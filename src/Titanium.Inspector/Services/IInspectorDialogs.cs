@@ -31,7 +31,11 @@ public interface IInspectorDialogs
     /// <summary>
     /// Confirm installing an Inspector update for the selected channel. Returns true if Install and restart.
     /// </summary>
-    Task<bool> ConfirmInstallUpdateAsync(Window? owner, string version, string channelDisplay);
+    Task<bool> ConfirmInstallUpdateAsync(
+        Window? owner,
+        string version,
+        string channelDisplay,
+        UpdateOfferKind offerKind = UpdateOfferKind.Upgrade);
 }
 
 /// <summary>Avalonia modal dialogs.</summary>
@@ -94,15 +98,39 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
             cancel: CancelLabel,
             height: 300);
 
-    public Task<bool> ConfirmInstallUpdateAsync(Window? owner, string version, string channelDisplay) =>
-        SimpleConfirmDialog.ShowAsync(
+    public Task<bool> ConfirmInstallUpdateAsync(
+        Window? owner,
+        string version,
+        string channelDisplay,
+        UpdateOfferKind offerKind = UpdateOfferKind.Upgrade)
+    {
+        var (title, body, accept) = offerKind switch
+        {
+            UpdateOfferKind.Downgrade => (
+                "Install older release",
+                $"Install older {channelDisplay} {version}? Your current build is newer and will be replaced.\n\n" +
+                "Inspector will close, replace the current installation, and relaunch.",
+                "Install and restart"),
+            UpdateOfferKind.ChannelSwitch => (
+                "Switch update channel",
+                $"Switch to {channelDisplay} {version}? This replaces your current build.\n\n" +
+                "Inspector will close, replace the current installation, and relaunch.",
+                "Switch and restart"),
+            _ => (
+                "Update available",
+                $"Version {version} ({channelDisplay}) is available.\n\n" +
+                "Inspector will close, replace the current installation, and relaunch.",
+                "Update and restart"),
+        };
+
+        return SimpleConfirmDialog.ShowAsync(
             owner,
-            "Install release",
-            $"Install {version} ({channelDisplay}) and restart now?\n\n" +
-            "Inspector will close, replace the current installation, and relaunch.",
-            accept: "Install and restart",
+            title,
+            body,
+            accept: accept,
             cancel: "Later",
             height: 240);
+    }
 }
 
 /// <summary>Scripted answers for unit / E2E-UI tests (no real windows).</summary>
@@ -163,11 +191,18 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
         return Task.FromResult(ResetSettingsResult);
     }
 
-    public Task<bool> ConfirmInstallUpdateAsync(Window? owner, string version, string channelDisplay)
+    public Task<bool> ConfirmInstallUpdateAsync(
+        Window? owner,
+        string version,
+        string channelDisplay,
+        UpdateOfferKind offerKind = UpdateOfferKind.Upgrade)
     {
         InstallUpdateCalls++;
         LastInstallUpdateVersion = version;
         LastInstallUpdateChannel = channelDisplay;
+        LastInstallUpdateOfferKind = offerKind;
         return Task.FromResult(InstallUpdateResult);
     }
+
+    public UpdateOfferKind LastInstallUpdateOfferKind { get; private set; }
 }

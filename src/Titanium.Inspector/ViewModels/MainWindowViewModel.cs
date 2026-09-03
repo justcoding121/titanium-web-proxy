@@ -2061,9 +2061,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         var owner = TryGetMainWindow();
         var version = result.RemoteVersion ?? "";
-        if (!await _dialogs.ConfirmInstallUpdateAsync(owner, version, result.ChannelDisplay))
+        if (!await _dialogs.ConfirmInstallUpdateAsync(owner, version, result.ChannelDisplay, result.OfferKind))
         {
-            StatusText = $"Update available: {version} ({result.ChannelDisplay})";
+            StatusText = result.Message;
             return;
         }
 

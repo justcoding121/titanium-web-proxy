@@ -6,6 +6,7 @@ using System.Text.Json;
 using Titanium.Cli;
 using Titanium.Cli.Config;
 using Titanium.Cli.Http3;
+using Titanium.Web.Proxy.Abstractions.Updates;
 
 namespace Titanium.Cli.Updates;
 
@@ -15,9 +16,14 @@ internal static class VersionCommand
     {
         var check = args.Contains("--check", StringComparer.OrdinalIgnoreCase);
         var plus = args.Contains("--plus", StringComparer.OrdinalIgnoreCase);
-        var channel = ParseChannel(args);
-        var channelDisplay = FormatChannel(channel);
 
+        if (!TryResolveChannel(args, out var channel, out var channelError))
+        {
+            AsyncConsole.WriteError(channelError!);
+            return 1;
+        }
+
+        var channelDisplay = FormatChannel(channel);
         PrintLocalVersions(plus);
 
         if (!check)
@@ -26,50 +32,84 @@ internal static class VersionCommand
         }
 
         var client = new UpdateFeedClient(channel);
-        var manifest = await client.TryGetManifestAsync();
+        var (manifest, feedError) = await client.TryGetManifestWithErrorAsync();
         if (manifest is null)
         {
-            AsyncConsole.WriteError("Unable to query update feed.");
+            AsyncConsole.WriteError(feedError ?? "Unable to query update feed.");
             return 1;
         }
 
         var local = typeof(Program).Assembly.GetName().Version ?? new Version(0, 0);
-        var remote = Version.TryParse(StripPrerelease(manifest.Version), out var v) ? v : new Version(0, 0);
-        AsyncConsole.WriteLine($"Remote Cli ({channelDisplay}): {manifest.Version}");
+        var remoteText = ReleaseVersion.NormalizeTag(manifest.Version);
+        var remote = ReleaseVersion.ParseComparable(remoteText);
+        var localComparable = ReleaseVersion.ToComparable(local);
+        var localDisplay = ReleaseVersion.FormatDisplay(local);
+
+        AsyncConsole.WriteLine($"Remote Cli ({channelDisplay}): {remoteText}");
+        AsyncConsole.WriteLine($"Local Cli: {localDisplay} → remote {remoteText} ({channelDisplay})");
 
         var exit = 0;
-        if (remote > local)
+        var cmp = remote.CompareTo(localComparable);
+        if (cmp > 0)
         {
-            AsyncConsole.WriteLine($"A newer Cli build is available ({channelDisplay}). Run: titanium update --channel {channel}");
+            AsyncConsole.WriteLine(
+                $"A newer Cli build is available ({localDisplay} → {remoteText}, {channelDisplay}). Run: titanium update --channel {channel}");
             exit = 2;
+        }
+        else if (cmp < 0)
+        {
+            AsyncConsole.WriteLine(
+                $"Local Cli {localDisplay} is newer than {channelDisplay} {remoteText}.");
         }
         else
         {
-            AsyncConsole.WriteLine($"Cli is up to date ({channelDisplay}).");
+            AsyncConsole.WriteLine($"Cli is up to date ({remoteText}, {channelDisplay}).");
         }
 
         if (plus)
         {
-            var plusLocal = TryGetLocalPlusVersion();
-            var plusRemote = manifest.Products?.Plus?.Version;
-            if (!string.IsNullOrEmpty(plusRemote) &&
-                Version.TryParse(StripPrerelease(plusRemote), out var pr) &&
-                (plusLocal is null || pr > plusLocal))
-            {
-                AsyncConsole.WriteLine(
-                    $"A newer Plus build is available ({plusRemote}, {channelDisplay}). Run: titanium update --plus --channel {channel}");
-                exit = 2;
-            }
-            else if (plusLocal is not null)
-            {
-                AsyncConsole.WriteLine($"Plus is up to date ({plusLocal}, {channelDisplay}).");
-            }
+            exit = Math.Max(exit, PrintPlusCheck(manifest, channel, channelDisplay));
         }
 
         return exit;
     }
 
-    private static Version? TryGetLocalPlusVersion()
+    private static int PrintPlusCheck(ReleaseManifest manifest, string channel, string channelDisplay)
+    {
+        var plusLocal = TryGetLocalPlusVersion();
+        var plusRemoteText = ReleaseVersion.NormalizeTag(
+            manifest.Products?.Plus?.Version ?? manifest.Version);
+        var plusRemote = ReleaseVersion.ParseComparable(plusRemoteText);
+
+        if (plusLocal is null)
+        {
+            AsyncConsole.WriteLine(
+                $"Plus is not installed. Run: titanium update --plus --channel {channel}");
+            return 2;
+        }
+
+        var plusLocalDisplay = ReleaseVersion.FormatDisplay(plusLocal);
+        AsyncConsole.WriteLine($"Local Plus: {plusLocalDisplay} → remote {plusRemoteText} ({channelDisplay})");
+        var cmp = plusRemote.CompareTo(ReleaseVersion.ToComparable(plusLocal));
+        if (cmp > 0)
+        {
+            AsyncConsole.WriteLine(
+                $"A newer Plus build is available ({plusLocalDisplay} → {plusRemoteText}, {channelDisplay}). Run: titanium update --plus --channel {channel}");
+            return 2;
+        }
+
+        if (cmp < 0)
+        {
+            AsyncConsole.WriteLine(
+                $"Local Plus {plusLocalDisplay} is newer than {channelDisplay} {plusRemoteText}.");
+            return 0;
+        }
+
+        AsyncConsole.WriteLine($"Plus is up to date ({plusRemoteText}, {channelDisplay}).");
+        return 0;
+    }
+
+    internal static Version? TryGetLocalPlusVersion()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Titanium.Plus.dll");
         if (!File.Exists(path))
@@ -91,8 +131,8 @@ internal static class VersionCommand
     {
         void Print(string name, Assembly? asm)
         {
-            var ver = asm?.GetName().Version?.ToString() ?? "(not loaded)";
-            AsyncConsole.WriteLine($"{name}: {ver}");
+            var ver = asm?.GetName().Version;
+            AsyncConsole.WriteLine($"{name}: {(ver is null ? "(not loaded)" : ReleaseVersion.FormatDisplay(ver))}");
         }
 
         Print("Cli", typeof(Program).Assembly);
@@ -109,7 +149,8 @@ internal static class VersionCommand
             }
             else if (module is not null)
             {
-                AsyncConsole.WriteLine($"Plus: {module.GetType().Assembly.GetName().Version} (RequiredAbstractions={module.RequiredAbstractionsVersion})");
+                AsyncConsole.WriteLine(
+                    $"Plus: {ReleaseVersion.FormatDisplay(module.GetType().Assembly.GetName().Version)} (RequiredAbstractions={module.RequiredAbstractionsVersion})");
             }
             else
             {
@@ -118,8 +159,40 @@ internal static class VersionCommand
         }
     }
 
+    /// <summary>Parse --channel; returns false when the value is not stable/beta.</summary>
+    internal static bool TryResolveChannel(string[] args, out string channel, out string? error)
+    {
+        channel = "stable";
+        error = null;
+        string? raw = null;
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (args[i] is "--channel" && i + 1 < args.Length)
+            {
+                raw = args[i + 1].Trim().ToLowerInvariant();
+                break;
+            }
+        }
+
+        raw ??= (Environment.GetEnvironmentVariable("TITANIUM_UPDATE_CHANNEL") ?? "stable").Trim().ToLowerInvariant();
+        if (raw is not ("stable" or "beta"))
+        {
+            error = $"Unknown channel '{raw}'. Use --channel stable or --channel beta.";
+            return false;
+        }
+
+        channel = raw;
+        return true;
+    }
+
     internal static string ParseChannel(string[] args)
     {
+        if (TryResolveChannel(args, out var channel, out _))
+        {
+            return channel;
+        }
+
+        // Legacy tests / callers: invalid values previously fell through as stable via FormatChannel.
         for (var i = 0; i < args.Length; i++)
         {
             if (args[i] is "--channel" && i + 1 < args.Length)
@@ -134,25 +207,63 @@ internal static class VersionCommand
     internal static string FormatChannel(string channel) =>
         channel.Equals("beta", StringComparison.OrdinalIgnoreCase) ? "beta" : "stable";
 
-    internal static string StripPrerelease(string? version)
+    internal static string StripPrerelease(string? version) => ReleaseVersion.StripPrerelease(version);
+
+    /// <summary>Whether CLI should install the remote release (upgrade or same-semver channel/tag switch).</summary>
+    internal static bool ShouldInstallCliRelease(
+        Version local,
+        string remoteText,
+        string channelDisplay,
+        string? installedReleaseTag,
+        string? installedReleaseChannel)
     {
-        if (string.IsNullOrEmpty(version))
+        remoteText = ReleaseVersion.NormalizeTag(remoteText);
+        var remoteSemver = ReleaseVersion.ParseComparable(remoteText);
+        var localSemver = ReleaseVersion.ToComparable(local);
+
+        if (remoteSemver > localSemver)
         {
-            return "0.0.0";
+            return true;
         }
 
-        var trimmed = version.TrimStart('v');
-        var dash = trimmed.IndexOf('-');
-        return dash > 0 ? trimmed[..dash] : trimmed;
+        if (remoteSemver < localSemver)
+        {
+            return false;
+        }
+
+        // Same semver: install when switching to beta tag or channel identity differs.
+        var isBeta = channelDisplay.Equals("beta", StringComparison.OrdinalIgnoreCase);
+        if (isBeta && remoteText.Contains('-', StringComparison.Ordinal))
+        {
+            if (string.IsNullOrEmpty(installedReleaseTag)
+                || !installedReleaseTag.Equals(remoteText, StringComparison.OrdinalIgnoreCase)
+                || string.IsNullOrEmpty(installedReleaseChannel)
+                || !installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 
 internal static class UpdateCommand
 {
+    private static readonly string CliIdentityPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "TitaniumCli",
+        "installed-release.json");
+
     public static async Task<int> ExecuteAsync(string[] args)
     {
         var plus = args.Contains("--plus", StringComparer.OrdinalIgnoreCase);
-        var channel = VersionCommand.ParseChannel(args);
+        if (!VersionCommand.TryResolveChannel(args, out var channel, out var channelError))
+        {
+            AsyncConsole.WriteError(channelError!);
+            return 1;
+        }
+
         var channelDisplay = VersionCommand.FormatChannel(channel);
 
         AsyncConsole.WriteLine(plus
@@ -160,10 +271,10 @@ internal static class UpdateCommand
             : $"Checking for updates ({channelDisplay})…");
 
         var client = new UpdateFeedClient(channel);
-        var manifest = await client.TryGetManifestAsync();
+        var (manifest, feedError) = await client.TryGetManifestWithErrorAsync();
         if (manifest is null)
         {
-            AsyncConsole.WriteError("Unable to query update feed.");
+            AsyncConsole.WriteError(feedError ?? "Unable to query update feed.");
             return 1;
         }
 
@@ -178,11 +289,26 @@ internal static class UpdateCommand
     private static async Task<int> UpdateCliAsync(ReleaseManifest manifest, string channelDisplay)
     {
         var local = typeof(Program).Assembly.GetName().Version ?? new Version(0, 0);
-        var remoteText = manifest.Version?.TrimStart('v') ?? "0.0.0";
-        var remote = Version.TryParse(VersionCommand.StripPrerelease(remoteText), out var v) ? v : new Version(0, 0);
-        if (remote <= local)
+        var remoteText = ReleaseVersion.NormalizeTag(manifest.Version);
+        var (installedTag, installedChannel) = ReadCliIdentity();
+        var localDisplay = ReleaseVersion.FormatDisplay(local);
+
+        if (!VersionCommand.ShouldInstallCliRelease(
+                local, remoteText, channelDisplay, installedTag, installedChannel))
         {
-            AsyncConsole.WriteLine($"Titanium CLI is up to date ({channelDisplay}).");
+            var remote = ReleaseVersion.ParseComparable(remoteText);
+            var localComparable = ReleaseVersion.ToComparable(local);
+            if (remote < localComparable)
+            {
+                AsyncConsole.WriteLine(
+                    $"Local Cli {localDisplay} is newer than {channelDisplay} {remoteText}. No changes.");
+            }
+            else
+            {
+                AsyncConsole.WriteLine($"Titanium CLI is up to date ({remoteText}, {channelDisplay}).");
+                WriteCliIdentity(remoteText, channelDisplay);
+            }
+
             return 0;
         }
 
@@ -195,7 +321,12 @@ internal static class UpdateCommand
             return 1;
         }
 
-        AsyncConsole.WriteLine($"Update {remoteText} ({channelDisplay}) is available. Installing…");
+        var remoteCmp = ReleaseVersion.ParseComparable(remoteText);
+        var localCmp = ReleaseVersion.ToComparable(local);
+        var action = remoteCmp > localCmp
+            ? $"Update {localDisplay} → {remoteText} ({channelDisplay})"
+            : $"Switching to {remoteText} ({channelDisplay})";
+        AsyncConsole.WriteLine($"{action}. Installing…");
         AsyncConsole.WriteLine("Downloading…");
 
         var workDir = Path.Combine(Path.GetTempPath(), "TitaniumCli-update");
@@ -232,8 +363,6 @@ internal static class UpdateCommand
         var relaunch = Path.Combine(installDir, exeName);
         if (!File.Exists(relaunch))
         {
-            // Published layout may use AssemblyName titanium without extension on Unix already handled;
-            // twp sibling is optional.
             relaunch = Path.Combine(installDir, OperatingSystem.IsWindows() ? "twp.exe" : "twp");
         }
 
@@ -246,9 +375,9 @@ internal static class UpdateCommand
             remoteText,
             channelDisplay);
 
+        WriteCliIdentity(remoteText, channelDisplay);
         AsyncConsole.WriteLine(
             $"Installing {remoteText} ({channelDisplay}) in the background. When finished, run: titanium version");
-        // Exit so the helper can replace locked binaries.
         return 0;
     }
 
@@ -261,9 +390,29 @@ internal static class UpdateCommand
             return 1;
         }
 
-        var remoteLabel = manifest.Products?.Plus?.Version ?? manifest.Version ?? "unknown";
+        var remoteLabel = ReleaseVersion.NormalizeTag(
+            manifest.Products?.Plus?.Version ?? manifest.Version ?? "unknown");
+        var remoteSemver = ReleaseVersion.ParseComparable(remoteLabel);
         var dest = Path.Combine(AppContext.BaseDirectory, "Titanium.Plus.dll");
         var backup = dest + ".bak";
+        var plusLocal = VersionCommand.TryGetLocalPlusVersion();
+        var installing = plusLocal is null;
+
+        if (plusLocal is not null)
+        {
+            var localComparable = ReleaseVersion.ToComparable(plusLocal);
+            if (remoteSemver == localComparable
+                || (!string.IsNullOrEmpty(asset.Sha256) && File.Exists(dest) && FileSha256Matches(dest, asset.Sha256)))
+            {
+                AsyncConsole.WriteLine(
+                    $"Plus is already at {remoteLabel} ({channelDisplay}).");
+                return 0;
+            }
+        }
+
+        AsyncConsole.WriteLine(installing
+            ? $"Installing Titanium.Plus {remoteLabel} ({channelDisplay})…"
+            : $"Updating Plus {ReleaseVersion.FormatDisplay(plusLocal)} → {remoteLabel} ({channelDisplay})…");
         AsyncConsole.WriteLine("Downloading…");
         try
         {
@@ -288,14 +437,96 @@ internal static class UpdateCommand
 
             var staging = dest + ".new";
             await File.WriteAllBytesAsync(staging, bytes);
-            File.Move(staging, dest, overwrite: true);
-            AsyncConsole.WriteLine($"Updated Titanium.Plus.dll to {remoteLabel} ({channelDisplay}).");
+            try
+            {
+                File.Move(staging, dest, overwrite: true);
+            }
+            catch
+            {
+                TryRestorePlusBackup(dest, backup);
+                throw;
+            }
+
+            AsyncConsole.WriteLine(installing
+                ? $"Installed Titanium.Plus.dll {remoteLabel} ({channelDisplay})."
+                : $"Updated Titanium.Plus.dll to {remoteLabel} ({channelDisplay}).");
             return 0;
         }
         catch (Exception ex)
         {
+            TryRestorePlusBackup(dest, backup);
             AsyncConsole.WriteError($"Plus update failed: {ex.Message}");
             return 1;
+        }
+    }
+
+    private static bool FileSha256Matches(string path, string expectedHex)
+    {
+        try
+        {
+            var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
+            return hash.Equals(expectedHex, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void TryRestorePlusBackup(string dest, string backup)
+    {
+        try
+        {
+            if (File.Exists(backup))
+            {
+                File.Copy(backup, dest, overwrite: true);
+            }
+        }
+        catch
+        {
+            // Best-effort restore.
+        }
+    }
+
+    private static (string? Tag, string? Channel) ReadCliIdentity()
+    {
+        try
+        {
+            if (!File.Exists(CliIdentityPath))
+            {
+                return (null, null);
+            }
+
+            var json = File.ReadAllText(CliIdentityPath);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            var tag = root.TryGetProperty("tag", out var t) ? t.GetString() : null;
+            var channel = root.TryGetProperty("channel", out var c) ? c.GetString() : null;
+            return (tag, channel);
+        }
+        catch
+        {
+            return (null, null);
+        }
+    }
+
+    private static void WriteCliIdentity(string tag, string channel)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(CliIdentityPath);
+            if (!string.IsNullOrEmpty(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            File.WriteAllText(
+                CliIdentityPath,
+                JsonSerializer.Serialize(new { tag, channel }));
+        }
+        catch
+        {
+            // Non-fatal.
         }
     }
 
@@ -424,10 +655,16 @@ internal sealed class UpdateFeedClient
 
     public async Task<ReleaseManifest?> TryGetManifestAsync()
     {
+        var (manifest, _) = await TryGetManifestWithErrorAsync();
+        return manifest;
+    }
+
+    public async Task<(ReleaseManifest? Manifest, string? Error)> TryGetManifestWithErrorAsync()
+    {
         var feed = Environment.GetEnvironmentVariable("TITANIUM_UPDATE_FEED");
         if (feed == string.Empty)
         {
-            return null;
+            return (null, "Update feed disabled (TITANIUM_UPDATE_FEED is empty).");
         }
 
         try
@@ -438,27 +675,50 @@ internal sealed class UpdateFeedClient
             if (!string.IsNullOrEmpty(feed))
             {
                 var json = await http.GetStringAsync(feed);
-                return JsonSerializer.Deserialize<ReleaseManifest>(json, ManifestJson);
+                var fromFeed = JsonSerializer.Deserialize<ReleaseManifest>(json, ManifestJson);
+                return fromFeed is null
+                    ? (null, "Update feed returned invalid JSON.")
+                    : (fromFeed, null);
             }
 
             var api = _channel.Equals("beta", StringComparison.OrdinalIgnoreCase)
                 ? "https://api.github.com/repos/justcoding121/titanium-web-proxy/releases"
                 : "https://api.github.com/repos/justcoding121/titanium-web-proxy/releases/latest";
 
-            var payload = await http.GetStringAsync(api);
+            using var response = await http.GetAsync(api);
+            if (!response.IsSuccessStatusCode)
+            {
+                return (null, $"Update feed HTTP {(int)response.StatusCode} from GitHub Releases.");
+            }
+
+            var payload = await response.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(payload);
             if (!TrySelectRelease(doc.RootElement, out var release))
             {
-                return null;
+                return (null, _channel.Equals("beta", StringComparison.OrdinalIgnoreCase)
+                    ? "No beta release found."
+                    : "No stable release found.");
             }
 
             var version = release.GetProperty("tag_name").GetString()?.TrimStart('v') ?? "0.0.0";
             var fromAsset = await TryLoadManifestAssetAsync(http, release, version);
-            return fromAsset ?? new ReleaseManifest { Version = version, Channel = _channel };
+            return (fromAsset ?? new ReleaseManifest { Version = version, Channel = _channel }, null);
         }
-        catch
+        catch (HttpRequestException ex)
         {
-            return null;
+            return (null, $"Update feed network error: {ex.Message}");
+        }
+        catch (TaskCanceledException)
+        {
+            return (null, "Update feed timed out.");
+        }
+        catch (JsonException ex)
+        {
+            return (null, $"Update feed JSON error: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            return (null, $"Unable to query update feed: {ex.Message}");
         }
     }
 

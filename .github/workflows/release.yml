@@ -553,7 +553,7 @@ jobs:
             "abstractionsVersion": version.split("-")[0],
             "products": {
               "cli": {"assets": {}},
-              "plus": {"requiredAbstractions": "7.0.0", "asset": None},
+              "plus": {"version": version, "requiredAbstractions": "7.0.0", "asset": None},
               "inspector": {"assets": {}},
             },
             "nuget": {
@@ -588,6 +588,7 @@ jobs:
                     break
             elif name.startswith("Titanium.Plus"):
               manifest["products"]["plus"]["asset"] = entry
+              manifest["products"]["plus"]["version"] = version
           pathlib.Path("dist/release-manifest.json").write_text(json.dumps(manifest, indent=2))
           print(json.dumps(manifest, indent=2))
           PY

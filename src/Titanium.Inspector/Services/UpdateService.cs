@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Win32;
+using Titanium.Web.Proxy.Abstractions.Updates;
 
 namespace Titanium.Inspector.Services;
 
@@ -11,6 +12,15 @@ public enum UpdateApplyKind
 {
     Msi,
     Zip,
+}
+
+/// <summary>How an offered channel install should be described to the user.</summary>
+public enum UpdateOfferKind
+{
+    None,
+    Upgrade,
+    ChannelSwitch,
+    Downgrade,
 }
 
 public sealed class UpdateCheckResult
@@ -24,6 +34,7 @@ public sealed class UpdateCheckResult
     public UpdateApplyKind ApplyKind { get; init; } = UpdateApplyKind.Zip;
     /// <summary>True when remote semver is lower than the running build (channel switch / downgrade).</summary>
     public bool IsDowngrade { get; init; }
+    public UpdateOfferKind OfferKind { get; init; }
 }
 
 /// <summary>GitHub Releases + release-manifest updater for Stable/Beta channels.</summary>
@@ -80,15 +91,14 @@ public sealed class UpdateService
             }
 
             var remoteText = NormalizeReleaseTag(manifest.Version);
-            if (!Version.TryParse(StripPrerelease(remoteText), out var remote))
-            {
-                remote = new Version(0, 0);
-            }
+            var remote = ReleaseVersion.ParseComparable(remoteText);
+            var localComparable = ReleaseVersion.ToComparable(local);
 
             var installedTag = _settings.Current.InstalledReleaseTag;
             var installedChannel = _settings.Current.InstalledReleaseChannel;
             if (!ShouldOfferChannelInstall(local, remoteText, channelDisplay, installedTag, installedChannel))
             {
+                SeedInstalledIdentity(remoteText, channelDisplay);
                 return new UpdateCheckResult
                 {
                     RemoteVersion = remoteText,
@@ -97,6 +107,7 @@ public sealed class UpdateService
                 };
             }
 
+            var offerKind = ClassifyOfferKind(local, remoteText, channelDisplay, installedTag, installedChannel);
             var (kind, asset) = ResolveAsset(manifest);
             if (asset?.Url is null)
             {
@@ -105,18 +116,34 @@ public sealed class UpdateService
                     UpdateAvailable = true,
                     RemoteVersion = remoteText,
                     ChannelDisplay = channelDisplay,
-                    IsDowngrade = remote < local,
+                    IsDowngrade = offerKind == UpdateOfferKind.Downgrade,
+                    OfferKind = offerKind,
                     Message =
                         $"Install {remoteText} ({channelDisplay}) is available, but no package was found for this install.",
                 };
             }
 
-            var isDowngrade = remote < local;
-            var message = remote > local
-                ? $"Update available: {remoteText} ({channelDisplay})"
-                : isDowngrade
-                    ? $"Install {channelDisplay} {remoteText} (replaces your current build)"
-                    : $"Install {remoteText} ({channelDisplay})";
+            // Windows MSI cannot MajorUpgrade to the same or older ProductVersion.
+            if (kind == UpdateApplyKind.Msi && remote <= localComparable)
+            {
+                return new UpdateCheckResult
+                {
+                    RemoteVersion = remoteText,
+                    ChannelDisplay = channelDisplay,
+                    OfferKind = UpdateOfferKind.None,
+                    Message =
+                        $"Windows Installer cannot replace this install with {remoteText} ({channelDisplay}) " +
+                        "(same or older version). Uninstall Titanium Inspector first, or download from the website.",
+                };
+            }
+
+            var message = offerKind switch
+            {
+                UpdateOfferKind.Upgrade => $"Update available: {remoteText} ({channelDisplay})",
+                UpdateOfferKind.Downgrade =>
+                    $"Install older {channelDisplay} {remoteText} (replaces your current build)",
+                _ => $"Switch to {channelDisplay} {remoteText} (replaces your current build)",
+            };
 
             return new UpdateCheckResult
             {
@@ -126,7 +153,8 @@ public sealed class UpdateService
                 AssetUrl = asset.Url,
                 AssetSha256 = asset.Sha256,
                 ApplyKind = kind,
-                IsDowngrade = isDowngrade,
+                IsDowngrade = offerKind == UpdateOfferKind.Downgrade,
+                OfferKind = offerKind,
                 Message = message,
             };
         }
@@ -141,8 +169,8 @@ public sealed class UpdateService
     }
 
     /// <summary>
-    /// Whether the selected channel's latest release should be offered — upgrades, downgrades, and
-    /// same-semver channel/build switches (not only when remote semver is newer).
+    /// Whether the selected channel's latest release should be offered — upgrades and intentional
+    /// channel/build switches (not phantom same-version reinstalls from 3-part vs 4-part Version).
     /// </summary>
     public static bool ShouldOfferChannelInstall(
         Version local,
@@ -152,42 +180,52 @@ public sealed class UpdateService
         string? installedReleaseChannel)
     {
         remoteText = NormalizeReleaseTag(remoteText);
-        var remoteSemver = Version.TryParse(StripPrerelease(remoteText), out var rv) ? rv : new Version(0, 0);
+        var remoteSemver = ReleaseVersion.ParseComparable(remoteText);
+        var localSemver = ReleaseVersion.ToComparable(local);
+        var isBetaChannel = channelDisplay.Equals("Beta", StringComparison.OrdinalIgnoreCase);
 
-        if (!string.IsNullOrEmpty(installedReleaseTag)
-            && installedReleaseTag.Equals(remoteText, StringComparison.OrdinalIgnoreCase)
-            && !string.IsNullOrEmpty(installedReleaseChannel)
-            && installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase))
+        var tagMatches = !string.IsNullOrEmpty(installedReleaseTag)
+            && installedReleaseTag.Equals(remoteText, StringComparison.OrdinalIgnoreCase);
+        var channelMatches = !string.IsNullOrEmpty(installedReleaseChannel)
+            && installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase);
+
+        // Exact channel build already installed and assembly matches remote semver.
+        if (tagMatches && channelMatches && remoteSemver == localSemver)
         {
             return false;
         }
 
-        if (remoteSemver > local)
+        // Persisted tag matches remote but assembly does not (e.g. failed MSI/UAC) — re-offer.
+        if (tagMatches && channelMatches && remoteSemver != localSemver)
         {
             return true;
         }
 
-        if (remoteSemver < local)
+        if (remoteSemver > localSemver)
         {
             return true;
         }
 
-        // Same semver — different release tag or channel build.
-        if (!string.IsNullOrEmpty(installedReleaseTag)
-            && !installedReleaseTag.Equals(remoteText, StringComparison.OrdinalIgnoreCase))
+        if (remoteSemver == localSemver)
         {
-            return true;
+            if (!string.IsNullOrEmpty(installedReleaseChannel)
+                && !installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            // Unknown or different beta tag at the same semver.
+            if (isBetaChannel && remoteText.Contains('-', StringComparison.Ordinal) && !tagMatches)
+            {
+                return true;
+            }
+
+            return false;
         }
 
+        // remote < local: only intentional channel / known-origin switches.
         if (!string.IsNullOrEmpty(installedReleaseChannel)
             && !installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        // Unknown install origin: offer beta build at same semver, or when persisted channel differs.
-        if (channelDisplay.Equals("Beta", StringComparison.OrdinalIgnoreCase)
-            && remoteText.Contains('-', StringComparison.Ordinal))
         {
             return true;
         }
@@ -195,11 +233,58 @@ public sealed class UpdateService
         return false;
     }
 
-    public static string NormalizeReleaseTag(string? tag) =>
-        (tag ?? "0.0.0").TrimStart('v');
+    /// <summary>Classify an offered install for dialog copy.</summary>
+    public static UpdateOfferKind ClassifyOfferKind(
+        Version local,
+        string remoteText,
+        string channelDisplay,
+        string? installedReleaseTag,
+        string? installedReleaseChannel)
+    {
+        if (!ShouldOfferChannelInstall(local, remoteText, channelDisplay, installedReleaseTag, installedReleaseChannel))
+        {
+            return UpdateOfferKind.None;
+        }
 
-    public static string StripPrerelease(string tag) =>
-        NormalizeReleaseTag(tag).Split('-')[0];
+        var remoteSemver = ReleaseVersion.ParseComparable(remoteText);
+        var localSemver = ReleaseVersion.ToComparable(local);
+        if (remoteSemver > localSemver)
+        {
+            return UpdateOfferKind.Upgrade;
+        }
+
+        if (remoteSemver < localSemver)
+        {
+            return UpdateOfferKind.Downgrade;
+        }
+
+        return UpdateOfferKind.ChannelSwitch;
+    }
+
+    public static string NormalizeReleaseTag(string? tag) => ReleaseVersion.NormalizeTag(tag);
+
+    public static string StripPrerelease(string tag) => ReleaseVersion.StripPrerelease(tag);
+
+    private void SeedInstalledIdentity(string remoteText, string channelDisplay)
+    {
+        var changed = false;
+        if (!string.Equals(_settings.Current.InstalledReleaseTag, remoteText, StringComparison.OrdinalIgnoreCase))
+        {
+            _settings.Current.InstalledReleaseTag = remoteText;
+            changed = true;
+        }
+
+        if (!string.Equals(_settings.Current.InstalledReleaseChannel, channelDisplay, StringComparison.OrdinalIgnoreCase))
+        {
+            _settings.Current.InstalledReleaseChannel = channelDisplay;
+            changed = true;
+        }
+
+        if (changed)
+        {
+            _settings.Save();
+        }
+    }
 
     /// <summary>Download package, verify SHA256, spawn apply helper, return true if helper started.</summary>
     public async Task<(bool Ok, string Message)> DownloadAndStartApplyAsync(
@@ -234,10 +319,6 @@ public sealed class UpdateService
 
             await File.WriteAllBytesAsync(packagePath, bytes, cancellationToken);
 
-            _settings.Current.InstalledReleaseTag = check.RemoteVersion;
-            _settings.Current.InstalledReleaseChannel = check.ChannelDisplay;
-            _settings.Save();
-
             var installDir = AppContext.BaseDirectory.TrimEnd(
                 Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             var exeName = OperatingSystem.IsWindows() ? "TitaniumInspector.exe" : "TitaniumInspector";
@@ -255,6 +336,12 @@ public sealed class UpdateService
                 relaunchPath,
                 check.RemoteVersion ?? "",
                 check.ChannelDisplay);
+
+            // Persist after the helper starts so a failed spawn does not claim the build is installed.
+            // If MSI UAC is cancelled later, tag may ahead of assembly — ShouldOffer re-offers when they differ.
+            _settings.Current.InstalledReleaseTag = check.RemoteVersion;
+            _settings.Current.InstalledReleaseChannel = check.ChannelDisplay;
+            _settings.Save();
 
             return (true, $"Installing {check.RemoteVersion} ({check.ChannelDisplay})…");
         }

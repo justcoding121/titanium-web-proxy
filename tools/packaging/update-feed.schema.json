@@ -16,6 +16,7 @@
         "plus": {
           "type": "object",
           "properties": {
+            "version": { "type": "string" },
             "requiredAbstractions": { "type": "string" },
             "asset": { "$ref": "#/$defs/asset" }
           }

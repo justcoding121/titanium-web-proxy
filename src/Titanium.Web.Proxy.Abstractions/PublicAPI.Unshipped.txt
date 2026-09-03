@@ -1,5 +1,12 @@
 #nullable enable
 static Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot.Empty.get -> Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot!
+static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.Compare(System.Version? left, System.Version? right) -> int
+static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.FormatDisplay(System.Version? version) -> string!
+static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.NormalizeTag(string? tag) -> string!
+static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.ParseComparable(string? tag) -> System.Version!
+static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.StripPrerelease(string? tag) -> string!
+static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.ToComparable(System.Version? version) -> System.Version!
+Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.AffinityCookie.get -> string?
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.AffinityCookie.init -> void

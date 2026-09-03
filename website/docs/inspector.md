@@ -52,7 +52,13 @@ chmod +x install-app.sh uninstall-app.sh TitaniumInspector
 
 ## Updates
 
-**Help → Update channel** — Stable (default) or Beta. **Help → Check for updates…** checks the latest release on the selected channel and offers to install it when you are not already on that channel build — including switching from Beta to an older Stable release or installing a Beta build at the same version number. Choosing **Install and restart** downloads the package (MSI for a Program Files install, otherwise the RID zip), closes Inspector, replaces the current installation, and relaunches. **Help → About Titanium Inspector…** shows the installed version and licensing details.
+**Help → Update channel** — Stable (default) or Beta. **Help → Check for updates…** checks the latest release on the selected channel and offers an install only when it is a real change:
+
+- **Newer** release → update dialog (**Update and restart**)
+- **Channel switch** (for example Beta → Stable at the same or older version) → switch dialog (**Switch and restart**)
+- Already on that channel build (including website/MSI installs of the same version) → **up to date** (no reinstall prompt)
+
+Choosing the accept action downloads the package (MSI for a Program Files install, otherwise the RID zip), closes Inspector, replaces the current installation, and relaunches. Windows Installer cannot apply the **same or an older** ProductVersion over an existing MSI install; in that case Inspector explains that you must uninstall first or use a website package. **Help → About Titanium Inspector…** shows the installed version and licensing details.
 
 **Options → Check for updates on startup** uses the same channel and confirm dialog (never silent-install).
 

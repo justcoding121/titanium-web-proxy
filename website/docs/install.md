@@ -52,15 +52,16 @@ titanium version --check --channel beta
 titanium http3-deps status
 ```
 
-`titanium update` checks the selected channel, downloads the RID **zip**, verifies SHA256, replaces the install directory after the process exits, and prints the new version. Use `--channel stable` (default) or `--channel beta` — it does not pick “whichever is newer” across channels.
+`titanium update` checks the selected channel, downloads the RID **zip**, verifies SHA256, replaces the install directory after the process exits, and prints the new version. Use `--channel stable` (default) or `--channel beta` — it does not pick “whichever is newer” across channels. Same-version checks treat assembly `7.0.5.0` and feed tag `7.0.5` as equal; when already current it prints up to date (or that local is newer than the channel) instead of reinstalling. Unknown channel names are rejected.
 
 ## Plus
 
 ```shell
 titanium update --plus --channel beta
+titanium version --check --plus
 ```
 
-See [Plus](/docs/plus). There is no separate Plus download link.
+`titanium update --plus` skips the download when the installed Plus DLL already matches the feed version (or SHA256). See [Plus](/docs/plus). There is no separate Plus download link.
 
 ## Inspector
 

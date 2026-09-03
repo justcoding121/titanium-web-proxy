@@ -14,6 +14,8 @@ titanium update --plus --channel beta
 titanium version --check --plus --channel beta
 ```
 
+`titanium version --check --plus` reports local → remote and exit code `2` when a newer Plus is available or Plus is missing. `titanium update --plus` installs or upgrades only when needed; if Plus is already current it prints that and skips the download.
+
 ## Enable
 
 ```yaml

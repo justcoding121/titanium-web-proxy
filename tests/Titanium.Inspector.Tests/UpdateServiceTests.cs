@@ -17,10 +17,11 @@ public class UpdateServiceTests
     }
 
     [TestMethod]
-    public void ResolveAsset_PrefersMsiKey_WhenMsiInstallAndAssetPresent()
+    public void ResolveAsset_UsesRidZip_WhenMsiAssetAbsent()
     {
         var settings = new SettingsService(Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json"));
         var svc = new UpdateService(settings);
+        var rid = UpdateService.SuggestRid();
         var manifest = new InspectorReleaseManifest
         {
             Version = "9.9.9",
@@ -30,26 +31,32 @@ public class UpdateServiceTests
                 {
                     Assets = new Dictionary<string, ManifestAsset>
                     {
-                        ["win-x64-msi"] = new ManifestAsset { Url = "https://example.test/a.msi", Sha256 = "aa" },
-                        ["win-x64"] = new ManifestAsset { Url = "https://example.test/a.zip", Sha256 = "bb" },
+                        [rid] = new ManifestAsset
+                        {
+                            Url = "https://example.test/rid.zip",
+                            Sha256 = "cc",
+                        },
                     },
                 },
             },
-        };
-
-        // Portable (non-Program Files) should get zip when not MSI; force zip path via ResolveAsset logic
-        // by using a manifest with only zip for current RID.
-        var rid = UpdateService.SuggestRid();
-        manifest.Products.Inspector.Assets[rid] = new ManifestAsset
-        {
-            Url = "https://example.test/rid.zip",
-            Sha256 = "cc",
         };
 
         var (kind, asset) = svc.ResolveAsset(manifest);
         Assert.IsNotNull(asset);
         Assert.AreEqual(UpdateApplyKind.Zip, kind);
         Assert.AreEqual("https://example.test/rid.zip", asset!.Url);
+    }
+
+    [TestMethod]
+    public void IsMsiInstall_DetectsProgramFilesPath()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        Assert.IsTrue(UpdateService.IsMsiInstall(Path.Combine(pf, "Titanium Inspector")));
     }
 
     [TestMethod]
@@ -97,11 +104,12 @@ public class UpdateServiceTests
     public async Task ScriptedDialog_ConfirmInstallUpdate_RecordsChannel()
     {
         var dialogs = new ScriptedInspectorDialogs { InstallUpdateResult = true };
-        var ok = await dialogs.ConfirmInstallUpdateAsync(null, "7.1.0", "Beta");
+        var ok = await dialogs.ConfirmInstallUpdateAsync(null, "7.1.0", "Beta", UpdateOfferKind.Upgrade);
         Assert.IsTrue(ok);
         Assert.AreEqual(1, dialogs.InstallUpdateCalls);
         Assert.AreEqual("7.1.0", dialogs.LastInstallUpdateVersion);
         Assert.AreEqual("Beta", dialogs.LastInstallUpdateChannel);
+        Assert.AreEqual(UpdateOfferKind.Upgrade, dialogs.LastInstallUpdateOfferKind);
     }
 
     [TestMethod]
@@ -109,6 +117,8 @@ public class UpdateServiceTests
     {
         Assert.IsTrue(UpdateService.ShouldOfferChannelInstall(
             new Version(7, 0, 3), "7.0.4", "Stable", null, null));
+        Assert.IsTrue(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 3, 0), "7.0.4", "Stable", null, null));
     }
 
     [TestMethod]
@@ -123,6 +133,8 @@ public class UpdateServiceTests
     {
         Assert.IsTrue(UpdateService.ShouldOfferChannelInstall(
             new Version(7, 0, 4), "7.0.4-beta", "Beta", null, null));
+        Assert.IsTrue(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 4, 0), "7.0.4-beta", "Beta", null, null));
     }
 
     [TestMethod]
@@ -132,6 +144,8 @@ public class UpdateServiceTests
             new Version(7, 0, 4), "7.0.4-beta", "Beta", "7.0.4-beta", "Beta"));
         Assert.IsFalse(UpdateService.ShouldOfferChannelInstall(
             new Version(7, 0, 4), "7.0.4", "Stable", "7.0.4", "Stable"));
+        Assert.IsFalse(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 4, 0), "7.0.4", "Stable", "7.0.4", "Stable"));
     }
 
     [TestMethod]
@@ -139,6 +153,16 @@ public class UpdateServiceTests
     {
         Assert.IsFalse(UpdateService.ShouldOfferChannelInstall(
             new Version(7, 0, 4), "7.0.4", "Stable", null, null));
+        // Assembly versions are 4-part; feed tags are 3-part — must not false-offer.
+        Assert.IsFalse(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 5, 0), "7.0.5", "Stable", null, null));
+    }
+
+    [TestMethod]
+    public void ShouldOfferChannelInstall_UnknownOriginOlderRemote_DoesNotOffer()
+    {
+        Assert.IsFalse(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 5, 0), "7.0.4", "Stable", null, null));
     }
 
     [TestMethod]
@@ -146,5 +170,26 @@ public class UpdateServiceTests
     {
         Assert.IsTrue(UpdateService.ShouldOfferChannelInstall(
             new Version(7, 0, 4), "7.0.4", "Stable", "7.0.4-beta", "Beta"));
+        Assert.IsTrue(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 4, 0), "7.0.4", "Stable", "7.0.4-beta", "Beta"));
+    }
+
+    [TestMethod]
+    public void ClassifyOfferKind_DistinguishesUpgradeChannelAndDowngrade()
+    {
+        Assert.AreEqual(
+            UpdateOfferKind.Upgrade,
+            UpdateService.ClassifyOfferKind(new Version(7, 0, 4, 0), "7.0.5", "Stable", null, null));
+        Assert.AreEqual(
+            UpdateOfferKind.ChannelSwitch,
+            UpdateService.ClassifyOfferKind(
+                new Version(7, 0, 4, 0), "7.0.4", "Stable", "7.0.4-beta", "Beta"));
+        Assert.AreEqual(
+            UpdateOfferKind.Downgrade,
+            UpdateService.ClassifyOfferKind(
+                new Version(7, 0, 5, 0), "7.0.4", "Stable", "7.0.5-beta", "Beta"));
+        Assert.AreEqual(
+            UpdateOfferKind.None,
+            UpdateService.ClassifyOfferKind(new Version(7, 0, 5, 0), "7.0.5", "Stable", null, null));
     }
 }
