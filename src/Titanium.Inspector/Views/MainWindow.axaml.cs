@@ -4,10 +4,12 @@ using System.Reflection;
 using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls;
+using Avalonia.Controls.Notifications;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Titanium.Inspector.Services;
@@ -30,6 +32,9 @@ public partial class MainWindow : Window
     private bool _sessionGridLayoutApplied;
     private ScrollBar? _sessionsVScroll;
     private MainWindowViewModel? _sessionsVm;
+    private MainWindowViewModel? _statusVm;
+    private WindowNotificationManager? _notificationManager;
+    private CancellationTokenSource? _attentionCts;
 
     public MainWindow()
     {
@@ -45,6 +50,32 @@ public partial class MainWindow : Window
             OnSessionsGridPointerPressed,
             RoutingStrategies.Tunnel);
         HookSessionsCollection(DataContext as MainWindowViewModel);
+        HookStatusAttention(DataContext as MainWindowViewModel);
+    }
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        base.OnApplyTemplate(e);
+        EnsureNotificationManager();
+    }
+
+    private void EnsureNotificationManager()
+    {
+        if (_notificationManager is not null)
+        {
+            return;
+        }
+
+        _notificationManager = new WindowNotificationManager(this)
+        {
+            Position = NotificationPosition.BottomRight,
+            MaxItems = 3,
+        };
+
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.AttachStatusNotifier(new AvaloniaStatusNotifier(() => _notificationManager));
+        }
     }
 
     private void OnSessionsGridLoaded(object? sender, RoutedEventArgs e)
@@ -118,6 +149,7 @@ public partial class MainWindow : Window
 
     private async void OnOpened(object? sender, EventArgs e)
     {
+        EnsureNotificationManager();
         AttachSessionsScroll();
         ApplySessionGridLayoutIfNeeded();
 
@@ -155,6 +187,10 @@ public partial class MainWindow : Window
     {
         CaptureAndPersistSessionGridLayout();
         HookSessionsCollection(null);
+        HookStatusAttention(null);
+        _attentionCts?.Cancel();
+        _attentionCts?.Dispose();
+        _attentionCts = null;
         if (_sessionsVScroll is not null)
         {
             _sessionsVScroll.PropertyChanged -= OnSessionsScrollBarPropertyChanged;
@@ -171,7 +207,65 @@ public partial class MainWindow : Window
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
         HookSessionsCollection(DataContext as MainWindowViewModel);
+        HookStatusAttention(DataContext as MainWindowViewModel);
+        if (_notificationManager is not null && DataContext is MainWindowViewModel vm)
+        {
+            vm.AttachStatusNotifier(new AvaloniaStatusNotifier(() => _notificationManager));
+        }
+
         ApplySessionGridLayoutIfNeeded();
+    }
+
+    private void HookStatusAttention(MainWindowViewModel? vm)
+    {
+        if (ReferenceEquals(_statusVm, vm))
+        {
+            return;
+        }
+
+        if (_statusVm is not null)
+        {
+            _statusVm.PropertyChanged -= OnStatusVmPropertyChanged;
+        }
+
+        _statusVm = vm;
+        if (_statusVm is not null)
+        {
+            _statusVm.PropertyChanged += OnStatusVmPropertyChanged;
+        }
+    }
+
+    private void OnStatusVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainWindowViewModel.StatusAttentionTick))
+        {
+            PulseStatusAttention();
+        }
+    }
+
+    private async void PulseStatusAttention()
+    {
+        _attentionCts?.Cancel();
+        _attentionCts?.Dispose();
+        _attentionCts = new CancellationTokenSource();
+        var token = _attentionCts.Token;
+
+        try
+        {
+            // Brief highlight behind the status text so results are harder to miss.
+            StatusTextHost.Background = new SolidColorBrush(Color.FromArgb(56, 0, 120, 212));
+            StatusTextBlock.Opacity = 1;
+            await Task.Delay(180, token);
+            StatusTextBlock.Opacity = 0.55;
+            await Task.Delay(160, token);
+            StatusTextBlock.Opacity = 1;
+            await Task.Delay(900, token);
+            StatusTextHost.Background = Brushes.Transparent;
+        }
+        catch (OperationCanceledException)
+        {
+            // superseded by a newer status result
+        }
     }
 
     private void HookSessionsCollection(MainWindowViewModel? vm)

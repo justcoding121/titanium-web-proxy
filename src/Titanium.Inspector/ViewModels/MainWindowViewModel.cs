@@ -26,9 +26,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly InterceptionService _interception;
     private readonly IInspectorDialogs _dialogs;
     private readonly IInspectorPathPicker _pathPicker;
+    private IStatusNotifier _statusNotifier;
     private readonly ObservableCollection<SessionSnapshot> _all;
     private readonly List<SessionSnapshot> _selectedSessions = new();
+    private readonly RelayCommand _clearSessionsCommand;
+    private readonly RelayCommand _removeSelectedSessionsCommand;
+    private readonly RelayCommand _exportSelectedHarCommand;
+    private readonly RelayCommand _exportSelectedArchiveCommand;
     private string _statusText = "Ready";
+    private StatusSeverity _statusSeverity = StatusSeverity.Neutral;
+    private bool _isStatusBusy;
+    private int _statusAttentionTick;
+    private bool _settingStatus;
     private string _sessionCountText = "Sessions: 0";
     private string _searchQuery = "";
     private SessionSnapshot? _selected;
@@ -79,7 +88,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         SettingsService settings,
         InterceptionService? interception = null,
         IInspectorDialogs? dialogs = null,
-        IInspectorPathPicker? pathPicker = null)
+        IInspectorPathPicker? pathPicker = null,
+        IStatusNotifier? statusNotifier = null)
     {
         _buffer = buffer;
         _registry = registry;
@@ -90,6 +100,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception = interception ?? new InterceptionService();
         _dialogs = dialogs ?? new AvaloniaInspectorDialogs();
         _pathPicker = pathPicker ?? new AvaloniaInspectorPathPicker();
+        _statusNotifier = statusNotifier ?? NullStatusNotifier.Instance;
         Sessions = new ObservableCollection<SessionSnapshot>();
         Breakpoints = new BreakpointViewModel();
         AutoResponder = new AutoResponderViewModel();
@@ -115,10 +126,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return Task.CompletedTask;
         });
         ExportHarCommand = new RelayCommand(async () => await ExportHarAsync());
-        ExportSelectedHarCommand = new RelayCommand(async () => await ExportSelectedHarAsync());
+        _exportSelectedHarCommand = new RelayCommand(async () => await ExportSelectedHarAsync(), () => HasSelectedSessions);
+        ExportSelectedHarCommand = _exportSelectedHarCommand;
         ImportHarCommand = new RelayCommand(async () => await ImportHarAsync());
         ExportArchiveCommand = new RelayCommand(async () => await ExportArchiveAsync());
-        ExportSelectedArchiveCommand = new RelayCommand(async () => await ExportSelectedArchiveAsync());
+        _exportSelectedArchiveCommand = new RelayCommand(async () => await ExportSelectedArchiveAsync(), () => HasSelectedSessions);
+        ExportSelectedArchiveCommand = _exportSelectedArchiveCommand;
         ImportArchiveCommand = new RelayCommand(async () => await ImportArchiveAsync());
         StartCaptureCommand = new RelayCommand(async () => await StartCaptureAsync());
         StopCaptureCommand = new RelayCommand(StopCaptureAsync);
@@ -144,8 +157,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             IgnoreServerCertificateErrors = !IgnoreServerCertificateErrors;
             return Task.CompletedTask;
         });
-        ClearSessionsCommand = new RelayCommand(ClearSessionsAsync);
-        RemoveSelectedSessionsCommand = new RelayCommand(RemoveSelectedSessionsAsync);
+        _clearSessionsCommand = new RelayCommand(ClearSessionsAsync, () => HasSessions);
+        ClearSessionsCommand = _clearSessionsCommand;
+        _removeSelectedSessionsCommand = new RelayCommand(RemoveSelectedSessionsAsync, () => HasSelectedSessions);
+        RemoveSelectedSessionsCommand = _removeSelectedSessionsCommand;
         ToggleSystemProxyCommand = new RelayCommand(ToggleSystemProxyAsync);
         InstallCaCommand = new RelayCommand(InstallCaAsync);
         UntrustCaCommand = new RelayCommand(UntrustCaAsync);
@@ -209,6 +224,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     /// <summary>Exposed for E2E / headless tests.</summary>
     public IInspectorPathPicker PathPicker => _pathPicker;
 
+    /// <summary>Attach window toast host after the main window template is ready.</summary>
+    public void AttachStatusNotifier(IStatusNotifier notifier) =>
+        _statusNotifier = notifier ?? NullStatusNotifier.Instance;
+
     /// <summary>Exposed for E2E / headless tests — seeds the in-memory capture list.</summary>
     public void SeedSession(SessionSnapshot snapshot)
     {
@@ -222,6 +241,57 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _selectedSessions.Clear();
         _selectedSessions.AddRange(selected);
         NotifyFilterSelectionProperties();
+    }
+
+    /// <summary>True when the store has at least one session (Clear sessions).</summary>
+    public bool HasSessions => _all.Count > 0;
+
+    /// <summary>Semantic color / busy state for the status bar.</summary>
+    public StatusSeverity StatusSeverity
+    {
+        get => _statusSeverity;
+        private set => SetField(ref _statusSeverity, value);
+    }
+
+    /// <summary>True while an async menu/action is waiting for a result.</summary>
+    public bool IsStatusBusy
+    {
+        get => _isStatusBusy;
+        private set => SetField(ref _isStatusBusy, value);
+    }
+
+    /// <summary>Increments when a non-busy result should briefly pulse the status text.</summary>
+    public int StatusAttentionTick
+    {
+        get => _statusAttentionTick;
+        private set => SetField(ref _statusAttentionTick, value);
+    }
+
+    /// <summary>
+    /// Update status bar text, severity, busy indicator, and optionally toast important outcomes.
+    /// </summary>
+    public void SetStatus(string text, StatusSeverity severity = StatusSeverity.Neutral, bool toastImportant = false)
+    {
+        _settingStatus = true;
+        try
+        {
+            SetField(ref _statusText, text, nameof(StatusText));
+            StatusSeverity = severity;
+            IsStatusBusy = severity == StatusSeverity.Busy;
+            if (severity is StatusSeverity.Success or StatusSeverity.Warning or StatusSeverity.Error)
+            {
+                StatusAttentionTick++;
+            }
+
+            if (toastImportant)
+            {
+                _statusNotifier.Show(text, severity);
+            }
+        }
+        finally
+        {
+            _settingStatus = false;
+        }
     }
 
     /// <summary>
@@ -490,7 +560,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         _stopBusy = true;
         _reenableSystemProxyOnStart = SystemProxy;
-        StatusText = "Stopping…";
+        SetStatus("Stopping…", StatusSeverity.Busy);
 
         try
         {
@@ -501,7 +571,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 SetSystemProxyCore(false);
                 PersistSettings();
                 RefreshEndpointAndBindUi();
-                StatusText = statusAfterStop;
+                SetStatus(statusAfterStop, StatusSeverity.Success);
             }).ConfigureAwait(false);
         }
         finally
@@ -524,7 +594,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         SelectedSession = null;
         _interception.ResetSessionIdSequence();
         RefreshSessionCountText();
-        StatusText = "Sessions cleared";
+        NotifyFilterSelectionProperties();
+        SetStatus("Sessions cleared", StatusSeverity.Success, toastImportant: true);
         return Task.CompletedTask;
     }
 
@@ -533,7 +604,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var selected = ResolveExportSelection();
         if (selected.Count == 0)
         {
-            StatusText = "Select one or more sessions to remove";
+            SetStatus("Select one or more sessions to remove", StatusSeverity.Warning);
             return Task.CompletedTask;
         }
 
@@ -555,7 +626,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         RefreshSessionCountText();
-        StatusText = selected.Count == 1 ? "Removed 1 session" : $"Removed {selected.Count} sessions";
+        NotifyFilterSelectionProperties();
+        SetStatus(
+            selected.Count == 1 ? "Removed 1 session" : $"Removed {selected.Count} sessions",
+            StatusSeverity.Success,
+            toastImportant: true);
         return Task.CompletedTask;
     }
 
@@ -569,7 +644,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         if (!_interception.IsRunning)
         {
-            StatusText = "Start the proxy first";
+            SetStatus("Start the proxy first", StatusSeverity.Warning);
             return;
         }
 
@@ -581,14 +656,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 ok = _interception.InstallRootCertificateAsAdmin(machineStore: false);
             else
             {
-                StatusText = "Root CA install cancelled elevation - try Export CA and install manually (Keychain / NSS / cert store)";
+                SetStatus(
+                    "Root CA install cancelled elevation - try Export CA and install manually (Keychain / NSS / cert store)",
+                    StatusSeverity.Warning);
                 return;
             }
         }
 
-        StatusText = ok
-            ? "Root CA trusted - ready to enable Decrypt HTTPS"
-            : "Root CA install failed (store / Keychain / NSS) - try Export CA, or allow the admin prompt";
+        SetStatus(
+            ok
+                ? "Root CA trusted - ready to enable Decrypt HTTPS"
+                : "Root CA install failed (store / Keychain / NSS) - try Export CA, or allow the admin prompt",
+            ok ? StatusSeverity.Success : StatusSeverity.Error,
+            toastImportant: true);
     }
 
 
@@ -596,14 +676,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         if (!_interception.IsRunning)
         {
-            StatusText = "Start the proxy first";
+            SetStatus("Start the proxy first", StatusSeverity.Warning);
             return;
         }
 
         var owner = TryGetMainWindow();
         if (!await _dialogs.ConfirmRemoveRootCaAsync(owner))
         {
-            StatusText = "Remove root CA cancelled";
+            SetStatus("Remove root CA cancelled", StatusSeverity.Neutral);
             return;
         }
 
@@ -613,23 +693,27 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             SetDecryptHttpsCore(false);
         }
 
-        StatusText = _interception.IsRootTrusted
-            ? "Remove requested but CA still present in store"
-            : "Root CA removed from current user store; Decrypt HTTPS is off until you install the CA again";
+        var stillPresent = _interception.IsRootTrusted;
+        SetStatus(
+            stillPresent
+                ? "Remove requested but CA still present in store"
+                : "Root CA removed from current user store; Decrypt HTTPS is off until you install the CA again",
+            stillPresent ? StatusSeverity.Warning : StatusSeverity.Success,
+            toastImportant: true);
     }
 
     private async Task RotateCaAsync()
     {
         if (!_interception.IsRunning)
         {
-            StatusText = "Start the proxy first";
+            SetStatus("Start the proxy first", StatusSeverity.Warning);
             return;
         }
 
         var owner = TryGetMainWindow();
         if (!await _dialogs.ConfirmRotateRootCaAsync(owner))
         {
-            StatusText = "Clear and reinstall root CA cancelled";
+            SetStatus("Clear and reinstall root CA cancelled", StatusSeverity.Neutral);
             return;
         }
 
@@ -640,7 +724,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var ok = _interception.RotateRootCertificate(machineStore: false);
         if (!ok)
         {
-            StatusText = "Clear and reinstall root CA failed — see logs";
+            SetStatus("Clear and reinstall root CA failed — see logs", StatusSeverity.Error, toastImportant: true);
             return;
         }
 
@@ -654,11 +738,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             if (!trusted && await _dialogs.ConfirmElevateRootCaAsync(owner))
                 trusted = _interception.InstallRootCertificateAsAdmin(machineStore: false);
 
-            StatusText = FormatRotateCaInstallStatus(trusted, changed);
+            var message = FormatRotateCaInstallStatus(trusted, changed);
+            SetStatus(message, trusted ? StatusSeverity.Success : StatusSeverity.Error, toastImportant: true);
             return;
         }
 
-        StatusText = FormatRotateCaDeferredTrustStatus(changed);
+        SetStatus(FormatRotateCaDeferredTrustStatus(changed), StatusSeverity.Warning, toastImportant: true);
     }
 
     private static string FormatRotateCaInstallStatus(bool trusted, bool changed)
@@ -674,7 +759,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private Task ExportCaAsync()
     {
         var path = _interception.ExportRootCertificate();
-        StatusText = path is null ? "No root certificate yet — Start the proxy first" : "Exported CA: " + path;
+        if (path is null)
+        {
+            SetStatus("No root certificate yet — Start the proxy first", StatusSeverity.Warning);
+        }
+        else
+        {
+            SetStatus("Exported CA: " + path, StatusSeverity.Success, toastImportant: true);
+        }
+
         return Task.CompletedTask;
     }
 
@@ -1022,6 +1115,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSelectedSessions)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSingleSelectedSession)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCopyUrl)));
+        RaiseSessionCommandCanExecuteChanged();
+    }
+
+    private void RaiseSessionCommandCanExecuteChanged()
+    {
+        _clearSessionsCommand.RaiseCanExecuteChanged();
+        _removeSelectedSessionsCommand.RaiseCanExecuteChanged();
+        _exportSelectedHarCommand.RaiseCanExecuteChanged();
+        _exportSelectedArchiveCommand.RaiseCanExecuteChanged();
     }
 
     private List<string> ResolveCopyUrls() =>
@@ -1655,7 +1757,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public string StatusText
     {
         get => _statusText;
-        set => SetField(ref _statusText, value);
+        set
+        {
+            if (_settingStatus)
+            {
+                SetField(ref _statusText, value);
+                return;
+            }
+
+            // Direct assignments (toggles / guards) stay Neutral and clear busy.
+            SetStatus(value, StatusSeverity.Neutral);
+        }
     }
 
     /// <summary>Live session total; kept separate so capture traffic does not wipe command feedback.</summary>
@@ -2012,6 +2124,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         SessionCountText = string.IsNullOrWhiteSpace(SearchQuery)
             ? $"Sessions: {_all.Count}{spilledSuffix}"
             : $"Sessions: {Sessions.Count} / {_all.Count}{spilledSuffix}";
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSessions)));
+        RaiseSessionCommandCanExecuteChanged();
     }
 
     private void NotifyQuickFilterProperties()
@@ -2045,15 +2159,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public async Task CheckUpdatesAsync(bool promptIfAvailable = true)
     {
         var channel = _updates.ChannelDisplayName;
-        StatusText = $"Checking for updates ({channel})…";
+        SetStatus($"Checking for updates ({channel})…", StatusSeverity.Busy);
         var result = await _updates.CheckAsync();
         if (!result.UpdateAvailable || string.IsNullOrEmpty(result.AssetUrl))
         {
-            StatusText = result.Message;
+            var upToDate = result.Message.Contains("up to date", StringComparison.OrdinalIgnoreCase);
+            SetStatus(
+                result.Message,
+                upToDate ? StatusSeverity.Success : StatusSeverity.Warning,
+                toastImportant: true);
             return;
         }
 
-        StatusText = result.Message;
+        SetStatus(result.Message, StatusSeverity.Success, toastImportant: true);
         if (!promptIfAvailable)
         {
             return;
@@ -2063,19 +2181,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var version = result.RemoteVersion ?? "";
         if (!await _dialogs.ConfirmInstallUpdateAsync(owner, version, result.ChannelDisplay, result.OfferKind))
         {
-            StatusText = result.Message;
+            SetStatus(result.Message, StatusSeverity.Success);
             return;
         }
 
-        StatusText = "Downloading update…";
+        SetStatus("Downloading update…", StatusSeverity.Busy);
         var (ok, message) = await _updates.DownloadAndStartApplyAsync(result);
-        StatusText = message;
+        SetStatus(message, ok ? StatusSeverity.Success : StatusSeverity.Error, toastImportant: true);
         if (!ok)
         {
             return;
         }
 
-        StatusText = $"Installing {version} ({result.ChannelDisplay})… restarting.";
+        SetStatus($"Installing {version} ({result.ChannelDisplay})… restarting.", StatusSeverity.Busy);
         BeginBackgroundShutdown();
         if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
@@ -2097,6 +2215,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.IgnoreServerCertificateErrors = _settings.Current.IgnoreServerCertificateErrors;
         _interception.DecryptHttps = _decryptHttps;
         _interception.ConfigureLogging(_settings.Current);
+        SetStatus("Starting proxy…", StatusSeverity.Busy);
         await _interception.StartAsync(address, BindPort);
         if (_interception.BoundPort > 0)
         {
@@ -2118,24 +2237,30 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         if (_decryptHttps && !_interception.RefreshTrustState())
         {
             SetDecryptHttpsCore(false);
-            StatusText = SystemProxy
-                ? $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS."
-                : $"Proxy running on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.";
+            SetStatus(
+                SystemProxy
+                    ? $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS."
+                    : $"Proxy running on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.",
+                StatusSeverity.Warning);
             return;
         }
 
         if (SystemProxy)
         {
-            StatusText = _decryptHttps
-                ? $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on. Decrypt HTTPS on. Chrome: --disable-quic or H3 may bypass."
-                : $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS shown as encrypted tunnels until Decrypt HTTPS is enabled." +
-                  " Chrome/Edge: --disable-quic or HTTP/3 may bypass the proxy.";
+            SetStatus(
+                _decryptHttps
+                    ? $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on. Decrypt HTTPS on. Chrome: --disable-quic or H3 may bypass."
+                    : $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS shown as encrypted tunnels until Decrypt HTTPS is enabled." +
+                      " Chrome/Edge: --disable-quic or HTTP/3 may bypass the proxy.",
+                StatusSeverity.Success);
             return;
         }
 
-        StatusText = _decryptHttps
-            ? $"Proxy running on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS on. Enable System proxy if needed. Chrome: --disable-quic or H3 may bypass."
-            : $"Proxy running on {FormatBindDisplay()}:{BindPort} — HTTPS shown as encrypted tunnels until Decrypt HTTPS is enabled. Enable System proxy if needed.";
+        SetStatus(
+            _decryptHttps
+                ? $"Proxy running on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS on. Enable System proxy if needed. Chrome: --disable-quic or H3 may bypass."
+                : $"Proxy running on {FormatBindDisplay()}:{BindPort} — HTTPS shown as encrypted tunnels until Decrypt HTTPS is enabled. Enable System proxy if needed.",
+            StatusSeverity.Success);
     }
 
     private void RefreshEndpointAndBindUi()
@@ -2167,20 +2292,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         if (SelectedSession is null)
         {
-            StatusText = "Select a session to replay";
+            SetStatus("Select a session to replay", StatusSeverity.Warning);
             return;
         }
 
-        StatusText = "Replaying…";
+        SetStatus("Replaying…", StatusSeverity.Busy);
         await _store.EnsureBodiesLoadedAsync(SelectedSession).ConfigureAwait(false);
         var result = await ReplayService.ReplayAsync(
             SelectedSession,
             ignoreServerCertificateErrors: _interception.IgnoreServerCertificateErrors).ConfigureAwait(false);
         await MarshalToUiAsync(() =>
         {
-            StatusText = result.Ok
-                ? $"Replay → HTTP {result.StatusCode}: {Truncate(result.Message, 120)}"
-                : "Replay failed: " + result.Message;
+            SetStatus(
+                result.Ok
+                    ? $"Replay → HTTP {result.StatusCode}: {Truncate(result.Message, 120)}"
+                    : "Replay failed: " + result.Message,
+                result.Ok ? StatusSeverity.Success : StatusSeverity.Error,
+                toastImportant: !result.Ok);
         }).ConfigureAwait(false);
     }
 
@@ -2188,11 +2316,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         if (string.IsNullOrWhiteSpace(ComposerUrl))
         {
-            StatusText = "Composer URL is required";
+            SetStatus("Composer URL is required", StatusSeverity.Warning);
             return;
         }
 
-        StatusText = "Composer sending…";
+        SetStatus("Composer sending…", StatusSeverity.Busy);
         var template = new SessionSnapshot
         {
             Method = string.IsNullOrWhiteSpace(ComposerMethod) ? "GET" : ComposerMethod,
@@ -2212,7 +2340,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         if (!result.Ok)
         {
-            StatusText = "Composer failed: " + result.Message;
+            SetStatus("Composer failed: " + result.Message, StatusSeverity.Error, toastImportant: true);
             return;
         }
 
@@ -2237,7 +2365,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ApplyFilter();
         RefreshSessionCountText();
         SelectedSession = snap;
-        StatusText = $"Composer → HTTP {result.StatusCode} (session #{snap.Id})";
+        SetStatus($"Composer → HTTP {result.StatusCode} (session #{snap.Id})", StatusSeverity.Success);
     }
 
     private static string? GuessContentType(string headers)
@@ -2262,14 +2390,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         if (_all.Count == 0)
         {
-            StatusText = "No sessions to export";
+            SetStatus("No sessions to export", StatusSeverity.Warning);
             return;
         }
 
         var path = await _pathPicker.PickSavePathAsync("Export all HAR", "titanium-inspector.har", "HAR", "*.har");
         if (path is null)
         {
-            StatusText = "Export HAR cancelled";
+            SetStatus("Export HAR cancelled", StatusSeverity.Neutral);
             return;
         }
 
@@ -2278,14 +2406,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             var sessions = _all.ToList();
             // Stay on the UI sync context (RelayCommand). ConfigureAwait(false) + StatusText update
             // raced with headless WaitUntil pumps on macOS (file written, StatusText stayed Ready).
-            StatusText = "Exporting HAR…";
+            SetStatus("Exporting HAR…", StatusSeverity.Busy);
             await _store.EnsureBodiesLoadedAsync(sessions);
             await SessionArchive.ExportHarAsync(sessions, path);
-            StatusText = $"Exported {sessions.Count} sessions to {path}";
+            SetStatus($"Exported {sessions.Count} sessions to {path}", StatusSeverity.Success, toastImportant: true);
         }
         catch (Exception ex)
         {
-            StatusText = "Export HAR failed: " + Truncate(ex.Message, 160);
+            SetStatus("Export HAR failed: " + Truncate(ex.Message, 160), StatusSeverity.Error, toastImportant: true);
         }
     }
 
@@ -2294,27 +2422,27 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var sessions = ResolveExportSelection();
         if (sessions.Count == 0)
         {
-            StatusText = "Select a session to export";
+            SetStatus("Select a session to export", StatusSeverity.Warning);
             return;
         }
 
         var path = await _pathPicker.PickSavePathAsync("Export selected HAR", "titanium-inspector.har", "HAR", "*.har");
         if (path is null)
         {
-            StatusText = "Export HAR cancelled";
+            SetStatus("Export HAR cancelled", StatusSeverity.Neutral);
             return;
         }
 
         try
         {
-            StatusText = "Exporting HAR…";
+            SetStatus("Exporting HAR…", StatusSeverity.Busy);
             await _store.EnsureBodiesLoadedAsync(sessions);
             await SessionArchive.ExportHarAsync(sessions, path);
-            StatusText = $"Exported {sessions.Count} sessions to {path}";
+            SetStatus($"Exported {sessions.Count} sessions to {path}", StatusSeverity.Success, toastImportant: true);
         }
         catch (Exception ex)
         {
-            StatusText = "Export HAR failed: " + Truncate(ex.Message, 160);
+            SetStatus("Export HAR failed: " + Truncate(ex.Message, 160), StatusSeverity.Error, toastImportant: true);
         }
     }
 
@@ -2323,10 +2451,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var path = await _pathPicker.PickOpenPathAsync("Import HAR", "HAR", "*.har", ZipFileFilter);
         if (path is null)
         {
-            StatusText = "No .har or archive to import";
+            SetStatus("No .har or archive to import", StatusSeverity.Warning);
             return;
         }
 
+        SetStatus("Importing…", StatusSeverity.Busy);
         List<SessionSnapshot> imported;
         if (path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
         {
@@ -2344,21 +2473,21 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         ApplyFilter();
         RefreshSessionCountText();
-        StatusText = $"Appended {imported.Count} sessions from {Path.GetFileName(path)}";
+        SetStatus($"Appended {imported.Count} sessions from {Path.GetFileName(path)}", StatusSeverity.Success, toastImportant: true);
     }
 
     private async Task ExportArchiveAsync()
     {
         if (_all.Count == 0)
         {
-            StatusText = "No sessions to export";
+            SetStatus("No sessions to export", StatusSeverity.Warning);
             return;
         }
 
         var path = await _pathPicker.PickSavePathAsync("Export all archive", "titanium-inspector.zip", "ZIP", ZipFileFilter);
         if (path is null)
         {
-            StatusText = "Export archive cancelled";
+            SetStatus("Export archive cancelled", StatusSeverity.Neutral);
             return;
         }
 
@@ -2367,14 +2496,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             var sessions = _all.ToList();
             // Stay on the UI sync context (RelayCommand). ConfigureAwait(false) + StatusText update
             // raced with headless WaitUntil pumps on macOS (file written, StatusText stayed Ready).
-            StatusText = "Exporting archive…";
+            SetStatus("Exporting archive…", StatusSeverity.Busy);
             await _store.EnsureBodiesLoadedAsync(sessions);
             await SessionArchive.ExportNativeArchiveAsync(sessions, path);
-            StatusText = $"Exported {sessions.Count} sessions to {path}";
+            SetStatus($"Exported {sessions.Count} sessions to {path}", StatusSeverity.Success, toastImportant: true);
         }
         catch (Exception ex)
         {
-            StatusText = "Export archive failed: " + Truncate(ex.Message, 160);
+            SetStatus("Export archive failed: " + Truncate(ex.Message, 160), StatusSeverity.Error, toastImportant: true);
         }
     }
 
@@ -2383,27 +2512,27 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var sessions = ResolveExportSelection();
         if (sessions.Count == 0)
         {
-            StatusText = "Select a session to export";
+            SetStatus("Select a session to export", StatusSeverity.Warning);
             return;
         }
 
         var path = await _pathPicker.PickSavePathAsync("Export selected archive", "titanium-inspector.zip", "ZIP", ZipFileFilter);
         if (path is null)
         {
-            StatusText = "Export archive cancelled";
+            SetStatus("Export archive cancelled", StatusSeverity.Neutral);
             return;
         }
 
         try
         {
-            StatusText = "Exporting archive…";
+            SetStatus("Exporting archive…", StatusSeverity.Busy);
             await _store.EnsureBodiesLoadedAsync(sessions);
             await SessionArchive.ExportNativeArchiveAsync(sessions, path);
-            StatusText = $"Exported {sessions.Count} sessions to {path}";
+            SetStatus($"Exported {sessions.Count} sessions to {path}", StatusSeverity.Success, toastImportant: true);
         }
         catch (Exception ex)
         {
-            StatusText = "Export archive failed: " + Truncate(ex.Message, 160);
+            SetStatus("Export archive failed: " + Truncate(ex.Message, 160), StatusSeverity.Error, toastImportant: true);
         }
     }
 
@@ -2412,11 +2541,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var path = await _pathPicker.PickOpenPathAsync("Import archive", "ZIP", ZipFileFilter);
         if (path is null)
         {
-            StatusText = "No titanium-inspector archive to import";
+            SetStatus("No titanium-inspector archive to import", StatusSeverity.Warning);
             return;
         }
 
-        StatusText = "Importing archive…";
+        SetStatus("Importing archive…", StatusSeverity.Busy);
         try
         {
             // Stay on the UI sync context (RelayCommand). ConfigureAwait(false) + off-thread
@@ -2430,11 +2559,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
             ApplyFilter();
             RefreshSessionCountText();
-            StatusText = $"Appended {imported.Count} sessions from {Path.GetFileName(path)}";
+            SetStatus($"Appended {imported.Count} sessions from {Path.GetFileName(path)}", StatusSeverity.Success, toastImportant: true);
         }
         catch (Exception ex)
         {
-            StatusText = "Import archive failed: " + Truncate(ex.Message, 160);
+            SetStatus("Import archive failed: " + Truncate(ex.Message, 160), StatusSeverity.Error, toastImportant: true);
         }
     }
 
@@ -2482,9 +2611,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 }
 
-internal sealed class RelayCommand(Func<Task> execute) : ICommand
+internal sealed class RelayCommand(Func<Task> execute, Func<bool>? canExecute = null) : ICommand
 {
-    public bool CanExecute(object? parameter) => true;
+    public bool CanExecute(object? parameter) => canExecute?.Invoke() ?? true;
+
+    public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 
     public async void Execute(object? parameter)
     {
@@ -2501,7 +2632,5 @@ internal sealed class RelayCommand(Func<Task> execute) : ICommand
         }
     }
 
-#pragma warning disable CS0067
     public event EventHandler? CanExecuteChanged;
-#pragma warning restore CS0067
 }

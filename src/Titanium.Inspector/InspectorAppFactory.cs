@@ -14,8 +14,9 @@ public static class InspectorAppFactory
         UpdateService updates,
         InterceptionService? interception = null,
         IInspectorDialogs? dialogs = null,
-        IInspectorPathPicker? pathPicker = null) =>
-        new(buffer, registry, updates, settings, interception, dialogs, pathPicker);
+        IInspectorPathPicker? pathPicker = null,
+        IStatusNotifier? statusNotifier = null) =>
+        new(buffer, registry, updates, settings, interception, dialogs, pathPicker, statusNotifier);
 
     public static (MainWindowViewModel ViewModel, MainWindow Window) CreateMainWindow(
         SettingsService settings,
@@ -24,9 +25,10 @@ public static class InspectorAppFactory
         UpdateService updates,
         InterceptionService? interception = null,
         IInspectorDialogs? dialogs = null,
-        IInspectorPathPicker? pathPicker = null)
+        IInspectorPathPicker? pathPicker = null,
+        IStatusNotifier? statusNotifier = null)
     {
-        var vm = CreateViewModel(settings, buffer, registry, updates, interception, dialogs, pathPicker);
+        var vm = CreateViewModel(settings, buffer, registry, updates, interception, dialogs, pathPicker, statusNotifier);
         var window = new MainWindow { DataContext = vm };
         return (vm, window);
     }

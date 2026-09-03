@@ -395,10 +395,18 @@
           </TabItem>
         </TabControl>
       </DockPanel>
-      <Grid Grid.Row="2" Grid.ColumnSpan="3" Margin="8" ColumnDefinitions="*,Auto">
-        <TextBlock Grid.Column="0" Text="{Binding StatusText}" TextWrapping="Wrap" VerticalAlignment="Center"
-                   AutomationProperties.AutomationId="StatusText" />
-        <TextBlock Grid.Column="1" Text="{Binding SessionCountText}" Margin="16,0,0,0" VerticalAlignment="Center"
+      <Grid Grid.Row="2" Grid.ColumnSpan="3" Margin="8" ColumnDefinitions="Auto,*,Auto"
+            x:Name="StatusBarPanel" AutomationProperties.AutomationId="StatusBarPanel">
+        <ProgressBar Grid.Column="0" Width="72" Height="4" Margin="0,0,8,0"
+                     IsIndeterminate="True" VerticalAlignment="Center"
+                     IsVisible="{Binding IsStatusBusy}"
+                     AutomationProperties.AutomationId="StatusBusyProgress" />
+        <Border Grid.Column="1" x:Name="StatusTextHost" Background="Transparent" CornerRadius="3" Padding="4,2">
+          <TextBlock x:Name="StatusTextBlock" Text="{Binding StatusText}" TextWrapping="Wrap" VerticalAlignment="Center"
+                     Foreground="{Binding StatusSeverity, Converter={StaticResource StatusSeverityBrushConverter}}"
+                     AutomationProperties.AutomationId="StatusText" />
+        </Border>
+        <TextBlock Grid.Column="2" Text="{Binding SessionCountText}" Margin="16,0,0,0" VerticalAlignment="Center"
                    Opacity="0.8" AutomationProperties.AutomationId="SessionCountText" />
       </Grid>
     </Grid>

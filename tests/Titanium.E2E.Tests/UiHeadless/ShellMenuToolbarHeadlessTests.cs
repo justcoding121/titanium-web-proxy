@@ -48,7 +48,7 @@ public class ShellMenuToolbarHeadlessTests
             fx.Robot.Click("MenuStartCapture");
             await InspectorUiRobot.WaitForAsync(() => fx.Interception.IsRunning, TimeSpan.FromSeconds(10));
 
-            fx.ViewModel.Sessions.Add(new SessionSnapshot
+            fx.ViewModel.SeedSession(new SessionSnapshot
             {
                 Id = 42,
                 Method = "GET",
@@ -58,6 +58,7 @@ public class ShellMenuToolbarHeadlessTests
                 Protocol = "HTTP/1.1",
             });
             Assert.IsTrue(fx.ViewModel.Sessions.Count >= 1);
+            Assert.IsTrue(fx.ViewModel.ClearSessionsCommand.CanExecute(null));
 
             fx.Robot.Click("MenuClearSessions");
             Assert.AreEqual(0, fx.ViewModel.Sessions.Count);

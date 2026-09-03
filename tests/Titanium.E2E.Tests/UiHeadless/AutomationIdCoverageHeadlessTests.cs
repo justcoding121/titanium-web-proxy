@@ -124,6 +124,8 @@ public class AutomationIdCoverageHeadlessTests
         "ScriptOnRequest",
         "ScriptOnResponse",
         "StatusText",
+        "StatusBusyProgress",
+        "StatusBarPanel",
         "SessionCountText"
     ];
 
