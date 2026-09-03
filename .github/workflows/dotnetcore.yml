@@ -34,7 +34,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
     permissions:
-      # write: Publish Documentation (EndBug/add-and-commit) pushes DocFX output to develop.
+      # write: Publish Documentation pushes DocFX output to develop.
       # GITHUB_TOKEN with contents:read cannot push (403 github-actions[bot]).
       contents: write
       # SonarCloud / PR decoration when token is present
@@ -134,22 +134,42 @@ jobs:
       shell: pwsh
       run: .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
 
-    - name: Update Documentation
-      if: github.ref == 'refs/heads/develop'
-      run: docfx .github/docfx.json
-
+    # DocFX output races other develop pushes (incl. concurrent "Update documentation").
+    # Sync to origin/develop, regenerate, commit docs-only, retry push — never fail the
+    # job on stash/rebase conflicts from EndBug/add-and-commit autostash.
     - name: Publish Documentation
       if: github.ref == 'refs/heads/develop'
-      uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5 # v9
-      with:
-        default_author: github_actions
-        message: Update documentation
-        committer_name: GitHub Actions
-        committer_email: actions@github.com
-        # Only commit DocFX output -- never Sonar/coverage/tool install artifacts
-        add: 'docs'
-        # DocFX often races another develop push; rebase instead of failing the job.
-        pull: '--rebase --autostash'
+      shell: pwsh
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        for ($attempt = 1; $attempt -le 5; $attempt++) {
+          Write-Host "Publish documentation attempt $attempt"
+          git fetch origin develop
+          if ($LASTEXITCODE -ne 0) { throw "git fetch failed" }
+          git reset --hard origin/develop
+          if ($LASTEXITCODE -ne 0) { throw "git reset failed" }
+          docfx .github/docfx.json
+          if ($LASTEXITCODE -ne 0) { throw "docfx failed" }
+          git add -- docs
+          if (-not (git status --porcelain -- docs)) {
+            Write-Host "No documentation changes to publish."
+            exit 0
+          }
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" `
+            commit --author="github-actions <41898282+github-actions[bot]@users.noreply.github.com>" `
+            -m "Update documentation"
+          if ($LASTEXITCODE -ne 0) { throw "git commit failed" }
+          git push origin HEAD:develop
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Documentation published."
+            exit 0
+          }
+          Write-Host "Push rejected (develop moved); retrying..."
+          Start-Sleep -Seconds (2 * $attempt)
+        }
+        throw "Failed to publish documentation after retries"
 
   # Cross-OS Inspector + Plus dashboard UI gates (Headless / Visual / Playwright).
   # Inspector unit suite stays on Windows `build` only except Inspector-Stress (below).
