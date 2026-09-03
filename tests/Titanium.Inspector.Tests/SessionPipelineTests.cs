@@ -119,6 +119,131 @@ public class SessionPipelineTests
     }
 
     [TestMethod]
+    public async Task SessionCountText_BodySearchShowsInMemoryOnlyScope_WhenBodiesSpilled()
+    {
+        var settingsPath = Path.Combine(Path.GetTempPath(), "twp-inspector-body-scope-" + Guid.NewGuid().ToString("N") + ".json");
+        var cacheDir = Path.Combine(Path.GetTempPath(), "twp-session-cache-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var settings = new SettingsService(settingsPath);
+            var registry = new SessionRegistry(
+                new SessionStoreOptions
+                {
+                    MaxSessionsInMemory = 100,
+                    HotBodySessions = 1,
+                    SpillBodiesToDisk = true,
+                    MaxCaptureBytesInMemory = long.MaxValue,
+                    DiskCacheMaxBytes = 64L * 1024 * 1024,
+                    DiskCacheMaxAgeDays = 1,
+                },
+                cacheDir);
+            var buffer = new SessionStreamBuffer(registry);
+            var vm = new MainWindowViewModel(
+                buffer,
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+
+            var s1 = new SessionSnapshot
+            {
+                Id = 1,
+                Method = "GET",
+                Url = "https://example.com/1",
+                RequestBodyText = "alpha-body",
+                RequestBodyBytes = new byte[32],
+                ResponseBodyText = "r1",
+                ResponseBodyBytes = new byte[32],
+            };
+            var s2 = new SessionSnapshot
+            {
+                Id = 2,
+                Method = "GET",
+                Url = "https://example.com/2",
+                RequestBodyText = "beta-body",
+                RequestBodyBytes = new byte[32],
+                ResponseBodyText = "r2",
+                ResponseBodyBytes = new byte[32],
+            };
+
+            registry.Add(s1);
+            registry.Add(s2);
+            await registry.Store.FlushSpillAsync();
+
+            Assert.IsTrue(registry.Store.SpilledCount >= 1, "Expected at least one spilled body");
+
+            vm.SearchQuery = "body:alpha-body";
+            StringAssert.Contains(vm.SessionCountText, "bodies on disk");
+            StringAssert.Contains(vm.SessionCountText, "body search: in-memory only");
+            StringAssert.Contains(vm.SessionCountText, "on disk skipped");
+        }
+        finally
+        {
+            if (File.Exists(settingsPath))
+            {
+                File.Delete(settingsPath);
+            }
+
+            try
+            {
+                if (Directory.Exists(cacheDir))
+                {
+                    Directory.Delete(cacheDir, recursive: true);
+                }
+            }
+            catch
+            {
+                // best-effort cleanup
+            }
+        }
+    }
+
+    [TestMethod]
+    public void SessionCountText_RetentionEviction_SurfacesCaptureWindowOnZeroMatch()
+    {
+        var settingsPath = Path.Combine(Path.GetTempPath(), "twp-inspector-retention-scope-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(settingsPath);
+            var registry = new SessionRegistry(
+                new SessionStoreOptions
+                {
+                    MaxSessionsInMemory = 2,
+                    HotBodySessions = 2,
+                    SpillBodiesToDisk = false,
+                    MaxCaptureBytesInMemory = long.MaxValue,
+                });
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+
+            var t0 = DateTimeOffset.UtcNow.AddMinutes(-30);
+            registry.Add(new SessionSnapshot { Id = 1, Url = "https://a/1", StartedUtc = t0 });
+            registry.Add(new SessionSnapshot { Id = 2, Url = "https://a/2", StartedUtc = t0.AddMinutes(1) });
+            registry.Add(new SessionSnapshot { Id = 3, Url = "https://a/3", StartedUtc = t0.AddMinutes(2) });
+
+            Assert.AreEqual(2, registry.Store.Count);
+            Assert.IsNull(registry.TryGet(1));
+
+            vm.SearchQuery = "host:does-not-exist";
+            StringAssert.Contains(vm.SessionCountText, "Sessions: 0 / 2");
+            StringAssert.Contains(vm.SessionCountText, "since ");
+            StringAssert.Contains(vm.SessionCountText, "no matches in current list");
+            StringAssert.Contains(vm.SessionCountText, "removed by retention");
+        }
+        finally
+        {
+            if (File.Exists(settingsPath))
+            {
+                File.Delete(settingsPath);
+            }
+        }
+    }
+
+    [TestMethod]
     public void SelectingSession_OpensDetails_CloseHidesPane()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-inspector-details-" + Guid.NewGuid().ToString("N") + ".json");

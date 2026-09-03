@@ -111,7 +111,7 @@
         <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarSearchFilters">
           <TextBox MinWidth="160" Width="320" MaxWidth="420" Margin="0,0,12,6"
                    Watermark="Search sessions… (e.g. method:GET host:api)"
-                   ToolTip.Tip="Advanced tokens: method: status: host: url: body: process: content-type: is:ws|grpc|tunnel|error hide:tunnel|image"
+                   ToolTip.Tip="Advanced tokens: method: status: host: url: body: process: content-type: is:ws|grpc|tunnel|error hide:tunnel|image. Metadata search covers all listed sessions (including spilled). body: searches in-memory bodies only — sessions with bodies on disk are skipped until you inspect them."
                    Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
           <CheckBox Content="Hide CONNECT" IsChecked="{Binding HideTunnelsFilter}"
                     VerticalAlignment="Center" Margin="0,0,12,6"

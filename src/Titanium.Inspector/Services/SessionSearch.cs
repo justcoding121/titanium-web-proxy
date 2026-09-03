@@ -165,6 +165,88 @@ public static class SessionSearch
     /// <summary>Clear the entire search/filter query.</summary>
     public static string ClearFilters(string? _) => "";
 
+    /// <summary>True when the query includes a <c>body:</c> token.</summary>
+    public static bool HasBodyToken(string? query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return false;
+        }
+
+        return Tokenize(query).Any(t => t.Key == "body");
+    }
+
+    /// <summary>
+    /// Hint when <c>body:</c> is active but some session bodies live only on disk
+    /// (search does not hydrate spilled bodies).
+    /// </summary>
+    public static string? FormatBodySearchScopeHint(string? query, int spilledCount)
+    {
+        if (spilledCount <= 0 || !HasBodyToken(query))
+        {
+            return null;
+        }
+
+        return spilledCount == 1
+            ? "body search: in-memory only, 1 on disk skipped"
+            : $"body search: in-memory only, {spilledCount} on disk skipped";
+    }
+
+    /// <summary>
+    /// Status-bar session count / search-scope text. Metadata search always covers listed rows;
+    /// <c>body:</c> is in-memory only unless bodies are hot.
+    /// </summary>
+    public static string BuildSessionCountText(
+        int visibleCount,
+        int totalCount,
+        string? searchQuery,
+        int spilledCount,
+        int retentionEvictedTotal,
+        DateTimeOffset? oldestStartedUtc)
+    {
+        var searching = !string.IsNullOrWhiteSpace(searchQuery);
+        var text = searching
+            ? $"Sessions: {visibleCount} / {totalCount}"
+            : $"Sessions: {totalCount}";
+
+        if (spilledCount > 0)
+        {
+            text += $" ({spilledCount} bodies on disk)";
+        }
+
+        if (retentionEvictedTotal > 0 && oldestStartedUtc is { } oldest)
+        {
+            text += $" · since {oldest.ToLocalTime():HH:mm}";
+        }
+
+        var bodyHint = FormatBodySearchScopeHint(searchQuery, spilledCount);
+        if (bodyHint is not null)
+        {
+            text += $" · {bodyHint}";
+        }
+
+        if (searching && visibleCount == 0 && totalCount > 0)
+        {
+            if (bodyHint is not null)
+            {
+                if (retentionEvictedTotal > 0)
+                {
+                    text += retentionEvictedTotal == 1
+                        ? " · 1 removed by retention"
+                        : $" · {retentionEvictedTotal} removed by retention";
+                }
+            }
+            else if (retentionEvictedTotal > 0)
+            {
+                text += retentionEvictedTotal == 1
+                    ? " · no matches in current list · 1 removed by retention"
+                    : $" · no matches in current list · {retentionEvictedTotal} removed by retention";
+            }
+        }
+
+        return text;
+    }
+
     private static List<(string Key, string Value)> Tokenize(string query)
     {
         var list = new List<(string, string)>();

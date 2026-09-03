@@ -40,6 +40,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private bool _settingStatus;
     private string _sessionCountText = "Sessions: 0";
     private string _searchQuery = "";
+    /// <summary>Sessions hard-evicted by retention this process (not user clear/remove).</summary>
+    private int _retentionEvictedTotal;
+    /// <summary>When &gt; 0, <see cref="OnSessionsRemoved"/> skips retention accounting/status.</summary>
+    private int _userRemovalDepth;
     private SessionSnapshot? _selected;
     private string _selectedHeaders = "";
     private string _selectedBody = "";
@@ -588,10 +592,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private Task ClearSessionsAsync()
     {
-        _store.Clear();
+        _userRemovalDepth++;
+        try
+        {
+            _store.Clear();
+        }
+        finally
+        {
+            _userRemovalDepth--;
+        }
+
         Sessions.Clear();
         _selectedSessions.Clear();
         SelectedSession = null;
+        _retentionEvictedTotal = 0;
         _interception.ResetSessionIdSequence();
         RefreshSessionCountText();
         NotifyFilterSelectionProperties();
@@ -609,7 +623,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         var ids = selected.Select(s => s.Id).ToHashSet();
-        _store.Remove(ids);
+        _userRemovalDepth++;
+        try
+        {
+            _store.Remove(ids);
+        }
+        finally
+        {
+            _userRemovalDepth--;
+        }
 
         for (var i = Sessions.Count - 1; i >= 0; i--)
         {
@@ -2081,6 +2103,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             SelectedSession = null;
         }
 
+        if (_userRemovalDepth > 0)
+        {
+            RefreshSessionCountText();
+            return;
+        }
+
+        _retentionEvictedTotal += removed.Count;
         RefreshSessionCountText();
         if (removed.Count == 1)
         {
@@ -2119,11 +2148,27 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private void RefreshSessionCountText()
     {
-        var spilled = _store.SpilledCount;
-        var spilledSuffix = spilled > 0 ? $" ({spilled} bodies on disk)" : "";
-        SessionCountText = string.IsNullOrWhiteSpace(SearchQuery)
-            ? $"Sessions: {_all.Count}{spilledSuffix}"
-            : $"Sessions: {Sessions.Count} / {_all.Count}{spilledSuffix}";
+        DateTimeOffset? oldest = null;
+        if (_retentionEvictedTotal > 0 && _all.Count > 0)
+        {
+            oldest = _all[0].StartedUtc;
+            for (var i = 1; i < _all.Count; i++)
+            {
+                var t = _all[i].StartedUtc;
+                if (t < oldest.Value)
+                {
+                    oldest = t;
+                }
+            }
+        }
+
+        SessionCountText = SessionSearch.BuildSessionCountText(
+            Sessions.Count,
+            _all.Count,
+            SearchQuery,
+            _store.SpilledCount,
+            _retentionEvictedTotal,
+            oldest);
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSessions)));
         RaiseSessionCommandCanExecuteChanged();
     }
