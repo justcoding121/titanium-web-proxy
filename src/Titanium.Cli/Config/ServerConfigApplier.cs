@@ -37,6 +37,31 @@ internal static class ServerConfigApplier
         ApplyTls(proxy, server.Tls);
         ApplyUpstream(proxy, server.Upstream);
         ApplyCertificateManager(proxy, server.CertificateManager);
+        ApplyDecryptExclusions(proxy, server);
+    }
+
+    private static void ApplyDecryptExclusions(ProxyServer proxy, ServerConfig server)
+    {
+        if (server.DecryptSkipHosts is null && server.DecryptOnlyHosts is null)
+        {
+            return;
+        }
+
+        var skip = server.DecryptSkipHosts ?? [];
+        var only = server.DecryptOnlyHosts ?? [];
+        foreach (var endPoint in proxy.ProxyEndPoints)
+        {
+            if (endPoint is not ExplicitProxyEndPoint explicitEp)
+            {
+                continue;
+            }
+
+            MitmExclusionDefaults.ApplyDecryptExclusions(
+                explicitEp,
+                () => explicitEp.DecryptSsl,
+                skip,
+                only);
+        }
     }
 
     private static void ApplyProtocolFlags(ProxyServer proxy, ServerConfig server)

@@ -38,6 +38,9 @@ public class CaptureSettingsParityTests
             svc.Current.IgnoreServerCertificateErrors = true;
             svc.Current.DecryptSkipHosts = ["*.corp.example.com", "auth.example.com"];
             svc.Current.DecryptOnlyHosts = ["api.example.com"];
+            svc.Current.SystemProxyBypassHosts = ["sso.corp.example.com"];
+            svc.Current.ProxyLoopback = false;
+            svc.Current.WarnedAboutPacReplace = true;
             svc.Current.LoggingEnabled = true;
             svc.Current.LoggingEnableFile = true;
             svc.Current.LoggingMinimumLevel = "Warning";
@@ -54,6 +57,9 @@ public class CaptureSettingsParityTests
             Assert.IsTrue(loaded.IgnoreServerCertificateErrors);
             CollectionAssert.AreEqual(ExpectedSkipHosts, loaded.DecryptSkipHosts);
             CollectionAssert.AreEqual(ExpectedOnlyHosts, loaded.DecryptOnlyHosts);
+            CollectionAssert.AreEqual(new[] { "sso.corp.example.com" }, loaded.SystemProxyBypassHosts);
+            Assert.IsFalse(loaded.ProxyLoopback);
+            Assert.IsTrue(loaded.WarnedAboutPacReplace);
             Assert.AreEqual("Warning", loaded.LoggingMinimumLevel);
             Assert.AreEqual(@"C:\tmp\inspector.log", loaded.LoggingFilePath);
         }

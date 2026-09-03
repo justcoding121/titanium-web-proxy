@@ -59,6 +59,14 @@ public sealed class InterceptionService : IDisposable
     /// <summary>When non-empty, only these hosts are decrypted (built-in bypasses still never decrypt).</summary>
     public List<string> DecryptOnlyHosts { get; set; } = [];
 
+    /// <summary>User WinINET bypass patterns when System proxy is on.</summary>
+    public List<string> SystemProxyBypassHosts { get; set; } = [];
+
+    /// <summary>Proxy localhost through the system proxy when enabled.</summary>
+    public bool ProxyLoopback { get; set; } = true;
+
+    public InspectorSettings? SystemProxySettings { get; set; }
+
     /// <summary>True when the OS can host QUIC (MsQuic / <c>QuicListener.IsSupported</c>).</summary>
     public static bool IsHttp3Supported => System.Net.Quic.QuicListener.IsSupported;
 
@@ -348,7 +356,7 @@ public sealed class InterceptionService : IDisposable
     /// <summary>
     /// Enable or disable system proxy. Returns false if the proxy is not running or the underlying call failed.
     /// </summary>
-    public bool SetSystemProxy(bool enable)
+    public bool SetSystemProxy(bool enable, InspectorSettings? settings = null)
     {
         if (_proxy is null || _endPoint is null || !_proxy.ProxyRunning)
         {
@@ -359,7 +367,9 @@ public sealed class InterceptionService : IDisposable
         {
             if (enable)
             {
-                _systemProxy.SetAsSystemProxy(_proxy, _endPoint);
+                var effective = settings ?? SystemProxySettings ?? new InspectorSettings();
+                SystemProxySettings = effective;
+                _systemProxy.SetAsSystemProxy(_proxy, _endPoint, effective);
                 _systemProxyEnabled = true;
             }
             else
@@ -374,6 +384,17 @@ public sealed class InterceptionService : IDisposable
         {
             return false;
         }
+    }
+
+    /// <summary>Re-applies system proxy bypass rules when already enabled (after settings change).</summary>
+    public bool ReapplySystemProxyIfEnabled()
+    {
+        if (!_systemProxyEnabled || SystemProxySettings is null)
+        {
+            return true;
+        }
+
+        return SetSystemProxy(true, SystemProxySettings);
     }
 
     /// <summary>Install root CA and refresh <see cref="IsRootTrusted"/> from the store.</summary>
@@ -729,10 +750,14 @@ public sealed class InterceptionService : IDisposable
     {
         var host = e.HttpClient.Request.RequestUri?.Host
                    ?? TryHost(e.HttpClient.Request);
-        e.DecryptSsl = DecryptHttps && !MitmBypass.ShouldDisableSslDecrypt(
+        var disableDecrypt = MitmBypass.ShouldDisableSslDecrypt(
             host,
             DecryptSkipHosts,
             DecryptOnlyHosts);
+        e.DecryptSsl = DecryptHttps && !disableDecrypt;
+        var opaqueReason = disableDecrypt || !DecryptHttps
+            ? MitmBypass.ResolveOpaqueReason(host, DecryptHttps, DecryptSkipHosts, DecryptOnlyHosts)
+            : OpaqueTunnelReason.None;
 
         if (!Capturing)
         {
@@ -743,7 +768,7 @@ public sealed class InterceptionService : IDisposable
         {
             // Opaque HTTPS (DecryptHttps=false) never hits BeforeRequest — publish CONNECT here
             // so the session list matches Fiddler when decryption is off.
-            var snap = CreateTunnelSnapshot(e);
+            var snap = CreateTunnelSnapshot(e, opaqueReason);
             AttachTunnelByteCounters(e, snap);
             _live[e.HttpClient] = snap;
             SessionCaptured?.Invoke(this, snap);
@@ -784,7 +809,7 @@ public sealed class InterceptionService : IDisposable
         return Task.CompletedTask;
     }
 
-    private SessionSnapshot CreateTunnelSnapshot(TunnelConnectSessionEventArgs e)
+    private SessionSnapshot CreateTunnelSnapshot(TunnelConnectSessionEventArgs e, OpaqueTunnelReason opaqueReason)
     {
         var req = e.HttpClient.Request;
         var processId = 0;
@@ -814,6 +839,7 @@ public sealed class InterceptionService : IDisposable
             ProcessId = processId,
             ProcessName = processName,
             IsTunnel = true,
+            OpaqueReason = opaqueReason,
         };
     }
 

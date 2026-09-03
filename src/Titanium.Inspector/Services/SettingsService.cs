@@ -97,6 +97,18 @@ public sealed class InspectorSettings
     /// When non-empty, only these host patterns are decrypted (built-in bypass hosts still never decrypt).
     /// </summary>
     public List<string> DecryptOnlyHosts { get; set; } = new();
+
+    /// <summary>Extra WinINET bypass patterns (Layer A) when System proxy is on.</summary>
+    public List<string> SystemProxyBypassHosts { get; set; } = new();
+
+    /// <summary>When true, localhost uses the proxy (WinINET &lt;-loopback&gt; / Unix NO_PROXY parity).</summary>
+    public bool ProxyLoopback { get; set; } = true;
+
+    /// <summary>Power users may edit built-in exclusion entries.</summary>
+    public bool AllowEditingBuiltInExclusions { get; set; }
+
+    /// <summary>User acknowledged PAC replace warning when enabling System proxy.</summary>
+    public bool WarnedAboutPacReplace { get; set; }
 }
 
 public sealed class SettingsService

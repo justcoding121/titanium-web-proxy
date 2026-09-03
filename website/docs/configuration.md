@@ -148,6 +148,8 @@ server:
     upStreamEndPoint: null
     upStreamEndPointIPv4: null
     upStreamEndPointIPv6: null
+  decryptSkipHosts: []      # explicit listeners: tunnel-only (no MITM) per host pattern
+  decryptOnlyHosts: []      # when non-empty, only these hosts are decrypted
   certificateManager:
     certificateEngine: BouncyCastleFast
     leafCertificateKeyAlgorithm: EcdsaP256

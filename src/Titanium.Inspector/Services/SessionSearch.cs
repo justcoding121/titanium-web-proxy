@@ -285,6 +285,9 @@ public static class SessionSearch
                 "tunnel" => s.IsTunnel,
                 "multipart" => s.IsMultipart,
                 "error" or "errors" => IsErrorStatus(s.StatusCode),
+                "opaque" or "encrypted" => s.IsTunnel && s.OpaqueReason != OpaqueTunnelReason.None,
+                _ when token.Value.StartsWith("opaque-reason:", StringComparison.OrdinalIgnoreCase) =>
+                    MatchOpaqueReason(s, token.Value["opaque-reason:".Length..]),
                 _ => true,
             },
             "hide" => token.Value.ToLowerInvariant() switch
@@ -367,5 +370,25 @@ public static class SessionSearch
 
         return ImageOrStaticExtensions.Any(ext =>
             path.EndsWith(ext, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool MatchOpaqueReason(SessionSnapshot s, string reasonToken)
+    {
+        if (!s.IsTunnel || s.OpaqueReason == OpaqueTunnelReason.None)
+        {
+            return false;
+        }
+
+        return reasonToken.ToLowerInvariant() switch
+        {
+            "builtin" or "built-in" => s.OpaqueReason is OpaqueTunnelReason.BuiltInIdentity
+                or OpaqueTunnelReason.BuiltInPinning,
+            "identity" or "microsoft" => s.OpaqueReason == OpaqueTunnelReason.BuiltInIdentity,
+            "pinning" => s.OpaqueReason == OpaqueTunnelReason.BuiltInPinning,
+            "skip" or "skiplist" => s.OpaqueReason == OpaqueTunnelReason.UserSkipList,
+            "only" or "onlylist" => s.OpaqueReason == OpaqueTunnelReason.UserOnlyList,
+            "decrypt-off" or "decryptoff" => s.OpaqueReason == OpaqueTunnelReason.DecryptOff,
+            _ => s.OpaqueReason.ToString().Equals(reasonToken, StringComparison.OrdinalIgnoreCase),
+        };
     }
 }

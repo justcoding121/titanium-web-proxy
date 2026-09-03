@@ -41,6 +41,11 @@ public interface IInspectorDialogs
     Task<bool> ConfirmResetSettingsAsync(Window? owner);
 
     /// <summary>
+    /// Warn when enabling System proxy will replace an existing PAC script.
+    /// </summary>
+    Task<bool> ConfirmPacReplaceAsync(Window? owner);
+
+    /// <summary>
     /// Confirm installing an Inspector update for the selected channel. Returns true if Install and restart.
     /// </summary>
     Task<bool> ConfirmInstallUpdateAsync(
@@ -190,11 +195,20 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
         SimpleConfirmDialog.ShowAsync(
             owner,
             "Reset Inspector settings",
-            "Restore bind address, menus, Tools (Composer/Breakpoints/AutoResponder/Scripts), retention, logging, HTTPS host lists, and layout to factory defaults?\n\n" +
-            "This does not remove the root CA, change OS trust, clear captured sessions, or delete the on-disk body cache. Restart Inspector afterward so retention limits fully apply.",
+            "Restore bind address, menus, Tools, retention, logging, exclusion host lists (bypass and tunnel-only), and layout to factory defaults?\n\n" +
+            "This does not remove the root CA, change OS proxy or Store loopback exemptions, clear captured sessions, or delete the on-disk body cache. Restart Inspector afterward so retention limits fully apply.",
             accept: "Reset settings",
             cancel: CancelLabel,
-            height: 300);
+            height: 320);
+
+    public Task<bool> ConfirmPacReplaceAsync(Window? owner) =>
+        SimpleConfirmDialog.ShowAsync(
+            owner,
+            "Replace PAC script?",
+            "Inspector will set itself as the system proxy and replace any PAC script. Your existing bypass list will be preserved and merged. Disabling System proxy restores previous settings.",
+            accept: "Enable system proxy",
+            cancel: CancelLabel,
+            height: 280);
 
     public Task<bool> ConfirmInstallUpdateAsync(
         Window? owner,
@@ -242,6 +256,7 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
     public bool QuitFirefoxForTrustResult { get; set; } = true;
     public bool DeviceCaSetupResult { get; set; }
     public bool ResetSettingsResult { get; set; } = true;
+    public bool PacReplaceResult { get; set; } = true;
     public bool RotateRootCaResult { get; set; } = true;
     public bool InstallUpdateResult { get; set; } = true;
     public int InstallRootCaCalls { get; private set; }
@@ -314,6 +329,9 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
         ResetSettingsCalls++;
         return Task.FromResult(ResetSettingsResult);
     }
+
+    public Task<bool> ConfirmPacReplaceAsync(Window? owner) =>
+        Task.FromResult(PacReplaceResult);
 
     public Task<bool> ConfirmInstallUpdateAsync(
         Window? owner,

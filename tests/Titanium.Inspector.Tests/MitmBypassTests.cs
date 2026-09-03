@@ -41,4 +41,31 @@ public class MitmBypassTests
         Assert.IsTrue(MitmBypass.HostnameMatches("login.live.com", "login.live.com"));
         Assert.IsFalse(MitmBypass.HostnameMatches("other.com", "*.example.com"));
     }
+
+    [TestMethod]
+    public void ResolveOpaqueReason_ClassifiesBuiltInAndUserLists()
+    {
+        Assert.AreEqual(OpaqueTunnelReason.DecryptOff,
+            MitmBypass.ResolveOpaqueReason("api.example.com", decryptHttps: false, null, null));
+        Assert.AreEqual(OpaqueTunnelReason.BuiltInIdentity,
+            MitmBypass.ResolveOpaqueReason("login.live.com", decryptHttps: true, null, null));
+        Assert.AreEqual(OpaqueTunnelReason.BuiltInPinning,
+            MitmBypass.ResolveOpaqueReason("www.dropbox.com", decryptHttps: true, null, null));
+        Assert.AreEqual(OpaqueTunnelReason.UserSkipList,
+            MitmBypass.ResolveOpaqueReason("api.example.com", true, ["api.example.com"], null));
+        Assert.AreEqual(OpaqueTunnelReason.UserOnlyList,
+            MitmBypass.ResolveOpaqueReason("other.example.com", true, null, ["api.example.com"]));
+    }
+
+    [TestMethod]
+    public void CreateSystemProxySettings_MergesUserBypassHosts()
+    {
+        var settings = MitmBypass.CreateSystemProxySettings(new InspectorSettings
+        {
+            SystemProxyBypassHosts = ["*.corp.example.com"],
+            ProxyLoopback = true,
+        });
+        CollectionAssert.Contains(settings.BypassRules.ToList(), "*.corp.example.com");
+        Assert.IsTrue(settings.ProxyLoopback);
+    }
 }

@@ -45,6 +45,8 @@
                   IsChecked="{Binding SystemProxy, Mode=OneWay}"
                   Command="{Binding ToggleSystemProxyCommand}"
                   AutomationProperties.AutomationId="MenuToggleSystemProxy" />
+        <MenuItem Header="View excluded hosts…" Command="{Binding ViewExcludedHostsCommand}"
+                  AutomationProperties.AutomationId="MenuViewExcludedHosts" />
         <MenuItem Header="Install root CA (current user)" Command="{Binding InstallCaCommand}" AutomationProperties.AutomationId="MenuInstallCa" />
         <MenuItem Header="Remove root CA (current user)" Command="{Binding UntrustCaCommand}" AutomationProperties.AutomationId="MenuRemoveCa" />
         <MenuItem Header="Clear and reinstall root CA…" Command="{Binding RotateCaCommand}" AutomationProperties.AutomationId="MenuRotateCa" />
@@ -80,7 +82,8 @@
         <Separator />
         <MenuItem Header="Session retention…" Command="{Binding OpenSessionRetentionCommand}"
                   AutomationProperties.AutomationId="MenuSessionRetention" />
-        <MenuItem Header="HTTPS sites to decrypt…" Command="{Binding OpenHttpsDecryptHostsCommand}"
+        <MenuItem Header="Excluded hosts…" Command="{Binding OpenHttpsDecryptHostsCommand}"
+                  ToolTip.Tip="HTTPS decrypt skip lists and OS bypass rules"
                   AutomationProperties.AutomationId="MenuHttpsDecryptHosts" />
         <MenuItem Header="Ignore insecure server certificates" ToggleType="CheckBox"
                   IsChecked="{Binding IgnoreServerCertificateErrors, Mode=OneWay}"
@@ -216,6 +219,9 @@
             <MenuItem Header="Filter by host" Command="{Binding FilterByHostCommand}"
                       IsVisible="{Binding CanFilterByHost}"
                       AutomationProperties.AutomationId="CtxFilterByHost" />
+            <MenuItem Header="Exclude host…" Command="{Binding ExcludeHostCommand}"
+                      IsVisible="{Binding CanExcludeHost}"
+                      AutomationProperties.AutomationId="CtxExcludeHost" />
             <MenuItem Header="Filter by process" Command="{Binding FilterByProcessCommand}"
                       IsVisible="{Binding CanFilterByProcess}"
                       AutomationProperties.AutomationId="CtxFilterByProcess" />
@@ -245,7 +251,14 @@
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
-          <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="180" MinWidth="120" />
+          <DataGridTemplateColumn Header="Host" Width="180" MinWidth="120" SortMemberPath="Host">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate x:DataType="svc:SessionSnapshot">
+                <TextBlock Text="{Binding Host}" VerticalAlignment="Center"
+                           ToolTip.Tip="{Binding OpaqueReasonDisplay}" />
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
           <DataGridTextColumn Header="URL" Binding="{Binding Url}" Width="320" MinWidth="160" />
           <DataGridTextColumn Header="Protocol" Binding="{Binding Protocol}" Width="130" MinWidth="120" />
           <DataGridTextColumn Header="Duration (ms)" Binding="{Binding DurationMs, StringFormat={}{0:0}}"
@@ -284,8 +297,14 @@
                           IsVisible="{Binding HasSelectedSession}"
                           SelectedIndex="{Binding SelectedInspectTabIndex}">
                 <TabItem Header="Headers" AutomationProperties.AutomationId="TabHeaders">
-                  <TextBox IsReadOnly="True" Text="{Binding SelectedHeaders}" AcceptsReturn="True" TextWrapping="Wrap"
-                           FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="HeadersText" />
+                  <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="{Binding SelectedOpaqueHint}" Margin="0,0,0,8"
+                               TextWrapping="Wrap" Opacity="0.85" FontSize="12"
+                               IsVisible="{Binding ShowSelectedOpaqueHint}"
+                               AutomationProperties.AutomationId="SelectedOpaqueHint" />
+                    <TextBox IsReadOnly="True" Text="{Binding SelectedHeaders}" AcceptsReturn="True" TextWrapping="Wrap"
+                             FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="HeadersText" />
+                  </DockPanel>
                 </TabItem>
                 <TabItem Header="Body" AutomationProperties.AutomationId="TabBody">
                   <TextBox IsReadOnly="True" Text="{Binding SelectedBody}" AcceptsReturn="True" TextWrapping="Wrap"
@@ -418,7 +437,7 @@
           </TabItem>
         </TabControl>
       </DockPanel>
-      <Grid Grid.Row="2" Grid.ColumnSpan="3" Margin="8" ColumnDefinitions="Auto,*,Auto"
+      <Grid Grid.Row="2" Grid.ColumnSpan="3" Margin="8" ColumnDefinitions="Auto,*,Auto,Auto"
             x:Name="StatusBarPanel" AutomationProperties.AutomationId="StatusBarPanel">
         <ProgressBar Grid.Column="0" Width="72" Height="4" Margin="0,0,8,0"
                      IsIndeterminate="True" VerticalAlignment="Center"
@@ -431,6 +450,12 @@
         </Border>
         <TextBlock Grid.Column="2" Text="{Binding SessionCountText}" Margin="16,0,0,0" VerticalAlignment="Center"
                    Opacity="0.8" AutomationProperties.AutomationId="SessionCountText" />
+        <Button Grid.Column="3" Content="{Binding ExclusionSummaryText}" Margin="8,0,0,0"
+                VerticalAlignment="Center" Padding="4,0" Background="Transparent" BorderThickness="0"
+                Command="{Binding OpenExclusionSummaryCommand}"
+                IsVisible="{Binding HasExclusionSummary}"
+                Opacity="0.85" FontSize="11"
+                AutomationProperties.AutomationId="ExclusionSummaryLink" />
       </Grid>
     </Grid>
   </DockPanel>

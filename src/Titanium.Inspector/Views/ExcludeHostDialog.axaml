@@ -1,0 +1,29 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Titanium.Inspector.Views.ExcludeHostDialog"
+        AutomationProperties.AutomationId="ExcludeHostDialog"
+        Title="Exclude host"
+        Width="440" Height="280"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+  <DockPanel Margin="16">
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+      <Button x:Name="SaveButton" Content="Add" MinWidth="88" AutomationProperties.AutomationId="ExcludeHostAdd" />
+      <Button x:Name="CancelButton" Content="Cancel" MinWidth="88" IsCancel="True" AutomationProperties.AutomationId="ExcludeHostCancel" />
+    </StackPanel>
+    <StackPanel Spacing="10">
+      <TextBlock x:Name="HostLabel" FontWeight="SemiBold" />
+      <RadioButton x:Name="TunnelOnlyRadio" GroupName="ExcludeKind" IsChecked="True"
+                   Content="Tunnel only (recommended) — stays visible, no decrypt"
+                   AutomationProperties.AutomationId="ExcludeHostTunnelOnly" />
+      <RadioButton x:Name="BypassProxyRadio" GroupName="ExcludeKind"
+                   Content="Bypass proxy (System proxy) — hidden from session list"
+                   AutomationProperties.AutomationId="ExcludeHostBypassProxy" />
+      <TextBlock x:Name="BypassWarning" TextWrapping="Wrap" Foreground="OrangeRed" FontSize="12"
+                 IsVisible="False"
+                 Text="Traffic will not appear in Inspector. Requires System proxy to be on." />
+      <CheckBox x:Name="WildcardParentCheck" Content="Also add *.parent-domain.com"
+                AutomationProperties.AutomationId="ExcludeHostWildcardParent" />
+    </StackPanel>
+  </DockPanel>
+</Window>

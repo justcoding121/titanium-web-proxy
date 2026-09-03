@@ -51,6 +51,12 @@ public sealed class ServerConfig
     public UpstreamConfig? Upstream { get; set; }
 
     public CertificateManagerConfig? CertificateManager { get; set; }
+
+    /// <summary>Host patterns that skip HTTPS decryption on explicit listeners (tunnel only).</summary>
+    public List<string>? DecryptSkipHosts { get; set; }
+
+    /// <summary>When non-empty, only these hosts are decrypted on explicit listeners.</summary>
+    public List<string>? DecryptOnlyHosts { get; set; }
 }
 
 /// <summary>Deadline and retry knobs on <c>ProxyServer</c>.</summary>

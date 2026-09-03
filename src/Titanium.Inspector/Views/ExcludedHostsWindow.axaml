@@ -1,0 +1,65 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Titanium.Inspector.Views.ExcludedHostsWindow"
+        AutomationProperties.AutomationId="ExcludedHostsWindow"
+        Title="Excluded hosts"
+        Width="640" Height="720"
+        WindowStartupLocation="CenterOwner">
+  <DockPanel Margin="16">
+    <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
+      <TextBlock TextWrapping="Wrap" Opacity="0.9"
+                 Text="OS bypass rules apply only when Capture → System proxy is on. Tunnel-only rules apply to all clients pointing at Inspector." />
+      <TextBlock x:Name="ScopeBanner" TextWrapping="Wrap" Opacity="0.75" FontSize="12" />
+    </StackPanel>
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+      <Button x:Name="SaveButton" Content="Save" MinWidth="88" AutomationProperties.AutomationId="ExcludedHostsSave" />
+      <Button x:Name="CancelButton" Content="Cancel" MinWidth="88" IsCancel="True" AutomationProperties.AutomationId="ExcludedHostsCancel" />
+    </StackPanel>
+    <ScrollViewer>
+      <StackPanel Spacing="12">
+        <TextBlock FontWeight="SemiBold" Text="Built-in (recommended)" />
+        <TextBlock Opacity="0.75" TextWrapping="Wrap" FontSize="12"
+                   Text="Microsoft identity hosts bypass the proxy. Pinning hosts tunnel without decrypt." />
+        <TextBox x:Name="BuiltInBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
+                 MinHeight="120" FontFamily="Consolas,Courier New,monospace" FontSize="11"
+                 AutomationProperties.AutomationId="ExcludedBuiltInList" />
+
+        <TextBlock FontWeight="SemiBold" Text="Your rules — Bypass proxy (OS)" />
+        <TextBlock Opacity="0.75" TextWrapping="Wrap" FontSize="12"
+                   Text="Traffic will not appear in Inspector. Requires System proxy." />
+        <TextBox x:Name="BypassHostsBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="72"
+                 Watermark="*.corp.example.com"
+                 AutomationProperties.AutomationId="ExcludedBypassHosts" />
+
+        <TextBlock FontWeight="SemiBold" Text="Your rules — Tunnel only (no decrypt)" />
+        <TextBlock Opacity="0.75" TextWrapping="Wrap" FontSize="12"
+                   Text="Stays visible as CONNECT. Turn on Decrypt HTTPS on the toolbar first." />
+        <TextBox x:Name="SkipHostsBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="72"
+                 Watermark="*.corp.example.com&#x0a;auth.example.com"
+                 AutomationProperties.AutomationId="ExcludedSkipHosts" />
+
+        <TextBlock FontWeight="SemiBold" Text="Advanced — Only decrypt these hosts" />
+        <TextBlock Opacity="0.75" TextWrapping="Wrap" FontSize="12"
+                   Text="Leave empty to decrypt everything except lists above and built-ins." />
+        <TextBox x:Name="OnlyHostsBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56"
+                 Watermark="api.example.com"
+                 AutomationProperties.AutomationId="ExcludedOnlyHosts" />
+
+        <CheckBox x:Name="ProxyLoopbackCheck" Content="Proxy localhost (advanced)"
+                  AutomationProperties.AutomationId="ExcludedProxyLoopback" />
+        <TextBlock Opacity="0.7" TextWrapping="Wrap" FontSize="11" Margin="24,0,0,0"
+                   Text="Windows: &lt;-loopback&gt; rule. macOS/Linux: omits localhost from NO_PROXY." />
+
+        <TextBlock FontWeight="SemiBold" Text="Effective OS bypass (when System proxy on)" />
+        <TextBlock x:Name="PreviewLabel" Opacity="0.75" FontSize="12" />
+        <TextBox x:Name="PreviewBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
+                 MinHeight="48" FontFamily="Consolas,Courier New,monospace" FontSize="11"
+                 AutomationProperties.AutomationId="ExcludedOsPreview" />
+
+        <TextBlock FontWeight="SemiBold" Text="Client setup" />
+        <TextBlock TextWrapping="Wrap" Opacity="0.85" FontSize="12"
+                   Text="• Firefox: use Capture → Trust CA in Firefox… (OS bypass does not apply unless Firefox uses system proxy)&#x0a;• Windows Store apps: Capture → Allow Store apps…&#x0a;• Chrome QUIC may bypass the proxy — disable QUIC or use HTTP/2&#x0a;• Manual proxy: point browser to 127.0.0.1:&lt;port&gt; (tunnel rules still apply)" />
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

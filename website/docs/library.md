@@ -60,3 +60,22 @@ Use `ForwardHost` on a transparent endpoint for a zero-cost terminate-lite path,
 `ProxyServer.SetAsSystemProxy` / `RestoreOriginalProxySettings` work on Windows (WinINET), macOS (`networksetup`), and Linux (GNOME + KDE + process environment). Unsupported platforms throw `NotSupportedException`.
 
 `CertificateManager.TrustRootCertificate` installs into the current-user store on all platforms and additionally trusts for SSL on macOS (login keychain) and Linux (user NSS db). Check `LastOsTrustResult` for structured outcomes (e.g. missing `certutil`, Keychain Always Trust needed). `InstallNssCertutilAndRetryUserTrust` installs NSS tools via package manager / Homebrew after user consent. `FirefoxCertificateTrust` enables Windows `ImportEnterpriseRoots` or imports into the default Firefox profile. `TrustRootCertificateAsAdmin` shows an OS admin prompt (UAC / macOS authentication / polkit) for machine-wide trust.
+
+## MITM hostname exclusions
+
+Two layers:
+
+1. **OS bypass** — `SystemProxySettings.BypassRules` + `SetAsSystemProxy(..., settings)`. Use for clients that break even on opaque tunnels (Microsoft identity / RDP). Defaults: `MitmExclusionDefaults.SystemProxyBypassRules`.
+2. **Tunnel only** — `BeforeTunnelConnectRequest` → `e.DecryptSsl = false`, or call `MitmExclusionDefaults.ApplyDecryptExclusions(endPoint, () => decryptOn, skipHosts, onlyHosts)`.
+
+```csharp
+var settings = MitmExclusionDefaults.CreateSystemProxySettings(
+    proxyLoopback: true,
+    additionalBypassRules: ["*.corp.example.com"]);
+proxyServer.SetAsSystemProxy(endPoint, ProxyProtocolType.AllHttp, settings);
+
+MitmExclusionDefaults.ApplyDecryptExclusions(endPoint, () => true,
+    decryptSkipHosts: ["*.bank.example.com"]);
+```
+
+CLI edge proxies can set `server.decryptSkipHosts` / `server.decryptOnlyHosts` in `twp.yaml` (tunnel-only; no OS bypass).

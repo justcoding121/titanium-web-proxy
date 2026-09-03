@@ -37,6 +37,11 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     public bool IsWebSocket { get; set; }
     public bool IsGrpc { get; set; }
     public bool IsTunnel { get; set; }
+    public OpaqueTunnelReason OpaqueReason { get; set; }
+
+    /// <summary>Human-readable opaque tunnel explanation for tooltips and inspect pane.</summary>
+    public string OpaqueReasonDisplay => ExclusionPreview.DescribeOpaqueReason(OpaqueReason);
+
     public bool IsMultipart { get; set; }
     public IReadOnlyList<WebSocketFrameSnapshot>? WebSocketFrames { get; set; }
     public IReadOnlyList<GrpcFrameSnapshot>? GrpcFrames { get; set; }

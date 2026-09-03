@@ -72,9 +72,24 @@ Default bind is typically `127.0.0.1:8866`. Bind address/port are **start-time**
 
 HTTPS stays encrypted (opaque tunnels) until **Decrypt HTTPS** is enabled.
 
-Capture menu latching options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs) show a check when on. Preferences such as **Session retention…**, **HTTPS sites to decrypt…**, **Ignore insecure server certificates** (off by default), and **Logging…** live under **Options**. **Reset Inspector settings…** restores preferences to factory defaults; it does not remove the root CA or clear sessions.
+Capture menu latching options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs) show a check when on. Preferences such as **Session retention…**, **Excluded hosts…** (HTTPS decrypt skip lists and OS bypass rules), **Ignore insecure server certificates** (off by default), and **Logging…** live under **Options**. **Capture → View excluded hosts…** shows built-in Microsoft/pinning defaults and the effective OS bypass preview. **Reset Inspector settings…** restores preferences to factory defaults (clears user exclusion lists); it does not remove the root CA, change OS proxy or Store loopback exemptions, or clear sessions.
 
-The status strip keeps command feedback on the left and a live **Sessions: N** count on the right, so capture traffic does not wipe tips or export paths.
+## Excluded hosts (proxy bypass vs tunnel-only)
+
+Inspector uses two layers:
+
+| Layer | Effect | When it applies |
+|-------|--------|-----------------|
+| **OS bypass** | Traffic never reaches Inspector | **System proxy** on — Microsoft identity hosts by default, plus your bypass list |
+| **Tunnel only** | CONNECT row stays visible, TLS opaque | Always (manual or system proxy) — pinning defaults, plus your skip list |
+
+**Options → Excluded hosts…** edits user bypass and tunnel-only lists. Right-click a session → **Exclude host…** (defaults to tunnel-only). Opaque sessions show a reason in the inspect pane and host tooltip (`Decrypt off`, built-in, skip list, etc.). Search: `is:opaque`, `is:opaque-reason:builtin`.
+
+**Manual browser proxy** (`127.0.0.1:8866`): tunnel-only rules work; OS bypass does not apply unless **System proxy** is on. Enabling **System proxy** replaces a PAC script on Windows; existing bypass rules are merged. **Chrome QUIC** may bypass the proxy entirely — not fixable via host lists.
+
+Built-in defaults include Microsoft SSO / RDP hosts (bypass) and Dropbox/Webex (tunnel only). On Windows, **Proxy localhost** uses the `<-loopback>` rule; on macOS/Linux it omits `localhost` from `NO_PROXY` for parity.
+
+The status strip keeps command feedback on the left and a live **Sessions: N** count on the right, so capture traffic does not wipe tips or export paths. When exclusions are configured, a compact **Exclusions: …** link opens the dialog.
 
 **Install root CA (current user)** trusts the MITM CA on this PC. On Windows, the OS may show a Trusted Root **Yes/No** security dialog the first time that certificate is added (this is not UAC). On macOS/Linux, Inspector also trusts the CA in Keychain / user NSS (`certutil`). If tools are missing or Keychain needs **Always Trust**, a single recovery dialog offers the next step (install NSS tools via package manager or Homebrew, open Keychain Access, or elevate). Re-installing when the CA is already trusted does not prompt again; orphan same-name roots are cleaned up only when a new thumbprint is installed, or via **Remove** / **Clear and reinstall**. **Remove root CA** clears every same-name Titanium root in the current-user Trusted Root store (including orphans from earlier installs) and best-effort clears Firefox policy/profile trust we added. **Clear and reinstall root CA…** mints a new private key, clears this install’s leaf certificate cache (next to `%AppData%\TitaniumInspector\rootCert.pfx`), removes same-name trusted roots, and prompts to reinstall trust. **Trust CA in Firefox…** (opt-in) enables Windows `ImportEnterpriseRoots` when possible, otherwise imports into the default Firefox profile via NSS `certutil` (may ask you to quit Firefox; on Linux/macOS can offer to install `certutil` first). **Device CA setup…** opens a dialog with steps for phones/other devices and can **Export CA** from there (or use **Export root CA…** on the Capture menu).
 

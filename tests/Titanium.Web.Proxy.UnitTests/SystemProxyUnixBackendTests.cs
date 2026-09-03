@@ -28,12 +28,20 @@ public class UnixProxyBypassMapperTests
     }
 
     [TestMethod]
-    public void ToNoProxyEnv_IncludesLocalhost()
+    public void ToNoProxyEnv_OmitsLocalhost_WhenLoopbackRulePresent()
     {
-        var env = UnixProxyBypassMapper.ToNoProxyEnv("*.corp");
+        var env = UnixProxyBypassMapper.ToNoProxyEnv("<-loopback>;*.corp");
+        Assert.IsFalse(env.Contains("localhost", StringComparison.OrdinalIgnoreCase));
+        Assert.IsFalse(env.Contains("127.0.0.1", StringComparison.Ordinal));
+        StringAssert.Contains(env, "*.corp");
+    }
+
+    [TestMethod]
+    public void ToNoProxyEnv_ExplicitLoopbackFalse_IncludesLocalhost()
+    {
+        var env = UnixProxyBypassMapper.ToNoProxyEnv("*.corp", proxyLoopback: false);
         StringAssert.Contains(env, "localhost");
         StringAssert.Contains(env, "127.0.0.1");
-        StringAssert.Contains(env, "*.corp");
     }
 
     [TestMethod]

@@ -187,3 +187,19 @@ static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryRequestFirefoxQuit(
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryResolveDefaultProfileDirectory(out string! profileDirectory, out string? error) -> bool
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustDefaultProfile(System.Security.Cryptography.X509Certificates.X509Certificate2! certificate, string! friendlyName) -> Titanium.Web.Proxy.Network.CertificateOsTrustResult!
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.UntrustDefaultProfile(string! friendlyName) -> bool
+Titanium.Web.Proxy.MitmExclusionDefaults
+static readonly Titanium.Web.Proxy.MitmExclusionDefaults.SystemProxyBypassRules -> string![]!
+static readonly Titanium.Web.Proxy.MitmExclusionDefaults.TunnelOnlyPinningDomains -> string![]!
+static Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint! endPoint, System.Func<bool>! decryptHttpsEnabled, System.Collections.Generic.IEnumerable<string!>? decryptSkipHosts = null, System.Collections.Generic.IEnumerable<string!>? decryptOnlyHosts = null) -> void
+static Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(bool proxyLoopback = true, System.Collections.Generic.IEnumerable<string!>? additionalBypassRules = null) -> Titanium.Web.Proxy.SystemProxySettings!
+static Titanium.Web.Proxy.MitmExclusionDefaults.HostnameMatches(string! hostname, string! pattern) -> bool
+static Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(string? hostname) -> bool
+static Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(string? hostname, System.Collections.Generic.IEnumerable<string!>? userSkipHosts, System.Collections.Generic.IEnumerable<string!>? userOnlyHosts) -> bool
+Titanium.Web.Proxy.SystemProxySettings.BuildProxyOverride(string? currentProxyOverride) -> string!
+Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper
+static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.IsLocalHost(string? host) -> bool
+static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToCommaSeparated(string? winInetProxyOverride) -> string!
+static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToGsettingsArray(string? winInetProxyOverride) -> string!
+static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv(string? winInetProxyOverride) -> string!
+static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv(string? winInetProxyOverride, bool proxyLoopback) -> string!
+static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToUnixBypassHosts(string? winInetProxyOverride) -> System.Collections.Generic.IReadOnlyList<string!>!

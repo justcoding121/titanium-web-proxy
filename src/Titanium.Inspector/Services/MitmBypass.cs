@@ -1,4 +1,3 @@
-using System.Linq;
 using Titanium.Web.Proxy;
 
 namespace Titanium.Inspector.Services;
@@ -6,112 +5,71 @@ namespace Titanium.Inspector.Services;
 /// <summary>Identity / pinning hosts that should bypass system proxy or SSL decrypt.</summary>
 public static class MitmBypass
 {
-    public static readonly string[] SystemProxyBypassRules =
-    [
-        "*.microsoftonline.com",
-        "*.microsoftonline-p.com",
-        "login.windows.net",
-        "*.login.microsoft.com",
-        "login.live.com",
-        "account.live.com",
-        "*.msauth.net",
-        "*.msftauth.net",
-        "enterpriseregistration.windows.net",
-    ];
+    public static string[] SystemProxyBypassRules => MitmExclusionDefaults.SystemProxyBypassRules;
 
-    public static SystemProxySettings CreateSystemProxySettings(bool includeLoopback = true)
+    public static SystemProxySettings CreateSystemProxySettings(bool includeLoopback = true) =>
+        CreateSystemProxySettings(new InspectorSettings { ProxyLoopback = includeLoopback });
+
+    public static SystemProxySettings CreateSystemProxySettings(InspectorSettings settings)
     {
-        var settings = new SystemProxySettings();
-        foreach (var rule in SystemProxyBypassRules)
-        {
-            settings.BypassRules.Add(rule);
-        }
-
-        if (includeLoopback)
-        {
-            settings.ProxyLoopback = true;
-        }
-
-        return settings;
+        return MitmExclusionDefaults.CreateSystemProxySettings(
+            settings.ProxyLoopback,
+            settings.SystemProxyBypassHosts);
     }
 
     public static bool ShouldDisableSslDecrypt(string? hostname) =>
-        ShouldDisableSslDecrypt(hostname, userSkipHosts: null, userOnlyHosts: null);
+        MitmExclusionDefaults.ShouldDisableSslDecrypt(hostname);
 
-    /// <summary>
-    /// Returns true when TLS should stay opaque (no MITM decrypt).
-    /// Built-in SSO/pinning hosts always skip. User skip patterns add more.
-    /// When <paramref name="userOnlyHosts"/> is non-empty, only matching hosts decrypt
-    /// (built-in bypass hosts still never decrypt).
-    /// </summary>
     public static bool ShouldDisableSslDecrypt(
         string? hostname,
+        IEnumerable<string>? userSkipHosts,
+        IEnumerable<string>? userOnlyHosts) =>
+        MitmExclusionDefaults.ShouldDisableSslDecrypt(hostname, userSkipHosts, userOnlyHosts);
+
+    public static bool HostnameMatches(string hostname, string pattern) =>
+        MitmExclusionDefaults.HostnameMatches(hostname, pattern);
+
+    public static OpaqueTunnelReason ResolveOpaqueReason(
+        string? hostname,
+        bool decryptHttps,
         IEnumerable<string>? userSkipHosts,
         IEnumerable<string>? userOnlyHosts)
     {
         if (string.IsNullOrEmpty(hostname))
         {
-            return false;
+            return OpaqueTunnelReason.None;
         }
 
-        if (IsBuiltInSslBypass(hostname))
+        if (!decryptHttps)
         {
-            return true;
+            return OpaqueTunnelReason.DecryptOff;
         }
 
-        if (MatchesAny(hostname, userSkipHosts))
+        if (SystemProxyBypassRules.Any(rule => HostnameMatches(hostname, rule)))
         {
-            return true;
+            return OpaqueTunnelReason.BuiltInIdentity;
+        }
+
+        if (MitmExclusionDefaults.TunnelOnlyPinningDomains.Any(domain =>
+                hostname.Equals(domain, StringComparison.OrdinalIgnoreCase)
+                || hostname.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase)))
+        {
+            return OpaqueTunnelReason.BuiltInPinning;
+        }
+
+        if (userSkipHosts is not null && userSkipHosts.Any(p => HostnameMatches(hostname, p)))
+        {
+            return OpaqueTunnelReason.UserSkipList;
         }
 
         var only = userOnlyHosts?
             .Where(h => !string.IsNullOrWhiteSpace(h))
             .ToList();
-        if (only is { Count: > 0 } && !MatchesAny(hostname, only))
+        if (only is { Count: > 0 } && !only.Any(p => HostnameMatches(hostname, p)))
         {
-            return true;
+            return OpaqueTunnelReason.UserOnlyList;
         }
 
-        return false;
-    }
-
-    public static bool HostnameMatches(string hostname, string pattern)
-    {
-        if (string.IsNullOrWhiteSpace(pattern))
-        {
-            return false;
-        }
-
-        pattern = pattern.Trim();
-        if (pattern.StartsWith("*.", StringComparison.Ordinal))
-        {
-            var suffix = pattern[1..];
-            return hostname.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
-                   || hostname.Equals(pattern[2..], StringComparison.OrdinalIgnoreCase);
-        }
-
-        return hostname.Equals(pattern, StringComparison.OrdinalIgnoreCase)
-               || hostname.EndsWith("." + pattern, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsBuiltInSslBypass(string hostname)
-    {
-        if (SystemProxyBypassRules.Any(rule => HostnameMatches(hostname, rule)))
-        {
-            return true;
-        }
-
-        return hostname.Contains("dropbox.com", StringComparison.OrdinalIgnoreCase)
-               || hostname.Contains("webex.com", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool MatchesAny(string hostname, IEnumerable<string>? patterns)
-    {
-        if (patterns is null)
-        {
-            return false;
-        }
-
-        return patterns.Any(pattern => HostnameMatches(hostname, pattern));
+        return OpaqueTunnelReason.None;
     }
 }

@@ -45,6 +45,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private const int OutcomeSuccessRevertMs = 5000;
     private const int OutcomeErrorRevertMs = 8000;
     private string _sessionCountText = "Sessions: 0";
+    private string _exclusionSummaryText = "";
     private string _searchQuery = "";
     private bool _firefoxTrustHintShown;
     /// <summary>Sessions hard-evicted by retention this process (not user clear/remove).</summary>
@@ -198,7 +199,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OpenSessionRetentionCommand = new RelayCommand(OpenSessionRetentionAsync);
         OpenLoggingSettingsCommand = new RelayCommand(OpenLoggingSettingsAsync);
         OpenAboutCommand = new RelayCommand(OpenAboutAsync);
-        OpenHttpsDecryptHostsCommand = new RelayCommand(OpenHttpsDecryptHostsAsync);
+        OpenHttpsDecryptHostsCommand = new RelayCommand(OpenExcludedHostsAsync);
+        ViewExcludedHostsCommand = new RelayCommand(() => ViewExcludedHostsAsync(readOnly: true));
+        ExcludeHostCommand = new RelayCommand(ExcludeHostAsync);
         ResetSettingsCommand = new RelayCommand(ResetSettingsAsync);
         ReplayCommand = new RelayCommand(async () => await ReplaySelectedAsync());
         LoadFromSelectedCommand = new RelayCommand(LoadFromSelectedAsync);
@@ -206,6 +209,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         CopyUrlCommand = new RelayCommand(CopyUrlAsync);
         FilterByHostCommand = new RelayCommand(FilterByHostAsync);
         FilterByProcessCommand = new RelayCommand(FilterByProcessAsync);
+        OpenExclusionSummaryCommand = new RelayCommand(() => ViewExcludedHostsAsync(readOnly: false));
         SendComposerCommand = new RelayCommand(async () => await SendComposerAsync());
         AddAutoResponderRuleCommand = new RelayCommand(AddAutoResponderRuleAsync);
         DeleteAutoResponderRuleCommand = new RelayCommand(DeleteAutoResponderRuleAsync);
@@ -238,7 +242,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.ConfigureLogging(_settings.Current);
         _interception.IgnoreServerCertificateErrors = _settings.Current.IgnoreServerCertificateErrors;
         _interception.DecryptHttps = _decryptHttps;
-        ApplyDecryptHostListsFromSettings();
+        ApplyExclusionSettingsFromSettings();
         ShowLoopbackExemptMenu = AppContainerLoopback.IsSupported;
     }
 
@@ -776,10 +780,37 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
-    private Task ToggleSystemProxyAsync()
+    private Task ToggleSystemProxyAsync() => TryToggleSystemProxyAsync();
+
+    private async Task TryToggleSystemProxyAsync()
     {
-        SystemProxy = !SystemProxy;
-        return Task.CompletedTask;
+        if (SystemProxy)
+        {
+            SystemProxy = false;
+            return;
+        }
+
+        if (!_interception.IsRunning)
+        {
+            StatusText = "Start the proxy before enabling system proxy";
+            return;
+        }
+
+        var s = _settings.Current;
+        if (!s.WarnedAboutPacReplace && SystemProxyPacHelper.HasActivePacScript())
+        {
+            var owner = TryGetMainWindow();
+            if (!await _dialogs.ConfirmPacReplaceAsync(owner))
+            {
+                StatusText = "System proxy not enabled (PAC replace cancelled)";
+                return;
+            }
+
+            s.WarnedAboutPacReplace = true;
+            _settings.Save();
+        }
+
+        SystemProxy = true;
     }
 
     private async Task InstallCaAsync()
@@ -1258,23 +1289,87 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    private async Task OpenHttpsDecryptHostsAsync()
+    private async Task OpenExcludedHostsAsync()
     {
         var owner = TryGetMainWindow();
         if (owner is null)
         {
-            StatusText = "HTTPS sites to decrypt requires the main window";
+            StatusText = "Excluded hosts requires the main window";
             return;
         }
 
-        var saved = await HttpsDecryptHostsWindow.ShowAsync(
+        var saved = await ExcludedHostsWindow.ShowAsync(
             owner,
             _settings,
-            ApplyDecryptHostListsFromSettings);
-        StatusText = saved
-            ? "HTTPS sites to decrypt saved (applies to new connections)"
-            : "HTTPS sites to decrypt cancelled";
+            readOnly: false,
+            ApplyExclusionSettingsFromSettings);
+        if (saved)
+        {
+            if (SystemProxy && !_interception.ReapplySystemProxyIfEnabled())
+            {
+                StatusText = "Exclusions saved; re-toggle System proxy to apply OS bypass changes";
+            }
+            else
+            {
+                StatusText = "Excluded hosts saved (applies to new connections)";
+            }
+
+            UpdateExclusionSummary();
+        }
+        else
+        {
+            StatusText = "Excluded hosts cancelled";
+        }
     }
+
+    private async Task ViewExcludedHostsAsync(bool readOnly)
+    {
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            StatusText = "Excluded hosts requires the main window";
+            return;
+        }
+
+        await ExcludedHostsWindow.ShowAsync(owner, _settings, readOnly, null);
+    }
+
+    private async Task ExcludeHostAsync()
+    {
+        var selected = SelectedSession;
+        if (selected is null || string.IsNullOrWhiteSpace(selected.Host))
+        {
+            StatusText = "Select a session with a host to exclude";
+            return;
+        }
+
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            StatusText = "Exclude host requires the main window";
+            return;
+        }
+
+        var (saved, kind, _) = await ExcludeHostDialog.ShowAsync(owner, _settings, selected.Host);
+        if (!saved)
+        {
+            StatusText = "Exclude host cancelled";
+            return;
+        }
+
+        ApplyExclusionSettingsFromSettings();
+        if (kind == ExcludeHostKind.BypassProxy && SystemProxy)
+        {
+            _interception.ReapplySystemProxyIfEnabled();
+        }
+
+        UpdateExclusionSummary();
+        StatusText = kind == ExcludeHostKind.BypassProxy
+            ? $"Added {selected.Host} to OS bypass exclusions (new connections)"
+            : $"Added {selected.Host} to tunnel-only exclusions (new connections)";
+    }
+
+    private async Task OpenHttpsDecryptHostsAsync() => await OpenExcludedHostsAsync();
 
     private async Task ResetSettingsAsync()
     {
@@ -1292,11 +1387,22 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             "Settings restored to defaults — restart Inspector so retention limits fully apply. Root CA and sessions were not changed.";
     }
 
-    private void ApplyDecryptHostListsFromSettings()
+    private void ApplyExclusionSettingsFromSettings()
     {
         var s = _settings.Current;
         _interception.DecryptSkipHosts = s.DecryptSkipHosts?.ToList() ?? [];
         _interception.DecryptOnlyHosts = s.DecryptOnlyHosts?.ToList() ?? [];
+        _interception.SystemProxyBypassHosts = s.SystemProxyBypassHosts?.ToList() ?? [];
+        _interception.ProxyLoopback = s.ProxyLoopback;
+        _interception.SystemProxySettings = s;
+        UpdateExclusionSummary();
+    }
+
+    private void UpdateExclusionSummary()
+    {
+        ExclusionSummaryText = ExclusionPreview.ExclusionSummary(_settings.Current);
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ExclusionSummaryText)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasExclusionSummary)));
     }
 
     private async Task DeviceCaSetupAsync()
@@ -1407,6 +1513,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     /// <summary>True when selection shares one non-empty host (single or multi-select).</summary>
     public bool CanFilterByHost => ResolveUnanimousFilterHost() is not null;
 
+    public bool CanExcludeHost => CanFilterByHost;
+
+    public string ExclusionSummaryText
+    {
+        get => _exclusionSummaryText;
+        private set => SetField(ref _exclusionSummaryText, value);
+    }
+
+    public bool HasExclusionSummary => !string.IsNullOrEmpty(_exclusionSummaryText);
+
+    public string SelectedOpaqueHint =>
+        _selected is { IsTunnel: true } && _selected.OpaqueReason != OpaqueTunnelReason.None
+            ? _selected.OpaqueReasonDisplay
+            : "";
+
+    public bool ShowSelectedOpaqueHint => !string.IsNullOrEmpty(SelectedOpaqueHint);
+
     /// <summary>True when selection shares one non-empty process (single or multi-select).</summary>
     public bool CanFilterByProcess => ResolveUnanimousFilterProcess() is not null;
 
@@ -1514,6 +1637,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private void NotifyFilterSelectionProperties()
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanFilterByHost)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanExcludeHost)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanFilterByProcess)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSelectedSessions)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSingleSelectedSession)));
@@ -1628,6 +1752,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand OpenLoggingSettingsCommand { get; }
     public ICommand OpenAboutCommand { get; }
     public ICommand OpenHttpsDecryptHostsCommand { get; }
+    public ICommand ViewExcludedHostsCommand { get; }
+    public ICommand ExcludeHostCommand { get; }
+    public ICommand OpenExclusionSummaryCommand { get; }
     public ICommand ResetSettingsCommand { get; }
     public ICommand ReplayCommand { get; }
     public ICommand LoadFromSelectedCommand { get; }
@@ -1813,7 +1940,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                     return;
                 }
 
-                if (!_interception.SetSystemProxy(true))
+                if (!_interception.SetSystemProxy(true, _settings.Current))
                 {
                     StatusText =
                         "Failed to enable system proxy (permissions, cancelled admin prompt, or unsupported desktop environment)";
@@ -2078,6 +2205,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSelectedSession)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowInspectEmpty)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedOpaqueHint)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowSelectedOpaqueHint)));
             NotifyFilterSelectionProperties();
 
             if (value is not null)
@@ -2217,7 +2346,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.ScriptOnResponse = _scriptOnResponse;
         _interception.IgnoreServerCertificateErrors = s.IgnoreServerCertificateErrors;
         _interception.DecryptHttps = _decryptHttps;
-        ApplyDecryptHostListsFromSettings();
+        ApplyExclusionSettingsFromSettings();
         _debugFileLogging = IsDebugFileLoggingEnabled(s);
         _interception.ConfigureLogging(s);
 
@@ -2423,10 +2552,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         if (_selected is null)
         {
             SelectedHeaders = SelectedBody = SelectedHex = SelectedFrames = "";
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedOpaqueHint)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowSelectedOpaqueHint)));
             return;
         }
 
         var sb = new StringBuilder();
+        if (_selected.IsTunnel && _selected.OpaqueReason != OpaqueTunnelReason.None)
+        {
+            sb.AppendLine(_selected.OpaqueReasonDisplay);
+            sb.AppendLine();
+        }
         sb.AppendLine("=== Request ===");
         sb.AppendLine(_selected.RequestHeadersText);
         if (!string.IsNullOrEmpty(_selected.ResponseHeadersText))
@@ -2456,6 +2592,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         SelectedHeaders = sb.ToString();
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedOpaqueHint)));
 
         SelectedBody = SessionInspectors.FormatLabeledBody(
             _selected.RequestHeadersText,
