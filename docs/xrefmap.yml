@@ -7185,6 +7185,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots
   nameWithType: FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryRequestFirefoxQuit(System.Nullable{System.TimeSpan})
+  name: TryRequestFirefoxQuit(TimeSpan?)
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TryRequestFirefoxQuit_System_Nullable_System_TimeSpan__
+  commentId: M:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryRequestFirefoxQuit(System.Nullable{System.TimeSpan})
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryRequestFirefoxQuit(System.TimeSpan?)
+  nameWithType: FirefoxCertificateTrust.TryRequestFirefoxQuit(TimeSpan?)
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryRequestFirefoxQuit*
+  name: TryRequestFirefoxQuit
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TryRequestFirefoxQuit_
+  commentId: Overload:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryRequestFirefoxQuit
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryRequestFirefoxQuit
+  nameWithType: FirefoxCertificateTrust.TryRequestFirefoxQuit
 - uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryResolveDefaultProfileDirectory(System.String@,System.String@)
   name: TryResolveDefaultProfileDirectory(out string, out string?)
   href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TryResolveDefaultProfileDirectory_System_String__System_String__
