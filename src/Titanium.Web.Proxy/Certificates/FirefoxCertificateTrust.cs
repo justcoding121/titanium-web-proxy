@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy.Network;
@@ -217,26 +219,118 @@ public static class FirefoxCertificateTrust
     /// <summary>True when a firefox process is running (best-effort).</summary>
     public static bool IsFirefoxProcessRunning()
     {
+        foreach (var process in EnumerateFirefoxProcesses())
+        {
+            process.Dispose();
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Asks Firefox to quit gracefully (user already consented). Waits briefly for exit.
+    ///     Does not force-kill; returns false if Firefox is still running after the wait.
+    /// </summary>
+    public static bool TryRequestFirefoxQuit(TimeSpan? waitForExit = null) =>
+        TryRequestFirefoxQuit(waitForExit, new ProcessRunner());
+
+    /// <summary>
+    ///     Asks Firefox to quit gracefully (user already consented). Waits briefly for exit.
+    ///     Does not force-kill; returns false if Firefox is still running after the wait.
+    /// </summary>
+    internal static bool TryRequestFirefoxQuit(TimeSpan? waitForExit, IProcessRunner runner)
+    {
+        var wait = waitForExit ?? TimeSpan.FromSeconds(8);
+
+        if (!IsFirefoxProcessRunning())
+            return true;
+
+        if (OperatingSystem.IsWindows())
+        {
+            foreach (var process in EnumerateFirefoxProcesses())
+            {
+                try
+                {
+                    process.CloseMainWindow();
+                }
+                catch
+                {
+                    // ignore per-process failures; wait loop decides success
+                }
+                finally
+                {
+                    process.Dispose();
+                }
+            }
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            // Consent already given in UI — quit the app, not Keychain UI automation.
+            runner.Run("osascript", "-e 'tell application \"Firefox\" to quit'");
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            foreach (var process in EnumerateFirefoxProcesses())
+            {
+                try
+                {
+                    runner.Run("kill", $"-TERM {process.Id}");
+                }
+                catch
+                {
+                    // ignore
+                }
+                finally
+                {
+                    process.Dispose();
+                }
+            }
+        }
+
+        var deadline = DateTime.UtcNow + wait;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (!IsFirefoxProcessRunning())
+                return true;
+            Thread.Sleep(200);
+        }
+
+        return !IsFirefoxProcessRunning();
+    }
+
+    private static IEnumerable<Process> EnumerateFirefoxProcesses()
+    {
+        Process[] processes;
         try
         {
-            return Process.GetProcesses()
-                .Any(p =>
-                {
-                    try
-                    {
-                        var name = p.ProcessName;
-                        return name.Equals("firefox", StringComparison.OrdinalIgnoreCase)
-                               || name.Equals("firefox-bin", StringComparison.OrdinalIgnoreCase);
-                    }
-                    catch
-                    {
-                        return false;
-                    }
-                });
+            processes = Process.GetProcesses();
         }
         catch
         {
-            return false;
+            yield break;
+        }
+
+        foreach (var process in processes)
+        {
+            var match = false;
+            try
+            {
+                var name = process.ProcessName;
+                match = name.Equals("firefox", StringComparison.OrdinalIgnoreCase)
+                        || name.Equals("firefox-bin", StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                match = false;
+            }
+
+            if (match)
+                yield return process;
+            else
+            {
+                try { process.Dispose(); } catch { /* ignore */ }
+            }
         }
     }
 
@@ -333,7 +427,8 @@ public static class FirefoxCertificateTrust
         return false;
     }
 
-    private static string[] GetFirefoxRoots()
+    /// <summary>Known Firefox profile roots (classic, Snap, Flatpak). First hit with profiles.ini wins.</summary>
+    internal static string[] GetFirefoxRoots()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (OperatingSystem.IsWindows())
@@ -355,7 +450,11 @@ public static class FirefoxCertificateTrust
             return
             [
                 Path.Combine(home, ".mozilla", "firefox"),
+                // Ubuntu Snap default Firefox
                 Path.Combine(home, "snap", "firefox", "common", ".mozilla", "firefox"),
+                // Flatpak (org.mozilla.Firefox / org.mozilla.firefox)
+                Path.Combine(home, ".var", "app", "org.mozilla.firefox", ".mozilla", "firefox"),
+                Path.Combine(home, ".var", "app", "org.mozilla.Firefox", ".mozilla", "firefox"),
             ];
         }
 

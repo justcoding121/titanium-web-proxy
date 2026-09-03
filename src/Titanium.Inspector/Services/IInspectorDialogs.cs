@@ -54,13 +54,20 @@ public interface IInspectorDialogs
 public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
 {
     private const string CancelLabel = "Cancel";
-    public Task<bool> ConfirmInstallRootCaAsync(Window? owner) =>
-        SimpleConfirmDialog.ShowAsync(
+    public Task<bool> ConfirmInstallRootCaAsync(Window? owner)
+    {
+        var windowsHint = OperatingSystem.IsWindows()
+            ? "\n\nWindows may show a Trusted Root Yes/No security dialog (not UAC) — choose Yes to trust the CA."
+            : "";
+        return SimpleConfirmDialog.ShowAsync(
             owner,
             "Install root CA",
-            "Decrypt HTTPS requires trusting the Titanium Inspector root CA in your current-user certificate store (and Keychain/NSS on macOS/Linux). Install now?",
+            "Decrypt HTTPS requires trusting the Titanium Inspector root CA in your current-user certificate store (and Keychain/NSS on macOS/Linux). Install now?" +
+            windowsHint,
             accept: "Install",
-            cancel: CancelLabel);
+            cancel: CancelLabel,
+            height: OperatingSystem.IsWindows() ? 260 : 220);
+    }
 
     public Task<bool> ConfirmRemoveRootCaAsync(Window? owner) =>
         SimpleConfirmDialog.ShowAsync(
@@ -150,11 +157,12 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
         SimpleConfirmDialog.ShowAsync(
             owner,
             "Quit Firefox",
-            "Firefox appears to be running and may lock its certificate database. Quit Firefox, then click Retry.\n\n" +
-            "Inspector will not force-quit Firefox for you.",
-            accept: "Retry",
+            "Firefox appears to be running and may lock its certificate database.\n\n" +
+            "Inspector can ask Firefox to quit gracefully (unsaved tabs may prompt inside Firefox). " +
+            "It will not force-kill the process.",
+            accept: "Quit Firefox and retry",
             cancel: CancelLabel,
-            height: 240);
+            height: 260);
 
     public Task<bool> ShowDeviceCaSetupAsync(Window? owner, string message) =>
         SimpleConfirmDialog.ShowAsync(

@@ -145,7 +145,8 @@ Applies to every captured request/response. On request, `abort` or `set-status` 
 Notes:
 
 - Headless Linux without polkit/GUI cannot show an admin dialog; use Export CA and install manually.
-- **Trust CA in Firefox…** is opt-in under Capture (not auto-run after Install root CA). Default Firefox profile only.
+- **Trust CA in Firefox…** is opt-in under Capture (not auto-run after Install root CA). Default Firefox profile only. Profile roots include classic `~/.mozilla/firefox`, Ubuntu Snap, and Flatpak (`~/.var/app/org.mozilla.firefox/...`). If Firefox is running, Inspector can ask it to quit gracefully (with consent) before writing `cert9.db`.
+- On Windows, the first Current User Root install may show an OS Trusted Root **Yes/No** dialog (not UAC); choose **Yes**. Inspector cannot replace that dialog.
 - macOS without Homebrew: Export CA and import under Firefox → Authorities (Inspector does not install Homebrew).
 - KDE proxy reload is best-effort; a session restart may be needed if apps do not pick up changes.
 - If user-level CA install fails, Inspector offers an adaptive recovery dialog (tools / Keychain / admin).

@@ -183,6 +183,7 @@ static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProcessRunnin
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProfilePresent() -> bool
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots() -> bool
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots() -> Titanium.Web.Proxy.Network.CertificateOsTrustResult!
+static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryRequestFirefoxQuit(System.TimeSpan? waitForExit = null) -> bool
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryResolveDefaultProfileDirectory(out string! profileDirectory, out string? error) -> bool
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustDefaultProfile(System.Security.Cryptography.X509Certificates.X509Certificate2! certificate, string! friendlyName) -> Titanium.Web.Proxy.Network.CertificateOsTrustResult!
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.UntrustDefaultProfile(string! friendlyName) -> bool

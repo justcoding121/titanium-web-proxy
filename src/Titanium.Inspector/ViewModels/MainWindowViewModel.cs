@@ -673,7 +673,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        SetStatus("Trusting root CA…", StatusSeverity.Busy);
+        SetStatus(
+            OperatingSystem.IsWindows()
+                ? "Trusting root CA… if Windows asks Trusted Root Yes/No, choose Yes"
+                : "Trusting root CA…",
+            StatusSeverity.Busy);
         var ok = await EnsureRootCaTrustedAsync(promptIfNeeded: true);
         if (ok)
             SetOsTrustSuccessStatus();
@@ -704,7 +708,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 return;
             }
 
-            SetStatus("Trusting root CA…", StatusSeverity.Busy);
+            SetStatus(
+                OperatingSystem.IsWindows()
+                    ? "Trusting root CA… if Windows asks Trusted Root Yes/No, choose Yes"
+                    : "Trusting root CA…",
+                StatusSeverity.Busy);
             if (!await EnsureRootCaTrustedAsync(promptIfNeeded: true))
             {
                 SetStatus(
@@ -718,7 +726,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         if (!FirefoxCertificateTrust.IsFirefoxProfilePresent())
         {
             SetStatus(
-                "Firefox profile not found — install Firefox or use Export CA and import under Firefox → Authorities",
+                "Firefox profile not found — open Firefox once to create a profile " +
+                "(classic, Snap, or Flatpak), or use Export CA → Firefox Authorities",
                 StatusSeverity.Warning,
                 toastImportant: true);
             return;
@@ -777,6 +786,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             {
                 if (!await _dialogs.ConfirmQuitFirefoxForTrustAsync(owner))
                     return CertificateOsTrustResult.Fail(CertificateOsTrustKind.Cancelled, "Firefox trust cancelled");
+
+                SetStatus("Quitting Firefox…", StatusSeverity.Busy);
+                if (!FirefoxCertificateTrust.TryRequestFirefoxQuit())
+                {
+                    return CertificateOsTrustResult.Fail(
+                        CertificateOsTrustKind.Failed,
+                        "Firefox is still running — close it fully, then retry Trust CA in Firefox");
+                }
+
+                SetStatus("Updating Firefox trust…", StatusSeverity.Busy);
                 continue;
             }
 
@@ -993,7 +1012,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         if (await _dialogs.ConfirmInstallRootCaAsync(owner))
         {
-            SetStatus("Trusting root CA…", StatusSeverity.Busy);
+            SetStatus(
+                OperatingSystem.IsWindows()
+                    ? "Trusting root CA… if Windows asks Trusted Root Yes/No, choose Yes"
+                    : "Trusting root CA…",
+                StatusSeverity.Busy);
             var trusted = await EnsureRootCaTrustedAsync(promptIfNeeded: true);
             var message = trusted
                 ? (changed
@@ -2180,7 +2203,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                     return;
                 }
 
-                SetStatus("Trusting root CA…", StatusSeverity.Busy);
+                SetStatus(
+                    OperatingSystem.IsWindows()
+                        ? "Trusting root CA… if Windows asks Trusted Root Yes/No, choose Yes"
+                        : "Trusting root CA…",
+                    StatusSeverity.Busy);
                 if (!await EnsureRootCaTrustedAsync(promptIfNeeded: true))
                 {
                     StatusText = FormatOsTrustFailureStatus(_interception.LastOsTrustResult);

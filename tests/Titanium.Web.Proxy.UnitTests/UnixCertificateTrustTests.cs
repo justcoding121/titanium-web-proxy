@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Network;
@@ -137,5 +138,32 @@ public class FirefoxCertificateTrustTests
 
         Assert.IsTrue(result.Succeeded, result.Message);
         FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots();
+    }
+
+    [TestMethod]
+    public void GetFirefoxRoots_IncludesSnapAndFlatpakOnLinuxLayout()
+    {
+        var roots = FirefoxCertificateTrust.GetFirefoxRoots();
+        Assert.IsTrue(roots.Length >= 1);
+        if (!OperatingSystem.IsLinux())
+            return;
+
+        Assert.IsTrue(roots.Any(r => r.Contains(".mozilla", StringComparison.OrdinalIgnoreCase)));
+        Assert.IsTrue(roots.Any(r => r.Contains("snap", StringComparison.OrdinalIgnoreCase) &&
+                                     r.Contains("firefox", StringComparison.OrdinalIgnoreCase)));
+        Assert.IsTrue(roots.Any(r => r.Contains(".var", StringComparison.Ordinal) &&
+                                     r.Contains("org.mozilla.firefox", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void TryRequestFirefoxQuit_WhenNotRunning_ReturnsTrue()
+    {
+        if (FirefoxCertificateTrust.IsFirefoxProcessRunning())
+        {
+            Assert.Inconclusive("Firefox is running on this machine");
+            return;
+        }
+
+        Assert.IsTrue(FirefoxCertificateTrust.TryRequestFirefoxQuit(TimeSpan.FromMilliseconds(100)));
     }
 }
