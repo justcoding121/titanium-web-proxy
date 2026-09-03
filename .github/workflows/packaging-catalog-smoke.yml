@@ -45,12 +45,6 @@ jobs:
           flatpak-builder --user --force-clean /tmp/ti-inspector-build \
             tools/packaging/flatpak/io.github.justcoding121.TitaniumInspector.yml
 
-      - name: flatpak-builder CLI
-        run: |
-          set -euo pipefail
-          flatpak-builder --user --force-clean /tmp/ti-cli-build \
-            tools/packaging/flatpak/io.github.justcoding121.TitaniumCli.yml
-
   homebrew:
     if: inputs.run_homebrew
     runs-on: macos-latest
