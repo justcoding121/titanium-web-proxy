@@ -1,53 +1,44 @@
-# Flathub packaging (Titanium Inspector + CLI)
+# Flathub packaging (Titanium Inspector)
 
-First listing is a **human Flathub review**. Later stables should be version / URL / SHA bumps only.
+Flatpak manifests live here for local smoke builds and a future **human-led** Flathub listing of **Inspector only**.
 
-## App IDs
+## Eligibility
 
-| App | Flatpak ID | Manifest |
+| App | Flatpak ID | Flathub |
 | --- | --- | --- |
-| Inspector | `io.github.justcoding121.TitaniumInspector` | [`io.github.justcoding121.TitaniumInspector.yml`](io.github.justcoding121.TitaniumInspector.yml) |
-| CLI | `io.github.justcoding121.TitaniumCli` | [`io.github.justcoding121.TitaniumCli.yml`](io.github.justcoding121.TitaniumCli.yml) |
+| Inspector | `io.github.justcoding121.TitaniumInspector` | Allowed as a desktop app (subject to review) |
+| CLI | `io.github.justcoding121.TitaniumCli` | **Not accepted** — [console software](https://docs.flathub.org/docs/for-app-authors/requirements#console-software) |
 
-## Formal Flathub submissions (v7.0.5)
+Ship CLI via GitHub Releases, Homebrew (`justcoding121/titanium`), and winget — not Flathub.
 
-- Inspector: https://github.com/flathub/flathub/pull/10054
-- CLI: https://github.com/flathub/flathub/pull/10055
-- Demo clips: https://github.com/justcoding121/titanium-web-proxy/releases/tag/flathub-submission-media
+## v7.0.5 submission outcome (2026-09-02)
 
-## Beta dry-run (before stable Flathub submit)
+Both first-listing PRs were **closed** by Flathub reviewers:
 
-1. Point manifests at a polished **beta** linux-x64 zip + SHA256 (temporary).
-2. Run [`.github/workflows/packaging-catalog-smoke.yml`](../../.github/workflows/packaging-catalog-smoke.yml) (`run_flatpak=true`) or locally:
+- Inspector: https://github.com/flathub/flathub/pull/10054 (`duplicate` / `spam` / `AI Slop`)
+- CLI: https://github.com/flathub/flathub/pull/10055 (same + `blocked`; console software)
 
-```shell
-flatpak-builder --user --force-clean /tmp/ti-build \
-  tools/packaging/flatpak/io.github.justcoding121.TitaniumInspector.yml
-```
+Reviewer feedback in short:
 
-3. Do **not** request formal Flathub merge while URLs still point at a `-beta` tag.
+1. Demo videos did not show real Flatpak usage on Linux.
+2. Checklist items must be satisfied (video is required — not “N/A until bot build”).
+3. Do not spam `bot, build`.
+4. Submissions must follow the [generative AI policy](https://docs.flathub.org/docs/for-app-authors/requirements#generative-ai-policy): **do not** open, edit, or reply on Flathub PRs via AI agents; PR body / replies must be written by the maintainer.
 
-## First / formal submission checklist
+Do **not** reopen Flathub PRs from automation. Any retry is a **manual** maintainer action after trust / media issues are fixed.
 
-1. Cut a **signed/stable** GitHub Release that includes `TitaniumInspector-linux-x64.zip` and `Titanium.Cli-linux-x64.zip`.
-2. Retarget `url:` + `sha256:` in both manifests from beta → stable. Prefer AppImage source later if Flathub reviewers prefer a single file; zip is fine for first listing.
-3. Create Flathub account + two new app repos (or one PR per app) under [flathub/flathub](https://github.com/flathub/flathub) following [App Submission](https://docs.flathub.org/docs/for-app-authors/submission).
-4. Copy this directory’s manifests, `.desktop`, and `.metainfo.xml` into each Flathub app repo.
-5. Respond to reviewer sandbox / metainfo feedback (network + display sockets are already declared for Inspector).
+## Before a human re-submit (Inspector only)
 
-## Later versions (`flathub-updates`)
+1. Build and install the Flatpak locally on a real Linux desktop (`flatpak-builder` / smoke workflow).
+2. Record a clear screencast of **the Flatpak** running (launch UI, proxy a request, show useful workflow) — not a zoomed still / unrelated clip.
+3. Fill the Flathub checklist yourself; leave no placeholder “N/A” on required items.
+4. Open the submission PR yourself (no agent). Keep replies short and human.
+5. Manifest / metainfo / finish-args in this directory are the starting point (`wayland` + `fallback-x11`, no `--filesystem=home`).
 
-Manifests include `x-checker-data` so [flathub-external-data-checker](https://github.com/flathub/flatpak-external-data-checker) can open PRs when GitHub Releases change.
+App-ID companion repos (for `appid-url-not-reachable`):
 
-After each stable cut you can also bump manually:
-
-```shell
-# Example: recompute sha of the linux-x64 zip used by the manifest
-sha256sum TitaniumInspector-linux-x64.zip
-# Edit url tag + sha256 in the Flathub app repo; open PR
-```
-
-Optional CI in this monorepo: add a workflow that opens a PR against the Flathub app repos with updated URL/SHA — keep secrets for a bot token with access to those forks.
+- https://github.com/justcoding121/TitaniumInspector
+- https://github.com/justcoding121/TitaniumCli (kept for ID consistency; not for Flathub listing)
 
 ## Local build smoke
 
@@ -56,3 +47,9 @@ flatpak-builder --user --install --force-clean /tmp/ti-build \
   tools/packaging/flatpak/io.github.justcoding121.TitaniumInspector.yml
 flatpak run io.github.justcoding121.TitaniumInspector
 ```
+
+Optional CI: [`.github/workflows/packaging-catalog-smoke.yml`](../../.github/workflows/packaging-catalog-smoke.yml) (`run_flatpak=true`).
+
+## Later versions (after a successful first listing)
+
+Manifests include `x-checker-data` for flathub-external-data-checker. After each stable cut, bump `url` + `sha256` in the Flathub app repo (or let the checker open a PR).
