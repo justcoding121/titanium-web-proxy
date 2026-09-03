@@ -45,11 +45,10 @@ public class InspectorHeadlessUiE2ETests
 
         Assert.IsTrue(interception.IsRunning, vm.StatusText);
         Assert.IsTrue(vm.Capturing);
+        Assert.AreEqual("Ready", vm.StatusText);
         Assert.IsTrue(
-            vm.StatusText.Contains("Proxy running", StringComparison.OrdinalIgnoreCase) ||
-            vm.StatusText.Contains("Decrypt HTTPS", StringComparison.OrdinalIgnoreCase) ||
-            vm.StatusText.Contains("encrypted tunnels", StringComparison.OrdinalIgnoreCase),
-            vm.StatusText);
+            vm.EndpointStatusText.Contains("Proxy running", StringComparison.OrdinalIgnoreCase),
+            vm.EndpointStatusText);
 
         vm.InstallCaCommand.Execute(null);
         await Task.Delay(100);

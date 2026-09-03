@@ -19,6 +19,9 @@
     <!-- Bundle id: com.justcoding121.titaniuminspector -->
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Titanium.Inspector.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.2.8" />
     <PackageReference Include="Avalonia.Desktop" Version="11.2.8" />
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.2.8" />

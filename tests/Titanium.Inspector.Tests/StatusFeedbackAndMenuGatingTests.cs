@@ -166,9 +166,106 @@ public class StatusFeedbackAndMenuGatingTests
             vm.StartCaptureCommand.Execute(null);
             await WaitUntil(() => interception.IsRunning);
 
-            StringAssert.Contains(vm.StatusText, "Proxy running on");
+            Assert.AreEqual("Ready", vm.StatusText);
             Assert.AreEqual(StatusSeverity.Neutral, vm.StatusSeverity);
+            StringAssert.Contains(vm.EndpointStatusText, "Proxy running on");
             Assert.IsFalse(vm.IsStatusBusy);
+
+            vm.EnsureShutdown();
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task SetTransientStatus_RevertsToReadyAfterDelay()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-transient-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            settings.Current.AutoStartCapture = false;
+            settings.Save();
+
+            var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(new SessionRegistry()),
+                new SessionRegistry(),
+                new UpdateService(settings),
+                settings,
+                interception);
+
+            vm.BindPort = 0;
+            vm.StartCaptureCommand.Execute(null);
+            await WaitUntil(() => interception.IsRunning);
+            Assert.AreEqual("Ready", vm.StatusText);
+
+            vm.SetTransientStatus("Exported 1 sessions", StatusSeverity.Success, revertMs: 100);
+            Assert.AreEqual(StatusSeverity.Success, vm.StatusSeverity);
+
+            await Task.Delay(250);
+            Assert.AreEqual("Ready", vm.StatusText);
+            Assert.AreEqual(StatusSeverity.Neutral, vm.StatusSeverity);
+
+            vm.EnsureShutdown();
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task SetTransientStatus_UsesToastSeveritySeparateFromBar()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-toast-severity-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var notifier = new RecordingStatusNotifier();
+            var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                statusNotifier: notifier);
+
+            vm.BindPort = 0;
+            vm.StartCaptureCommand.Execute(null);
+            await WaitUntil(() => interception.IsRunning);
+
+            vm.SetTransientStatus(
+                "Titanium Inspector is up to date (Stable).",
+                StatusSeverity.Neutral,
+                toastImportant: true,
+                revertMs: 50,
+                toastSeverity: StatusSeverity.Success);
+
+            Assert.AreEqual(StatusSeverity.Neutral, vm.StatusSeverity);
+            Assert.AreEqual("Titanium Inspector is up to date (Stable).", vm.StatusText);
+            Assert.AreEqual(1, notifier.Calls.Count);
+            Assert.AreEqual(StatusSeverity.Success, notifier.Calls[0].Severity);
+
+            await Task.Delay(150);
+            Assert.AreEqual("Ready", vm.StatusText);
+            Assert.AreEqual(StatusSeverity.Neutral, vm.StatusSeverity);
 
             vm.EnsureShutdown();
         }
