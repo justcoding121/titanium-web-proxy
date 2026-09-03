@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Titanium.Inspector.Views;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Inspector.Services;
 
@@ -14,6 +15,17 @@ public interface IInspectorDialogs
 
     /// <summary>Ask to retry CA install with an OS admin prompt. Returns true if confirmed.</summary>
     Task<bool> ConfirmElevateRootCaAsync(Window? owner);
+
+    /// <summary>
+    /// Adaptive recovery when user OS trust failed (certutil missing, Keychain confirm, elevate).
+    /// </summary>
+    Task<TrustRecoveryChoice> ShowTrustRecoveryAsync(Window? owner, CertificateOsTrustResult? result);
+
+    /// <summary>Ask to install root CA before Firefox trust. Returns true if Install.</summary>
+    Task<bool> ConfirmInstallRootCaBeforeFirefoxAsync(Window? owner);
+
+    /// <summary>Ask the user to quit Firefox so the profile DB can be updated.</summary>
+    Task<bool> ConfirmQuitFirefoxForTrustAsync(Window? owner);
 
     /// <summary>
     /// Show device CA setup steps. Returns true if the user chose Export CA; false on Close / no owner.
@@ -65,6 +77,84 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
             "User-level trust failed or was insufficient. Continue to show the OS admin prompt (UAC / macOS authentication / polkit)? Cancel leaves certificate settings unchanged.",
             accept: "Continue",
             cancel: CancelLabel);
+
+    public Task<TrustRecoveryChoice> ShowTrustRecoveryAsync(Window? owner, CertificateOsTrustResult? result)
+    {
+        var kind = result?.Kind ?? CertificateOsTrustKind.Failed;
+        var message = result?.Message ?? "Root CA trust failed.";
+
+        return kind switch
+        {
+            CertificateOsTrustKind.CertutilMissing when result is { BrewAvailable: true } =>
+                TrustRecoveryDialog.ShowAsync(
+                    owner,
+                    "Install browser certificate tools",
+                    message + "\n\nThis runs: brew install nss",
+                    primary: "Install via Homebrew",
+                    secondary: "Export CA",
+                    height: 280),
+
+            CertificateOsTrustKind.CertutilMissing =>
+                TrustRecoveryDialog.ShowAsync(
+                    owner,
+                    "Install browser certificate tools",
+                    message + (string.IsNullOrEmpty(result?.PackageHint)
+                        ? ""
+                        : $"\n\nPackage: {result!.PackageHint}"),
+                    primary: "Install browser certificate tools",
+                    secondary: "Export CA",
+                    height: 280),
+
+            CertificateOsTrustKind.HomebrewMissing =>
+                TrustRecoveryDialog.ShowAsync(
+                    owner,
+                    "certutil not available",
+                    message,
+                    primary: "Export CA",
+                    secondary: null,
+                    height: 260),
+
+            CertificateOsTrustKind.MacNeedsManualTrustConfirm =>
+                TrustRecoveryDialog.ShowAsync(
+                    owner,
+                    "Confirm trust in Keychain Access",
+                    message +
+                    "\n\n1. Find the Titanium Inspector root certificate\n" +
+                    "2. Get Info → Trust → When using this certificate: Always Trust\n" +
+                    "3. Close the info window and return here",
+                    primary: "Open Keychain Access",
+                    secondary: "I've confirmed — Continue",
+                    height: 320),
+
+            _ => TrustRecoveryDialog.ShowAsync(
+                owner,
+                "Install with administrator privileges",
+                message +
+                "\n\nContinue to show the OS admin prompt (UAC / macOS authentication / polkit)? " +
+                "Not now leaves certificate settings unchanged.",
+                primary: "Install with administrator",
+                secondary: "Export CA",
+                height: 280),
+        };
+    }
+
+    public Task<bool> ConfirmInstallRootCaBeforeFirefoxAsync(Window? owner) =>
+        SimpleConfirmDialog.ShowAsync(
+            owner,
+            "Install root CA first",
+            "Firefox trust needs the Titanium Inspector root CA installed on this PC first. Install the root CA now?",
+            accept: "Install",
+            cancel: CancelLabel);
+
+    public Task<bool> ConfirmQuitFirefoxForTrustAsync(Window? owner) =>
+        SimpleConfirmDialog.ShowAsync(
+            owner,
+            "Quit Firefox",
+            "Firefox appears to be running and may lock its certificate database. Quit Firefox, then click Retry.\n\n" +
+            "Inspector will not force-quit Firefox for you.",
+            accept: "Retry",
+            cancel: CancelLabel,
+            height: 240);
 
     public Task<bool> ShowDeviceCaSetupAsync(Window? owner, string message) =>
         SimpleConfirmDialog.ShowAsync(
@@ -139,6 +229,9 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
     public bool InstallRootCaResult { get; set; } = true;
     public bool RemoveRootCaResult { get; set; } = true;
     public bool ElevateRootCaResult { get; set; } = true;
+    public TrustRecoveryChoice TrustRecoveryResult { get; set; } = TrustRecoveryChoice.Primary;
+    public bool InstallRootCaBeforeFirefoxResult { get; set; } = true;
+    public bool QuitFirefoxForTrustResult { get; set; } = true;
     public bool DeviceCaSetupResult { get; set; }
     public bool ResetSettingsResult { get; set; } = true;
     public bool RotateRootCaResult { get; set; } = true;
@@ -146,6 +239,9 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
     public int InstallRootCaCalls { get; private set; }
     public int RemoveRootCaCalls { get; private set; }
     public int ElevateRootCaCalls { get; private set; }
+    public int TrustRecoveryCalls { get; private set; }
+    public int InstallRootCaBeforeFirefoxCalls { get; private set; }
+    public int QuitFirefoxForTrustCalls { get; private set; }
     public int DeviceCaSetupCalls { get; private set; }
     public int ResetSettingsCalls { get; private set; }
     public int RotateRootCaCalls { get; private set; }
@@ -153,6 +249,7 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
     public string? LastDeviceCaSetupMessage { get; private set; }
     public string? LastInstallUpdateVersion { get; private set; }
     public string? LastInstallUpdateChannel { get; private set; }
+    public CertificateOsTrustResult? LastTrustRecoveryResult { get; private set; }
 
     public Task<bool> ConfirmInstallRootCaAsync(Window? owner)
     {
@@ -170,6 +267,25 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
     {
         ElevateRootCaCalls++;
         return Task.FromResult(ElevateRootCaResult);
+    }
+
+    public Task<TrustRecoveryChoice> ShowTrustRecoveryAsync(Window? owner, CertificateOsTrustResult? result)
+    {
+        TrustRecoveryCalls++;
+        LastTrustRecoveryResult = result;
+        return Task.FromResult(TrustRecoveryResult);
+    }
+
+    public Task<bool> ConfirmInstallRootCaBeforeFirefoxAsync(Window? owner)
+    {
+        InstallRootCaBeforeFirefoxCalls++;
+        return Task.FromResult(InstallRootCaBeforeFirefoxResult);
+    }
+
+    public Task<bool> ConfirmQuitFirefoxForTrustAsync(Window? owner)
+    {
+        QuitFirefoxForTrustCalls++;
+        return Task.FromResult(QuitFirefoxForTrustResult);
     }
 
     public Task<bool> ConfirmRotateRootCaAsync(Window? owner)

@@ -122,7 +122,7 @@ public class InspectorFeatureSanityE2ETests
             UseInMemoryTrustState = true,
             FailNextUserTrustInstall = true,
         };
-        var dialogs = new ScriptedInspectorDialogs { ElevateRootCaResult = true };
+        var dialogs = new ScriptedInspectorDialogs { TrustRecoveryResult = TrustRecoveryChoice.Primary };
         var vm = new MainWindowViewModel(buffer, registry, updates, settings, interception, dialogs);
 
         try
@@ -132,9 +132,9 @@ public class InspectorFeatureSanityE2ETests
             await WaitAsync(() => interception.IsRunning);
 
             vm.InstallCaCommand.Execute(null);
-            await WaitAsync(() => dialogs.ElevateRootCaCalls >= 1 || interception.IsRootTrusted);
+            await WaitAsync(() => dialogs.TrustRecoveryCalls >= 1 || interception.IsRootTrusted);
 
-            Assert.AreEqual(1, dialogs.ElevateRootCaCalls);
+            Assert.AreEqual(1, dialogs.TrustRecoveryCalls);
             Assert.IsTrue(interception.IsRootTrusted, vm.StatusText);
         }
         finally
@@ -162,7 +162,7 @@ public class InspectorFeatureSanityE2ETests
             UseInMemoryTrustState = true,
             FailNextUserTrustInstall = true,
         };
-        var dialogs = new ScriptedInspectorDialogs { ElevateRootCaResult = false };
+        var dialogs = new ScriptedInspectorDialogs { TrustRecoveryResult = TrustRecoveryChoice.Cancel };
         var vm = new MainWindowViewModel(buffer, registry, updates, settings, interception, dialogs);
 
         try
@@ -172,9 +172,9 @@ public class InspectorFeatureSanityE2ETests
             await WaitAsync(() => interception.IsRunning);
 
             vm.InstallCaCommand.Execute(null);
-            await WaitAsync(() => dialogs.ElevateRootCaCalls >= 1);
+            await WaitAsync(() => dialogs.TrustRecoveryCalls >= 1);
 
-            Assert.AreEqual(1, dialogs.ElevateRootCaCalls);
+            Assert.AreEqual(1, dialogs.TrustRecoveryCalls);
             Assert.IsFalse(interception.IsRootTrusted);
             StringAssert.Contains(vm.StatusText.ToLowerInvariant(), "cancel");
         }

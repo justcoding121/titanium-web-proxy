@@ -49,6 +49,8 @@
         <MenuItem Header="Remove root CA (current user)" Command="{Binding UntrustCaCommand}" AutomationProperties.AutomationId="MenuRemoveCa" />
         <MenuItem Header="Clear and reinstall root CA…" Command="{Binding RotateCaCommand}" AutomationProperties.AutomationId="MenuRotateCa" />
         <MenuItem Header="Export root CA…" Command="{Binding ExportCaCommand}" AutomationProperties.AutomationId="MenuExportCa" />
+        <MenuItem Header="Trust CA in Firefox…" Command="{Binding TrustFirefoxCaCommand}"
+                  AutomationProperties.AutomationId="MenuTrustFirefoxCa" />
         <MenuItem Header="Device CA setup…" Command="{Binding DeviceCaSetupCommand}" AutomationProperties.AutomationId="MenuDeviceCa" />
         <MenuItem Header="Allow Store apps…" Command="{Binding OpenLoopbackExemptCommand}"
                   IsVisible="{Binding ShowLoopbackExemptMenu}"

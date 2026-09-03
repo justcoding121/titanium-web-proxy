@@ -155,3 +155,34 @@ Titanium.Web.Proxy.Transforms.TransformEngine.ApplyRequestTransforms(System.Coll
 Titanium.Web.Proxy.Transforms.TransformEngine.TransformEngine() -> void
 Titanium.Web.Proxy.ProxyServer.ReverseProxy.get -> Titanium.Web.Proxy.Abstractions.ReverseProxyOptions?
 Titanium.Web.Proxy.ProxyServer.ReverseProxy.set -> void
+Titanium.Web.Proxy.Network.CertificateOsTrustKind
+Titanium.Web.Proxy.Network.CertificateOsTrustKind.Succeeded = 0 -> Titanium.Web.Proxy.Network.CertificateOsTrustKind
+Titanium.Web.Proxy.Network.CertificateOsTrustKind.CertutilMissing = 1 -> Titanium.Web.Proxy.Network.CertificateOsTrustKind
+Titanium.Web.Proxy.Network.CertificateOsTrustKind.NssFailed = 2 -> Titanium.Web.Proxy.Network.CertificateOsTrustKind
+Titanium.Web.Proxy.Network.CertificateOsTrustKind.MacKeychainFailed = 3 -> Titanium.Web.Proxy.Network.CertificateOsTrustKind
+Titanium.Web.Proxy.Network.CertificateOsTrustKind.MacNeedsManualTrustConfirm = 4 -> Titanium.Web.Proxy.Network.CertificateOsTrustKind
+Titanium.Web.Proxy.Network.CertificateOsTrustKind.HomebrewMissing = 5 -> Titanium.Web.Proxy.Network.CertificateOsTrustKind
+Titanium.Web.Proxy.Network.CertificateOsTrustKind.Unsupported = 6 -> Titanium.Web.Proxy.Network.CertificateOsTrustKind
+Titanium.Web.Proxy.Network.CertificateOsTrustKind.Cancelled = 7 -> Titanium.Web.Proxy.Network.CertificateOsTrustKind
+Titanium.Web.Proxy.Network.CertificateOsTrustKind.Failed = 8 -> Titanium.Web.Proxy.Network.CertificateOsTrustKind
+Titanium.Web.Proxy.Network.CertificateOsTrustResult
+Titanium.Web.Proxy.Network.CertificateOsTrustResult.BrewAvailable.get -> bool
+Titanium.Web.Proxy.Network.CertificateOsTrustResult.CertificateOsTrustResult(Titanium.Web.Proxy.Network.CertificateOsTrustKind kind, string! message, string? packageHint = null, bool brewAvailable = false) -> void
+Titanium.Web.Proxy.Network.CertificateOsTrustResult.Kind.get -> Titanium.Web.Proxy.Network.CertificateOsTrustKind
+Titanium.Web.Proxy.Network.CertificateOsTrustResult.Message.get -> string!
+Titanium.Web.Proxy.Network.CertificateOsTrustResult.PackageHint.get -> string?
+Titanium.Web.Proxy.Network.CertificateOsTrustResult.Succeeded.get -> bool
+static Titanium.Web.Proxy.Network.CertificateOsTrustResult.Fail(Titanium.Web.Proxy.Network.CertificateOsTrustKind kind, string! message, string? packageHint = null, bool brewAvailable = false) -> Titanium.Web.Proxy.Network.CertificateOsTrustResult!
+static Titanium.Web.Proxy.Network.CertificateOsTrustResult.Ok(string! message = "Trusted") -> Titanium.Web.Proxy.Network.CertificateOsTrustResult!
+Titanium.Web.Proxy.Network.CertificateManager.LastOsTrustResult.get -> Titanium.Web.Proxy.Network.CertificateOsTrustResult?
+Titanium.Web.Proxy.Network.CertificateManager.InstallNssCertutilAndRetryUserTrust() -> Titanium.Web.Proxy.Network.CertificateOsTrustResult!
+Titanium.Web.Proxy.Network.CertificateManager.OpenMacKeychainGuidance() -> string?
+Titanium.Web.Proxy.Network.CertificateManager.VerifyOsUserSslTrust() -> bool
+Titanium.Web.Proxy.Network.FirefoxCertificateTrust
+static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProcessRunning() -> bool
+static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProfilePresent() -> bool
+static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots() -> bool
+static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots() -> Titanium.Web.Proxy.Network.CertificateOsTrustResult!
+static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryResolveDefaultProfileDirectory(out string! profileDirectory, out string? error) -> bool
+static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustDefaultProfile(System.Security.Cryptography.X509Certificates.X509Certificate2! certificate, string! friendlyName) -> Titanium.Web.Proxy.Network.CertificateOsTrustResult!
+static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.UntrustDefaultProfile(string! friendlyName) -> bool

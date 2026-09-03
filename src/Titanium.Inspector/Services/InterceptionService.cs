@@ -10,6 +10,7 @@ using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Inspector.Services;
 
@@ -75,6 +76,16 @@ public sealed class InterceptionService : IDisposable
     public bool SystemProxyEnabled => _systemProxyEnabled;
     public X509Certificate2? RootCertificate => _proxy?.CertificateManager.RootCertificate;
     public bool IsRootTrusted { get; private set; }
+
+    /// <summary>Last OS trust outcome from Install root CA (Keychain / NSS / package hints).</summary>
+    public CertificateOsTrustResult? LastOsTrustResult { get; private set; }
+
+    /// <summary>Root certificate display name used as NSS nickname.</summary>
+    public string RootCertificateName =>
+        _proxy?.CertificateManager.RootCertificateName ?? "Titanium Inspector Root Certificate";
+
+    /// <summary>True when a Firefox profiles.ini is present on this machine.</summary>
+    public bool IsFirefoxProfilePresent => FirefoxCertificateTrust.IsFirefoxProfilePresent();
 
     /// <summary>True when the running proxy currently allows HTTP/2.</summary>
     public bool Http2Enabled { get; private set; } = true;
@@ -366,7 +377,7 @@ public sealed class InterceptionService : IDisposable
     }
 
     /// <summary>Install root CA and refresh <see cref="IsRootTrusted"/> from the store.</summary>
-    /// <returns>True when the cert is present in the target Root store after install.</returns>
+    /// <returns>True when the cert is present in the target Root store after install (or Unix SSL trust succeeded / needs Keychain confirm).</returns>
     public bool InstallRootCertificate(bool machineStore)
     {
         if (_proxy is null)
@@ -377,6 +388,8 @@ public sealed class InterceptionService : IDisposable
         if (FailNextUserTrustInstall)
         {
             FailNextUserTrustInstall = false;
+            LastOsTrustResult = CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed, "Forced user-trust failure (test)");
             return false;
         }
 
@@ -384,6 +397,7 @@ public sealed class InterceptionService : IDisposable
         {
             _inMemoryTrusted = true;
             IsRootTrusted = true;
+            LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted (in-memory)");
             return true;
         }
 
@@ -392,13 +406,36 @@ public sealed class InterceptionService : IDisposable
         if (IsRootPresentInStore(machineStore))
         {
             IsRootTrusted = true;
+            if (!OperatingSystem.IsWindows() &&
+                !_proxy.CertificateManager.VerifyOsUserSslTrust())
+            {
+                // .NET store has the cert but Keychain/NSS may still need work.
+                _proxy.CertificateManager.TrustRootCertificate(machineStore);
+                LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
+                IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) || IsRootPresentInStore(machineStore);
+                return IsRootTrusted ||
+                       LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
+            }
+
+            LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA already trusted");
             return true;
         }
 
         _proxy.CertificateManager.TrustRootCertificate(machineStore);
-        IsRootTrusted = IsRootPresentInStore(machineStore);
-        return IsRootTrusted;
+        LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
+
+        if (OperatingSystem.IsWindows())
+        {
+            IsRootTrusted = IsRootPresentInStore(machineStore);
+            return IsRootTrusted;
+        }
+
+        IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) || IsRootPresentInStore(machineStore);
+        // MacNeedsManualTrustConfirm: cert was added; UI should guide Always Trust then re-verify.
+        return IsRootTrusted ||
+               LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
     }
+
     /// <summary>
     /// Installs the root CA with an OS admin prompt when required (UAC / macOS auth / polkit).
     /// </summary>
@@ -413,15 +450,92 @@ public sealed class InterceptionService : IDisposable
         {
             _inMemoryTrusted = true;
             IsRootTrusted = true;
+            LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted (in-memory)");
             return true;
         }
 
         var ok = _proxy.CertificateManager.TrustRootCertificateAsAdmin(machineStore);
+        LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
         // On non-Windows, OS trust may succeed even when X509Store presence checks are incomplete.
         IsRootTrusted = ok && (IsRootPresentInStore(machineStore) || !OperatingSystem.IsWindows());
         if (ok && !IsRootTrusted)
             IsRootTrusted = true;
-        return IsRootTrusted;
+        return IsRootTrusted ||
+               LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
+    }
+
+    /// <summary>Installs certutil (package/brew) then retries user SSL trust.</summary>
+    public CertificateOsTrustResult InstallNssToolsAndRetryTrust()
+    {
+        if (_proxy is null)
+        {
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed, "Start the proxy first");
+        }
+
+        var result = _proxy.CertificateManager.InstallNssCertutilAndRetryUserTrust();
+        LastOsTrustResult = result;
+        if (EvaluateUnixTrustSuccess(result) ||
+            result.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+        {
+            IsRootTrusted = result.Succeeded || IsRootPresentInStore(false);
+        }
+
+        return result;
+    }
+
+    /// <summary>Opens Keychain Access for Always Trust guidance.</summary>
+    public string? OpenMacKeychainGuidance() => _proxy?.CertificateManager.OpenMacKeychainGuidance();
+
+    /// <summary>Re-verifies macOS/Linux user SSL trust and updates <see cref="IsRootTrusted"/>.</summary>
+    public bool VerifyOsUserSslTrust()
+    {
+        if (_proxy is null) return false;
+        if (UseInMemoryTrustState) return IsRootTrusted;
+        var ok = _proxy.CertificateManager.VerifyOsUserSslTrust() || IsRootPresentInStore(false);
+        if (ok) IsRootTrusted = true;
+        return ok;
+    }
+
+    /// <summary>
+    ///     Trust CA for Firefox: Windows ImportEnterpriseRoots first; otherwise (or on failure)
+    ///     import into the default Firefox profile via certutil.
+    /// </summary>
+    public CertificateOsTrustResult TrustFirefox()
+    {
+        if (_proxy is null)
+        {
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed, "Start the proxy first");
+        }
+
+        var cert = _proxy.CertificateManager.RootCertificate;
+        if (cert is null)
+        {
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed, "Root certificate is not loaded");
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            var policy = FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots();
+            if (policy.Succeeded)
+                return policy;
+            // Fall through to profile NSS import.
+        }
+
+        return FirefoxCertificateTrust.TrustDefaultProfile(cert, RootCertificateName);
+    }
+
+    private static bool EvaluateUnixTrustSuccess(CertificateOsTrustResult? result) =>
+        result is { Succeeded: true };
+
+    /// <summary>Marks the last trust attempt as user-cancelled (recovery dialog dismissed).</summary>
+    public void SetLastOsTrustCancelled()
+    {
+        LastOsTrustResult = CertificateOsTrustResult.Fail(
+            CertificateOsTrustKind.Cancelled,
+            "Root CA install cancelled");
     }
 
     public void UntrustRootCertificate(bool machineStore)

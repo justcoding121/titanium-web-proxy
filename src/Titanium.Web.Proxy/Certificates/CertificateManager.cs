@@ -1362,6 +1362,9 @@ public sealed class CertificateManager : IDisposable
         return RootCertificate != null;
     }
 
+    /// <summary>Last OS/browser trust outcome from <see cref="TrustRootCertificate"/> / related helpers.</summary>
+    public CertificateOsTrustResult? LastOsTrustResult { get; private set; }
+
     /// <summary>
     ///     Trusts the root certificate in the current-user Personal and Trusted Root stores,
     ///     and optionally also in the local-machine Personal and Trusted Root stores.
@@ -1395,7 +1398,49 @@ public sealed class CertificateManager : IDisposable
 
         // On macOS/Linux, also trust for SSL in Keychain / NSS so browsers accept MITM.
         if (!RunTime.IsWindows && RootCertificate != null)
-            Helpers.UnixCertificateTrust.TrustUserSsl(RootCertificate, RootCertificateName);
+        {
+            LastOsTrustResult = Helpers.UnixCertificateTrust.TrustUserSsl(RootCertificate, RootCertificateName);
+            return;
+        }
+
+        LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted in current-user store");
+    }
+
+    /// <summary>
+    ///     Installs NSS <c>certutil</c> (Linux package or macOS Homebrew) after user consent, then retries user SSL trust.
+    /// </summary>
+    public CertificateOsTrustResult InstallNssCertutilAndRetryUserTrust()
+    {
+        var install = Helpers.UnixCertificateTrust.TryInstallNssCertutil();
+        if (!install.Succeeded)
+        {
+            LastOsTrustResult = install;
+            return install;
+        }
+
+        if (RootCertificate == null)
+        {
+            LastOsTrustResult = CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed, "Root certificate is not loaded");
+            return LastOsTrustResult;
+        }
+
+        LastOsTrustResult = Helpers.UnixCertificateTrust.TrustUserSsl(RootCertificate, RootCertificateName);
+        return LastOsTrustResult;
+    }
+
+    /// <summary>Re-checks macOS/Linux user SSL trust for the current root.</summary>
+    public bool VerifyOsUserSslTrust()
+    {
+        if (RootCertificate == null || RunTime.IsWindows) return IsRootCertificateUserTrusted();
+        return Helpers.UnixCertificateTrust.VerifyUserSslTrust(RootCertificate);
+    }
+
+    /// <summary>Opens Keychain Access (and a temp .cer) for manual Always Trust on macOS.</summary>
+    public string? OpenMacKeychainGuidance()
+    {
+        if (RootCertificate == null || !RunTime.IsMac) return null;
+        return Helpers.UnixCertificateTrust.OpenMacKeychainGuidanceForCertificate(RootCertificate);
     }
 
     /// <summary>
@@ -1420,11 +1465,20 @@ public sealed class CertificateManager : IDisposable
 
         if (!RunTime.IsWindows)
         {
-            Helpers.UnixCertificateTrust.TrustUserSsl(certificate, RootCertificateName);
+            LastOsTrustResult = Helpers.UnixCertificateTrust.TrustUserSsl(certificate, RootCertificateName);
             // Explicit true when only user-store trust was requested (no machine step).
-            return machineTrusted
-                ? Helpers.UnixCertificateTrust.TrustMachineSsl(certificate, RootCertificateName)
-                : true; // NOSONAR S1125
+            if (!machineTrusted)
+                return LastOsTrustResult.Succeeded ||
+                       LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
+
+            var machineOk = Helpers.UnixCertificateTrust.TrustMachineSsl(certificate, RootCertificateName);
+            if (!machineOk)
+            {
+                LastOsTrustResult = CertificateOsTrustResult.Fail(
+                    CertificateOsTrustKind.Failed, "Machine-wide CA trust failed");
+            }
+
+            return machineOk;
         }
 
         // Elevated certutil shows UAC; skip in CI / test processes that suppress Root UI.
@@ -1555,6 +1609,11 @@ public sealed class CertificateManager : IDisposable
 
         if (!RunTime.IsWindows && RootCertificate != null)
             Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
+
+        // Best-effort Firefox cleanup (policy + default profile nickname).
+        FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots();
+        if (RootCertificate != null)
+            FirefoxCertificateTrust.UntrustDefaultProfile(RootCertificateName);
     }
 
     /// <summary>
@@ -1570,11 +1629,15 @@ public sealed class CertificateManager : IDisposable
         {
             if (RootCertificate == null) return false;
             Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
+            FirefoxCertificateTrust.UntrustDefaultProfile(RootCertificateName);
             // Explicit true when only user-store untrust was requested (no machine step).
             return machineTrusted
                 ? Helpers.UnixCertificateTrust.UntrustMachineSsl(RootCertificate, RootCertificateName)
                 : true; // NOSONAR S1125
         }
+
+        FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots();
+        FirefoxCertificateTrust.UntrustDefaultProfile(RootCertificateName);
 
         // Elevated certutil -delstore shows UAC; skip when Root UI is suppressed.
         if (ShouldSuppressInteractiveRootStoreMutations)

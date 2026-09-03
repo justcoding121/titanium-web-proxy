@@ -37,6 +37,7 @@ public class AutomationIdCoverageHeadlessTests
         "MenuRemoveCa",
         "MenuRotateCa",
         "MenuExportCa",
+        "MenuTrustFirefoxCa",
         "MenuDeviceCa",
         "MenuLoopbackExempt",
         "MenuTools",

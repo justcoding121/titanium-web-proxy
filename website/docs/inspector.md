@@ -76,7 +76,7 @@ Capture menu latching options (**Capturing**, **Decrypt HTTPS**, **System proxy*
 
 The status strip keeps command feedback on the left and a live **Sessions: N** count on the right, so capture traffic does not wipe tips or export paths.
 
-**Install root CA (current user)** trusts the MITM CA on this PC. On Windows, the OS may show a Trusted Root **Yes/No** security dialog the first time that certificate is added (this is not UAC). Re-installing when the CA is already trusted does not prompt again; orphan same-name roots are cleaned up only when a new thumbprint is installed, or via **Remove** / **Clear and reinstall**. **Remove root CA** clears every same-name Titanium root in the current-user Trusted Root store (including orphans from earlier installs). **Clear and reinstall root CA…** mints a new private key, clears this install’s leaf certificate cache (next to `%AppData%\TitaniumInspector\rootCert.pfx`), removes same-name trusted roots, and prompts to reinstall trust. **Device CA setup…** opens a dialog with steps for phones/other devices and can **Export CA** from there (or use **Export root CA…** on the Capture menu).
+**Install root CA (current user)** trusts the MITM CA on this PC. On Windows, the OS may show a Trusted Root **Yes/No** security dialog the first time that certificate is added (this is not UAC). On macOS/Linux, Inspector also trusts the CA in Keychain / user NSS (`certutil`). If tools are missing or Keychain needs **Always Trust**, a single recovery dialog offers the next step (install NSS tools via package manager or Homebrew, open Keychain Access, or elevate). Re-installing when the CA is already trusted does not prompt again; orphan same-name roots are cleaned up only when a new thumbprint is installed, or via **Remove** / **Clear and reinstall**. **Remove root CA** clears every same-name Titanium root in the current-user Trusted Root store (including orphans from earlier installs) and best-effort clears Firefox policy/profile trust we added. **Clear and reinstall root CA…** mints a new private key, clears this install’s leaf certificate cache (next to `%AppData%\TitaniumInspector\rootCert.pfx`), removes same-name trusted roots, and prompts to reinstall trust. **Trust CA in Firefox…** (opt-in) enables Windows `ImportEnterpriseRoots` when possible, otherwise imports into the default Firefox profile via NSS `certutil` (may ask you to quit Firefox; on Linux/macOS can offer to install `certutil` first). **Device CA setup…** opens a dialog with steps for phones/other devices and can **Export CA** from there (or use **Export root CA…** on the Capture menu).
 
 Leaf certificates for Inspector are stored under `%AppData%\TitaniumInspector\crts\` (beside the root PFX), not under the shared `%LocalAppData%\Titanium.Web.Proxy\crts` folder used by the library default. On first start after upgrade (and on every clear/reinstall), Inspector best-effort deletes that legacy shared `crts` folder; it never deletes a shared `rootCert.pfx`.
 
@@ -138,14 +138,17 @@ Applies to every captured request/response. On request, `abort` or `set-status` 
 | System proxy | WinINET (automatic) | `networksetup` (admin prompt if required) | GNOME `gsettings` + KDE + process `http(s)_proxy` |
 | Root CA user trust | Current-user Root store | Login keychain (`security`) + .NET store | .NET store + user NSS (`certutil`, Chromium) |
 | Root CA machine / admin | UAC + `certutil` | System keychain (macOS auth dialog) | `pkexec` + `update-ca-certificates` |
-| Cancel elevation | Leaves settings unchanged | Leaves settings unchanged | Leaves settings unchanged |
+| Missing `certutil` | N/A for OS trust | **Trust CA in Firefox…** can run `brew install nss` when Homebrew is present | Recovery dialog can install `libnss3-tools` / `nss-tools` / `mozilla-nss-tools` via `pkexec` |
+| Firefox | **Trust CA in Firefox…** sets `ImportEnterpriseRoots` (restart Firefox) | Profile NSS import (needs `certutil`) | Profile NSS import (needs `certutil`) |
+| Cancel elevation / recovery | Leaves settings unchanged | Leaves settings unchanged | Leaves settings unchanged |
 
 Notes:
 
 - Headless Linux without polkit/GUI cannot show an admin dialog; use Export CA and install manually.
-- Firefox may require trusting the CA in its own certificate store.
+- **Trust CA in Firefox…** is opt-in under Capture (not auto-run after Install root CA). Default Firefox profile only.
+- macOS without Homebrew: Export CA and import under Firefox → Authorities (Inspector does not install Homebrew).
 - KDE proxy reload is best-effort; a session restart may be needed if apps do not pick up changes.
-- If user-level CA install fails, Inspector offers an elevated retry (OS admin prompt).
+- If user-level CA install fails, Inspector offers an adaptive recovery dialog (tools / Keychain / admin).
 ## Other features
 
 - Session grid: method, status, host, URL, Protocol, duration, Wait (TTFB), size, process. Right-click menu: Replay, Load into Composer, Export selected HAR/archive, Copy URL.

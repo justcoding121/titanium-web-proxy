@@ -11,6 +11,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.Views;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Inspector.ViewModels;
 
@@ -40,6 +41,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private bool _settingStatus;
     private string _sessionCountText = "Sessions: 0";
     private string _searchQuery = "";
+    private bool _firefoxTrustHintShown;
     /// <summary>Sessions hard-evicted by retention this process (not user clear/remove).</summary>
     private int _retentionEvictedTotal;
     /// <summary>When &gt; 0, <see cref="OnSessionsRemoved"/> skips retention accounting/status.</summary>
@@ -167,6 +169,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         RemoveSelectedSessionsCommand = _removeSelectedSessionsCommand;
         ToggleSystemProxyCommand = new RelayCommand(ToggleSystemProxyAsync);
         InstallCaCommand = new RelayCommand(InstallCaAsync);
+        TrustFirefoxCaCommand = new RelayCommand(TrustFirefoxCaAsync);
         UntrustCaCommand = new RelayCommand(UntrustCaAsync);
         RotateCaCommand = new RelayCommand(RotateCaAsync);
         ExportCaCommand = new RelayCommand(ExportCaAsync);
@@ -670,27 +673,261 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        var ok = _interception.InstallRootCertificate(machineStore: false);
-        if (!ok)
+        SetStatus("Trusting root CA…", StatusSeverity.Busy);
+        var ok = await EnsureRootCaTrustedAsync(promptIfNeeded: true);
+        if (ok)
+            SetOsTrustSuccessStatus();
+        else if (_interception.LastOsTrustResult?.Kind == CertificateOsTrustKind.Cancelled ||
+                 string.IsNullOrEmpty(_interception.LastOsTrustResult?.Message))
+            SetStatus("Root CA install cancelled", StatusSeverity.Warning);
+        else
+            SetStatus(
+                FormatOsTrustFailureStatus(_interception.LastOsTrustResult),
+                StatusSeverity.Error,
+                toastImportant: true);
+    }
+
+    private async Task TrustFirefoxCaAsync()
+    {
+        if (!_interception.IsRunning)
         {
-            var owner = TryGetMainWindow();
-            if (await _dialogs.ConfirmElevateRootCaAsync(owner))
-                ok = _interception.InstallRootCertificateAsAdmin(machineStore: false);
-            else
+            SetStatus("Start the proxy first", StatusSeverity.Warning);
+            return;
+        }
+
+        var owner = TryGetMainWindow();
+        if (!_interception.IsRootTrusted)
+        {
+            if (!await _dialogs.ConfirmInstallRootCaBeforeFirefoxAsync(owner))
+            {
+                SetStatus("Trust CA in Firefox cancelled — install root CA first", StatusSeverity.Warning);
+                return;
+            }
+
+            SetStatus("Trusting root CA…", StatusSeverity.Busy);
+            if (!await EnsureRootCaTrustedAsync(promptIfNeeded: true))
             {
                 SetStatus(
-                    "Root CA install cancelled elevation - try Export CA and install manually (Keychain / NSS / cert store)",
-                    StatusSeverity.Warning);
+                    FormatOsTrustFailureStatus(_interception.LastOsTrustResult),
+                    StatusSeverity.Error,
+                    toastImportant: true);
                 return;
             }
         }
 
+        if (!FirefoxCertificateTrust.IsFirefoxProfilePresent())
+        {
+            SetStatus(
+                "Firefox profile not found — install Firefox or use Export CA and import under Firefox → Authorities",
+                StatusSeverity.Warning,
+                toastImportant: true);
+            return;
+        }
+
+        SetStatus("Updating Firefox trust…", StatusSeverity.Busy);
+        var result = await TrustFirefoxWithRecoveryAsync(owner);
         SetStatus(
-            ok
-                ? "Root CA trusted - ready to enable Decrypt HTTPS"
-                : "Root CA install failed (store / Keychain / NSS) - try Export CA, or allow the admin prompt",
-            ok ? StatusSeverity.Success : StatusSeverity.Error,
+            result.Succeeded
+                ? result.Message
+                : result.Message + (result.Kind is CertificateOsTrustKind.CertutilMissing
+                    or CertificateOsTrustKind.HomebrewMissing
+                    ? " — try Export CA"
+                    : ""),
+            result.Succeeded ? StatusSeverity.Success : StatusSeverity.Error,
             toastImportant: true);
+    }
+
+    private async Task<CertificateOsTrustResult> TrustFirefoxWithRecoveryAsync(Window? owner)
+    {
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var result = _interception.TrustFirefox();
+            if (result.Succeeded)
+                return result;
+
+            if (result.Kind is CertificateOsTrustKind.CertutilMissing or CertificateOsTrustKind.HomebrewMissing)
+            {
+                var choice = await _dialogs.ShowTrustRecoveryAsync(owner, result);
+                if (choice == TrustRecoveryChoice.Primary &&
+                    result.Kind == CertificateOsTrustKind.CertutilMissing &&
+                    (OperatingSystem.IsLinux() || result.BrewAvailable))
+                {
+                    SetStatus("Installing browser certificate tools…", StatusSeverity.Busy);
+                    var install = _interception.InstallNssToolsAndRetryTrust();
+                    if (!install.Succeeded && install.Kind != CertificateOsTrustKind.Succeeded)
+                    {
+                        // InstallNssTools also retries OS NSS; for Firefox we only needed certutil.
+                        // Continue to retry TrustFirefox if certutil appeared.
+                    }
+
+                    continue;
+                }
+
+                if (choice == TrustRecoveryChoice.Secondary ||
+                    (choice == TrustRecoveryChoice.Primary && result.Kind == CertificateOsTrustKind.HomebrewMissing))
+                {
+                    await ExportCaAsync();
+                }
+
+                return result;
+            }
+
+            if (result.Message.Contains("Quit Firefox", StringComparison.OrdinalIgnoreCase) ||
+                result.Message.Contains("running", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!await _dialogs.ConfirmQuitFirefoxForTrustAsync(owner))
+                    return CertificateOsTrustResult.Fail(CertificateOsTrustKind.Cancelled, "Firefox trust cancelled");
+                continue;
+            }
+
+            return result;
+        }
+
+        return CertificateOsTrustResult.Fail(
+            CertificateOsTrustKind.Failed, "Firefox trust failed after retries");
+    }
+
+    /// <summary>
+    /// Attempts user OS trust and adaptive recovery (certutil install / Keychain / elevate).
+    /// </summary>
+    private async Task<bool> EnsureRootCaTrustedAsync(bool promptIfNeeded)
+    {
+        var owner = TryGetMainWindow();
+        var ok = _interception.InstallRootCertificate(machineStore: false);
+        var result = _interception.LastOsTrustResult;
+
+        if (ok && result?.Kind != CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+            return true;
+
+        if (!promptIfNeeded)
+            return ok;
+
+        // Adaptive recovery loop (certutil / Keychain / elevate).
+        for (var i = 0; i < 4; i++)
+        {
+            result = _interception.LastOsTrustResult;
+            if (_interception.IsRootTrusted &&
+                result?.Kind != CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+                return true;
+
+            if (result?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm ||
+                (!ok && result != null) ||
+                !ok)
+            {
+                var choice = await _dialogs.ShowTrustRecoveryAsync(owner, result);
+                if (choice == TrustRecoveryChoice.Cancel)
+                {
+                    _interception.SetLastOsTrustCancelled();
+                    return false;
+                }
+
+                if (result?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+                {
+                    if (choice == TrustRecoveryChoice.Primary)
+                    {
+                        _interception.OpenMacKeychainGuidance();
+                        SetStatus(
+                            "Set Always Trust in Keychain Access, then click I've confirmed in the next prompt",
+                            StatusSeverity.Neutral);
+                        // Re-show same recovery so user can Continue.
+                        continue;
+                    }
+
+                    // Secondary = I've confirmed — Continue
+                    SetStatus("Verifying Keychain trust…", StatusSeverity.Busy);
+                    if (_interception.VerifyOsUserSslTrust())
+                        return true;
+
+                    SetStatus(
+                        "Keychain trust not verified yet — set Always Trust, then continue",
+                        StatusSeverity.Warning);
+                    continue;
+                }
+
+                if (result?.Kind == CertificateOsTrustKind.CertutilMissing &&
+                    (result.BrewAvailable || OperatingSystem.IsLinux()))
+                {
+                    if (choice == TrustRecoveryChoice.Primary)
+                    {
+                        SetStatus("Installing browser certificate tools…", StatusSeverity.Busy);
+                        var install = _interception.InstallNssToolsAndRetryTrust();
+                        if (install.Succeeded ||
+                            install.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+                        {
+                            ok = install.Succeeded ||
+                                 install.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
+                            if (install.Succeeded)
+                                return true;
+                            continue;
+                        }
+
+                        SetStatus(install.Message, StatusSeverity.Error);
+                        continue;
+                    }
+
+                    if (choice == TrustRecoveryChoice.Secondary)
+                        await ExportCaAsync();
+                    return false;
+                }
+
+                if (result?.Kind == CertificateOsTrustKind.HomebrewMissing)
+                {
+                    if (choice == TrustRecoveryChoice.Primary)
+                        await ExportCaAsync();
+                    return false;
+                }
+
+                // Default: elevate or export
+                if (choice == TrustRecoveryChoice.Primary)
+                {
+                    SetStatus("Trusting root CA (administrator)…", StatusSeverity.Busy);
+                    ok = _interception.InstallRootCertificateAsAdmin(machineStore: false);
+                    if (ok && _interception.LastOsTrustResult?.Kind !=
+                        CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+                        return true;
+                    continue;
+                }
+
+                if (choice == TrustRecoveryChoice.Secondary)
+                    await ExportCaAsync();
+                return false;
+            }
+
+            break;
+        }
+
+        return _interception.IsRootTrusted;
+    }
+
+    private void SetOsTrustSuccessStatus()
+    {
+        var msg = "Root CA trusted — ready to decrypt HTTPS";
+        if (!_firefoxTrustHintShown && _interception.IsFirefoxProfilePresent)
+        {
+            _firefoxTrustHintShown = true;
+            msg += " · Using Firefox? Capture → Trust CA in Firefox…";
+        }
+
+        SetStatus(msg, StatusSeverity.Success, toastImportant: true);
+    }
+
+    private static string FormatOsTrustFailureStatus(CertificateOsTrustResult? result)
+    {
+        if (result is null)
+            return "Root CA install failed — try Export CA, or allow the admin prompt";
+
+        return result.Kind switch
+        {
+            CertificateOsTrustKind.CertutilMissing =>
+                result.Message + " — Capture → Install root CA to install tools, or Export CA",
+            CertificateOsTrustKind.MacNeedsManualTrustConfirm =>
+                "Root CA needs Always Trust in Keychain Access",
+            CertificateOsTrustKind.HomebrewMissing =>
+                result.Message,
+            _ => string.IsNullOrWhiteSpace(result.Message)
+                ? "Root CA install failed — try Export CA, or allow the admin prompt"
+                : result.Message,
+        };
     }
 
 
@@ -756,12 +993,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         if (await _dialogs.ConfirmInstallRootCaAsync(owner))
         {
-            var trusted = _interception.InstallRootCertificate(machineStore: false);
-            if (!trusted && await _dialogs.ConfirmElevateRootCaAsync(owner))
-                trusted = _interception.InstallRootCertificateAsAdmin(machineStore: false);
-
-            var message = FormatRotateCaInstallStatus(trusted, changed);
-            SetStatus(message, trusted ? StatusSeverity.Success : StatusSeverity.Error, toastImportant: true);
+            SetStatus("Trusting root CA…", StatusSeverity.Busy);
+            var trusted = await EnsureRootCaTrustedAsync(promptIfNeeded: true);
+            var message = trusted
+                ? (changed
+                    ? "Root CA cleared and trusted — ready to enable Decrypt HTTPS"
+                    : "Root CA trusted — ready to enable Decrypt HTTPS")
+                : FormatOsTrustFailureStatus(_interception.LastOsTrustResult);
+            if (trusted)
+                SetOsTrustSuccessStatus();
+            else
+                SetStatus(message, StatusSeverity.Error, toastImportant: true);
             return;
         }
 
@@ -1234,6 +1476,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand RemoveSelectedSessionsCommand { get; }
     public ICommand ToggleSystemProxyCommand { get; }
     public ICommand InstallCaCommand { get; }
+    public ICommand TrustFirefoxCaCommand { get; }
     public ICommand UntrustCaCommand { get; }
     public ICommand RotateCaCommand { get; }
     public ICommand ExportCaCommand { get; }
@@ -1937,10 +2180,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                     return;
                 }
 
-                if (!_interception.InstallRootCertificate(machineStore: false) &&
-                    !await TryElevateRootCaInstallAsync(owner))
+                SetStatus("Trusting root CA…", StatusSeverity.Busy);
+                if (!await EnsureRootCaTrustedAsync(promptIfNeeded: true))
                 {
-                    StatusText = "Root CA install failed - Decrypt HTTPS stays off (try Export CA or allow admin prompt)";
+                    StatusText = FormatOsTrustFailureStatus(_interception.LastOsTrustResult);
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
                     return;
                 }
@@ -1954,10 +2197,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             _decryptHttpsBusy = false;
         }
     }
-
-    private async Task<bool> TryElevateRootCaInstallAsync(Window? owner) =>
-        await _dialogs.ConfirmElevateRootCaAsync(owner) &&
-        _interception.InstallRootCertificateAsAdmin(machineStore: false);
 
     private void SetDecryptHttpsCore(bool enabled)
     {
