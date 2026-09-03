@@ -6497,6 +6497,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.EnsureRootCertificate
   nameWithType: CertificateManager.EnsureRootCertificate
+- uid: Titanium.Web.Proxy.Network.CertificateManager.InstallNssCertutilAndRetryUserTrust
+  name: InstallNssCertutilAndRetryUserTrust()
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_InstallNssCertutilAndRetryUserTrust
+  commentId: M:Titanium.Web.Proxy.Network.CertificateManager.InstallNssCertutilAndRetryUserTrust
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.InstallNssCertutilAndRetryUserTrust()
+  nameWithType: CertificateManager.InstallNssCertutilAndRetryUserTrust()
+- uid: Titanium.Web.Proxy.Network.CertificateManager.InstallNssCertutilAndRetryUserTrust*
+  name: InstallNssCertutilAndRetryUserTrust
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_InstallNssCertutilAndRetryUserTrust_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.InstallNssCertutilAndRetryUserTrust
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.InstallNssCertutilAndRetryUserTrust
+  nameWithType: CertificateManager.InstallNssCertutilAndRetryUserTrust
 - uid: Titanium.Web.Proxy.Network.CertificateManager.IntermediateCertificates
   name: IntermediateCertificates
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_IntermediateCertificates
@@ -6536,6 +6549,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.IsRootCertificateUserTrusted
   nameWithType: CertificateManager.IsRootCertificateUserTrusted
+- uid: Titanium.Web.Proxy.Network.CertificateManager.LastOsTrustResult
+  name: LastOsTrustResult
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_LastOsTrustResult
+  commentId: P:Titanium.Web.Proxy.Network.CertificateManager.LastOsTrustResult
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.LastOsTrustResult
+  nameWithType: CertificateManager.LastOsTrustResult
+- uid: Titanium.Web.Proxy.Network.CertificateManager.LastOsTrustResult*
+  name: LastOsTrustResult
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_LastOsTrustResult_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.LastOsTrustResult
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.LastOsTrustResult
+  nameWithType: CertificateManager.LastOsTrustResult
 - uid: Titanium.Web.Proxy.Network.CertificateManager.LeafCertificateKeyAlgorithm
   name: LeafCertificateKeyAlgorithm
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_LeafCertificateKeyAlgorithm
@@ -6584,6 +6610,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.LoadRootCertificate
   nameWithType: CertificateManager.LoadRootCertificate
+- uid: Titanium.Web.Proxy.Network.CertificateManager.OpenMacKeychainGuidance
+  name: OpenMacKeychainGuidance()
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_OpenMacKeychainGuidance
+  commentId: M:Titanium.Web.Proxy.Network.CertificateManager.OpenMacKeychainGuidance
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.OpenMacKeychainGuidance()
+  nameWithType: CertificateManager.OpenMacKeychainGuidance()
+- uid: Titanium.Web.Proxy.Network.CertificateManager.OpenMacKeychainGuidance*
+  name: OpenMacKeychainGuidance
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_OpenMacKeychainGuidance_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.OpenMacKeychainGuidance
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.OpenMacKeychainGuidance
+  nameWithType: CertificateManager.OpenMacKeychainGuidance
 - uid: Titanium.Web.Proxy.Network.CertificateManager.OverwritePfxFile
   name: OverwritePfxFile
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_OverwritePfxFile
@@ -6765,6 +6804,201 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.TrustRootCertificateAsAdmin
   nameWithType: CertificateManager.TrustRootCertificateAsAdmin
+- uid: Titanium.Web.Proxy.Network.CertificateManager.VerifyOsUserSslTrust
+  name: VerifyOsUserSslTrust()
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_VerifyOsUserSslTrust
+  commentId: M:Titanium.Web.Proxy.Network.CertificateManager.VerifyOsUserSslTrust
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.VerifyOsUserSslTrust()
+  nameWithType: CertificateManager.VerifyOsUserSslTrust()
+- uid: Titanium.Web.Proxy.Network.CertificateManager.VerifyOsUserSslTrust*
+  name: VerifyOsUserSslTrust
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_VerifyOsUserSslTrust_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.VerifyOsUserSslTrust
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.VerifyOsUserSslTrust
+  nameWithType: CertificateManager.VerifyOsUserSslTrust
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustKind
+  name: CertificateOsTrustKind
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustKind.html
+  commentId: T:Titanium.Web.Proxy.Network.CertificateOsTrustKind
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustKind
+  nameWithType: CertificateOsTrustKind
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustKind.Cancelled
+  name: Cancelled
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustKind.html#Titanium_Web_Proxy_Network_CertificateOsTrustKind_Cancelled
+  commentId: F:Titanium.Web.Proxy.Network.CertificateOsTrustKind.Cancelled
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustKind.Cancelled
+  nameWithType: CertificateOsTrustKind.Cancelled
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustKind.CertutilMissing
+  name: CertutilMissing
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustKind.html#Titanium_Web_Proxy_Network_CertificateOsTrustKind_CertutilMissing
+  commentId: F:Titanium.Web.Proxy.Network.CertificateOsTrustKind.CertutilMissing
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustKind.CertutilMissing
+  nameWithType: CertificateOsTrustKind.CertutilMissing
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustKind.Failed
+  name: Failed
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustKind.html#Titanium_Web_Proxy_Network_CertificateOsTrustKind_Failed
+  commentId: F:Titanium.Web.Proxy.Network.CertificateOsTrustKind.Failed
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustKind.Failed
+  nameWithType: CertificateOsTrustKind.Failed
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustKind.HomebrewMissing
+  name: HomebrewMissing
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustKind.html#Titanium_Web_Proxy_Network_CertificateOsTrustKind_HomebrewMissing
+  commentId: F:Titanium.Web.Proxy.Network.CertificateOsTrustKind.HomebrewMissing
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustKind.HomebrewMissing
+  nameWithType: CertificateOsTrustKind.HomebrewMissing
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustKind.MacKeychainFailed
+  name: MacKeychainFailed
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustKind.html#Titanium_Web_Proxy_Network_CertificateOsTrustKind_MacKeychainFailed
+  commentId: F:Titanium.Web.Proxy.Network.CertificateOsTrustKind.MacKeychainFailed
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustKind.MacKeychainFailed
+  nameWithType: CertificateOsTrustKind.MacKeychainFailed
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustKind.MacNeedsManualTrustConfirm
+  name: MacNeedsManualTrustConfirm
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustKind.html#Titanium_Web_Proxy_Network_CertificateOsTrustKind_MacNeedsManualTrustConfirm
+  commentId: F:Titanium.Web.Proxy.Network.CertificateOsTrustKind.MacNeedsManualTrustConfirm
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustKind.MacNeedsManualTrustConfirm
+  nameWithType: CertificateOsTrustKind.MacNeedsManualTrustConfirm
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustKind.NssFailed
+  name: NssFailed
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustKind.html#Titanium_Web_Proxy_Network_CertificateOsTrustKind_NssFailed
+  commentId: F:Titanium.Web.Proxy.Network.CertificateOsTrustKind.NssFailed
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustKind.NssFailed
+  nameWithType: CertificateOsTrustKind.NssFailed
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustKind.Succeeded
+  name: Succeeded
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustKind.html#Titanium_Web_Proxy_Network_CertificateOsTrustKind_Succeeded
+  commentId: F:Titanium.Web.Proxy.Network.CertificateOsTrustKind.Succeeded
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustKind.Succeeded
+  nameWithType: CertificateOsTrustKind.Succeeded
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustKind.Unsupported
+  name: Unsupported
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustKind.html#Titanium_Web_Proxy_Network_CertificateOsTrustKind_Unsupported
+  commentId: F:Titanium.Web.Proxy.Network.CertificateOsTrustKind.Unsupported
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustKind.Unsupported
+  nameWithType: CertificateOsTrustKind.Unsupported
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustResult
+  name: CertificateOsTrustResult
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustResult.html
+  commentId: T:Titanium.Web.Proxy.Network.CertificateOsTrustResult
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustResult
+  nameWithType: CertificateOsTrustResult
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustResult.#ctor(Titanium.Web.Proxy.Network.CertificateOsTrustKind,System.String,System.String,System.Boolean)
+  name: CertificateOsTrustResult(CertificateOsTrustKind, string, string?, bool)
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustResult.html#Titanium_Web_Proxy_Network_CertificateOsTrustResult__ctor_Titanium_Web_Proxy_Network_CertificateOsTrustKind_System_String_System_String_System_Boolean_
+  commentId: M:Titanium.Web.Proxy.Network.CertificateOsTrustResult.#ctor(Titanium.Web.Proxy.Network.CertificateOsTrustKind,System.String,System.String,System.Boolean)
+  name.vb: New(CertificateOsTrustKind, String, String, Boolean)
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustResult.CertificateOsTrustResult(Titanium.Web.Proxy.Network.CertificateOsTrustKind, string, string?, bool)
+  fullName.vb: Titanium.Web.Proxy.Network.CertificateOsTrustResult.New(Titanium.Web.Proxy.Network.CertificateOsTrustKind, String, String, Boolean)
+  nameWithType: CertificateOsTrustResult.CertificateOsTrustResult(CertificateOsTrustKind, string, string?, bool)
+  nameWithType.vb: CertificateOsTrustResult.New(CertificateOsTrustKind, String, String, Boolean)
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustResult.#ctor*
+  name: CertificateOsTrustResult
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustResult.html#Titanium_Web_Proxy_Network_CertificateOsTrustResult__ctor_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateOsTrustResult.#ctor
+  isSpec: "True"
+  name.vb: New
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustResult.CertificateOsTrustResult
+  fullName.vb: Titanium.Web.Proxy.Network.CertificateOsTrustResult.New
+  nameWithType: CertificateOsTrustResult.CertificateOsTrustResult
+  nameWithType.vb: CertificateOsTrustResult.New
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustResult.BrewAvailable
+  name: BrewAvailable
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustResult.html#Titanium_Web_Proxy_Network_CertificateOsTrustResult_BrewAvailable
+  commentId: P:Titanium.Web.Proxy.Network.CertificateOsTrustResult.BrewAvailable
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustResult.BrewAvailable
+  nameWithType: CertificateOsTrustResult.BrewAvailable
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustResult.BrewAvailable*
+  name: BrewAvailable
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustResult.html#Titanium_Web_Proxy_Network_CertificateOsTrustResult_BrewAvailable_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateOsTrustResult.BrewAvailable
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustResult.BrewAvailable
+  nameWithType: CertificateOsTrustResult.BrewAvailable
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Fail(Titanium.Web.Proxy.Network.CertificateOsTrustKind,System.String,System.String,System.Boolean)
+  name: Fail(CertificateOsTrustKind, string, string?, bool)
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustResult.html#Titanium_Web_Proxy_Network_CertificateOsTrustResult_Fail_Titanium_Web_Proxy_Network_CertificateOsTrustKind_System_String_System_String_System_Boolean_
+  commentId: M:Titanium.Web.Proxy.Network.CertificateOsTrustResult.Fail(Titanium.Web.Proxy.Network.CertificateOsTrustKind,System.String,System.String,System.Boolean)
+  name.vb: Fail(CertificateOsTrustKind, String, String, Boolean)
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Fail(Titanium.Web.Proxy.Network.CertificateOsTrustKind, string, string?, bool)
+  fullName.vb: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Fail(Titanium.Web.Proxy.Network.CertificateOsTrustKind, String, String, Boolean)
+  nameWithType: CertificateOsTrustResult.Fail(CertificateOsTrustKind, string, string?, bool)
+  nameWithType.vb: CertificateOsTrustResult.Fail(CertificateOsTrustKind, String, String, Boolean)
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Fail*
+  name: Fail
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustResult.html#Titanium_Web_Proxy_Network_CertificateOsTrustResult_Fail_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateOsTrustResult.Fail
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Fail
+  nameWithType: CertificateOsTrustResult.Fail
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Kind
+  name: Kind
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustResult.html#Titanium_Web_Proxy_Network_CertificateOsTrustResult_Kind
+  commentId: P:Titanium.Web.Proxy.Network.CertificateOsTrustResult.Kind
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Kind
+  nameWithType: CertificateOsTrustResult.Kind
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Kind*
+  name: Kind
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustResult.html#Titanium_Web_Proxy_Network_CertificateOsTrustResult_Kind_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateOsTrustResult.Kind
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Kind
+  nameWithType: CertificateOsTrustResult.Kind
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Message
+  name: Message
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustResult.html#Titanium_Web_Proxy_Network_CertificateOsTrustResult_Message
+  commentId: P:Titanium.Web.Proxy.Network.CertificateOsTrustResult.Message
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Message
+  nameWithType: CertificateOsTrustResult.Message
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Message*
+  name: Message
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustResult.html#Titanium_Web_Proxy_Network_CertificateOsTrustResult_Message_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateOsTrustResult.Message
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Message
+  nameWithType: CertificateOsTrustResult.Message
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Ok(System.String)
+  name: Ok(string)
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustResult.html#Titanium_Web_Proxy_Network_CertificateOsTrustResult_Ok_System_String_
+  commentId: M:Titanium.Web.Proxy.Network.CertificateOsTrustResult.Ok(System.String)
+  name.vb: Ok(String)
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Ok(string)
+  fullName.vb: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Ok(String)
+  nameWithType: CertificateOsTrustResult.Ok(string)
+  nameWithType.vb: CertificateOsTrustResult.Ok(String)
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Ok*
+  name: Ok
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustResult.html#Titanium_Web_Proxy_Network_CertificateOsTrustResult_Ok_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateOsTrustResult.Ok
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Ok
+  nameWithType: CertificateOsTrustResult.Ok
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustResult.PackageHint
+  name: PackageHint
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustResult.html#Titanium_Web_Proxy_Network_CertificateOsTrustResult_PackageHint
+  commentId: P:Titanium.Web.Proxy.Network.CertificateOsTrustResult.PackageHint
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustResult.PackageHint
+  nameWithType: CertificateOsTrustResult.PackageHint
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustResult.PackageHint*
+  name: PackageHint
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustResult.html#Titanium_Web_Proxy_Network_CertificateOsTrustResult_PackageHint_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateOsTrustResult.PackageHint
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustResult.PackageHint
+  nameWithType: CertificateOsTrustResult.PackageHint
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Succeeded
+  name: Succeeded
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustResult.html#Titanium_Web_Proxy_Network_CertificateOsTrustResult_Succeeded
+  commentId: P:Titanium.Web.Proxy.Network.CertificateOsTrustResult.Succeeded
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Succeeded
+  nameWithType: CertificateOsTrustResult.Succeeded
+- uid: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Succeeded*
+  name: Succeeded
+  href: api/Titanium.Web.Proxy.Network.CertificateOsTrustResult.html#Titanium_Web_Proxy_Network_CertificateOsTrustResult_Succeeded_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateOsTrustResult.Succeeded
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateOsTrustResult.Succeeded
+  nameWithType: CertificateOsTrustResult.Succeeded
 - uid: Titanium.Web.Proxy.Network.DefaultCertificateDiskCache
   name: DefaultCertificateDiskCache
   href: api/Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.html
@@ -6877,6 +7111,112 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.SaveRootCertificate
   nameWithType: DefaultCertificateDiskCache.SaveRootCertificate
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust
+  name: FirefoxCertificateTrust
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html
+  commentId: T:Titanium.Web.Proxy.Network.FirefoxCertificateTrust
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust
+  nameWithType: FirefoxCertificateTrust
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProcessRunning
+  name: IsFirefoxProcessRunning()
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_IsFirefoxProcessRunning
+  commentId: M:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProcessRunning
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProcessRunning()
+  nameWithType: FirefoxCertificateTrust.IsFirefoxProcessRunning()
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProcessRunning*
+  name: IsFirefoxProcessRunning
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_IsFirefoxProcessRunning_
+  commentId: Overload:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProcessRunning
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProcessRunning
+  nameWithType: FirefoxCertificateTrust.IsFirefoxProcessRunning
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProfilePresent
+  name: IsFirefoxProfilePresent()
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_IsFirefoxProfilePresent
+  commentId: M:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProfilePresent
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProfilePresent()
+  nameWithType: FirefoxCertificateTrust.IsFirefoxProfilePresent()
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProfilePresent*
+  name: IsFirefoxProfilePresent
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_IsFirefoxProfilePresent_
+  commentId: Overload:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProfilePresent
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProfilePresent
+  nameWithType: FirefoxCertificateTrust.IsFirefoxProfilePresent
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustDefaultProfile(System.Security.Cryptography.X509Certificates.X509Certificate2,System.String)
+  name: TrustDefaultProfile(X509Certificate2, string)
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TrustDefaultProfile_System_Security_Cryptography_X509Certificates_X509Certificate2_System_String_
+  commentId: M:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustDefaultProfile(System.Security.Cryptography.X509Certificates.X509Certificate2,System.String)
+  name.vb: TrustDefaultProfile(X509Certificate2, String)
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustDefaultProfile(System.Security.Cryptography.X509Certificates.X509Certificate2, string)
+  fullName.vb: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustDefaultProfile(System.Security.Cryptography.X509Certificates.X509Certificate2, String)
+  nameWithType: FirefoxCertificateTrust.TrustDefaultProfile(X509Certificate2, string)
+  nameWithType.vb: FirefoxCertificateTrust.TrustDefaultProfile(X509Certificate2, String)
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustDefaultProfile*
+  name: TrustDefaultProfile
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TrustDefaultProfile_
+  commentId: Overload:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustDefaultProfile
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustDefaultProfile
+  nameWithType: FirefoxCertificateTrust.TrustDefaultProfile
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots
+  name: TryClearWindowsEnterpriseRoots()
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TryClearWindowsEnterpriseRoots
+  commentId: M:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots()
+  nameWithType: FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots()
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots*
+  name: TryClearWindowsEnterpriseRoots
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TryClearWindowsEnterpriseRoots_
+  commentId: Overload:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots
+  nameWithType: FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots
+  name: TryEnableWindowsEnterpriseRoots()
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TryEnableWindowsEnterpriseRoots
+  commentId: M:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots()
+  nameWithType: FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots()
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots*
+  name: TryEnableWindowsEnterpriseRoots
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TryEnableWindowsEnterpriseRoots_
+  commentId: Overload:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots
+  nameWithType: FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryResolveDefaultProfileDirectory(System.String@,System.String@)
+  name: TryResolveDefaultProfileDirectory(out string, out string?)
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TryResolveDefaultProfileDirectory_System_String__System_String__
+  commentId: M:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryResolveDefaultProfileDirectory(System.String@,System.String@)
+  name.vb: TryResolveDefaultProfileDirectory(String, String)
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryResolveDefaultProfileDirectory(out string, out string?)
+  fullName.vb: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryResolveDefaultProfileDirectory(String, String)
+  nameWithType: FirefoxCertificateTrust.TryResolveDefaultProfileDirectory(out string, out string?)
+  nameWithType.vb: FirefoxCertificateTrust.TryResolveDefaultProfileDirectory(String, String)
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryResolveDefaultProfileDirectory*
+  name: TryResolveDefaultProfileDirectory
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TryResolveDefaultProfileDirectory_
+  commentId: Overload:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryResolveDefaultProfileDirectory
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryResolveDefaultProfileDirectory
+  nameWithType: FirefoxCertificateTrust.TryResolveDefaultProfileDirectory
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.UntrustDefaultProfile(System.String)
+  name: UntrustDefaultProfile(string)
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_UntrustDefaultProfile_System_String_
+  commentId: M:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.UntrustDefaultProfile(System.String)
+  name.vb: UntrustDefaultProfile(String)
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.UntrustDefaultProfile(string)
+  fullName.vb: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.UntrustDefaultProfile(String)
+  nameWithType: FirefoxCertificateTrust.UntrustDefaultProfile(string)
+  nameWithType.vb: FirefoxCertificateTrust.UntrustDefaultProfile(String)
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.UntrustDefaultProfile*
+  name: UntrustDefaultProfile
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_UntrustDefaultProfile_
+  commentId: Overload:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.UntrustDefaultProfile
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.UntrustDefaultProfile
+  nameWithType: FirefoxCertificateTrust.UntrustDefaultProfile
 - uid: Titanium.Web.Proxy.Network.ICertificateCache
   name: ICertificateCache
   href: api/Titanium.Web.Proxy.Network.ICertificateCache.html
