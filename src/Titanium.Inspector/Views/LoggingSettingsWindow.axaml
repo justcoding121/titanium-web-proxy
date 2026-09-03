@@ -14,7 +14,7 @@
       <Button x:Name="CancelButton" Content="Cancel" MinWidth="88" IsCancel="True" AutomationProperties.AutomationId="LoggingCancel" />
     </StackPanel>
     <TextBlock x:Name="StatusText" DockPanel.Dock="Bottom" Margin="0,8,0,0" TextWrapping="Wrap"
-               Foreground="#C0392B" AutomationProperties.AutomationId="LoggingStatus" />
+               Foreground="{DynamicResource InspectorErrorTextBrush}" AutomationProperties.AutomationId="LoggingStatus" />
     <StackPanel Spacing="12">
       <CheckBox x:Name="EnableLoggingCheck" Content="Enable logging"
                 AutomationProperties.AutomationId="LoggingEnabled" />

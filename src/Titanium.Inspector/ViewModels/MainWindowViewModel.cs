@@ -38,6 +38,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private StatusSeverity _statusSeverity = StatusSeverity.Neutral;
     private bool _isStatusBusy;
     private int _statusAttentionTick;
+    private int _themeRefreshTick;
     private bool _settingStatus;
     private string _sessionCountText = "Sessions: 0";
     private string _searchQuery = "";
@@ -124,6 +125,21 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         SetUpdateChannelBetaCommand = new RelayCommand(() =>
         {
             UpdateChannelIsBeta = true;
+            return Task.CompletedTask;
+        });
+        SetThemeLightCommand = new RelayCommand(() =>
+        {
+            SetThemeMode(ThemeMode.Light);
+            return Task.CompletedTask;
+        });
+        SetThemeDarkCommand = new RelayCommand(() =>
+        {
+            SetThemeMode(ThemeMode.Dark);
+            return Task.CompletedTask;
+        });
+        SetThemeAutomaticCommand = new RelayCommand(() =>
+        {
+            SetThemeMode(ThemeMode.Automatic);
             return Task.CompletedTask;
         });
         ToggleCheckForUpdatesOnStartupCommand = new RelayCommand(() =>
@@ -274,6 +290,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         private set => SetField(ref _statusAttentionTick, value);
     }
 
+    /// <summary>Increments when the active theme variant changes so status-code brushes rebind.</summary>
+    public int ThemeRefreshTick
+    {
+        get => _themeRefreshTick;
+        private set => SetField(ref _themeRefreshTick, value);
+    }
+
     /// <summary>
     /// Update status bar text, severity, busy indicator, and optionally toast important outcomes.
     /// </summary>
@@ -300,6 +323,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             _settingStatus = false;
         }
     }
+
+    private void SetSteadyStatus(string text) => SetStatus(text, StatusSeverity.Neutral);
 
     /// <summary>
     /// After the main window is shown: optionally start capture and system proxy.
@@ -329,14 +354,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         SystemProxy = true;
         if (SystemProxy)
         {
-            StatusText =
+            SetSteadyStatus(
                 $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS shown as encrypted tunnels until Decrypt HTTPS is enabled." +
-                " Chrome/Edge: --disable-quic or HTTP/3 may bypass the proxy.";
+                " Chrome/Edge: --disable-quic or HTTP/3 may bypass the proxy.");
         }
         else
         {
-            StatusText =
-                $"Proxy running on {FormatBindDisplay()}:{BindPort}, but system proxy failed to enable — use the System proxy checkbox.";
+            SetStatus(
+                $"Proxy running on {FormatBindDisplay()}:{BindPort}, but system proxy failed to enable — use the System proxy checkbox.",
+                StatusSeverity.Warning);
         }
     }
 
@@ -578,7 +604,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 SetSystemProxyCore(false);
                 PersistSettings();
                 RefreshEndpointAndBindUi();
-                SetStatus(statusAfterStop, StatusSeverity.Success);
+                SetSteadyStatus(statusAfterStop);
             }).ConfigureAwait(false);
         }
         finally
@@ -1480,6 +1506,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand CheckForUpdatesCommand { get; }
     public ICommand SetUpdateChannelStableCommand { get; }
     public ICommand SetUpdateChannelBetaCommand { get; }
+    public ICommand SetThemeLightCommand { get; }
+    public ICommand SetThemeDarkCommand { get; }
+    public ICommand SetThemeAutomaticCommand { get; }
     public ICommand ToggleCheckForUpdatesOnStartupCommand { get; }
     public ICommand ExportHarCommand { get; }
     public ICommand ExportSelectedHarCommand { get; }
@@ -1785,6 +1814,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             }
         }
     }
+
+    public bool ThemeModeIsLight => _settings.Current.ThemeMode == ThemeMode.Light;
+
+    public bool ThemeModeIsDark => _settings.Current.ThemeMode == ThemeMode.Dark;
+
+    public bool ThemeModeIsAutomatic => _settings.Current.ThemeMode == ThemeMode.Automatic;
 
     public bool CheckForUpdatesOnStartup
     {
@@ -2117,6 +2152,32 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UpdateChannelIsBeta)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UpdateChannelIsStable)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CheckForUpdatesOnStartup)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThemeModeIsLight)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThemeModeIsDark)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThemeModeIsAutomatic)));
+        ThemeService.ApplyThemeMode(_settings.Current.ThemeMode);
+    }
+
+    private void SetThemeMode(ThemeMode mode)
+    {
+        if (_settings.Current.ThemeMode == mode)
+        {
+            return;
+        }
+
+        _settings.Current.ThemeMode = mode;
+        _settings.Save();
+        ThemeService.ApplyThemeMode(mode);
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThemeModeIsLight)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThemeModeIsDark)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThemeModeIsAutomatic)));
+    }
+
+    /// <summary>Rebind theme-aware brushes after <see cref="Application.ActualThemeVariant"/> changes.</summary>
+    public void NotifyThemeVariantChanged()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StatusSeverity)));
+        ThemeRefreshTick++;
     }
 
     private static bool IsDebugFileLoggingEnabled(InspectorSettings s) =>
@@ -2558,20 +2619,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         if (SystemProxy)
         {
-            SetStatus(
+            SetSteadyStatus(
                 _decryptHttps
                     ? $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on. Decrypt HTTPS on. Chrome: --disable-quic or H3 may bypass."
                     : $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS shown as encrypted tunnels until Decrypt HTTPS is enabled." +
-                      " Chrome/Edge: --disable-quic or HTTP/3 may bypass the proxy.",
-                StatusSeverity.Success);
+                      " Chrome/Edge: --disable-quic or HTTP/3 may bypass the proxy.");
             return;
         }
 
-        SetStatus(
+        SetSteadyStatus(
             _decryptHttps
                 ? $"Proxy running on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS on. Enable System proxy if needed. Chrome: --disable-quic or H3 may bypass."
-                : $"Proxy running on {FormatBindDisplay()}:{BindPort} — HTTPS shown as encrypted tunnels until Decrypt HTTPS is enabled. Enable System proxy if needed.",
-            StatusSeverity.Success);
+                : $"Proxy running on {FormatBindDisplay()}:{BindPort} — HTTPS shown as encrypted tunnels until Decrypt HTTPS is enabled. Enable System proxy if needed.");
     }
 
     private void RefreshEndpointAndBindUi()

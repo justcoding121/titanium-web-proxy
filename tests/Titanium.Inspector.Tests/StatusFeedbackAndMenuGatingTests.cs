@@ -140,6 +140,61 @@ public class StatusFeedbackAndMenuGatingTests
         }
     }
 
+    [TestMethod]
+    public async Task StartCapture_HealthyProxy_UsesNeutralSteadyStatus()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-steady-status-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            settings.Current.AutoStartCapture = false;
+            settings.Current.AutoSystemProxyOnStart = false;
+            settings.Save();
+
+            var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(new SessionRegistry()),
+                new SessionRegistry(),
+                new UpdateService(settings),
+                settings,
+                interception);
+
+            vm.BindPort = 0;
+            vm.StartCaptureCommand.Execute(null);
+            await WaitUntil(() => interception.IsRunning);
+
+            StringAssert.Contains(vm.StatusText, "Proxy running on");
+            Assert.AreEqual(StatusSeverity.Neutral, vm.StatusSeverity);
+            Assert.IsFalse(vm.IsStatusBusy);
+
+            vm.EnsureShutdown();
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    private static async Task WaitUntil(Func<bool> predicate, int timeoutMs = 5000)
+    {
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (!predicate())
+        {
+            if (Environment.TickCount64 >= deadline)
+            {
+                Assert.Fail("Timed out waiting for condition.");
+            }
+
+            await Task.Delay(25);
+        }
+    }
+
     private static async Task ExecuteAsync(System.Windows.Input.ICommand command)
     {
         command.Execute(null);

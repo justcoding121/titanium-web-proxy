@@ -10,6 +10,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Titanium.Inspector.Services;
@@ -35,6 +36,7 @@ public partial class MainWindow : Window
     private MainWindowViewModel? _statusVm;
     private WindowNotificationManager? _notificationManager;
     private CancellationTokenSource? _attentionCts;
+    private EventHandler? _themeVariantChangedHandler;
 
     public MainWindow()
     {
@@ -51,6 +53,7 @@ public partial class MainWindow : Window
             RoutingStrategies.Tunnel);
         HookSessionsCollection(DataContext as MainWindowViewModel);
         HookStatusAttention(DataContext as MainWindowViewModel);
+        HookThemeVariantChanged();
     }
 
     protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
@@ -188,6 +191,7 @@ public partial class MainWindow : Window
         CaptureAndPersistSessionGridLayout();
         HookSessionsCollection(null);
         HookStatusAttention(null);
+        HookThemeVariantChanged(unhook: true);
         _attentionCts?.Cancel();
         _attentionCts?.Dispose();
         _attentionCts = null;
@@ -214,6 +218,37 @@ public partial class MainWindow : Window
         }
 
         ApplySessionGridLayoutIfNeeded();
+        HookThemeVariantChanged();
+    }
+
+    private void HookThemeVariantChanged(bool unhook = false)
+    {
+        if (Application.Current is not { } app)
+        {
+            return;
+        }
+
+        if (_themeVariantChangedHandler is not null)
+        {
+            app.ActualThemeVariantChanged -= _themeVariantChangedHandler;
+            _themeVariantChangedHandler = null;
+        }
+
+        if (unhook)
+        {
+            return;
+        }
+
+        _themeVariantChangedHandler = OnActualThemeVariantChanged;
+        app.ActualThemeVariantChanged += _themeVariantChangedHandler;
+    }
+
+    private void OnActualThemeVariantChanged(object? sender, EventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.NotifyThemeVariantChanged();
+        }
     }
 
     private void HookStatusAttention(MainWindowViewModel? vm)
@@ -253,7 +288,7 @@ public partial class MainWindow : Window
         try
         {
             // Brief highlight behind the status text so results are harder to miss.
-            StatusTextHost.Background = new SolidColorBrush(Color.FromArgb(56, 0, 120, 212));
+            StatusTextHost.Background = ResolveStatusAttentionBackground();
             StatusTextBlock.Opacity = 1;
             await Task.Delay(180, token);
             StatusTextBlock.Opacity = 0.55;
@@ -266,6 +301,21 @@ public partial class MainWindow : Window
         {
             // superseded by a newer status result
         }
+    }
+
+    private static IBrush ResolveStatusAttentionBackground()
+    {
+        if (Application.Current?.TryGetResource(
+                "StatusFeedbackBusyBrush",
+                Application.Current.ActualThemeVariant,
+                out var resource) == true
+            && resource is SolidColorBrush busy)
+        {
+            var c = busy.Color;
+            return new SolidColorBrush(Color.FromArgb(56, c.R, c.G, c.B));
+        }
+
+        return new SolidColorBrush(Color.FromArgb(56, 0, 120, 212));
     }
 
     private void HookSessionsCollection(MainWindowViewModel? vm)

@@ -28,6 +28,7 @@ public static class InspectorAppFactory
         IInspectorPathPicker? pathPicker = null,
         IStatusNotifier? statusNotifier = null)
     {
+        ThemeService.ApplyThemeMode(settings.Current.ThemeMode);
         var vm = CreateViewModel(settings, buffer, registry, updates, interception, dialogs, pathPicker, statusNotifier);
         var window = new MainWindow { DataContext = vm };
         return (vm, window);

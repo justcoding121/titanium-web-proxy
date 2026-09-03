@@ -25,9 +25,9 @@
                  Text="Licensed under the PolyForm Noncommercial License 1.0.0." />
       <StackPanel Orientation="Horizontal" Spacing="16">
         <TextBlock x:Name="LicenseLink" Text="License details" Cursor="Hand"
-                   TextDecorations="Underline" Foreground="#0066CC" />
+                   TextDecorations="Underline" Foreground="{DynamicResource InspectorLinkBrush}" />
         <TextBlock x:Name="WebsiteLink" Text="titaniumproxy.com" Cursor="Hand"
-                   TextDecorations="Underline" Foreground="#0066CC" />
+                   TextDecorations="Underline" Foreground="{DynamicResource InspectorLinkBrush}" />
       </StackPanel>
     </StackPanel>
   </DockPanel>

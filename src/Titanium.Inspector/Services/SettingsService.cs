@@ -3,6 +3,13 @@ using System.Text.Json.Serialization;
 
 namespace Titanium.Inspector.Services;
 
+public enum ThemeMode
+{
+    Automatic,
+    Light,
+    Dark,
+}
+
 public sealed class AutoResponderRuleDto
 {
     public string MatchUrl { get; set; } = "*";
@@ -58,6 +65,9 @@ public sealed class InspectorSettings
 
     /// <summary>When false, HTTPS stays opaque CONNECT tunnels (Fiddler-like default).</summary>
     public bool DecryptHttps { get; set; }
+
+    /// <summary>App color theme: follow OS (Automatic), Light, or Dark.</summary>
+    public ThemeMode ThemeMode { get; set; } = ThemeMode.Automatic;
 
     /// <summary>Session grid column widths, order, and sort across launches.</summary>
     public SessionGridLayoutDto? SessionGridLayout { get; set; }

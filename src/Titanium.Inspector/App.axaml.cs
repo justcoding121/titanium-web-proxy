@@ -14,6 +14,7 @@ public partial class App : Application
     public override void OnFrameworkInitializationCompleted()
     {
         var settings = SettingsService.Load();
+        ThemeService.ApplyThemeMode(settings.Current.ThemeMode);
         var sessions = new SessionRegistry(SessionStoreOptions.FromSettings(settings.Current));
         var buffer = new SessionStreamBuffer();
         var updates = new UpdateService(settings);

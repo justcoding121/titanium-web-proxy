@@ -63,6 +63,21 @@
         <MenuItem Header="Scripts…" Command="{Binding OpenToolsScriptsCommand}" AutomationProperties.AutomationId="MenuToolsScripts" />
       </MenuItem>
       <MenuItem Header="_Options" AutomationProperties.AutomationId="MenuOptions">
+        <MenuItem Header="_Theme" AutomationProperties.AutomationId="MenuTheme">
+          <MenuItem Header="Light" ToggleType="Radio"
+                    IsChecked="{Binding ThemeModeIsLight, Mode=OneWay}"
+                    Command="{Binding SetThemeLightCommand}"
+                    AutomationProperties.AutomationId="MenuThemeLight" />
+          <MenuItem Header="Dark" ToggleType="Radio"
+                    IsChecked="{Binding ThemeModeIsDark, Mode=OneWay}"
+                    Command="{Binding SetThemeDarkCommand}"
+                    AutomationProperties.AutomationId="MenuThemeDark" />
+          <MenuItem Header="Automatic" ToggleType="Radio"
+                    IsChecked="{Binding ThemeModeIsAutomatic, Mode=OneWay}"
+                    Command="{Binding SetThemeAutomaticCommand}"
+                    AutomationProperties.AutomationId="MenuThemeAutomatic" />
+        </MenuItem>
+        <Separator />
         <MenuItem Header="Session retention…" Command="{Binding OpenSessionRetentionCommand}"
                   AutomationProperties.AutomationId="MenuSessionRetention" />
         <MenuItem Header="HTTPS sites to decrypt…" Command="{Binding OpenHttpsDecryptHostsCommand}"
@@ -218,9 +233,15 @@
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate x:DataType="svc:SessionSnapshot">
                 <TextBlock Text="{Binding StatusCode}"
-                           Foreground="{Binding StatusCode, Converter={StaticResource StatusCodeBrushConverter}}"
                            FontWeight="{Binding StatusCode, Converter={StaticResource StatusCodeFontWeightConverter}}"
-                           VerticalAlignment="Center" />
+                           VerticalAlignment="Center">
+                  <TextBlock.Foreground>
+                    <MultiBinding Converter="{StaticResource StatusCodeBrushConverter}">
+                      <Binding Path="StatusCode" />
+                      <Binding Path="DataContext.ThemeRefreshTick" RelativeSource="{RelativeSource AncestorType=Window}" />
+                    </MultiBinding>
+                  </TextBlock.Foreground>
+                </TextBlock>
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
