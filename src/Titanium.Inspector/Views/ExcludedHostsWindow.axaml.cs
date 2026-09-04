@@ -22,25 +22,23 @@ public partial class ExcludedHostsWindow : Window
         _onSaved = onSaved;
         InitializeComponent();
         Title = readOnly ? "Excluded hosts (view)" : "Excluded hosts";
-        BuiltInBox.Text = string.Join(
-            Environment.NewLine,
-            ExclusionPreview.BuiltInEntries().Select(e => $"{e.Pattern,-36} {e.Outcome,-14} {e.Note}"));
+        _settings.EnsureExclusionsSeeded();
         LoadFromSettings();
         if (readOnly)
         {
             BypassHostsBox.IsReadOnly = true;
             SkipHostsBox.IsReadOnly = true;
-            OnlyHostsBox.IsReadOnly = true;
             ProxyLoopbackCheck.IsEnabled = false;
+            ResetDefaultsButton.IsVisible = false;
             SaveButton.IsVisible = false;
             CancelButton.Content = "Close";
         }
         else
         {
             SaveButton.Click += OnSave;
+            ResetDefaultsButton.Click += OnResetDefaults;
             BypassHostsBox.TextChanged += (_, _) => RefreshPreview();
             SkipHostsBox.TextChanged += (_, _) => RefreshPreview();
-            OnlyHostsBox.TextChanged += (_, _) => RefreshPreview();
             ProxyLoopbackCheck.IsCheckedChanged += (_, _) => RefreshPreview();
         }
 
@@ -66,10 +64,9 @@ public partial class ExcludedHostsWindow : Window
         var s = _settings.Current;
         BypassHostsBox.Text = HostListFormat.Join(s.SystemProxyBypassHosts);
         SkipHostsBox.Text = HostListFormat.Join(s.DecryptSkipHosts);
-        OnlyHostsBox.Text = HostListFormat.Join(s.DecryptOnlyHosts);
         ProxyLoopbackCheck.IsChecked = s.ProxyLoopback;
         ScopeBanner.Text = _readOnly
-            ? "Read-only view of built-in and saved exclusion rules."
+            ? "Read-only view of saved exclusion rules (including factory seeds)."
             : "Changes to OS bypass apply when System proxy is on (re-applied on save if active).";
     }
 
@@ -80,8 +77,7 @@ public partial class ExcludedHostsWindow : Window
             ProxyLoopback = ProxyLoopbackCheck.IsChecked == true,
             SystemProxyBypassHosts = HostListFormat.Parse(BypassHostsBox.Text),
             DecryptSkipHosts = HostListFormat.Parse(SkipHostsBox.Text),
-            DecryptOnlyHosts = HostListFormat.Parse(OnlyHostsBox.Text),
-            AllowEditingBuiltInExclusions = _settings.Current.AllowEditingBuiltInExclusions,
+            ExclusionsInitialized = true,
             WarnedAboutPacReplace = _settings.Current.WarnedAboutPacReplace,
         };
     }
@@ -91,7 +87,16 @@ public partial class ExcludedHostsWindow : Window
         var draft = DraftSettings();
         var (label, value) = ExclusionPreview.FormatForCurrentOs(draft);
         PreviewLabel.Text = label;
-        PreviewBox.Text = value;
+        PreviewBlock.Text = value;
+    }
+
+    private void OnResetDefaults(object? sender, RoutedEventArgs e)
+    {
+        SettingsService.ApplyFactoryExclusionDefaults(_settings.Current);
+        BypassHostsBox.Text = HostListFormat.Join(_settings.Current.SystemProxyBypassHosts);
+        SkipHostsBox.Text = HostListFormat.Join(_settings.Current.DecryptSkipHosts);
+        ProxyLoopbackCheck.IsChecked = true;
+        RefreshPreview();
     }
 
     private void OnSave(object? sender, RoutedEventArgs e)
@@ -99,8 +104,8 @@ public partial class ExcludedHostsWindow : Window
         var s = _settings.Current;
         s.SystemProxyBypassHosts = HostListFormat.Parse(BypassHostsBox.Text);
         s.DecryptSkipHosts = HostListFormat.Parse(SkipHostsBox.Text);
-        s.DecryptOnlyHosts = HostListFormat.Parse(OnlyHostsBox.Text);
         s.ProxyLoopback = ProxyLoopbackCheck.IsChecked == true;
+        s.ExclusionsInitialized = true;
         _settings.Save();
         _onSaved?.Invoke();
         _saved = true;

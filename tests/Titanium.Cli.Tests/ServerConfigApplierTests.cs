@@ -303,4 +303,38 @@ public class ServerConfigApplierTests
         Assert.IsFalse(ServerConfigApplier.TryParseEndPoint("not-an-endpoint", out _));
         Assert.IsFalse(ServerConfigApplier.TryParseEndPoint("", out _));
     }
+
+    [TestMethod]
+    public void CreateSystemProxySettings_OmittedBypass_MergesFactoryIdentity()
+    {
+        var settings = ServerConfigApplier.CreateSystemProxySettings(new ServerConfig());
+        Assert.IsTrue(settings.BypassRules.Contains("login.live.com"));
+        Assert.IsTrue(settings.ProxyLoopback);
+    }
+
+    [TestMethod]
+    public void CreateSystemProxySettings_PresentBypass_ReplaceOmitsRemovedIdentity()
+    {
+        var withoutLive = MitmExclusionDefaults.SystemProxyBypassRules
+            .Where(r => r != "login.live.com")
+            .ToList();
+        var settings = ServerConfigApplier.CreateSystemProxySettings(new ServerConfig
+        {
+            SystemProxyBypassHosts = withoutLive,
+            ProxyLoopback = false,
+        });
+        Assert.IsFalse(settings.BypassRules.Contains("login.live.com"));
+        Assert.IsFalse(settings.ProxyLoopback);
+        Assert.AreEqual(withoutLive.Count, settings.BypassRules.Count);
+    }
+
+    [TestMethod]
+    public void CreateSystemProxySettings_EmptyBypassList_ReplaceIsEmpty()
+    {
+        var settings = ServerConfigApplier.CreateSystemProxySettings(new ServerConfig
+        {
+            SystemProxyBypassHosts = [],
+        });
+        Assert.AreEqual(0, settings.BypassRules.Count);
+    }
 }

@@ -63,19 +63,30 @@ Use `ForwardHost` on a transparent endpoint for a zero-cost terminate-lite path,
 
 ## MITM hostname exclusions
 
-Two layers:
+Two layers (both work with system proxy on **Windows**, **macOS**, and **Linux**):
 
-1. **OS bypass** — `SystemProxySettings.BypassRules` + `SetAsSystemProxy(..., settings)`. Use for clients that break even on opaque tunnels (Microsoft identity / RDP). Defaults: `MitmExclusionDefaults.SystemProxyBypassRules`.
-2. **Tunnel only** — `BeforeTunnelConnectRequest` → `e.DecryptSsl = false`, or call `MitmExclusionDefaults.ApplyDecryptExclusions(endPoint, () => decryptOn, skipHosts, onlyHosts)`.
+1. **OS bypass** — `SystemProxySettings.BypassRules` + `SetAsSystemProxy(..., settings)`. Traffic never hits the proxy when System proxy is on. Factory seed: `MitmExclusionDefaults.SystemProxyBypassRules` (Microsoft identity / SSO / RDP).
+2. **Tunnel only** — `BeforeTunnelConnectRequest` → `e.DecryptSsl = false`, or `MitmExclusionDefaults.ApplyDecryptExclusions(...)`. CONNECT stays visible; no decrypt. Factory seed: `MitmExclusionDefaults.TunnelOnlyPinningDomains` (`dropbox.com`, `webex.com`).
+
+Use **`MitmExclusionMode.Merge`** (default, back-compat) to always re-inject factory hosts, or **`Replace`** so the caller lists are authoritative (you can remove identity hosts — risk breaking SSO while System proxy is on).
 
 ```csharp
+// Merge: factory identity hosts + extras
 var settings = MitmExclusionDefaults.CreateSystemProxySettings(
     proxyLoopback: true,
     additionalBypassRules: ["*.corp.example.com"]);
 proxyServer.SetAsSystemProxy(endPoint, ProxyProtocolType.AllHttp, settings);
 
+// Replace: full list you provide (factory not re-added)
+var custom = MitmExclusionDefaults.CreateSystemProxySettings(
+    proxyLoopback: true,
+    MitmExclusionDefaults.SystemProxyBypassRules.Append("*.corp.example.com"),
+    MitmExclusionMode.Replace);
+
 MitmExclusionDefaults.ApplyDecryptExclusions(endPoint, () => true,
-    decryptSkipHosts: ["*.bank.example.com"]);
+    decryptSkipHosts: ["*.bank.example.com"],
+    decryptOnlyHosts: null,
+    MitmExclusionMode.Replace);
 ```
 
-CLI edge proxies can set `server.decryptSkipHosts` / `server.decryptOnlyHosts` in `twp.yaml` (tunnel-only; no OS bypass).
+CLI: when `server.decryptSkipHosts` and/or `server.decryptOnlyHosts` are present in `twp.yaml`, exclusions apply with **Replace**. Omit both to leave Merge defaults. Optional `server.systemProxyBypassHosts` / `server.proxyLoopback` build OS-bypass settings the same way (present ⇒ Replace; omit ⇒ Merge). Removing identity hosts from OS bypass can break Microsoft SSO while System proxy is enabled.

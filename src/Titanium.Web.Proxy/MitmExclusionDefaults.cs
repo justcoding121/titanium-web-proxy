@@ -14,7 +14,7 @@ namespace Titanium.Web.Proxy;
 /// </summary>
 public static class MitmExclusionDefaults
 {
-    /// <summary>WinINET bypass patterns for Microsoft identity endpoints (Entra / WAM / RDP).</summary>
+    /// <summary>WinINET / system-proxy bypass patterns for Microsoft identity endpoints (Entra / WAM / RDP).</summary>
     public static readonly string[] SystemProxyBypassRules =
     [
         "*.microsoftonline.com",
@@ -28,25 +28,58 @@ public static class MitmExclusionDefaults
         "enterpriseregistration.windows.net",
     ];
 
-    /// <summary>Pinning demo hosts that should tunnel (DecryptSsl=false) but stay visible.</summary>
+    /// <summary>Pinning hosts that should tunnel (DecryptSsl=false) but stay visible.</summary>
     public static readonly string[] TunnelOnlyPinningDomains = ["dropbox.com", "webex.com"];
 
     /// <summary>
-    ///     Builds <see cref="SystemProxySettings"/> with identity bypass rules and optional user additions.
+    ///     Builds <see cref="SystemProxySettings"/> with factory identity bypass rules and loopback
+    ///     (<see cref="MitmExclusionMode.Merge"/>).
+    /// </summary>
+    public static SystemProxySettings CreateSystemProxySettings() =>
+        CreateSystemProxySettings(proxyLoopback: true, null, MitmExclusionMode.Merge);
+
+    /// <summary>
+    ///     Builds <see cref="SystemProxySettings"/> with factory identity bypass rules
+    ///     (<see cref="MitmExclusionMode.Merge"/>).
+    /// </summary>
+    public static SystemProxySettings CreateSystemProxySettings(bool proxyLoopback) =>
+        CreateSystemProxySettings(proxyLoopback, null, MitmExclusionMode.Merge);
+
+    /// <summary>
+    ///     Builds <see cref="SystemProxySettings"/> with identity bypass rules and optional user additions
+    ///     (<see cref="MitmExclusionMode.Merge"/>).
     /// </summary>
     public static SystemProxySettings CreateSystemProxySettings(
-        bool proxyLoopback = true,
-        IEnumerable<string>? additionalBypassRules = null)
+        bool proxyLoopback,
+        IEnumerable<string>? additionalBypassRules) =>
+        CreateSystemProxySettings(proxyLoopback, additionalBypassRules, MitmExclusionMode.Merge);
+
+    /// <summary>
+    ///     Builds <see cref="SystemProxySettings"/> from factory and/or caller bypass rules.
+    /// </summary>
+    /// <param name="proxyLoopback">When true, localhost uses the proxy (platform-specific loopback rule).</param>
+    /// <param name="bypassRules">
+    ///     Extra rules in <see cref="MitmExclusionMode.Merge"/>, or the full authoritative list in
+    ///     <see cref="MitmExclusionMode.Replace"/>.
+    /// </param>
+    /// <param name="mode">Merge factory OS-bypass defaults, or replace them with <paramref name="bypassRules"/>.</param>
+    public static SystemProxySettings CreateSystemProxySettings(
+        bool proxyLoopback,
+        IEnumerable<string>? bypassRules,
+        MitmExclusionMode mode)
     {
         var settings = new SystemProxySettings();
-        foreach (var rule in SystemProxyBypassRules)
+        if (mode == MitmExclusionMode.Merge)
         {
-            settings.BypassRules.Add(rule);
+            foreach (var rule in SystemProxyBypassRules)
+            {
+                settings.BypassRules.Add(rule);
+            }
         }
 
-        if (additionalBypassRules is not null)
+        if (bypassRules is not null)
         {
-            foreach (var rule in additionalBypassRules.Where(r => !string.IsNullOrWhiteSpace(r)))
+            foreach (var rule in bypassRules.Where(r => !string.IsNullOrWhiteSpace(r)))
             {
                 settings.BypassRules.Add(rule.Trim());
             }
@@ -56,27 +89,38 @@ public static class MitmExclusionDefaults
         return settings;
     }
 
-    /// <summary>Returns true when CONNECT should use SSL passthrough instead of MITM.</summary>
+    /// <summary>Returns true when CONNECT should use SSL passthrough instead of MITM (Merge mode).</summary>
     public static bool ShouldDisableSslDecrypt(string? hostname) =>
-        ShouldDisableSslDecrypt(hostname, userSkipHosts: null, userOnlyHosts: null);
+        ShouldDisableSslDecrypt(hostname, userSkipHosts: null, userOnlyHosts: null, MitmExclusionMode.Merge);
 
     /// <summary>
-    ///     Returns true when TLS should stay opaque (no MITM decrypt).
-    ///     Built-in SSO/pinning hosts always skip. User skip patterns add more.
-    ///     When <paramref name="userOnlyHosts"/> is non-empty, only matching hosts decrypt
-    ///     (built-in bypass hosts still never decrypt).
+    ///     Returns true when TLS should stay opaque (no MITM decrypt) using <see cref="MitmExclusionMode.Merge"/>.
     /// </summary>
     public static bool ShouldDisableSslDecrypt(
         string? hostname,
         IEnumerable<string>? userSkipHosts,
-        IEnumerable<string>? userOnlyHosts)
+        IEnumerable<string>? userOnlyHosts) =>
+        ShouldDisableSslDecrypt(hostname, userSkipHosts, userOnlyHosts, MitmExclusionMode.Merge);
+
+    /// <summary>
+    ///     Returns true when TLS should stay opaque (no MITM decrypt).
+    ///     <see cref="MitmExclusionMode.Merge"/>: factory SSO/pinning hosts always skip, then user skip /
+    ///     optional decrypt-only allowlist.
+    ///     <see cref="MitmExclusionMode.Replace"/>: only <paramref name="userSkipHosts"/> and optional
+    ///     <paramref name="userOnlyHosts"/> apply (factory hosts are not forced).
+    /// </summary>
+    public static bool ShouldDisableSslDecrypt(
+        string? hostname,
+        IEnumerable<string>? userSkipHosts,
+        IEnumerable<string>? userOnlyHosts,
+        MitmExclusionMode mode)
     {
         if (string.IsNullOrEmpty(hostname))
         {
             return false;
         }
 
-        if (IsBuiltInSslBypass(hostname))
+        if (mode == MitmExclusionMode.Merge && IsBuiltInSslBypass(hostname))
         {
             return true;
         }
@@ -117,24 +161,41 @@ public static class MitmExclusionDefaults
                || hostname.EndsWith("." + pattern, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>Registers per-CONNECT <c>DecryptSsl</c> gating on an explicit endpoint (Merge mode).</summary>
+    public static void ApplyDecryptExclusions(
+        ExplicitProxyEndPoint endPoint,
+        Func<bool> decryptHttpsEnabled) =>
+        ApplyDecryptExclusions(endPoint, decryptHttpsEnabled, null, null, MitmExclusionMode.Merge);
+
+    /// <summary>Registers per-CONNECT <c>DecryptSsl</c> gating on an explicit endpoint (Merge mode).</summary>
+    public static void ApplyDecryptExclusions(
+        ExplicitProxyEndPoint endPoint,
+        Func<bool> decryptHttpsEnabled,
+        IEnumerable<string>? decryptSkipHosts,
+        IEnumerable<string>? decryptOnlyHosts) =>
+        ApplyDecryptExclusions(
+            endPoint, decryptHttpsEnabled, decryptSkipHosts, decryptOnlyHosts, MitmExclusionMode.Merge);
+
     /// <summary>Registers per-CONNECT <c>DecryptSsl</c> gating on an explicit endpoint.</summary>
     public static void ApplyDecryptExclusions(
         ExplicitProxyEndPoint endPoint,
         Func<bool> decryptHttpsEnabled,
-        IEnumerable<string>? decryptSkipHosts = null,
-        IEnumerable<string>? decryptOnlyHosts = null)
+        IEnumerable<string>? decryptSkipHosts,
+        IEnumerable<string>? decryptOnlyHosts,
+        MitmExclusionMode mode)
     {
         endPoint.BeforeTunnelConnectRequest += (_, e) =>
         {
             var host = e.HttpClient.Request.RequestUri?.Host
                        ?? e.HttpClient.Request.Host;
             e.DecryptSsl = decryptHttpsEnabled()
-                           && !ShouldDisableSslDecrypt(host, decryptSkipHosts, decryptOnlyHosts);
+                           && !ShouldDisableSslDecrypt(host, decryptSkipHosts, decryptOnlyHosts, mode);
             return Task.CompletedTask;
         };
     }
 
-    private static bool IsBuiltInSslBypass(string hostname)
+    /// <summary>True when <paramref name="hostname"/> matches factory OS-bypass or tunnel-only defaults.</summary>
+    public static bool IsBuiltInSslBypass(string hostname)
     {
         if (SystemProxyBypassRules.Any(rule => HostnameMatches(hostname, rule)))
         {

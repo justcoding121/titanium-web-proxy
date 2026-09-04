@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Helpers;
 
@@ -39,41 +38,23 @@ public static class ExclusionPreview
         return ("Bypass list", winInet);
     }
 
-    public static IReadOnlyList<(string Pattern, string Outcome, string Note)> BuiltInEntries()
-    {
-        var list = new List<(string, string, string)>();
-        foreach (var rule in MitmBypass.SystemProxyBypassRules)
-        {
-            list.Add((rule, "Bypass proxy", "Microsoft SSO / RDP"));
-        }
-
-        foreach (var domain in MitmExclusionDefaults.TunnelOnlyPinningDomains)
-        {
-            list.Add((domain, "Tunnel only", "Certificate pinning"));
-        }
-
-        return list;
-    }
-
     public static string ExclusionSummary(InspectorSettings settings)
     {
-        var builtIn = MitmBypass.SystemProxyBypassRules.Length
-                      + MitmExclusionDefaults.TunnelOnlyPinningDomains.Length;
         var bypass = settings.SystemProxyBypassHosts?.Count(h => !string.IsNullOrWhiteSpace(h)) ?? 0;
         var tunnel = settings.DecryptSkipHosts?.Count(h => !string.IsNullOrWhiteSpace(h)) ?? 0;
-        if (builtIn == 0 && bypass == 0 && tunnel == 0)
+        if (bypass == 0 && tunnel == 0)
         {
             return "";
         }
 
-        return $"Exclusions: {builtIn} built-in, {bypass} bypass, {tunnel} tunnel-only";
+        return $"Exclusions: {bypass} OS bypass, {tunnel} tunnel-only";
     }
 
     public static string DescribeOpaqueReason(OpaqueTunnelReason reason) => reason switch
     {
         OpaqueTunnelReason.DecryptOff => "Encrypted: Decrypt HTTPS is off",
-        OpaqueTunnelReason.BuiltInIdentity => "Encrypted: built-in Microsoft identity bypass",
-        OpaqueTunnelReason.BuiltInPinning => "Encrypted: built-in pinning (tunnel only)",
+        OpaqueTunnelReason.BuiltInIdentity => "Encrypted: Microsoft identity bypass (tunnel)",
+        OpaqueTunnelReason.BuiltInPinning => "Encrypted: pinning host (tunnel only)",
         OpaqueTunnelReason.UserSkipList => "Encrypted: tunnel-only exclusion list",
         OpaqueTunnelReason.UserOnlyList => "Encrypted: not on decrypt-only allowlist",
         _ => "",

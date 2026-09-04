@@ -52,11 +52,26 @@ public sealed class ServerConfig
 
     public CertificateManagerConfig? CertificateManager { get; set; }
 
-    /// <summary>Host patterns that skip HTTPS decryption on explicit listeners (tunnel only).</summary>
+    /// <summary>
+    ///     Host patterns that skip HTTPS decryption on explicit listeners (tunnel only).
+    ///     When this property or <see cref="DecryptOnlyHosts"/> is present (non-null), exclusions use
+    ///     <c>MitmExclusionMode.Replace</c> — factory SSO/pinning hosts are not re-injected.
+    ///     Omit both to keep library Merge defaults (no CLI overlay).
+    /// </summary>
     public List<string>? DecryptSkipHosts { get; set; }
 
     /// <summary>When non-empty, only these hosts are decrypted on explicit listeners.</summary>
     public List<string>? DecryptOnlyHosts { get; set; }
+
+    /// <summary>
+    ///     OS system-proxy bypass hosts for callers that build <c>SystemProxySettings</c> from this config.
+    ///     When non-null, lists use Replace mode (authoritative). Omit for Merge with factory identity hosts.
+    ///     Removing Microsoft identity hosts can break SSO / WAM while System proxy is on.
+    /// </summary>
+    public List<string>? SystemProxyBypassHosts { get; set; }
+
+    /// <summary>When true, localhost uses the proxy (platform loopback rule). Used with system-proxy helpers.</summary>
+    public bool? ProxyLoopback { get; set; }
 }
 
 /// <summary>Deadline and retry knobs on <c>ProxyServer</c>.</summary>

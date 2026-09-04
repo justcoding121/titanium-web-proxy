@@ -40,6 +40,24 @@ internal static class ServerConfigApplier
         ApplyDecryptExclusions(proxy, server);
     }
 
+    /// <summary>
+    ///     Builds system-proxy settings from config. Null <see cref="ServerConfig.SystemProxyBypassHosts"/>
+    ///     merges factory identity hosts; a present list (including empty) is authoritative (Replace).
+    /// </summary>
+    public static SystemProxySettings CreateSystemProxySettings(ServerConfig? server)
+    {
+        var loopback = server?.ProxyLoopback ?? true;
+        if (server?.SystemProxyBypassHosts is null)
+        {
+            return MitmExclusionDefaults.CreateSystemProxySettings(loopback);
+        }
+
+        return MitmExclusionDefaults.CreateSystemProxySettings(
+            loopback,
+            server.SystemProxyBypassHosts,
+            MitmExclusionMode.Replace);
+    }
+
     private static void ApplyDecryptExclusions(ProxyServer proxy, ServerConfig server)
     {
         if (server.DecryptSkipHosts is null && server.DecryptOnlyHosts is null)
@@ -56,11 +74,13 @@ internal static class ServerConfigApplier
                 continue;
             }
 
+            // Present lists are authoritative — do not re-inject factory SSO/pinning hosts.
             MitmExclusionDefaults.ApplyDecryptExclusions(
                 explicitEp,
                 () => explicitEp.DecryptSsl,
                 skip,
-                only);
+                only,
+                MitmExclusionMode.Replace);
         }
     }
 

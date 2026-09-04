@@ -81,7 +81,7 @@ public class CaptureSettingsParityTests
     }
 
     [TestMethod]
-    public void MitmBypass_UserSkipAndOnlyLists()
+    public void MitmBypass_UserSkipAndOnlyLists_ReplaceMode()
     {
         Assert.IsFalse(MitmBypass.ShouldDisableSslDecrypt("api.example.com", null, null));
 
@@ -100,8 +100,8 @@ public class CaptureSettingsParityTests
             null,
             ["api.example.com"]));
 
-        // Built-in still wins even if on include list
-        Assert.IsTrue(MitmBypass.ShouldDisableSslDecrypt(
+        // Replace: factory identity hosts are not forced when omitted from skip list
+        Assert.IsFalse(MitmBypass.ShouldDisableSslDecrypt(
             "login.live.com",
             null,
             ["login.live.com"]));

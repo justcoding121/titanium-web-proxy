@@ -19,7 +19,7 @@ public class MitmBypassTests
     }
 
     [TestMethod]
-    public void ShouldDisableSslDecrypt_BypassHostsAndPinning()
+    public void ShouldDisableSslDecrypt_BypassHostsAndPinning_MergeDefaults()
     {
         Assert.IsFalse(MitmBypass.ShouldDisableSslDecrypt(null));
         Assert.IsFalse(MitmBypass.ShouldDisableSslDecrypt(""));
@@ -43,29 +43,43 @@ public class MitmBypassTests
     }
 
     [TestMethod]
-    public void ResolveOpaqueReason_ClassifiesBuiltInAndUserLists()
+    public void ResolveOpaqueReason_ClassifiesFromUserLists()
     {
         Assert.AreEqual(OpaqueTunnelReason.DecryptOff,
             MitmBypass.ResolveOpaqueReason("api.example.com", decryptHttps: false, null, null));
         Assert.AreEqual(OpaqueTunnelReason.BuiltInIdentity,
-            MitmBypass.ResolveOpaqueReason("login.live.com", decryptHttps: true, null, null));
+            MitmBypass.ResolveOpaqueReason(
+                "login.live.com", decryptHttps: true, MitmBypass.SystemProxyBypassRules, null));
         Assert.AreEqual(OpaqueTunnelReason.BuiltInPinning,
-            MitmBypass.ResolveOpaqueReason("www.dropbox.com", decryptHttps: true, null, null));
+            MitmBypass.ResolveOpaqueReason(
+                "www.dropbox.com", decryptHttps: true, MitmBypass.TunnelOnlyPinningDomains, null));
         Assert.AreEqual(OpaqueTunnelReason.UserSkipList,
             MitmBypass.ResolveOpaqueReason("api.example.com", true, ["api.example.com"], null));
         Assert.AreEqual(OpaqueTunnelReason.UserOnlyList,
             MitmBypass.ResolveOpaqueReason("other.example.com", true, null, ["api.example.com"]));
+        Assert.AreEqual(OpaqueTunnelReason.None,
+            MitmBypass.ResolveOpaqueReason("login.live.com", decryptHttps: true, null, null));
     }
 
     [TestMethod]
-    public void CreateSystemProxySettings_MergesUserBypassHosts()
+    public void CreateSystemProxySettings_ReplaceUsesUserListOnly()
     {
         var settings = MitmBypass.CreateSystemProxySettings(new InspectorSettings
         {
             SystemProxyBypassHosts = ["*.corp.example.com"],
             ProxyLoopback = true,
         });
-        CollectionAssert.Contains(settings.BypassRules.ToList(), "*.corp.example.com");
+        CollectionAssert.AreEqual(new[] { "*.corp.example.com" }, settings.BypassRules.ToList());
+        Assert.IsFalse(settings.BypassRules.Contains("login.live.com"));
         Assert.IsTrue(settings.ProxyLoopback);
+    }
+
+    [TestMethod]
+    public void CreateSystemProxySettings_SeededFactoryDefaults_IncludeIdentityHosts()
+    {
+        var inspector = new InspectorSettings();
+        SettingsService.ApplyFactoryExclusionDefaults(inspector);
+        var settings = MitmBypass.CreateSystemProxySettings(inspector);
+        CollectionAssert.IsSubsetOf(MitmBypass.SystemProxyBypassRules, settings.BypassRules.ToList());
     }
 }

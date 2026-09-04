@@ -236,6 +236,10 @@ Titanium.Web.Proxy.Configuration.Models.ServerConfig.CheckCertificateRevocation.
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.CheckCertificateRevocation.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.CompatibilityMode100Continue.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.CompatibilityMode100Continue.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.DecryptOnlyHosts.get -> System.Collections.Generic.List<string!>?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.DecryptOnlyHosts.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.DecryptSkipHosts.get -> System.Collections.Generic.List<string!>?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.DecryptSkipHosts.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.DnsServerEndPoint.get -> string?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.DnsServerEndPoint.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Enable100ContinueBehaviour.get -> bool?
@@ -262,7 +266,11 @@ Titanium.Web.Proxy.Configuration.Models.ServerConfig.Pooling.get -> Titanium.Web
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Pooling.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Profile.get -> string?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Profile.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ProxyLoopback.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ProxyLoopback.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.ServerConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.SystemProxyBypassHosts.get -> System.Collections.Generic.List<string!>?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.SystemProxyBypassHosts.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Timeouts.get -> Titanium.Web.Proxy.Configuration.Models.TimeoutsConfig?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Timeouts.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Tls.get -> Titanium.Web.Proxy.Configuration.Models.TlsConfig?

@@ -753,10 +753,10 @@ public sealed class InterceptionService : IDisposable
         var disableDecrypt = MitmBypass.ShouldDisableSslDecrypt(
             host,
             DecryptSkipHosts,
-            DecryptOnlyHosts);
+            userOnlyHosts: null);
         e.DecryptSsl = DecryptHttps && !disableDecrypt;
         var opaqueReason = disableDecrypt || !DecryptHttps
-            ? MitmBypass.ResolveOpaqueReason(host, DecryptHttps, DecryptSkipHosts, DecryptOnlyHosts)
+            ? MitmBypass.ResolveOpaqueReason(host, DecryptHttps, DecryptSkipHosts, userOnlyHosts: null)
             : OpaqueTunnelReason.None;
 
         if (!Capturing)

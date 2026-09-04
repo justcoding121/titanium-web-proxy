@@ -7,14 +7,24 @@ public static class MitmBypass
 {
     public static string[] SystemProxyBypassRules => MitmExclusionDefaults.SystemProxyBypassRules;
 
-    public static SystemProxySettings CreateSystemProxySettings(bool includeLoopback = true) =>
-        CreateSystemProxySettings(new InspectorSettings { ProxyLoopback = includeLoopback });
+    public static string[] TunnelOnlyPinningDomains => MitmExclusionDefaults.TunnelOnlyPinningDomains;
 
+    /// <summary>
+    ///     Factory OS-bypass defaults with optional loopback (Merge mode — for callers without saved settings).
+    /// </summary>
+    public static SystemProxySettings CreateSystemProxySettings(bool includeLoopback = true) =>
+        MitmExclusionDefaults.CreateSystemProxySettings(includeLoopback);
+
+    /// <summary>
+    ///     Builds system-proxy settings from the Inspector exclusion lists (Replace mode —
+    ///     factory defaults are not re-merged; seed them into settings instead).
+    /// </summary>
     public static SystemProxySettings CreateSystemProxySettings(InspectorSettings settings)
     {
         return MitmExclusionDefaults.CreateSystemProxySettings(
             settings.ProxyLoopback,
-            settings.SystemProxyBypassHosts);
+            settings.SystemProxyBypassHosts,
+            MitmExclusionMode.Replace);
     }
 
     public static bool ShouldDisableSslDecrypt(string? hostname) =>
@@ -24,7 +34,8 @@ public static class MitmBypass
         string? hostname,
         IEnumerable<string>? userSkipHosts,
         IEnumerable<string>? userOnlyHosts) =>
-        MitmExclusionDefaults.ShouldDisableSslDecrypt(hostname, userSkipHosts, userOnlyHosts);
+        MitmExclusionDefaults.ShouldDisableSslDecrypt(
+            hostname, userSkipHosts, userOnlyHosts, MitmExclusionMode.Replace);
 
     public static bool HostnameMatches(string hostname, string pattern) =>
         MitmExclusionDefaults.HostnameMatches(hostname, pattern);
@@ -45,20 +56,22 @@ public static class MitmBypass
             return OpaqueTunnelReason.DecryptOff;
         }
 
-        if (SystemProxyBypassRules.Any(rule => HostnameMatches(hostname, rule)))
-        {
-            return OpaqueTunnelReason.BuiltInIdentity;
-        }
-
-        if (MitmExclusionDefaults.TunnelOnlyPinningDomains.Any(domain =>
-                hostname.Equals(domain, StringComparison.OrdinalIgnoreCase)
-                || hostname.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase)))
-        {
-            return OpaqueTunnelReason.BuiltInPinning;
-        }
-
+        // Replace mode: classify using the lists the user (or seed) provided.
         if (userSkipHosts is not null && userSkipHosts.Any(p => HostnameMatches(hostname, p)))
         {
+            // Prefer friendlier labels when the pattern matches factory seeds.
+            if (SystemProxyBypassRules.Any(rule => HostnameMatches(hostname, rule)))
+            {
+                return OpaqueTunnelReason.BuiltInIdentity;
+            }
+
+            if (TunnelOnlyPinningDomains.Any(domain =>
+                    hostname.Equals(domain, StringComparison.OrdinalIgnoreCase)
+                    || hostname.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase)))
+            {
+                return OpaqueTunnelReason.BuiltInPinning;
+            }
+
             return OpaqueTunnelReason.UserSkipList;
         }
 

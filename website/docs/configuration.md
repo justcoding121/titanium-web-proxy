@@ -148,8 +148,10 @@ server:
     upStreamEndPoint: null
     upStreamEndPointIPv4: null
     upStreamEndPointIPv6: null
-  decryptSkipHosts: []      # explicit listeners: tunnel-only (no MITM) per host pattern
-  decryptOnlyHosts: []      # when non-empty, only these hosts are decrypted
+  decryptSkipHosts: []      # present ⇒ Replace tunnel-only list (omit key to keep Merge factory defaults)
+  decryptOnlyHosts: []      # when non-empty, only these hosts are decrypted (Replace with skip/only)
+  systemProxyBypassHosts: null  # present ⇒ Replace OS bypass (omit ⇒ Merge identity defaults); SSO risk if removed
+  proxyLoopback: true       # localhost via proxy when building SystemProxySettings from config
   certificateManager:
     certificateEngine: BouncyCastleFast
     leafCertificateKeyAlgorithm: EcdsaP256

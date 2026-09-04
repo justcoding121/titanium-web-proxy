@@ -72,22 +72,24 @@ Default bind is typically `127.0.0.1:8866`. Bind address/port are **start-time**
 
 HTTPS stays encrypted (opaque tunnels) until **Decrypt HTTPS** is enabled.
 
-Capture menu latching options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs) show a check when on. Preferences such as **Session retention…**, **Excluded hosts…** (HTTPS decrypt skip lists and OS bypass rules), **Ignore insecure server certificates** (off by default), and **Logging…** live under **Options**. **Capture → View excluded hosts…** shows built-in Microsoft/pinning defaults and the effective OS bypass preview. **Reset Inspector settings…** restores preferences to factory defaults (clears user exclusion lists); it does not remove the root CA, change OS proxy or Store loopback exemptions, or clear sessions.
+Capture menu latching options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs) show a check when on. Preferences such as **Session retention…**, **Excluded hosts…** (editable OS bypass and tunnel-only lists seeded from factory defaults), **Ignore insecure server certificates** (off by default), and **Logging…** live under **Options**. **Capture → View excluded hosts…** opens the same dialog read-only. **Reset Inspector settings…** restores preferences to factory defaults (re-seeds exclusion lists); it does not remove the root CA, change OS proxy or Store loopback exemptions, or clear sessions.
 
 ## Excluded hosts (proxy bypass vs tunnel-only)
 
-Inspector uses two layers:
+Inspector uses two editable lists (seeded once from factory defaults; **Reset to defaults** restores them):
 
 | Layer | Effect | When it applies |
 |-------|--------|-----------------|
-| **OS bypass** | Traffic never reaches Inspector | **System proxy** on — Microsoft identity hosts by default, plus your bypass list |
-| **Tunnel only** | CONNECT row stays visible, TLS opaque | Always (manual or system proxy) — pinning defaults, plus your skip list |
+| **OS bypass** | Traffic never reaches Inspector | **System proxy** on — Windows WinINET, macOS `networksetup`, Linux GNOME/KDE/`NO_PROXY` |
+| **Tunnel only** | CONNECT row stays visible, TLS opaque | Always (manual or system proxy) |
 
-**Options → Excluded hosts…** edits user bypass and tunnel-only lists. Right-click a session → **Exclude host…** (defaults to tunnel-only). Opaque sessions show a reason in the inspect pane and host tooltip (`Decrypt off`, built-in, skip list, etc.). Search: `is:opaque`, `is:opaque-reason:builtin`.
+Factory seeds: Microsoft identity / SSO / RDP hosts → OS bypass; Dropbox/Webex → tunnel only. Removing identity hosts from OS bypass can break sign-in while System proxy is on. Lists are applied with **Replace** (no silent re-merge of removed defaults).
 
-**Manual browser proxy** (`127.0.0.1:8866`): tunnel-only rules work; OS bypass does not apply unless **System proxy** is on. Enabling **System proxy** replaces a PAC script on Windows; existing bypass rules are merged. **Chrome QUIC** may bypass the proxy entirely — not fixable via host lists.
+**Options → Excluded hosts…** edits both lists, **Proxy localhost**, and shows an **Effective OS bypass** preview for the current OS. Right-click a session → **Exclude host…** (defaults to tunnel-only). Opaque sessions show a reason in the inspect pane and host tooltip. Search: `is:opaque`, `is:opaque-reason:builtin`.
 
-Built-in defaults include Microsoft SSO / RDP hosts (bypass) and Dropbox/Webex (tunnel only). On Windows, **Proxy localhost** uses the `<-loopback>` rule; on macOS/Linux it omits `localhost` from `NO_PROXY` for parity.
+**Manual browser proxy** (`127.0.0.1:8866`): tunnel-only rules work; OS bypass does not apply unless **System proxy** is on. Enabling **System proxy** replaces a PAC script on Windows; existing bypass rules are merged with the OS override string. **Chrome QUIC** may bypass the proxy entirely — not fixable via host lists.
+
+On Windows, **Proxy localhost** uses the `<-loopback>` rule; on macOS/Linux it omits `localhost` from `NO_PROXY` for parity.
 
 The status strip keeps command feedback on the left and a live **Sessions: N** count on the right, so capture traffic does not wipe tips or export paths. When exclusions are configured, a compact **Exclusions: …** link opens the dialog.
 

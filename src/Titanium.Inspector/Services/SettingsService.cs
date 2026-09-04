@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Titanium.Web.Proxy;
 
 namespace Titanium.Inspector.Services;
 
@@ -90,22 +91,25 @@ public sealed class InspectorSettings
     /// <summary>Delete spill files older than this many days on startup.</summary>
     public int DiskCacheMaxAgeDays { get; set; } = 7;
 
-    /// <summary>Extra host patterns that skip HTTPS decryption (one pattern per entry; supports *.example.com).</summary>
+    /// <summary>Host patterns that skip HTTPS decryption (tunnel only). Supports *.example.com.</summary>
     public List<string> DecryptSkipHosts { get; set; } = new();
 
     /// <summary>
-    /// When non-empty, only these host patterns are decrypted (built-in bypass hosts still never decrypt).
+    /// Legacy decrypt-only allowlist. Inspector no longer edits or applies this; kept for settings back-compat.
     /// </summary>
     public List<string> DecryptOnlyHosts { get; set; } = new();
 
-    /// <summary>Extra WinINET bypass patterns (Layer A) when System proxy is on.</summary>
+    /// <summary>OS system-proxy bypass patterns when System proxy is on (Replace mode — full list).</summary>
     public List<string> SystemProxyBypassHosts { get; set; } = new();
 
     /// <summary>When true, localhost uses the proxy (WinINET &lt;-loopback&gt; / Unix NO_PROXY parity).</summary>
     public bool ProxyLoopback { get; set; } = true;
 
-    /// <summary>Power users may edit built-in exclusion entries.</summary>
-    public bool AllowEditingBuiltInExclusions { get; set; }
+    /// <summary>
+    /// When true, <see cref="SystemProxyBypassHosts"/> and <see cref="DecryptSkipHosts"/> were seeded
+    /// from factory defaults (or saved by the user). When false, load applies factory seed once.
+    /// </summary>
+    public bool ExclusionsInitialized { get; set; }
 
     /// <summary>User acknowledged PAC replace warning when enabling System proxy.</summary>
     public bool WarnedAboutPacReplace { get; set; }
@@ -142,12 +146,47 @@ public sealed class SettingsService
     }
 
     /// <summary>
+    /// Seeds OS-bypass and tunnel-only lists from <see cref="MitmExclusionDefaults"/> when not yet initialized.
+    /// Persists when seeding changes settings.
+    /// </summary>
+    public bool EnsureExclusionsSeeded()
+    {
+        if (Current.ExclusionsInitialized)
+        {
+            return false;
+        }
+
+        ApplyFactoryExclusionDefaults(Current);
+        Current.ExclusionsInitialized = true;
+        Save();
+        return true;
+    }
+
+    /// <summary>Restores factory OS-bypass and tunnel-only lists (and loopback).</summary>
+    public void ResetExclusionsToFactoryDefaults()
+    {
+        ApplyFactoryExclusionDefaults(Current);
+        Current.DecryptOnlyHosts = [];
+        Current.ExclusionsInitialized = true;
+        Save();
+    }
+
+    public static void ApplyFactoryExclusionDefaults(InspectorSettings settings)
+    {
+        settings.SystemProxyBypassHosts = MitmExclusionDefaults.SystemProxyBypassRules.ToList();
+        settings.DecryptSkipHosts = MitmExclusionDefaults.TunnelOnlyPinningDomains.ToList();
+        settings.ProxyLoopback = true;
+    }
+
+    /// <summary>
     /// Replace preferences with factory defaults and write settings.json.
     /// Does not touch the root CA, OS trust stores, or captured sessions / disk body cache.
     /// </summary>
     public void ResetToFactoryDefaults()
     {
         Current = new InspectorSettings();
+        ApplyFactoryExclusionDefaults(Current);
+        Current.ExclusionsInitialized = true;
         Save();
     }
 
@@ -155,7 +194,10 @@ public sealed class SettingsService
     {
         if (!File.Exists(_path))
         {
-            return new InspectorSettings();
+            var fresh = new InspectorSettings();
+            ApplyFactoryExclusionDefaults(fresh);
+            fresh.ExclusionsInitialized = true;
+            return fresh;
         }
 
         try
@@ -163,11 +205,33 @@ public sealed class SettingsService
             var json = File.ReadAllText(_path);
             var loaded = JsonSerializer.Deserialize<InspectorSettings>(json, JsonOptions)
                          ?? new InspectorSettings();
+            if (!loaded.ExclusionsInitialized)
+            {
+                // Migrate: empty lists previously relied on silent Merge of factory defaults.
+                if (loaded.SystemProxyBypassHosts.Count == 0 && loaded.DecryptSkipHosts.Count == 0)
+                {
+                    ApplyFactoryExclusionDefaults(loaded);
+                }
+
+                loaded.ExclusionsInitialized = true;
+                try
+                {
+                    File.WriteAllText(_path, JsonSerializer.Serialize(loaded, JsonOptions));
+                }
+                catch
+                {
+                    // best effort
+                }
+            }
+
             return loaded;
         }
         catch
         {
-            return new InspectorSettings();
+            var fallback = new InspectorSettings();
+            ApplyFactoryExclusionDefaults(fallback);
+            fallback.ExclusionsInitialized = true;
+            return fallback;
         }
     }
 }

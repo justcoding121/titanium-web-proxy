@@ -379,6 +379,18 @@ public class AutomationIdCoverageHeadlessTests
             var about = new AboutWindow();
             AssertHasAutomationId(about, "AboutWindow");
             AssertHasAutomationId(about, "AboutOk");
+
+            var exclusions = new ExcludedHostsWindow(settings, readOnly: false, onSaved: null);
+            AssertHasAutomationId(exclusions, "ExcludedHostsWindow");
+            AssertHasAutomationId(exclusions, "ExcludedBypassHosts");
+            AssertHasAutomationId(exclusions, "ExcludedSkipHosts");
+            AssertHasAutomationId(exclusions, "ExcludedProxyLoopback");
+            AssertHasAutomationId(exclusions, "ExcludedOsPreview");
+            AssertHasAutomationId(exclusions, "ExcludedHostsResetDefaults");
+            AssertHasAutomationId(exclusions, "ExcludedHostsSave");
+            Assert.IsFalse(exclusions.GetLogicalDescendants().OfType<Control>().Any(c =>
+                string.Equals(AutomationProperties.GetAutomationId(c), "ExcludedOnlyHosts", StringComparison.Ordinal)
+                || string.Equals(AutomationProperties.GetAutomationId(c), "ExcludedBuiltInList", StringComparison.Ordinal)));
         });
     }
 

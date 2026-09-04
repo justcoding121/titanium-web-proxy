@@ -3,47 +3,39 @@
         x:Class="Titanium.Inspector.Views.ExcludedHostsWindow"
         AutomationProperties.AutomationId="ExcludedHostsWindow"
         Title="Excluded hosts"
-        Width="640" Height="720"
+        Width="640" Height="680"
         WindowStartupLocation="CenterOwner">
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
       <TextBlock TextWrapping="Wrap" Opacity="0.9"
-                 Text="OS bypass rules apply only when Capture → System proxy is on. Tunnel-only rules apply to all clients pointing at Inspector." />
+                 Text="OS bypass needs Capture → System proxy (works on Windows, macOS, and Linux). Tunnel-only rules apply to every client that hits Inspector. Factory defaults are seeded into the lists below — edit freely or reset." />
       <TextBlock x:Name="ScopeBanner" TextWrapping="Wrap" Opacity="0.75" FontSize="12" />
     </StackPanel>
-    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
-      <Button x:Name="SaveButton" Content="Save" MinWidth="88" AutomationProperties.AutomationId="ExcludedHostsSave" />
-      <Button x:Name="CancelButton" Content="Cancel" MinWidth="88" IsCancel="True" AutomationProperties.AutomationId="ExcludedHostsCancel" />
-    </StackPanel>
+    <DockPanel DockPanel.Dock="Bottom" Margin="0,16,0,0">
+      <Button x:Name="ResetDefaultsButton" DockPanel.Dock="Left" Content="Reset to defaults" MinWidth="120"
+              AutomationProperties.AutomationId="ExcludedHostsResetDefaults" />
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button x:Name="SaveButton" Content="Save" MinWidth="88" AutomationProperties.AutomationId="ExcludedHostsSave" />
+        <Button x:Name="CancelButton" Content="Cancel" MinWidth="88" IsCancel="True" AutomationProperties.AutomationId="ExcludedHostsCancel" />
+      </StackPanel>
+    </DockPanel>
     <ScrollViewer>
       <StackPanel Spacing="12">
-        <TextBlock FontWeight="SemiBold" Text="Built-in (recommended)" />
+        <TextBlock FontWeight="SemiBold" Text="Bypass proxy (OS)" />
         <TextBlock Opacity="0.75" TextWrapping="Wrap" FontSize="12"
-                   Text="Microsoft identity hosts bypass the proxy. Pinning hosts tunnel without decrypt." />
-        <TextBox x:Name="BuiltInBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
-                 MinHeight="120" FontFamily="Consolas,Courier New,monospace" FontSize="11"
-                 AutomationProperties.AutomationId="ExcludedBuiltInList" />
-
-        <TextBlock FontWeight="SemiBold" Text="Your rules — Bypass proxy (OS)" />
-        <TextBlock Opacity="0.75" TextWrapping="Wrap" FontSize="12"
-                   Text="Traffic will not appear in Inspector. Requires System proxy." />
-        <TextBox x:Name="BypassHostsBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="72"
-                 Watermark="*.corp.example.com"
+                   Text="Traffic never reaches Inspector when System proxy is on. Seeded with Microsoft identity / SSO / RDP hosts. Removing them can break sign-in while System proxy is enabled." />
+        <TextBox x:Name="BypassHostsBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="120"
+                 Watermark="*.microsoftonline.com&#x0a;login.live.com"
+                 FontFamily="Consolas,Courier New,monospace" FontSize="11"
                  AutomationProperties.AutomationId="ExcludedBypassHosts" />
 
-        <TextBlock FontWeight="SemiBold" Text="Your rules — Tunnel only (no decrypt)" />
+        <TextBlock FontWeight="SemiBold" Text="Tunnel only (no decrypt)" />
         <TextBlock Opacity="0.75" TextWrapping="Wrap" FontSize="12"
-                   Text="Stays visible as CONNECT. Turn on Decrypt HTTPS on the toolbar first." />
+                   Text="CONNECT stays visible; TLS stays opaque when Decrypt HTTPS is on. Seeded with certificate-pinning hosts (Dropbox, Webex)." />
         <TextBox x:Name="SkipHostsBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="72"
-                 Watermark="*.corp.example.com&#x0a;auth.example.com"
+                 Watermark="dropbox.com&#x0a;webex.com"
+                 FontFamily="Consolas,Courier New,monospace" FontSize="11"
                  AutomationProperties.AutomationId="ExcludedSkipHosts" />
-
-        <TextBlock FontWeight="SemiBold" Text="Advanced — Only decrypt these hosts" />
-        <TextBlock Opacity="0.75" TextWrapping="Wrap" FontSize="12"
-                   Text="Leave empty to decrypt everything except lists above and built-ins." />
-        <TextBox x:Name="OnlyHostsBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56"
-                 Watermark="api.example.com"
-                 AutomationProperties.AutomationId="ExcludedOnlyHosts" />
 
         <CheckBox x:Name="ProxyLoopbackCheck" Content="Proxy localhost (advanced)"
                   AutomationProperties.AutomationId="ExcludedProxyLoopback" />
@@ -52,9 +44,9 @@
 
         <TextBlock FontWeight="SemiBold" Text="Effective OS bypass (when System proxy on)" />
         <TextBlock x:Name="PreviewLabel" Opacity="0.75" FontSize="12" />
-        <TextBox x:Name="PreviewBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
-                 MinHeight="48" FontFamily="Consolas,Courier New,monospace" FontSize="11"
-                 AutomationProperties.AutomationId="ExcludedOsPreview" />
+        <TextBlock x:Name="PreviewBlock" TextWrapping="Wrap"
+                   FontFamily="Consolas,Courier New,monospace" FontSize="11"
+                   AutomationProperties.AutomationId="ExcludedOsPreview" />
 
         <TextBlock FontWeight="SemiBold" Text="Client setup" />
         <TextBlock TextWrapping="Wrap" Opacity="0.85" FontSize="12"
