@@ -87,6 +87,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private int _selectedInspectTabIndex;
     private int _selectedToolsTabIndex;
     private bool _showSessionDetails;
+    /// <summary>
+    /// When true, assigning <see cref="SelectedSession"/> must not force the details pane open
+    /// (filter restore / bulk removal — DataGrid may briefly re-select a neighbor row).
+    /// </summary>
+    private bool _suppressOpenSessionDetails;
     private bool _showWsFramesTab;
     private string _composerMethod = "GET";
     private string _composerUrl = "";
@@ -715,6 +720,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private Task ClearSessionsAsync()
     {
+        // Drop selection before mutating the grid so the DataGrid cannot cascade-select
+        // a neighbor row (SelectedSession setter would reopen a closed details pane).
+        _selectedSessions.Clear();
+        SelectedSession = null;
+
         _userRemovalDepth++;
         try
         {
@@ -726,8 +736,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         Sessions.Clear();
-        _selectedSessions.Clear();
-        SelectedSession = null;
         _retentionEvictedTotal = 0;
         _interception.ResetSessionIdSequence();
         RefreshSessionCountText();
@@ -746,6 +754,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         var ids = selected.Select(s => s.Id).ToHashSet();
+        // Clear selection of removed rows before store/grid mutation (same cascade as Clear).
+        _selectedSessions.RemoveAll(s => ids.Contains(s.Id));
+        if (SelectedSession is not null && ids.Contains(SelectedSession.Id))
+        {
+            SelectedSession = null;
+        }
+
         _userRemovalDepth++;
         try
         {
@@ -762,12 +777,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             {
                 Sessions.RemoveAt(i);
             }
-        }
-
-        _selectedSessions.Clear();
-        if (SelectedSession is not null && ids.Contains(SelectedSession.Id))
-        {
-            SelectedSession = null;
         }
 
         RefreshSessionCountText();
@@ -1189,19 +1198,42 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private static string FormatRotateCaDeferredTrustStatus(bool changed) =>
         changed ? "Root CA cleared — Install root CA (or enable Decrypt HTTPS) to trust the new certificate" : "Root CA recreate completed — Install root CA to trust";
 
-    private Task ExportCaAsync()
+    private async Task ExportCaAsync()
     {
-        var path = _interception.ExportRootCertificate();
-        if (path is null)
+        if (_interception.RootCertificate is null)
         {
             SetGuardStatus("No root certificate yet — Start the proxy first");
-        }
-        else
-        {
-            SetOutcomeStatus("Exported CA: " + path, StatusSeverity.Success, toastImportant: true);
+            return;
         }
 
-        return Task.CompletedTask;
+        var path = await _pathPicker.PickSavePathAsync(
+            "Export root CA",
+            "TitaniumInspector-RootCA.cer",
+            [
+                new PathPickerFileType("Certificate", "*.cer"),
+                new PathPickerFileType("PEM", "*.pem"),
+            ]);
+        if (path is null)
+        {
+            SetTransientStatus("Export CA cancelled", StatusSeverity.Neutral, revertMs: GuardStatusRevertMs);
+            return;
+        }
+
+        try
+        {
+            var exported = _interception.ExportRootCertificate(path);
+            if (exported is null)
+            {
+                SetGuardStatus("No root certificate yet — Start the proxy first");
+                return;
+            }
+
+            SetOutcomeStatus("Exported CA: " + exported, StatusSeverity.Success, toastImportant: true);
+        }
+        catch (Exception ex)
+        {
+            SetOutcomeStatus("Export CA failed: " + Truncate(ex.Message, 160), StatusSeverity.Error, toastImportant: true);
+        }
     }
 
     private async Task OpenLoopbackExemptAsync()
@@ -1397,7 +1429,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var message =
             "To decrypt HTTPS from a phone or other device:\n\n" +
             "1. Export the root CA (use Export CA below, or Capture → Export root CA…).\n" +
-            "2. Install the .cer on the device as a trusted CA.\n" +
+            "2. Install the exported .cer (or .pem) on the device as a trusted CA.\n" +
             $"3. Set the device HTTP proxy to this PC's LAN IP on port {BindPort} " +
             $"(current bind is {BindAddress}:{BindPort}).\n\n" +
             "Use Bind address 0.0.0.0 so other devices can reach the proxy.";
@@ -2195,7 +2227,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowSelectedOpaqueHint)));
             NotifyFilterSelectionProperties();
 
-            if (value is not null)
+            if (value is not null && !_suppressOpenSessionDetails)
             {
                 ShowSessionDetails = true;
                 SelectedOuterPaneIndex = 0;
@@ -2629,18 +2661,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         var ids = removed.Select(s => s.Id).ToHashSet();
+        // Clear selection before removing rows — otherwise Avalonia DataGrid selects a
+        // neighbor and SelectedSession reopens the details pane.
+        _selectedSessions.RemoveAll(s => ids.Contains(s.Id));
+        if (SelectedSession is not null && ids.Contains(SelectedSession.Id))
+        {
+            SelectedSession = null;
+        }
+
         for (var i = Sessions.Count - 1; i >= 0; i--)
         {
             if (ids.Contains(Sessions[i].Id))
             {
                 Sessions.RemoveAt(i);
             }
-        }
-
-        _selectedSessions.RemoveAll(s => ids.Contains(s.Id));
-        if (SelectedSession is not null && ids.Contains(SelectedSession.Id))
-        {
-            SelectedSession = null;
         }
 
         if (_userRemovalDepth > 0)
@@ -2723,6 +2757,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private void ApplyFilter()
     {
         var previouslySelected = SelectedSession;
+        var detailsWereOpen = ShowSessionDetails;
         Sessions.Clear();
         foreach (var s in SessionSearch.Filter(_all, SearchQuery))
         {
@@ -2730,9 +2765,24 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         // Restore single selection used by the detail pane when the row still matches the filter.
+        // Do not force the pane open — the user may have closed it, and Sessions.Clear() can
+        // briefly null SelectedSession via the DataGrid binding.
         if (previouslySelected is not null && Sessions.Contains(previouslySelected))
         {
-            SelectedSession = previouslySelected;
+            if (!ReferenceEquals(_selected, previouslySelected))
+            {
+                _suppressOpenSessionDetails = true;
+                try
+                {
+                    SelectedSession = previouslySelected;
+                }
+                finally
+                {
+                    _suppressOpenSessionDetails = false;
+                }
+            }
+
+            ShowSessionDetails = detailsWereOpen;
         }
         else if (previouslySelected is not null)
         {

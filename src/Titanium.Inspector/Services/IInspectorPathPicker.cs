@@ -2,10 +2,15 @@ using Avalonia.Platform.Storage;
 
 namespace Titanium.Inspector.Services;
 
+/// <summary>One save-dialog type filter (display name + wildcard pattern).</summary>
+public readonly record struct PathPickerFileType(string Name, string Pattern);
+
 /// <summary>File open/save prompts; injectable so headless / E2E tests avoid StorageProvider.</summary>
 public interface IInspectorPathPicker
 {
     Task<string?> PickSavePathAsync(string title, string suggestedFileName, string filterName, string pattern);
+
+    Task<string?> PickSavePathAsync(string title, string suggestedFileName, IReadOnlyList<PathPickerFileType> fileTypes);
 
     Task<string?> PickOpenPathAsync(string title, string filterName, params string[] patterns);
 }
@@ -13,9 +18,15 @@ public interface IInspectorPathPicker
 /// <summary>Production picker: Avalonia StorageProvider when available, else Desktop fallback path.</summary>
 public sealed class AvaloniaInspectorPathPicker : IInspectorPathPicker
 {
-    public async Task<string?> PickSavePathAsync(string title, string suggestedFileName, string filterName, string pattern)
+    public Task<string?> PickSavePathAsync(string title, string suggestedFileName, string filterName, string pattern) =>
+        PickSavePathAsync(title, suggestedFileName, [new PathPickerFileType(filterName, pattern)]);
+
+    public async Task<string?> PickSavePathAsync(
+        string title,
+        string suggestedFileName,
+        IReadOnlyList<PathPickerFileType> fileTypes)
     {
-        var fromUi = await InspectorPathPickerHelpers.TrySaveViaStorageAsync(title, suggestedFileName, filterName, pattern);
+        var fromUi = await InspectorPathPickerHelpers.TrySaveViaStorageAsync(title, suggestedFileName, fileTypes);
         if (fromUi is not null)
         {
             return fromUi;
@@ -60,10 +71,18 @@ public sealed class ScriptedInspectorPathPicker : IInspectorPathPicker
     public string? OpenPath { get; set; }
     public int SaveCalls { get; private set; }
     public int OpenCalls { get; private set; }
+    public IReadOnlyList<PathPickerFileType>? LastSaveFileTypes { get; private set; }
 
-    public Task<string?> PickSavePathAsync(string title, string suggestedFileName, string filterName, string pattern)
+    public Task<string?> PickSavePathAsync(string title, string suggestedFileName, string filterName, string pattern) =>
+        PickSavePathAsync(title, suggestedFileName, [new PathPickerFileType(filterName, pattern)]);
+
+    public Task<string?> PickSavePathAsync(
+        string title,
+        string suggestedFileName,
+        IReadOnlyList<PathPickerFileType> fileTypes)
     {
         SaveCalls++;
+        LastSaveFileTypes = fileTypes;
         return Task.FromResult(SavePath);
     }
 
@@ -79,8 +98,7 @@ internal static class InspectorPathPickerHelpers
     public static async Task<string?> TrySaveViaStorageAsync(
         string title,
         string suggestedFileName,
-        string filterName,
-        string pattern)
+        IReadOnlyList<PathPickerFileType> fileTypes)
     {
         var top = TryGetMainWindow();
         if (top?.StorageProvider is not { CanSave: true } sp)
@@ -88,14 +106,17 @@ internal static class InspectorPathPickerHelpers
             return null;
         }
 
-        var file = await sp.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+        var choices = fileTypes.Count == 0
+            ? [new FilePickerFileType("All") { Patterns = ["*.*"] }]
+            : fileTypes
+                .Select(t => new FilePickerFileType(t.Name) { Patterns = [t.Pattern] })
+                .ToList();
+
+        var file = await sp.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = title,
             SuggestedFileName = suggestedFileName,
-            FileTypeChoices =
-            [
-                new Avalonia.Platform.Storage.FilePickerFileType(filterName) { Patterns = [pattern] },
-            ],
+            FileTypeChoices = choices,
         });
         return file?.TryGetLocalPath();
     }
@@ -108,13 +129,13 @@ internal static class InspectorPathPickerHelpers
             return null;
         }
 
-        var files = await sp.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
+        var files = await sp.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = title,
             AllowMultiple = false,
             FileTypeFilter =
             [
-                new Avalonia.Platform.Storage.FilePickerFileType(filterName) { Patterns = patterns.ToList() },
+                new FilePickerFileType(filterName) { Patterns = patterns.ToList() },
             ],
         });
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;

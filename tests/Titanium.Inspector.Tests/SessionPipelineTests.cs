@@ -293,6 +293,84 @@ public class SessionPipelineTests
     }
 
     [TestMethod]
+    public void ClearSessions_AfterClosingDetails_DoesNotReopenPane()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-inspector-clear-details-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+
+            var a = new SessionSnapshot { Id = 1, Method = "GET", Url = "https://a.test/", Host = "a.test" };
+            var b = new SessionSnapshot { Id = 2, Method = "GET", Url = "https://b.test/", Host = "b.test" };
+            var c = new SessionSnapshot { Id = 3, Method = "GET", Url = "https://c.test/", Host = "c.test" };
+            vm.SeedSession(a);
+            vm.SeedSession(b);
+            vm.SeedSession(c);
+
+            vm.SelectedSession = b;
+            Assert.IsTrue(vm.ShowSessionDetails);
+            vm.CloseSessionDetailsCommand.Execute(null);
+            Assert.IsFalse(vm.ShowSessionDetails);
+            Assert.AreSame(b, vm.SelectedSession);
+
+            Assert.IsTrue(vm.ClearSessionsCommand.CanExecute(null));
+            vm.ClearSessionsCommand.Execute(null);
+
+            Assert.AreEqual(0, vm.Sessions.Count);
+            Assert.IsNull(vm.SelectedSession);
+            Assert.IsFalse(vm.ShowSessionDetails);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
+    public void ApplyFilter_AfterClosingDetails_DoesNotReopenPane()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-inspector-filter-details-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+
+            var snap = new SessionSnapshot { Id = 1, Method = "GET", Url = "https://a.test/", Host = "a.test" };
+            vm.SeedSession(snap);
+            vm.SelectedSession = snap;
+            vm.CloseSessionDetailsCommand.Execute(null);
+            Assert.IsFalse(vm.ShowSessionDetails);
+
+            vm.SearchQuery = "host:a.test";
+            Assert.AreSame(snap, vm.SelectedSession);
+            Assert.IsFalse(vm.ShowSessionDetails);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
     public void WsFramesTab_OnlyForWebSocket_AndToolsMenuOpensPane()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-inspector-ws-tools-" + Guid.NewGuid().ToString("N") + ".json");

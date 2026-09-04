@@ -29,7 +29,9 @@ public class InspectorFeatureSanityE2ETests
         var recorder = new RecordingSystemProxyController();
         var interception = new InterceptionService(recorder) { UseInMemoryTrustState = true };
         var dialogs = new ScriptedInspectorDialogs();
-        var vm = new MainWindowViewModel(buffer, registry, updates, settings, interception, dialogs);
+        var pathPicker = new ScriptedInspectorPathPicker();
+        var vm = new MainWindowViewModel(buffer, registry, updates, settings, interception, dialogs, pathPicker);
+        var exportCaPath = Path.Combine(Path.GetTempPath(), "twp-feat-ca-" + Guid.NewGuid().ToString("N") + ".cer");
 
         try
         {
@@ -78,9 +80,11 @@ public class InspectorFeatureSanityE2ETests
                 vm.StatusText.Contains("HTTP", StringComparison.OrdinalIgnoreCase) ||
                 vm.Sessions.Count > 0);
 
+            pathPicker.SavePath = exportCaPath;
             vm.ExportCaCommand.Execute(null);
-            await Task.Delay(50);
-            Assert.IsFalse(string.IsNullOrWhiteSpace(vm.StatusText));
+            await WaitAsync(() => vm.StatusText.Contains("Exported CA", StringComparison.Ordinal));
+            Assert.IsTrue(File.Exists(exportCaPath), vm.StatusText);
+            Assert.AreEqual(1, pathPicker.SaveCalls);
 
             vm.ClearSessionsCommand.Execute(null);
             await Task.Delay(50);
@@ -101,6 +105,7 @@ public class InspectorFeatureSanityE2ETests
         {
             try { vm.EnsureShutdown(); } catch { /* ignore */ }
             try { File.Delete(settingsPath); } catch { /* ignore */ }
+            try { File.Delete(exportCaPath); } catch { /* ignore */ }
         }
     }
 
