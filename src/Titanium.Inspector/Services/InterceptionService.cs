@@ -728,8 +728,36 @@ public sealed class InterceptionService : IDisposable
         var path = destinationPath ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
             "TitaniumInspector-RootCA.cer");
-        File.WriteAllBytes(path, cert.Export(X509ContentType.Cert));
+        var der = cert.Export(X509ContentType.Cert);
+        if (IsPemExportPath(path))
+        {
+            File.WriteAllText(path, EncodeCertificatePem(der), Encoding.ASCII);
+        }
+        else
+        {
+            File.WriteAllBytes(path, der);
+        }
+
         return path;
+    }
+
+    internal static bool IsPemExportPath(string path) =>
+        Path.GetExtension(path).Equals(".pem", StringComparison.OrdinalIgnoreCase);
+
+    internal static string EncodeCertificatePem(byte[] der)
+    {
+        var b64 = Convert.ToBase64String(der);
+        var sb = new StringBuilder(b64.Length + 64);
+        sb.AppendLine("-----BEGIN CERTIFICATE-----");
+        for (var i = 0; i < b64.Length; i += 64)
+        {
+            var len = Math.Min(64, b64.Length - i);
+            sb.Append(b64, i, len);
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("-----END CERTIFICATE-----");
+        return sb.ToString();
     }
 
     private void EnsureRootPfxPath()
