@@ -53,7 +53,7 @@ public class ExportRootCertificateFormatTests
             Assert.AreEqual(pem, interception.ExportRootCertificate(pem));
 
             var derBytes = await File.ReadAllBytesAsync(cer);
-            using var fromCer = new X509Certificate2(derBytes);
+            using var fromCer = X509CertificateLoader.LoadCertificate(derBytes);
             Assert.AreEqual(interception.RootCertificate!.Thumbprint, fromCer.Thumbprint);
 
             var pemText = await File.ReadAllTextAsync(pem, Encoding.ASCII);
