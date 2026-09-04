@@ -11,6 +11,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.Views;
+using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Inspector.ViewModels;
@@ -248,6 +249,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.DecryptHttps = _decryptHttps;
         ApplyExclusionSettingsFromSettings();
         ShowLoopbackExemptMenu = AppContainerLoopback.IsSupported;
+        ShowProcessColumn = ClientProcessId.IsSupported;
     }
 
     /// <summary>Exposed for E2E / headless tests.</summary>
@@ -1550,7 +1552,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public bool ShowSelectedOpaqueHint => !string.IsNullOrEmpty(SelectedOpaqueHint);
 
     /// <summary>True when selection shares one non-empty process (single or multi-select).</summary>
-    public bool CanFilterByProcess => ResolveUnanimousFilterProcess() is not null;
+    public bool CanFilterByProcess =>
+        ShowProcessColumn && ResolveUnanimousFilterProcess() is not null;
 
     /// <summary>True when at least one session is selected.</summary>
     public bool HasSelectedSessions => ResolveFilterSelection().Count > 0;
@@ -2123,6 +2126,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     public bool ShowLoopbackExemptMenu { get; }
+
+    /// <summary>True when this OS can resolve local client process ids for the Process column.</summary>
+    public bool ShowProcessColumn { get; }
 
     /// <summary>Right pane visibility (Inspect + Tools). Kept name for tests.</summary>
     public bool ShowSessionDetails

@@ -1,4 +1,6 @@
 #nullable enable
+Titanium.Web.Proxy.ClientProcessId
+static Titanium.Web.Proxy.ClientProcessId.IsSupported.get -> bool
 Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming
 Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.BrowserTlsCompletedAt.get -> System.DateTime?
 Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.BrowserTlsDuration.get -> System.TimeSpan?

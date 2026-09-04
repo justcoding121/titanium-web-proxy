@@ -173,20 +173,21 @@ internal class TcpClientConnection : IDisposable
 
         if (processId.HasValue) return processId.Value;
 
-        if (RunTime.IsWindows)
+        if (!Titanium.Web.Proxy.ClientProcessId.IsSupported)
         {
-            var remoteEndPoint = (IPEndPoint)RemoteEndPoint;
-
-            // If client is localhost get the process id
-            if (NetworkHelper.IsLocalIpAddress(remoteEndPoint.Address))
-                processId = TcpHelper.GetProcessIdByLocalPort(endPoint.IpAddress.AddressFamily, remoteEndPoint.Port);
-            else
-                // can't access process Id of remote request from remote machine
-                processId = -1;
-
-            return processId.Value;
+            processId = -1;
+            return -1;
         }
 
-        throw new PlatformNotSupportedException();
+        var remoteEndPoint = (IPEndPoint)RemoteEndPoint;
+
+        // If client is localhost get the process id
+        if (NetworkHelper.IsLocalIpAddress(remoteEndPoint.Address))
+            processId = TcpHelper.GetProcessIdByLocalPort(endPoint.IpAddress.AddressFamily, remoteEndPoint.Port);
+        else
+            // can't access process Id of remote request from remote machine
+            processId = -1;
+
+        return processId.Value;
     }
 }

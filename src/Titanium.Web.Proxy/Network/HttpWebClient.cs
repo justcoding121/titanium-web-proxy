@@ -132,8 +132,9 @@ public class HttpWebClient
     public Response Response { get; internal set; }
 
     /// <summary>
-    ///     PID of the process that is created the current session when client is running in this machine
-    ///     If client is remote then this will return
+    ///     PID of the local client process for this session (Windows, Linux, and macOS).
+    ///     Remote clients, unsupported platforms, and unresolved sockets yield a non-positive value.
+    ///     See <see cref="ClientProcessId.IsSupported"/>.
     /// </summary>
     public Lazy<int> ProcessId { get; internal set; }
 

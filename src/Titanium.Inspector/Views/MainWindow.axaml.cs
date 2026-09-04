@@ -84,6 +84,7 @@ public partial class MainWindow : Window
     private void OnSessionsGridLoaded(object? sender, RoutedEventArgs e)
     {
         AttachSessionsScroll();
+        ApplyProcessColumnVisibility();
         ApplySessionGridLayoutIfNeeded();
         ApplySessionColumnHeaderTips();
     }
@@ -217,6 +218,7 @@ public partial class MainWindow : Window
             vm.AttachStatusNotifier(new AvaloniaStatusNotifier(() => _notificationManager));
         }
 
+        ApplyProcessColumnVisibility();
         ApplySessionGridLayoutIfNeeded();
         HookThemeVariantChanged();
     }
@@ -489,6 +491,22 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ApplyProcessColumnVisibility()
+    {
+        if (DataContext is not MainWindowViewModel vm || SessionsGrid.Columns.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var column in SessionsGrid.Columns)
+        {
+            if (string.Equals(SessionGridLayout.GetColumnKey(column.Header), "Process", StringComparison.Ordinal))
+            {
+                column.IsVisible = vm.ShowProcessColumn;
+            }
+        }
+    }
+
     private void ApplySessionGridLayoutIfNeeded()
     {
         if (_sessionGridLayoutApplied
@@ -499,6 +517,7 @@ public partial class MainWindow : Window
         }
 
         _sessionGridLayoutApplied = true;
+        ApplyProcessColumnVisibility();
         var layout = vm.GetSessionGridLayout();
         var byKey = SessionGridLayout.IndexByKey(layout?.Columns);
 
@@ -581,6 +600,11 @@ public partial class MainWindow : Window
         var layout = new SessionGridLayoutDto();
         foreach (var column in SessionsGrid.Columns)
         {
+            if (!column.IsVisible)
+            {
+                continue;
+            }
+
             var key = SessionGridLayout.GetColumnKey(column.Header);
             if (key is null)
             {
