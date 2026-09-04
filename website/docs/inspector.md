@@ -60,7 +60,7 @@ chmod +x install-app.sh uninstall-app.sh TitaniumInspector
 
 Choosing the accept action downloads the package (MSI for a Program Files install, otherwise the RID zip), closes Inspector, replaces the current installation, and relaunches. Windows Installer cannot apply the **same or an older** ProductVersion over an existing MSI install; in that case Inspector explains that you must uninstall first or use a website package. **Help → About Titanium Inspector…** shows the installed version and licensing details.
 
-**Options → Check for updates on startup** uses the same channel and confirm dialog (never silent-install).
+**Help → Check for updates on startup** uses the same channel and confirm dialog (never silent-install).
 
 ## Quick use
 
@@ -72,7 +72,7 @@ Default bind is typically `127.0.0.1:8866`. Bind address/port are **start-time**
 
 HTTPS stays encrypted (opaque tunnels) until **Decrypt HTTPS** is enabled.
 
-Capture menu latching options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs) show a check when on. Preferences such as **Session retention…**, **Excluded hosts…** (editable OS bypass and tunnel-only lists seeded from factory defaults), **Ignore insecure server certificates** (off by default), and **Logging…** live under **Options**. **Capture → View excluded hosts…** opens the same dialog read-only. **Reset Inspector settings…** restores preferences to factory defaults (re-seeds exclusion lists); it does not remove the root CA, change OS proxy or Store loopback exemptions, or clear sessions.
+Capture menu latching options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs) show a check when on. Preferences such as **Session retention…**, **Excluded hosts…** (editable OS bypass and tunnel-only lists seeded from factory defaults), **Ignore insecure server certificates** (off by default), and **Logging…** live under **Options**. **Reset Inspector settings…** restores preferences to factory defaults (re-seeds exclusion lists); it does not remove the root CA, change OS proxy or Store loopback exemptions, or clear sessions.
 
 ## Excluded hosts (proxy bypass vs tunnel-only)
 

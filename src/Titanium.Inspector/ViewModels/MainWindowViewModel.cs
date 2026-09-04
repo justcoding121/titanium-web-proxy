@@ -200,7 +200,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OpenLoggingSettingsCommand = new RelayCommand(OpenLoggingSettingsAsync);
         OpenAboutCommand = new RelayCommand(OpenAboutAsync);
         OpenHttpsDecryptHostsCommand = new RelayCommand(OpenExcludedHostsAsync);
-        ViewExcludedHostsCommand = new RelayCommand(() => ViewExcludedHostsAsync(readOnly: true));
         ExcludeHostCommand = new RelayCommand(ExcludeHostAsync);
         ResetSettingsCommand = new RelayCommand(ResetSettingsAsync);
         ReplayCommand = new RelayCommand(async () => await ReplaySelectedAsync());
@@ -209,7 +208,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         CopyUrlCommand = new RelayCommand(CopyUrlAsync);
         FilterByHostCommand = new RelayCommand(FilterByHostAsync);
         FilterByProcessCommand = new RelayCommand(FilterByProcessAsync);
-        OpenExclusionSummaryCommand = new RelayCommand(() => ViewExcludedHostsAsync(readOnly: false));
+        OpenExclusionSummaryCommand = new RelayCommand(OpenExcludedHostsAsync);
         SendComposerCommand = new RelayCommand(async () => await SendComposerAsync());
         AddAutoResponderRuleCommand = new RelayCommand(AddAutoResponderRuleAsync);
         DeleteAutoResponderRuleCommand = new RelayCommand(DeleteAutoResponderRuleAsync);
@@ -1322,18 +1321,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    private async Task ViewExcludedHostsAsync(bool readOnly)
-    {
-        var owner = TryGetMainWindow();
-        if (owner is null)
-        {
-            StatusText = "Excluded hosts requires the main window";
-            return;
-        }
-
-        await ExcludedHostsWindow.ShowAsync(owner, _settings, readOnly, null);
-    }
-
     private async Task ExcludeHostAsync()
     {
         var selected = SelectedSession;
@@ -1752,7 +1739,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand OpenLoggingSettingsCommand { get; }
     public ICommand OpenAboutCommand { get; }
     public ICommand OpenHttpsDecryptHostsCommand { get; }
-    public ICommand ViewExcludedHostsCommand { get; }
     public ICommand ExcludeHostCommand { get; }
     public ICommand OpenExclusionSummaryCommand { get; }
     public ICommand ResetSettingsCommand { get; }

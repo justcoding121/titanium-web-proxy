@@ -45,8 +45,6 @@
                   IsChecked="{Binding SystemProxy, Mode=OneWay}"
                   Command="{Binding ToggleSystemProxyCommand}"
                   AutomationProperties.AutomationId="MenuToggleSystemProxy" />
-        <MenuItem Header="View excluded hosts…" Command="{Binding ViewExcludedHostsCommand}"
-                  AutomationProperties.AutomationId="MenuViewExcludedHosts" />
         <MenuItem Header="Install root CA (current user)" Command="{Binding InstallCaCommand}" AutomationProperties.AutomationId="MenuInstallCa" />
         <MenuItem Header="Remove root CA (current user)" Command="{Binding UntrustCaCommand}" AutomationProperties.AutomationId="MenuRemoveCa" />
         <MenuItem Header="Clear and reinstall root CA…" Command="{Binding RotateCaCommand}" AutomationProperties.AutomationId="MenuRotateCa" />
@@ -90,11 +88,6 @@
                   Command="{Binding ToggleIgnoreServerCertificateErrorsCommand}"
                   AutomationProperties.AutomationId="MenuIgnoreServerCertErrors" />
         <Separator />
-        <MenuItem Header="Check for updates on startup" ToggleType="CheckBox"
-                  IsChecked="{Binding CheckForUpdatesOnStartup, Mode=OneWay}"
-                  Command="{Binding ToggleCheckForUpdatesOnStartupCommand}"
-                  AutomationProperties.AutomationId="MenuCheckUpdatesOnStartup" />
-        <Separator />
         <MenuItem Header="Logging…" Command="{Binding OpenLoggingSettingsCommand}"
                   AutomationProperties.AutomationId="MenuLogging" />
         <Separator />
@@ -104,6 +97,10 @@
       <MenuItem Header="_Help" AutomationProperties.AutomationId="MenuHelp">
         <MenuItem Header="Check for updates…" Command="{Binding CheckForUpdatesCommand}"
                   AutomationProperties.AutomationId="MenuCheckForUpdates" />
+        <MenuItem Header="Check for updates on startup" ToggleType="CheckBox"
+                  IsChecked="{Binding CheckForUpdatesOnStartup, Mode=OneWay}"
+                  Command="{Binding ToggleCheckForUpdatesOnStartupCommand}"
+                  AutomationProperties.AutomationId="MenuCheckUpdatesOnStartup" />
         <MenuItem Header="Update channel" AutomationProperties.AutomationId="MenuUpdateChannel">
           <MenuItem Header="Stable" ToggleType="CheckBox"
                     IsChecked="{Binding UpdateChannelIsStable, Mode=OneWay}"
