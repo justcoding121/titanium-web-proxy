@@ -9,7 +9,7 @@
     <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
       <TextBlock TextWrapping="Wrap" Opacity="0.9"
                  Text="OS bypass needs Capture → System proxy (works on Windows, macOS, and Linux). Tunnel-only rules apply to every client that hits Inspector. Factory defaults are seeded into the lists below — edit freely or reset." />
-      <TextBlock x:Name="ScopeBanner" TextWrapping="Wrap" Opacity="0.75" FontSize="12" />
+      <TextBlock x:Name="ScopeBanner" TextWrapping="Wrap" Opacity="0.75" />
     </StackPanel>
     <DockPanel DockPanel.Dock="Bottom" Margin="0,16,0,0">
       <Button x:Name="ResetDefaultsButton" DockPanel.Dock="Left" Content="Reset to defaults" MinWidth="120"
@@ -22,34 +22,34 @@
     <ScrollViewer>
       <StackPanel Spacing="12">
         <TextBlock FontWeight="SemiBold" Text="Bypass proxy (OS)" />
-        <TextBlock Opacity="0.75" TextWrapping="Wrap" FontSize="12"
+        <TextBlock Opacity="0.75" TextWrapping="Wrap"
                    Text="Traffic never reaches Inspector when System proxy is on. Seeded with Microsoft identity / SSO / RDP hosts. Removing them can break sign-in while System proxy is enabled." />
         <TextBox x:Name="BypassHostsBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="120"
                  Watermark="*.microsoftonline.com&#x0a;login.live.com"
-                 FontFamily="Consolas,Courier New,monospace" FontSize="11"
+                 FontFamily="Consolas,Courier New,monospace"
                  AutomationProperties.AutomationId="ExcludedBypassHosts" />
 
         <TextBlock FontWeight="SemiBold" Text="Tunnel only (no decrypt)" />
-        <TextBlock Opacity="0.75" TextWrapping="Wrap" FontSize="12"
+        <TextBlock Opacity="0.75" TextWrapping="Wrap"
                    Text="CONNECT stays visible; TLS stays opaque when Decrypt HTTPS is on. Seeded with certificate-pinning hosts (Dropbox, Webex)." />
         <TextBox x:Name="SkipHostsBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="72"
                  Watermark="dropbox.com&#x0a;webex.com"
-                 FontFamily="Consolas,Courier New,monospace" FontSize="11"
+                 FontFamily="Consolas,Courier New,monospace"
                  AutomationProperties.AutomationId="ExcludedSkipHosts" />
 
         <CheckBox x:Name="ProxyLoopbackCheck" Content="Proxy localhost (advanced)"
                   AutomationProperties.AutomationId="ExcludedProxyLoopback" />
-        <TextBlock Opacity="0.7" TextWrapping="Wrap" FontSize="11" Margin="24,0,0,0"
+        <TextBlock Opacity="0.75" TextWrapping="Wrap" Margin="24,0,0,0"
                    Text="Windows: &lt;-loopback&gt; rule. macOS/Linux: omits localhost from NO_PROXY." />
 
         <TextBlock FontWeight="SemiBold" Text="Effective OS bypass (when System proxy on)" />
-        <TextBlock x:Name="PreviewLabel" Opacity="0.75" FontSize="12" />
+        <TextBlock x:Name="PreviewLabel" Opacity="0.75" />
         <TextBlock x:Name="PreviewBlock" TextWrapping="Wrap"
-                   FontFamily="Consolas,Courier New,monospace" FontSize="11"
+                   FontFamily="Consolas,Courier New,monospace"
                    AutomationProperties.AutomationId="ExcludedOsPreview" />
 
         <TextBlock FontWeight="SemiBold" Text="Client setup" />
-        <TextBlock TextWrapping="Wrap" Opacity="0.85" FontSize="12"
+        <TextBlock TextWrapping="Wrap" Opacity="0.85"
                    Text="• Firefox: use Capture → Trust CA in Firefox… (OS bypass does not apply unless Firefox uses system proxy)&#x0a;• Windows Store apps: Capture → Allow Store apps…&#x0a;• Chrome QUIC may bypass the proxy — disable QUIC or use HTTP/2&#x0a;• Manual proxy: point browser to 127.0.0.1:&lt;port&gt; (tunnel rules still apply)" />
       </StackPanel>
     </ScrollViewer>
