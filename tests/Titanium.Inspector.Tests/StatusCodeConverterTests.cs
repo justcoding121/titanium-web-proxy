@@ -48,7 +48,7 @@ public class StatusCodeConverterTests
         var other = AssertSolid(StatusCodeBrushConverter.Instance.Convert(0, typeof(IBrush), null, Culture));
 
         Assert.AreEqual(Color.Parse("#888888"), pending.Color);
-        Assert.AreEqual(Color.Parse("#0F7B0F"), success.Color);
+        Assert.AreEqual(Color.Parse("#0A5F0A"), success.Color);
         Assert.AreEqual(Color.Parse("#0078D4"), redirect.Color);
         Assert.AreEqual(Color.Parse("#C19C00"), client.Color);
         Assert.AreEqual(Color.Parse("#C42B1C"), server.Color);
@@ -61,7 +61,7 @@ public class StatusCodeConverterTests
     {
         object boxed = 204;
         var brush = AssertSolid(StatusCodeBrushConverter.Instance.Convert(boxed, typeof(IBrush), null, Culture));
-        Assert.AreEqual(Color.Parse("#0F7B0F"), brush.Color);
+        Assert.AreEqual(Color.Parse("#0A5F0A"), brush.Color);
     }
 
     [TestMethod]
@@ -80,7 +80,7 @@ public class StatusCodeConverterTests
 
         Assert.AreEqual(Color.Parse("#6B6B6B"), neutral.Color);
         Assert.AreEqual(Color.Parse("#0078D4"), busy.Color);
-        Assert.AreEqual(Color.Parse("#0F7B0F"), success.Color);
+        Assert.AreEqual(Color.Parse("#0A5F0A"), success.Color);
         Assert.AreEqual(Color.Parse("#9A6700"), warning.Color);
         Assert.AreEqual(Color.Parse("#C42B1C"), error.Color);
     }

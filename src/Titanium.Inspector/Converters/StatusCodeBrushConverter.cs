@@ -13,7 +13,7 @@ public sealed class StatusCodeBrushConverter : IValueConverter, IMultiValueConve
     public static readonly StatusCodeBrushConverter Instance = new();
 
     private static readonly IBrush FallbackMuted = new SolidColorBrush(Color.Parse("#888888"));
-    private static readonly IBrush FallbackSuccess = new SolidColorBrush(Color.Parse("#0F7B0F"));
+    private static readonly IBrush FallbackSuccess = new SolidColorBrush(Color.Parse("#0A5F0A"));
     private static readonly IBrush FallbackRedirect = new SolidColorBrush(Color.Parse("#0078D4"));
     private static readonly IBrush FallbackClientError = new SolidColorBrush(Color.Parse("#C19C00"));
     private static readonly IBrush FallbackServerError = new SolidColorBrush(Color.Parse("#C42B1C"));

@@ -13,7 +13,7 @@ public sealed class StatusSeverityBrushConverter : IValueConverter
 
     private static readonly IBrush FallbackNeutral = new SolidColorBrush(Color.Parse("#6B6B6B"));
     private static readonly IBrush FallbackBusy = new SolidColorBrush(Color.Parse("#0078D4"));
-    private static readonly IBrush FallbackSuccess = new SolidColorBrush(Color.Parse("#0F7B0F"));
+    private static readonly IBrush FallbackSuccess = new SolidColorBrush(Color.Parse("#0A5F0A"));
     private static readonly IBrush FallbackWarning = new SolidColorBrush(Color.Parse("#9A6700"));
     private static readonly IBrush FallbackError = new SolidColorBrush(Color.Parse("#C42B1C"));
 
