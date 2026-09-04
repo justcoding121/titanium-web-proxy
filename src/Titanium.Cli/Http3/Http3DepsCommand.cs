@@ -71,6 +71,11 @@ internal static class Http3DepsCommand
         AsyncConsole.WriteLine("       Ubuntu/Debian: libnuma1");
         AsyncConsole.WriteLine("       Alpine:        numactl lttng-ust");
         AsyncConsole.WriteLine($"  2) Or run: titanium http3-deps {InstallSubcommand}");
+        if (OperatingSystem.IsMacOS())
+        {
+            AsyncConsole.WriteLine("     macOS: brew install libmsquic openssl@3, then rebuild (Debug copies natives beside the binary).");
+            AsyncConsole.WriteLine("     Alternative: export DYLD_FALLBACK_LIBRARY_PATH=\"$(brew --prefix)/opt/libmsquic/lib:$(brew --prefix)/opt/openssl@3/lib\"");
+        }
         if (OperatingSystem.IsWindows())
         {
             AsyncConsole.WriteLine("  Windows requires Windows 11 or Windows Server 2022+ (OS MsQuic).");
@@ -97,9 +102,10 @@ internal static class Http3DepsCommand
         if (OperatingSystem.IsMacOS())
         {
             return await RunPackageInstallAsync(
-                "brew",
+                ResolveBrewCommand(),
                 [InstallSubcommand, LibMsQuicPackage],
-                $"Homebrew is required: https://brew.sh — then: brew {InstallSubcommand} {LibMsQuicPackage}");
+                $"Homebrew is required: https://brew.sh — then: brew {InstallSubcommand} {LibMsQuicPackage} openssl@3. " +
+                "For local Debug builds, rebuild Inspector/CLI so natives are copied beside the binary.");
         }
 
         if (File.Exists("/etc/alpine-release") || LooksLikeMusl())
@@ -176,13 +182,18 @@ internal static class Http3DepsCommand
 
     private static async Task<int> RunPackageInstallAsync(string fileName, string[] args, string hint)
     {
-        if (!HasCommand(fileName) && fileName != "brew")
+        var isBrew = fileName == "brew" ||
+                     fileName.EndsWith("/brew", StringComparison.Ordinal) ||
+                     fileName.EndsWith("\\brew", StringComparison.Ordinal);
+        if (isBrew)
         {
-            AsyncConsole.WriteError(hint);
-            return 1;
+            if (!HasCommand("brew") && !File.Exists(fileName))
+            {
+                AsyncConsole.WriteError(hint);
+                return 1;
+            }
         }
-
-        if (fileName == "brew" && !HasCommand("brew"))
+        else if (!HasCommand(fileName))
         {
             AsyncConsole.WriteError(hint);
             return 1;
@@ -195,6 +206,30 @@ internal static class Http3DepsCommand
         }
 
         return await RunAsync(fileName, args);
+    }
+
+    /// <summary>Prefer PATH brew, then common prefixes (including user installs under ~/.homebrew).</summary>
+    private static string ResolveBrewCommand()
+    {
+        if (HasCommand("brew"))
+        {
+            return "brew";
+        }
+
+        foreach (var candidate in new[]
+                 {
+                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homebrew", "bin", "brew"),
+                     "/opt/homebrew/bin/brew",
+                     "/usr/local/bin/brew",
+                 })
+        {
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return "brew";
     }
 
     private static async Task<int> RunAsync(string fileName, IReadOnlyList<string> args)

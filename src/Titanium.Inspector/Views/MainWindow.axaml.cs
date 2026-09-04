@@ -41,6 +41,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        MacOsNativeMenu.AttachIfMac(this, MainMenu);
         Closing += OnClosing;
         Opened += OnOpened;
         DataContextChanged += OnDataContextChanged;

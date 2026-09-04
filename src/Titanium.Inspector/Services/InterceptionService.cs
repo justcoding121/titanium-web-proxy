@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Titanium.Inspector.ViewModels;
 using Titanium.Web.Proxy;
@@ -33,6 +34,11 @@ public sealed class InterceptionService : IDisposable
     private readonly ManualResetEventSlim _shutdownCompleted = new(false);
     private string? _rootPfxPath;
     private InspectorSettings? _loggingSettings;
+    private Channel<ProcessResolveWork>? _processResolveChannel;
+    private CancellationTokenSource? _processResolveCts;
+    private Task? _processResolveTask;
+
+    private readonly record struct ProcessResolveWork(SessionSnapshot Snap, Lazy<int> ProcessId);
 
     public InterceptionService(ISystemProxyController? systemProxy = null)
     {
@@ -168,8 +174,12 @@ public sealed class InterceptionService : IDisposable
         _proxy.AddEndPoint(_endPoint);
         _proxy.Start();
         BoundPort = _endPoint.Port;
+        StartProcessResolveWorker();
 
-        IsRootTrusted = UseInMemoryTrustState ? _inMemoryTrusted : IsRootPresentInStore(machineStore: false);
+        // Do not treat Unix store/Keychain presence as SSL trust (see RefreshTrustState).
+        IsRootTrusted = UseInMemoryTrustState
+            ? _inMemoryTrusted
+            : RefreshTrustState(machineStore: false);
 
         TryPruneLegacySharedCrtsOnce();
 
@@ -348,6 +358,7 @@ public sealed class InterceptionService : IDisposable
         _endPoint = null;
         BoundPort = 0;
         _live.Clear();
+        StopProcessResolveWorker();
         IsRootTrusted = false;
         _systemProxyEnabled = false;
         Http3Enabled = false;
@@ -422,24 +433,34 @@ public sealed class InterceptionService : IDisposable
             return true;
         }
 
-        // Already trusted: skip TrustRootCertificate so Windows does not show another
-        // Trusted Root security dialog (or orphan-removal prompt) on repeated Install CA.
+        // Already in the .NET Root store: on Windows that is SSL trust. On macOS/Linux the
+        // cert can sit in Keychain/NSS without "Always Trust" / SSL trust — do not treat
+        // presence alone as trusted (Chrome then gets NET::ERR_CERT_AUTHORITY_INVALID).
         if (IsRootPresentInStore(machineStore))
         {
-            IsRootTrusted = true;
-            if (!OperatingSystem.IsWindows() &&
-                !_proxy.CertificateManager.VerifyOsUserSslTrust())
+            if (OperatingSystem.IsWindows())
             {
-                // .NET store has the cert but Keychain/NSS may still need work.
-                _proxy.CertificateManager.TrustRootCertificate(machineStore);
-                LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
-                IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) || IsRootPresentInStore(machineStore);
-                return IsRootTrusted ||
-                       LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
+                IsRootTrusted = true;
+                LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA already trusted");
+                return true;
             }
 
-            LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA already trusted");
-            return true;
+            if (_proxy.CertificateManager.VerifyOsUserSslTrust())
+            {
+                IsRootTrusted = true;
+                LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA already trusted for SSL");
+                return true;
+            }
+
+            // .NET/Keychain has the cert but SSL trust is incomplete — push OS trust again.
+            _proxy.CertificateManager.TrustRootCertificate(machineStore);
+            LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
+            IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
+                            _proxy.CertificateManager.VerifyOsUserSslTrust();
+            // MacNeedsManualTrustConfirm: cert was added; UI should guide Always Trust then re-verify.
+            // Return true so the recovery loop runs, but keep IsRootTrusted false until verified.
+            return IsRootTrusted ||
+                   LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
         }
 
         _proxy.CertificateManager.TrustRootCertificate(machineStore);
@@ -451,7 +472,8 @@ public sealed class InterceptionService : IDisposable
             return IsRootTrusted;
         }
 
-        IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) || IsRootPresentInStore(machineStore);
+        IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
+                        _proxy.CertificateManager.VerifyOsUserSslTrust();
         // MacNeedsManualTrustConfirm: cert was added; UI should guide Always Trust then re-verify.
         return IsRootTrusted ||
                LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
@@ -477,10 +499,14 @@ public sealed class InterceptionService : IDisposable
 
         var ok = _proxy.CertificateManager.TrustRootCertificateAsAdmin(machineStore);
         LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
-        // On non-Windows, OS trust may succeed even when X509Store presence checks are incomplete.
-        IsRootTrusted = ok && (IsRootPresentInStore(machineStore) || !OperatingSystem.IsWindows());
-        if (ok && !IsRootTrusted)
-            IsRootTrusted = true;
+        if (OperatingSystem.IsWindows())
+        {
+            IsRootTrusted = ok && IsRootPresentInStore(machineStore);
+            return IsRootTrusted;
+        }
+
+        IsRootTrusted = ok && (EvaluateUnixTrustSuccess(LastOsTrustResult) ||
+                               _proxy.CertificateManager.VerifyOsUserSslTrust());
         return IsRootTrusted ||
                LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
     }
@@ -496,10 +522,14 @@ public sealed class InterceptionService : IDisposable
 
         var result = _proxy.CertificateManager.InstallNssCertutilAndRetryUserTrust();
         LastOsTrustResult = result;
-        if (EvaluateUnixTrustSuccess(result) ||
-            result.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+        if (EvaluateUnixTrustSuccess(result))
         {
-            IsRootTrusted = result.Succeeded || IsRootPresentInStore(false);
+            IsRootTrusted = true;
+        }
+        else if (result.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+        {
+            // Cert may be present; SSL trust still requires Always Trust confirmation.
+            IsRootTrusted = _proxy.CertificateManager.VerifyOsUserSslTrust();
         }
 
         return result;
@@ -513,8 +543,12 @@ public sealed class InterceptionService : IDisposable
     {
         if (_proxy is null) return false;
         if (UseInMemoryTrustState) return IsRootTrusted;
-        var ok = _proxy.CertificateManager.VerifyOsUserSslTrust() || IsRootPresentInStore(false);
-        if (ok) IsRootTrusted = true;
+        // Windows: Root store presence is trust. Unix: require real SSL trust verification —
+        // Keychain/NSS can hold the CA without trusting it for SSL (Chrome MITM fails).
+        var ok = OperatingSystem.IsWindows()
+            ? IsRootPresentInStore(false)
+            : _proxy.CertificateManager.VerifyOsUserSslTrust();
+        IsRootTrusted = ok;
         return ok;
     }
 
@@ -685,7 +719,27 @@ public sealed class InterceptionService : IDisposable
 
     public bool RefreshTrustState(bool machineStore = false)
     {
-        IsRootTrusted = UseInMemoryTrustState ? _inMemoryTrusted : IsRootPresentInStore(machineStore);
+        if (UseInMemoryTrustState)
+        {
+            IsRootTrusted = _inMemoryTrusted;
+            return IsRootTrusted;
+        }
+
+        // Windows Root store presence == trust. On macOS/Linux, presence is not enough —
+        // VerifyOsUserSslTrust checks Keychain/NSS SSL trust (security verify-cert / certutil).
+        if (OperatingSystem.IsWindows())
+        {
+            IsRootTrusted = IsRootPresentInStore(machineStore);
+            return IsRootTrusted;
+        }
+
+        if (_proxy is null)
+        {
+            IsRootTrusted = false;
+            return false;
+        }
+
+        IsRootTrusted = _proxy.CertificateManager.VerifyOsUserSslTrust();
         return IsRootTrusted;
     }
 
@@ -800,6 +854,7 @@ public sealed class InterceptionService : IDisposable
             AttachTunnelByteCounters(e, snap);
             _live[e.HttpClient] = snap;
             SessionCaptured?.Invoke(this, snap);
+            ScheduleProcessResolve(snap, e.HttpClient.ProcessId);
         }
         catch
         {
@@ -840,20 +895,6 @@ public sealed class InterceptionService : IDisposable
     private SessionSnapshot CreateTunnelSnapshot(TunnelConnectSessionEventArgs e, OpaqueTunnelReason opaqueReason)
     {
         var req = e.HttpClient.Request;
-        var processId = 0;
-        string? processName = null;
-        try
-        {
-            processId = e.HttpClient.ProcessId.Value;
-            if (processId > 0)
-            {
-                processName = System.Diagnostics.Process.GetProcessById(processId).ProcessName;
-            }
-        }
-        catch
-        {
-            // process may have exited
-        }
 
         return new SessionSnapshot
         {
@@ -864,8 +905,6 @@ public sealed class InterceptionService : IDisposable
             StartedUtc = DateTimeOffset.UtcNow,
             RequestHeadersText = FormatHeaders(req.Headers),
             Protocol = SessionDisplayFormat.FormatHttpProtocol(req.HttpVersion),
-            ProcessId = processId,
-            ProcessName = processName,
             IsTunnel = true,
             OpaqueReason = opaqueReason,
         };
@@ -922,6 +961,7 @@ public sealed class InterceptionService : IDisposable
             var snap = CreatePreviewSnapshot(e, assignId: true);
             _live[e.HttpClient] = snap;
             SessionCaptured?.Invoke(this, snap);
+            ScheduleProcessResolve(snap, e.HttpClient.ProcessId);
         }
         catch (Exception)
         {
@@ -968,6 +1008,7 @@ public sealed class InterceptionService : IDisposable
                 snap = CreatePreviewSnapshot(e, assignId: true);
                 _live[e.HttpClient] = snap;
                 SessionCaptured?.Invoke(this, snap);
+                ScheduleProcessResolve(snap, e.HttpClient.ProcessId);
             }
 
             FillResponse(snap, e);
@@ -1005,20 +1046,6 @@ public sealed class InterceptionService : IDisposable
         var req = e.HttpClient.Request;
         var bodyBytes = req.IsBodyRead ? TruncateBytes(req.Body) : null;
         var bodyText = bodyBytes is null ? null : TruncateText(Encoding.UTF8.GetString(bodyBytes));
-        var processId = 0;
-        string? processName = null;
-        try
-        {
-            processId = e.HttpClient.ProcessId.Value;
-            if (processId > 0)
-            {
-                processName = System.Diagnostics.Process.GetProcessById(processId).ProcessName;
-            }
-        }
-        catch
-        {
-            // process may have exited
-        }
 
         return new SessionSnapshot
         {
@@ -1032,8 +1059,6 @@ public sealed class InterceptionService : IDisposable
             RequestBodyText = bodyText,
             ContentType = req.ContentType,
             Protocol = SessionDisplayFormat.FormatHttpProtocol(req.HttpVersion),
-            ProcessId = processId,
-            ProcessName = processName,
             IsTunnel = req.Method?.Equals("CONNECT", StringComparison.OrdinalIgnoreCase) == true,
             IsWebSocket = req.UpgradeToWebSocket,
             IsGrpc = req.ContentType?.Contains("grpc", StringComparison.OrdinalIgnoreCase) == true,
@@ -1045,6 +1070,121 @@ public sealed class InterceptionService : IDisposable
 
     /// <summary>Reset the session ID sequence (tests / clear-sessions).</summary>
     public void ResetSessionIdSequence() => Interlocked.Exchange(ref _nextId, 0);
+
+    private void StartProcessResolveWorker()
+    {
+        StopProcessResolveWorker();
+        if (!ClientProcessId.IsSupported)
+        {
+            return;
+        }
+
+        var channel = Channel.CreateUnbounded<ProcessResolveWork>(new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = false,
+            AllowSynchronousContinuations = false,
+        });
+        var cts = new CancellationTokenSource();
+        _processResolveChannel = channel;
+        _processResolveCts = cts;
+        _processResolveTask = Task.Run(() => ProcessResolveLoopAsync(channel.Reader, cts.Token), cts.Token);
+    }
+
+    private void StopProcessResolveWorker()
+    {
+        var cts = _processResolveCts;
+        var channel = _processResolveChannel;
+        _processResolveCts = null;
+        _processResolveChannel = null;
+        _processResolveTask = null;
+
+        try
+        {
+            channel?.Writer.TryComplete();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        try
+        {
+            cts?.Cancel();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        cts?.Dispose();
+    }
+
+    private void ScheduleProcessResolve(SessionSnapshot snap, Lazy<int> processId)
+    {
+        var channel = _processResolveChannel;
+        if (channel is null)
+        {
+            return;
+        }
+
+        channel.Writer.TryWrite(new ProcessResolveWork(snap, processId));
+    }
+
+    private async Task ProcessResolveLoopAsync(
+        ChannelReader<ProcessResolveWork> reader,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await foreach (var work in reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+                try
+                {
+                    var processId = work.ProcessId.Value;
+                    string? processName = null;
+                    if (processId > 0)
+                    {
+                        try
+                        {
+                            processName = System.Diagnostics.Process.GetProcessById(processId).ProcessName;
+                        }
+                        catch
+                        {
+                            // process may have exited; keep pid when known
+                        }
+                    }
+
+                    if (processId <= 0 && string.IsNullOrEmpty(processName))
+                    {
+                        continue;
+                    }
+
+                    if (work.Snap.ProcessId == processId &&
+                        string.Equals(work.Snap.ProcessName, processName, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    work.Snap.ProcessId = processId > 0 ? processId : 0;
+                    work.Snap.ProcessName = processName;
+                    SessionUpdated?.Invoke(this, work.Snap);
+                }
+                catch
+                {
+                    // never break the resolve loop for a single session
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // expected on stop
+        }
+        catch (ChannelClosedException)
+        {
+            // expected on stop
+        }
+    }
 
     private static void FillResponse(SessionSnapshot snap, SessionEventArgs e)
     {

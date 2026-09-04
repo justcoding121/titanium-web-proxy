@@ -2520,6 +2520,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 }
             }
 
+            // Re-verify after recovery: macOS can report "installed" before Always Trust.
+            if (!_interception.VerifyOsUserSslTrust() && !OperatingSystem.IsWindows())
+            {
+                StatusText = "Root CA needs Always Trust in Keychain Access before Decrypt HTTPS";
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+                return;
+            }
+
             SetDecryptHttpsCore(true);
             StatusText = "Decrypting HTTPS";
         }

@@ -30,4 +30,11 @@
   <ItemGroup>
     <PackageReference Include="Certes" Version="3.0.4" />
   </ItemGroup>
+  <!-- Local macOS Debug/dotnet run: copy Homebrew MsQuic beside the apphost (Release zips use bundle-http3-native.ps1). -->
+  <Target Name="CopyMacHttp3Natives" AfterTargets="Build" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <Exec Command="bash &quot;$(MSBuildThisFileDirectory)..\..\tools\packaging\copy-http3-natives-osx.sh&quot; &quot;$(TargetDir)&quot;"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low" />
+  </Target>
 </Project>

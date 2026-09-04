@@ -350,7 +350,13 @@ internal static class UnixCertificateTrust
         if (which is { Succeeded: true } && !string.IsNullOrWhiteSpace(which.StandardOutput))
             return which.StandardOutput.Trim().Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)[0];
 
-        foreach (var candidate in new[] { "/opt/homebrew/bin/brew", "/usr/local/bin/brew" })
+        foreach (var candidate in new[]
+                 {
+                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                         ".homebrew", "bin", "brew"),
+                     "/opt/homebrew/bin/brew",
+                     "/usr/local/bin/brew",
+                 })
         {
             if (File.Exists(candidate))
                 return candidate;
