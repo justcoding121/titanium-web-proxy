@@ -748,15 +748,15 @@ public sealed class InterceptionService : IDisposable
     {
         var b64 = Convert.ToBase64String(der);
         var sb = new StringBuilder(b64.Length + 64);
-        sb.AppendLine("-----BEGIN CERTIFICATE-----");
+        sb.Append("-----BEGIN CERTIFICATE-----\n");
         for (var i = 0; i < b64.Length; i += 64)
         {
             var len = Math.Min(64, b64.Length - i);
             sb.Append(b64, i, len);
-            sb.AppendLine();
+            sb.Append('\n');
         }
 
-        sb.AppendLine("-----END CERTIFICATE-----");
+        sb.Append("-----END CERTIFICATE-----\n");
         return sb.ToString();
     }
 

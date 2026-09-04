@@ -20,12 +20,28 @@ public class InspectorPathPickerAndFactoryTests
         Assert.AreEqual(@"C:\tmp\in.har", await picker.PickOpenPathAsync("t", "HAR", "*.har"));
         Assert.AreEqual(1, picker.SaveCalls);
         Assert.AreEqual(1, picker.OpenCalls);
+        Assert.AreEqual(1, picker.LastSaveFileTypes!.Count);
+        Assert.AreEqual("HAR", picker.LastSaveFileTypes[0].Name);
+
+        picker.SavePath = @"C:\tmp\ca.pem";
+        Assert.AreEqual(
+            @"C:\tmp\ca.pem",
+            await picker.PickSavePathAsync(
+                "Export root CA",
+                "TitaniumInspector-RootCA.cer",
+                [
+                    new PathPickerFileType("Certificate", "*.cer"),
+                    new PathPickerFileType("PEM", "*.pem"),
+                ]));
+        Assert.AreEqual(2, picker.SaveCalls);
+        Assert.AreEqual(2, picker.LastSaveFileTypes!.Count);
+        Assert.AreEqual("*.pem", picker.LastSaveFileTypes[1].Pattern);
 
         picker.SavePath = null;
         picker.OpenPath = null;
         Assert.IsNull(await picker.PickSavePathAsync("t", "x.har", "HAR", "*.har"));
         Assert.IsNull(await picker.PickOpenPathAsync("t", "HAR", "*.har"));
-        Assert.AreEqual(2, picker.SaveCalls);
+        Assert.AreEqual(3, picker.SaveCalls);
         Assert.AreEqual(2, picker.OpenCalls);
     }
 

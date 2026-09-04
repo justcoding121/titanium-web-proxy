@@ -85,6 +85,10 @@ public class InspectorFeatureSanityE2ETests
             await WaitAsync(() => vm.StatusText.Contains("Exported CA", StringComparison.Ordinal));
             Assert.IsTrue(File.Exists(exportCaPath), vm.StatusText);
             Assert.AreEqual(1, pathPicker.SaveCalls);
+            Assert.IsNotNull(pathPicker.LastSaveFileTypes);
+            Assert.AreEqual(2, pathPicker.LastSaveFileTypes!.Count);
+            Assert.AreEqual("*.cer", pathPicker.LastSaveFileTypes[0].Pattern);
+            Assert.AreEqual("*.pem", pathPicker.LastSaveFileTypes[1].Pattern);
 
             vm.ClearSessionsCommand.Execute(null);
             await Task.Delay(50);
