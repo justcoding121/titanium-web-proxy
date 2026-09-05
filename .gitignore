@@ -231,6 +231,10 @@ tmp/
 # Local one-off probes (not part of the product tree)
 tools/_H3UpgradeProbeLocal/
 
+# Regenerated on macOS build with absolute DYLD_FALLBACK_LIBRARY_PATH for local HTTP/3
+src/Titanium.Inspector/Properties/launchSettings.json
+src/Titanium.Cli/Properties/launchSettings.json
+
 # VitePress site (website/)
 website/.vitepress/dist/
 website/.vitepress/cache/

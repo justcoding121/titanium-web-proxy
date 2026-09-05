@@ -43,5 +43,13 @@
           IgnoreExitCode="true"
           StandardOutputImportance="low"
           StandardErrorImportance="low" />
+    <!-- Avoid a re-exec when launching via `dotnet run` / IDE: Quic only dlopen()s by leaf name. -->
+    <PropertyGroup>
+      <_Http3LaunchSettings>$(MSBuildProjectDirectory)\Properties\launchSettings.json</_Http3LaunchSettings>
+      <_Http3TargetDir>$([System.IO.Path]::GetFullPath('$(TargetDir)').TrimEnd('\').TrimEnd('/'))</_Http3TargetDir>
+    </PropertyGroup>
+    <MakeDir Directories="$(MSBuildProjectDirectory)\Properties" />
+    <WriteLinesToFile File="$(_Http3LaunchSettings)" Overwrite="true" Encoding="UTF-8"
+      Lines='{"profiles":{"TitaniumInspector":{"commandName":"Project","environmentVariables":{"DYLD_FALLBACK_LIBRARY_PATH":"$(_Http3TargetDir)"}}}}' />
   </Target>
 </Project>

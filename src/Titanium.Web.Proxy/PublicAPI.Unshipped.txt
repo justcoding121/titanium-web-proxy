@@ -217,3 +217,5 @@ static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToGsettingsArray(string?
 static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv(string? winInetProxyOverride) -> string!
 static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv(string? winInetProxyOverride, bool proxyLoopback) -> string!
 static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToUnixBypassHosts(string? winInetProxyOverride) -> System.Collections.Generic.IReadOnlyList<string!>!
+Titanium.Web.Proxy.Http3.Http3NativeBootstrap
+static Titanium.Web.Proxy.Http3.Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(string![]? args = null) -> void

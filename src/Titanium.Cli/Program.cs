@@ -1,6 +1,7 @@
 using Titanium.Cli.Config;
 using Titanium.Cli.Http3;
 using Titanium.Cli.Updates;
+using Titanium.Web.Proxy.Http3;
 
 namespace Titanium.Cli;
 
@@ -8,6 +9,9 @@ internal static class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        // Framework-dependent macOS Debug: make app-local libmsquic visible to QuicListener.
+        Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(args);
+
         try
         {
             if (args.Length == 0)

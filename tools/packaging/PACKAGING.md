@@ -126,6 +126,10 @@ See [`.github/workflows/release.yml`](../../.github/workflows/release.yml):
 
 Native bundling runs on **release** only (not every PR).
 
+### Local macOS Debug / `dotnet run`
+
+`copy-http3-natives-osx.sh` (Inspector + CLI `CopyMacHttp3Natives` target) copies Homebrew MsQuic + OpenSSL beside `$(TargetDir)` with `@loader_path` rewrites. Framework-dependent hosts still need that directory on `DYLD_FALLBACK_LIBRARY_PATH` because `System.Net.Quic` loads MsQuic by leaf name only. Inspector/CLI call `Http3NativeBootstrap.EnsureAppLocalMsQuicVisible` at startup (and regenerate gitignored `Properties/launchSettings.json`) so a normal Debug launch enables HTTP/3 after `brew install libmsquic openssl@3`. Self-contained RID publishes do not need the re-exec path.
+
 ## Quarterly lock-file bump (CVE ownership)
 
 Bundling OpenSSL/MsQuic means **this repo owns CVE patching** for those versions in distributed zips.

@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using Avalonia;
+using Titanium.Web.Proxy.Http3;
 
 namespace Titanium.Inspector;
 
@@ -8,8 +9,13 @@ namespace Titanium.Inspector;
 internal static class Program
 {
     [STAThread]
-    public static void Main(string[] args) =>
+    public static void Main(string[] args)
+    {
+        // Framework-dependent macOS Debug: System.Net.Quic does not search BaseDirectory for
+        // libmsquic; relaunch with DYLD_FALLBACK when natives were copied beside the apphost.
+        Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(args);
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    }
 
     public static AppBuilder BuildAvaloniaApp()
     {

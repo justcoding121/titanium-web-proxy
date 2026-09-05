@@ -73,8 +73,10 @@ internal static class Http3DepsCommand
         AsyncConsole.WriteLine($"  2) Or run: titanium http3-deps {InstallSubcommand}");
         if (OperatingSystem.IsMacOS())
         {
-            AsyncConsole.WriteLine("     macOS: brew install libmsquic openssl@3, then rebuild (Debug copies natives beside the binary).");
-            AsyncConsole.WriteLine("     Alternative: export DYLD_FALLBACK_LIBRARY_PATH=\"$(brew --prefix)/opt/libmsquic/lib:$(brew --prefix)/opt/openssl@3/lib\"");
+            AsyncConsole.WriteLine("     macOS: brew install libmsquic openssl@3, then rebuild (copies natives beside the binary).");
+            AsyncConsole.WriteLine("     Framework-dependent Debug also needs those libs on DYLD_FALLBACK_LIBRARY_PATH;");
+            AsyncConsole.WriteLine("     Inspector/CLI re-launch with that automatically (or use `dotnet run` launchSettings).");
+            AsyncConsole.WriteLine("     Manual: export DYLD_FALLBACK_LIBRARY_PATH=\"$(brew --prefix)/opt/libmsquic/lib:$(brew --prefix)/opt/openssl@3/lib\"");
         }
         if (OperatingSystem.IsWindows())
         {

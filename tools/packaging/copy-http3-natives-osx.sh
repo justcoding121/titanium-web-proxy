@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Copy Homebrew MsQuic + OpenSSL into an output folder with @loader_path so
-# System.Net.Quic.QuicListener.IsSupported works for local Debug/dotnet run builds
-# (Release zips use bundle-http3-native.ps1 instead).
+# local Debug/Release builds can load them (Release RID zips use bundle-http3-native.ps1).
+#
+# Note: framework-dependent (typical `dotnet build` / `dotnet run`) hosts still need the
+# app directory on DYLD_FALLBACK_LIBRARY_PATH — System.Net.Quic only dlopen()s by leaf name
+# on macOS and does not search AppContext.BaseDirectory. Inspector/CLI call
+# Http3NativeBootstrap (or use generated launchSettings) for that.
 set -euo pipefail
 
 OUT_DIR="${1:-}"
@@ -76,22 +80,35 @@ for f in libmsquic.2.6.1.dylib libmsquic.2.dylib libmsquic.dylib libssl.3.dylib 
   rewrite_id "$OUT_DIR/$f"
 done
 
-# Point msquic / libssl at local libcrypto (absolute Homebrew paths or placeholders).
-retarget_crypto() {
+# Match Release bundler: retarget libmsquic / libssl / libcrypto deps to @loader_path.
+retarget_http3_deps() {
   local f="$1"
-  local dep
+  local dep leaf
   while IFS= read -r dep; do
     [[ -z "$dep" ]] && continue
-    case "$dep" in
-      *libcrypto*)
-        install_name_tool -change "$dep" "@loader_path/libcrypto.3.dylib" "$f" 2>/dev/null || true
+    leaf="$(basename "$dep")"
+    case "$leaf" in
+      libmsquic*|libssl*|libcrypto*)
+        if [[ -f "$OUT_DIR/$leaf" || "$leaf" == libmsquic* || "$leaf" == libssl* || "$leaf" == libcrypto* ]]; then
+          # Prefer the stable names we copied when the dep leaf is a versioned symlink name.
+          if [[ ! -f "$OUT_DIR/$leaf" ]]; then
+            case "$leaf" in
+              libmsquic*) leaf="libmsquic.dylib" ;;
+              libssl*) leaf="libssl.3.dylib" ;;
+              libcrypto*) leaf="libcrypto.3.dylib" ;;
+            esac
+          fi
+          if [[ -f "$OUT_DIR/$leaf" && "$dep" != "@loader_path/$leaf" ]]; then
+            install_name_tool -change "$dep" "@loader_path/$leaf" "$f" 2>/dev/null || true
+          fi
+        fi
         ;;
     esac
   done < <(otool -L "$f" | awk 'NR>1 {print $1}')
 }
 
-for f in libmsquic.2.6.1.dylib libmsquic.2.dylib libmsquic.dylib libssl.3.dylib; do
-  retarget_crypto "$OUT_DIR/$f"
+for f in libmsquic.2.6.1.dylib libmsquic.2.dylib libmsquic.dylib libssl.3.dylib libcrypto.3.dylib; do
+  retarget_http3_deps "$OUT_DIR/$f"
 done
 
 if command -v codesign >/dev/null 2>&1; then
