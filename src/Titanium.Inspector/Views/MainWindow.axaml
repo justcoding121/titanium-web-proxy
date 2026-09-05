@@ -16,6 +16,8 @@
         <MenuItem Header="Export all archive…" Command="{Binding ExportArchiveCommand}" AutomationProperties.AutomationId="MenuExportArchive" />
         <MenuItem Header="Export selected archive…" Command="{Binding ExportSelectedArchiveCommand}" AutomationProperties.AutomationId="MenuExportSelectedArchive" />
         <MenuItem Header="Import archive…" Command="{Binding ImportArchiveCommand}" AutomationProperties.AutomationId="MenuImportArchive" />
+        <Separator />
+        <MenuItem Header="E_xit" Command="{Binding ExitCommand}" AutomationProperties.AutomationId="MenuExit" />
       </MenuItem>
       <MenuItem Header="_Capture" AutomationProperties.AutomationId="MenuCapture">
         <MenuItem Header="Start proxy" Command="{Binding StartCaptureCommand}" AutomationProperties.AutomationId="MenuStartCapture" />

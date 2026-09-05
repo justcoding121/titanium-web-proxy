@@ -166,6 +166,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _exportSelectedArchiveCommand = Cmd(async () => await ExportSelectedArchiveAsync(), () => HasSelectedSessions);
         ExportSelectedArchiveCommand = _exportSelectedArchiveCommand;
         ImportArchiveCommand = Cmd(async () => await ImportArchiveAsync());
+        ExitCommand = Cmd(ExitAsync);
         StartCaptureCommand = Cmd(async () => await StartCaptureAsync());
         StopCaptureCommand = Cmd(StopCaptureAsync);
         ToggleInterceptCommand = Cmd(ToggleInterceptAsync);
@@ -1773,6 +1774,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand ExportArchiveCommand { get; }
     public ICommand ExportSelectedArchiveCommand { get; }
     public ICommand ImportArchiveCommand { get; }
+    public ICommand ExitCommand { get; }
     public ICommand StartCaptureCommand { get; }
     public ICommand StopCaptureCommand { get; }
     public ICommand ToggleInterceptCommand { get; }
@@ -3006,6 +3008,25 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         {
             TryGetMainWindow()?.Close();
         }
+    }
+
+    private Task ExitAsync()
+    {
+        // Close the main window so OnClosing runs BeginBackgroundShutdown (system proxy restore).
+        var window = TryGetMainWindow();
+        if (window is not null)
+        {
+            window.Close();
+            return Task.CompletedTask;
+        }
+
+        BeginBackgroundShutdown();
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            desktop.Shutdown();
+        }
+
+        return Task.CompletedTask;
     }
 
     private async Task StartCaptureAsync()
