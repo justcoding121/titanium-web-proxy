@@ -54,16 +54,22 @@ internal static class LinuxBrowserLaunchProxy
     /// <summary>Returns true when at least one browser-launch hook was written and re-validated.</summary>
     internal static bool Apply(string hostname, int port)
     {
-        var policyOk = WritePolicies(hostname, port) > 0;
-        var desktopOk = WriteBrowserDesktopOverrides(hostname, port) > 0;
+        var policyCount = WritePolicies(hostname, port);
+        var policyOk = policyCount > 0;
+        var desktopCount = WriteBrowserDesktopOverrides(hostname, port);
+        var desktopOk = desktopCount > 0;
         var xfceOk = WriteXfceWebBrowserHelper(hostname, port);
+        var profileCount = LinuxChromeProfileProxy.Apply(hostname, port);
+        var profileOk = profileCount > 0;
         if (desktopOk)
             TryUpdateDesktopDatabase();
-        return policyOk || desktopOk || xfceOk;
+        return policyOk || desktopOk || xfceOk || profileOk;
     }
 
     internal static void Clear()
     {
+        LinuxChromeProfileProxy.Clear();
+
         foreach (var dir in PolicyDirectories())
         {
             try
