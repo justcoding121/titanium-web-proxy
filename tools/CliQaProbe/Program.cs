@@ -82,7 +82,7 @@ internal static class Program
               service        Service status-missing + unelevated install message;
                              with --elevated: install/start/HTTP/stop/uninstall
                              (name titanium-qa-probe only)
-              core           Help + dialects + forward/nginx/static/mitm/logging
+              core           Help + dialects + forward/conf/static/mitm/logging
               all            core + sitefile/routes/tls/http2/plus/meta + unelevated
                              service checks; --elevated adds live SCM lifecycle
 

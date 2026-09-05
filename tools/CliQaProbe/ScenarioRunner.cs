@@ -166,7 +166,7 @@ public static class ScenarioRunner
             fails += await TestOk(log, spawn, "test-yaml", ConfigWriter.WriteForwardHost(temp, listen, origin.Port));
             fails += await TestOk(log, spawn, "test-json", ConfigWriter.WriteRoutes(temp, CliSpawn.GetFreePort(), origin.Port));
             fails += await TestOk(log, spawn, "test-twp", ConfigWriter.WriteSiteFileListenForward(temp, CliSpawn.GetFreePort(), origin.Port));
-            fails += await TestOk(log, spawn, "test-nginx", ConfigWriter.WriteHttpServerConf(temp, CliSpawn.GetFreePort(), origin.Port));
+            fails += await TestOk(log, spawn, "test-conf", ConfigWriter.WriteHttpServerConf(temp, CliSpawn.GetFreePort(), origin.Port));
 
             var invalid = ConfigWriter.WriteInvalid(temp);
             var (code, _, stderr) = await spawn.RunOnceAsync(["test", "-c", invalid]);
@@ -186,7 +186,7 @@ public static class ScenarioRunner
     {
         var fails = 0;
         fails += await RunForwardAsync(log);
-        fails += await RunNginxAsync(log);
+        fails += await RunConfAsync(log);
         fails += await RunStaticAsync(log);
         return fails == 0 ? 0 : 1;
     }
@@ -204,7 +204,7 @@ public static class ScenarioRunner
         return fails == 0 ? 0 : 1;
     }
 
-    /// <summary>Subset for <c>core</c>: mitm + logging (forward/nginx/static already run).</summary>
+    /// <summary>Subset for <c>core</c>: mitm + logging (forward/conf/static already run).</summary>
     public static async Task<int> RunCoreTrafficExtrasAsync(ProbeLog log)
     {
         var fails = 0;
@@ -438,7 +438,7 @@ public static class ScenarioRunner
         }
     }
 
-    private static async Task<int> RunNginxAsync(ProbeLog log)
+    private static async Task<int> RunConfAsync(ProbeLog log)
     {
         using var origin = new EchoOrigin();
         var temp = MakeTemp();
@@ -450,13 +450,14 @@ public static class ScenarioRunner
             await spawn.StartRunAsync(cfg);
             using var http = CreateDirectHttp();
             var resp = await http.GetAsync($"http://127.0.0.1:{listen}/conf");
-            var ok = resp.StatusCode == HttpStatusCode.OK;
-            log.Step("run-nginx", ok, $"status={(int)resp.StatusCode}");
+            var body = await resp.Content.ReadAsStringAsync();
+            var ok = resp.StatusCode == HttpStatusCode.OK && body.Contains("echo:", StringComparison.Ordinal);
+            log.Step("run-conf", ok, $"status={(int)resp.StatusCode} body={Trim(body)}");
             return ok ? 0 : 1;
         }
         catch (Exception ex)
         {
-            log.Step("run-nginx", false, ex.Message);
+            log.Step("run-conf", false, ex.Message);
             return 1;
         }
         finally
@@ -477,8 +478,9 @@ public static class ScenarioRunner
             await spawn.StartRunAsync(cfg);
             using var http = CreateDirectHttp();
             var resp = await http.GetAsync($"http://127.0.0.1:{listen}/site");
-            var ok = resp.StatusCode == HttpStatusCode.OK;
-            log.Step("run-sitefile", ok, $"status={(int)resp.StatusCode}");
+            var body = await resp.Content.ReadAsStringAsync();
+            var ok = resp.StatusCode == HttpStatusCode.OK && body.Contains("echo:", StringComparison.Ordinal);
+            log.Step("run-sitefile", ok, $"status={(int)resp.StatusCode} body={Trim(body)}");
             return ok ? 0 : 1;
         }
         catch (Exception ex)
@@ -504,8 +506,9 @@ public static class ScenarioRunner
             await spawn.StartRunAsync(cfg);
             using var http = CreateProxyHttp(listen);
             var resp = await http.GetAsync($"http://127.0.0.1:{origin.Port}/routed");
-            var ok = resp.StatusCode == HttpStatusCode.OK;
-            log.Step("run-routes", ok, $"status={(int)resp.StatusCode}");
+            var body = await resp.Content.ReadAsStringAsync();
+            var ok = resp.StatusCode == HttpStatusCode.OK && body.Contains("echo:", StringComparison.Ordinal);
+            log.Step("run-routes", ok, $"status={(int)resp.StatusCode} body={Trim(body)}");
             return ok ? 0 : 1;
         }
         catch (Exception ex)
@@ -577,8 +580,9 @@ public static class ScenarioRunner
             };
             using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
             var resp = await http.GetAsync($"https://localhost:{listen}/tls");
-            var ok = resp.StatusCode == HttpStatusCode.OK;
-            log.Step("run-tls", ok, $"status={(int)resp.StatusCode}");
+            var body = await resp.Content.ReadAsStringAsync();
+            var ok = resp.StatusCode == HttpStatusCode.OK && body.Contains("echo:", StringComparison.Ordinal);
+            log.Step("run-tls", ok, $"status={(int)resp.StatusCode} body={Trim(body)}");
             return ok ? 0 : 1;
         }
         catch (Exception ex)
@@ -632,8 +636,9 @@ public static class ScenarioRunner
             await spawn.StartRunAsync(cfg);
             using var http = CreateDirectHttp();
             var resp = await http.GetAsync($"http://127.0.0.1:{listen}/flags");
-            var ok = resp.StatusCode == HttpStatusCode.OK;
-            log.Step("run-http2-off", ok, $"status={(int)resp.StatusCode}");
+            var body = await resp.Content.ReadAsStringAsync();
+            var ok = resp.StatusCode == HttpStatusCode.OK && body.Contains("echo:", StringComparison.Ordinal);
+            log.Step("run-http2-off", ok, $"status={(int)resp.StatusCode} body={Trim(body)}");
             return ok ? 0 : 1;
         }
         catch (Exception ex)
@@ -684,15 +689,15 @@ public static class ScenarioRunner
                 await Task.Delay(200);
             }
 
-            // Fallback: stdout already proved running via StartRunAsync
-            if (!found && File.Exists(logFile))
+            // Require a real log marker — empty/partial file is a fail.
+            if (!found)
             {
-                found = true;
-                detail = "file created (stdout already had running)";
+                log.Step("run-logging", false, detail);
+                return 1;
             }
 
-            log.Step("run-logging", found, detail);
-            return found ? 0 : 1;
+            log.Step("run-logging", true, detail);
+            return 0;
         }
         catch (Exception ex)
         {
@@ -742,15 +747,25 @@ public static class ScenarioRunner
             {
                 auth.Headers.Add("X-Titanium-Control-Secret", secret);
                 var snap = await plain.SendAsync(auth);
-                var ok = snap.StatusCode == HttpStatusCode.OK;
-                log.Step("run-plus", ok, $"401 then {(int)snap.StatusCode}");
-                return ok ? 0 : 1;
+                if (snap.StatusCode != HttpStatusCode.OK)
+                {
+                    log.Step("run-plus", false, $"expected 200 snapshot got {(int)snap.StatusCode}");
+                    return 1;
+                }
             }
+
+            // Proxied traffic through the same CLI process (user-like path).
+            using var traffic = CreateDirectHttp();
+            var proxied = await traffic.GetAsync($"http://127.0.0.1:{listen}/plus");
+            var body = await proxied.Content.ReadAsStringAsync();
+            var ok = proxied.StatusCode == HttpStatusCode.OK && body.Contains("echo:", StringComparison.Ordinal);
+            log.Step("run-plus", ok, $"401/200 control + proxied status={(int)proxied.StatusCode}");
+            return ok ? 0 : 1;
         }
         catch (Exception ex)
         {
-            log.Step("run-plus", true, "soft skip: " + ex.Message, skipped: true);
-            return 0;
+            log.Step("run-plus", false, ex.Message);
+            return 1;
         }
         finally
         {

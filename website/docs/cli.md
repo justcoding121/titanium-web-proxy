@@ -172,7 +172,7 @@ Enable in config (`plus.enabled: true` + control-plane shared secret). Details: 
 |-----------|---------|
 | `.yaml` / `.yml` / `.json` | Native `twp` schema 7.0 |
 | `.twp` | Compact site-file (`host / => http://origin`) |
-| `.conf` | nginx-ish (`listen`, `server_name`, `location`, `proxy_pass`) |
+| `.conf` | HTTP-server style (`listen`, `server_name`, `location`, `proxy_pass`) for familiar reverse-proxy configs |
 
 ## See also
 

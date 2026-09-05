@@ -28,8 +28,8 @@ dotnet run --project tools/CliQaProbe -- service --elevated
 |------|--------|
 | Nested help | root, run/test/version/update/http3-deps/service/install/start `--help` |
 | Meta | `version`, `version --check` (soft), `http3-deps status` (never install) |
-| `test` dialects | yaml / json / twp / nginx + invalid |
-| Live `run` | forward, nginx `.conf`, site-file listen+forward, routes, static+ETag, TLS leaf, MITM→local HTTPS echo, http2-off, file logging, Plus soft |
+| `test` dialects | yaml / json / twp / `.conf` (http-server) + invalid |
+| Live `run` | forward, `.conf` reverse, site-file listen+forward, routes, static+ETag, TLS leaf, MITM→local HTTPS echo, http2-off, file logging, Plus soft |
 | OS service | status missing; unelevated install message; `--elevated` install→start→HTTP→stop→uninstall as **`titanium-qa-probe` only** |
 
 Skipped (already unit/E2E): factory `binPath` snapshots, flag parse unit tests, live `update` / `http3-deps install`.
