@@ -144,27 +144,33 @@ public partial class ProxyServer
                         // The client leg here is genuine HTTP/1.1 wire bytes (this bridge only changes
                         // what the *origin* connection speaks), so the same wire-framing rules as
                         // RequestHandler apply before anything observes pre-normalization values.
-                        try
+                        // Fast path (probe / no handlers): skip validator + SetOriginalHeaders copies —
+                        // Mac dual-TLS H1→H2 residual is multiplex, but every keep-alive still paid
+                        // framing + original-header snapshot Gen0 with no user-visible benefit.
+                        if (!args.IsFastPath)
                         {
-                            Http1FramingValidator.Validate(request, ResolveHttp1WireFramingSource(args),
-                                args.Server.PolicyModes.AllowAmbiguousFraming);
-                        }
-                        catch (Http1FramingException framingEx)
-                        {
-                            ProxyMetrics.ParserError("framing");
-                            args.HttpClient.Response = new GenericResponse(framingEx.StatusCode)
+                            try
                             {
-                                HttpVersion = request.HttpVersion
-                            };
-                            args.HttpClient.Response.Headers.AddHeader(KnownHeaders.Connection,
-                                KnownHeaders.ConnectionClose);
-                            closeConnection = true;
-                            await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
-                            args.IsClientResponseCommitted = true;
-                            return;
-                        }
+                                Http1FramingValidator.Validate(request, ResolveHttp1WireFramingSource(args),
+                                    args.Server.PolicyModes.AllowAmbiguousFraming);
+                            }
+                            catch (Http1FramingException framingEx)
+                            {
+                                ProxyMetrics.ParserError("framing");
+                                args.HttpClient.Response = new GenericResponse(framingEx.StatusCode)
+                                {
+                                    HttpVersion = request.HttpVersion
+                                };
+                                args.HttpClient.Response.Headers.AddHeader(KnownHeaders.Connection,
+                                    KnownHeaders.ConnectionClose);
+                                closeConnection = true;
+                                await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                                args.IsClientResponseCommitted = true;
+                                return;
+                            }
 
-                        request.SetOriginalHeaders();
+                            request.SetOriginalHeaders();
+                        }
 
                         // Fill default Host before BeforeRequest so handlers can read or override it.
                         if (!args.IsTransparent && !args.IsSocks && request.Host == null)
