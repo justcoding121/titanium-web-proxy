@@ -99,6 +99,13 @@ public sealed class CertificateManager : IDisposable
     public static bool SuppressInteractiveRootStoreMutations { get; set; }
 
     /// <summary>
+    ///     True when Root-store Add/Remove should be skipped to avoid modal CryptUI prompts
+    ///     (static flag, CI env, or <c>TITANIUM_SKIP_ROOT_STORE_UI=1</c>).
+    /// </summary>
+    public static bool AreInteractiveRootStoreMutationsSuppressed =>
+        ShouldSuppressInteractiveRootStoreMutations;
+
+    /// <summary>
     ///     True when Root-store Add/Remove should be skipped to avoid modal CryptUI prompts.
     /// </summary>
     internal static bool ShouldSuppressInteractiveRootStoreMutations =>
@@ -1407,6 +1414,15 @@ public sealed class CertificateManager : IDisposable
         // On macOS/Linux, also trust for SSL in Keychain / NSS so browsers accept MITM.
         if (!RunTime.IsWindows && RootCertificate != null)
         {
+            // Unit/CI: never open Keychain auth, polkit, or NSS package install dialogs.
+            if (ShouldSuppressInteractiveRootStoreMutations)
+            {
+                LastOsTrustResult = CertificateOsTrustResult.Fail(
+                    CertificateOsTrustKind.Cancelled,
+                    "OS SSL trust skipped (interactive root-store UI suppressed)");
+                return;
+            }
+
             LastOsTrustResult = Helpers.UnixCertificateTrust.TrustUserSsl(RootCertificate, RootCertificateName);
             if (!machineTrusted)
                 return;
@@ -1436,6 +1452,14 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     public CertificateOsTrustResult InstallNssCertutilAndRetryUserTrust()
     {
+        if (ShouldSuppressInteractiveRootStoreMutations)
+        {
+            LastOsTrustResult = CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Cancelled,
+                "NSS certutil install skipped (interactive root-store UI suppressed)");
+            return LastOsTrustResult;
+        }
+
         var install = Helpers.UnixCertificateTrust.TryInstallNssCertutil();
         if (!install.Succeeded)
         {
@@ -1485,6 +1509,7 @@ public sealed class CertificateManager : IDisposable
     public string? OpenMacKeychainGuidance()
     {
         if (RootCertificate == null || !RunTime.IsMac) return null;
+        if (ShouldSuppressInteractiveRootStoreMutations) return null;
         return Helpers.UnixCertificateTrust.OpenMacKeychainGuidanceForCertificate(RootCertificate);
     }
 
@@ -1507,6 +1532,15 @@ public sealed class CertificateManager : IDisposable
         var rootAdded = InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
         if (rootAdded)
             RemoveOrphanedSameCommonNameCertificates(StoreLocation.CurrentUser, keepCurrentThumbprint: true);
+
+        // UAC / Keychain auth / polkit — never in unit/CI (hangs unattended runs).
+        if (ShouldSuppressInteractiveRootStoreMutations)
+        {
+            LastOsTrustResult = CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Cancelled,
+                "Elevated root trust skipped (interactive root-store UI suppressed)");
+            return false;
+        }
 
         if (!RunTime.IsWindows)
         {
@@ -1534,10 +1568,6 @@ public sealed class CertificateManager : IDisposable
 
             return true;
         }
-
-        // Elevated certutil shows UAC; skip in CI / test processes that suppress Root UI.
-        if (ShouldSuppressInteractiveRootStoreMutations)
-            return false;
 
         // certutil.exe only accepts the PFX password via a plain "-p password" command-line argument -
         // it has no file/stdin-based alternative (confirmed: no documented option to read it from a
@@ -1661,7 +1691,8 @@ public sealed class CertificateManager : IDisposable
         if (machineTrusted)
             RemoveOrphanedSameCommonNameCertificates(StoreLocation.LocalMachine, keepCurrentThumbprint: false);
 
-        if (!RunTime.IsWindows && RootCertificate != null)
+        if (!RunTime.IsWindows && RootCertificate != null &&
+            !ShouldSuppressInteractiveRootStoreMutations)
             Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
 
         // Best-effort Firefox cleanup (policy + default profile nickname).
@@ -1682,8 +1713,10 @@ public sealed class CertificateManager : IDisposable
         if (!RunTime.IsWindows)
         {
             if (RootCertificate == null) return false;
-            Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
             FirefoxCertificateTrust.UntrustDefaultProfile(RootCertificateName);
+            if (ShouldSuppressInteractiveRootStoreMutations)
+                return true;
+            Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
             // Explicit true when only user-store untrust was requested (no machine step).
             return machineTrusted
                 ? Helpers.UnixCertificateTrust.UntrustMachineSsl(RootCertificate, RootCertificateName)

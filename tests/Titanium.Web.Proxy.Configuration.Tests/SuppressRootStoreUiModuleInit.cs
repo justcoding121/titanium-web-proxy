@@ -2,7 +2,7 @@ using System;
 using System.Runtime.CompilerServices;
 using Titanium.Web.Proxy.Network;
 
-namespace Titanium.Cli.Tests;
+namespace Titanium.Web.Proxy.Configuration.Tests;
 
 /// <summary>
 ///     Prevent Windows CryptUI Root Store Yes/No dialogs from hanging local/CI test runs.

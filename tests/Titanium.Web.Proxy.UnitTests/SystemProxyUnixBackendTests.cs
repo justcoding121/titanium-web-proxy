@@ -66,11 +66,9 @@ public class MacOsSystemProxyBackendTests
     [TestMethod]
     public void SetProxy_InvokesNetworkSetup_ForHttpAndHttps()
     {
-        var runner = new FakeProcessRunner();
+        var runner = new FakeProcessRunner { TrackNetworkSetup = true };
         runner.When("networksetup", "-listallnetworkservices",
             "An asterisk (*) denotes that a network service is disabled.\nWi-Fi\n*Ethernet\n");
-        runner.When("networksetup", "-getwebproxy", "Enabled: No\nServer: \nPort: 0\n");
-        runner.When("networksetup", "-getsecurewebproxy", "Enabled: No\nServer: \nPort: 0\n");
         runner.When("networksetup", "-getproxybypassdomains",
             "There aren't any bypass domains currently set.\n");
         runner.When("networksetup", "-getautoproxyurl", "URL: (null)\nEnabled: No\n");
@@ -102,15 +100,17 @@ public class MacOsSystemProxyBackendTests
         Assert.IsTrue(runner.Commands.Exists(c => c.Contains("-setsocksfirewallproxystate") && c.Contains("off")));
         Assert.IsFalse(runner.Commands.Exists(c => c.Contains("\"Ethernet\"")),
             "Disabled (*Ethernet) services must be skipped");
+        Assert.AreEqual("Enabled: Yes\nServer: 127.0.0.1\nPort: 8000\n",
+            runner.NetworkSetupProxy("Wi-Fi", secure: false));
+        Assert.AreEqual("Enabled: Yes\nServer: 127.0.0.1\nPort: 8000\n",
+            runner.NetworkSetupProxy("Wi-Fi", secure: true));
     }
 
     [TestMethod]
     public void SetProxy_Elevates_WhenNetworkSetupDenies()
     {
-        var runner = new FakeProcessRunner();
+        var runner = new FakeProcessRunner { TrackNetworkSetup = true };
         runner.When("networksetup", "-listallnetworkservices", "Wi-Fi\n");
-        runner.When("networksetup", "-getwebproxy", "Enabled: No\nServer:\nPort: 0\n");
-        runner.When("networksetup", "-getsecurewebproxy", "Enabled: No\nServer:\nPort: 0\n");
         runner.When("networksetup", "-getproxybypassdomains", "Empty\n");
         runner.When("networksetup", "-getautoproxyurl", "URL: (null)\nEnabled: No\n");
         runner.When("networksetup", "-getproxyautodiscovery", "Auto Proxy Discovery: Off\n");
@@ -125,15 +125,20 @@ public class MacOsSystemProxyBackendTests
               SOCKSEnable : 0
             }
             """);
+        // First non-elevated -setwebproxy fails; elevation applies TrackNetworkSetup state and
+        // scutil stub proves CFNetwork-visible apply.
         runner.FailMatching = "-setwebproxy";
         runner.FailError = "You must be an administrator to perform this operation.";
+        runner.ClearFailMatchingAfterElevatedSet = true;
 
-        var elevation = new FakeElevationPrompt();
+        var elevation = new FakeElevationPrompt { ApplyNetworkSetupTo = runner };
         using var backend = new MacOsSystemProxyBackend(runner, elevation);
         backend.SetProxy("127.0.0.1", 8000, ProxyProtocolType.Http, null);
 
         Assert.IsTrue(elevation.Calls.Count > 0);
         Assert.IsTrue(elevation.Calls[0].FileName.Contains("networksetup"));
+        Assert.AreEqual("Enabled: Yes\nServer: 127.0.0.1\nPort: 8000\n",
+            runner.NetworkSetupProxy("Wi-Fi", secure: false));
     }
 
     [TestMethod]
@@ -676,6 +681,10 @@ internal sealed class FakeProcessRunner : IProcessRunner
 {
     private readonly List<(string Match, string Output)> _responses = new();
     private readonly Dictionary<string, string> _gsettings = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (bool Enabled, string Host, int Port)> _webProxy =
+        new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (bool Enabled, string Host, int Port)> _secureWebProxy =
+        new(StringComparer.Ordinal);
 
     public List<string> Commands { get; } = new();
     public bool DefaultSuccess { get; set; } = true;
@@ -685,6 +694,13 @@ internal sealed class FakeProcessRunner : IProcessRunner
     public string? WriteFileOnMatch { get; set; }
     /// <summary>When true, gsettings set/get are tracked in-memory for apply verification.</summary>
     public bool TrackGsettings { get; set; }
+    /// <summary>When true, networksetup set/get web proxy are tracked for post-apply verify.</summary>
+    public bool TrackNetworkSetup { get; set; }
+    /// <summary>
+    /// After an elevated <c>-setwebproxy</c> succeeds, clear <see cref="FailMatching"/> so
+    /// subsequent verify/get calls are not treated as failures.
+    /// </summary>
+    public bool ClearFailMatchingAfterElevatedSet { get; set; }
 
     public void When(string fileName, string argsContains, string stdout) =>
         _responses.Add((fileName + " " + argsContains, stdout));
@@ -694,6 +710,23 @@ internal sealed class FakeProcessRunner : IProcessRunner
 
     public string? GsettingsValue(string schema, string key) =>
         _gsettings.TryGetValue($"{schema} {key}", out var value) ? value : null;
+
+    public string NetworkSetupProxy(string service, bool secure)
+    {
+        var map = secure ? _secureWebProxy : _webProxy;
+        if (!map.TryGetValue(service, out var state))
+            return "Enabled: No\nServer: \nPort: 0\n";
+        return $"Enabled: {(state.Enabled ? "Yes" : "No")}\nServer: {state.Host}\nPort: {state.Port}\n";
+    }
+
+    /// <summary>Applies an elevated networksetup argument list into tracked proxy state.</summary>
+    public void ApplyElevatedNetworkSetup(string arguments)
+    {
+        ApplyNetworkSetupMutation(arguments);
+        if (ClearFailMatchingAfterElevatedSet &&
+            arguments.Contains("-setwebproxy", StringComparison.Ordinal))
+            FailMatching = null;
+    }
 
     public ProcessRunResult? Run(string fileName, string arguments,
         IDictionary<string, string?>? environment = null, string? workingDirectory = null)
@@ -707,6 +740,14 @@ internal sealed class FakeProcessRunner : IProcessRunner
         if (TrackGsettings && fileName == "gsettings")
         {
             var tracked = TryTrackGsettings(arguments);
+            if (tracked is not null)
+                return tracked;
+        }
+
+        if (TrackNetworkSetup &&
+            (fileName == "networksetup" || fileName.EndsWith("/networksetup", StringComparison.Ordinal)))
+        {
+            var tracked = TryTrackNetworkSetup(arguments);
             if (tracked is not null)
                 return tracked;
         }
@@ -753,6 +794,66 @@ internal sealed class FakeProcessRunner : IProcessRunner
         return null;
     }
 
+    private ProcessRunResult? TryTrackNetworkSetup(string arguments)
+    {
+        if (ApplyNetworkSetupMutation(arguments))
+            return new ProcessRunResult(0, string.Empty, string.Empty);
+
+        if (arguments.StartsWith("-getwebproxy ", StringComparison.Ordinal) ||
+            arguments.StartsWith("-getsecurewebproxy ", StringComparison.Ordinal))
+        {
+            var secure = arguments.StartsWith("-getsecurewebproxy ", StringComparison.Ordinal);
+            var service = ExtractQuotedService(arguments);
+            return new ProcessRunResult(0, NetworkSetupProxy(service, secure), string.Empty);
+        }
+
+        return null;
+    }
+
+    private bool ApplyNetworkSetupMutation(string arguments)
+    {
+        // -setwebproxy "Wi-Fi" 127.0.0.1 8000
+        if (arguments.StartsWith("-setwebproxy ", StringComparison.Ordinal) ||
+            arguments.StartsWith("-setsecurewebproxy ", StringComparison.Ordinal))
+        {
+            var secure = arguments.StartsWith("-setsecurewebproxy ", StringComparison.Ordinal);
+            var service = ExtractQuotedService(arguments);
+            var afterQuote = arguments[(arguments.IndexOf('"', StringComparison.Ordinal) + 1)..];
+            var close = afterQuote.IndexOf('"');
+            var rest = afterQuote[(close + 1)..].Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var host = rest.Length > 0 ? rest[0] : "127.0.0.1";
+            var port = rest.Length > 1 && int.TryParse(rest[1], out var p) ? p : 0;
+            var map = secure ? _secureWebProxy : _webProxy;
+            var prev = map.TryGetValue(service, out var existing) ? existing : (false, host, port);
+            map[service] = (prev.Item1, host, port);
+            return true;
+        }
+
+        // -setwebproxystate "Wi-Fi" on|off
+        if (arguments.StartsWith("-setwebproxystate ", StringComparison.Ordinal) ||
+            arguments.StartsWith("-setsecurewebproxystate ", StringComparison.Ordinal))
+        {
+            var secure = arguments.StartsWith("-setsecurewebproxystate ", StringComparison.Ordinal);
+            var service = ExtractQuotedService(arguments);
+            var on = arguments.EndsWith(" on", StringComparison.OrdinalIgnoreCase);
+            var map = secure ? _secureWebProxy : _webProxy;
+            var prev = map.TryGetValue(service, out var existing) ? existing : (false, "127.0.0.1", 0);
+            map[service] = (on, prev.Item2, prev.Item3);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string ExtractQuotedService(string arguments)
+    {
+        var start = arguments.IndexOf('"');
+        var end = arguments.IndexOf('"', start + 1);
+        if (start < 0 || end <= start)
+            return "Wi-Fi";
+        return arguments[(start + 1)..end].Replace("\\\"", "\"", StringComparison.Ordinal);
+    }
+
     private static void TryTouchQuotedPath(string arguments)
     {
         var start = arguments.IndexOf('"');
@@ -775,11 +876,17 @@ internal sealed class FakeElevationPrompt : IElevationPrompt
 {
     public bool Cancel { get; set; }
     public List<(string FileName, string Arguments)> Calls { get; } = new();
+    public FakeProcessRunner? ApplyNetworkSetupTo { get; set; }
 
     public ProcessRunResult? RunElevated(string fileName, string arguments)
     {
         Calls.Add((fileName, arguments));
-        return Cancel ? null : new ProcessRunResult(0, string.Empty, string.Empty);
+        if (Cancel) return null;
+        if (ApplyNetworkSetupTo is not null &&
+            (fileName.Contains("networksetup", StringComparison.Ordinal) ||
+             arguments.Contains("-set", StringComparison.Ordinal)))
+            ApplyNetworkSetupTo.ApplyElevatedNetworkSetup(arguments);
+        return new ProcessRunResult(0, string.Empty, string.Empty);
     }
 }
 

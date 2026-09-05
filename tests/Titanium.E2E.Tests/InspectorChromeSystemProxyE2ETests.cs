@@ -26,6 +26,9 @@ public class InspectorChromeSystemProxyE2ETests
             return;
         }
 
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            RootStoreUiTestGuards.RequireInteractiveRootTrustAvailable();
+
         var chrome = FindChrome();
         if (chrome is null)
         {
