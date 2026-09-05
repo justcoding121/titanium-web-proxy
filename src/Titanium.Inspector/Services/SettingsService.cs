@@ -248,8 +248,8 @@ public sealed class SettingsService
             }
             else if (MergeMissingFactoryOsBypassHosts(loaded))
             {
-                // Additive: new factory forge/SSO hosts (e.g. github.com) must land in existing
-                // settings.json or Inspector Replace-mode system proxy keeps MITM'ing git HTTPS.
+                // Additive: new factory SSO/identity hosts must land in existing settings.json or
+                // Inspector Replace-mode system proxy omits them.
                 try
                 {
                     File.WriteAllText(_path, JsonSerializer.Serialize(loaded, JsonOptions));

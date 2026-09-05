@@ -64,7 +64,7 @@ public class ExclusionSettingsSeedTests
     }
 
     [TestMethod]
-    public void Load_ExistingSettings_MergesMissingFactoryGitBypassHosts()
+    public void Load_ExistingSettings_MergesMissingFactoryIdentityBypassHosts()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-excl-merge-" + Guid.NewGuid().ToString("N") + ".json");
         try
@@ -80,9 +80,8 @@ public class ExclusionSettingsSeedTests
 
             var service = new SettingsService(path);
             Assert.IsTrue(service.Current.SystemProxyBypassHosts.Contains("login.live.com"));
-            Assert.IsTrue(service.Current.SystemProxyBypassHosts.Contains("github.com"),
-                "Existing settings must pick up new factory forge bypass hosts");
-            Assert.IsTrue(service.Current.SystemProxyBypassHosts.Contains("*.github.com"));
+            Assert.IsTrue(service.Current.SystemProxyBypassHosts.Contains("*.microsoftonline.com"),
+                "Existing settings must pick up new factory identity bypass hosts");
             CollectionAssert.Contains(service.Current.DecryptSkipHosts.ToArray(), "dropbox.com");
         }
         finally

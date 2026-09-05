@@ -8,18 +8,13 @@ using Titanium.Web.Proxy.Models;
 namespace Titanium.Web.Proxy;
 
 /// <summary>
-///     Default hostname exclusions for MITM proxies (Microsoft identity, developer Git forges,
-///     and certificate-pinning hosts). Use with <see cref="SystemProxySettings.BypassRules"/> and
+///     Default hostname exclusions for MITM proxies (Microsoft identity / certificate pinning).
+///     Use with <see cref="SystemProxySettings.BypassRules"/> and
 ///     <see cref="EventArguments.TunnelConnectSessionEventArgs.DecryptSsl"/>.
 /// </summary>
 public static class MitmExclusionDefaults
 {
-    /// <summary>
-    ///     WinINET / system-proxy bypass patterns. Traffic matching these never enters the proxy
-    ///     (DIRECT). Includes Microsoft identity endpoints and common Git HTTPS forges — otherwise
-    ///     enabling system proxy breaks <c>git push</c>/<c>git pull</c> and credential helpers that
-    ///     talk to GitHub/GitLab/Bitbucket/Azure DevOps over HTTPS.
-    /// </summary>
+    /// <summary>WinINET / system-proxy bypass patterns for Microsoft identity endpoints (Entra / WAM / RDP).</summary>
     public static readonly string[] SystemProxyBypassRules =
     [
         "*.microsoftonline.com",
@@ -31,17 +26,6 @@ public static class MitmExclusionDefaults
         "*.msauth.net",
         "*.msftauth.net",
         "enterpriseregistration.windows.net",
-        // Developer Git forges (HTTPS remotes + raw/asset CDNs used by credential helpers / LFS).
-        "github.com",
-        "*.github.com",
-        "*.githubusercontent.com",
-        "gitlab.com",
-        "*.gitlab.com",
-        "bitbucket.org",
-        "*.bitbucket.org",
-        "dev.azure.com",
-        "*.dev.azure.com",
-        "*.visualstudio.com",
     ];
 
     /// <summary>Pinning hosts that should tunnel (DecryptSsl=false) but stay visible.</summary>

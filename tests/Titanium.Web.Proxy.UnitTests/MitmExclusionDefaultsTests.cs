@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy;
@@ -19,20 +20,13 @@ public class MitmExclusionDefaultsTests
     }
 
     [TestMethod]
-    public void SystemProxyBypassRules_IncludeGitForgesSoHttpsRemotesStayDirect()
+    public void SystemProxyBypassRules_DoNotBypassGitHubSoBrowserCaptureWorks()
     {
-        CollectionAssert.Contains(MitmExclusionDefaults.SystemProxyBypassRules, "github.com");
-        CollectionAssert.Contains(MitmExclusionDefaults.SystemProxyBypassRules, "*.github.com");
-        CollectionAssert.Contains(MitmExclusionDefaults.SystemProxyBypassRules, "*.githubusercontent.com");
-        CollectionAssert.Contains(MitmExclusionDefaults.SystemProxyBypassRules, "gitlab.com");
-        CollectionAssert.Contains(MitmExclusionDefaults.SystemProxyBypassRules, "bitbucket.org");
-        CollectionAssert.Contains(MitmExclusionDefaults.SystemProxyBypassRules, "dev.azure.com");
-
-        Assert.IsTrue(MitmExclusionDefaults.IsBuiltInSslBypass("github.com"));
-        Assert.IsTrue(MitmExclusionDefaults.IsBuiltInSslBypass("api.github.com"));
-        Assert.IsTrue(MitmExclusionDefaults.IsBuiltInSslBypass("codeload.github.com"));
-        Assert.IsTrue(MitmExclusionDefaults.IsBuiltInSslBypass("raw.githubusercontent.com"));
-        Assert.IsTrue(MitmExclusionDefaults.ShouldDisableSslDecrypt("github.com"));
+        Assert.IsFalse(MitmExclusionDefaults.SystemProxyBypassRules.Contains("github.com"));
+        Assert.IsFalse(MitmExclusionDefaults.SystemProxyBypassRules.Any(r =>
+            r.Contains("github", StringComparison.OrdinalIgnoreCase)));
+        Assert.IsFalse(MitmExclusionDefaults.IsBuiltInSslBypass("github.com"));
+        Assert.IsFalse(MitmExclusionDefaults.IsBuiltInSslBypass("api.github.com"));
     }
 
     [TestMethod]
