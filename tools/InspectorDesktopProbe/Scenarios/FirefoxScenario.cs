@@ -36,6 +36,7 @@ public static class FirefoxScenario
             return 1;
         }
 
+        // Enterprise-roots / ImportEnterpriseRoots write the default profile; still needed for decrypt.
         await harness.OnUiAsync(() => harness.Robot.Click("MenuTrustFirefoxCa")).ConfigureAwait(true);
         await Task.Delay(1500).ConfigureAwait(true);
         log.Step("firefox-trust-menu", true, harness.ViewModel.StatusText ?? "");
@@ -44,12 +45,14 @@ public static class FirefoxScenario
         await harness.OnUiAsync(() => harness.Robot.SetCheck("SystemProxyCheck", true)).ConfigureAwait(true);
         await harness.WaitUntilAsync(() => harness.ViewModel.SystemProxy, TimeSpan.FromSeconds(15)).ConfigureAwait(true);
 
-        foreach (var p in Process.GetProcessesByName("firefox"))
-        {
-            try { p.Kill(entireProcessTree: true); } catch { /* ignore */ }
-        }
-
+        SystemProxyBrowserCapture.KillFirefoxProcesses();
         await Task.Delay(1000).ConfigureAwait(true);
+
+        // Temp profile forces system proxy; enterprise_roots is OS-level on Windows so decrypt still works.
+        var profileDir = SystemProxyBrowserCapture.CreateTempFirefoxProfile("twp-probe-firefox-");
+        // On Windows, ImportEnterpriseRoots is machine/user policy — temp profile inherits it.
+        // Mirror enterprise_roots into the temp profile user.js for non-Windows / belt-and-suspenders.
+        AppendEnterpriseRootsPref(profileDir);
 
         var host = SystemProxyBrowserCapture.DefaultProbeHost;
         Process? proc = null;
@@ -63,7 +66,7 @@ public static class FirefoxScenario
         harness.Interception.SessionCaptured += OnSession;
         try
         {
-            proc = SystemProxyBrowserCapture.StartFirefox(firefox, $"https://{host}/");
+            proc = SystemProxyBrowserCapture.StartFirefox(firefox, profileDir, $"https://{host}/");
             var deadline = DateTime.UtcNow + timeout;
             while (captured is null && DateTime.UtcNow < deadline)
                 await Task.Delay(250).ConfigureAwait(true);
@@ -81,11 +84,22 @@ public static class FirefoxScenario
         {
             harness.Interception.SessionCaptured -= OnSession;
             SystemProxyBrowserCapture.TryKill(proc);
+            SystemProxyBrowserCapture.KillFirefoxProcesses();
+            SystemProxyBrowserCapture.TryDeleteDir(profileDir);
             await harness.OnUiAsync(() =>
             {
                 if (harness.ViewModel.SystemProxy)
                     harness.Robot.SetCheck("SystemProxyCheck", false);
             }).ConfigureAwait(true);
         }
+    }
+
+    private static void AppendEnterpriseRootsPref(string profileDir)
+    {
+        var userJs = Path.Combine(profileDir, "user.js");
+        File.AppendAllText(userJs, """
+
+            user_pref("security.enterprise_roots.enabled", true);
+            """);
     }
 }

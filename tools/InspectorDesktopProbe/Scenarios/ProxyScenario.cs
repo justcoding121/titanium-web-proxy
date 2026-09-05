@@ -69,11 +69,32 @@ public static class ProxyScenario
         InspectorHarness harness, ProbeLog log, string name, string path, TimeSpan timeout)
     {
         var host = SystemProxyBrowserCapture.DefaultProbeHost;
-        var userData = Path.Combine(Path.GetTempPath(), $"twp-probe-{name}-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(userData);
+        var isFirefox = name.Equals("firefox", StringComparison.OrdinalIgnoreCase);
+        var profileDir = isFirefox
+            ? SystemProxyBrowserCapture.CreateTempFirefoxProfile($"twp-probe-{name}-")
+            : Path.Combine(Path.GetTempPath(), $"twp-probe-{name}-" + Guid.NewGuid().ToString("N"));
+        if (!isFirefox)
+            Directory.CreateDirectory(profileDir);
+
         Process? proc = null;
         try
         {
+            if (isFirefox)
+            {
+                // Leftover Firefox often swallows -new-instance / ignores a new profile.
+                SystemProxyBrowserCapture.KillFirefoxProcesses();
+                await Task.Delay(800).ConfigureAwait(true);
+            }
+
+            // Ensure system proxy is on (prior browser's off-check leaves it disabled until finally).
+            await harness.OnUiAsync(() =>
+            {
+                if (!harness.ViewModel.SystemProxy)
+                    harness.Robot.SetCheck("SystemProxyCheck", true);
+            }).ConfigureAwait(true);
+            await harness.WaitUntilAsync(() => harness.ViewModel.SystemProxy, TimeSpan.FromSeconds(10))
+                .ConfigureAwait(true);
+
             SessionSnapshot? captured = null;
             void OnSession(object? _, SessionSnapshot s)
             {
@@ -84,10 +105,10 @@ public static class ProxyScenario
             harness.Interception.SessionCaptured += OnSession;
             try
             {
-                proc = name.Equals("firefox", StringComparison.OrdinalIgnoreCase)
-                    ? SystemProxyBrowserCapture.StartFirefox(path, $"https://{host}/")
+                proc = isFirefox
+                    ? SystemProxyBrowserCapture.StartFirefox(path, profileDir, $"https://{host}/")
                     : SystemProxyBrowserCapture.StartChromiumViaSystemProxy(
-                        path, userData, $"https://{host}/", disableQuic: true);
+                        path, profileDir, $"https://{host}/", disableQuic: true);
 
                 var deadline = DateTime.UtcNow + timeout;
                 while (captured is null && DateTime.UtcNow < deadline)
@@ -106,7 +127,6 @@ public static class ProxyScenario
                 harness.Interception.SessionCaptured -= OnSession;
             }
 
-            // Disable and ensure no after-disable capture
             await harness.OnUiAsync(() =>
             {
                 if (harness.ViewModel.SystemProxy)
@@ -114,6 +134,8 @@ public static class ProxyScenario
             }).ConfigureAwait(true);
             await Task.Delay(800).ConfigureAwait(true);
             SystemProxyBrowserCapture.TryKill(proc);
+            if (isFirefox)
+                SystemProxyBrowserCapture.KillFirefoxProcesses();
             proc = null;
 
             SessionSnapshot? after = null;
@@ -126,19 +148,10 @@ public static class ProxyScenario
             harness.Interception.SessionCaptured += OnAfter;
             try
             {
-                // Re-enable briefly? No — proxy should stay off; relaunch should not hit us.
-                await harness.OnUiAsync(() =>
-                {
-                    if (!harness.ViewModel.SystemProxy)
-                        harness.Robot.SetCheck("SystemProxyCheck", true);
-                }).ConfigureAwait(true);
-                // Actually for off-check we need proxy OFF. Re-read plan: toggle off → no new sessions.
-                await harness.OnUiAsync(() => harness.Robot.SetCheck("SystemProxyCheck", false)).ConfigureAwait(true);
-
-                proc = name.Equals("firefox", StringComparison.OrdinalIgnoreCase)
-                    ? SystemProxyBrowserCapture.StartFirefox(path, $"https://{host}/?after-disable=1")
+                proc = isFirefox
+                    ? SystemProxyBrowserCapture.StartFirefox(path, profileDir, $"https://{host}/?after-disable=1")
                     : SystemProxyBrowserCapture.StartChromiumViaSystemProxy(
-                        path, userData, $"https://{host}/?after-disable=1", disableQuic: true);
+                        path, profileDir, $"https://{host}/?after-disable=1", disableQuic: true);
 
                 var offDeadline = DateTime.UtcNow.AddSeconds(12);
                 while (after is null && DateTime.UtcNow < offDeadline)
@@ -156,7 +169,6 @@ public static class ProxyScenario
             finally
             {
                 harness.Interception.SessionCaptured -= OnAfter;
-                // Restore system proxy for remaining browsers in the loop
                 await harness.OnUiAsync(() =>
                 {
                     if (!harness.ViewModel.SystemProxy)
@@ -172,7 +184,9 @@ public static class ProxyScenario
         finally
         {
             SystemProxyBrowserCapture.TryKill(proc);
-            SystemProxyBrowserCapture.TryDeleteDir(userData);
+            if (isFirefox)
+                SystemProxyBrowserCapture.KillFirefoxProcesses();
+            SystemProxyBrowserCapture.TryDeleteDir(profileDir);
         }
     }
 

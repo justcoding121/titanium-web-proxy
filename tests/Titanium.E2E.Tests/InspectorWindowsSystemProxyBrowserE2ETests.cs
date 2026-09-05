@@ -162,40 +162,54 @@ public class InspectorWindowsSystemProxyBrowserE2ETests
             var ffTrust = interception.TrustFirefox();
             Assert.IsTrue(ffTrust.Succeeded, ffTrust.Message);
 
-            foreach (var p in Process.GetProcessesByName("firefox"))
-            {
-                try { p.Kill(entireProcessTree: true); } catch { /* ignore */ }
-            }
-
             Assert.IsTrue(
                 interception.SetSystemProxy(true, CreateSettings()),
                 interception.LastSystemProxyError ?? "SetSystemProxy failed");
 
-            browser = SystemProxyBrowserCapture.StartFirefox(firefox, $"https://{ProbeHost}/");
+            SystemProxyBrowserCapture.KillFirefoxProcesses();
+            await Task.Delay(800);
 
-            var deadline = DateTime.UtcNow.AddSeconds(35);
-            while (captured is null && DateTime.UtcNow < deadline)
-                await Task.Delay(250);
+            var profileDir = SystemProxyBrowserCapture.CreateTempFirefoxProfile("twp-e2e-ff-");
+            File.AppendAllText(
+                Path.Combine(profileDir, "user.js"),
+                """
 
-            if (captured is null)
-                Assert.Inconclusive("No Firefox session via WinINET within 35s");
+                user_pref("security.enterprise_roots.enabled", true);
+                """);
+            try
+            {
+                browser = SystemProxyBrowserCapture.StartFirefox(firefox, profileDir, $"https://{ProbeHost}/");
 
-            StringAssert.Contains(captured!.Url, ProbeHost, StringComparison.OrdinalIgnoreCase);
+                var deadline = DateTime.UtcNow.AddSeconds(35);
+                while (captured is null && DateTime.UtcNow < deadline)
+                    await Task.Delay(250);
 
-            Assert.IsTrue(interception.SetSystemProxy(false));
-            captured = null;
-            await Task.Delay(1500);
-            SystemProxyBrowserCapture.TryKill(browser);
-            browser = SystemProxyBrowserCapture.StartFirefox(firefox, $"https://{ProbeHost}/?after-disable=1");
+                if (captured is null)
+                    Assert.Inconclusive("No Firefox session via WinINET within 35s");
 
-            var offDeadline = DateTime.UtcNow.AddSeconds(12);
-            while (captured is null && DateTime.UtcNow < offDeadline)
-                await Task.Delay(250);
+                StringAssert.Contains(captured!.Url, ProbeHost, StringComparison.OrdinalIgnoreCase);
 
-            Assert.IsTrue(
-                captured is null ||
-                !captured.Url.Contains("after-disable", StringComparison.OrdinalIgnoreCase),
-                "Firefox still proxied after WinINET restore");
+                Assert.IsTrue(interception.SetSystemProxy(false));
+                captured = null;
+                await Task.Delay(1500);
+                SystemProxyBrowserCapture.TryKill(browser);
+                SystemProxyBrowserCapture.KillFirefoxProcesses();
+                browser = SystemProxyBrowserCapture.StartFirefox(
+                    firefox, profileDir, $"https://{ProbeHost}/?after-disable=1");
+
+                var offDeadline = DateTime.UtcNow.AddSeconds(12);
+                while (captured is null && DateTime.UtcNow < offDeadline)
+                    await Task.Delay(250);
+
+                Assert.IsTrue(
+                    captured is null ||
+                    !captured.Url.Contains("after-disable", StringComparison.OrdinalIgnoreCase),
+                    "Firefox still proxied after WinINET restore");
+            }
+            finally
+            {
+                SystemProxyBrowserCapture.TryDeleteDir(profileDir);
+            }
         }
         finally
         {
@@ -211,11 +225,7 @@ public class InspectorWindowsSystemProxyBrowserE2ETests
 
             CertificateManager.SuppressInteractiveRootStoreMutations = previousSuppress;
             SystemProxyBrowserCapture.TryKill(browser);
-
-            foreach (var p in Process.GetProcessesByName("firefox"))
-            {
-                try { p.Kill(entireProcessTree: true); } catch { /* ignore */ }
-            }
+            SystemProxyBrowserCapture.KillFirefoxProcesses();
         }
     }
 

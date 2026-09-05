@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using Titanium.Inspector.Services;
 
 namespace Titanium.Inspector.DesktopProbe.Shared;
@@ -31,13 +32,61 @@ public static class SystemProxyBrowserCapture
         }) ?? throw new InvalidOperationException($"Failed to start {browserPath}");
     }
 
-    public static Process StartFirefox(string browserPath, string url) =>
-        Process.Start(new ProcessStartInfo
+    /// <summary>
+    /// Launch Firefox with an isolated profile that forces OS system proxy
+    /// (<c>network.proxy.type=5</c>). Callers should pass a dir from
+    /// <see cref="CreateTempFirefoxProfile"/> and delete it afterward.
+    /// </summary>
+    public static Process StartFirefox(string browserPath, string profileDir, string url, bool headless = false)
+    {
+        var headlessArg = headless ? "--headless " : string.Empty;
+        return Process.Start(new ProcessStartInfo
         {
             FileName = browserPath,
-            Arguments = $"-no-remote -new-instance \"{url}\"",
+            Arguments = $"{headlessArg}-no-remote -profile \"{profileDir}\" \"{url}\"",
             UseShellExecute = false,
         }) ?? throw new InvalidOperationException($"Failed to start {browserPath}");
+    }
+
+    /// <summary>
+    /// Fresh Firefox profile with system-proxy prefs (parity with Chromium's temp user-data-dir).
+    /// Avoids a dirty default profile that may ignore WinINET / gsettings.
+    /// </summary>
+    public static string CreateTempFirefoxProfile(string? prefix = null)
+    {
+        var dir = Path.Combine(
+            Path.GetTempPath(),
+            (prefix ?? "twp-ff-") + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        // type 5 = use system proxy settings (Windows WinINET / macOS / Linux DE).
+        File.WriteAllText(
+            Path.Combine(dir, "user.js"),
+            """
+            user_pref("network.proxy.type", 5);
+            user_pref("network.proxy.share_proxy_settings", true);
+            user_pref("network.proxy.allow_hijacking_localhost", true);
+            user_pref("network.http.http3.enable", false);
+            user_pref("network.trr.mode", 5);
+            user_pref("browser.shell.checkDefaultBrowser", false);
+            user_pref("browser.startup.homepage_override.mstone", "ignore");
+            user_pref("toolkit.telemetry.enabled", false);
+            user_pref("app.update.enabled", false);
+            user_pref("datareporting.policy.dataSubmissionEnabled", false);
+            user_pref("startup.homepage_welcome_url", "");
+            user_pref("startup.homepage_welcome_url.additional", "");
+            """,
+            Encoding.UTF8);
+        return dir;
+    }
+
+    public static void KillFirefoxProcesses()
+    {
+        foreach (var p in Process.GetProcessesByName("firefox"))
+        {
+            try { p.Kill(entireProcessTree: true); } catch { /* ignore */ }
+            try { p.Dispose(); } catch { /* ignore */ }
+        }
+    }
 
     public static async Task<SessionSnapshot?> WaitForHostAsync(
         InterceptionService interception,
