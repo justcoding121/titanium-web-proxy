@@ -1,4 +1,4 @@
-# Validate Flatpak manifests + Homebrew formula against a published release tag.
+# Validate Homebrew formula against a published release tag.
 # Used for beta dry-run before stable catalog submit.
 name: packaging-catalog-smoke
 
@@ -9,11 +9,6 @@ on:
         description: 'GitHub release tag (e.g. v7.0.4-beta or v7.0.5)'
         required: true
         type: string
-      run_flatpak:
-        description: 'Build Flatpak manifests with flatpak-builder'
-        required: true
-        type: boolean
-        default: true
       run_homebrew:
         description: 'Smoke brew install from in-repo formula'
         required: true
@@ -24,27 +19,6 @@ permissions:
   contents: read
 
 jobs:
-  flatpak:
-    if: inputs.run_flatpak
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install flatpak-builder + Freedesktop 24.08
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder
-          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak install -y --user flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08
-
-      - name: flatpak-builder Inspector
-        run: |
-          set -euo pipefail
-          flatpak-builder --user --force-clean /tmp/ti-inspector-build \
-            tools/packaging/flatpak/io.github.justcoding121.TitaniumInspector.yml
-
   homebrew:
     if: inputs.run_homebrew
     runs-on: macos-latest

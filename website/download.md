@@ -11,7 +11,7 @@ const channels = [
 
 Get CLI and Inspector builds from GitHub Releases. This page lists the **latest stable** and **latest beta** product releases (NuGet-only tags are skipped). Prefer the primary format per OS (MSI / DMG / AppImage / deb / rpm); portable zips remain on GitHub for `titanium update` and Alpine/musl.
 
-**Windows:** Authenticode-signed assets show publisher **Jehonathan Thomas**. **winget** is stable-only. **macOS CLI:** `brew tap justcoding121/titanium && brew install titanium` when the tap is published. **Linux desktop:** Flathub listing for Inspector is planned after a successful human-led submission (CLI is not eligible for Flathub).
+**Windows:** Authenticode-signed assets show publisher **Jehonathan Thomas**. **winget** is stable-only. **macOS CLI:** `brew tap justcoding121/titanium && brew install titanium` when the tap is published. **Linux desktop:** use AppImage / `.deb` / `.rpm` from GitHub Releases (Inspector needs host access for system proxy and CA trust; it is not published on Flathub).
 
 HTTP/3 natives ship inside each RID zip / package (except Windows OS MsQuic). Alpine/K8s: use **`linux-musl-*`**, not `linux-x64`. Details: [HTTP/3](/docs/http3).
 

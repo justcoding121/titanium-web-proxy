@@ -6,7 +6,7 @@ Full download buttons live on the [Download](/download) page. This page is the s
 
 - **Windows:** Signed releases show Authenticode publisher **Jehonathan Thomas** (Azure Artifact Signing). SmartScreen reputation still builds over downloads/time.
 - **macOS:** Prefer the notarized **DMG** for Inspector when published. CLI zips are signed/notarized when Apple Developer secrets are configured in CI.
-- **Linux:** Prefer AppImage / `.deb` / `.rpm` (glibc) or Flathub when listed. Verify GitHub assets with `SHA256SUMS` and the detached signature `SHA256SUMS.asc`:
+- **Linux:** Prefer AppImage / `.deb` / `.rpm` (glibc). Verify GitHub assets with `SHA256SUMS` and the detached signature `SHA256SUMS.asc`:
 
 ```shell
 # Import the Titanium Releases public key (once)

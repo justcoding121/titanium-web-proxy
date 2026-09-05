@@ -76,10 +76,6 @@ brew tap justcoding121/titanium
 brew install titanium
 ```
 
-### Flathub (Inspector only)
-
-Inspector Flatpak under [`flatpak/`](flatpak/). CLI is not submitted to Flathub (console apps are rejected). See [`flatpak/README.md`](flatpak/README.md).
-
 ### Linux / macOS desktop helpers (Inspector zips)
 
 Release publish copies helpers into each Inspector zip:
