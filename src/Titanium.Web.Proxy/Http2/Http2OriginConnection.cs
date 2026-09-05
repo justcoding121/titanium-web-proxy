@@ -348,7 +348,7 @@ internal sealed class Http2OriginConnection : IDisposable
 
                 var headersEndStream = !streamRequest && bufferedBody == null && !enqueueBufferedTrailers;
                 Http2Helper.EnqueueHeader(originSettings, frameHeader, frameHeaderBuffer, request,
-                    headersEndStream, Writer);
+                    headersEndStream, Writer, encoderAlreadyExclusive: true);
             }
             finally
             {
@@ -618,7 +618,7 @@ internal sealed class Http2OriginConnection : IDisposable
                 // Must use SendHeader with endStream=false: SendBody derives END_STREAM from the body
                 // and would half-close a bodiless CONNECT before the first tunnel byte.
                 Http2Helper.EnqueueHeader(originSettings, frameHeader, frameHeaderBuffer, request,
-                    endStream: false, Writer);
+                    endStream: false, Writer, encoderAlreadyExclusive: true);
             }
             finally
             {

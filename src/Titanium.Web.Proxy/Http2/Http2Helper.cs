@@ -3882,8 +3882,9 @@ namespace Titanium.Web.Proxy.Http2
                 encoder.EncodeHeader(writer, StaticTable.KnownHeaderAuhtority, authorityValue);
                 encoder.EncodeHeader(writer, StaticTable.KnownHeaderScheme,
                     request.IsHttps ? SchemeHttps : SchemeHttp);
-                encoder.EncodeHeader(writer, StaticTable.KnownHeaderPath, request.RequestUriString8, false,
-                    HpackUtil.IndexType.None, false);
+                // Index :path (static "/" / repeated paths). IndexType.None forced a literal on every
+                // stream and lengthened writeLock under Mac dual-TLS H1→H2 / H3→H2 multiplex.
+                encoder.EncodeHeader(writer, StaticTable.KnownHeaderPath, request.RequestUriString8);
                 // RFC 8441 §5: :protocol must appear after the other pseudo-headers.
                 if (request.ExtendedConnectProtocol != null)
                     encoder.EncodeHeader(writer, StaticTable.KnownHeaderProtocol,
@@ -4191,8 +4192,7 @@ namespace Titanium.Web.Proxy.Http2
                     encoder.EncodeHeader(writer, StaticTable.KnownHeaderAuhtority, pseudo.Authority);
                 encoder.EncodeHeader(writer, StaticTable.KnownHeaderScheme, scheme);
                 if (pseudo.Path.Length > 0)
-                    encoder.EncodeHeader(writer, StaticTable.KnownHeaderPath, pseudo.Path, false,
-                        HpackUtil.IndexType.None, false);
+                    encoder.EncodeHeader(writer, StaticTable.KnownHeaderPath, pseudo.Path);
                 // RFC 8441 §5: :protocol must appear after the other pseudo-headers.
                 if (pseudo.Protocol.Length > 0)
                     encoder.EncodeHeader(writer, StaticTable.KnownHeaderProtocol, pseudo.Protocol);
@@ -4759,13 +4759,21 @@ namespace Titanium.Web.Proxy.Http2
 
         /// <summary>
         ///     HPACK-encodes <paramref name="rr"/> into a rented framed HEADERS/CONTINUATION block.
-        ///     Takes <c>lock(settings.Sync)</c> around encode (same as <see cref="SendHeader"/> /
-        ///     <see cref="QueueSendHeader"/>) so the connection Encoder and encode scratch stay
-        ///     consistent even if a caller only holds the origin socket write lock.
+        ///     Takes <c>lock(settings.Sync)</c> around encode unless <paramref name="encoderAlreadyExclusive"/>
+        ///     (origin <c>SendAsync</c> already holds <c>writeLock</c>, which serializes the Encoder).
         /// </summary>
         internal static ArraySegment<byte> RentFramedHeaders(Http2Settings settings, Http2FrameHeader frameHeader,
-            byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, bool pushPromise = false)
+            byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, bool pushPromise = false,
+            bool encoderAlreadyExclusive = false)
         {
+            if (encoderAlreadyExclusive)
+            {
+                var block = EncodeHeaderBlock(settings, rr);
+                return RentFramedHeaderBlock(frameHeader, frameHeaderBuffer, frameHeader.StreamId,
+                    pushPromise ? Http2FrameType.PushPromise : Http2FrameType.Headers, endStream,
+                    rr.Priority.HasValue, block, settings.MaxFrameSize);
+            }
+
             lock (settings.Sync)
             {
                 var block = EncodeHeaderBlock(settings, rr);
@@ -4777,13 +4785,16 @@ namespace Titanium.Web.Proxy.Http2
 
         /// <summary>
         ///     HPACK-encodes <paramref name="rr"/> and enqueues the framed HEADERS/CONTINUATION bytes.
-        ///     Encode is synchronized on <paramref name="settings"/>; enqueue may run after that lock.
+        ///     When <paramref name="encoderAlreadyExclusive"/> is set (origin writeLock held), skips the
+        ///     nested <c>settings.Sync</c> — Mac dual-TLS H1→H2 profiles nested-lock + encode under
+        ///     writeLock as the multiplex convoy.
         /// </summary>
         internal static void EnqueueHeader(Http2Settings settings, Http2FrameHeader frameHeader,
             byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Http2FrameWriter writer,
-            bool pushPromise = false)
+            bool pushPromise = false, bool encoderAlreadyExclusive = false)
         {
-            var framed = RentFramedHeaders(settings, frameHeader, frameHeaderBuffer, rr, endStream, pushPromise);
+            var framed = RentFramedHeaders(settings, frameHeader, frameHeaderBuffer, rr, endStream, pushPromise,
+                encoderAlreadyExclusive);
             writer.EnqueueRented(framed.Array!, framed.Count);
         }
 
