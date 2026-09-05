@@ -472,14 +472,16 @@ jobs:
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
             Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $csv) { throw 'No CSV found for compare-product gate validation' }
-          # macos-15-intel first-baseline floors (PERF-GATES.md) — Win/Linux keep defaults.
+          # macos-15-intel floors after SoftGrow SoftPick Mac parity dig (local Arm Mini
+          # H3→H3 ~0.95×, H3→H1 residual; H1 plain ≥YARP / ~1.00× nginx). Raise toward
+          # Win/Linux without claiming full reverse bridge ≥1.00× on every cell.
           $macFloors = @()
           if ('${{ matrix.os }}' -eq 'macos-15-intel') {
             $macFloors = @(
               '-MitmHttp3TlsFullGate', '0.65',
               '-MitmHttp1PlainFullGate', '0.55',
-              '-ReverseYarpHttp3ToHttp1Gate', '0.55',
-              '-ReverseYarpHttp3Gate', '0.74'
+              '-ReverseYarpHttp3ToHttp1Gate', '0.70',
+              '-ReverseYarpHttp3Gate', '0.78'
             )
           }
           pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName @macFloors

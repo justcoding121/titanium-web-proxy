@@ -116,19 +116,30 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
             // One ToArray: grow=1 makes every in-flight stream a TryPick miss, then the
             // at-max path used to snapshot again (dump: thousands of Http2OriginConnection[]).
             var snapshot = SnapshotMembers(entry);
-            var picked = TryPickFromSnapshot(snapshot, limits);
-            if (picked != null)
-                return picked;
-
-            // Soft-miss. Skip CreationGate only when a Gate-held snapshot says the authority
-            // is already at max — open is impossible, so serializing on CreationGate cannot
-            // create and would only convoy oversubscribed rents (c=64).
-            if (!CanOpenAnother(entry, limits))
+            // Early grow (SoftGrow) before PreferPick: SoftStreamCapacity is the SETTINGS/gate
+            // hard soft-pick so SoftGrow fan-out does not require SoftPick=SoftGrow (which caused
+            // TryPickAny oversubscribe once MaxOrigin×SoftGrow streams were in flight).
+            // SoftGrow is per-connection (TLS=16 / cleartext=4); empty snapshot uses TLS default.
+            var growAt = snapshot.Length > 0
+                ? snapshot[0].PoolGrowThreshold
+                : Http2OriginConnection.PoolGrowActiveStreamThreshold;
+            var earlyGrow = CanOpenAnother(entry, limits) && ShouldEarlyGrow(snapshot, growAt);
+            if (!earlyGrow)
             {
-                DiagPickStats.OnTryPickAny();
-                picked = TryPickAnyFromSnapshot(snapshot);
+                var picked = TryPickFromSnapshot(snapshot, limits);
                 if (picked != null)
                     return picked;
+
+                // Soft-miss. Skip CreationGate only when a Gate-held snapshot says the authority
+                // is already at max — open is impossible, so serializing on CreationGate cannot
+                // create and would only convoy oversubscribed rents (c=64).
+                if (!CanOpenAnother(entry, limits))
+                {
+                    DiagPickStats.OnTryPickAny();
+                    picked = TryPickAnyFromSnapshot(snapshot);
+                    if (picked != null)
+                        return picked;
+                }
             }
 
             DiagPickStats.OnCreationGate();
@@ -138,14 +149,28 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
                 ObjectDisposedException.ThrowIf(draining, nameof(Http2OriginConnectionPool));
 
                 snapshot = SnapshotMembers(entry);
-                picked = TryPickFromSnapshot(snapshot, limits);
-                if (picked != null)
-                    return picked;
-
-                if (!CanOpenAnother(entry, limits))
+                growAt = snapshot.Length > 0
+                    ? snapshot[0].PoolGrowThreshold
+                    : Http2OriginConnection.PoolGrowActiveStreamThreshold;
+                earlyGrow = CanOpenAnother(entry, limits) && ShouldEarlyGrow(snapshot, growAt);
+                if (!earlyGrow)
                 {
-                    DiagPickStats.OnTryPickAny();
-                    picked = TryPickAnyFromSnapshot(snapshot);
+                    var picked = TryPickFromSnapshot(snapshot, limits);
+                    if (picked != null)
+                        return picked;
+
+                    if (!CanOpenAnother(entry, limits))
+                    {
+                        DiagPickStats.OnTryPickAny();
+                        picked = TryPickAnyFromSnapshot(snapshot);
+                        if (picked != null)
+                            return picked;
+                    }
+                }
+                else if (!CanOpenAnother(entry, limits))
+                {
+                    var picked = TryPickFromSnapshot(snapshot, limits)
+                                 ?? TryPickAnyFromSnapshot(snapshot);
                     if (picked != null)
                         return picked;
                 }
@@ -285,6 +310,29 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
     }
 
     public async ValueTask DisposeAsync() => await DrainAsync().ConfigureAwait(false);
+
+    /// <summary>
+    ///     True when every usable member is at/above <paramref name="growAt"/> active streams
+    ///     (or the snapshot is empty). Empty → caller should open the first connection.
+    /// </summary>
+    private static bool ShouldEarlyGrow(Http2OriginConnection[] snapshot, int growAt)
+    {
+        if (snapshot.Length == 0)
+            return true;
+
+        var usable = 0;
+        foreach (var c in snapshot)
+        {
+            if (!c.IsUsable || c.IsNearStreamIdExhaustion)
+                continue;
+
+            usable++;
+            if (c.ActiveStreamCount < growAt)
+                return false;
+        }
+
+        return usable > 0;
+    }
 
     private static Http2OriginConnection? TryPickAnyUsable(AuthorityEntry entry)
         => TryPickAnyFromSnapshot(SnapshotMembers(entry));
