@@ -7,8 +7,7 @@
         WindowStartupLocation="CenterOwner">
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
-      <TextBlock TextWrapping="Wrap" Opacity="0.9"
-                 Text="OS bypass needs Capture → System proxy (works on Windows, macOS, and Linux). Tunnel-only rules apply to every client that hits Inspector. Factory defaults are seeded into the lists below — edit freely or reset." />
+      <TextBlock x:Name="IntroText" TextWrapping="Wrap" Opacity="0.9" />
       <TextBlock x:Name="ScopeBanner" TextWrapping="Wrap" Opacity="0.75" />
     </StackPanel>
     <DockPanel DockPanel.Dock="Bottom" Margin="0,16,0,0">
@@ -39,8 +38,7 @@
 
         <CheckBox x:Name="ProxyLoopbackCheck" Content="Proxy localhost (advanced)"
                   AutomationProperties.AutomationId="ExcludedProxyLoopback" />
-        <TextBlock Opacity="0.75" TextWrapping="Wrap" Margin="24,0,0,0"
-                   Text="Windows: &lt;-loopback&gt; rule. macOS/Linux: omits localhost from NO_PROXY." />
+        <TextBlock x:Name="LoopbackHintText" Opacity="0.75" TextWrapping="Wrap" Margin="24,0,0,0" />
 
         <TextBlock FontWeight="SemiBold" Text="Effective OS bypass (when System proxy on)" />
         <TextBlock x:Name="PreviewLabel" Opacity="0.75" />

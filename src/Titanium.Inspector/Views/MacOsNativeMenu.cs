@@ -1,4 +1,3 @@
-using Avalonia;
 using Avalonia.Controls;
 
 namespace Titanium.Inspector.Views;
@@ -8,6 +7,8 @@ namespace Titanium.Inspector.Views;
 /// Avalonia menu strip. In-window Menu/ContextMenu popups are unreliable on macOS when the app is
 /// started from a fullscreen host (Cursor/Rider) — see AvaloniaUI/Avalonia#15178. Native menus and
 /// <c>OverlayPopups</c> avoid that failure mode.
+/// The macOS application menu (About) is defined early in <c>App.axaml</c> — setting it from here
+/// is too late; Avalonia has already exported the default "About Avalonia" item to AppKit.
 /// </summary>
 internal static class MacOsNativeMenu
 {

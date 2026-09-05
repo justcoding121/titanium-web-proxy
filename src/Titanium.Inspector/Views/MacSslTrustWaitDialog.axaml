@@ -1,0 +1,36 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Titanium.Inspector.Views.MacSslTrustWaitDialog"
+        Title="Confirm trust in Keychain Access"
+        Width="520" Height="420"
+        MinHeight="380"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False"
+        Topmost="True"
+        AutomationProperties.AutomationId="MacSslTrustWaitDialog">
+  <DockPanel Margin="20">
+    <StackPanel DockPanel.Dock="Bottom" Spacing="12" Margin="0,16,0,0">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <ProgressBar x:Name="WaitProgress" IsIndeterminate="True" Width="120" Height="4"
+                     VerticalAlignment="Center"
+                     AutomationProperties.AutomationId="MacSslTrustProgress" />
+        <TextBlock x:Name="StatusText" Text="Waiting for SSL trust…" VerticalAlignment="Center"
+                   TextWrapping="Wrap" Opacity="0.85"
+                   AutomationProperties.AutomationId="MacSslTrustStatus" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button x:Name="ConfirmSavedButton" MinWidth="140" Content="I’ve saved Always Trust"
+                AutomationProperties.AutomationId="MacSslTrustConfirmSaved" />
+        <Button x:Name="OpenKeychainButton" MinWidth="88" Content="Open Keychain Access"
+                AutomationProperties.AutomationId="MacSslTrustOpenKeychain" />
+        <Button x:Name="CancelButton" MinWidth="88" IsCancel="True" Content="Cancel"
+                AutomationProperties.AutomationId="MacSslTrustCancel" />
+      </StackPanel>
+    </StackPanel>
+    <ScrollViewer>
+      <TextBlock x:Name="MessageText" TextWrapping="Wrap"
+                 AutomationProperties.AutomationId="MacSslTrustMessage" />
+    </ScrollViewer>
+  </DockPanel>
+</Window>

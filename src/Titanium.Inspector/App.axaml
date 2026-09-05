@@ -4,6 +4,13 @@
              x:Class="Titanium.Inspector.App"
              Name="Titanium Inspector"
              RequestedThemeVariant="Default">
+  <!-- Must be set here (before Avalonia exports the app menu). Late SetMenu cannot
+       replace the default "About Avalonia" item already pushed to AppKit. -->
+  <NativeMenu.Menu>
+    <NativeMenu>
+      <NativeMenuItem Header="About Titanium Inspector…" Click="OnMacAboutClick" />
+    </NativeMenu>
+  </NativeMenu.Menu>
   <Application.Resources>
     <ResourceDictionary>
       <ResourceDictionary.ThemeDictionaries>

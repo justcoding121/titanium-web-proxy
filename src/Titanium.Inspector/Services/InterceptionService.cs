@@ -538,6 +538,10 @@ public sealed class InterceptionService : IDisposable
     /// <summary>Opens Keychain Access for Always Trust guidance.</summary>
     public string? OpenMacKeychainGuidance() => _proxy?.CertificateManager.OpenMacKeychainGuidance();
 
+    /// <summary>Best-effort: root is present in the macOS login keychain (not necessarily SSL-trusted).</summary>
+    public bool IsRootInLoginKeychain() =>
+        _proxy?.CertificateManager.IsRootInLoginKeychain() == true;
+
     /// <summary>Re-verifies macOS/Linux user SSL trust and updates <see cref="IsRootTrusted"/>.</summary>
     public bool VerifyOsUserSslTrust()
     {
@@ -608,7 +612,11 @@ public sealed class InterceptionService : IDisposable
         }
 
         _proxy.CertificateManager.RemoveTrustedRootCertificate(machineStore);
-        IsRootTrusted = IsRootPresentInStore(machineStore);
+        // On macOS the CA may remain in System.keychain (Chrome still trusts it) even after
+        // the .NET current-user Root store entry is gone.
+        IsRootTrusted = OperatingSystem.IsMacOS()
+            ? _proxy.CertificateManager.IsOsRootStillPresent()
+            : IsRootPresentInStore(machineStore);
     }
 
     /// <summary>

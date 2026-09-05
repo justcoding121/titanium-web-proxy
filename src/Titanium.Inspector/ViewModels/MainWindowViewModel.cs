@@ -838,13 +838,25 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             StatusSeverity.Busy);
         var ok = await EnsureRootCaTrustedAsync(promptIfNeeded: true);
         if (ok)
+        {
             SetOsTrustSuccessStatus();
-        else if (_interception.LastOsTrustResult?.Kind == CertificateOsTrustKind.Cancelled ||
-                 string.IsNullOrEmpty(_interception.LastOsTrustResult?.Message))
+            return;
+        }
+
+        if (_interception.LastOsTrustResult?.Kind == CertificateOsTrustKind.Cancelled ||
+            string.IsNullOrEmpty(_interception.LastOsTrustResult?.Message))
+        {
+            SetGuardStatus("Root CA install cancelled");
+            return;
+        }
+
+        if (await ResolveTerminalTrustFailureAsync(_interception.LastOsTrustResult))
+            SetOsTrustSuccessStatus();
+        else if (_interception.LastOsTrustResult?.Kind == CertificateOsTrustKind.Cancelled)
             SetGuardStatus("Root CA install cancelled");
         else
             SetOutcomeStatus(
-                FormatOsTrustFailureStatus(_interception.LastOsTrustResult),
+                OsTrustUxCopy.FormatStatus(_interception.LastOsTrustResult),
                 StatusSeverity.Error,
                 toastImportant: true);
     }
@@ -987,37 +999,27 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 result?.Kind != CertificateOsTrustKind.MacNeedsManualTrustConfirm)
                 return true;
 
-            if (result?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm ||
-                (!ok && result != null) ||
-                !ok)
+            if (result?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+            {
+                // Busy status lives only inside the wait dialog — not the main window chrome.
+                var wait = await WaitForMacSslTrustAsync(owner);
+                // Final verify in case trust was saved just as the dialog closed.
+                if (wait == MacSslTrustWaitResult.Trusted || _interception.VerifyOsUserSslTrust())
+                    return true;
+
+                _interception.SetLastOsTrustCancelled();
+                if (wait == MacSslTrustWaitResult.NotSavedYet || _interception.IsRootInLoginKeychain())
+                    SetGuardStatus(OsTrustUxCopy.MacSslTrustNotSavedYet);
+                return false;
+            }
+
+            if ((!ok && result != null) || !ok)
             {
                 var choice = await _dialogs.ShowTrustRecoveryAsync(owner, result);
                 if (choice == TrustRecoveryChoice.Cancel)
                 {
                     _interception.SetLastOsTrustCancelled();
                     return false;
-                }
-
-                if (result?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
-                {
-                    if (choice == TrustRecoveryChoice.Primary)
-                    {
-                        _interception.OpenMacKeychainGuidance();
-                        SetStatus(
-                            "Set Always Trust in Keychain Access, then click I've confirmed in the next prompt",
-                            StatusSeverity.Neutral);
-                        // Re-show same recovery so user can Continue.
-                        continue;
-                    }
-
-                    // Secondary = I've confirmed — Continue
-                    SetStatus("Verifying Keychain trust…", StatusSeverity.Busy);
-                    if (_interception.VerifyOsUserSslTrust())
-                        return true;
-
-                    SetGuardStatus(
-                        "Keychain trust not verified yet — set Always Trust, then continue");
-                    continue;
                 }
 
                 if (result?.Kind == CertificateOsTrustKind.CertutilMissing &&
@@ -1075,6 +1077,25 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return _interception.IsRootTrusted;
     }
 
+    private Task<MacSslTrustWaitResult> WaitForMacSslTrustAsync(Window? owner)
+    {
+        // Waiting UX is entirely in the modal — clear main-window Busy so the status bar
+        // spinner / "Trusting root CA…" does not compete with the dialog status line.
+        if (IsStatusBusy)
+        {
+            SetSteadyStatus(
+                _interception.IsRunning
+                    ? $"Proxy running on {FormatBindDisplay()}:{BindPort}"
+                    : "Ready");
+        }
+
+        return _dialogs.ShowMacSslTrustWaitAsync(
+            owner,
+            () => _interception.VerifyOsUserSslTrust(),
+            () => _interception.OpenMacKeychainGuidance(),
+            () => _interception.IsRootInLoginKeychain());
+    }
+
     private void SetOsTrustSuccessStatus()
     {
         var msg = "Root CA trusted — ready to decrypt HTTPS";
@@ -1087,24 +1108,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         SetOutcomeStatus(msg, StatusSeverity.Success, toastImportant: true);
     }
 
-    private static string FormatOsTrustFailureStatus(CertificateOsTrustResult? result)
-    {
-        if (result is null)
-            return "Root CA install failed — try Export CA, or allow the admin prompt";
-
-        return result.Kind switch
-        {
-            CertificateOsTrustKind.CertutilMissing =>
-                result.Message + " — Capture → Install root CA to install tools, or Export CA",
-            CertificateOsTrustKind.MacNeedsManualTrustConfirm =>
-                "Root CA needs Always Trust in Keychain Access",
-            CertificateOsTrustKind.HomebrewMissing =>
-                result.Message,
-            _ => string.IsNullOrWhiteSpace(result.Message)
-                ? "Root CA install failed — try Export CA, or allow the admin prompt"
-                : result.Message,
-        };
-    }
+    private static string FormatOsTrustFailureStatus(CertificateOsTrustResult? result) =>
+        OsTrustUxCopy.FormatStatus(result);
 
 
     private async Task UntrustCaAsync()
@@ -1129,10 +1134,26 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         var stillPresent = _interception.IsRootTrusted;
+        string message;
+        if (stillPresent)
+        {
+            message = OperatingSystem.IsMacOS()
+                ? "Remove incomplete — Titanium CA still in Keychain (approve the admin password prompt to clear System.keychain)"
+                : OperatingSystem.IsLinux()
+                    ? "Remove requested but CA still present in the certificate store"
+                    : "Remove requested but CA still present in store";
+        }
+        else
+        {
+            message = OperatingSystem.IsMacOS()
+                ? "Root CA removed from Keychain; Decrypt HTTPS is off until you install the CA again"
+                : OperatingSystem.IsLinux()
+                    ? "Root CA removed from the user certificate store; Decrypt HTTPS is off until you install the CA again"
+                    : "Root CA removed from current user store; Decrypt HTTPS is off until you install the CA again";
+        }
+
         SetOutcomeStatus(
-            stillPresent
-                ? "Remove requested but CA still present in store"
-                : "Root CA removed from current user store; Decrypt HTTPS is off until you install the CA again",
+            message,
             stillPresent ? StatusSeverity.Warning : StatusSeverity.Success,
             toastImportant: true);
     }
@@ -2491,9 +2512,24 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         {
             if (!_interception.IsRunning)
             {
-                StatusText = "Start the proxy before enabling Decrypt HTTPS";
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
-                return;
+                var owner = TryGetMainWindow();
+                if (!await _dialogs.ConfirmStartProxyForDecryptAsync(owner))
+                {
+                    SetGuardStatus("Decrypt HTTPS cancelled — start the proxy first");
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+                    return;
+                }
+
+                await StartCaptureAsync();
+                if (!_interception.IsRunning)
+                {
+                    SetOutcomeStatus(
+                        "Could not start the proxy — Decrypt HTTPS stays off",
+                        StatusSeverity.Error,
+                        toastImportant: true);
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+                    return;
+                }
             }
 
             _interception.RefreshTrustState();
@@ -2502,7 +2538,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 var owner = TryGetMainWindow();
                 if (!await _dialogs.ConfirmInstallRootCaAsync(owner))
                 {
-                    StatusText = "Decrypt HTTPS cancelled — root CA not installed";
+                    SetGuardStatus("Decrypt HTTPS cancelled — root CA not installed");
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
                     return;
                 }
@@ -2514,27 +2550,123 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                     StatusSeverity.Busy);
                 if (!await EnsureRootCaTrustedAsync(promptIfNeeded: true))
                 {
-                    StatusText = FormatOsTrustFailureStatus(_interception.LastOsTrustResult);
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
-                    return;
+                    if (_interception.LastOsTrustResult?.Kind == CertificateOsTrustKind.Cancelled)
+                    {
+                        SetGuardStatus("Decrypt HTTPS cancelled — root CA not trusted");
+                        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+                        return;
+                    }
+
+                    if (!await ResolveTerminalTrustFailureAsync(_interception.LastOsTrustResult))
+                    {
+                        if (_interception.LastOsTrustResult?.Kind == CertificateOsTrustKind.Cancelled)
+                            SetGuardStatus("Decrypt HTTPS cancelled — root CA not trusted");
+                        else
+                            SetOutcomeStatus(
+                                OsTrustUxCopy.FormatStatus(_interception.LastOsTrustResult),
+                                StatusSeverity.Error,
+                                toastImportant: true);
+                        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+                        return;
+                    }
                 }
             }
 
             // Re-verify after recovery: macOS can report "installed" before Always Trust.
             if (!_interception.VerifyOsUserSslTrust() && !OperatingSystem.IsWindows())
             {
-                StatusText = "Root CA needs Always Trust in Keychain Access before Decrypt HTTPS";
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
-                return;
+                var incomplete = CertificateOsTrustResult.Fail(
+                    CertificateOsTrustKind.MacNeedsManualTrustConfirm,
+                    "Root CA needs Always Trust in Keychain Access before Decrypt HTTPS");
+                if (!await ResolveTerminalTrustFailureAsync(incomplete) ||
+                    (!_interception.VerifyOsUserSslTrust() && !OperatingSystem.IsWindows()))
+                {
+                    SetOutcomeStatus(
+                        OsTrustUxCopy.FormatStatus(incomplete),
+                        StatusSeverity.Error,
+                        toastImportant: true);
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+                    return;
+                }
             }
 
             SetDecryptHttpsCore(true);
-            StatusText = "Decrypting HTTPS";
+            SetOutcomeStatus("Decrypting HTTPS", StatusSeverity.Success, toastImportant: true);
         }
         finally
         {
             _decryptHttpsBusy = false;
         }
+    }
+
+    /// <summary>
+    /// Terminal trust-failure modal: retry / Keychain / Export. Returns true when trust is established.
+    /// </summary>
+    private async Task<bool> ResolveTerminalTrustFailureAsync(CertificateOsTrustResult? result)
+    {
+        if (result?.Kind == CertificateOsTrustKind.Cancelled)
+            return false;
+
+        var owner = TryGetMainWindow();
+        for (var i = 0; i < 4; i++)
+        {
+            var choice = await _dialogs.ShowDecryptTrustFailedAsync(owner, result);
+            if (choice == TrustRecoveryChoice.Cancel)
+            {
+                _interception.SetLastOsTrustCancelled();
+                return false;
+            }
+
+            var kind = result?.Kind ?? CertificateOsTrustKind.Failed;
+
+            if (kind == CertificateOsTrustKind.HomebrewMissing)
+            {
+                // Primary is Export CA when brew is missing.
+                if (choice is TrustRecoveryChoice.Primary or TrustRecoveryChoice.Secondary)
+                    await ExportCaAsync();
+                return false;
+            }
+
+            if (kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+            {
+                if (choice == TrustRecoveryChoice.Secondary)
+                {
+                    await ExportCaAsync();
+                    return false;
+                }
+
+                // Primary = Continue in Keychain Access → wait+poll dialog (spinner only in dialog).
+                var wait = await WaitForMacSslTrustAsync(owner);
+                if (wait == MacSslTrustWaitResult.Trusted || _interception.VerifyOsUserSslTrust())
+                    return true;
+
+                _interception.SetLastOsTrustCancelled();
+                if (wait == MacSslTrustWaitResult.NotSavedYet || _interception.IsRootInLoginKeychain())
+                    SetGuardStatus(OsTrustUxCopy.MacSslTrustNotSavedYet);
+                return false;
+            }
+
+            if (choice == TrustRecoveryChoice.Secondary)
+            {
+                await ExportCaAsync();
+                return false;
+            }
+
+            // Primary = Try again
+            SetStatus(
+                OperatingSystem.IsWindows()
+                    ? "Trusting root CA… if Windows asks Trusted Root Yes/No, choose Yes"
+                    : "Trusting root CA…",
+                StatusSeverity.Busy);
+            if (await EnsureRootCaTrustedAsync(promptIfNeeded: true))
+                return true;
+
+            result = _interception.LastOsTrustResult;
+            if (result?.Kind == CertificateOsTrustKind.Cancelled)
+                return false;
+        }
+
+        return _interception.IsRootTrusted || _interception.VerifyOsUserSslTrust();
     }
 
     private void SetDecryptHttpsCore(bool enabled)

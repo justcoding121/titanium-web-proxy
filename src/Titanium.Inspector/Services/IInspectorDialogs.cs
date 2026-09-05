@@ -21,6 +21,25 @@ public interface IInspectorDialogs
     /// </summary>
     Task<TrustRecoveryChoice> ShowTrustRecoveryAsync(Window? owner, CertificateOsTrustResult? result);
 
+    /// <summary>
+    /// macOS: wait while the user sets Always Trust; polls SSL verify until trusted or cancelled.
+    /// </summary>
+    Task<MacSslTrustWaitResult> ShowMacSslTrustWaitAsync(
+        Window? owner,
+        Func<bool> verifySslTrust,
+        Action openKeychain,
+        Func<bool>? isInLoginKeychain = null);
+
+    /// <summary>
+    /// Terminal failure after trust recovery: Try again / Export CA / Keychain confirm.
+    /// </summary>
+    Task<TrustRecoveryChoice> ShowDecryptTrustFailedAsync(Window? owner, CertificateOsTrustResult? result);
+
+    /// <summary>
+    /// Offer to start the proxy so Decrypt HTTPS can continue. Returns true if Start.
+    /// </summary>
+    Task<bool> ConfirmStartProxyForDecryptAsync(Window? owner);
+
     /// <summary>Ask to install root CA before Firefox trust. Returns true if Install.</summary>
     Task<bool> ConfirmInstallRootCaBeforeFirefoxAsync(Window? owner);
 
@@ -59,26 +78,20 @@ public interface IInspectorDialogs
 public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
 {
     private const string CancelLabel = "Cancel";
-    public Task<bool> ConfirmInstallRootCaAsync(Window? owner)
-    {
-        var windowsHint = OperatingSystem.IsWindows()
-            ? "\n\nWindows may show a Trusted Root Yes/No security dialog (not UAC) — choose Yes to trust the CA."
-            : "";
-        return SimpleConfirmDialog.ShowAsync(
+    public Task<bool> ConfirmInstallRootCaAsync(Window? owner) =>
+        SimpleConfirmDialog.ShowAsync(
             owner,
             "Install root CA",
-            "Decrypt HTTPS requires trusting the Titanium Inspector root CA in your current-user certificate store (and Keychain/NSS on macOS/Linux). Install now?" +
-            windowsHint,
+            OsTrustUxCopy.ConfirmInstallRootCaBody(),
             accept: "Install",
             cancel: CancelLabel,
             height: OperatingSystem.IsWindows() ? 260 : 220);
-    }
 
     public Task<bool> ConfirmRemoveRootCaAsync(Window? owner) =>
         SimpleConfirmDialog.ShowAsync(
             owner,
             "Remove root CA",
-            "Remove the Titanium Inspector root CA from the current-user Trusted Root store? HTTPS decrypt will be turned off.",
+            OsTrustUxCopy.ConfirmRemoveRootCaBody(),
             accept: "Remove",
             cancel: CancelLabel);
 
@@ -86,7 +99,7 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
         SimpleConfirmDialog.ShowAsync(
             owner,
             "Install with administrator privileges",
-            "User-level trust failed or was insufficient. Continue to show the OS admin prompt (UAC / macOS authentication / polkit)? Cancel leaves certificate settings unchanged.",
+            OsTrustUxCopy.ConfirmElevateRootCaBody(),
             accept: "Continue",
             cancel: CancelLabel);
 
@@ -130,25 +143,44 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
                 TrustRecoveryDialog.ShowAsync(
                     owner,
                     "Confirm trust in Keychain Access",
-                    message +
-                    "\n\n1. Find the Titanium Inspector root certificate\n" +
-                    "2. Get Info → Trust → When using this certificate: Always Trust\n" +
-                    "3. Close the info window and return here",
+                    OsTrustUxCopy.MacSslTrustWaitBody,
                     primary: "Open Keychain Access",
-                    secondary: "I've confirmed — Continue",
-                    height: 320),
+                    secondary: null,
+                    height: 340),
 
             _ => TrustRecoveryDialog.ShowAsync(
                 owner,
                 "Install with administrator privileges",
-                message +
-                "\n\nContinue to show the OS admin prompt (UAC / macOS authentication / polkit)? " +
-                "Not now leaves certificate settings unchanged.",
+                OsTrustUxCopy.TrustRecoveryAdminBody(message),
                 primary: "Install with administrator",
                 secondary: "Export CA",
                 height: 280),
         };
     }
+
+    public Task<MacSslTrustWaitResult> ShowMacSslTrustWaitAsync(
+        Window? owner,
+        Func<bool> verifySslTrust,
+        Action openKeychain,
+        Func<bool>? isInLoginKeychain = null) =>
+        MacSslTrustWaitDialog.ShowAsync(owner, verifySslTrust, openKeychain, isInLoginKeychain);
+
+    public Task<TrustRecoveryChoice> ShowDecryptTrustFailedAsync(
+        Window? owner,
+        CertificateOsTrustResult? result)
+    {
+        var (title, body, primary, secondary, height) = OsTrustUxCopy.FormatDecryptTrustFailed(result);
+        return TrustRecoveryDialog.ShowAsync(owner, title, body, primary, secondary, height);
+    }
+
+    public Task<bool> ConfirmStartProxyForDecryptAsync(Window? owner) =>
+        SimpleConfirmDialog.ShowAsync(
+            owner,
+            "Start the proxy?",
+            "Decrypt HTTPS needs the proxy running so Inspector can install and verify the root CA. Start now?",
+            accept: "Start proxy",
+            cancel: CancelLabel,
+            height: 220);
 
     public Task<bool> ConfirmInstallRootCaBeforeFirefoxAsync(Window? owner) =>
         SimpleConfirmDialog.ShowAsync(
@@ -252,6 +284,7 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
     public bool RemoveRootCaResult { get; set; } = true;
     public bool ElevateRootCaResult { get; set; } = true;
     public TrustRecoveryChoice TrustRecoveryResult { get; set; } = TrustRecoveryChoice.Primary;
+    public MacSslTrustWaitResult MacSslTrustWaitResult { get; set; } = MacSslTrustWaitResult.Trusted;
     public bool InstallRootCaBeforeFirefoxResult { get; set; } = true;
     public bool QuitFirefoxForTrustResult { get; set; } = true;
     public bool DeviceCaSetupResult { get; set; }
@@ -259,10 +292,15 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
     public bool PacReplaceResult { get; set; } = true;
     public bool RotateRootCaResult { get; set; } = true;
     public bool InstallUpdateResult { get; set; } = true;
+    public TrustRecoveryChoice DecryptTrustFailedResult { get; set; } = TrustRecoveryChoice.Cancel;
+    public bool StartProxyForDecryptResult { get; set; }
     public int InstallRootCaCalls { get; private set; }
     public int RemoveRootCaCalls { get; private set; }
     public int ElevateRootCaCalls { get; private set; }
     public int TrustRecoveryCalls { get; private set; }
+    public int MacSslTrustWaitCalls { get; private set; }
+    public int DecryptTrustFailedCalls { get; private set; }
+    public int StartProxyForDecryptCalls { get; private set; }
     public int InstallRootCaBeforeFirefoxCalls { get; private set; }
     public int QuitFirefoxForTrustCalls { get; private set; }
     public int DeviceCaSetupCalls { get; private set; }
@@ -273,6 +311,7 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
     public string? LastInstallUpdateVersion { get; private set; }
     public string? LastInstallUpdateChannel { get; private set; }
     public CertificateOsTrustResult? LastTrustRecoveryResult { get; private set; }
+    public CertificateOsTrustResult? LastDecryptTrustFailedResult { get; private set; }
 
     public Task<bool> ConfirmInstallRootCaAsync(Window? owner)
     {
@@ -297,6 +336,53 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
         TrustRecoveryCalls++;
         LastTrustRecoveryResult = result;
         return Task.FromResult(TrustRecoveryResult);
+    }
+
+    public Task<MacSslTrustWaitResult> ShowMacSslTrustWaitAsync(
+        Window? owner,
+        Func<bool> verifySslTrust,
+        Action openKeychain,
+        Func<bool>? isInLoginKeychain = null)
+    {
+        MacSslTrustWaitCalls++;
+        try
+        {
+            openKeychain();
+        }
+        catch
+        {
+            // ignore in tests
+        }
+
+        if (MacSslTrustWaitResult == MacSslTrustWaitResult.Trusted)
+        {
+            try
+            {
+                // Allow scripted verify to update interception state when tests wire a real callback.
+                _ = verifySslTrust();
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
+        return Task.FromResult(MacSslTrustWaitResult);
+    }
+
+    public Task<TrustRecoveryChoice> ShowDecryptTrustFailedAsync(
+        Window? owner,
+        CertificateOsTrustResult? result)
+    {
+        DecryptTrustFailedCalls++;
+        LastDecryptTrustFailedResult = result;
+        return Task.FromResult(DecryptTrustFailedResult);
+    }
+
+    public Task<bool> ConfirmStartProxyForDecryptAsync(Window? owner)
+    {
+        StartProxyForDecryptCalls++;
+        return Task.FromResult(StartProxyForDecryptResult);
     }
 
     public Task<bool> ConfirmInstallRootCaBeforeFirefoxAsync(Window? owner)

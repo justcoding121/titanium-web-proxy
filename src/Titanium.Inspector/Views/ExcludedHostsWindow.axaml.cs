@@ -21,6 +21,8 @@ public partial class ExcludedHostsWindow : Window
         _readOnly = readOnly;
         _onSaved = onSaved;
         InitializeComponent();
+        IntroText.Text = OsTrustUxCopy.ExcludedHostsIntro();
+        LoopbackHintText.Text = OsTrustUxCopy.ExcludedHostsLoopbackHint();
         Title = readOnly ? "Excluded hosts (view)" : "Excluded hosts";
         _settings.EnsureExclusionsSeeded();
         LoadFromSettings();
