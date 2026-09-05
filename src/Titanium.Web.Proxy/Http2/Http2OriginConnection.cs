@@ -1,8 +1,8 @@
 using System;
 using System.Buffers;
 using System.Buffers.Binary;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -67,7 +67,9 @@ internal sealed class Http2OriginConnection : IDisposable
     private readonly SemaphoreSlim writeLock = new(1, 1);
     private readonly Http2FlowController sendFlow = new();
     private readonly Http2Settings originSettings = new();
-    private readonly ConcurrentDictionary<int, PendingStream> streams = new();
+    // Client-initiated stream ids are odd (1,3,5,…). Index = streamId >> 1.
+    // Volatile slot publishes replace ConcurrentDictionary on the origin ReadLoop / SendAsync path.
+    private PendingStream?[] streamTable = new PendingStream?[64];
     private readonly CancellationTokenSource connectionCts = new();
     private readonly TaskCompletionSource<bool> initialSettingsReceived =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -109,8 +111,8 @@ internal sealed class Http2OriginConnection : IDisposable
     internal bool IsUsable => !faulted && !goingAway && !connection.IsClosed;
 
     /// <summary>
-    ///     In-flight streams currently registered on this connection. Interlocked — do not use
-    ///     <c>streams.Count</c> (that takes every ConcurrentDictionary lock).
+    ///     In-flight streams currently registered on this connection. Interlocked — do not scan
+    ///     <c>streamTable</c> for the count.
     /// </summary>
     internal int ActiveStreamCount => Volatile.Read(ref activeStreamCount);
 
@@ -207,17 +209,75 @@ internal sealed class Http2OriginConnection : IDisposable
 
     private void RegisterOpenedStream(int streamId, PendingStream pending)
     {
-        if (!streams.TryAdd(streamId, pending))
+        var idx = streamId >> 1;
+        EnsureStreamTable(idx);
+        // Odd client stream ids; one slot per id. CompareExchange publishes to the ReadLoop.
+        if (Interlocked.CompareExchange(ref streamTable[idx], pending, null) != null)
             throw new InvalidOperationException($"HTTP/2 stream {streamId} is already registered on this origin connection.");
         Interlocked.Increment(ref activeStreamCount);
     }
 
     private bool TryUnregisterStream(int streamId, out PendingStream? pending)
     {
-        if (!streams.TryRemove(streamId, out pending))
+        var idx = streamId >> 1;
+        var table = streamTable;
+        if ((uint)idx >= (uint)table.Length)
+        {
+            pending = null;
+            return false;
+        }
+
+        pending = Interlocked.Exchange(ref table[idx], null);
+        if (pending == null)
             return false;
         Interlocked.Decrement(ref activeStreamCount);
         return true;
+    }
+
+    private bool TryGetStream(int streamId, [NotNullWhen(true)] out PendingStream? pending)
+    {
+        var idx = streamId >> 1;
+        var table = streamTable;
+        if ((uint)idx >= (uint)table.Length)
+        {
+            pending = null;
+            return false;
+        }
+
+        pending = Volatile.Read(ref table[idx]);
+        return pending != null;
+    }
+
+    private bool StreamTableContains(int streamId)
+    {
+        var idx = streamId >> 1;
+        var table = streamTable;
+        return (uint)idx < (uint)table.Length && Volatile.Read(ref table[idx]) != null;
+    }
+
+    private void EnsureStreamTable(int idx)
+    {
+        var table = streamTable;
+        if ((uint)idx < (uint)table.Length)
+            return;
+
+        // Resize under writeLock (RegisterOpenedStream only); ReadLoop may still see the old
+        // array until the new one is published — copy keeps live slots.
+        var newLen = Math.Max(table.Length * 2, idx + 1);
+        var next = new PendingStream?[newLen];
+        Array.Copy(table, next, table.Length);
+        Volatile.Write(ref streamTable, next);
+    }
+
+    private IEnumerable<PendingStream> EnumerateLiveStreams()
+    {
+        var table = streamTable;
+        for (var i = 0; i < table.Length; i++)
+        {
+            var pending = Volatile.Read(ref table[i]);
+            if (pending != null)
+                yield return pending;
+        }
     }
 
     /// <summary>
@@ -728,7 +788,7 @@ internal sealed class Http2OriginConnection : IDisposable
     private async Task WriteTunnelDataAsync(int streamId, ReadOnlyMemory<byte> payload, bool endStream,
         CancellationToken cancellationToken)
     {
-        if (!streams.ContainsKey(streamId) && !endStream)
+        if (!StreamTableContains(streamId) && !endStream)
             throw new IOException($"HTTP/2 tunnel stream {streamId} is no longer open.");
 
         await EnqueueDataWithFlowAsync(streamId, payload, endStream, cancellationToken);
@@ -820,7 +880,7 @@ internal sealed class Http2OriginConnection : IDisposable
         if (connectionBytes <= 0 && streamBytes <= 0)
             return Task.CompletedTask;
 
-        var streamStillTracked = streamBytes > 0 && streams.ContainsKey(streamId);
+        var streamStillTracked = streamBytes > 0 && StreamTableContains(streamId);
         if (connectionBytes > 0)
             Http2Helper.EnqueueWindowUpdate(Writer, 0, connectionBytes);
         if (streamStillTracked)
@@ -1027,7 +1087,7 @@ internal sealed class Http2OriginConnection : IDisposable
                             byte[]? rented = null;
                             try
                             {
-                                if (streams.TryGetValue(streamId, out var pendingData))
+                                if (TryGetStream(streamId, out var pendingData))
                                 {
                                     if (pendingData.IsTunnel)
                                     {
@@ -1163,13 +1223,17 @@ internal sealed class Http2OriginConnection : IDisposable
                             intake.Advance(length);
                             goAwayLastStreamId = lastId;
                             goingAway = true;
-                            foreach (var kvp in streams)
+                            var table = streamTable;
+                            for (var i = 0; i < table.Length; i++)
                             {
-                                if (kvp.Key > lastId)
+                                var pendingGoAway = Volatile.Read(ref table[i]);
+                                if (pendingGoAway == null) continue;
+                                var sid = (i << 1) | 1;
+                                if (sid > lastId)
                                 {
                                     var goAwayEx = new Http2OriginGoAwayException(
-                                        $"The origin sent GOAWAY ({errorCode}) before stream {kvp.Key} was processed; it is safe to retry.");
-                                    FailPending(kvp.Value, goAwayEx);
+                                        $"The origin sent GOAWAY ({errorCode}) before stream {sid} was processed; it is safe to retry.");
+                                    FailPending(pendingGoAway, goAwayEx);
                                 }
                             }
                         }
@@ -1377,7 +1441,7 @@ internal sealed class Http2OriginConnection : IDisposable
             return;
         }
 
-        if (!streams.TryGetValue(streamId, out var pending)) return;
+        if (!TryGetStream(streamId, out var pending)) return;
 
         var status = headerCollector.Status;
         var buildingResponse = headerCollector.BuildingResponse;
@@ -1461,7 +1525,7 @@ internal sealed class Http2OriginConnection : IDisposable
 
     private void CompleteStream(int streamId)
     {
-        if (!streams.TryGetValue(streamId, out var pending)) return;
+        if (!TryGetStream(streamId, out var pending)) return;
 
         if (pending.IsTunnel)
         {
@@ -1525,8 +1589,8 @@ internal sealed class Http2OriginConnection : IDisposable
                     "The HTTP/1.1-to-HTTP/2 origin bridge connection failed.", wrapped);
         }
 
-        foreach (var kvp in streams)
-            FailPending(kvp.Value, ex);
+        foreach (var pendingFail in EnumerateLiveStreams())
+            FailPending(pendingFail, ex);
 
         initialSettingsReceived.TrySetException(ex);
     }
