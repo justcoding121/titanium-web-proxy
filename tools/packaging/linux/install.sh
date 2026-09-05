@@ -7,9 +7,10 @@ PREFIX="${PREFIX:-${HOME}/.local}"
 APP_DIR="${PREFIX}/share/TitaniumInspector"
 BIN_DIR="${PREFIX}/bin"
 APPS_DIR="${PREFIX}/share/applications"
-ICONS_DIR="${PREFIX}/share/icons/hicolor/256x256/apps"
+HICOLOR_ROOT="${PREFIX}/share/icons/hicolor"
 DESKTOP_SRC="${SCRIPT_DIR}/TitaniumInspector.desktop.in"
 EXE_NAME="TitaniumInspector"
+ICON_ID="titanium-inspector"
 
 if [[ ! -x "${SCRIPT_DIR}/${EXE_NAME}" && ! -f "${SCRIPT_DIR}/${EXE_NAME}" ]]; then
   echo "error: ${EXE_NAME} not found next to install.sh (extract the full zip first)" >&2
@@ -21,7 +22,7 @@ if [[ ! -f "${DESKTOP_SRC}" ]]; then
   exit 1
 fi
 
-mkdir -p "${APP_DIR}" "${BIN_DIR}" "${APPS_DIR}" "${ICONS_DIR}"
+mkdir -p "${APP_DIR}" "${BIN_DIR}" "${APPS_DIR}" "${HICOLOR_ROOT}"
 
 echo "Installing payload to ${APP_DIR} ..."
 # Refresh install dir; keep a clean copy of the zip contents (including helpers).
@@ -30,40 +31,67 @@ mkdir -p "${APP_DIR}"
 cp -a "${SCRIPT_DIR}/." "${APP_DIR}/"
 chmod +x "${APP_DIR}/${EXE_NAME}" "${APP_DIR}/install.sh" "${APP_DIR}/uninstall.sh" 2>/dev/null || true
 
-ICON_SRC=""
-for candidate in "${APP_DIR}/app.ico" "${APP_DIR}/Assets/app.ico" "${SCRIPT_DIR}/app.ico"; do
-  if [[ -f "${candidate}" ]]; then
-    ICON_SRC="${candidate}"
-    break
-  fi
-done
+# Prefer shared helper when present (repo checkout or zip that ships desktop-icons.sh).
+ICON_OK=0
+if [[ -f "${SCRIPT_DIR}/desktop-icons.sh" ]]; then
+  # shellcheck source=../desktop-icons.sh
+  source "${SCRIPT_DIR}/desktop-icons.sh"
+  PAYLOAD_DIR="${APP_DIR}" SCRIPT_DIR="${SCRIPT_DIR}" \
+    install_hicolor_icons "${HICOLOR_ROOT}" "${ICON_ID}" "${APP_DIR}/app.ico" \
+    && ICON_OK=1 || true
+elif [[ -f "${SCRIPT_DIR}/../desktop-icons.sh" ]]; then
+  # shellcheck source=../desktop-icons.sh
+  source "${SCRIPT_DIR}/../desktop-icons.sh"
+  PAYLOAD_DIR="${APP_DIR}" SCRIPT_DIR="${SCRIPT_DIR}" \
+    install_hicolor_icons "${HICOLOR_ROOT}" "${ICON_ID}" "${APP_DIR}/app.ico" \
+    && ICON_OK=1 || true
+fi
 
-ICON_DEST="${ICONS_DIR}/titanium-inspector.png"
-if [[ -n "${ICON_SRC}" ]]; then
-  if command -v convert >/dev/null 2>&1; then
-    convert "${ICON_SRC}" -thumbnail 256x256 "${ICON_DEST}" || cp -f "${ICON_SRC}" "${ICONS_DIR}/titanium-inspector.ico"
-  else
-    # Many desktops accept .ico; also keep a copy named .png path fallback via Icon= absolute .ico
-    cp -f "${ICON_SRC}" "${ICONS_DIR}/titanium-inspector.ico"
-    ICON_DEST="${ICONS_DIR}/titanium-inspector.ico"
+if [[ "${ICON_OK}" -ne 1 ]]; then
+  # Zip-local prebuilt PNGs (release) or ImageMagick fallback.
+  for size in 16 32 48 128 256 512; do
+    mkdir -p "${HICOLOR_ROOT}/${size}x${size}/apps"
+    dest="${HICOLOR_ROOT}/${size}x${size}/apps/${ICON_ID}.png"
+    if [[ -f "${SCRIPT_DIR}/${ICON_ID}-${size}.png" ]]; then
+      cp -f "${SCRIPT_DIR}/${ICON_ID}-${size}.png" "${dest}"
+    elif [[ -f "${SCRIPT_DIR}/${ICON_ID}.png" ]]; then
+      cp -f "${SCRIPT_DIR}/${ICON_ID}.png" "${dest}"
+    elif [[ -f "${APP_DIR}/app.ico" ]] && command -v convert >/dev/null 2>&1; then
+      convert "${APP_DIR}/app.ico" -thumbnail "${size}x${size}" "${dest}" 2>/dev/null || true
+    fi
+  done
+  if [[ ! -f "${HICOLOR_ROOT}/256x256/apps/${ICON_ID}.png" && -f "${APP_DIR}/app.ico" ]]; then
+    mkdir -p "${HICOLOR_ROOT}/256x256/apps"
+    if command -v convert >/dev/null 2>&1; then
+      convert "${APP_DIR}/app.ico" -thumbnail 256x256 \
+        "${HICOLOR_ROOT}/256x256/apps/${ICON_ID}.png" 2>/dev/null || true
+    else
+      cp -f "${APP_DIR}/app.ico" "${HICOLOR_ROOT}/256x256/apps/${ICON_ID}.ico"
+    fi
   fi
-else
-  ICON_DEST=""
+fi
+
+ICON_LINE="${ICON_ID}"
+if [[ ! -f "${HICOLOR_ROOT}/256x256/apps/${ICON_ID}.png" ]]; then
+  if [[ -f "${HICOLOR_ROOT}/256x256/apps/${ICON_ID}.ico" ]]; then
+    ICON_LINE="${HICOLOR_ROOT}/256x256/apps/${ICON_ID}.ico"
+  else
+    ICON_LINE=""
+  fi
 fi
 
 ln -sfn "${APP_DIR}/${EXE_NAME}" "${BIN_DIR}/titanium-inspector"
 
 DESKTOP_OUT="${APPS_DIR}/TitaniumInspector.desktop"
 EXEC_LINE="${APP_DIR}/${EXE_NAME}"
-ICON_LINE="${ICON_DEST}"
 sed -e "s|@EXEC@|${EXEC_LINE}|g" -e "s|@ICON@|${ICON_LINE}|g" "${DESKTOP_SRC}" > "${DESKTOP_OUT}"
 chmod 644 "${DESKTOP_OUT}"
 
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database "${APPS_DIR}" >/dev/null 2>&1 || true
 fi
-if command -v gtk-update-icon-cache >/dev/null 2>&1 && [[ -d "${PREFIX}/share/icons/hicolor" ]]; then
-  gtk-update-icon-cache -f -t "${PREFIX}/share/icons/hicolor" >/dev/null 2>&1 || true
+if command -v gtk-update-icon-cache >/dev/null 2>&1 && [[ -d "${HICOLOR_ROOT}" ]]; then
+  gtk-update-icon-cache -f -t "${HICOLOR_ROOT}" >/dev/null 2>&1 || true
 fi
 
 echo "Installed Titanium Inspector."

@@ -26,30 +26,10 @@ rsync -a --exclude 'install-app.sh' --exclude 'uninstall-app.sh' \
 
 chmod +x "${APP_PATH}/Contents/MacOS/${EXE_NAME}"
 
-ICON_SRC=""
-for candidate in "${PAYLOAD_DIR}/app.ico" "${APP_PATH}/Contents/MacOS/app.ico"; do
-  if [[ -f "${candidate}" ]]; then
-    ICON_SRC="${candidate}"
-    break
-  fi
-done
-
-ICON_FILE=""
-if [[ -n "${ICON_SRC}" ]] && command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
-  ICONSET="$(mktemp -d)/AppIcon.iconset"
-  mkdir -p "${ICONSET}"
-  TMP_PNG="$(mktemp).png"
-  if sips -s format png "${ICON_SRC}" --out "${TMP_PNG}" >/dev/null 2>&1; then
-    for size in 16 32 128 256 512; do
-      sips -z "${size}" "${size}" "${TMP_PNG}" --out "${ICONSET}/icon_${size}x${size}.png" >/dev/null
-      double=$((size * 2))
-      sips -z "${double}" "${double}" "${TMP_PNG}" --out "${ICONSET}/icon_${size}x${size}@2x.png" >/dev/null
-    done
-    iconutil -c icns "${ICONSET}" -o "${APP_PATH}/Contents/Resources/AppIcon.icns"
-    ICON_FILE="AppIcon.icns"
-  fi
-  rm -rf "$(dirname "${ICONSET}")" "${TMP_PNG}" 2>/dev/null || true
-fi
+# shellcheck source=../desktop-icons.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/desktop-icons.sh"
+ICON_KEY="$(PAYLOAD_DIR="${PAYLOAD_DIR}" install_macos_app_icon \
+  "${APP_PATH}/Contents/Resources" "${PAYLOAD_DIR}/app.ico" || true)"
 
 cat > "${APP_PATH}/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -74,7 +54,7 @@ cat > "${APP_PATH}/Contents/Info.plist" <<EOF
 	<string>12.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
-$([ -n "${ICON_FILE}" ] && printf '\t<key>CFBundleIconFile</key>\n\t<string>%s</string>\n' "${ICON_FILE}")
+$([ -n "${ICON_KEY}" ] && printf '\t<key>CFBundleIconFile</key>\n\t<string>%s</string>\n' "${ICON_KEY}")
 </dict>
 </plist>
 EOF

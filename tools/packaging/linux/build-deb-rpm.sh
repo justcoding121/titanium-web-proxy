@@ -53,7 +53,14 @@ if [[ "${PRODUCT}" == "cli" && -f "${PREFIX}/twp" ]]; then
 fi
 
 if [[ "${PRODUCT}" == "inspector" ]]; then
-  mkdir -p "${STAGE}/usr/share/applications" "${STAGE}/usr/share/icons/hicolor/256x256/apps"
+  mkdir -p "${STAGE}/usr/share/applications" "${STAGE}/usr/share/icons/hicolor"
+  # shellcheck source=desktop-icons.sh
+  source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/desktop-icons.sh"
+  if ! install_hicolor_icons "${STAGE}/usr/share/icons/hicolor" "titanium-inspector" \
+      "${PAYLOAD_DIR}/app.ico"; then
+    echo "error: failed to install titanium-inspector hicolor icons" >&2
+    exit 1
+  fi
   DESKTOP_IN="${PAYLOAD_DIR}/TitaniumInspector.desktop.in"
   if [[ -f "${DESKTOP_IN}" ]]; then
     sed -e "s|@EXEC@|/opt/${NAME}/${EXE}|g" -e "s|@ICON@|titanium-inspector|g" \

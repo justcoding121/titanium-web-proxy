@@ -333,11 +333,15 @@ jobs:
           ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
           Copy-Item -Force tools/packaging/THIRD-PARTY-INSPECTOR.txt (Join-Path $out "THIRD-PARTY-INSPECTOR.txt")
           Copy-Item -Force src/Titanium.Inspector/Assets/app.ico (Join-Path $out "app.ico")
+          Copy-Item -Force tools/packaging/desktop-icons.sh $out
           if ($rid -like 'linux*') {
             Copy-Item -Force tools/packaging/linux/install.sh, tools/packaging/linux/uninstall.sh, tools/packaging/linux/TitaniumInspector.desktop.in $out
+            Copy-Item -Force tools/packaging/icons/titanium-inspector.png $out
+            Copy-Item -Force (Get-ChildItem tools/packaging/icons/titanium-inspector-*.png) $out
           }
           if ($rid -like 'osx*') {
             Copy-Item -Force tools/packaging/osx/install-app.sh, tools/packaging/osx/uninstall-app.sh $out
+            Copy-Item -Force tools/packaging/icons/AppIcon.icns $out
           }
       - name: Azure login (OIDC)
         if: matrix.rid == 'win-x64'

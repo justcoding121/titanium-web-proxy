@@ -73,13 +73,10 @@ EOF
 cp "${APPDIR}/usr/share/applications/${ICON_ID}.desktop" "${APPDIR}/${ICON_ID}.desktop"
 
 ICON_PNG="${APPDIR}/usr/share/icons/hicolor/256x256/apps/${ICON_ID}.png"
-ICON_SRC=""
-for c in "${PAYLOAD_DIR}/app.ico" "${ROOT}/src/Titanium.Inspector/Assets/app.ico"; do
-  [[ -f "$c" ]] && ICON_SRC="$c" && break
-done
-if [[ -n "${ICON_SRC}" ]] && command -v convert >/dev/null 2>&1; then
-  convert "${ICON_SRC}" -resize 256x256 "${ICON_PNG}" || true
-fi
+# shellcheck source=../desktop-icons.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/desktop-icons.sh"
+install_hicolor_icons "${APPDIR}/usr/share/icons/hicolor" "${ICON_ID}" \
+  "${PAYLOAD_DIR}/app.ico" "${ROOT}/src/Titanium.Inspector/Assets/app.ico" || true
 # appimagetool requires the icon named in the desktop file to exist
 if [[ ! -f "${ICON_PNG}" ]]; then
   if command -v convert >/dev/null 2>&1; then

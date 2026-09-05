@@ -27,21 +27,20 @@ rsync -a --exclude 'install-app.sh' --exclude 'uninstall-app.sh' \
 
 chmod +x "${APP_PATH}/Contents/MacOS/${EXE_NAME}"
 
-# Best-effort icon: convert .ico → .icns when iconutil/sips tooling exists.
-ICON_SRC=""
-for candidate in "${SCRIPT_DIR}/app.ico" "${APP_PATH}/Contents/MacOS/app.ico"; do
-  if [[ -f "${candidate}" ]]; then
-    ICON_SRC="${candidate}"
-    break
-  fi
-done
-
 ICON_KEY=""
-if [[ -n "${ICON_SRC}" ]] && command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
+if [[ -f "${SCRIPT_DIR}/desktop-icons.sh" ]]; then
+  # shellcheck source=../desktop-icons.sh
+  source "${SCRIPT_DIR}/desktop-icons.sh"
+  ICON_KEY="$(PAYLOAD_DIR="${SCRIPT_DIR}" SCRIPT_DIR="${SCRIPT_DIR}" \
+    install_macos_app_icon "${APP_PATH}/Contents/Resources" \
+    "${SCRIPT_DIR}/app.ico" || true)"
+elif [[ -f "${SCRIPT_DIR}/AppIcon.icns" ]]; then
+  cp -f "${SCRIPT_DIR}/AppIcon.icns" "${APP_PATH}/Contents/Resources/AppIcon.icns"
+  ICON_KEY="AppIcon"
+elif [[ -f "${SCRIPT_DIR}/app.ico" ]] && command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
   ICONSET="$(mktemp -d)/AppIcon.iconset"
   mkdir -p "${ICONSET}"
-  # Produce a large PNG then downscale for iconset sizes.
-  sips -s format png "${ICON_SRC}" --out /tmp/titanium-inspector-icon.png >/dev/null 2>&1 || true
+  sips -s format png "${SCRIPT_DIR}/app.ico" --out /tmp/titanium-inspector-icon.png >/dev/null 2>&1 || true
   if [[ -f /tmp/titanium-inspector-icon.png ]]; then
     for size in 16 32 128 256 512; do
       sips -z "${size}" "${size}" /tmp/titanium-inspector-icon.png --out "${ICONSET}/icon_${size}x${size}.png" >/dev/null

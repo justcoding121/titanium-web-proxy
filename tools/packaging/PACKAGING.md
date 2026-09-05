@@ -86,8 +86,10 @@ Release publish copies helpers into each Inspector zip:
 
 | RID | Helpers |
 | --- | --- |
-| `linux-*` | `install.sh`, `uninstall.sh`, `TitaniumInspector.desktop.in`, `app.ico` |
-| `osx-*` | `install-app.sh`, `uninstall-app.sh`, `app.ico` |
+| `linux-*` | `install.sh`, `uninstall.sh`, `TitaniumInspector.desktop.in`, `app.ico`, `desktop-icons.sh`, `titanium-inspector*.png` |
+| `osx-*` | `install-app.sh`, `uninstall-app.sh`, `app.ico`, `desktop-icons.sh`, `AppIcon.icns` |
+
+Prebuilt icons live in [`icons/`](icons/) (hicolor PNG sizes + macOS `AppIcon.icns`). Deb/rpm/AppImage/DMG packaging installs them into the OS icon locations.
 
 **Linux:** extract the zip, then `./install.sh` (default prefix `~/.local`). **macOS:** extract, then `./install-app.sh` → `~/Applications/Titanium Inspector.app` (prefer DMG when published).
 
