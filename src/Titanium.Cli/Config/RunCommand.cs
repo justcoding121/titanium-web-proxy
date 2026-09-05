@@ -1,4 +1,5 @@
 using System.Net;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Titanium.Cli;
 using Titanium.Cli.Certificates;
@@ -22,7 +23,34 @@ namespace Titanium.Cli.Config;
 
 internal static class RunCommand
 {
-    public static async Task<int> ExecuteAsync(string configPath, bool verbose = false)
+    public static async Task<int> ExecuteAsync(string[] args)
+    {
+        if (CliHelp.RequestsHelp(args.AsSpan(1)))
+        {
+            return PrintHelp();
+        }
+
+        var configPath = ParseConfigPath(args);
+        var verbose = ParseVerbose(args);
+        var serviceMode = ParseServiceMode(args);
+        var serviceName = ParseServiceName(args) ?? Service.ServiceDefaults.DefaultServiceName;
+
+        if (serviceMode && OperatingSystem.IsWindows())
+        {
+            return await WindowsProxyServiceHost.RunAsync(configPath, verbose, serviceName)
+                .ConfigureAwait(false);
+        }
+
+        return await ExecuteCoreAsync(configPath, verbose, serviceMode, CancellationToken.None)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>Shared proxy lifecycle for foreground run and Windows Service hosted mode.</summary>
+    internal static async Task<int> ExecuteCoreAsync(
+        string configPath,
+        bool verbose,
+        bool serviceMode,
+        CancellationToken stoppingToken)
     {
         var loaded = ConfigLoader.Load(configPath);
         var errors = TwpConfigValidator.Validate(loaded.Config);
@@ -36,11 +64,24 @@ internal static class RunCommand
             return 1;
         }
 
+        // When launched as a service, resolve relative paths against the config directory
+        // (SCM / systemd / launchd cwd is typically System32 or /).
+        var configDir = Path.GetDirectoryName(Path.GetFullPath(configPath));
+        if (!string.IsNullOrEmpty(configDir))
+        {
+            Directory.SetCurrentDirectory(configDir);
+        }
+
         var requiresSessionPath = ConfigNeedsSessionPath(loaded.Config);
         // CLI is non-interactive: do not install the MITM root into the user trust store
         // (Windows can block on a security prompt and hang headless CI / services).
         using var proxy = new ProxyServer(userTrustRootCertificate: false);
         ApplyLogging(proxy, loaded.Config.Logging, verbose);
+        if (serviceMode)
+        {
+            ApplyServiceLoggingDefaults(proxy, loaded.Config.Logging);
+        }
+
         // Fast leaf cold-start before server.certificateManager overlays (which may override engine/algo).
         proxy.CertificateManager.ApplyFastColdStartLeafSettings();
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
@@ -49,7 +90,7 @@ internal static class RunCommand
         var clusterManager = new ClusterManager();
         if (loaded.Config.Clusters.Count > 0)
         {
-            await clusterManager.ApplyAsync(loaded.Config.Clusters.ToList());
+            await clusterManager.ApplyAsync(loaded.Config.Clusters.ToList()).ConfigureAwait(false);
         }
 
         foreach (var listener in loaded.Config.Listeners)
@@ -101,28 +142,175 @@ internal static class RunCommand
             ResponseCache = responseCache,
             LatencyRecorder = loadBalancer,
             Logger = proxy.Logger,
-        });
+        }).ConfigureAwait(false);
 
         RefreshReverseProxy();
         proxy.Start();
         StartAcmeIfConfigured(proxy, loaded.Config);
 
-        AsyncConsole.WriteLine("Titanium proxy running. Press Ctrl+C to stop.");
-        await AsyncConsole.FlushAsync();
-        await WaitForCtrlCAsync();
-        await proxy.StopAsync();
+        if (serviceMode)
+        {
+            AsyncConsole.WriteLine("Titanium proxy running (service mode).");
+        }
+        else
+        {
+            AsyncConsole.WriteLine("Titanium proxy running. Press Ctrl+C to stop.");
+        }
+
+        await AsyncConsole.FlushAsync().ConfigureAwait(false);
+        await WaitForShutdownAsync(stoppingToken).ConfigureAwait(false);
+        await proxy.StopAsync().ConfigureAwait(false);
         return 0;
     }
 
-    private static async Task WaitForCtrlCAsync()
+    internal static int PrintHelp()
     {
-        var tcs = new TaskCompletionSource();
-        Console.CancelKeyPress += (_, e) =>
+        AsyncConsole.WriteLine("""
+            titanium run -c <config> [-v|--verbose] [--service] [--name <service-name>]
+
+              -c, --config   Path to twp.yaml / .json / .twp / .conf (required).
+              -v, --verbose  Enable debug console logging.
+              --service      Run as an OS service worker (used by `titanium service install`).
+              --name         Windows SCM service name when --service is set (default: titanium).
+
+            Starts the proxy and blocks until Ctrl+C, SIGTERM, or the service manager stops it.
+            """);
+        CliHelp.WriteDocsFooter();
+        return 0;
+    }
+
+    internal static string ParseConfigPath(string[] args)
+    {
+        for (var i = 1; i < args.Length; i++)
+        {
+            if ((args[i] is "-c" or "--config") && i + 1 < args.Length)
+            {
+                return args[i + 1];
+            }
+        }
+
+        throw new ArgumentException("Missing required -c <config-path>.");
+    }
+
+    internal static bool ParseVerbose(string[] args)
+    {
+        for (var i = 1; i < args.Length; i++)
+        {
+            if (args[i] is "-v" or "--verbose")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    internal static bool ParseServiceMode(string[] args)
+    {
+        for (var i = 1; i < args.Length; i++)
+        {
+            if (args[i] is "--service")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    internal static string? ParseServiceName(string[] args)
+    {
+        for (var i = 1; i < args.Length; i++)
+        {
+            if (args[i] is "--name" && i + 1 < args.Length)
+            {
+                return args[i + 1];
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// When YAML has no file log, enable a default file sink on Windows (SCM has no console)
+    /// and keep console on Linux/macOS so journald / launchd capture stdout.
+    /// </summary>
+    internal static void ApplyServiceLoggingDefaults(ProxyServer proxy, LoggingConfig? logging)
+    {
+        var hasFile = logging is { EnableFile: true } && !string.IsNullOrWhiteSpace(logging.FilePath);
+        if (hasFile)
+        {
+            return;
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "Titanium",
+                "logs");
+            Directory.CreateDirectory(dir);
+            proxy.Logging.Enabled = true;
+            proxy.Logging.EnableFile = true;
+            proxy.Logging.FilePath = Path.Combine(dir, "titanium.log");
+            if (proxy.Logging.MinimumLevel > Microsoft.Extensions.Logging.LogLevel.Information)
+            {
+                proxy.Logging.MinimumLevel = Microsoft.Extensions.Logging.LogLevel.Information;
+            }
+
+            proxy.ApplyLoggingConfiguration();
+            return;
+        }
+
+        // Linux journald / macOS launchd StandardOutPath: ensure console is on.
+        if (!proxy.Logging.Enabled || !proxy.Logging.EnableConsole)
+        {
+            proxy.Logging.Enabled = true;
+            proxy.Logging.EnableConsole = true;
+            if (proxy.Logging.MinimumLevel > Microsoft.Extensions.Logging.LogLevel.Information)
+            {
+                proxy.Logging.MinimumLevel = Microsoft.Extensions.Logging.LogLevel.Information;
+            }
+
+            proxy.ApplyLoggingConfiguration();
+        }
+    }
+
+    private static async Task WaitForShutdownAsync(CancellationToken stoppingToken)
+    {
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        void RequestStop() => tcs.TrySetResult();
+
+        ConsoleCancelEventHandler? cancelHandler = (_, e) =>
         {
             e.Cancel = true;
-            tcs.TrySetResult();
+            RequestStop();
         };
-        await tcs.Task;
+        Console.CancelKeyPress += cancelHandler;
+
+        using var reg = stoppingToken.CanBeCanceled
+            ? stoppingToken.Register(RequestStop)
+            : default;
+
+        PosixSignalRegistration? sigTerm = null;
+        PosixSignalRegistration? sigInt = null;
+        try
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                sigTerm = PosixSignalRegistration.Create(PosixSignal.SIGTERM, _ => RequestStop());
+                sigInt = PosixSignalRegistration.Create(PosixSignal.SIGINT, _ => RequestStop());
+            }
+
+            await tcs.Task.ConfigureAwait(false);
+        }
+        finally
+        {
+            Console.CancelKeyPress -= cancelHandler;
+            sigTerm?.Dispose();
+            sigInt?.Dispose();
+        }
     }
 
     private static void StartAcmeIfConfigured(ProxyServer proxy, TwpConfig config)

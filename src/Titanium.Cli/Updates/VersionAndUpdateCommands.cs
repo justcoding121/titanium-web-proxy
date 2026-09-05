@@ -6,6 +6,7 @@ using System.Text.Json;
 using Titanium.Cli;
 using Titanium.Cli.Config;
 using Titanium.Cli.Http3;
+using Titanium.Cli.Service;
 using Titanium.Web.Proxy.Abstractions.Updates;
 
 namespace Titanium.Cli.Updates;
@@ -14,6 +15,11 @@ internal static class VersionCommand
 {
     public static async Task<int> ExecuteAsync(string[] args)
     {
+        if (CliHelp.RequestsHelp(args.AsSpan(1)))
+        {
+            return PrintHelp();
+        }
+
         var check = args.Contains("--check", StringComparer.OrdinalIgnoreCase);
         var plus = args.Contains("--plus", StringComparer.OrdinalIgnoreCase);
 
@@ -72,6 +78,22 @@ internal static class VersionCommand
         }
 
         return exit;
+    }
+
+    internal static int PrintHelp()
+    {
+        AsyncConsole.WriteLine("""
+            titanium version [--check] [--plus] [--channel stable|beta]
+
+              (default)   Print local Cli / Core / Abstractions / Configuration versions.
+              --check     Compare local Cli (and optionally Plus) to the update feed.
+              --plus      Include Plus DLL version (with or without --check).
+              --channel   stable (default) or beta. Also: TITANIUM_UPDATE_CHANNEL.
+
+            Exit codes with --check: 0 up to date, 2 update available, 1 feed error.
+            """);
+        CliHelp.WriteDocsFooter();
+        return 0;
     }
 
     private static int PrintPlusCheck(ReleaseManifest manifest, string channel, string channelDisplay)
@@ -257,6 +279,11 @@ internal static class UpdateCommand
 
     public static async Task<int> ExecuteAsync(string[] args)
     {
+        if (CliHelp.RequestsHelp(args.AsSpan(1)))
+        {
+            return PrintHelp();
+        }
+
         var plus = args.Contains("--plus", StringComparer.OrdinalIgnoreCase);
         if (!VersionCommand.TryResolveChannel(args, out var channel, out var channelError))
         {
@@ -265,6 +292,13 @@ internal static class UpdateCommand
         }
 
         var channelDisplay = VersionCommand.FormatChannel(channel);
+
+        if (await ServiceCommand.IsDefaultServiceRunningAsync().ConfigureAwait(false))
+        {
+            AsyncConsole.WriteError(
+                "Warning: the Titanium OS service appears to be running. Stop it before updating " +
+                "(`titanium service stop`), then run update again, then `titanium service start`.");
+        }
 
         AsyncConsole.WriteLine(plus
             ? $"Checking Plus updates ({channelDisplay})…"
@@ -284,6 +318,21 @@ internal static class UpdateCommand
         }
 
         return await UpdateCliAsync(manifest, channelDisplay);
+    }
+
+    internal static int PrintHelp()
+    {
+        AsyncConsole.WriteLine("""
+            titanium update [--plus] [--channel stable|beta]
+
+              (default)   Download and install a newer CLI zip when the feed is ahead.
+              --plus      Update Titanium.Plus.dll beside the CLI instead of the CLI zip.
+              --channel   stable (default) or beta. Also: TITANIUM_UPDATE_CHANNEL.
+
+            Does not use winget. If an OS service is running, stop it first so the exe can be replaced.
+            """);
+        CliHelp.WriteDocsFooter();
+        return 0;
     }
 
     private static async Task<int> UpdateCliAsync(ReleaseManifest manifest, string channelDisplay)

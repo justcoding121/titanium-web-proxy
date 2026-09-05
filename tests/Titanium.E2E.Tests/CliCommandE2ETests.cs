@@ -53,7 +53,47 @@ public class CliCommandE2ETests
         var (code, stdout, _) = await harness.RunOnceAsync(["help"]);
         Assert.AreEqual(0, code);
         StringAssert.Contains(stdout, "titanium run");
+        StringAssert.Contains(stdout, "titanium service");
     }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Run_Help_DoesNotRequireConfig_Exit0()
+    {
+        using var harness = new CliProcessHarness();
+        var (code, stdout, _) = await harness.RunOnceAsync(["run", "--help"]);
+        Assert.AreEqual(0, code);
+        StringAssert.Contains(stdout, "titanium run");
+        StringAssert.Contains(stdout, DocsUrlHint);
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Update_Help_DoesNotHitNetwork_Exit0()
+    {
+        using var harness = new CliProcessHarness();
+        var (code, stdout, _) = await harness.RunOnceAsync(
+            ["update", "--help"],
+            timeout: TimeSpan.FromSeconds(15));
+        Assert.AreEqual(0, code);
+        StringAssert.Contains(stdout, "titanium update");
+        Assert.IsFalse(
+            stdout.Contains("Checking for updates", StringComparison.OrdinalIgnoreCase),
+            stdout);
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Service_Help_Exit0()
+    {
+        using var harness = new CliProcessHarness();
+        var (code, stdout, _) = await harness.RunOnceAsync(["service", "--help"]);
+        Assert.AreEqual(0, code);
+        StringAssert.Contains(stdout, "install");
+        StringAssert.Contains(stdout, "status");
+    }
+
+    private const string DocsUrlHint = "titaniumproxy.com/docs/cli";
 
     [TestMethod]
     [TestCategory("E2E")]

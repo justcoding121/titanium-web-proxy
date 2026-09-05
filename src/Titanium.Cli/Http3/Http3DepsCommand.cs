@@ -17,7 +17,17 @@ internal static class Http3DepsCommand
 
     public static async Task<int> ExecuteAsync(string[] args)
     {
+        if (args.Length >= 2 && CliHelp.IsHelpToken(args[1]))
+        {
+            return PrintHelp();
+        }
+
         var sub = args.Length > 1 ? args[1].ToLowerInvariant() : "status";
+        if (args.Length > 2 && CliHelp.RequestsHelp(args.AsSpan(2)))
+        {
+            return PrintHelp();
+        }
+
         return sub switch
         {
             "status" => Status(),
@@ -39,6 +49,7 @@ internal static class Http3DepsCommand
             bundles MsQuic + OpenSSL (MIT/Apache). Zips do NOT ship libnuma / lttng-ust (LGPL/GPL);
             those stay host packages. Use install for empty/distroless images or when Quic is false.
             """);
+        CliHelp.WriteDocsFooter();
         return 0;
     }
 

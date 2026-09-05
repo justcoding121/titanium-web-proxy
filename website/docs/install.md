@@ -54,6 +54,8 @@ titanium http3-deps status
 
 `titanium update` checks the selected channel, downloads the RID **zip**, verifies SHA256, replaces the install directory after the process exits, and prints the new version. Use `--channel stable` (default) or `--channel beta` — it does not pick “whichever is newer” across channels. Same-version checks treat assembly `7.0.5.0` and feed tag `7.0.5` as equal; when already current it prints up to date (or that local is newer than the channel) instead of reinstalling. Unknown channel names are rejected.
 
+**Start at boot:** `titanium service install -c <config>` registers the CLI with Windows Service Control Manager, Linux systemd, or macOS launchd so the proxy survives reboot. Requires Administrator / sudo for a machine service. Details: [CLI — service](/docs/cli#service).
+
 ## Plus
 
 ```shell

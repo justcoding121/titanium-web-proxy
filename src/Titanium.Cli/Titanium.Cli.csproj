@@ -29,6 +29,9 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Certes" Version="3.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.0" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.0" />
   </ItemGroup>
   <!-- Local macOS Debug/dotnet run: copy Homebrew MsQuic beside the apphost (Release zips use bundle-http3-native.ps1). -->
   <Target Name="CopyMacHttp3Natives" AfterTargets="Build" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
