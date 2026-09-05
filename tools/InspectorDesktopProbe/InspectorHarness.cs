@@ -128,6 +128,8 @@ public sealed class InspectorHarness : IAsyncDisposable
                 try { ViewModel.SystemProxy = false; } catch { /* ignore */ }
                 try { ViewModel.EnsureShutdown(); } catch { /* ignore */ }
                 try { Window.Close(); } catch { /* ignore */ }
+                // Drain any SessionUpdated posts already queued before store dispose.
+                Dispatcher.UIThread.RunJobs();
             }).ConfigureAwait(true);
         }
         catch
