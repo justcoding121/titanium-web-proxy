@@ -128,10 +128,11 @@ internal sealed class Http2OriginConnection : IDisposable
     internal const int PoolGrowActiveStreamThresholdTls = 16;
 
     /// <summary>
-    ///     Early-grow threshold for cleartext h2c. SoftGrow=4 fans ReadLoops earlier (Mac H3→h2c);
-    ///     SoftGrow=16 on cleartext starved ReadLoops under Soft=16-as-pick-cap.
+    ///     Early-grow threshold for cleartext h2c. SoftGrow=4 was the Soft=16-as-pick-cap era;
+    ///     with SoftPick=SETTINGS, SoftGrow=8 lifts Mac H3→h2c (~0.88→~0.94×). SoftGrow=12
+    ///     regresses (~0.88×). SoftGrow=16 on cleartext starved ReadLoops under Soft=16-as-pick.
     /// </summary>
-    internal const int PoolGrowActiveStreamThresholdCleartext = 4;
+    internal const int PoolGrowActiveStreamThresholdCleartext = 8;
 
     /// <summary>Alias — TLS SoftGrow (tests / wiki that reference the historical name).</summary>
     internal const int PoolGrowActiveStreamThreshold = PoolGrowActiveStreamThresholdTls;
