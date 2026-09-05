@@ -8,11 +8,21 @@
   <DockPanel Margin="12">
     <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,8"
                Text="Windows Store / UWP apps are blocked from localhost by default. Check apps that should use Inspector, then Apply. Clear all removes every allow entry." />
-    <TextBox x:Name="FilterBox"
-             DockPanel.Dock="Top"
-             Margin="0,0,0,8"
-             Watermark="Filter by app name…"
-             AutomationProperties.AutomationId="LoopbackFilter" />
+    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
+        <Button x:Name="CheckAllButton"
+                Content="Check all"
+                MinWidth="88"
+                AutomationProperties.AutomationId="LoopbackCheckAll" />
+        <Button x:Name="UncheckAllButton"
+                Content="Uncheck all"
+                MinWidth="88"
+                AutomationProperties.AutomationId="LoopbackUncheckAll" />
+      </StackPanel>
+      <TextBox x:Name="FilterBox"
+               Watermark="Filter by app name…"
+               AutomationProperties.AutomationId="LoopbackFilter" />
+    </DockPanel>
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,12,0,0">
       <Button x:Name="ExemptButton" AutomationProperties.AutomationId="LoopbackExempt" Content="Apply" MinWidth="120" />
       <Button x:Name="ClearButton" AutomationProperties.AutomationId="LoopbackClear" Content="Clear all" MinWidth="120" />
@@ -33,6 +43,7 @@
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="svc:AppContainerInfo">
               <CheckBox IsChecked="{Binding IsExempt, Mode=TwoWay}"
+                        IsCheckedChanged="OnExemptCheckChanged"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center" />
             </DataTemplate>

@@ -8,12 +8,16 @@ public partial class LoopbackExemptWindow : Window
 {
     private List<AppContainerInfo> _items = [];
     private string? _pendingStatus;
+    private bool _suppressExemptCheckChanged;
+    private List<AppContainerInfo> _visibleItems = [];
 
     public LoopbackExemptWindow()
     {
         InitializeComponent();
         ExemptButton.Click += OnExempt;
         ClearButton.Click += OnClear;
+        CheckAllButton.Click += OnCheckAll;
+        UncheckAllButton.Click += OnUncheckAll;
         CloseButton.Click += (_, _) => Close();
         FilterBox.TextChanged += (_, _) => ApplyFilter();
         Opened += (_, _) => Reload();
@@ -59,7 +63,10 @@ public partial class LoopbackExemptWindow : Window
                 i.PackageFamilyName.Contains(query, StringComparison.OrdinalIgnoreCase));
         }
 
-        var filtered = view.ToList();
+        var filtered = view
+            .OrderByDescending(i => i.IsExempt)
+            .ThenBy(i => i.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
         SetGridItems(filtered);
 
         if (_pendingStatus is not null)
@@ -79,8 +86,39 @@ public partial class LoopbackExemptWindow : Window
     private void SetGridItems(IReadOnlyList<AppContainerInfo> items)
     {
         // Clearing selection before replacing ItemsSource avoids Avalonia DataGrid crashes.
-        PackageGrid.SelectedItem = null;
-        PackageGrid.ItemsSource = items;
+        _suppressExemptCheckChanged = true;
+        try
+        {
+            PackageGrid.SelectedItem = null;
+            _visibleItems = items.ToList();
+            PackageGrid.ItemsSource = _visibleItems;
+        }
+        finally
+        {
+            _suppressExemptCheckChanged = false;
+        }
+    }
+
+    private void OnExemptCheckChanged(object? sender, RoutedEventArgs e)
+    {
+        if (_suppressExemptCheckChanged)
+            return;
+
+        ApplyFilter();
+    }
+
+    private void OnCheckAll(object? sender, RoutedEventArgs e)
+    {
+        foreach (var item in _visibleItems)
+            item.IsExempt = true;
+        ApplyFilter();
+    }
+
+    private void OnUncheckAll(object? sender, RoutedEventArgs e)
+    {
+        foreach (var item in _visibleItems)
+            item.IsExempt = false;
+        ApplyFilter();
     }
 
     private void OnExempt(object? sender, RoutedEventArgs e)
