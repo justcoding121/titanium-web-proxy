@@ -19,6 +19,23 @@ public class MitmExclusionDefaultsTests
     }
 
     [TestMethod]
+    public void SystemProxyBypassRules_IncludeGitForgesSoHttpsRemotesStayDirect()
+    {
+        CollectionAssert.Contains(MitmExclusionDefaults.SystemProxyBypassRules, "github.com");
+        CollectionAssert.Contains(MitmExclusionDefaults.SystemProxyBypassRules, "*.github.com");
+        CollectionAssert.Contains(MitmExclusionDefaults.SystemProxyBypassRules, "*.githubusercontent.com");
+        CollectionAssert.Contains(MitmExclusionDefaults.SystemProxyBypassRules, "gitlab.com");
+        CollectionAssert.Contains(MitmExclusionDefaults.SystemProxyBypassRules, "bitbucket.org");
+        CollectionAssert.Contains(MitmExclusionDefaults.SystemProxyBypassRules, "dev.azure.com");
+
+        Assert.IsTrue(MitmExclusionDefaults.IsBuiltInSslBypass("github.com"));
+        Assert.IsTrue(MitmExclusionDefaults.IsBuiltInSslBypass("api.github.com"));
+        Assert.IsTrue(MitmExclusionDefaults.IsBuiltInSslBypass("codeload.github.com"));
+        Assert.IsTrue(MitmExclusionDefaults.IsBuiltInSslBypass("raw.githubusercontent.com"));
+        Assert.IsTrue(MitmExclusionDefaults.ShouldDisableSslDecrypt("github.com"));
+    }
+
+    [TestMethod]
     public void CreateSystemProxySettings_Replace_OmitsIdentityHostWhenRemoved()
     {
         var withoutIdentity = MitmExclusionDefaults.SystemProxyBypassRules

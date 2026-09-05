@@ -64,6 +64,37 @@ public class ExclusionSettingsSeedTests
     }
 
     [TestMethod]
+    public void Load_ExistingSettings_MergesMissingFactoryGitBypassHosts()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-excl-merge-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var seed = new InspectorSettings
+            {
+                ExclusionsInitialized = true,
+                SystemProxyBypassHosts = ["login.live.com"],
+                DecryptSkipHosts = ["dropbox.com"],
+                ProxyLoopback = true,
+            };
+            File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(seed));
+
+            var service = new SettingsService(path);
+            Assert.IsTrue(service.Current.SystemProxyBypassHosts.Contains("login.live.com"));
+            Assert.IsTrue(service.Current.SystemProxyBypassHosts.Contains("github.com"),
+                "Existing settings must pick up new factory forge bypass hosts");
+            Assert.IsTrue(service.Current.SystemProxyBypassHosts.Contains("*.github.com"));
+            CollectionAssert.Contains(service.Current.DecryptSkipHosts.ToArray(), "dropbox.com");
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
     public void ExclusionSummary_CountsUserLists()
     {
         var settings = new InspectorSettings

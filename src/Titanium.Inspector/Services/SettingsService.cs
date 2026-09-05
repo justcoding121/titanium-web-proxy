@@ -179,6 +179,29 @@ public sealed class SettingsService
     }
 
     /// <summary>
+    ///     Adds any factory OS-bypass hosts missing from the saved list (does not remove user entries).
+    ///     Returns true when the list changed.
+    /// </summary>
+    internal static bool MergeMissingFactoryOsBypassHosts(InspectorSettings settings)
+    {
+        settings.SystemProxyBypassHosts ??= [];
+        var changed = false;
+        foreach (var rule in MitmExclusionDefaults.SystemProxyBypassRules)
+        {
+            if (settings.SystemProxyBypassHosts.Any(h =>
+                    string.Equals(h, rule, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            settings.SystemProxyBypassHosts.Add(rule);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    /// <summary>
     /// Replace preferences with factory defaults and write settings.json.
     /// Does not touch the root CA, OS trust stores, or captured sessions / disk body cache.
     /// </summary>
@@ -214,6 +237,19 @@ public sealed class SettingsService
                 }
 
                 loaded.ExclusionsInitialized = true;
+                try
+                {
+                    File.WriteAllText(_path, JsonSerializer.Serialize(loaded, JsonOptions));
+                }
+                catch
+                {
+                    // best effort
+                }
+            }
+            else if (MergeMissingFactoryOsBypassHosts(loaded))
+            {
+                // Additive: new factory forge/SSO hosts (e.g. github.com) must land in existing
+                // settings.json or Inspector Replace-mode system proxy keeps MITM'ing git HTTPS.
                 try
                 {
                     File.WriteAllText(_path, JsonSerializer.Serialize(loaded, JsonOptions));
