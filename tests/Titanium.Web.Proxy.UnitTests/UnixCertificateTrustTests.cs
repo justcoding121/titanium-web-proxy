@@ -81,6 +81,159 @@ public class UnixCertificateTrustTests
         Assert.IsFalse(fail.Succeeded);
         Assert.AreEqual("libnss3-tools", fail.PackageHint);
     }
+
+    [TestMethod]
+    public void IsCertificateInLoginKeychain_NonMac_ReturnsFalse()
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            Assert.Inconclusive("macOS uses real keychain path");
+            return;
+        }
+
+        using var cert = CreateEphemeralRoot();
+        Assert.IsFalse(UnixCertificateTrust.IsCertificateInLoginKeychain(cert, new FakeProcessRunner()));
+    }
+
+    [TestMethod]
+    public void IsCertificateInLoginKeychain_WhenSecurityListsHash_ReturnsTrue()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.Inconclusive("macOS-only");
+            return;
+        }
+
+        using var cert = CreateEphemeralRoot();
+        var sha1 = cert.GetCertHashString();
+        var runner = new FakeProcessRunner();
+        runner.When("security", "find-certificate", $"SHA-1 hash: {sha1}\n");
+        Assert.IsTrue(UnixCertificateTrust.IsCertificateInLoginKeychain(cert, runner));
+    }
+
+    [TestMethod]
+    public void IsCertificateInLoginKeychain_WhenSecurityMisses_ReturnsFalse()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.Inconclusive("macOS-only");
+            return;
+        }
+
+        using var cert = CreateEphemeralRoot();
+        var runner = new FakeProcessRunner { DefaultSuccess = false };
+        Assert.IsFalse(UnixCertificateTrust.IsCertificateInLoginKeychain(cert, runner));
+    }
+
+    [TestMethod]
+    public void HasExplicitMacSslTrustSettings_NoTrustSettings_ReturnsFalse()
+    {
+        using var cert = CreateEphemeralRoot();
+        var runner = new FakeProcessRunner { DefaultSuccess = false };
+        runner.When("security", "dump-trust-settings",
+            "SecTrustSettingsCopyCertificates: No Trust Settings were found.\n");
+        Assert.IsFalse(UnixCertificateTrust.HasExplicitMacSslTrustSettings(runner, cert));
+    }
+
+    [TestMethod]
+    public void HasExplicitMacSslTrustSettings_TrustListStubWithoutPolicies_ReturnsFalse()
+    {
+        using var cert = CreateEphemeralRoot();
+        var sha1 = cert.GetCertHashString();
+        var runner = new FakeProcessRunner { DefaultSuccess = false };
+        runner.When("security", "dump-trust-settings",
+            "SecTrustSettingsCopyCertificates: No Trust Settings were found.\n");
+        // add-trusted-cert stub: SHA-1 in trustList, no trustSettings policies.
+        runner.When("security", "trust-settings-export", "ok\n");
+        runner.WriteFileOnMatch = "trust-settings-export";
+        runner.When("plutil", "-p",
+            "{\n  \"trustList\" => {\n    \"" + sha1 + "\" => {\n" +
+            "      \"issuerName\" => {length = 48, bytes = 0xab}\n" +
+            "      \"modDate\" => 2026-09-04 22:15:04 +0000\n" +
+            "      \"serialNumber\" => {length = 8, bytes = 0xcd}\n" +
+            "    }\n  }\n  \"trustVersion\" => 1\n}\n");
+        Assert.IsFalse(UnixCertificateTrust.HasExplicitMacSslTrustSettings(runner, cert));
+    }
+
+    [TestMethod]
+    public void HasExplicitMacSslTrustSettings_TrustRootPolicy_ReturnsTrue()
+    {
+        using var cert = CreateEphemeralRoot();
+        var sha1 = cert.GetCertHashString();
+        var dump = $"""
+            Number of trusted certs = 1
+            Cert 0: Titanium Inspector Root Certificate
+               SHA-1 hash: {sha1}
+               Number of trust settings : 1
+               Trust Setting 0:
+                  Policy OID            : 1.2.840.113635.100.1.3
+                  Result Type           : kSecTrustSettingsResultTrustRoot
+            """;
+        var runner = new FakeProcessRunner();
+        runner.When("security", "dump-trust-settings -d", dump);
+        Assert.IsTrue(UnixCertificateTrust.HasExplicitMacSslTrustSettings(runner, cert));
+    }
+
+    [TestMethod]
+    public void UntrustUserSsl_OnMac_DeletesByHashWithTrustFlag_AndElevatesSystemCleanup()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.Inconclusive("macOS-only");
+            return;
+        }
+
+        using var cert = CreateEphemeralRoot();
+        var sha1 = cert.GetCertHashString();
+        var runner = new FakeProcessRunner();
+        runner.When("security", "find-certificate",
+            $"SHA-1 hash: {sha1}\nkeychain: \"/Library/Keychains/System.keychain\"\n");
+        runner.When("security", "delete-certificate", "ok\n");
+        runner.When("security", "remove-trusted-cert", "ok\n");
+        var elevation = new FakeElevationPrompt();
+
+        Assert.IsTrue(UnixCertificateTrust.UntrustUserSsl(
+            cert, "Titanium Root Certificate Authority", runner, elevation));
+
+        Assert.IsTrue(runner.Commands.Exists(c =>
+            c.Contains("delete-certificate -Z " + sha1, StringComparison.Ordinal) &&
+            c.Contains("-t", StringComparison.Ordinal)));
+        Assert.IsTrue(elevation.Calls.Count >= 1);
+        Assert.IsTrue(elevation.Calls.Exists(c =>
+            c.Arguments.Contains("System.keychain", StringComparison.Ordinal) ||
+            c.Arguments.Contains("remove-trusted-cert", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void VerifyUserSslTrust_OnMac_UsesTrustSettingsNotVerifyCertAlone()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.Inconclusive("macOS-only");
+            return;
+        }
+
+        using var cert = CreateEphemeralRoot();
+        // Fake: verify-cert would succeed, but no trust settings → must be false.
+        var runner = new FakeProcessRunner();
+        runner.When("security", "verify-cert", "...certificate verification successful.\n");
+        runner.When("security", "dump-trust-settings",
+            "SecTrustSettingsCopyCertificates: No Trust Settings were found.\n");
+        Assert.IsFalse(UnixCertificateTrust.VerifyUserSslTrust(cert, runner));
+    }
+
+    private static System.Security.Cryptography.X509Certificates.X509Certificate2 CreateEphemeralRoot()
+    {
+        using var rsa = System.Security.Cryptography.RSA.Create(2048);
+        var req = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+            "CN=Titanium Inspector Root Certificate",
+            rsa,
+            System.Security.Cryptography.HashAlgorithmName.SHA256,
+            System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+        req.CertificateExtensions.Add(
+            new System.Security.Cryptography.X509Certificates.X509BasicConstraintsExtension(true, false, 0, true));
+        return req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+    }
 }
 
 [TestClass]

@@ -715,8 +715,10 @@ public sealed class CertificateManager : IDisposable
         }
         catch (Exception e)
         {
+            // macOS often denies opening CurrentUser\Root for write; Keychain untrust still runs.
             OnException(new Exception(
-                $"Failed to open {storeName}\\{storeLocation} for same-CN root cleanup.", e));
+                $"Failed to open {storeName}\\{storeLocation} for same-CN root cleanup " +
+                "(continuing with OS trust helpers).", e));
         }
     }
 
@@ -1370,10 +1372,10 @@ public sealed class CertificateManager : IDisposable
     ///     and optionally also in the local-machine Personal and Trusted Root stores.
     /// </summary>
     /// <param name="machineTrusted">
-    ///     When <see langword="true"/>, also install into the local-machine stores. Defaults to
-    ///     <see langword="false"/> — user-only trust is the recommended default for interactive
-    ///     apps; machine trust needs elevation (or a privileged service account) and otherwise
-    ///     fails silently.
+    ///     When <see langword="true"/>, also install machine-wide trust (LocalMachine on Windows;
+    ///     System.keychain / system CA store on macOS/Linux, with an admin prompt). Defaults to
+    ///     <see langword="false"/> — user-only trust is the recommended default. Check
+    ///     <see cref="LastOsTrustResult"/> and <see cref="VerifyOsUserSslTrust"/> after calling.
     /// </param>
     public void TrustRootCertificate(bool machineTrusted = false)
     {
@@ -1400,6 +1402,23 @@ public sealed class CertificateManager : IDisposable
         if (!RunTime.IsWindows && RootCertificate != null)
         {
             LastOsTrustResult = Helpers.UnixCertificateTrust.TrustUserSsl(RootCertificate, RootCertificateName);
+            if (!machineTrusted)
+                return;
+
+            // machineTrusted: elevate into System.keychain / system CA store (admin prompt).
+            var machineOk = Helpers.UnixCertificateTrust.TrustMachineSsl(RootCertificate, RootCertificateName);
+            if (!machineOk)
+            {
+                LastOsTrustResult = CertificateOsTrustResult.Fail(
+                    CertificateOsTrustKind.Failed,
+                    "Machine-wide CA trust failed (user trust may already be applied)");
+            }
+            else if (LastOsTrustResult.Succeeded ||
+                     LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+            {
+                LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted machine-wide");
+            }
+
             return;
         }
 
@@ -1434,6 +1453,26 @@ public sealed class CertificateManager : IDisposable
     {
         if (RootCertificate == null || RunTime.IsWindows) return IsRootCertificateUserTrusted();
         return Helpers.UnixCertificateTrust.VerifyUserSslTrust(RootCertificate);
+    }
+
+    /// <summary>
+    ///     Best-effort: true when the current root appears in the macOS login keychain.
+    ///     Does not imply SSL Always Trust — use <see cref="VerifyOsUserSslTrust"/>.
+    /// </summary>
+    public bool IsRootInLoginKeychain()
+    {
+        if (RootCertificate == null || !RunTime.IsMac) return false;
+        return Helpers.UnixCertificateTrust.IsCertificateInLoginKeychain(RootCertificate);
+    }
+
+    /// <summary>
+    ///     True when a Titanium root (current hash or known CN) remains in login or System keychain.
+    /// </summary>
+    public bool IsOsRootStillPresent()
+    {
+        if (RootCertificate == null || !RunTime.IsMac) return false;
+        return Helpers.UnixCertificateTrust.IsMacRootStillPresent(
+            new Helpers.ProcessRunner(), RootCertificate, RootCertificateName);
     }
 
     /// <summary>Opens Keychain Access (and a temp .cer) for manual Always Trust on macOS.</summary>
@@ -1474,11 +1513,20 @@ public sealed class CertificateManager : IDisposable
             var machineOk = Helpers.UnixCertificateTrust.TrustMachineSsl(certificate, RootCertificateName);
             if (!machineOk)
             {
+                // User trust may already be applied; surface machine failure clearly.
                 LastOsTrustResult = CertificateOsTrustResult.Fail(
-                    CertificateOsTrustKind.Failed, "Machine-wide CA trust failed");
+                    CertificateOsTrustKind.Failed,
+                    "Machine-wide CA trust failed (user trust may already be applied)");
+                return false;
             }
 
-            return machineOk;
+            if (LastOsTrustResult.Succeeded ||
+                LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+            {
+                LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted machine-wide");
+            }
+
+            return true;
         }
 
         // Elevated certutil shows UAC; skip in CI / test processes that suppress Root UI.

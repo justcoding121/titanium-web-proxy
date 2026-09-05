@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using Titanium.Web.Proxy.Network;
@@ -44,13 +45,16 @@ internal static class UnixCertificateTrust
 
     /// <summary>
     ///     Removes user SSL trust previously added by <see cref="TrustUserSsl"/>.
+    ///     On macOS this also best-effort clears matching System keychain copies and trust
+    ///     settings (admin password may be required) — Chrome trusts System roots even when
+    ///     the login / .NET user store entry is gone.
     /// </summary>
     public static bool UntrustUserSsl(X509Certificate2 certificate, string friendlyName,
-        IProcessRunner? runner = null)
+        IProcessRunner? runner = null, IElevationPrompt? elevation = null)
     {
         runner ??= new ProcessRunner();
         if (RunTime.IsMac)
-            return UntrustMacUser(runner, certificate);
+            return UntrustMacThorough(runner, certificate, friendlyName, elevation);
 
         if (RunTime.IsLinux)
             return UntrustLinuxNss(runner, friendlyName);
@@ -93,7 +97,7 @@ internal static class UnixCertificateTrust
         elevation ??= new OsElevationPrompt(runner);
 
         if (RunTime.IsMac)
-            return UntrustMacSystem(elevation, certificate);
+            return UntrustMacThorough(runner, certificate, friendlyName, elevation);
 
         if (RunTime.IsLinux)
             return UntrustLinuxSystem(elevation, friendlyName);
@@ -255,7 +259,8 @@ internal static class UnixCertificateTrust
         IProcessRunner? runner = null)
     {
         if (!RunTime.IsMac) return null;
-        var cerPath = WriteTempCer(certificate);
+        // Friendly file name so Keychain's "trust this certificate?" dialog is recognizable.
+        var cerPath = WriteTempCer(certificate, forUserGuidance: true);
         OpenMacKeychainGuidance(cerPath, runner);
         return cerPath;
     }
@@ -282,6 +287,41 @@ internal static class UnixCertificateTrust
         }
 
         return false;
+    }
+
+    /// <summary>
+    ///     Best-effort: true when the certificate appears in the login keychain (by SHA-1 hash).
+    ///     Presence does not imply SSL Always Trust.
+    /// </summary>
+    public static bool IsCertificateInLoginKeychain(X509Certificate2 certificate, IProcessRunner? runner = null)
+    {
+        if (!RunTime.IsMac)
+            return false;
+
+        runner ??= new ProcessRunner();
+        var sha1 = certificate.GetCertHashString();
+        if (string.IsNullOrWhiteSpace(sha1))
+            return false;
+
+        // -a: all matching; -Z: print SHA-1. Match our hash in the dump.
+        var byHash = runner.Run("security", $"find-certificate -a -Z {sha1}");
+        if (byHash is { Succeeded: true } &&
+            byHash.StandardOutput.Contains(sha1, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var commonName = certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false);
+        if (string.IsNullOrWhiteSpace(commonName))
+            return false;
+
+        var loginDb = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Library", "Keychains", "login.keychain-db");
+        var args = File.Exists(loginDb)
+            ? $"find-certificate -a -c \"{Escape(commonName)}\" -Z \"{loginDb}\""
+            : $"find-certificate -a -c \"{Escape(commonName)}\" -Z";
+        var byName = runner.Run("security", args);
+        return byName is { Succeeded: true } &&
+               byName.StandardOutput.Contains(sha1, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Resolves NSS <c>certutil</c> on PATH (not Windows system <c>certutil.exe</c>).</summary>
@@ -392,12 +432,14 @@ internal static class UnixCertificateTrust
 
     private static bool TrustMacUser(IProcessRunner runner, string cerPath)
     {
-        // -d: add to admin cert store domain; -r trustRoot: trust as root CA.
+        // User trust domain (no -d). Using -d writes admin-domain stubs and often leaves
+        // System.keychain copies that Chrome keeps trusting after "Remove CA".
+        // -r trustRoot: trust as root CA in the login keychain.
         var keychain = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             "Library", "Keychains", "login.keychain-db");
         var result = runner.Run("security",
-            $"add-trusted-cert -d -r trustRoot -k \"{keychain}\" \"{cerPath}\"");
+            $"add-trusted-cert -r trustRoot -k \"{keychain}\" \"{cerPath}\"");
         if (result is { Succeeded: true }) return true;
 
         // Older macOS keychain name
@@ -405,54 +447,269 @@ internal static class UnixCertificateTrust
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             "Library", "Keychains", "login.keychain");
         result = runner.Run("security",
-            $"add-trusted-cert -d -r trustRoot -k \"{keychain}\" \"{cerPath}\"");
+            $"add-trusted-cert -r trustRoot -k \"{keychain}\" \"{cerPath}\"");
         return result is { Succeeded: true };
     }
 
     private static bool VerifyMacSslTrust(IProcessRunner runner, X509Certificate2 certificate)
     {
+        // IMPORTANT: `security verify-cert -p ssl` often succeeds when the CA is merely present
+        // in login.keychain. Keychain Access Get Info can also show "Always Trust" for incomplete
+        // trust-list entries that have no policy array — Chrome still rejects MITM until real
+        // SecTrustSettings policies exist (dump-trust-settings / export with trustSettings).
+        return HasExplicitMacSslTrustSettings(runner, certificate);
+    }
+
+    /// <summary>
+    ///     True when macOS has persisted SSL/root trust policies for this certificate
+    ///     (not merely a trust-list stub or Keychain UI display state).
+    /// </summary>
+    internal static bool HasExplicitMacSslTrustSettings(IProcessRunner runner, X509Certificate2 certificate)
+    {
+        var sha1 = certificate.GetCertHashString();
+        var commonName = certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false) ?? "";
+
+        if (DumpTrustSettingsMentionsPolicies(runner, sha1, commonName))
+            return true;
+
+        return TrustSettingsExportHasPolicies(runner, sha1);
+    }
+
+    private static bool DumpTrustSettingsMentionsPolicies(
+        IProcessRunner runner, string sha1, string commonName)
+    {
+        foreach (var args in new[] { "dump-trust-settings -d", "dump-trust-settings" })
+        {
+            var dump = runner.Run("security", args);
+            if (dump is null)
+                continue;
+
+            var text = dump.StandardOutput + "\n" + dump.StandardError;
+            if (text.Contains("No Trust Settings were found", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var mentionsCert =
+                (!string.IsNullOrEmpty(sha1) &&
+                 text.Contains(sha1, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(commonName) &&
+                 text.Contains(commonName, StringComparison.OrdinalIgnoreCase));
+            if (!mentionsCert)
+                continue;
+
+            // dump-trust-settings only lists certs that have policy rows when healthy.
+            if (text.Contains("kSecTrustSettingsResultTrustRoot", StringComparison.Ordinal) ||
+                text.Contains("kSecTrustSettingsResultProceed", StringComparison.Ordinal) ||
+                text.Contains("Trust Root", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("Number of trust settings", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Parses <c>security trust-settings-export</c>. A trustList stub without
+    ///     <c>trustSettings</c> policies is NOT enough (Keychain UI may still show Always Trust).
+    /// </summary>
+    private static bool TrustSettingsExportHasPolicies(IProcessRunner runner, string sha1)
+    {
+        if (string.IsNullOrEmpty(sha1))
+            return false;
+
+        foreach (var adminDomain in new[] { true, false })
+        {
+            var path = Path.Combine(Path.GetTempPath(), "twp-trust-" + Guid.NewGuid().ToString("N") + ".plist");
+            try
+            {
+                var args = adminDomain
+                    ? $"trust-settings-export -d \"{path}\""
+                    : $"trust-settings-export \"{path}\"";
+                var export = runner.Run("security", args);
+                if (export is not { Succeeded: true } || !File.Exists(path))
+                    continue;
+
+                // Avoid pulling a plist library dependency: scan the XML/binary via plutil text.
+                var printed = runner.Run("plutil", $"-p \"{path}\"");
+                if (printed is null)
+                    continue;
+
+                var text = printed.StandardOutput;
+                // Look for our SHA-1 key block; require a nested trustSettings array nearby.
+                var keyIdx = text.IndexOf(sha1, StringComparison.OrdinalIgnoreCase);
+                if (keyIdx < 0)
+                    continue;
+
+                // Heuristic: within the next ~2KB after the hash key, require trustSettings.
+                var window = text.Substring(keyIdx, Math.Min(2048, text.Length - keyIdx));
+                if (!window.Contains("trustSettings", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                // Empty array / missing policies: reject.
+                if (window.Contains("trustSettings => [\n  ]", StringComparison.Ordinal) ||
+                    window.Contains("trustSettings => []", StringComparison.Ordinal))
+                    continue;
+
+                if (window.Contains("kSecTrustSettingsResultTrustRoot", StringComparison.Ordinal) ||
+                    window.Contains("kSecTrustSettingsResultProceed", StringComparison.Ordinal) ||
+                    window.Contains("TrustRoot", StringComparison.OrdinalIgnoreCase) ||
+                    window.Contains("result", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            finally
+            {
+                TryDelete(path);
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Removes every Titanium-named / current-hash copy from login + System keychains and
+    ///     clears user/admin trust settings. System deletes require an admin password prompt.
+    /// </summary>
+    private static bool UntrustMacThorough(
+        IProcessRunner runner,
+        X509Certificate2 certificate,
+        string friendlyName,
+        IElevationPrompt? elevation = null)
+    {
+        elevation ??= new OsElevationPrompt(runner);
+
+        var hashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var sha1 = certificate.GetCertHashString();
+        if (!string.IsNullOrWhiteSpace(sha1))
+            hashes.Add(sha1);
+
+        foreach (var cn in MacRootCommonNames(friendlyName, certificate))
+            CollectMacCertificateHashes(runner, cn, hashes);
+
+        var any = false;
         var cerPath = WriteTempCer(certificate);
         try
         {
-            // verify-cert returns 0 when the cert chains to a trusted root for SSL.
-            var verify = runner.Run("security", $"verify-cert -c \"{cerPath}\" -p ssl");
-            if (verify is { Succeeded: true })
-                return true;
+            foreach (var hash in hashes)
+            {
+                // -t also drops user trust settings for this cert.
+                var login = runner.Run("security", $"delete-certificate -Z {hash} -t");
+                if (login is { Succeeded: true })
+                    any = true;
+            }
 
-            // Fallback: trust settings dump mentioning the SHA-1 (legacy) hash.
-            var sha1 = certificate.GetCertHashString();
-            var dump = runner.Run("security", "dump-trust-settings -d");
-            if (dump is { Succeeded: true } &&
-                dump.StandardOutput.Contains(sha1, StringComparison.OrdinalIgnoreCase))
-                return true;
+            // One admin prompt for System.keychain + admin trust domain.
+            if (hashes.Count > 0 || File.Exists(cerPath))
+            {
+                var parts = new List<string>();
+                foreach (var hash in hashes)
+                {
+                    parts.Add(
+                        $"/usr/bin/security delete-certificate -Z {hash} -t /Library/Keychains/System.keychain || true");
+                }
 
-            return false;
+                parts.Add($"/usr/bin/security remove-trusted-cert -d \"{cerPath}\" || true");
+                var script = string.Join("; ", parts);
+                var elevated = elevation.RunElevated("/bin/sh", $"-c \"{EscapeShell(script)}\"");
+                if (elevated is { Succeeded: true })
+                    any = true;
+            }
+
+            var userTrust = runner.Run("security", $"remove-trusted-cert \"{cerPath}\"");
+            if (userTrust is { Succeeded: true })
+                any = true;
         }
         finally
         {
             TryDelete(cerPath);
         }
+
+        return any || hashes.Count == 0;
     }
 
-    private static bool UntrustMacUser(IProcessRunner runner, X509Certificate2 certificate)
+    private static IEnumerable<string> MacRootCommonNames(string friendlyName, X509Certificate2 certificate)
     {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void Add(string? name)
+        {
+            if (!string.IsNullOrWhiteSpace(name))
+                seen.Add(name.Trim());
+        }
+
+        Add(friendlyName);
+        Add(certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false));
+        Add("Titanium Root Certificate Authority");
+        Add("Titanium Inspector Root Certificate");
+        return seen;
+    }
+
+    private static void CollectMacCertificateHashes(
+        IProcessRunner runner, string commonName, ISet<string> hashes)
+    {
+        if (string.IsNullOrWhiteSpace(commonName))
+            return;
+
+        var loginDb = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Library", "Keychains", "login.keychain-db");
+        var searches = new List<string>
+        {
+            $"find-certificate -a -c \"{Escape(commonName)}\" -Z",
+        };
+        if (File.Exists(loginDb))
+            searches.Add($"find-certificate -a -c \"{Escape(commonName)}\" -Z \"{loginDb}\"");
+        searches.Add(
+            $"find-certificate -a -c \"{Escape(commonName)}\" -Z /Library/Keychains/System.keychain");
+
+        foreach (var args in searches)
+        {
+            var dump = runner.Run("security", args);
+            if (dump is null)
+                continue;
+
+            foreach (var line in (dump.StandardOutput + "\n" + dump.StandardError)
+                     .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+            {
+                // "SHA-1 hash: AABBCC..."
+                const string marker = "SHA-1 hash:";
+                var idx = line.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                if (idx < 0)
+                    continue;
+                var hash = line[(idx + marker.Length)..].Trim();
+                if (hash.Length >= 40)
+                    hashes.Add(hash);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     True when any Titanium-named certificate remains in login or System keychain,
+    ///     or the current root hash is still findable.
+    /// </summary>
+    internal static bool IsMacRootStillPresent(
+        IProcessRunner runner, X509Certificate2 certificate, string friendlyName)
+    {
+        var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var cn in MacRootCommonNames(friendlyName, certificate))
+            CollectMacCertificateHashes(runner, cn, found);
+        if (found.Count > 0)
+            return true;
+
         var sha1 = certificate.GetCertHashString();
-        var result = runner.Run("security", $"delete-certificate -Z {sha1}");
-        return result is { Succeeded: true };
+        if (string.IsNullOrWhiteSpace(sha1))
+            return false;
+
+        var byHash = runner.Run("security", $"find-certificate -a -Z {sha1}");
+        return byHash is { Succeeded: true } &&
+               byHash.StandardOutput.Contains(sha1, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TrustMacSystem(IElevationPrompt elevation, string cerPath)
     {
         var result = elevation.RunElevated("/usr/bin/security",
             $"add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain \"{cerPath}\"");
-        return result is { Succeeded: true };
-    }
-
-    private static bool UntrustMacSystem(IElevationPrompt elevation, X509Certificate2 certificate)
-    {
-        var sha1 = certificate.GetCertHashString();
-        var result = elevation.RunElevated("/usr/bin/security",
-            $"delete-certificate -Z {sha1} /Library/Keychains/System.keychain");
         return result is { Succeeded: true };
     }
 
@@ -533,9 +790,23 @@ internal static class UnixCertificateTrust
         return nssDir;
     }
 
-    internal static string WriteTempCer(X509Certificate2 certificate)
+    internal static string WriteTempCer(X509Certificate2 certificate, bool forUserGuidance = false)
     {
-        var path = Path.Combine(Path.GetTempPath(), "twp-" + Guid.NewGuid().ToString("N") + ".cer");
+        string fileName;
+        if (forUserGuidance)
+        {
+            var cn = certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false);
+            if (string.IsNullOrWhiteSpace(cn))
+                cn = "Titanium-Inspector-Root-CA";
+            fileName = SanitizeFileName(cn.Trim()) + ".cer";
+        }
+        else
+        {
+            // Internal ops: unique name avoids races between concurrent trust helpers.
+            fileName = "twp-" + Guid.NewGuid().ToString("N") + ".cer";
+        }
+
+        var path = Path.Combine(Path.GetTempPath(), fileName);
         File.WriteAllBytes(path, certificate.Export(X509ContentType.Cert));
         return path;
     }

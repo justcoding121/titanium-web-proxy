@@ -180,6 +180,8 @@ Titanium.Web.Proxy.Network.CertificateManager.LastOsTrustResult.get -> Titanium.
 Titanium.Web.Proxy.Network.CertificateManager.InstallNssCertutilAndRetryUserTrust() -> Titanium.Web.Proxy.Network.CertificateOsTrustResult!
 Titanium.Web.Proxy.Network.CertificateManager.OpenMacKeychainGuidance() -> string?
 Titanium.Web.Proxy.Network.CertificateManager.VerifyOsUserSslTrust() -> bool
+Titanium.Web.Proxy.Network.CertificateManager.IsRootInLoginKeychain() -> bool
+Titanium.Web.Proxy.Network.CertificateManager.IsOsRootStillPresent() -> bool
 Titanium.Web.Proxy.Network.FirefoxCertificateTrust
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProcessRunning() -> bool
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProfilePresent() -> bool

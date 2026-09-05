@@ -225,6 +225,9 @@ tools/ChromeLoadProbe/results/
 .tmp-rps/
 tmp/
 
+# Local trust/MITM validation screenshots (manual / agent runs)
+.validation-screenshots/
+
 # VitePress site (website/)
 website/.vitepress/dist/
 website/.vitepress/cache/

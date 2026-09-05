@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Helpers;
@@ -170,6 +171,8 @@ internal sealed class FakeProcessRunner : IProcessRunner
     public bool DefaultSuccess { get; set; } = true;
     public string? FailMatching { get; set; }
     public string FailError { get; set; } = "error";
+    /// <summary>When set, matching commands that contain a quoted path create that empty file.</summary>
+    public string? WriteFileOnMatch { get; set; }
 
     public void When(string fileName, string argsContains, string stdout) =>
         _responses.Add((fileName + " " + argsContains, stdout));
@@ -190,12 +193,37 @@ internal sealed class FakeProcessRunner : IProcessRunner
             var args = space < 0 ? string.Empty : match[(space + 1)..];
             if (cmd.Contains(file, StringComparison.Ordinal) &&
                 (args.Length == 0 || cmd.Contains(args, StringComparison.Ordinal)))
+            {
+                if (WriteFileOnMatch != null &&
+                    cmd.Contains(WriteFileOnMatch, StringComparison.Ordinal))
+                {
+                    TryTouchQuotedPath(arguments);
+                }
+
                 return new ProcessRunResult(0, output, string.Empty);
+            }
         }
 
         return DefaultSuccess
             ? new ProcessRunResult(0, string.Empty, string.Empty)
             : new ProcessRunResult(1, string.Empty, "fail");
+    }
+
+    private static void TryTouchQuotedPath(string arguments)
+    {
+        var start = arguments.IndexOf('"');
+        var end = arguments.LastIndexOf('"');
+        if (start < 0 || end <= start)
+            return;
+        var path = arguments[(start + 1)..end];
+        try
+        {
+            File.WriteAllText(path, string.Empty);
+        }
+        catch
+        {
+            // ignore
+        }
     }
 }
 
