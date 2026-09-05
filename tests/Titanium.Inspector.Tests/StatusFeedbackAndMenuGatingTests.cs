@@ -191,6 +191,7 @@ public class StatusFeedbackAndMenuGatingTests
         {
             var settings = new SettingsService(path);
             settings.Current.AutoStartCapture = false;
+            settings.Current.AutoSystemProxyOnStart = false;
             settings.Save();
 
             var interception = new InterceptionService(new RecordingSystemProxyController())

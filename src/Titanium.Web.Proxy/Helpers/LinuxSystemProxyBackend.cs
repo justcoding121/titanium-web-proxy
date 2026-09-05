@@ -1,13 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Runtime.Versioning;
+using System.Text;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Helpers;
 
 /// <summary>
-///     Linux system proxy: GNOME gsettings + KDE kwriteconfig + process http(s)_proxy / no_proxy.
+///     Linux system proxy: GNOME gsettings + KDE kwriteconfig + process/session http(s)_proxy
+///     + Chromium launch hooks. Ubuntu 24.04 libproxy often ignores gsettings and returns DIRECT
+///     unless http_proxy is set; Chrome also needs a full quit/relaunch to pick up hooks.
 /// </summary>
 [SupportedOSPlatform("linux")]
 internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
@@ -18,6 +22,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     private const string KdeProxyTypeKey = "ProxyType";
     private const string GsettingsCommand = "gsettings";
     private const string DbusSessionBusAddress = "DBUS_SESSION_BUS_ADDRESS";
+    private const string SessionEnvDropInFileName = "90-titanium-inspector-proxy.conf";
 
     private static readonly string[] EnvKeys =
     [
@@ -32,6 +37,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     private bool _hasSnapshot;
     private bool _disposed;
     private bool _dbusSanitized;
+    private bool _sessionEnvApplied;
     private readonly EventHandler _processExitHandler;
     private readonly UnhandledExceptionEventHandler _unhandledExceptionHandler;
 
@@ -89,7 +95,18 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
             // best-effort
         }
 
-        // XFCE/i3/WSLg dock Chrome ignores GNOME gsettings; pin Chromium-family via policy + .desktop Exec.
+        // libproxy 0.5 on Ubuntu often ignores gsettings; publish http_proxy to the user session too.
+        var sessionEnvApplied = false;
+        try
+        {
+            sessionEnvApplied = ApplyUserSessionProxyEnvironment(hostname, port, protocolType, proxyOverride);
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        // XFCE/i3/WSLg/RDP dock Chrome ignores GNOME gsettings; pin Chromium-family via policy + .desktop Exec.
         var hooksApplied = false;
         if (_applyBrowserLaunchHooks)
         {
@@ -106,12 +123,12 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         if (desktopError is not null && !hooksApplied)
             throw desktopError;
 
-        if (!gnome && !kde && !hooksApplied)
+        if (!gnome && !kde && !hooksApplied && !sessionEnvApplied)
         {
             throw new InvalidOperationException(
-                "Linux system proxy requires GNOME gsettings, KDE kwriteconfig, or writable " +
-                "Chrome/Chromium desktop/policy files; only this process's http(s)_proxy " +
-                "environment was updated.");
+                "Linux system proxy requires GNOME gsettings, KDE kwriteconfig, writable " +
+                "Chrome/Chromium desktop/policy files, or a user session environment; only this " +
+                "process's http(s)_proxy environment was updated.");
         }
     }
 
@@ -156,6 +173,15 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         try
         {
             ClearProcessProxyEnv();
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        try
+        {
+            ClearUserSessionProxyEnvironment();
         }
         catch
         {
@@ -231,6 +257,15 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
                         Environment.SetEnvironmentVariable(key, value);
                 }
             }
+        }
+        catch
+        {
+            // process-exit restore must not throw
+        }
+
+        try
+        {
+            ClearUserSessionProxyEnvironment();
         }
         catch
         {
@@ -392,8 +427,8 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     }
 
     /// <summary>
-    ///     Clear poisoned session-bus addresses (e.g. Cursor/sandbox <c>disabled:</c>) so gsettings/dconf
-    ///     can discover the real X11/user session bus that Chrome already uses.
+    ///     Clear poisoned session-bus addresses (e.g. Cursor/sandbox <c>disabled:</c>) and adopt the
+    ///     graphical login bus (XFCE/GNOME/xrdp) so gsettings/dconf match what the desktop uses.
     /// </summary>
     private void EnsureUsableDbusSession()
     {
@@ -402,7 +437,20 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
 
         var address = Environment.GetEnvironmentVariable(DbusSessionBusAddress);
         if (IsUnusableDbusAddress(address))
+        {
             Environment.SetEnvironmentVariable(DbusSessionBusAddress, null);
+            var discovered = LinuxGraphicalSession.TryGetDbusSessionAddress();
+            if (!IsUnusableDbusAddress(discovered))
+                Environment.SetEnvironmentVariable(DbusSessionBusAddress, discovered);
+        }
+
+        var display = Environment.GetEnvironmentVariable("DISPLAY");
+        if (string.IsNullOrWhiteSpace(display))
+        {
+            var sessionDisplay = LinuxGraphicalSession.TryGetDisplay();
+            if (!string.IsNullOrWhiteSpace(sessionDisplay))
+                Environment.SetEnvironmentVariable("DISPLAY", sessionDisplay);
+        }
 
         _dbusSanitized = true;
     }
@@ -445,6 +493,101 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         var noProxy = UnixProxyBypassMapper.ToNoProxyEnv(proxyOverride);
         Environment.SetEnvironmentVariable("no_proxy", noProxy);
         Environment.SetEnvironmentVariable("NO_PROXY", noProxy);
+    }
+
+    /// <summary>
+    ///     Publish http(s)_proxy to systemd --user and environment.d so libproxy-based apps
+    ///     (and newly started session tools) see the Inspector. Does not restart browsers.
+    /// </summary>
+    private bool ApplyUserSessionProxyEnvironment(string hostname, int port, ProxyProtocolType protocolType,
+        string? proxyOverride)
+    {
+        var url = $"http://{hostname}:{port}"; // NOSONAR S5332
+        var noProxy = UnixProxyBypassMapper.ToNoProxyEnv(proxyOverride);
+        var assignments = new List<string>();
+        if ((protocolType & ProxyProtocolType.Http) != 0)
+        {
+            assignments.Add($"http_proxy={url}");
+            assignments.Add($"HTTP_PROXY={url}");
+        }
+
+        if ((protocolType & ProxyProtocolType.Https) != 0)
+        {
+            assignments.Add($"https_proxy={url}");
+            assignments.Add($"HTTPS_PROXY={url}");
+        }
+
+        assignments.Add($"no_proxy={noProxy}");
+        assignments.Add($"NO_PROXY={noProxy}");
+
+        var any = false;
+        var joined = string.Join(' ', assignments.Select(QuoteShell));
+        var systemctl = _runner.Run("systemctl", $"--user set-environment {joined}");
+        if (systemctl is { Succeeded: true })
+            any = true;
+
+        var names = string.Join(' ',
+            assignments.Select(a => a.Split('=', 2)[0]));
+        var dbusUpdate = _runner.Run("dbus-update-activation-environment", $"--systemd {names}");
+        if (dbusUpdate is { Succeeded: true })
+            any = true;
+
+        if (TryWriteSessionEnvDropIn(assignments))
+            any = true;
+
+        _sessionEnvApplied = any;
+        return any;
+    }
+
+    private void ClearUserSessionProxyEnvironment()
+    {
+        if (_sessionEnvApplied)
+        {
+            _runner.Run("systemctl",
+                "--user unset-environment http_proxy https_proxy HTTP_PROXY HTTPS_PROXY no_proxy NO_PROXY");
+            _sessionEnvApplied = false;
+        }
+
+        TryDeleteSessionEnvDropIn();
+    }
+
+    private static bool TryWriteSessionEnvDropIn(IReadOnlyList<string> assignments)
+    {
+        try
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (string.IsNullOrWhiteSpace(home))
+                return false;
+
+            var dir = Path.Combine(home, ".config", "environment.d");
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, SessionEnvDropInFileName);
+            var sb = new StringBuilder();
+            sb.AppendLine("# Managed by Titanium Inspector — removed when system proxy is restored");
+            foreach (var line in assignments)
+                sb.AppendLine(line);
+            File.WriteAllText(path, sb.ToString());
+            return File.Exists(path);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void TryDeleteSessionEnvDropIn()
+    {
+        try
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (string.IsNullOrWhiteSpace(home))
+                return;
+            File.Delete(Path.Combine(home, ".config", "environment.d", SessionEnvDropInFileName));
+        }
+        catch
+        {
+            // best-effort
+        }
     }
 
     private static void ClearProcessProxyEnv()

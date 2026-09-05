@@ -169,9 +169,14 @@ public class LinuxSystemProxyBackendTests
         Assert.AreEqual("'127.0.0.1'", runner.GsettingsValue("org.gnome.system.proxy.http", "host"));
         Assert.AreEqual("8866", runner.GsettingsValue("org.gnome.system.proxy.http", "port"));
         Assert.AreEqual("true", runner.GsettingsValue("org.gnome.system.proxy.http", "enabled"));
+        Assert.IsTrue(runner.Commands.Exists(c =>
+            c.Contains("systemctl", StringComparison.Ordinal) &&
+            c.Contains("set-environment", StringComparison.Ordinal)));
 
         backend.RestoreOriginalSettings();
         Assert.IsTrue(string.IsNullOrEmpty(Environment.GetEnvironmentVariable("http_proxy")));
+        Assert.IsTrue(runner.Commands.Exists(c =>
+            c.Contains("unset-environment", StringComparison.Ordinal)));
     }
 
     [TestMethod]

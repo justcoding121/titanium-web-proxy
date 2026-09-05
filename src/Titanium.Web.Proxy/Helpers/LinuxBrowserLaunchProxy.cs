@@ -57,6 +57,8 @@ internal static class LinuxBrowserLaunchProxy
         var policyOk = WritePolicies(hostname, port) > 0;
         var desktopOk = WriteBrowserDesktopOverrides(hostname, port) > 0;
         var xfceOk = WriteXfceWebBrowserHelper(hostname, port);
+        if (desktopOk)
+            TryUpdateDesktopDatabase();
         return policyOk || desktopOk || xfceOk;
     }
 
@@ -79,7 +81,36 @@ internal static class LinuxBrowserLaunchProxy
 
         DeleteMarkedDesktopOverride(UserXfceChromeHelperPath());
         RestoreXfceHelpersRc();
+        TryUpdateDesktopDatabase();
     }
+
+    private static void TryUpdateDesktopDatabase()
+    {
+        try
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var apps = Path.Combine(home, ".local", "share", "applications");
+            if (!Directory.Exists(apps))
+                return;
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "update-desktop-database",
+                Arguments = QuoteShellArg(apps),
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            });
+            process?.WaitForExit(3000);
+        }
+        catch
+        {
+            // optional helper; dock may still pick up overrides without a cache refresh
+        }
+    }
+
+    private static string QuoteShellArg(string value) =>
+        "\"" + value.Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
 
     /// <summary>Writes managed policy JSON; returns count of directories that validated after write.</summary>
     internal static int WritePolicies(string hostname, int port, IEnumerable<string>? directories = null)

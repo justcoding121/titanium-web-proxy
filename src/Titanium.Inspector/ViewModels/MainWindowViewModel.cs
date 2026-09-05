@@ -454,16 +454,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         SystemProxy = true;
-        if (SystemProxy)
-        {
-            SetSteadyStatus("Ready");
-        }
-        else
+        if (!SystemProxy)
         {
             SetStatus(
                 $"Proxy running on {FormatBindDisplay()}:{BindPort}, but system proxy failed to enable — use the System proxy checkbox.",
                 StatusSeverity.Warning);
         }
+        // On success the SystemProxy setter already shows restart-browser guidance — do not overwrite with Ready.
     }
 
     /// <summary>
@@ -3052,9 +3049,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         var wantSystemProxy = _reenableSystemProxyOnStart || AutoSystemProxyOnStart;
         _reenableSystemProxyOnStart = false;
+        var showedSystemProxyGuidance = false;
         if (wantSystemProxy && !SystemProxy)
         {
             SystemProxy = true;
+            showedSystemProxyGuidance = SystemProxy;
         }
 
         // If settings asked for decrypt but CA is gone, fall back to CONNECT (no silent re-trust).
@@ -3069,13 +3068,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        if (SystemProxy)
+        // Keep the system-proxy restart guidance visible; do not replace it with Ready.
+        if (!showedSystemProxyGuidance)
         {
             SetSteadyStatus("Ready");
-            return;
         }
-
-        SetSteadyStatus("Ready");
     }
 
     private void RefreshEndpointAndBindUi()
@@ -3424,14 +3421,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         if (OperatingSystem.IsLinux())
         {
             var message =
-                "System proxy enabled. Fully quit and relaunch Chrome/Chromium so dock and already-running windows pick up the proxy.";
+                "System proxy enabled. Fully quit and reopen your browser so traffic routes through Inspector " +
+                "(already-open Chrome/Chromium windows keep their old proxy settings).";
             if (IsWsl())
-                message += " Windows Chrome on the host is not affected.";
+                message += " Windows browsers on the host are not affected.";
             return message;
         }
 
         if (OperatingSystem.IsMacOS())
-            return "System proxy enabled. Quit and reopen browsers if they were already running.";
+            return "System proxy enabled. Quit and reopen browsers if they were already running so traffic routes through Inspector.";
 
         return "System proxy enabled. For Chrome: disable QUIC (--disable-quic) or H3 may bypass the proxy.";
     }
@@ -3439,7 +3437,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private static string SystemProxyDisabledStatusMessage()
     {
         if (OperatingSystem.IsLinux())
-            return "System proxy restored. Fully quit Chrome/Chromium if it was launched while the Inspector proxy was on.";
+            return "System proxy restored. Fully quit and reopen Chrome/Chromium if it was launched while the Inspector proxy was on.";
+
+        if (OperatingSystem.IsMacOS())
+            return "System proxy restored. Quit and reopen browsers if they were launched while the Inspector proxy was on.";
 
         return "System proxy restored";
     }
