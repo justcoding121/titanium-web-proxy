@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
 using Titanium.Web.Proxy.Models;
@@ -40,6 +41,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     private bool _sessionEnvApplied;
     private readonly EventHandler _processExitHandler;
     private readonly UnhandledExceptionEventHandler _unhandledExceptionHandler;
+    private readonly List<PosixSignalRegistration> _posixSignals = new();
 
     public LinuxSystemProxyBackend(IProcessRunner? runner = null, bool applyBrowserLaunchHooks = true)
     {
@@ -49,6 +51,22 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         _unhandledExceptionHandler = (_, _) => RestoreOriginalSettings();
         AppDomain.CurrentDomain.ProcessExit += _processExitHandler;
         AppDomain.CurrentDomain.UnhandledException += _unhandledExceptionHandler;
+        // SIGTERM/SIGINT skip Avalonia Exit; still must restore gsettings and drop Chrome proxy flags.
+        try
+        {
+            _posixSignals.Add(PosixSignalRegistration.Create(PosixSignal.SIGTERM, _ =>
+            {
+                RestoreOriginalSettings();
+            }));
+            _posixSignals.Add(PosixSignalRegistration.Create(PosixSignal.SIGINT, _ =>
+            {
+                RestoreOriginalSettings();
+            }));
+        }
+        catch
+        {
+            // older runtimes / non-POSIX
+        }
     }
 
     public void SetProxy(string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
@@ -324,6 +342,12 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         if (_disposed) return;
         AppDomain.CurrentDomain.ProcessExit -= _processExitHandler;
         AppDomain.CurrentDomain.UnhandledException -= _unhandledExceptionHandler;
+        foreach (var reg in _posixSignals)
+        {
+            try { reg.Dispose(); } catch { /* ignore */ }
+        }
+
+        _posixSignals.Clear();
         _disposed = true;
     }
 

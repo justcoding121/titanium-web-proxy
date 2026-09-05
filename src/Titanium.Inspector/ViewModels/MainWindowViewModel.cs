@@ -1996,7 +1996,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 SetOutcomeStatus(
                     SystemProxyEnabledStatusMessage(),
                     StatusSeverity.Success,
-                    toastImportant: OperatingSystem.IsLinux() || OperatingSystem.IsMacOS());
+                    toastImportant: OperatingSystem.IsWindows());
                 return;
             }
 
@@ -2015,8 +2015,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             SetSystemProxyCore(false);
             SetOutcomeStatus(
                 SystemProxyDisabledStatusMessage(),
-                StatusSeverity.Success,
-                toastImportant: OperatingSystem.IsLinux());
+                StatusSeverity.Success);
         }
     }
 
@@ -3418,46 +3417,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private static string SystemProxyEnabledStatusMessage()
     {
-        if (OperatingSystem.IsLinux())
-        {
-            var message =
-                "System proxy enabled. Fully quit and reopen your browser so traffic routes through Inspector " +
-                "(already-open Chrome/Chromium windows keep their old proxy settings).";
-            if (IsWsl())
-                message += " Windows browsers on the host are not affected.";
-            return message;
-        }
+        if (OperatingSystem.IsWindows())
+            return "System proxy enabled. For Chrome: disable QUIC (--disable-quic) or H3 may bypass the proxy.";
 
-        if (OperatingSystem.IsMacOS())
-            return "System proxy enabled. Quit and reopen browsers if they were already running so traffic routes through Inspector.";
-
-        return "System proxy enabled. For Chrome: disable QUIC (--disable-quic) or H3 may bypass the proxy.";
+        return "System proxy enabled";
     }
 
-    private static string SystemProxyDisabledStatusMessage()
-    {
-        if (OperatingSystem.IsLinux())
-            return "System proxy restored. Fully quit and reopen Chrome/Chromium if it was launched while the Inspector proxy was on.";
-
-        if (OperatingSystem.IsMacOS())
-            return "System proxy restored. Quit and reopen browsers if they were launched while the Inspector proxy was on.";
-
-        return "System proxy restored";
-    }
-
-    private static bool IsWsl()
-    {
-        try
-        {
-            var version = File.ReadAllText("/proc/version");
-            return version.Contains("Microsoft", StringComparison.OrdinalIgnoreCase) ||
-                   version.Contains("WSL", StringComparison.OrdinalIgnoreCase);
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    private static string SystemProxyDisabledStatusMessage() =>
+        "System proxy restored";
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? name = null)
     {

@@ -63,7 +63,11 @@ internal static class LinuxBrowserLaunchProxy
         var profileOk = profileCount > 0;
         if (desktopOk)
             TryUpdateDesktopDatabase();
-        return policyOk || desktopOk || xfceOk || profileOk;
+        var ok = policyOk || desktopOk || xfceOk || profileOk;
+        // Already-running Chrome ignores Preference file edits and often ignores gsettings;
+        // relaunch so traffic switches immediately.
+        LinuxChromiumRelaunch.TryRelaunchForProxyChange(hostname, port, enableProxy: true);
+        return ok;
     }
 
     internal static void Clear()
@@ -88,6 +92,9 @@ internal static class LinuxBrowserLaunchProxy
         DeleteMarkedDesktopOverride(UserXfceChromeHelperPath());
         RestoreXfceHelpersRc();
         TryUpdateDesktopDatabase();
+
+        // Relaunch without proxy flags so already-open Chrome drops the dead endpoint immediately.
+        LinuxChromiumRelaunch.TryRelaunchForProxyChange(null, 0, enableProxy: false);
     }
 
     private static void TryUpdateDesktopDatabase()

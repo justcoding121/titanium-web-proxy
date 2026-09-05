@@ -301,6 +301,27 @@ public class LinuxBrowserLaunchProxyTests
     }
 
     [TestMethod]
+    public void ChromeProfileProxy_StripRemovesDeadFixedServersWithoutBackup()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-chrome-strip-" + Guid.NewGuid().ToString("N"));
+        var prefs = Path.Combine(dir, "Preferences");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(prefs,
+                """{"proxy":{"mode":"fixed_servers","server":"http://127.0.0.1:8866","bypass_list":"<-loopback>"}}""");
+            Assert.IsTrue(LinuxChromeProfileProxy.TryStripInspectorProxyForTests(prefs, "127.0.0.1", 8866));
+            var text = File.ReadAllText(prefs);
+            StringAssert.Contains(text, "\"mode\":\"system\"");
+            Assert.IsFalse(text.Contains("8866", StringComparison.Ordinal));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
     public void BuildPolicyJson_EscapesSpecialHostCharacters()
     {
         var json = LinuxBrowserLaunchProxy.BuildPolicyJson("weird\"host", 8866);

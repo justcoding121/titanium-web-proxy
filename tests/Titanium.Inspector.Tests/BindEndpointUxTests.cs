@@ -186,11 +186,6 @@ public class BindEndpointUxTests
                 vm.StatusText,
                 "System proxy enabled",
                 "Auto system proxy on start should surface enable guidance, not wipe it with Ready");
-            if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                StringAssert.Contains(vm.StatusText, "reopen",
-                    "Unix platforms should ask the user to restart the browser");
-            }
 
             vm.EnsureShutdown();
         }
