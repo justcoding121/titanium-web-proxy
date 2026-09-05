@@ -612,11 +612,15 @@ public sealed class InterceptionService : IDisposable
         }
 
         _proxy.CertificateManager.RemoveTrustedRootCertificate(machineStore);
-        // On macOS the CA may remain in System.keychain (Chrome still trusts it) even after
-        // the .NET current-user Root store entry is gone.
-        IsRootTrusted = OperatingSystem.IsMacOS()
-            ? _proxy.CertificateManager.IsOsRootStillPresent()
-            : IsRootPresentInStore(machineStore);
+        // Windows: Root store presence is trust. macOS: Chrome still trusts System.keychain
+        // copies after the .NET user store is cleared. Linux: Chrome reads NSS (~/.pki/nssdb),
+        // not the .NET store — leftover nicknames must keep IsRootTrusted true.
+        if (OperatingSystem.IsWindows())
+            IsRootTrusted = IsRootPresentInStore(machineStore);
+        else if (OperatingSystem.IsMacOS())
+            IsRootTrusted = _proxy.CertificateManager.IsOsRootStillPresent();
+        else
+            IsRootTrusted = _proxy.CertificateManager.VerifyOsUserSslTrust();
     }
 
     /// <summary>

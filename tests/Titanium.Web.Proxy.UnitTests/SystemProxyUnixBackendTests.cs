@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
@@ -103,21 +105,46 @@ public class MacOsSystemProxyBackendTests
 }
 
 [TestClass]
+public class SystemProxyHostnameTests
+{
+    [TestMethod]
+    public void FormatSystemProxyHostname_UsesIpv4LiteralForLoopbackAndAny()
+    {
+        Assert.AreEqual("127.0.0.1", ProxyServer.FormatSystemProxyHostname(IPAddress.Loopback));
+        Assert.AreEqual("127.0.0.1", ProxyServer.FormatSystemProxyHostname(IPAddress.Any));
+        Assert.AreEqual("::1", ProxyServer.FormatSystemProxyHostname(IPAddress.IPv6Loopback));
+        Assert.AreEqual("::1", ProxyServer.FormatSystemProxyHostname(IPAddress.IPv6Any));
+        Assert.AreEqual("192.168.1.10", ProxyServer.FormatSystemProxyHostname(IPAddress.Parse("192.168.1.10")));
+    }
+}
+
+[TestClass]
 [SupportedOSPlatform("linux")]
 public class LinuxSystemProxyBackendTests
 {
     [TestMethod]
+    public void IsUnusableDbusAddress_DetectsPoisonedAndEmpty()
+    {
+        Assert.IsTrue(LinuxSystemProxyBackend.IsUnusableDbusAddress(null));
+        Assert.IsTrue(LinuxSystemProxyBackend.IsUnusableDbusAddress(""));
+        Assert.IsTrue(LinuxSystemProxyBackend.IsUnusableDbusAddress("disabled:"));
+        Assert.IsTrue(LinuxSystemProxyBackend.IsUnusableDbusAddress("disabled"));
+        Assert.IsFalse(LinuxSystemProxyBackend.IsUnusableDbusAddress(
+            "unix:path=/tmp/dbus-test,guid=abc"));
+    }
+
+    [TestMethod]
     public void SetProxy_AppliesGnomeAndEnvironment()
     {
-        var runner = new FakeProcessRunner();
+        var runner = new FakeProcessRunner { TrackGsettings = true };
         runner.When("sh", "command -v gsettings", "/usr/bin/gsettings\n");
         runner.When("gsettings", "list-schemas", "org.gnome.system.proxy\n");
-        runner.When("gsettings", "get org.gnome.system.proxy mode", "'none'\n");
-        runner.When("gsettings", "get org.gnome.system.proxy.http host", "''\n");
-        runner.When("gsettings", "get org.gnome.system.proxy.http port", "0\n");
-        runner.When("gsettings", "get org.gnome.system.proxy.https host", "''\n");
-        runner.When("gsettings", "get org.gnome.system.proxy.https port", "0\n");
-        runner.When("gsettings", "get org.gnome.system.proxy ignore-hosts", "[]\n");
+        runner.SeedGsettings("org.gnome.system.proxy", "mode", "'none'");
+        runner.SeedGsettings("org.gnome.system.proxy.http", "host", "''");
+        runner.SeedGsettings("org.gnome.system.proxy.http", "port", "0");
+        runner.SeedGsettings("org.gnome.system.proxy.https", "host", "''");
+        runner.SeedGsettings("org.gnome.system.proxy.https", "port", "0");
+        runner.SeedGsettings("org.gnome.system.proxy", "ignore-hosts", "[]");
         runner.When("sh", "command -v kwriteconfig6", "\n");
         runner.When("sh", "command -v kwriteconfig5", "\n");
         runner.DefaultSuccess = true;
@@ -136,9 +163,35 @@ public class LinuxSystemProxyBackendTests
             c.Contains("manual", StringComparison.Ordinal)));
         Assert.AreEqual("http://127.0.0.1:8866", Environment.GetEnvironmentVariable("http_proxy"));
         Assert.AreEqual("http://127.0.0.1:8866", Environment.GetEnvironmentVariable("https_proxy"));
+        Assert.AreEqual("'manual'", runner.GsettingsValue("org.gnome.system.proxy", "mode"));
+        Assert.AreEqual("'127.0.0.1'", runner.GsettingsValue("org.gnome.system.proxy.http", "host"));
+        Assert.AreEqual("8866", runner.GsettingsValue("org.gnome.system.proxy.http", "port"));
 
         backend.RestoreOriginalSettings();
         Assert.IsTrue(string.IsNullOrEmpty(Environment.GetEnvironmentVariable("http_proxy")));
+    }
+
+    [TestMethod]
+    public void SetProxy_WhenGnomeWriteDoesNotStick_Throws()
+    {
+        var runner = new FakeProcessRunner();
+        runner.When("sh", "command -v gsettings", "/usr/bin/gsettings\n");
+        runner.When("gsettings", "list-schemas", "org.gnome.system.proxy\n");
+        // Gets always return none/empty — simulates dconf commit failure with exit 0.
+        runner.When("gsettings", "get org.gnome.system.proxy mode", "'none'\n");
+        runner.When("gsettings", "get org.gnome.system.proxy.http host", "''\n");
+        runner.When("gsettings", "get org.gnome.system.proxy.http port", "0\n");
+        runner.When("gsettings", "get org.gnome.system.proxy.https host", "''\n");
+        runner.When("gsettings", "get org.gnome.system.proxy.https port", "0\n");
+        runner.When("gsettings", "get org.gnome.system.proxy ignore-hosts", "[]\n");
+        runner.When("sh", "command -v kwriteconfig6", "\n");
+        runner.When("sh", "command -v kwriteconfig5", "\n");
+        runner.DefaultSuccess = true;
+
+        using var backend = new LinuxSystemProxyBackend(runner);
+        var ex = Assert.ThrowsException<InvalidOperationException>(() =>
+            backend.SetProxy("127.0.0.1", 8866, ProxyProtocolType.AllHttp, "localhost"));
+        StringAssert.Contains(ex.Message, "Failed to apply GNOME system proxy");
     }
 }
 
@@ -166,6 +219,7 @@ public class ElevationPromptCancelTests
 internal sealed class FakeProcessRunner : IProcessRunner
 {
     private readonly List<(string Match, string Output)> _responses = new();
+    private readonly Dictionary<string, string> _gsettings = new(StringComparer.Ordinal);
 
     public List<string> Commands { get; } = new();
     public bool DefaultSuccess { get; set; } = true;
@@ -173,9 +227,17 @@ internal sealed class FakeProcessRunner : IProcessRunner
     public string FailError { get; set; } = "error";
     /// <summary>When set, matching commands that contain a quoted path create that empty file.</summary>
     public string? WriteFileOnMatch { get; set; }
+    /// <summary>When true, gsettings set/get are tracked in-memory for apply verification.</summary>
+    public bool TrackGsettings { get; set; }
 
     public void When(string fileName, string argsContains, string stdout) =>
         _responses.Add((fileName + " " + argsContains, stdout));
+
+    public void SeedGsettings(string schema, string key, string value) =>
+        _gsettings[$"{schema} {key}"] = value;
+
+    public string? GsettingsValue(string schema, string key) =>
+        _gsettings.TryGetValue($"{schema} {key}", out var value) ? value : null;
 
     public ProcessRunResult? Run(string fileName, string arguments,
         IDictionary<string, string?>? environment = null, string? workingDirectory = null)
@@ -185,6 +247,13 @@ internal sealed class FakeProcessRunner : IProcessRunner
 
         if (FailMatching != null && cmd.Contains(FailMatching, StringComparison.Ordinal))
             return new ProcessRunResult(1, string.Empty, FailError);
+
+        if (TrackGsettings && fileName == "gsettings")
+        {
+            var tracked = TryTrackGsettings(arguments);
+            if (tracked is not null)
+                return tracked;
+        }
 
         foreach (var (match, output) in _responses)
         {
@@ -207,6 +276,25 @@ internal sealed class FakeProcessRunner : IProcessRunner
         return DefaultSuccess
             ? new ProcessRunResult(0, string.Empty, string.Empty)
             : new ProcessRunResult(1, string.Empty, "fail");
+    }
+
+    private ProcessRunResult? TryTrackGsettings(string arguments)
+    {
+        var parts = arguments.Split(' ', 4, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 4 && parts[0] == "set")
+        {
+            _gsettings[$"{parts[1]} {parts[2]}"] = parts[3];
+            return new ProcessRunResult(0, string.Empty, string.Empty);
+        }
+
+        if (parts.Length >= 3 && parts[0] == "get")
+        {
+            var key = $"{parts[1]} {parts[2]}";
+            if (_gsettings.TryGetValue(key, out var value))
+                return new ProcessRunResult(0, value + "\n", string.Empty);
+        }
+
+        return null;
     }
 
     private static void TryTouchQuotedPath(string arguments)

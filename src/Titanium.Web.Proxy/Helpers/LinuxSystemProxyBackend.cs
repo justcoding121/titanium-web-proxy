@@ -17,6 +17,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     private const string GnomeSystemProxyHttpsSchema = "org.gnome.system.proxy.https";
     private const string KdeProxyTypeKey = "ProxyType";
     private const string GsettingsCommand = "gsettings";
+    private const string DbusSessionBusAddress = "DBUS_SESSION_BUS_ADDRESS";
 
     private static readonly string[] EnvKeys =
     [
@@ -29,6 +30,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     private KdeSnapshot? _kde;
     private bool _hasSnapshot;
     private bool _disposed;
+    private bool _dbusSanitized;
     private readonly EventHandler _processExitHandler;
     private readonly UnhandledExceptionEventHandler _unhandledExceptionHandler;
 
@@ -45,13 +47,24 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     {
         EnsureSnapshot();
 
-        if (HasGnome())
+        var gnome = HasGnome();
+        var kde = HasKde();
+
+        if (gnome)
             ApplyGnome(hostname, port, protocolType, proxyOverride);
 
-        if (HasKde())
+        if (kde)
             ApplyKde(hostname, port, protocolType, proxyOverride);
 
+        // Process env alone does not affect Chrome/Firefox already running in the desktop session.
         ApplyProcessEnvironment(hostname, port, protocolType, proxyOverride);
+
+        if (!gnome && !kde)
+        {
+            throw new InvalidOperationException(
+                "Linux system proxy requires GNOME gsettings or KDE kwriteconfig; " +
+                "only this process's http(s)_proxy environment was updated.");
+        }
     }
 
     public void RemoveProxy(ProxyProtocolType protocolType, bool saveOriginalConfig = true)
@@ -123,7 +136,9 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     {
         if (HasGnome())
         {
-            var result = _runner.Run(GsettingsCommand, $"get {GnomeSystemProxySchema} ignore-hosts");
+            EnsureUsableDbusSession();
+            var result = _runner.Run(GsettingsCommand, $"get {GnomeSystemProxySchema} ignore-hosts",
+                DbusEnvironmentOverride());
             if (result is { Succeeded: true })
                 return ParseGsettingsArray(result.StandardOutput);
         }
@@ -186,6 +201,8 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
 
     private void ApplyGnome(string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
     {
+        EnsureUsableDbusSession();
+
         GsettingsSet(GnomeSystemProxySchema, "mode", "'manual'");
         if ((protocolType & ProxyProtocolType.Http) != 0)
         {
@@ -202,7 +219,64 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         if (proxyOverride != null)
             GsettingsSet(GnomeSystemProxySchema, "ignore-hosts",
                 UnixProxyBypassMapper.ToGsettingsArray(proxyOverride));
+
+        // gsettings often exits 0 even when dconf cannot commit (e.g. DBUS_SESSION_BUS_ADDRESS=disabled:).
+        // Verify so Inspector does not show System proxy on while Chrome still sees mode=none.
+        VerifyGnomeApplied(hostname, port, protocolType);
     }
+
+    private void VerifyGnomeApplied(string hostname, int port, ProxyProtocolType protocolType)
+    {
+        var mode = GsettingsGet(GnomeSystemProxySchema, "mode")?.Trim('\'', '"') ?? string.Empty;
+        if (!mode.Equals("manual", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Failed to apply GNOME system proxy (gsettings mode is still " +
+                $"'{mode}' — is a D-Bus session available?).");
+        }
+
+        if ((protocolType & ProxyProtocolType.Http) != 0)
+        {
+            var host = GsettingsGet(GnomeSystemProxyHttpSchema, "host")?.Trim('\'', '"') ?? string.Empty;
+            var appliedPort = ParseInt(GsettingsGet(GnomeSystemProxyHttpSchema, "port"));
+            if (!host.Equals(hostname, StringComparison.OrdinalIgnoreCase) || appliedPort != port)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to apply GNOME HTTP proxy (got {host}:{appliedPort}, expected {hostname}:{port}).");
+            }
+        }
+
+        if ((protocolType & ProxyProtocolType.Https) != 0)
+        {
+            var host = GsettingsGet(GnomeSystemProxyHttpsSchema, "host")?.Trim('\'', '"') ?? string.Empty;
+            var appliedPort = ParseInt(GsettingsGet(GnomeSystemProxyHttpsSchema, "port"));
+            if (!host.Equals(hostname, StringComparison.OrdinalIgnoreCase) || appliedPort != port)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to apply GNOME HTTPS proxy (got {host}:{appliedPort}, expected {hostname}:{port}).");
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Clear poisoned session-bus addresses (e.g. Cursor/sandbox <c>disabled:</c>) so gsettings/dconf
+    ///     can discover the real X11/user session bus that Chrome already uses.
+    /// </summary>
+    private void EnsureUsableDbusSession()
+    {
+        if (_dbusSanitized)
+            return;
+
+        var address = Environment.GetEnvironmentVariable(DbusSessionBusAddress);
+        if (IsUnusableDbusAddress(address))
+            Environment.SetEnvironmentVariable(DbusSessionBusAddress, null);
+
+        _dbusSanitized = true;
+    }
+
+    internal static bool IsUnusableDbusAddress(string? address) =>
+        string.IsNullOrWhiteSpace(address) ||
+        address.StartsWith("disabled", StringComparison.OrdinalIgnoreCase);
 
     private void ApplyKde(string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
     {
@@ -248,11 +322,12 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
 
     private bool HasGnome()
     {
-        var which = _runner.Run("sh", "-c \"command -v gsettings\"");
+        EnsureUsableDbusSession();
+        var which = _runner.Run("sh", "-c \"command -v gsettings\"", DbusEnvironmentOverride());
         if (which is not { Succeeded: true } || string.IsNullOrWhiteSpace(which.StandardOutput))
             return false;
 
-        var schema = _runner.Run(GsettingsCommand, "list-schemas");
+        var schema = _runner.Run(GsettingsCommand, "list-schemas", DbusEnvironmentOverride());
         return schema is { Succeeded: true } &&
                schema.StandardOutput.Contains(GnomeSystemProxySchema, StringComparison.Ordinal);
     }
@@ -295,12 +370,32 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
 
     private string? GsettingsGet(string schema, string key)
     {
-        var result = _runner.Run(GsettingsCommand, $"get {schema} {key}");
+        EnsureUsableDbusSession();
+        var result = _runner.Run(GsettingsCommand, $"get {schema} {key}", DbusEnvironmentOverride());
         return result is { Succeeded: true } ? result.StandardOutput.Trim() : null;
     }
 
-    private void GsettingsSet(string schema, string key, string value) =>
-        _runner.Run(GsettingsCommand, $"set {schema} {key} {value}");
+    private void GsettingsSet(string schema, string key, string value)
+    {
+        EnsureUsableDbusSession();
+        _runner.Run(GsettingsCommand, $"set {schema} {key} {value}", DbusEnvironmentOverride());
+    }
+
+    /// <summary>
+    ///     Ensure child gsettings processes do not inherit a poisoned bus address even if something
+    ///     re-set <c>DBUS_SESSION_BUS_ADDRESS</c> after <see cref="EnsureUsableDbusSession"/>.
+    /// </summary>
+    private static IDictionary<string, string?>? DbusEnvironmentOverride()
+    {
+        var address = Environment.GetEnvironmentVariable(DbusSessionBusAddress);
+        if (!IsUnusableDbusAddress(address))
+            return null;
+
+        return new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            [DbusSessionBusAddress] = null
+        };
+    }
 
     private static string QuoteGsettings(string value) => $"'{value.Replace("'", @"'\''")}'";
 

@@ -633,6 +633,12 @@ public sealed class CertificateManager : IDisposable
             x509Store.Open(OpenFlags.OpenExistingOnly);
             return x509Store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, false);
         }
+        catch (CryptographicException)
+        {
+            // Fresh Linux images often lack ~/.dotnet/corefx/cryptography/x509stores/{root,my}.
+            // Treat a missing store as empty so InstallCertificate can create it via ReadWrite.
+            return [];
+        }
         finally
         {
             x509Store.Close();

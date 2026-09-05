@@ -97,6 +97,7 @@ public class InspectorFeatureSanityE2ETests
             vm.UntrustCaCommand.Execute(null);
             await WaitAsync(() => dialogs.RemoveRootCaCalls > 0);
             Assert.IsFalse(vm.DecryptHttps);
+            Assert.IsFalse(interception.IsRootTrusted);
 
             vm.ToggleSystemProxyCommand.Execute(null);
             await WaitAsync(() => recorder.RestoreCount >= 1);

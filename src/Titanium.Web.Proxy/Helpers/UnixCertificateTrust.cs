@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using Titanium.Web.Proxy.Network;
 
@@ -57,7 +58,7 @@ internal static class UnixCertificateTrust
             return UntrustMacThorough(runner, certificate, friendlyName, elevation);
 
         if (RunTime.IsLinux)
-            return UntrustLinuxNss(runner, friendlyName);
+            return UntrustLinuxNss(runner, certificate, friendlyName);
 
         return false;
     }
@@ -273,20 +274,32 @@ internal static class UnixCertificateTrust
             return VerifyMacSslTrust(runner, certificate);
 
         if (RunTime.IsLinux)
-        {
-            // Presence in user NSS db is a practical signal for Chromium trust.
-            var nssDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".pki", "nssdb");
-            if (!Directory.Exists(nssDir)) return false;
-            var certutil = FindCertutil(runner);
-            if (certutil is null) return false;
-            var list = runner.Run(certutil, $"-d sql:{nssDir} -L");
-            return list is { Succeeded: true } &&
-                   list.StandardOutput.Contains(certificate.GetNameInfo(X509NameType.SimpleName, false) ?? "",
-                       StringComparison.OrdinalIgnoreCase);
-        }
+            return VerifyLinuxNssTrust(runner, certificate);
 
         return false;
+    }
+
+    /// <summary>
+    ///     True when <paramref name="certificate"/> is present in the user NSS DB (any nickname)
+    ///     with trust attributes that include SSL (Chromium reads <c>~/.pki/nssdb</c>).
+    /// </summary>
+    internal static bool VerifyLinuxNssTrust(IProcessRunner runner, X509Certificate2 certificate)
+    {
+        var nssDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".pki", "nssdb");
+        if (!Directory.Exists(nssDir)) return false;
+        var certutil = FindCertutil(runner);
+        if (certutil is null) return false;
+
+        var list = runner.Run(certutil, $"-d sql:{nssDir} -L");
+        if (list is not { Succeeded: true })
+            return false;
+
+        // Match by certificate bytes, not nickname/CN. The same DER can sit under a
+        // legacy nickname ("Titanium Inspector Root Certificate") while the product CN
+        // is "Titanium Root Certificate Authority", and a CN substring hit would also
+        // false-positive against an unrelated nickname.
+        return LinuxNssContainsCertificate(runner, certutil, nssDir, certificate, list.StandardOutput);
     }
 
     /// <summary>
@@ -728,27 +741,160 @@ internal static class UnixCertificateTrust
         }
 
         var certutil = FindCertutil(runner)!;
+        // Drop any prior nickname so -A is not a silent no-op when the DER already exists
+        // under a different nickname (certutil exits 0 without listing the new name).
+        runner.Run(certutil, $"-d sql:{nssDir} -D -n \"{Escape(friendlyName)}\"");
+
         var result = runner.Run(certutil,
             $"-d sql:{nssDir} -A -t \"C,,\" -n \"{Escape(friendlyName)}\" -i \"{cerPath}\"");
-        if (result is { Succeeded: true })
+        if (result is not { Succeeded: true })
+        {
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.NssFailed,
+                string.IsNullOrWhiteSpace(result?.StandardError)
+                    ? "certutil failed to add the root CA to ~/.pki/nssdb"
+                    : result!.StandardError.Trim());
+        }
+
+        var list = runner.Run(certutil, $"-d sql:{nssDir} -L");
+        if (list is { Succeeded: true } &&
+            list.StandardOutput.Contains(friendlyName, StringComparison.OrdinalIgnoreCase))
+            return CertificateOsTrustResult.Ok("Root CA trusted in user NSS database");
+
+        // DER collision under another nickname: remove matching entries and re-add.
+        if (TryReloadCertificateFromCer(cerPath) is { } cert)
+            RemoveLinuxNssEntriesMatching(runner, certutil, nssDir, cert);
+
+        result = runner.Run(certutil,
+            $"-d sql:{nssDir} -A -t \"C,,\" -n \"{Escape(friendlyName)}\" -i \"{cerPath}\"");
+        list = runner.Run(certutil, $"-d sql:{nssDir} -L");
+        if (result is { Succeeded: true } &&
+            list is { Succeeded: true } &&
+            list.StandardOutput.Contains(friendlyName, StringComparison.OrdinalIgnoreCase))
             return CertificateOsTrustResult.Ok("Root CA trusted in user NSS database");
 
         return CertificateOsTrustResult.Fail(
             CertificateOsTrustKind.NssFailed,
-            string.IsNullOrWhiteSpace(result?.StandardError)
-                ? "certutil failed to add the root CA to ~/.pki/nssdb"
-                : result!.StandardError.Trim());
+            "certutil reported success but the root CA nickname is missing from ~/.pki/nssdb");
     }
 
-    private static bool UntrustLinuxNss(IProcessRunner runner, string friendlyName)
+    private static X509Certificate2? TryReloadCertificateFromCer(string cerPath)
+    {
+        try
+        {
+            return X509CertificateLoader.LoadCertificateFromFile(cerPath);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void RemoveLinuxNssEntriesMatching(
+        IProcessRunner runner, string certutil, string nssDir, X509Certificate2 certificate)
+    {
+        var list = runner.Run(certutil, $"-d sql:{nssDir} -L");
+        if (list is not { Succeeded: true })
+            return;
+
+        foreach (var nick in ParseNssNicknames(list.StandardOutput))
+        {
+            if (!LinuxNssNicknameMatches(runner, certutil, nssDir, nick, certificate))
+                continue;
+            runner.Run(certutil, $"-d sql:{nssDir} -D -n \"{Escape(nick)}\"");
+        }
+    }
+
+    private static bool LinuxNssContainsCertificate(
+        IProcessRunner runner, string certutil, string nssDir, X509Certificate2 certificate, string listOutput)
+    {
+        foreach (var nick in ParseNssNicknames(listOutput))
+        {
+            if (LinuxNssNicknameMatches(runner, certutil, nssDir, nick, certificate))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool LinuxNssNicknameMatches(
+        IProcessRunner runner, string certutil, string nssDir, string nickname, X509Certificate2 certificate)
+    {
+        var dumped = runner.Run(certutil, $"-d sql:{nssDir} -L -n \"{Escape(nickname)}\" -a");
+        if (dumped is not { Succeeded: true } || string.IsNullOrWhiteSpace(dumped.StandardOutput))
+            return false;
+
+        try
+        {
+            using var loaded = X509Certificate2.CreateFromPem(dumped.StandardOutput);
+            return string.Equals(loaded.Thumbprint, certificate.Thumbprint, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static IEnumerable<string> ParseNssNicknames(string certutilListOutput)
+    {
+        foreach (var raw in certutilListOutput.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = raw.TrimEnd();
+            if (line.Length == 0 ||
+                line.StartsWith("Certificate Nickname", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("SSL,", StringComparison.OrdinalIgnoreCase) ||
+                line.All(c => c == '-' || char.IsWhiteSpace(c)))
+                continue;
+
+            // "Nickname ... spaces ... Trust"
+            var nick = line;
+            var trustIdx = line.LastIndexOf("  ", StringComparison.Ordinal);
+            if (trustIdx > 0)
+                nick = line[..trustIdx].TrimEnd();
+            if (nick.Length > 0)
+                yield return nick;
+        }
+    }
+
+    private static bool UntrustLinuxNss(
+        IProcessRunner runner, X509Certificate2 certificate, string friendlyName)
     {
         var nssDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".pki", "nssdb");
-        if (!Directory.Exists(nssDir)) return false;
+        if (!Directory.Exists(nssDir))
+            return true;
+
         var certutil = FindCertutil(runner);
-        if (certutil is null) return false;
-        var result = runner.Run(certutil, $"-d sql:{nssDir} -D -n \"{Escape(friendlyName)}\"");
-        return result is { Succeeded: true };
+        if (certutil is null)
+            return false;
+
+        // certutil -A is a silent no-op when the same DER exists under another nickname
+        // (legacy "Titanium Inspector Root Certificate" vs current CN). Delete every
+        // matching nickname so Remove CA actually clears Chrome trust.
+        var nicks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(friendlyName))
+            nicks.Add(friendlyName);
+
+        var list = runner.Run(certutil, $"-d sql:{nssDir} -L");
+        if (list is { Succeeded: true })
+        {
+            foreach (var nick in ParseNssNicknames(list.StandardOutput))
+            {
+                if (nicks.Contains(nick) ||
+                    LinuxNssNicknameMatches(runner, certutil, nssDir, nick, certificate))
+                    nicks.Add(nick);
+            }
+        }
+
+        var deleted = false;
+        foreach (var nick in nicks)
+        {
+            var result = runner.Run(certutil, $"-d sql:{nssDir} -D -n \"{Escape(nick)}\"");
+            if (result is { Succeeded: true })
+                deleted = true;
+        }
+
+        return deleted || !VerifyLinuxNssTrust(runner, certificate);
     }
 
     private static bool TrustLinuxSystem(IElevationPrompt elevation, string cerPath, string friendlyName)

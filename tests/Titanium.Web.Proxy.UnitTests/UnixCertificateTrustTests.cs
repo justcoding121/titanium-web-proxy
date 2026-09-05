@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Helpers;
@@ -205,6 +206,79 @@ public class UnixCertificateTrustTests
     }
 
     [TestMethod]
+    public void UntrustUserSsl_OnLinux_DeletesAliasNicknameMatchingCertificate()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Inconclusive("Linux-only");
+            return;
+        }
+
+        using var cert = CreateEphemeralRoot();
+        var pem = ToPem(cert);
+        var runner = new FakeProcessRunner { DefaultSuccess = true };
+        runner.When("sh", "command -v certutil", "/usr/bin/certutil\n");
+        runner.When("certutil", "-L -n", pem);
+        runner.When("certutil", "-L", """
+            Certificate Nickname                                         Trust Attributes
+                                                                         SSL,S/MIME,JAR/XPI
+
+            Titanium Inspector Root Certificate                          C,,
+            """);
+
+        Assert.IsTrue(UnixCertificateTrust.UntrustUserSsl(
+            cert, "Titanium Root Certificate Authority", runner));
+        Assert.IsTrue(runner.Commands.Exists(c =>
+            c.Contains("-D", StringComparison.Ordinal) &&
+            c.Contains("Titanium Inspector Root Certificate", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Linux")]
+    public void TrustAndUntrustUserSsl_LinuxNss_RemovesAliasNickname()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Inconclusive("Linux-only");
+            return;
+        }
+
+        var runner = new ProcessRunner();
+        if (UnixCertificateTrust.FindCertutil(runner) is null)
+        {
+            Assert.Inconclusive("certutil (libnss3-tools) required");
+            return;
+        }
+
+        using var cert = CreateEphemeralRoot();
+        var alias = "TWP-NssAlias-" + Guid.NewGuid().ToString("N")[..8];
+        var cerPath = UnixCertificateTrust.WriteTempCer(cert);
+        try
+        {
+            var nssDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".pki", "nssdb");
+            Directory.CreateDirectory(nssDir);
+            var add = runner.Run("certutil",
+                $"-d sql:{nssDir} -A -t \"C,,\" -n \"{alias}\" -i \"{cerPath}\"");
+            Assert.IsNotNull(add);
+            Assert.IsTrue(add!.Succeeded, add.StandardError);
+            Assert.IsTrue(UnixCertificateTrust.VerifyUserSslTrust(cert, runner),
+                "Chrome NSS db should contain the imported test CA");
+
+            Assert.IsTrue(UnixCertificateTrust.UntrustUserSsl(
+                cert, "Titanium Root Certificate Authority", runner),
+                "Remove CA must delete the leftover alias nickname, not only the official CN");
+            Assert.IsFalse(UnixCertificateTrust.VerifyUserSslTrust(cert, runner),
+                "NSS still lists the test CA after Untrust");
+        }
+        finally
+        {
+            try { File.Delete(cerPath); } catch { /* best-effort */ }
+            UnixCertificateTrust.UntrustUserSsl(cert, alias, runner);
+        }
+    }
+
+    [TestMethod]
     public void VerifyUserSslTrust_OnMac_UsesTrustSettingsNotVerifyCertAlone()
     {
         if (!OperatingSystem.IsMacOS())
@@ -222,11 +296,16 @@ public class UnixCertificateTrustTests
         Assert.IsFalse(UnixCertificateTrust.VerifyUserSslTrust(cert, runner));
     }
 
+    private static string ToPem(System.Security.Cryptography.X509Certificates.X509Certificate2 cert) =>
+        "-----BEGIN CERTIFICATE-----\n" +
+        Convert.ToBase64String(cert.RawData, Base64FormattingOptions.InsertLineBreaks) +
+        "\n-----END CERTIFICATE-----\n";
+
     private static System.Security.Cryptography.X509Certificates.X509Certificate2 CreateEphemeralRoot()
     {
         using var rsa = System.Security.Cryptography.RSA.Create(2048);
         var req = new System.Security.Cryptography.X509Certificates.CertificateRequest(
-            "CN=Titanium Inspector Root Certificate",
+            "CN=TWP-NssRoundTrip-" + Guid.NewGuid().ToString("N")[..8],
             rsa,
             System.Security.Cryptography.HashAlgorithmName.SHA256,
             System.Security.Cryptography.RSASignaturePadding.Pkcs1);

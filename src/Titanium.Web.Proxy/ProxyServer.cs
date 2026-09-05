@@ -1505,11 +1505,11 @@ public partial class ProxyServer : IDisposable
             proxyOverride = settings.BuildProxyOverride(currentProxyOverride);
         }
 
+        // Prefer 127.0.0.1 over "localhost" for IPv4 loopback endpoints. Chrome/glibc often
+        // resolve localhost to ::1 first; an IPv4-only TcpListener never accepts that, so the
+        // browser falls back to DIRECT and Inspector captures nothing.
         SystemProxySettingsManager.SetProxy(
-            Equals(endPoint.IpAddress, IPAddress.Any) ||
-            Equals(endPoint.IpAddress, IPAddress.Loopback)
-                ? "localhost"
-                : endPoint.IpAddress.ToString(),
+            FormatSystemProxyHostname(endPoint.IpAddress),
             endPoint.Port,
             protocolType,
             proxyOverride);
@@ -2050,6 +2050,22 @@ public partial class ProxyServer : IDisposable
             throw new InvalidOperationException("Cannot set endPoints not added to proxy as system proxy");
 
         if (!ProxyRunning) throw new InvalidOperationException("Cannot set system proxy settings before proxy has been started.");
+    }
+
+    /// <summary>
+    ///     Hostname written into OS system-proxy settings for <paramref name="address"/>.
+    ///     IPv4 loopback uses <c>127.0.0.1</c> (not <c>localhost</c>) so clients that prefer
+    ///     IPv6 <c>::1</c> still reach an IPv4-only listener.
+    /// </summary>
+    internal static string FormatSystemProxyHostname(IPAddress address)
+    {
+        if (Equals(address, IPAddress.IPv6Any) || Equals(address, IPAddress.IPv6Loopback))
+            return "::1";
+
+        if (Equals(address, IPAddress.Any) || Equals(address, IPAddress.Loopback))
+            return "127.0.0.1";
+
+        return address.ToString();
     }
 
     /// <summary>
