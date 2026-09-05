@@ -355,8 +355,12 @@ public class FirefoxCertificateTrustTests
     {
         if (!OperatingSystem.IsWindows())
         {
-            var unsupported = FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots();
-            Assert.AreEqual(CertificateOsTrustKind.Unsupported, unsupported.Kind);
+            var nonWindows = FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots();
+            // Linux/macOS may succeed via policies.json; otherwise Unsupported.
+            if (nonWindows.Succeeded)
+                FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots();
+            else
+                Assert.AreEqual(CertificateOsTrustKind.Unsupported, nonWindows.Kind);
             return;
         }
 
@@ -370,6 +374,79 @@ public class FirefoxCertificateTrustTests
 
         Assert.IsTrue(result.Succeeded, result.Message);
         FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots();
+    }
+
+    [TestMethod]
+    public void BuildOrMergeFirefoxPoliciesJson_PreservesExistingPolicies()
+    {
+        const string existing =
+            """
+            {
+              "policies": {
+                "BlockAboutConfig": true,
+                "Certificates": {
+                  "ImportEnterpriseRoots": false
+                }
+              }
+            }
+            """;
+        var merged = FirefoxCertificateTrust.BuildOrMergeFirefoxPoliciesJson(existing, importEnterpriseRoots: true);
+        Assert.IsTrue(FirefoxCertificateTrust.TryValidateFirefoxPoliciesJson(merged, out var err), err);
+        using var doc = System.Text.Json.JsonDocument.Parse(merged);
+        Assert.IsTrue(doc.RootElement.GetProperty("policies").GetProperty("BlockAboutConfig").GetBoolean());
+        Assert.IsTrue(doc.RootElement.GetProperty("policies").GetProperty("Certificates")
+            .GetProperty("ImportEnterpriseRoots").GetBoolean());
+    }
+
+    [TestMethod]
+    public void BuildOrMergeFirefoxPoliciesJson_RecoversFromCorruptExisting()
+    {
+        var merged = FirefoxCertificateTrust.BuildOrMergeFirefoxPoliciesJson("{not-json", importEnterpriseRoots: true);
+        Assert.IsTrue(FirefoxCertificateTrust.TryValidateFirefoxPoliciesJson(merged, out var err), err);
+    }
+
+    [TestMethod]
+    public void EnsureEnterpriseRootsUserPref_DoesNotRewriteCommentsOrLockPref()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-ff-userjs-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var userJs = Path.Combine(dir, "user.js");
+            File.WriteAllText(userJs,
+                "// security.enterprise_roots.enabled\n" +
+                "lockPref(\"security.enterprise_roots.enabled\", false);\n" +
+                "user_pref(\"security.enterprise_roots.enabled\", false);\n");
+
+            FirefoxCertificateTrust.EnsureEnterpriseRootsUserPref(dir);
+            Assert.IsTrue(FirefoxCertificateTrust.VerifyEnterpriseRootsUserPref(dir));
+            var text = File.ReadAllText(userJs);
+            StringAssert.Contains(text, "// security.enterprise_roots.enabled");
+            StringAssert.Contains(text, "lockPref(\"security.enterprise_roots.enabled\", false);");
+            StringAssert.Contains(text, "user_pref(\"security.enterprise_roots.enabled\", true);");
+            Assert.IsFalse(text.Contains("user_pref(\"security.enterprise_roots.enabled\", false);",
+                StringComparison.Ordinal));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public void ParseDefaultProfileEntry_HonorsIsRelativeZero()
+    {
+        var ini = """
+            [Profile0]
+            Name=abs
+            IsRelative=0
+            Path=/opt/firefox-profile
+            Default=1
+            """;
+        var entry = FirefoxCertificateTrust.ParseDefaultProfileEntry(ini);
+        Assert.IsNotNull(entry);
+        Assert.AreEqual("/opt/firefox-profile", entry!.Value.Path);
+        Assert.IsFalse(entry.Value.IsRelative);
     }
 
     [TestMethod]

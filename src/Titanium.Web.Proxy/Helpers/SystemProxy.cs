@@ -144,7 +144,11 @@ internal class SystemProxyManager : ISystemProxyBackend
     {
         using (var reg = OpenInternetSettingsKey())
         {
-            if (reg == null) return;
+            if (reg == null)
+            {
+                throw new InvalidOperationException(
+                    "Could not open HKCU Internet Settings; Windows system proxy was not changed");
+            }
 
             SaveOriginalProxyConfiguration(reg);
             PrepareRegistry(reg);
@@ -158,13 +162,24 @@ internal class SystemProxyManager : ISystemProxyBackend
             if ((protocolType & ProxyProtocolType.Https) != 0)
                 existingSystemProxyValues.Add(new HttpSystemProxyValue(hostname, port, ProxyProtocolType.Https));
 
+            var proxyServerValue = string.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray());
             reg.DeleteValue(RegAutoConfigUrl, false);
             reg.SetValue(RegProxyEnable, 1);
-            reg.SetValue(RegProxyServer,
-                string.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
+            reg.SetValue(RegProxyServer, proxyServerValue);
             if (proxyOverride != null) reg.SetValue(RegProxyOverride, proxyOverride);
 
             Refresh();
+
+            // Re-read so a silent registry failure cannot look like success to Inspector.
+            var enableObj = reg.GetValue(RegProxyEnable);
+            var enable = enableObj is null ? 0 : Convert.ToInt32(enableObj);
+            var server = reg.GetValue(RegProxyServer) as string ?? string.Empty;
+            if (enable != 1 ||
+                !server.Contains($"{hostname}:{port}", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "WinINET proxy write did not stick (ProxyEnable/ProxyServer mismatch after set)");
+            }
         }
     }
 

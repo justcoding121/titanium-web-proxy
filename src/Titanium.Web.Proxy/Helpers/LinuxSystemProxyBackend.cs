@@ -95,8 +95,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         {
             try
             {
-                LinuxBrowserLaunchProxy.Apply(hostname, port);
-                hooksApplied = true;
+                hooksApplied = LinuxBrowserLaunchProxy.Apply(hostname, port);
             }
             catch
             {

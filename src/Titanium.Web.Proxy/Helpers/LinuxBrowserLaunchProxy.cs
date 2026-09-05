@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Titanium.Web.Proxy.Helpers;
 
@@ -17,6 +20,13 @@ internal static class LinuxBrowserLaunchProxy
     internal const string PolicyFileName = "titanium-inspector-proxy.json";
     internal const string DesktopMarker = "X-Titanium-Inspector-Proxy=true";
     internal const string ProxyBypassList = "<-loopback>";
+
+    /// <summary>
+    ///     Chromium managed-policy floor we target: modern <c>ProxyMode</c> string enum plus
+    ///     legacy <c>ProxyServerMode</c> int (2 = fixed servers) for older builds that still
+    ///     read the deprecated key. Unknown keys are ignored by Chromium.
+    /// </summary>
+    internal const int LegacyProxyServerModeFixedServers = 2;
 
     private static readonly string[] DesktopSources =
     [
@@ -41,11 +51,13 @@ internal static class LinuxBrowserLaunchProxy
         "/usr/bin/microsoft-edge",
     ];
 
-    internal static void Apply(string hostname, int port)
+    /// <summary>Returns true when at least one browser-launch hook was written and re-validated.</summary>
+    internal static bool Apply(string hostname, int port)
     {
-        WritePolicies(hostname, port);
-        WriteBrowserDesktopOverrides(hostname, port);
-        WriteXfceWebBrowserHelper(hostname, port);
+        var policyOk = WritePolicies(hostname, port) > 0;
+        var desktopOk = WriteBrowserDesktopOverrides(hostname, port) > 0;
+        var xfceOk = WriteXfceWebBrowserHelper(hostname, port);
+        return policyOk || desktopOk || xfceOk;
     }
 
     internal static void Clear()
@@ -69,33 +81,143 @@ internal static class LinuxBrowserLaunchProxy
         RestoreXfceHelpersRc();
     }
 
-    internal static void WritePolicies(string hostname, int port, IEnumerable<string>? directories = null)
+    /// <summary>Writes managed policy JSON; returns count of directories that validated after write.</summary>
+    internal static int WritePolicies(string hostname, int port, IEnumerable<string>? directories = null)
     {
-        var json = BuildPolicyJson(hostname, port);
+        string json;
+        try
+        {
+            json = BuildPolicyJson(hostname, port);
+        }
+        catch
+        {
+            return 0;
+        }
+
+        if (!TryValidatePolicyJson(json, hostname, port, out _))
+            return 0;
+
+        var written = 0;
         foreach (var dir in directories ?? PolicyDirectories())
         {
             try
             {
                 Directory.CreateDirectory(dir);
-                File.WriteAllText(Path.Combine(dir, PolicyFileName), json);
+                var path = Path.Combine(dir, PolicyFileName);
+                // Atomic-ish: write temp then replace so a crash mid-write cannot leave truncated JSON.
+                var temp = path + ".tmp";
+                File.WriteAllText(temp, json);
+                File.Move(temp, path, overwrite: true);
+                var onDisk = File.ReadAllText(path);
+                if (TryValidatePolicyJson(onDisk, hostname, port, out _))
+                    written++;
+                else
+                {
+                    try { File.Delete(path); } catch { /* ignore */ }
+                }
             }
             catch
             {
                 // /etc/opt/chrome and snap roots may not be writable
             }
         }
+
+        return written;
     }
 
+    /// <summary>
+    ///     Builds Chromium managed-policy JSON. Prefer modern <see cref="ProxyMode"/> string keys;
+    ///     also emit deprecated <c>ProxyServerMode</c>=2 for older Chromium that still reads it.
+    /// </summary>
     internal static string BuildPolicyJson(string hostname, int port)
     {
+        if (string.IsNullOrWhiteSpace(hostname))
+            throw new ArgumentException("hostname is required", nameof(hostname));
+        if (port is <= 0 or > 65535)
+            throw new ArgumentOutOfRangeException(nameof(port));
+
         var server = $"http://{hostname}:{port}";
-        return
-            "{\n" +
-            "  \"ProxyMode\": \"fixed_servers\",\n" +
-            "  \"ProxyServer\": \"" + server + "\",\n" +
-            "  \"ProxyBypassList\": \"" + ProxyBypassList + "\",\n" +
-            "  \"QuicAllowed\": false\n" +
-            "}\n";
+        var payload = new JsonObject
+        {
+            ["ProxyMode"] = "fixed_servers",
+            // Deprecated int enum (2 = Use a fixed proxy server). Harmless on modern Chrome.
+            ["ProxyServerMode"] = LegacyProxyServerModeFixedServers,
+            ["ProxyServer"] = server,
+            ["ProxyBypassList"] = ProxyBypassList,
+            ["QuicAllowed"] = false,
+        };
+
+        return payload.ToJsonString(new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            // Keep <-loopback> readable; \u003C form is also valid JSON but harder to audit.
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        }) + "\n";
+    }
+
+    /// <summary>
+    ///     True when <paramref name="json"/> is valid Chromium managed-policy JSON containing
+    ///     either modern <c>ProxyMode=fixed_servers</c> or legacy <c>ProxyServerMode=2</c>,
+    ///     plus matching host/port. Extra/unknown properties are allowed (forward compatible).
+    /// </summary>
+    internal static bool TryValidatePolicyJson(string json, string hostname, int port, out string? error)
+    {
+        error = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                error = "policy root must be a JSON object";
+                return false;
+            }
+
+            var root = doc.RootElement;
+            var modeOk = false;
+            if (root.TryGetProperty("ProxyMode", out var mode) &&
+                mode.ValueKind == JsonValueKind.String &&
+                mode.GetString()?.Equals("fixed_servers", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                modeOk = true;
+            }
+
+            if (root.TryGetProperty("ProxyServerMode", out var legacyMode) &&
+                legacyMode.ValueKind == JsonValueKind.Number &&
+                legacyMode.TryGetInt32(out var legacyInt) &&
+                legacyInt == LegacyProxyServerModeFixedServers)
+            {
+                modeOk = true;
+            }
+
+            if (!modeOk)
+            {
+                error = "missing ProxyMode=fixed_servers (or ProxyServerMode=2)";
+                return false;
+            }
+
+            if (!root.TryGetProperty("ProxyServer", out var server) ||
+                server.ValueKind != JsonValueKind.String)
+            {
+                error = "missing ProxyServer string";
+                return false;
+            }
+
+            var expected = $"http://{hostname}:{port}";
+            var actual = server.GetString() ?? string.Empty;
+            if (!actual.Contains($"{hostname}:{port}", StringComparison.Ordinal) &&
+                !actual.Equals(expected, StringComparison.OrdinalIgnoreCase))
+            {
+                error = "ProxyServer does not point at the Inspector endpoint";
+                return false;
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            return false;
+        }
     }
 
     internal static string InjectChromeProxyArgs(string execLine, string hostname, int port)
@@ -144,17 +266,21 @@ internal static class LinuxBrowserLaunchProxy
         yield return "/etc/opt/edge/policies/managed";
     }
 
-    private static void WriteBrowserDesktopOverrides(string hostname, int port)
+    private static int WriteBrowserDesktopOverrides(string hostname, int port)
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var destDir = Path.Combine(home, ".local", "share", "applications");
+        var written = 0;
         foreach (var source in DesktopSources)
         {
             if (!File.Exists(source))
                 continue;
             var dest = Path.Combine(destDir, Path.GetFileName(source));
-            WriteMarkedDesktopExec(source, dest, hostname, port);
+            if (WriteMarkedDesktopExec(source, dest, hostname, port))
+                written++;
         }
+
+        return written;
     }
 
     private static IEnumerable<string> UserDesktopOverridePaths()
@@ -165,7 +291,7 @@ internal static class LinuxBrowserLaunchProxy
             yield return Path.Combine(destDir, Path.GetFileName(source));
     }
 
-    private static void WriteMarkedDesktopExec(string source, string dest, string hostname, int port)
+    private static bool WriteMarkedDesktopExec(string source, string dest, string hostname, int port)
     {
         try
         {
@@ -189,10 +315,14 @@ internal static class LinuxBrowserLaunchProxy
 
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
             File.WriteAllText(dest, rewritten.ToString());
+
+            var verify = File.ReadAllText(dest);
+            return verify.Contains(DesktopMarker, StringComparison.Ordinal) &&
+                   verify.Contains("--proxy-server=", StringComparison.Ordinal);
         }
         catch
         {
-            // ignore
+            return false;
         }
     }
 
@@ -212,11 +342,11 @@ internal static class LinuxBrowserLaunchProxy
         }
     }
 
-    private static void WriteXfceWebBrowserHelper(string hostname, int port)
+    private static bool WriteXfceWebBrowserHelper(string hostname, int port)
     {
         var chrome = ChromeBinaries.FirstOrDefault(File.Exists);
         if (chrome is null)
-            return;
+            return false;
 
         var flags = ChromeProxyFlags(hostname, port);
         var helperPath = UserXfceChromeHelperPath();
@@ -235,16 +365,19 @@ internal static class LinuxBrowserLaunchProxy
                 "X-XFCE-Binaries=google-chrome;google-chrome-stable;chromium;chromium-browser;brave-browser;\n" +
                 $"X-XFCE-Commands={chrome} {flags};\n" +
                 $"X-XFCE-CommandsWithParameter={chrome} {flags} \"%s\";\n");
+
+            var helperOk = File.Exists(helperPath) &&
+                           File.ReadAllText(helperPath).Contains("--proxy-server=", StringComparison.Ordinal);
+            var rcOk = WriteXfceHelpersRc();
+            return helperOk && rcOk;
         }
         catch
         {
-            // ignore
+            return false;
         }
-
-        WriteXfceHelpersRc();
     }
 
-    private static void WriteXfceHelpersRc()
+    private static bool WriteXfceHelpersRc()
     {
         var path = UserXfceHelpersRcPath();
         try
@@ -276,10 +409,11 @@ internal static class LinuxBrowserLaunchProxy
                 lines.Insert(0, "# " + DesktopMarker);
 
             File.WriteAllText(path, string.Join('\n', lines).TrimEnd() + "\n");
+            return File.ReadAllText(path).Contains(DesktopMarker, StringComparison.Ordinal);
         }
         catch
         {
-            // ignore
+            return false;
         }
     }
 

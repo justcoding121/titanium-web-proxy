@@ -40,8 +40,15 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
         try
         {
             EnsureSnapshot();
+            var services = ListNetworkServices();
+            if (services.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "networksetup listed no network services; macOS system proxy was not changed");
+            }
+
             var bypass = UnixProxyBypassMapper.ToCommaSeparated(proxyOverride);
-            foreach (var service in ListNetworkServices())
+            foreach (var service in services)
             {
                 if ((protocolType & ProxyProtocolType.Http) != 0)
                 {
@@ -58,6 +65,8 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
                 if (proxyOverride != null)
                     RunNetworkSetup($"-setproxybypassdomains \"{Escape(service)}\" {FormatBypassArgs(bypass)}", true);
             }
+
+            VerifyMacApplied(services, hostname, port, protocolType);
         }
         catch (Exception ex)
         {
@@ -213,12 +222,72 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
     {
         var result = _runner.Run(NetworkSetupCommand, arguments);
         if (result is { Succeeded: true }) return;
-        if (!elevateOnAuthFailure) return;
+        if (!elevateOnAuthFailure)
+        {
+            throw new InvalidOperationException(
+                "networksetup failed: " + (result?.StandardError ?? result?.StandardOutput ?? "unknown error"));
+        }
 
         var err = (result?.StandardError ?? string.Empty) + (result?.StandardOutput ?? string.Empty);
-        if (result is not null && !LooksLikeAuthFailure(err)) return;
+        if (result is not null && !LooksLikeAuthFailure(err))
+        {
+            throw new InvalidOperationException(
+                "networksetup failed: " + (string.IsNullOrWhiteSpace(err) ? "non-zero exit" : err.Trim()));
+        }
 
-        _elevation.RunElevated("/usr/sbin/networksetup", arguments);
+        var elevated = _elevation.RunElevated("/usr/sbin/networksetup", arguments);
+        if (elevated is not { Succeeded: true })
+        {
+            throw new InvalidOperationException(
+                "Elevated networksetup failed: " +
+                (elevated?.StandardError ?? elevated?.StandardOutput ?? "cancelled or denied"));
+        }
+    }
+
+    private void VerifyMacApplied(
+        IReadOnlyList<string> services, string hostname, int port, ProxyProtocolType protocolType)
+    {
+        Exception? last = null;
+        foreach (var service in services)
+        {
+            try
+            {
+                if ((protocolType & ProxyProtocolType.Http) != 0)
+                {
+                    var http = ParseProxyState(_runner.Run(NetworkSetupCommand, $"-getwebproxy \"{Escape(service)}\""));
+                    if (!http.Enabled ||
+                        !http.Host.Equals(hostname, StringComparison.OrdinalIgnoreCase) ||
+                        http.Port != port)
+                    {
+                        last = new InvalidOperationException(
+                            $"HTTP proxy on '{service}' did not stick (enabled={http.Enabled}, {http.Host}:{http.Port})");
+                        continue;
+                    }
+                }
+
+                if ((protocolType & ProxyProtocolType.Https) != 0)
+                {
+                    var https = ParseProxyState(
+                        _runner.Run(NetworkSetupCommand, $"-getsecurewebproxy \"{Escape(service)}\""));
+                    if (!https.Enabled ||
+                        !https.Host.Equals(hostname, StringComparison.OrdinalIgnoreCase) ||
+                        https.Port != port)
+                    {
+                        last = new InvalidOperationException(
+                            $"HTTPS proxy on '{service}' did not stick (enabled={https.Enabled}, {https.Host}:{https.Port})");
+                        continue;
+                    }
+                }
+
+                return; // at least one service verified
+            }
+            catch (Exception ex)
+            {
+                last = ex;
+            }
+        }
+
+        throw last ?? new InvalidOperationException("macOS system proxy could not be verified after apply");
     }
 
     private static bool LooksLikeAuthFailure(string text) =>

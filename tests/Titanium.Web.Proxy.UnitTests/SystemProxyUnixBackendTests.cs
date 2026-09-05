@@ -254,17 +254,52 @@ public class LinuxBrowserLaunchProxyTests
         Directory.CreateDirectory(dir);
         try
         {
-            LinuxBrowserLaunchProxy.WritePolicies("127.0.0.1", 8866, [dir]);
+            Assert.AreEqual(1, LinuxBrowserLaunchProxy.WritePolicies("127.0.0.1", 8866, [dir]));
             var json = File.ReadAllText(Path.Combine(dir, LinuxBrowserLaunchProxy.PolicyFileName));
+            Assert.IsTrue(LinuxBrowserLaunchProxy.TryValidatePolicyJson(json, "127.0.0.1", 8866, out var err), err);
             StringAssert.Contains(json, "fixed_servers");
             StringAssert.Contains(json, "http://127.0.0.1:8866");
             StringAssert.Contains(json, "<-loopback>");
             StringAssert.Contains(json, "\"QuicAllowed\": false");
+            // Legacy int enum for older Chromium builds that still read ProxyServerMode.
+            StringAssert.Contains(json, "\"ProxyServerMode\": 2");
         }
         finally
         {
             try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
         }
+    }
+
+    [TestMethod]
+    public void BuildPolicyJson_EscapesSpecialHostCharacters()
+    {
+        var json = LinuxBrowserLaunchProxy.BuildPolicyJson("weird\"host", 8866);
+        Assert.IsTrue(LinuxBrowserLaunchProxy.TryValidatePolicyJson(json, "weird\"host", 8866, out var err), err);
+        // Must be valid JSON even with quotes in the host fragment.
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        Assert.AreEqual("fixed_servers", doc.RootElement.GetProperty("ProxyMode").GetString());
+    }
+
+    [TestMethod]
+    public void TryValidatePolicyJson_AcceptsLegacyProxyServerModeOnly()
+    {
+        const string legacy =
+            """
+            {
+              "ProxyServerMode": 2,
+              "ProxyServer": "http://10.0.0.1:8888"
+            }
+            """;
+        Assert.IsTrue(LinuxBrowserLaunchProxy.TryValidatePolicyJson(legacy, "10.0.0.1", 8888, out var err), err);
+    }
+
+    [TestMethod]
+    public void TryValidatePolicyJson_RejectsCorruptOrWrongEndpoint()
+    {
+        Assert.IsFalse(LinuxBrowserLaunchProxy.TryValidatePolicyJson("{", "127.0.0.1", 8866, out _));
+        Assert.IsFalse(LinuxBrowserLaunchProxy.TryValidatePolicyJson(
+            """{"ProxyMode":"fixed_servers","ProxyServer":"http://127.0.0.1:1"}""",
+            "127.0.0.1", 8866, out _));
     }
 }
 
