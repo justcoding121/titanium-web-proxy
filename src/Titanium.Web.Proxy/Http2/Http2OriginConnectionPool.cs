@@ -119,7 +119,7 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
             // Early grow (SoftGrow) before PreferPick: SoftStreamCapacity is the SETTINGS/gate
             // hard soft-pick so SoftGrow fan-out does not require SoftPick=SoftGrow (which caused
             // TryPickAny oversubscribe once MaxOrigin×SoftGrow streams were in flight).
-            // SoftGrow is per-connection (TLS=SoftStreamCapacity / cleartext=8); empty snapshot uses TLS alias.
+            // SoftGrow is per-connection (TLS=16 / cleartext=8); empty snapshot uses TLS default.
             var growAt = snapshot.Length > 0
                 ? snapshot[0].PoolGrowThreshold
                 : Http2OriginConnection.PoolGrowActiveStreamThreshold;

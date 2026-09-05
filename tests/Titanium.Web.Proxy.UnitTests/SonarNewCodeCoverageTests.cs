@@ -607,9 +607,9 @@ public class SonarNewCodeCoverageTests
 
         typeof(Http2OriginConnection).GetField("concurrencyGateCapacity", PrivateInstance)!
             .SetValue(connection, 16);
-        // SoftPick = SETTINGS/gate; TLS SoftGrow = SoftStreamCapacity (same value once SETTINGS applied).
+        // SoftPick = SETTINGS/gate; SoftGrow dial is separate (PoolGrowActiveStreamThreshold).
         Assert.AreEqual(16, connection.SoftStreamCapacity);
-        Assert.AreEqual(connection.SoftStreamCapacity, connection.PoolGrowThreshold);
+        Assert.AreEqual(Http2OriginConnection.PoolGrowActiveStreamThreshold, connection.PoolGrowThreshold);
 
         typeof(Http2OriginConnection).GetMethod("AttachExclusiveFrameWriter", PrivateInstance)!
             .Invoke(connection, null);

@@ -118,9 +118,12 @@ internal sealed class Http2OriginConnection : IDisposable
     internal int LeaseCount => Volatile.Read(ref leaseCount);
 
     /// <summary>
-    ///     Historical SoftGrow=16 TLS constant (tests may still reference the alias). Live TLS grow
-    ///     uses <see cref="SoftStreamCapacity"/> via <see cref="PoolGrowThreshold"/>. SoftGrow=32
-    ///     peaked H1 TLS ~0.83× but softened H3→h2c; SoftGrow=SoftPick keeps H3≥1.00 and H1~0.80–0.82×.
+    ///     Early-grow threshold for TLS origins (ALPN <c>h2</c>). H1TLS→h2c leads (~1.07×) while
+    ///     H1TLS→H2 lags — residual is outbound TLS H2 (SecureTransport), not the H1 bridge.
+    ///     SoftGrow=SoftPick (~0.81× H1, H3≥1.00) serializes one SslStream; SoftGrow=8+inline
+    ///     peaked H1 ~0.83× but H3→H2 ~0.90×; SoftGrow=32 similar H1 with softer H3→h2c.
+    ///     SoftGrow=16 + inline body + writeLock spin balances H1~0.82× and H3~1.00. Cap remains
+    ///     <see cref="ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority"/>.
     /// </summary>
     internal const int PoolGrowActiveStreamThresholdTls = 16;
 
@@ -131,7 +134,7 @@ internal sealed class Http2OriginConnection : IDisposable
     /// </summary>
     internal const int PoolGrowActiveStreamThresholdCleartext = 8;
 
-    /// <summary>Alias — TLS SoftGrow historical name (live TLS dial is SoftStreamCapacity).</summary>
+    /// <summary>Alias — TLS SoftGrow (tests / wiki that reference the historical name).</summary>
     internal const int PoolGrowActiveStreamThreshold = PoolGrowActiveStreamThresholdTls;
 
     /// <summary>
@@ -152,16 +155,11 @@ internal sealed class Http2OriginConnection : IDisposable
         }
     }
 
-    /// <summary>
-    ///     Early-grow dial for this connection (TLS vs cleartext). TLS SoftGrow=SoftStreamCapacity
-    ///     (SETTINGS/gate): SoftGrow=16 early fan-out left Mac dual-TLS H1→H2 ~0.77×; SoftPick
-    ///     quiet pairs ~0.80–0.82× H1 and H3→H2 ≥1.00. SoftGrow=32 peaked H1 ~0.83× but
-    ///     softened H3→h2c — rejected. Cleartext SoftGrow=8 kept.
-    /// </summary>
+    /// <summary>Early-grow dial for this connection (TLS vs cleartext).</summary>
     internal int PoolGrowThreshold =>
         connection.Http2Cleartext
             ? PoolGrowActiveStreamThresholdCleartext
-            : SoftStreamCapacity;
+            : PoolGrowActiveStreamThresholdTls;
 
     /// <summary>True when the next odd stream id would approach int wraparound.</summary>
     internal bool IsNearStreamIdExhaustion => Volatile.Read(ref lastStreamId) >= StreamIdExhaustionThreshold;
