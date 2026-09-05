@@ -228,6 +228,9 @@ tmp/
 # Local trust/MITM validation screenshots (manual / agent runs)
 .validation-screenshots/
 
+# Local one-off probes (not part of the product tree)
+tools/_H3UpgradeProbeLocal/
+
 # VitePress site (website/)
 website/.vitepress/dist/
 website/.vitepress/cache/
