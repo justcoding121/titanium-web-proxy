@@ -20,6 +20,12 @@ dotnet run --project tools/InspectorDesktopProbe -- firefox
 dotnet run --project tools/InspectorDesktopProbe -- loopback      # Windows Store apps
 dotnet run --project tools/InspectorDesktopProbe -- exclusions
 dotnet run --project tools/InspectorDesktopProbe -- pac
+dotnet run --project tools/InspectorDesktopProbe -- machine-trust status
+dotnet run --project tools/InspectorDesktopProbe -- machine-trust install   # admin password
+dotnet run --project tools/InspectorDesktopProbe -- machine-trust run
+dotnet run --project tools/InspectorDesktopProbe -- machine-trust curl-check
+dotnet run --project tools/InspectorDesktopProbe -- machine-trust remove
+dotnet run --project tools/InspectorDesktopProbe -- machine-trust clean
 dotnet run --project tools/InspectorDesktopProbe -- all
 ```
 
@@ -32,7 +38,8 @@ dotnet run --project tools/InspectorDesktopProbe -- all
 | `loopback` | Allow Store apps dialog (Win8+) |
 | `exclusions` | Excluded hosts + Proxy localhost |
 | `pac` | PAC replace confirm cancel/accept when PAC is active |
-| `all` | Applicable scenarios for this OS |
+| `machine-trust` | Machine CA trust (`status` / `install` / `remove` / `run` / `curl-check` / `clean`); Core-only, no Avalonia. Aliases: `install-system`, `remove-system`. Flag: `run --no-system-proxy` |
+| `all` | Applicable scenarios for this OS (**excludes** `machine-trust`) |
 
 ## Logs (MCP-friendly)
 

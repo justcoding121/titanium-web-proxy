@@ -38,6 +38,15 @@ internal static class Program
             return code;
         }
 
+        // machine-trust is Core-only (no Avalonia / Inspector harness).
+        if (cmd is "machine-trust")
+        {
+            using var log = new ProbeLog(ResolveResultsDir());
+            var code = MachineTrustScenario.RunAsync(args, log).GetAwaiter().GetResult();
+            log.WriteSummary(cmd, code);
+            return code;
+        }
+
         Environment.SetEnvironmentVariable("TITANIUM_INSPECTOR_SKIP_AUTO_MAINWINDOW", "1");
 
         var builder = AppBuilder.Configure<App>()
@@ -147,14 +156,18 @@ internal static class Program
               dotnet run --project tools/InspectorDesktopProbe -- <command> [--browser auto|edge|chrome|firefox|safari] [--timeout-sec 45]
 
             Commands:
-              status       Dump OS proxy / trust / last-run.json (add --ui for live harness)
-              proxy        Start capture, toggle System proxy, capture via OS proxy (no --proxy-server)
-              cert         Install/Remove CA via menus; assert Decrypt HTTPS auto-off after remove
-              firefox      Trust CA in Firefox + system-proxy HTTPS capture
-              loopback     Windows: Allow Store apps dialog
-              exclusions   Excluded hosts + Proxy localhost
-              pac          PAC replace confirm cancel/accept (when PAC active)
-              all          Run applicable scenarios for this OS
+              status         Dump OS proxy / trust / last-run.json (add --ui for live harness)
+              proxy          Start capture, toggle System proxy, capture via OS proxy (no --proxy-server)
+              cert           Install/Remove CA via menus; assert Decrypt HTTPS auto-off after remove
+              firefox        Trust CA in Firefox + system-proxy HTTPS capture
+              loopback       Windows: Allow Store apps dialog
+              exclusions     Excluded hosts + Proxy localhost
+              pac            PAC replace confirm cancel/accept (when PAC active)
+              machine-trust  Machine CA trust (install/remove/run/curl-check/status/clean) — no UI
+              all            Run applicable scenarios for this OS (excludes machine-trust)
+
+            machine-trust subcommands: status | install | remove | run | curl-check | clean
+              Aliases: install-system, remove-system. Flag: run --no-system-proxy
 
             Logs: tools/InspectorDesktopProbe/results/ (last-run.json for MCP)
 
