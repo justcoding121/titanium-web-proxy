@@ -79,6 +79,79 @@ public static class SystemProxyBrowserCapture
         return dir;
     }
 
+    /// <summary>
+    /// Launch Safari via Launch Services so it uses macOS system proxy (no CLI proxy flags).
+    /// <c>open</c> exits immediately; call <see cref="KillSafariProcesses"/> to stop Safari.
+    /// </summary>
+    public static Process StartSafari(string url)
+    {
+        if (!OperatingSystem.IsMacOS())
+            throw new PlatformNotSupportedException("Safari probe is macOS-only");
+
+        TryDisableSafariHttp3();
+
+        return Process.Start(new ProcessStartInfo
+        {
+            FileName = "open",
+            Arguments = $"-a Safari \"{url}\"",
+            UseShellExecute = false,
+        }) ?? throw new InvalidOperationException("Failed to start Safari");
+    }
+
+    public static void KillSafariProcesses()
+    {
+        if (!OperatingSystem.IsMacOS())
+            return;
+
+        try
+        {
+            using var quit = Process.Start(new ProcessStartInfo
+            {
+                FileName = "osascript",
+                ArgumentList = { "-e", "tell application \"Safari\" to quit" },
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+            });
+            quit?.WaitForExit(5000);
+        }
+        catch
+        {
+            // ignore
+        }
+
+        foreach (var p in Process.GetProcessesByName("Safari"))
+        {
+            try { p.Kill(entireProcessTree: true); } catch { /* ignore */ }
+            try { p.Dispose(); } catch { /* ignore */ }
+        }
+    }
+
+    /// <summary>
+    /// HTTP/3 (QUIC) bypasses HTTP(S) proxies. Chromium gets --disable-quic; Safari has no flag.
+    /// </summary>
+    private static void TryDisableSafariHttp3()
+    {
+        try
+        {
+            using var p = Process.Start(new ProcessStartInfo
+            {
+                FileName = "defaults",
+                Arguments = "write com.apple.Safari WebKitPreferences.http3Enabled -bool false",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+            });
+            p?.WaitForExit(3000);
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
     public static void KillFirefoxProcesses()
     {
         foreach (var p in Process.GetProcessesByName("firefox"))

@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace Titanium.Inspector.DesktopProbe.Shared;
 
-/// <summary>Locate Chrome / Edge / Firefox without requiring --proxy-server.</summary>
+/// <summary>Locate Chrome / Edge / Firefox / Safari without requiring --proxy-server.</summary>
 public static class BrowserPaths
 {
     public static string? FindChrome()
@@ -32,7 +32,12 @@ public static class BrowserPaths
         }
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            return FirstExisting("/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge");
+        {
+            return FirstExisting(
+                "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+                "/Applications/Microsoft Edge Beta.app/Contents/MacOS/Microsoft Edge Beta",
+                "/Applications/Microsoft Edge Dev.app/Contents/MacOS/Microsoft Edge Dev");
+        }
 
         return Which("microsoft-edge") ?? Which("microsoft-edge-stable");
     }
@@ -52,12 +57,22 @@ public static class BrowserPaths
         return Which("firefox");
     }
 
+    /// <summary>Safari is macOS-only and always uses CFNetwork / system proxy.</summary>
+    public static string? FindSafari()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            return null;
+        return FirstExisting("/Applications/Safari.app/Contents/MacOS/Safari");
+    }
+
     public static IEnumerable<(string Name, string Path)> ResolveAuto()
     {
         if (FindEdge() is { } edge)
             yield return ("edge", edge);
         if (FindChrome() is { } chrome)
             yield return ("chrome", chrome);
+        if (FindSafari() is { } safari)
+            yield return ("safari", safari);
         if (FindFirefox() is { } firefox)
             yield return ("firefox", firefox);
     }
@@ -69,6 +84,7 @@ public static class BrowserPaths
             "auto" => ResolveAuto().Select(b => b.Path).FirstOrDefault(),
             "edge" => FindEdge(),
             "chrome" => FindChrome(),
+            "safari" => FindSafari(),
             "firefox" => FindFirefox(),
             _ => null,
         };

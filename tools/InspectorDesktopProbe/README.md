@@ -5,7 +5,7 @@ On-demand desktop UX + OS proxy/CA validation for Titanium Inspector. **Not CI.*
 ## Prerequisites
 
 - Built Inspector dependencies (`dotnet build` restores Avalonia)
-- Browsers as needed: Edge (Windows), Chrome, Firefox
+- Browsers as needed: Edge, Chrome, Firefox; Safari on macOS
 - Interactive session (Windows Trusted Root **Yes/No**, macOS Keychain password still need a human click once)
 - Avalonia confirm dialogs are auto-accepted by the probe
 
@@ -14,6 +14,7 @@ On-demand desktop UX + OS proxy/CA validation for Titanium Inspector. **Not CI.*
 ```powershell
 dotnet run --project tools/InspectorDesktopProbe -- status
 dotnet run --project tools/InspectorDesktopProbe -- proxy --browser auto --timeout-sec 45
+dotnet run --project tools/InspectorDesktopProbe -- proxy --browser safari   # macOS
 dotnet run --project tools/InspectorDesktopProbe -- cert
 dotnet run --project tools/InspectorDesktopProbe -- firefox
 dotnet run --project tools/InspectorDesktopProbe -- loopback      # Windows Store apps
@@ -25,7 +26,7 @@ dotnet run --project tools/InspectorDesktopProbe -- all
 | Command | Validates |
 |---------|-----------|
 | `status` | OS proxy dump, trust suppress flag, optional `--ui` harness |
-| `proxy` | System proxy checkbox → WinINET/gsettings/scutil → browser HTTPS **without** `--proxy-server` |
+| `proxy` | System proxy checkbox → WinINET/gsettings/scutil → Edge/Chrome/Firefox (and Safari on macOS) HTTPS **without** `--proxy-server` |
 | `cert` | Install/Remove CA menus; **Decrypt HTTPS auto-off** after remove |
 | `firefox` | Trust CA in Firefox + system-proxy capture |
 | `loopback` | Allow Store apps dialog (Win8+) |

@@ -15,6 +15,8 @@ public static class ProxyScenario
             return 1;
         }
 
+        log.Info("Proxy browsers: " + string.Join(", ", browsers.Select(b => b.Name)));
+
         await harness.OnUiAsync(() => harness.Robot.Click("MenuStartCapture")).ConfigureAwait(true);
         await harness.WaitUntilAsync(() => harness.Interception.IsRunning, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
         log.Step("start-capture", true, $"port={harness.Interception.BoundPort}");
@@ -70,10 +72,13 @@ public static class ProxyScenario
     {
         var host = SystemProxyBrowserCapture.DefaultProbeHost;
         var isFirefox = name.Equals("firefox", StringComparison.OrdinalIgnoreCase);
-        var profileDir = isFirefox
-            ? SystemProxyBrowserCapture.CreateTempFirefoxProfile($"twp-probe-{name}-")
-            : Path.Combine(Path.GetTempPath(), $"twp-probe-{name}-" + Guid.NewGuid().ToString("N"));
-        if (!isFirefox)
+        var isSafari = name.Equals("safari", StringComparison.OrdinalIgnoreCase);
+        var profileDir = isSafari
+            ? null
+            : isFirefox
+                ? SystemProxyBrowserCapture.CreateTempFirefoxProfile($"twp-probe-{name}-")
+                : Path.Combine(Path.GetTempPath(), $"twp-probe-{name}-" + Guid.NewGuid().ToString("N"));
+        if (profileDir is not null && !isFirefox)
             Directory.CreateDirectory(profileDir);
 
         Process? proc = null;
@@ -83,6 +88,11 @@ public static class ProxyScenario
             {
                 // Leftover Firefox often swallows -new-instance / ignores a new profile.
                 SystemProxyBrowserCapture.KillFirefoxProcesses();
+                await Task.Delay(800).ConfigureAwait(true);
+            }
+            else if (isSafari)
+            {
+                SystemProxyBrowserCapture.KillSafariProcesses();
                 await Task.Delay(800).ConfigureAwait(true);
             }
 
@@ -105,10 +115,7 @@ public static class ProxyScenario
             harness.Interception.SessionCaptured += OnSession;
             try
             {
-                proc = isFirefox
-                    ? SystemProxyBrowserCapture.StartFirefox(path, profileDir, $"https://{host}/")
-                    : SystemProxyBrowserCapture.StartChromiumViaSystemProxy(
-                        path, profileDir, $"https://{host}/", disableQuic: true);
+                proc = StartBrowser(name, path, profileDir, $"https://{host}/");
 
                 var deadline = DateTime.UtcNow + timeout;
                 while (captured is null && DateTime.UtcNow < deadline)
@@ -133,9 +140,7 @@ public static class ProxyScenario
                     harness.Robot.SetCheck("SystemProxyCheck", false);
             }).ConfigureAwait(true);
             await Task.Delay(800).ConfigureAwait(true);
-            SystemProxyBrowserCapture.TryKill(proc);
-            if (isFirefox)
-                SystemProxyBrowserCapture.KillFirefoxProcesses();
+            StopBrowser(name, proc);
             proc = null;
 
             SessionSnapshot? after = null;
@@ -148,10 +153,7 @@ public static class ProxyScenario
             harness.Interception.SessionCaptured += OnAfter;
             try
             {
-                proc = isFirefox
-                    ? SystemProxyBrowserCapture.StartFirefox(path, profileDir, $"https://{host}/?after-disable=1")
-                    : SystemProxyBrowserCapture.StartChromiumViaSystemProxy(
-                        path, profileDir, $"https://{host}/?after-disable=1", disableQuic: true);
+                proc = StartBrowser(name, path, profileDir, $"https://{host}/?after-disable=1");
 
                 var offDeadline = DateTime.UtcNow.AddSeconds(12);
                 while (after is null && DateTime.UtcNow < offDeadline)
@@ -183,11 +185,28 @@ public static class ProxyScenario
         }
         finally
         {
-            SystemProxyBrowserCapture.TryKill(proc);
-            if (isFirefox)
-                SystemProxyBrowserCapture.KillFirefoxProcesses();
+            StopBrowser(name, proc);
             SystemProxyBrowserCapture.TryDeleteDir(profileDir);
         }
+    }
+
+    private static Process StartBrowser(string name, string path, string? profileDir, string url)
+    {
+        if (name.Equals("firefox", StringComparison.OrdinalIgnoreCase))
+            return SystemProxyBrowserCapture.StartFirefox(path, profileDir!, url);
+        if (name.Equals("safari", StringComparison.OrdinalIgnoreCase))
+            return SystemProxyBrowserCapture.StartSafari(url);
+        return SystemProxyBrowserCapture.StartChromiumViaSystemProxy(
+            path, profileDir!, url, disableQuic: true);
+    }
+
+    private static void StopBrowser(string name, Process? proc)
+    {
+        SystemProxyBrowserCapture.TryKill(proc);
+        if (name.Equals("firefox", StringComparison.OrdinalIgnoreCase))
+            SystemProxyBrowserCapture.KillFirefoxProcesses();
+        else if (name.Equals("safari", StringComparison.OrdinalIgnoreCase))
+            SystemProxyBrowserCapture.KillSafariProcesses();
     }
 
     private static List<(string Name, string Path)> ResolveBrowsers(string browser)

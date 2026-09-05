@@ -47,7 +47,7 @@ public static class CertScenario
         await harness.OnUiAsync(() => harness.Robot.SetCheck("SystemProxyCheck", true)).ConfigureAwait(true);
         await harness.WaitUntilAsync(() => harness.ViewModel.SystemProxy, TimeSpan.FromSeconds(15)).ConfigureAwait(true);
 
-        var path = BrowserPaths.Resolve(browser) ?? BrowserPaths.FindEdge() ?? BrowserPaths.FindChrome();
+        var path = ChromiumPathForDecrypt(browser);
         if (path is not null)
         {
             var host = SystemProxyBrowserCapture.DefaultProbeHost;
@@ -112,5 +112,18 @@ public static class CertScenario
         }).ConfigureAwait(true);
 
         return 0;
+    }
+
+    private static string? ChromiumPathForDecrypt(string browser)
+    {
+        if (!browser.Equals("safari", StringComparison.OrdinalIgnoreCase))
+        {
+            var resolved = BrowserPaths.Resolve(browser);
+            if (resolved is not null &&
+                !resolved.Contains("Safari.app", StringComparison.Ordinal))
+                return resolved;
+        }
+
+        return BrowserPaths.FindEdge() ?? BrowserPaths.FindChrome();
     }
 }

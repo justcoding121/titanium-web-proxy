@@ -144,7 +144,7 @@ internal static class Program
             InspectorDesktopProbe — on-demand Inspector UX + OS proxy/CA validation (not CI).
 
             Usage:
-              dotnet run --project tools/InspectorDesktopProbe -- <command> [--browser auto|edge|chrome|firefox] [--timeout-sec 45]
+              dotnet run --project tools/InspectorDesktopProbe -- <command> [--browser auto|edge|chrome|firefox|safari] [--timeout-sec 45]
 
             Commands:
               status       Dump OS proxy / trust / last-run.json (add --ui for live harness)
