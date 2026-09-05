@@ -226,9 +226,10 @@ public sealed class ProxyResourceLimits
             MaxOpenHeaderBlockDuration = maxOpenHeaderBlockDuration,
             ConnectionPoolingEnabled = connectionPoolingEnabled,
             MaxCachedConnectionsPerHost = maxCachedConnectionsPerHost,
-            // SoftPick SoftGrow=SoftCap: Mac H1 Offer previously filled ~8 dual-TLS legs and
-            // left H1 TLS→H2 ~0.89×; MaxOrigin=1 SoftPick long 20s ~0.94× (deeper multiplex on
-            // one SecureTransport origin). H3 SoftPick was already 1 leg. MaxOrigin=16/32 rejected.
+            // SoftPick SoftGrow=SoftCap. Offer-once (seed only when pool empty) + MaxOrigin=1:
+            // H1 ALPN Offer previously filled ~8 dual-TLS legs (~0.89×); MaxOrigin=1 SoftPick
+            // long 20s ~0.95×. Offer-once SoftGrow=16 MaxOrigin=8 ~0.89× — reject SoftGrow=16.
+            // MaxOrigin=2/4/16/32 with Offer flood rejected.
             MaxOriginHttp2ConnectionsPerAuthority = 1,
             MaxCertificateCacheEntries = maxCertificateCacheEntries
         };

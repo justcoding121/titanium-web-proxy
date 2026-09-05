@@ -378,6 +378,16 @@ public partial class ProxyServer
         if (seedConnection == null)
             return;
 
+        // SoftPick SoftGrow: only seed the first origin leg from the negotiation-retained ALPN
+        // connection. Later H1 clients must Rent/SoftGrow — Offer-flooding MaxOrigin dual-TLS
+        // legs from every client left Mac H1 TLS→H2 ~0.89× (pool dig avgMembers≈7–8).
+        if (Http2OriginConnectionPool.HasAny(poolKey)
+            || Http2OriginConnectionPool.IsAtMaxOriginCapacity(poolKey))
+        {
+            await TcpConnectionFactory.Release(seedConnection, true);
+            return;
+        }
+
         try
         {
             var created = await Http2OriginConnection.CreateAsync(seedConnection, logger,

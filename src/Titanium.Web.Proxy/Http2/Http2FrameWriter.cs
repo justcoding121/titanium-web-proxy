@@ -42,8 +42,8 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
         {
             SingleReader = true,
             SingleWriter = false,
-            // Keep ASC=false: EnqueueRented runs under origin writeLock; sync drain WriteAsync
-            // under that lock was profiled as a Mac/Win multiplex regress (wiki FrameWriter ASC abort).
+            // Keep ASC=false: EnqueueRented runs under origin writeLock; ASC=true MaxOrigin=1
+            // SoftPick long A/B ~0.78× H1 / ~0.88× H3 — sync drain under writeLock regresses.
             AllowSynchronousContinuations = false
         });
         drainTask = Task.Run(() => DrainAsync(cts.Token), cts.Token);

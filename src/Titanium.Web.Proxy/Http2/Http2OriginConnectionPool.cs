@@ -207,6 +207,31 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
     }
 
     /// <summary>
+    ///     True when this authority already holds at least one pooled origin connection.
+    /// </summary>
+    internal bool HasAny(string poolKey)
+    {
+        if (!pool.TryGetValue(poolKey, out var entry))
+            return false;
+
+        lock (entry.Gate)
+            return entry.Connections.Count > 0;
+    }
+
+    /// <summary>
+    ///     True when this authority already holds
+    ///     <see cref="ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority" /> members.
+    /// </summary>
+    internal bool IsAtMaxOriginCapacity(string poolKey)
+    {
+        if (!pool.TryGetValue(poolKey, out var entry))
+            return false;
+
+        lock (entry.Gate)
+            return entry.Connections.Count >= proxyServer.ResourceLimits.MaxOriginHttp2ConnectionsPerAuthority;
+    }
+
+    /// <summary>
     ///     Offers an already-established connection (e.g. the H1 bridge seed from negotiation) into the
     ///     pool for <paramref name="poolKey" />. Disposes it when the authority is already at capacity.
     /// </summary>

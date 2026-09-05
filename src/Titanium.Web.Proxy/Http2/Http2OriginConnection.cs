@@ -157,8 +157,9 @@ internal sealed class Http2OriginConnection : IDisposable
 
     /// <summary>
     ///     Early-grow dial for TLS and cleartext: SoftGrow = SoftStreamCapacity (SETTINGS/gate).
-    ///     Long Mac SoftPick ~0.91× H1 / ~0.97× H3. SoftGrow=16/32/SoftCap/4/48 rejected on long
-    ///     pairs. Pool dig: H3 SoftPick = 1 origin leg; H1 Offer fills ~MaxOrigin(8) without SoftGrow.
+    ///     Offer-once (seed only when pool empty) stops H1 ALPN from flooding MaxOrigin dual-TLS
+    ///     legs. SoftGrow=16 + Offer-once long A/B ~0.89× H1 / ~0.90× H3 — reject. SoftGrow=SoftPick
+    ///     + MaxOrigin=1 (or Offer-once MaxOrigin=8) ~0.95× H1. SoftGrow=32/SoftCap/4/48 rejected.
     /// </summary>
     internal int PoolGrowThreshold => SoftStreamCapacity;
 
@@ -1640,6 +1641,7 @@ internal sealed class Http2OriginConnection : IDisposable
 
         // Brief spin before WaitAsync: under SoftGrow=SoftPick a single TLS origin conn sees
         // heavy writeLock convoy at c=64; WaitAsync alone allocates Task nodes per miss.
+        // spin64 (past yield) long A/B: H1 ~0.88× regress vs brief spin ~0.95× — keep brief.
         var spinner = new SpinWait();
         while (!spinner.NextSpinWillYield)
         {
