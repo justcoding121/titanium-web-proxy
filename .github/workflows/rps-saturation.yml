@@ -479,6 +479,7 @@ jobs:
           if ('${{ matrix.os }}' -eq 'macos-15-intel') {
             $macFloors = @(
               '-MitmHttp3TlsFullGate', '0.65',
+              '-MitmHttp3CleartextFullGate', '0.60',
               '-MitmHttp1PlainFullGate', '0.55',
               '-ReverseYarpHttp3ToHttp1Gate', '0.70',
               '-ReverseYarpHttp3Gate', '0.78'

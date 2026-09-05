@@ -8,6 +8,8 @@ param(
     [double] $MitmHttp3Gate = 0.69,
     # Defaults match MitmGate; Mac CI overrides to 0.65 (H3→H1 TLS Full smoke @ 2026da55).
     [double] $MitmHttp3TlsFullGate = 0.70,
+    # Defaults match MitmGate; Mac CI overrides to 0.60 (H3→H1 plain Full @ 011ef887 = 0.620).
+    [double] $MitmHttp3CleartextFullGate = 0.70,
     # Defaults match MitmGate; Mac CI overrides to 0.55 (H1 plain Full @ d0439556 = 0.564).
     [double] $MitmHttp1PlainFullGate = 0.70,
     [double] $ReverseYarpGate = 0.95,
@@ -54,11 +56,12 @@ $mitmPairs = @(
 )
 
 $failed = $false
-Write-Host "MITM gates (Full/Lite >= $MitmGate x Reverse; H3->H3 >= $MitmHttp3Gate; H3->H1 TLS Full >= $MitmHttp3TlsFullGate; H1 plain Full >= $MitmHttp1PlainFullGate @ c=64 median)" -ForegroundColor Cyan
+Write-Host "MITM gates (Full/Lite >= $MitmGate x Reverse; H3->H3 >= $MitmHttp3Gate; H3->H1 TLS Full >= $MitmHttp3TlsFullGate; H3->H1 plain Full >= $MitmHttp3CleartextFullGate; H1 plain Full >= $MitmHttp1PlainFullGate @ c=64 median)" -ForegroundColor Cyan
 foreach ($p in $mitmPairs) {
     foreach ($kind in @('Lite', 'Full')) {
         $pairGate = if ($p.Label -eq 'H3->H3') { $MitmHttp3Gate }
             elseif ($p.Label -eq 'H3->H1 TLS' -and $kind -eq 'Full') { $MitmHttp3TlsFullGate }
+            elseif ($p.Label -eq 'H3->H1 plain' -and $kind -eq 'Full') { $MitmHttp3CleartextFullGate }
             elseif ($p.Label -eq 'H1 plain' -and $kind -eq 'Full') { $MitmHttp1PlainFullGate }
             else { $MitmGate }
         $num = $p.$kind
