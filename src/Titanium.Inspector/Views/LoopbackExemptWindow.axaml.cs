@@ -104,21 +104,51 @@ public partial class LoopbackExemptWindow : Window
         if (_suppressExemptCheckChanged)
             return;
 
-        ApplyFilter();
+        // Do not call ApplyFilter() here. Rebinding ItemsSource while template CheckBoxes
+        // raise IsCheckedChanged (Check all / Uncheck all / row toggle) re-enters and hangs.
+        UpdateStatusCounts();
     }
 
     private void OnCheckAll(object? sender, RoutedEventArgs e)
     {
-        foreach (var item in _visibleItems)
-            item.IsExempt = true;
+        _suppressExemptCheckChanged = true;
+        try
+        {
+            foreach (var item in _visibleItems)
+                item.IsExempt = true;
+        }
+        finally
+        {
+            _suppressExemptCheckChanged = false;
+        }
+
         ApplyFilter();
     }
 
     private void OnUncheckAll(object? sender, RoutedEventArgs e)
     {
-        foreach (var item in _visibleItems)
-            item.IsExempt = false;
+        _suppressExemptCheckChanged = true;
+        try
+        {
+            foreach (var item in _visibleItems)
+                item.IsExempt = false;
+        }
+        finally
+        {
+            _suppressExemptCheckChanged = false;
+        }
+
         ApplyFilter();
+    }
+
+    private void UpdateStatusCounts()
+    {
+        var query = FilterBox.Text?.Trim() ?? "";
+        var exemptCount = _items.Count(i => i.IsExempt);
+        if (string.IsNullOrEmpty(query))
+            StatusText.Text = $"{_items.Count} apps; {exemptCount} currently allowed.";
+        else
+            StatusText.Text = $"Showing {_visibleItems.Count} of {_items.Count}; {exemptCount} currently allowed.";
     }
 
     private void OnExempt(object? sender, RoutedEventArgs e)
