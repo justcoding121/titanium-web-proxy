@@ -559,21 +559,19 @@ public class SonarNewCodeCoverageTests
     public void DiagPickStats_WhenForcedEnabled_RecordsAndFormats()
     {
         var diag = typeof(Http2OriginConnectionPool).GetNestedType("DiagPickStats", BindingFlags.NonPublic)!;
-        var enabled = diag.GetField("Enabled", BindingFlags.Static | BindingFlags.NonPublic)!;
-        var original = (bool)enabled.GetValue(null)!;
+        var previousPick = Environment.GetEnvironmentVariable("TWP_DIAG_POOL_PICK");
+        var previousOut = Environment.GetEnvironmentVariable("TWP_DIAG_POOL_PICK_OUT");
         var outPath = Path.Combine(Path.GetTempPath(), $"twp-diag-pick-{Guid.NewGuid():N}.log");
+        Environment.SetEnvironmentVariable("TWP_DIAG_POOL_PICK", "1");
         Environment.SetEnvironmentVariable("TWP_DIAG_POOL_PICK_OUT", outPath);
         try
         {
-            enabled.SetValue(null, true);
-            diag.GetMethod("OnRent", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, null);
-            diag.GetMethod("OnTryPick", BindingFlags.Static | BindingFlags.NonPublic)!
-                .Invoke(null, [2, 1, 3, true]);
-            diag.GetMethod("OnTryPick", BindingFlags.Static | BindingFlags.NonPublic)!
-                .Invoke(null, [1, 1, 1, false]);
-            diag.GetMethod("OnCreationGate", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, null);
-            diag.GetMethod("OnTryPickAny", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, null);
-            diag.GetMethod("OnOpen", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, null);
+            Http2OriginConnectionPool.DiagPickStats.OnRent();
+            Http2OriginConnectionPool.DiagPickStats.OnTryPick(2, 1, 3, hit: true);
+            Http2OriginConnectionPool.DiagPickStats.OnTryPick(1, 1, 1, hit: false);
+            Http2OriginConnectionPool.DiagPickStats.OnCreationGate();
+            Http2OriginConnectionPool.DiagPickStats.OnTryPickAny();
+            Http2OriginConnectionPool.DiagPickStats.OnOpen();
             diag.GetMethod("Emit", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, ["test"]);
 
             var summary = Http2OriginConnectionPool.DiagPickStats.FormatSummary();
@@ -585,17 +583,9 @@ public class SonarNewCodeCoverageTests
         }
         finally
         {
-            enabled.SetValue(null, original);
-            Environment.SetEnvironmentVariable("TWP_DIAG_POOL_PICK_OUT", null);
-            SpinWait.SpinUntil(() =>
-            {
-                try
-                {
-                    if (File.Exists(outPath)) File.Delete(outPath);
-                    return !File.Exists(outPath);
-                }
-                catch (IOException) { return false; }
-            }, TimeSpan.FromSeconds(3));
+            Environment.SetEnvironmentVariable("TWP_DIAG_POOL_PICK", previousPick);
+            Environment.SetEnvironmentVariable("TWP_DIAG_POOL_PICK_OUT", previousOut);
+            try { if (File.Exists(outPath)) File.Delete(outPath); } catch (IOException) { /* ignore */ }
         }
     }
 
@@ -1052,13 +1042,13 @@ public class SonarNewCodeCoverageTests
     public void Http2OriginPool_DiagPickStats_WhenEnabled_EmitsCounters()
     {
         var diag = typeof(Http2OriginConnectionPool).GetNestedType("DiagPickStats", BindingFlags.NonPublic)!;
-        var enabled = diag.GetField("Enabled", BindingFlags.NonPublic | BindingFlags.Static)!;
         var loggerStarted = diag.GetField("loggerStarted", BindingFlags.NonPublic | BindingFlags.Static)!;
-        var previous = (bool)enabled.GetValue(null)!;
+        var previousPick = Environment.GetEnvironmentVariable("TWP_DIAG_POOL_PICK");
+        var previousOut = Environment.GetEnvironmentVariable("TWP_DIAG_POOL_PICK_OUT");
         var previousLogger = (int)loggerStarted.GetValue(null)!;
         try
         {
-            enabled.SetValue(null, true);
+            Environment.SetEnvironmentVariable("TWP_DIAG_POOL_PICK", "1");
             loggerStarted.SetValue(null, 0);
 
             var outPath = Path.Combine(Path.GetTempPath(), $"twp-pool-diag-{Guid.NewGuid():N}.log");
@@ -1083,7 +1073,7 @@ public class SonarNewCodeCoverageTests
             }
             finally
             {
-                Environment.SetEnvironmentVariable("TWP_DIAG_POOL_PICK_OUT", null);
+                Environment.SetEnvironmentVariable("TWP_DIAG_POOL_PICK_OUT", previousOut);
                 SpinWait.SpinUntil(() =>
                 {
                     try
@@ -1097,7 +1087,7 @@ public class SonarNewCodeCoverageTests
         }
         finally
         {
-            enabled.SetValue(null, previous);
+            Environment.SetEnvironmentVariable("TWP_DIAG_POOL_PICK", previousPick);
             loggerStarted.SetValue(null, previousLogger);
         }
     }

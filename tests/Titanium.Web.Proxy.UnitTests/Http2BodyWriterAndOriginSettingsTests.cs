@@ -284,8 +284,7 @@ public class Http2BodyWriterAndOriginSettingsTests
         var pendingType = typeof(Http2OriginConnection).GetNestedType("PendingStream", BindingFlags.NonPublic)!;
         var pending = Activator.CreateInstance(pendingType, BindingFlags.Instance | BindingFlags.NonPublic,
             null, [1024L], null)!;
-        var streams = typeof(Http2OriginConnection).GetField("streams", PrivateInstance)!.GetValue(origin)!;
-        Assert.IsTrue((bool)streams.GetType().GetMethod("TryAdd")!.Invoke(streams, [1, pending])!);
+        RegisterOpenedStream(origin, 1, pending);
 
         var process = GetProcessHeaderBlock(origin);
         process(1, EncodeStatusBlock(100, ("x-hint", "1")), false);
@@ -317,8 +316,7 @@ public class Http2BodyWriterAndOriginSettingsTests
         Assert.IsNull(pendingType.GetField("InterimChannel", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!
             .GetValue(pending));
 
-        var streams = typeof(Http2OriginConnection).GetField("streams", PrivateInstance)!.GetValue(origin)!;
-        Assert.IsTrue((bool)streams.GetType().GetMethod("TryAdd")!.Invoke(streams, [1, pending])!);
+        RegisterOpenedStream(origin, 1, pending);
 
         var process = GetProcessHeaderBlock(origin);
         process(1, EncodeStatusBlock(100, ("x-hint", "1")), false);
@@ -343,9 +341,7 @@ public class Http2BodyWriterAndOriginSettingsTests
         var pendingType = typeof(Http2OriginConnection).GetNestedType("PendingStream", BindingFlags.NonPublic)!;
         var pending = Activator.CreateInstance(pendingType, BindingFlags.Instance | BindingFlags.NonPublic,
             null, [1024L], null)!;
-        var streamsField = typeof(Http2OriginConnection).GetField("streams", PrivateInstance)!;
-        var streams = streamsField.GetValue(origin)!;
-        Assert.IsTrue((bool)streams.GetType().GetMethod("TryAdd")!.Invoke(streams, [3, pending])!);
+        RegisterOpenedStream(origin, 3, pending);
 
         var process = GetProcessHeaderBlock(origin);
         process(3, EncodeStatusBlock(200), false);
@@ -447,6 +443,12 @@ public class Http2BodyWriterAndOriginSettingsTests
     {
         var method = typeof(Http2OriginConnection).GetMethod("ProcessHeaderBlock", PrivateInstance)!;
         return method.CreateDelegate<ProcessHeaderBlockDelegate>(origin);
+    }
+
+    private static void RegisterOpenedStream(Http2OriginConnection origin, int streamId, object pending)
+    {
+        var method = typeof(Http2OriginConnection).GetMethod("RegisterOpenedStream", PrivateInstance)!;
+        method.Invoke(origin, [streamId, pending]);
     }
 
     private sealed class RecordingHeaderListener : IHeaderListener
