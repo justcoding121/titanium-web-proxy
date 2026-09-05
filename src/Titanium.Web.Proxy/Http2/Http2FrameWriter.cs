@@ -30,6 +30,8 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
     private readonly SemaphoreSlim? writeLock;
     private readonly CancellationTokenSource cts = new();
     private readonly Task drainTask;
+    // SingleReader drain: reuse coalesce scratch (avoids new ArraySegment[64] under multiplex).
+    private readonly ArraySegment<byte>[] coalesceFrames = new ArraySegment<byte>[CoalesceMaxFrames];
     private int disposed;
 
     public Http2FrameWriter(System.IO.Stream output, SemaphoreSlim? writeLock = null)
@@ -40,6 +42,8 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
         {
             SingleReader = true,
             SingleWriter = false,
+            // Keep ASC=false: EnqueueRented runs under origin writeLock; sync drain WriteAsync
+            // under that lock was profiled as a Mac/Win multiplex regress (wiki FrameWriter ASC abort).
             AllowSynchronousContinuations = false
         });
         drainTask = Task.Run(() => DrainAsync(cts.Token), cts.Token);
@@ -82,7 +86,7 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
                         }
 
                         var total = first.Count;
-                        var frames = new ArraySegment<byte>[CoalesceMaxFrames];
+                        var frames = coalesceFrames;
                         frames[0] = first;
                         var count = 1;
                         while (count < CoalesceMaxFrames

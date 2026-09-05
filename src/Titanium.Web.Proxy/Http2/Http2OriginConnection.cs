@@ -79,6 +79,7 @@ internal sealed class Http2OriginConnection : IDisposable
     private SemaphoreSlim? concurrencyGate;
     private int concurrencyGateCapacity;
     private Decoder? decoder;
+    private readonly HeaderCollectorListener headerCollector = new();
     private int lastStreamId = -1;
     private volatile bool faulted;
     private volatile bool goingAway;
@@ -117,24 +118,30 @@ internal sealed class Http2OriginConnection : IDisposable
     internal int LeaseCount => Volatile.Read(ref leaseCount);
 
     /// <summary>
-    ///     Grow the origin pool once every member has this many active streams, well before
-    ///     <c>SETTINGS_MAX_CONCURRENT_STREAMS</c> (common default 100). One connection serializes
-    ///     encode+enqueue under <c>writeLock</c>; spreading across a few TLS+H2 sessions matches
-    ///     SocketsHttpHandler <c>EnableMultipleHttp2Connections</c>.
-    ///     Profiled at c=16 with threshold 16: dumpasync showed a single
-    ///     <c>ReadLoopAsync</c> and hundreds of <c>SemaphoreSlim</c> waiters — grow earlier so
-    ///     low concurrency is not pinned to one origin TLS+H2 session.
-    ///     Soft=4 (was 1←2←4): grow once a member has 4 in-flight streams. Soft=1 opened a new
-    ///     TLS+H2 session on the first concurrent stream and fanned out to MaxOrigin (=8) on CI
-    ///     4 vCPU — cool hid the cost; Windows H3→H2 CI sat ~0.94× YARP. Soft=4 still spreads
-    ///     writeLocks before SETTINGS_MAX_CONCURRENT_STREAMS while keeping fewer ReadLoops.
-    ///     Cap remains <see cref="ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority"/>.
+    ///     Early-grow threshold for TLS origins (ALPN <c>h2</c>). SoftGrow=4 SoftPick=SETTINGS
+    ///     did not beat SoftGrow=16 on Mac H3→H2 (recheck ~0.80× vs SoftGrow=16 shape ~0.87×)
+    ///     and softened H1→H2. SoftGrow=8 rejected (~0.71× H1→H2). SoftGrow=16 + SoftPick at
+    ///     SETTINGS/gate avoids Soft=4-as-pick-cap <c>TryPickAny</c> cliff while keeping dual-TLS
+    ///     fan-out modest. Cap remains
+    ///     <see cref="ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority"/>.
     /// </summary>
-    internal const int PoolGrowActiveStreamThreshold = 4;
+    internal const int PoolGrowActiveStreamThresholdTls = 16;
 
     /// <summary>
-    ///     Soft multiplex capacity used by <see cref="Http2OriginConnectionPool" /> to decide when to
-    ///     open another origin connection. Prefers filling existing connections before growing the pool.
+    ///     Early-grow threshold for cleartext h2c. SoftGrow=4 fans ReadLoops earlier (Mac H3→h2c);
+    ///     SoftGrow=16 on cleartext starved ReadLoops under Soft=16-as-pick-cap.
+    /// </summary>
+    internal const int PoolGrowActiveStreamThresholdCleartext = 4;
+
+    /// <summary>Alias — TLS SoftGrow (tests / wiki that reference the historical name).</summary>
+    internal const int PoolGrowActiveStreamThreshold = PoolGrowActiveStreamThresholdTls;
+
+    /// <summary>
+    ///     Soft multiplex pick capacity used by <see cref="Http2OriginConnectionPool" /> —
+    ///     <c>SETTINGS_MAX_CONCURRENT_STREAMS</c> / concurrency gate (not the early-grow dial).
+    ///     Prefer filling under this cap; grow is driven separately by
+    ///     <see cref="PoolGrowActiveStreamThreshold"/> /
+    ///     <see cref="PoolGrowActiveStreamThresholdCleartext"/>.
     /// </summary>
     internal int SoftStreamCapacity
     {
@@ -143,9 +150,15 @@ internal sealed class Http2OriginConnection : IDisposable
             var cap = concurrencyGateCapacity;
             if (cap <= 0)
                 cap = resourceLimits.MaxConcurrentStreamsPerConnection;
-            return Math.Max(1, Math.Min(cap, PoolGrowActiveStreamThreshold));
+            return Math.Max(1, cap);
         }
     }
+
+    /// <summary>Early-grow dial for this connection (TLS vs cleartext).</summary>
+    internal int PoolGrowThreshold =>
+        connection.Http2Cleartext
+            ? PoolGrowActiveStreamThresholdCleartext
+            : PoolGrowActiveStreamThresholdTls;
 
     /// <summary>True when the next odd stream id would approach int wraparound.</summary>
     internal bool IsNearStreamIdExhaustion => Volatile.Read(ref lastStreamId) >= StreamIdExhaustionThreshold;
@@ -1309,60 +1322,14 @@ internal sealed class Http2OriginConnection : IDisposable
     {
         // Decode into the Response's own HeaderCollection (or a temporary for 1xx) so we do not
         // allocate a second HeaderCollection and copy every field — H3→H2 tiny-GET pays this
-        // once per request on the origin ReadLoop.
-        ByteString status = default;
-        Response? buildingResponse = null;
-        HeaderCollection? interimHeaders = null;
-
-        var listener = new HeaderCollectorListener((name, value) =>
-        {
-            if (name.Length > 0 && name.Span[0] == (byte)':')
-            {
-                if (name.Equals(StaticTable.KnownHeaderStatus)) status = value;
-                return;
-            }
-
-            // Regular fields: after :status in response HEADERS, or with no :status in a trailer block.
-            if (status.Length == 0)
-            {
-                // Trailer HEADERS (RFC 9113 §8.1) — no :status. Park in interimHeaders as a trailer bag.
-                interimHeaders ??= new HeaderCollection();
-                interimHeaders.AddHeader(new HttpHeader(name, value));
-                return;
-            }
-
-            if (interimHeaders != null)
-            {
-                interimHeaders.AddHeader(new HttpHeader(name, value));
-                return;
-            }
-
-            if (buildingResponse == null)
-            {
-                var statusCodeEarly = TryParseAsciiStatusCode(status.Span, out var early) ? early : 0;
-                if (statusCodeEarly is >= 100 and <= 199)
-                {
-                    interimHeaders = new HeaderCollection();
-                    interimHeaders.AddHeader(new HttpHeader(name, value));
-                    return;
-                }
-
-                buildingResponse = new Response
-                {
-                    StatusCode = statusCodeEarly != 0 ? statusCodeEarly : 502,
-                    StatusDescription = string.Empty,
-                    HttpVersion = HttpHeader.Version11,
-                    HeaderNamesAreHttp2Normalized = true
-                };
-            }
-
-            buildingResponse.Headers.AddHeader(new HttpHeader(name, value));
-        });
+        // once per request on the origin ReadLoop. Reuse the connection's HeaderCollectorListener
+        // (no per-HEADERS lambda/listener Gen0 on the shared ReadLoop).
+        headerCollector.Begin();
 
         try
         {
             decoder ??= new Decoder(8192, 4096);
-            decoder.Decode(compressed, listener);
+            decoder.Decode(compressed, headerCollector);
             decoder.EndHeaderBlock();
         }
         catch (Exception ex)
@@ -1372,6 +1339,10 @@ internal sealed class Http2OriginConnection : IDisposable
         }
 
         if (!streams.TryGetValue(streamId, out var pending)) return;
+
+        var status = headerCollector.Status;
+        var buildingResponse = headerCollector.BuildingResponse;
+        var interimHeaders = headerCollector.InterimHeaders;
 
         if (status.Length > 0)
         {
@@ -1707,16 +1678,58 @@ internal sealed class Http2OriginConnection : IDisposable
 
     private sealed class HeaderCollectorListener : IHeaderListener
     {
-        private readonly Action<ByteString, ByteString> addHeader;
+        internal ByteString Status;
+        internal Response? BuildingResponse;
+        internal HeaderCollection? InterimHeaders;
 
-        internal HeaderCollectorListener(Action<ByteString, ByteString> addHeader)
+        internal void Begin()
         {
-            this.addHeader = addHeader;
+            Status = default;
+            BuildingResponse = null;
+            InterimHeaders = null;
         }
 
         public void AddHeader(ByteString name, ByteString value, bool sensitive)
         {
-            addHeader(name, value);
+            if (name.Length > 0 && name.Span[0] == (byte)':')
+            {
+                if (name.Equals(StaticTable.KnownHeaderStatus)) Status = value;
+                return;
+            }
+
+            if (Status.Length == 0)
+            {
+                InterimHeaders ??= new HeaderCollection();
+                InterimHeaders.AddHeader(new HttpHeader(name, value));
+                return;
+            }
+
+            if (InterimHeaders != null)
+            {
+                InterimHeaders.AddHeader(new HttpHeader(name, value));
+                return;
+            }
+
+            if (BuildingResponse == null)
+            {
+                var statusCodeEarly = TryParseAsciiStatusCode(Status.Span, out var early) ? early : 0;
+                if (statusCodeEarly is >= 100 and <= 199)
+                {
+                    InterimHeaders = new HeaderCollection();
+                    InterimHeaders.AddHeader(new HttpHeader(name, value));
+                    return;
+                }
+
+                BuildingResponse = new Response
+                {
+                    StatusCode = statusCodeEarly != 0 ? statusCodeEarly : 502,
+                    StatusDescription = string.Empty,
+                    HttpVersion = HttpHeader.Version11,
+                    HeaderNamesAreHttp2Normalized = true
+                };
+            }
+
+            BuildingResponse.Headers.AddHeader(new HttpHeader(name, value));
         }
     }
 }

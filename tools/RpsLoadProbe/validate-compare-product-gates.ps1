@@ -11,9 +11,9 @@ param(
     # Defaults match MitmGate; Mac CI overrides to 0.55 (H1 plain Full @ d0439556 = 0.564).
     [double] $MitmHttp1PlainFullGate = 0.70,
     [double] $ReverseYarpGate = 0.95,
-    # H3→H3 peer (all OS when YARP SLO-passes): Mac ~0.78×; Win often TWP ahead.
+    # H3→H3 peer (all OS when YARP SLO-passes): Mac CI overrides to 0.78; Win often TWP ahead.
     [double] $ReverseYarpHttp3Gate = 0.75,
-    # Defaults match ReverseYarpGate; Mac CI overrides to 0.55 (median 0.587 @ d0439556).
+    # Defaults match ReverseYarpGate; Mac CI overrides to 0.70 (SoftGrow SoftPick Mac parity).
     [double] $ReverseYarpHttp3ToHttp1Gate = 0.95,
     [string] $BaselineCsvPath = ""
 )
