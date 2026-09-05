@@ -161,17 +161,17 @@ internal sealed class ProxyWorker : BackgroundService
 
         if (settings.SetAsSystemProxy)
         {
-            try
+            var result = proxyServer.TrySetAsSystemProxy(explicitEndPointV4, ProxyProtocolType.AllHttp,
+                KnownMitmExclusions.CreateSystemProxySettings());
+            if (result.Succeeded)
             {
-                proxyServer.SetAsSystemProxy(explicitEndPointV4, ProxyProtocolType.AllHttp,
-                    KnownMitmExclusions.CreateSystemProxySettings());
                 logger.LogInformation(
                     "Registered as Windows system proxy on port {ListeningPort} with identity host bypass (cleared on stop)",
                     explicitEndPointV4.Port);
             }
-            catch (NotSupportedException ex)
+            else
             {
-                logger.LogWarning(ex, "SetAsSystemProxy is enabled but system proxy is not supported on this platform");
+                logger.LogWarning("SetAsSystemProxy failed: {Message}", result.Message);
             }
         }
 

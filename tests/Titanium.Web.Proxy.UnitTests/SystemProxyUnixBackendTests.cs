@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -142,6 +143,7 @@ public class LinuxSystemProxyBackendTests
         runner.SeedGsettings("org.gnome.system.proxy", "mode", "'none'");
         runner.SeedGsettings("org.gnome.system.proxy.http", "host", "''");
         runner.SeedGsettings("org.gnome.system.proxy.http", "port", "0");
+        runner.SeedGsettings("org.gnome.system.proxy.http", "enabled", "false");
         runner.SeedGsettings("org.gnome.system.proxy.https", "host", "''");
         runner.SeedGsettings("org.gnome.system.proxy.https", "port", "0");
         runner.SeedGsettings("org.gnome.system.proxy", "ignore-hosts", "[]");
@@ -154,7 +156,7 @@ public class LinuxSystemProxyBackendTests
         Environment.SetEnvironmentVariable("HTTP_PROXY", null);
         Environment.SetEnvironmentVariable("HTTPS_PROXY", null);
 
-        using var backend = new LinuxSystemProxyBackend(runner);
+        using var backend = new LinuxSystemProxyBackend(runner, applyBrowserLaunchHooks: false);
         backend.SetProxy("127.0.0.1", 8866, ProxyProtocolType.AllHttp, "localhost");
 
         Assert.IsTrue(runner.Commands.Exists(c =>
@@ -166,6 +168,7 @@ public class LinuxSystemProxyBackendTests
         Assert.AreEqual("'manual'", runner.GsettingsValue("org.gnome.system.proxy", "mode"));
         Assert.AreEqual("'127.0.0.1'", runner.GsettingsValue("org.gnome.system.proxy.http", "host"));
         Assert.AreEqual("8866", runner.GsettingsValue("org.gnome.system.proxy.http", "port"));
+        Assert.AreEqual("true", runner.GsettingsValue("org.gnome.system.proxy.http", "enabled"));
 
         backend.RestoreOriginalSettings();
         Assert.IsTrue(string.IsNullOrEmpty(Environment.GetEnvironmentVariable("http_proxy")));
@@ -181,6 +184,7 @@ public class LinuxSystemProxyBackendTests
         runner.When("gsettings", "get org.gnome.system.proxy mode", "'none'\n");
         runner.When("gsettings", "get org.gnome.system.proxy.http host", "''\n");
         runner.When("gsettings", "get org.gnome.system.proxy.http port", "0\n");
+        runner.When("gsettings", "get org.gnome.system.proxy.http enabled", "false\n");
         runner.When("gsettings", "get org.gnome.system.proxy.https host", "''\n");
         runner.When("gsettings", "get org.gnome.system.proxy.https port", "0\n");
         runner.When("gsettings", "get org.gnome.system.proxy ignore-hosts", "[]\n");
@@ -188,10 +192,79 @@ public class LinuxSystemProxyBackendTests
         runner.When("sh", "command -v kwriteconfig5", "\n");
         runner.DefaultSuccess = true;
 
-        using var backend = new LinuxSystemProxyBackend(runner);
+        using var backend = new LinuxSystemProxyBackend(runner, applyBrowserLaunchHooks: false);
         var ex = Assert.ThrowsException<InvalidOperationException>(() =>
             backend.SetProxy("127.0.0.1", 8866, ProxyProtocolType.AllHttp, "localhost"));
         StringAssert.Contains(ex.Message, "Failed to apply GNOME system proxy");
+    }
+}
+
+[TestClass]
+[SupportedOSPlatform("linux")]
+public class LinuxBrowserLaunchProxyTests
+{
+    [TestMethod]
+    public void InjectChromeProxyArgs_InsertsFlagsBeforePercentU()
+    {
+        var line = LinuxBrowserLaunchProxy.InjectChromeProxyArgs(
+            "Exec=/usr/bin/google-chrome-stable %U", "127.0.0.1", 8866);
+        StringAssert.Contains(line, "--proxy-server=http://127.0.0.1:8866");
+        StringAssert.Contains(line, "--proxy-bypass-list=<-loopback>");
+        StringAssert.Contains(line, "--disable-quic");
+        Assert.IsTrue(line.EndsWith(" %U", StringComparison.Ordinal), line);
+    }
+
+    [TestMethod]
+    public void InjectChromeProxyArgs_WorksForChromiumAndBraveExecLines()
+    {
+        var chromium = LinuxBrowserLaunchProxy.InjectChromeProxyArgs(
+            "Exec=/usr/bin/chromium %U", "127.0.0.1", 8866);
+        StringAssert.Contains(chromium, "--proxy-server=http://127.0.0.1:8866");
+        StringAssert.Contains(chromium, "--disable-quic");
+        Assert.IsTrue(chromium.EndsWith(" %U", StringComparison.Ordinal), chromium);
+
+        var brave = LinuxBrowserLaunchProxy.InjectChromeProxyArgs(
+            "Exec=/usr/bin/brave-browser %u", "10.0.0.1", 8888);
+        StringAssert.Contains(brave, "--proxy-server=http://10.0.0.1:8888");
+    }
+
+    [TestMethod]
+    public void PolicyDirectories_IncludeSnapAndFlatpakChromeRoots()
+    {
+        var dirs = LinuxBrowserLaunchProxy.PolicyDirectories().ToList();
+        Assert.IsTrue(dirs.Any(d => d.Contains("snap", StringComparison.Ordinal) && d.Contains("chromium", StringComparison.Ordinal)));
+        Assert.IsTrue(dirs.Any(d => d.Contains(".var/app/com.google.Chrome", StringComparison.Ordinal) ||
+                                    d.Contains($".var{Path.DirectorySeparatorChar}app{Path.DirectorySeparatorChar}com.google.Chrome", StringComparison.Ordinal)));
+        Assert.IsTrue(dirs.Any(d => d.Contains("BraveSoftware", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void InjectChromeProxyArgs_IsIdempotent()
+    {
+        var once = LinuxBrowserLaunchProxy.InjectChromeProxyArgs(
+            "Exec=/usr/bin/google-chrome-stable %U", "127.0.0.1", 8866);
+        var twice = LinuxBrowserLaunchProxy.InjectChromeProxyArgs(once, "127.0.0.1", 8866);
+        Assert.AreEqual(once, twice);
+    }
+
+    [TestMethod]
+    public void WritePolicies_WritesManagedJson()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-chrome-policy-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            LinuxBrowserLaunchProxy.WritePolicies("127.0.0.1", 8866, [dir]);
+            var json = File.ReadAllText(Path.Combine(dir, LinuxBrowserLaunchProxy.PolicyFileName));
+            StringAssert.Contains(json, "fixed_servers");
+            StringAssert.Contains(json, "http://127.0.0.1:8866");
+            StringAssert.Contains(json, "<-loopback>");
+            StringAssert.Contains(json, "\"QuicAllowed\": false");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
     }
 }
 

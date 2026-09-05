@@ -268,6 +268,8 @@ internal class SystemProxyManager : ISystemProxyBackend
         var ov = originalValues;
         if (ov == null) return;
 
+        try
+        {
         using (var reg = Registry.CurrentUser.OpenSubKey(RegKeyInternetSettings, true))
         {
             if (reg == null) return;
@@ -306,6 +308,11 @@ internal class SystemProxyManager : ISystemProxyBackend
                 // SetInternetOption in the refresh method re-enables ProxyEnable registry value
                 // in Windows 7 or earlier at system shutdown.
                 Refresh();
+        }
+        }
+        catch
+        {
+            // process-exit restore must not throw
         }
     }
 

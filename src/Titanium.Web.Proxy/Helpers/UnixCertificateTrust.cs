@@ -33,6 +33,12 @@ internal static class UnixCertificateTrust
                 CertificateOsTrustKind.Unsupported,
                 "OS SSL trust helpers are only available on macOS and Linux");
         }
+        catch (Exception ex)
+        {
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed,
+                "OS SSL trust failed: " + ex.Message);
+        }
         finally
         {
             TryDelete(cerPath);
@@ -54,13 +60,20 @@ internal static class UnixCertificateTrust
         IProcessRunner? runner = null, IElevationPrompt? elevation = null)
     {
         runner ??= new ProcessRunner();
-        if (RunTime.IsMac)
-            return UntrustMacThorough(runner, certificate, friendlyName, elevation);
+        try
+        {
+            if (RunTime.IsMac)
+                return UntrustMacThorough(runner, certificate, friendlyName, elevation);
 
-        if (RunTime.IsLinux)
-            return UntrustLinuxNss(runner, certificate, friendlyName);
+            if (RunTime.IsLinux)
+                return UntrustLinuxNss(runner, certificate, friendlyName);
 
-        return false;
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -82,6 +95,10 @@ internal static class UnixCertificateTrust
 
             return false;
         }
+        catch
+        {
+            return false;
+        }
         finally
         {
             TryDelete(cerPath);
@@ -96,14 +113,20 @@ internal static class UnixCertificateTrust
     {
         runner ??= new ProcessRunner();
         elevation ??= new OsElevationPrompt(runner);
+        try
+        {
+            if (RunTime.IsMac)
+                return UntrustMacThorough(runner, certificate, friendlyName, elevation);
 
-        if (RunTime.IsMac)
-            return UntrustMacThorough(runner, certificate, friendlyName, elevation);
+            if (RunTime.IsLinux)
+                return UntrustLinuxSystem(elevation, friendlyName);
 
-        if (RunTime.IsLinux)
-            return UntrustLinuxSystem(elevation, friendlyName);
-
-        return false;
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -285,21 +308,26 @@ internal static class UnixCertificateTrust
     /// </summary>
     internal static bool VerifyLinuxNssTrust(IProcessRunner runner, X509Certificate2 certificate)
     {
-        var nssDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".pki", "nssdb");
-        if (!Directory.Exists(nssDir)) return false;
         var certutil = FindCertutil(runner);
         if (certutil is null) return false;
 
-        var list = runner.Run(certutil, $"-d sql:{nssDir} -L");
-        if (list is not { Succeeded: true })
-            return false;
+        foreach (var nssDir in LinuxNssDatabaseDirectories())
+        {
+            if (!Directory.Exists(nssDir)) continue;
 
-        // Match by certificate bytes, not nickname/CN. The same DER can sit under a
-        // legacy nickname ("Titanium Inspector Root Certificate") while the product CN
-        // is "Titanium Root Certificate Authority", and a CN substring hit would also
-        // false-positive against an unrelated nickname.
-        return LinuxNssContainsCertificate(runner, certutil, nssDir, certificate, list.StandardOutput);
+            var list = runner.Run(certutil, $"-d sql:{nssDir} -L");
+            if (list is not { Succeeded: true })
+                continue;
+
+            // Match by certificate bytes, not nickname/CN. The same DER can sit under a
+            // legacy nickname ("Titanium Inspector Root Certificate") while the product CN
+            // is "Titanium Root Certificate Authority", and a CN substring hit would also
+            // false-positive against an unrelated nickname.
+            if (LinuxNssContainsCertificate(runner, certutil, nssDir, certificate, list.StandardOutput))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -759,7 +787,10 @@ internal static class UnixCertificateTrust
         var list = runner.Run(certutil, $"-d sql:{nssDir} -L");
         if (list is { Succeeded: true } &&
             list.StandardOutput.Contains(friendlyName, StringComparison.OrdinalIgnoreCase))
+        {
+            TryTrustAdditionalLinuxNss(runner, certutil, cerPath, friendlyName);
             return CertificateOsTrustResult.Ok("Root CA trusted in user NSS database");
+        }
 
         // DER collision under another nickname: remove matching entries and re-add.
         if (TryReloadCertificateFromCer(cerPath) is { } cert)
@@ -771,7 +802,10 @@ internal static class UnixCertificateTrust
         if (result is { Succeeded: true } &&
             list is { Succeeded: true } &&
             list.StandardOutput.Contains(friendlyName, StringComparison.OrdinalIgnoreCase))
+        {
+            TryTrustAdditionalLinuxNss(runner, certutil, cerPath, friendlyName);
             return CertificateOsTrustResult.Ok("Root CA trusted in user NSS database");
+        }
 
         return CertificateOsTrustResult.Fail(
             CertificateOsTrustKind.NssFailed,
@@ -859,15 +893,30 @@ internal static class UnixCertificateTrust
     private static bool UntrustLinuxNss(
         IProcessRunner runner, X509Certificate2 certificate, string friendlyName)
     {
-        var nssDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".pki", "nssdb");
-        if (!Directory.Exists(nssDir))
-            return true;
-
         var certutil = FindCertutil(runner);
         if (certutil is null)
             return false;
 
+        var anyDb = false;
+        var deleted = false;
+        foreach (var nssDir in LinuxNssDatabaseDirectories())
+        {
+            if (!Directory.Exists(nssDir))
+                continue;
+            anyDb = true;
+            if (UntrustLinuxNssDirectory(runner, certutil, nssDir, certificate, friendlyName))
+                deleted = true;
+        }
+
+        if (!anyDb)
+            return true;
+
+        return deleted || !VerifyLinuxNssTrust(runner, certificate);
+    }
+
+    private static bool UntrustLinuxNssDirectory(
+        IProcessRunner runner, string certutil, string nssDir, X509Certificate2 certificate, string friendlyName)
+    {
         // certutil -A is a silent no-op when the same DER exists under another nickname
         // (legacy "Titanium Inspector Root Certificate" vs current CN). Delete every
         // matching nickname so Remove CA actually clears Chrome trust.
@@ -894,7 +943,44 @@ internal static class UnixCertificateTrust
                 deleted = true;
         }
 
-        return deleted || !VerifyLinuxNssTrust(runner, certificate);
+        return deleted;
+    }
+
+    private static void TryTrustAdditionalLinuxNss(
+        IProcessRunner runner, string certutil, string cerPath, string friendlyName)
+    {
+        var primary = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".pki", "nssdb");
+        foreach (var nssDir in LinuxNssDatabaseDirectories())
+        {
+            if (string.Equals(nssDir, primary, StringComparison.Ordinal))
+                continue;
+            if (!Directory.Exists(nssDir))
+                continue;
+            try
+            {
+                runner.Run(certutil, $"-d sql:{nssDir} -D -n \"{Escape(friendlyName)}\"");
+                runner.Run(certutil,
+                    $"-d sql:{nssDir} -A -t \"C,,\" -n \"{Escape(friendlyName)}\" -i \"{cerPath}\"");
+            }
+            catch
+            {
+                // Snap/Flatpak DBs are best-effort.
+            }
+        }
+    }
+
+    internal static IEnumerable<string> LinuxNssDatabaseDirectories()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        yield return Path.Combine(home, ".pki", "nssdb");
+        yield return Path.Combine(home, "snap", "chromium", "common", ".pki", "nssdb");
+        yield return Path.Combine(home, "snap", "chromium", "current", ".pki", "nssdb");
+        yield return Path.Combine(home, "snap", "google-chrome", "common", ".pki", "nssdb");
+        yield return Path.Combine(home, "snap", "google-chrome", "current", ".pki", "nssdb");
+        yield return Path.Combine(home, ".var", "app", "org.chromium.Chromium", ".pki", "nssdb");
+        yield return Path.Combine(home, ".var", "app", "com.google.Chrome", ".pki", "nssdb");
+        yield return Path.Combine(home, ".var", "app", "com.brave.Browser", ".pki", "nssdb");
     }
 
     private static bool TrustLinuxSystem(IElevationPrompt elevation, string cerPath, string friendlyName)

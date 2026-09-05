@@ -37,37 +37,51 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
 
     public void SetProxy(string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
     {
-        EnsureSnapshot();
-        var bypass = UnixProxyBypassMapper.ToCommaSeparated(proxyOverride);
-        foreach (var service in ListNetworkServices())
+        try
         {
-            if ((protocolType & ProxyProtocolType.Http) != 0)
+            EnsureSnapshot();
+            var bypass = UnixProxyBypassMapper.ToCommaSeparated(proxyOverride);
+            foreach (var service in ListNetworkServices())
             {
-                RunNetworkSetup($"-setwebproxy \"{Escape(service)}\" {hostname} {port}", true);
-                RunNetworkSetup($"-setwebproxystate \"{Escape(service)}\" on", true);
-            }
+                if ((protocolType & ProxyProtocolType.Http) != 0)
+                {
+                    RunNetworkSetup($"-setwebproxy \"{Escape(service)}\" {hostname} {port}", true);
+                    RunNetworkSetup($"-setwebproxystate \"{Escape(service)}\" on", true);
+                }
 
-            if ((protocolType & ProxyProtocolType.Https) != 0)
-            {
-                RunNetworkSetup($"-setsecurewebproxy \"{Escape(service)}\" {hostname} {port}", true);
-                RunNetworkSetup($"-setsecurewebproxystate \"{Escape(service)}\" on", true);
-            }
+                if ((protocolType & ProxyProtocolType.Https) != 0)
+                {
+                    RunNetworkSetup($"-setsecurewebproxy \"{Escape(service)}\" {hostname} {port}", true);
+                    RunNetworkSetup($"-setsecurewebproxystate \"{Escape(service)}\" on", true);
+                }
 
-            if (proxyOverride != null)
-                RunNetworkSetup($"-setproxybypassdomains \"{Escape(service)}\" {FormatBypassArgs(bypass)}", true);
+                if (proxyOverride != null)
+                    RunNetworkSetup($"-setproxybypassdomains \"{Escape(service)}\" {FormatBypassArgs(bypass)}", true);
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("Failed to apply macOS system proxy: " + ex.Message, ex);
         }
     }
 
     public void RemoveProxy(ProxyProtocolType protocolType, bool saveOriginalConfig = true)
     {
-        if (saveOriginalConfig) EnsureSnapshot();
-        foreach (var service in ListNetworkServices())
+        try
         {
-            if ((protocolType & ProxyProtocolType.Http) != 0)
-                RunNetworkSetup($"-setwebproxystate \"{Escape(service)}\" off", true);
+            if (saveOriginalConfig) EnsureSnapshot();
+            foreach (var service in ListNetworkServices())
+            {
+                if ((protocolType & ProxyProtocolType.Http) != 0)
+                    RunNetworkSetup($"-setwebproxystate \"{Escape(service)}\" off", true);
 
-            if ((protocolType & ProxyProtocolType.Https) != 0)
-                RunNetworkSetup($"-setsecurewebproxystate \"{Escape(service)}\" off", true);
+                if ((protocolType & ProxyProtocolType.Https) != 0)
+                    RunNetworkSetup($"-setsecurewebproxystate \"{Escape(service)}\" off", true);
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("Failed to disable macOS system proxy: " + ex.Message, ex);
         }
     }
 
@@ -81,6 +95,8 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
     {
         if (!_hasSnapshot) return;
 
+        try
+        {
         foreach (var snap in _original)
         {
             if (snap.HttpEnabled)
@@ -110,6 +126,11 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
 
         _original.Clear();
         _hasSnapshot = false;
+        }
+        catch
+        {
+            // process-exit restore must not throw
+        }
     }
 
     public string? GetCurrentProxyOverride()

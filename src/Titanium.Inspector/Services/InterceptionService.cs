@@ -94,6 +94,9 @@ public sealed class InterceptionService : IDisposable
     /// <summary>Last OS trust outcome from Install root CA (Keychain / NSS / package hints).</summary>
     public CertificateOsTrustResult? LastOsTrustResult { get; private set; }
 
+    /// <summary>Last system-proxy enable/disable failure message (null after success).</summary>
+    public string? LastSystemProxyError { get; private set; }
+
     /// <summary>Root certificate display name used as NSS nickname.</summary>
     public string RootCertificateName =>
         _proxy?.CertificateManager.RootCertificateName ?? "Titanium Inspector Root Certificate";
@@ -369,8 +372,10 @@ public sealed class InterceptionService : IDisposable
     /// </summary>
     public bool SetSystemProxy(bool enable, InspectorSettings? settings = null)
     {
+        LastSystemProxyError = null;
         if (_proxy is null || _endPoint is null || !_proxy.ProxyRunning)
         {
+            LastSystemProxyError = "Proxy is not running";
             return false;
         }
 
@@ -380,19 +385,43 @@ public sealed class InterceptionService : IDisposable
             {
                 var effective = settings ?? SystemProxySettings ?? new InspectorSettings();
                 SystemProxySettings = effective;
-                _systemProxy.SetAsSystemProxy(_proxy, _endPoint, effective);
+                var result = _systemProxy.SetAsSystemProxy(_proxy, _endPoint, effective);
+                if (!result.Succeeded)
+                {
+                    LastSystemProxyError = result.Message;
+                    _proxy.Logger.LogWarning("System proxy enable failed: {Message}", result.Message);
+                    return false;
+                }
+
                 _systemProxyEnabled = true;
             }
             else
             {
-                _systemProxy.RestoreOriginalProxySettings(_proxy);
+                var result = _systemProxy.RestoreOriginalProxySettings(_proxy);
+                if (!result.Succeeded)
+                {
+                    LastSystemProxyError = result.Message;
+                    _proxy.Logger.LogWarning("System proxy disable failed: {Message}", result.Message);
+                    return false;
+                }
+
                 _systemProxyEnabled = false;
             }
 
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            LastSystemProxyError = ex.Message;
+            try
+            {
+                _proxy.Logger.LogWarning(ex, "System proxy {Action} failed", enable ? "enable" : "disable");
+            }
+            catch
+            {
+                // logging must not hide the original failure
+            }
+
             return false;
         }
     }

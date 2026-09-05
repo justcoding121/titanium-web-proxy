@@ -219,3 +219,14 @@ static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv(string? win
 static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToUnixBypassHosts(string? winInetProxyOverride) -> System.Collections.Generic.IReadOnlyList<string!>!
 Titanium.Web.Proxy.Http3.Http3NativeBootstrap
 static Titanium.Web.Proxy.Http3.Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(string![]? args = null) -> void
+Titanium.Web.Proxy.SystemProxyChangeResult
+Titanium.Web.Proxy.SystemProxyChangeResult.Message.get -> string!
+Titanium.Web.Proxy.SystemProxyChangeResult.Succeeded.get -> bool
+Titanium.Web.Proxy.SystemProxyChangeResult.SystemProxyChangeResult() -> void
+Titanium.Web.Proxy.SystemProxyChangeResult.SystemProxyChangeResult(bool succeeded, string! message) -> void
+static Titanium.Web.Proxy.SystemProxyChangeResult.Fail(string! message) -> Titanium.Web.Proxy.SystemProxyChangeResult
+static Titanium.Web.Proxy.SystemProxyChangeResult.Ok(string! message) -> Titanium.Web.Proxy.SystemProxyChangeResult
+Titanium.Web.Proxy.ProxyServer.TryDisableAllSystemProxies() -> Titanium.Web.Proxy.SystemProxyChangeResult
+Titanium.Web.Proxy.ProxyServer.TryDisableSystemProxy(Titanium.Web.Proxy.Models.ProxyProtocolType protocolType) -> Titanium.Web.Proxy.SystemProxyChangeResult
+Titanium.Web.Proxy.ProxyServer.TryRestoreOriginalProxySettings() -> Titanium.Web.Proxy.SystemProxyChangeResult
+Titanium.Web.Proxy.ProxyServer.TrySetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint! endPoint, Titanium.Web.Proxy.Models.ProxyProtocolType protocolType, Titanium.Web.Proxy.SystemProxySettings? settings = null) -> Titanium.Web.Proxy.SystemProxyChangeResult

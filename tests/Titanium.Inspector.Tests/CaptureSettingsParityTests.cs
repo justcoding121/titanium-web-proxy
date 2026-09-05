@@ -224,7 +224,9 @@ public class CaptureSettingsParityTests
             Assert.AreEqual(8866, vm.BindPort);
             Assert.IsFalse(vm.IgnoreServerCertificateErrors);
             Assert.IsFalse(vm.DecryptHttps);
-            Assert.AreEqual(0, settings.Current.DecryptSkipHosts.Count);
+            CollectionAssert.AreEquivalent(
+                Titanium.Web.Proxy.MitmExclusionDefaults.TunnelOnlyPinningDomains,
+                settings.Current.DecryptSkipHosts);
             Assert.AreEqual(10_000, settings.Current.MaxSessionsInMemory);
             Assert.AreEqual(1, registry.VisibleSessions.Count);
             StringAssert.Contains(vm.StatusText, "Root CA and sessions were not changed");

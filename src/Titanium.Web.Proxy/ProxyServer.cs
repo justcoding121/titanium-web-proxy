@@ -1470,71 +1470,92 @@ public partial class ProxyServer : IDisposable
     public void SetAsSystemProxy(ExplicitProxyEndPoint endPoint, ProxyProtocolType protocolType,
         SystemProxySettings? settings)
     {
+        var result = TrySetAsSystemProxy(endPoint, protocolType, settings);
+        if (!result.Succeeded)
+            logger.LogWarning("SetAsSystemProxy failed: {Message}", result.Message);
+    }
+
+    /// <summary>
+    ///     Enable OS system proxy without throwing. Failures are logged and returned so Inspector/CLI
+    ///     can show a status message instead of crashing.
+    /// </summary>
+    public SystemProxyChangeResult TrySetAsSystemProxy(ExplicitProxyEndPoint endPoint, ProxyProtocolType protocolType,
+        SystemProxySettings? settings = null)
+    {
+        if (endPoint is null)
+            throw new ArgumentNullException(nameof(endPoint));
+
         if (SystemProxySettingsManager == null)
-            throw new NotSupportedException(SystemProxyNotSupportedMessage);
+            return SystemProxyChangeResult.Fail(SystemProxyNotSupportedMessage);
 
-        ValidateEndPointAsSystemProxy(endPoint);
-
-        // Validate bypass rules up front so a malformed rule cannot leave the proxy state half-applied.
-        settings?.Validate();
-
-        var isHttp = (protocolType & ProxyProtocolType.Http) > 0;
-        var isHttps = (protocolType & ProxyProtocolType.Https) > 0;
-
-        if (isHttps)
+        try
         {
-            CertificateManager.EnsureRootCertificate();
+            ValidateEndPointAsSystemProxy(endPoint);
+            settings?.Validate();
 
-            // If certificate was trusted by the machine
-            if (!CertificateManager.CertValidated)
+            var isHttp = (protocolType & ProxyProtocolType.Http) > 0;
+            var isHttps = (protocolType & ProxyProtocolType.Https) > 0;
+
+            if (isHttps)
             {
-                protocolType = protocolType & ~ProxyProtocolType.Https;
-                isHttps = false;
+                CertificateManager.EnsureRootCertificate();
+
+                if (!CertificateManager.CertValidated)
+                {
+                    protocolType &= ~ProxyProtocolType.Https;
+                    isHttps = false;
+                }
             }
+
+            if (isHttp)
+                ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemHttpProxy = false);
+
+            if (isHttps)
+                ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemHttpsProxy = false);
+
+            string? proxyOverride = null;
+            if (settings != null)
+            {
+                var currentProxyOverride = SystemProxySettingsManager.GetCurrentProxyOverride();
+                proxyOverride = settings.BuildProxyOverride(currentProxyOverride);
+            }
+
+            SystemProxySettingsManager.SetProxy(
+                FormatSystemProxyHostname(endPoint.IpAddress),
+                endPoint.Port,
+                protocolType,
+                proxyOverride);
+
+            if (isHttp) endPoint.IsSystemHttpProxy = true;
+            if (isHttps) endPoint.IsSystemHttpsProxy = true;
+
+            string? proxyType = null;
+            switch (protocolType)
+            {
+                case ProxyProtocolType.Http:
+                    proxyType = "HTTP";
+                    break;
+                case ProxyProtocolType.Https:
+                    proxyType = "HTTPS";
+                    break;
+                case ProxyProtocolType.AllHttp:
+                    proxyType = "HTTP and HTTPS";
+                    break;
+            }
+
+            var message = protocolType == ProxyProtocolType.None
+                ? "System proxy request completed with no HTTP(S) protocols enabled"
+                : $"Set endpoint at Ip {endPoint.IpAddress} and port: {endPoint.Port} as System {proxyType} Proxy";
+            if (protocolType != ProxyProtocolType.None)
+                ProxyDiagnostics.ReportInformation(logger, message);
+
+            return SystemProxyChangeResult.Ok(message);
         }
-
-        // clear any settings previously added
-        if (isHttp) ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemHttpProxy = false);
-
-        if (isHttps) ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemHttpsProxy = false);
-
-        string? proxyOverride = null;
-        if (settings != null)
+        catch (Exception ex)
         {
-            var currentProxyOverride = SystemProxySettingsManager.GetCurrentProxyOverride();
-            proxyOverride = settings.BuildProxyOverride(currentProxyOverride);
+            logger.LogWarning(ex, "System proxy enable failed");
+            return SystemProxyChangeResult.Fail(ex.Message);
         }
-
-        // Prefer 127.0.0.1 over "localhost" for IPv4 loopback endpoints. Chrome/glibc often
-        // resolve localhost to ::1 first; an IPv4-only TcpListener never accepts that, so the
-        // browser falls back to DIRECT and Inspector captures nothing.
-        SystemProxySettingsManager.SetProxy(
-            FormatSystemProxyHostname(endPoint.IpAddress),
-            endPoint.Port,
-            protocolType,
-            proxyOverride);
-
-        if (isHttp) endPoint.IsSystemHttpProxy = true;
-
-        if (isHttps) endPoint.IsSystemHttpsProxy = true;
-
-        string? proxyType = null;
-        switch (protocolType)
-        {
-            case ProxyProtocolType.Http:
-                proxyType = "HTTP";
-                break;
-            case ProxyProtocolType.Https:
-                proxyType = "HTTPS";
-                break;
-            case ProxyProtocolType.AllHttp:
-                proxyType = "HTTP and HTTPS";
-                break;
-        }
-
-        if (protocolType != ProxyProtocolType.None)
-            ProxyDiagnostics.ReportInformation(logger,
-                $"Set endpoint at Ip {endPoint.IpAddress} and port: {endPoint.Port} as System {proxyType} Proxy");
     }
 
     /// <summary>
@@ -1558,12 +1579,28 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public void RestoreOriginalProxySettings()
     {
+        var result = TryRestoreOriginalProxySettings();
+        if (!result.Succeeded)
+            logger.LogWarning("RestoreOriginalProxySettings failed: {Message}", result.Message);
+    }
+
+    /// <summary>Restore OS proxy without throwing.</summary>
+    public SystemProxyChangeResult TryRestoreOriginalProxySettings()
+    {
         if (SystemProxySettingsManager == null)
-            throw new NotSupportedException(SystemProxyNotSupportedMessage);
+            return SystemProxyChangeResult.Fail(SystemProxyNotSupportedMessage);
 
-        SystemProxySettingsManager.RestoreOriginalSettings();
-
-        ClearEndpointSystemProxyFlags(ProxyProtocolType.AllHttp);
+        try
+        {
+            SystemProxySettingsManager.RestoreOriginalSettings();
+            ClearEndpointSystemProxyFlags(ProxyProtocolType.AllHttp);
+            return SystemProxyChangeResult.Ok("System proxy restored");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "System proxy restore failed");
+            return SystemProxyChangeResult.Fail(ex.Message);
+        }
     }
 
     /// <summary>
@@ -1571,16 +1608,28 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public void DisableSystemProxy(ProxyProtocolType protocolType)
     {
+        var result = TryDisableSystemProxy(protocolType);
+        if (!result.Succeeded)
+            logger.LogWarning("DisableSystemProxy failed: {Message}", result.Message);
+    }
+
+    /// <summary>Clear OS proxy for the given protocols without throwing.</summary>
+    public SystemProxyChangeResult TryDisableSystemProxy(ProxyProtocolType protocolType)
+    {
         if (SystemProxySettingsManager == null)
-            throw new NotSupportedException(SystemProxyNotSupportedMessage);
+            return SystemProxyChangeResult.Fail(SystemProxyNotSupportedMessage);
 
-        SystemProxySettingsManager.RemoveProxy(protocolType);
-
-        // Without this, an endpoint's IsSystemHttpProxy/IsSystemHttpsProxy stays true after the
-        // corresponding registry setting has already been cleared, so a later SetAsSystemProxy call
-        // for the other protocol - or Stop()'s own best-effort registry cleanup - can read stale flags
-        // that no longer reflect the actual system proxy configuration.
-        ClearEndpointSystemProxyFlags(protocolType);
+        try
+        {
+            SystemProxySettingsManager.RemoveProxy(protocolType);
+            ClearEndpointSystemProxyFlags(protocolType);
+            return SystemProxyChangeResult.Ok("System proxy disabled");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "System proxy disable failed");
+            return SystemProxyChangeResult.Fail(ex.Message);
+        }
     }
 
     /// <summary>
@@ -1588,12 +1637,28 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public void DisableAllSystemProxies()
     {
+        var result = TryDisableAllSystemProxies();
+        if (!result.Succeeded)
+            logger.LogWarning("DisableAllSystemProxies failed: {Message}", result.Message);
+    }
+
+    /// <summary>Clear all OS proxy settings without throwing.</summary>
+    public SystemProxyChangeResult TryDisableAllSystemProxies()
+    {
         if (SystemProxySettingsManager == null)
-            throw new NotSupportedException(SystemProxyNotSupportedMessage);
+            return SystemProxyChangeResult.Fail(SystemProxyNotSupportedMessage);
 
-        SystemProxySettingsManager.DisableAllProxy();
-
-        ClearEndpointSystemProxyFlags(ProxyProtocolType.AllHttp);
+        try
+        {
+            SystemProxySettingsManager.DisableAllProxy();
+            ClearEndpointSystemProxyFlags(ProxyProtocolType.AllHttp);
+            return SystemProxyChangeResult.Ok("All system proxies disabled");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Disable all system proxies failed");
+            return SystemProxyChangeResult.Fail(ex.Message);
+        }
     }
 
     /// <summary>
@@ -1648,10 +1713,17 @@ public partial class ProxyServer : IDisposable
 
         if (changeSystemProxySettings && SystemProxySettingsManager != null)
         {
-            var ownedPorts = ProxyEndPoints.Select(x => x.Port).ToHashSet();
-            var protocolToRemove = SystemProxySettingsManager.GetStaleLocalProxyProtocols(ownedPorts);
-            if (protocolToRemove != ProxyProtocolType.None)
-                SystemProxySettingsManager.RemoveProxy(protocolToRemove, false);
+            try
+            {
+                var ownedPorts = ProxyEndPoints.Select(x => x.Port).ToHashSet();
+                var protocolToRemove = SystemProxySettingsManager.GetStaleLocalProxyProtocols(ownedPorts);
+                if (protocolToRemove != ProxyProtocolType.None)
+                    SystemProxySettingsManager.RemoveProxy(protocolToRemove, false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Clearing stale system proxy on Start failed (continuing)");
+            }
         }
 
         var assignedSystemUpStreamResolver = false;

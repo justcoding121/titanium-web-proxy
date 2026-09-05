@@ -293,6 +293,15 @@ public class InspectorChromeSystemProxyE2ETests
             p.WaitForExit(5000);
             Assert.AreEqual("manual", mode, ignoreCase: true);
         }
+
+        psi.Arguments = "get org.gnome.system.proxy.http enabled";
+        using (var p = Process.Start(psi)!)
+        {
+            var enabled = p.StandardOutput.ReadToEnd().Trim().Trim('\'', '"');
+            p.WaitForExit(5000);
+            Assert.AreEqual("true", enabled, ignoreCase: true,
+                "GIO/Chrome ignore mode=manual unless http enabled is true");
+        }
     }
 
     private static string? FindCertutil()

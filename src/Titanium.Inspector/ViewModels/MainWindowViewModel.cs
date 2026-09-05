@@ -127,116 +127,116 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         LoadFromSettings();
 
-        CheckForUpdatesCommand = new RelayCommand(async () => await CheckUpdatesAsync(promptIfAvailable: true));
-        SetUpdateChannelStableCommand = new RelayCommand(() =>
+        CheckForUpdatesCommand = Cmd(async () => await CheckUpdatesAsync(promptIfAvailable: true));
+        SetUpdateChannelStableCommand = Cmd(() =>
         {
             UpdateChannelIsBeta = false;
             return Task.CompletedTask;
         });
-        SetUpdateChannelBetaCommand = new RelayCommand(() =>
+        SetUpdateChannelBetaCommand = Cmd(() =>
         {
             UpdateChannelIsBeta = true;
             return Task.CompletedTask;
         });
-        SetThemeLightCommand = new RelayCommand(() =>
+        SetThemeLightCommand = Cmd(() =>
         {
             SetThemeMode(ThemeMode.Light);
             return Task.CompletedTask;
         });
-        SetThemeDarkCommand = new RelayCommand(() =>
+        SetThemeDarkCommand = Cmd(() =>
         {
             SetThemeMode(ThemeMode.Dark);
             return Task.CompletedTask;
         });
-        SetThemeAutomaticCommand = new RelayCommand(() =>
+        SetThemeAutomaticCommand = Cmd(() =>
         {
             SetThemeMode(ThemeMode.Automatic);
             return Task.CompletedTask;
         });
-        ToggleCheckForUpdatesOnStartupCommand = new RelayCommand(() =>
+        ToggleCheckForUpdatesOnStartupCommand = Cmd(() =>
         {
             CheckForUpdatesOnStartup = !CheckForUpdatesOnStartup;
             return Task.CompletedTask;
         });
-        ExportHarCommand = new RelayCommand(async () => await ExportHarAsync());
-        _exportSelectedHarCommand = new RelayCommand(async () => await ExportSelectedHarAsync(), () => HasSelectedSessions);
+        ExportHarCommand = Cmd(async () => await ExportHarAsync());
+        _exportSelectedHarCommand = Cmd(async () => await ExportSelectedHarAsync(), () => HasSelectedSessions);
         ExportSelectedHarCommand = _exportSelectedHarCommand;
-        ImportHarCommand = new RelayCommand(async () => await ImportHarAsync());
-        ExportArchiveCommand = new RelayCommand(async () => await ExportArchiveAsync());
-        _exportSelectedArchiveCommand = new RelayCommand(async () => await ExportSelectedArchiveAsync(), () => HasSelectedSessions);
+        ImportHarCommand = Cmd(async () => await ImportHarAsync());
+        ExportArchiveCommand = Cmd(async () => await ExportArchiveAsync());
+        _exportSelectedArchiveCommand = Cmd(async () => await ExportSelectedArchiveAsync(), () => HasSelectedSessions);
         ExportSelectedArchiveCommand = _exportSelectedArchiveCommand;
-        ImportArchiveCommand = new RelayCommand(async () => await ImportArchiveAsync());
-        StartCaptureCommand = new RelayCommand(async () => await StartCaptureAsync());
-        StopCaptureCommand = new RelayCommand(StopCaptureAsync);
-        ToggleInterceptCommand = new RelayCommand(ToggleInterceptAsync);
-        ToggleCapturingCommand = new RelayCommand(ToggleCapturingAsync);
-        ToggleAutoStartCaptureCommand = new RelayCommand(() =>
+        ImportArchiveCommand = Cmd(async () => await ImportArchiveAsync());
+        StartCaptureCommand = Cmd(async () => await StartCaptureAsync());
+        StopCaptureCommand = Cmd(StopCaptureAsync);
+        ToggleInterceptCommand = Cmd(ToggleInterceptAsync);
+        ToggleCapturingCommand = Cmd(ToggleCapturingAsync);
+        ToggleAutoStartCaptureCommand = Cmd(() =>
         {
             AutoStartCapture = !AutoStartCapture;
             return Task.CompletedTask;
         });
-        ToggleAutoSystemProxyOnStartCommand = new RelayCommand(() =>
+        ToggleAutoSystemProxyOnStartCommand = Cmd(() =>
         {
             AutoSystemProxyOnStart = !AutoSystemProxyOnStart;
             return Task.CompletedTask;
         });
-        ToggleDecryptHttpsCommand = new RelayCommand(() =>
+        ToggleDecryptHttpsCommand = Cmd(() =>
         {
             DecryptHttps = !DecryptHttps;
             return Task.CompletedTask;
         });
-        ToggleIgnoreServerCertificateErrorsCommand = new RelayCommand(() =>
+        ToggleIgnoreServerCertificateErrorsCommand = Cmd(() =>
         {
             IgnoreServerCertificateErrors = !IgnoreServerCertificateErrors;
             return Task.CompletedTask;
         });
-        _clearSessionsCommand = new RelayCommand(ClearSessionsAsync, () => HasSessions);
+        _clearSessionsCommand = Cmd(ClearSessionsAsync, () => HasSessions);
         ClearSessionsCommand = _clearSessionsCommand;
-        _removeSelectedSessionsCommand = new RelayCommand(RemoveSelectedSessionsAsync, () => HasSelectedSessions);
+        _removeSelectedSessionsCommand = Cmd(RemoveSelectedSessionsAsync, () => HasSelectedSessions);
         RemoveSelectedSessionsCommand = _removeSelectedSessionsCommand;
-        ToggleSystemProxyCommand = new RelayCommand(ToggleSystemProxyAsync);
-        InstallCaCommand = new RelayCommand(InstallCaAsync);
-        TrustFirefoxCaCommand = new RelayCommand(TrustFirefoxCaAsync);
-        UntrustCaCommand = new RelayCommand(UntrustCaAsync);
-        RotateCaCommand = new RelayCommand(RotateCaAsync);
-        ExportCaCommand = new RelayCommand(ExportCaAsync);
-        DeviceCaSetupCommand = new RelayCommand(DeviceCaSetupAsync);
-        OpenLoopbackExemptCommand = new RelayCommand(OpenLoopbackExemptAsync);
-        OpenSessionRetentionCommand = new RelayCommand(OpenSessionRetentionAsync);
-        OpenLoggingSettingsCommand = new RelayCommand(OpenLoggingSettingsAsync);
-        OpenAboutCommand = new RelayCommand(OpenAboutAsync);
-        OpenHttpsDecryptHostsCommand = new RelayCommand(OpenExcludedHostsAsync);
-        ExcludeHostCommand = new RelayCommand(ExcludeHostAsync);
-        ResetSettingsCommand = new RelayCommand(ResetSettingsAsync);
-        ReplayCommand = new RelayCommand(async () => await ReplaySelectedAsync());
-        LoadFromSelectedCommand = new RelayCommand(LoadFromSelectedAsync);
-        LoadIntoComposerCommand = new RelayCommand(LoadIntoComposerAsync);
-        CopyUrlCommand = new RelayCommand(CopyUrlAsync);
-        FilterByHostCommand = new RelayCommand(FilterByHostAsync);
-        FilterByProcessCommand = new RelayCommand(FilterByProcessAsync);
-        OpenExclusionSummaryCommand = new RelayCommand(OpenExcludedHostsAsync);
-        SendComposerCommand = new RelayCommand(async () => await SendComposerAsync());
-        AddAutoResponderRuleCommand = new RelayCommand(AddAutoResponderRuleAsync);
-        DeleteAutoResponderRuleCommand = new RelayCommand(DeleteAutoResponderRuleAsync);
-        UpdateAutoResponderRuleCommand = new RelayCommand(UpdateAutoResponderRuleAsync);
-        ContinueBreakpointCommand = new RelayCommand(() =>
+        ToggleSystemProxyCommand = Cmd(ToggleSystemProxyAsync);
+        InstallCaCommand = Cmd(InstallCaAsync);
+        TrustFirefoxCaCommand = Cmd(TrustFirefoxCaAsync);
+        UntrustCaCommand = Cmd(UntrustCaAsync);
+        RotateCaCommand = Cmd(RotateCaAsync);
+        ExportCaCommand = Cmd(ExportCaAsync);
+        DeviceCaSetupCommand = Cmd(DeviceCaSetupAsync);
+        OpenLoopbackExemptCommand = Cmd(OpenLoopbackExemptAsync);
+        OpenSessionRetentionCommand = Cmd(OpenSessionRetentionAsync);
+        OpenLoggingSettingsCommand = Cmd(OpenLoggingSettingsAsync);
+        OpenAboutCommand = Cmd(OpenAboutAsync);
+        OpenHttpsDecryptHostsCommand = Cmd(OpenExcludedHostsAsync);
+        ExcludeHostCommand = Cmd(ExcludeHostAsync);
+        ResetSettingsCommand = Cmd(ResetSettingsAsync);
+        ReplayCommand = Cmd(async () => await ReplaySelectedAsync());
+        LoadFromSelectedCommand = Cmd(LoadFromSelectedAsync);
+        LoadIntoComposerCommand = Cmd(LoadIntoComposerAsync);
+        CopyUrlCommand = Cmd(CopyUrlAsync);
+        FilterByHostCommand = Cmd(FilterByHostAsync);
+        FilterByProcessCommand = Cmd(FilterByProcessAsync);
+        OpenExclusionSummaryCommand = Cmd(OpenExcludedHostsAsync);
+        SendComposerCommand = Cmd(async () => await SendComposerAsync());
+        AddAutoResponderRuleCommand = Cmd(AddAutoResponderRuleAsync);
+        DeleteAutoResponderRuleCommand = Cmd(DeleteAutoResponderRuleAsync);
+        UpdateAutoResponderRuleCommand = Cmd(UpdateAutoResponderRuleAsync);
+        ContinueBreakpointCommand = Cmd(() =>
         {
             Breakpoints.Continue();
             return Task.CompletedTask;
         });
-        AbortBreakpointCommand = new RelayCommand(() =>
+        AbortBreakpointCommand = Cmd(() =>
         {
             Breakpoints.Abort();
             return Task.CompletedTask;
         });
-        ApplyEditBodyCommand = new RelayCommand(ApplyEditBodyAsync);
-        ToggleDebugLoggingCommand = new RelayCommand(ToggleDebugLoggingAsync);
-        CloseSessionDetailsCommand = new RelayCommand(CloseSessionDetailsAsync);
-        OpenToolsComposerCommand = new RelayCommand(() => OpenToolsTabAsync(0));
-        OpenToolsBreakpointsCommand = new RelayCommand(() => OpenToolsTabAsync(1));
-        OpenToolsAutoResponderCommand = new RelayCommand(() => OpenToolsTabAsync(2));
-        OpenToolsScriptsCommand = new RelayCommand(() => OpenToolsTabAsync(3));
-        ClearFiltersCommand = new RelayCommand(() =>
+        ApplyEditBodyCommand = Cmd(ApplyEditBodyAsync);
+        ToggleDebugLoggingCommand = Cmd(ToggleDebugLoggingAsync);
+        CloseSessionDetailsCommand = Cmd(CloseSessionDetailsAsync);
+        OpenToolsComposerCommand = Cmd(() => OpenToolsTabAsync(0));
+        OpenToolsBreakpointsCommand = Cmd(() => OpenToolsTabAsync(1));
+        OpenToolsAutoResponderCommand = Cmd(() => OpenToolsTabAsync(2));
+        OpenToolsScriptsCommand = Cmd(() => OpenToolsTabAsync(3));
+        ClearFiltersCommand = Cmd(() =>
         {
             SearchQuery = SessionSearch.ClearFilters(SearchQuery);
             return Task.CompletedTask;
@@ -802,7 +802,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         if (!_interception.IsRunning)
         {
-            StatusText = "Start the proxy before enabling system proxy";
+            SetGuardStatus("Start the proxy before enabling system proxy");
             return;
         }
 
@@ -1977,35 +1977,47 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             {
                 if (!_interception.IsRunning)
                 {
-                    StatusText = "Start the proxy before enabling system proxy";
+                    SetGuardStatus("Start the proxy before enabling system proxy");
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
                     return;
                 }
 
                 if (!_interception.SetSystemProxy(true, _settings.Current))
                 {
-                    StatusText =
-                        "Failed to enable system proxy (permissions, cancelled admin prompt, or unsupported desktop environment)";
+                    var detail = _interception.LastSystemProxyError;
+                    var text = string.IsNullOrWhiteSpace(detail)
+                        ? "Failed to enable system proxy (permissions, cancelled admin prompt, or unsupported desktop environment)"
+                        : "Failed to enable system proxy: " + Truncate(detail, 180);
+                    SetOutcomeStatus(text, StatusSeverity.Error, toastImportant: true);
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
                     return;
                 }
 
                 SetSystemProxyCore(true);
-                StatusText =
-                    "System proxy enabled. For Chrome: disable QUIC (--disable-quic) or H3 may bypass the proxy.";
+                SetOutcomeStatus(
+                    SystemProxyEnabledStatusMessage(),
+                    StatusSeverity.Success,
+                    toastImportant: OperatingSystem.IsLinux() || OperatingSystem.IsMacOS());
                 return;
             }
 
             if (_interception.IsRunning && _interception.SystemProxyEnabled &&
                 !_interception.SetSystemProxy(false))
             {
-                StatusText = "Failed to restore system proxy settings";
+                var detail = _interception.LastSystemProxyError;
+                var text = string.IsNullOrWhiteSpace(detail)
+                    ? "Failed to restore system proxy settings"
+                    : "Failed to restore system proxy: " + Truncate(detail, 180);
+                SetOutcomeStatus(text, StatusSeverity.Error, toastImportant: true);
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
                 return;
             }
 
             SetSystemProxyCore(false);
-            StatusText = "System proxy restored";
+            SetOutcomeStatus(
+                SystemProxyDisabledStatusMessage(),
+                StatusSeverity.Success,
+                toastImportant: OperatingSystem.IsLinux());
         }
     }
 
@@ -3370,6 +3382,61 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private static string Truncate(string text, int max)
         => text.Length <= max ? text : text[..max] + "…";
 
+    private RelayCommand Cmd(Func<Task> execute, Func<bool>? canExecute = null) =>
+        new(execute, canExecute, ReportActionFailure);
+
+    internal void ReportActionFailure(Exception ex)
+    {
+        if (ex is OperationCanceledException)
+        {
+            return;
+        }
+
+        SetOutcomeStatus(
+            "Action failed: " + Truncate(ex.Message, 160),
+            StatusSeverity.Error,
+            toastImportant: true);
+    }
+
+    private static string SystemProxyEnabledStatusMessage()
+    {
+        if (OperatingSystem.IsLinux())
+        {
+            var message =
+                "System proxy enabled. Fully quit and relaunch Chrome/Chromium so dock and already-running windows pick up the proxy.";
+            if (IsWsl())
+                message += " Windows Chrome on the host is not affected.";
+            return message;
+        }
+
+        if (OperatingSystem.IsMacOS())
+            return "System proxy enabled. Quit and reopen browsers if they were already running.";
+
+        return "System proxy enabled. For Chrome: disable QUIC (--disable-quic) or H3 may bypass the proxy.";
+    }
+
+    private static string SystemProxyDisabledStatusMessage()
+    {
+        if (OperatingSystem.IsLinux())
+            return "System proxy restored. Fully quit Chrome/Chromium if it was launched while the Inspector proxy was on.";
+
+        return "System proxy restored";
+    }
+
+    private static bool IsWsl()
+    {
+        try
+        {
+            var version = File.ReadAllText("/proc/version");
+            return version.Contains("Microsoft", StringComparison.OrdinalIgnoreCase) ||
+                   version.Contains("WSL", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? name = null)
     {
         if (Equals(field, value))
@@ -3393,7 +3460,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 }
 
-internal sealed class RelayCommand(Func<Task> execute, Func<bool>? canExecute = null) : ICommand
+internal sealed class RelayCommand(Func<Task> execute, Func<bool>? canExecute = null, Action<Exception>? onError = null) : ICommand
 {
     public bool CanExecute(object? parameter) => canExecute?.Invoke() ?? true;
 
@@ -3408,9 +3475,15 @@ internal sealed class RelayCommand(Func<Task> execute, Func<bool>? canExecute = 
             // headless flakes where export wrote the file but StatusText stayed "Ready").
             await execute();
         }
-        catch
+        catch (Exception ex)
         {
+            if (ex is OperationCanceledException)
+            {
+                return;
+            }
+
             // UI commands must not tear down the process (async void).
+            onError?.Invoke(ex);
         }
     }
 

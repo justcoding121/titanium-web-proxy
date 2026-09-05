@@ -25,6 +25,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     ];
 
     private readonly IProcessRunner _runner;
+    private readonly bool _applyBrowserLaunchHooks;
     private readonly Dictionary<string, string?> _originalEnv = new(StringComparer.Ordinal);
     private GnomeSnapshot? _gnome;
     private KdeSnapshot? _kde;
@@ -34,9 +35,10 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     private readonly EventHandler _processExitHandler;
     private readonly UnhandledExceptionEventHandler _unhandledExceptionHandler;
 
-    public LinuxSystemProxyBackend(IProcessRunner? runner = null)
+    public LinuxSystemProxyBackend(IProcessRunner? runner = null, bool applyBrowserLaunchHooks = true)
     {
         _runner = runner ?? new ProcessRunner();
+        _applyBrowserLaunchHooks = applyBrowserLaunchHooks;
         _processExitHandler = (_, _) => RestoreOriginalSettings();
         _unhandledExceptionHandler = (_, _) => RestoreOriginalSettings();
         AppDomain.CurrentDomain.ProcessExit += _processExitHandler;
@@ -49,41 +51,129 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
 
         var gnome = HasGnome();
         var kde = HasKde();
+        Exception? desktopError = null;
 
+        // Apply every desktop path that exists. GNOME verify must not skip XFCE/KDE/Chrome hooks.
         if (gnome)
-            ApplyGnome(hostname, port, protocolType, proxyOverride);
+        {
+            try
+            {
+                ApplyGnome(hostname, port, protocolType, proxyOverride);
+            }
+            catch (Exception ex)
+            {
+                desktopError = ex;
+            }
+        }
 
         if (kde)
-            ApplyKde(hostname, port, protocolType, proxyOverride);
+        {
+            try
+            {
+                ApplyKde(hostname, port, protocolType, proxyOverride);
+                desktopError = null;
+            }
+            catch (Exception ex)
+            {
+                desktopError ??= ex;
+            }
+        }
 
         // Process env alone does not affect Chrome/Firefox already running in the desktop session.
-        ApplyProcessEnvironment(hostname, port, protocolType, proxyOverride);
+        try
+        {
+            ApplyProcessEnvironment(hostname, port, protocolType, proxyOverride);
+        }
+        catch
+        {
+            // best-effort
+        }
 
-        if (!gnome && !kde)
+        // XFCE/i3/WSLg dock Chrome ignores GNOME gsettings; pin Chromium-family via policy + .desktop Exec.
+        var hooksApplied = false;
+        if (_applyBrowserLaunchHooks)
+        {
+            try
+            {
+                LinuxBrowserLaunchProxy.Apply(hostname, port);
+                hooksApplied = true;
+            }
+            catch
+            {
+                // best-effort
+            }
+        }
+
+        if (desktopError is not null && !hooksApplied)
+            throw desktopError;
+
+        if (!gnome && !kde && !hooksApplied)
         {
             throw new InvalidOperationException(
-                "Linux system proxy requires GNOME gsettings or KDE kwriteconfig; " +
-                "only this process's http(s)_proxy environment was updated.");
+                "Linux system proxy requires GNOME gsettings, KDE kwriteconfig, or writable " +
+                "Chrome/Chromium desktop/policy files; only this process's http(s)_proxy " +
+                "environment was updated.");
         }
     }
 
     public void RemoveProxy(ProxyProtocolType protocolType, bool saveOriginalConfig = true)
     {
-        if (saveOriginalConfig) EnsureSnapshot();
+        try
+        {
+            if (saveOriginalConfig) EnsureSnapshot();
+        }
+        catch
+        {
+            // continue disable even if snapshot fails
+        }
 
         // Full disable is the practical Linux equivalent of removing http/https entries.
-        if (HasGnome())
+        try
         {
-            GsettingsSet(GnomeSystemProxySchema, "mode", "'none'");
+            if (HasGnome())
+            {
+                GsettingsSet(GnomeSystemProxySchema, "mode", "'none'");
+                GsettingsSet(GnomeSystemProxyHttpSchema, "enabled", "false");
+            }
+        }
+        catch
+        {
+            // best-effort
         }
 
-        if (HasKde())
+        try
         {
-            KdeWrite(KdeProxyTypeKey, "0");
-            KdeReload();
+            if (HasKde())
+            {
+                KdeWrite(KdeProxyTypeKey, "0");
+                KdeReload();
+            }
+        }
+        catch
+        {
+            // best-effort
         }
 
-        ClearProcessProxyEnv();
+        try
+        {
+            ClearProcessProxyEnv();
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        if (_applyBrowserLaunchHooks)
+        {
+            try
+            {
+                LinuxBrowserLaunchProxy.Clear();
+            }
+            catch
+            {
+                // best-effort
+            }
+        }
     }
 
     public void DisableAllProxy()
@@ -96,33 +186,67 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     {
         if (!_hasSnapshot) return;
 
-        if (_gnome is not null && HasGnome())
+        try
         {
-            GsettingsSet(GnomeSystemProxySchema, "mode", QuoteGsettings(_gnome.Mode));
-            GsettingsSet(GnomeSystemProxyHttpSchema, "host", QuoteGsettings(_gnome.HttpHost));
-            GsettingsSet(GnomeSystemProxyHttpSchema, "port", _gnome.HttpPort.ToString());
-            GsettingsSet(GnomeSystemProxyHttpsSchema, "host", QuoteGsettings(_gnome.HttpsHost));
-            GsettingsSet(GnomeSystemProxyHttpsSchema, "port", _gnome.HttpsPort.ToString());
-            GsettingsSet(GnomeSystemProxySchema, "ignore-hosts", _gnome.IgnoreHosts);
-        }
-
-        if (_kde is not null && HasKde())
-        {
-            KdeWrite(KdeProxyTypeKey, _kde.ProxyType);
-            KdeWrite("httpProxy", _kde.HttpProxy);
-            KdeWrite("httpsProxy", _kde.HttpsProxy);
-            KdeWrite("NoProxyFor", _kde.NoProxyFor);
-            KdeReload();
-        }
-
-        foreach (var key in EnvKeys)
-        {
-            if (_originalEnv.TryGetValue(key, out var value))
+            if (_gnome is not null && HasGnome())
             {
-                if (value is null)
-                    Environment.SetEnvironmentVariable(key, null);
-                else
-                    Environment.SetEnvironmentVariable(key, value);
+                GsettingsSet(GnomeSystemProxySchema, "mode", QuoteGsettings(_gnome.Mode));
+                GsettingsSet(GnomeSystemProxyHttpSchema, "host", QuoteGsettings(_gnome.HttpHost));
+                GsettingsSet(GnomeSystemProxyHttpSchema, "port", _gnome.HttpPort.ToString());
+                GsettingsSet(GnomeSystemProxyHttpSchema, "enabled", _gnome.HttpEnabled ? "true" : "false");
+                GsettingsSet(GnomeSystemProxyHttpsSchema, "host", QuoteGsettings(_gnome.HttpsHost));
+                GsettingsSet(GnomeSystemProxyHttpsSchema, "port", _gnome.HttpsPort.ToString());
+                GsettingsSet(GnomeSystemProxySchema, "ignore-hosts", _gnome.IgnoreHosts);
+            }
+        }
+        catch
+        {
+            // process-exit restore must not throw
+        }
+
+        try
+        {
+            if (_kde is not null && HasKde())
+            {
+                KdeWrite(KdeProxyTypeKey, _kde.ProxyType);
+                KdeWrite("httpProxy", _kde.HttpProxy);
+                KdeWrite("httpsProxy", _kde.HttpsProxy);
+                KdeWrite("NoProxyFor", _kde.NoProxyFor);
+                KdeReload();
+            }
+        }
+        catch
+        {
+            // process-exit restore must not throw
+        }
+
+        try
+        {
+            foreach (var key in EnvKeys)
+            {
+                if (_originalEnv.TryGetValue(key, out var value))
+                {
+                    if (value is null)
+                        Environment.SetEnvironmentVariable(key, null);
+                    else
+                        Environment.SetEnvironmentVariable(key, value);
+                }
+            }
+        }
+        catch
+        {
+            // process-exit restore must not throw
+        }
+
+        if (_applyBrowserLaunchHooks)
+        {
+            try
+            {
+                LinuxBrowserLaunchProxy.Clear();
+            }
+            catch
+            {
+                // process-exit restore must not throw
             }
         }
 
@@ -182,6 +306,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
                 GsettingsGet(GnomeSystemProxySchema, "mode")?.Trim('\'', '"') ?? "none",
                 GsettingsGet(GnomeSystemProxyHttpSchema, "host")?.Trim('\'', '"') ?? string.Empty,
                 ParseInt(GsettingsGet(GnomeSystemProxyHttpSchema, "port")),
+                ParseGsettingsBool(GsettingsGet(GnomeSystemProxyHttpSchema, "enabled")),
                 GsettingsGet(GnomeSystemProxyHttpsSchema, "host")?.Trim('\'', '"') ?? string.Empty,
                 ParseInt(GsettingsGet(GnomeSystemProxyHttpsSchema, "port")),
                 GsettingsGet(GnomeSystemProxySchema, "ignore-hosts") ?? "[]");
@@ -208,6 +333,8 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         {
             GsettingsSet(GnomeSystemProxyHttpSchema, "host", QuoteGsettings(hostname));
             GsettingsSet(GnomeSystemProxyHttpSchema, "port", port.ToString());
+            // GIO/Chrome treat mode=manual with enabled=false as DIRECT (no sessions in Inspector).
+            GsettingsSet(GnomeSystemProxyHttpSchema, "enabled", "true");
         }
 
         if ((protocolType & ProxyProtocolType.Https) != 0)
@@ -243,6 +370,13 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
             {
                 throw new InvalidOperationException(
                     $"Failed to apply GNOME HTTP proxy (got {host}:{appliedPort}, expected {hostname}:{port}).");
+            }
+
+            if (!ParseGsettingsBool(GsettingsGet(GnomeSystemProxyHttpSchema, "enabled")))
+            {
+                throw new InvalidOperationException(
+                    "Failed to apply GNOME HTTP proxy (org.gnome.system.proxy.http enabled is still false; " +
+                    "Chrome/GIO treat that as DIRECT and no sessions appear).");
             }
         }
 
@@ -405,6 +539,12 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     private static int ParseInt(string? text) =>
         int.TryParse(text?.Trim(), out var n) ? n : 0;
 
+    private static bool ParseGsettingsBool(string? text)
+    {
+        var value = text?.Trim().Trim('\'', '"');
+        return value is "true" or "True" or "1";
+    }
+
     private static string ParseGsettingsArray(string output)
     {
         // e.g. ['localhost', '127.0.0.1']
@@ -462,7 +602,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     }
 
     private sealed record GnomeSnapshot(
-        string Mode, string HttpHost, int HttpPort, string HttpsHost, int HttpsPort, string IgnoreHosts);
+        string Mode, string HttpHost, int HttpPort, bool HttpEnabled, string HttpsHost, int HttpsPort, string IgnoreHosts);
 
     private sealed record KdeSnapshot(string ProxyType, string HttpProxy, string HttpsProxy, string NoProxyFor);
 }

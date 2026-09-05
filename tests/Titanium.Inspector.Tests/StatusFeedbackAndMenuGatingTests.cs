@@ -1,6 +1,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.ViewModels;
+using Titanium.Web.Proxy;
 
 namespace Titanium.Inspector.Tests;
 
@@ -250,6 +251,7 @@ public class StatusFeedbackAndMenuGatingTests
             vm.BindPort = 0;
             vm.StartCaptureCommand.Execute(null);
             await WaitUntil(() => interception.IsRunning);
+            notifier.Calls.Clear();
 
             vm.SetTransientStatus(
                 "Titanium Inspector is up to date (Stable).",
@@ -297,4 +299,73 @@ public class StatusFeedbackAndMenuGatingTests
         command.Execute(null);
         await Task.Delay(50);
     }
+
+    [TestMethod]
+    public async Task RelayCommand_Exception_ToastsErrorAndDoesNotThrow()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-cmd-fail-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var notifier = new RecordingStatusNotifier();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(new SessionRegistry()),
+                new SessionRegistry(),
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()),
+                statusNotifier: notifier);
+
+            var cmd = new RelayCommand(
+                () => throw new InvalidOperationException("boom-test"),
+                null,
+                vm.ReportActionFailure);
+            cmd.Execute(null);
+            await Task.Delay(80);
+
+            Assert.IsTrue(
+                notifier.Calls.Exists(c =>
+                    c.Severity == StatusSeverity.Error && c.Message.Contains("boom-test", StringComparison.Ordinal)),
+                "Expected error toast for a failed menu/command action");
+            StringAssert.Contains(vm.StatusText, "Action failed");
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task SetSystemProxy_WhenControllerReportsFailure_ReturnsFalseWithoutThrowing()
+    {
+        using var interception = new InterceptionService(new FailingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+        };
+        await interception.StartAsync(System.Net.IPAddress.Loopback, 0);
+        try
+        {
+            Assert.IsFalse(interception.SetSystemProxy(true));
+            Assert.AreEqual("forced system proxy failure", interception.LastSystemProxyError);
+        }
+        finally
+        {
+            interception.EnsureShutdown();
+        }
+    }
+}
+
+internal sealed class FailingSystemProxyController : ISystemProxyController
+{
+    public SystemProxyChangeResult SetAsSystemProxy(
+        Titanium.Web.Proxy.ProxyServer proxy,
+        Titanium.Web.Proxy.Models.ExplicitProxyEndPoint endPoint,
+        InspectorSettings settings) =>
+        SystemProxyChangeResult.Fail("forced system proxy failure");
+
+    public SystemProxyChangeResult RestoreOriginalProxySettings(Titanium.Web.Proxy.ProxyServer proxy) =>
+        SystemProxyChangeResult.Fail("forced system proxy failure");
 }
