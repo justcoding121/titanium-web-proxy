@@ -141,6 +141,8 @@ Typically at or above **YARP**; ahead of **nginx** on H2/H3→H1 reverse, near p
 - [Benchmarks](benchmarks/Titanium.Web.Proxy.Benchmarks): loopback throughput and allocation (BenchmarkDotNet)
 - [RPS saturation probe](tools/RpsLoadProbe): concurrent breaking-point RPS
 - [Inspector desktop probe](tools/InspectorDesktopProbe): on-demand System proxy / CA / browser UX (not CI)
+- [CLI QA probe](tools/CliQaProbe): on-demand CLI help / dialects / live `run` / optional OS service (not CI)
+- [Local QA recipe](tools/LOCAL-QA.md): solo per-OS checklist (E2E + both probes)
 - [API documentation](https://titaniumproxy.com/api/Titanium.Web.Proxy.ProxyServer.html)
 
 ### Screenshots

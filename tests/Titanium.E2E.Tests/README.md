@@ -35,6 +35,9 @@ dotnet test tests/Titanium.E2E.Tests -c Release --filter "TestCategory=E2E-UI-Wi
 
 # On-demand desktop UI + OS dialogs (not CI) — see tools/InspectorDesktopProbe/README.md
 dotnet run --project tools/InspectorDesktopProbe -- all
+
+# On-demand CLI process checklist (not CI) — see tools/CliQaProbe/README.md and tools/LOCAL-QA.md
+dotnet run --project tools/CliQaProbe -- all
 ```
 
 ### Local Linux UI via Docker

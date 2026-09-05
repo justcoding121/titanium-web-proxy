@@ -221,6 +221,7 @@ BenchmarkDotNet.Artifacts/
 tools/ColdStartProbe/results/
 tools/ChromeLoadProbe/results/
 tools/InspectorDesktopProbe/results/
+tools/CliQaProbe/results/
 
 # Local RPS / protocol probe scratch (never commit)
 .tmp-rps/
