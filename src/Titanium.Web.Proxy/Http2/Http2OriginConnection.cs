@@ -120,9 +120,9 @@ internal sealed class Http2OriginConnection : IDisposable
     /// <summary>
     ///     Early-grow threshold for TLS origins (ALPN <c>h2</c>). SoftGrow=4 SoftPick=SETTINGS
     ///     did not beat SoftGrow=16 on Mac H3→H2 (recheck ~0.80× vs SoftGrow=16 shape ~0.87×)
-    ///     and softened H1→H2. SoftGrow=8 rejected (~0.71× H1→H2). SoftGrow=16 + SoftPick at
-    ///     SETTINGS/gate avoids Soft=4-as-pick-cap <c>TryPickAny</c> cliff while keeping dual-TLS
-    ///     fan-out modest. Cap remains
+    ///     and softened H1→H2. SoftGrow=8 rejected (~0.71× H1→H2). SoftGrow=24 no H1 lift
+    ///     (~0.74×). SoftGrow=16 + SoftPick at SETTINGS/gate avoids Soft=4-as-pick-cap
+    ///     <c>TryPickAny</c> cliff while keeping dual-TLS fan-out modest. Cap remains
     ///     <see cref="ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority"/>.
     /// </summary>
     internal const int PoolGrowActiveStreamThresholdTls = 16;
