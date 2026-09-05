@@ -1,6 +1,6 @@
 # Performance Local Lab
 
-Local Windows laptop debugging / cool A/B tables. **Not publishable** � do not compare these absolutes to [Performance](Performance) GHA tables. Use cool paired ratios as a gate, then remasure on matched Windows+Linux GHA and paste CI medians onto Performance.
+Local Windows laptop debugging / cool A/B tables. **Not publishable** � do not compare these absolutes to [Performance](Performance) GHA tables. Use cool paired ratios as a gate, then remeasure on matched Windows+Linux GHA and paste CI medians onto Performance.
 
 Playbook (harness, dumps, stage timing, Memory techniques) stays on [Performance Profiling](Performance-Profiling).
 
@@ -28,7 +28,7 @@ Local debug setup and historical High-perf / cool-paired tables. **Do not paste 
 | Harness | RpsLoadProbe Release; arms run **sequentially**                 |
 
 
-This box is **8 logical / ~32 GiB** — not the 4 vCPU / 16 GiB GHA class. Treat ratios as the local gate; remasure on CI before claiming a publishable win.
+This box is **8 logical / ~32 GiB** — not the 4 vCPU / 16 GiB GHA class. Treat ratios as the local gate; remeasure on CI before claiming a publishable win.
 
 **Cool** = ~2 min idle, then paired A/B (alternate who goes first; **mean of both orders @ c=32**) — **authoritative local gate**; reverse tiny-GET / body cells below use those cool absolutes when cited. **Heated** = long sequential matrix (thermal skew). **🥇** = higher cool sustain in that row (or heated sustain only when no cool pair exists — noted).
 
@@ -82,7 +82,7 @@ Reverse TWP/YARP cells for cool-audited arms are **cool paired means** (see note
 **TWP Memory / CPU** (heated 1-rep @ tip, `laptop-matrix-memory-20260824/`; warmup 2s / measure 8s; c=8–64): filled from compare-same / compare-bridges / compare-mitm peak-RPS step. Cool RPS cells unchanged. H2→H1 ~190–207 MiB (was ~425 laptop / ~848 CI); no outsized Memory arms vs prior H2 bag leak.
 Windows reverse tiny-GET: base matrix **2026-08-20** High-perf, Linux-matched harness (warmup 2s / measure 8s; concurrency 8, 16, 32, 64; median of 3 repeats except H2 TLS→H3 and H3→H1/H2, which have 2). CSVs under `tools/RpsLoadProbe/results/windows-20260820/` (`compare-same`, `compare-bridges`). MITM and heavier reverse: 1-repeat follow-up under `windows-20260820-quick/`. Absolute RPS swings with sequential-arm heat; prefer TWP÷YARP ratios.
 
-**2026-08-21 remasure (through exact-body + H3 QPACK-normalized names):** H1 plain, H1 TLS, H1→H2, H3→H1, H3→H2 refreshed as mean of both arm orders at c=32 (`win-final-`*). Exact-size H2 origin body materialize (no MemoryStream+ToArray) and `HeaderNamesAreHttp2Normalized` on the H3 fast Request. Other reverse Windows rows still **2026-08-20** unless noted.
+**2026-08-21 remeasure (through exact-body + H3 QPACK-normalized names):** H1 plain, H1 TLS, H1→H2, H3→H1, H3→H2 refreshed as mean of both arm orders at c=32 (`win-final-`*). Exact-size H2 origin body materialize (no MemoryStream+ToArray) and `HeaderNamesAreHttp2Normalized` on the H3 fast Request. Other reverse Windows rows still **2026-08-20** unless noted.
 
 **2026-08-22 matrix fill (missing plain cells):** Library fix so cleartext-listen reverse (`DecryptSsl=false`) honors `ForwardCleartext=false` as origin HTTPS (H1 plain→HTTPS). New probe arms: `reverse-http1-to-https` / `yarp-reverse-http1-to-https`, `http-mitm` (explicit plain→plain). Full Windows `compare-same` + `compare-bridges` + plain twins under `tools/RpsLoadProbe/results/windows-20260822-matrix/` (1-rep; warmup 2s / measure 8s; c=8,16,32,64).
 
@@ -90,7 +90,7 @@ Windows reverse tiny-GET: base matrix **2026-08-20** High-perf, Linux-matched ha
 
 **Load generators:** Reverse inbound H3 arms use `**dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`) after dual-listen reverse H3. MITM H3→H2 / H3→H3 / H3→H1 plain reuse the same dual-listen transparent reverse path as their reverse twins (`ForwardCleartext` / decrypt knobs). Older UDP-only `quic-http3` MITM H3→H1 TLS numbers are dual-crypto extras (`mitm-http3-to-http1`).
 
-**Matched HttpClient TWP÷YARP — table cells are cool absolutes where cited:** **parity audit** `win-parity-audit-20260822-004214/` (both orders @ c=32): H1 plain **41,390 / 38,772** ≈ **1.07×**; H1 TLS **35,205 / 29,750** ≈ **1.18×**; H1→H3 **21,819 / 20,712** ≈ **1.05×**; H3→H3 **26,299 / 14,942** ≈ **1.76×** (YARP soft — treat absolute cautiously). **2026-08-22 cool paste** `win-cool-paste-20260822-063226/` (both orders @ c=32): H1→H2 **25,540 / 24,920** ≈ **1.02×**; H1 plain→HTTPS **30,844 / 30,621** ≈ **1.01×**; h2c→H3 **27,493 / 24,535** ≈ **1.12×**; H2 TLS→H3 **30,813 / 24,039** ≈ **1.28×**; h2c→H1 **46,517 / 42,994** ≈ **1.08×**; H3→H1 **22,325 / 23,773** ≈ **0.94×**; H3→H2 **22,297 / 21,914** ≈ **1.02×**. **2026-08-23 soft coolish (both orders @ c=32, after session-lite H2/H3 gate):** H3→H1 ≈ **1.09×**; h2c→H1 ≈ **1.05×**; H1→H3 ≈ **1.25×**. Published CI Win bridges @ `11e32f1c` still show those three ≤1.00× — tip remasure @ `62e5efcd` in flight. TWP-led H2 same-protocol rows unchanged (h2c↔h2c ≈ **1.17×**, etc.).
+**Matched HttpClient TWP÷YARP — table cells are cool absolutes where cited:** **parity audit** `win-parity-audit-20260822-004214/` (both orders @ c=32): H1 plain **41,390 / 38,772** ≈ **1.07×**; H1 TLS **35,205 / 29,750** ≈ **1.18×**; H1→H3 **21,819 / 20,712** ≈ **1.05×**; H3→H3 **26,299 / 14,942** ≈ **1.76×** (YARP soft — treat absolute cautiously). **2026-08-22 cool paste** `win-cool-paste-20260822-063226/` (both orders @ c=32): H1→H2 **25,540 / 24,920** ≈ **1.02×**; H1 plain→HTTPS **30,844 / 30,621** ≈ **1.01×**; h2c→H3 **27,493 / 24,535** ≈ **1.12×**; H2 TLS→H3 **30,813 / 24,039** ≈ **1.28×**; h2c→H1 **46,517 / 42,994** ≈ **1.08×**; H3→H1 **22,325 / 23,773** ≈ **0.94×**; H3→H2 **22,297 / 21,914** ≈ **1.02×**. **2026-08-23 soft coolish (both orders @ c=32, after session-lite H2/H3 gate):** H3→H1 ≈ **1.09×**; h2c→H1 ≈ **1.05×**; H1→H3 ≈ **1.25×**. Published CI Win bridges @ `11e32f1c` still show those three ≤1.00× — tip remeasure @ `62e5efcd` in flight. TWP-led H2 same-protocol rows unchanged (h2c↔h2c ≈ **1.17×**, etc.).
 
 **Attempted H1→H3 micro-opts (2026-08-22, reverted):** Lowercasing H1 request names before QPACK + buffering tiny H3 origin bodies **without draining to FIN** **regressed** cool H1→H3 from ~1.13× to ~0.65× — kept out. **2026-08-23 kept:** same ≤64 KiB eager materialize in `ForwardOverQuicAsync` **plus drain-to-FIN before Dispose** (else RST poisons the QUIC pool → handshake-per-request; first attempt ~1.16×→~0.7×). Cool both orders ≈ **1.03–1.23×** (`cool-h3-origin-eager64-drain-20260823/`). Smoke H2→H3 / H3→H3 still lead; H3→H1 unchanged (~0.98× TY).
 
@@ -121,7 +121,7 @@ nginx/Windows is a limited port — use it for **same-OS** comparison only, not 
 
 nginx/Windows collapses on large reverse bodies in this harness; treat as same-OS only.
 
-**2026-08-22 cool remasure (bodies) — H2→H1 cells are cool means** (`win-bodies-coalesce288-20260822/`, both orders @ c=32): 64 KiB **7,744 / 6,844** ≈ **1.13×** → TWP leads; 256 KiB **1,935 / 2,179** ≈ **0.89×** → YARP leads. H1 TLS→H1 64 KiB still heated (marker follows heated). H3→H1 64 KiB cool ≈ **0.96×** → YARP leads. 256 KiB H1/H3: heated → YARP leads.
+**2026-08-22 cool remeasure (bodies) — H2→H1 cells are cool means** (`win-bodies-coalesce288-20260822/`, both orders @ c=32): 64 KiB **7,744 / 6,844** ≈ **1.13×** → TWP leads; 256 KiB **1,935 / 2,179** ≈ **0.89×** → YARP leads. H1 TLS→H1 64 KiB still heated (marker follows heated). H3→H1 64 KiB cool ≈ **0.96×** → YARP leads. 256 KiB H1/H3: heated → YARP leads.
 
 ### POST 64 KiB request + 64 KiB response
 
@@ -135,7 +135,7 @@ nginx/Windows collapses on large reverse bodies in this harness; treat as same-O
 | HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **1,973** | **2,001** | *Not possible* | *Not possible* | **1,802**    | **1,893** |
 
 
-H1 POST: TWP leads (heated and cool). H2 POST: YARP leads — heated ≈ **0.74×**, cool ≈ **~0.88–0.95×** with c=1 TWP ahead (~**1.2×**); residual is multiplex scaling, not single-stream cost. **H3 POST (2026-08-22):** `UpdateContentLength` on streamed uploads stamped CL=0 (`ab16a871`). Heated remasure `sustain0-verify/h3-post/` (c=8–64): TWP sustain **1,973** / YARP **1,802** ≈ **1.09×**.
+H1 POST: TWP leads (heated and cool). H2 POST: YARP leads — heated ≈ **0.74×**, cool ≈ **~0.88–0.95×** with c=1 TWP ahead (~**1.2×**); residual is multiplex scaling, not single-stream cost. **H3 POST (2026-08-22):** `UpdateContentLength` on streamed uploads stamped CL=0 (`ab16a871`). Heated remeasure `sustain0-verify/h3-post/` (c=8–64): TWP sustain **1,973** / YARP **1,802** ≈ **1.09×**.
 
 ### Lossy / high-RTT (H2 HOL / H3 packet loss)
 
@@ -166,7 +166,7 @@ H1 stays usable; H2 collapses under connection stalls (HOL). **H3 is the protoco
 | Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | **9** | **590** | *Not possible* | *Not possible* | 🥇 **2,455** | **2,455** |
 | Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | 🥇 **38,235** | **38,823** | **18,251** | **19,054** | **37,803** | **38,454** |
 
-Slow consumer is sleep-bound (~16 × 8 ms per 256 KiB); H1/H2 sit in the same band. **H3 slow-consumer (2026-08-22):** fast path closed the origin socket for CL>16 KiB without `StreamBodyWriter` (`36d21f67`); remasure `sustain0-verify/h3-slow/` matches YARP at **248** sustain. Early-response H1: TWP leads (~1.25× YARP) — sequential H1 still finishes the exchange quickly when the origin answers after 8 KiB. **H3 early-response (2026-08-22):** cool mean ≈ **1.21×** YARP after overlapping origin upload with `ReceiveResponse` / `StreamBodyWriter` (`fix-early-tls/`). Early-response H2 and duplex H2: YARP leads on heated matrix; TWP H2↔H2 duplex sustain **9** vs peak **590** (errors at higher concurrency) vs YARP **2,455**. WebSocket echo: TWP leads (~1.01× YARP); nginx/Windows same-OS only.
+Slow consumer is sleep-bound (~16 × 8 ms per 256 KiB); H1/H2 sit in the same band. **H3 slow-consumer (2026-08-22):** fast path closed the origin socket for CL>16 KiB without `StreamBodyWriter` (`36d21f67`); remeasure `sustain0-verify/h3-slow/` matches YARP at **248** sustain. Early-response H1: TWP leads (~1.25× YARP) — sequential H1 still finishes the exchange quickly when the origin answers after 8 KiB. **H3 early-response (2026-08-22):** cool mean ≈ **1.21×** YARP after overlapping origin upload with `ReceiveResponse` / `StreamBodyWriter` (`fix-early-tls/`). Early-response H2 and duplex H2: YARP leads on heated matrix; TWP H2↔H2 duplex sustain **9** vs peak **590** (errors at higher concurrency) vs YARP **2,455**. WebSocket echo: TWP leads (~1.01× YARP); nginx/Windows same-OS only.
 
 ### TLS termination cost (H1 TLS → cleartext origin)
 
