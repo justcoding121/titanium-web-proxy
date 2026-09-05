@@ -245,12 +245,22 @@ public class UnixCertificateTrustTests
     }
 
     [TestMethod]
+    [TestCategory("E2E-Slow")]
     [TestCategory("E2E-UI-Linux")]
     public void TrustAndUntrustUserSsl_LinuxNss_RemovesAliasNickname()
     {
         if (!OperatingSystem.IsLinux())
         {
             Assert.Inconclusive("Linux-only");
+            return;
+        }
+
+        // Unit ModuleInit sets TITANIUM_SKIP_ROOT_STORE_UI=1 — refuse live NSS mutation.
+        if (CertificateManager.AreInteractiveRootStoreMutationsSuppressed)
+        {
+            Assert.Inconclusive(
+                "Skipped: live NSS mutation blocked while interactive root-store UI is suppressed " +
+                "(unset TITANIUM_SKIP_ROOT_STORE_UI and SuppressInteractiveRootStoreMutations to run)");
             return;
         }
 
@@ -544,12 +554,21 @@ public class FirefoxCertificateTrustTests
     }
 
     [TestMethod]
+    [TestCategory("E2E-Slow")]
     [TestCategory("E2E-UI-Linux")]
     public void TrustAndUntrustDefaultProfile_Linux_RoundTripsWhenFirefoxIdle()
     {
         if (!OperatingSystem.IsLinux())
         {
             Assert.Inconclusive("Linux-only");
+            return;
+        }
+
+        if (CertificateManager.AreInteractiveRootStoreMutationsSuppressed)
+        {
+            Assert.Inconclusive(
+                "Skipped: live Firefox NSS mutation blocked while interactive root-store UI is suppressed " +
+                "(unset TITANIUM_SKIP_ROOT_STORE_UI and SuppressInteractiveRootStoreMutations to run)");
             return;
         }
 

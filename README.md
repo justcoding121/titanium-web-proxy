@@ -140,6 +140,7 @@ Typically at or above **YARP**; ahead of **nginx** on H2/H3→H1 reverse, near p
 - [Windows service](examples/Titanium.Web.Proxy.Examples.WindowsService)
 - [Benchmarks](benchmarks/Titanium.Web.Proxy.Benchmarks): loopback throughput and allocation (BenchmarkDotNet)
 - [RPS saturation probe](tools/RpsLoadProbe): concurrent breaking-point RPS
+- [Inspector desktop probe](tools/InspectorDesktopProbe): on-demand System proxy / CA / browser UX (not CI)
 - [API documentation](https://titaniumproxy.com/api/Titanium.Web.Proxy.ProxyServer.html)
 
 ### Screenshots

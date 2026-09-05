@@ -620,12 +620,21 @@ public class LinuxBrowserLaunchProxyTests
     }
 
     [TestMethod]
+    [TestCategory("E2E-Slow")]
     [TestCategory("E2E-UI-Linux")]
     public void TrustUserSsl_Linux_SharesNssDbUsedByChromeAndEdge()
     {
         if (!OperatingSystem.IsLinux())
         {
             Assert.Inconclusive("Linux-only");
+            return;
+        }
+
+        if (CertificateManager.AreInteractiveRootStoreMutationsSuppressed)
+        {
+            Assert.Inconclusive(
+                "Skipped: live Chrome/Edge NSS mutation blocked while interactive root-store UI is suppressed " +
+                "(unset TITANIUM_SKIP_ROOT_STORE_UI and SuppressInteractiveRootStoreMutations to run)");
             return;
         }
 

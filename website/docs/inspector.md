@@ -170,6 +170,8 @@ Notes:
 - Enabling **System proxy** on macOS turns off PAC, WPAD, and SOCKS so Firefox (CFNetwork) sees the HTTP(S) proxy; previous PAC/SOCKS settings are restored when System proxy is turned off. Firefox that was already open may need a restart.
 - KDE proxy reload is best-effort; a session restart may be needed if apps do not pick up changes.
 - If user-level CA install fails, Inspector offers an adaptive recovery dialog (tools / Keychain / admin).
+- **Contributors:** unit/integration tests never open OS cert UI (`TITANIUM_SKIP_ROOT_STORE_UI=1`). For live System proxy / Install CA / browsers / Store apps UX, run [`tools/InspectorDesktopProbe`](../../tools/InspectorDesktopProbe/README.md) (`dotnet run --project tools/InspectorDesktopProbe -- all`). Results: `tools/InspectorDesktopProbe/results/last-run.json`.
+
 ## Other features
 
 - Session grid: method, status, host, URL, Protocol, duration, Wait (TTFB), size, process. Right-click menu: Replay, Load into Composer, Export selected HAR/archive, Copy URL.

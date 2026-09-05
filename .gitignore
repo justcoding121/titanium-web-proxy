@@ -220,6 +220,7 @@ BenchmarkDotNet.Artifacts/
 # Cold-start A/B run output (these harnesses are run manually, not in CI)
 tools/ColdStartProbe/results/
 tools/ChromeLoadProbe/results/
+tools/InspectorDesktopProbe/results/
 
 # Local RPS / protocol probe scratch (never commit)
 .tmp-rps/

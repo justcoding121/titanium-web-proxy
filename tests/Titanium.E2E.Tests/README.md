@@ -13,7 +13,7 @@ Process-level and service-level end-to-end coverage for CLI, CLI+Plus, and Inspe
 | `E2E-UI-Plus-Dashboard` | Yes (`ui-portable` + Windows `build`) | Playwright Chromium vs Plus HTML dashboard | Yes (`ui-portable` on Windows/Linux/macOS + dedicated `inspector-ui-macos`) | ViewModel commands, feature sanity (capture/proxy/CA/tools/composer), elevate-CA UX |
 | `E2E-UI-Mac` / `E2E-UI-Linux` | Yes (macOS / Linux runners only) | System-proxy backend factory selection for that OS |
 | `E2E-UI-Window` | No (opt-in) | Windows FlaUI / real HWND smoke against `TitaniumInspector.exe` |
-| `E2E-Slow` | No | Chrome/Firefox + system proxy (WinINET / macOS networksetup); Firefox tests are macOS-only |
+| `E2E-Slow` | No | Chrome/Firefox + system proxy (WinINET / macOS networksetup); Firefox tests are macOS-only. Shares helpers with `tools/InspectorDesktopProbe`. |
 
 **Happy path (all three products):** `HappyPathSanityE2ETests` — Inspector sessions in the UI collection, CLI explicit MITM + debug log file, CLI+Plus control-plane auth + MITM + debug log.
 
@@ -32,6 +32,9 @@ dotnet test tests/Titanium.E2E.Tests -c Release --filter "TestCategory=E2E-Slow"
 
 # Optional real Inspector window (Windows)
 dotnet test tests/Titanium.E2E.Tests -c Release --filter "TestCategory=E2E-UI-Window"
+
+# On-demand desktop UI + OS dialogs (not CI) — see tools/InspectorDesktopProbe/README.md
+dotnet run --project tools/InspectorDesktopProbe -- all
 ```
 
 ### Local Linux UI via Docker

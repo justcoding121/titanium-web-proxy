@@ -83,11 +83,12 @@ public class InspectorFirefoxSystemProxyE2ETests
             return;
         }
 
+        RootStoreUiTestGuards.RequireInteractiveRootTrustAvailable();
+
         using var interception = new InterceptionService();
         await interception.StartAsync(IPAddress.Loopback, 0);
 
         var previousSuppress = CertificateManager.SuppressInteractiveRootStoreMutations;
-        CertificateManager.SuppressInteractiveRootStoreMutations = false;
         try
         {
             var trusted = interception.InstallRootCertificate(machineStore: false);

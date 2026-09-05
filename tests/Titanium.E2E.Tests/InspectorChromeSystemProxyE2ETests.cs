@@ -3,6 +3,7 @@ using System.Net;
 using System.Runtime.InteropServices;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.E2E.Tests.Harness;
+using Titanium.Inspector.DesktopProbe.Shared;
 using Titanium.Inspector.Services;
 using Titanium.Web.Proxy.Network;
 
@@ -29,7 +30,7 @@ public class InspectorChromeSystemProxyE2ETests
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             RootStoreUiTestGuards.RequireInteractiveRootTrustAvailable();
 
-        var chrome = FindChrome();
+        var chrome = BrowserPaths.FindChrome();
         if (chrome is null)
         {
             Assert.Inconclusive("Chrome not found");
@@ -64,7 +65,14 @@ public class InspectorChromeSystemProxyE2ETests
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                AssertLinuxGsettingsPointsAtProxy(interception.BoundPort);
+                try
+                {
+                    OsProxyStatus.AssertLinuxGsettingsPointsAtProxy(interception.BoundPort);
+                }
+                catch (Exception ex)
+                {
+                    Assert.Fail(ex.Message);
+                }
             }
 
             // Explicit --proxy-server avoids depending on live DE gsettings refresh in headless CI.
@@ -151,7 +159,7 @@ public class InspectorChromeSystemProxyE2ETests
             return;
         }
 
-        var chrome = FindChrome();
+        var chrome = BrowserPaths.FindChrome();
         if (chrome is null)
         {
             Assert.Inconclusive("Chrome not found");
@@ -264,49 +272,6 @@ public class InspectorChromeSystemProxyE2ETests
         }
     }
 
-    private static void AssertLinuxGsettingsPointsAtProxy(int port)
-    {
-        // Clear poisoned sandbox dbus so reads hit the real session bus.
-        var psi = new ProcessStartInfo("gsettings", "get org.gnome.system.proxy.http host")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-        psi.Environment.Remove("DBUS_SESSION_BUS_ADDRESS");
-        using (var p = Process.Start(psi)!)
-        {
-            var host = p.StandardOutput.ReadToEnd().Trim().Trim('\'', '"');
-            p.WaitForExit(5000);
-            Assert.AreEqual("127.0.0.1", host, "System proxy must advertise IPv4 loopback, not localhost");
-        }
-
-        psi.Arguments = "get org.gnome.system.proxy.http port";
-        using (var p = Process.Start(psi)!)
-        {
-            var portText = p.StandardOutput.ReadToEnd().Trim();
-            p.WaitForExit(5000);
-            Assert.AreEqual(port.ToString(), portText);
-        }
-
-        psi.Arguments = "get org.gnome.system.proxy mode";
-        using (var p = Process.Start(psi)!)
-        {
-            var mode = p.StandardOutput.ReadToEnd().Trim().Trim('\'', '"');
-            p.WaitForExit(5000);
-            Assert.AreEqual("manual", mode, ignoreCase: true);
-        }
-
-        psi.Arguments = "get org.gnome.system.proxy.http enabled";
-        using (var p = Process.Start(psi)!)
-        {
-            var enabled = p.StandardOutput.ReadToEnd().Trim().Trim('\'', '"');
-            p.WaitForExit(5000);
-            Assert.AreEqual("true", enabled, ignoreCase: true,
-                "GIO/Chrome ignore mode=manual unless http enabled is true");
-        }
-    }
-
     private static string? FindCertutil()
     {
         try
@@ -325,39 +290,5 @@ public class InspectorChromeSystemProxyE2ETests
         {
             return null;
         }
-    }
-
-    private static string? FindChrome()
-    {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            var candidates = new[]
-            {
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Google", "Chrome",
-                    "Application", "chrome.exe"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Google", "Chrome",
-                    "Application", "chrome.exe"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome",
-                    "Application", "chrome.exe"),
-            };
-            return candidates.FirstOrDefault(File.Exists);
-        }
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            foreach (var candidate in new[]
-                     {
-                         "/usr/bin/google-chrome-stable",
-                         "/usr/bin/google-chrome",
-                         "/usr/bin/chromium-browser",
-                         "/usr/bin/chromium",
-                     })
-            {
-                if (File.Exists(candidate))
-                    return candidate;
-            }
-        }
-
-        return null;
     }
 }
