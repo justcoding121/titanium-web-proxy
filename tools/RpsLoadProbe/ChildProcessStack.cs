@@ -263,6 +263,15 @@ internal sealed class ChildProcessStack : IAsyncDisposable
             env["TWP_RPS_CAPTURE_TLS"] = "1";
         if (mode is ProbeMode.TwpCliPlusCacheHitHttp1)
             env["TWP_RPS_ORIGIN_CACHE_CONTROL"] = "public, max-age=60";
+        // Forward Mac parity pool-pick digs into the proxy child (ProcessStartInfo env is a copy;
+        // explicit forward avoids surprises when the parent only exported the vars briefly).
+        foreach (var key in new[] { "TWP_DIAG_POOL_PICK", "TWP_DIAG_POOL_PICK_OUT", "TWP_RPS_STAGE_TIMING" })
+        {
+            var value = Environment.GetEnvironmentVariable(key);
+            if (!string.IsNullOrEmpty(value))
+                env[key] = value;
+        }
+
         return env;
     }
 

@@ -157,8 +157,8 @@ internal sealed class Http2OriginConnection : IDisposable
 
     /// <summary>
     ///     Early-grow dial for TLS and cleartext: SoftGrow = SoftStreamCapacity (SETTINGS/gate).
-    ///     Long Mac + stream-id table: SoftPick ~0.91× H1 / ~0.97× H3; SoftGrow=min(SoftCap,32)
-    ///     ~0.87× / ~0.92× rejected; SoftGrow=16 ~0.90 / ~0.89; SoftCap/4 rejected.
+    ///     Long Mac SoftPick ~0.91× H1 / ~0.97× H3. SoftGrow=16/32/SoftCap/4/48 rejected on long
+    ///     pairs. Pool dig: H3 SoftPick = 1 origin leg; H1 Offer fills ~MaxOrigin(8) without SoftGrow.
     /// </summary>
     internal int PoolGrowThreshold => SoftStreamCapacity;
 

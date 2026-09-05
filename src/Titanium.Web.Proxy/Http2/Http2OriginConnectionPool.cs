@@ -495,7 +495,7 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
     /// </summary>
     internal static class DiagPickStats
     {
-        private static bool Enabled =
+        private static bool Enabled =>
             string.Equals(Environment.GetEnvironmentVariable("TWP_DIAG_POOL_PICK"), "1",
                 StringComparison.Ordinal);
 
