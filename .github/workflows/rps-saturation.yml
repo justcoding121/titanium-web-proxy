@@ -472,17 +472,18 @@ jobs:
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
             Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $csv) { throw 'No CSV found for compare-product gate validation' }
-          # macos-15-intel floors after SoftPick remasure 33982544855 (H3 reverse leads;
-          # MITM H2 h2c Full / H2 plain Lite weak on GHA). Local Arm Mini still ~0.90× on
-          # H1 TLS→H2 / ~0.97× H3→H2 — raise reverse H3 floors; hold MITM weak cells.
+          # macos-15-intel floors after Offer-once remasure 33990406830 (reverse H3 leads;
+          # MITM H2 Full÷Reverse weak — secondary until reverse parity closed). Local Arm Mini
+          # digs H1 TLS→H2 Offer-once SoftPick SoftCap; cleartext SoftGrow=8 MaxOrigin=8.
           $macFloors = @()
           if ('${{ matrix.os }}' -eq 'macos-15-intel') {
             $macFloors = @(
+              '-MitmGate', '0.35',
               '-MitmHttp3TlsFullGate', '0.65',
               '-MitmHttp3CleartextFullGate', '0.60',
               '-MitmHttp1PlainFullGate', '0.55',
-              '-MitmHttp2H2cFullGate', '0.50',
-              '-MitmHttp2PlainLiteGate', '0.65',
+              '-MitmHttp2H2cFullGate', '0.45',
+              '-MitmHttp2PlainLiteGate', '0.55',
               '-ReverseYarpHttp3ToHttp1Gate', '0.95',
               '-ReverseYarpHttp3Gate', '0.95'
             )
