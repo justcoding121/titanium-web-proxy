@@ -9,6 +9,8 @@ namespace Titanium.Web.Proxy.Helpers;
 
 /// <summary>
 ///     macOS system proxy via <c>networksetup</c>, with optional admin elevation on auth failure.
+///     Disables PAC / WPAD / SOCKS while Inspector is the system proxy so CFNetwork (Firefox)
+///     sees the HTTP(S) proxy rather than an auto-config script.
 /// </summary>
 [SupportedOSPlatform("macos")]
 [SupportedOSPlatform("osx")]
@@ -50,6 +52,9 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
             var bypass = UnixProxyBypassMapper.ToCommaSeparated(proxyOverride);
             foreach (var service in services)
             {
+                // PAC / WPAD / SOCKS take precedence in CFNetwork (Firefox system-proxy mode).
+                DisableConflictingProxyModes(service);
+
                 if ((protocolType & ProxyProtocolType.Http) != 0)
                 {
                     RunNetworkSetup($"-setwebproxy \"{Escape(service)}\" {hostname} {port}", true);
@@ -129,6 +134,31 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
                 RunNetworkSetup($"-setsecurewebproxystate \"{Escape(snap.Service)}\" off", true);
             }
 
+            if (snap.SocksEnabled)
+            {
+                RunNetworkSetup(
+                    $"-setsocksfirewallproxy \"{Escape(snap.Service)}\" {snap.SocksHost} {snap.SocksPort}", true);
+                RunNetworkSetup($"-setsocksfirewallproxystate \"{Escape(snap.Service)}\" on", true);
+            }
+            else
+            {
+                RunNetworkSetup($"-setsocksfirewallproxystate \"{Escape(snap.Service)}\" off", true);
+            }
+
+            if (snap.AutoProxyEnabled && !string.IsNullOrWhiteSpace(snap.AutoProxyUrl) &&
+                !snap.AutoProxyUrl.Equals("(null)", StringComparison.OrdinalIgnoreCase))
+            {
+                RunNetworkSetup($"-setautoproxyurl \"{Escape(snap.Service)}\" \"{Escape(snap.AutoProxyUrl)}\"", true);
+                RunNetworkSetup($"-setautoproxystate \"{Escape(snap.Service)}\" on", true);
+            }
+            else
+            {
+                RunNetworkSetup($"-setautoproxystate \"{Escape(snap.Service)}\" off", true);
+            }
+
+            RunNetworkSetup(
+                $"-setproxyautodiscovery \"{Escape(snap.Service)}\" {(snap.AutoDiscovery ? "on" : "off")}", true);
+
             RunNetworkSetup(
                 $"-setproxybypassdomains \"{Escape(snap.Service)}\" {FormatBypassArgs(snap.BypassDomains)}", true);
         }
@@ -180,6 +210,13 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
         _disposed = true;
     }
 
+    private void DisableConflictingProxyModes(string service)
+    {
+        RunNetworkSetup($"-setautoproxystate \"{Escape(service)}\" off", true);
+        RunNetworkSetup($"-setproxyautodiscovery \"{Escape(service)}\" off", true);
+        RunNetworkSetup($"-setsocksfirewallproxystate \"{Escape(service)}\" off", true);
+    }
+
     private void EnsureSnapshot()
     {
         if (_hasSnapshot) return;
@@ -188,6 +225,12 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
         {
             var http = ParseProxyState(_runner.Run(NetworkSetupCommand, $"-getwebproxy \"{Escape(service)}\""));
             var https = ParseProxyState(_runner.Run(NetworkSetupCommand, $"-getsecurewebproxy \"{Escape(service)}\""));
+            var socks = ParseProxyState(
+                _runner.Run(NetworkSetupCommand, $"-getsocksfirewallproxy \"{Escape(service)}\""));
+            var autoProxy = ParseAutoProxyUrl(
+                _runner.Run(NetworkSetupCommand, $"-getautoproxyurl \"{Escape(service)}\""));
+            var autoDiscovery = ParseAutoDiscovery(
+                _runner.Run(NetworkSetupCommand, $"-getproxyautodiscovery \"{Escape(service)}\""));
             var bypassResult = _runner.Run(NetworkSetupCommand, $"-getproxybypassdomains \"{Escape(service)}\"");
             var bypass = bypassResult?.StandardOutput ?? string.Empty;
             if (bypass.Contains("There aren't any", StringComparison.OrdinalIgnoreCase))
@@ -197,6 +240,9 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
                 service,
                 http.Enabled, http.Host, http.Port,
                 https.Enabled, https.Host, https.Port,
+                socks.Enabled, socks.Host, socks.Port,
+                autoProxy.Enabled, autoProxy.Url,
+                autoDiscovery,
                 string.Join(",",
                     bypass.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim())
                         .Where(x => x.Length > 0))));
@@ -247,6 +293,13 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
     private void VerifyMacApplied(
         IReadOnlyList<string> services, string hostname, int port, ProxyProtocolType protocolType)
     {
+        var scutil = _runner.Run("scutil", "--proxy");
+        if (TryParseScutilProxy(scutil?.StandardOutput, out var effective) &&
+            ScutilMatches(effective, hostname, port, protocolType))
+        {
+            return;
+        }
+
         Exception? last = null;
         foreach (var service in services)
         {
@@ -290,6 +343,125 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
         throw last ?? new InvalidOperationException("macOS system proxy could not be verified after apply");
     }
 
+    internal static bool TryParseScutilProxy(string? output, out ScutilProxyState state)
+    {
+        state = default;
+        if (string.IsNullOrWhiteSpace(output))
+            return false;
+
+        var httpEnable = false;
+        var httpsEnable = false;
+        var pacEnable = false;
+        var socksEnable = false;
+        var httpHost = "";
+        var httpsHost = "";
+        var httpPort = 0;
+        var httpsPort = 0;
+        var any = false;
+
+        foreach (var raw in output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = raw.Trim();
+            var sep = line.IndexOf(':');
+            if (sep < 0) continue;
+            var key = line[..sep].Trim();
+            var value = line[(sep + 1)..].Trim();
+
+            if (key.Equals("HTTPEnable", StringComparison.OrdinalIgnoreCase))
+            {
+                httpEnable = IsScutilEnabled(value);
+                any = true;
+            }
+            else if (key.Equals("HTTPSEnable", StringComparison.OrdinalIgnoreCase))
+            {
+                httpsEnable = IsScutilEnabled(value);
+                any = true;
+            }
+            else if (key.Equals("HTTPProxy", StringComparison.OrdinalIgnoreCase))
+            {
+                httpHost = value;
+                any = true;
+            }
+            else if (key.Equals("HTTPSProxy", StringComparison.OrdinalIgnoreCase))
+            {
+                httpsHost = value;
+                any = true;
+            }
+            else if (key.Equals("HTTPPort", StringComparison.OrdinalIgnoreCase) && int.TryParse(value, out var hp))
+            {
+                httpPort = hp;
+                any = true;
+            }
+            else if (key.Equals("HTTPSPort", StringComparison.OrdinalIgnoreCase) && int.TryParse(value, out var sp))
+            {
+                httpsPort = sp;
+                any = true;
+            }
+            else if (key.Equals("ProxyAutoConfigEnable", StringComparison.OrdinalIgnoreCase))
+            {
+                pacEnable = IsScutilEnabled(value);
+                any = true;
+            }
+            else if (key.Equals("ProxyAutoDiscoveryEnable", StringComparison.OrdinalIgnoreCase))
+            {
+                if (IsScutilEnabled(value))
+                    pacEnable = true;
+                any = true;
+            }
+            else if (key.Equals("SOCKSEnable", StringComparison.OrdinalIgnoreCase))
+            {
+                socksEnable = IsScutilEnabled(value);
+                any = true;
+            }
+        }
+
+        if (!any)
+            return false;
+
+        state = new ScutilProxyState(httpEnable, httpHost, httpPort, httpsEnable, httpsHost, httpsPort, pacEnable,
+            socksEnable);
+        return true;
+    }
+
+    internal static bool ScutilMatches(
+        ScutilProxyState state, string hostname, int port, ProxyProtocolType protocolType)
+    {
+        // PAC / WPAD still enabled means Firefox will not use the manual HTTP proxy.
+        if (state.PacEnabled)
+            return false;
+
+        if ((protocolType & ProxyProtocolType.Http) != 0)
+        {
+            if (!state.HttpEnabled ||
+                !state.HttpHost.Equals(hostname, StringComparison.OrdinalIgnoreCase) ||
+                state.HttpPort != port)
+            {
+                return false;
+            }
+        }
+
+        if ((protocolType & ProxyProtocolType.Https) != 0)
+        {
+            if (!state.HttpsEnabled ||
+                !state.HttpsHost.Equals(hostname, StringComparison.OrdinalIgnoreCase) ||
+                state.HttpsPort != port)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    internal readonly record struct ScutilProxyState(
+        bool HttpEnabled, string HttpHost, int HttpPort,
+        bool HttpsEnabled, string HttpsHost, int HttpsPort,
+        bool PacEnabled, bool SocksEnabled);
+
+    private static bool IsScutilEnabled(string value) =>
+        value == "1" || value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("yes", StringComparison.OrdinalIgnoreCase);
+
     private static bool LooksLikeAuthFailure(string text) =>
         text.Contains("permission", StringComparison.OrdinalIgnoreCase) ||
         text.Contains("authoriz", StringComparison.OrdinalIgnoreCase) ||
@@ -320,6 +492,41 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
         return (enabled, host, port);
     }
 
+    internal static (bool Enabled, string Url) ParseAutoProxyUrl(ProcessRunResult? result)
+    {
+        var enabled = false;
+        var url = "";
+        if (result is null) return (false, url);
+        foreach (var line in result.StandardOutput.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var idx = line.IndexOf(':');
+            if (idx < 0) continue;
+            var key = line[..idx].Trim();
+            var value = line[(idx + 1)..].Trim();
+            if (key.Equals("Enabled", StringComparison.OrdinalIgnoreCase))
+                enabled = value.Equals("Yes", StringComparison.OrdinalIgnoreCase);
+            else if (key.Equals("URL", StringComparison.OrdinalIgnoreCase))
+                url = value;
+        }
+
+        return (enabled, url);
+    }
+
+    internal static bool ParseAutoDiscovery(ProcessRunResult? result)
+    {
+        if (result is null) return false;
+        foreach (var line in result.StandardOutput.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var idx = line.LastIndexOf(':');
+            var value = idx < 0 ? line.Trim() : line[(idx + 1)..].Trim();
+            if (value.Equals("On", StringComparison.OrdinalIgnoreCase) ||
+                value.Equals("Yes", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
     private static string FormatBypassArgs(string bypassCsv)
     {
         if (string.IsNullOrWhiteSpace(bypassCsv) ||
@@ -342,5 +549,8 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
         string Service,
         bool HttpEnabled, string HttpHost, int HttpPort,
         bool HttpsEnabled, string HttpsHost, int HttpsPort,
+        bool SocksEnabled, string SocksHost, int SocksPort,
+        bool AutoProxyEnabled, string AutoProxyUrl,
+        bool AutoDiscovery,
         string BypassDomains);
 }

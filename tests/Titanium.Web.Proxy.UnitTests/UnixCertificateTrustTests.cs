@@ -356,11 +356,16 @@ public class FirefoxCertificateTrustTests
         if (!OperatingSystem.IsWindows())
         {
             var nonWindows = FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots();
-            // Linux/macOS may succeed via policies.json; otherwise Unsupported.
+            // Linux/macOS may succeed via user-writable policies.json or profile user.js.
             if (nonWindows.Succeeded)
                 FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots();
             else
-                Assert.AreEqual(CertificateOsTrustKind.Unsupported, nonWindows.Kind);
+            {
+                Assert.IsTrue(
+                    nonWindows.Kind is CertificateOsTrustKind.Unsupported or CertificateOsTrustKind.Failed,
+                    nonWindows.Kind + ": " + nonWindows.Message);
+            }
+
             return;
         }
 
@@ -462,6 +467,57 @@ public class FirefoxCertificateTrustTests
                                      r.Contains("firefox", StringComparison.OrdinalIgnoreCase)));
         Assert.IsTrue(roots.Any(r => r.Contains(".var", StringComparison.Ordinal) &&
                                      r.Contains("org.mozilla.firefox", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void GetFirefoxRoots_IncludesDeveloperEditionAndNightlyOnMac()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.Inconclusive("macOS-only");
+            return;
+        }
+
+        var roots = FirefoxCertificateTrust.GetFirefoxRoots();
+        Assert.IsTrue(roots.Any(r => r.EndsWith("Firefox", StringComparison.Ordinal)));
+        Assert.IsTrue(roots.Any(r => r.Contains("FirefoxDeveloperEdition", StringComparison.Ordinal)));
+        Assert.IsTrue(roots.Any(r => r.Contains("Firefox Nightly", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void GetFirefoxPoliciesJsonPaths_OnMac_DoesNotIncludeAppBundle()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.Inconclusive("macOS-only");
+            return;
+        }
+
+        var paths = FirefoxCertificateTrust.GetFirefoxPoliciesJsonPaths().ToList();
+        Assert.IsFalse(paths.Any(p => p.Contains("Firefox.app", StringComparison.Ordinal)),
+            "Writing policies.json into Firefox.app breaks code signing");
+        Assert.IsTrue(paths.Any(p => p.Contains("Application Support", StringComparison.Ordinal) &&
+                                     p.EndsWith("policies.json", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void EnsureEnterpriseRootsPrefFile_WritesAndClearsUserJs()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-ff-pref-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            FirefoxCertificateTrust.EnsureEnterpriseRootsUserPref(dir);
+            Assert.IsTrue(FirefoxCertificateTrust.VerifyEnterpriseRootsUserPref(dir));
+            FirefoxCertificateTrust.EnsureEnterpriseRootsPrefFile(Path.Combine(dir, "prefs.js"));
+            var prefs = File.ReadAllText(Path.Combine(dir, "prefs.js"));
+            StringAssert.Contains(prefs, "security.enterprise_roots.enabled");
+            StringAssert.Contains(prefs, "true");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
     }
 
     [TestMethod]

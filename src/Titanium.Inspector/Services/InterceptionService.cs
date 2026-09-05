@@ -471,14 +471,14 @@ public sealed class InterceptionService : IDisposable
             {
                 IsRootTrusted = true;
                 LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA already trusted");
-                return true;
+                return CompleteRootTrustInstall(true);
             }
 
             if (_proxy.CertificateManager.VerifyOsUserSslTrust())
             {
                 IsRootTrusted = true;
                 LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA already trusted for SSL");
-                return true;
+                return CompleteRootTrustInstall(true);
             }
 
             // .NET/Keychain has the cert but SSL trust is incomplete — push OS trust again.
@@ -488,8 +488,9 @@ public sealed class InterceptionService : IDisposable
                             _proxy.CertificateManager.VerifyOsUserSslTrust();
             // MacNeedsManualTrustConfirm: cert was added; UI should guide Always Trust then re-verify.
             // Return true so the recovery loop runs, but keep IsRootTrusted false until verified.
-            return IsRootTrusted ||
-                   LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
+            return CompleteRootTrustInstall(
+                IsRootTrusted ||
+                LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
         }
 
         _proxy.CertificateManager.TrustRootCertificate(machineStore);
@@ -498,14 +499,22 @@ public sealed class InterceptionService : IDisposable
         if (OperatingSystem.IsWindows())
         {
             IsRootTrusted = IsRootPresentInStore(machineStore);
-            return IsRootTrusted;
+            return CompleteRootTrustInstall(IsRootTrusted);
         }
 
         IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
                         _proxy.CertificateManager.VerifyOsUserSslTrust();
         // MacNeedsManualTrustConfirm: cert was added; UI should guide Always Trust then re-verify.
-        return IsRootTrusted ||
-               LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
+        return CompleteRootTrustInstall(
+            IsRootTrusted ||
+            LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
+    }
+
+    private bool CompleteRootTrustInstall(bool installed)
+    {
+        if (IsRootTrusted)
+            TryEnableFirefoxEnterpriseRootsBestEffort();
+        return installed;
     }
 
     /// <summary>
@@ -531,13 +540,14 @@ public sealed class InterceptionService : IDisposable
         if (OperatingSystem.IsWindows())
         {
             IsRootTrusted = ok && IsRootPresentInStore(machineStore);
-            return IsRootTrusted;
+            return CompleteRootTrustInstall(IsRootTrusted);
         }
 
         IsRootTrusted = ok && (EvaluateUnixTrustSuccess(LastOsTrustResult) ||
                                _proxy.CertificateManager.VerifyOsUserSslTrust());
-        return IsRootTrusted ||
-               LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
+        return CompleteRootTrustInstall(
+            IsRootTrusted ||
+            LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
     }
 
     /// <summary>Installs certutil (package/brew) then retries user SSL trust.</summary>
@@ -582,12 +592,14 @@ public sealed class InterceptionService : IDisposable
             ? IsRootPresentInStore(false)
             : _proxy.CertificateManager.VerifyOsUserSslTrust();
         IsRootTrusted = ok;
+        if (ok)
+            TryEnableFirefoxEnterpriseRootsBestEffort();
         return ok;
     }
 
     /// <summary>
-    ///     Trust CA for Firefox: Windows ImportEnterpriseRoots first; otherwise (or on failure)
-    ///     import into the default Firefox profile via certutil.
+    ///     Trust CA for Firefox: enable OS-root import (Windows policy / macOS Keychain via
+    ///     <c>user.js</c>) first; otherwise import into the default Firefox profile via certutil.
     /// </summary>
     public CertificateOsTrustResult TrustFirefox()
     {
@@ -611,8 +623,32 @@ public sealed class InterceptionService : IDisposable
                 return policy;
             // Fall through to profile NSS import.
         }
+        else
+        {
+            var pref = FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref();
+            if (pref.Succeeded)
+                return pref;
+        }
 
         return FirefoxCertificateTrust.TrustDefaultProfile(cert, RootCertificateName);
+    }
+
+    /// <summary>
+    ///     Best-effort: if a Firefox profile exists, enable OS-root trust so Install root CA
+    ///     is enough after a Firefox restart (no extra menu, no certutil).
+    /// </summary>
+    public void TryEnableFirefoxEnterpriseRootsBestEffort()
+    {
+        try
+        {
+            if (!FirefoxCertificateTrust.IsFirefoxProfilePresent())
+                return;
+            FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref();
+        }
+        catch
+        {
+            // install path must not fail because Firefox prefs were locked
+        }
     }
 
     private static bool EvaluateUnixTrustSuccess(CertificateOsTrustResult? result) =>

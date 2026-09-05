@@ -14,8 +14,9 @@ namespace Titanium.Web.Proxy.Network;
 
 /// <summary>
 ///     Firefox-specific CA trust: Windows ImportEnterpriseRoots policy / policies.json,
-///     profile <c>user.js</c> fallback, plus optional NSS import into the default profile
-///     (<c>cert9.db</c>).
+///     profile <c>user.js</c> (and <c>prefs.js</c> when Firefox is not running) so Firefox
+///     uses OS roots, plus optional NSS import into the default profile (<c>cert9.db</c>).
+///     Does not write into the Firefox.app bundle (that would invalidate the code signature).
 /// </summary>
 public static class FirefoxCertificateTrust
 {
@@ -53,10 +54,9 @@ public static class FirefoxCertificateTrust
                     "Firefox policies.json updated (ImportEnterpriseRoots); restart Firefox to apply");
             }
 
-            return CertificateOsTrustResult.Fail(
-                CertificateOsTrustKind.Unsupported,
-                "ImportEnterpriseRoots registry policy is Windows-only; " +
-                "could not write a user/system Firefox policies.json either");
+            // macOS/Linux: user.js is the supported way to enable OS-root trust without
+            // modifying the application bundle (which would break code signing).
+            return TryEnableEnterpriseRootsUserPref();
         }
 
         try
@@ -150,6 +150,44 @@ public static class FirefoxCertificateTrust
         }
 
         return cleared;
+    }
+
+    /// <summary>
+    ///     Enables <c>security.enterprise_roots.enabled</c> in the default Firefox profile
+    ///     (<c>user.js</c>; also <c>prefs.js</c> when Firefox is not running) so Firefox trusts
+    ///     OS roots (Windows store / macOS Keychain / Linux system CAs).
+    /// </summary>
+    public static CertificateOsTrustResult TryEnableEnterpriseRootsUserPref()
+    {
+        if (!TryResolveDefaultProfileDirectory(out var profileDir, out var resolveError))
+        {
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed,
+                resolveError ?? "Firefox profile not found");
+        }
+
+        try
+        {
+            EnsureEnterpriseRootsUserPref(profileDir);
+            if (!IsFirefoxProcessRunning())
+                EnsureEnterpriseRootsPrefFile(Path.Combine(profileDir, "prefs.js"));
+
+            if (!VerifyEnterpriseRootsUserPref(profileDir))
+            {
+                return CertificateOsTrustResult.Fail(
+                    CertificateOsTrustKind.Failed,
+                    "Wrote Firefox user.js but security.enterprise_roots.enabled did not validate");
+            }
+
+            return CertificateOsTrustResult.Ok(
+                "Firefox will trust the OS root CA after you restart Firefox (profile preference)");
+        }
+        catch (Exception ex)
+        {
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed,
+                "Failed to enable Firefox OS-root trust: " + ex.Message);
+        }
     }
 
     /// <summary>
@@ -322,8 +360,12 @@ public static class FirefoxCertificateTrust
 
         if (OperatingSystem.IsMacOS())
         {
-            yield return "/Applications/Firefox.app/Contents/Resources/distribution/policies.json";
+            // Never write Firefox.app/.../distribution — that invalidates the code signature.
             yield return Path.Combine(home, "Library", "Application Support", "Firefox", "distribution",
+                "policies.json");
+            yield return Path.Combine(home, "Library", "Application Support", "FirefoxDeveloperEdition",
+                "distribution", "policies.json");
+            yield return Path.Combine(home, "Library", "Application Support", "Firefox Nightly", "distribution",
                 "policies.json");
             yield break;
         }
@@ -341,13 +383,15 @@ public static class FirefoxCertificateTrust
         }
     }
 
-    internal static void EnsureEnterpriseRootsUserPref(string profileDirectory)
+    internal static void EnsureEnterpriseRootsUserPref(string profileDirectory) =>
+        EnsureEnterpriseRootsPrefFile(Path.Combine(profileDirectory, "user.js"));
+
+    internal static void EnsureEnterpriseRootsPrefFile(string prefFile)
     {
         const string prefLine = "user_pref(\"" + EnterpriseRootsPrefName + "\", true);";
-        var userJs = Path.Combine(profileDirectory, "user.js");
-        if (File.Exists(userJs))
+        if (File.Exists(prefFile))
         {
-            var text = File.ReadAllText(userJs);
+            var text = File.ReadAllText(prefFile);
             var lines = text.Split(['\r', '\n'], StringSplitOptions.None);
             var found = false;
             for (var i = 0; i < lines.Length; i++)
@@ -361,15 +405,15 @@ public static class FirefoxCertificateTrust
 
             if (found)
             {
-                File.WriteAllText(userJs, string.Join(Environment.NewLine, lines));
+                File.WriteAllText(prefFile, string.Join(Environment.NewLine, lines));
                 return;
             }
 
-            File.AppendAllText(userJs, Environment.NewLine + prefLine + Environment.NewLine);
+            File.AppendAllText(prefFile, Environment.NewLine + prefLine + Environment.NewLine);
             return;
         }
 
-        File.WriteAllText(userJs, prefLine + Environment.NewLine);
+        File.WriteAllText(prefFile, prefLine + Environment.NewLine);
     }
 
     internal static bool VerifyEnterpriseRootsUserPref(string profileDirectory)
@@ -388,12 +432,18 @@ public static class FirefoxCertificateTrust
 
     private static bool ClearEnterpriseRootsUserPref(string profileDirectory)
     {
-        var userJs = Path.Combine(profileDirectory, "user.js");
-        if (!File.Exists(userJs)) return false;
-        var lines = File.ReadAllLines(userJs)
+        var cleared = ClearEnterpriseRootsPrefFile(Path.Combine(profileDirectory, "user.js"));
+        cleared = ClearEnterpriseRootsPrefFile(Path.Combine(profileDirectory, "prefs.js")) || cleared;
+        return cleared;
+    }
+
+    private static bool ClearEnterpriseRootsPrefFile(string prefFile)
+    {
+        if (!File.Exists(prefFile)) return false;
+        var lines = File.ReadAllLines(prefFile)
             .Where(l => !EnterpriseRootsUserPrefLine.IsMatch(l))
             .ToArray();
-        File.WriteAllLines(userJs, lines);
+        File.WriteAllLines(prefFile, lines);
         return true;
     }
 
@@ -544,25 +594,14 @@ public static class FirefoxCertificateTrust
         else if (OperatingSystem.IsMacOS())
         {
             // Consent already given in UI — quit the app, not Keychain UI automation.
+            // osascript may be blocked by TCC; fall back to SIGTERM (never SIGKILL).
             runner.Run("osascript", "-e 'tell application \"Firefox\" to quit'");
+            if (IsFirefoxProcessRunning())
+                TermFirefoxProcesses(runner);
         }
         else if (OperatingSystem.IsLinux())
         {
-            foreach (var process in EnumerateFirefoxProcesses())
-            {
-                try
-                {
-                    runner.Run("kill", $"-TERM {process.Id}");
-                }
-                catch
-                {
-                    // ignore
-                }
-                finally
-                {
-                    process.Dispose();
-                }
-            }
+            TermFirefoxProcesses(runner);
         }
 
         var deadline = DateTime.UtcNow + wait;
@@ -574,6 +613,25 @@ public static class FirefoxCertificateTrust
         }
 
         return !IsFirefoxProcessRunning();
+    }
+
+    private static void TermFirefoxProcesses(IProcessRunner runner)
+    {
+        foreach (var process in EnumerateFirefoxProcesses())
+        {
+            try
+            {
+                runner.Run("kill", $"-TERM {process.Id}");
+            }
+            catch
+            {
+                // ignore per-process failures; wait loop decides success
+            }
+            finally
+            {
+                process.Dispose();
+            }
+        }
     }
 
     private static IEnumerable<Process> EnumerateFirefoxProcesses()
@@ -739,6 +797,8 @@ public static class FirefoxCertificateTrust
             return
             [
                 Path.Combine(home, "Library", "Application Support", "Firefox"),
+                Path.Combine(home, "Library", "Application Support", "FirefoxDeveloperEdition"),
+                Path.Combine(home, "Library", "Application Support", "Firefox Nightly"),
             ];
         }
 

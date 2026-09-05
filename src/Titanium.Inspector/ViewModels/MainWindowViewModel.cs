@@ -1100,7 +1100,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         if (!_firefoxTrustHintShown && _interception.IsFirefoxProfilePresent)
         {
             _firefoxTrustHintShown = true;
-            msg += " · Using Firefox? Capture → Trust CA in Firefox…";
+            msg += " · Restart Firefox to use OS-root trust (or Capture → Trust CA in Firefox…)";
         }
 
         SetOutcomeStatus(msg, StatusSeverity.Success, toastImportant: true);
@@ -3419,6 +3419,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         if (OperatingSystem.IsWindows())
             return "System proxy enabled. For Chrome: disable QUIC (--disable-quic) or H3 may bypass the proxy.";
+
+        if (OperatingSystem.IsMacOS())
+            return "System proxy enabled. Restart Firefox if it was already open so it picks up the proxy.";
 
         return "System proxy enabled";
     }

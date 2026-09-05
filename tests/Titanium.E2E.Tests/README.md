@@ -13,7 +13,7 @@ Process-level and service-level end-to-end coverage for CLI, CLI+Plus, and Inspe
 | `E2E-UI-Plus-Dashboard` | Yes (`ui-portable` + Windows `build`) | Playwright Chromium vs Plus HTML dashboard | Yes (`ui-portable` on Windows/Linux/macOS + dedicated `inspector-ui-macos`) | ViewModel commands, feature sanity (capture/proxy/CA/tools/composer), elevate-CA UX |
 | `E2E-UI-Mac` / `E2E-UI-Linux` | Yes (macOS / Linux runners only) | System-proxy backend factory selection for that OS |
 | `E2E-UI-Window` | No (opt-in) | Windows FlaUI / real HWND smoke against `TitaniumInspector.exe` |
-| `E2E-Slow` | No | Windows WinINET system proxy + Chrome `--disable-quic` |
+| `E2E-Slow` | No | Chrome/Firefox + system proxy (WinINET / macOS networksetup); Firefox tests are macOS-only |
 
 **Happy path (all three products):** `HappyPathSanityE2ETests` — Inspector sessions in the UI collection, CLI explicit MITM + debug log file, CLI+Plus control-plane auth + MITM + debug log.
 
@@ -26,7 +26,8 @@ dotnet test tests/Titanium.E2E.Tests -c Release --filter "TestCategory=E2E|TestC
 # Only the cohesive happy-path trio
 dotnet test tests/Titanium.E2E.Tests -c Release --filter "FullyQualifiedName~HappyPathSanity"
 
-# Optional Chrome + system proxy (mutates WinINET; restores in finally)
+# Optional Chrome/Firefox + system proxy (mutates OS proxy; restores in finally).
+# Firefox tests are macOS-only and require Firefox.app.
 dotnet test tests/Titanium.E2E.Tests -c Release --filter "TestCategory=E2E-Slow"
 
 # Optional real Inspector window (Windows)

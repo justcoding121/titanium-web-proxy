@@ -72,6 +72,21 @@ public class MacOsSystemProxyBackendTests
         runner.When("networksetup", "-getsecurewebproxy", "Enabled: No\nServer: \nPort: 0\n");
         runner.When("networksetup", "-getproxybypassdomains",
             "There aren't any bypass domains currently set.\n");
+        runner.When("networksetup", "-getautoproxyurl", "URL: (null)\nEnabled: No\n");
+        runner.When("networksetup", "-getproxyautodiscovery", "Auto Proxy Discovery: Off\n");
+        runner.When("networksetup", "-getsocksfirewallproxy", "Enabled: No\nServer:\nPort: 0\n");
+        runner.When("scutil", "--proxy", """
+            <dictionary> {
+              HTTPEnable : 1
+              HTTPPort : 8000
+              HTTPProxy : 127.0.0.1
+              HTTPSEnable : 1
+              HTTPSPort : 8000
+              HTTPSProxy : 127.0.0.1
+              ProxyAutoConfigEnable : 0
+              SOCKSEnable : 0
+            }
+            """);
         runner.DefaultSuccess = true;
 
         using var backend = new MacOsSystemProxyBackend(runner, new FakeElevationPrompt());
@@ -81,6 +96,9 @@ public class MacOsSystemProxyBackendTests
             c.Contains("-setwebproxy") && c.Contains("127.0.0.1") && c.Contains("8000")));
         Assert.IsTrue(runner.Commands.Exists(c => c.Contains("-setsecurewebproxy")));
         Assert.IsTrue(runner.Commands.Exists(c => c.Contains("-setproxybypassdomains")));
+        Assert.IsTrue(runner.Commands.Exists(c => c.Contains("-setautoproxystate") && c.Contains("off")));
+        Assert.IsTrue(runner.Commands.Exists(c => c.Contains("-setproxyautodiscovery") && c.Contains("off")));
+        Assert.IsTrue(runner.Commands.Exists(c => c.Contains("-setsocksfirewallproxystate") && c.Contains("off")));
         Assert.IsFalse(runner.Commands.Exists(c => c.Contains("\"Ethernet\"")),
             "Disabled (*Ethernet) services must be skipped");
     }
@@ -93,6 +111,19 @@ public class MacOsSystemProxyBackendTests
         runner.When("networksetup", "-getwebproxy", "Enabled: No\nServer:\nPort: 0\n");
         runner.When("networksetup", "-getsecurewebproxy", "Enabled: No\nServer:\nPort: 0\n");
         runner.When("networksetup", "-getproxybypassdomains", "Empty\n");
+        runner.When("networksetup", "-getautoproxyurl", "URL: (null)\nEnabled: No\n");
+        runner.When("networksetup", "-getproxyautodiscovery", "Auto Proxy Discovery: Off\n");
+        runner.When("networksetup", "-getsocksfirewallproxy", "Enabled: No\nServer:\nPort: 0\n");
+        runner.When("scutil", "--proxy", """
+            <dictionary> {
+              HTTPEnable : 1
+              HTTPPort : 8000
+              HTTPProxy : 127.0.0.1
+              HTTPSEnable : 0
+              ProxyAutoConfigEnable : 0
+              SOCKSEnable : 0
+            }
+            """);
         runner.FailMatching = "-setwebproxy";
         runner.FailError = "You must be an administrator to perform this operation.";
 
@@ -102,6 +133,95 @@ public class MacOsSystemProxyBackendTests
 
         Assert.IsTrue(elevation.Calls.Count > 0);
         Assert.IsTrue(elevation.Calls[0].FileName.Contains("networksetup"));
+    }
+
+    [TestMethod]
+    public void SetProxy_RestoresPacSocksAndAutoDiscovery()
+    {
+        var runner = new FakeProcessRunner();
+        runner.When("networksetup", "-listallnetworkservices", "Wi-Fi\n");
+        runner.When("networksetup", "-getwebproxy", "Enabled: No\nServer:\nPort: 0\n");
+        runner.When("networksetup", "-getsecurewebproxy", "Enabled: No\nServer:\nPort: 0\n");
+        runner.When("networksetup", "-getproxybypassdomains", "Empty\n");
+        runner.When("networksetup", "-getautoproxyurl", "URL: http://wpad.example/proxy.pac\nEnabled: Yes\n");
+        runner.When("networksetup", "-getproxyautodiscovery", "Auto Proxy Discovery: On\n");
+        runner.When("networksetup", "-getsocksfirewallproxy", "Enabled: Yes\nServer: 10.0.0.1\nPort: 1080\n");
+        runner.When("scutil", "--proxy", """
+            <dictionary> {
+              HTTPEnable : 1
+              HTTPPort : 8000
+              HTTPProxy : 127.0.0.1
+              HTTPSEnable : 1
+              HTTPSPort : 8000
+              HTTPSProxy : 127.0.0.1
+              ProxyAutoConfigEnable : 0
+              SOCKSEnable : 0
+            }
+            """);
+        runner.DefaultSuccess = true;
+
+        using var backend = new MacOsSystemProxyBackend(runner, new FakeElevationPrompt());
+        backend.SetProxy("127.0.0.1", 8000, ProxyProtocolType.AllHttp, null);
+        runner.Commands.Clear();
+        backend.RestoreOriginalSettings();
+
+        Assert.IsTrue(runner.Commands.Exists(c =>
+            c.Contains("-setautoproxyurl") && c.Contains("http://wpad.example/proxy.pac")));
+        Assert.IsTrue(runner.Commands.Exists(c => c.Contains("-setautoproxystate") && c.Contains("on")));
+        Assert.IsTrue(runner.Commands.Exists(c => c.Contains("-setproxyautodiscovery") && c.Contains("on")));
+        Assert.IsTrue(runner.Commands.Exists(c =>
+            c.Contains("-setsocksfirewallproxy") && c.Contains("10.0.0.1") && c.Contains("1080")));
+    }
+
+    [TestMethod]
+    public void TryParseScutilProxy_ReadsHttpHttpsAndRejectsPac()
+    {
+        const string output = """
+            <dictionary> {
+              HTTPEnable : 1
+              HTTPPort : 8866
+              HTTPProxy : 127.0.0.1
+              HTTPSEnable : 1
+              HTTPSPort : 8866
+              HTTPSProxy : 127.0.0.1
+              ProxyAutoConfigEnable : 1
+              SOCKSEnable : 0
+            }
+            """;
+        Assert.IsTrue(MacOsSystemProxyBackend.TryParseScutilProxy(output, out var state));
+        Assert.IsTrue(state.HttpEnabled);
+        Assert.AreEqual("127.0.0.1", state.HttpHost);
+        Assert.AreEqual(8866, state.HttpPort);
+        Assert.IsTrue(state.PacEnabled);
+        Assert.IsFalse(MacOsSystemProxyBackend.ScutilMatches(
+            state, "127.0.0.1", 8866, ProxyProtocolType.AllHttp),
+            "PAC still enabled must not count as applied for Firefox/CFNetwork");
+    }
+
+    [TestMethod]
+    public void TryParseScutilProxy_MatchesManualProxy()
+    {
+        const string output = """
+            HTTPEnable : 1
+            HTTPPort : 8866
+            HTTPProxy : 127.0.0.1
+            HTTPSEnable : 1
+            HTTPSPort : 8866
+            HTTPSProxy : 127.0.0.1
+            ProxyAutoConfigEnable : 0
+            """;
+        Assert.IsTrue(MacOsSystemProxyBackend.TryParseScutilProxy(output, out var state));
+        Assert.IsTrue(MacOsSystemProxyBackend.ScutilMatches(
+            state, "127.0.0.1", 8866, ProxyProtocolType.AllHttp));
+    }
+
+    [TestMethod]
+    public void ParseAutoDiscovery_OffIsFalse()
+    {
+        var result = new ProcessRunResult(0, "Auto Proxy Discovery: Off\n", "");
+        Assert.IsFalse(MacOsSystemProxyBackend.ParseAutoDiscovery(result));
+        result = new ProcessRunResult(0, "Auto Proxy Discovery: On\n", "");
+        Assert.IsTrue(MacOsSystemProxyBackend.ParseAutoDiscovery(result));
     }
 }
 
