@@ -130,7 +130,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         {
             try
             {
-                hooksApplied = LinuxBrowserLaunchProxy.Apply(hostname, port);
+                hooksApplied = LinuxBrowserLaunchProxy.Apply(hostname, port, proxyOverride);
             }
             catch
             {

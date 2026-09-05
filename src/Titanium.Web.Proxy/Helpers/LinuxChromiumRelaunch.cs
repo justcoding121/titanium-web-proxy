@@ -7,36 +7,67 @@ using System.Linq;
 namespace Titanium.Web.Proxy.Helpers;
 
 /// <summary>
-///     Chrome/Chromium ignore live Preference file edits and often ignore gsettings on this stack.
-///     When system proxy is toggled, quit and relaunch Chromium-family browsers with session restore
-///     so traffic switches immediately for already-open windows.
+///     Chrome/Chromium/Edge ignore live Preference file edits and often ignore gsettings.
+///     When system proxy is toggled, quit and relaunch each running Chromium-family browser
+///     with session restore so traffic switches immediately.
 /// </summary>
 internal static class LinuxChromiumRelaunch
 {
-    private static readonly string[] LaunchBinaries =
+    private enum BrowserFamily
+    {
+        Chrome,
+        Chromium,
+        Brave,
+        Edge,
+    }
+
+    private static readonly (BrowserFamily Family, string[] Binaries)[] FamilyLaunchers =
     [
-        "/usr/bin/google-chrome-stable",
-        "/usr/bin/google-chrome",
-        "/opt/google/chrome/google-chrome",
-        "/usr/bin/chromium-browser",
-        "/usr/bin/chromium",
-        "/usr/bin/brave-browser",
-        "/usr/bin/microsoft-edge-stable",
+        (BrowserFamily.Chrome,
+        [
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/google-chrome",
+            "/opt/google/chrome/google-chrome",
+        ]),
+        (BrowserFamily.Chromium,
+        [
+            "/usr/bin/chromium-browser",
+            "/usr/bin/chromium",
+        ]),
+        (BrowserFamily.Brave,
+        [
+            "/usr/bin/brave-browser",
+        ]),
+        (BrowserFamily.Edge,
+        [
+            "/usr/bin/microsoft-edge-stable",
+            "/usr/bin/microsoft-edge",
+        ]),
     ];
 
     /// <summary>
     ///     If a Chromium-family browser is running, quit it and relaunch with optional proxy flags
     ///     and <c>--restore-last-session</c>. Returns true when a relaunch was scheduled.
     ///     Runs detached (<c>setsid</c>) so SIGTERM/app exit cannot abort mid-quit/relaunch.
+    ///     Relaunches each running browser family with that family's own binary (not always Chrome).
     /// </summary>
     internal static bool TryRelaunchForProxyChange(string? hostname, int port, bool enableProxy)
     {
-        var mains = FindMainBrowserPids().ToList();
+        var mains = FindMainBrowsers().ToList();
         if (mains.Count == 0)
             return false;
 
-        var launch = LaunchBinaries.FirstOrDefault(File.Exists);
-        if (string.IsNullOrEmpty(launch))
+        var families = mains.Select(m => m.Family).Distinct().OrderBy(f => f).ToList();
+        var launchLines = new List<string>();
+        foreach (var family in families)
+        {
+            var launch = ResolveLaunchBinary(family);
+            if (string.IsNullOrEmpty(launch))
+                continue;
+            launchLines.Add(launch);
+        }
+
+        if (launchLines.Count == 0)
             return false;
 
         var args = "--restore-last-session --disable-quic";
@@ -60,16 +91,19 @@ internal static class LinuxChromiumRelaunch
                 xauth = candidate;
         }
 
-        // Detached helper survives Inspector SIGTERM (in-process waits were killed mid-relaunch).
         try
         {
             var scriptPath = Path.Combine(Path.GetTempPath(),
                 $"titanium-chrome-relaunch-{Environment.ProcessId}-{Guid.NewGuid():N}.sh");
-            var pidList = string.Join(" ", mains);
+            var pidList = string.Join(" ", mains.Select(m => m.Pid));
+            var quitCmds = string.Join("\n", launchLines.Select(l =>
+                $"{ShellQuote(l)} --quit >/dev/null 2>&1 || true"));
+            var startCmds = string.Join("\n", launchLines.Select(l =>
+                $"# shellcheck disable=SC2086\n{ShellQuote(l)} $ARGS >/dev/null 2>&1 &"));
+
             var script = $$"""
                 #!/bin/bash
                 set +e
-                LAUNCH={{ShellQuote(launch)}}
                 ARGS={{ShellQuote(args)}}
                 DISPLAY_VAL={{ShellQuote(display)}}
                 DBUS_VAL={{ShellQuote(dbus)}}
@@ -79,14 +113,13 @@ internal static class LinuxChromiumRelaunch
                 [ -n "$DISPLAY_VAL" ] && export DISPLAY="$DISPLAY_VAL"
                 [ -n "$DBUS_VAL" ] && export DBUS_SESSION_BUS_ADDRESS="$DBUS_VAL"
                 [ -n "$XAUTH_VAL" ] && export XAUTHORITY="$XAUTH_VAL"
-                "$LAUNCH" --quit >/dev/null 2>&1 || true
+                {{quitCmds}}
                 for i in $(seq 1 40); do
                   alive=0
                   for p in $PIDS; do [ -d "/proc/$p" ] && alive=1; done
                   [ "$alive" = "0" ] && break
                   sleep 0.2
                 done
-                # Match main chrome (space-joined cmdline) — exclude helpers / MCP
                 find_mains() {
                   for d in /proc/[0-9]*; do
                     pid=${d##*/}
@@ -107,10 +140,8 @@ internal static class LinuxChromiumRelaunch
                 sleep 1
                 for p in $(find_mains); do kill -KILL "$p" 2>/dev/null || true; done
                 sleep 0.5
-                # shellcheck disable=SC2086
-                "$LAUNCH" $ARGS >/dev/null 2>&1 &
+                {{startCmds}}
                 if [ "$ENABLE" = "0" ]; then
-                  # Drop fail-open listener once browser is direct again
                   pidf="$HOME/.config/TitaniumInspector/fail-open-proxy.pid"
                   if [ -f "$pidf" ]; then
                     kill "$(cat "$pidf")" 2>/dev/null || true
@@ -150,10 +181,24 @@ internal static class LinuxChromiumRelaunch
         }
     }
 
+    /// <summary>Test hook: resolve launch binary for a running executable path.</summary>
+    internal static string? ResolveLaunchBinaryForExeForTests(string exe) =>
+        TryClassify(exe, out var family) ? ResolveLaunchBinary(family) : null;
+
+    /// <summary>Test hook: classify main browser executable into a family name.</summary>
+    internal static string? ClassifyFamilyForTests(string exe) =>
+        TryClassify(exe, out var family) ? family.ToString() : null;
+
+    private static string? ResolveLaunchBinary(BrowserFamily family)
+    {
+        var entry = FamilyLaunchers.FirstOrDefault(f => f.Family == family);
+        return entry.Binaries?.FirstOrDefault(File.Exists);
+    }
+
     private static string ShellQuote(string value) =>
         "'" + (value ?? string.Empty).Replace("'", "'\\''", StringComparison.Ordinal) + "'";
 
-    private static IEnumerable<int> FindMainBrowserPids()
+    private static IEnumerable<(int Pid, BrowserFamily Family)> FindMainBrowsers()
     {
         IEnumerable<string> dirs;
         try { dirs = Directory.EnumerateDirectories("/proc"); }
@@ -177,7 +222,6 @@ internal static class LinuxChromiumRelaunch
             if (string.IsNullOrEmpty(raw))
                 continue;
 
-            // Some environments deliver cmdline as a single space-joined argv[0]; normalize.
             var full = raw.Replace('\0', ' ').Trim();
             var exe = raw.Split('\0', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
             if (exe.Contains(' ', StringComparison.Ordinal))
@@ -194,23 +238,44 @@ internal static class LinuxChromiumRelaunch
                 exe.Contains("/cursor/", StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            if (IsChromiumMainExecutable(exe))
-                yield return pid;
+            if (TryClassify(exe, out var family))
+                yield return (pid, family);
         }
     }
 
-    private static bool IsChromiumMainExecutable(string exe)
+    private static bool TryClassify(string exe, out BrowserFamily family)
     {
-        // Exact well-known binaries (avoid matching chrome_crashpad_handler via prefix).
-        if (exe is "/opt/google/chrome/chrome" or
-            "/usr/lib/chromium-browser/chromium-browser" or
-            "/usr/lib/chromium/chromium" or
-            "/usr/lib/brave.com/brave/brave" or
-            "/opt/brave.com/brave/brave" or
-            "/opt/microsoft/msedge/msedge")
-            return true;
-
+        family = default;
         var name = Path.GetFileName(exe);
-        return name is "chrome" or "chromium" or "chromium-browser" or "brave" or "msedge";
+
+        if (exe is "/opt/microsoft/msedge/msedge" ||
+            name is "msedge" ||
+            exe.Contains("microsoft-edge", StringComparison.OrdinalIgnoreCase) ||
+            exe.Contains("/msedge/", StringComparison.OrdinalIgnoreCase))
+        {
+            family = BrowserFamily.Edge;
+            return true;
+        }
+
+        if (exe.Contains("brave", StringComparison.OrdinalIgnoreCase) || name is "brave")
+        {
+            family = BrowserFamily.Brave;
+            return true;
+        }
+
+        if (exe is "/usr/lib/chromium-browser/chromium-browser" or "/usr/lib/chromium/chromium" ||
+            name is "chromium" or "chromium-browser")
+        {
+            family = BrowserFamily.Chromium;
+            return true;
+        }
+
+        if (exe is "/opt/google/chrome/chrome" || name is "chrome")
+        {
+            family = BrowserFamily.Chrome;
+            return true;
+        }
+
+        return false;
     }
 }

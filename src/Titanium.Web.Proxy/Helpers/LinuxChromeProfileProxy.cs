@@ -138,10 +138,12 @@ internal static class LinuxChromeProfileProxy
         yield return Path.Combine(home, ".config", "BraveSoftware", "Brave-Browser");
         yield return Path.Combine(home, ".config", "microsoft-edge");
         yield return Path.Combine(home, "snap", "chromium", "common", "chromium");
+        yield return Path.Combine(home, "snap", "microsoft-edge", "common", "microsoft-edge");
         yield return Path.Combine(home, ".var", "app", "com.google.Chrome", "config", "google-chrome");
         yield return Path.Combine(home, ".var", "app", "org.chromium.Chromium", "config", "chromium");
         yield return Path.Combine(home, ".var", "app", "com.brave.Browser", "config", "BraveSoftware",
             "Brave-Browser");
+        yield return Path.Combine(home, ".var", "app", "com.microsoft.Edge", "config", "microsoft-edge");
     }
 
     // Test hooks

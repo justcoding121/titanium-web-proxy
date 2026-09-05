@@ -152,17 +152,19 @@ Applies to every captured request/response. On request, `abort` or `set-status` 
 
 | Feature | Windows | macOS | Linux |
 |---------|---------|-------|-------|
-| System proxy | WinINET (automatic) | `networksetup` (disables PAC/WPAD/SOCKS so CFNetwork/Firefox see HTTP(S); admin prompt if required) | GNOME `gsettings` + KDE + process `http(s)_proxy` |
-| Root CA user trust | Current-user Root store | Login keychain (`security`) + .NET store | .NET store + user NSS (`certutil`, Chromium) |
+| System proxy | WinINET (automatic) | `networksetup` (disables PAC/WPAD/SOCKS so CFNetwork/Firefox see HTTP(S); admin prompt if required) | GNOME `gsettings` + KDE + process `http(s)_proxy` + Chromium/Edge launch hooks + Firefox profile prefs |
+| Instant browser switch | OS settings (live for most apps) | OS settings (live for most apps; Firefox may need restart) | Chromium/Edge quit+relaunch with `--proxy-server`; Firefox prefs + quit/relaunch |
+| Root CA user trust | Current-user Root store | Login keychain (`security`) + .NET store | .NET store + user NSS (`certutil`, Chrome/Edge/Chromium incl. Snap/Flatpak DBs) |
 | Root CA machine / admin | UAC + `certutil` | System keychain (macOS auth dialog) | `pkexec` + `update-ca-certificates` |
 | Missing `certutil` | N/A for OS trust | **Trust CA in Firefox…** can run `brew install nss` when Homebrew is present | Recovery dialog can install `libnss3-tools` / `nss-tools` / `mozilla-nss-tools` via `pkexec` |
-| Firefox | **Trust CA in Firefox…** sets `ImportEnterpriseRoots` (restart Firefox) | Install root CA writes profile `user.js` (`security.enterprise_roots.enabled`); NSS `certutil` is the fallback. Never modifies `Firefox.app`. | Profile `user.js` OS-root trust first; NSS import fallback |
+| Firefox | **Trust CA in Firefox…** sets `ImportEnterpriseRoots` (restart Firefox) | Install root CA writes profile `user.js` (`security.enterprise_roots.enabled`); NSS `certutil` is the fallback. Never modifies `Firefox.app`. | Profile `user.js` OS-root trust first; NSS import fallback; system proxy also writes `network.proxy.*` in the default profile |
 | Cancel elevation / recovery | Leaves settings unchanged | Leaves settings unchanged | Leaves settings unchanged |
 
 Notes:
 
 - Headless Linux without polkit/GUI cannot show an admin dialog; use Export CA and install manually.
 - **Trust CA in Firefox…** remains available for NSS profile import. **Install root CA** also best-effort writes `security.enterprise_roots.enabled` in the default profile `user.js` (macOS includes `FirefoxDeveloperEdition` and `Firefox Nightly` profile roots; Linux includes Snap and Flatpak). Inspector does **not** write into `Firefox.app`. If Firefox is running, Inspector can ask it to quit gracefully (with consent) before writing `cert9.db`; on macOS it falls back to SIGTERM if osascript is blocked.
+- On Linux, **System proxy** also updates Chromium-family managed policy / Preferences / `.desktop` helpers and Firefox `prefs.js`, then relaunches already-open Chrome, Edge, Chromium, Brave, and Firefox so traffic switches without a manual restart. On exit or proxy off, settings are restored and browsers are relaunched without the Inspector endpoint (with a short fail-open tunnel if Chromium still pointed at a dead port).
 - On Windows, the first Current User Root install may show an OS Trusted Root **Yes/No** dialog (not UAC); choose **Yes**. Inspector cannot replace that dialog.
 - macOS without Homebrew: OS-root trust via `user.js` does not need `certutil`. Export CA and import under Firefox → Authorities only if enterprise-roots is not enough.
 - Enabling **System proxy** on macOS turns off PAC, WPAD, and SOCKS so Firefox (CFNetwork) sees the HTTP(S) proxy; previous PAC/SOCKS settings are restored when System proxy is turned off. Firefox that was already open may need a restart.

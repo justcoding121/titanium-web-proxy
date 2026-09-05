@@ -981,6 +981,10 @@ internal static class UnixCertificateTrust
         yield return Path.Combine(home, ".var", "app", "org.chromium.Chromium", ".pki", "nssdb");
         yield return Path.Combine(home, ".var", "app", "com.google.Chrome", ".pki", "nssdb");
         yield return Path.Combine(home, ".var", "app", "com.brave.Browser", ".pki", "nssdb");
+        // Microsoft Edge (deb) shares ~/.pki/nssdb; Snap/Flatpak keep private DBs when present.
+        yield return Path.Combine(home, "snap", "microsoft-edge", "common", ".pki", "nssdb");
+        yield return Path.Combine(home, "snap", "microsoft-edge", "current", ".pki", "nssdb");
+        yield return Path.Combine(home, ".var", "app", "com.microsoft.Edge", ".pki", "nssdb");
     }
 
     private static bool TrustLinuxSystem(IElevationPrompt elevation, string cerPath, string friendlyName)

@@ -8,6 +8,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.UnitTests;
 
@@ -471,6 +472,182 @@ public class LinuxBrowserLaunchProxyTests
         Assert.IsFalse(LinuxBrowserLaunchProxy.TryValidatePolicyJson(
             """{"ProxyMode":"fixed_servers","ProxyServer":"http://127.0.0.1:1"}""",
             "127.0.0.1", 8866, out _));
+    }
+
+    [TestMethod]
+    public void ChromiumRelaunch_ClassifiesEdgeAndChromeFamilies()
+    {
+        Assert.AreEqual("Edge", LinuxChromiumRelaunch.ClassifyFamilyForTests("/opt/microsoft/msedge/msedge"));
+        Assert.AreEqual("Chrome", LinuxChromiumRelaunch.ClassifyFamilyForTests("/opt/google/chrome/chrome"));
+        Assert.AreEqual("Chromium", LinuxChromiumRelaunch.ClassifyFamilyForTests("/usr/lib/chromium/chromium"));
+        Assert.IsNull(LinuxChromiumRelaunch.ClassifyFamilyForTests("/opt/google/chrome/chrome_crashpad_handler"));
+    }
+
+    [TestMethod]
+    public void ChromiumRelaunch_ResolvesEdgeLaunchWhenEdgeBinaryExists()
+    {
+        if (!File.Exists("/usr/bin/microsoft-edge-stable") && !File.Exists("/usr/bin/microsoft-edge"))
+        {
+            Assert.Inconclusive("Edge not installed on this host");
+            return;
+        }
+
+        var launch = LinuxChromiumRelaunch.ResolveLaunchBinaryForExeForTests("/opt/microsoft/msedge/msedge");
+        Assert.IsNotNull(launch);
+        StringAssert.Contains(launch, "microsoft-edge");
+    }
+
+    [TestMethod]
+    public void FirefoxProxy_MergePrefsWritesManualProxyAndMarker()
+    {
+        var existing = """
+            user_pref("browser.startup.homepage", "about:home");
+            user_pref("network.proxy.type", 5);
+            """;
+        var managed = new Dictionary<string, string>
+        {
+            ["network.proxy.type"] = "1",
+            ["network.proxy.http"] = "\"127.0.0.1\"",
+            ["network.proxy.http_port"] = "8866",
+            ["titanium.inspector.proxy.managed"] = "true",
+        };
+        var merged = LinuxFirefoxProxy.MergePrefsForTests(existing, managed);
+        StringAssert.Contains(merged, "user_pref(\"network.proxy.type\", 1);");
+        StringAssert.Contains(merged, "user_pref(\"network.proxy.http\", \"127.0.0.1\");");
+        StringAssert.Contains(merged, "user_pref(\"network.proxy.http_port\", 8866);");
+        StringAssert.Contains(merged, "titanium.inspector.proxy.managed");
+        StringAssert.Contains(merged, "browser.startup.homepage");
+    }
+
+    [TestMethod]
+    public void FirefoxProxy_RemoveKeysDropsManagedLines()
+    {
+        var existing = """
+            user_pref("network.proxy.type", 1);
+            user_pref("browser.startup.homepage", "about:home");
+            """;
+        var cleaned = LinuxFirefoxProxy.RemoveKeysForTests(existing, ["network.proxy.type"]);
+        Assert.IsFalse(cleaned.Contains("network.proxy.type", StringComparison.Ordinal));
+        StringAssert.Contains(cleaned, "browser.startup.homepage");
+    }
+
+    [TestMethod]
+    public void FirefoxProxy_BypassListUsesUnixMapperHosts()
+    {
+        var bypass = LinuxFirefoxProxy.BuildFirefoxBypassListForTests("*.example.com;<local>");
+        StringAssert.Contains(bypass, "*.example.com");
+        StringAssert.Contains(bypass, "*.local");
+    }
+
+    [TestMethod]
+    public void PolicyDirectories_IncludeMicrosoftEdge()
+    {
+        Assert.IsTrue(LinuxBrowserLaunchProxy.PolicyDirectories()
+            .Any(p => p.Contains("microsoft-edge", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Linux")]
+    public void FirefoxProxy_ApplyClear_WritesAndRestoresPrefsWhenProfileExists()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Inconclusive("Linux-only");
+            return;
+        }
+
+        if (FirefoxCertificateTrust.IsFirefoxProcessRunning())
+        {
+            Assert.Inconclusive("Firefox is running; skip prefs mutation");
+            return;
+        }
+
+        if (!FirefoxCertificateTrust.TryResolveDefaultProfileDirectory(out var profileDir, out var err))
+        {
+            Assert.Inconclusive(err ?? "no profile");
+            return;
+        }
+
+        var prefsPath = Path.Combine(profileDir, "prefs.js");
+        var before = File.Exists(prefsPath) ? File.ReadAllText(prefsPath) : string.Empty;
+        var backupMarker = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".config", "TitaniumInspector", "firefox-proxy-backup.json");
+        try
+        {
+            Assert.IsTrue(LinuxFirefoxProxy.Apply("127.0.0.1", 8866, "<-loopback>;localhost"),
+                "Firefox proxy Apply should write prefs");
+            var after = File.ReadAllText(prefsPath);
+            StringAssert.Contains(after, "network.proxy.type\", 1)");
+            StringAssert.Contains(after, "127.0.0.1");
+            StringAssert.Contains(after, "8866");
+            StringAssert.Contains(after, "titanium.inspector.proxy.managed");
+
+            LinuxFirefoxProxy.Clear();
+            var cleared = File.ReadAllText(prefsPath);
+            Assert.IsFalse(cleared.Contains("titanium.inspector.proxy.managed", StringComparison.Ordinal));
+            Assert.IsFalse(File.Exists(backupMarker));
+        }
+        finally
+        {
+            try
+            {
+                if (before.Length == 0 && File.Exists(prefsPath))
+                    File.Delete(prefsPath);
+                else
+                    File.WriteAllText(prefsPath, before);
+            }
+            catch
+            {
+                // best-effort restore
+            }
+
+            try
+            {
+                if (File.Exists(backupMarker))
+                    File.Delete(backupMarker);
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Linux")]
+    public void TrustUserSsl_Linux_SharesNssDbUsedByChromeAndEdge()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Inconclusive("Linux-only");
+            return;
+        }
+
+        var runner = new ProcessRunner();
+        if (UnixCertificateTrust.FindCertutil(runner) is null)
+        {
+            Assert.Inconclusive("certutil required");
+            return;
+        }
+
+        using var rsa = System.Security.Cryptography.RSA.Create(2048);
+        var req = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+            "CN=TWP-ChromiumEdgeCA-" + Guid.NewGuid().ToString("N")[..8],
+            rsa,
+            System.Security.Cryptography.HashAlgorithmName.SHA256,
+            System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+        req.CertificateExtensions.Add(
+            new System.Security.Cryptography.X509Certificates.X509BasicConstraintsExtension(true, false, 0, true));
+        using var cert = req.CreateSelfSigned(
+            DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+        var friendly = "TWP-ChromiumEdgeCA-" + Guid.NewGuid().ToString("N")[..8];
+
+        var trust = UnixCertificateTrust.TrustUserSsl(cert, friendly, runner);
+        Assert.IsTrue(trust.Succeeded, trust.Message);
+        Assert.IsTrue(UnixCertificateTrust.VerifyUserSslTrust(cert, runner));
+        Assert.IsTrue(UnixCertificateTrust.UntrustUserSsl(cert, friendly, runner));
+        Assert.IsFalse(UnixCertificateTrust.VerifyUserSslTrust(cert, runner));
     }
 }
 

@@ -39,6 +39,17 @@ public class UnixCertificateTrustTests
     }
 
     [TestMethod]
+    public void LinuxNssDatabaseDirectories_IncludeEdgeSnapAndFlatpakPaths()
+    {
+        var dirs = UnixCertificateTrust.LinuxNssDatabaseDirectories().ToList();
+        Assert.IsTrue(dirs.Any(d => d.Contains($"{Path.DirectorySeparatorChar}.pki{Path.DirectorySeparatorChar}nssdb", StringComparison.Ordinal)
+                                    || d.EndsWith(".pki/nssdb", StringComparison.Ordinal)
+                                    || d.EndsWith(".pki\\nssdb", StringComparison.Ordinal)));
+        Assert.IsTrue(dirs.Any(d => d.Contains("microsoft-edge", StringComparison.OrdinalIgnoreCase)
+                                    || d.Contains("com.microsoft.Edge", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
     public void TryInstallNssCertutil_Linux_UsesElevationForAptPackage()
     {
         if (!OperatingSystem.IsLinux())
@@ -530,5 +541,51 @@ public class FirefoxCertificateTrustTests
         }
 
         Assert.IsTrue(FirefoxCertificateTrust.TryRequestFirefoxQuit(TimeSpan.FromMilliseconds(100)));
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Linux")]
+    public void TrustAndUntrustDefaultProfile_Linux_RoundTripsWhenFirefoxIdle()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Inconclusive("Linux-only");
+            return;
+        }
+
+        if (FirefoxCertificateTrust.IsFirefoxProcessRunning())
+        {
+            Assert.Inconclusive("Firefox is running; skip live profile NSS mutation");
+            return;
+        }
+
+        var runner = new ProcessRunner();
+        if (UnixCertificateTrust.FindCertutil(runner) is null)
+        {
+            Assert.Inconclusive("certutil required");
+            return;
+        }
+
+        if (!FirefoxCertificateTrust.TryResolveDefaultProfileDirectory(out _, out var resolveError))
+        {
+            Assert.Inconclusive(resolveError ?? "no Firefox profile");
+            return;
+        }
+
+        using var rsa = System.Security.Cryptography.RSA.Create(2048);
+        var req = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+            "CN=TWP-FirefoxMatrix-" + Guid.NewGuid().ToString("N")[..8],
+            rsa,
+            System.Security.Cryptography.HashAlgorithmName.SHA256,
+            System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+        req.CertificateExtensions.Add(
+            new System.Security.Cryptography.X509Certificates.X509BasicConstraintsExtension(true, false, 0, true));
+        using var cert = req.CreateSelfSigned(
+            DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+        var friendly = "TWP-FirefoxMatrix-" + Guid.NewGuid().ToString("N")[..8];
+
+        var trust = FirefoxCertificateTrust.TrustDefaultProfile(cert, friendly, runner);
+        Assert.IsTrue(trust.Succeeded, trust.Message);
+        Assert.IsTrue(FirefoxCertificateTrust.UntrustDefaultProfile(friendly, runner));
     }
 }

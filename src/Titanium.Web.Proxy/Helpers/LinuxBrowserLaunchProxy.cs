@@ -52,7 +52,7 @@ internal static class LinuxBrowserLaunchProxy
     ];
 
     /// <summary>Returns true when at least one browser-launch hook was written and re-validated.</summary>
-    internal static bool Apply(string hostname, int port)
+    internal static bool Apply(string hostname, int port, string? proxyOverride = null)
     {
         var policyCount = WritePolicies(hostname, port);
         var policyOk = policyCount > 0;
@@ -61,10 +61,11 @@ internal static class LinuxBrowserLaunchProxy
         var xfceOk = WriteXfceWebBrowserHelper(hostname, port);
         var profileCount = LinuxChromeProfileProxy.Apply(hostname, port);
         var profileOk = profileCount > 0;
+        var firefoxOk = LinuxFirefoxProxy.Apply(hostname, port, proxyOverride);
         if (desktopOk)
             TryUpdateDesktopDatabase();
-        var ok = policyOk || desktopOk || xfceOk || profileOk;
-        // Already-running Chrome ignores Preference file edits and often ignores gsettings;
+        var ok = policyOk || desktopOk || xfceOk || profileOk || firefoxOk;
+        // Already-running Chromium-family browsers ignore Preference file edits and often ignore gsettings;
         // relaunch so traffic switches immediately.
         LinuxChromiumRelaunch.TryRelaunchForProxyChange(hostname, port, enableProxy: true);
         return ok;
@@ -73,6 +74,7 @@ internal static class LinuxBrowserLaunchProxy
     internal static void Clear()
     {
         LinuxChromeProfileProxy.Clear();
+        LinuxFirefoxProxy.Clear();
 
         foreach (var dir in PolicyDirectories())
         {
@@ -93,7 +95,7 @@ internal static class LinuxBrowserLaunchProxy
         RestoreXfceHelpersRc();
         TryUpdateDesktopDatabase();
 
-        // Relaunch without proxy flags so already-open Chrome drops the dead endpoint immediately.
+        // Relaunch without proxy flags so already-open Chromium browsers drop the dead endpoint immediately.
         LinuxChromiumRelaunch.TryRelaunchForProxyChange(null, 0, enableProxy: false);
     }
 
@@ -299,12 +301,15 @@ internal static class LinuxBrowserLaunchProxy
         yield return Path.Combine(home, ".config", "microsoft-edge", "policies", "managed");
         yield return Path.Combine(home, "snap", "chromium", "common", "chromium", "policies", "managed");
         yield return Path.Combine(home, "snap", "chromium", "current", ".config", "chromium", "policies", "managed");
+        yield return Path.Combine(home, "snap", "microsoft-edge", "common", "microsoft-edge", "policies", "managed");
         yield return Path.Combine(home, ".var", "app", "com.google.Chrome", "config", "google-chrome", "policies",
             "managed");
         yield return Path.Combine(home, ".var", "app", "org.chromium.Chromium", "config", "chromium", "policies",
             "managed");
         yield return Path.Combine(home, ".var", "app", "com.brave.Browser", "config", "BraveSoftware", "Brave-Browser",
             "policies", "managed");
+        yield return Path.Combine(home, ".var", "app", "com.microsoft.Edge", "config", "microsoft-edge", "policies",
+            "managed");
         yield return "/etc/opt/chrome/policies/managed";
         yield return "/etc/chromium/policies/managed";
         yield return "/etc/opt/edge/policies/managed";
