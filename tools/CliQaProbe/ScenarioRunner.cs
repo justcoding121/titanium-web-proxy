@@ -579,9 +579,7 @@ public static class ScenarioRunner
                 ServerCertificateCustomValidationCallback = (_, cert, _, _) => cert is not null,
             };
             using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
-            // Use 127.0.0.1 (not localhost): EchoOrigin HttpListener is bound to 127.0.0.1 and
-            // rejects Host: localhost with 404 <h1>Not Found (Not Found)</h1> on Linux.
-            var resp = await http.GetAsync($"https://127.0.0.1:{listen}/tls");
+            var resp = await http.GetAsync($"https://localhost:{listen}/tls");
             var body = await resp.Content.ReadAsStringAsync();
             var ok = resp.StatusCode == HttpStatusCode.OK && body.Contains("echo:", StringComparison.Ordinal);
             log.Step("run-tls", ok, $"status={(int)resp.StatusCode} body={Trim(body)}");
