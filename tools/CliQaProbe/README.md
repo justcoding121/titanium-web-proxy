@@ -1,6 +1,6 @@
 # CliQaProbe
 
-Per-machine Titanium CLI checklist (not in the solution, not CI). Spawns a built `titanium.dll` and exercises nested help, config dialects, live `run` traffic, and optional OS service lifecycle.
+Per-machine Titanium CLI checklist (not in the solution, not CI). Spawns the built `titanium` / `titanium.exe` apphost (not `dotnet titanium.dll`) and exercises nested help, config dialects, live `run` traffic, and optional OS service lifecycle. The apphost is required so `service install` records a real SCM / systemd / launchd binPath.
 
 ## Prerequisites
 

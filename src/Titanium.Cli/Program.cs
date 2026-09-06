@@ -10,6 +10,9 @@ internal static class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        args = PrivilegePrompt.TakeInternalArgs(args);
+        PrivilegePrompt.TryAttachParentConsole();
+
         // Framework-dependent macOS Debug: make app-local libmsquic visible to QuicListener.
         Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(args);
 

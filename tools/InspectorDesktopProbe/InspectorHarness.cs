@@ -22,6 +22,7 @@ public sealed class InspectorHarness : IAsyncDisposable
     public MainWindow Window { get; private set; } = null!;
     public ProbeUiRobot Robot { get; private set; } = null!;
     public ScriptedInspectorDialogs Dialogs { get; } = new();
+    public ScriptedInspectorPathPicker PathPicker { get; } = new();
     public InterceptionService Interception { get; private set; } = null!;
     public ProbeLog Log { get; }
 
@@ -64,7 +65,7 @@ public sealed class InspectorHarness : IAsyncDisposable
             };
 
             (ViewModel, Window) = InspectorAppFactory.CreateMainWindow(
-                settings, buffer, registry, updates, Interception, Dialogs);
+                settings, buffer, registry, updates, Interception, Dialogs, PathPicker);
 
             ViewModel.BindPort = 0;
             ViewModel.BindAddress = "127.0.0.1";

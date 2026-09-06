@@ -55,6 +55,16 @@ internal static class ServiceDefaults
         return [host, entry];
     }
 
+    /// <summary>
+    /// Process + optional <c>titanium.dll</c> args when relaunching under UAC/sudo
+    /// while still hosted as <c>dotnet titanium.dll</c> (no adjacent apphost).
+    /// </summary>
+    internal static (string FileName, string[] PrefixArgs) ResolveRelaunchTarget()
+    {
+        var prefix = ResolveProgramPrefix();
+        return (prefix[0], prefix.Length > 1 ? prefix[1..] : []);
+    }
+
     public static Dictionary<string, string> ResolveServiceEnvironment()
     {
         var env = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -83,6 +93,9 @@ internal static class ServiceDefaults
         var name = Path.GetFileNameWithoutExtension(processPath);
         return name.Equals("dotnet", StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>Alias for <see cref="IsDotnetMuxer"/> used by elevation relaunch paths.</summary>
+    internal static bool IsDotnetHostPath(string path) => IsDotnetMuxer(path);
 
     private static string ResolveEntryDll(string[] commandLineArgs, string baseDirectory)
     {

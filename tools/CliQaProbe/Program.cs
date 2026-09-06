@@ -77,7 +77,7 @@ internal static class Program
               dotnet run --project tools/CliQaProbe -- <command> [--elevated]
 
             Commands:
-              status         titanium.dll path, OS, elevation, last-run.json
+              status         apphost / dll path, OS, elevation, last-run.json
               help-matrix    Nested --help including service subcommands
               service        Service status-missing + unelevated install message;
                              with --elevated: install/start/HTTP/stop/uninstall

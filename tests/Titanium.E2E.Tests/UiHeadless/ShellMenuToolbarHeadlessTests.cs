@@ -119,4 +119,108 @@ public class ShellMenuToolbarHeadlessTests
             Assert.IsFalse(fx.ViewModel.ShowSessionDetails);
         });
     }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Headless")]
+    public async Task MenuRemoveSelected_And_DeleteKey_RemoveSessions()
+    {
+        await using var fx = new InspectorHeadlessFixture();
+        await fx.StartAsync();
+        await fx.DispatchAsync(() =>
+        {
+            fx.ViewModel.SeedSession(new SessionSnapshot
+            {
+                Id = 11,
+                Method = "GET",
+                StatusCode = 200,
+                Host = "del.test",
+                Url = "http://del.test/one",
+                Protocol = "HTTP/1.1",
+            });
+            fx.ViewModel.SeedSession(new SessionSnapshot
+            {
+                Id = 12,
+                Method = "GET",
+                StatusCode = 200,
+                Host = "del.test",
+                Url = "http://del.test/two",
+                Protocol = "HTTP/1.1",
+            });
+
+            var first = fx.ViewModel.Sessions[0];
+            fx.ViewModel.SelectedSession = first;
+            fx.ViewModel.SetSelectedSessions([first]);
+            Assert.IsTrue(fx.ViewModel.RemoveSelectedSessionsCommand.CanExecute(null));
+
+            var beforeMenu = fx.ViewModel.Sessions.Count;
+            fx.Robot.Click("MenuRemoveSelected");
+            Assert.IsTrue(fx.ViewModel.Sessions.Count < beforeMenu, "MenuRemoveSelected must drop count");
+
+            // Recreate two sessions for Delete-key single then multi.
+            fx.ViewModel.SeedSession(new SessionSnapshot
+            {
+                Id = 21,
+                Method = "GET",
+                StatusCode = 200,
+                Host = "del.test",
+                Url = "http://del.test/a",
+                Protocol = "HTTP/1.1",
+            });
+            fx.ViewModel.SeedSession(new SessionSnapshot
+            {
+                Id = 22,
+                Method = "GET",
+                StatusCode = 200,
+                Host = "del.test",
+                Url = "http://del.test/b",
+                Protocol = "HTTP/1.1",
+            });
+
+            var one = fx.ViewModel.Sessions[0];
+            fx.ViewModel.SelectedSession = one;
+            fx.ViewModel.SetSelectedSessions([one]);
+            Assert.IsTrue(fx.Robot.TryFind<Avalonia.Controls.DataGrid>("SessionsGrid", out var grid) && grid is not null);
+            grid!.SelectedItems.Clear();
+            grid.SelectedItems.Add(one);
+
+            var beforeDelete = fx.ViewModel.Sessions.Count;
+            fx.Robot.RaiseKey("SessionsGrid", Avalonia.Input.Key.Delete);
+            Assert.IsTrue(fx.ViewModel.Sessions.Count < beforeDelete, "Delete key must remove selected session");
+
+            if (fx.ViewModel.Sessions.Count < 2)
+            {
+                fx.ViewModel.SeedSession(new SessionSnapshot
+                {
+                    Id = 31,
+                    Method = "GET",
+                    StatusCode = 200,
+                    Host = "del.test",
+                    Url = "http://del.test/c",
+                    Protocol = "HTTP/1.1",
+                });
+                fx.ViewModel.SeedSession(new SessionSnapshot
+                {
+                    Id = 32,
+                    Method = "GET",
+                    StatusCode = 200,
+                    Host = "del.test",
+                    Url = "http://del.test/d",
+                    Protocol = "HTTP/1.1",
+                });
+            }
+
+            var multi = fx.ViewModel.Sessions.Take(2).ToList();
+            Assert.IsTrue(multi.Count >= 2);
+            fx.ViewModel.SetSelectedSessions(multi);
+            fx.ViewModel.SelectedSession = multi[0];
+            grid.SelectedItems.Clear();
+            foreach (var s in multi)
+                grid.SelectedItems.Add(s);
+
+            var beforeMulti = fx.ViewModel.Sessions.Count;
+            Assert.IsTrue(fx.ViewModel.HasSelectedSessions);
+            fx.Robot.RaiseKey("SessionsGrid", Avalonia.Input.Key.Delete);
+            Assert.IsTrue(fx.ViewModel.Sessions.Count < beforeMulti, "Delete key must remove multi-selected sessions");
+        });
+    }
 }

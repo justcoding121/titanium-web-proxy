@@ -292,6 +292,73 @@ public class ServiceCommandParseTests
 }
 
 [TestClass]
+public class PrivilegePromptTests
+{
+    [TestCleanup]
+    public void Reset() => PrivilegePrompt.ResetForTests();
+
+    [TestMethod]
+    public void TakeInternalArgs_StripsRelaunchFlags()
+    {
+        var rest = PrivilegePrompt.TakeInternalArgs([
+            "service", "install", "-c", "twp.yaml",
+            PrivilegePrompt.RelaunchFlag,
+            PrivilegePrompt.ParentPidFlag, "4242",
+        ]);
+        CollectionAssert.AreEqual(new[] { "service", "install", "-c", "twp.yaml" }, rest);
+        Assert.IsTrue(PrivilegePrompt.HasRelaunchFlag);
+        Assert.AreEqual(4242u, PrivilegePrompt.ParentPid);
+    }
+
+    [TestMethod]
+    public void AbsolutizeConfigArgs_ExpandsRelativeDashC()
+    {
+        var abs = PrivilegePrompt.AbsolutizeConfigArgs(["service", "install", "-c", "twp.yaml"]);
+        Assert.AreEqual("service", abs[0]);
+        Assert.AreEqual("-c", abs[2]);
+        Assert.IsTrue(Path.IsPathRooted(abs[3]), abs[3]);
+        StringAssert.EndsWith(abs[3], "twp.yaml");
+    }
+
+    [TestMethod]
+    public void JoinWindowsArguments_QuotesSpaces()
+    {
+        var line = PrivilegePrompt.JoinWindowsArguments(["run", "-c", @"C:\My Config\twp.yaml"]);
+        StringAssert.Contains(line, "\"C:\\My Config\\twp.yaml\"");
+    }
+
+    [TestMethod]
+    public void FallbackAndPromptMessages_ArePlatformSpecific()
+    {
+        StringAssert.Contains(PrivilegePrompt.FallbackMessage(), "privileges");
+        StringAssert.Contains(PrivilegePrompt.InteractivePromptMessage(), "permission");
+    }
+
+    [TestMethod]
+    public void IsDotnetHostPath_DetectsHost()
+    {
+        Assert.IsTrue(ServiceDefaults.IsDotnetHostPath(@"C:\Program Files\dotnet\dotnet.exe"));
+        Assert.IsTrue(ServiceDefaults.IsDotnetHostPath("/usr/bin/dotnet"));
+        Assert.IsFalse(ServiceDefaults.IsDotnetHostPath(@"C:\tools\titanium.exe"));
+    }
+
+    [TestMethod]
+    public async Task EnsureOrRelaunch_WhenAlreadyHandledOrNonInteractive_DoesNotLoop()
+    {
+        var result = await PrivilegePrompt.EnsureOrRelaunchAsync(["service", "status"]);
+        if (PrivilegePrompt.IsElevated())
+        {
+            Assert.IsNull(result);
+            return;
+        }
+
+        // Testhost redirects IO, so we must not pop UAC/sudo; caller prints the fallback.
+        Assert.IsFalse(PrivilegePrompt.CanPromptInteractively());
+        Assert.IsNull(result);
+    }
+}
+
+[TestClass]
 public class NestedHelpTests
 {
     [TestMethod]

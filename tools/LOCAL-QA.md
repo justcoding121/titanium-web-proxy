@@ -21,13 +21,13 @@ dotnet run --project tools/InspectorDesktopProbe -- all
 
 | Probe | Purpose |
 |-------|---------|
-| [CliQaProbe](CliQaProbe/README.md) | Spawn `titanium.dll`; operator CLI surface including `service` |
-| [InspectorDesktopProbe](InspectorDesktopProbe/README.md) | In-process Avalonia; System proxy, root CA, browsers, Store loopback |
+| [CliQaProbe](CliQaProbe/README.md) | Spawn `titanium` / `titanium.exe`; operator CLI surface including `service` |
+| [InspectorDesktopProbe](InspectorDesktopProbe/README.md) | In-process Avalonia; full UI chrome + System proxy, root CA, browsers, Store loopback |
 
 Results: `tools/CliQaProbe/results/last-run.json`, `tools/InspectorDesktopProbe/results/last-run.json`.
 
 ## Notes
 
-- Do not expand InspectorDesktopProbe into Composer/HAR/themes — covered by `E2E-UI` / Headless.
 - CliQaProbe never mutates the default service name `titanium`; elevated runs use `titanium-qa-probe` and uninstall in `finally`.
 - `titanium update` and `http3-deps install` are omitted (network / machine mutation).
+- InspectorDesktopProbe `all` starts with `chrome` (full menu / context / Delete-key / Options / Tools click-through), then OS proxy/CA scenarios.

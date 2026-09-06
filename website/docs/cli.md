@@ -104,25 +104,25 @@ The unit runs:
 titanium run -c <abs-config> --service
 ```
 
-Working directory is the config file’s directory (so relative cert / static paths in YAML still resolve). Machine services require **Administrator** (Windows) or **sudo** (Linux/macOS). Elevation is not auto-requested — re-run from an elevated prompt.
+Working directory is the config file’s directory (so relative cert / static paths in YAML still resolve). Machine services require **Administrator** (Windows) or **root** (Linux/macOS). In an interactive terminal, Titanium asks the OS for permission (UAC on Windows, sudo on Linux/macOS). If you cancel the prompt, or the session is not interactive (CI / redirected IO), re-run from an elevated prompt — or use `--user` on Linux/macOS.
 
 ### Examples
 
 ```shell
-# Windows (elevated PowerShell / cmd)
+# Windows — UAC prompt if you are not already Administrator
 titanium service install -c C:\proxy\twp.yaml
 titanium service status
 titanium service stop
 titanium service start
 
-# Linux (systemd)
-sudo titanium service install -c /etc/titanium/twp.yaml
-# Per-user (no sudo); for start-at-boot without login:
+# Linux (systemd) — sudo prompt if you are not root
+titanium service install -c /etc/titanium/twp.yaml
+# Per-user (no elevation); for start-at-boot without login:
 #   loginctl enable-linger $USER
 titanium service install -c ~/twp.yaml --user
 
-# macOS (LaunchDaemon)
-sudo titanium service install -c /usr/local/etc/titanium/twp.yaml
+# macOS (LaunchDaemon) — sudo prompt if you are not root
+titanium service install -c /usr/local/etc/titanium/twp.yaml
 ```
 
 ### Logs

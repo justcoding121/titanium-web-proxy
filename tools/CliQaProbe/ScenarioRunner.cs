@@ -47,6 +47,7 @@ public static class ScenarioRunner
         try
         {
             using var spawn = new CliSpawn();
+            log.Info($"titanium apphost: {spawn.CliExePath}");
             log.Info($"titanium.dll: {spawn.CliDllPath}");
             log.Info($"OS: {RuntimeInformation.OSDescription}");
             log.Info($"Elevated: {Elevation.IsElevated()}");
@@ -216,6 +217,7 @@ public static class ScenarioRunner
     public static async Task<int> RunServiceSectionAsync(ProbeLog log, bool elevatedRequested)
     {
         using var spawn = new CliSpawn();
+        log.Info($"CLI apphost: {spawn.CliExePath}");
         var temp = MakeTemp();
         var fails = 0;
         var elevated = elevatedRequested || Elevation.IsElevated();
@@ -257,9 +259,9 @@ public static class ScenarioRunner
 
             if (elevated)
             {
-                fails += await RunServiceLifecycleAsync(log, spawn, temp);
+                fails += await RunServiceLifecycleAsync(log, spawn);
                 if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                    fails += await RunServiceUserAsync(log, spawn, temp);
+                    fails += await RunServiceUserAsync(log, spawn);
                 else
                     log.Step("service-user", true, "skipped on Windows", skipped: true);
             }
@@ -282,9 +284,10 @@ public static class ScenarioRunner
         return fails == 0 ? 0 : 1;
     }
 
-    private static async Task<int> RunServiceLifecycleAsync(ProbeLog log, CliSpawn spawn, string temp)
+    private static async Task<int> RunServiceLifecycleAsync(ProbeLog log, CliSpawn spawn)
     {
         using var origin = new EchoOrigin();
+        var temp = MakeServiceTemp();
         var listen = CliSpawn.GetFreePort();
         var cfg = ConfigWriter.WriteForwardHost(temp, listen, origin.Port);
         var name = Elevation.QaServiceName;
@@ -362,15 +365,18 @@ public static class ScenarioRunner
             var unOk = unCode == 0 || (unOut + unErr).Contains("not installed", StringComparison.OrdinalIgnoreCase);
             log.Step("service-lifecycle-uninstall", unOk, $"exit={unCode} {Trim(unOut + unErr)}");
             if (!unOk) fails++;
+
+            TryDelete(temp);
         }
 
         log.Step("service-lifecycle", fails == 0, fails == 0 ? "ok" : $"{fails} substep(s) failed");
         return fails == 0 ? 0 : 1;
     }
 
-    private static async Task<int> RunServiceUserAsync(ProbeLog log, CliSpawn spawn, string temp)
+    private static async Task<int> RunServiceUserAsync(ProbeLog log, CliSpawn spawn)
     {
         using var origin = new EchoOrigin();
+        var temp = MakeServiceTemp();
         var listen = CliSpawn.GetFreePort();
         var cfg = ConfigWriter.WriteForwardHost(temp, listen, origin.Port);
         var name = Elevation.QaServiceName;
@@ -404,6 +410,8 @@ public static class ScenarioRunner
             var unOk = unCode == 0 || (unOut + unErr).Contains("not installed", StringComparison.OrdinalIgnoreCase);
             log.Step("service-user-uninstall", unOk, $"exit={unCode} {Trim(unOut + unErr)}");
             if (!unOk) fails++;
+
+            TryDelete(temp);
         }
 
         log.Step("service-user", fails == 0, fails == 0 ? "ok" : "failed");
@@ -812,6 +820,26 @@ public static class ScenarioRunner
         var dir = Path.Combine(Path.GetTempPath(), "cli-qa-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         return dir;
+    }
+
+    /// <summary>
+    /// Config dir for OS-service lifecycle. On Windows the worker runs as LocalSystem,
+    /// so user %TEMP% is not reliable; use ProgramData instead.
+    /// </summary>
+    private static string MakeServiceTemp()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "Titanium",
+                "qa-probe",
+                Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            return dir;
+        }
+
+        return MakeTemp();
     }
 
     private static void TryDelete(string dir)

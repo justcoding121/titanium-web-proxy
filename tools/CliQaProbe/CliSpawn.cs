@@ -5,7 +5,10 @@ using System.Text;
 
 namespace Titanium.Cli.QaProbe;
 
-/// <summary>Spawns built titanium.dll (same layout as E2E CliProcessHarness).</summary>
+/// <summary>
+/// Spawns the built CLI apphost (<c>titanium.exe</c> / <c>titanium</c>) so
+/// <c>service install</c> records a real SCM / systemd / launchd binPath.
+/// </summary>
 public sealed class CliSpawn : IDisposable
 {
     private Process? _runProcess;
@@ -15,6 +18,7 @@ public sealed class CliSpawn : IDisposable
 
     public string CliDirectory { get; }
     public string CliDllPath { get; }
+    public string CliExePath { get; }
 
     public string StdOut
     {
@@ -35,6 +39,16 @@ public sealed class CliSpawn : IDisposable
             throw new FileNotFoundException(
                 "titanium.dll not found. Build Titanium.Cli (Release) before CliQaProbe.",
                 CliDllPath);
+        }
+
+        CliExePath = Path.Combine(
+            CliDirectory,
+            OperatingSystem.IsWindows() ? "titanium.exe" : "titanium");
+        if (!File.Exists(CliExePath))
+        {
+            throw new FileNotFoundException(
+                "CLI apphost not found. Build Titanium.Cli so service install records titanium (not dotnet).",
+                CliExePath);
         }
     }
 
@@ -166,7 +180,7 @@ public sealed class CliSpawn : IDisposable
 
         var psi = new ProcessStartInfo
         {
-            FileName = "dotnet",
+            FileName = CliExePath,
             WorkingDirectory = CliDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -174,7 +188,6 @@ public sealed class CliSpawn : IDisposable
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        psi.ArgumentList.Add(CliDllPath);
         foreach (var a in args)
             psi.ArgumentList.Add(a);
 

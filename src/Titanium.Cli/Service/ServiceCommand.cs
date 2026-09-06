@@ -64,7 +64,8 @@ internal static class ServiceCommand
               -c, --config <path>   Config file used by the service.
               --no-start            Install and enable, but do not start immediately.
 
-            Machine services need Administrator (Windows) or sudo (Linux/macOS).
+            Machine services need Administrator (Windows) or root (Linux/macOS).
+            In a terminal, Titanium asks the OS for permission (UAC / sudo).
             """);
         CliHelp.WriteDocsFooter();
         return 0;
@@ -94,6 +95,7 @@ internal static class ServiceCommand
 
             The unit runs: titanium run -c <abs-config> --service
             Working directory is the config file's directory.
+            Machine install asks the OS for permission when needed (UAC / sudo).
             """);
         CliHelp.WriteDocsFooter();
         return 0;
@@ -132,7 +134,7 @@ internal static class ServiceCommand
                 "--user is not supported on Windows (machine Windows Service only). Omit --user.");
         }
 
-        // Validate config before writing any unit.
+        // Validate config before writing any unit (and before an OS permission prompt).
         var loaded = ConfigLoader.Load(configPath);
         var errors = TwpConfigValidator.Validate(loaded.Config);
         if (errors.Count > 0)
@@ -143,6 +145,15 @@ internal static class ServiceCommand
             }
 
             return 1;
+        }
+
+        if (!user)
+        {
+            var elevation = await PrivilegePrompt.EnsureOrRelaunchAsync(args).ConfigureAwait(false);
+            if (elevation is int elevatedCode)
+            {
+                return elevatedCode;
+            }
         }
 
         var absConfig = Path.GetFullPath(configPath);
@@ -163,6 +174,11 @@ internal static class ServiceCommand
 
     private static async Task<int> UninstallAsync(string[] args)
     {
+        if (await ElevateMachineServiceAsync(args).ConfigureAwait(false) is int code)
+        {
+            return code;
+        }
+
         var manager = CreateManager();
         await manager.UninstallAsync(ParseName(args), ParseUser(args)).ConfigureAwait(false);
         return 0;
@@ -170,6 +186,11 @@ internal static class ServiceCommand
 
     private static async Task<int> StartAsync(string[] args)
     {
+        if (await ElevateMachineServiceAsync(args).ConfigureAwait(false) is int code)
+        {
+            return code;
+        }
+
         var manager = CreateManager();
         await manager.StartAsync(ParseName(args), ParseUser(args)).ConfigureAwait(false);
         return 0;
@@ -177,6 +198,11 @@ internal static class ServiceCommand
 
     private static async Task<int> StopAsync(string[] args)
     {
+        if (await ElevateMachineServiceAsync(args).ConfigureAwait(false) is int code)
+        {
+            return code;
+        }
+
         var manager = CreateManager();
         await manager.StopAsync(ParseName(args), ParseUser(args)).ConfigureAwait(false);
         return 0;
@@ -184,10 +210,24 @@ internal static class ServiceCommand
 
     private static async Task<int> RestartAsync(string[] args)
     {
+        if (await ElevateMachineServiceAsync(args).ConfigureAwait(false) is int code)
+        {
+            return code;
+        }
+
         var manager = CreateManager();
         await manager.RestartAsync(ParseName(args), ParseUser(args)).ConfigureAwait(false);
         return 0;
     }
+
+    /// <summary>
+    /// Machine services need admin/root. <c>--user</c> (Linux/macOS) does not.
+    /// Returns an exit code when this process should stop (OS prompt finished).
+    /// </summary>
+    private static Task<int?> ElevateMachineServiceAsync(string[] args) =>
+        ParseUser(args)
+            ? Task.FromResult<int?>(null)
+            : PrivilegePrompt.EnsureOrRelaunchAsync(args);
 
     private static async Task<int> StatusAsync(string[] args)
     {

@@ -91,6 +91,7 @@ internal static class Program
             _exitCode = cmd switch
             {
                 "status" => StatusScenario.Run(log, harness),
+                "chrome" => await ChromeScenario.RunAsync(harness, log).ConfigureAwait(true),
                 "proxy" => await ProxyScenario.RunAsync(harness, log, browser, timeout).ConfigureAwait(true),
                 "cert" => await CertScenario.RunAsync(harness, log, browser, timeout).ConfigureAwait(true),
                 "firefox" => await FirefoxScenario.RunAsync(harness, log, timeout).ConfigureAwait(true),
@@ -123,6 +124,7 @@ internal static class Program
     {
         var codes = new List<int>
         {
+            await ChromeScenario.RunAsync(harness, log).ConfigureAwait(true),
             StatusScenario.Run(log, harness),
             await ProxyScenario.RunAsync(harness, log, browser, timeout).ConfigureAwait(true),
             await CertScenario.RunAsync(harness, log, browser, timeout).ConfigureAwait(true),
@@ -157,6 +159,7 @@ internal static class Program
 
             Commands:
               status         Dump OS proxy / trust / last-run.json (add --ui for live harness)
+              chrome         Full menu / context / Options / toolbar / Inspect / Tools / Delete-key click-through
               proxy          Start capture, toggle System proxy, capture via OS proxy (no --proxy-server)
               cert           Install/Remove CA via menus; assert Decrypt HTTPS auto-off after remove
               firefox        Trust CA in Firefox + system-proxy HTTPS capture
@@ -164,7 +167,7 @@ internal static class Program
               exclusions     Excluded hosts + Proxy localhost
               pac            PAC replace confirm cancel/accept (when PAC active)
               machine-trust  Machine CA trust (install/remove/run/curl-check/status/clean) — no UI
-              all            Run applicable scenarios for this OS (excludes machine-trust)
+              all            chrome then applicable OS scenarios (excludes machine-trust)
 
             machine-trust subcommands: status | install | remove | run | curl-check | clean
               Aliases: install-system, remove-system. Flag: run --no-system-proxy
