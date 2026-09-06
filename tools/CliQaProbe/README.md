@@ -17,7 +17,8 @@ dotnet run --project tools/CliQaProbe -- status
 dotnet run --project tools/CliQaProbe -- help-matrix
 dotnet run --project tools/CliQaProbe -- core
 dotnet run --project tools/CliQaProbe -- all
-dotnet run --project tools/CliQaProbe -- all --elevated   # Admin / sudo for real SCM
+dotnet run --project tools/CliQaProbe -- all --elevated   # login user + passwordless sudo (Linux)
+# or: sudo -E dotnet run --project tools/CliQaProbe -- all --elevated
 dotnet run --project tools/CliQaProbe -- service
 dotnet run --project tools/CliQaProbe -- service --elevated
 ```
@@ -30,7 +31,7 @@ dotnet run --project tools/CliQaProbe -- service --elevated
 | Meta | `version`, `version --check` (soft), `http3-deps status` (never install) |
 | `test` dialects | yaml / json / twp / `.conf` (http-server) + invalid |
 | Live `run` | forward, `.conf` reverse, site-file listen+forward, routes, static+ETag, TLS leaf, MITM→local HTTPS echo, http2-off, file logging, Plus soft |
-| OS service | status missing; unelevated install message; `--elevated` install→start→HTTP→stop→uninstall as **`titanium-qa-probe` only** |
+| OS service | status missing; unelevated install message; `--elevated` machine install→start→HTTP→stop→uninstall as **`titanium-qa-probe`** (via `sudo -n` when not root); Linux/macOS also **`service --user`** as the **login user** (`SUDO_USER` when the probe was started with sudo). Bare root without `SUDO_USER` skips `--user` (no user bus). |
 
 Skipped (already unit/E2E): factory `binPath` snapshots, flag parse unit tests, live `update` / `http3-deps install`.
 

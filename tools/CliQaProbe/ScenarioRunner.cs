@@ -259,6 +259,8 @@ public static class ScenarioRunner
 
             if (elevated)
             {
+                // Machine unit needs root; probe uses sudo -n when not already elevated.
+                // systemd --user must run as the login user (fails under bare root — no user bus).
                 fails += await RunServiceLifecycleAsync(log, spawn);
                 if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                     fails += await RunServiceUserAsync(log, spawn);
@@ -296,22 +298,22 @@ public static class ScenarioRunner
         try
         {
             // Best-effort cleanup of leftovers
-            _ = await spawn.RunOnceAsync(["service", "uninstall", "--name", name], timeout: TimeSpan.FromSeconds(60));
+            _ = await spawn.RunOnceSystemAsync(["service", "uninstall", "--name", name], timeout: TimeSpan.FromSeconds(60));
 
-            var (installCode, installOut, installErr) = await spawn.RunOnceAsync(
+            var (installCode, installOut, installErr) = await spawn.RunOnceSystemAsync(
                 ["service", "install", "-c", cfg, "--name", name, "--no-start"],
                 timeout: TimeSpan.FromSeconds(90));
             var installOk = installCode == 0;
             log.Step("service-lifecycle-install", installOk, $"exit={installCode} {Trim(installOut + installErr)}");
             if (!installOk) return 1;
 
-            var (stCode, stOut, stErr) = await spawn.RunOnceAsync(
+            var (stCode, stOut, stErr) = await spawn.RunOnceSystemAsync(
                 ["service", "status", "--name", name], timeout: TimeSpan.FromSeconds(30));
             var stOk = stCode == 0 && (stOut + stErr).Contains("stopped", StringComparison.OrdinalIgnoreCase);
             log.Step("service-lifecycle-status", stOk, $"exit={stCode} {Trim(stOut + stErr)}");
             if (!stOk) fails++;
 
-            var (startCode, startOut, startErr) = await spawn.RunOnceAsync(
+            var (startCode, startOut, startErr) = await spawn.RunOnceSystemAsync(
                 ["service", "start", "--name", name], timeout: TimeSpan.FromSeconds(90));
             var startOk = startCode == 0;
             log.Step("service-lifecycle-start", startOk, $"exit={startCode} {Trim(startOut + startErr)}");
@@ -346,7 +348,7 @@ public static class ScenarioRunner
                 if (!httpOk) fails++;
             }
 
-            var (stopCode, stopOut, stopErr) = await spawn.RunOnceAsync(
+            var (stopCode, stopOut, stopErr) = await spawn.RunOnceSystemAsync(
                 ["service", "stop", "--name", name], timeout: TimeSpan.FromSeconds(90));
             var stopOk = stopCode == 0;
             log.Step("service-lifecycle-stop", stopOk, $"exit={stopCode} {Trim(stopOut + stopErr)}");
@@ -356,11 +358,11 @@ public static class ScenarioRunner
         {
             try
             {
-                _ = await spawn.RunOnceAsync(["service", "stop", "--name", name], timeout: TimeSpan.FromSeconds(60));
+                _ = await spawn.RunOnceSystemAsync(["service", "stop", "--name", name], timeout: TimeSpan.FromSeconds(60));
             }
             catch { /* ignore */ }
 
-            var (unCode, unOut, unErr) = await spawn.RunOnceAsync(
+            var (unCode, unOut, unErr) = await spawn.RunOnceSystemAsync(
                 ["service", "uninstall", "--name", name], timeout: TimeSpan.FromSeconds(90));
             var unOk = unCode == 0 || (unOut + unErr).Contains("not installed", StringComparison.OrdinalIgnoreCase);
             log.Step("service-lifecycle-uninstall", unOk, $"exit={unCode} {Trim(unOut + unErr)}");
@@ -375,6 +377,17 @@ public static class ScenarioRunner
 
     private static async Task<int> RunServiceUserAsync(ProbeLog log, CliSpawn spawn)
     {
+        var login = Elevation.TryResolveLoginUser();
+        if (login is null)
+        {
+            log.Step("service-user", true,
+                "skipped (systemd --user needs a login user; run as that user or sudo so SUDO_USER is set)",
+                skipped: true);
+            return 0;
+        }
+
+        log.Info($"service --user as login user '{login}' (systemd --user fails under bare root)");
+
         using var origin = new EchoOrigin();
         var temp = MakeServiceTemp();
         var listen = CliSpawn.GetFreePort();
@@ -384,18 +397,18 @@ public static class ScenarioRunner
 
         try
         {
-            _ = await spawn.RunOnceAsync(
+            _ = await spawn.RunOnceLoginUserAsync(
                 ["service", "uninstall", "--name", name, "--user"],
                 timeout: TimeSpan.FromSeconds(60));
 
-            var (installCode, installOut, installErr) = await spawn.RunOnceAsync(
+            var (installCode, installOut, installErr) = await spawn.RunOnceLoginUserAsync(
                 ["service", "install", "-c", cfg, "--name", name, "--user", "--no-start"],
                 timeout: TimeSpan.FromSeconds(90));
             var installOk = installCode == 0;
             log.Step("service-user-install", installOk, $"exit={installCode} {Trim(installOut + installErr)}");
             if (!installOk) return 1;
 
-            var (stCode, stOut, stErr) = await spawn.RunOnceAsync(
+            var (stCode, stOut, stErr) = await spawn.RunOnceLoginUserAsync(
                 ["service", "status", "--name", name, "--user"],
                 timeout: TimeSpan.FromSeconds(30));
             var stOk = stCode == 0;
@@ -404,7 +417,7 @@ public static class ScenarioRunner
         }
         finally
         {
-            var (unCode, unOut, unErr) = await spawn.RunOnceAsync(
+            var (unCode, unOut, unErr) = await spawn.RunOnceLoginUserAsync(
                 ["service", "uninstall", "--name", name, "--user"],
                 timeout: TimeSpan.FromSeconds(90));
             var unOk = unCode == 0 || (unOut + unErr).Contains("not installed", StringComparison.OrdinalIgnoreCase);

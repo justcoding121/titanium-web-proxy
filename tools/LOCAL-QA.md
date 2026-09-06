@@ -9,9 +9,11 @@ dotnet test tests/Titanium.E2E.Tests -c Release --filter "TestCategory=E2E|TestC
 # CLI process checklist (nested help, dialects, live run, unelevated service messages)
 dotnet run --project tools/CliQaProbe -- all
 
-# Optional: live OS service install/start/stop/uninstall as name titanium-qa-probe
-# Requires Administrator (Windows) or sudo (Linux/macOS)
+# Optional: live OS service install/start/stop/uninstall as name titanium-qa-probe.
+# Prefer the login user (passwordless sudo for machine units; systemd --user as that user):
 dotnet run --project tools/CliQaProbe -- all --elevated
+# Also OK: sudo -E dotnet run --project tools/CliQaProbe -- all --elevated
+# (probe drops to SUDO_USER for --user; bare root without SUDO_USER skips --user)
 
 # Inspector System proxy / CA / browser / loopback UX (desktop dialogs; not CI)
 dotnet run --project tools/InspectorDesktopProbe -- all

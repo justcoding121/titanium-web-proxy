@@ -89,7 +89,68 @@ public sealed class CliSpawn : IDisposable
         TimeSpan? timeout = null,
         IDictionary<string, string?>? env = null)
     {
-        using var process = StartProcess(args, env);
+        using var process = StartProcess(CliExePath, args, env);
+        return await WaitProcessAsync(process, timeout).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Machine service commands: run via <c>sudo -n</c> when the probe is not already root.
+    /// </summary>
+    public async Task<(int ExitCode, string StdOut, string StdErr)> RunOnceSystemAsync(
+        string[] args,
+        TimeSpan? timeout = null)
+    {
+        if (Elevation.IsElevated())
+            return await RunOnceAsync(args, timeout).ConfigureAwait(false);
+
+        if (!File.Exists("/usr/bin/sudo"))
+            return (1, "", "sudo not found");
+
+        var sudoArgs = new List<string> { "-n", "--", CliExePath };
+        sudoArgs.AddRange(args);
+        using var process = StartProcess("/usr/bin/sudo", sudoArgs.ToArray(), env: null);
+        return await WaitProcessAsync(process, timeout).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <c>systemd --user</c> commands: always as the login user (drop privileges when root via sudo).
+    /// </summary>
+    public async Task<(int ExitCode, string StdOut, string StdErr)> RunOnceLoginUserAsync(
+        string[] args,
+        TimeSpan? timeout = null)
+    {
+        var user = Elevation.TryResolveLoginUser();
+        var userEnv = Elevation.TryBuildLoginUserEnv();
+        if (user is null || userEnv is null)
+        {
+            return (1, "",
+                "No login user for systemd --user (run as a normal user, or sudo from a login user so SUDO_USER is set).");
+        }
+
+        if (!Elevation.IsElevated())
+            return await RunOnceAsync(args, timeout, userEnv).ConfigureAwait(false);
+
+        if (!File.Exists("/usr/bin/sudo"))
+            return (1, "", "sudo not found");
+
+        // sudo -n -u <user> env HOME=... XDG_RUNTIME_DIR=... <titanium> ...
+        var sudoArgs = new List<string> { "-n", "-u", user, "--", "env" };
+        foreach (var (k, v) in userEnv)
+        {
+            if (v is not null)
+                sudoArgs.Add($"{k}={v}");
+        }
+
+        sudoArgs.Add(CliExePath);
+        sudoArgs.AddRange(args);
+        using var process = StartProcess("/usr/bin/sudo", sudoArgs.ToArray(), env: null);
+        return await WaitProcessAsync(process, timeout).ConfigureAwait(false);
+    }
+
+    private async Task<(int ExitCode, string StdOut, string StdErr)> WaitProcessAsync(
+        Process process,
+        TimeSpan? timeout)
+    {
         using var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(60));
         try
         {
@@ -113,7 +174,7 @@ public sealed class CliSpawn : IDisposable
         if (verbose)
             args.Add("-v");
 
-        _runProcess = StartProcess(args.ToArray(), env);
+        _runProcess = StartProcess(CliExePath, args.ToArray(), env);
         await WaitForOutputAsync("running", TimeSpan.FromSeconds(45)).ConfigureAwait(false);
     }
 
@@ -170,7 +231,7 @@ public sealed class CliSpawn : IDisposable
         _runProcess = null;
     }
 
-    private Process StartProcess(string[] args, IDictionary<string, string?>? env)
+    private Process StartProcess(string fileName, string[] args, IDictionary<string, string?>? env)
     {
         lock (_gate)
         {
@@ -180,7 +241,7 @@ public sealed class CliSpawn : IDisposable
 
         var psi = new ProcessStartInfo
         {
-            FileName = CliExePath,
+            FileName = fileName,
             WorkingDirectory = CliDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
