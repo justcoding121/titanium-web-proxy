@@ -11,7 +11,7 @@ internal sealed class WindowsServiceManager : IOsServiceManager
     {
         EnsureElevated();
         var binPath = ServiceUnitFactory.BuildWindowsBinPath(
-            request.ExePath, request.ConfigPath, request.Name);
+            request.ProgramPrefix, request.ConfigPath, request.Name);
 
         // Delete existing if present so reinstall is idempotent.
         if (ServiceExists(request.Name))

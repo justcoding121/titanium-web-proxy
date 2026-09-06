@@ -20,7 +20,11 @@ internal sealed class SystemdServiceManager : IOsServiceManager
         Directory.CreateDirectory(dir);
 
         var unit = ServiceUnitFactory.BuildSystemdUnit(
-            request.ExePath, request.ConfigPath, request.WorkingDirectory, request.User);
+            request.ProgramPrefix,
+            request.ConfigPath,
+            request.WorkingDirectory,
+            request.User,
+            request.EnvironmentVariables);
         await File.WriteAllTextAsync(unitPath, unit, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
             .ConfigureAwait(false);
         AsyncConsole.WriteLine($"Wrote {unitPath}");

@@ -16,20 +16,35 @@ internal sealed class LaunchdServiceManager : IOsServiceManager
         }
 
         var label = ServiceDefaults.ResolveMacOsLabel(request.Name);
-        var logDir = ServiceUnitFactory.ResolveLaunchdLogDirectory(request.User);
+        var userHome = request.User ? ResolveUserHome() : null;
+        var logDir = ServiceUnitFactory.ResolveLaunchdLogDirectory(request.User, userHome);
         Directory.CreateDirectory(logDir);
         var outPath = Path.Combine(logDir, request.Name + ".out.log");
         var errPath = Path.Combine(logDir, request.Name + ".err.log");
 
+        var programPrefix = request.ProgramPrefix;
+        if (!request.User)
+        {
+            var sourceDir = ServicePayload.DiscoverAppDirectory(programPrefix);
+            if (!string.IsNullOrEmpty(sourceDir) && Directory.Exists(sourceDir))
+            {
+                var destDir = ServicePayload.MacOsDaemonPayloadDirectory(request.Name);
+                ServicePayload.CopyDirectory(sourceDir, destDir);
+                programPrefix = ServicePayload.RemapPrefix(programPrefix, sourceDir, destDir);
+                TryChmodExecute(programPrefix[0]);
+            }
+        }
+
         var plist = ServiceUnitFactory.BuildLaunchdPlist(
             label,
-            request.ExePath,
+            programPrefix,
             request.ConfigPath,
             request.WorkingDirectory,
             outPath,
-            errPath);
+            errPath,
+            request.EnvironmentVariables);
 
-        var plistPath = ServiceUnitFactory.ResolveLaunchdPlistPath(label, request.User);
+        var plistPath = ServiceUnitFactory.ResolveLaunchdPlistPath(label, request.User, userHome);
         var dir = Path.GetDirectoryName(plistPath)!;
         Directory.CreateDirectory(dir);
         await File.WriteAllTextAsync(plistPath, plist, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
@@ -38,22 +53,18 @@ internal sealed class LaunchdServiceManager : IOsServiceManager
 
         var domain = ResolveDomain(request.User);
         // bootout first so reinstall is idempotent.
-        try
+        await TryBootoutAsync(domain, plistPath, label).ConfigureAwait(false);
+
+        if (!request.StartAfterInstall)
         {
-            await LaunchctlAsync("bootout", domain, plistPath).ConfigureAwait(false);
-        }
-        catch
-        {
-            // Not loaded yet.
+            // Leave the plist on disk for boot/login; do not bootstrap now.
+            // bootstrap + RunAtLoad would start immediately and ignore --no-start.
+            return;
         }
 
         await LaunchctlAsync("bootstrap", domain, plistPath).ConfigureAwait(false);
-
-        if (request.StartAfterInstall)
-        {
-            await LaunchctlAsync("kickstart", "-k", domain + "/" + label).ConfigureAwait(false);
-            AsyncConsole.WriteLine($"Service '{label}' started.");
-        }
+        await LaunchctlAsync("kickstart", "-k", domain + "/" + label).ConfigureAwait(false);
+        AsyncConsole.WriteLine($"Service '{label}' started.");
     }
 
     public async Task UninstallAsync(string name, bool user)
@@ -64,29 +75,19 @@ internal sealed class LaunchdServiceManager : IOsServiceManager
         }
 
         var label = ServiceDefaults.ResolveMacOsLabel(name);
-        var plistPath = ServiceUnitFactory.ResolveLaunchdPlistPath(label, user);
+        var userHome = user ? ResolveUserHome() : null;
+        var plistPath = ServiceUnitFactory.ResolveLaunchdPlistPath(label, user, userHome);
         var domain = ResolveDomain(user);
-        try
-        {
-            await LaunchctlAsync("bootout", domain, plistPath).ConfigureAwait(false);
-        }
-        catch
-        {
-            try
-            {
-                await LaunchctlAsync("bootout", domain + "/" + label).ConfigureAwait(false);
-            }
-            catch
-            {
-                // Already unloaded.
-            }
-        }
+        await TryBootoutAsync(domain, plistPath, label).ConfigureAwait(false);
 
         if (File.Exists(plistPath))
         {
             File.Delete(plistPath);
             AsyncConsole.WriteLine($"Removed {plistPath}");
         }
+
+        if (!user)
+            ServicePayload.TryDeleteDirectory(ServicePayload.MacOsDaemonPayloadDirectory(name));
     }
 
     public async Task StartAsync(string name, bool user)
@@ -97,7 +98,19 @@ internal sealed class LaunchdServiceManager : IOsServiceManager
         }
 
         var label = ServiceDefaults.ResolveMacOsLabel(name);
+        var userHome = user ? ResolveUserHome() : null;
+        var plistPath = ServiceUnitFactory.ResolveLaunchdPlistPath(label, user, userHome);
+        if (!File.Exists(plistPath))
+        {
+            throw new InvalidOperationException($"Service '{label}' is not installed.");
+        }
+
         var domain = ResolveDomain(user);
+        if (!await IsLoadedAsync(domain, label).ConfigureAwait(false))
+        {
+            await LaunchctlAsync("bootstrap", domain, plistPath).ConfigureAwait(false);
+        }
+
         await LaunchctlAsync("kickstart", "-k", domain + "/" + label).ConfigureAwait(false);
         AsyncConsole.WriteLine($"Service '{label}' started.");
     }
@@ -110,8 +123,11 @@ internal sealed class LaunchdServiceManager : IOsServiceManager
         }
 
         var label = ServiceDefaults.ResolveMacOsLabel(name);
+        var userHome = user ? ResolveUserHome() : null;
+        var plistPath = ServiceUnitFactory.ResolveLaunchdPlistPath(label, user, userHome);
         var domain = ResolveDomain(user);
-        await LaunchctlAsync("kill", "SIGTERM", domain + "/" + label).ConfigureAwait(false);
+        // KeepAlive=true restarts after SIGTERM. bootout unloads the job and leaves the plist.
+        await TryBootoutAsync(domain, plistPath, label).ConfigureAwait(false);
         AsyncConsole.WriteLine($"Service '{label}' stopped.");
     }
 
@@ -124,7 +140,8 @@ internal sealed class LaunchdServiceManager : IOsServiceManager
     public async Task<ServiceStatusResult> StatusAsync(string name, bool user)
     {
         var label = ServiceDefaults.ResolveMacOsLabel(name);
-        var plistPath = ServiceUnitFactory.ResolveLaunchdPlistPath(label, user);
+        var userHome = user ? ResolveUserHome() : null;
+        var plistPath = ServiceUnitFactory.ResolveLaunchdPlistPath(label, user, userHome);
         if (!File.Exists(plistPath))
         {
             return new ServiceStatusResult(ServiceStatusKind.NotInstalled, label);
@@ -151,12 +168,64 @@ internal sealed class LaunchdServiceManager : IOsServiceManager
 
     private static string ResolveDomain(bool user)
     {
-        if (user)
+        if (!user)
+            return "system";
+
+        var uid = ResolveTargetUid();
+        if (uid == 0)
         {
-            return $"gui/{GetUid()}";
+            throw new InvalidOperationException(
+                "Cannot install a LaunchAgent as root (gui/0). Run without sudo, or invoke sudo from a logged-in user so SUDO_UID is set.");
         }
 
-        return "system";
+        return $"gui/{uid}";
+    }
+
+    internal static uint ResolveTargetUid()
+    {
+        if (GetEuid() == 0)
+        {
+            var sudoUid = Environment.GetEnvironmentVariable("SUDO_UID");
+            if (uint.TryParse(sudoUid, out var uid) && uid != 0)
+                return uid;
+        }
+
+        return GetUid();
+    }
+
+    internal static string ResolveUserHome()
+    {
+        if (GetEuid() == 0)
+        {
+            var sudoUser = Environment.GetEnvironmentVariable("SUDO_USER");
+            if (!string.IsNullOrEmpty(sudoUser))
+            {
+                foreach (var home in new[] { "/Users/" + sudoUser, "/home/" + sudoUser })
+                {
+                    if (Directory.Exists(home))
+                        return home;
+                }
+            }
+        }
+
+        return Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    }
+
+    private static void TryChmodExecute(string path)
+    {
+        try
+        {
+            if (!File.Exists(path))
+                return;
+            var mode = File.GetUnixFileMode(path);
+            File.SetUnixFileMode(
+                path,
+                mode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
+        }
+        catch
+        {
+            // Best-effort; launchd will fail clearly if the binary is not executable.
+        }
     }
 
     private static void EnsureRoot()
@@ -173,6 +242,38 @@ internal sealed class LaunchdServiceManager : IOsServiceManager
 
     [DllImport("libc", EntryPoint = "getuid", SetLastError = true)]
     private static extern uint GetUid();
+
+    private static async Task<bool> IsLoadedAsync(string domain, string label)
+    {
+        var (code, stdout, stderr) = await RunLaunchctlAsync("print", domain + "/" + label)
+            .ConfigureAwait(false);
+        if (code == 0)
+            return true;
+        var text = stdout + stderr;
+        return !text.Contains("Could not find", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static async Task TryBootoutAsync(string domain, string plistPath, string label)
+    {
+        try
+        {
+            await LaunchctlAsync("bootout", domain, plistPath).ConfigureAwait(false);
+            return;
+        }
+        catch
+        {
+            // Not loaded, or launchctl wants domain/label.
+        }
+
+        try
+        {
+            await LaunchctlAsync("bootout", domain + "/" + label).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Already unloaded.
+        }
+    }
 
     private static async Task LaunchctlAsync(params string[] args)
     {

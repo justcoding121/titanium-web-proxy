@@ -148,15 +148,15 @@ internal static class ServiceCommand
         var absConfig = Path.GetFullPath(configPath);
         var workDir = Path.GetDirectoryName(absConfig)
                       ?? throw new InvalidOperationException("Unable to resolve config directory.");
-        var exe = ServiceDefaults.ResolveExePath();
         var manager = CreateManager();
         await manager.InstallAsync(new ServiceInstallRequest(
             name,
             absConfig,
             user,
             StartAfterInstall: !noStart,
-            exe,
-            workDir)).ConfigureAwait(false);
+            ServiceDefaults.ResolveProgramPrefix(),
+            workDir,
+            ServiceDefaults.ResolveServiceEnvironment())).ConfigureAwait(false);
         AsyncConsole.WriteLine($"Service '{name}' installed.");
         return 0;
     }

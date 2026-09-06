@@ -118,6 +118,131 @@ public class ServiceUnitFactoryTests
         Assert.AreEqual("com.justcoding121.titanium", ServiceDefaults.ResolveMacOsLabel("titanium"));
         Assert.AreEqual("com.example.custom", ServiceDefaults.ResolveMacOsLabel("com.example.custom"));
     }
+
+    [TestMethod]
+    public void ResolveProgramPrefix_PrefersApphostWhenHostedByDotnet()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-svc-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var muxer = Path.Combine(dir, "dotnet");
+            var dll = Path.Combine(dir, "titanium.dll");
+            var apphost = Path.Combine(dir, OperatingSystem.IsWindows() ? "titanium.exe" : "titanium");
+            File.WriteAllText(muxer, "x");
+            File.WriteAllText(dll, "x");
+            File.WriteAllText(apphost, "x");
+            var prefix = ServiceDefaults.ResolveProgramPrefix(muxer, [dll], dir);
+            Assert.AreEqual(1, prefix.Length);
+            Assert.AreEqual(Path.GetFullPath(apphost), prefix[0]);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public void ResolveProgramPrefix_FallsBackToDotnetDll()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-svc-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var muxer = Path.Combine(dir, "dotnet");
+            var dll = Path.Combine(dir, "titanium.dll");
+            File.WriteAllText(muxer, "x");
+            File.WriteAllText(dll, "x");
+            var prefix = ServiceDefaults.ResolveProgramPrefix(muxer, [dll], dir);
+            CollectionAssert.AreEqual(
+                new[] { Path.GetFullPath(muxer), Path.GetFullPath(dll) },
+                prefix);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public void ResolveProgramPrefix_NativeHostUnchanged()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-svc-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var host = Path.Combine(dir, "titanium");
+            File.WriteAllText(host, "x");
+            var prefix = ServiceDefaults.ResolveProgramPrefix(host, [host], dir);
+            Assert.AreEqual(1, prefix.Length);
+            Assert.AreEqual(Path.GetFullPath(host), prefix[0]);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public void BuildLaunchdPlist_IncludesHostedDllAndEnvironment()
+    {
+        var plist = ServiceUnitFactory.BuildLaunchdPlist(
+            "com.justcoding121.titanium",
+            ["/opt/dotnet/dotnet", "/opt/titanium/titanium.dll"],
+            "/etc/titanium/twp.yaml",
+            "/etc/titanium",
+            "/Library/Logs/Titanium/titanium.out.log",
+            "/Library/Logs/Titanium/titanium.err.log",
+            new Dictionary<string, string> { ["DOTNET_ROOT"] = "/opt/dotnet" });
+        StringAssert.Contains(plist, "<string>/opt/dotnet/dotnet</string>");
+        StringAssert.Contains(plist, "<string>/opt/titanium/titanium.dll</string>");
+        StringAssert.Contains(plist, "<key>EnvironmentVariables</key>");
+        StringAssert.Contains(plist, "<key>DOTNET_ROOT</key>");
+        StringAssert.Contains(plist, "<string>/opt/dotnet</string>");
+    }
+
+    [TestMethod]
+    public void BuildWindowsBinPath_HostedByDotnet()
+    {
+        var bin = ServiceUnitFactory.BuildWindowsBinPath(
+            [@"C:\Program Files\dotnet\dotnet.exe", @"C:\Titanium\titanium.dll"],
+            @"C:\Titanium\twp.yaml",
+            "titanium");
+        StringAssert.StartsWith(bin, "\"C:\\Program Files\\dotnet\\dotnet.exe\" C:\\Titanium\\titanium.dll run -c");
+    }
+
+    [TestMethod]
+    public void ResolveLaunchdPlistPath_UserHomeOverride()
+    {
+        Assert.AreEqual(
+            "/Users/qa/Library/LaunchAgents/com.justcoding121.titanium.plist",
+            ServiceUnitFactory.ResolveLaunchdPlistPath(
+                "com.justcoding121.titanium", user: true, userHome: "/Users/qa"));
+    }
+
+    [TestMethod]
+    public void ServicePayload_RemapPrefix_MovesAppDirOnly()
+    {
+        var src = Path.Combine(Path.GetTempPath(), "twp-src");
+        var dst = Path.Combine(Path.GetTempPath(), "twp-dst");
+        var muxer = Path.Combine(Path.GetTempPath(), "dotnet-fake", "dotnet");
+        var remapped = ServicePayload.RemapPrefix(
+            [muxer, Path.Combine(src, "titanium.dll")],
+            src,
+            dst);
+        Assert.AreEqual(Path.GetFullPath(muxer), remapped[0]);
+        Assert.AreEqual(Path.GetFullPath(Path.Combine(dst, "titanium.dll")), remapped[1]);
+    }
+
+    [TestMethod]
+    public void ServicePayload_DiscoverAppDirectory_FromDll()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-app");
+        var dll = Path.Combine(dir, "titanium.dll");
+        Assert.AreEqual(
+            Path.GetFullPath(dir),
+            ServicePayload.DiscoverAppDirectory(["dotnet", dll]));
+    }
 }
 
 [TestClass]
