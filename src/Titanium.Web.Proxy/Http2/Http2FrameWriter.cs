@@ -74,10 +74,33 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
         {
             while (await reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
             {
+                // MaxOrigin=1 SoftPick: writeLock serializes EnqueueRented then Release; the drain
+                // often wakes after a single HEADERS. Brief spin lets the next producer enqueue so
+                // coalesce can batch SecureTransport writes (YARP/SHH contiguous outgoing buffer).
+                var spinner = new SpinWait();
+                while (!spinner.NextSpinWillYield)
+                {
+                    if (reader.TryPeek(out _))
+                        break;
+                    spinner.SpinOnce();
+                }
+
                 while (reader.TryRead(out var first))
                 {
                     try
                     {
+                        // Second grace after taking first frame — next writeLock holder may enqueue.
+                        if (!reader.TryPeek(out _))
+                        {
+                            spinner = new SpinWait();
+                            while (!spinner.NextSpinWillYield)
+                            {
+                                if (reader.TryPeek(out _))
+                                    break;
+                                spinner.SpinOnce();
+                            }
+                        }
+
                         if (!reader.TryPeek(out _))
                         {
                             await WriteLockedAsync(first.AsMemory(), cancellationToken).ConfigureAwait(false);
