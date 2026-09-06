@@ -98,6 +98,8 @@ internal static class RunCommand
             AddListener(proxy, listener);
         }
 
+        ServerConfigApplier.ApplyIgnoreServerCertificateErrorsAfterListeners(proxy, loaded.Config.Server);
+
         if (loaded.Config.Listeners.Count == 0)
         {
             proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 8000, false));

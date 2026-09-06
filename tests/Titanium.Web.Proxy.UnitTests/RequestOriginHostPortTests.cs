@@ -100,4 +100,34 @@ public class RequestOriginHostPortTests
         Assert.AreEqual("2001:db8::1", host);
         Assert.AreEqual(443, port);
     }
+
+    [TestMethod]
+    public void ApplyTransparentForwardCleartextHost_RewritesListenHostToOrigin()
+    {
+        var request = new Request { Method = "GET", RequestUriString = "/tls" };
+        request.Host = "127.0.0.1:8443";
+        var endPoint = new TransparentProxyEndPoint(System.Net.IPAddress.Loopback, 8443, true)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = 18080,
+            ForwardCleartext = true,
+        };
+        request.ApplyTransparentForwardCleartextHost(endPoint);
+        Assert.AreEqual("127.0.0.1:18080", request.Host);
+    }
+
+    [TestMethod]
+    public void ApplyTransparentForwardCleartextHost_LeavesHostWhenReEncrypting()
+    {
+        var request = new Request { Method = "GET", RequestUriString = "/" };
+        request.Host = "127.0.0.1:8443";
+        var endPoint = new TransparentProxyEndPoint(System.Net.IPAddress.Loopback, 8443, true)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = 18080,
+            ForwardCleartext = false,
+        };
+        request.ApplyTransparentForwardCleartextHost(endPoint);
+        Assert.AreEqual("127.0.0.1:8443", request.Host);
+    }
 }

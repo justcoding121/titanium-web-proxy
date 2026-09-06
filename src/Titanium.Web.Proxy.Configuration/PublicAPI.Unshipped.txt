@@ -256,6 +256,8 @@ Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableRfc8441.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableRfc8441.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableWinAuth.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableWinAuth.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.IgnoreServerCertificateErrors.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.IgnoreServerCertificateErrors.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Limits.get -> Titanium.Web.Proxy.Configuration.Models.LimitsConfig?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Limits.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.OriginHttpVersionPolicy.get -> string?

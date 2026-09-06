@@ -35,6 +35,14 @@ public sealed class ServerConfig
     /// <summary>NoCheck, Online, Offline, or OnlineNoCheck.</summary>
     public string? CheckCertificateRevocation { get; set; }
 
+    /// <summary>
+    ///     When true, accept origin certificates that fail OS chain validation (MITM of
+    ///     self-signed / private CA / loopback). When false, reject them. Omit to let the CLI
+    ///     default: true for explicit <c>decryptSsl</c> listeners (macOS cannot write
+    ///     CurrentUser\Root without Keychain UI).
+    /// </summary>
+    public bool? IgnoreServerCertificateErrors { get; set; }
+
     /// <summary>DNS resolver for HTTPS/SVCB discovery, e.g. <c>8.8.8.8:53</c>.</summary>
     public string? DnsServerEndPoint { get; set; }
 

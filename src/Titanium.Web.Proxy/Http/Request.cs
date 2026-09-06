@@ -158,6 +158,25 @@ public class Request : RequestResponseBase
     }
 
     /// <summary>
+    ///     TLS-terminate reverse (<see cref="TransparentBaseProxyEndPoint.ForwardCleartext"/>) must
+    ///     send <c>Host</c> as the origin bind identity, not the public listen host:port.
+    ///     HttpListener (and similar) match Host to the registered prefix; keeping
+    ///     <c>127.0.0.1:listenPort</c> yields 404 on macOS/Linux.
+    /// </summary>
+    internal void ApplyTransparentForwardCleartextHost(ProxyEndPoint? endPoint)
+    {
+        if (endPoint is not TransparentBaseProxyEndPoint
+            {
+                ForwardCleartext: true,
+                ForwardHost: { Length: > 0 } forwardHost
+            } transparent)
+            return;
+
+        var port = transparent.ForwardPort ?? 80;
+        Host = port == 80 ? forwardHost : $"{forwardHost}:{port}";
+    }
+
+    /// <summary>
     ///     Does this request has a 100-continue header?
     /// </summary>
     public bool ExpectContinue

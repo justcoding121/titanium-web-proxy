@@ -36,6 +36,9 @@ public partial class ProxyServer
 
         if (sslPolicyErrors == SslPolicyErrors.None) return true;
 
+        if (IgnoreServerCertificateErrors)
+            return true;
+
         // By default
         // do not allow this client to communicate with unauthenticated servers.
         return false;

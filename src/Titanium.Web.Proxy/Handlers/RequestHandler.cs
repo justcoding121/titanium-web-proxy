@@ -887,6 +887,7 @@ public partial class ProxyServer
     {
         var cancellationToken = args.CancellationToken;
         var request = args.HttpClient.Request;
+        request.ApplyTransparentForwardCleartextHost(args.ProxyEndPoint);
 
         // Transparent reverse tiny GET: send + receive + write without WinAuth / 1xx loop /
         // SetOriginalHeaders / BeforeResponse. Probe and no-interception servers hit this.

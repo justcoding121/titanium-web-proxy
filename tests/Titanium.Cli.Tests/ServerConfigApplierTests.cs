@@ -337,4 +337,23 @@ public class ServerConfigApplierTests
         });
         Assert.AreEqual(0, settings.BypassRules.Count);
     }
+
+    [TestMethod]
+    public void ApplyIgnoreServerCertificateErrorsAfterListeners_DefaultsTrueForExplicitDecrypt()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true));
+        ServerConfigApplier.ApplyIgnoreServerCertificateErrorsAfterListeners(proxy, server: null);
+        Assert.IsTrue(proxy.IgnoreServerCertificateErrors);
+    }
+
+    [TestMethod]
+    public void ApplyIgnoreServerCertificateErrorsAfterListeners_ConfigFalseWins()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true));
+        ServerConfigApplier.ApplyIgnoreServerCertificateErrorsAfterListeners(
+            proxy, new ServerConfig { IgnoreServerCertificateErrors = false });
+        Assert.IsFalse(proxy.IgnoreServerCertificateErrors);
+    }
 }

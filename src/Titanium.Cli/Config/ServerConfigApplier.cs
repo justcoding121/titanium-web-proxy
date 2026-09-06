@@ -41,6 +41,29 @@ internal static class ServerConfigApplier
     }
 
     /// <summary>
+    ///     After listeners exist: honor config, else default ignore-upstream-cert for explicit MITM.
+    ///     macOS denies CurrentUser\Root writes (Keychain UI); without this, decryptSsl cannot
+    ///     complete HTTPS to loopback/self-signed origins.
+    /// </summary>
+    public static void ApplyIgnoreServerCertificateErrorsAfterListeners(ProxyServer proxy, ServerConfig? server)
+    {
+        if (server?.IgnoreServerCertificateErrors is bool configured)
+        {
+            proxy.IgnoreServerCertificateErrors = configured;
+            return;
+        }
+
+        foreach (var endPoint in proxy.ProxyEndPoints)
+        {
+            if (endPoint is ExplicitProxyEndPoint { DecryptSsl: true })
+            {
+                proxy.IgnoreServerCertificateErrors = true;
+                return;
+            }
+        }
+    }
+
+    /// <summary>
     ///     Builds system-proxy settings from config. Null <see cref="ServerConfig.SystemProxyBypassHosts"/>
     ///     merges factory identity hosts; a present list (including empty) is authoritative (Replace).
     /// </summary>
@@ -125,6 +148,8 @@ internal static class ServerConfigApplier
         {
             proxy.CheckCertificateRevocation = revocation;
         }
+
+        ApplyBool(server.IgnoreServerCertificateErrors, v => proxy.IgnoreServerCertificateErrors = v);
 
         if (!string.IsNullOrWhiteSpace(server.DnsServerEndPoint) &&
             TryParseEndPoint(server.DnsServerEndPoint, out var dns))

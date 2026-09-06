@@ -92,6 +92,7 @@ public partial class ProxyServer
         // (see Request.StripHopByHopConnectionForTransparentOrigin).
         var clientRequestedClose = H1TerminateClientRequestedClose(request);
         request.StripHopByHopConnectionForTransparentOrigin();
+        request.ApplyTransparentForwardCleartextHost(endPoint);
 
         var isHttps = !endPoint.ForwardCleartext && request.IsHttps;
         // Terminate with ForwardCleartext: origin is cleartext regardless of client TLS.
@@ -281,6 +282,8 @@ public partial class ProxyServer
 
         var clientRequestedClose = H1TerminateClientRequestedClose(request);
         request.StripHopByHopConnectionForTransparentOrigin();
+
+        request.ApplyTransparentForwardCleartextHost(endPoint);
 
         var isHttps = !endPoint.ForwardCleartext && request.IsHttps;
         if (endPoint.ForwardCleartext)

@@ -547,6 +547,14 @@ public partial class ProxyServer : IDisposable
     public X509RevocationMode CheckCertificateRevocation { get; set; }
 
     /// <summary>
+    ///     When <see langword="true"/>, origin TLS certificates that fail OS chain validation are
+    ///     still accepted (MITM of loopback/self-signed/private CAs). Inspector's
+    ///     "Ignore server certificate errors" maps here. Default <see langword="false"/>.
+    ///     A subscribed <see cref="ServerCertificateValidationCallback"/> still wins.
+    /// </summary>
+    public bool IgnoreServerCertificateErrors { get; set; }
+
+    /// <summary>
     ///     Does this proxy uses the HTTP protocol 100 continue behaviour strictly?
     ///     Broken 100 continue implementations on server/client may cause problems if enabled.
     ///     Defaults to false.

@@ -320,6 +320,8 @@ public partial class ProxyServer
                 }
             }
 
+            request.ApplyTransparentForwardCleartextHost(sessionArgs.ProxyEndPoint);
+
             // RFC 7540 §8.1.2.5: an h2 client may split Cookie across several HEADERS field lines.
             // Only allocate when multiple Cookie lines actually exist (probe GETs have none).
             if (request.Headers.NonUniqueHeaders.TryGetValue("Cookie", out var cookieLines)

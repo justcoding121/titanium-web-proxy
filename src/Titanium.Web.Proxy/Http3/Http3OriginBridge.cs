@@ -1015,6 +1015,7 @@ internal static class Http3OriginBridge
         request.Locked = true;
         if (string.IsNullOrEmpty(request.Host) && request.Authority.Length > 0)
             request.Host = request.Authority.GetString();
+        request.ApplyTransparentForwardCleartextHost(fwd.ProxyEndPoint);
 
         // Match H3→H2 / H3→H3: SNI / Host stay on client :authority (OriginAuthorityHost,
         // typically "localhost"). ForwardHost is connect-only via connectHost/connectPort.
@@ -1791,6 +1792,7 @@ internal static class Http3OriginBridge
             sessionArgs.HttpClient.SetConnection(connection
                 ?? throw new InvalidOperationException(
                     $"Failed to establish an HTTP/1.1 origin connection to '{host}:{port}'."));
+            sessionArgs.HttpClient.Request.ApplyTransparentForwardCleartextHost(sessionArgs.ProxyEndPoint);
             await sessionArgs.HttpClient.SendRequest(
                 server.Enable100ContinueBehaviour, sessionArgs.IsTransparent,
                 sessionArgs.OriginHttpVersionPolicy ?? server.OriginHttpVersionPolicy, cancellationToken);
