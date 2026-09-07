@@ -62,6 +62,28 @@ Use a strong secret in production. Dev-only default secrets require an explicit 
 | Resilience | Active HTTP/TCP health probes |
 | Cache | In-memory HTTP response cache (`cache.enable`) |
 
+## `plus.options` keys
+
+String values under `plus.options` (examples):
+
+| Key | Role |
+|-----|------|
+| `discovery.mode` | `file`, `dns`, `consul`, or `k8s` |
+| `discovery.file` | Path for `mode=file` |
+| `discovery.dnsName` / `discovery.dnsPort` | DNS discovery target |
+| `discovery.consulUrl` / `discovery.k8sUrl` | Best-effort HTTP poll endpoints |
+| `discovery.intervalMs` / `discovery.clusterId` | Poll interval and cluster id |
+| `security.allowCidrs` | Comma-separated client CIDR allow-list |
+| `security.jwtAuthority` / `security.jwtAudience` / `security.jwksUrl` | JWT/OIDC validation |
+| `waf.enabled` | Enable thin deny-list WAF |
+| `waf.denyPaths` / `waf.denyMethods` / `waf.denyHeader` | Deny rules |
+| `waf.maxBodyBytes` / `waf.rulesFile` | Body cap and optional rules file |
+| `state.mode` | `memory` or use Redis via `state.redis` |
+| `state.redis` / `state.rateLimitPerMinute` | Redis connection and rate limit |
+| `resilience.activeHealth` | Enable active probes |
+| `resilience.intervalMs` / `resilience.unhealthyThreshold` / `resilience.path` / `resilience.protocol` / `resilience.timeoutMs` | Probe knobs |
+| `cache.enable` | In-memory response cache |
+
 ## See also
 
 - [CLI](/docs/cli)

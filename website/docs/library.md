@@ -4,9 +4,11 @@ NuGet package **Titanium.Web.Proxy** (MIT). Target framework: **.NET 10**.
 
 ```shell
 dotnet add package Titanium.Web.Proxy
-# Prerelease (e.g. 7.0.4-beta when newer than stable):
+# Prerelease when newer than the stable NuGet feed:
 dotnet add package Titanium.Web.Proxy --prerelease
 ```
+
+Related MIT packages (also on NuGet): **Titanium.Web.Proxy.Abstractions** (shared contracts) and **Titanium.Web.Proxy.Configuration** (`twp.yaml` / dialect loaders — optional for embedders). See [migration 6→7](https://github.com/justcoding121/titanium-web-proxy/blob/develop/docs/migration-6-to-7.md).
 
 ## Explicit man-in-the-middle (MITM) proxy
 

@@ -140,7 +140,7 @@ titanium service install -c /usr/local/etc/titanium/twp.yaml
 ## Minimal ForwardHost reverse
 
 ```yaml
-schemaVersion: "7.0"
+schemaVersion: "7.1"
 listeners:
   - host: "127.0.0.1"
     port: 8000
@@ -171,7 +171,7 @@ Enable in config (`plus.enabled: true` + control-plane shared secret); disable w
 
 | Extension | Dialect |
 |-----------|---------|
-| `.yaml` / `.yml` / `.json` | Native `twp` schema 7.0 |
+| `.yaml` / `.yml` / `.json` | Native `twp` schema 7.1 |
 | `.twp` | Compact site-file (`host / => http://origin`) |
 | `.conf` | HTTP-server style (`listen`, `server_name`, `location`, `proxy_pass`) for familiar reverse-proxy configs |
 

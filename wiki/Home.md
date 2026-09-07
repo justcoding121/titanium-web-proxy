@@ -566,8 +566,7 @@ proxyServer.AfterResponse += async (sender, e) =>
 
 - .NET 10
 
-Versions prior to 4.0 also supported .NET Framework 4.6.2 and .NET 8; starting with 4.0, the package targets
-.NET 10 only.
+Current packages target **.NET 10** only. Older product lines also supported .NET Framework 4.6.2 and earlier .NET (including .NET 8).
 
 ## Breaking changes: unified logging and timing
 

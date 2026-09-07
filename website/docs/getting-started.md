@@ -17,7 +17,7 @@ Titanium Web Proxy is a lightweight, high-performance HTTP(S) proxy: reverse / e
 2. Create `twp.yaml`:
 
 ```yaml
-schemaVersion: "7.0"
+schemaVersion: "7.1"
 listeners:
   - host: "127.0.0.1"
     port: 8000
@@ -71,8 +71,8 @@ Point your client at `127.0.0.1:8000`. Only trust a generated root CA on a machi
 ## Platforms
 
 - **CLI, Plus, Core:** Windows, Linux, and macOS (self-contained CLI zips; no .NET SDK required to *run* the CLI).
-- **Inspector:** Windows-first (MSI / portable zip).
-- **Library:** .NET 10 (NuGet).
+- **Inspector:** Windows (MSI / zip), macOS (DMG / zip), Linux (AppImage / deb / rpm / zip).
+- **Library:** .NET 10 (NuGet: `Titanium.Web.Proxy`; optional Abstractions / Configuration packages).
 
 ## Next
 

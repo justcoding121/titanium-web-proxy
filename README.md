@@ -28,7 +28,7 @@ Protocol coverage details: [protocol support matrix](https://github.com/justcodi
 | **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse / edge proxy for any backend stack, managed by the command line interface (CLI) | [Download](https://titaniumproxy.com/download#cli) (Windows, Linux, macOS) |
 | **Titanium Inspector** | Desktop MITM debugger — session grid, inspectors, AutoResponder, breakpoints, HTTP Archive (HAR) export | [Download](https://titaniumproxy.com/download#inspector) |
 | **Titanium.Plus** | Optional ops: control plane, dashboard, observability (non-commercial license) | After installing CLI: `titanium update --plus` |
-| **Titanium.Web.Proxy** | Embed a proxy (MITM and/or reverse) in a .NET app | [NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy/7.0.4) |
+| **Titanium.Web.Proxy** | Embed a proxy (MITM and/or reverse) in a .NET app | [NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy) |
 
 Requires .NET 10 or later for the library. CLI and Inspector downloads are self-contained (no SDK needed to run them).
 
@@ -66,7 +66,7 @@ On Windows, **winget is stable-only**:
 winget install justcoding121.TitaniumCli
 ```
 
-For **beta**, download a self-contained zip from [Download](https://titaniumproxy.com/download) / [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) (for example `v7.0.4-beta`; stable is `v7.0.4`). Extract and run:
+For **beta**, download a self-contained zip from [Download](https://titaniumproxy.com/download) / [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) (stable is `v7.0.5`; use the newest beta tag when published). Extract and run:
 
 ```shell
 titanium run -c twp.yaml

@@ -231,7 +231,7 @@ plus:
     cache.enable: "true"
 ```
 
-Common `plus.options` keys (string values): discovery, security, WAF, rate-limit state (`state.mode=memory` or `state.redis`), resilience probes, and cache. See [Plus](/docs/plus). Engine settings belong in `server:`, not `plus.options`.
+Common `plus.options` keys (string values): see the table on [Plus](/docs/plus) (`discovery.*`, `security.*`, `waf.*`, `state.*`, `resilience.*`, `cache.enable`). Engine settings belong in `server:`, not `plus.options`.
 
 ## Validate
 

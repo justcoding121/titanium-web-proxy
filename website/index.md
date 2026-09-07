@@ -35,11 +35,11 @@ features:
   <div class="edition-card">
     <h3>Titanium.Cli</h3>
     <p class="license">MIT · zip / winget</p>
-    <p>Standalone reverse / edge proxy for any backend stack, managed by the command line interface (CLI): <code>run</code>, <code>test</code>, <code>version</code>, <code>update</code>.</p>
+    <p>Standalone reverse / edge proxy for any backend stack, managed by the command line interface (CLI): <code>run</code>, <code>test</code>, <code>version</code>, <code>update</code>, <code>http3-deps</code>, <code>service</code>.</p>
   </div>
   <div class="edition-card">
     <h3>Titanium Inspector</h3>
-    <p class="license">PolyForm Noncommercial · MSI / zip</p>
+    <p class="license">PolyForm Noncommercial · Windows / macOS / Linux</p>
     <p>Desktop man-in-the-middle (MITM) debugger — session grid, inspectors, AutoResponder, breakpoints, HTTP Archive (HAR) export.</p>
   </div>
   <div class="edition-card">
@@ -65,7 +65,7 @@ titanium test -c twp.yaml
 ```
 
 ```yaml [twp.yaml]
-schemaVersion: "7.0"
+schemaVersion: "7.1"
 listeners:
   - host: "127.0.0.1"
     port: 8000
