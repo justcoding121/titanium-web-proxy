@@ -8,7 +8,7 @@ dotnet add package Titanium.Web.Proxy
 dotnet add package Titanium.Web.Proxy --prerelease
 ```
 
-## Explicit MITM proxy
+## Explicit man-in-the-middle (MITM) proxy
 
 ```csharp
 using System.Net;

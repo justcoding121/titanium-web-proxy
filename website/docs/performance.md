@@ -1,6 +1,6 @@
 # Performance
 
-Titanium targets low-overhead MITM and reverse proxying: connection pooling, HTTP/2 multiplexing, and buffer reuse.
+Titanium targets low-overhead man-in-the-middle (MITM) and reverse proxying: connection pooling, HTTP/2 multiplexing, and buffer reuse.
 
 ## Summary (from publishable CI tables)
 
@@ -9,7 +9,7 @@ On matched **GitHub Actions 4 vCPU / 16 GiB** runners, Titanium is typically:
 - **at or above YARP** for reverse-proxy workloads
 - **ahead of nginx** on H2/H3→H1 reverse; **near parity** for the rest (nginx still edges tiny keep-alive H1)
 
-MITM is Titanium-only among those peers (they cannot MITM). Absolute RPS varies by OS, TLS, and MsQuic packaging — compare **within a table**, not across Windows vs Linux.
+MITM is Titanium-only among those peers (they cannot MITM). Absolute requests per second (RPS) varies by OS, TLS, and MsQuic packaging — compare **within a table**, not across Windows vs Linux.
 
 ## Practical reverse RPS (CI)
 

@@ -4,7 +4,7 @@
 |---------|------|---------|----------------|
 | **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse / edge proxy for any stack | MIT | [Download](/download) zips, winget |
 | **Titanium Inspector** | Desktop man-in-the-middle (MITM) debugger | [PolyForm Noncommercial](https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt) | MSI / zip / winget |
-| **Titanium.Plus** | Control plane, ops, observability, dashboard | PolyForm Noncommercial | `titanium update --plus` / `--remove-plus` |
+| **Titanium.Plus** | Control plane, ops, observability, dashboard | PolyForm Noncommercial | After installing CLI: `titanium update --plus` |
 | **Titanium.Web.Proxy** | Optional embeddable library for .NET apps | MIT | NuGet |
 
 CLI and Plus target reverse-proxy / edge workloads (routing, load balancing, health, discovery) on Windows, Linux, and macOS. Inspector is the MITM debugging product. The Core library is for embedding the same engine in a .NET process.

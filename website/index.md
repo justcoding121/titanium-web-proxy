@@ -22,11 +22,11 @@ features:
   - title: Intercept & modify
     details: Explicit, transparent, and SOCKS4/5 endpoints. Decrypt HTTPS, stream bodies, and shape traffic — from the Inspector, CLI, or your own app.
   - title: Reverse / edge CLI
-    details: Run `titanium` / `twp` with a YAML config — routes, clusters, load balancing, TLS terminate, and automatic certificates (ACME). Self-contained zips for every major OS.
+    details: Run `titanium` / `twp` with a YAML config — routes, clusters, load balancing, TLS terminate, and automatic certificates via Automatic Certificate Management Environment (ACME). Self-contained zips for every major OS.
   - title: HTTP/1 · HTTP/2 · HTTP/3
     details: HTTP/2 on by default. HTTP/3 (QUIC) opt-in. Bridges when the client and origin speak different protocol versions.
   - title: Measured performance
-    details: Typically at or above YARP; strong reverse-proxy throughput (requests per second). See the performance guide for publishable tables.
+    details: Typically at or above YARP; strong reverse-proxy throughput in requests per second (RPS). See the performance guide for publishable tables.
 ---
 
 ## Editions
@@ -40,12 +40,12 @@ features:
   <div class="edition-card">
     <h3>Titanium Inspector</h3>
     <p class="license">PolyForm Noncommercial · MSI / zip</p>
-    <p>Desktop man-in-the-middle (MITM) debugger — session grid, inspectors, AutoResponder, breakpoints, HAR export.</p>
+    <p>Desktop man-in-the-middle (MITM) debugger — session grid, inspectors, AutoResponder, breakpoints, HTTP Archive (HAR) export.</p>
   </div>
   <div class="edition-card">
     <h3>Titanium.Plus</h3>
     <p class="license">PolyForm Noncommercial</p>
-    <p>Control plane, dashboard, observability, discovery, and a thin web application firewall (WAF). Install with <code>titanium update --plus</code>.</p>
+    <p>Control plane, dashboard, observability, discovery, and a thin web application firewall (WAF). After installing CLI: <code>titanium update --plus</code>.</p>
   </div>
   <div class="edition-card">
     <h3>Titanium.Web.Proxy</h3>

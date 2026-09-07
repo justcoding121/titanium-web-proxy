@@ -26,7 +26,7 @@ Not for end users. Per-OS checklists and on-demand probes live under `tools/`:
 - [LOCAL-QA.md](tools/LOCAL-QA.md) — solo checklist (E2E + probes)
 - [CliQaProbe](tools/CliQaProbe) — CLI help / dialects / live `run` / optional OS service
 - [InspectorDesktopProbe](tools/InspectorDesktopProbe) — system proxy / CA / browser UX
-- [RpsLoadProbe](tools/RpsLoadProbe) — concurrent breaking-point load (requests per second)
+- [RpsLoadProbe](tools/RpsLoadProbe) — concurrent breaking-point load in requests per second (RPS)
 
 ## PR checklist
 

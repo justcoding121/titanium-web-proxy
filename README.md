@@ -12,7 +12,7 @@ A lightweight, high-performance HTTP(S) proxy for Windows, Linux, and macOS — 
 
 - Intercept, inspect, modify, redirect, or block HTTP and HTTPS traffic
 - Explicit, transparent, and SOCKS4/5 proxy endpoints
-- Decrypt HTTPS (man-in-the-middle / MITM) when you install and trust a local root certificate
+- Decrypt HTTPS with man-in-the-middle (MITM) when you install and trust a local root certificate
 - Stream request and response bodies across HTTP/1.x, HTTP/2, and HTTP/3 (QUIC)
 - Upstream HTTP, HTTPS, and SOCKS proxies with automatic system proxy detection
 - Proxy authentication, mutual TLS, Kerberos, and NTLM
@@ -26,8 +26,8 @@ Protocol coverage details: [protocol support matrix](https://github.com/justcodi
 | Product | Best for | How you get it |
 |---------|----------|----------------|
 | **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse / edge proxy for any backend stack | [Download](https://titaniumproxy.com/download#cli) (Windows, Linux, macOS) |
-| **Titanium Inspector** | Desktop man-in-the-middle debugger — session grid, inspectors, AutoResponder, breakpoints, HAR export | [Download](https://titaniumproxy.com/download#inspector) |
-| **Titanium.Plus** | Optional ops: control plane, dashboard, observability (non-commercial license) | After CLI: `titanium update --plus` |
+| **Titanium Inspector** | Desktop MITM debugger — session grid, inspectors, AutoResponder, breakpoints, HTTP Archive (HAR) export | [Download](https://titaniumproxy.com/download#inspector) |
+| **Titanium.Plus** | Optional ops: control plane, dashboard, observability (non-commercial license) | After installing CLI: `titanium update --plus` |
 | **Titanium.Web.Proxy** | Embed a proxy (MITM and/or reverse) in a .NET app | [NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy/7.0.4) |
 
 Requires .NET 10 or later for the library. CLI and Inspector downloads are self-contained (no SDK needed to run them).
@@ -44,9 +44,9 @@ Requires .NET 10 or later for the library. CLI and Inspector downloads are self-
 
 ## Performance
 
-![Practical reverse proxy throughput (requests per second) on Linux](wiki/images/rps-practical-linux.png)
+![Practical reverse proxy throughput in requests per second (RPS) on Linux](wiki/images/rps-practical-linux.png)
 
-**RPS** means **requests per second** (how many HTTP requests the reverse proxy completes under load). Typically at or above **YARP**; ahead of **nginx** when the client speaks HTTP/2 or HTTP/3 and the origin is HTTP/1.1; near parity elsewhere. Full tables: [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
+**RPS** is how many HTTP requests the reverse proxy completes under load. Typically at or above **YARP**; ahead of **nginx** when the client speaks HTTP/2 or HTTP/3 and the origin is HTTP/1.1; near parity elsewhere. Full tables: [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
 
 ## Installation
 
@@ -81,7 +81,7 @@ Each CLI zip also includes a `twp` alias binary.
 
 ### Titanium Inspector
 
-Prefer [Download](https://titaniumproxy.com/download). On Windows, winget id `justcoding121.TitaniumInspector` is **stable-only**. Start interception from the Capture menu, install the root CA (certificate authority), then toggle system proxy.
+Prefer [Download](https://titaniumproxy.com/download). On Windows, winget id `justcoding121.TitaniumInspector` is **stable-only**. Start interception from the Capture menu, install the root certificate authority (CA), then toggle system proxy.
 
 ## Quick start (library)
 
