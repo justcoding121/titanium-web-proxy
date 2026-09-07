@@ -246,6 +246,7 @@ namespace Titanium.Web.Proxy.Http2
             // streams may relay via the primary leg while mutated streams re-encode through
             // QueueSendHeaderTowardServer onto the same serverStream — enabling the pool would
             // dispose ServerFrameWriter and race those writes with the pool's primary Writer.
+            // Tip A/B (MITM MaxOrigin=2 + pool): Lite err%~29 / RSS blow-up — keep disabled.
             var useMultiOrigin = canCompressedRelayTopology
                 && !httpInterceptionEnabled
                 && openOriginConnectionAsync != null
@@ -490,24 +491,88 @@ namespace Titanium.Web.Proxy.Http2
         }
 
         /// <summary>
-        ///     Schedules finalize. Compressed-relay finalize is synchronous (no SessionEventArgs) — avoid
-        ///     allocating a <see cref="Task"/> into <see cref="Http2ConnectionState.PendingFinalizations"/>.
+        ///     Schedules finalize. Compressed-relay finalize is synchronous when AfterResponse completes
+        ///     inline (gate-off has no SessionEventArgs; MITM unchanged-lite usually Completes Task) —
+        ///     avoid allocating a <see cref="Task"/> into <see cref="Http2ConnectionState.PendingFinalizations"/>.
         /// </summary>
         private static void ScheduleFinalize(Http2StreamState state,
             Func<SessionEventArgs, Task> onAfterResponse, ILogger logger,
             Http2ConnectionState connectionState)
         {
-            if (state.IsCompressedRelay && state.SessionArgs == null)
+            if (state.IsCompressedRelay)
             {
-                // Inline hot path: FinalizedFlag + pool return. Prefer TryReset over dispose+new CTS.
+                // Inline hot path: FinalizedFlag + optional sync AfterResponse/Dispose + pool return.
                 if (Interlocked.CompareExchange(ref state.FinalizedFlag, 1, 0) != 0)
                     return;
-                connectionState.ReturnStreamState(state);
-                return;
+
+                var args = state.SessionArgs;
+                if (args == null)
+                {
+                    connectionState.ReturnStreamState(state);
+                    return;
+                }
+
+                // MITM unchanged-lite: both Before* dispatches finished before END_STREAM closed the
+                // stream. Prefer sync AfterResponse+Dispose; async AfterResponse falls back to Task track.
+                try
+                {
+                    var after = onAfterResponse(args);
+                    if (after.IsCompletedSuccessfully)
+                    {
+                        args.Dispose();
+                        connectionState.ReturnStreamState(state);
+                        return;
+                    }
+
+                    if (after.IsCompleted)
+                    {
+                        // Faulted/canceled CompletedTask — still dispose; report like FinalizeStreamAsync.
+                        if (after.IsFaulted)
+                        {
+                            ReportException(logger, new ProxyHttpException("HTTP/2 AfterResponse handler failed",
+                                after.Exception?.GetBaseException(), args));
+                        }
+
+                        args.Dispose();
+                        connectionState.ReturnStreamState(state);
+                        return;
+                    }
+
+                    // Rare async AfterResponse: finish on the pending bag (FinalizedFlag already set).
+                    connectionState.PendingFinalizations.Track(CompleteMitmCompressedFinalizeAsync(
+                        after, args, state, logger, connectionState));
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    ReportException(logger, new ProxyHttpException("HTTP/2 AfterResponse handler failed", ex, args));
+                    args.Dispose();
+                    connectionState.ReturnStreamState(state);
+                    return;
+                }
             }
 
             connectionState.PendingFinalizations.Track(
                 FinalizeStreamAsync(state, onAfterResponse, logger, connectionState));
+        }
+
+        private static async Task CompleteMitmCompressedFinalizeAsync(Task afterResponse,
+            SessionEventArgs args, Http2StreamState state, ILogger logger,
+            Http2ConnectionState connectionState)
+        {
+            try
+            {
+                await afterResponse.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                ReportException(logger, new ProxyHttpException("HTTP/2 AfterResponse handler failed", ex, args));
+            }
+            finally
+            {
+                args.Dispose();
+                connectionState.ReturnStreamState(state);
+            }
         }
 
         /// <summary>
@@ -596,6 +661,11 @@ namespace Titanium.Web.Proxy.Http2
             // "Settings describing the peer this task writes to" - used to size outbound HEADERS/
             // CONTINUATION/DATA framing so it never exceeds what that peer advertised it will accept.
             var remoteSettings = isClient ? connectionState.ServerSettings : connectionState.ClientSettings;
+
+            // One decode scratch per connection direction: HEADERS decode is serialized on this frame
+            // loop, so ConcurrentBag contention is unnecessary. Clears MutationCount/COW without the
+            // live-bag Clear() side effects.
+            var headerDecodeScratch = new HeaderCollection();
 
             // Flow control governing DATA this task writes toward `output`; replenished by WINDOW_UPDATE/
             // SETTINGS_INITIAL_WINDOW_SIZE frames read from that same peer - necessarily by the *other*
@@ -928,7 +998,8 @@ namespace Titanium.Web.Proxy.Http2
             async Task<bool> ProcessCompleteHeaderBlockAsync(int hbStreamId, SessionEventArgs sessionArgs,
                 RequestResponseBase headerRr, byte[] compressed, bool endStreamFlag, bool isPromise)
             {
-                var collected = new HeaderCollection();
+                headerDecodeScratch.ResetForDecodeScratch();
+                var collected = headerDecodeScratch;
                 var headerListener = new MyHeaderListener(
                     (name, value) => collected.AddHeader(new HttpHeader(name, value)), isRequest: isClient);
 

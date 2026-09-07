@@ -20,6 +20,12 @@ namespace Titanium.Web.Proxy.EventArguments;
 /// </summary>
 public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
 {
+    /// <summary>
+    ///     Shared process-id stub when lookup is unsupported or unused (transparent reverse / RPS).
+    ///     Avoids a <see cref="Lazy{T}"/> allocation per multiplexed H2/H3 stream.
+    /// </summary>
+    private static readonly Lazy<int> UnknownClientProcessId = new(() => 0);
+
     protected readonly IBufferPool BufferPool;
 
     internal readonly CancellationTokenSource CancellationTokenSource;
@@ -64,7 +70,9 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
 
         ClientStream = clientStream;
         HttpClient = new HttpWebClient(connectRequest, request,
-            new Lazy<int>(() => clientStream.Connection.GetProcessId(endPoint)));
+            ClientProcessId.IsSupported && endPoint is not TransparentBaseProxyEndPoint
+                ? new Lazy<int>(() => clientStream.Connection.GetProcessId(endPoint))
+                : UnknownClientProcessId);
         ProxyEndPoint = endPoint;
         EnableWinAuth = server.EnableWinAuth && IsWindowsAuthenticationSupported;
     }

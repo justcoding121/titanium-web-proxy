@@ -584,6 +584,24 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     }
 
     /// <summary>
+    ///     Reset a connection-scoped HPACK decode scratch without MutationCount / COW side effects.
+    ///     Safe only when this collection is not a live Request/Response header bag.
+    /// </summary>
+    internal void ResetForDecodeScratch()
+    {
+        headers.Clear();
+        nonUniqueHeaders.Clear();
+        nonUniqueHeadersReadOnly.Clear();
+        MutationCount = 0;
+        _mitmRelayCowArmed = false;
+        _mitmRelayCowUnique = null;
+        _mitmRelayCowNonUnique = null;
+        _mitmRelayCowNonUniqueNames = 0;
+        _mitmRelayAppends = default;
+        _mitmRelayAppendDirty = false;
+    }
+
+    /// <summary>
     ///     Rewrites Title-Case HTTP/1.1 field names to lowercase ASCII in place (RFC 9113 / 9114).
     ///     Used before HPACK/QPACK encode so the hot path can skip per-field <c>ToLowerInvariant</c>.
     ///     No-op when names are already lowercase (common for HTTP/2 origins and some H1 stacks).
