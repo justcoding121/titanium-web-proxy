@@ -231,7 +231,7 @@ plus:
     cache.enable: "true"
 ```
 
-Common `plus.options` keys (string values): see the table on [Plus](/docs/plus) (`discovery.*`, `security.*`, `waf.*`, `state.*`, `resilience.*`, `cache.enable`). Engine settings belong in `server:`, not `plus.options`.
+Common `plus.options` keys (string values): see the table on [Plus](/docs/plus) (`discovery.*`, `security.*`, `waf.*`, `state.*`, `resilience.*`, `cache.enable`, `grpc.transcode.*`). Enabling `grpc.transcode.enabled` forces the HTTP session interception path — see [gRPC-JSON transcoding](/docs/grpc-json-transcoding). Engine settings belong in `server:`, not `plus.options`.
 
 ## Validate
 

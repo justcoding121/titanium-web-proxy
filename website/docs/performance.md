@@ -37,6 +37,10 @@ Detailed tables, harness knobs, and methodology live in the project wiki:
 
 Harness: [`tools/RpsLoadProbe`](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe) and [PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/PERF-GATES.md).
 
+### Feature cost notes
+
+- **gRPC-JSON transcoding** (Plus): when unset, Core pays only a null check. When enabled, the process uses the session interception path and buffers matched unary bodies — do not enable it on default RPS edition arms. Details: [gRPC-JSON transcoding](/docs/grpc-json-transcoding).
+
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
 ```

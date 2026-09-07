@@ -314,13 +314,16 @@ public partial class ProxyServer
     /// </summary>
     /// <param name="args"></param>
     /// <returns></returns>
-    private Task OnBeforeResponse(SessionEventArgs args)
+    private async Task OnBeforeResponse(SessionEventArgs args)
     {
-        if (args.IsFastPath) return Task.CompletedTask;
+        if (args.IsFastPath) return;
 
-        return BeforeResponse != null
-            ? BeforeResponse.InvokeAsync(this, args, logger)
-            : Task.CompletedTask;
+        // Rewrite gRPC → JSON before user handlers when the request was transcoded.
+        if (ReverseProxy?.GrpcJsonTranscoder is { } transcoder)
+            await transcoder.TryRewriteResponseAsync(args, args.CancellationToken).ConfigureAwait(false);
+
+        if (BeforeResponse != null)
+            await BeforeResponse.InvokeAsync(this, args, logger).ConfigureAwait(false);
     }
 
     /// <summary>

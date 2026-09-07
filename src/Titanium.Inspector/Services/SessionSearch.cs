@@ -282,6 +282,7 @@ public static class SessionSearch
             {
                 "ws" or "websocket" => s.IsWebSocket,
                 "grpc" => s.IsGrpc,
+                "transcoded" => s.IsTranscoded,
                 "tunnel" => s.IsTunnel,
                 "multipart" => s.IsMultipart,
                 "error" or "errors" => IsErrorStatus(s.StatusCode),

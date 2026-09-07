@@ -7,6 +7,7 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Titanium.Inspector.ViewModels;
 using Titanium.Web.Proxy;
+using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http;
@@ -1123,24 +1124,76 @@ public sealed class InterceptionService : IDisposable
         var req = e.HttpClient.Request;
         var bodyBytes = req.IsBodyRead ? TruncateBytes(req.Body) : null;
         var bodyText = bodyBytes is null ? null : TruncateText(Encoding.UTF8.GetString(bodyBytes));
+        GrpcJsonTranscodeSessionMark.TryGet(e.UserData, out var mark);
 
-        return new SessionSnapshot
+        var snap = new SessionSnapshot
         {
             Id = assignId ? NextSessionId() : 0,
-            Method = req.Method ?? "GET",
-            Url = req.Url ?? "",
+            Method = mark?.ClientMethod ?? req.Method ?? "GET",
+            Url = BuildDisplayUrl(req, mark),
             Host = TryHost(req),
             StartedUtc = DateTimeOffset.UtcNow,
             RequestHeadersText = FormatHeaders(req.Headers),
             RequestBodyBytes = bodyBytes,
             RequestBodyText = bodyText,
-            ContentType = req.ContentType,
+            ContentType = mark?.ClientContentType ?? req.ContentType,
             Protocol = SessionDisplayFormat.FormatHttpProtocol(req.HttpVersion),
             IsTunnel = req.Method?.Equals("CONNECT", StringComparison.OrdinalIgnoreCase) == true,
             IsWebSocket = req.UpgradeToWebSocket,
-            IsGrpc = req.ContentType?.Contains("grpc", StringComparison.OrdinalIgnoreCase) == true,
+            IsGrpc = req.ContentType?.Contains("grpc", StringComparison.OrdinalIgnoreCase) == true ||
+                     mark is not null,
+            IsTranscoded = mark is not null,
             IsMultipart = req.ContentType?.Contains("multipart/", StringComparison.OrdinalIgnoreCase) == true,
         };
+
+        ApplyTranscodeMark(snap, mark);
+        if (mark?.ClientRequestBody is { Length: > 0 } clientBody)
+        {
+            snap.RequestBodyBytes = TruncateBytes(clientBody);
+            snap.RequestBodyText = TruncateText(Encoding.UTF8.GetString(clientBody));
+        }
+
+        if (mark?.UpstreamRequestBody is { Length: > 0 } upstreamReq)
+        {
+            snap.UpstreamRequestBodyBytes = TruncateBytes(upstreamReq);
+            snap.GrpcFrames = ProtocolFrameInspectors.ParseGrpcFrames(snap.UpstreamRequestBodyBytes);
+        }
+
+        return snap;
+    }
+
+    private static void ApplyTranscodeMark(SessionSnapshot snap, GrpcJsonTranscodeSessionMark? mark)
+    {
+        if (mark is null) return;
+        snap.IsTranscoded = true;
+        snap.ClientMethod = mark.ClientMethod;
+        snap.ClientPathAndQuery = mark.ClientPathAndQuery;
+        snap.ClientContentType = mark.ClientContentType;
+        snap.UpstreamMethod = mark.UpstreamMethod;
+        snap.UpstreamPath = mark.UpstreamPath;
+        snap.UpstreamContentType = mark.UpstreamContentType;
+    }
+
+    private static string BuildDisplayUrl(Request req, GrpcJsonTranscodeSessionMark? mark)
+    {
+        if (mark is null)
+            return req.Url ?? "";
+
+        // Prefer absolute URL with client path when available.
+        var url = req.Url ?? "";
+        if (Uri.TryCreate(url, UriKind.Absolute, out var abs))
+        {
+            var builder = new UriBuilder(abs)
+            {
+                Path = mark.ClientPathAndQuery.Split('?', 2)[0],
+                Query = mark.ClientPathAndQuery.Contains('?', StringComparison.Ordinal)
+                    ? mark.ClientPathAndQuery.Split('?', 2)[1]
+                    : string.Empty
+            };
+            return builder.Uri.ToString();
+        }
+
+        return mark.ClientPathAndQuery;
     }
 
     private long NextSessionId() => Interlocked.Increment(ref _nextId);
@@ -1278,12 +1331,22 @@ public sealed class InterceptionService : IDisposable
 
         ApplyTiming(snap, e.Timing, snap.StartedUtc);
 
+        if (GrpcJsonTranscodeSessionMark.TryGet(e.UserData, out var mark) && mark is not null)
+        {
+            ApplyTranscodeMark(snap, mark);
+            if (mark.UpstreamResponseBody is { Length: > 0 } upstreamResp)
+            {
+                snap.UpstreamResponseBodyBytes = TruncateBytes(upstreamResp);
+                snap.GrpcFrames = ProtocolFrameInspectors.ParseGrpcFrames(snap.UpstreamResponseBodyBytes);
+            }
+        }
+
         if (snap.IsWebSocket)
         {
             snap.WebSocketFrames = ProtocolFrameInspectors.ParseWebSocketFrames(bodyBytes ?? snap.RequestBodyBytes);
         }
 
-        if (snap.IsGrpc && bodyBytes is { Length: > 0 })
+        if (snap.IsGrpc && !snap.IsTranscoded && bodyBytes is { Length: > 0 })
         {
             snap.GrpcFrames = ProtocolFrameInspectors.ParseGrpcFrames(bodyBytes);
         }

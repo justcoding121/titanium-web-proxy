@@ -89,8 +89,36 @@ Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse.Headers.get -> System
 Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse.Headers.init -> void
 Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse.StatusCode.get -> int
 Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse.StatusCode.init -> void
-Titanium.Web.Proxy.Abstractions.Plugins.IGrpcTranscodeHook
-Titanium.Web.Proxy.Abstractions.Plugins.IGrpcTranscodeHook.TryTranscode(System.ReadOnlySpan<byte> requestBody, out byte[]? responseBody) -> bool
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.ClientContentType.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.ClientContentType.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.ClientMethod.get -> string!
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.ClientMethod.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.ClientPathAndQuery.get -> string!
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.ClientPathAndQuery.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.GrpcJsonTranscodeSessionMark() -> void
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.OutputMessageType.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.OutputMessageType.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.PreviousUserData.get -> object?
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.PreviousUserData.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.RpcFullName.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.RpcFullName.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.ClientRequestBody.get -> byte[]?
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.ClientRequestBody.set -> void
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.UpstreamRequestBody.get -> byte[]?
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.UpstreamRequestBody.set -> void
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.UpstreamResponseBody.get -> byte[]?
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.UpstreamResponseBody.set -> void
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.UpstreamContentType.get -> string!
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.UpstreamContentType.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.UpstreamMethod.get -> string!
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.UpstreamMethod.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.UpstreamPath.get -> string!
+Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.UpstreamPath.init -> void
+static Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark.TryGet(object? userData, out Titanium.Web.Proxy.Abstractions.Plugins.GrpcJsonTranscodeSessionMark? mark) -> bool
+Titanium.Web.Proxy.Abstractions.Plugins.IGrpcJsonTranscoder
+Titanium.Web.Proxy.Abstractions.Plugins.IGrpcJsonTranscoder.TryRewriteRequestAsync(object! session, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Titanium.Web.Proxy.Abstractions.Plugins.IGrpcJsonTranscoder.TryRewriteResponseAsync(object! session, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache
 Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache.Count.get -> int
 Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache.Purge(string? pathPrefix = null) -> int
@@ -117,6 +145,8 @@ Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ClusterManager.get
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ClusterManager.init -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.LatencyRecorder.get -> Titanium.Web.Proxy.Abstractions.Plugins.ILatencyRecorder?
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.LatencyRecorder.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.GrpcJsonTranscoder.get -> Titanium.Web.Proxy.Abstractions.Plugins.IGrpcJsonTranscoder?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.GrpcJsonTranscoder.set -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.Logger.get -> Microsoft.Extensions.Logging.ILogger?
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.Logger.init -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.Middleware.get -> System.Collections.Generic.IList<Titanium.Web.Proxy.Abstractions.Middleware.IProxyMiddleware!>?
@@ -137,8 +167,8 @@ Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.ClusterManager.get -> Titani
 Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.ClusterManager.init -> void
 Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.Clusters.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig!>?
 Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.Clusters.init -> void
-Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.GrpcTranscodeHook.get -> Titanium.Web.Proxy.Abstractions.Plugins.IGrpcTranscodeHook?
-Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.GrpcTranscodeHook.init -> void
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.GrpcJsonTranscoder.get -> Titanium.Web.Proxy.Abstractions.Plugins.IGrpcJsonTranscoder?
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.GrpcJsonTranscoder.init -> void
 Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.LatencyRecorder.get -> Titanium.Web.Proxy.Abstractions.Plugins.ILatencyRecorder?
 Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.LatencyRecorder.init -> void
 Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.LoadBalancer.get -> Titanium.Web.Proxy.Abstractions.Routing.ILoadBalancer?

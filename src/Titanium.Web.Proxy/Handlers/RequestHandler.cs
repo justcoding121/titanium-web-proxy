@@ -323,8 +323,10 @@ public partial class ProxyServer
 
                         args.IsFastPath = fastPath;
 
-                        // Middleware requires BeforeRequest; never skip it when configured.
-                        if (fastPath && ReverseProxy?.Middleware is { Count: > 0 })
+                        // Middleware / gRPC-JSON transcoder require BeforeRequest; never skip when configured.
+                        if (fastPath &&
+                            (ReverseProxy?.Middleware is { Count: > 0 } ||
+                             ReverseProxy?.GrpcJsonTranscoder is not null))
                         {
                             fastPath = false;
                             args.IsFastPath = false;
@@ -1152,6 +1154,10 @@ public partial class ProxyServer
             return;
 
         args.Timing?.MarkRequestHeadersReceived();
+
+        // Rewrite REST/JSON → gRPC before middleware / user handlers / routing when configured.
+        if (ReverseProxy?.GrpcJsonTranscoder is { } transcoder)
+            await transcoder.TryRewriteRequestAsync(args, args.CancellationToken).ConfigureAwait(false);
 
         var middleware = ReverseProxy?.Middleware;
         if (middleware is { Count: > 0 })

@@ -100,5 +100,6 @@ proxyServer.Start();
 - [Download CLI & Inspector](/download)
 - [Getting started](/docs/getting-started)
 - [Configuration reference](/docs/configuration)
+- [gRPC-JSON transcoding](/docs/grpc-json-transcoding)
 - [Release notes](/releases)
 - [API reference](/api/Titanium.Web.Proxy.ProxyServer.html){target="_blank" rel="noreferrer"}

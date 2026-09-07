@@ -354,6 +354,44 @@ public class CliPlusE2ETests
         }
     }
 
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task GrpcTranscode_MissingDescriptor_ExitsOnStart()
+    {
+        using var origin = new EchoOrigin();
+        var listen = CliProcessHarness.GetFreePort();
+        var control = CliProcessHarness.GetFreePort();
+        const string secret = "e2e-grpc-secret";
+        var missingPb = Path.Combine(_tempDir, "does-not-exist.pb");
+        var cfg = ConfigFixtures.WritePlusOptions(
+            _tempDir,
+            listen,
+            origin.Port,
+            control,
+            secret,
+            new Dictionary<string, string>
+            {
+                ["grpc.transcode.enabled"] = "true",
+                ["grpc.transcode.descriptorSet"] = missingPb.Replace("\\", "\\\\"),
+                ["grpc.transcode.services"] = "helloworld.Greeter",
+            });
+
+        using var harness = new CliProcessHarness();
+        harness.EnsurePlusDllBesideCli(copy: true);
+        var env = new Dictionary<string, string?>
+        {
+            ["TITANIUM_PLUS_ALLOW_DEV_SECRET"] = "1",
+        };
+
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(async () =>
+        {
+            await harness.StartRunAsync(cfg, env);
+        });
+
+        var combined = harness.StdOut + harness.StdErr;
+        StringAssert.Contains(combined, "descriptor", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static async Task WaitControlPlaneAsync(HttpClient http, int control)
     {
         var deadline = DateTime.UtcNow.AddSeconds(30);

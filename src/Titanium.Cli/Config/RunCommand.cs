@@ -118,6 +118,8 @@ internal static class RunCommand
 
         ConfigureResponseCache(proxy, middleware, responseCache, plusOptions);
 
+        IGrpcJsonTranscoder? grpcJsonTranscoder = null;
+
         void RefreshReverseProxy()
         {
             proxy.ReverseProxy = new ReverseProxyOptions
@@ -130,10 +132,11 @@ internal static class RunCommand
                 TransformEngine = new TransformEngine(),
                 Middleware = middleware.Count > 0 ? middleware : null,
                 LatencyRecorder = loadBalancer,
+                GrpcJsonTranscoder = grpcJsonTranscoder,
             };
         }
 
-        await TryActivatePlusAsync(loaded.Config, new PlusActivationContext
+        var plusContext = new PlusActivationContext
         {
             ProxyServer = proxy,
             ClusterManager = clusterManager,
@@ -144,7 +147,9 @@ internal static class RunCommand
             ResponseCache = responseCache,
             LatencyRecorder = loadBalancer,
             Logger = proxy.Logger,
-        }).ConfigureAwait(false);
+        };
+        await TryActivatePlusAsync(loaded.Config, plusContext).ConfigureAwait(false);
+        grpcJsonTranscoder = plusContext.GrpcJsonTranscoder;
 
         RefreshReverseProxy();
         proxy.Start();
@@ -690,6 +695,16 @@ internal static class RunCommand
         }
 
         if (config.Certificates?.AcmeDomain is not null)
+        {
+            return true;
+        }
+
+        if (config.Plus is not null &&
+            config.Plus.Options is not null &&
+            config.Plus.Options.TryGetValue("grpc.transcode.enabled", out var grpcEnabled) &&
+            (grpcEnabled.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+             grpcEnabled.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+             grpcEnabled.Equals("yes", StringComparison.OrdinalIgnoreCase)))
         {
             return true;
         }

@@ -36,8 +36,33 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     public bool BodiesOnDisk { get; set; }
     public bool IsWebSocket { get; set; }
     public bool IsGrpc { get; set; }
+    public bool IsTranscoded { get; set; }
     public bool IsTunnel { get; set; }
     public OpaqueTunnelReason OpaqueReason { get; set; }
+
+    /// <summary>Client-facing HTTP method before gRPC-JSON rewrite (when <see cref="IsTranscoded"/>).</summary>
+    public string? ClientMethod { get; set; }
+
+    /// <summary>Client-facing path/query before gRPC-JSON rewrite (when <see cref="IsTranscoded"/>).</summary>
+    public string? ClientPathAndQuery { get; set; }
+
+    /// <summary>Client Content-Type before gRPC-JSON rewrite (when <see cref="IsTranscoded"/>).</summary>
+    public string? ClientContentType { get; set; }
+
+    /// <summary>Upstream gRPC method (usually POST) after rewrite.</summary>
+    public string? UpstreamMethod { get; set; }
+
+    /// <summary>Upstream gRPC path (/package.Service/Method).</summary>
+    public string? UpstreamPath { get; set; }
+
+    /// <summary>Upstream Content-Type (application/grpc).</summary>
+    public string? UpstreamContentType { get; set; }
+
+    /// <summary>Framed protobuf request bytes sent upstream (Inspector hex/frames).</summary>
+    public byte[]? UpstreamRequestBodyBytes { get; set; }
+
+    /// <summary>Framed protobuf response bytes from upstream before JSON rewrite.</summary>
+    public byte[]? UpstreamResponseBodyBytes { get; set; }
 
     /// <summary>Human-readable opaque tunnel explanation for tooltips and inspect pane.</summary>
     public string OpaqueReasonDisplay => ExclusionPreview.DescribeOpaqueReason(OpaqueReason);

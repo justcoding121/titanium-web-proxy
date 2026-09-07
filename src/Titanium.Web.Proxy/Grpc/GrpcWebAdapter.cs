@@ -1,19 +1,19 @@
 using System;
 using System.Text;
-using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Grpc;
 
 /// <summary>
-/// Adapter for application/grpc-web* content types. Preserves trailers; optional
-/// <see cref="IGrpcTranscodeHook"/> — Core never embeds protobuf codecs.
+/// Adapter for application/grpc-web* content types and length-prefixed gRPC frames.
+/// Protobuf codecs live outside Core (e.g. Plus gRPC-JSON transcoder).
 /// </summary>
 internal static class GrpcWebAdapter
 {
     public const string GrpcWebContentType = "application/grpc-web";
     public const string GrpcWebProtoContentType = "application/grpc-web+proto";
     public const string GrpcWebTextContentType = "application/grpc-web-text";
+    public const string GrpcContentType = "application/grpc";
 
     public static bool IsGrpcWeb(HeaderCollection headers)
     {
@@ -33,7 +33,7 @@ internal static class GrpcWebAdapter
                ct.StartsWith(GrpcWebTextContentType, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>Decode a length-prefixed gRPC-Web frame (compressed flag + 4-byte BE length + payload).</summary>
+    /// <summary>Decode a length-prefixed gRPC frame (compressed flag + 4-byte BE length + payload).</summary>
     public static bool TryReadFrame(ReadOnlySpan<byte> buffer, out bool compressed, out ReadOnlySpan<byte> payload, out int consumed)
     {
         compressed = false;
@@ -81,16 +81,6 @@ internal static class GrpcWebAdapter
                 responseHeaders.AddHeader(name, header.Value);
             }
         }
-    }
-
-    public static byte[]? MaybeTranscode(IGrpcTranscodeHook? hook, byte[] requestBody)
-    {
-        if (hook is null)
-        {
-            return null;
-        }
-
-        return hook.TryTranscode(requestBody, out var response) ? response : null;
     }
 
     public static byte[]? DecodeBase64TextBody(ReadOnlySpan<byte> asciiBody)

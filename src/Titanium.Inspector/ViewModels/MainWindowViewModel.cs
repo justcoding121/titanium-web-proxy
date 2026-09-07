@@ -2737,6 +2737,21 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             sb.AppendLine(_selected.OpaqueReasonDisplay);
             sb.AppendLine();
         }
+
+        if (_selected.IsTranscoded)
+        {
+            sb.AppendLine("=== gRPC-JSON transcoded ===");
+            sb.Append("Client: ").Append(_selected.ClientMethod ?? _selected.Method)
+                .Append(' ').AppendLine(_selected.ClientPathAndQuery ?? _selected.Url);
+            if (!string.IsNullOrEmpty(_selected.ClientContentType))
+                sb.Append("Client Content-Type: ").AppendLine(_selected.ClientContentType);
+            sb.Append("Upstream: ").Append(_selected.UpstreamMethod ?? "POST")
+                .Append(' ').AppendLine(_selected.UpstreamPath ?? "");
+            if (!string.IsNullOrEmpty(_selected.UpstreamContentType))
+                sb.Append("Upstream Content-Type: ").AppendLine(_selected.UpstreamContentType);
+            sb.AppendLine();
+        }
+
         sb.AppendLine("=== Request ===");
         sb.AppendLine(_selected.RequestHeadersText);
         if (!string.IsNullOrEmpty(_selected.ResponseHeadersText))
@@ -2775,6 +2790,32 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             _selected.ResponseBodyText,
             _selected.RequestBodyBytes,
             _selected.ResponseBodyBytes);
+        if (_selected.IsTranscoded)
+        {
+            var prefix = new StringBuilder();
+            prefix.AppendLine("=== Client (JSON/REST) ===");
+            prefix.AppendLine(_selected.RequestBodyText ?? "(empty)");
+            prefix.AppendLine();
+            prefix.AppendLine("=== Client response (JSON) ===");
+            prefix.AppendLine(_selected.ResponseBodyText ?? "(empty)");
+            if (_selected.UpstreamRequestBodyBytes is { Length: > 0 } ||
+                _selected.UpstreamResponseBodyBytes is { Length: > 0 })
+            {
+                prefix.AppendLine();
+                prefix.AppendLine("=== Upstream gRPC frames (see Hex / frame preview) ===");
+                if (_selected.GrpcFrames is { Count: > 0 } gf)
+                {
+                    foreach (var f in gf)
+                        prefix.Append("frame compressed=").Append(f.Compressed)
+                            .Append(" len=").Append(f.Length)
+                            .Append(" preview=").AppendLine(f.HexPreview);
+                }
+            }
+
+            prefix.AppendLine();
+            prefix.Append(SelectedBody);
+            SelectedBody = prefix.ToString();
+        }
         SelectedHex = SessionInspectors.FormatLabeledHex(
             _selected.RequestHeadersText,
             _selected.ResponseHeadersText,

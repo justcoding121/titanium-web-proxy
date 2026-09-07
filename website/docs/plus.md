@@ -61,6 +61,7 @@ Use a strong secret in production. Dev-only default secrets require an explicit 
 | State | Fixed-window per-IP rate limit (`state.mode=memory` or `state.redis`) |
 | Resilience | Active HTTP/TCP health probes |
 | Cache | In-memory HTTP response cache (`cache.enable`) |
+| gRPC-JSON transcoding | REST/JSON ↔ unary gRPC via FileDescriptorSet + `google.api.http` ([guide](/docs/grpc-json-transcoding)) |
 
 ## `plus.options` keys
 
@@ -83,9 +84,17 @@ String values under `plus.options` (examples):
 | `resilience.activeHealth` | Enable active probes |
 | `resilience.intervalMs` / `resilience.unhealthyThreshold` / `resilience.path` / `resilience.protocol` / `resilience.timeoutMs` | Probe knobs |
 | `cache.enable` | In-memory response cache |
+| `grpc.transcode.enabled` | Enable gRPC-JSON transcoding |
+| `grpc.transcode.descriptorSet` | Path to FileDescriptorSet (`.pb`) |
+| `grpc.transcode.services` | Comma-separated fully-qualified service names |
+| `grpc.transcode.convertGrpcStatus` | Map non-OK `grpc-status` to HTTP + JSON body (default true) |
+| `grpc.transcode.ignoreUnknownQueryParameters` | Ignore unknown query keys (default true) |
+| `grpc.transcode.preserveProtoFieldNames` | Use proto field names in JSON (default false) |
+| `grpc.transcode.alwaysPrintPrimitiveFields` | Always emit primitive defaults in JSON (default false) |
 
 ## See also
 
 - [CLI](/docs/cli)
 - [Configuration](/docs/configuration)
 - [Editions](/docs/editions)
+- [gRPC-JSON transcoding](/docs/grpc-json-transcoding)

@@ -18,5 +18,10 @@ public sealed class ReverseProxyOptions
     public ILoadBalancer? LoadBalancer { get; init; }
     public ITransformEngine? TransformEngine { get; init; }
     public ILatencyRecorder? LatencyRecorder { get; init; }
-    public IGrpcTranscodeHook? GrpcTranscodeHook { get; init; }
+
+    /// <summary>
+    /// Optional gRPC-JSON transcoder. Null (default) is zero-cost on the hot path.
+    /// When non-null, Core disables fast-path for the session so bodies can be rewritten.
+    /// </summary>
+    public IGrpcJsonTranscoder? GrpcJsonTranscoder { get; init; }
 }
