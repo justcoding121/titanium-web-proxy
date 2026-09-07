@@ -68,9 +68,13 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     public string OpaqueReasonDisplay => ExclusionPreview.DescribeOpaqueReason(OpaqueReason);
 
     public bool IsMultipart { get; set; }
+    public bool IsServerSentEvents { get; set; }
     public IReadOnlyList<WebSocketFrameSnapshot>? WebSocketFrames { get; set; }
+    public IReadOnlyList<SseEventSnapshot>? SseEvents { get; set; }
     public IReadOnlyList<GrpcFrameSnapshot>? GrpcFrames { get; set; }
     public IReadOnlyList<MultipartPartSnapshot>? MultipartParts { get; set; }
+    /// <summary>Optional protobuf wire-format or descriptor decode text for inspect.</summary>
+    public string? ProtobufDecodedText { get; set; }
 
     public int? StatusCode
     {
