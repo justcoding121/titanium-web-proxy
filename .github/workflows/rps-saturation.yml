@@ -29,6 +29,7 @@ on:
           - compare-same
           - compare-bridges
           - compare-http3-cleartext
+          - compare-nginx-https
           - compare-mitm
           - compare-matrix
           - compare-product
@@ -53,6 +54,8 @@ on:
           - reverse-http1-tls
           - bare-reverse-http1-tls
           - nginx-reverse-http1-tls
+          - nginx-reverse-http1-to-https
+          - nginx-reverse-http1-tls-to-https
           - yarp-reverse-http1-tls
           - https-mitm
           - mitm-http2-to-http1
@@ -96,7 +99,9 @@ on:
           - yarp-reverse-http2-to-https-http1
           - yarp-reverse-http3-to-https-http1
           - nginx-reverse-http2
+          - nginx-reverse-http2-to-https-http1
           - nginx-reverse-http3-cleartext
+          - nginx-reverse-http3-to-https-http1
           - yarp-reverse-http2
           - yarp-reverse-http2-to-https
           - twp-cli-reverse-http1

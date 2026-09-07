@@ -254,6 +254,28 @@ internal static class ServeProxyHost
                 nginxVersion = nginx.Version;
                 break;
             }
+            case ProbeMode.NginxReverseHttp1ToHttps:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var nginx = await NginxHost.TryStartHttp1ToHttpsAsync(originHttpsPort, nginxPath)
+                            ?? throw new InvalidOperationException(NginxHost.NginxMissingMessage());
+                proxy = nginx;
+                listenUrl = nginx.ListenUrl;
+                targetForClient = nginx.ListenUrl;
+                nginxVersion = nginx.Version;
+                break;
+            }
+            case ProbeMode.NginxReverseHttp1TlsToHttps:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var nginx = await NginxHost.TryStartHttp1TlsToHttpsAsync(originHttpsPort, nginxPath)
+                            ?? throw new InvalidOperationException(NginxHost.NginxMissingMessage());
+                proxy = nginx;
+                listenUrl = nginx.ListenUrl;
+                targetForClient = nginx.ListenUrl;
+                nginxVersion = nginx.Version;
+                break;
+            }
             case ProbeMode.YarpReverseHttp1Tls:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
@@ -353,10 +375,34 @@ internal static class ServeProxyHost
                 nginxVersion = nginx.Version;
                 break;
             }
+            case ProbeMode.NginxReverseHttp2ToHttpsHttp1:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var nginx = await NginxHost.TryStartHttp2ToHttpsHttp1Async(originHttpsPort, nginxPath)
+                            ?? throw new InvalidOperationException(NginxHost.NginxMissingMessage());
+                proxy = nginx;
+                listenUrl = nginx.ListenUrl;
+                targetForClient = nginx.ListenUrl;
+                nginxVersion = nginx.Version;
+                break;
+            }
             case ProbeMode.NginxReverseHttp3Cleartext:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
                 var nginx = await NginxHost.TryStartHttp3CleartextAsync(originHttpPort, nginxPath)
+                            ?? throw new InvalidOperationException(
+                                "nginx HTTP/3 is not available (need --with-http_v3_module). " +
+                                NginxHost.NginxMissingMessage());
+                proxy = nginx;
+                listenUrl = nginx.ListenUrl;
+                targetForClient = nginx.ListenUrl;
+                nginxVersion = nginx.Version;
+                break;
+            }
+            case ProbeMode.NginxReverseHttp3ToHttpsHttp1:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var nginx = await NginxHost.TryStartHttp3ToHttpsHttp1Async(originHttpsPort, nginxPath)
                             ?? throw new InvalidOperationException(
                                 "nginx HTTP/3 is not available (need --with-http_v3_module). " +
                                 NginxHost.NginxMissingMessage());
@@ -757,6 +803,7 @@ internal static class ServeProxyHost
         {
             ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp2Cleartext or ProbeMode.ReverseHttp2ToH2c
                 or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.NginxReverseHttp2
+                or ProbeMode.NginxReverseHttp2ToHttpsHttp1
                 or ProbeMode.YarpReverseHttp2 or ProbeMode.YarpReverseHttp2ToH2c
                 or ProbeMode.YarpReverseHttp2ToHttps or ProbeMode.YarpReverseHttp2ToHttp3
                 or ProbeMode.YarpReverseHttp2ToHttpsHttp1
@@ -769,7 +816,7 @@ internal static class ServeProxyHost
                 or ProbeMode.ReverseHttp3ToH2c or ProbeMode.YarpReverseHttp3ToH2c
                 or ProbeMode.YarpReverseHttp3Cleartext or ProbeMode.YarpReverseHttp3ToHttp2
                 or ProbeMode.YarpReverseHttp3ToHttp3 or ProbeMode.YarpReverseHttp3ToHttpsHttp1
-                or ProbeMode.NginxReverseHttp3Cleartext
+                or ProbeMode.NginxReverseHttp3Cleartext or ProbeMode.NginxReverseHttp3ToHttpsHttp1
                 or ProbeMode.MitmHttp3ToHttp1 => "3.0",
             // H1 client arms (including H1→H2/H3 bridges) must stay 1.1 so ALPN negotiate is http/1.1.
             _ => "1.1"
@@ -849,9 +896,14 @@ internal static class ServeProxyHost
         ProbeMode.ReverseH2cToH1 => "reverse-h2c-to-h1",
         ProbeMode.YarpReverseH2cToH1 => "yarp-reverse-h2c-to-h1",
         ProbeMode.ReverseH2cToH3 => "reverse-h2c-to-h3",
+        ProbeMode.NginxReverseHttp1ToHttps => "nginx-reverse-http1-to-https",
+        ProbeMode.NginxReverseHttp1TlsToHttps => "nginx-reverse-http1-tls-to-https",
         ProbeMode.YarpReverseH2cToH3 => "yarp-reverse-h2c-to-h3",
         ProbeMode.NginxReverseHttp2 => "nginx-reverse-http2",
+        ProbeMode.NginxReverseHttp2ToHttpsHttp1 => "nginx-reverse-http2-to-https-http1",
         ProbeMode.NginxReverseHttp3Cleartext => "nginx-reverse-http3-cleartext",
+        ProbeMode.NginxReverseHttp3ToHttpsHttp1 => "nginx-reverse-http3-to-https-http1",
+        ProbeMode.CompareNginxHttps => "compare-nginx-https",
         ProbeMode.YarpReverseHttp2 => "yarp-reverse-http2",
         ProbeMode.YarpReverseHttp2ToHttps => "yarp-reverse-http2-to-https",
         ProbeMode.ReverseHttp3 => "reverse-http3",
@@ -944,7 +996,7 @@ internal static class ServeHost
 
         if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
             or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
-            or ProbeMode.CompareHttp3Cleartext
+            or ProbeMode.CompareHttp3Cleartext or ProbeMode.CompareNginxHttps
             or ProbeMode.CompareMitm or ProbeMode.CompareMatrix or ProbeMode.CompareProduct
             or ProbeMode.CompareProductSmoke or ProbeMode.CompareCeiling
             or ProbeMode.CompareBodies
@@ -955,8 +1007,10 @@ internal static class ServeHost
             return 2;
         }
 
-        if ((mode is ProbeMode.NginxReverseHttp1 or ProbeMode.NginxReverseHttp1Tls or ProbeMode.NginxReverseHttp2
-                or ProbeMode.NginxReverseHttp3Cleartext)
+        if ((mode is ProbeMode.NginxReverseHttp1 or ProbeMode.NginxReverseHttp1Tls
+                or ProbeMode.NginxReverseHttp1ToHttps or ProbeMode.NginxReverseHttp1TlsToHttps
+                or ProbeMode.NginxReverseHttp2 or ProbeMode.NginxReverseHttp2ToHttpsHttp1
+                or ProbeMode.NginxReverseHttp3Cleartext or ProbeMode.NginxReverseHttp3ToHttpsHttp1)
             && NginxHost.ResolveNginxExecutable(nginxPath) == null)
         {
             ProbeLog.Error(NginxHost.NginxMissingMessage());
@@ -1155,6 +1209,22 @@ internal static class ServeHost
                     return new ServeStack(origin, nginx, null, origin.HttpUrl, null, [], nginx.ListenUrl,
                         null, nginx.ListenUrl, [nginx.ListenUrl], nginx.Version, "1.1");
                 }
+                case ProbeMode.NginxReverseHttp1ToHttps:
+                {
+                    var origin = await OriginServer.StartAsync(true, responseBytes, cancellationToken, workload);
+                    var nginx = await NginxHost.TryStartHttp1ToHttpsAsync(origin.HttpsPort, nginxPath)
+                                ?? throw new InvalidOperationException("nginx not available.");
+                    return new ServeStack(origin, nginx, null, origin.HttpUrl, origin.HttpsUrl, [], nginx.ListenUrl,
+                        null, nginx.ListenUrl, [nginx.ListenUrl], nginx.Version, "1.1");
+                }
+                case ProbeMode.NginxReverseHttp1TlsToHttps:
+                {
+                    var origin = await OriginServer.StartAsync(true, responseBytes, cancellationToken, workload);
+                    var nginx = await NginxHost.TryStartHttp1TlsToHttpsAsync(origin.HttpsPort, nginxPath)
+                                ?? throw new InvalidOperationException("nginx not available.");
+                    return new ServeStack(origin, nginx, null, origin.HttpUrl, origin.HttpsUrl, [], nginx.ListenUrl,
+                        null, nginx.ListenUrl, [nginx.ListenUrl], nginx.Version, "1.1");
+                }
                 case ProbeMode.ReverseHttp2:
                 {
                     var origin = await OriginServer.StartAsync(new OriginListenOptions
@@ -1258,6 +1328,20 @@ internal static class ServeHost
                     return new ServeStack(origin, nginx, null, origin.HttpUrl, null, [], nginx.ListenUrl,
                         null, nginx.ListenUrl, [nginx.ListenUrl], nginx.Version, "2.0");
                 }
+                case ProbeMode.NginxReverseHttp2ToHttpsHttp1:
+                {
+                    var origin = await OriginServer.StartAsync(new OriginListenOptions
+                    {
+                        EnableHttp = false,
+                        EnableHttps = true,
+                        HttpsProtocols = HttpProtocols.Http1,
+                        ResponseBytes = responseBytes
+                    }, cancellationToken, workload);
+                    var nginx = await NginxHost.TryStartHttp2ToHttpsHttp1Async(origin.HttpsPort, nginxPath)
+                                ?? throw new InvalidOperationException("nginx not available.");
+                    return new ServeStack(origin, nginx, null, origin.HttpUrl, origin.HttpsUrl, [], nginx.ListenUrl,
+                        null, nginx.ListenUrl, [nginx.ListenUrl], nginx.Version, "2.0");
+                }
                 case ProbeMode.NginxReverseHttp3Cleartext:
                 {
                     if (!System.Net.Quic.QuicListener.IsSupported)
@@ -1268,6 +1352,24 @@ internal static class ServeHost
                                 ?? throw new InvalidOperationException(
                                     "nginx HTTP/3 is not available (need --with-http_v3_module).");
                     return new ServeStack(origin, nginx, null, origin.HttpUrl, null, [], nginx.ListenUrl,
+                        null, nginx.ListenUrl, [nginx.ListenUrl], nginx.Version, "3.0");
+                }
+                case ProbeMode.NginxReverseHttp3ToHttpsHttp1:
+                {
+                    if (!System.Net.Quic.QuicListener.IsSupported)
+                        throw new PlatformNotSupportedException("QuicListener is not supported.");
+
+                    var origin = await OriginServer.StartAsync(new OriginListenOptions
+                    {
+                        EnableHttp = false,
+                        EnableHttps = true,
+                        HttpsProtocols = HttpProtocols.Http1,
+                        ResponseBytes = responseBytes
+                    }, cancellationToken, workload);
+                    var nginx = await NginxHost.TryStartHttp3ToHttpsHttp1Async(origin.HttpsPort, nginxPath)
+                                ?? throw new InvalidOperationException(
+                                    "nginx HTTP/3 is not available (need --with-http_v3_module).");
+                    return new ServeStack(origin, nginx, null, origin.HttpUrl, origin.HttpsUrl, [], nginx.ListenUrl,
                         null, nginx.ListenUrl, [nginx.ListenUrl], nginx.Version, "3.0");
                 }
                 case ProbeMode.ReverseHttp3:

@@ -251,7 +251,7 @@ internal static class Cli
 
     private static bool IsMultiArmMode(ProbeMode mode) => mode is ProbeMode.Compare or ProbeMode.CompareHttp2
         or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
-        or ProbeMode.CompareHttp3Cleartext
+        or ProbeMode.CompareHttp3Cleartext or ProbeMode.CompareNginxHttps
         or ProbeMode.CompareMitm or ProbeMode.CompareMatrix or ProbeMode.CompareProduct
         or ProbeMode.CompareCeiling or ProbeMode.CompareBodies
         or ProbeMode.ComparePost
@@ -336,6 +336,12 @@ internal static class Cli
             case "nginx-reverse-http1-tls":
                 mode = ProbeMode.NginxReverseHttp1Tls;
                 return true;
+            case "nginx-reverse-http1-to-https":
+                mode = ProbeMode.NginxReverseHttp1ToHttps;
+                return true;
+            case "nginx-reverse-http1-tls-to-https":
+                mode = ProbeMode.NginxReverseHttp1TlsToHttps;
+                return true;
             case "yarp-reverse-http1-tls":
                 mode = ProbeMode.YarpReverseHttp1Tls;
                 return true;
@@ -381,8 +387,17 @@ internal static class Cli
             case "nginx-reverse-http2":
                 mode = ProbeMode.NginxReverseHttp2;
                 return true;
+            case "nginx-reverse-http2-to-https-http1":
+                mode = ProbeMode.NginxReverseHttp2ToHttpsHttp1;
+                return true;
             case "nginx-reverse-http3-cleartext":
                 mode = ProbeMode.NginxReverseHttp3Cleartext;
+                return true;
+            case "nginx-reverse-http3-to-https-http1":
+                mode = ProbeMode.NginxReverseHttp3ToHttpsHttp1;
+                return true;
+            case "compare-nginx-https":
+                mode = ProbeMode.CompareNginxHttps;
                 return true;
             case "yarp-reverse-http2":
                 mode = ProbeMode.YarpReverseHttp2;
@@ -655,7 +670,12 @@ internal static class Cli
               reverse-h2c-to-h3       TWP cleartext h2c reverse -> H2→H3 bridge -> Quic/h3 origin
               yarp-reverse-h2c-to-h3  Control arm: cleartext h2c -> HTTP/3 origin
               nginx-reverse-http2     Control arm: ssl+http2 -> cleartext HTTP/1 origin
+              nginx-reverse-http2-to-https-http1 Control arm: ssl+http2 -> HTTPS HTTP/1 (proxy_ssl)
               nginx-reverse-http3-cleartext Control arm: QUIC/h3 -> cleartext HTTP/1 (needs http_v3_module)
+              nginx-reverse-http3-to-https-http1 Control arm: QUIC/h3 -> HTTPS HTTP/1 (proxy_ssl)
+              nginx-reverse-http1-to-https Control arm: cleartext HTTP/1 -> HTTPS HTTP/1 (proxy_ssl)
+              nginx-reverse-http1-tls-to-https Control arm: TLS HTTP/1 -> HTTPS HTTP/1 (dual TLS)
+              compare-nginx-https     Smoke: TWP+YARP+nginx on HTTPS-origin terminate wires
               yarp-reverse-http2      Control arm: TLS+h2 -> cleartext HTTP/1 origin
               reverse-http3           TWP TransparentQuic (h3) -> Quic HTTPS/h3 origin
               reverse-http3-cleartext TWP QUIC/h3 terminate -> cleartext HTTP/1 origin

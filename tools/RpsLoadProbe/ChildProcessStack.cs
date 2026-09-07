@@ -214,10 +214,12 @@ internal sealed class ChildProcessStack : IAsyncDisposable
             or ProbeMode.ReverseHttp1PlainToH2c or ProbeMode.YarpReverseHttp1PlainToH2c => OriginRecipe.H2c,
         ProbeMode.HttpsMitm or ProbeMode.ReverseHttp1Mitm
             or ProbeMode.ReverseHttp1ToHttps or ProbeMode.YarpReverseHttp1ToHttps
-            or ProbeMode.YarpReverseHttp1TlsToHttps => OriginRecipe.Https,
+            or ProbeMode.YarpReverseHttp1TlsToHttps
+            or ProbeMode.NginxReverseHttp1ToHttps or ProbeMode.NginxReverseHttp1TlsToHttps => OriginRecipe.Https,
         ProbeMode.MitmHttp2ToHttp1 or ProbeMode.MitmHttp3ToHttp1
             or ProbeMode.ReverseH2cToHttps or ProbeMode.YarpReverseH2cToHttps
-            or ProbeMode.YarpReverseHttp2ToHttpsHttp1 or ProbeMode.YarpReverseHttp3ToHttpsHttp1 =>
+            or ProbeMode.YarpReverseHttp2ToHttpsHttp1 or ProbeMode.YarpReverseHttp3ToHttpsHttp1
+            or ProbeMode.NginxReverseHttp2ToHttpsHttp1 or ProbeMode.NginxReverseHttp3ToHttpsHttp1 =>
             OriginRecipe.HttpsHttp1Only,
         ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi => OriginRecipe.HttpsMulti,
         ProbeMode.ReverseHttp2 or ProbeMode.ReverseH2c or ProbeMode.YarpReverseH2c

@@ -17,6 +17,10 @@ internal enum ProbeMode
     ReverseHttp1ToHttps,
     BareReverseHttp1Tls,
     NginxReverseHttp1Tls,
+    /// <summary>Native reverse: cleartext HTTP/1 → HTTPS HTTP/1 (<c>proxy_ssl</c>).</summary>
+    NginxReverseHttp1ToHttps,
+    /// <summary>Native reverse: TLS HTTP/1 → HTTPS HTTP/1 (dual TLS; <c>proxy_ssl</c>).</summary>
+    NginxReverseHttp1TlsToHttps,
     YarpReverseHttp1Tls,
     YarpReverseHttp1ToHttps,
     ReverseHttp2,
@@ -33,8 +37,12 @@ internal enum ProbeMode
     /// <summary>Client prior-knowledge h2c → H2→H3 bridge → QUIC/h3.</summary>
     ReverseH2cToH3,
     NginxReverseHttp2,
+    /// <summary>Native reverse: client TLS+h2 → HTTPS HTTP/1 (<c>proxy_ssl</c>).</summary>
+    NginxReverseHttp2ToHttpsHttp1,
     /// <summary>Native reverse: client QUIC/h3 → cleartext HTTP/1. Requires nginx <c>http_v3_module</c>.</summary>
     NginxReverseHttp3Cleartext,
+    /// <summary>Native reverse: client QUIC/h3 → HTTPS HTTP/1 (<c>proxy_ssl</c>). Requires <c>http_v3_module</c>.</summary>
+    NginxReverseHttp3ToHttpsHttp1,
     /// <summary>Managed reverse peer client TLS+h2 → cleartext HTTP/1 origin (native reverse peer parity).</summary>
     YarpReverseHttp2,
     YarpReverseHttp2ToH2c,
@@ -104,6 +112,10 @@ internal enum ProbeMode
     CompareBridges,
     /// <summary>H3→H1 cleartext only: TWP + YARP (+ nginx when http_v3_module).</summary>
     CompareHttp3Cleartext,
+    /// <summary>
+    /// Quick smoke for nginx <c>proxy_ssl</c> HTTPS-origin peers (H1 plain/TLS, H2 TLS, H3→HTTPS H1).
+    /// </summary>
+    CompareNginxHttps,
     /// <summary>
     /// True MITM 5×5: same Client×Origin wires as reverse, but TWP_RPS_HTTP_INTERCEPTION=1
     /// (no-op BeforeRequest/BeforeResponse = lite finish possible). TWP-only; plus explicit CONNECT.
@@ -262,6 +274,7 @@ internal static class RampOrchestrator
             var removed = arms.RemoveAll(a =>
                 a.Mode is ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp3Cleartext
                     or ProbeMode.YarpReverseHttp3Cleartext or ProbeMode.NginxReverseHttp3Cleartext
+                    or ProbeMode.NginxReverseHttp3ToHttpsHttp1
                     or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.YarpReverseHttp1ToHttp3
                     or ProbeMode.ReverseHttp1PlainToHttp3 or ProbeMode.YarpReverseHttp1PlainToHttp3
                     or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
@@ -282,12 +295,15 @@ internal static class RampOrchestrator
         }
 
         if ((options.Mode is ProbeMode.NginxReverseHttp1 or ProbeMode.NginxReverseHttp1Tls
-                or ProbeMode.NginxReverseHttp2 or ProbeMode.NginxReverseHttp3Cleartext
+                or ProbeMode.NginxReverseHttp1ToHttps or ProbeMode.NginxReverseHttp1TlsToHttps
+                or ProbeMode.NginxReverseHttp2 or ProbeMode.NginxReverseHttp2ToHttpsHttp1
+                or ProbeMode.NginxReverseHttp3Cleartext or ProbeMode.NginxReverseHttp3ToHttpsHttp1
                 or ProbeMode.Compare or ProbeMode.CompareHttp2
                 or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame
                 or ProbeMode.CompareBridges or ProbeMode.CompareHttp3Cleartext
                 or ProbeMode.CompareBodies or ProbeMode.ComparePost or ProbeMode.CompareLossy
-                or ProbeMode.CompareTlsCost or ProbeMode.CompareArch or ProbeMode.CompareSaturation)
+                or ProbeMode.CompareTlsCost or ProbeMode.CompareArch or ProbeMode.CompareSaturation
+                or ProbeMode.CompareNginxHttps)
             && nginxExe == null)
         {
             ProbeLog.Info(NginxHost.NginxMissingMessage());
@@ -605,6 +621,12 @@ internal static class RampOrchestrator
             ProbeMode.NginxReverseHttp1Tls => nginxAvailable
                 ? [new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null)]
                 : [],
+            ProbeMode.NginxReverseHttp1ToHttps => nginxAvailable
+                ? [new("nginx-reverse-http1-to-https", ProbeMode.NginxReverseHttp1ToHttps, null)]
+                : [],
+            ProbeMode.NginxReverseHttp1TlsToHttps => nginxAvailable
+                ? [new("nginx-reverse-http1-tls-to-https", ProbeMode.NginxReverseHttp1TlsToHttps, null)]
+                : [],
             ProbeMode.YarpReverseHttp1Tls => [new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null)],
             ProbeMode.YarpReverseHttp1ToHttps => [new("yarp-reverse-http1-to-https", ProbeMode.YarpReverseHttp1ToHttps, null)],
             ProbeMode.ReverseHttp2 => [new("twp-reverse-http2", ProbeMode.ReverseHttp2, null)],
@@ -631,9 +653,16 @@ internal static class RampOrchestrator
             ProbeMode.NginxReverseHttp2 => nginxAvailable
                 ? [new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null)]
                 : [],
+            ProbeMode.NginxReverseHttp2ToHttpsHttp1 => nginxAvailable
+                ? [new("nginx-reverse-http2-to-https-http1", ProbeMode.NginxReverseHttp2ToHttpsHttp1, null)]
+                : [],
             ProbeMode.NginxReverseHttp3Cleartext => nginxHttp3Available
                 ? [new("nginx-reverse-http3-cleartext", ProbeMode.NginxReverseHttp3Cleartext, null)]
                 : [],
+            ProbeMode.NginxReverseHttp3ToHttpsHttp1 => nginxHttp3Available
+                ? [new("nginx-reverse-http3-to-https-http1", ProbeMode.NginxReverseHttp3ToHttpsHttp1, null)]
+                : [],
+            ProbeMode.CompareNginxHttps => BuildNginxHttpsArms(nginxAvailable, nginxHttp3Available),
             ProbeMode.YarpReverseHttp2 => [new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null)],
             ProbeMode.ReverseHttp3 => [new("twp-reverse-http3", ProbeMode.ReverseHttp3, null)],
             ProbeMode.ReverseHttp3Cleartext =>
@@ -1268,12 +1297,23 @@ internal static class RampOrchestrator
             var i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp1);
             if (i >= 0)
                 arms.Insert(i + 1, new("nginx-reverse-http1", ProbeMode.NginxReverseHttp1, null));
+            i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp1ToHttps);
+            if (i >= 0)
+                arms.Insert(i + 1, new("nginx-reverse-http1-to-https", ProbeMode.NginxReverseHttp1ToHttps, null));
             i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp1Tls);
             if (i >= 0)
                 arms.Insert(i + 1, new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null));
+            i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp1TlsToHttps);
+            if (i >= 0)
+                arms.Insert(i + 1,
+                    new("nginx-reverse-http1-tls-to-https", ProbeMode.NginxReverseHttp1TlsToHttps, null));
             i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp2);
             if (i >= 0)
                 arms.Insert(i + 1, new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null));
+            i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp2ToHttpsHttp1);
+            if (i >= 0)
+                arms.Insert(i + 1,
+                    new("nginx-reverse-http2-to-https-http1", ProbeMode.NginxReverseHttp2ToHttpsHttp1, null));
         }
 
         if (nginxHttp3Available)
@@ -1281,7 +1321,40 @@ internal static class RampOrchestrator
             var i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp3Cleartext);
             if (i >= 0)
                 arms.Insert(i + 1, new("nginx-reverse-http3-cleartext", ProbeMode.NginxReverseHttp3Cleartext, null));
+            i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp3ToHttpsHttp1);
+            if (i >= 0)
+                arms.Insert(i + 1,
+                    new("nginx-reverse-http3-to-https-http1", ProbeMode.NginxReverseHttp3ToHttpsHttp1, null));
         }
+
+        return arms;
+    }
+
+    private static IReadOnlyList<ArmSpec> BuildNginxHttpsArms(bool nginxAvailable, bool nginxHttp3Available)
+    {
+        // Peer TWP+YARP on the same wires so local/GHA smoke can confirm ÷nginx ratios.
+        var arms = new List<ArmSpec>
+        {
+            new("twp-reverse-http1-to-https", ProbeMode.ReverseHttp1ToHttps, null),
+            new("yarp-reverse-http1-to-https", ProbeMode.YarpReverseHttp1ToHttps, null)
+        };
+        if (nginxAvailable)
+            arms.Add(new("nginx-reverse-http1-to-https", ProbeMode.NginxReverseHttp1ToHttps, null));
+
+        arms.Add(new("twp-reverse-http1-mitm", ProbeMode.ReverseHttp1Mitm, null));
+        arms.Add(new("yarp-reverse-http1-tls-to-https", ProbeMode.YarpReverseHttp1TlsToHttps, null));
+        if (nginxAvailable)
+            arms.Add(new("nginx-reverse-http1-tls-to-https", ProbeMode.NginxReverseHttp1TlsToHttps, null));
+
+        arms.Add(new("twp-reverse-http2-to-https-http1", ProbeMode.MitmHttp2ToHttp1, null));
+        arms.Add(new("yarp-reverse-http2-to-https-http1", ProbeMode.YarpReverseHttp2ToHttpsHttp1, null));
+        if (nginxAvailable)
+            arms.Add(new("nginx-reverse-http2-to-https-http1", ProbeMode.NginxReverseHttp2ToHttpsHttp1, null));
+
+        arms.Add(new("twp-reverse-http3-to-https-http1", ProbeMode.MitmHttp3ToHttp1, null));
+        arms.Add(new("yarp-reverse-http3-to-https-http1", ProbeMode.YarpReverseHttp3ToHttpsHttp1, null));
+        if (nginxHttp3Available)
+            arms.Add(new("nginx-reverse-http3-to-https-http1", ProbeMode.NginxReverseHttp3ToHttpsHttp1, null));
 
         return arms;
     }
@@ -1695,7 +1768,9 @@ internal static class RampOrchestrator
         var yarpInboundH3 = mode is ProbeMode.YarpReverseHttp3Cleartext
             or ProbeMode.YarpReverseHttp3ToHttp2
             or ProbeMode.YarpReverseHttp3ToHttp3
-            or ProbeMode.NginxReverseHttp3Cleartext;
+            or ProbeMode.YarpReverseHttp3ToHttpsHttp1
+            or ProbeMode.NginxReverseHttp3Cleartext
+            or ProbeMode.NginxReverseHttp3ToHttpsHttp1;
         if (yarpInboundH3)
             return "localhost";
 
