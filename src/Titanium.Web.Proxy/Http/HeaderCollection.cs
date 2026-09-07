@@ -171,10 +171,12 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     /// </summary>
     public HeaderCollection()
     {
-        headers = new Dictionary<string, HttpHeader>(StringComparer.OrdinalIgnoreCase);
-        nonUniqueHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
+        // Probe GETs / H2 Lite carry a handful of unique headers; keep the three maps small
+        // so empty Request/Response shells (before TakeContentsFrom) cost less per stream.
+        headers = new Dictionary<string, HttpHeader>(8, StringComparer.OrdinalIgnoreCase);
+        nonUniqueHeaders = new Dictionary<string, List<HttpHeader>>(2, StringComparer.OrdinalIgnoreCase);
         nonUniqueHeadersReadOnly =
-            new Dictionary<string, IReadOnlyList<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
+            new Dictionary<string, IReadOnlyList<HttpHeader>>(2, StringComparer.OrdinalIgnoreCase);
     }
 
     private ReadOnlyDictionary<string, HttpHeader>? headersView;

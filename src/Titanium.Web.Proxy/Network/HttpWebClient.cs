@@ -130,10 +130,18 @@ public class HttpWebClient
     /// <summary>
     ///     Web Response. Created on first access so H2/H3 MITM Lite request-only work
     ///     does not allocate a Response + HeaderCollection graph per stream up front.
+    ///     CompareExchange: H2 request/response legs can race the first access.
     /// </summary>
     public Response Response
     {
-        get => response ??= new Response();
+        get
+        {
+            var existing = response;
+            if (existing != null)
+                return existing;
+            var created = new Response();
+            return Interlocked.CompareExchange(ref response, created, null) ?? created;
+        }
         internal set => response = value;
     }
 
