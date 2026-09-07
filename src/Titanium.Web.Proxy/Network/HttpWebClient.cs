@@ -145,6 +145,9 @@ public class HttpWebClient
         internal set => response = value;
     }
 
+    /// <summary>True when a response object has already been materialized for this exchange.</summary>
+    internal bool HasResponse => response != null;
+
     private Response? response;
 
     /// <summary>

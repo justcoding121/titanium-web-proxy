@@ -283,7 +283,7 @@ internal static class Http3RequestStream
                     sessionArgs.HttpClient.Request.Headers.AddHeader(
                         new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
 
-                if (sessionArgs.HttpClient.Response.Locked)
+                if (sessionArgs.HttpClient.HasResponse && sessionArgs.HttpClient.Response.Locked)
                 {
                     // Synthetic response: abort unread request DATA rather than draining an
                     // endless upload (matches RespondStreaming closeServerConnection guidance).
@@ -742,7 +742,8 @@ internal static class Http3RequestStream
             return false;
         if (authArgs.UpstreamHttpProtocol != UpstreamHttpProtocol.Http11)
             return false;
-        if (request.CancelRequest || sessionArgs.HttpClient.Response.Locked)
+        if (request.CancelRequest
+            || (sessionArgs.HttpClient.HasResponse && sessionArgs.HttpClient.Response.Locked))
             return false;
         if (request.IsBodyRead || request.BodyAvailable)
             return false;
