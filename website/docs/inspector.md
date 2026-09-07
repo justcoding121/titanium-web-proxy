@@ -109,15 +109,19 @@ Use **Tools → Composer / Breakpoints / AutoResponder / Scripts…** to open th
 - **Headers** — request/response headers, cookies, query (labeled sections)
 - **Body** — request and response bodies as `=== Request ===` / `=== Response ===` (decoded / JSON when possible; `(empty)` if missing)
 - **Hex** — same labeled sections for raw bytes
-- **WS Frames** — shown **only for WebSocket** sessions; best-effort text preview of messages (not a full opcode stream)
+- **WS Frames** — shown for WebSocket sessions; live frames when available (direction, opcode, payload preview)
+- **SSE** — shown for `text/event-stream` (or `Accept: text/event-stream`) responses; parses `event` / `id` / `data` blocks into a readable event list
+- **Protobuf** — wire-format field dump for gRPC and gRPC-JSON-transcoded upstream frames (field number, wire type, value). MVP does **not** require a `.protoset` / descriptor set; the optional settings field `ProtobufDescriptorSetPath` is stored for a future typed decode. Until then, the Protobuf tab always shows the JSON wire dump.
 
 Search for WebSocket traffic with `is:ws`. Search for gRPC with `is:grpc`, and for gRPC-JSON transcoded sessions with `is:transcoded` (client REST/JSON vs upstream gRPC faces appear in the Headers/Body inspect panes). Quick filters on the toolbar toggle `hide:tunnel`, `hide:image`, and `is:error` into the same search box. Status classes (`status:2xx` … `status:5xx`), `process:`, and `content-type:` are also supported. The status strip shows **Sessions: N** with no filter, and **visible / total** when a search or quick filter is active.
+
+**Network throttle:** use the toolbar **Throttle** combo (`None`, `Slow 3G`, `Fast 3G`, `LTE`) to add latency and bandwidth shaping on body writes / WebSocket frames during capture. Off by default (`None`); the hot path skips delay work when no profile is enabled.
 
 ### Tools (all traffic)
 
 Pipeline order on each request:
 
-**Scripts → AutoResponder → Breakpoints → origin**
+**Scripts → AutoResponder → Map Remote → Breakpoints → origin**
 
 #### Composer
 
@@ -130,6 +134,14 @@ Pause matching requests (URL glob; `*` = all) so you can edit the body, **Contin
 #### AutoResponder
 
 If **Enabled**, the first matching rule returns a fake status/body **before** the real server (and before breakpoints). Match URLs with `*` wildcards.
+
+**Map Local:** set an optional file path on the rule (or use **Browse…**). When the path is set, the response body is read from that file instead of the inline body field. Inline body is used when Map Local is empty. Missing files cause the rule to be skipped (request continues to breakpoints/origin).
+
+Optional **GraphQL operationName** on AutoResponder, Map Remote, and Breakpoints: when set, the rule only matches requests whose JSON body has that `operationName` (or a matching named operation in the `query` string). Same URL, different operations can take different rules.
+
+#### Map Remote
+
+If **Enabled**, the first matching rule rewrites the request URL to another absolute origin **before** breakpoints and the real server. Match with `*` wildcards. A single `*` in both match and target preserves the captured path/query suffix (for example match `https://prod.example/*` → target `http://127.0.0.1:5000/*`). Map Remote does not run when AutoResponder / Map Local already answered the request.
 
 #### Scripts
 
@@ -170,7 +182,9 @@ Notes:
 
 ## Other features
 
-- Session grid: method, status, host, URL, Protocol, duration, Wait (TTFB), size, process. Right-click menu: Replay, Load into Composer, Export selected HAR/archive, Copy URL.
+- Session grid: method, status, host, URL, Protocol, duration, Wait (TTFB), size, process. Right-click menu: Replay, Load into Composer, Export selected HAR/archive, Copy URL, Copy as curl, Copy as fetch, Diff selected (exactly two sessions).
+- **Copy as curl / fetch:** with one session selected, generate a shell `curl` command or a JavaScript `fetch(...)` call from the request URL, method, headers, and body (CONNECT tunnels are skipped). The snippet is copied to the clipboard.
+- **Session Diff:** with exactly two sessions selected, compare method/URL/status/headers/bodies offline. The result opens on the Inspect **Diff** tab and is copied to the clipboard.
 - HAR / archive: Export all writes every captured session; Export selected writes the grid multi-selection. Import appends sessions from the file. Replay selected session.
 - System proxy and root CA install / untrust / export; Device CA setup dialog for external devices; **Allow Store apps…** on Windows
 - Search (`method:GET status:2xx host:example process:chrome is:ws hide:tunnel`); quick filters: Hide CONNECT, Hide images, Errors only

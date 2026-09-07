@@ -118,6 +118,7 @@ public sealed class InterceptionService : IDisposable
     public bool AutoTrustRootOnStart { get; set; }
 
     public AutoResponderViewModel? AutoResponder { get; set; }
+    public MapRemoteViewModel? MapRemote { get; set; }
     public BreakpointViewModel? Breakpoints { get; set; }
 
     /// <summary>When true, breakpoints also fire on BeforeResponse.</summary>
@@ -128,6 +129,12 @@ public sealed class InterceptionService : IDisposable
 
     /// <summary>Optional light response script (set-header / set-status / abort).</summary>
     public string? ScriptOnResponse { get; set; }
+
+    /// <summary>Active network throttle profile (null / None = off).</summary>
+    public NetworkThrottleProfile? ThrottleProfile { get; set; }
+
+    /// <summary>Optional FileDescriptorSet path for protobuf decode hints.</summary>
+    public string? ProtobufDescriptorSetPath { get; set; }
 
     public event EventHandler<SessionSnapshot>? SessionCaptured;
     public event EventHandler<SessionSnapshot>? SessionUpdated;
@@ -156,6 +163,8 @@ public sealed class InterceptionService : IDisposable
         _proxy.BeforeRequest += OnBeforeRequest;
         _proxy.BeforeResponse += OnBeforeResponse;
         _proxy.AfterResponse += OnAfterResponse;
+        _proxy.OnRequestBodyWrite += OnRequestBodyWriteThrottle;
+        _proxy.OnResponseBodyWrite += OnResponseBodyWriteThrottle;
         _proxy.ServerCertificateValidationCallback += OnServerCertValidation;
 
         if (!string.IsNullOrWhiteSpace(UpstreamProxyAddress) &&
@@ -349,6 +358,8 @@ public sealed class InterceptionService : IDisposable
         _proxy.BeforeRequest -= OnBeforeRequest;
         _proxy.BeforeResponse -= OnBeforeResponse;
         _proxy.AfterResponse -= OnAfterResponse;
+        _proxy.OnRequestBodyWrite -= OnRequestBodyWriteThrottle;
+        _proxy.OnResponseBodyWrite -= OnResponseBodyWriteThrottle;
         _proxy.ServerCertificateValidationCallback -= OnServerCertValidation;
         if (_endPoint is not null)
         {
@@ -992,7 +1003,13 @@ public sealed class InterceptionService : IDisposable
     {
         try
         {
-            if (e.HttpClient.Request.HasBody && ShouldBufferBody(e.HttpClient.Request, e))
+            // Buffer body when tools need GraphQL operationName matching.
+            var needsBodyForTools =
+                (AutoResponder is { Enabled: true } && AutoResponder.Rules.Any(r => r.Enabled && !string.IsNullOrWhiteSpace(r.GraphQlOperationName))) ||
+                (MapRemote is { Enabled: true } && MapRemote.Rules.Any(r => r.Enabled && !string.IsNullOrWhiteSpace(r.GraphQlOperationName))) ||
+                (Breakpoints is { Enabled: true } && !string.IsNullOrWhiteSpace(Breakpoints.GraphQlOperationName));
+
+            if (e.HttpClient.Request.HasBody && (ShouldBufferBody(e.HttpClient.Request, e) || needsBodyForTools))
             {
                 e.HttpClient.Request.KeepBody = true;
                 await e.GetRequestBody();
@@ -1003,19 +1020,41 @@ public sealed class InterceptionService : IDisposable
                 return;
             }
 
-            // AutoResponder before breakpoints / origin.
+            string? requestBody = null;
+            if (needsBodyForTools && e.HttpClient.Request.IsBodyRead)
+            {
+                requestBody = await e.GetRequestBodyAsString();
+            }
+
+            var requestUrl = e.HttpClient.Request.Url ?? "";
+
+            // AutoResponder / Map Local before breakpoints / origin.
+            var autoResponded = false;
             if (AutoResponder is not null &&
-                AutoResponder.TryMatch(e.HttpClient.Request.Url ?? "", out var rule) &&
-                rule is not null)
+                AutoResponder.TryMatch(requestUrl, requestBody, out var rule) &&
+                rule is not null &&
+                AutoResponderViewModel.TryResolveBody(rule, out var bodyBytes, out _))
             {
                 var headers = new List<HttpHeader>
                 {
                     new("Content-Type", rule.ContentType),
                 };
-                e.GenericResponse(rule.Body, (HttpStatusCode)rule.StatusCode, headers);
+                e.GenericResponse(bodyBytes, (HttpStatusCode)rule.StatusCode, headers);
+                autoResponded = true;
+            }
+
+            // Map Remote: rewrite URL before origin (only when not already answered).
+            if (!autoResponded &&
+                MapRemote is not null &&
+                MapRemote.TryRewrite(requestUrl, requestBody, out var rewritten, out _) &&
+                !string.IsNullOrEmpty(rewritten))
+            {
+                e.HttpClient.Request.Url = rewritten;
             }
 
             if (Breakpoints is { Enabled: true } &&
+                (string.IsNullOrWhiteSpace(Breakpoints.GraphQlOperationName) ||
+                 GraphQlOperationMatcher.MatchesOperation(requestBody, Breakpoints.GraphQlOperationName)) &&
                 Breakpoints.TryEnter(CreatePreviewSnapshot(e, assignId: false), out var hit))
             {
                 var action = await hit.WaitAsync();
@@ -1144,6 +1183,8 @@ public sealed class InterceptionService : IDisposable
                      mark is not null,
             IsTranscoded = mark is not null,
             IsMultipart = req.ContentType?.Contains("multipart/", StringComparison.OrdinalIgnoreCase) == true,
+            IsServerSentEvents =
+                (req.Headers.GetFirstHeader("Accept")?.Value?.Contains("text/event-stream", StringComparison.OrdinalIgnoreCase) == true),
         };
 
         ApplyTranscodeMark(snap, mark);
@@ -1157,6 +1198,12 @@ public sealed class InterceptionService : IDisposable
         {
             snap.UpstreamRequestBodyBytes = TruncateBytes(upstreamReq);
             snap.GrpcFrames = ProtocolFrameInspectors.ParseGrpcFrames(snap.UpstreamRequestBodyBytes);
+            snap.ProtobufDecodedText = ProtobufMessageDecoder.DecodeWireFormat(snap.UpstreamRequestBodyBytes);
+        }
+
+        if (assignId && snap.IsWebSocket)
+        {
+            AttachLiveWebSocketFrames(e, snap);
         }
 
         return snap;
@@ -1343,17 +1390,82 @@ public sealed class InterceptionService : IDisposable
 
         if (snap.IsWebSocket)
         {
-            snap.WebSocketFrames = ProtocolFrameInspectors.ParseWebSocketFrames(bodyBytes ?? snap.RequestBodyBytes);
+            // Prefer live frames when present; otherwise best-effort parse.
+            snap.WebSocketFrames ??= ProtocolFrameInspectors.ParseWebSocketFrames(bodyBytes ?? snap.RequestBodyBytes);
+        }
+
+        var contentType = resp.ContentType ?? snap.ContentType ?? "";
+        if (contentType.Contains("text/event-stream", StringComparison.OrdinalIgnoreCase) ||
+            snap.IsServerSentEvents)
+        {
+            snap.IsServerSentEvents = true;
+            snap.SseEvents = SseEventParser.Parse(snap.ResponseBodyText);
         }
 
         if (snap.IsGrpc && !snap.IsTranscoded && bodyBytes is { Length: > 0 })
         {
             snap.GrpcFrames = ProtocolFrameInspectors.ParseGrpcFrames(bodyBytes);
+            snap.ProtobufDecodedText = ProtobufMessageDecoder.DecodeWireFormat(bodyBytes);
+        }
+
+        if (snap.IsTranscoded && snap.UpstreamResponseBodyBytes is { Length: > 0 })
+        {
+            snap.ProtobufDecodedText = ProtobufMessageDecoder.DecodeWireFormat(snap.UpstreamResponseBodyBytes);
         }
 
         if (snap.IsMultipart && bodyBytes is { Length: > 0 })
         {
             snap.MultipartParts = ProtocolFrameInspectors.ParseMultipart(snap.ContentType, bodyBytes);
+        }
+    }
+
+    private void AttachLiveWebSocketFrames(SessionEventArgs e, SessionSnapshot snap)
+    {
+        var frames = new List<WebSocketFrameSnapshot>();
+        snap.WebSocketFrames = frames;
+        e.BeforeWebSocketFrame += (_, args) =>
+        {
+            var direction = args.Direction == WebSocketFrameDirection.ClientToServer ? "Client" : "Server";
+            var opcode = args.OpCode.ToString();
+            frames.Add(ProtocolFrameInspectors.FromLiveFrame(direction, opcode, args.Data));
+            var profile = ThrottleProfile;
+            if (profile is { IsEnabled: true })
+            {
+                args.Delay = NetworkThrottle.DelayFor(profile, args.Data.Length, applyLatency: true);
+            }
+
+            SessionUpdated?.Invoke(this, snap);
+            return Task.CompletedTask;
+        };
+    }
+
+    private async Task OnRequestBodyWriteThrottle(object sender, BeforeBodyWriteEventArgs e)
+    {
+        var profile = ThrottleProfile;
+        if (profile is not { IsEnabled: true })
+        {
+            return;
+        }
+
+        var delay = NetworkThrottle.DelayFor(profile, e.BodyBytes?.Length ?? 0, applyLatency: e.IsChunked == false || e.BodyBytes?.Length > 0);
+        if (delay > TimeSpan.Zero)
+        {
+            await Task.Delay(delay).ConfigureAwait(false);
+        }
+    }
+
+    private async Task OnResponseBodyWriteThrottle(object sender, BeforeBodyWriteEventArgs e)
+    {
+        var profile = ThrottleProfile;
+        if (profile is not { IsEnabled: true })
+        {
+            return;
+        }
+
+        var delay = NetworkThrottle.DelayFor(profile, e.BodyBytes?.Length ?? 0, applyLatency: true);
+        if (delay > TimeSpan.Zero)
+        {
+            await Task.Delay(delay).ConfigureAwait(false);
         }
     }
 

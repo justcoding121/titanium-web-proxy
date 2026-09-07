@@ -570,6 +570,8 @@ public static class ChromeScenario
             await harness.OnUiAsync(() =>
             {
                 harness.Robot.ClickSessionsContextItem("CtxCopyUrl");
+                harness.Robot.ClickSessionsContextItem("CtxCopyAsCurl");
+                harness.Robot.ClickSessionsContextItem("CtxCopyAsFetch");
                 harness.Robot.ClickSessionsContextItem("CtxFilterByHost");
                 if (!harness.ViewModel.SearchQuery.Contains("host:", StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException("CtxFilterByHost did not set host: filter");

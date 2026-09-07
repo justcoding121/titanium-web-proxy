@@ -35,6 +35,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly RelayCommand _removeSelectedSessionsCommand;
     private readonly RelayCommand _exportSelectedHarCommand;
     private readonly RelayCommand _exportSelectedArchiveCommand;
+    private readonly RelayCommand _copyAsCurlCommand;
+    private readonly RelayCommand _copyAsFetchCommand;
+    private readonly RelayCommand _diffSessionsCommand;
+    private string _sessionDiffText = "";
     private string _statusText = "Ready";
     private StatusSeverity _statusSeverity = StatusSeverity.Neutral;
     private bool _isStatusBusy;
@@ -71,7 +75,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string _autoResponderMatch = "*";
     private string _autoResponderBody = "OK";
     private string _autoResponderContentType = "text/plain";
+    private string _autoResponderLocalFilePath = string.Empty;
     private int _autoResponderStatus = 200;
+    private string _mapRemoteMatch = "*";
+    private string _mapRemoteTarget = "http://127.0.0.1/";
+    private string _mapRemoteGraphQlOperation = string.Empty;
+    private string _autoResponderGraphQlOperation = string.Empty;
     private string _plusPanelsSummary = "";
     private string _bindAddress = "127.0.0.1";
     private int _bindPort = 8866;
@@ -94,6 +103,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     /// </summary>
     private bool _suppressOpenSessionDetails;
     private bool _showWsFramesTab;
+    private bool _showSseTab;
+    private bool _showProtobufTab;
+    private string _selectedSseEvents = "";
+    private string _selectedProtobufDecoded = "";
+    private string _networkThrottleProfile = "None";
     private string _composerMethod = "GET";
     private string _composerUrl = "";
     private string _composerHeaders = "";
@@ -122,7 +136,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         Sessions = new ObservableCollection<SessionSnapshot>();
         Breakpoints = new BreakpointViewModel();
         AutoResponder = new AutoResponderViewModel();
+        MapRemote = new MapRemoteViewModel();
         _interception.AutoResponder = AutoResponder;
+        _interception.MapRemote = MapRemote;
         _interception.Breakpoints = Breakpoints;
 
         LoadFromSettings();
@@ -213,6 +229,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         LoadFromSelectedCommand = Cmd(LoadFromSelectedAsync);
         LoadIntoComposerCommand = Cmd(LoadIntoComposerAsync);
         CopyUrlCommand = Cmd(CopyUrlAsync);
+        _copyAsCurlCommand = Cmd(CopyAsCurlAsync, () => CanCopyAsCurl);
+        CopyAsCurlCommand = _copyAsCurlCommand;
+        _copyAsFetchCommand = Cmd(CopyAsFetchAsync, () => CanCopyAsCurl);
+        CopyAsFetchCommand = _copyAsFetchCommand;
+        _diffSessionsCommand = Cmd(DiffSessionsAsync, () => CanDiffSessions);
+        DiffSessionsCommand = _diffSessionsCommand;
         FilterByHostCommand = Cmd(FilterByHostAsync);
         FilterByProcessCommand = Cmd(FilterByProcessAsync);
         OpenExclusionSummaryCommand = Cmd(OpenExcludedHostsAsync);
@@ -220,6 +242,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         AddAutoResponderRuleCommand = Cmd(AddAutoResponderRuleAsync);
         DeleteAutoResponderRuleCommand = Cmd(DeleteAutoResponderRuleAsync);
         UpdateAutoResponderRuleCommand = Cmd(UpdateAutoResponderRuleAsync);
+        BrowseAutoResponderLocalFileCommand = Cmd(BrowseAutoResponderLocalFileAsync);
+        AddMapRemoteRuleCommand = Cmd(AddMapRemoteRuleAsync);
+        DeleteMapRemoteRuleCommand = Cmd(DeleteMapRemoteRuleAsync);
+        UpdateMapRemoteRuleCommand = Cmd(UpdateMapRemoteRuleAsync);
         ContinueBreakpointCommand = Cmd(() =>
         {
             Breakpoints.Continue();
@@ -237,6 +263,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OpenToolsBreakpointsCommand = Cmd(() => OpenToolsTabAsync(1));
         OpenToolsAutoResponderCommand = Cmd(() => OpenToolsTabAsync(2));
         OpenToolsScriptsCommand = Cmd(() => OpenToolsTabAsync(3));
+        OpenToolsMapRemoteCommand = Cmd(() => OpenToolsTabAsync(4));
         ClearFiltersCommand = Cmd(() =>
         {
             SearchQuery = SessionSearch.ClearFilters(SearchQuery);
@@ -533,6 +560,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private void WireEventHandlers()
     {
         WireAutoResponderHandlers();
+        WireMapRemoteHandlers();
         WireBreakpointHandlers();
         WireSessionPipelineHandlers();
     }
@@ -548,17 +576,37 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 AutoResponderStatus = selected.StatusCode;
                 AutoResponderBody = selected.Body;
                 AutoResponderContentType = selected.ContentType;
+                AutoResponderLocalFilePath = selected.LocalFilePath;
+                AutoResponderGraphQlOperation = selected.GraphQlOperationName;
             }
         };
         AutoResponder.EnabledChanged += (_, _) => PersistAutoResponder();
         AutoResponder.Rules.CollectionChanged += (_, _) => { /* persistence via explicit commands */ };
     }
 
+    private void WireMapRemoteHandlers()
+    {
+        MapRemote.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MapRemoteViewModel.SelectedRule) &&
+                MapRemote.SelectedRule is { } selected)
+            {
+                MapRemoteMatch = selected.MatchUrl;
+                MapRemoteTarget = selected.TargetUrl;
+                MapRemoteGraphQlOperation = selected.GraphQlOperationName;
+            }
+        };
+        MapRemote.EnabledChanged += (_, _) => PersistMapRemote();
+        MapRemote.Rules.CollectionChanged += (_, _) => { /* persistence via explicit commands */ };
+    }
+
     private void WireBreakpointHandlers()
     {
         Breakpoints.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(BreakpointViewModel.Enabled) or nameof(BreakpointViewModel.UrlFilter))
+            if (e.PropertyName is nameof(BreakpointViewModel.Enabled)
+                or nameof(BreakpointViewModel.UrlFilter)
+                or nameof(BreakpointViewModel.GraphQlOperationName))
             {
                 PersistSettings();
             }
@@ -1522,6 +1570,103 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         StatusText = urls.Count == 1 ? "Copied URL" : $"Copied {urls.Count} URLs";
     }
 
+    private async Task CopyAsCurlAsync()
+    {
+        if (!TryBuildCopyAsCurl(out var curl))
+        {
+            StatusText = "Select one session with a URL to copy as curl";
+            return;
+        }
+
+        await CopyTextToClipboardAsync(curl).ConfigureAwait(false);
+        StatusText = "Copied as curl";
+    }
+
+    private async Task CopyAsFetchAsync()
+    {
+        if (!TryBuildCopyAsFetch(out var fetch))
+        {
+            StatusText = "Select one session with a URL to copy as fetch";
+            return;
+        }
+
+        await CopyTextToClipboardAsync(fetch).ConfigureAwait(false);
+        StatusText = "Copied as fetch";
+    }
+
+    private async Task DiffSessionsAsync()
+    {
+        if (!TryBuildSessionDiff(out var diff))
+        {
+            StatusText = "Select exactly two sessions to diff";
+            return;
+        }
+
+        SessionDiffText = diff.Text;
+        await CopyTextToClipboardAsync(diff.Text).ConfigureAwait(false);
+        ShowSessionDetails = true;
+        SelectedOuterPaneIndex = 0;
+        SelectedInspectTabIndex = 3; // Diff tab
+        StatusText = diff.HasDifferences ? "Session Diff: differences found (copied)" : "Session Diff: identical (copied)";
+    }
+
+    /// <summary>Compares exactly two selected sessions (E2E / probe).</summary>
+    public bool TryBuildSessionDiff(out SessionDiffResult diff)
+    {
+        diff = new SessionDiffResult(false, "");
+        var selection = ResolveFilterSelection();
+        if (selection.Count != 2)
+        {
+            return false;
+        }
+
+        diff = SessionDiff.Compare(selection[0], selection[1]);
+        return true;
+    }
+
+    /// <summary>Builds curl for the single selected session (E2E / probe).</summary>
+    public bool TryBuildCopyAsCurl(out string curl)
+    {
+        curl = "";
+        var session = ResolveSingleCopySession();
+        if (session is null || !SessionRequestCodegen.CanGenerate(session))
+        {
+            return false;
+        }
+
+        curl = SessionRequestCodegen.ToCurl(session);
+        return true;
+    }
+
+    /// <summary>Builds fetch for the single selected session (E2E / probe).</summary>
+    public bool TryBuildCopyAsFetch(out string fetch)
+    {
+        fetch = "";
+        var session = ResolveSingleCopySession();
+        if (session is null || !SessionRequestCodegen.CanGenerate(session))
+        {
+            return false;
+        }
+
+        fetch = SessionRequestCodegen.ToFetch(session);
+        return true;
+    }
+
+    private SessionSnapshot? ResolveSingleCopySession()
+    {
+        var selection = ResolveFilterSelection();
+        return selection.Count == 1 ? selection[0] : null;
+    }
+
+    private async Task CopyTextToClipboardAsync(string text)
+    {
+        var window = TryGetMainWindow();
+        if (window?.Clipboard is { } clipboard)
+        {
+            await clipboard.SetTextAsync(text).ConfigureAwait(false);
+        }
+    }
+
     private Task FilterByHostAsync()
     {
         var host = ResolveUnanimousFilterHost();
@@ -1582,6 +1727,35 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     /// <summary>True when at least one selected session has a URL to copy.</summary>
     public bool CanCopyUrl => ResolveCopyUrls().Count > 0;
+
+    /// <summary>True when exactly one non-tunnel session with a URL is selected (curl/fetch).</summary>
+    public bool CanCopyAsCurl
+    {
+        get
+        {
+            var session = ResolveSingleCopySession();
+            return SessionRequestCodegen.CanGenerate(session);
+        }
+    }
+
+    /// <summary>True when exactly two sessions are selected for Session Diff.</summary>
+    public bool CanDiffSessions => ResolveFilterSelection().Count == 2;
+
+    /// <summary>Last Session Diff text (Inspect Diff tab / probe).</summary>
+    public string SessionDiffText
+    {
+        get => _sessionDiffText;
+        private set
+        {
+            if (SetField(ref _sessionDiffText, value))
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanShowSessionDiffTab)));
+            }
+        }
+    }
+
+    /// <summary>Show Inspect Diff tab after a Session Diff has been computed.</summary>
+    public bool CanShowSessionDiffTab => !string.IsNullOrEmpty(SessionDiffText);
 
     private string? ResolveUnanimousFilterHost()
     {
@@ -1683,6 +1857,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSelectedSessions)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSingleSelectedSession)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCopyUrl)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCopyAsCurl)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanDiffSessions)));
         RaiseSessionCommandCanExecuteChanged();
     }
 
@@ -1692,6 +1868,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _removeSelectedSessionsCommand.RaiseCanExecuteChanged();
         _exportSelectedHarCommand.RaiseCanExecuteChanged();
         _exportSelectedArchiveCommand.RaiseCanExecuteChanged();
+        _copyAsCurlCommand.RaiseCanExecuteChanged();
+        _copyAsFetchCommand.RaiseCanExecuteChanged();
+        _diffSessionsCommand.RaiseCanExecuteChanged();
     }
 
     private List<string> ResolveCopyUrls() =>
@@ -1708,6 +1887,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             StatusCode = AutoResponderStatus,
             Body = AutoResponderBody,
             ContentType = AutoResponderContentType,
+            LocalFilePath = AutoResponderLocalFilePath,
+            GraphQlOperationName = AutoResponderGraphQlOperation,
             Enabled = true,
         });
         PersistAutoResponder();
@@ -1743,8 +1924,71 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         rule.StatusCode = AutoResponderStatus;
         rule.Body = AutoResponderBody;
         rule.ContentType = AutoResponderContentType;
+        rule.LocalFilePath = AutoResponderLocalFilePath;
+        rule.GraphQlOperationName = AutoResponderGraphQlOperation;
         PersistAutoResponder();
         StatusText = "AutoResponder rule updated";
+        return Task.CompletedTask;
+    }
+
+    private async Task BrowseAutoResponderLocalFileAsync()
+    {
+        var path = await _pathPicker.PickOpenPathAsync(
+            "Map Local — choose response file",
+            "All files",
+            ["*.*"]).ConfigureAwait(true);
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        AutoResponderLocalFilePath = path;
+        StatusText = $"Map Local file: {path}";
+    }
+
+    private Task AddMapRemoteRuleAsync()
+    {
+        MapRemote.Rules.Add(new MapRemoteRule
+        {
+            MatchUrl = MapRemoteMatch,
+            TargetUrl = MapRemoteTarget,
+            GraphQlOperationName = MapRemoteGraphQlOperation,
+            Enabled = true,
+        });
+        PersistMapRemote();
+        StatusText = $"Map Remote rule added ({MapRemote.Rules.Count} total)";
+        return Task.CompletedTask;
+    }
+
+    private Task DeleteMapRemoteRuleAsync()
+    {
+        if (MapRemote.SelectedRule is null)
+        {
+            StatusText = "Select a Map Remote rule to delete";
+            return Task.CompletedTask;
+        }
+
+        MapRemote.Rules.Remove(MapRemote.SelectedRule);
+        MapRemote.SelectedRule = null;
+        PersistMapRemote();
+        StatusText = "Map Remote rule deleted";
+        return Task.CompletedTask;
+    }
+
+    private Task UpdateMapRemoteRuleAsync()
+    {
+        if (MapRemote.SelectedRule is null)
+        {
+            StatusText = "Select a Map Remote rule to update";
+            return Task.CompletedTask;
+        }
+
+        var rule = MapRemote.SelectedRule;
+        rule.MatchUrl = MapRemoteMatch;
+        rule.TargetUrl = MapRemoteTarget;
+        rule.GraphQlOperationName = MapRemoteGraphQlOperation;
+        PersistMapRemote();
+        StatusText = "Map Remote rule updated";
         return Task.CompletedTask;
     }
 
@@ -1758,6 +2002,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ObservableCollection<SessionSnapshot> Sessions { get; }
     public BreakpointViewModel Breakpoints { get; }
     public AutoResponderViewModel AutoResponder { get; }
+    public MapRemoteViewModel MapRemote { get; }
     public ICommand CheckForUpdatesCommand { get; }
     public ICommand SetUpdateChannelStableCommand { get; }
     public ICommand SetUpdateChannelBetaCommand { get; }
@@ -1801,12 +2046,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand LoadFromSelectedCommand { get; }
     public ICommand LoadIntoComposerCommand { get; }
     public ICommand CopyUrlCommand { get; }
+    public ICommand CopyAsCurlCommand { get; }
+    public ICommand CopyAsFetchCommand { get; }
+    public ICommand DiffSessionsCommand { get; }
     public ICommand FilterByHostCommand { get; }
     public ICommand FilterByProcessCommand { get; }
     public ICommand SendComposerCommand { get; }
     public ICommand AddAutoResponderRuleCommand { get; }
     public ICommand DeleteAutoResponderRuleCommand { get; }
     public ICommand UpdateAutoResponderRuleCommand { get; }
+    public ICommand BrowseAutoResponderLocalFileCommand { get; }
+    public ICommand AddMapRemoteRuleCommand { get; }
+    public ICommand DeleteMapRemoteRuleCommand { get; }
+    public ICommand UpdateMapRemoteRuleCommand { get; }
     public ICommand ContinueBreakpointCommand { get; }
     public ICommand AbortBreakpointCommand { get; }
     public ICommand ApplyEditBodyCommand { get; }
@@ -1816,6 +2068,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand OpenToolsBreakpointsCommand { get; }
     public ICommand OpenToolsAutoResponderCommand { get; }
     public ICommand OpenToolsScriptsCommand { get; }
+    public ICommand OpenToolsMapRemoteCommand { get; }
     public ICommand ClearFiltersCommand { get; }
 
     public string BindAddress
@@ -1933,6 +2186,37 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         get => _autoResponderContentType;
         set => SetField(ref _autoResponderContentType, value);
+    }
+
+    /// <summary>Optional Map Local file path; when set, response body is read from disk.</summary>
+    public string AutoResponderLocalFilePath
+    {
+        get => _autoResponderLocalFilePath;
+        set => SetField(ref _autoResponderLocalFilePath, value);
+    }
+
+    public string MapRemoteMatch
+    {
+        get => _mapRemoteMatch;
+        set => SetField(ref _mapRemoteMatch, value);
+    }
+
+    public string MapRemoteTarget
+    {
+        get => _mapRemoteTarget;
+        set => SetField(ref _mapRemoteTarget, value);
+    }
+
+    public string MapRemoteGraphQlOperation
+    {
+        get => _mapRemoteGraphQlOperation;
+        set => SetField(ref _mapRemoteGraphQlOperation, value);
+    }
+
+    public string AutoResponderGraphQlOperation
+    {
+        get => _autoResponderGraphQlOperation;
+        set => SetField(ref _autoResponderGraphQlOperation, value);
     }
 
     public int AutoResponderStatus
@@ -2187,6 +2471,52 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         private set => SetField(ref _showWsFramesTab, value);
     }
 
+    public bool ShowSseTab
+    {
+        get => _showSseTab;
+        private set => SetField(ref _showSseTab, value);
+    }
+
+    public bool ShowProtobufTab
+    {
+        get => _showProtobufTab;
+        private set => SetField(ref _showProtobufTab, value);
+    }
+
+    public string SelectedSseEvents
+    {
+        get => _selectedSseEvents;
+        private set => SetField(ref _selectedSseEvents, value);
+    }
+
+    public string SelectedProtobufDecoded
+    {
+        get => _selectedProtobufDecoded;
+        private set => SetField(ref _selectedProtobufDecoded, value);
+    }
+
+    /// <summary>Network throttle profile name applied to capture (None / Slow 3G / Fast 3G / LTE).</summary>
+    public string NetworkThrottleProfile
+    {
+        get => _networkThrottleProfile;
+        set
+        {
+            if (!SetField(ref _networkThrottleProfile, value ?? "None"))
+            {
+                return;
+            }
+
+            _interception.ThrottleProfile = NetworkThrottle.Find(_networkThrottleProfile) is { IsEnabled: true } p
+                ? p
+                : null;
+            _settings.Current.NetworkThrottleProfile = _networkThrottleProfile;
+            _settings.Save();
+        }
+    }
+
+    public IReadOnlyList<string> NetworkThrottleProfileNames { get; } =
+        NetworkThrottle.Profiles.Select(p => p.Name).ToArray();
+
     public string SearchQuery
     {
         get => _searchQuery;
@@ -2300,7 +2630,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>Inspect tabs: 0 Headers, 1 Body, 2 Hex, 3 WS Frames.</summary>
+    /// <summary>Inspect tabs: 0 Headers, 1 Body, 2 Hex, 3 Diff, 4 WS Frames.</summary>
     public int SelectedInspectTabIndex
     {
         get => _selectedInspectTabIndex;
@@ -2313,7 +2643,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>Tools tabs: 0 Composer, 1 Breakpoints, 2 AutoResponder, 3 Scripts.</summary>
+    /// <summary>Tools tabs: 0 Composer, 1 Breakpoints, 2 AutoResponder, 3 Scripts, 4 Map Remote.</summary>
     public int SelectedToolsTabIndex
     {
         get => _selectedToolsTabIndex;
@@ -2327,7 +2657,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Compatibility index for tests: 0–3 Inspect, 4–7 Tools (Composer…Scripts).
+    /// Compatibility index for tests: 0–3 Inspect, 4–8 Tools (Composer…Map Remote).
     /// </summary>
     public int SelectedDetailTabIndex
     {
@@ -2339,12 +2669,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             if (value < 4)
             {
                 SelectedOuterPaneIndex = 0;
-                SelectedInspectTabIndex = Math.Clamp(value, 0, 3);
+                SelectedInspectTabIndex = Math.Clamp(value, 0, 6);
             }
             else
             {
                 SelectedOuterPaneIndex = 1;
-                SelectedToolsTabIndex = Math.Clamp(value - 4, 0, 3);
+                SelectedToolsTabIndex = Math.Clamp(value - 4, 0, 4);
             }
 
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
@@ -2401,14 +2731,22 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.ScriptOnResponse = _scriptOnResponse;
         _interception.IgnoreServerCertificateErrors = s.IgnoreServerCertificateErrors;
         _interception.DecryptHttps = _decryptHttps;
+        _interception.ProtobufDescriptorSetPath = s.ProtobufDescriptorSetPath;
+        _networkThrottleProfile = string.IsNullOrWhiteSpace(s.NetworkThrottleProfile) ? "None" : s.NetworkThrottleProfile;
+        _interception.ThrottleProfile = NetworkThrottle.Find(_networkThrottleProfile) is { IsEnabled: true } tp
+            ? tp
+            : null;
         ApplyExclusionSettingsFromSettings();
         _debugFileLogging = IsDebugFileLoggingEnabled(s);
         _interception.ConfigureLogging(s);
 
         AutoResponder.Enabled = s.AutoResponderEnabled;
         AutoResponder.LoadFromDtos(s.AutoResponderRules);
+        MapRemote.Enabled = s.MapRemoteEnabled;
+        MapRemote.LoadFromDtos(s.MapRemoteRules);
         Breakpoints.Enabled = s.BreakpointEnabled;
         Breakpoints.UrlFilter = string.IsNullOrEmpty(s.BreakpointUrlFilter) ? "*" : s.BreakpointUrlFilter;
+        Breakpoints.GraphQlOperationName = s.BreakpointGraphQlOperationName ?? "";
     }
 
     private void NotifySettingsUiChanged()
@@ -2466,6 +2804,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         AutoResponder.NotifyRulesChanged();
     }
 
+    private void PersistMapRemote()
+    {
+        _settings.Current.MapRemoteEnabled = MapRemote.Enabled;
+        _settings.Current.MapRemoteRules = MapRemote.ToDtos();
+        _settings.Save();
+        MapRemote.NotifyRulesChanged();
+    }
+
     private void PersistSettings()
     {
         var s = _settings.Current;
@@ -2477,8 +2823,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         s.IgnoreServerCertificateErrors = _interception.IgnoreServerCertificateErrors;
         s.AutoResponderEnabled = AutoResponder.Enabled;
         s.AutoResponderRules = AutoResponder.ToDtos();
+        s.MapRemoteEnabled = MapRemote.Enabled;
+        s.MapRemoteRules = MapRemote.ToDtos();
         s.BreakpointEnabled = Breakpoints.Enabled;
         s.BreakpointUrlFilter = Breakpoints.UrlFilter;
+        s.BreakpointGraphQlOperationName = string.IsNullOrWhiteSpace(Breakpoints.GraphQlOperationName)
+            ? null
+            : Breakpoints.GraphQlOperationName;
         s.BreakpointOnResponse = BreakpointOnResponse;
         s.ScriptOnRequest = ScriptOnRequest;
         s.ScriptOnResponse = ScriptOnResponse;
@@ -2499,16 +2850,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         ShowSessionDetails = true;
         SelectedOuterPaneIndex = 1;
-        SelectedToolsTabIndex = Math.Clamp(toolsTabIndex, 0, 3);
+        SelectedToolsTabIndex = Math.Clamp(toolsTabIndex, 0, 4);
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
         return Task.CompletedTask;
     }
 
     private void UpdateWsFramesVisibility()
     {
-        var show = _selected?.IsWebSocket == true;
-        ShowWsFramesTab = show;
-        if (!show && SelectedInspectTabIndex == 3)
+        ShowWsFramesTab = _selected?.IsWebSocket == true;
+        ShowSseTab = _selected?.IsServerSentEvents == true ||
+                     (_selected?.SseEvents?.Count > 0);
+        ShowProtobufTab = _selected?.IsGrpc == true ||
+                          _selected?.IsTranscoded == true ||
+                          !string.IsNullOrEmpty(_selected?.ProtobufDecodedText);
+        // Inspect tabs: 0 Headers, 1 Body, 2 Hex, 3 Diff, 4 WS, 5 SSE, 6 Protobuf
+        if ((!ShowWsFramesTab && SelectedInspectTabIndex == 4) ||
+            (!ShowSseTab && SelectedInspectTabIndex == 5) ||
+            (!ShowProtobufTab && SelectedInspectTabIndex == 6))
         {
             SelectedInspectTabIndex = 0;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
@@ -2837,6 +3195,36 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         {
             SelectedFrames = _selected.IsWebSocket ? "(no frames parsed)" : "";
         }
+
+        if (_selected.SseEvents is { Count: > 0 } sse)
+        {
+            var sseSb = new StringBuilder();
+            foreach (var ev in sse)
+            {
+                sseSb.Append("event=").Append(ev.Event);
+                if (!string.IsNullOrEmpty(ev.Id))
+                {
+                    sseSb.Append(" id=").Append(ev.Id);
+                }
+
+                sseSb.AppendLine();
+                sseSb.AppendLine(ev.Data);
+                sseSb.AppendLine("---");
+            }
+
+            SelectedSseEvents = sseSb.ToString();
+        }
+        else
+        {
+            SelectedSseEvents = _selected.IsServerSentEvents ? "(no events parsed)" : "";
+        }
+
+        SelectedProtobufDecoded = !string.IsNullOrEmpty(_selected.ProtobufDecodedText)
+            ? _selected.ProtobufDecodedText
+            : (_selected.IsGrpc || _selected.IsTranscoded
+                ? ProtobufMessageDecoder.DecodeWireFormat(
+                    _selected.UpstreamResponseBodyBytes ?? _selected.UpstreamRequestBodyBytes ?? _selected.ResponseBodyBytes)
+                : "");
     }
 
     private void OnSessionAddedToFilter(SessionSnapshot snapshot)

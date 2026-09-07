@@ -18,6 +18,20 @@ public sealed class AutoResponderRuleDto
     public string Body { get; set; } = string.Empty;
     public string ContentType { get; set; } = "text/plain";
     public bool Enabled { get; set; } = true;
+
+    /// <summary>When set, response body is read from this file (Map Local) instead of <see cref="Body"/>.</summary>
+    public string? LocalFilePath { get; set; }
+
+    /// <summary>Optional GraphQL operationName; when set, rule matches only that operation.</summary>
+    public string? GraphQlOperationName { get; set; }
+}
+
+public sealed class MapRemoteRuleDto
+{
+    public string MatchUrl { get; set; } = "*";
+    public string TargetUrl { get; set; } = "http://127.0.0.1/";
+    public bool Enabled { get; set; } = true;
+    public string? GraphQlOperationName { get; set; }
 }
 
 public sealed class InspectorSettings
@@ -38,9 +52,15 @@ public sealed class InspectorSettings
     public bool AutoResponderEnabled { get; set; }
     public List<AutoResponderRuleDto> AutoResponderRules { get; set; } = new();
 
+    public bool MapRemoteEnabled { get; set; }
+    public List<MapRemoteRuleDto> MapRemoteRules { get; set; } = new();
+
     public bool BreakpointEnabled { get; set; }
     public string BreakpointUrlFilter { get; set; } = "*";
     public bool BreakpointOnResponse { get; set; }
+
+    /// <summary>Optional GraphQL operationName for breakpoints.</summary>
+    public string? BreakpointGraphQlOperationName { get; set; }
 
     public string? ScriptOnRequest { get; set; }
     public string? ScriptOnResponse { get; set; }
@@ -113,6 +133,12 @@ public sealed class InspectorSettings
 
     /// <summary>User acknowledged PAC replace warning when enabling System proxy.</summary>
     public bool WarnedAboutPacReplace { get; set; }
+
+    /// <summary>Optional FileDescriptorSet path for protobuf decode on inspect.</summary>
+    public string? ProtobufDescriptorSetPath { get; set; }
+
+    /// <summary>Active network throttle profile name (<c>None</c>, <c>Slow 3G</c>, …).</summary>
+    public string NetworkThrottleProfile { get; set; } = "None";
 }
 
 public sealed class SettingsService

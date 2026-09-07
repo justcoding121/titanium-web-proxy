@@ -63,6 +63,7 @@
         <MenuItem Header="Breakpoints…" Command="{Binding OpenToolsBreakpointsCommand}" AutomationProperties.AutomationId="MenuToolsBreakpoints" />
         <MenuItem Header="AutoResponder…" Command="{Binding OpenToolsAutoResponderCommand}" AutomationProperties.AutomationId="MenuToolsAutoResponder" />
         <MenuItem Header="Scripts…" Command="{Binding OpenToolsScriptsCommand}" AutomationProperties.AutomationId="MenuToolsScripts" />
+        <MenuItem Header="Map Remote…" Command="{Binding OpenToolsMapRemoteCommand}" AutomationProperties.AutomationId="MenuToolsMapRemote" />
       </MenuItem>
       <MenuItem Header="_Options" AutomationProperties.AutomationId="MenuOptions">
         <MenuItem Header="_Theme" AutomationProperties.AutomationId="MenuTheme">
@@ -157,6 +158,12 @@
           <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}"
                     VerticalAlignment="Center" Margin="0,0,12,6"
                     AutomationProperties.AutomationId="SystemProxyCheck" />
+          <TextBlock Text="Throttle" VerticalAlignment="Center" Margin="0,0,6,6" Opacity="0.85" />
+          <ComboBox Width="110" Margin="0,0,12,6" VerticalAlignment="Center"
+                    ItemsSource="{Binding NetworkThrottleProfileNames}"
+                    SelectedItem="{Binding NetworkThrottleProfile}"
+                    ToolTip.Tip="Add latency and bandwidth shaping during capture (body writes / WebSocket frames). Off by default."
+                    AutomationProperties.AutomationId="ComboNetworkThrottle" />
         </WrapPanel>
         <!-- Bind / intercept controls wrap independently of the rows above. -->
         <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarEndpoint">
@@ -215,6 +222,15 @@
             <MenuItem Header="Copy URL" Command="{Binding CopyUrlCommand}"
                       IsVisible="{Binding CanCopyUrl}"
                       AutomationProperties.AutomationId="CtxCopyUrl" />
+            <MenuItem Header="Copy as curl" Command="{Binding CopyAsCurlCommand}"
+                      IsVisible="{Binding CanCopyAsCurl}"
+                      AutomationProperties.AutomationId="CtxCopyAsCurl" />
+            <MenuItem Header="Copy as fetch" Command="{Binding CopyAsFetchCommand}"
+                      IsVisible="{Binding CanCopyAsCurl}"
+                      AutomationProperties.AutomationId="CtxCopyAsFetch" />
+            <MenuItem Header="Diff selected…" Command="{Binding DiffSessionsCommand}"
+                      IsVisible="{Binding CanDiffSessions}"
+                      AutomationProperties.AutomationId="CtxDiffSessions" />
             <MenuItem Header="Filter by host" Command="{Binding FilterByHostCommand}"
                       IsVisible="{Binding CanFilterByHost}"
                       AutomationProperties.AutomationId="CtxFilterByHost" />
@@ -313,15 +329,35 @@
                   <TextBox IsReadOnly="True" Text="{Binding SelectedHex}" AcceptsReturn="True" TextWrapping="Wrap"
                            FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="HexText" />
                 </TabItem>
+                <TabItem Header="Diff" AutomationProperties.AutomationId="TabDiff"
+                         IsVisible="{Binding CanShowSessionDiffTab}">
+                  <TextBox IsReadOnly="True" Text="{Binding SessionDiffText}" AcceptsReturn="True" TextWrapping="Wrap"
+                           FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="DiffText" />
+                </TabItem>
                 <TabItem Header="WS Frames" AutomationProperties.AutomationId="TabFrames"
                          IsVisible="{Binding ShowWsFramesTab}">
                   <DockPanel>
                     <TextBlock DockPanel.Dock="Top" Margin="8,8,8,0" Opacity="0.75" TextWrapping="Wrap"
-                               Text="WebSocket message preview for this session (best-effort text)." />
+                               Text="Live WebSocket frames for this session (direction, opcode, payload preview)." />
                     <TextBox IsReadOnly="True" Text="{Binding SelectedFrames}" AcceptsReturn="True" TextWrapping="Wrap"
                              Margin="0,4,0,0"
                              FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="FramesText" />
                   </DockPanel>
+                </TabItem>
+                <TabItem Header="SSE" AutomationProperties.AutomationId="TabSse"
+                         IsVisible="{Binding ShowSseTab}">
+                  <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Margin="8,8,8,0" Opacity="0.75" TextWrapping="Wrap"
+                               Text="Server-Sent Events parsed from the response body." />
+                    <TextBox IsReadOnly="True" Text="{Binding SelectedSseEvents}" AcceptsReturn="True" TextWrapping="Wrap"
+                             Margin="0,4,0,0"
+                             FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="SseText" />
+                  </DockPanel>
+                </TabItem>
+                <TabItem Header="Protobuf" AutomationProperties.AutomationId="TabProtobuf"
+                         IsVisible="{Binding ShowProtobufTab}">
+                  <TextBox IsReadOnly="True" Text="{Binding SelectedProtobufDecoded}" AcceptsReturn="True" TextWrapping="Wrap"
+                           FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="ProtobufText" />
                 </TabItem>
               </TabControl>
             </Grid>
@@ -366,6 +402,8 @@
                             AutomationProperties.AutomationId="BreakpointOnResponse" />
                   <TextBox Watermark="URL filter (* = all, e.g. *api*/users*)" Text="{Binding Breakpoints.UrlFilter}"
                            AutomationProperties.AutomationId="BreakpointUrlFilter" />
+                  <TextBox Watermark="GraphQL operationName (optional)" Text="{Binding Breakpoints.GraphQlOperationName}"
+                           AutomationProperties.AutomationId="BreakpointGraphQlOperation" />
                   <TextBox Watermark="Edit body (Apply edit body, then Continue)" Text="{Binding BreakpointEditBody}"
                            AcceptsReturn="True" Height="80" FontFamily="Consolas,Courier New,monospace"
                            AutomationProperties.AutomationId="BreakpointEditBody" />
@@ -382,7 +420,7 @@
               <TabItem Header="AutoResponder" AutomationProperties.AutomationId="TabAutoResponder">
                 <StackPanel Margin="8" Spacing="8">
                   <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                             Text="Return a fake response for matching URLs before the real server (and before breakpoints)." />
+                             Text="Return a fake response for matching URLs before the real server (and before breakpoints). Map Local loads the body from a file when a path is set." />
                   <CheckBox Content="Enabled (before breakpoints)" IsChecked="{Binding AutoResponder.Enabled}"
                             AutomationProperties.AutomationId="AutoResponderEnabled" />
                   <ListBox ItemsSource="{Binding AutoResponder.Rules}"
@@ -403,7 +441,16 @@
                              AutomationProperties.AutomationId="AutoResponderStatus" />
                     <TextBox Watermark="Content-Type" Text="{Binding AutoResponderContentType}" Width="160" AutomationProperties.AutomationId="AutoResponderContentType" />
                   </StackPanel>
-                  <TextBox Watermark="Response body" Text="{Binding AutoResponderBody}" AcceptsReturn="True" Height="80"
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBox Watermark="Map Local file (optional)" Text="{Binding AutoResponderLocalFilePath}"
+                             MinWidth="280" HorizontalAlignment="Stretch"
+                             AutomationProperties.AutomationId="AutoResponderLocalFile" />
+                    <Button Content="Browse…" Command="{Binding BrowseAutoResponderLocalFileCommand}"
+                            AutomationProperties.AutomationId="AutoResponderBrowseLocal" />
+                  </StackPanel>
+                  <TextBox Watermark="GraphQL operationName (optional)" Text="{Binding AutoResponderGraphQlOperation}"
+                           AutomationProperties.AutomationId="AutoResponderGraphQlOperation" />
+                  <TextBox Watermark="Response body (used when Map Local is empty)" Text="{Binding AutoResponderBody}" AcceptsReturn="True" Height="80"
                            AutomationProperties.AutomationId="AutoResponderBody" />
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button Content="Add rule" Command="{Binding AddAutoResponderRuleCommand}"
@@ -430,6 +477,39 @@
                            FontFamily="Consolas,Courier New,monospace"
                            Watermark="set-header Name: Value  |  set-status 404  |  abort"
                            AutomationProperties.AutomationId="ScriptOnResponse" />
+                </StackPanel>
+              </TabItem>
+              <TabItem Header="Map Remote" AutomationProperties.AutomationId="TabMapRemote">
+                <StackPanel Margin="8" Spacing="8">
+                  <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                             Text="Rewrite matching request URLs to another origin before the real server. Use a single * in match and target to preserve a path/query suffix. Runs after AutoResponder / Map Local." />
+                  <CheckBox Content="Enabled" IsChecked="{Binding MapRemote.Enabled}"
+                            AutomationProperties.AutomationId="MapRemoteEnabled" />
+                  <ListBox ItemsSource="{Binding MapRemote.Rules}"
+                           SelectedItem="{Binding MapRemote.SelectedRule}"
+                           Height="120"
+                           MinHeight="80"
+                           AutomationProperties.AutomationId="MapRemoteRules">
+                    <ListBox.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{Binding Display}" />
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                  <TextBox Watermark="Match URL (* wildcards)" Text="{Binding MapRemoteMatch}"
+                           AutomationProperties.AutomationId="MapRemoteMatch" />
+                  <TextBox Watermark="Target URL (absolute, optional *)" Text="{Binding MapRemoteTarget}"
+                           AutomationProperties.AutomationId="MapRemoteTarget" />
+                  <TextBox Watermark="GraphQL operationName (optional)" Text="{Binding MapRemoteGraphQlOperation}"
+                           AutomationProperties.AutomationId="MapRemoteGraphQlOperation" />
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="Add rule" Command="{Binding AddMapRemoteRuleCommand}"
+                            AutomationProperties.AutomationId="MapRemoteAdd" />
+                    <Button Content="Update rule" Command="{Binding UpdateMapRemoteRuleCommand}"
+                            AutomationProperties.AutomationId="MapRemoteUpdate" />
+                    <Button Content="Delete rule" Command="{Binding DeleteMapRemoteRuleCommand}"
+                            AutomationProperties.AutomationId="MapRemoteDelete" />
+                  </StackPanel>
                 </StackPanel>
               </TabItem>
             </TabControl>
