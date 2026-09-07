@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Threading;
 using Microsoft.Extensions.Logging;
@@ -123,6 +123,9 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
         set => HttpClient.UserData = value;
     }
 
+    /// <summary>Optional response header transforms staged during reverse-proxy request transforms.</summary>
+    internal object? ResponseHeaderTransformPlan { get; set; }
+
     /// <summary>
     ///     Per-session override for <see cref="ProxyServer.ConnectTimeOutSeconds" />.
     ///     <see langword="null" /> uses the server default; <see cref="TimeSpan.Zero" /> or negative
@@ -213,9 +216,10 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     internal int? UpstreamConnectPort { get; set; }
 
     /// <summary>
-    ///     Selected cluster destination id for health / retry bookkeeping.
+    ///     Selected cluster destination id when reverse-proxy routing applied this session;
+    ///     otherwise <c>null</c>. Used by Plus circuit breaker / health bookkeeping.
     /// </summary>
-    internal string? UpstreamDestinationId { get; set; }
+    public string? UpstreamDestinationId { get; internal set; }
 
     /// <summary>Active-request lease for <see cref="Clusters.DestinationHealthTracker"/>.</summary>
     internal IDisposable? DestinationRequestLease { get; set; }

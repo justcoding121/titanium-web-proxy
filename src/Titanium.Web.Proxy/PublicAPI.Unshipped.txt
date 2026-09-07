@@ -17,6 +17,7 @@ Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.OriginCapabilitySource.get ->
 Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.OriginCapabilityStartedAt.get -> System.DateTime?
 Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.StartedAt.get -> System.DateTime
 Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.TotalDuration.get -> System.TimeSpan?
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UpstreamDestinationId.get -> string?
 Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.ConnectTiming.get -> Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming?
 Titanium.Web.Proxy.Network.CertificateKeyAlgorithm
 Titanium.Web.Proxy.Network.CertificateKeyAlgorithm.EcdsaP256 = 1 -> Titanium.Web.Proxy.Network.CertificateKeyAlgorithm

@@ -318,6 +318,9 @@ public partial class ProxyServer
     {
         if (args.IsFastPath) return;
 
+        // Staged ResponseHeaderSet/Remove from route transforms (null when unused).
+        ReverseProxySessionDispatch.ApplyResponseTransforms(args);
+
         // Rewrite gRPC → JSON before user handlers when the request was transcoded.
         if (ReverseProxy?.GrpcJsonTranscoder is { } transcoder)
             await transcoder.TryRewriteResponseAsync(args, args.CancellationToken).ConfigureAwait(false);

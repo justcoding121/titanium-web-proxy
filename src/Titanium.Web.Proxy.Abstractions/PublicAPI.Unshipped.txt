@@ -244,7 +244,10 @@ Titanium.Web.Proxy.Abstractions.Routing.TransformConfig.Parameters.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.TransformConfig.TransformConfig() -> void
 Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext
 Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.Headers.get -> System.Collections.Generic.Dictionary<string!, string!>!
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.HeadersToRemove.get -> System.Collections.Generic.HashSet<string!>!
 Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.Path.get -> string!
 Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.Path.set -> void
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.ResponseHeadersToRemove.get -> System.Collections.Generic.HashSet<string!>!
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.ResponseHeadersToSet.get -> System.Collections.Generic.Dictionary<string!, string!>!
 Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.TransformRequestContext() -> void
 virtual Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareDelegate.Invoke(Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext! context, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
