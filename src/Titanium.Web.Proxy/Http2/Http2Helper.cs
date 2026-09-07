@@ -1667,7 +1667,8 @@ namespace Titanium.Web.Proxy.Http2
                         // right after the final (non-interim) response headers are parsed, before BeforeResponse runs.
                         sessionArgs.Timing?.MarkResponseHeadersReceived();
 
-                        var tcs = new TaskCompletionSource<bool>();
+                        // END_STREAM on response HEADERS ⇒ no response body waiters for GetResponseBody.
+                        TaskCompletionSource<bool>? tcs = endStreamFlag ? null : new TaskCompletionSource<bool>();
                         response.ReadHttp2BeforeHandlerTaskCompletionSource = tcs;
 
                         var streamContext = new Http2StreamContext(hbStreamId, connectionState,
@@ -1675,10 +1676,21 @@ namespace Titanium.Web.Proxy.Http2
                         var handler = onBeforeRequestResponse(sessionArgs, streamContext);
                         response.Http2BeforeHandlerTask = handler;
 
-                        if (handler == await Task.WhenAny(tcs.Task, handler))
+                        bool handlerCompleted;
+                        if (tcs == null)
+                        {
+                            await handler;
+                            handlerCompleted = true;
+                        }
+                        else
+                        {
+                            handlerCompleted = handler == await Task.WhenAny(tcs.Task, handler);
+                        }
+
+                        if (handlerCompleted)
                         {
                             response.ReadHttp2BeforeHandlerTaskCompletionSource = null;
-                            tcs.SetResult(true);
+                            tcs?.SetResult(true);
 
                             // BeforeResponse may have replaced HttpClient.Response outright - exactly what
                             // Respond()/Ok()/Redirect() do when called after the real response was already

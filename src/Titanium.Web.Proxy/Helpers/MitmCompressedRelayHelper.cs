@@ -242,7 +242,8 @@ internal static class MitmCompressedRelayHelper
         private bool TryMatchUniqueHeadersAllowingGrowth(
             HeaderCollection after, int maxAdds, ref AddedHeaderBuffer added)
         {
-            foreach (var kv in _unique)
+            var unique = _unique!;
+            foreach (var kv in unique)
             {
                 if (after.NonUniqueHeaders.TryGetValue(kv.Key, out var grownList))
                 {
@@ -283,9 +284,10 @@ internal static class MitmCompressedRelayHelper
         private bool TryAppendNewUniqueHeaders(
             HeaderCollection after, int maxAdds, ref AddedHeaderBuffer added)
         {
+            var unique = _unique!;
             foreach (var kv in after.Headers)
             {
-                if (_unique.ContainsKey(kv.Key))
+                if (unique.ContainsKey(kv.Key))
                     continue;
 
                 if (added.Count >= maxAdds)
@@ -300,7 +302,8 @@ internal static class MitmCompressedRelayHelper
         private bool TryMatchNonUniqueTrailing(
             HeaderCollection after, int maxAdds, ref AddedHeaderBuffer added)
         {
-            foreach (var kv in _nonUniqueSnapshot)
+            var nonUniqueSnapshot = _nonUniqueSnapshot!;
+            foreach (var kv in nonUniqueSnapshot)
             {
                 if (!after.NonUniqueHeaders.TryGetValue(kv.Key, out var afterList))
                     return false;
@@ -340,9 +343,11 @@ internal static class MitmCompressedRelayHelper
 
         private bool NonUniqueNamesAreKnown(HeaderCollection after)
         {
+            var unique = _unique!;
+            var nonUniqueSnapshot = _nonUniqueSnapshot!;
             foreach (var name in after.NonUniqueHeaders.Keys) // NOSONAR S3267 -- Explicit loop avoids LINQ enumerator allocation on hot path.
             {
-                if (!_nonUniqueSnapshot.ContainsKey(name) && !_unique.ContainsKey(name))
+                if (!nonUniqueSnapshot.ContainsKey(name) && !unique.ContainsKey(name))
                     return false;
             }
 
@@ -366,9 +371,10 @@ internal static class MitmCompressedRelayHelper
             if (!TryCollectDrops(after, maxDrops, out dropped, out var dropCount) || dropCount == 0)
                 return false;
 
+            var unique = _unique!;
             foreach (var kv in after.Headers) // NOSONAR S3267 -- Explicit loop avoids LINQ enumerator allocation on hot path.
             {
-                if (!_unique.ContainsKey(kv.Key))
+                if (!unique.ContainsKey(kv.Key))
                     return false;
             }
 
@@ -380,7 +386,8 @@ internal static class MitmCompressedRelayHelper
         {
             dropped = default;
             dropCount = 0;
-            foreach (var kv in _unique)
+            var unique = _unique!;
+            foreach (var kv in unique)
             {
                 if (after.Headers.TryGetValue(kv.Key, out var header))
                 {
