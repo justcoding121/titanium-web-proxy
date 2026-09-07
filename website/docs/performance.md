@@ -13,7 +13,7 @@ MITM is Titanium-only among those peers (they cannot MITM). Absolute requests pe
 
 ## Practical reverse RPS (CI)
 
-Sustain RPS @ concurrency 64 for common reverse wires (tiny keep-alive GET). Grouped bars: Titanium / YARP / nginx. Missing nginx bars mean that wire is *Not possible* for stock nginx. Charts from `compare-product` @ `af6feb9c` ([33480574506](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33480574506)); regenerate with [`render-practical-charts.py`](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/render-practical-charts.py).
+Sustain RPS @ concurrency 64 for common reverse wires (tiny keep-alive GET). Grouped bars: Titanium / YARP / nginx. Missing nginx bars mean that wire is *Not possible* for stock nginx. Charts from `compare-product` @ `024bd68d` ([34126809918](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34126809918)); regenerate with [`render-practical-charts.py`](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/render-practical-charts.py).
 
 ### Windows
 

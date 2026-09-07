@@ -461,8 +461,11 @@ jobs:
             -ResultsDir tools/RpsLoadProbe/results `
             -BombardierCheck
 
+      # Post-ramp gates: hard-fail on PR / push checks. Manual workflow_dispatch still
+      # runs them (logs misses) but continue-on-error so every OS finishes + uploads CSVs.
       - name: Validate edition gates
         if: env.RPS_MODE == 'compare-editions'
+        continue-on-error: ${{ github.event_name == 'workflow_dispatch' }}
         shell: pwsh
         run: |
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
@@ -472,31 +475,18 @@ jobs:
 
       - name: Validate compare-product gates
         if: env.RPS_MODE == 'compare-product' || env.RPS_MODE == 'compare-product-smoke'
+        continue-on-error: ${{ github.event_name == 'workflow_dispatch' }}
         shell: pwsh
         run: |
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
             Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $csv) { throw 'No CSV found for compare-product gate validation' }
-          # macos-15-intel floors after Offer-once remasure 33990406830 (reverse H3 leads;
-          # MITM H2 Full÷Reverse weak — secondary until reverse parity closed). Local Arm Mini
-          # digs H1 TLS→H2 Offer-once SoftPick SoftCap; cleartext SoftGrow=8 MaxOrigin=8.
-          $macFloors = @()
-          if ('${{ matrix.os }}' -eq 'macos-15-intel') {
-            $macFloors = @(
-              '-MitmGate', '0.35',
-              '-MitmHttp3TlsFullGate', '0.65',
-              '-MitmHttp3CleartextFullGate', '0.60',
-              '-MitmHttp1PlainFullGate', '0.55',
-              '-MitmHttp2H2cFullGate', '0.45',
-              '-MitmHttp2PlainLiteGate', '0.55',
-              '-ReverseYarpHttp3ToHttp1Gate', '0.95',
-              '-ReverseYarpHttp3Gate', '0.95'
-            )
-          }
-          pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName @macFloors
+          # Same floors on all OS: MITM÷Reverse >= 0.80, reverse TWP÷YARP >= 0.95. No nginx gate.
+          pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName
 
       - name: Validate cross-version gates
         if: env.RPS_MODE == 'compare-cross-version'
+        continue-on-error: ${{ github.event_name == 'workflow_dispatch' }}
         shell: pwsh
         run: |
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |

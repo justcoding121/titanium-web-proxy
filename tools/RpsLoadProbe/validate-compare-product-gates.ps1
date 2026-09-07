@@ -1,26 +1,12 @@
-# Validate compare-product medians: MITM Lite/Full >= 0.70, reverse TWP/YARP >= 0.95.
+# Validate compare-product medians @ c=64:
+#   MITM Lite/Full ÷ Reverse >= 0.80 (all OS, all gated pairs)
+#   Reverse TWP ÷ YARP >= 0.95 (when YARP SLO-passes)
+# No nginx gate — nginx is wiki/charts only.
 # When Repeats>1, each arm contributes multiple c=64 SLO-pass rows — use the median RPS.
-# macos-15-intel CI passes lower floors for first Mac baselines (see PERF-GATES.md / workflow).
 param(
     [Parameter(Mandatory)] [string] $CsvPath,
-    [double] $MitmGate = 0.70,
-    # H3→H3 MITM (all OS): macos-15-intel first baseline ~0.693; keep written floor.
-    [double] $MitmHttp3Gate = 0.69,
-    # Defaults match MitmGate; Mac CI overrides to 0.65 (H3→H1 TLS Full smoke @ 2026da55).
-    [double] $MitmHttp3TlsFullGate = 0.70,
-    # Defaults match MitmGate; Mac CI overrides to 0.60 (H3→H1 plain Full @ 011ef887 = 0.620).
-    [double] $MitmHttp3CleartextFullGate = 0.70,
-    # Defaults match MitmGate; Mac CI overrides to 0.55 (H1 plain Full @ d0439556 = 0.564).
-    [double] $MitmHttp1PlainFullGate = 0.70,
-    # Defaults match MitmGate; Mac SoftPick remasure 33982544855 H2 h2c Full = 0.527.
-    [double] $MitmHttp2H2cFullGate = 0.70,
-    # Defaults match MitmGate; Mac SoftPick remasure 33982544855 H2 plain Lite = 0.671.
-    [double] $MitmHttp2PlainLiteGate = 0.70,
+    [double] $MitmGate = 0.80,
     [double] $ReverseYarpGate = 0.95,
-    # H3→H3 peer (all OS when YARP SLO-passes): Mac CI overrides to 0.78; Win often TWP ahead.
-    [double] $ReverseYarpHttp3Gate = 0.75,
-    # Defaults match ReverseYarpGate; Mac CI overrides to 0.70 (SoftGrow SoftPick Mac parity).
-    [double] $ReverseYarpHttp3ToHttp1Gate = 0.95,
     [string] $BaselineCsvPath = ""
 )
 
@@ -60,16 +46,9 @@ $mitmPairs = @(
 )
 
 $failed = $false
-Write-Host "MITM gates (Full/Lite >= $MitmGate x Reverse; H3->H3 >= $MitmHttp3Gate; H3->H1 TLS Full >= $MitmHttp3TlsFullGate; H3->H1 plain Full >= $MitmHttp3CleartextFullGate; H1 plain Full >= $MitmHttp1PlainFullGate; H2 h2c Full >= $MitmHttp2H2cFullGate; H2 plain Lite >= $MitmHttp2PlainLiteGate @ c=64 median)" -ForegroundColor Cyan
+Write-Host "MITM gates (Lite/Full >= $MitmGate x Reverse @ c=64 median; all OS)" -ForegroundColor Cyan
 foreach ($p in $mitmPairs) {
     foreach ($kind in @('Lite', 'Full')) {
-        $pairGate = if ($p.Label -eq 'H3->H3') { $MitmHttp3Gate }
-            elseif ($p.Label -eq 'H3->H1 TLS' -and $kind -eq 'Full') { $MitmHttp3TlsFullGate }
-            elseif ($p.Label -eq 'H3->H1 plain' -and $kind -eq 'Full') { $MitmHttp3CleartextFullGate }
-            elseif ($p.Label -eq 'H1 plain' -and $kind -eq 'Full') { $MitmHttp1PlainFullGate }
-            elseif ($p.Label -eq 'H2 h2c->h2c' -and $kind -eq 'Full') { $MitmHttp2H2cFullGate }
-            elseif ($p.Label -eq 'H2 plain' -and $kind -eq 'Lite') { $MitmHttp2PlainLiteGate }
-            else { $MitmGate }
         $num = $p.$kind
         $den = $p.Reverse
         if (-not $sustain.ContainsKey($num) -or -not $sustain.ContainsKey($den)) {
@@ -78,18 +57,18 @@ foreach ($p in $mitmPairs) {
             continue
         }
         $ratio = $sustain[$num] / $sustain[$den]
-        $ok = $ratio -ge $pairGate
+        $ok = $ratio -ge $MitmGate
         $color = if ($ok) { 'Green' } else { 'Red' }
-        Write-Host ("{0} {1} = {2:N3} (gate {3:N2})" -f $p.Label, $kind, $ratio, $pairGate) -ForegroundColor $color
+        Write-Host ("{0} {1} = {2:N3} (gate {3:N2})" -f $p.Label, $kind, $ratio, $MitmGate) -ForegroundColor $color
         if (-not $ok) { $failed = $true }
     }
 }
 
 Write-Host ""
-Write-Host "Reverse TWP/YARP gates (H3->H1 >= $ReverseYarpHttp3ToHttp1Gate; H3->H3 >= $ReverseYarpHttp3Gate @ c=64 median)" -ForegroundColor Cyan
+Write-Host "Reverse TWP/YARP gates (>= $ReverseYarpGate @ c=64 median; skip when YARP SLO-fails)" -ForegroundColor Cyan
 $revPairs = @(
-    @{ Label = 'H3->H1'; Twp = 'twp-reverse-http3-to-https-http1'; Yarp = 'yarp-reverse-http3-to-https-http1'; Gate = $ReverseYarpHttp3ToHttp1Gate },
-    @{ Label = 'H3->H3'; Twp = 'twp-reverse-http3'; Yarp = 'yarp-reverse-http3-to-http3'; Gate = $ReverseYarpHttp3Gate }
+    @{ Label = 'H3->H1'; Twp = 'twp-reverse-http3-to-https-http1'; Yarp = 'yarp-reverse-http3-to-https-http1' },
+    @{ Label = 'H3->H3'; Twp = 'twp-reverse-http3'; Yarp = 'yarp-reverse-http3-to-http3' }
 )
 foreach ($p in $revPairs) {
     if (-not $sustain.ContainsKey($p.Twp)) {
@@ -103,10 +82,9 @@ foreach ($p in $revPairs) {
         continue
     }
     $ratio = $sustain[$p.Twp] / $sustain[$p.Yarp]
-    $gate = [double]$p.Gate
-    $ok = $ratio -ge $gate
+    $ok = $ratio -ge $ReverseYarpGate
     $color = if ($ok) { 'Green' } else { 'Red' }
-    Write-Host ("{0} TWP/YARP = {1:N3} (gate {2:N2})" -f $p.Label, $ratio, $gate) -ForegroundColor $color
+    Write-Host ("{0} TWP/YARP = {1:N3} (gate {2:N2})" -f $p.Label, $ratio, $ReverseYarpGate) -ForegroundColor $color
     if (-not $ok) { $failed = $true }
 }
 
