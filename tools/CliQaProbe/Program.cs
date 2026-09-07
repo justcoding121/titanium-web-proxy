@@ -26,6 +26,7 @@ internal static class Program
                 "meta" => await ScenarioRunner.RunMetaAsync(log),
                 "service" => await ScenarioRunner.RunServiceSectionAsync(log, elevated),
                 "core" => await RunCoreAsync(log),
+                "plus" => await ScenarioRunner.RunPlusSectionAsync(log),
                 "all" => await RunAllAsync(log, elevated),
                 _ => Unknown(log, cmd),
             };
@@ -85,11 +86,13 @@ internal static class Program
                              with --elevated: install/start/HTTP/stop/uninstall
                              (name titanium-qa-probe only)
               core           Help + dialects + forward/conf/static/mitm/logging
+              plus           Plus control-plane + auth/CORS + circuit/retry probes
               all            core + sitefile/routes/tls/http2/plus/meta + unelevated
                              service checks; --elevated adds live SCM lifecycle
 
             Examples:
               dotnet run --project tools/CliQaProbe -- all
+              dotnet run --project tools/CliQaProbe -- plus
               dotnet run --project tools/CliQaProbe -- meta
               dotnet run --project tools/CliQaProbe -- all --elevated
 

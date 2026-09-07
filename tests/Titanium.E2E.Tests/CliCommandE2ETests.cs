@@ -169,6 +169,35 @@ public class CliCommandE2ETests
 
     [TestMethod]
     [TestCategory("E2E")]
+    public async Task Run_AccessLog_WritesNdjsonLine()
+    {
+        using var origin = new EchoOrigin();
+        var listen = CliProcessHarness.GetFreePort();
+        var accessPath = Path.Combine(_tempDir, "access.ndjson");
+        var cfg = ConfigFixtures.WriteAccessLog(_tempDir, listen, origin.Port, accessPath);
+        using var harness = new CliProcessHarness();
+        harness.EnsurePlusDllBesideCli(copy: false);
+        await harness.StartRunAsync(cfg);
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+            var response = await http.GetAsync($"http://127.0.0.1:{listen}/access-log");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            await Task.Delay(400);
+            Assert.IsTrue(File.Exists(accessPath), "access log file missing");
+            var text = await File.ReadAllTextAsync(accessPath);
+            StringAssert.Contains(text, "access-log");
+            StringAssert.Contains(text, "\"method\"");
+            StringAssert.Contains(text, "\"status\"");
+        }
+        finally
+        {
+            harness.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
     public async Task Run_RoutesAndClusters_ProxiesHttp()
     {
         using var origin = new EchoOrigin();
@@ -188,6 +217,80 @@ public class CliCommandE2ETests
             // Explicit proxy: absolute-form URL to origin via proxy
             var response = await http.GetAsync($"http://127.0.0.1:{origin.Port}/routed");
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        }
+        finally
+        {
+            harness.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Run_Transforms_PathPrefixApplied()
+    {
+        using var origin = new EchoOrigin();
+        var listen = CliProcessHarness.GetFreePort();
+        var cfg = ConfigFixtures.WriteTransforms(_tempDir, listen, origin.Port);
+        using var harness = new CliProcessHarness();
+        harness.EnsurePlusDllBesideCli(copy: false);
+        await harness.StartRunAsync(cfg);
+        try
+        {
+            using var handler = new HttpClientHandler
+            {
+                Proxy = new WebProxy($"http://127.0.0.1:{listen}"),
+                UseProxy = true,
+            };
+            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
+            // Absolute-form to origin host so EchoOrigin's HttpListener Host prefix matches
+            // (transform.test would 404 at HttpListener even when reverse-proxy routing works).
+            var response = await http.GetAsync($"http://127.0.0.1:{origin.Port}/api");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            var body = await response.Content.ReadAsStringAsync();
+            StringAssert.Contains(body, "/gw/api");
+        }
+        finally
+        {
+            harness.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Run_SIGHUP_ReloadsRouteTransforms()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("SIGHUP config reload is Unix-only.");
+        }
+
+        using var origin = new EchoOrigin();
+        var listen = CliProcessHarness.GetFreePort();
+        var cfg = ConfigFixtures.WriteTransforms(_tempDir, listen, origin.Port, pathPrefix: "/v1");
+        using var harness = new CliProcessHarness();
+        harness.EnsurePlusDllBesideCli(copy: false);
+        await harness.StartRunAsync(cfg);
+        try
+        {
+            Assert.IsTrue(harness.ProcessId is > 0);
+            using var handler = new HttpClientHandler
+            {
+                Proxy = new WebProxy($"http://127.0.0.1:{listen}"),
+                UseProxy = true,
+            };
+            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
+
+            var before = await http.GetAsync($"http://127.0.0.1:{origin.Port}/api");
+            Assert.AreEqual(HttpStatusCode.OK, before.StatusCode);
+            StringAssert.Contains(await before.Content.ReadAsStringAsync(), "/v1/api");
+
+            ConfigFixtures.WriteTransforms(_tempDir, listen, origin.Port, pathPrefix: "/v2");
+            harness.SendSighup();
+            await harness.WaitForOutputAsync("Config reloaded.", TimeSpan.FromSeconds(15));
+
+            var after = await http.GetAsync($"http://127.0.0.1:{origin.Port}/api");
+            Assert.AreEqual(HttpStatusCode.OK, after.StatusCode);
+            StringAssert.Contains(await after.Content.ReadAsStringAsync(), "/v2/api");
         }
         finally
         {

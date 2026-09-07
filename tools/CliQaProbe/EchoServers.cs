@@ -51,6 +51,57 @@ public sealed class EchoOrigin : IDisposable
     }
 }
 
+/// <summary>Returns 500 for the first <paramref name="failCount"/> requests, then 200.</summary>
+public sealed class FlakyEchoOrigin : IDisposable
+{
+    private readonly HttpListener _listener;
+    private readonly CancellationTokenSource _cts = new();
+    private int _remainingFailures;
+    private int _hits;
+
+    public int Port { get; }
+    public int Hits => _hits;
+
+    public FlakyEchoOrigin(int failCount)
+    {
+        _remainingFailures = Math.Max(0, failCount);
+        (_listener, Port) = CliSpawn.BindHttpListenerOrRetry(p => $"http://127.0.0.1:{p}/");
+        _ = Task.Run(() => AcceptLoopAsync(_cts.Token));
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        try { _listener.Stop(); _listener.Close(); } catch { /* ignore */ }
+    }
+
+    private async Task AcceptLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested && _listener.IsListening)
+        {
+            HttpListenerContext ctx;
+            try { ctx = await _listener.GetContextAsync().WaitAsync(ct).ConfigureAwait(false); }
+            catch { return; }
+
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    Interlocked.Increment(ref _hits);
+                    var fail = Interlocked.Decrement(ref _remainingFailures) >= 0;
+                    var path = ctx.Request.Url?.AbsolutePath ?? "/";
+                    var body = Encoding.UTF8.GetBytes(fail ? $"fail:{path}" : $"echo:{path}:{ctx.Request.HttpMethod}");
+                    ctx.Response.StatusCode = fail ? 500 : 200;
+                    ctx.Response.ContentType = "text/plain";
+                    ctx.Response.OutputStream.Write(body);
+                    ctx.Response.Close();
+                }
+                catch { try { ctx.Response.Abort(); } catch { /* ignore */ } }
+            }, ct);
+        }
+    }
+}
+
 /// <summary>
 /// HTTPS origin whose leaf is signed by a temp CA installed in CurrentUser\Root,
 /// so CLI MITM (default ValidateServerCertificate) accepts the upstream without a

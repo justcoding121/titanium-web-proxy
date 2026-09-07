@@ -65,6 +65,28 @@ Engine knobs live under `server:` (this document). Plus feature options stay und
 
 Match fields typically include host, path (`Exact` / `Prefix` / `Template`), method, headers, and query. Cluster algorithms include RoundRobin, Random, LeastRequests, and LeastTime; destinations support weight and sticky cookie/header. When any cluster uses `LeastTime`, the CLI automatically enables request timing capture so latency EWMA can drive selection.
 
+### Route transforms
+
+Optional `transforms` on a route rewrite the upstream request (and can stage response header changes). Empty/absent transforms keep the reverse fast path. Supported kinds:
+
+| Kind | Parameters | Effect |
+|------|------------|--------|
+| `PathRemovePrefix` | `prefix` | Strip a path prefix |
+| `PathPrefix` | `prefix` | Prepend a path prefix |
+| `QueryValueSet` | `name`, `value` | Set or replace a query parameter |
+| `RequestHeaderSet` | `name`, `value` | Set a request header |
+| `RequestHeaderRemove` | `name` | Remove a request header |
+| `ResponseHeaderSet` | `name`, `value` | Set a response header after the origin responds |
+| `ResponseHeaderRemove` | `name` | Remove a response header after the origin responds |
+
+```json
+"transforms": [
+  { "kind": "PathPrefix", "parameters": { "prefix": "/gw" } },
+  { "kind": "QueryValueSet", "parameters": { "name": "env", "value": "lab" } },
+  { "kind": "RequestHeaderSet", "parameters": { "name": "X-Edge", "value": "1" } }
+]
+```
+
 ## Server (`ProxyServer` knobs)
 
 Null nested objects and null properties leave the library or profile default. Apply order: `profile` first, then overlays.
@@ -85,6 +107,9 @@ server:
   blockPrivateNetworkDestinations: false
   checkCertificateRevocation: NoCheck
   dnsServerEndPoint: "8.8.8.8:53"
+  accessLog:
+    path: "logs/access.ndjson"   # omit or null = off (zero cost)
+    sampleRate: 1.0              # 0.0–1.0
   timeouts:
     connectionTimeOutSeconds: 60
     connectTimeOutSeconds: 20
@@ -165,11 +190,29 @@ server:
     rootCertificateIssuerName: null
     saveFakeCertificates: true
     disableWildCardCertificates: false
+  accessLog: null   # opt-in NDJSON access log (see below)
 ```
 
 Listener-level `enableHttp2: false` still forces HTTP/2 off after `server.enableHttp2`. Listener-level `enableHttp3: false` (or `server.enableHttp3: false`) disables HTTP/3.
 
-HTTP interception is not a YAML knob: the CLI turns it on automatically when the config needs the session path (transforms, static files, or ACME). Request timing capture is not a YAML knob either: it is enabled automatically when any cluster uses `LeastTime`.
+HTTP interception is not a YAML knob: the CLI turns it on automatically when the config needs the session path (transforms, static files, ACME, access logs, or gRPC-JSON). Request timing capture is not a YAML knob either: it is enabled automatically when any cluster uses `LeastTime` (and when access logs are enabled).
+
+### Access log (`server.accessLog`)
+
+Opt-in JSON Lines (NDJSON) access log written **after** each response. Bodies are never buffered for this feature.
+
+```yaml
+server:
+  accessLog:
+    path: "./logs/access.ndjson"
+    sampleRate: 1.0   # 0.0–1.0; omit for 1.0
+```
+
+Each line includes `ts`, `method`, `url`, `host`, `status`, `durationMs`, and `clientIp`. Omit `accessLog` (or leave `path` empty) for zero cost on the hot path.
+
+### Graceful reload
+
+On Unix, send **SIGHUP** to a running `titanium run` process to reload routes and clusters from the same config file without stopping listeners or aborting in-flight requests. Windows service hosts should use a process restart or the Plus control-plane snapshot API instead.
 
 ### Code-only callbacks
 

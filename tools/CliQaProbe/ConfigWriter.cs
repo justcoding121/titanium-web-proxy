@@ -52,6 +52,42 @@ public static class ConfigWriter
         return path;
     }
 
+    public static string WriteTransforms(string dir, int listenPort, int originPort, string pathPrefix = "/gw")
+    {
+        var path = Path.Combine(dir, $"transforms-{listenPort}.json");
+        File.WriteAllText(path, $$"""
+            {
+              "schemaVersion": "7.0",
+              "listeners": [
+                { "host": "127.0.0.1", "port": {{listenPort}}, "decryptSsl": false }
+              ],
+              "routes": [
+                {
+                  "id": "r1",
+                  "clusterId": "c1",
+                  "order": 1,
+                  "match": { "path": "/", "pathKind": "Prefix" },
+                  "transforms": [
+                    { "kind": "PathPrefix", "parameters": { "prefix": "{{pathPrefix}}" } },
+                    { "kind": "QueryValueSet", "parameters": { "name": "env", "value": "lab" } },
+                    { "kind": "RequestHeaderSet", "parameters": { "name": "X-Probe", "value": "transforms" } }
+                  ]
+                }
+              ],
+              "clusters": [
+                {
+                  "id": "c1",
+                  "algorithm": "RoundRobin",
+                  "destinations": [
+                    { "id": "d1", "address": "127.0.0.1", "port": {{originPort}} }
+                  ]
+                }
+              ]
+            }
+            """);
+        return path;
+    }
+
     public static string WriteStatic(string dir, int listenPort, string staticRoot)
     {
         var path = Path.Combine(dir, $"static-{listenPort}.yaml");
@@ -93,6 +129,127 @@ public static class ConfigWriter
     {
         var path = Path.Combine(dir, "invalid.yaml");
         File.WriteAllText(path, "listeners:\n  - port: -1\n");
+        return path;
+    }
+
+    public static string WriteAccessLog(string dir, int listenPort, int originPort, string accessLogPath)
+    {
+        var path = Path.Combine(dir, $"access-{listenPort}.yaml");
+        File.WriteAllText(path, $"""
+            schemaVersion: "7.0"
+            listeners:
+              - host: "127.0.0.1"
+                port: {listenPort}
+                decryptSsl: false
+                forwardHost: "127.0.0.1"
+                forwardPort: {originPort}
+            server:
+              accessLog:
+                path: "{accessLogPath.Replace("\\", "/")}"
+                sampleRate: 1.0
+            """);
+        return path;
+    }
+
+    public static string WritePlusAuthCors(string dir, int listenPort, int originPort, int controlPort, string secret)
+    {
+        var path = Path.Combine(dir, $"plus-auth-{listenPort}.json");
+        File.WriteAllText(path, $$"""
+            {
+              "schemaVersion": "7.0",
+              "listeners": [
+                { "host": "127.0.0.1", "port": {{listenPort}}, "decryptSsl": false }
+              ],
+              "routes": [
+                {
+                  "id": "r1",
+                  "clusterId": "c1",
+                  "order": 1,
+                  "match": { "path": "/", "pathKind": "Prefix" }
+                }
+              ],
+              "clusters": [
+                {
+                  "id": "c1",
+                  "algorithm": "RoundRobin",
+                  "destinations": [
+                    { "id": "d1", "address": "127.0.0.1", "port": {{originPort}} }
+                  ]
+                }
+              ],
+              "logging": {
+                "enabled": true,
+                "minimumLevel": "Information",
+                "enableConsole": true
+              },
+              "plus": {
+                "enabled": true,
+                "controlPlane": {
+                  "host": "127.0.0.1",
+                  "port": {{controlPort}},
+                  "sharedSecret": "{{secret}}"
+                },
+                "options": {
+                  "security.apiKeys": "probe-key",
+                  "cors.enabled": "true",
+                  "cors.allowOrigin": "*",
+                  "resilience.circuit.enabled": "true",
+                  "resilience.circuit.failureThreshold": "3",
+                  "resilience.retry.idempotentAttempts": "2"
+                }
+              }
+            }
+            """);
+        return path;
+    }
+
+    public static string WritePlusCircuit(string dir, int listenPort, int originPort, int controlPort, string secret)
+    {
+        var path = Path.Combine(dir, $"plus-circuit-{listenPort}.json");
+        File.WriteAllText(path, $$"""
+            {
+              "schemaVersion": "7.0",
+              "listeners": [
+                { "host": "127.0.0.1", "port": {{listenPort}}, "decryptSsl": false }
+              ],
+              "routes": [
+                {
+                  "id": "r1",
+                  "clusterId": "c1",
+                  "order": 1,
+                  "match": { "path": "/", "pathKind": "Prefix" }
+                }
+              ],
+              "clusters": [
+                {
+                  "id": "c1",
+                  "algorithm": "RoundRobin",
+                  "destinations": [
+                    { "id": "d1", "address": "127.0.0.1", "port": {{originPort}} }
+                  ]
+                }
+              ],
+              "logging": {
+                "enabled": true,
+                "minimumLevel": "Information",
+                "enableConsole": true
+              },
+              "plus": {
+                "enabled": true,
+                "controlPlane": {
+                  "host": "127.0.0.1",
+                  "port": {{controlPort}},
+                  "sharedSecret": "{{secret}}"
+                },
+                "options": {
+                  "resilience.circuit.enabled": "true",
+                  "resilience.circuit.failureThreshold": "2",
+                  "resilience.circuit.cooldownMs": "60000",
+                  "resilience.retry.idempotentAttempts": "2"
+                }
+              }
+            }
+            """);
         return path;
     }
 

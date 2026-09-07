@@ -343,16 +343,30 @@ public static class ScenarioRunner
         return fails == 0 ? 0 : 1;
     }
 
+    public static async Task<int> RunPlusSectionAsync(ProbeLog log)
+    {
+        var fails = 0;
+        fails += await RunPlusAsync(log);
+        fails += await RunPlusAuthCorsAsync(log);
+        fails += await RunPlusCircuitAsync(log);
+        return fails == 0 ? 0 : 1;
+    }
+
     public static async Task<int> RunLiveRemainingAsync(ProbeLog log)
     {
         var fails = 0;
         fails += await RunSiteFileAsync(log);
         fails += await RunRoutesAsync(log);
+        fails += await RunTransformsAsync(log);
+        fails += await RunAccessLogAsync(log);
+        fails += await RunReloadAsync(log);
         fails += await RunTlsAsync(log);
         fails += await RunMitmAsync(log);
         fails += await RunHttp2OffAsync(log);
         fails += await RunLoggingAsync(log);
         fails += await RunPlusAsync(log);
+        fails += await RunPlusAuthCorsAsync(log);
+        fails += await RunPlusCircuitAsync(log);
         return fails == 0 ? 0 : 1;
     }
 
@@ -694,6 +708,35 @@ public static class ScenarioRunner
         }
     }
 
+    private static async Task<int> RunTransformsAsync(ProbeLog log)
+    {
+        using var origin = new EchoOrigin();
+        var temp = MakeTemp();
+        try
+        {
+            var listen = CliSpawn.GetFreePort();
+            var cfg = ConfigWriter.WriteTransforms(temp, listen, origin.Port);
+            using var spawn = new CliSpawn();
+            await spawn.StartRunAsync(cfg);
+            using var http = CreateProxyHttp(listen);
+            var resp = await http.GetAsync($"http://127.0.0.1:{origin.Port}/api");
+            var body = await resp.Content.ReadAsStringAsync();
+            var ok = resp.StatusCode == HttpStatusCode.OK &&
+                     body.Contains("/gw/api", StringComparison.Ordinal);
+            log.Step("run-transforms", ok, $"status={(int)resp.StatusCode} body={Trim(body)}");
+            return ok ? 0 : 1;
+        }
+        catch (Exception ex)
+        {
+            log.Step("run-transforms", false, ex.Message);
+            return 1;
+        }
+        finally
+        {
+            TryDelete(temp);
+        }
+    }
+
     private static async Task<int> RunStaticAsync(ProbeLog log)
     {
         var temp = MakeTemp();
@@ -945,6 +988,244 @@ public static class ScenarioRunner
         }
     }
 
+    private static async Task<int> RunAccessLogAsync(ProbeLog log)
+    {
+        using var origin = new EchoOrigin();
+        var temp = MakeTemp();
+        try
+        {
+            var listen = CliSpawn.GetFreePort();
+            var accessPath = Path.Combine(temp, "access.ndjson");
+            var cfg = ConfigWriter.WriteAccessLog(temp, listen, origin.Port, accessPath);
+            using var spawn = new CliSpawn();
+            await spawn.StartRunAsync(cfg);
+            using var http = CreateProxyHttp(listen);
+            var resp = await http.GetAsync($"http://127.0.0.1:{origin.Port}/access-log");
+            _ = await resp.Content.ReadAsStringAsync();
+            await Task.Delay(300);
+            var ok = resp.StatusCode == HttpStatusCode.OK &&
+                     File.Exists(accessPath) &&
+                     (await File.ReadAllTextAsync(accessPath)).Contains("access-log", StringComparison.Ordinal);
+            log.Step("run-access-log", ok, ok ? "ndjson written" : $"status={(int)resp.StatusCode} exists={File.Exists(accessPath)}");
+            return ok ? 0 : 1;
+        }
+        catch (Exception ex)
+        {
+            log.Step("run-access-log", false, ex.Message);
+            return 1;
+        }
+        finally
+        {
+            TryDelete(temp);
+        }
+    }
+
+    private static async Task<int> RunReloadAsync(ProbeLog log)
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            log.Step("run-reload", true, "SIGHUP not available on Windows — skip", skipped: true);
+            return 0;
+        }
+
+        using var origin = new EchoOrigin();
+        var temp = MakeTemp();
+        try
+        {
+            var listen = CliSpawn.GetFreePort();
+            var cfg = ConfigWriter.WriteTransforms(temp, listen, origin.Port, pathPrefix: "/v1");
+            using var spawn = new CliSpawn();
+            await spawn.StartRunAsync(cfg);
+            using var http = CreateProxyHttp(listen);
+            var before = await http.GetAsync($"http://127.0.0.1:{origin.Port}/api");
+            var beforeBody = await before.Content.ReadAsStringAsync();
+            if (before.StatusCode != HttpStatusCode.OK || !beforeBody.Contains("/v1/api", StringComparison.Ordinal))
+            {
+                log.Step("run-reload", false, $"pre-reload failed status={(int)before.StatusCode} body={Trim(beforeBody)}");
+                return 1;
+            }
+
+            ConfigWriter.WriteTransforms(temp, listen, origin.Port, pathPrefix: "/v2");
+            var pid = spawn.ProcessId;
+            if (pid is not > 0)
+            {
+                log.Step("run-reload", false, "CLI process id unavailable");
+                return 1;
+            }
+
+            try
+            {
+                // SIGHUP = 1 on Linux/macOS
+                if (NativeKill(pid.Value, 1) != 0)
+                    throw new InvalidOperationException($"kill(SIGHUP) failed for pid {pid.Value}");
+            }
+            catch (Exception ex)
+            {
+                log.Step("run-reload", false, "SIGHUP failed: " + ex.Message);
+                return 1;
+            }
+
+            try
+            {
+                await spawn.WaitForOutputAsync("Config reloaded.", TimeSpan.FromSeconds(15));
+            }
+            catch (Exception ex)
+            {
+                log.Step("run-reload", false, "missing reload ack: " + ex.Message);
+                return 1;
+            }
+
+            var after = await http.GetAsync($"http://127.0.0.1:{origin.Port}/api");
+            var afterBody = await after.Content.ReadAsStringAsync();
+            var ok = after.StatusCode == HttpStatusCode.OK &&
+                     afterBody.Contains("/v2/api", StringComparison.Ordinal) &&
+                     spawn.StdOut.Contains("Config reloaded.", StringComparison.Ordinal);
+            log.Step(
+                "run-reload",
+                ok,
+                ok ? "SIGHUP applied PathPrefix /v1→/v2" : $"status={(int)after.StatusCode} body={Trim(afterBody)}");
+            return ok ? 0 : 1;
+        }
+        catch (Exception ex)
+        {
+            log.Step("run-reload", false, ex.Message);
+            return 1;
+        }
+        finally
+        {
+            TryDelete(temp);
+        }
+    }
+
+    private static async Task<int> RunPlusAuthCorsAsync(ProbeLog log)
+    {
+        var temp = MakeTemp();
+        try
+        {
+            using var spawn = new CliSpawn();
+            if (!spawn.TryEnsurePlusDll())
+            {
+                log.Step("run-plus-auth-cors", true, "Titanium.Plus.dll not built — skip", skipped: true);
+                return 0;
+            }
+
+            using var origin = new EchoOrigin();
+            var listen = CliSpawn.GetFreePort();
+            var control = CliSpawn.GetFreePort();
+            const string secret = "cli-qa-plus-auth";
+            var cfg = ConfigWriter.WritePlusAuthCors(temp, listen, origin.Port, control, secret);
+            await spawn.StartRunAsync(cfg, verbose: true, env: new Dictionary<string, string?>
+            {
+                ["TITANIUM_PLUS_ALLOW_DEV_SECRET"] = "1",
+            });
+
+            if (!await WaitForLogAsync(spawn, "Plus Circuit", TimeSpan.FromSeconds(5)) ||
+                !await WaitForLogAsync(spawn, "Plus Retry", TimeSpan.FromSeconds(2)))
+            {
+                log.Step("run-plus-auth-cors", false,
+                    "expected Plus Circuit / Plus Retry activation logs; out=" + Trim(spawn.StdOut + spawn.StdErr));
+                return 1;
+            }
+
+            using var http = CreateDirectHttp(TimeSpan.FromSeconds(15));
+            using (var denied = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{listen}/secure"))
+            {
+                var resp = await http.SendAsync(denied);
+                if (resp.StatusCode != HttpStatusCode.Unauthorized)
+                {
+                    log.Step("run-plus-auth-cors", false, $"expected 401 without key got {(int)resp.StatusCode}");
+                    return 1;
+                }
+            }
+
+            using (var allowed = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{listen}/secure"))
+            {
+                allowed.Headers.Add("X-Api-Key", "probe-key");
+                var resp = await http.SendAsync(allowed);
+                var body = await resp.Content.ReadAsStringAsync();
+                var hasCors = resp.Headers.Contains("Access-Control-Allow-Origin") ||
+                              resp.Content.Headers.Contains("Access-Control-Allow-Origin");
+                var ok = resp.StatusCode == HttpStatusCode.OK && body.Contains("echo:", StringComparison.Ordinal) && hasCors;
+                log.Step("run-plus-auth-cors", ok, $"status={(int)resp.StatusCode} cors={hasCors} circuit/retry logs ok");
+                return ok ? 0 : 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            log.Step("run-plus-auth-cors", false, ex.Message);
+            return 1;
+        }
+        finally
+        {
+            TryDelete(temp);
+        }
+    }
+
+    private static async Task<int> RunPlusCircuitAsync(ProbeLog log)
+    {
+        var temp = MakeTemp();
+        try
+        {
+            using var spawn = new CliSpawn();
+            if (!spawn.TryEnsurePlusDll())
+            {
+                log.Step("run-plus-circuit", true, "Titanium.Plus.dll not built — skip", skipped: true);
+                return 0;
+            }
+
+            using var origin = new FlakyEchoOrigin(failCount: 3);
+            var listen = CliSpawn.GetFreePort();
+            var control = CliSpawn.GetFreePort();
+            const string secret = "cli-qa-plus-circuit";
+            var cfg = ConfigWriter.WritePlusCircuit(temp, listen, origin.Port, control, secret);
+            await spawn.StartRunAsync(cfg, verbose: true, env: new Dictionary<string, string?>
+            {
+                ["TITANIUM_PLUS_ALLOW_DEV_SECRET"] = "1",
+            });
+
+            if (!await WaitForLogAsync(spawn, "Plus Circuit", TimeSpan.FromSeconds(5)))
+            {
+                log.Step("run-plus-circuit", false,
+                    "expected Plus Circuit activation log; out=" + Trim(spawn.StdOut + spawn.StdErr));
+                return 1;
+            }
+
+            using var http = CreateDirectHttp(TimeSpan.FromSeconds(15));
+            _ = await http.GetAsync($"http://127.0.0.1:{listen}/a");
+            _ = await http.GetAsync($"http://127.0.0.1:{listen}/b");
+
+            string json = "";
+            var deadline = DateTime.UtcNow.AddSeconds(15);
+            while (DateTime.UtcNow < deadline)
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{control}/v1/snapshot");
+                req.Headers.TryAddWithoutValidation("X-Titanium-Control-Secret", secret);
+                var snap = await http.SendAsync(req);
+                json = await snap.Content.ReadAsStringAsync();
+                if (json.Contains("unhealthy", StringComparison.OrdinalIgnoreCase))
+                {
+                    break;
+                }
+
+                await Task.Delay(100);
+            }
+
+            var unhealthy = json.Contains("unhealthy", StringComparison.OrdinalIgnoreCase);
+            var ok = unhealthy && origin.Hits >= 2;
+            log.Step("run-plus-circuit", ok, $"hits={origin.Hits} unhealthy={unhealthy}");
+            return ok ? 0 : 1;
+        }
+        catch (Exception ex)
+        {
+            log.Step("run-plus-circuit", false, ex.Message);
+            return 1;
+        }
+        finally
+        {
+            TryDelete(temp);
+        }
+    }
+
     private static async Task<int> HelpStep(ProbeLog log, CliSpawn spawn, string id, string[] args, Func<string, bool> assert)
     {
         try
@@ -1019,10 +1300,29 @@ public static class ScenarioRunner
         }
     }
 
+    private static async Task<bool> WaitForLogAsync(CliSpawn spawn, string substring, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var text = spawn.StdOut + spawn.StdErr;
+            if (text.Contains(substring, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (spawn.ProcessId is null)
+                return text.Contains(substring, StringComparison.OrdinalIgnoreCase);
+            await Task.Delay(50);
+        }
+
+        return (spawn.StdOut + spawn.StdErr).Contains(substring, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static async Task<string> ReadSharedAsync(string path)
     {
         await using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var reader = new StreamReader(fs, Encoding.UTF8);
         return await reader.ReadToEndAsync();
     }
+
+    [DllImport("libc", EntryPoint = "kill", SetLastError = true)]
+    private static extern int NativeKill(int pid, int sig);
 }
