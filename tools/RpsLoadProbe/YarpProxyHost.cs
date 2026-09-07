@@ -157,7 +157,7 @@ internal sealed class YarpProxyHost : IDisposable
         {
             UseTls = false,
             InboundProtocols = HttpProtocols.Http2,
-            DestinationAddress = $"https://127.0.0.1:{originQuicPort}/",
+            DestinationAddress = Http3OriginAddress(originQuicPort),
             OutboundVersion = HttpVersion.Version30,
             OutboundVersionPolicy = HttpVersionPolicy.RequestVersionExact,
             AcceptAnyServerCertificate = true
@@ -192,7 +192,7 @@ internal sealed class YarpProxyHost : IDisposable
         {
             UseTls = true,
             InboundProtocols = HttpProtocols.Http1,
-            DestinationAddress = $"https://127.0.0.1:{originQuicPort}/",
+            DestinationAddress = Http3OriginAddress(originQuicPort),
             OutboundVersion = HttpVersion.Version30,
             OutboundVersionPolicy = HttpVersionPolicy.RequestVersionExact,
             AcceptAnyServerCertificate = true
@@ -204,7 +204,7 @@ internal sealed class YarpProxyHost : IDisposable
         {
             UseTls = true,
             InboundProtocols = HttpProtocols.Http1AndHttp2,
-            DestinationAddress = $"https://127.0.0.1:{originQuicPort}/",
+            DestinationAddress = Http3OriginAddress(originQuicPort),
             OutboundVersion = HttpVersion.Version30,
             OutboundVersionPolicy = HttpVersionPolicy.RequestVersionExact,
             AcceptAnyServerCertificate = true
@@ -273,7 +273,7 @@ internal sealed class YarpProxyHost : IDisposable
         {
             UseTls = false,
             InboundProtocols = HttpProtocols.Http1,
-            DestinationAddress = $"https://127.0.0.1:{originQuicPort}/",
+            DestinationAddress = Http3OriginAddress(originQuicPort),
             OutboundVersion = HttpVersion.Version30,
             OutboundVersionPolicy = HttpVersionPolicy.RequestVersionExact,
             AcceptAnyServerCertificate = true
@@ -333,11 +333,18 @@ internal sealed class YarpProxyHost : IDisposable
         {
             UseTls = true,
             InboundProtocols = HttpProtocols.Http1AndHttp2AndHttp3,
-            DestinationAddress = $"https://127.0.0.1:{originQuicPort}/",
+            DestinationAddress = Http3OriginAddress(originQuicPort),
             OutboundVersion = HttpVersion.Version30,
             OutboundVersionPolicy = HttpVersionPolicy.RequestVersionExact,
             AcceptAnyServerCertificate = true
         });
+
+    /// <summary>
+    ///     Darwin/MsQuic HttpClient H3 to an IP literal often fails SNI (same class as inbound
+    ///     ListenUrl using localhost). TWP H3 origin arms already use ForwardHost=localhost.
+    /// </summary>
+    private static string Http3OriginAddress(int originQuicPort) =>
+        $"https://localhost:{originQuicPort}/";
 
     private sealed class YarpListenOptions
     {
