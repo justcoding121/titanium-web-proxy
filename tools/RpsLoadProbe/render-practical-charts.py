@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 # Practical industry reverse wires (short labels → CSV arm names).
+# nginx HTTPS-origin peers use proxy_ssl (http1-tls-to-https, http2/http3-to-https-http1).
+# H2→H2 / H3→H2 stay nginx=None — stock nginx has no H2/H3 upstream.
 PRACTICAL_ARMS: List[Tuple[str, str, str, Optional[str]]] = [
     # label, twp, yarp, nginx (None = not possible)
     ("H1 TLS→H1c", "twp-reverse-http1-tls", "yarp-reverse-http1-tls", "nginx-reverse-http1-tls"),
@@ -29,12 +31,24 @@ PRACTICAL_ARMS: List[Tuple[str, str, str, Optional[str]]] = [
         "nginx-reverse-http1-tls-to-https",
     ),
     ("H2 TLS→H1c", "twp-reverse-http2-cleartext", "yarp-reverse-http2", "nginx-reverse-http2"),
+    (
+        "H2 TLS→H1 TLS",
+        "twp-reverse-http2-to-https-http1",
+        "yarp-reverse-http2-to-https-http1",
+        "nginx-reverse-http2-to-https-http1",
+    ),
     ("H2 TLS→H2 TLS", "twp-reverse-http2", "yarp-reverse-http2-to-https", None),
     (
         "H3→H1c",
         "twp-reverse-http3-cleartext",
         "yarp-reverse-http3-cleartext",
         "nginx-reverse-http3-cleartext",
+    ),
+    (
+        "H3→H1 TLS",
+        "twp-reverse-http3-to-https-http1",
+        "yarp-reverse-http3-to-https-http1",
+        "nginx-reverse-http3-to-https-http1",
     ),
     ("H3→H2 TLS", "twp-reverse-http3-to-http2", "yarp-reverse-http3-to-http2", None),
 ]
@@ -136,7 +150,7 @@ def render_chart(
     products = ("Titanium", "YARP", "nginx")
     offsets = (-width, 0.0, width)
 
-    fig, ax = plt.subplots(figsize=(12.5, 5.2), dpi=140)
+    fig, ax = plt.subplots(figsize=(14.5, 5.4), dpi=140)
     ymax = 1.0
     for product, offset in zip(products, offsets):
         vals = series[product]
@@ -174,8 +188,8 @@ def render_chart(
     fig.text(
         0.01,
         0.01,
-        "Tiny keep-alive GET · GHA 4-core · missing nginx bars = Not possible · "
-        "SLO-miss sustain plotted as 0",
+        "Tiny keep-alive GET · GHA 4-core · nginx includes proxy_ssl HTTPS-origin peers · "
+        "missing nginx bars = Not possible · SLO-miss sustain plotted as 0",
         fontsize=8,
         color="#444444",
     )
