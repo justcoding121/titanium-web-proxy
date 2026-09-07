@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.E2E.Tests.Harness;
 using Titanium.Inspector.Services;
@@ -147,6 +148,283 @@ public class InspectorServiceE2ETests
         Assert.AreEqual((HttpStatusCode)418, response.StatusCode);
         Assert.AreEqual("teapot", await response.Content.ReadAsStringAsync(cts.Token));
         interception.Stop();
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task MapLocal_InjectsFileBodyBeforeOrigin()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-map-local-e2e-" + Guid.NewGuid().ToString("N") + ".txt");
+        await File.WriteAllTextAsync(path, "from-disk-map-local");
+        try
+        {
+            using var interception = new InterceptionService(new RecordingSystemProxyController());
+            interception.AutoResponder = new AutoResponderViewModel { Enabled = true };
+            interception.AutoResponder.Rules.Add(new AutoResponderRule
+            {
+                MatchUrl = "*map-local-e2e*",
+                StatusCode = 209,
+                Body = "should-not-use",
+                ContentType = "text/plain",
+                LocalFilePath = path,
+                Enabled = true,
+            });
+
+            await interception.StartAsync(IPAddress.Loopback, 0);
+            using var handler = new HttpClientHandler
+            {
+                Proxy = new WebProxy($"http://127.0.0.1:{interception.BoundPort}"),
+                UseProxy = true,
+            };
+            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var response = await http.GetAsync("http://127.0.0.1:9/map-local-e2e", cts.Token);
+            Assert.AreEqual((HttpStatusCode)209, response.StatusCode);
+            Assert.AreEqual("from-disk-map-local", await response.Content.ReadAsStringAsync(cts.Token));
+            interception.Stop();
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task MapRemote_RewritesUrlBeforeOrigin()
+    {
+        using var origin = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        origin.Start();
+        var originPort = ((IPEndPoint)origin.LocalEndpoint).Port;
+        _ = Task.Run(async () =>
+        {
+            using var client = await origin.AcceptTcpClientAsync();
+            await using var stream = client.GetStream();
+            var buf = new byte[4096];
+            _ = await stream.ReadAsync(buf);
+            var body = System.Text.Encoding.UTF8.GetBytes("remote-ok");
+            var resp = "HTTP/1.1 200 OK\r\nContent-Length: " + body.Length +
+                       "\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n";
+            await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(resp));
+            await stream.WriteAsync(body);
+        });
+
+        using var interception = new InterceptionService(new RecordingSystemProxyController());
+        interception.MapRemote = new MapRemoteViewModel { Enabled = true };
+        interception.MapRemote.Rules.Add(new MapRemoteRule
+        {
+            MatchUrl = "*map-remote-e2e*",
+            TargetUrl = $"http://127.0.0.1:{originPort}/ok",
+            Enabled = true,
+        });
+        await interception.StartAsync(IPAddress.Loopback, 0);
+        using var handler = new HttpClientHandler
+        {
+            Proxy = new WebProxy($"http://127.0.0.1:{interception.BoundPort}"),
+            UseProxy = true,
+        };
+        using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
+        var response = await http.GetAsync("http://127.0.0.1:9/map-remote-e2e");
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("remote-ok", await response.Content.ReadAsStringAsync());
+        interception.Stop();
+        origin.Stop();
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task GraphQlOperation_AutoResponder_MatchesNamedOp()
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController());
+        interception.AutoResponder = new AutoResponderViewModel { Enabled = true };
+        interception.AutoResponder.Rules.Add(new AutoResponderRule
+        {
+            MatchUrl = "*graphql*",
+            StatusCode = 200,
+            Body = "{\"data\":{\"e2e\":true}}",
+            ContentType = "application/json",
+            GraphQlOperationName = "E2eOp",
+            Enabled = true,
+        });
+        await interception.StartAsync(IPAddress.Loopback, 0);
+        using var handler = new HttpClientHandler
+        {
+            Proxy = new WebProxy($"http://127.0.0.1:{interception.BoundPort}"),
+            UseProxy = true,
+        };
+        using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
+        using var content = new StringContent(
+            """{"operationName":"E2eOp","query":"query E2eOp { e2e }"}""",
+            Encoding.UTF8,
+            "application/json");
+        var response = await http.PostAsync("http://127.0.0.1:9/graphql", content);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        StringAssert.Contains(await response.Content.ReadAsStringAsync(), "\"e2e\":true");
+        interception.Stop();
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task CopyAsCurl_GeneratesCurlAndFetchFromSession()
+    {
+        var settingsPath = Path.Combine(Path.GetTempPath(), "twp-copy-as-e2e-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(settingsPath);
+            var registry = new SessionRegistry();
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception);
+
+            var snap = new SessionSnapshot
+            {
+                Id = 42,
+                Method = "PATCH",
+                Url = "https://e2e.example/resource",
+                Host = "e2e.example",
+                RequestHeadersText = "Accept: application/json\nContent-Type: application/json\n",
+                RequestBodyText = "{\"id\":42}",
+            };
+            vm.SeedSession(snap);
+            vm.SelectedSession = snap;
+            vm.SetSelectedSessions([snap]);
+
+            Assert.IsTrue(vm.CanCopyAsCurl);
+            Assert.IsTrue(vm.TryBuildCopyAsCurl(out var curl));
+            StringAssert.Contains(curl, "curl 'https://e2e.example/resource'");
+            StringAssert.Contains(curl, "-X 'PATCH'");
+            StringAssert.Contains(curl, "--data-binary '{\"id\":42}'");
+
+            Assert.IsTrue(vm.TryBuildCopyAsFetch(out var fetch));
+            StringAssert.Contains(fetch, "fetch(\"https://e2e.example/resource\"");
+            StringAssert.Contains(fetch, "\"method\": \"PATCH\"");
+            StringAssert.Contains(fetch, "\"body\": \"{\\\"id\\\":42}\"");
+
+            vm.CopyAsCurlCommand.Execute(null);
+            await Task.Delay(150);
+            StringAssert.Contains(vm.StatusText, "Copied as curl");
+
+            vm.CopyAsFetchCommand.Execute(null);
+            await Task.Delay(150);
+            StringAssert.Contains(vm.StatusText, "Copied as fetch");
+        }
+        finally
+        {
+            if (File.Exists(settingsPath))
+            {
+                File.Delete(settingsPath);
+            }
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task SessionDiff_ComparesTwoSelectedSessions()
+    {
+        var settingsPath = Path.Combine(Path.GetTempPath(), "twp-session-diff-e2e-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(settingsPath);
+            var registry = new SessionRegistry();
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception);
+
+            var a = new SessionSnapshot
+            {
+                Id = 1,
+                Method = "GET",
+                Url = "https://e2e.example/d",
+                StatusCode = 200,
+                RequestHeadersText = "Accept: text/plain\n",
+                ResponseBodyText = "one",
+            };
+            var b = new SessionSnapshot
+            {
+                Id = 2,
+                Method = "GET",
+                Url = "https://e2e.example/d",
+                StatusCode = 201,
+                RequestHeadersText = "Accept: application/json\n",
+                ResponseBodyText = "two",
+            };
+            vm.SeedSession(a);
+            vm.SeedSession(b);
+            vm.SetSelectedSessions([a, b]);
+
+            Assert.IsTrue(vm.CanDiffSessions);
+            Assert.IsTrue(vm.TryBuildSessionDiff(out var diff));
+            Assert.IsTrue(diff.HasDifferences);
+            StringAssert.Contains(diff.Text, "Status: 200 → 201");
+            StringAssert.Contains(diff.Text, "- Accept: text/plain");
+            StringAssert.Contains(diff.Text, "+ Accept: application/json");
+            StringAssert.Contains(diff.Text, "- one");
+            StringAssert.Contains(diff.Text, "+ two");
+
+            vm.DiffSessionsCommand.Execute(null);
+            await Task.Delay(150);
+            StringAssert.Contains(vm.SessionDiffText, "- one");
+            StringAssert.Contains(vm.StatusText, "Session Diff");
+            Assert.IsTrue(vm.CanShowSessionDiffTab);
+            Assert.AreEqual(3, vm.SelectedInspectTabIndex);
+        }
+        finally
+        {
+            if (File.Exists(settingsPath))
+            {
+                File.Delete(settingsPath);
+            }
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public void SessionDiff_ComparesTwoSeededSessions()
+    {
+        var settingsPath = Path.Combine(Path.GetTempPath(), "twp-diff-e2e-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(settingsPath);
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+            var left = new SessionSnapshot { Id = 1, Method = "GET", Url = "https://e2e/diff", StatusCode = 200, ResponseBodyText = "one" };
+            var right = new SessionSnapshot { Id = 2, Method = "GET", Url = "https://e2e/diff", StatusCode = 201, ResponseBodyText = "two" };
+            vm.SeedSession(left);
+            vm.SeedSession(right);
+            vm.SetSelectedSessions([left, right]);
+            Assert.IsTrue(vm.TryBuildSessionDiff(out var diff));
+            Assert.IsTrue(diff.HasDifferences);
+            StringAssert.Contains(diff.Text, "~ Status");
+        }
+        finally
+        {
+            if (File.Exists(settingsPath))
+            {
+                File.Delete(settingsPath);
+            }
+        }
     }
 
     [TestMethod]

@@ -98,6 +98,16 @@ internal static class Program
                 "loopback" => await LoopbackScenario.RunAsync(harness, log).ConfigureAwait(true),
                 "exclusions" => await ExclusionsScenario.RunAsync(harness, log).ConfigureAwait(true),
                 "pac" => await PacScenario.RunAsync(harness, log).ConfigureAwait(true),
+                "map-local" => await MapLocalScenario.RunAsync(harness, log).ConfigureAwait(true),
+                "map-remote" => await MapRemoteScenario.RunAsync(harness, log).ConfigureAwait(true),
+                "copy-as-curl" => await CopyAsCurlScenario.RunAsync(harness, log).ConfigureAwait(true),
+                "session-diff" => await SessionDiffScenario.RunAsync(harness, log).ConfigureAwait(true),
+                "graphql-operation" => await GraphQlOperationScenario.RunAsync(harness, log).ConfigureAwait(true),
+                "protobuf-decode" => await ProtobufDecodeScenario.RunAsync(harness, log).ConfigureAwait(true),
+                "sse-viewer" => await SseViewerScenario.RunAsync(harness, log).ConfigureAwait(true),
+                "ws-sse" => await SseViewerScenario.RunAsync(harness, log).ConfigureAwait(true),
+                "network-throttle" => await NetworkThrottleScenario.RunAsync(harness, log).ConfigureAwait(true),
+                "inspect-viewers" => await InspectViewersScenario.RunAsync(harness, log).ConfigureAwait(true),
                 "all" => await RunAllAsync(harness, log, browser, timeout).ConfigureAwait(true),
                 _ => FailUnknown(log, cmd),
             };
@@ -130,6 +140,14 @@ internal static class Program
             await CertScenario.RunAsync(harness, log, browser, timeout).ConfigureAwait(true),
             await ExclusionsScenario.RunAsync(harness, log).ConfigureAwait(true),
             await PacScenario.RunAsync(harness, log).ConfigureAwait(true),
+            await MapLocalScenario.RunAsync(harness, log).ConfigureAwait(true),
+            await MapRemoteScenario.RunAsync(harness, log).ConfigureAwait(true),
+            await CopyAsCurlScenario.RunAsync(harness, log).ConfigureAwait(true),
+            await SessionDiffScenario.RunAsync(harness, log).ConfigureAwait(true),
+            await GraphQlOperationScenario.RunAsync(harness, log).ConfigureAwait(true),
+            await ProtobufDecodeScenario.RunAsync(harness, log).ConfigureAwait(true),
+            await SseViewerScenario.RunAsync(harness, log).ConfigureAwait(true),
+            await NetworkThrottleScenario.RunAsync(harness, log).ConfigureAwait(true),
         };
 
         if (OperatingSystem.IsWindowsVersionAtLeast(6, 2))
@@ -166,6 +184,15 @@ internal static class Program
               loopback       Windows: Allow Store apps dialog
               exclusions     Excluded hosts + Proxy localhost
               pac            PAC replace confirm cancel/accept (when PAC active)
+              map-local      AutoResponder Map Local file body via harness proxy
+              map-remote     Map Remote URL rewrite via harness proxy
+              copy-as-curl   Generate curl/fetch from a seeded session + context commands
+              session-diff   Diff two seeded sessions
+              graphql-operation  GraphQL operationName AutoResponder match
+              protobuf-decode Wire-format protobuf inspect tab (no system proxy)
+              sse-viewer     SSE AutoResponder + inspect tab (alias: ws-sse)
+              network-throttle Throttle profile ViewModel → InterceptionService
+              inspect-viewers protobuf-decode + sse-viewer + network-throttle
               machine-trust  Machine CA trust (install/remove/run/curl-check/status/clean) — no UI
               all            chrome then applicable OS scenarios (excludes machine-trust)
 

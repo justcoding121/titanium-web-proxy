@@ -397,7 +397,8 @@ public class SessionPipelineTests
             Assert.IsTrue(vm.HasSelectedSession);
             Assert.IsFalse(vm.ShowInspectEmpty);
 
-            vm.SelectedInspectTabIndex = 3;
+            // Inspect tabs: 0 Headers, 1 Body, 2 Hex, 3 Diff, 4 WS, 5 SSE, 6 Protobuf
+            vm.SelectedInspectTabIndex = 4;
             vm.SelectedSession = new SessionSnapshot
             {
                 Id = 2,
