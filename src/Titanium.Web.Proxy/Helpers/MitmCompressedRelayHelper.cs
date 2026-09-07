@@ -410,8 +410,15 @@ internal static class MitmCompressedRelayHelper
         HeaderRelayBaseline baseline,
         HeaderCollection after,
         int maxAdds,
-        out AddedHeaderBuffer added) =>
-        baseline.TryDiffAppendOnly(after, maxAdds, out added);
+        out AddedHeaderBuffer added)
+    {
+        // COW Lite Take produces MutationCount-only baselines — TryDiffAppendOnly always
+        // returns false without a header snapshot. Match the int overload (H2 unchanged-lite).
+        if (baseline.IsMutationCountOnly)
+            return AllowsCompressedRelay(baseline.MutationCount, after, maxAdds, out added);
+
+        return baseline.TryDiffAppendOnly(after, maxAdds, out added);
+    }
 
     /// <summary>
     ///     MutationCount-only gate for unchanged headers. When counts diverge, caller must use

@@ -193,4 +193,32 @@ public class MitmCompressedRelayHelperTests
             after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out var added));
         Assert.AreEqual(0, added.Count);
     }
+
+    [TestMethod]
+    public void MutationCountOnlyBaseline_Unchanged_AllowsRelay()
+    {
+        var headers = new HeaderCollection();
+        headers.AddHeader("accept", "text/html");
+        headers.ArmMitmRelayBaseline();
+        var baseline = headers.TakeMitmRelayBaseline();
+
+        Assert.IsTrue(baseline.IsMutationCountOnly);
+        Assert.IsTrue(MitmCompressedRelayHelper.AllowsCompressedRelay(
+            baseline, headers, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out var added));
+        Assert.AreEqual(0, added.Count);
+    }
+
+    [TestMethod]
+    public void MutationCountOnlyBaseline_Mutated_RefusesRelay()
+    {
+        var headers = new HeaderCollection();
+        headers.AddHeader("accept", "text/html");
+        headers.ArmMitmRelayBaseline();
+        var baseline = headers.TakeMitmRelayBaseline();
+        headers.AddHeader("x-probe", "1");
+
+        Assert.IsTrue(baseline.IsMutationCountOnly);
+        Assert.IsFalse(MitmCompressedRelayHelper.AllowsCompressedRelay(
+            baseline, headers, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out _));
+    }
 }
