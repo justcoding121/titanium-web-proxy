@@ -662,10 +662,11 @@ namespace Titanium.Web.Proxy.Http2
             // CONTINUATION/DATA framing so it never exceeds what that peer advertised it will accept.
             var remoteSettings = isClient ? connectionState.ServerSettings : connectionState.ClientSettings;
 
-            // One decode scratch per connection direction: HEADERS decode is serialized on this frame
-            // loop, so ConcurrentBag contention is unnecessary. Clears MutationCount/COW without the
-            // live-bag Clear() side effects.
+            // One decode scratch + listener per connection direction: HEADERS decode is serialized on
+            // this frame loop, so ConcurrentBag contention is unnecessary. Clears MutationCount/COW
+            // without the live-bag Clear() side effects. Listener is reused (no per-block Action alloc).
             var headerDecodeScratch = new HeaderCollection();
+            var headerDecodeListener = new MyHeaderListener(headerDecodeScratch, isRequest: isClient);
 
             // Flow control governing DATA this task writes toward `output`; replenished by WINDOW_UPDATE/
             // SETTINGS_INITIAL_WINDOW_SIZE frames read from that same peer - necessarily by the *other*
@@ -1000,8 +1001,8 @@ namespace Titanium.Web.Proxy.Http2
             {
                 headerDecodeScratch.ResetForDecodeScratch();
                 var collected = headerDecodeScratch;
-                var headerListener = new MyHeaderListener(
-                    (name, value) => collected.AddHeader(new HttpHeader(name, value)), isRequest: isClient);
+                headerDecodeListener.ResetForDecode(collected);
+                var headerListener = headerDecodeListener;
 
                 try
                 {
@@ -5738,7 +5739,8 @@ namespace Titanium.Web.Proxy.Http2
         // internal for unit tests that assert RFC 7540/8441 header-block validation contracts
         internal class MyHeaderListener : IHeaderListener
         {
-            private readonly Action<ByteString, ByteString> addHeaderFunc;
+            private Action<ByteString, ByteString>? addHeaderFunc;
+            private HeaderCollection? decodeTarget;
 
             /// <summary>
             ///     <see langword="true"/> when this block is for a request (client→proxy direction).
@@ -5804,6 +5806,30 @@ namespace Titanium.Web.Proxy.Http2
                 this.isRequest = isRequest;
             }
 
+            /// <summary>Connection-scoped decode listener — target is rebound via <see cref="ResetForDecode"/>.</summary>
+            public MyHeaderListener(HeaderCollection decodeTarget, bool isRequest)
+            {
+                this.decodeTarget = decodeTarget;
+                this.isRequest = isRequest;
+            }
+
+            /// <summary>Clear per-block state so this listener can decode the next HEADERS on the same connection.</summary>
+            public void ResetForDecode(HeaderCollection target)
+            {
+                decodeTarget = target;
+                addHeaderFunc = null;
+                Method = default;
+                Status = default;
+                Authority = default;
+                scheme = default;
+                Path = default;
+                Protocol = default;
+                sawMethod = sawStatus = sawAuthority = sawScheme = sawPath = sawProtocol = false;
+                seenRegularHeader = false;
+                HasMalformedHeader = false;
+                MalformedReason = null;
+            }
+
             public void AddHeader(ByteString name, ByteString value, bool sensitive) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
             {
                 if (name.Length > 0 && name.Span[0] == ':')
@@ -5819,80 +5845,95 @@ namespace Titanium.Web.Proxy.Http2
                         return;
                     }
 
-                    string nameStr = Encoding.ASCII.GetString(name.Span);
-                    switch (nameStr)
+                    // Byte-match known pseudos — avoid Encoding.ASCII.GetString per field on the MITM decode path.
+                    var n = name.Span;
+                    if (n.SequenceEqual(":method"u8))
                     {
-                        case ":method":
-                            if (!isRequest || sawMethod)
-                            {
-                                MarkMalformed(isRequest
-                                    ? "duplicate pseudo-header field ':method'"
-                                    : "request pseudo-header ':method' in a response block");
-                                return;
-                            }
-                            sawMethod = true;
-                            Method = value;
+                        if (!isRequest || sawMethod)
+                        {
+                            MarkMalformed(isRequest
+                                ? "duplicate pseudo-header field ':method'"
+                                : "request pseudo-header ':method' in a response block");
                             return;
-                        case ":authority":
-                            if (!isRequest || sawAuthority)
-                            {
-                                MarkMalformed(isRequest
-                                    ? "duplicate pseudo-header field ':authority'"
-                                    : "request pseudo-header ':authority' in a response block");
-                                return;
-                            }
-                            sawAuthority = true;
-                            Authority = value;
-                            return;
-                        case ":scheme":
-                            if (!isRequest || sawScheme)
-                            {
-                                MarkMalformed(isRequest
-                                    ? "duplicate pseudo-header field ':scheme'"
-                                    : "request pseudo-header ':scheme' in a response block");
-                                return;
-                            }
-                            sawScheme = true;
-                            scheme = value;
-                            return;
-                        case ":path":
-                            if (!isRequest || sawPath)
-                            {
-                                MarkMalformed(isRequest
-                                    ? "duplicate pseudo-header field ':path'"
-                                    : "request pseudo-header ':path' in a response block");
-                                return;
-                            }
-                            sawPath = true;
-                            Path = value;
-                            return;
-                        case ":status":
-                            if (isRequest || sawStatus)
-                            {
-                                MarkMalformed(!isRequest
-                                    ? "duplicate pseudo-header field ':status'"
-                                    : "response pseudo-header ':status' in a request block");
-                                return;
-                            }
-                            sawStatus = true;
-                            Status = value;
-                            return;
-                        case ":protocol":
-                            // RFC 8441 §5: only valid on CONNECT requests.
-                            if (!isRequest || sawProtocol)
-                            {
-                                MarkMalformed(isRequest
-                                    ? "duplicate pseudo-header field ':protocol'"
-                                    : "request pseudo-header ':protocol' in a response block");
-                                return;
-                            }
-                            sawProtocol = true;
-                            Protocol = value;
-                            return;
-                        default:
-                            MarkMalformed($"unknown pseudo-header field '{nameStr}'");
-                            return;
+                        }
+                        sawMethod = true;
+                        Method = value;
+                        return;
                     }
+
+                    if (n.SequenceEqual(":authority"u8))
+                    {
+                        if (!isRequest || sawAuthority)
+                        {
+                            MarkMalformed(isRequest
+                                ? "duplicate pseudo-header field ':authority'"
+                                : "request pseudo-header ':authority' in a response block");
+                            return;
+                        }
+                        sawAuthority = true;
+                        Authority = value;
+                        return;
+                    }
+
+                    if (n.SequenceEqual(":scheme"u8))
+                    {
+                        if (!isRequest || sawScheme)
+                        {
+                            MarkMalformed(isRequest
+                                ? "duplicate pseudo-header field ':scheme'"
+                                : "request pseudo-header ':scheme' in a response block");
+                            return;
+                        }
+                        sawScheme = true;
+                        scheme = value;
+                        return;
+                    }
+
+                    if (n.SequenceEqual(":path"u8))
+                    {
+                        if (!isRequest || sawPath)
+                        {
+                            MarkMalformed(isRequest
+                                ? "duplicate pseudo-header field ':path'"
+                                : "request pseudo-header ':path' in a response block");
+                            return;
+                        }
+                        sawPath = true;
+                        Path = value;
+                        return;
+                    }
+
+                    if (n.SequenceEqual(":status"u8))
+                    {
+                        if (isRequest || sawStatus)
+                        {
+                            MarkMalformed(!isRequest
+                                ? "duplicate pseudo-header field ':status'"
+                                : "response pseudo-header ':status' in a request block");
+                            return;
+                        }
+                        sawStatus = true;
+                        Status = value;
+                        return;
+                    }
+
+                    if (n.SequenceEqual(":protocol"u8))
+                    {
+                        // RFC 8441 §5: only valid on CONNECT requests.
+                        if (!isRequest || sawProtocol)
+                        {
+                            MarkMalformed(isRequest
+                                ? "duplicate pseudo-header field ':protocol'"
+                                : "request pseudo-header ':protocol' in a response block");
+                            return;
+                        }
+                        sawProtocol = true;
+                        Protocol = value;
+                        return;
+                    }
+
+                    MarkMalformed($"unknown pseudo-header field '{Encoding.ASCII.GetString(n)}'");
+                    return;
                 }
 
                 seenRegularHeader = true;
@@ -5910,7 +5951,8 @@ namespace Titanium.Web.Proxy.Http2
                     }
                 }
 
-                addHeaderFunc(name, value);
+                addHeaderFunc?.Invoke(name, value);
+                decodeTarget?.AddHeader(new HttpHeader(name, value));
             }
 
             private void MarkMalformed(string reason)
