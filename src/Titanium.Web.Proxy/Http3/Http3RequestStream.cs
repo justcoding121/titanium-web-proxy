@@ -247,8 +247,7 @@ internal static class Http3RequestStream
                 }
 
                 // 6. Fire BeforeRequest (stamp timing milestone just before).
-                var requestHeaderRelayBaseline =
-                    MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(request.Headers);
+                request.Headers.ArmMitmRelayBaseline();
                 var capturedRequestMethod = request.Method;
                 var capturedRequestPath = request.RequestUriString8;
                 var capturedRequestAuthority = request.Authority;
@@ -274,6 +273,7 @@ internal static class Http3RequestStream
                 // Inject Via only when we stay on the full session forward path (not MITM
                 // unchanged-lite / IsFastPath). Adding Via before the unchanged check would
                 // dirtied MutationCount and defeat the lite finish.
+                var requestHeaderRelayBaseline = request.Headers.TakeMitmRelayBaseline();
                 var mitmUnchangedH3H1 = TryMitmUnchangedH3ToH1Lite(
                     sessionArgs, authArgs, request, requestHeaderRelayBaseline,
                     capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
@@ -355,8 +355,7 @@ internal static class Http3RequestStream
                         ColdOpenSessionFactory, qpackContext);
 
                     var response = sessionArgs.HttpClient.Response;
-                    var respHeaderRelayBaseline =
-                        MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(response.Headers);
+                    response.Headers.ArmMitmRelayBaseline();
                     var respStatusBaseline = response.StatusCode;
                     var respBodyRead = response.IsBodyRead;
                     var respBodyAvailable = response.BodyAvailable;
@@ -364,6 +363,7 @@ internal static class Http3RequestStream
 
                     await onBeforeResponse(sessionArgs);
 
+                    var respHeaderRelayBaseline = response.Headers.TakeMitmRelayBaseline();
                     var responseBodyUnchanged = response.StatusCode == respStatusBaseline
                                                 && response.IsBodyRead == respBodyRead
                                                 && response.BodyAvailable == respBodyAvailable

@@ -1246,18 +1246,14 @@ namespace Titanium.Web.Proxy.Http2
                     request.IsHttps = headerListener.Scheme == ProxyServer.UriSchemeHttps;
                     request.Authority = headerListener.Authority;
                     request.RequestUriString8 = path;
-                    foreach (var header in collected)
-                    {
-                        request.Headers.AddHeader(header);
-                    }
+                    request.Headers.TakeContentsFrom(collected);
 
                     // Capture compressed block for intercept unchanged → relay (static-HPACK MITM only).
                     if (httpInterceptionEnabled && forceStaticHpackTable
                         && connectionState.Streams.TryGetValue(hbStreamId, out var captureState))
                     {
                         captureState.CapturedCompressedHeaders = compressed;
-                        captureState.HeadersRelayBaseline =
-                            MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(request.Headers);
+                        request.Headers.ArmMitmRelayBaseline();
                         captureState.CapturedMethod = request.Method;
                         captureState.CapturedPath = request.RequestUriString8;
                         captureState.CapturedAuthority = request.Authority;
@@ -1291,7 +1287,8 @@ namespace Titanium.Web.Proxy.Http2
                         sessionArgs.IsFastPath = !shouldInterceptHttp(interceptionCtx);
                     }
 
-                    var tcs = new TaskCompletionSource<bool>();
+                    // END_STREAM on HEADERS ⇒ no request body; skip TCS used by GetRequestBody waiters.
+                    TaskCompletionSource<bool>? tcs = endStreamFlag ? null : new TaskCompletionSource<bool>();
                     request.ReadHttp2BeforeHandlerTaskCompletionSource = tcs;
 
                     var streamContext = new Http2StreamContext(hbStreamId, connectionState,
@@ -1305,17 +1302,26 @@ namespace Titanium.Web.Proxy.Http2
                     var dispatchFrameHeader = new Http2FrameHeader { StreamId = hbStreamId };
                     var dispatchFrameHeaderBuffer = new byte[9];
                     var previousDispatch = requestDispatchChain;
-                    var dispatchTask = Task.Run(async () =>
+                    // Static-HPACK MITM unchanged-lite: handlers are usually sync CompletedTask and the
+                    // forward path is compressed relay (same shape as gate-off). Task.Run per stream was
+                    // a large Lite tax vs reverse; start the async state machine without a pool hop.
+                    // Bridges / dynamic HPACK keep Task.Run so encode+checkout does not serialize the
+                    // frame loop (~22k streams/s cap measured on h2-to-h1 when run inline).
+                    async Task DispatchRequestAfterHeadersAsync()
                     {
-                        // The handler must start here on the pool, not on the frame loop: its synchronous
-                        // prefix (BeforeRequest dispatch, bridge request prep, origin pool checkout - even
-                        // the origin header write when the socket buffer accepts it without suspending)
-                        // otherwise runs inline per HEADERS and caps one client connection at the
-                        // reciprocal of that prefix (~22k streams/s measured on the h2-to-h1 bridge).
                         // DATA routing stays correct: client DATA frames await this dispatch task before
                         // being routed, so channels the handler registers are always visible in time.
                         var handler = onBeforeRequestResponse(sessionArgs, streamContext);
-                        var handlerCompleted = handler == await Task.WhenAny(tcs.Task, handler);
+                        bool handlerCompleted;
+                        if (tcs == null)
+                        {
+                            await handler;
+                            handlerCompleted = true;
+                        }
+                        else
+                        {
+                            handlerCompleted = handler == await Task.WhenAny(tcs.Task, handler);
+                        }
 
                         // The origin must observe newly opened client streams in increasing stream-id order.
                         // Handlers run concurrently, but admit each completed decision after the prior stream's
@@ -1325,7 +1331,7 @@ namespace Titanium.Web.Proxy.Http2
                         if (handlerCompleted)
                         {
                         request.ReadHttp2BeforeHandlerTaskCompletionSource = null;
-                        tcs.SetResult(true);
+                        tcs?.SetResult(true);
 
                         // Apply the same outgoing-request normalization and Via policy as HTTP/1.x.
                         // External bridges (H2→H1 via NullOriginStream, H2→H3 via IsExternalBridge)
@@ -1494,6 +1500,7 @@ namespace Titanium.Web.Proxy.Http2
                                     && request.RequestUriString8.Equals(relayState.CapturedPath)
                                     && request.Authority.Equals(relayState.CapturedAuthority))
                                 {
+                                    relayState.HeadersRelayBaseline = request.Headers.TakeMitmRelayBaseline();
                                     // Lite / unchanged: MutationCount match → verbatim relay (skip header diff walk).
                                     if (!injectVia
                                         && MitmCompressedRelayHelper.AllowsCompressedRelay(
@@ -1588,7 +1595,13 @@ namespace Titanium.Web.Proxy.Http2
                         }
 
                         request.Locked = true;
-                    }, cancellationToken);
+                    }
+
+                    // Static-HPACK MITM: start without Task.Run (see DispatchRequestAfterHeadersAsync).
+                    // Dynamic HPACK / bridges: keep Task.Run so sync encode does not serialize the frame loop.
+                    Task dispatchTask = forceStaticHpackTable && httpInterceptionEnabled
+                        ? DispatchRequestAfterHeadersAsync()
+                        : Task.Run((Func<Task>)DispatchRequestAfterHeadersAsync, cancellationToken);
                     requestDispatchChain = dispatchTask;
                     request.Http2BeforeHandlerTask = dispatchTask;
                     pendingSynthetics.Track(dispatchTask);
@@ -1639,17 +1652,13 @@ namespace Titanium.Web.Proxy.Http2
                         response.HttpVersion = HttpVersion.Version20;
                         response.StatusCode = statusCode;
                         response.StatusDescription = string.Empty;
-                        foreach (var header in collected)
-                        {
-                            response.Headers.AddHeader(header);
-                        }
+                        response.Headers.TakeContentsFrom(collected);
 
                         if (httpInterceptionEnabled && forceStaticHpackTable
                             && connectionState.Streams.TryGetValue(hbStreamId, out var respCapture))
                         {
                             respCapture.CapturedCompressedHeaders = compressed;
-                            respCapture.HeadersRelayBaseline =
-                                MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(response.Headers);
+                            response.Headers.ArmMitmRelayBaseline();
                             respCapture.CapturedStatusCode = statusCode;
                         }
 
@@ -1734,6 +1743,7 @@ namespace Titanium.Web.Proxy.Http2
                                 && !finalResponse.IsBodyRead
                                 && finalResponse.StatusCode == respRelay.CapturedStatusCode)
                             {
+                                respRelay.HeadersRelayBaseline = finalResponse.Headers.TakeMitmRelayBaseline();
                                 if (!injectViaResp
                                     && MitmCompressedRelayHelper.AllowsCompressedRelay(
                                         respRelay.HeadersRelayBaseline.MutationCount,

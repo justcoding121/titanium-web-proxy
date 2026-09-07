@@ -252,15 +252,16 @@ public class MitmStaticRebuildHelperTests
             (StaticTable.KnownHeaderMethod, (ByteString)"GET"),
             ((ByteString)"accept", (ByteString)"*/*"));
 
-        var before = new HeaderCollection();
-        before.AddHeader("accept", "*/*");
-        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(before);
-
-        var after = new HeaderCollection();
-        after.AddHeader("accept", "text/plain");
+        // Same HeaderCollection instance as production: Capture then mutate in place
+        // so MutationCount diverges (cross-instance equal counts are not a hot-path case).
+        var headers = new HeaderCollection();
+        headers.AddHeader("accept", "*/*");
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(headers);
+        headers.RemoveHeader("accept");
+        headers.AddHeader("accept", "text/plain");
 
         Assert.IsFalse(MitmStaticRebuildHelper.TryPrepareStaticHpackRelay(
-            original, baseline, after, out _, out _));
+            original, baseline, headers, out _, out _));
     }
 
     [TestMethod]

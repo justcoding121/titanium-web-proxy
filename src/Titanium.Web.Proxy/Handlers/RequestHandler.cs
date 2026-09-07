@@ -332,8 +332,7 @@ public partial class ProxyServer
                             args.IsFastPath = false;
                         }
 
-                        var requestHeaderRelayBaseline =
-                            MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(request.Headers);
+                        request.Headers.ArmMitmRelayBaseline();
                         var capturedRequestMethod = request.Method;
                         var capturedRequestPath = request.RequestUriString8;
                         var capturedRequestAuthority = request.Authority;
@@ -364,6 +363,8 @@ public partial class ProxyServer
                             args.IsClientResponseCommitted = true;
                             return;
                         }
+
+                        var requestHeaderRelayBaseline = request.Headers.TakeMitmRelayBaseline();
 
                         // Total per-request deadline starts after BeforeRequest so session overrides apply.
                         using var requestDeadline = args.Deadlines.Start(cancellationToken,
@@ -1148,32 +1149,55 @@ public partial class ProxyServer
     /// </summary>
     /// <param name="args">The session event arguments.</param>
     /// <returns></returns>
-    private async Task OnBeforeRequest(SessionEventArgs args)
+    private Task OnBeforeRequest(SessionEventArgs args)
     {
         if (args.IsFastPath)
-            return;
+            return Task.CompletedTask;
 
         args.Timing?.MarkRequestHeadersReceived();
 
         // Rewrite REST/JSON → gRPC before middleware / user handlers / routing when configured.
         if (ReverseProxy?.GrpcJsonTranscoder is { } transcoder)
-            await transcoder.TryRewriteRequestAsync(args, args.CancellationToken).ConfigureAwait(false);
+            return OnBeforeRequestWithTranscoderAsync(args, transcoder);
+
+        var middleware = ReverseProxy?.Middleware;
+        if (middleware is { Count: > 0 })
+            return OnBeforeRequestWithMiddlewareAsync(args, middleware);
+
+        if (BeforeRequest != null)
+            return BeforeRequest.InvokeAsync(this, args, logger);
+
+        return Task.CompletedTask;
+    }
+
+    private async Task OnBeforeRequestWithTranscoderAsync(
+        SessionEventArgs args,
+        Abstractions.Plugins.IGrpcJsonTranscoder transcoder)
+    {
+        await transcoder.TryRewriteRequestAsync(args, args.CancellationToken).ConfigureAwait(false);
 
         var middleware = ReverseProxy?.Middleware;
         if (middleware is { Count: > 0 })
         {
-            var ctx = new Abstractions.Middleware.ProxyMiddlewareContext { Session = args };
-            Abstractions.Middleware.ProxyMiddlewareDelegate terminus = async (_, _) =>
-            {
-                if (BeforeRequest != null)
-                    await BeforeRequest.InvokeAsync(this, args, logger);
-            };
-            await Middleware.ProxyMiddlewarePipeline.Build(middleware, terminus)(ctx, args.CancellationToken);
+            await OnBeforeRequestWithMiddlewareAsync(args, middleware).ConfigureAwait(false);
             return;
         }
 
         if (BeforeRequest != null)
-            await BeforeRequest.InvokeAsync(this, args, logger);
+            await BeforeRequest.InvokeAsync(this, args, logger).ConfigureAwait(false);
+    }
+
+    private async Task OnBeforeRequestWithMiddlewareAsync(
+        SessionEventArgs args,
+        IReadOnlyList<Abstractions.Middleware.IProxyMiddleware> middleware)
+    {
+        var ctx = new Abstractions.Middleware.ProxyMiddlewareContext { Session = args };
+        Abstractions.Middleware.ProxyMiddlewareDelegate terminus = async (_, _) =>
+        {
+            if (BeforeRequest != null)
+                await BeforeRequest.InvokeAsync(this, args, logger);
+        };
+        await Middleware.ProxyMiddlewarePipeline.Build(middleware, terminus)(ctx, args.CancellationToken);
     }
 
     /// <summary>

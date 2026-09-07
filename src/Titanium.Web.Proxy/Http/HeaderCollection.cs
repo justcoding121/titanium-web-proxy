@@ -28,6 +28,145 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     internal int MutationCount { get; private set; }
 
     /// <summary>
+    ///     When armed, pure AddHeader of new unique names are logged without a full snapshot
+    ///     (Full MITM append-relay). Other mutations either snapshot (legacy COW) or mark dirty
+    ///     so Take falls back to re-encode.
+    /// </summary>
+    private bool _mitmRelayCowArmed;
+    private int _mitmRelayCowMutationCount;
+    private Dictionary<string, string>? _mitmRelayCowUnique;
+    private Dictionary<string, List<string>>? _mitmRelayCowNonUnique;
+    private int _mitmRelayCowNonUniqueNames;
+    private Helpers.MitmCompressedRelayHelper.AddedHeaderBuffer _mitmRelayAppends;
+    private bool _mitmRelayAppendDirty;
+
+    /// <summary>
+    ///     Arm copy-on-write baseline for MITM unchanged-lite. Call after wire decode, before handlers.
+    ///     Lite (no mutations) never allocates a header snapshot; Full append-only logs adds without
+    ///     cloning the wire header maps.
+    /// </summary>
+    internal void ArmMitmRelayBaseline()
+    {
+        _mitmRelayCowArmed = true;
+        _mitmRelayCowMutationCount = MutationCount;
+        _mitmRelayCowUnique = null;
+        _mitmRelayCowNonUnique = null;
+        _mitmRelayCowNonUniqueNames = 0;
+        _mitmRelayAppends = default;
+        _mitmRelayAppendDirty = false;
+    }
+
+    /// <summary>
+    ///     Build the relay baseline after handlers: MutationCount-only when unchanged, append-log when
+    ///     only new unique headers were added, else the pre-mutation snapshot taken on first complex mutate.
+    /// </summary>
+    internal Helpers.MitmCompressedRelayHelper.HeaderRelayBaseline TakeMitmRelayBaseline()
+    {
+        _mitmRelayCowArmed = false;
+        if (_mitmRelayCowUnique is null)
+        {
+            if (!_mitmRelayAppendDirty && _mitmRelayAppends.Count > 0)
+            {
+                var appendBaseline = Helpers.MitmCompressedRelayHelper.HeaderRelayBaseline.FromAppendLog(
+                    _mitmRelayCowMutationCount, _mitmRelayAppends);
+                _mitmRelayAppends = default;
+                return appendBaseline;
+            }
+
+            _mitmRelayAppends = default;
+            _mitmRelayAppendDirty = false;
+            return Helpers.MitmCompressedRelayHelper.HeaderRelayBaseline.CaptureMutationCountFromCount(
+                _mitmRelayCowMutationCount);
+        }
+
+        var baseline = new Helpers.MitmCompressedRelayHelper.HeaderRelayBaseline(
+            _mitmRelayCowMutationCount, _mitmRelayCowUnique, _mitmRelayCowNonUnique,
+            _mitmRelayCowNonUniqueNames);
+        _mitmRelayCowUnique = null;
+        _mitmRelayCowNonUnique = null;
+        _mitmRelayAppends = default;
+        _mitmRelayAppendDirty = false;
+        return baseline;
+    }
+
+    /// <summary>
+    ///     Move decoded headers from a scratch collection into this empty destination (H2 MITM).
+    ///     Avoids a second Dictionary insert pass / MutationCount churn of foreach AddHeader.
+    /// </summary>
+    internal void TakeContentsFrom(HeaderCollection source)
+    {
+        if (ReferenceEquals(this, source))
+            return;
+
+        if (headers.Count != 0 || nonUniqueHeaders.Count != 0)
+        {
+            foreach (var header in source)
+                AddHeader(header);
+            source.Clear();
+            return;
+        }
+
+        foreach (var kv in source.headers)
+            headers.Add(kv.Key, kv.Value);
+        foreach (var kv in source.nonUniqueHeaders)
+        {
+            nonUniqueHeaders.Add(kv.Key, kv.Value);
+            if (source.nonUniqueHeadersReadOnly.TryGetValue(kv.Key, out var readOnly))
+                nonUniqueHeadersReadOnly.Add(kv.Key, readOnly);
+        }
+
+        MutationCount = source.MutationCount;
+        source.headers.Clear();
+        source.nonUniqueHeaders.Clear();
+        source.nonUniqueHeadersReadOnly.Clear();
+        source.MutationCount = 0;
+        source._mitmRelayCowArmed = false;
+        source._mitmRelayCowUnique = null;
+        source._mitmRelayCowNonUnique = null;
+        source._mitmRelayAppends = default;
+        source._mitmRelayAppendDirty = false;
+    }
+
+    private void InvalidateMitmRelayAppendLog()
+    {
+        _mitmRelayAppends = default;
+        _mitmRelayAppendDirty = true;
+    }
+
+    private void EnsureMitmRelayCowSnapshot()
+    {
+        if (!_mitmRelayCowArmed || _mitmRelayCowUnique is not null)
+            return;
+
+        // Append-log already committed adds into this collection; falling back to a snapshot of the
+        // *current* maps would treat those adds as baseline. Mark dirty so Take forces re-encode.
+        if (_mitmRelayAppends.Count > 0 || _mitmRelayAppendDirty)
+        {
+            InvalidateMitmRelayAppendLog();
+            return;
+        }
+
+        var unique = new Dictionary<string, string>(headers.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in headers)
+            unique[kv.Key] = kv.Value.Value;
+
+        var nonUnique = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in nonUniqueHeaders)
+        {
+            var values = new List<string>(kv.Value.Count);
+            foreach (var h in kv.Value)
+                values.Add(h.Value);
+            nonUnique[kv.Key] = values;
+        }
+
+        _mitmRelayCowUnique = unique;
+        _mitmRelayCowNonUnique = nonUnique;
+        _mitmRelayCowNonUniqueNames = nonUniqueHeaders.Count;
+        _mitmRelayAppends = default;
+        _mitmRelayAppendDirty = false;
+    }
+
+    /// <summary>
     ///     Initializes a new instance of the <see cref="HeaderCollection" /> class.
     /// </summary>
     public HeaderCollection()
@@ -273,6 +412,19 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     /// <param name="newHeader"></param>
     public void AddHeader(HttpHeader newHeader)
     {
+        if (_mitmRelayCowArmed && _mitmRelayCowUnique is null && !_mitmRelayAppendDirty
+            && !headers.ContainsKey(newHeader.Name)
+            && !nonUniqueHeaders.ContainsKey(newHeader.Name)
+            && _mitmRelayAppends.Count < Helpers.MitmCompressedRelayHelper.DefaultMaxAppendHeaders)
+        {
+            // Pure append of a new unique name: log for compressed relay without cloning wire headers.
+            _mitmRelayAppends.Add(newHeader.Name, newHeader.Value);
+            MutationCount++;
+            headers.Add(newHeader.Name, newHeader);
+            return;
+        }
+
+        EnsureMitmRelayCowSnapshot();
         MutationCount++;
         // if header exist in non-unique header collection add it there
         if (nonUniqueHeaders.TryGetValue(newHeader.Name, out var list))
@@ -351,6 +503,7 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     /// </returns>
     public bool RemoveHeader(string headerName)
     {
+        EnsureMitmRelayCowSnapshot();
         var result = headers.Remove(headerName);
 
         // do not convert to '||' expression to avoid lazy evaluation
@@ -374,6 +527,7 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     /// </returns>
     public bool RemoveHeader(KnownHeader headerName)
     {
+        EnsureMitmRelayCowSnapshot();
         var result = headers.Remove(headerName.String);
 
         // do not convert to '||' expression to avoid lazy evaluation
@@ -393,6 +547,7 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     /// <param name="header">Returns true if header exists and was removed </param>
     public bool RemoveHeader(HttpHeader header)
     {
+        EnsureMitmRelayCowSnapshot();
         if (headers.TryGetValue(header.Name, out var existing))
         {
             if (!existing.Equals(header)) return false;
@@ -420,6 +575,7 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     /// </summary>
     public void Clear()
     {
+        EnsureMitmRelayCowSnapshot();
         if (headers.Count > 0 || nonUniqueHeaders.Count > 0)
             MutationCount++;
         headers.Clear();
@@ -503,6 +659,7 @@ public class HeaderCollection : IEnumerable<HttpHeader>
 
         if (headers.TryGetValue(headerName.String, out var header))
         {
+            EnsureMitmRelayCowSnapshot();
             MutationCount++;
             header.SetValue(value);
         }
@@ -516,6 +673,7 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     {
         if (headers.TryGetValue(headerName.String, out var header))
         {
+            EnsureMitmRelayCowSnapshot();
             MutationCount++;
             header.SetValue(value);
         }

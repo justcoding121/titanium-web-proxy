@@ -107,17 +107,20 @@ internal static class MitmCompressedRelayHelper
     internal readonly struct HeaderRelayBaseline
     {
         private readonly int _mutationCount;
-        private readonly Dictionary<string, string> _unique;
-        private readonly Dictionary<string, List<string>> _nonUniqueSnapshot;
+        private readonly Dictionary<string, string>? _unique;
+        private readonly Dictionary<string, List<string>>? _nonUniqueSnapshot;
         private readonly int _nonUniqueNamesAtCapture;
+        private readonly AddedHeaderBuffer _precomputedAppends;
 
-        internal HeaderRelayBaseline(int mutationCount, Dictionary<string, string> unique,
-            Dictionary<string, List<string>> nonUniqueSnapshot, int nonUniqueNamesAtCapture)
+        internal HeaderRelayBaseline(int mutationCount, Dictionary<string, string>? unique,
+            Dictionary<string, List<string>>? nonUniqueSnapshot, int nonUniqueNamesAtCapture,
+            AddedHeaderBuffer precomputedAppends = default)
         {
             _mutationCount = mutationCount;
             _unique = unique;
             _nonUniqueSnapshot = nonUniqueSnapshot;
             _nonUniqueNamesAtCapture = nonUniqueNamesAtCapture;
+            _precomputedAppends = precomputedAppends;
         }
 
         internal static HeaderRelayBaseline Capture(HeaderCollection headers)
@@ -139,11 +142,52 @@ internal static class MitmCompressedRelayHelper
                 headers.NonUniqueHeaders.Count);
         }
 
+        /// <summary>
+        ///     MITM unchanged-lite hot path: store <see cref="MutationCount"/> only.
+        ///     Avoids cloning unique/non-unique dictionaries when the finish path is
+        ///     <see cref="AllowsCompressedRelay(int, HeaderCollection, int, out AddedHeaderBuffer)"/>.
+        ///     Append/drop diff (<see cref="TryDiffAppendOnly"/>) returns false — callers fall back
+        ///     to full HPACK/QPACK re-encode when handlers mutate.
+        /// </summary>
+        internal static HeaderRelayBaseline CaptureMutationCount(HeaderCollection headers) =>
+            new(headers.MutationCount, null, null, MutationCountOnlySentinel);
+
+        /// <summary>MutationCount-only baseline from a previously armed COW count (no live collection).</summary>
+        internal static HeaderRelayBaseline CaptureMutationCountFromCount(int mutationCount) =>
+            new(mutationCount, null, null, MutationCountOnlySentinel);
+
+        /// <summary>
+        ///     Pure-append COW log: handlers only added new unique headers (no wire snapshot).
+        /// </summary>
+        internal static HeaderRelayBaseline FromAppendLog(int mutationCount, AddedHeaderBuffer appends) =>
+            new(mutationCount, null, null, AppendLogSentinel, appends);
+
+        private const int MutationCountOnlySentinel = -1;
+        private const int AppendLogSentinel = -2;
+
         internal int MutationCount => _mutationCount;
+
+        internal bool IsMutationCountOnly => _nonUniqueNamesAtCapture == MutationCountOnlySentinel;
+
+        internal bool TryGetPrecomputedAppends(out AddedHeaderBuffer added)
+        {
+            if (_nonUniqueNamesAtCapture == AppendLogSentinel && _precomputedAppends.Count > 0)
+            {
+                added = _precomputedAppends;
+                return true;
+            }
+
+            added = default;
+            return false;
+        }
 
         internal bool TryDiffAppendOnly(HeaderCollection after, int maxAdds, out AddedHeaderBuffer added)
         {
             added = default;
+
+            // MutationCount-only baselines cannot append-diff (no pre-handler header snapshot).
+            if (_unique is null || IsMutationCountOnly)
+                return false;
 
             if (_nonUniqueNamesAtCapture > 0 || after.NonUniqueHeaders.Count > 0)
                 return TryDiffNonUniqueTrailingAppend(after, maxAdds, out added);
@@ -309,6 +353,9 @@ internal static class MitmCompressedRelayHelper
         internal bool TryDiffDropOnly(HeaderCollection after, int maxDrops, out DroppedNameBuffer dropped)
         {
             dropped = default;
+
+            if (_unique is null || IsMutationCountOnly)
+                return false;
 
             if (_mutationCount == after.MutationCount)
                 return false;
