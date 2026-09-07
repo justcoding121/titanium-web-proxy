@@ -1546,18 +1546,13 @@ namespace Titanium.Web.Proxy.Http2
                             }
                             else
                             {
-                                // Bind shared origin metadata without SetConnection so HasConnection stays
-                                // false (H1 syphon/drain must not touch the multiplexed H2 socket).
-                                if (originConnection != null)
-                                    BindOriginForHttp2Stream(sessionArgs, originConnection);
-                                ApplyCleartextOriginScheme(request, originConnection,
-                                    sessionArgs.ClientConnection);
-
                                 // True MITM noop-safe: relay the original compressed HEADERS when handlers
                                 // did not mutate method/path/authority/headers or buffer/replace the body
                                 // (GetRequestBody sets IsBodyRead and would leave origin without DATA).
                                 // Skip relay when Via would be injected (explicit MITM) — append as HPACK
                                 // literal on the static block instead of full re-encode (matches H3).
+                                // Bind origin / scheme patch only after we know we are not on the
+                                // compressed-relay finish (avoids work on the Lite hot path).
                                 var injectVia = !sessionArgs.IsFastPath && !sessionArgs.IsTransparent
                                     && !sessionArgs.IsSocks
                                     && !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym);
@@ -1603,6 +1598,10 @@ namespace Titanium.Web.Proxy.Http2
 
                                 if (!requestRelayed)
                                 {
+                                    if (originConnection != null)
+                                        BindOriginForHttp2Stream(sessionArgs, originConnection);
+                                    ApplyCleartextOriginScheme(request, originConnection,
+                                        sessionArgs.ClientConnection);
                                     if (!bridgeOwnsRequestPrep)
                                     {
                                         // The h2-to-h1 / h2-to-h3 bridges own request preparation before they
@@ -1744,6 +1743,167 @@ namespace Titanium.Web.Proxy.Http2
 
                         var streamContext = new Http2StreamContext(hbStreamId, connectionState,
                             isClient ? input : output, cancellationToken);
+                        // Static-HPACK MITM: dispatch BeforeResponse+relay off the origin→client frame loop
+                        // (mirrors request DispatchRequestAfterHeadersAsync). Awaiting on the loop serialized
+                        // every stream's BeforeResponse under c=64 and was a large Lite÷Reverse tax.
+                        // Dynamic HPACK / bridges keep the inline await so encode stays ordered with decode.
+                        var dispatchFrameHeader = new Http2FrameHeader { StreamId = hbStreamId };
+                        var dispatchFrameHeaderBuffer = new byte[9];
+
+                        async Task DispatchResponseAfterHeadersAsync()
+                        {
+                            var handler = onBeforeRequestResponse(sessionArgs, streamContext);
+                            bool handlerCompleted;
+                            if (tcs == null)
+                            {
+                                await handler;
+                                handlerCompleted = true;
+                            }
+                            else
+                            {
+                                handlerCompleted = handler == await Task.WhenAny(tcs.Task, handler);
+                            }
+
+                            if (handlerCompleted)
+                            {
+                                response.ReadHttp2BeforeHandlerTaskCompletionSource = null;
+                                tcs?.SetResult(true);
+
+                                // BeforeResponse may have replaced HttpClient.Response outright - exactly what
+                                // Respond()/Ok()/Redirect() do when called after the real response was already
+                                // received. Note that this is the *one* Respond() call site that does not set
+                                // Request.CancelRequest (see SessionEventArgs.Respond: that flag only means
+                                // "never forward the request", which is meaningless once the request has already
+                                // gone out) - so the only reliable signal that a replacement happened is whether
+                                // HttpClient.Response is no longer the same object `response` above was captured
+                                // from *before* the handler ran. Dispatching the stale `response` here would
+                                // silently drop the replacement and send the original object instead.
+                                var finalResponse = sessionArgs.HttpClient.Response;
+
+                                if (!ReferenceEquals(finalResponse, response))
+                                {
+                                    // the real response's own body (if the server is still sending one) must
+                                    // never reach the client now that a different response has been substituted;
+                                    // suppress it exactly like an in-flight GetBody() wait does. Flow-control
+                                    // credit for those bytes is still granted back to the server unconditionally
+                                    // by the generic DATA-frame handling below, regardless of this flag.
+                                    finalResponse.Http2IgnoreBodyFrames = true;
+                                    finalResponse.Locked = true;
+
+                                    connectionState.Streams.TryGetValue(hbStreamId, out var streamState);
+                                    var linkedCts893 = streamState != null
+                                        ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,
+                                            streamState.Cancellation.Token)
+                                        : null;
+                                    var streamToken = linkedCts893?.Token ?? cancellationToken;
+                                    // we are inside the isClient=false branch, so `output` is the client stream
+                                    // here (see the isClient=false call in SendHttp2).
+                                    var synthTask = EmitSyntheticResponseAsync(sessionArgs, hbStreamId, connectionState,
+                                            output, streamToken, onAfterResponse, logger)
+                                        .ContinueWith(t =>
+                                        {
+                                            linkedCts893?.Dispose();
+                                            if (t.IsFaulted)
+                                            {
+                                                ReportException(logger, new ProxyHttpException(
+                                                    SyntheticResponseFailedMessage, t.Exception.GetBaseException(),
+                                                    sessionArgs));
+                                            }
+                                        }, TaskScheduler.Default);
+                                    if (streamState != null) streamState.SyntheticTask = synthTask;
+                                    pendingSynthetics.Track(synthTask);
+
+                                    return;
+                                }
+
+                                // Match H1/H3 fast-path: skip Via when no HTTP interception — append as HPACK
+                                // literal on compressed relay instead of mutating before the relay gate.
+                                var injectViaResp = !sessionArgs.IsFastPath && !sessionArgs.IsTransparent
+                                                    && !sessionArgs.IsSocks
+                                                    && !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym);
+
+                                // True MITM noop-safe: relay original compressed response HEADERS when unchanged.
+                                // GetResponseBody / SetResponseBody set IsBodyRead/BodyAvailable — must re-encode.
+                                var responseRelayed = false;
+                                if (forceStaticHpackTable
+                                    && ReferenceEquals(finalResponse, response)
+                                    && connectionState.Streams.TryGetValue(hbStreamId, out var respRelay)
+                                    && respRelay.CapturedCompressedHeaders != null
+                                    && !finalResponse.IsBodyRead
+                                    && finalResponse.StatusCode == respRelay.CapturedStatusCode)
+                                {
+                                    respRelay.HeadersRelayBaseline = finalResponse.Headers.TakeMitmRelayBaseline();
+                                    if (!injectViaResp
+                                        && MitmCompressedRelayHelper.AllowsCompressedRelay(
+                                            respRelay.HeadersRelayBaseline.MutationCount,
+                                            finalResponse.Headers,
+                                            MitmCompressedRelayHelper.DefaultMaxAppendHeaders,
+                                            out _))
+                                    {
+                                        await RelayCompressedHeaderBlockAsync(hbStreamId,
+                                            respRelay.CapturedCompressedHeaders, endStreamFlag);
+                                        respRelay.EnableResponseDataCompressedRelay();
+                                        responseRelayed = true;
+                                    }
+                                    else if (TryPrepareMitmStaticHpackRelay(
+                                        respRelay.CapturedCompressedHeaders,
+                                        respRelay.HeadersRelayBaseline, finalResponse.Headers,
+                                        injectViaResp,
+                                        injectViaResp
+                                            ? $"{finalResponse.HttpVersion.Major}.{finalResponse.HttpVersion.Minor} {sessionArgs.Server.ViaHeaderPseudonym}"
+                                            : null,
+                                        out var respBlockToRelay, out var respAppendSuffix))
+                                    {
+                                        await RelayCompressedHeaderBlockAsync(hbStreamId, respBlockToRelay, endStreamFlag,
+                                            respAppendSuffix);
+                                        respRelay.EnableResponseDataCompressedRelay();
+                                        responseRelayed = true;
+                                    }
+                                }
+
+                                if (!responseRelayed)
+                                {
+                                    if (injectViaResp)
+                                    {
+                                        ProxyServer.AddViaHeader(finalResponse.Headers, finalResponse.HttpVersion,
+                                            sessionArgs.Server.ViaHeaderPseudonym);
+                                    }
+
+                                    if (connectionState.Streams.TryGetValue(hbStreamId, out var clearResp))
+                                        clearResp.CapturedCompressedHeaders = null;
+                                    QueueSendHeader(connectionState, towardServer: false, outputWriteLock,
+                                        remoteSettings, dispatchFrameHeader, dispatchFrameHeaderBuffer, finalResponse,
+                                        endStreamFlag, output, isPromise);
+                                }
+
+                                // RFC 8441: once a final 2xx response to a native h2↔h2 extended CONNECT is
+                                // forwarded to the client, the stream enters tunnel state. DATA frames from either
+                                // direction are raw tunnel bytes; any subsequent HEADERS/CONTINUATION is rejected.
+                                if (finalResponse.StatusCode is >= 200 and < 300
+                                    && connectionState.Streams.TryGetValue(hbStreamId, out var tunnelEstState)
+                                    && tunnelEstState.IsExtendedConnect
+                                    && tunnelEstState.InboundTunnelChannel == null)
+                                {
+                                    tunnelEstState.ExtendedConnectEstablished = true;
+                                }
+
+                                finalResponse.Locked = true;
+                                return;
+                            }
+
+                            response.Http2IgnoreBodyFrames = true;
+                            response.Locked = true;
+                        }
+
+                        if (forceStaticHpackTable && httpInterceptionEnabled)
+                        {
+                            var dispatchTask = DispatchResponseAfterHeadersAsync();
+                            response.Http2BeforeHandlerTask = dispatchTask;
+                            pendingSynthetics.Track(dispatchTask);
+                            return false;
+                        }
+
+                        {
                         var handler = onBeforeRequestResponse(sessionArgs, streamContext);
                         response.Http2BeforeHandlerTask = handler;
 
@@ -1891,6 +2051,7 @@ namespace Titanium.Web.Proxy.Http2
 
                         response.Locked = true;
                         return false;
+                        }
                     }
 
                     if (isInterim)
