@@ -124,6 +124,10 @@ internal static class MitmStaticRebuildHelper
         blockToRelay = capturedBlock;
         appendLiterals = default;
 
+        // Unchanged Lite: MutationCount match → skip O(headers) append/drop diff.
+        if (baseline.MutationCount == after.MutationCount)
+            return true;
+
         if (baseline.TryDiffAppendOnly(after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders,
                 out appendLiterals))
             return true;
@@ -144,6 +148,10 @@ internal static class MitmStaticRebuildHelper
     {
         blockToRelay = capturedBlock;
         appendLiterals = default;
+
+        // Unchanged Lite: MutationCount match → skip O(headers) append/drop diff.
+        if (baseline.MutationCount == after.MutationCount)
+            return true;
 
         if (baseline.TryDiffAppendOnly(after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders,
                 out appendLiterals))

@@ -269,33 +269,34 @@ public class CliCommandE2ETests
         var cfg = ConfigFixtures.WriteTransforms(_tempDir, listen, origin.Port, pathPrefix: "/v1");
         using var harness = new CliProcessHarness();
         harness.EnsurePlusDllBesideCli(copy: false);
-        await harness.StartRunAsync(cfg);
-        try
-        {
-            Assert.IsTrue(harness.ProcessId is > 0);
-            using var handler = new HttpClientHandler
+            await harness.StartRunAsync(cfg);
+            await harness.WaitForOutputAsync("sighup-handler-registered", TimeSpan.FromSeconds(15));
+            try
             {
-                Proxy = new WebProxy($"http://127.0.0.1:{listen}"),
-                UseProxy = true,
-            };
-            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
+                Assert.IsTrue(harness.ProcessId is > 0);
+                using var handler = new HttpClientHandler
+                {
+                    Proxy = new WebProxy($"http://127.0.0.1:{listen}"),
+                    UseProxy = true,
+                };
+                using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
 
-            var before = await http.GetAsync($"http://127.0.0.1:{origin.Port}/api");
-            Assert.AreEqual(HttpStatusCode.OK, before.StatusCode);
-            StringAssert.Contains(await before.Content.ReadAsStringAsync(), "/v1/api");
+                var before = await http.GetAsync($"http://127.0.0.1:{origin.Port}/api");
+                Assert.AreEqual(HttpStatusCode.OK, before.StatusCode);
+                StringAssert.Contains(await before.Content.ReadAsStringAsync(), "/v1/api");
 
-            ConfigFixtures.WriteTransforms(_tempDir, listen, origin.Port, pathPrefix: "/v2");
-            harness.SendSighup();
-            await harness.WaitForOutputAsync("Config reloaded.", TimeSpan.FromSeconds(15));
+                ConfigFixtures.WriteTransforms(_tempDir, listen, origin.Port, pathPrefix: "/v2");
+                harness.SendSighup();
+                await harness.WaitForOutputAsync("Config reloaded.", TimeSpan.FromSeconds(15));
 
-            var after = await http.GetAsync($"http://127.0.0.1:{origin.Port}/api");
-            Assert.AreEqual(HttpStatusCode.OK, after.StatusCode);
-            StringAssert.Contains(await after.Content.ReadAsStringAsync(), "/v2/api");
-        }
-        finally
-        {
-            harness.Dispose();
-        }
+                var after = await http.GetAsync($"http://127.0.0.1:{origin.Port}/api");
+                Assert.AreEqual(HttpStatusCode.OK, after.StatusCode);
+                StringAssert.Contains(await after.Content.ReadAsStringAsync(), "/v2/api");
+            }
+            finally
+            {
+                harness.Dispose();
+            }
     }
 
     [TestMethod]

@@ -153,7 +153,7 @@ public static class ConfigWriter
 
     public static string WritePlusAuthCors(string dir, int listenPort, int originPort, int controlPort, string secret)
     {
-        var path = Path.Combine(dir, $"plus-auth-{listenPort}.json");
+        var path = Path.Combine(dir, $"twp-plus-auth-{listenPort}.json");
         File.WriteAllText(path, $$"""
             {
               "schemaVersion": "7.0",
@@ -205,7 +205,7 @@ public static class ConfigWriter
 
     public static string WritePlusCircuit(string dir, int listenPort, int originPort, int controlPort, string secret)
     {
-        var path = Path.Combine(dir, $"plus-circuit-{listenPort}.json");
+        var path = Path.Combine(dir, $"twp-plus-circuit-{listenPort}.json");
         File.WriteAllText(path, $$"""
             {
               "schemaVersion": "7.0",
@@ -330,6 +330,63 @@ public static class ConfigWriter
               - host: "127.0.0.1"
                 port: {listenPort}
                 decryptSsl: true
+            """);
+        return path;
+    }
+
+    public static string WritePlusGrpcTranscode(
+        string dir,
+        int listenPort,
+        int originPort,
+        int controlPort,
+        string secret,
+        string descriptorSetPath)
+    {
+        var path = Path.Combine(dir, $"twp-plus-grpc-{listenPort}.json");
+        var descriptor = descriptorSetPath.Replace("\\", "/", StringComparison.Ordinal);
+        File.WriteAllText(path, $$"""
+            {
+              "schemaVersion": "7.0",
+              "listeners": [
+                { "host": "127.0.0.1", "port": {{listenPort}}, "decryptSsl": false }
+              ],
+              "routes": [
+                {
+                  "id": "r1",
+                  "clusterId": "c1",
+                  "order": 1,
+                  "match": { "path": "/", "pathKind": "Prefix" }
+                }
+              ],
+              "clusters": [
+                {
+                  "id": "c1",
+                  "algorithm": "RoundRobin",
+                  "destinations": [
+                    { "id": "d1", "address": "127.0.0.1", "port": {{originPort}} }
+                  ]
+                }
+              ],
+              "logging": {
+                "enabled": true,
+                "minimumLevel": "Information",
+                "enableConsole": true
+              },
+              "plus": {
+                "enabled": true,
+                "controlPlane": {
+                  "host": "127.0.0.1",
+                  "port": {{controlPort}},
+                  "sharedSecret": "{{secret}}"
+                },
+                "options": {
+                  "grpc.transcode.enabled": "true",
+                  "grpc.transcode.descriptorSet": "{{descriptor}}",
+                  "grpc.transcode.services": "helloworld.Greeter",
+                  "grpc.transcode.compression": "gzip"
+                }
+              }
+            }
             """);
         return path;
     }

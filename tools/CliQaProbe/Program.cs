@@ -86,7 +86,7 @@ internal static class Program
                              with --elevated: install/start/HTTP/stop/uninstall
                              (name titanium-qa-probe only)
               core           Help + dialects + forward/conf/static/mitm/logging
-              plus           Plus control-plane + auth/CORS + circuit/retry probes
+              plus           Plus control-plane + auth/CORS + circuit/retry + gRPC-JSON probes
               all            core + sitefile/routes/tls/http2/plus/meta + unelevated
                              service checks; --elevated adds live SCM lifecycle
 

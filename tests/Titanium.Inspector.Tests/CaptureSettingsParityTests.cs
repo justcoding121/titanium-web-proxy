@@ -2,6 +2,7 @@ using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.Views;
+using Titanium.Web.Proxy;
 
 namespace Titanium.Inspector.Tests;
 
@@ -57,7 +58,17 @@ public class CaptureSettingsParityTests
             Assert.IsTrue(loaded.IgnoreServerCertificateErrors);
             CollectionAssert.AreEqual(ExpectedSkipHosts, loaded.DecryptSkipHosts);
             CollectionAssert.AreEqual(ExpectedOnlyHosts, loaded.DecryptOnlyHosts);
-            CollectionAssert.AreEqual(new[] { "sso.corp.example.com" }, loaded.SystemProxyBypassHosts);
+            // Load merges any missing factory OS-bypass hosts into the saved list.
+            Assert.IsTrue(
+                loaded.SystemProxyBypassHosts.Contains("sso.corp.example.com"),
+                "Custom OS-bypass host must round-trip");
+            foreach (var rule in MitmExclusionDefaults.SystemProxyBypassRules)
+            {
+                Assert.IsTrue(
+                    loaded.SystemProxyBypassHosts.Any(h =>
+                        string.Equals(h, rule, StringComparison.OrdinalIgnoreCase)),
+                    "Expected factory OS-bypass host after merge: " + rule);
+            }
             Assert.IsFalse(loaded.ProxyLoopback);
             Assert.IsTrue(loaded.WarnedAboutPacReplace);
             Assert.AreEqual("Warning", loaded.LoggingMinimumLevel);

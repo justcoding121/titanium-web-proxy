@@ -1484,28 +1484,46 @@ namespace Titanium.Web.Proxy.Http2
                                 var injectVia = !sessionArgs.IsFastPath && !sessionArgs.IsTransparent
                                     && !sessionArgs.IsSocks
                                     && !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym);
+                                var requestRelayed = false;
                                 if (forceStaticHpackTable
                                     && connectionState.Streams.TryGetValue(hbStreamId, out var relayState)
                                     && relayState.CapturedCompressedHeaders != null
                                     && !request.IsBodyRead
                                     && !request.BodyAvailable
-                                    && TryPrepareMitmStaticHpackRelay(
+                                    && string.Equals(request.Method, relayState.CapturedMethod, StringComparison.Ordinal)
+                                    && request.RequestUriString8.Equals(relayState.CapturedPath)
+                                    && request.Authority.Equals(relayState.CapturedAuthority))
+                                {
+                                    // Lite / unchanged: MutationCount match → verbatim relay (skip header diff walk).
+                                    if (!injectVia
+                                        && MitmCompressedRelayHelper.AllowsCompressedRelay(
+                                            relayState.HeadersRelayBaseline.MutationCount,
+                                            request.Headers,
+                                            MitmCompressedRelayHelper.DefaultMaxAppendHeaders,
+                                            out _))
+                                    {
+                                        await RelayCompressedHeaderBlockAsync(hbStreamId,
+                                            relayState.CapturedCompressedHeaders, endStreamFlag);
+                                        relayState.EnableRequestDataCompressedRelay();
+                                        requestRelayed = true;
+                                    }
+                                    else if (TryPrepareMitmStaticHpackRelay(
                                         relayState.CapturedCompressedHeaders,
                                         relayState.HeadersRelayBaseline, request.Headers,
                                         injectVia,
                                         injectVia
                                             ? $"{request.HttpVersion.Major}.{request.HttpVersion.Minor} {sessionArgs.Server.ViaHeaderPseudonym}"
                                             : null,
-                                        out var reqBlockToRelay, out var reqAppendSuffix)
-                                    && string.Equals(request.Method, relayState.CapturedMethod, StringComparison.Ordinal)
-                                    && request.RequestUriString8.Equals(relayState.CapturedPath)
-                                    && request.Authority.Equals(relayState.CapturedAuthority))
-                                {
-                                    await RelayCompressedHeaderBlockAsync(hbStreamId, reqBlockToRelay, endStreamFlag,
-                                        reqAppendSuffix);
-                                    relayState.EnableRequestDataCompressedRelay();
+                                        out var reqBlockToRelay, out var reqAppendSuffix))
+                                    {
+                                        await RelayCompressedHeaderBlockAsync(hbStreamId, reqBlockToRelay, endStreamFlag,
+                                            reqAppendSuffix);
+                                        relayState.EnableRequestDataCompressedRelay();
+                                        requestRelayed = true;
+                                    }
                                 }
-                                else
+
+                                if (!requestRelayed)
                                 {
                                     if (!bridgeOwnsRequestPrep)
                                     {
@@ -1708,26 +1726,43 @@ namespace Titanium.Web.Proxy.Http2
 
                             // True MITM noop-safe: relay original compressed response HEADERS when unchanged.
                             // GetResponseBody / SetResponseBody set IsBodyRead/BodyAvailable — must re-encode.
+                            var responseRelayed = false;
                             if (forceStaticHpackTable
                                 && ReferenceEquals(finalResponse, response)
                                 && connectionState.Streams.TryGetValue(hbStreamId, out var respRelay)
                                 && respRelay.CapturedCompressedHeaders != null
                                 && !finalResponse.IsBodyRead
-                                && TryPrepareMitmStaticHpackRelay(
+                                && finalResponse.StatusCode == respRelay.CapturedStatusCode)
+                            {
+                                if (!injectViaResp
+                                    && MitmCompressedRelayHelper.AllowsCompressedRelay(
+                                        respRelay.HeadersRelayBaseline.MutationCount,
+                                        finalResponse.Headers,
+                                        MitmCompressedRelayHelper.DefaultMaxAppendHeaders,
+                                        out _))
+                                {
+                                    await RelayCompressedHeaderBlockAsync(hbStreamId,
+                                        respRelay.CapturedCompressedHeaders, endStreamFlag);
+                                    respRelay.EnableResponseDataCompressedRelay();
+                                    responseRelayed = true;
+                                }
+                                else if (TryPrepareMitmStaticHpackRelay(
                                     respRelay.CapturedCompressedHeaders,
                                     respRelay.HeadersRelayBaseline, finalResponse.Headers,
                                     injectViaResp,
                                     injectViaResp
                                         ? $"{finalResponse.HttpVersion.Major}.{finalResponse.HttpVersion.Minor} {sessionArgs.Server.ViaHeaderPseudonym}"
                                         : null,
-                                    out var respBlockToRelay, out var respAppendSuffix)
-                                && finalResponse.StatusCode == respRelay.CapturedStatusCode)
-                            {
-                                await RelayCompressedHeaderBlockAsync(hbStreamId, respBlockToRelay, endStreamFlag,
-                                    respAppendSuffix);
-                                respRelay.EnableResponseDataCompressedRelay();
+                                    out var respBlockToRelay, out var respAppendSuffix))
+                                {
+                                    await RelayCompressedHeaderBlockAsync(hbStreamId, respBlockToRelay, endStreamFlag,
+                                        respAppendSuffix);
+                                    respRelay.EnableResponseDataCompressedRelay();
+                                    responseRelayed = true;
+                                }
                             }
-                            else
+
+                            if (!responseRelayed)
                             {
                                 if (injectViaResp)
                                 {

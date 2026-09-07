@@ -1,4 +1,4 @@
-using Titanium.Cli.Parsers;
+using System.Text.Json;
 using Titanium.Web.Proxy.Configuration;
 using Titanium.Web.Proxy.Configuration.Models;
 using Titanium.Web.Proxy.Configuration.Parsers;
@@ -47,9 +47,12 @@ internal static class ConfigLoader
         }
 
         if (ext.Equals(".json", StringComparison.OrdinalIgnoreCase) &&
-            !name.StartsWith("twp", StringComparison.OrdinalIgnoreCase))
+            !name.StartsWith("twp", StringComparison.OrdinalIgnoreCase) &&
+            !LooksLikeNativeTwpJson(path))
         {
-            // Prefer reverse-proxy document dialect for generic *.json; native twp.json uses TwpConfigLoader.
+            // Prefer reverse-proxy document dialect for generic *.json that are only
+            // listeners/routes/clusters. Native TwpConfig (plus/server/logging/…) must not
+            // silently parse as reverse-proxy — that dialect drops Plus and other sections.
             try
             {
                 return new LoadedConfig
@@ -71,5 +74,41 @@ internal static class ConfigLoader
             Dialect = "twp-native",
             Config = TwpConfigLoader.LoadFile(path),
         };
+    }
+
+    /// <summary>
+    /// True when the JSON root looks like a native <see cref="TwpConfig"/> (not a bare
+    /// reverse-proxy document). Filename conventions alone are not enough — users often
+    /// name configs <c>config.json</c> / <c>edge.json</c> while still including <c>plus:</c>.
+    /// </summary>
+    internal static bool LooksLikeNativeTwpJson(string path)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                if (prop.NameEquals("schemaVersion") ||
+                    prop.NameEquals("plus") ||
+                    prop.NameEquals("server") ||
+                    prop.NameEquals("logging") ||
+                    prop.NameEquals("certificates") ||
+                    prop.NameEquals("staticFiles"))
+                {
+                    return true;
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        return false;
     }
 }

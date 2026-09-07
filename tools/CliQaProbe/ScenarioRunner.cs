@@ -349,6 +349,7 @@ public static class ScenarioRunner
         fails += await RunPlusAsync(log);
         fails += await RunPlusAuthCorsAsync(log);
         fails += await RunPlusCircuitAsync(log);
+        fails += await RunPlusGrpcTranscodeAsync(log);
         return fails == 0 ? 0 : 1;
     }
 
@@ -367,6 +368,7 @@ public static class ScenarioRunner
         fails += await RunPlusAsync(log);
         fails += await RunPlusAuthCorsAsync(log);
         fails += await RunPlusCircuitAsync(log);
+        fails += await RunPlusGrpcTranscodeAsync(log);
         return fails == 0 ? 0 : 1;
     }
 
@@ -1036,6 +1038,7 @@ public static class ScenarioRunner
             var cfg = ConfigWriter.WriteTransforms(temp, listen, origin.Port, pathPrefix: "/v1");
             using var spawn = new CliSpawn();
             await spawn.StartRunAsync(cfg);
+            await spawn.WaitForOutputAsync("sighup-handler-registered", TimeSpan.FromSeconds(15));
             using var http = CreateProxyHttp(listen);
             var before = await http.GetAsync($"http://127.0.0.1:{origin.Port}/api");
             var beforeBody = await before.Content.ReadAsStringAsync();
@@ -1145,7 +1148,9 @@ public static class ScenarioRunner
                 var body = await resp.Content.ReadAsStringAsync();
                 var hasCors = resp.Headers.Contains("Access-Control-Allow-Origin") ||
                               resp.Content.Headers.Contains("Access-Control-Allow-Origin");
-                var ok = resp.StatusCode == HttpStatusCode.OK && body.Contains("echo:", StringComparison.Ordinal) && hasCors;
+                var ok = resp.StatusCode == HttpStatusCode.OK &&
+                         body.Contains("echo:", StringComparison.Ordinal) &&
+                         hasCors;
                 log.Step("run-plus-auth-cors", ok, $"status={(int)resp.StatusCode} cors={hasCors} circuit/retry logs ok");
                 return ok ? 0 : 1;
             }
@@ -1218,6 +1223,75 @@ public static class ScenarioRunner
         catch (Exception ex)
         {
             log.Step("run-plus-circuit", false, ex.Message);
+            return 1;
+        }
+        finally
+        {
+            TryDelete(temp);
+        }
+    }
+
+    private static async Task<int> RunPlusGrpcTranscodeAsync(ProbeLog log)
+    {
+        var temp = MakeTemp();
+        try
+        {
+            using var spawn = new CliSpawn();
+            if (!spawn.TryEnsurePlusDll())
+            {
+                log.Step("run-plus-grpc", true, "Titanium.Plus.dll not built — skip", skipped: true);
+                return 0;
+            }
+
+            var fixturePb = Path.Combine(
+                CliSpawn.FindRepoRoot(),
+                "tests",
+                "Titanium.Plus.Tests",
+                "Fixtures",
+                "GrpcTranscode",
+                "greeter.pb");
+            if (!File.Exists(fixturePb))
+            {
+                log.Step("run-plus-grpc", true, "greeter.pb fixture missing — skip", skipped: true);
+                return 0;
+            }
+
+            var descriptorCopy = Path.Combine(temp, "greeter.pb");
+            File.Copy(fixturePb, descriptorCopy, overwrite: true);
+
+            using var origin = new EchoOrigin();
+            var listen = CliSpawn.GetFreePort();
+            var control = CliSpawn.GetFreePort();
+            const string secret = "cli-qa-plus-grpc";
+            var cfg = ConfigWriter.WritePlusGrpcTranscode(
+                temp, listen, origin.Port, control, secret, descriptorCopy);
+            await spawn.StartRunAsync(cfg, verbose: true, env: new Dictionary<string, string?>
+            {
+                ["TITANIUM_PLUS_ALLOW_DEV_SECRET"] = "1",
+            });
+
+            var loaded = await WaitForLogAsync(spawn, "gRPC-JSON transcoder", TimeSpan.FromSeconds(10));
+            if (!loaded)
+            {
+                // Prefer a clear activation failure over a silent skip.
+                var text = spawn.StdOut + spawn.StdErr;
+                if (text.Contains("Plus activation failed", StringComparison.OrdinalIgnoreCase))
+                {
+                    log.Step("run-plus-grpc", false, Trim(text));
+                    return 1;
+                }
+            }
+
+            var ok = loaded;
+            log.Step(
+                "run-plus-grpc",
+                ok,
+                ok ? "transcoder enabled (gzip option set)" : Trim(spawn.StdOut + spawn.StdErr));
+            return ok ? 0 : 1;
+        }
+        catch (Exception ex)
+        {
+            log.Step("run-plus-grpc", false, ex.Message);
             return 1;
         }
         finally

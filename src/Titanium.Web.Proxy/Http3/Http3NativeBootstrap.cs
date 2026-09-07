@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Quic;
@@ -18,6 +19,11 @@ namespace Titanium.Web.Proxy.Http3;
 /// search works. Framework-dependent builds keep Quic in the shared framework directory, so
 /// copying dylibs beside the app is not enough unless <c>DYLD_FALLBACK_LIBRARY_PATH</c>
 /// (or <c>DYLD_LIBRARY_PATH</c>) includes that folder — set before process start.
+/// <para>
+/// Re-launch uses a child process. The parent must forward POSIX termination/reload signals
+/// to that child (and cancel the parent's default terminate) so <c>kill -HUP &lt;started-pid&gt;</c>,
+/// SIGTERM from a service manager, and Ctrl+C reach the process that actually runs the proxy.
+/// </para>
 /// </remarks>
 public static class Http3NativeBootstrap
 {
@@ -153,6 +159,10 @@ public static class Http3NativeBootstrap
                 return;
             }
 
+            // Parent keeps the original PID that launchd/shell/probes signal. Forward those
+            // signals to the child that actually hosts Quic + the proxy, and cancel the parent's
+            // default terminate so SIGHUP (reload) does not exit 129 before the child sees it.
+            using var signalForwarders = ForwardUnixSignalsToChild(child);
             child.WaitForExit();
             Environment.Exit(child.ExitCode);
         }
@@ -161,6 +171,47 @@ public static class Http3NativeBootstrap
             // Leave the original process running; Quic may stay unsupported.
         }
     }
+
+    /// <summary>
+    /// Registers parent-side POSIX handlers that forward SIGHUP/SIGINT/SIGTERM to
+    /// <paramref name="child"/> and cancel the parent's default terminate action.
+    /// </summary>
+    internal static IDisposable ForwardUnixSignalsToChild(Process child)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return EmptyDisposable.Instance;
+        }
+
+        var registrations = new List<PosixSignalRegistration>(3);
+        void Forward(PosixSignal signal, int signo)
+        {
+            registrations.Add(PosixSignalRegistration.Create(signal, ctx =>
+            {
+                ctx.Cancel = true;
+                try
+                {
+                    if (!child.HasExited)
+                    {
+                        _ = NativeKill(child.Id, signo);
+                    }
+                }
+                catch
+                {
+                    // Child may have exited between HasExited and kill.
+                }
+            }));
+        }
+
+        // SIGHUP=1, SIGINT=2, SIGTERM=15 on Linux and macOS.
+        Forward(PosixSignal.SIGHUP, 1);
+        Forward(PosixSignal.SIGINT, 2);
+        Forward(PosixSignal.SIGTERM, 15);
+        return new SignalForwarderLease(registrations);
+    }
+
+    [DllImport("libc", EntryPoint = "kill", SetLastError = true)]
+    private static extern int NativeKill(int pid, int sig);
 
     private static void AppendRelaunchArguments(ProcessStartInfo psi, string processPath, string[] appArgs)
     {
@@ -210,4 +261,30 @@ public static class Http3NativeBootstrap
         string.Equals(a, b, RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal);
+
+    private sealed class SignalForwarderLease : IDisposable
+    {
+        private readonly List<PosixSignalRegistration> _registrations;
+
+        public SignalForwarderLease(List<PosixSignalRegistration> registrations) =>
+            _registrations = registrations;
+
+        public void Dispose()
+        {
+            foreach (var reg in _registrations)
+            {
+                reg.Dispose();
+            }
+
+            _registrations.Clear();
+        }
+    }
+
+    private sealed class EmptyDisposable : IDisposable
+    {
+        public static readonly EmptyDisposable Instance = new();
+        public void Dispose()
+        {
+        }
+    }
 }

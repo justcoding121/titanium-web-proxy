@@ -416,7 +416,7 @@ public class InspectorServiceE2ETests
             vm.SetSelectedSessions([left, right]);
             Assert.IsTrue(vm.TryBuildSessionDiff(out var diff));
             Assert.IsTrue(diff.HasDifferences);
-            StringAssert.Contains(diff.Text, "~ Status");
+            StringAssert.Contains(diff.Text, "Status: 200 → 201");
         }
         finally
         {

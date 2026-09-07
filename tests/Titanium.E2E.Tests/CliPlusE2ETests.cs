@@ -489,8 +489,12 @@ public class CliPlusE2ETests
             await WaitControlPlaneAsync(http, control);
 
             var combined = harness.StdOut + harness.StdErr;
-            StringAssert.Contains(combined, "Plus Circuit", StringComparison.OrdinalIgnoreCase);
-            StringAssert.Contains(combined, "Plus Retry", StringComparison.OrdinalIgnoreCase);
+            Assert.IsTrue(
+                combined.Contains("Plus Circuit", StringComparison.OrdinalIgnoreCase),
+                "Expected Plus Circuit activation log");
+            Assert.IsTrue(
+                combined.Contains("Plus Retry", StringComparison.OrdinalIgnoreCase),
+                "Expected Plus Retry activation log");
 
             _ = await http.GetAsync($"http://127.0.0.1:{listen}/a");
             _ = await http.GetAsync($"http://127.0.0.1:{listen}/b");

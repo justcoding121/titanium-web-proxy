@@ -116,6 +116,7 @@ internal static class RunCommand
         var plusOptions = loaded.Config.Plus is not null
             ? BuildPlusOptions(loaded.Config.Plus)
             : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        ResolvePlusRelativePaths(plusOptions, configDir);
 
         ConfigureResponseCache(proxy, middleware, responseCache, plusOptions);
 
@@ -596,7 +597,56 @@ internal static class RunCommand
             AsyncConsole.WriteError(warning);
         }
 
-        plus?.Apply(context);
+        if (plus is null)
+        {
+            return;
+        }
+
+        try
+        {
+            plus.Apply(context);
+        }
+        catch (Exception ex)
+        {
+            // Surface plugin failures (missing gRPC descriptor, bad JWKS URL, …) instead of
+            // continuing as a half-activated edge with silent Plus drop.
+            AsyncConsole.WriteError("Plus activation failed: " + ex.Message);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Resolves Plus file paths (e.g. gRPC descriptor sets) against the config directory so
+    /// relative paths keep working after <see cref="Directory.SetCurrentDirectory"/>.
+    /// </summary>
+    internal static void ResolvePlusRelativePaths(
+        Dictionary<string, string> plusOptions,
+        string? configDir)
+    {
+        if (string.IsNullOrEmpty(configDir) || plusOptions.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var key in new[]
+                 {
+                     "grpc.transcode.descriptorSet",
+                     "waf.rulesFile",
+                     "discovery.file",
+                 })
+        {
+            if (!plusOptions.TryGetValue(key, out var raw) || string.IsNullOrWhiteSpace(raw))
+            {
+                continue;
+            }
+
+            if (Path.IsPathRooted(raw))
+            {
+                continue;
+            }
+
+            plusOptions[key] = Path.GetFullPath(Path.Combine(configDir, raw));
+        }
     }
 
     internal static void ApplyLogging(ProxyServer proxy, LoggingConfig? logging, bool verbose)
