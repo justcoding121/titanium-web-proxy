@@ -56,12 +56,13 @@ Use a strong secret in production. Dev-only default secrets require an explicit 
 | Observability | Prometheus-style metrics for destination state / latency |
 | Operations | Drain / healthy / maintenance destination states |
 | Discovery | File watch, DNS poll; Consul / Kubernetes best-effort |
-| Security | CIDR allow-list, JWT/OIDC (JWKS) |
+| Security | CIDR allow-list, JWT/OIDC (JWKS), API key / Basic auth |
 | Web application firewall (WAF) | Thin deny-list (paths, methods, headers, body size) — not a full WAF suite |
 | State | Fixed-window per-IP rate limit (`state.mode=memory` or `state.redis`) |
-| Resilience | Active HTTP/TCP health probes |
+| Resilience | Active HTTP/TCP health probes, circuit outlier ejection, bounded idempotent connection retries |
+| CORS | Opt-in preflight + `Access-Control-*` response headers |
 | Cache | In-memory HTTP response cache (`cache.enable`) |
-| gRPC-JSON transcoding | REST/JSON ↔ unary gRPC via FileDescriptorSet + `google.api.http` ([guide](/docs/grpc-json-transcoding)) |
+| gRPC-JSON transcoding | REST/JSON ↔ gRPC (unary + multi-frame streaming; optional gzip) via FileDescriptorSet + `google.api.http` ([guide](/docs/grpc-json-transcoding)) |
 
 ## `plus.options` keys
 
@@ -76,6 +77,11 @@ String values under `plus.options` (examples):
 | `discovery.intervalMs` / `discovery.clusterId` | Poll interval and cluster id |
 | `security.allowCidrs` | Comma-separated client CIDR allow-list |
 | `security.jwtAuthority` / `security.jwtAudience` / `security.jwksUrl` | JWT/OIDC validation |
+| `security.apiKeys` | Comma-separated API keys (`X-Api-Key` by default) |
+| `security.apiKeyHeader` | Alternate API key header name |
+| `security.basicUsers` | Comma-separated `user:password` pairs for HTTP Basic |
+| `cors.enabled` | Enable CORS helper (`true`) |
+| `cors.allowOrigin` / `cors.allowMethods` / `cors.allowHeaders` / `cors.allowCredentials` / `cors.maxAgeSeconds` | CORS knobs |
 | `waf.enabled` | Enable thin deny-list WAF |
 | `waf.denyPaths` / `waf.denyMethods` / `waf.denyHeader` | Deny rules |
 | `waf.maxBodyBytes` / `waf.rulesFile` | Body cap and optional rules file |
@@ -83,6 +89,9 @@ String values under `plus.options` (examples):
 | `state.redis` / `state.rateLimitPerMinute` | Redis connection and rate limit |
 | `resilience.activeHealth` | Enable active probes |
 | `resilience.intervalMs` / `resilience.unhealthyThreshold` / `resilience.path` / `resilience.protocol` / `resilience.timeoutMs` | Probe knobs |
+| `resilience.circuit.enabled` | Outlier ejection on consecutive 5xx → Unhealthy |
+| `resilience.circuit.failureThreshold` / `resilience.circuit.cooldownMs` | Circuit knobs |
+| `resilience.retry.idempotentAttempts` | Raise connection retries for safe methods (1–5) |
 | `cache.enable` | In-memory response cache |
 | `grpc.transcode.enabled` | Enable gRPC-JSON transcoding |
 | `grpc.transcode.descriptorSet` | Path to FileDescriptorSet (`.pb`) |
@@ -91,6 +100,7 @@ String values under `plus.options` (examples):
 | `grpc.transcode.ignoreUnknownQueryParameters` | Ignore unknown query keys (default true) |
 | `grpc.transcode.preserveProtoFieldNames` | Use proto field names in JSON (default false) |
 | `grpc.transcode.alwaysPrintPrimitiveFields` | Always emit primitive defaults in JSON (default false) |
+| `grpc.transcode.compression` | `true` or `gzip` to gzip framed payloads |
 
 ## See also
 
