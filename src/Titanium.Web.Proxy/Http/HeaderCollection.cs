@@ -423,7 +423,7 @@ public class HeaderCollection : IEnumerable<HttpHeader>
             && _mitmRelayAppends.Count < Helpers.MitmCompressedRelayHelper.DefaultMaxAppendHeaders)
         {
             // Pure append of a new unique name: log for compressed relay without cloning wire headers.
-            _mitmRelayAppends.Add(newHeader.Name, newHeader.Value);
+            _mitmRelayAppends.Add(newHeader);
             MutationCount++;
             headers.Add(newHeader.Name, newHeader);
             return;

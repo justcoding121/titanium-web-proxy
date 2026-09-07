@@ -4512,7 +4512,7 @@ namespace Titanium.Web.Proxy.Http2
             for (var i = 0; i < added.Count; i++)
             {
                 var h = added[i];
-                extraSize += GetStaticLiteralAppendSize(h.Name.Length, h.Value.Length);
+                extraSize += GetStaticLiteralAppendSize(h.NameData.Length, h.ValueData.Length);
             }
 
             if (extraName != null)
@@ -4523,7 +4523,7 @@ namespace Titanium.Web.Proxy.Http2
             for (var i = 0; i < added.Count; i++)
             {
                 var h = added[i];
-                offset = WriteStaticLiteralWithoutIndexing(result, offset, h.Name, h.Value);
+                offset = WriteStaticLiteralWithoutIndexing(result, offset, h.NameData.Span, h.ValueData.Span);
             }
 
             if (extraName != null)
@@ -4579,12 +4579,28 @@ namespace Titanium.Web.Proxy.Http2
             return size + 1;
         }
 
-        private static int WriteStaticLiteralWithoutIndexing(byte[] dest, int offset, string name, string value)
+        private static int WriteStaticLiteralWithoutIndexing(byte[] dest, int offset, ReadOnlySpan<byte> name,
+            ReadOnlySpan<byte> value)
         {
             dest[offset++] = 0x00; // Literal without indexing, new name (name index 0)
             offset += WriteHpackAsciiStringLiteral(dest.AsSpan(offset), name);
             offset += WriteHpackAsciiStringLiteral(dest.AsSpan(offset), value);
             return offset;
+        }
+
+        private static int WriteStaticLiteralWithoutIndexing(byte[] dest, int offset, string name, string value)
+        {
+            dest[offset++] = 0x00;
+            offset += WriteHpackAsciiStringLiteral(dest.AsSpan(offset), name);
+            offset += WriteHpackAsciiStringLiteral(dest.AsSpan(offset), value);
+            return offset;
+        }
+
+        private static int WriteHpackAsciiStringLiteral(Span<byte> dest, ReadOnlySpan<byte> value)
+        {
+            var written = WriteHpackPrefixedInt(dest, 0x00, 7, (ulong)value.Length);
+            value.CopyTo(dest.Slice(written));
+            return written + value.Length;
         }
 
         private static int WriteHpackAsciiStringLiteral(Span<byte> dest, string value)

@@ -55,14 +55,18 @@ internal static class MitmCompressedRelayHelper
 
     internal readonly struct AddedHeader
     {
-        internal AddedHeader(string name, string value)
+        internal AddedHeader(HttpHeader header)
         {
-            Name = name;
-            Value = value;
+            Header = header;
         }
 
-        internal string Name { get; }
-        internal string Value { get; }
+        /// <summary>Wire header already holding NameData/ValueData — avoid string↔bytes on HPACK append.</summary>
+        internal HttpHeader Header { get; }
+
+        internal string Name => Header.Name;
+        internal string Value => Header.Value;
+        internal ByteString NameData => Header.NameData;
+        internal ByteString ValueData => Header.ValueData;
     }
 
     /// <summary>Stack-friendly buffer for up to four appended header literals.</summary>
@@ -71,16 +75,18 @@ internal static class MitmCompressedRelayHelper
         private AddedHeader _h0, _h1, _h2, _h3;
         internal int Count { get; private set; }
 
-        internal void Add(string name, string value)
+        internal void Add(HttpHeader header)
         {
             switch (Count++)
             {
-                case 0: _h0 = new AddedHeader(name, value); break;
-                case 1: _h1 = new AddedHeader(name, value); break;
-                case 2: _h2 = new AddedHeader(name, value); break;
-                default: _h3 = new AddedHeader(name, value); break;
+                case 0: _h0 = new AddedHeader(header); break;
+                case 1: _h1 = new AddedHeader(header); break;
+                case 2: _h2 = new AddedHeader(header); break;
+                default: _h3 = new AddedHeader(header); break;
             }
         }
+
+        internal void Add(string name, string value) => Add(new HttpHeader(name, value));
 
         internal readonly AddedHeader this[int index] => index switch
         {
