@@ -1,6 +1,7 @@
 using System.Net;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
+using Titanium.Cli.AccessLog;
 using Titanium.Cli;
 using Titanium.Cli.Certificates;
 using Titanium.Cli.Parsers;
@@ -122,10 +123,13 @@ internal static class RunCommand
 
         void RefreshReverseProxy()
         {
+            // Prefer ClusterManager snapshot so SIGHUP reload picks up new destinations
+            // (do not close over the initial ConfigLoader result).
+            var snapClusters = clusterManager.Snapshot.Clusters;
             proxy.ReverseProxy = new ReverseProxyOptions
             {
                 Routes = routes.Count > 0 ? routes : null,
-                Clusters = loaded.Config.Clusters.Count > 0 ? loaded.Config.Clusters.ToList() : null,
+                Clusters = snapClusters.Count > 0 ? snapClusters.Values.ToList() : null,
                 ClusterManager = clusterManager,
                 RouteMatcher = new RouteMatcher(),
                 LoadBalancer = loadBalancer,
@@ -155,19 +159,146 @@ internal static class RunCommand
         proxy.Start();
         StartAcmeIfConfigured(proxy, loaded.Config);
 
-        if (serviceMode)
+        JsonAccessLogWriter? accessLog = null;
+        try
         {
-            AsyncConsole.WriteLine("Titanium proxy running (service mode).");
+            accessLog = TryStartAccessLog(proxy, loaded.Config.Server);
+
+            if (serviceMode)
+            {
+                AsyncConsole.WriteLine("Titanium proxy running (service mode).");
+            }
+            else
+            {
+                AsyncConsole.WriteLine("Titanium proxy running. Press Ctrl+C to stop.");
+            }
+
+            await AsyncConsole.FlushAsync().ConfigureAwait(false);
+            Console.WriteLine("awaiting-shutdown-or-reload");
+            Console.Out.Flush();
+            await WaitForShutdownOrReloadAsync(
+                stoppingToken,
+                onReload: async () =>
+                {
+                    try
+                    {
+                        await ReloadConfigAsync(
+                            configPath,
+                            proxy,
+                            clusterManager,
+                            routes,
+                            middleware,
+                            loadBalancer,
+                            responseCache,
+                            plusOptions,
+                            () => grpcJsonTranscoder,
+                            t => grpcJsonTranscoder = t,
+                            RefreshReverseProxy).ConfigureAwait(false);
+                        AsyncConsole.WriteLine("Config reloaded.");
+                        await AsyncConsole.FlushAsync().ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        AsyncConsole.WriteError("Config reload failed: " + ex.Message);
+                    }
+                }).ConfigureAwait(false);
+            await proxy.StopAsync().ConfigureAwait(false);
+            return 0;
+        }
+        finally
+        {
+            accessLog?.Dispose();
+        }
+    }
+
+    private static JsonAccessLogWriter? TryStartAccessLog(ProxyServer proxy, ServerConfig? server)
+    {
+        var cfg = server?.AccessLog;
+        if (cfg is null || string.IsNullOrWhiteSpace(cfg.Path))
+        {
+            return null;
+        }
+
+        var sample = cfg.SampleRate ?? 1.0;
+        if (sample <= 0)
+        {
+            return null;
+        }
+
+        proxy.EnableHttpInterception = true;
+        proxy.EnableRequestTimingCapture = true;
+        var writer = new JsonAccessLogWriter(cfg.Path, sample);
+        proxy.AfterResponse += (_, e) =>
+        {
+            try
+            {
+                writer.TryWrite(e);
+            }
+            catch
+            {
+                // Access log is best-effort.
+            }
+
+            return Task.CompletedTask;
+        };
+        AsyncConsole.WriteLine($"Access log: {cfg.Path} (sample={sample:0.###})");
+        return writer;
+    }
+
+    /// <summary>
+    /// Reloads routes/clusters (and server settings) from <paramref name="configPath"/>.
+    /// Validation failures throw before mutating <paramref name="routes"/> or the cluster manager.
+    /// </summary>
+    internal static async Task ReloadConfigAsync(
+        string configPath,
+        ProxyServer proxy,
+        ClusterManager clusterManager,
+        List<RouteConfig> routes,
+        List<IProxyMiddleware> middleware,
+        LoadBalancer loadBalancer,
+        MemoryHttpResponseCache responseCache,
+        Dictionary<string, string> plusOptions,
+        Func<IGrpcJsonTranscoder?> getGrpc,
+        Action<IGrpcJsonTranscoder?> setGrpc,
+        Action refreshReverseProxy)
+    {
+        var loaded = ConfigLoader.Load(configPath);
+        var errors = TwpConfigValidator.Validate(loaded.Config);
+        if (errors.Count > 0)
+        {
+            throw new InvalidOperationException(string.Join("; ", errors));
+        }
+
+        ServerConfigApplier.Apply(proxy, loaded.Config.Server);
+        if (loaded.Config.Clusters.Count > 0)
+        {
+            await clusterManager.ApplyAsync(loaded.Config.Clusters.ToList()).ConfigureAwait(false);
         }
         else
         {
-            AsyncConsole.WriteLine("Titanium proxy running. Press Ctrl+C to stop.");
+            await clusterManager.ApplyAsync([]).ConfigureAwait(false);
         }
 
-        await AsyncConsole.FlushAsync().ConfigureAwait(false);
-        await WaitForShutdownAsync(stoppingToken).ConfigureAwait(false);
-        await proxy.StopAsync().ConfigureAwait(false);
-        return 0;
+        ReplaceRoutes(routes, loaded.Config.Routes);
+
+        // Keep existing middleware; Plus control plane remains. Refresh reverse options only.
+        _ = getGrpc();
+        refreshReverseProxy();
+        _ = middleware;
+        _ = loadBalancer;
+        _ = responseCache;
+        _ = plusOptions;
+        _ = setGrpc;
+    }
+
+    /// <summary>In-place route list swap used by SIGHUP reload (and unit tests).</summary>
+    internal static void ReplaceRoutes(List<RouteConfig> routes, IEnumerable<RouteConfig> next)
+    {
+        routes.Clear();
+        foreach (var r in next)
+        {
+            routes.Add(r);
+        }
     }
 
     internal static int PrintHelp()
@@ -181,6 +312,8 @@ internal static class RunCommand
               --name         Windows SCM service name when --service is set (default: titanium).
 
             Starts the proxy and blocks until Ctrl+C, SIGTERM, or the service manager stops it.
+            On Unix, SIGHUP reloads routes/clusters from the config file without dropping the
+            process or in-flight connections (listeners stay bound).
             """);
         CliHelp.WriteDocsFooter();
         return 0;
@@ -283,7 +416,7 @@ internal static class RunCommand
         }
     }
 
-    private static async Task WaitForShutdownAsync(CancellationToken stoppingToken)
+    private static async Task WaitForShutdownOrReloadAsync(CancellationToken stoppingToken, Func<Task>? onReload)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -302,12 +435,42 @@ internal static class RunCommand
 
         PosixSignalRegistration? sigTerm = null;
         PosixSignalRegistration? sigInt = null;
+        PosixSignalRegistration? sigHup = null;
         try
         {
             if (!OperatingSystem.IsWindows())
             {
-                sigTerm = PosixSignalRegistration.Create(PosixSignal.SIGTERM, _ => RequestStop());
-                sigInt = PosixSignalRegistration.Create(PosixSignal.SIGINT, _ => RequestStop());
+                sigTerm = PosixSignalRegistration.Create(PosixSignal.SIGTERM, ctx =>
+                {
+                    ctx.Cancel = true;
+                    RequestStop();
+                });
+                sigInt = PosixSignalRegistration.Create(PosixSignal.SIGINT, ctx =>
+                {
+                    ctx.Cancel = true;
+                    RequestStop();
+                });
+                if (onReload is not null)
+                {
+                    sigHup = PosixSignalRegistration.Create(PosixSignal.SIGHUP, ctx =>
+                    {
+                        // Cancel default terminate-on-HUP so reload can complete.
+                        ctx.Cancel = true;
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await onReload().ConfigureAwait(false);
+                            }
+                            catch
+                            {
+                                // Reload errors are logged by caller.
+                            }
+                        });
+                    });
+                    Console.WriteLine("sighup-handler-registered");
+                    Console.Out.Flush();
+                }
             }
 
             await tcs.Task.ConfigureAwait(false);
@@ -317,8 +480,12 @@ internal static class RunCommand
             Console.CancelKeyPress -= cancelHandler;
             sigTerm?.Dispose();
             sigInt?.Dispose();
+            sigHup?.Dispose();
         }
     }
+
+    private static async Task WaitForShutdownAsync(CancellationToken stoppingToken) =>
+        await WaitForShutdownOrReloadAsync(stoppingToken, onReload: null).ConfigureAwait(false);
 
     private static void StartAcmeIfConfigured(ProxyServer proxy, TwpConfig config)
     {
@@ -705,6 +872,11 @@ internal static class RunCommand
             (grpcEnabled.Equals("true", StringComparison.OrdinalIgnoreCase) ||
              grpcEnabled.Equals("1", StringComparison.OrdinalIgnoreCase) ||
              grpcEnabled.Equals("yes", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        if (config.Server?.AccessLog is { Path: not null and not "" })
         {
             return true;
         }

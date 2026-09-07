@@ -30,6 +30,8 @@ public sealed class CliSpawn : IDisposable
         get { lock (_gate) return _stderr.ToString(); }
     }
 
+    public int? ProcessId => _runProcess is { HasExited: false } p ? p.Id : _runProcess?.Id;
+
     public CliSpawn()
     {
         CliDirectory = LocateCliDirectory();
