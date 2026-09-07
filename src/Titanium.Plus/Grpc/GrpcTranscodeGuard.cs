@@ -37,7 +37,10 @@ public sealed class GrpcTranscodeGuard
             convertGrpcStatus: IsTruthy(options, "grpc.transcode.convertGrpcStatus", defaultValue: true),
             ignoreUnknownQueryParameters: IsTruthy(options, "grpc.transcode.ignoreUnknownQueryParameters", defaultValue: true),
             preserveProtoFieldNames: IsTruthy(options, "grpc.transcode.preserveProtoFieldNames"),
-            alwaysPrintPrimitiveFields: IsTruthy(options, "grpc.transcode.alwaysPrintPrimitiveFields"));
+            alwaysPrintPrimitiveFields: IsTruthy(options, "grpc.transcode.alwaysPrintPrimitiveFields"),
+            enableGzipCompression: IsTruthy(options, "grpc.transcode.compression") ||
+                                   string.Equals(options.GetValueOrDefault("grpc.transcode.compression"), "gzip",
+                                       StringComparison.OrdinalIgnoreCase));
 
         context.GrpcJsonTranscoder = transcoder;
         PlusLog.Info(context,

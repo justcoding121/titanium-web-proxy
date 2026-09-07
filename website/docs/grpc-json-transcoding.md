@@ -1,6 +1,6 @@
 # gRPC-JSON transcoding
 
-Titanium Plus can translate REST/JSON HTTP calls into unary gRPC for an upstream service, and translate gRPC responses back to JSON for the client. Mapping comes from `google.api.http` annotations in a compiled protobuf FileDescriptorSet.
+Titanium Plus can translate REST/JSON HTTP calls into gRPC for an upstream service, and translate gRPC responses back to JSON for the client. Mapping comes from `google.api.http` annotations in a compiled protobuf FileDescriptorSet.
 
 ## Requirements
 
@@ -66,6 +66,7 @@ plus:
     grpc.transcode.ignoreUnknownQueryParameters: "true"
     grpc.transcode.preserveProtoFieldNames: "false"
     grpc.transcode.alwaysPrintPrimitiveFields: "false"
+    grpc.transcode.compression: "gzip"
 
 listeners:
   - name: main
@@ -94,7 +95,7 @@ Startup fails if the feature is enabled but the descriptor file is missing or `s
 
 Unmatched REST requests pass through unchanged. Against a gRPC-only origin that usually fails — keep routes scoped to mapped prefixes.
 
-MVP supports **unary** RPCs and **uncompressed** frames only.
+Supports **unary** and **multi-frame** responses (server streaming frames become a JSON array). Optional **gzip** compression via `grpc.transcode.compression` (`true` or `gzip`).
 
 ### Example
 

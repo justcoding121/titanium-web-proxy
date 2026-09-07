@@ -113,9 +113,6 @@ internal sealed class HttpRuleRouter
 
                 foreach (var method in service.Methods)
                 {
-                    if (method.IsClientStreaming || method.IsServerStreaming)
-                        continue;
-
                     var options = method.GetOptions();
                     if (options is null) continue;
 

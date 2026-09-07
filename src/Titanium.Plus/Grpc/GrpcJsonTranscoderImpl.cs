@@ -7,7 +7,7 @@ using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Plus.Grpc;
 
-/// <summary>Unary REST/JSON ↔ gRPC transcoder driven by a FileDescriptorSet and google.api.http rules.</summary>
+/// <summary>REST/JSON ↔ gRPC transcoder (unary + server/client streaming frames; optional gzip).</summary>
 internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
 {
     private readonly HttpRuleRouter _router;
@@ -16,6 +16,7 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
     private readonly bool _ignoreUnknownQueryParameters;
     private readonly bool _preserveProtoFieldNames;
     private readonly bool _alwaysPrintPrimitiveFields;
+    private readonly bool _enableGzipCompression;
 
     public GrpcJsonTranscoderImpl(
         HttpRuleRouter router,
@@ -23,7 +24,8 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
         bool convertGrpcStatus,
         bool ignoreUnknownQueryParameters,
         bool preserveProtoFieldNames,
-        bool alwaysPrintPrimitiveFields)
+        bool alwaysPrintPrimitiveFields,
+        bool enableGzipCompression = false)
     {
         _router = router;
         _messagesByFullName = messagesByFullName;
@@ -31,6 +33,7 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
         _ignoreUnknownQueryParameters = ignoreUnknownQueryParameters;
         _preserveProtoFieldNames = preserveProtoFieldNames;
         _alwaysPrintPrimitiveFields = alwaysPrintPrimitiveFields;
+        _enableGzipCompression = enableGzipCompression;
     }
 
     public static GrpcJsonTranscoderImpl LoadFromDescriptorSet(
@@ -39,7 +42,8 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
         bool convertGrpcStatus,
         bool ignoreUnknownQueryParameters,
         bool preserveProtoFieldNames,
-        bool alwaysPrintPrimitiveFields)
+        bool alwaysPrintPrimitiveFields,
+        bool enableGzipCompression = false)
     {
         var bytes = File.ReadAllBytes(descriptorSetPath);
         var set = FileDescriptorSet.Parser.ParseFrom(bytes);
@@ -62,7 +66,8 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
             convertGrpcStatus,
             ignoreUnknownQueryParameters,
             preserveProtoFieldNames,
-            alwaysPrintPrimitiveFields);
+            alwaysPrintPrimitiveFields,
+            enableGzipCompression);
     }
 
     private static void IndexMessages(IList<MessageDescriptor> types, Dictionary<string, MessageDescriptor> map)
@@ -146,7 +151,14 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
         }
 
         var protoBytes = message.ToByteArray();
-        var framed = GrpcFrames.Encode(protoBytes);
+        if (_enableGzipCompression)
+        {
+            protoBytes = Gzip(protoBytes);
+            request.Headers.RemoveHeader("grpc-encoding");
+            request.Headers.AddHeader("grpc-encoding", "gzip");
+        }
+
+        var framed = GrpcFrames.Encode(protoBytes, compressed: _enableGzipCompression);
         var upstreamPath = "/" + route.Method.Service.FullName + "/" + route.Method.Name;
 
         var mark = new GrpcJsonTranscodeSessionMark
@@ -245,15 +257,12 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
             return true;
         }
 
-        if (!GrpcFrames.TryRead(body, out var compressed, out var payload))
+        if (!TryReadAllFrames(body, out var payloads))
         {
             args.SetResponseBody("{}"u8.ToArray());
             args.Respond(args.HttpClient.Response);
             return true;
         }
-
-        if (compressed)
-            throw new InvalidOperationException("Compressed gRPC frames are not supported in this transcoder MVP.");
 
         if (mark.OutputMessageType is null ||
             !_messagesByFullName.TryGetValue(mark.OutputMessageType, out var outputType))
@@ -263,12 +272,65 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
             return true;
         }
 
-        var message = new DescriptorMessage(outputType);
-        message.MergeFrom(payload.ToArray());
-        var json = ProtoJson.Format(message, _preserveProtoFieldNames, _alwaysPrintPrimitiveFields);
+        var jsonParts = new List<string>(payloads.Count);
+        foreach (var payload in payloads)
+        {
+            var message = new DescriptorMessage(outputType);
+            message.MergeFrom(payload);
+            jsonParts.Add(ProtoJson.Format(message, _preserveProtoFieldNames, _alwaysPrintPrimitiveFields));
+        }
+
+        // Server streaming (multiple frames) → JSON array; unary → single object.
+        var json = jsonParts.Count <= 1
+            ? (jsonParts.Count == 0 ? "{}" : jsonParts[0])
+            : "[" + string.Join(",", jsonParts) + "]";
         args.SetResponseBody(Encoding.UTF8.GetBytes(json));
         args.Respond(args.HttpClient.Response);
         return true;
+    }
+
+    private bool TryReadAllFrames(byte[] body, out List<byte[]> payloads)
+    {
+        payloads = [];
+        var offset = 0;
+        while (offset < body.Length)
+        {
+            if (!GrpcFrames.TryRead(body.AsSpan(offset), out var compressed, out var payload))
+            {
+                return payloads.Count > 0;
+            }
+
+            var bytes = payload.ToArray();
+            if (compressed)
+            {
+                bytes = Gunzip(bytes);
+            }
+
+            payloads.Add(bytes);
+            offset += 5 + payload.Length;
+        }
+
+        return payloads.Count > 0;
+    }
+
+    private static byte[] Gzip(byte[] input)
+    {
+        using var ms = new MemoryStream();
+        using (var gzip = new System.IO.Compression.GZipStream(ms, System.IO.Compression.CompressionLevel.Fastest, leaveOpen: true))
+        {
+            gzip.Write(input);
+        }
+
+        return ms.ToArray();
+    }
+
+    private static byte[] Gunzip(byte[] input)
+    {
+        using var inputMs = new MemoryStream(input);
+        using var gzip = new System.IO.Compression.GZipStream(inputMs, System.IO.Compression.CompressionMode.Decompress);
+        using var output = new MemoryStream();
+        gzip.CopyTo(output);
+        return output.ToArray();
     }
 
     private static int? TryReadGrpcStatus(Response response)
