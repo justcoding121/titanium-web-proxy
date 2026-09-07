@@ -175,20 +175,23 @@ public class HeaderCollection : IEnumerable<HttpHeader>
         nonUniqueHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
         nonUniqueHeadersReadOnly =
             new Dictionary<string, IReadOnlyList<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
-        Headers = new ReadOnlyDictionary<string, HttpHeader>(headers);
-        NonUniqueHeaders = new ReadOnlyDictionary<string, IReadOnlyList<HttpHeader>>(nonUniqueHeadersReadOnly);
     }
+
+    private ReadOnlyDictionary<string, HttpHeader>? headersView;
+    private ReadOnlyDictionary<string, IReadOnlyList<HttpHeader>>? nonUniqueHeadersView;
 
     /// <summary>
     ///     Unique Request header collection.
     /// </summary>
-    public ReadOnlyDictionary<string, HttpHeader> Headers { get; }
+    public ReadOnlyDictionary<string, HttpHeader> Headers =>
+        headersView ??= new ReadOnlyDictionary<string, HttpHeader>(headers);
 
     /// <summary>
     ///     Non-unique headers. Values are read-only views over the internal lists so callers cannot
     ///     <c>Add</c>/<c>Clear</c> storage that still belongs to this collection.
     /// </summary>
-    public ReadOnlyDictionary<string, IReadOnlyList<HttpHeader>> NonUniqueHeaders { get; }
+    public ReadOnlyDictionary<string, IReadOnlyList<HttpHeader>> NonUniqueHeaders =>
+        nonUniqueHeadersView ??= new ReadOnlyDictionary<string, IReadOnlyList<HttpHeader>>(nonUniqueHeadersReadOnly);
 
     /// <summary>
     ///     Returns an enumerator that iterates through the collection.
