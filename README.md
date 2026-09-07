@@ -129,7 +129,11 @@ Configure your client to use `127.0.0.1:8000` as its HTTP and HTTPS proxy. Trust
 
 ## Performance
 
-Typically at or above **YARP**; ahead of **nginx** on H2/H3→H1 reverse, near parity for the rest (nginx still edges tiny keep-alive). Details: [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
+![Practical reverse RPS on Linux (GHA)](wiki/images/rps-practical-linux.png)
+
+Sustain RPS @ concurrency 64 for common reverse wires (tiny keep-alive GET) on `ubuntu-latest` — Titanium vs YARP vs nginx. Missing nginx bars are *Not possible* for that wire. Chart @ `af6feb9c`; regenerate with `tools/RpsLoadProbe/render-practical-charts.py` after a new `compare-product` run.
+
+Typically at or above **YARP**; ahead of **nginx** on H2/H3→H1 reverse, near parity for the rest (nginx still edges tiny keep-alive). Full tables: [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
 
 ## Examples and documentation
 

@@ -11,6 +11,22 @@ On matched **GitHub Actions 4 vCPU / 16 GiB** runners, Titanium is typically:
 
 MITM is Titanium-only among those peers (they cannot MITM). Absolute RPS varies by OS, TLS, and MsQuic packaging — compare **within a table**, not across Windows vs Linux.
 
+## Practical reverse RPS (CI)
+
+Sustain RPS @ concurrency 64 for common reverse wires (tiny keep-alive GET). Grouped bars: Titanium / YARP / nginx. Missing nginx bars mean that wire is *Not possible* for stock nginx. Charts from `compare-product` @ `af6feb9c` ([33480574506](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33480574506)); regenerate with [`render-practical-charts.py`](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/render-practical-charts.py).
+
+### Windows
+
+![Practical reverse RPS on Windows](../../wiki/images/rps-practical-windows.png)
+
+### Linux
+
+![Practical reverse RPS on Linux](../../wiki/images/rps-practical-linux.png)
+
+### macOS
+
+![Practical reverse RPS on macOS](../../wiki/images/rps-practical-macos.png)
+
 ## Full measurements
 
 Detailed tables, harness knobs, and methodology live in the project wiki:

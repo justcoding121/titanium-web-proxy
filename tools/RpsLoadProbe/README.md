@@ -137,6 +137,20 @@ Two TWP-only MITM shapes on the same Client×Origin wires (+ CONNECT). nginx/YAR
 
 **Reverse** (`compare-matrix` / reverse half of `compare-product`) is bare terminate (no handlers). nginx conf matches TWP/YARP streaming: `keepalive 256`, `proxy_buffering off`, `proxy_request_buffering off`.
 
+### Practical reverse charts (README / website)
+
+After downloading a `compare-product` CSV set:
+
+```bash
+pip install -r tools/RpsLoadProbe/requirements-charts.txt
+python3 tools/RpsLoadProbe/render-practical-charts.py \
+  --results-root tools/RpsLoadProbe/results/gha-dl/<runId> \
+  --out-dir wiki/images \
+  --title-suffix '@ <sha>'
+```
+
+Writes `wiki/images/rps-practical-{linux,windows,macos}.png` (Linux also embeds in the repo README; all three on the website Performance page).
+
 ## Editions (`titanium run` daemon)
 
 Library arms (`twp-reverse-*`) embed Core with probe-tuned settings. Edition arms spawn the shipped CLI (`titanium run -c twp.yaml`) as an external process — same shape as nginx — for product-defaults comparison. Full matrix is ~60 min (expanded Plus/CLI stress arms).
