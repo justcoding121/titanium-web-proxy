@@ -35,7 +35,7 @@ features:
   <div class="edition-card">
     <h3>Titanium.Cli</h3>
     <p class="license">MIT · zip / winget</p>
-    <p>Standalone reverse / edge proxy for any backend stack: <code>run</code>, <code>test</code>, <code>version</code>, <code>update</code>.</p>
+    <p>Standalone reverse / edge proxy for any backend stack, managed by the command line interface (CLI): <code>run</code>, <code>test</code>, <code>version</code>, <code>update</code>.</p>
   </div>
   <div class="edition-card">
     <h3>Titanium Inspector</h3>
