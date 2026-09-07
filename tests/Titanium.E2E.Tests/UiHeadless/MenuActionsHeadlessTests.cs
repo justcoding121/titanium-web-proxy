@@ -241,6 +241,10 @@ public class MenuActionsHeadlessTests
                 OpenSessionsContextMenu(fx);
                 fx.Robot.Click("CtxCopyUrl");
                 OpenSessionsContextMenu(fx);
+                fx.Robot.Click("CtxCopyAsCurl");
+                OpenSessionsContextMenu(fx);
+                fx.Robot.Click("CtxCopyAsFetch");
+                OpenSessionsContextMenu(fx);
                 fx.Robot.Click("CtxFilterByHost");
                 OpenSessionsContextMenu(fx);
                 fx.Robot.Click("CtxFilterByProcess");
