@@ -4,7 +4,7 @@ title: Titanium Web Proxy
 hero:
   name: Titanium Web Proxy
   text: High-performance HTTP(S) proxy
-  tagline: Reverse / edge CLI, desktop Inspector, and optional Plus ops — on Windows, Linux, and macOS. Embed in .NET when you need a library.
+  tagline: Reverse / edge CLI, desktop traffic debugger, and optional ops add-on — on Windows, Linux, and macOS. Embed the same engine in .NET when you need a library.
   image:
     src: /logo.svg
     alt: Titanium Web Proxy
@@ -22,11 +22,11 @@ features:
   - title: Intercept & modify
     details: Explicit, transparent, and SOCKS4/5 endpoints. Decrypt HTTPS, stream bodies, and shape traffic — from the Inspector, CLI, or your own app.
   - title: Reverse / edge CLI
-    details: Run `titanium` / `twp` with twp.yaml — routes, clusters, load balancing, TLS terminate, and ACME. Self-contained zips for every major OS.
+    details: Run `titanium` / `twp` with a YAML config — routes, clusters, load balancing, TLS terminate, and automatic certificates (ACME). Self-contained zips for every major OS.
   - title: HTTP/1 · HTTP/2 · HTTP/3
-    details: HTTP/2 on by default. HTTP/3 (QUIC) opt-in. Protocol bridges between client and origin versions.
+    details: HTTP/2 on by default. HTTP/3 (QUIC) opt-in. Bridges when the client and origin speak different protocol versions.
   - title: Measured performance
-    details: Typically at or above YARP; ahead of nginx on H2/H3→H1 reverse, near parity for the rest. See the performance guide for publishable tables.
+    details: Typically at or above YARP; strong reverse-proxy throughput (requests per second). See the performance guide for publishable tables.
 ---
 
 ## Editions
@@ -35,17 +35,17 @@ features:
   <div class="edition-card">
     <h3>Titanium.Cli</h3>
     <p class="license">MIT · zip / winget</p>
-    <p>Standalone reverse / edge daemon for any stack: <code>run</code>, <code>test</code>, <code>version</code>, <code>update</code>.</p>
+    <p>Standalone reverse / edge proxy for any backend stack: <code>run</code>, <code>test</code>, <code>version</code>, <code>update</code>.</p>
   </div>
   <div class="edition-card">
     <h3>Titanium Inspector</h3>
-    <p class="license">PolyForm NC · MSI / zip</p>
-    <p>Desktop MITM debugger — session grid, inspectors, AutoResponder, breakpoints, HAR.</p>
+    <p class="license">PolyForm Noncommercial · MSI / zip</p>
+    <p>Desktop man-in-the-middle (MITM) debugger — session grid, inspectors, AutoResponder, breakpoints, HAR export.</p>
   </div>
   <div class="edition-card">
     <h3>Titanium.Plus</h3>
-    <p class="license">PolyForm NC</p>
-    <p>Control plane, dashboard, observability, discovery, WAF. Install with <code>titanium update --plus</code>.</p>
+    <p class="license">PolyForm Noncommercial</p>
+    <p>Control plane, dashboard, observability, discovery, and a thin web application firewall (WAF). Install with <code>titanium update --plus</code>.</p>
   </div>
   <div class="edition-card">
     <h3>Titanium.Web.Proxy</h3>

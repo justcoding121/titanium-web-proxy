@@ -1,14 +1,14 @@
 # Getting started
 
-Titanium Web Proxy is a lightweight, high-performance HTTP(S) proxy for general use: reverse / edge, MITM debugging, and ops. The CLI, Plus, and Inspector run on **Windows, Linux, and macOS**. A **.NET library** is available when you want to embed the engine in an app.
+Titanium Web Proxy is a lightweight, high-performance HTTP(S) proxy: reverse / edge from the CLI, man-in-the-middle (MITM) debugging in the Inspector, optional ops via Plus, or embed the engine in a .NET app. CLI, Plus, and Inspector run on **Windows, Linux, and macOS**.
 
 ## Choose a path
 
 | Goal | Start here |
 |------|------------|
 | Run a reverse / edge proxy from YAML | [Download CLI](/download) → [CLI](/docs/cli) → [Configuration](/docs/configuration) |
-| Desktop traffic debugging | [Download Inspector](/download) → [Inspector](/docs/inspector) |
-| Ops / control plane | [Plus](/docs/plus) (`titanium update --plus`; use `--channel beta` for prereleases) |
+| Desktop HTTPS traffic debugging | [Download Inspector](/download) → [Inspector](/docs/inspector) |
+| Ops / control plane (non-commercial) | [Plus](/docs/plus) (`titanium update --plus`) |
 | Embed in a .NET app | [Library](/docs/library) + NuGet (`--prerelease` for beta) |
 
 ## CLI reverse in 30 seconds

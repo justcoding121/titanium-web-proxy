@@ -9,11 +9,11 @@ const channels = [
 ]
 </script>
 
-Get CLI and Inspector builds from GitHub Releases. This page lists the **latest stable** and **latest beta** product releases (NuGet-only tags are skipped). Prefer the primary format per OS (MSI / DMG / AppImage / deb / rpm); portable zips remain on GitHub for `titanium update` and Alpine/musl.
+Get CLI and Inspector builds from GitHub Releases. This page lists the **latest stable** and **latest beta** product releases (NuGet-only tags are skipped). Prefer the primary format per OS (MSI / DMG / AppImage / deb / rpm); portable zips remain on GitHub for `titanium update` and Alpine (musl) images.
 
 **Windows:** Authenticode-signed assets show publisher **Jehonathan Thomas**. **winget** is stable-only. **macOS CLI:** `brew tap justcoding121/titanium && brew install titanium` when the tap is published. **Linux desktop:** use AppImage / `.deb` / `.rpm` from GitHub Releases.
 
-HTTP/3 natives ship inside each RID zip / package (except Windows OS MsQuic). Alpine/K8s: use **`linux-musl-*`**, not `linux-x64`. Details: [HTTP/3](/docs/http3).
+HTTP/3 (QUIC) native libraries ship inside each platform zip / package (except Windows OS MsQuic). Alpine / Kubernetes: use **`linux-musl-*`**, not `linux-x64`. Details: [HTTP/3](/docs/http3).
 
 <div v-for="ch in channels" :key="ch.id" class="download-channel">
   <h2 :id="ch.id">
@@ -30,7 +30,7 @@ HTTP/3 natives ship inside each RID zip / package (except Windows OS MsQuic). Al
 
   <h3 :id="ch.id + '-inspector'">Titanium Inspector</h3>
   <p>
-    Desktop MITM debugger.
+    Desktop man-in-the-middle (MITM) debugger.
     <strong>Windows:</strong> MSI (signed).
     <strong>macOS:</strong> DMG when published; otherwise zip + <code>install-app.sh</code>.
     <strong>Linux glibc:</strong> AppImage / <code>.deb</code> / <code>.rpm</code> when published; otherwise zip.
