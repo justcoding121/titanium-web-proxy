@@ -8,7 +8,7 @@ Standalone reverse / edge proxy for any backend stack. MIT licensed. Self-contai
 titanium run -c <config> [-v|--verbose] [--service]
 titanium test -c <config>
 titanium version [--check] [--plus] [--channel beta]
-titanium update [--plus] [--channel beta]
+titanium update [--plus] [--remove-plus] [--channel beta]
 titanium http3-deps status|install
 titanium service install|uninstall|start|stop|restart|status
 ```
@@ -20,7 +20,7 @@ titanium service install|uninstall|start|stop|restart|status
 | `run` | Start the proxy from YAML/JSON (or other dialects) |
 | `test` | Validate config without serving traffic |
 | `version` | Print local version; `--check` compares to the update feed |
-| `update` | Self-update the CLI from the release feed (download, verify SHA256, replace install); `--plus` updates the Plus DLL |
+| `update` | Self-update the CLI from the release feed (download, verify SHA256, replace install); `--plus` installs/updates the Plus DLL; `--remove-plus` deletes it |
 | `http3-deps` | Report Quic availability; optionally install system MsQuic on edge hosts |
 | `service` | Install / start / stop an OS service so the proxy survives reboot |
 
@@ -62,10 +62,10 @@ Prints local Cli / Core / Abstractions / Configuration versions. With `--check`,
 ## `update`
 
 ```text
-titanium update [--plus] [--channel stable|beta]
+titanium update [--plus] [--remove-plus] [--channel stable|beta]
 ```
 
-Downloads the CLI zip (or Plus DLL with `--plus`), verifies SHA256, and replaces the install. If an OS service is running, stop it first so the executable can be replaced:
+Downloads the CLI zip (or Plus DLL with `--plus`), verifies SHA256, and replaces the install. `--remove-plus` deletes `Titanium.Plus.dll` beside the CLI (no network; mutually exclusive with `--plus`). If an OS service is running, stop it first so the executable can be replaced:
 
 ```shell
 titanium service stop
@@ -162,9 +162,10 @@ For path-based routing and load balancing, see [Configuration](/docs/configurati
 
 ```shell
 titanium update --plus
+titanium update --remove-plus
 ```
 
-Enable in config (`plus.enabled: true` + control-plane shared secret). Details: [Plus](/docs/plus).
+Enable in config (`plus.enabled: true` + control-plane shared secret); disable with `plus.enabled: false`. Use `--remove-plus` to delete the DLL from disk. Details: [Plus](/docs/plus).
 
 ## Config dialects
 

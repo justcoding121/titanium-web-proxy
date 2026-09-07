@@ -15,6 +15,7 @@ dotnet build src/Titanium.Plus -c Release
 ```powershell
 dotnet run --project tools/CliQaProbe -- status
 dotnet run --project tools/CliQaProbe -- help-matrix
+dotnet run --project tools/CliQaProbe -- meta
 dotnet run --project tools/CliQaProbe -- core
 dotnet run --project tools/CliQaProbe -- all
 dotnet run --project tools/CliQaProbe -- all --elevated   # login user + passwordless sudo (Linux)
@@ -27,13 +28,13 @@ dotnet run --project tools/CliQaProbe -- service --elevated
 
 | Area | Steps |
 |------|--------|
-| Nested help | root, run/test/version/update/http3-deps/service/install/start `--help` |
-| Meta | `version`, `version --check` (soft), `http3-deps status` (never install) |
+| Nested help | root, run/test/version/update/http3-deps/service/install/start `--help` (update help asserts `--plus`) |
+| Meta | `version`, `version --check` (soft), `version --check --plus` (soft), `update --plus` (soft feed; restores prior Plus.dll), `update --remove-plus` (restores prior Plus.dll), `http3-deps status` (never install) |
 | `test` dialects | yaml / json / twp / `.conf` (http-server) + invalid |
 | Live `run` | forward, `.conf` reverse, site-file listen+forward, routes, static+ETag, TLS leaf, MITM→local HTTPS echo, http2-off, file logging, Plus soft |
 | OS service | status missing; unelevated install message; `--elevated` machine install→start→HTTP→stop→uninstall as **`titanium-qa-probe`** (via `sudo -n` when not root); Linux/macOS also **`service --user`** as the **login user** (`SUDO_USER` when the probe was started with sudo). Bare root without `SUDO_USER` skips `--user` (no user bus). |
 
-Skipped (already unit/E2E): factory `binPath` snapshots, flag parse unit tests, live `update` / `http3-deps install`.
+Skipped (already unit/E2E): factory `binPath` snapshots, flag parse unit tests, live CLI zip `update` / `http3-deps install`.
 
 ## Results
 

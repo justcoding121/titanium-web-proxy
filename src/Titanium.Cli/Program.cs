@@ -60,7 +60,7 @@ internal static class Program
               titanium run -c <config> [-v|--verbose] [--service]
               titanium test -c <config>
               titanium version [--check] [--plus] [--channel beta]
-              titanium update [--plus] [--channel beta]
+              titanium update [--plus] [--remove-plus] [--channel beta]
               titanium http3-deps status|install
               titanium service install|uninstall|start|stop|restart|status
 

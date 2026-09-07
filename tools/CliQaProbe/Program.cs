@@ -23,6 +23,7 @@ internal static class Program
             {
                 "status" => await ScenarioRunner.RunStatusAsync(log),
                 "help-matrix" => await ScenarioRunner.RunHelpMatrixAsync(log),
+                "meta" => await ScenarioRunner.RunMetaAsync(log),
                 "service" => await ScenarioRunner.RunServiceSectionAsync(log, elevated),
                 "core" => await RunCoreAsync(log),
                 "all" => await RunAllAsync(log, elevated),
@@ -79,6 +80,7 @@ internal static class Program
             Commands:
               status         apphost / dll path, OS, elevation, last-run.json
               help-matrix    Nested --help including service subcommands
+              meta           version / version --check[--plus] / update --plus|--remove-plus / http3-deps status
               service        Service status-missing + unelevated install message;
                              with --elevated: install/start/HTTP/stop/uninstall
                              (name titanium-qa-probe only)
@@ -88,6 +90,7 @@ internal static class Program
 
             Examples:
               dotnet run --project tools/CliQaProbe -- all
+              dotnet run --project tools/CliQaProbe -- meta
               dotnet run --project tools/CliQaProbe -- all --elevated
 
             Results: tools/CliQaProbe/results/last-run.json

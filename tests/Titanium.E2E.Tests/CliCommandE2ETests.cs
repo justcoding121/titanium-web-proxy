@@ -77,6 +77,8 @@ public class CliCommandE2ETests
             timeout: TimeSpan.FromSeconds(15));
         Assert.AreEqual(0, code);
         StringAssert.Contains(stdout, "titanium update");
+        StringAssert.Contains(stdout, "--plus");
+        StringAssert.Contains(stdout, "--remove-plus");
         Assert.IsFalse(
             stdout.Contains("Checking for updates", StringComparison.OrdinalIgnoreCase),
             stdout);

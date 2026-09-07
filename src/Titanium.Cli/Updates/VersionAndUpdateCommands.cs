@@ -285,6 +285,26 @@ internal static class UpdateCommand
         }
 
         var plus = args.Contains("--plus", StringComparer.OrdinalIgnoreCase);
+        var removePlus = args.Contains("--remove-plus", StringComparer.OrdinalIgnoreCase);
+        if (plus && removePlus)
+        {
+            AsyncConsole.WriteError("Use either --plus or --remove-plus, not both.");
+            return 1;
+        }
+
+        if (removePlus)
+        {
+            if (await ServiceCommand.IsDefaultServiceRunningAsync().ConfigureAwait(false))
+            {
+                AsyncConsole.WriteError(
+                    "Warning: the Titanium OS service appears to be running. Stop it before removing Plus " +
+                    "(`titanium service stop`) — the DLL may be locked, and the in-process control plane " +
+                    "keeps running until the proxy restarts.");
+            }
+
+            return RemovePlus();
+        }
+
         if (!VersionCommand.TryResolveChannel(args, out var channel, out var channelError))
         {
             AsyncConsole.WriteError(channelError!);
@@ -323,15 +343,62 @@ internal static class UpdateCommand
     internal static int PrintHelp()
     {
         AsyncConsole.WriteLine("""
-            titanium update [--plus] [--channel stable|beta]
+            titanium update [--plus] [--remove-plus] [--channel stable|beta]
 
-              (default)   Download and install a newer CLI zip when the feed is ahead.
-              --plus      Update Titanium.Plus.dll beside the CLI instead of the CLI zip.
-              --channel   stable (default) or beta. Also: TITANIUM_UPDATE_CHANNEL.
+              (default)      Download and install a newer CLI zip when the feed is ahead.
+              --plus         Install or update Titanium.Plus.dll beside the CLI.
+              --remove-plus  Delete Titanium.Plus.dll beside the CLI (no network).
+              --channel      stable (default) or beta. Also: TITANIUM_UPDATE_CHANNEL.
 
             Does not use winget. If an OS service is running, stop it first so the exe can be replaced.
+            Plus is PolyForm Noncommercial — not for commercial use. Disable in config with
+            plus.enabled: false; use --remove-plus to delete the DLL from disk.
             """);
         CliHelp.WriteDocsFooter();
+        return 0;
+    }
+
+    /// <summary>
+    /// Deletes <c>Titanium.Plus.dll</c> (and <c>.bak</c> / <c>.new</c>) beside the CLI install.
+    /// Idempotent when Plus is already absent. <paramref name="installDir"/> is for tests.
+    /// </summary>
+    internal static int RemovePlus(string? installDir = null)
+    {
+        var dir = string.IsNullOrWhiteSpace(installDir)
+            ? AppContext.BaseDirectory
+            : installDir;
+        dir = dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var dest = Path.Combine(dir, "Titanium.Plus.dll");
+        var backup = dest + ".bak";
+        var staging = dest + ".new";
+
+        var removed = false;
+        try
+        {
+            foreach (var path in new[] { dest, backup, staging })
+            {
+                if (!File.Exists(path))
+                    continue;
+                File.Delete(path);
+                removed = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            AsyncConsole.WriteError($"Plus remove failed: {ex.Message}");
+            return 1;
+        }
+
+        if (removed)
+            AsyncConsole.WriteLine("Removed Titanium.Plus.dll from the CLI install directory.");
+        else
+            AsyncConsole.WriteLine("Plus is not installed beside the CLI (nothing to remove).");
+
+        AsyncConsole.WriteLine(
+            "If a titanium run / OS service is still up with Plus loaded, stop and restart it so the " +
+            "control plane and dashboard unload (remove-plus does not stop them). " +
+            "If your config still has plus.enabled: true, set it to false (or remove the plus: block). " +
+            "Plus is PolyForm Noncommercial — not for commercial use.");
         return 0;
     }
 

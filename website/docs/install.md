@@ -61,9 +61,10 @@ titanium http3-deps status
 ```shell
 titanium update --plus --channel beta
 titanium version --check --plus
+titanium update --remove-plus
 ```
 
-`titanium update --plus` skips the download when the installed Plus DLL already matches the feed version (or SHA256). See [Plus](/docs/plus). There is no separate Plus download link.
+`titanium update --plus` skips the download when the installed Plus DLL already matches the feed version (or SHA256). Disable in config with `plus.enabled: false`; remove the DLL with `--remove-plus`. See [Plus](/docs/plus). There is no separate Plus download link.
 
 ## Inspector
 

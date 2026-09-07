@@ -31,5 +31,5 @@ Results: `tools/CliQaProbe/results/last-run.json`, `tools/InspectorDesktopProbe/
 ## Notes
 
 - CliQaProbe never mutates the default service name `titanium`; elevated runs use `titanium-qa-probe` and uninstall in `finally`.
-- `titanium update` and `http3-deps install` are omitted (network / machine mutation).
+- Live CLI zip `titanium update` and `http3-deps install` are omitted (network / machine mutation). Meta covers soft `version --check --plus`, live `update --plus`, and `update --remove-plus` (both restore any prior Plus.dll beside the CLI).
 - InspectorDesktopProbe `all` starts with `chrome` (full menu / context / Delete-key / Options / Tools click-through), then OS proxy/CA scenarios.

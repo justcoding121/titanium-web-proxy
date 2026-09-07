@@ -16,7 +16,9 @@ titanium version --check --plus --channel beta
 
 `titanium version --check --plus` reports local → remote and exit code `2` when a newer Plus is available or Plus is missing. `titanium update --plus` installs or upgrades only when needed; if Plus is already current it prints that and skips the download.
 
-## Enable
+## Enable / disable
+
+Day-to-day control is config — keep the DLL installed and toggle features:
 
 ```yaml
 plus:
@@ -28,6 +30,18 @@ plus:
   options:
     cache.enable: "true"
 ```
+
+Set `plus.enabled: false` (or remove the `plus:` block) to stop using Plus without deleting the DLL.
+
+## Remove
+
+To delete Plus from disk (cleanup, or when you must not keep the NC binary — e.g. commercial environments):
+
+```shell
+titanium update --remove-plus
+```
+
+This removes `Titanium.Plus.dll` (and `.bak` / `.new`) beside the CLI. It does **not** stop a running proxy, OS service, or the in-process Plus control plane / dashboard — stop `titanium run` or `titanium service stop`, then start again so Plus unloads. It does not edit your config; disable `plus.enabled` separately if it is still set. Re-install later with `titanium update --plus`.
 
 Use a strong secret in production. Dev-only default secrets require an explicit environment opt-in on loopback.
 

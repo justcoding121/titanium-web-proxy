@@ -78,7 +78,7 @@ titanium update
 
 Each CLI zip also includes a `twp` alias binary.
 
-Optional Plus: run `titanium update --plus` (add `--channel beta` for prereleases), then enable Plus in config (`plus.enabled: true` with `plus.controlPlane.sharedSecret`). Check with `titanium version --check --plus`.
+Optional Plus (PolyForm Noncommercial — not for commercial use): run `titanium update --plus` (add `--channel beta` for prereleases), then enable in config (`plus.enabled: true` with `plus.controlPlane.sharedSecret`). Disable with `plus.enabled: false`; remove the DLL with `titanium update --remove-plus`. Check with `titanium version --check --plus`.
 
 ### Titanium Inspector
 

@@ -96,6 +96,8 @@ public static class ScenarioRunner
         fails += await HelpStep(log, spawn, "help-test", ["test", "--help"], _ => true);
         fails += await HelpStep(log, spawn, "help-version", ["version", "--help"], _ => true);
         fails += await HelpStep(log, spawn, "help-update", ["update", "--help"], text =>
+            text.Contains("--plus", StringComparison.OrdinalIgnoreCase) &&
+            text.Contains("--remove-plus", StringComparison.OrdinalIgnoreCase) &&
             !text.Contains("Checking for updates", StringComparison.OrdinalIgnoreCase));
         fails += await HelpStep(log, spawn, "help-http3", ["http3-deps", "--help"], _ => true);
         fails += await HelpStep(log, spawn, "help-service", ["service", "--help"], text =>
@@ -146,6 +148,29 @@ public static class ScenarioRunner
         }
 
         {
+            try
+            {
+                var (code, stdout, stderr) = await spawn.RunOnceAsync(
+                    ["version", "--check", "--plus"],
+                    timeout: TimeSpan.FromSeconds(45));
+                var text = stdout + stderr;
+                var ok = (code is 0 or 1 or 2) &&
+                         (code == 1 ||
+                          text.Contains("Plus", StringComparison.OrdinalIgnoreCase));
+                log.Step("version-check-plus", ok,
+                    $"exit={code} (soft offline) {Trim(text)}", skipped: false);
+                if (!ok) fails++;
+            }
+            catch (Exception ex)
+            {
+                log.Step("version-check-plus", true, "soft skip: " + ex.Message, skipped: true);
+            }
+        }
+
+        fails += await RunUpdatePlusAsync(log, spawn);
+        fails += await RunRemovePlusAsync(log, spawn);
+
+        {
             var (code, stdout, stderr) = await spawn.RunOnceAsync(["http3-deps", "status"]);
             var ok = code == 0;
             log.Step("http3-deps-status", ok, $"exit={code} {Trim(stdout + stderr)}");
@@ -153,6 +178,132 @@ public static class ScenarioRunner
         }
 
         return fails == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Live <c>update --plus</c> against the release feed. Soft-passes feed errors.
+    /// Restores any pre-existing Plus.dll so a local build output is not left on the feed copy.
+    /// </summary>
+    private static async Task<int> RunUpdatePlusAsync(ProbeLog log, CliSpawn spawn)
+    {
+        var plusPath = Path.Combine(spawn.CliDirectory, "Titanium.Plus.dll");
+        var bakPath = plusPath + ".bak";
+        byte[]? priorPlus = null;
+        byte[]? priorBak = null;
+        try
+        {
+            if (File.Exists(plusPath))
+                priorPlus = await File.ReadAllBytesAsync(plusPath);
+            if (File.Exists(bakPath))
+                priorBak = await File.ReadAllBytesAsync(bakPath);
+
+            var (code, stdout, stderr) = await spawn.RunOnceAsync(
+                ["update", "--plus"],
+                timeout: TimeSpan.FromMinutes(3));
+            var text = stdout + stderr;
+
+            if (code == 1)
+            {
+                // Feed unreachable / no Plus asset — same soft policy as version --check.
+                var soft = text.Contains("Unable to query update feed", StringComparison.OrdinalIgnoreCase) ||
+                           text.Contains("No Plus package", StringComparison.OrdinalIgnoreCase) ||
+                           text.Contains("feed", StringComparison.OrdinalIgnoreCase);
+                log.Step("update-plus", soft, $"exit={code} (soft offline) {Trim(text)}",
+                    skipped: soft);
+                return soft ? 0 : 1;
+            }
+
+            var plusPresent = File.Exists(plusPath);
+            var messageOk =
+                text.Contains("Plus is already at", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("Installed Titanium.Plus", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("Updated Titanium.Plus", StringComparison.OrdinalIgnoreCase);
+            var ok = code == 0 && plusPresent && messageOk;
+            log.Step("update-plus", ok,
+                $"exit={code} dll={(plusPresent ? "present" : "missing")} {Trim(text)}");
+            return ok ? 0 : 1;
+        }
+        catch (Exception ex)
+        {
+            log.Step("update-plus", true, "soft skip: " + ex.Message, skipped: true);
+            return 0;
+        }
+        finally
+        {
+            try
+            {
+                if (priorPlus is not null)
+                    await File.WriteAllBytesAsync(plusPath, priorPlus);
+
+                if (priorBak is not null)
+                    await File.WriteAllBytesAsync(bakPath, priorBak);
+                else if (File.Exists(bakPath))
+                    File.Delete(bakPath);
+            }
+            catch
+            {
+                // best-effort restore
+            }
+        }
+    }
+
+    /// <summary>
+    /// <c>update --remove-plus</c> deletes the sidecar DLL; restores any prior Plus.dll afterward.
+    /// </summary>
+    private static async Task<int> RunRemovePlusAsync(ProbeLog log, CliSpawn spawn)
+    {
+        var plusPath = Path.Combine(spawn.CliDirectory, "Titanium.Plus.dll");
+        var bakPath = plusPath + ".bak";
+        byte[]? priorPlus = null;
+        byte[]? priorBak = null;
+        try
+        {
+            if (File.Exists(plusPath))
+                priorPlus = await File.ReadAllBytesAsync(plusPath);
+            if (File.Exists(bakPath))
+                priorBak = await File.ReadAllBytesAsync(bakPath);
+
+            // Ensure something to remove so we exercise the delete path, not only the empty message.
+            if (!File.Exists(plusPath))
+                await File.WriteAllBytesAsync(plusPath, "cli-qa-remove-plus"u8.ToArray());
+
+            var (code, stdout, stderr) = await spawn.RunOnceAsync(
+                ["update", "--remove-plus"],
+                timeout: TimeSpan.FromSeconds(30));
+            var text = stdout + stderr;
+            var gone = !File.Exists(plusPath) && !File.Exists(bakPath);
+            var messageOk =
+                text.Contains("Removed Titanium.Plus", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("nothing to remove", StringComparison.OrdinalIgnoreCase);
+            var ok = code == 0 && gone && messageOk &&
+                     text.Contains("plus.enabled", StringComparison.OrdinalIgnoreCase);
+            log.Step("remove-plus", ok, $"exit={code} dll-gone={gone} {Trim(text)}");
+            return ok ? 0 : 1;
+        }
+        catch (Exception ex)
+        {
+            log.Step("remove-plus", false, ex.Message);
+            return 1;
+        }
+        finally
+        {
+            try
+            {
+                if (priorPlus is not null)
+                    await File.WriteAllBytesAsync(plusPath, priorPlus);
+                else if (File.Exists(plusPath))
+                    File.Delete(plusPath);
+
+                if (priorBak is not null)
+                    await File.WriteAllBytesAsync(bakPath, priorBak);
+                else if (File.Exists(bakPath))
+                    File.Delete(bakPath);
+            }
+            catch
+            {
+                // best-effort restore
+            }
+        }
     }
 
     public static async Task<int> RunTestDialectsAsync(ProbeLog log)

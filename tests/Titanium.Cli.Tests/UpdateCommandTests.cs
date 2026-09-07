@@ -101,4 +101,49 @@ public class UpdateCommandTests
         StringAssert.Contains(script, "unzip");
         StringAssert.Contains(script, "beta");
     }
+
+    [TestMethod]
+    public void RemovePlus_DeletesDllBakAndStaging()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-remove-plus-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var dll = Path.Combine(dir, "Titanium.Plus.dll");
+            File.WriteAllText(dll, "plus");
+            File.WriteAllText(dll + ".bak", "bak");
+            File.WriteAllText(dll + ".new", "new");
+
+            Assert.AreEqual(0, UpdateCommand.RemovePlus(dir));
+            Assert.IsFalse(File.Exists(dll));
+            Assert.IsFalse(File.Exists(dll + ".bak"));
+            Assert.IsFalse(File.Exists(dll + ".new"));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public void RemovePlus_IdempotentWhenAbsent()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-remove-plus-empty-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            Assert.AreEqual(0, UpdateCommand.RemovePlus(dir));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public async Task Update_RejectsPlusAndRemovePlusTogether()
+    {
+        var code = await UpdateCommand.ExecuteAsync(["update", "--plus", "--remove-plus"]);
+        Assert.AreEqual(1, code);
+    }
 }
