@@ -417,6 +417,11 @@ internal static class MitmCompressedRelayHelper
         if (baseline.IsMutationCountOnly)
             return AllowsCompressedRelay(baseline.MutationCount, after, maxAdds, out added);
 
+        // COW Full append-log: adds are already applied on `after`; finish paths that speak H1
+        // (H3→H1 ForwardOverTcpFastAsync) or static append (H2/H3 QPACK) can proceed.
+        if (baseline.TryGetPrecomputedAppends(out added))
+            return added.Count <= maxAdds;
+
         return baseline.TryDiffAppendOnly(after, maxAdds, out added);
     }
 

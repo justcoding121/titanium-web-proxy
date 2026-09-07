@@ -221,4 +221,21 @@ public class MitmCompressedRelayHelperTests
         Assert.IsFalse(MitmCompressedRelayHelper.AllowsCompressedRelay(
             baseline, headers, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out _));
     }
+
+    [TestMethod]
+    public void AppendLogBaseline_AllowsRelayWithPrecomputedAdds()
+    {
+        var headers = new HeaderCollection();
+        headers.AddHeader("accept", "text/html");
+        headers.ArmMitmRelayBaseline();
+        headers.AddHeader("x-twp-rps-probe", "1");
+        var baseline = headers.TakeMitmRelayBaseline();
+
+        Assert.IsTrue(baseline.TryGetPrecomputedAppends(out var expected));
+        Assert.AreEqual(1, expected.Count);
+        Assert.IsTrue(MitmCompressedRelayHelper.AllowsCompressedRelay(
+            baseline, headers, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out var added));
+        Assert.AreEqual(1, added.Count);
+        Assert.AreEqual("x-twp-rps-probe", added[0].Name);
+    }
 }
