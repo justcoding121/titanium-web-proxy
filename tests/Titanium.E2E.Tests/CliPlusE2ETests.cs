@@ -392,6 +392,134 @@ public class CliPlusE2ETests
         StringAssert.Contains(combined, "descriptor", StringComparison.OrdinalIgnoreCase);
     }
 
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Plus_ApiKeyAuth_AndCors()
+    {
+        using var origin = new EchoOrigin();
+        var listen = CliProcessHarness.GetFreePort();
+        var control = CliProcessHarness.GetFreePort();
+        const string secret = "e2e-auth-cors";
+        var cfg = ConfigFixtures.WritePlusOptions(
+            _tempDir,
+            listen,
+            origin.Port,
+            control,
+            secret,
+            new Dictionary<string, string>
+            {
+                ["security.apiKeys"] = "e2e-key",
+                ["cors.enabled"] = "true",
+                ["cors.allowOrigin"] = "*",
+            },
+            useRoutes: true);
+        using var harness = new CliProcessHarness();
+        harness.EnsurePlusDllBesideCli(copy: true);
+        await harness.StartRunAsync(cfg, new Dictionary<string, string?>
+        {
+            ["TITANIUM_PLUS_ALLOW_DEV_SECRET"] = "1",
+        });
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+            await WaitControlPlaneAsync(http, control);
+
+            using (var denied = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{listen}/secure"))
+            {
+                var resp = await http.SendAsync(denied);
+                Assert.AreEqual(HttpStatusCode.Unauthorized, resp.StatusCode);
+            }
+
+            using (var allowed = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{listen}/secure"))
+            {
+                allowed.Headers.TryAddWithoutValidation("X-Api-Key", "e2e-key");
+                var resp = await http.SendAsync(allowed);
+                Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode);
+                StringAssert.Contains(await resp.Content.ReadAsStringAsync(), "echo:");
+                Assert.IsTrue(
+                    resp.Headers.Contains("Access-Control-Allow-Origin") ||
+                    resp.Content.Headers.Contains("Access-Control-Allow-Origin"));
+            }
+
+            using (var options = new HttpRequestMessage(HttpMethod.Options, $"http://127.0.0.1:{listen}/preflight"))
+            {
+                options.Headers.TryAddWithoutValidation("X-Api-Key", "e2e-key");
+                var resp = await http.SendAsync(options);
+                Assert.AreEqual(HttpStatusCode.NoContent, resp.StatusCode);
+                Assert.IsTrue(resp.Headers.Contains("Access-Control-Allow-Origin"));
+            }
+        }
+        finally
+        {
+            harness.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Plus_CircuitEjects_AfterOrigin5xx()
+    {
+        using var origin = new FlakyEchoOrigin(failCount: 3);
+        var listen = CliProcessHarness.GetFreePort();
+        var control = CliProcessHarness.GetFreePort();
+        const string secret = "e2e-circuit";
+        var cfg = ConfigFixtures.WritePlusOptions(
+            _tempDir,
+            listen,
+            origin.Port,
+            control,
+            secret,
+            new Dictionary<string, string>
+            {
+                ["resilience.circuit.enabled"] = "true",
+                ["resilience.circuit.failureThreshold"] = "2",
+                ["resilience.circuit.cooldownMs"] = "60000",
+                ["resilience.retry.idempotentAttempts"] = "2",
+            },
+            useRoutes: true);
+        using var harness = new CliProcessHarness();
+        harness.EnsurePlusDllBesideCli(copy: true);
+        await harness.StartRunAsync(cfg, new Dictionary<string, string?>
+        {
+            ["TITANIUM_PLUS_ALLOW_DEV_SECRET"] = "1",
+        }, verbose: true);
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+            await WaitControlPlaneAsync(http, control);
+
+            var combined = harness.StdOut + harness.StdErr;
+            StringAssert.Contains(combined, "Plus Circuit", StringComparison.OrdinalIgnoreCase);
+            StringAssert.Contains(combined, "Plus Retry", StringComparison.OrdinalIgnoreCase);
+
+            _ = await http.GetAsync($"http://127.0.0.1:{listen}/a");
+            _ = await http.GetAsync($"http://127.0.0.1:{listen}/b");
+
+            string json = "";
+            var deadline = DateTime.UtcNow.AddSeconds(15);
+            while (DateTime.UtcNow < deadline)
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{control}/v1/snapshot");
+                req.Headers.TryAddWithoutValidation(ControlPlaneServer.SharedSecretHeader, secret);
+                var snap = await http.SendAsync(req);
+                json = await snap.Content.ReadAsStringAsync();
+                if (json.Contains("unhealthy", StringComparison.OrdinalIgnoreCase))
+                {
+                    break;
+                }
+
+                await Task.Delay(100);
+            }
+
+            StringAssert.Contains(json, "unhealthy", StringComparison.OrdinalIgnoreCase);
+            Assert.IsTrue(origin.Hits >= 2, $"expected origin hits >= 2, got {origin.Hits}");
+        }
+        finally
+        {
+            harness.Dispose();
+        }
+    }
+
     private static async Task WaitControlPlaneAsync(HttpClient http, int control)
     {
         var deadline = DateTime.UtcNow.AddSeconds(30);
