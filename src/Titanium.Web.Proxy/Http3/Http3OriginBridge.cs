@@ -253,9 +253,9 @@ internal static class Http3OriginBridge
 
             // QuicStream WriteAsync may buffer; without Flush the peer can see the request hundreds of
             // ms late (observed ~450ms Cloudflare HTML TTFB with inFlight=1 after request "sent").
-            // Always Flush before CompleteWrites — skipping on IsFastPath stalled reverse H3→H3
-            // at c=64 on GHA Linux/Windows MsQuic (0 RPS) while MITM (which flushed) survived.
-            await originStream.FlushAsync(cancellationToken);
+            // Linux/Windows MsQuic need Flush before CompleteWrites (c=64 reverse stall); Darwin does not.
+            if (!RunTime.IsMac)
+                await originStream.FlushAsync(cancellationToken);
             originStream.CompleteWrites();
             sessionArgs.Timing?.MarkRequestSent();
 
@@ -859,8 +859,9 @@ internal static class Http3OriginBridge
                     requestSent = true;
                     // QuicStream WriteAsync may buffer; without Flush the peer can stall forever
                     // under multiplex (GHA Linux/Windows reverse H3→H3 @ c=64: 0 RPS / ~0% CPU).
-                    // CompleteWrites alone is not enough on those MsQuic builds — mirror full path.
-                    await originStream.FlushAsync(cancellationToken);
+                    // Darwin MsQuic + CompleteWrites is enough — Flush is a Mac H3÷YARP tax.
+                    if (!RunTime.IsMac)
+                        await originStream.FlushAsync(cancellationToken);
                     originStream.CompleteWrites();
 
                     // Verbatim origin→client frame copy (HEADERS + DATA + trailers). Skip QPACK
