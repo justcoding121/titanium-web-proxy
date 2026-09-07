@@ -237,7 +237,7 @@ internal static class Http3OriginBridge
             }
 
             // Use the origin authority (sniHost) for the :authority pseudo-header, not the connect host.
-                    var encodedHeaders = QpackEncoder.EncodeRequest(request, sniHost);
+                    var encodedHeaders = EncodeOriginRequestHeaders(quicConn, request, sniHost);
                     await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, encodedHeaders, cancellationToken);
                     // HEADERS are on the wire — client DATA may be consumed next; retry is no longer safe.
                     requestSent = true;
@@ -854,7 +854,7 @@ internal static class Http3OriginBridge
                     reused = !quicConn.ClaimFirstUse();
                     originStream = await quicConn.OpenRequestStreamAsync(cancellationToken);
 
-                    var encodedHeaders = QpackEncoder.EncodeRequest(request, sniHost);
+                    var encodedHeaders = EncodeOriginRequestHeaders(quicConn, request, sniHost);
                     await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, encodedHeaders, cancellationToken);
                     requestSent = true;
                     originStream.CompleteWrites();
@@ -2080,6 +2080,61 @@ internal static class Http3OriginBridge
         }
 
         return headers;
+    }
+
+
+    /// <summary>
+    ///     QPACK-encode an origin request, reusing a connection-scoped block when the fingerprint
+    ///     and identity match (identical reverse tiny-GET multiplex).
+    /// </summary>
+    private static byte[] EncodeOriginRequestHeaders(
+        QuicServerConnection quicConn, Request request, string sniHost)
+    {
+        var session = quicConn.Http3ClientSession;
+        var fingerprint = ComputeOriginRequestQpackFingerprint(request, sniHost);
+        var authority = OriginRequestAuthorityBytes(request, sniHost);
+        var path = OriginRequestPathBytes(request);
+        if (session != null)
+        {
+            var cached = session.TryGetCachedEncodedRequestHeaders(
+                fingerprint, request.Method, authority, path);
+            if (cached != null)
+                return cached;
+        }
+
+        var encoded = QpackEncoder.EncodeRequest(request, sniHost);
+        session?.SetCachedEncodedRequestHeaders(
+            fingerprint, request.Method, authority, path, encoded);
+        return encoded;
+    }
+
+    private static ReadOnlySpan<byte> OriginRequestAuthorityBytes(Request request, string sniHost)
+    {
+        if (request.Authority.Length > 0)
+            return request.Authority.Span;
+        if (!string.IsNullOrEmpty(request.Host))
+            return System.Text.Encoding.ASCII.GetBytes(request.Host);
+        return System.Text.Encoding.ASCII.GetBytes(sniHost);
+    }
+
+    private static ReadOnlySpan<byte> OriginRequestPathBytes(Request request)
+        => request.RequestUriString8.Length > 0
+            ? request.RequestUriString8.Span
+            : "/"u8;
+
+    private static int ComputeOriginRequestQpackFingerprint(Request request, string sniHost)
+    {
+        var hash = new HashCode();
+        hash.Add(request.Method);
+        hash.Add(request.IsHttps);
+        hash.AddBytes(OriginRequestAuthorityBytes(request, sniHost));
+        hash.AddBytes(OriginRequestPathBytes(request));
+        foreach (var header in request.Headers.GetAllHeaders())
+        {
+            hash.Add(header.Name);
+            hash.Add(header.Value);
+        }
+        return hash.ToHashCode();
     }
 
     private static int ParseStatusCode(List<(string Name, string Value)> headers)
