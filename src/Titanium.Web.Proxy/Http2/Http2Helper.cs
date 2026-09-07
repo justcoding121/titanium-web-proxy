@@ -1372,7 +1372,7 @@ namespace Titanium.Web.Proxy.Http2
                     // DATA/body completion awaits this task before SendBody, preserving HEADERS-before-DATA
                     // ordering for the stream without delaying subsequent HEADERS decode.
                     var dispatchFrameHeader = new Http2FrameHeader { StreamId = hbStreamId };
-                    var dispatchFrameHeaderBuffer = new byte[9];
+                    byte[]? dispatchFrameHeaderBuffer = null;
                     var previousDispatch = requestDispatchChain;
                     // Static-HPACK MITM unchanged-lite: handlers are usually sync CompletedTask and the
                     // forward path is compressed relay (same shape as gate-off). Task.Run per stream was
@@ -1541,7 +1541,8 @@ namespace Titanium.Web.Proxy.Http2
                                     // Encode HPACK under the ordered dispatch chain and queue copied wire
                                     // bytes without awaiting origin socket I/O.
                                     QueueSendHeaderTowardServer(connectionState, outputWriteLock,
-                                        remoteSettings, dispatchFrameHeader, dispatchFrameHeaderBuffer, request,
+                                        remoteSettings, dispatchFrameHeader,
+                                        dispatchFrameHeaderBuffer ??= new byte[9], request,
                                         endStreamFlag, output, isPromise);
                                 }
                             }
@@ -1653,7 +1654,8 @@ namespace Titanium.Web.Proxy.Http2
                                         if (connectionState.Streams.TryGetValue(hbStreamId, out var clearCapture))
                                             clearCapture.CapturedCompressedHeaders = null;
                                         QueueSendHeaderTowardServer(connectionState, outputWriteLock,
-                                            remoteSettings, dispatchFrameHeader, dispatchFrameHeaderBuffer, request,
+                                            remoteSettings, dispatchFrameHeader,
+                                            dispatchFrameHeaderBuffer ??= new byte[9], request,
                                             endStreamFlag, output, isPromise);
                                     }
                                 }
@@ -1749,7 +1751,7 @@ namespace Titanium.Web.Proxy.Http2
                         // every stream's BeforeResponse under c=64 and was a large Lite÷Reverse tax.
                         // Dynamic HPACK / bridges keep the inline await so encode stays ordered with decode.
                         var dispatchFrameHeader = new Http2FrameHeader { StreamId = hbStreamId };
-                        var dispatchFrameHeaderBuffer = new byte[9];
+                        byte[]? dispatchFrameHeaderBuffer = null;
 
                         async Task DispatchResponseAfterHeadersAsync()
                         {
@@ -1873,7 +1875,8 @@ namespace Titanium.Web.Proxy.Http2
                                     if (connectionState.Streams.TryGetValue(hbStreamId, out var clearResp))
                                         clearResp.CapturedCompressedHeaders = null;
                                     QueueSendHeader(connectionState, towardServer: false, outputWriteLock,
-                                        remoteSettings, dispatchFrameHeader, dispatchFrameHeaderBuffer, finalResponse,
+                                        remoteSettings, dispatchFrameHeader,
+                                        dispatchFrameHeaderBuffer ??= new byte[9], finalResponse,
                                         endStreamFlag, output, isPromise);
                                 }
 
