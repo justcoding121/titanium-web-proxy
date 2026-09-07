@@ -227,7 +227,15 @@ Titanium.Web.Proxy.Configuration.Models.PoolingConfig.TcpTimeWaitSeconds.get -> 
 Titanium.Web.Proxy.Configuration.Models.PoolingConfig.TcpTimeWaitSeconds.set -> void
 Titanium.Web.Proxy.Configuration.Models.PoolingConfig.ThreadPoolWorkerThread.get -> int?
 Titanium.Web.Proxy.Configuration.Models.PoolingConfig.ThreadPoolWorkerThread.set -> void
+Titanium.Web.Proxy.Configuration.Models.AccessLogConfig
+Titanium.Web.Proxy.Configuration.Models.AccessLogConfig.AccessLogConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.AccessLogConfig.Path.get -> string?
+Titanium.Web.Proxy.Configuration.Models.AccessLogConfig.Path.set -> void
+Titanium.Web.Proxy.Configuration.Models.AccessLogConfig.SampleRate.get -> double?
+Titanium.Web.Proxy.Configuration.Models.AccessLogConfig.SampleRate.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.AccessLog.get -> Titanium.Web.Proxy.Configuration.Models.AccessLogConfig?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.AccessLog.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.BlockPrivateNetworkDestinations.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.BlockPrivateNetworkDestinations.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.CertificateManager.get -> Titanium.Web.Proxy.Configuration.Models.CertificateManagerConfig?

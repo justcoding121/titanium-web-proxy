@@ -246,4 +246,17 @@ public class RunCommandTests
         Assert.IsTrue(proxy.Logging.EnableFile);
         Assert.AreEqual("logs/cli-test.log", proxy.Logging.FilePath);
     }
+
+    [TestMethod]
+    public void ConfigNeedsSessionPath_True_ForAccessLog()
+    {
+        var cfg = new TwpConfig
+        {
+            Server = new ServerConfig
+            {
+                AccessLog = new AccessLogConfig { Path = "/tmp/access.ndjson" },
+            },
+        };
+        Assert.IsTrue(RunCommand.ConfigNeedsSessionPath(cfg));
+    }
 }

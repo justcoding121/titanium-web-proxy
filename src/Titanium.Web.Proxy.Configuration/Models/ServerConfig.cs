@@ -80,6 +80,19 @@ public sealed class ServerConfig
 
     /// <summary>When true, localhost uses the proxy (platform loopback rule). Used with system-proxy helpers.</summary>
     public bool? ProxyLoopback { get; set; }
+
+    /// <summary>Opt-in JSON access log (path + optional sample rate). Null = off (zero cost).</summary>
+    public AccessLogConfig? AccessLog { get; set; }
+}
+
+/// <summary>JSON access log under <c>server.accessLog</c>.</summary>
+public sealed class AccessLogConfig
+{
+    /// <summary>File path for NDJSON lines. Required to enable.</summary>
+    public string? Path { get; set; }
+
+    /// <summary>Sample rate 0.0–1.0 (default 1.0 = all). Values ≤0 disable writing.</summary>
+    public double? SampleRate { get; set; }
 }
 
 /// <summary>Deadline and retry knobs on <c>ProxyServer</c>.</summary>

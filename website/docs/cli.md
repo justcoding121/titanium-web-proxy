@@ -41,7 +41,9 @@ titanium run -c <config> [-v|--verbose] [--service] [--name <service-name>]
 | `--service` | Service-worker mode (used by `titanium service install`; no “Press Ctrl+C” prompt; SIGTERM / SCM stop) |
 | `--name` | Windows SCM name when `--service` is set (default `titanium`) |
 
-Foreground run blocks until Ctrl+C. Exit `0` on clean stop; `1` on config/start errors.
+Foreground run blocks until Ctrl+C (or SIGTERM). On Linux/macOS, **SIGHUP** reloads routes/clusters from the same config path without dropping the process or in-flight connections (listeners stay bound). Exit `0` on clean stop; `1` on config/start errors.
+
+Opt-in NDJSON access logs via `server.accessLog` in the config (see [Configuration](/docs/configuration)). Bodies are never buffered for logging.
 
 ## `test`
 
