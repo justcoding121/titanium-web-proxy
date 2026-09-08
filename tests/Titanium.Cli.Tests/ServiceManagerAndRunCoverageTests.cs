@@ -9,6 +9,7 @@ using Titanium.Web.Proxy.Configuration.Models;
 namespace Titanium.Cli.Tests;
 
 [TestClass]
+#pragma warning disable CA1416 // coverage hits every OS manager from the Windows collector
 public class ServiceManagerAndRunCoverageTests
 {
     [TestMethod]
@@ -170,3 +171,4 @@ public class ServiceManagerAndRunCoverageTests
         return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 }
+#pragma warning restore CA1416
