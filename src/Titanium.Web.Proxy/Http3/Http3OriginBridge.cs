@@ -777,9 +777,13 @@ internal static class Http3OriginBridge
     /// <summary>
     ///     Session-less H3→H3 forward for the interception-off bodiless path.
     ///     Request: QPACK encode from the Request bag (authority rewrite for ForwardHost).
-    ///     Response: <b>verbatim frame relay</b> to <paramref name="clientStream"/> (H2 compressed-relay
-    ///     analogue) — no response QPACK decode/re-encode / <see cref="Response"/> graph.
-    ///     Returns <see langword="true"/> when the client response is already on the wire.
+    ///     Response when <paramref name="clientStream"/> is non-null: <b>verbatim frame relay</b>
+    ///     (H2 compressed-relay analogue) — no response QPACK decode/re-encode / <see cref="Response"/> graph.
+    ///     When <paramref name="clientStream"/> is null (MITM unchanged-lite): capture the first
+    ///     HEADERS QPACK block (+ tiny DATA) into <see cref="H3H2FastForward.PreencodedQpackHeaders"/>
+    ///     and populate <see cref="H3H2FastForward.Response"/> so BeforeResponse can run before emit.
+    ///     Returns <see langword="true"/> when the client response is already on the wire, or when
+    ///     MITM capture succeeded and the caller should <c>SendPreencodedResponseAsync</c>.
     /// </summary>
     internal static async Task<bool> ForwardOverQuicFastAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         H3H2FastForward fwd,
@@ -787,7 +791,7 @@ internal static class Http3OriginBridge
         ILogger logger,
         CancellationToken cancellationToken,
         Func<SessionEventArgs> coldOpenSessionFactory,
-        QuicStream clientStream)
+        QuicStream? clientStream)
     {
         var request = fwd.Request;
         var sniHost = fwd.OriginAuthorityHost ?? "localhost";
@@ -867,11 +871,11 @@ internal static class Http3OriginBridge
                     await originStream.FlushAsync(cancellationToken);
                     originStream.CompleteWrites();
 
-                    // Verbatim origin→client frame copy (HEADERS + DATA + trailers). Skip QPACK
-                    // decode/re-encode — same idea as H2 compressed same-protocol relay.
+                    // Verbatim origin→client frame copy, or MITM capture when clientStream is null.
                     // Tiny GET: coalesce HEADERS+DATA into one Quic write (origin probe sends both).
                     const int relayCoalesceMaxBytes = 16 * 1024;
                     var maxPayload = Math.Max(fwd.MaxBufferedBodyBytes, server.MaxDecodedHeaderListBytes);
+                    var captureForMitm = clientStream is null;
                     var sawFinalHeaders = false;
                     while (true)
                     {
@@ -884,7 +888,7 @@ internal static class Http3OriginBridge
                             if (frame.Type == Http3FrameType.Headers)
                             {
                                 // Ignore interim 1xx on the fast path (probes never send them).
-                                // Still forward the first HEADERS block and any trailers.
+                                // Still forward/capture the first HEADERS block and any trailers.
                                 if (!sawFinalHeaders)
                                 {
                                     var headersPayload = frame.Payload;
@@ -895,8 +899,15 @@ internal static class Http3OriginBridge
                                     {
                                         try
                                         {
-                                            await Http3Frame.WriteHeadersAndDataAsync(clientStream,
-                                                headersPayload, next.Payload, cancellationToken);
+                                            if (captureForMitm)
+                                            {
+                                                CaptureMitmQuicResponse(fwd, headersPayload, next.Payload);
+                                            }
+                                            else
+                                            {
+                                                await Http3Frame.WriteHeadersAndDataAsync(clientStream!,
+                                                    headersPayload, next.Payload, cancellationToken);
+                                            }
                                         }
                                         finally
                                         {
@@ -909,25 +920,51 @@ internal static class Http3OriginBridge
 
                                     if (next != null)
                                     {
-                                        await Http3Frame.WriteAsync(clientStream, Http3FrameType.Headers,
-                                            headersPayload, cancellationToken);
-                                        sawFinalHeaders = true;
-                                        if (next.Type == Http3FrameType.Data)
+                                        if (captureForMitm)
                                         {
-                                            if (next.Payload.Length > 0)
-                                                await Http3Frame.WriteAsync(clientStream, Http3FrameType.Data,
-                                                    next.Payload, cancellationToken);
+                                            CaptureMitmQuicResponse(fwd, headersPayload,
+                                                next.Type == Http3FrameType.Data
+                                                    ? next.Payload
+                                                    : ReadOnlyMemory<byte>.Empty);
+                                            if (next.Type != Http3FrameType.Data
+                                                && IsForbiddenOnRequestStream(next.Type))
+                                                throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
+                                                    $"Frame type 0x{next.Type:X} not permitted on request stream.");
                                         }
-                                        else if (IsForbiddenOnRequestStream(next.Type))
-                                            throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
-                                                $"Frame type 0x{next.Type:X} not permitted on request stream.");
+                                        else
+                                        {
+                                            await Http3Frame.WriteAsync(clientStream!, Http3FrameType.Headers,
+                                                headersPayload, cancellationToken);
+                                            if (next.Type == Http3FrameType.Data)
+                                            {
+                                                if (next.Payload.Length > 0)
+                                                    await Http3Frame.WriteAsync(clientStream!, Http3FrameType.Data,
+                                                        next.Payload, cancellationToken);
+                                            }
+                                            else if (IsForbiddenOnRequestStream(next.Type))
+                                                throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
+                                                    $"Frame type 0x{next.Type:X} not permitted on request stream.");
+                                        }
+
+                                        sawFinalHeaders = true;
                                         next.ReturnPayload();
                                         continue;
                                     }
                                 }
 
-                                await Http3Frame.WriteAsync(clientStream, Http3FrameType.Headers,
-                                    frame.Payload, cancellationToken);
+                                if (captureForMitm)
+                                {
+                                    if (!sawFinalHeaders)
+                                        CaptureMitmQuicResponse(fwd, frame.Payload, ReadOnlyMemory<byte>.Empty);
+                                    // Trailers after final headers: MITM capture drops them for tiny GET
+                                    // (probe responses have no trailers). Mutating handlers fall back.
+                                }
+                                else
+                                {
+                                    await Http3Frame.WriteAsync(clientStream!, Http3FrameType.Headers,
+                                        frame.Payload, cancellationToken);
+                                }
+
                                 sawFinalHeaders = true;
                                 continue;
                             }
@@ -938,8 +975,14 @@ internal static class Http3OriginBridge
                                     throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
                                         "DATA frame received before response HEADERS.");
                                 if (frame.Payload.Length > 0)
-                                    await Http3Frame.WriteAsync(clientStream, Http3FrameType.Data,
-                                        frame.Payload, cancellationToken);
+                                {
+                                    if (captureForMitm)
+                                        AppendMitmQuicBody(fwd, frame.Payload);
+                                    else
+                                        await Http3Frame.WriteAsync(clientStream!, Http3FrameType.Data,
+                                            frame.Payload, cancellationToken);
+                                }
+
                                 continue;
                             }
 
@@ -2143,6 +2186,85 @@ internal static class Http3OriginBridge
             hash.Add(header.Value);
         }
         return hash.ToHashCode();
+    }
+
+    private static void CaptureMitmQuicResponse(H3H2FastForward fwd, ReadOnlyMemory<byte> headersPayload,
+        ReadOnlyMemory<byte> bodyPayload)
+    {
+        var qpack = headersPayload.ToArray();
+        fwd.PreencodedQpackHeaders = qpack;
+        if (fwd.Response != null)
+            PopulateResponseFromQpack(fwd.Response, qpack);
+
+        if (bodyPayload.Length == 0)
+        {
+            fwd.PreencodedBody = null;
+            fwd.PreencodedBodyLength = 0;
+            fwd.PreencodedBodyRented = false;
+            if (fwd.Response != null)
+            {
+                fwd.Response.Body = Array.Empty<byte>();
+                fwd.Response.BodyIsWireEncoded = true;
+                fwd.Response.IsBodyReceived = true;
+                fwd.Response.IsBodyRead = true;
+            }
+
+            return;
+        }
+
+        var body = bodyPayload.ToArray();
+        fwd.PreencodedBody = body;
+        fwd.PreencodedBodyLength = body.Length;
+        fwd.PreencodedBodyRented = false;
+        if (fwd.Response != null)
+        {
+            var copy = new byte[body.Length];
+            Buffer.BlockCopy(body, 0, copy, 0, body.Length);
+            fwd.Response.Body = copy;
+            fwd.Response.BodyIsWireEncoded = true;
+            fwd.Response.IsBodyReceived = true;
+            fwd.Response.IsBodyRead = true;
+        }
+    }
+
+    private static void AppendMitmQuicBody(H3H2FastForward fwd, ReadOnlyMemory<byte> chunk)
+    {
+        if (chunk.Length == 0)
+            return;
+
+        var existing = fwd.PreencodedBody;
+        var existingLen = fwd.PreencodedBodyLength > 0
+            ? fwd.PreencodedBodyLength
+            : existing?.Length ?? 0;
+        var combined = new byte[existingLen + chunk.Length];
+        if (existingLen > 0 && existing != null)
+            Buffer.BlockCopy(existing, 0, combined, 0, existingLen);
+        chunk.Span.CopyTo(combined.AsSpan(existingLen));
+        fwd.PreencodedBody = combined;
+        fwd.PreencodedBodyLength = combined.Length;
+        fwd.PreencodedBodyRented = false;
+        if (fwd.Response != null)
+        {
+            var copy = new byte[combined.Length];
+            Buffer.BlockCopy(combined, 0, copy, 0, combined.Length);
+            fwd.Response.Body = copy;
+            fwd.Response.BodyIsWireEncoded = true;
+            fwd.Response.IsBodyReceived = true;
+            fwd.Response.IsBodyRead = true;
+        }
+    }
+
+    private static void PopulateResponseFromQpack(Response response, ReadOnlySpan<byte> qpack)
+    {
+        response.HttpVersion = HttpHeader.Version30;
+        response.Headers.Clear();
+        foreach (var (name, value) in QpackDecoder.Decode(qpack))
+        {
+            if (name == ":status" && int.TryParse(value, out var statusCode))
+                response.StatusCode = statusCode;
+            else if (name.Length == 0 || name[0] != ':')
+                response.Headers.AddHeader(new HttpHeader(name, value));
+        }
     }
 
     private static int ParseStatusCode(List<(string Name, string Value)> headers)
