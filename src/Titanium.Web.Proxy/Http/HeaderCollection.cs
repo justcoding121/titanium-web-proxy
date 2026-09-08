@@ -14,11 +14,11 @@ namespace Titanium.Web.Proxy.Http;
 [TypeConverter(typeof(ExpandableObjectConverter))]
 public class HeaderCollection : IEnumerable<HttpHeader>
 {
-    private readonly Dictionary<string, HttpHeader> headers;
+    private Dictionary<string, HttpHeader> headers;
 
-    private readonly Dictionary<string, List<HttpHeader>> nonUniqueHeaders;
+    private Dictionary<string, List<HttpHeader>> nonUniqueHeaders;
 
-    private readonly Dictionary<string, IReadOnlyList<HttpHeader>> nonUniqueHeadersReadOnly;
+    private Dictionary<string, IReadOnlyList<HttpHeader>> nonUniqueHeadersReadOnly;
 
     /// <summary>
     ///     Monotonic counter bumped on every mutating API (<see cref="AddHeader"/>, <see cref="RemoveHeader"/>,
@@ -91,7 +91,8 @@ public class HeaderCollection : IEnumerable<HttpHeader>
 
     /// <summary>
     ///     Move decoded headers from a scratch collection into this empty destination (H2 MITM).
-    ///     Avoids a second Dictionary insert pass / MutationCount churn of foreach AddHeader.
+    ///     Swaps the dictionary instances when this bag is empty so the hot path avoids a second
+    ///     insert pass; scratch keeps the prior empty maps for the next decode.
     /// </summary>
     internal void TakeContentsFrom(HeaderCollection source)
     {
@@ -106,25 +107,23 @@ public class HeaderCollection : IEnumerable<HttpHeader>
             return;
         }
 
-        foreach (var kv in source.headers)
-            headers.Add(kv.Key, kv.Value);
-        foreach (var kv in source.nonUniqueHeaders)
-        {
-            nonUniqueHeaders.Add(kv.Key, kv.Value);
-            if (source.nonUniqueHeadersReadOnly.TryGetValue(kv.Key, out var readOnly))
-                nonUniqueHeadersReadOnly.Add(kv.Key, readOnly);
-        }
-
+        // Swap maps — O(1). Destination inherits MutationCount; scratch is left empty for Reset/reuse.
+        (headers, source.headers) = (source.headers, headers);
+        (nonUniqueHeaders, source.nonUniqueHeaders) = (source.nonUniqueHeaders, nonUniqueHeaders);
+        (nonUniqueHeadersReadOnly, source.nonUniqueHeadersReadOnly) =
+            (source.nonUniqueHeadersReadOnly, nonUniqueHeadersReadOnly);
         MutationCount = source.MutationCount;
-        source.headers.Clear();
-        source.nonUniqueHeaders.Clear();
-        source.nonUniqueHeadersReadOnly.Clear();
         source.MutationCount = 0;
         source._mitmRelayCowArmed = false;
         source._mitmRelayCowUnique = null;
         source._mitmRelayCowNonUnique = null;
+        source._mitmRelayCowNonUniqueNames = 0;
         source._mitmRelayAppends = default;
         source._mitmRelayAppendDirty = false;
+        headersView = null;
+        nonUniqueHeadersView = null;
+        source.headersView = null;
+        source.nonUniqueHeadersView = null;
     }
 
     private void InvalidateMitmRelayAppendLog()

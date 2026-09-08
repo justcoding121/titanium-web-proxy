@@ -878,7 +878,26 @@ namespace Titanium.Web.Proxy.Http2
 
             // Gate-off same-protocol path: keep HPACK decoder in sync with a no-op listener, then
             // forward the compressed block unchanged (valid when both legs negotiated table size 0).
-            async Task RelayCompressedHeaderBlockAsync(int hbStreamId, byte[] compressed, bool endStreamFlag,
+            // Same-transport / patched scheme + no origin pool: sync enqueue (no async SM).
+            // Async only for multi-origin AssignStreamAsync or rare scheme-decode RST/GOAWAY.
+            void EnqueueRelayedHeaderBlock(int wireStreamId, ReadOnlyMemory<byte> blockToRelay,
+                bool endStreamFlag, byte[]? appendSuffix, Http2FrameWriter? dedicatedWriter,
+                SemaphoreSlim writeLock, Stream writeStream)
+            {
+                var relayFrameHeader = new Http2FrameHeader { StreamId = wireStreamId };
+                var appendMemory = appendSuffix == null ? ReadOnlyMemory<byte>.Empty : appendSuffix.AsMemory();
+                // Header bytes are written straight into the rented frame; no shared 9-byte scratch.
+                var framed = RentFramedHeaderBlock(relayFrameHeader, Array.Empty<byte>(), wireStreamId,
+                    Http2FrameType.Headers, endStreamFlag, hasPriority: false, blockToRelay, appendMemory,
+                    remoteSettings.MaxFrameSize);
+                if (dedicatedWriter != null)
+                    dedicatedWriter.EnqueueRented(framed.Array!, framed.Count);
+                else
+                    connectionState.EnqueueWriteRented(isClient, writeLock, writeStream,
+                        framed.Array!, framed.Count);
+            }
+
+            Task RelayCompressedHeaderBlockAsync(int hbStreamId, byte[] compressed, bool endStreamFlag,
                 byte[]? appendSuffix = null)
             {
                 // Mixed-transport: prefer a structural HPACK walk that only rewrites Indexed
@@ -897,94 +916,105 @@ namespace Titanium.Web.Proxy.Http2
                         case StaticSchemeOverrideResult.AlreadyMatching:
                             break;
                         default:
-                        {
-                            var overrideHeaders = new HeaderCollection();
-                            var overrideListener = new MyHeaderListener(
-                                (name, value) => overrideHeaders.AddHeader(new HttpHeader(name, value)),
-                                isRequest: true);
-                            try
-                            {
-                                if (decoder == null)
-                                {
-                                    headerTableSize = remoteSettings.HeaderTableSize;
-                                    decoder = new Decoder(maxDecodedHeaderListBytes, headerTableSize);
-                                }
-                                else if (headerTableSize != remoteSettings.HeaderTableSize)
-                                {
-                                    headerTableSize = remoteSettings.HeaderTableSize;
-                                    decoder.SetMaxHeaderTableSize(headerTableSize);
-                                }
-
-                                decoder.Decode(compressed.AsSpan(0, compressed.Length), overrideListener);
-                                if (decoder.EndHeaderBlock())
-                                {
-                                    ReportException(logger, new ProxyHttpException(
-                                        "HTTP/2 header list too large on compressed-relay stream.", null, null));
-                                    RemoveAndFinalizeStream(hbStreamId);
-                                    await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(),
-                                        new byte[9], hbStreamId, (Http2ErrorCode)0xb /* ENHANCE_YOUR_CALM */,
-                                        input));
-                                    return;
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                ReportException(logger, new ProxyHttpException(
-                                    "Failed to decode HTTP/2 headers on compressed-relay stream", ex, null));
-                                await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
-                                    hbStreamId, Http2ErrorCode.CompressionError, input));
-                                throw;
-                            }
-
-                            // Trailers / CONNECT (no :scheme) and already-matching schemes stay verbatim.
-                            if (!overrideListener.HasMalformedHeader
-                                && overrideListener.RawScheme.Length > 0
-                                && !overrideListener.RawScheme.Equals(compressedRelaySchemeOverride))
-                            {
-                                if (TryPatchStaticIndexedScheme(compressed, overrideListener.RawScheme,
-                                        compressedRelaySchemeOverride, out var patched))
-                                    blockToRelay = patched;
-                                else
-                                    blockToRelay = ReencodeCompressedRequestBlock(remoteSettings,
-                                        overrideListener, overrideHeaders, compressedRelaySchemeOverride);
-                            }
-
-                            break;
-                        }
+                            return RelayCompressedWithSchemeDecodeAsync(hbStreamId, compressed, endStreamFlag,
+                                appendSuffix);
                     }
                 }
 
-                var wireStreamId = hbStreamId;
-                Http2FrameWriter? dedicatedWriter = null;
-                SemaphoreSlim writeLock = outputWriteLock;
-                Stream writeStream = output;
-                var towardServer = isClient;
-
                 if (isClient && connectionState.OriginRelayPool != null)
-                {
-                    var assignment = await connectionState.OriginRelayPool
-                        .AssignStreamAsync(hbStreamId, cancellationToken).ConfigureAwait(false);
-                    wireStreamId = assignment.OriginStreamId;
-                    dedicatedWriter = assignment.Leg.Writer;
-                    writeStream = assignment.Leg.Stream;
-                }
-                else if (!isClient && originReceiveLeg != null)
+                    return RelayCompressedWithOriginPoolAsync(hbStreamId, blockToRelay, endStreamFlag, appendSuffix);
+
+                Http2FrameWriter? dedicatedWriter = null;
+                var writeLock = outputWriteLock;
+                var writeStream = output;
+                if (!isClient && originReceiveLeg != null)
                 {
                     // Origin → client: hbStreamId is already remapped to the client stream id by the caller.
                     dedicatedWriter = connectionState.ClientFrameWriter;
                 }
 
-                var relayFrameHeader = new Http2FrameHeader { StreamId = wireStreamId };
-                var relayFrameHeaderBuffer = new byte[9];
-                var appendMemory = appendSuffix == null ? ReadOnlyMemory<byte>.Empty : appendSuffix.AsMemory();
-                var framed = RentFramedHeaderBlock(relayFrameHeader, relayFrameHeaderBuffer, wireStreamId,
-                    Http2FrameType.Headers, endStreamFlag, hasPriority: false, blockToRelay, appendMemory,
-                    remoteSettings.MaxFrameSize);
-                if (dedicatedWriter != null)
-                    dedicatedWriter.EnqueueRented(framed.Array!, framed.Count);
-                else
-                    connectionState.EnqueueWriteRented(towardServer, writeLock, writeStream,
-                        framed.Array!, framed.Count);
+                EnqueueRelayedHeaderBlock(hbStreamId, blockToRelay, endStreamFlag, appendSuffix,
+                    dedicatedWriter, writeLock, writeStream);
+                return Task.CompletedTask;
+            }
+
+            async Task RelayCompressedWithOriginPoolAsync(int hbStreamId, ReadOnlyMemory<byte> blockToRelay,
+                bool endStreamFlag, byte[]? appendSuffix)
+            {
+                var assignment = await connectionState.OriginRelayPool!
+                    .AssignStreamAsync(hbStreamId, cancellationToken).ConfigureAwait(false);
+                EnqueueRelayedHeaderBlock(assignment.OriginStreamId, blockToRelay, endStreamFlag, appendSuffix,
+                    assignment.Leg.Writer, assignment.Leg.WriteLock, assignment.Leg.Stream);
+            }
+
+            async Task RelayCompressedWithSchemeDecodeAsync(int hbStreamId, byte[] compressed, bool endStreamFlag,
+                byte[]? appendSuffix)
+            {
+                var overrideHeaders = new HeaderCollection();
+                var overrideListener = new MyHeaderListener(
+                    (name, value) => overrideHeaders.AddHeader(new HttpHeader(name, value)),
+                    isRequest: true);
+                try
+                {
+                    if (decoder == null)
+                    {
+                        headerTableSize = remoteSettings.HeaderTableSize;
+                        decoder = new Decoder(maxDecodedHeaderListBytes, headerTableSize);
+                    }
+                    else if (headerTableSize != remoteSettings.HeaderTableSize)
+                    {
+                        headerTableSize = remoteSettings.HeaderTableSize;
+                        decoder.SetMaxHeaderTableSize(headerTableSize);
+                    }
+
+                    decoder.Decode(compressed.AsSpan(0, compressed.Length), overrideListener);
+                    if (decoder.EndHeaderBlock())
+                    {
+                        ReportException(logger, new ProxyHttpException(
+                            "HTTP/2 header list too large on compressed-relay stream.", null, null));
+                        RemoveAndFinalizeStream(hbStreamId);
+                        await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(),
+                            new byte[9], hbStreamId, (Http2ErrorCode)0xb /* ENHANCE_YOUR_CALM */,
+                            input));
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    ReportException(logger, new ProxyHttpException(
+                        "Failed to decode HTTP/2 headers on compressed-relay stream", ex, null));
+                    await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                        hbStreamId, Http2ErrorCode.CompressionError, input));
+                    throw;
+                }
+
+                ReadOnlyMemory<byte> blockToRelay = compressed;
+                // Trailers / CONNECT (no :scheme) and already-matching schemes stay verbatim.
+                if (!overrideListener.HasMalformedHeader
+                    && overrideListener.RawScheme.Length > 0
+                    && !overrideListener.RawScheme.Equals(compressedRelaySchemeOverride))
+                {
+                    if (TryPatchStaticIndexedScheme(compressed, overrideListener.RawScheme,
+                            compressedRelaySchemeOverride, out var patched))
+                        blockToRelay = patched;
+                    else
+                        blockToRelay = ReencodeCompressedRequestBlock(remoteSettings,
+                            overrideListener, overrideHeaders, compressedRelaySchemeOverride);
+                }
+
+                if (isClient && connectionState.OriginRelayPool != null)
+                {
+                    await RelayCompressedWithOriginPoolAsync(hbStreamId, blockToRelay, endStreamFlag, appendSuffix)
+                        .ConfigureAwait(false);
+                    return;
+                }
+
+                Http2FrameWriter? dedicatedWriter = null;
+                if (!isClient && originReceiveLeg != null)
+                    dedicatedWriter = connectionState.ClientFrameWriter;
+
+                EnqueueRelayedHeaderBlock(hbStreamId, blockToRelay, endStreamFlag, appendSuffix,
+                    dedicatedWriter, outputWriteLock, output);
             }
 
             // Decodes one fully-assembled HEADERS(+CONTINUATION...) block (already stripped of padding/
@@ -1379,11 +1409,77 @@ namespace Titanium.Web.Proxy.Http2
                     // a large Lite tax vs reverse; start the async state machine without a pool hop.
                     // Bridges / dynamic HPACK keep Task.Run so encode+checkout does not serialize the
                     // frame loop (~22k streams/s cap measured on h2-to-h1 when run inline).
-                    async Task DispatchRequestAfterHeadersAsync()
+                    // Prefer a non-async Lite finish (Task.CompletedTask) when handler + previousDispatch
+                    // + RelayCompressedHeaderBlockAsync all complete inline — avoids per-stream async SM.
+                    Task StartMitmStaticRequestDispatch()
+                    {
+                        var handler = onBeforeRequestResponse(sessionArgs, streamContext);
+                        if (tcs == null
+                            && handler.IsCompletedSuccessfully
+                            && previousDispatch.IsCompletedSuccessfully
+                            && !sessionArgs.HttpClient.Request.CancelRequest)
+                        {
+                            connectionState.Streams.TryGetValue(hbStreamId, out var relayState);
+                            bool isExtendedConnectTunnel = relayState?.IsExtendedConnect == true
+                                && relayState.InboundTunnelChannel != null;
+                            bool isNativeExtendedConnect = relayState?.IsExtendedConnect == true
+                                && relayState.InboundTunnelChannel == null;
+                            bool isExternalBridge = relayState?.IsExternalBridge == true
+                                || output is NullOriginStream;
+
+                            if (!isExtendedConnectTunnel && !isExternalBridge && !isNativeExtendedConnect)
+                            {
+                                var injectVia = !sessionArgs.IsFastPath && !sessionArgs.IsTransparent
+                                    && !sessionArgs.IsSocks
+                                    && !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym);
+                                if (!injectVia
+                                    && forceStaticHpackTable
+                                    && relayState?.CapturedCompressedHeaders != null
+                                    && !request.IsBodyRead
+                                    && !request.BodyAvailable
+                                    && string.Equals(request.Method, relayState.CapturedMethod, StringComparison.Ordinal)
+                                    && request.RequestUriString8.Equals(relayState.CapturedPath)
+                                    && request.Authority.Equals(relayState.CapturedAuthority))
+                                {
+                                    relayState.HeadersRelayBaseline = request.Headers.TakeMitmRelayBaseline();
+                                    if (MitmCompressedRelayHelper.AllowsCompressedRelay(
+                                            relayState.HeadersRelayBaseline.MutationCount,
+                                            request.Headers,
+                                            MitmCompressedRelayHelper.DefaultMaxAppendHeaders,
+                                            out _))
+                                    {
+                                        var relayTask = RelayCompressedHeaderBlockAsync(hbStreamId,
+                                            relayState.CapturedCompressedHeaders, endStreamFlag);
+                                        if (relayTask.IsCompletedSuccessfully)
+                                        {
+                                            request.ReadHttp2BeforeHandlerTaskCompletionSource = null;
+                                            relayState.EnableRequestDataCompressedRelay();
+                                            request.Locked = true;
+                                            return Task.CompletedTask;
+                                        }
+
+                                        return CompleteMitmLiteRelayAsync(relayTask, relayState);
+                                    }
+                                }
+                            }
+                        }
+
+                        return DispatchRequestAfterHeadersAsync(handler);
+
+                        async Task CompleteMitmLiteRelayAsync(Task relayTask, Http2StreamState relayState)
+                        {
+                            await relayTask;
+                            request.ReadHttp2BeforeHandlerTaskCompletionSource = null;
+                            relayState.EnableRequestDataCompressedRelay();
+                            request.Locked = true;
+                        }
+                    }
+
+                    async Task DispatchRequestAfterHeadersAsync(Task? prestartedHandler = null)
                     {
                         // DATA routing stays correct: client DATA frames await this dispatch task before
                         // being routed, so channels the handler registers are always visible in time.
-                        var handler = onBeforeRequestResponse(sessionArgs, streamContext);
+                        var handler = prestartedHandler ?? onBeforeRequestResponse(sessionArgs, streamContext);
                         bool handlerCompleted;
                         if (tcs == null)
                         {
@@ -1670,11 +1766,11 @@ namespace Titanium.Web.Proxy.Http2
                         request.Locked = true;
                     }
 
-                    // Static-HPACK MITM: start without Task.Run (see DispatchRequestAfterHeadersAsync).
+                    // Static-HPACK MITM: sync Lite finish when possible (see StartMitmStaticRequestDispatch).
                     // Dynamic HPACK / bridges: keep Task.Run so sync encode does not serialize the frame loop.
                     Task dispatchTask = forceStaticHpackTable && httpInterceptionEnabled
-                        ? DispatchRequestAfterHeadersAsync()
-                        : Task.Run((Func<Task>)DispatchRequestAfterHeadersAsync, cancellationToken);
+                        ? StartMitmStaticRequestDispatch()
+                        : Task.Run(() => DispatchRequestAfterHeadersAsync(), cancellationToken);
                     requestDispatchChain = dispatchTask;
                     request.Http2BeforeHandlerTask = dispatchTask;
                     pendingSynthetics.Track(dispatchTask);
@@ -4822,8 +4918,7 @@ namespace Titanium.Web.Proxy.Http2
                 }
 
                 frameHeader.Flags = flags;
-                frameHeader.CopyToBuffer(frameHeaderBuffer);
-                frameHeaderBuffer.AsSpan(0, 9).CopyTo(dest.Slice(destPos));
+                frameHeader.CopyToBuffer(dest.Slice(destPos));
                 destPos += 9;
                 if (chunkLength > 0)
                 {
