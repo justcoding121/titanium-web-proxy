@@ -192,6 +192,47 @@ public class InspectorCommandCoverageTests
             vm.SelectedInspectTabIndex = 1;
             vm.SelectedInspectTabIndex = 2;
             vm.SelectedInspectTabIndex = 4;
+
+            await ExecuteAsync(vm.ExportSelectedHarCommand);
+            await ExecuteAsync(vm.ExportSelectedArchiveCommand);
+            await ExecuteAsync(vm.RemoveSelectedSessionsCommand);
+            vm.SeedSession(proc);
+            vm.SetSelectedSessions([proc]);
+            await ExecuteAsync(vm.ClearSessionsCommand);
+            await ExecuteAsync(vm.ToggleSystemProxyCommand);
+            await ExecuteAsync(vm.OpenToolsScriptsCommand);
+
+            var notifier = new AvaloniaStatusNotifier(() => null);
+            foreach (var severity in Enum.GetValues<StatusSeverity>())
+                notifier.Show("toast " + severity, severity);
+            notifier.Show("   ", StatusSeverity.Neutral);
+            notifier.Show("", StatusSeverity.Error);
+
+            Assert.IsFalse(MapRemoteViewModel.TryApplyRewrite("https://a/", "https://a/", "", out _));
+            Assert.IsFalse(MapRemoteViewModel.TryApplyRewrite("https://a/", "*", "not-a-url", out _));
+            Assert.IsTrue(MapRemoteViewModel.TryApplyRewrite("https://a/x", "*", "https://b.test/", out var star));
+            Assert.AreEqual("https://b.test/", star);
+            Assert.IsTrue(MapRemoteViewModel.TryApplyRewrite("https://a/x", "*", "https://b.test/*", out var embed));
+            StringAssert.Contains(embed, "https://a/x");
+            Assert.IsTrue(MapRemoteViewModel.TryApplyRewrite("https://a/api/v1?q=1", "https://a/*", "https://b.test/*", out var cap));
+            StringAssert.Contains(cap, "api/v1");
+            Assert.IsTrue(MapRemoteViewModel.TryApplyRewrite("https://a/api", "https://a/*", "https://b.test/fixed", out var lit));
+            Assert.AreEqual("https://b.test/fixed", lit);
+
+            var map = new MapRemoteViewModel { Enabled = true };
+            map.Rules.Add(new MapRemoteRule { Enabled = true, MatchUrl = "*rewrite*", TargetUrl = "https://z.test/" });
+            Assert.IsTrue(map.TryRewrite("https://a/rewrite", out var rewritten, out var matched));
+            Assert.AreEqual("https://z.test/", rewritten);
+            Assert.IsNotNull(matched);
+            map.Enabled = false;
+            Assert.IsFalse(map.TryRewrite("https://a/rewrite", out _, out _));
+
+            _ = OsTrustUxCopy.ConfirmInstallRootCaBody();
+            _ = OsTrustUxCopy.ConfirmRemoveRootCaBody();
+            _ = OsTrustUxCopy.ConfirmElevateRootCaBody();
+            _ = OsTrustUxCopy.TrustRecoveryAdminBody("msg");
+            _ = OsTrustUxCopy.ExcludedHostsIntro();
+            _ = OsTrustUxCopy.ExcludedHostsLoopbackHint();
         }
         finally
         {

@@ -104,7 +104,7 @@ public sealed class CircuitBreakerController : IDisposable
         return Task.CompletedTask;
     }
 
-    private string? ResolveDestinationId(SessionEventArgs e)
+    private string? ResolveDestinationId(SessionEventArgs e) // NOSONAR S3776 -- Destination resolution walks cluster/route fallbacks in one place.
     {
         if (!string.IsNullOrEmpty(e.UpstreamDestinationId))
         {

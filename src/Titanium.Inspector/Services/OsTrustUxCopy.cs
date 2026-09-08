@@ -26,6 +26,8 @@ public static class OsTrustUxCopy
 
     public const string MacSslTrustWaitConfirmSaved = "I’ve saved Always Trust";
 
+    private const string ExportCaLabel = "Export CA";
+
     /// <summary>Install-root confirm body for the OS this process is running on.</summary>
     public static string ConfirmInstallRootCaBody()
     {
@@ -134,7 +136,7 @@ public static class OsTrustUxCopy
         var kind = result?.Kind ?? CertificateOsTrustKind.Failed;
         var detail = string.IsNullOrWhiteSpace(result?.Message)
             ? null
-            : result!.Message.Trim();
+            : result.Message.Trim();
 
         return kind switch
         {
@@ -142,7 +144,7 @@ public static class OsTrustUxCopy
                 "Confirm trust in Keychain",
                 detail ?? MacSslTrustWaitBody,
                 "Continue in Keychain Access",
-                "Export CA",
+                ExportCaLabel,
                 360),
 
             CertificateOsTrustKind.CertutilMissing => (
@@ -152,14 +154,14 @@ public static class OsTrustUxCopy
                     ? "Inspector needs certutil (NSS tools) to finish trusting the root CA."
                     : "Inspector needs browser certificate tools to finish trusting the root CA."),
                 "Try again",
-                "Export CA",
+                ExportCaLabel,
                 280),
 
             CertificateOsTrustKind.HomebrewMissing => (
                 "Certificate tools needed",
                 detail ??
                 "Homebrew is required to install certificate tools. Export the CA to trust it manually.",
-                "Export CA",
+                ExportCaLabel,
                 null,
                 260),
 
@@ -168,7 +170,7 @@ public static class OsTrustUxCopy
                 detail ??
                 "The Titanium Inspector root CA is not trusted on this computer yet.",
                 "Try again",
-                "Export CA",
+                ExportCaLabel,
                 260),
         };
     }

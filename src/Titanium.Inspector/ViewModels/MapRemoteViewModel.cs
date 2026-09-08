@@ -121,7 +121,7 @@ public sealed class MapRemoteViewModel : INotifyPropertyChanged
     /// into <paramref name="targetTemplate"/>. A single trailing <c>*</c> in both match and target
     /// preserves the matched suffix (path/query). Otherwise the target absolute URL replaces the request.
     /// </summary>
-    public static bool TryApplyRewrite(string url, string matchPattern, string targetTemplate, out string? rewritten)
+    public static bool TryApplyRewrite(string url, string matchPattern, string targetTemplate, out string? rewritten) // NOSONAR S3776 -- Wildcard rewrite keeps match/target suffix handling together.
     {
         rewritten = null;
         if (string.IsNullOrWhiteSpace(targetTemplate))
@@ -199,7 +199,7 @@ public sealed class MapRemoteViewModel : INotifyPropertyChanged
 public sealed class MapRemoteRule : INotifyPropertyChanged
 {
     private string _matchUrl = "*";
-    private string _targetUrl = "http://127.0.0.1/";
+    private string _targetUrl = "http://127.0.0.1/"; // NOSONAR S1075 -- Default Map Remote target is loopback.
     private string _graphQlOperationName = string.Empty;
     private bool _enabled = true;
 

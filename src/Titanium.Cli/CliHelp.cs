@@ -3,7 +3,7 @@ namespace Titanium.Cli;
 /// <summary>Shared argv helpers for nested <c>help</c> / <c>-h</c> / <c>--help</c>.</summary>
 internal static class CliHelp
 {
-    public const string DocsUrl = "https://titaniumproxy.com/docs/cli";
+    public const string DocsUrl = "https://titaniumproxy.com/docs/cli"; // NOSONAR S1075 -- Published CLI docs URL.
 
     public static bool IsHelpToken(string? arg) =>
         arg is "help" or "-h" or "--help";

@@ -87,7 +87,7 @@ internal static class LinuxProcNetTcp
     /// <summary>
     ///     Resolves a socket inode to an owning process id by scanning <c>/proc/*/fd</c>.
     /// </summary>
-    internal static int FindProcessIdByInode(long inode, string procRoot = "/proc")
+    internal static int FindProcessIdByInode(long inode, string procRoot = "/proc") // NOSONAR S3776 -- /proc fd inode walk is a single namespace scan.
     {
         if (inode <= 0)
         {

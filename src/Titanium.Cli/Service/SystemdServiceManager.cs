@@ -8,6 +8,10 @@ namespace Titanium.Cli.Service;
 [SupportedOSPlatform("linux")]
 internal sealed class SystemdServiceManager : IOsServiceManager
 {
+    private const string UnitSuffix = ".service";
+
+    private static string UnitName(string name) => name + UnitSuffix;
+
     public async Task InstallAsync(ServiceInstallRequest request)
     {
         if (!request.User)
@@ -30,7 +34,7 @@ internal sealed class SystemdServiceManager : IOsServiceManager
         AsyncConsole.WriteLine($"Wrote {unitPath}");
 
         await SystemctlAsync(request.User, "daemon-reload").ConfigureAwait(false);
-        await SystemctlAsync(request.User, "enable", request.Name + ".service").ConfigureAwait(false);
+        await SystemctlAsync(request.User, "enable", UnitName(request.Name)).ConfigureAwait(false);
 
         if (request.User)
         {
@@ -51,7 +55,7 @@ internal sealed class SystemdServiceManager : IOsServiceManager
             EnsureRoot();
         }
 
-        var unit = name + ".service";
+        var unit = UnitName(name);
         try
         {
             await SystemctlAsync(user, "stop", unit).ConfigureAwait(false);
@@ -87,7 +91,7 @@ internal sealed class SystemdServiceManager : IOsServiceManager
             EnsureRoot();
         }
 
-        await SystemctlAsync(user, "start", name + ".service").ConfigureAwait(false);
+        await SystemctlAsync(user, "start", UnitName(name)).ConfigureAwait(false);
         AsyncConsole.WriteLine($"Service '{name}' started.");
     }
 
@@ -98,7 +102,7 @@ internal sealed class SystemdServiceManager : IOsServiceManager
             EnsureRoot();
         }
 
-        await SystemctlAsync(user, "stop", name + ".service").ConfigureAwait(false);
+        await SystemctlAsync(user, "stop", UnitName(name)).ConfigureAwait(false);
         AsyncConsole.WriteLine($"Service '{name}' stopped.");
     }
 
@@ -109,7 +113,7 @@ internal sealed class SystemdServiceManager : IOsServiceManager
             EnsureRoot();
         }
 
-        await SystemctlAsync(user, "restart", name + ".service").ConfigureAwait(false);
+        await SystemctlAsync(user, "restart", UnitName(name)).ConfigureAwait(false);
         AsyncConsole.WriteLine($"Service '{name}' restarted.");
     }
 
@@ -121,7 +125,7 @@ internal sealed class SystemdServiceManager : IOsServiceManager
             return new ServiceStatusResult(ServiceStatusKind.NotInstalled, name);
         }
 
-        var (code, stdout) = await SystemctlCaptureAsync(user, "is-active", name + ".service")
+        var (code, stdout) = await SystemctlCaptureAsync(user, "is-active", UnitName(name))
             .ConfigureAwait(false);
         var state = stdout.Trim();
         var kind = state switch
@@ -146,7 +150,7 @@ internal sealed class SystemdServiceManager : IOsServiceManager
         RuntimeInformation.IsOSPlatform(OSPlatform.Linux) && GetEuid() == 0;
 
     [DllImport("libc", EntryPoint = "geteuid", SetLastError = true)]
-    private static extern uint GetEuid();
+    private static extern uint GetEuid(); // NOSONAR SYSLIB1054 -- libc geteuid marshalling is required by this existing interop signature.
 
     private static async Task SystemctlAsync(bool user, params string[] args)
     {

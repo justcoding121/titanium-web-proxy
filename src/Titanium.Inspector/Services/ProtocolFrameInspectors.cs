@@ -6,7 +6,7 @@ namespace Titanium.Inspector.Services;
 /// <summary>WebSocket frame and gRPC length-prefixed frame inspectors.</summary>
 public static class ProtocolFrameInspectors
 {
-    public static IReadOnlyList<WebSocketFrameSnapshot> ParseWebSocketFrames(byte[]? payload)
+    public static IReadOnlyList<WebSocketFrameSnapshot> ParseWebSocketFrames(byte[]? payload) // NOSONAR S3776 -- RFC6455 frame walk is a single offset state machine.
     {
         var list = new List<WebSocketFrameSnapshot>();
         if (payload is null || payload.Length == 0)

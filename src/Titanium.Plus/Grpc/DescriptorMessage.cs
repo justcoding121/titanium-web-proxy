@@ -131,6 +131,8 @@ internal sealed class DescriptorMessage : IMessage
         }
     }
 
+    public void MergeFrom(byte[] data) => MergeFrom(new CodedInputStream(data));
+
     private static object? ReadField(CodedInputStream input, FieldDescriptor field) =>
         field.FieldType switch
         {
@@ -169,6 +171,4 @@ internal sealed class DescriptorMessage : IMessage
         output.Flush();
         return ms.ToArray();
     }
-
-    public void MergeFrom(byte[] data) => MergeFrom(new CodedInputStream(data));
 }

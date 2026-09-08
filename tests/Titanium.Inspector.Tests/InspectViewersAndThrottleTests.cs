@@ -58,6 +58,29 @@ public class InspectViewersAndThrottleTests
     }
 
     [TestMethod]
+    public void ProtobufMessageDecoder_DecodesFixed64Fixed32TruncatedAndBinary()
+    {
+        Assert.AreEqual("", ProtobufMessageDecoder.DecodeWireFormat(null));
+        Assert.AreEqual("", ProtobufMessageDecoder.DecodeWireFormat([]));
+
+        // field 1, wire type 1 (64-bit)
+        var fixed64 = new byte[] { 0x09, 1, 2, 3, 4, 5, 6, 7, 8 };
+        StringAssert.Contains(ProtobufMessageDecoder.DecodeWireFormat(fixed64, stripGrpcFrame: false), "\"wireType\": 1");
+
+        // field 1, wire type 5 (32-bit)
+        var fixed32 = new byte[] { 0x0d, 1, 2, 3, 4 };
+        StringAssert.Contains(ProtobufMessageDecoder.DecodeWireFormat(fixed32, stripGrpcFrame: false), "\"wireType\": 5");
+
+        // truncated length-delimited
+        var truncated = new byte[] { 0x0a, 0x10 };
+        _ = ProtobufMessageDecoder.DecodeWireFormat(truncated, stripGrpcFrame: false);
+
+        // length-delimited with control bytes → hex
+        var binary = new byte[] { 0x0a, 0x02, 0x00, 0x01 };
+        StringAssert.Contains(ProtobufMessageDecoder.DecodeWireFormat(binary, stripGrpcFrame: false), "0001");
+    }
+
+    [TestMethod]
     public void NetworkThrottle_DelayFor_SlowProfile()
     {
         var delay = NetworkThrottle.DelayFor(NetworkThrottle.Slow3G, byteCount: 50_000, applyLatency: true);

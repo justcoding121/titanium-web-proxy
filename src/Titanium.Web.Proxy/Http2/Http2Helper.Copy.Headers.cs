@@ -57,7 +57,7 @@ namespace Titanium.Web.Proxy.Http2
         Action<int> removeAndFinalizeStream,
         Func<Func<ValueTask>, ValueTask> lockedOutputWrite,
         bool forceStaticHpackTable,
-        Http2Settings localSettings,
+        Http2Settings localSettings, // NOSONAR S1172 -- retained for CopyHttp2FrameAsync call-site IL match.
         HeaderCollection headerDecodeScratch,
         MyHeaderListener headerDecodeListener,
         ConcurrentDictionary<int, byte> syntheticStreams,
@@ -390,14 +390,7 @@ namespace Titanium.Web.Proxy.Http2
                 var request = (Request)headerRr;
                 request.HttpVersion = HttpVersion.Version20;
                 // Intern common methods — probe / browser GETs avoid per-stream GetString alloc.
-                var methodSpan = method.Span;
-                request.Method = methodSpan.SequenceEqual("GET"u8) ? "GET" // NOSONAR S3358 -- Interned method names; nested ternary avoids extra locals on the probe GET path.
-                    : methodSpan.SequenceEqual("HEAD"u8) ? "HEAD"
-                    : methodSpan.SequenceEqual("POST"u8) ? "POST"
-                    : methodSpan.SequenceEqual("PUT"u8) ? "PUT"
-                    : methodSpan.SequenceEqual("DELETE"u8) ? "DELETE"
-                    : methodSpan.SequenceEqual("OPTIONS"u8) ? "OPTIONS"
-                    : method.GetString();
+                request.Method = InternCommonHttpMethod(method.Span, method);
                 request.IsHttps = headerListener.Scheme == ProxyServer.UriSchemeHttps;
                 request.Authority = headerListener.Authority;
                 request.RequestUriString8 = path;
@@ -1425,6 +1418,17 @@ namespace Titanium.Web.Proxy.Http2
                     hbStreamId, headerRr.TrailingHeaders, endStreamFlag, output)));
                 return false;
             }
+        }
+
+        private static string InternCommonHttpMethod(ReadOnlySpan<byte> methodSpan, ByteString method)
+        {
+            if (methodSpan.SequenceEqual("GET"u8)) return "GET";
+            if (methodSpan.SequenceEqual("HEAD"u8)) return "HEAD";
+            if (methodSpan.SequenceEqual("POST"u8)) return "POST";
+            if (methodSpan.SequenceEqual("PUT"u8)) return "PUT";
+            if (methodSpan.SequenceEqual("DELETE"u8)) return "DELETE";
+            if (methodSpan.SequenceEqual("OPTIONS"u8)) return "OPTIONS";
+            return method.GetString();
         }
     }
 }

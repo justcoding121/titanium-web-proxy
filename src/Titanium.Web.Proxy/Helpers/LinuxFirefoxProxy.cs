@@ -406,13 +406,7 @@ internal static partial class LinuxFirefoxProxy
 
     private static string? ResolveFirefoxLaunch()
     {
-        foreach (var candidate in FirefoxLaunchCandidates)
-        {
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        return null;
+        return FirefoxLaunchCandidates.FirstOrDefault(File.Exists);
     }
 
     private static string ShellQuote(string value) =>

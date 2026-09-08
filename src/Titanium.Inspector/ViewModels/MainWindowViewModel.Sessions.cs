@@ -433,7 +433,7 @@ public sealed partial class MainWindowViewModel
         var path = await _pathPicker.PickOpenPathAsync(
             "Map Local — choose response file",
             "All files",
-            ["*.*"]).ConfigureAwait(true);
+            "*.*").ConfigureAwait(true);
         if (string.IsNullOrWhiteSpace(path))
         {
             return;

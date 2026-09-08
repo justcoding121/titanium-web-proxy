@@ -360,6 +360,8 @@ public class ServiceCommandParseTests
 [TestClass]
 public class PrivilegePromptTests
 {
+    private static readonly string[] ServiceInstallArgs = ["service", "install", "-c", "twp.yaml"];
+
     [TestCleanup]
     public void Reset() => PrivilegePrompt.ResetForTests();
 
@@ -367,11 +369,11 @@ public class PrivilegePromptTests
     public void TakeInternalArgs_StripsRelaunchFlags()
     {
         var rest = PrivilegePrompt.TakeInternalArgs([
-            "service", "install", "-c", "twp.yaml",
+            ..ServiceInstallArgs,
             PrivilegePrompt.RelaunchFlag,
             PrivilegePrompt.ParentPidFlag, "4242",
         ]);
-        CollectionAssert.AreEqual(new[] { "service", "install", "-c", "twp.yaml" }, rest);
+        CollectionAssert.AreEqual(ServiceInstallArgs, rest);
         Assert.IsTrue(PrivilegePrompt.HasRelaunchFlag);
         Assert.AreEqual(4242u, PrivilegePrompt.ParentPid);
     }
@@ -379,7 +381,7 @@ public class PrivilegePromptTests
     [TestMethod]
     public void AbsolutizeConfigArgs_ExpandsRelativeDashC()
     {
-        var abs = PrivilegePrompt.AbsolutizeConfigArgs(["service", "install", "-c", "twp.yaml"]);
+        var abs = PrivilegePrompt.AbsolutizeConfigArgs(ServiceInstallArgs);
         Assert.AreEqual("service", abs[0]);
         Assert.AreEqual("-c", abs[2]);
         Assert.IsTrue(Path.IsPathRooted(abs[3]), abs[3]);

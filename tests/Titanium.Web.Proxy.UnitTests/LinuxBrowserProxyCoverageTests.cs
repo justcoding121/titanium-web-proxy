@@ -15,7 +15,7 @@ namespace Titanium.Web.Proxy.UnitTests;
 public class LinuxBrowserProxyCoverageTests
 {
     [TestMethod]
-    public void ChromeProfile_ApplyClearAndWatcherReassert_OnAnyOs()
+    public async Task ChromeProfile_ApplyClearAndWatcherReassert_OnAnyOs()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var chromeRoot = Path.Combine(home, ".config", "google-chrome");
@@ -33,13 +33,13 @@ public class LinuxBrowserProxyCoverageTests
             StringAssert.Contains(text, "127.0.0.1:18866");
 
             File.WriteAllText(prefs, """{"proxy":{"mode":"system"}}""");
-            Thread.Sleep(500);
+            await Task.Delay(500);
             var reasserted = File.ReadAllText(prefs);
             StringAssert.Contains(reasserted, "fixed_servers");
 
             LinuxChromeProfileProxy.Clear();
             LinuxProxyFailOpen.Stop();
-            Thread.Sleep(500);
+            await Task.Delay(500);
             LinuxProxyFailOpen.Stop();
         }
         finally

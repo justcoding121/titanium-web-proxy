@@ -453,13 +453,7 @@ internal static class UnixCertificateTrust
         if (which is { Succeeded: true } && !string.IsNullOrWhiteSpace(which.StandardOutput))
             return which.StandardOutput.Trim().Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)[0];
 
-        foreach (var candidate in MacBrewCandidates)
-        {
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        return null;
+        return MacBrewCandidates.FirstOrDefault(File.Exists);
     }
 
     private static bool CommandExists(IProcessRunner runner, string name)
@@ -566,7 +560,7 @@ internal static class UnixCertificateTrust
     ///     Parses <c>security trust-settings-export</c>. A trustList stub without
     ///     <c>trustSettings</c> policies is NOT enough (Keychain UI may still show Always Trust).
     /// </summary>
-    private static bool TrustSettingsExportHasPolicies(IProcessRunner runner, string sha1)
+    private static bool TrustSettingsExportHasPolicies(IProcessRunner runner, string sha1) // NOSONAR S3776 -- trust-settings-export parse is a single plist window scan.
     {
         if (string.IsNullOrEmpty(sha1))
             return false;
@@ -682,7 +676,7 @@ internal static class UnixCertificateTrust
         return any || hashes.Count == 0;
     }
 
-    private static IEnumerable<string> MacRootCommonNames(string friendlyName, X509Certificate2 certificate)
+    private static HashSet<string> MacRootCommonNames(string friendlyName, X509Certificate2 certificate)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         void Add(string? name)
@@ -699,7 +693,7 @@ internal static class UnixCertificateTrust
     }
 
     private static void CollectMacCertificateHashes(
-        IProcessRunner runner, string commonName, ISet<string> hashes)
+        IProcessRunner runner, string commonName, HashSet<string> hashes)
     {
         if (string.IsNullOrWhiteSpace(commonName))
             return;
@@ -860,13 +854,8 @@ internal static class UnixCertificateTrust
     private static bool LinuxNssContainsCertificate(
         IProcessRunner runner, string certutil, string nssDir, X509Certificate2 certificate, string listOutput)
     {
-        foreach (var nick in ParseNssNicknames(listOutput))
-        {
-            if (LinuxNssNicknameMatches(runner, certutil, nssDir, nick, certificate))
-                return true;
-        }
-
-        return false;
+        return ParseNssNicknames(listOutput).Any(nick =>
+            LinuxNssNicknameMatches(runner, certutil, nssDir, nick, certificate));
     }
 
     private static bool LinuxNssNicknameMatches(
@@ -943,7 +932,7 @@ internal static class UnixCertificateTrust
         var list = runner.Run(certutil, $"-d sql:{nssDir} -L");
         if (list is { Succeeded: true })
         {
-            foreach (var nick in ParseNssNicknames(list.StandardOutput))
+            foreach (var nick in ParseNssNicknames(list.StandardOutput)) // NOSONAR S3267 -- nickname set is mutated while matching NSS dumps.
             {
                 if (nicks.Contains(nick) ||
                     LinuxNssNicknameMatches(runner, certutil, nssDir, nick, certificate))

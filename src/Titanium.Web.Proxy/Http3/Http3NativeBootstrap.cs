@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net.Quic;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -116,12 +117,10 @@ public static class Http3NativeBootstrap
                 continue;
             }
 
-            foreach (var part in value.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            foreach (var part in value.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                         .Where(p => PathsEqual(NormalizeDir(p), baseDir)))
             {
-                if (PathsEqual(NormalizeDir(part), baseDir))
-                {
-                    return true;
-                }
+                return true;
             }
         }
 

@@ -9,7 +9,8 @@ namespace Titanium.Inspector.Services;
 /// </summary>
 public static class ProtobufMessageDecoder
 {
-    public static string DecodeWireFormat(byte[]? framedOrRaw, bool stripGrpcFrame = true)
+    private static readonly JsonSerializerOptions WireFormatJsonOptions = new() { WriteIndented = true };
+    public static string DecodeWireFormat(byte[]? framedOrRaw, bool stripGrpcFrame = true) // NOSONAR S3776 -- Wire-format dump is a single protobuf walk.
     {
         if (framedOrRaw is null || framedOrRaw.Length == 0)
         {
@@ -74,7 +75,7 @@ public static class ProtobufMessageDecoder
             });
         }
 
-        return JsonSerializer.Serialize(fields, new JsonSerializerOptions { WriteIndented = true });
+        return JsonSerializer.Serialize(fields, WireFormatJsonOptions);
     }
 
     private static object? ReadLengthDelimited(byte[] payload, ref int offset)
@@ -115,7 +116,7 @@ public static class ProtobufMessageDecoder
 /// <summary>SSE event parser for inspect tab.</summary>
 public static class SseEventParser
 {
-    public static IReadOnlyList<SseEventSnapshot> Parse(string? text)
+    public static IReadOnlyList<SseEventSnapshot> Parse(string? text) // NOSONAR S3776 -- SSE event walk is a single line-oriented state machine.
     {
         var list = new List<SseEventSnapshot>();
         if (string.IsNullOrEmpty(text))
@@ -135,7 +136,7 @@ public static class SseEventParser
                 continue;
             }
 
-            if (line.StartsWith(":", StringComparison.Ordinal))
+            if (line.StartsWith(':'))
             {
                 continue;
             }

@@ -142,9 +142,9 @@ public class GrpcJsonTranscodeIntegrationTests
                     context.Response.StatusCode = 200;
                     context.Response.ContentType = "application/grpc";
                     context.Response.ContentLength = framed.Length;
-                    context.Response.Headers["grpc-status"] = grpcStatus.ToString();
+                    context.Response.Headers["grpc-status"] = grpcStatus.ToString(); // NOSONAR ASP0015 -- Fake gRPC origin uses indexer headers.
                     if (!string.IsNullOrEmpty(grpcMessage))
-                        context.Response.Headers["grpc-message"] = grpcMessage;
+                        context.Response.Headers["grpc-message"] = grpcMessage; // NOSONAR ASP0015 -- Fake gRPC origin uses indexer headers.
 
                     await context.Response.Body.WriteAsync(framed);
                 });

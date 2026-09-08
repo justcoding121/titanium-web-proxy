@@ -106,6 +106,31 @@ public class Http3OriginBridgeCoverageTests
     }
 
     [TestMethod]
+    public void BuildRequestHeaders_HostFallbackAndCleartextPath()
+    {
+        var request = new Request
+        {
+            Method = "GET",
+            IsHttps = false,
+            Host = "via-host.test",
+        };
+        var headers = (List<(string Name, string Value)>)BridgeMethod("BuildRequestHeaders")
+            .Invoke(null, [request, "sni.example"])!;
+        Assert.IsTrue(headers.Any(h => h.Name == ":scheme" && h.Value == "http"));
+        Assert.IsTrue(headers.Any(h => h.Name == ":authority" && h.Value == "via-host.test"));
+
+        var empty = new Request { Method = "HEAD" };
+        var fallback = (List<(string Name, string Value)>)BridgeMethod("BuildRequestHeaders")
+            .Invoke(null, [empty, "fallback.test"])!;
+        Assert.IsTrue(fallback.Any(h => h.Name == ":authority" && h.Value == "fallback.test"));
+        Assert.IsTrue(fallback.Any(h => h.Name == ":path" && h.Value == "/"));
+
+        var fp = (int)BridgeMethod("ComputeOriginRequestQpackFingerprint")
+            .Invoke(null, [request, "sni.example"])!;
+        Assert.AreNotEqual(0, fp);
+    }
+
+    [TestMethod]
     [DataRow((ulong)Http3FrameType.Settings, true)]
     [DataRow((ulong)Http3FrameType.GoAway, true)]
     [DataRow((ulong)Http3FrameType.MaxPushId, true)]

@@ -24,13 +24,13 @@ internal partial class NativeMethods
 
     [SupportedOSPlatform("macos")]
     [LibraryImport("libproc", EntryPoint = "proc_listpids")]
-    internal static partial int ProcListPids(uint type, uint typeInfo, int[]? buffer, int bufferSize);
+    internal static partial int ProcListPids(uint type, uint typeInfo, [In][Out] int[]? buffer, int bufferSize);
 
     [SupportedOSPlatform("macos")]
     [LibraryImport("libproc", EntryPoint = "proc_pidinfo")]
-    internal static partial int ProcPidInfo(int pid, int flavor, ulong arg, byte[]? buffer, int bufferSize);
+    internal static partial int ProcPidInfo(int pid, int flavor, ulong arg, [In][Out] byte[]? buffer, int bufferSize);
 
     [SupportedOSPlatform("macos")]
     [LibraryImport("libproc", EntryPoint = "proc_pidfdinfo")]
-    internal static partial int ProcPidFdInfo(int pid, int fd, int flavor, byte[] buffer, int bufferSize);
+    internal static partial int ProcPidFdInfo(int pid, int fd, int flavor, [In][Out] byte[] buffer, int bufferSize);
 }

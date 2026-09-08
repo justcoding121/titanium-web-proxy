@@ -229,20 +229,12 @@ internal static class Http3DepsCommand
             return "brew";
         }
 
-        foreach (var candidate in new[]
+        return new[]
                  {
                      Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homebrew", "bin", "brew"),
                      "/opt/homebrew/bin/brew",
                      "/usr/local/bin/brew",
-                 })
-        {
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        return "brew";
+                 }.FirstOrDefault(File.Exists) ?? "brew";
     }
 
     private static async Task<int> RunAsync(string fileName, IReadOnlyList<string> args)

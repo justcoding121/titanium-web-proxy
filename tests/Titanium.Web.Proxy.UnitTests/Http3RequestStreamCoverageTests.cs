@@ -55,5 +55,26 @@ public class Http3RequestStreamCoverageTests
         Assert.IsNull(result.Path);
         Assert.AreEqual(0, result.Regular.Count);
     }
+
+    [TestMethod]
+    public void StatusCodeString_AndHasUpperAscii_CoverHelpers()
+    {
+        var status = typeof(Http3RequestStream).GetMethod("StatusCodeString",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        foreach (var code in new[] { 200, 204, 301, 302, 304, 400, 404, 500, 502, 503, 418 })
+            Assert.AreEqual(code.ToString(), (string)status.Invoke(null, [code])!);
+
+        var upper = typeof(Http3RequestStream).GetMethod("HasUpperAscii",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        Assert.IsTrue((bool)upper.Invoke(null, ["Host"])!);
+        Assert.IsFalse((bool)upper.Invoke(null, ["content-type"])!);
+        Assert.IsFalse((bool)upper.Invoke(null, [""])!);
+
+        var staticOnly = typeof(Http3RequestStream).GetMethod("IsStaticOnlyQpackBlock",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        Assert.IsFalse((bool)staticOnly.Invoke(null, [Array.Empty<byte>()])!);
+        Assert.IsTrue((bool)staticOnly.Invoke(null, [new byte[] { 0, 0 }])!);
+        Assert.IsFalse((bool)staticOnly.Invoke(null, [new byte[] { 0x80 }])!);
+    }
 }
 #pragma warning restore CA1416

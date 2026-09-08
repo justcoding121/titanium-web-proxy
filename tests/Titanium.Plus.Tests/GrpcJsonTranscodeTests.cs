@@ -129,4 +129,33 @@ public class GrpcJsonTranscodeTests
         Assert.AreEqual("/v1/greeter/x", got!.ClientPathAndQuery);
         Assert.IsFalse(GrpcJsonTranscodeSessionMark.TryGet(null, out _));
     }
+
+    [TestMethod]
+    public void PathTemplate_MultiSegment_AndQueryString_AndRouterMatch()
+    {
+        var multi = PathTemplate.Parse("/v1/{name=**}");
+        Assert.IsTrue(multi.TryMatch("/v1/a/b/c", out var vars));
+        Assert.AreEqual("a/b/c", vars["name"]);
+        Assert.IsTrue(multi.TryMatch("/v1", out var empty));
+        Assert.AreEqual("", empty["name"]);
+        Assert.IsFalse(PathTemplate.Parse("/v1/greeter/{name}").TryMatch("/v1/greeter", out _));
+        Assert.IsFalse(PathTemplate.Parse("/literal/only").TryMatch("/other/only", out _));
+
+        var q = QueryString.Parse("/x?a=1&b=two%20words&flag&");
+        Assert.AreEqual("1", q["a"]);
+        Assert.AreEqual("two words", q["b"]);
+        Assert.AreEqual("", q["flag"]);
+        Assert.AreEqual(0, QueryString.Parse("/x").Count);
+        Assert.AreEqual(0, QueryString.Parse("/x?").Count);
+
+        var bytes = File.ReadAllBytes(FixturePb);
+        var set = FileDescriptorSet.Parser.ParseFrom(bytes);
+        var files = FileDescriptor.BuildFromByteStrings(set.File.Select(f => f.ToByteString()).ToList());
+        var router = HttpRuleRouter.Build(files, ["helloworld.Greeter"]);
+        Assert.IsTrue(router.TryMatch("GET", "/v1/greeter/Ada", out var route, out var pathVars));
+        Assert.AreEqual("Ada", pathVars["name"]);
+        Assert.IsNotNull(route);
+        Assert.IsFalse(router.TryMatch("PUT", "/v1/greeter/Ada", out _, out _));
+        Assert.IsFalse(router.TryMatch("GET", "/nope", out _, out _));
+    }
 }

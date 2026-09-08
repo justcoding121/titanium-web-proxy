@@ -502,12 +502,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        foreach (var column in SessionsGrid.Columns)
+        foreach (var column in SessionsGrid.Columns.Where(c =>
+                     string.Equals(SessionGridLayout.GetColumnKey(c.Header), "Process", StringComparison.Ordinal)))
         {
-            if (string.Equals(SessionGridLayout.GetColumnKey(column.Header), "Process", StringComparison.Ordinal))
-            {
-                column.IsVisible = vm.ShowProcessColumn;
-            }
+            column.IsVisible = vm.ShowProcessColumn;
         }
     }
 

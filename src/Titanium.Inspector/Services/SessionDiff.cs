@@ -137,7 +137,7 @@ public static class SessionDiff
         return count;
     }
 
-    private static int AppendBodyDiff(StringBuilder sb, string title, string left, string right)
+    private static int AppendBodyDiff(StringBuilder sb, string title, string left, string right) // NOSONAR S3776 -- Offline line diff; splitting would hide the bounded-lookahead contract.
     {
         if (string.Equals(left, right, StringComparison.Ordinal))
         {

@@ -91,24 +91,17 @@ internal static class ConfigLoader
                 return false;
             }
 
-            foreach (var prop in doc.RootElement.EnumerateObject())
-            {
-                if (prop.NameEquals("schemaVersion") ||
-                    prop.NameEquals("plus") ||
-                    prop.NameEquals("server") ||
-                    prop.NameEquals("logging") ||
-                    prop.NameEquals("certificates") ||
-                    prop.NameEquals("staticFiles"))
-                {
-                    return true;
-                }
-            }
+            return doc.RootElement.EnumerateObject().Any(prop =>
+                prop.NameEquals("schemaVersion") ||
+                prop.NameEquals("plus") ||
+                prop.NameEquals("server") ||
+                prop.NameEquals("logging") ||
+                prop.NameEquals("certificates") ||
+                prop.NameEquals("staticFiles"));
         }
         catch (JsonException)
         {
             return false;
         }
-
-        return false;
     }
 }

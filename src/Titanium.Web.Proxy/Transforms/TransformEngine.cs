@@ -8,7 +8,7 @@ namespace Titanium.Web.Proxy.Transforms;
 /// <summary>Applies known transform kinds to request path/headers/query and staged response headers.</summary>
 public sealed class TransformEngine : ITransformEngine
 {
-    public void ApplyRequestTransforms(IReadOnlyList<TransformConfig>? transforms, TransformRequestContext context)
+    public void ApplyRequestTransforms(IReadOnlyList<TransformConfig>? transforms, TransformRequestContext context) // NOSONAR S3776 -- Transform kinds share the request context; splitting would hide apply order.
     {
         if (transforms is null || transforms.Count == 0)
         {

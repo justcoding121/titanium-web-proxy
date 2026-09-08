@@ -53,13 +53,9 @@ internal static class ServerConfigApplier
             return;
         }
 
-        foreach (var endPoint in proxy.ProxyEndPoints)
+        if (proxy.ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(endPoint => endPoint.DecryptSsl))
         {
-            if (endPoint is ExplicitProxyEndPoint { DecryptSsl: true })
-            {
-                proxy.IgnoreServerCertificateErrors = true;
-                return;
-            }
+            proxy.IgnoreServerCertificateErrors = true;
         }
     }
 

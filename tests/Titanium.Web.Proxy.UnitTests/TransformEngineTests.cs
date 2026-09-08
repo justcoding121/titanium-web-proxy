@@ -40,4 +40,27 @@ public class TransformEngineTests
         engine.ApplyRequestTransforms([], ctx);
         Assert.AreEqual("/x", ctx.Path);
     }
+
+    [TestMethod]
+    public void PathRemovePrefix_And_QueryReplace_And_PrefixWithoutSlash()
+    {
+        var engine = new TransformEngine();
+        var ctx = new TransformRequestContext { Path = "/gateway/api/v1?env=prod" };
+        engine.ApplyRequestTransforms(
+        [
+            new TransformConfig { Kind = "PathRemovePrefix", Parameters = new Dictionary<string, string> { ["prefix"] = "/gateway" } },
+            new TransformConfig { Kind = "PathPrefix", Parameters = new Dictionary<string, string> { ["prefix"] = "edge" } },
+            new TransformConfig { Kind = "QueryValueSet", Parameters = new Dictionary<string, string> { ["name"] = "env", ["value"] = "lab" } },
+            new TransformConfig { Kind = "PathPrefix", Parameters = new Dictionary<string, string> { ["prefix"] = "" } },
+            new TransformConfig { Kind = "UnknownKind" },
+        ], ctx);
+        Assert.AreEqual("/edge/api/v1?env=lab", ctx.Path);
+
+        var bare = new TransformRequestContext { Path = "no-slash" };
+        engine.ApplyRequestTransforms(
+        [
+            new TransformConfig { Kind = "PathRemovePrefix", Parameters = new Dictionary<string, string> { ["prefix"] = "no" } },
+        ], bare);
+        Assert.IsTrue(bare.Path.StartsWith('/'));
+    }
 }

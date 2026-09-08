@@ -183,7 +183,8 @@ namespace Titanium.Web.Proxy.Http2
                 ReadOnlyMemory<byte>.Empty, maxFrameSize);
 
         private static ArraySegment<byte> RentFramedHeaderBlock(Http2FrameHeader frameHeader, // NOSONAR S107, S1172 -- Frame fields stay explicit; frameHeaderBuffer retained for call-site IL match.
-            byte[] frameHeaderBuffer, int streamId, Http2FrameType type, bool endStream, bool hasPriority,
+            byte[] frameHeaderBuffer, // NOSONAR S1172 -- retained for call-site IL match.
+            int streamId, Http2FrameType type, bool endStream, bool hasPriority,
             ReadOnlyMemory<byte> data, ReadOnlyMemory<byte> append, int maxFrameSize)
         {
             if (maxFrameSize <= 0) maxFrameSize = 16384;

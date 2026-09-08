@@ -6,6 +6,8 @@ namespace Titanium.Inspector.Tests;
 [TestClass]
 public class MitmBypassTests
 {
+    private static readonly string[] CorpBypassHost = ["*.corp.example.com"];
+
     [TestMethod]
     public void CreateSystemProxySettings_AddsBypassRulesAndLoopback()
     {
@@ -66,10 +68,10 @@ public class MitmBypassTests
     {
         var settings = MitmBypass.CreateSystemProxySettings(new InspectorSettings
         {
-            SystemProxyBypassHosts = ["*.corp.example.com"],
+            SystemProxyBypassHosts = [..CorpBypassHost],
             ProxyLoopback = true,
         });
-        CollectionAssert.AreEqual(new[] { "*.corp.example.com" }, settings.BypassRules.ToList());
+        CollectionAssert.AreEqual(CorpBypassHost, settings.BypassRules.ToList());
         Assert.IsFalse(settings.BypassRules.Contains("login.live.com"));
         Assert.IsTrue(settings.ProxyLoopback);
     }

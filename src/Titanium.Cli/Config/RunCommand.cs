@@ -54,7 +54,7 @@ internal static class RunCommand
     }
 
     /// <summary>Shared proxy lifecycle for foreground run and Windows Service hosted mode.</summary>
-    internal static async Task<int> ExecuteCoreAsync(
+    internal static async Task<int> ExecuteCoreAsync( // NOSONAR S3776 -- CLI run lifecycle (load, apply, wait, reload) shares the hosted proxy instance.
         string configPath,
         bool verbose,
         bool serviceMode,
@@ -183,7 +183,7 @@ internal static class RunCommand
 
             await AsyncConsole.FlushAsync().ConfigureAwait(false);
             Console.WriteLine("awaiting-shutdown-or-reload");
-            Console.Out.Flush();
+            await Console.Out.FlushAsync().ConfigureAwait(false);
             await WaitForShutdownOrReloadAsync(
                 stoppingToken,
                 onReload: async () =>
@@ -258,7 +258,7 @@ internal static class RunCommand
     /// Reloads routes/clusters (and server settings) from <paramref name="configPath"/>.
     /// Validation failures throw before mutating <paramref name="routes"/> or the cluster manager.
     /// </summary>
-    internal static async Task ReloadConfigAsync(
+    internal static async Task ReloadConfigAsync( // NOSONAR S107 -- Reload keeps established config wiring without a context bag.
         string configPath,
         ProxyServer proxy,
         ClusterManager clusterManager,
@@ -426,7 +426,7 @@ internal static class RunCommand
         }
     }
 
-    private static async Task WaitForShutdownOrReloadAsync(CancellationToken stoppingToken, Func<Task>? onReload)
+    private static async Task WaitForShutdownOrReloadAsync(CancellationToken stoppingToken, Func<Task>? onReload) // NOSONAR CA1068 -- Token stays first so POSIX signal registration can observe the run CTS.
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -479,7 +479,7 @@ internal static class RunCommand
                         }, stoppingToken);
                     });
                     Console.WriteLine("sighup-handler-registered");
-                    Console.Out.Flush();
+                    await Console.Out.FlushAsync().ConfigureAwait(false);
                 }
             }
 

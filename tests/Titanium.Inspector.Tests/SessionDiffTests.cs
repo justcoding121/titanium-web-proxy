@@ -70,4 +70,40 @@ public class SessionDiffTests
         StringAssert.Contains(result.Text, "+ X-A: 2");
         StringAssert.Contains(result.Text, "+ X-B: new");
     }
+
+    [TestMethod]
+    public void Compare_UrlBytesMultilineAndHeaderRemoval_CoversBodyDiffArms()
+    {
+        var identicalLong = string.Join('\n', Enumerable.Range(0, 12).Select(i => "same-" + i));
+        var left = new SessionSnapshot
+        {
+            Id = 1,
+            Method = "GET",
+            Url = "https://a/old",
+            StatusCode = 200,
+            RequestHeadersText = "X-Gone: 1\r\nShared: keep\r\n",
+            ResponseHeadersText = "Content-Type: text/plain\r\n",
+            RequestBodyBytes = "req-a"u8.ToArray(),
+            ResponseBodyText = identicalLong + "\nleft-only\nshared-tail\n",
+        };
+        var right = new SessionSnapshot
+        {
+            Id = 2,
+            Method = "GET",
+            Url = "https://a/new",
+            StatusCode = 200,
+            RequestHeadersText = "Shared: keep\r\nX-New: 2\r\n",
+            ResponseHeadersText = "Content-Type: text/html\r\n",
+            RequestBodyBytes = "req-b"u8.ToArray(),
+            ResponseBodyText = "inserted\n" + identicalLong + "\nshared-tail\nright-only\n",
+        };
+        var result = SessionDiff.Compare(left, right);
+        Assert.IsTrue(result.HasDifferences);
+        StringAssert.Contains(result.Text, "URL:");
+        StringAssert.Contains(result.Text, "- X-Gone: 1");
+        StringAssert.Contains(result.Text, "+ X-New: 2");
+        StringAssert.Contains(result.Text, "Request body");
+        StringAssert.Contains(result.Text, "Response body");
+        StringAssert.Contains(result.Text, "differences");
+    }
 }

@@ -200,11 +200,9 @@ internal sealed class LaunchdServiceManager : IOsServiceManager
             var sudoUser = Environment.GetEnvironmentVariable("SUDO_USER");
             if (!string.IsNullOrEmpty(sudoUser))
             {
-                foreach (var home in new[] { "/Users/" + sudoUser, "/home/" + sudoUser })
-                {
-                    if (Directory.Exists(home))
-                        return home;
-                }
+                var home = new[] { "/Users/" + sudoUser, "/home/" + sudoUser }.FirstOrDefault(Directory.Exists);
+                if (home is not null)
+                    return home;
             }
         }
 
@@ -238,10 +236,10 @@ internal sealed class LaunchdServiceManager : IOsServiceManager
     }
 
     [DllImport("libc", EntryPoint = "geteuid", SetLastError = true)]
-    private static extern uint GetEuid();
+    private static extern uint GetEuid(); // NOSONAR SYSLIB1054 -- libc geteuid marshalling is required by this existing interop signature.
 
     [DllImport("libc", EntryPoint = "getuid", SetLastError = true)]
-    private static extern uint GetUid();
+    private static extern uint GetUid(); // NOSONAR SYSLIB1054 -- libc getuid marshalling is required by this existing interop signature.
 
     private static async Task<bool> IsLoadedAsync(string domain, string label)
     {

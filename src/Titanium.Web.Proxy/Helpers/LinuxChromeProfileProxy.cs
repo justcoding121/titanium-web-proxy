@@ -23,6 +23,8 @@ internal static class LinuxChromeProfileProxy
     private const string ProxyKey = "proxy";
     private const string FixedServersMode = "fixed_servers";
     private const string ChromiumDirName = "chromium";
+    private const string MicrosoftEdgeDirName = "microsoft-edge";
+    private const string FlatpakConfigDirName = "config";
 
     private static readonly object Gate = new();
     private static readonly List<FileSystemWatcher> Watchers = new();
@@ -42,12 +44,7 @@ internal static class LinuxChromeProfileProxy
             _activePort = port;
             WriteMarker(hostname, port);
 
-            var written = 0;
-            foreach (var prefsPath in EnumeratePreferencesPaths())
-            {
-                if (TryWritePreferences(prefsPath, hostname, port))
-                    written++;
-            }
+            var written = EnumeratePreferencesPaths().Count(prefsPath => TryWritePreferences(prefsPath, hostname, port));
 
             RestartWatchers_NoLock();
             return written;
@@ -141,14 +138,14 @@ internal static class LinuxChromeProfileProxy
         yield return Path.Combine(home, ConfigDirName, "google-chrome-unstable");
         yield return Path.Combine(home, ConfigDirName, ChromiumDirName);
         yield return Path.Combine(home, ConfigDirName, "BraveSoftware", "Brave-Browser");
-        yield return Path.Combine(home, ConfigDirName, "microsoft-edge");
+        yield return Path.Combine(home, ConfigDirName, MicrosoftEdgeDirName);
         yield return Path.Combine(home, "snap", ChromiumDirName, "common", ChromiumDirName);
-        yield return Path.Combine(home, "snap", "microsoft-edge", "common", "microsoft-edge");
-        yield return Path.Combine(home, ".var", "app", "com.google.Chrome", "config", "google-chrome");
-        yield return Path.Combine(home, ".var", "app", "org.chromium.Chromium", "config", ChromiumDirName);
-        yield return Path.Combine(home, ".var", "app", "com.brave.Browser", "config", "BraveSoftware",
+        yield return Path.Combine(home, "snap", MicrosoftEdgeDirName, "common", MicrosoftEdgeDirName);
+        yield return Path.Combine(home, ".var", "app", "com.google.Chrome", FlatpakConfigDirName, "google-chrome");
+        yield return Path.Combine(home, ".var", "app", "org.chromium.Chromium", FlatpakConfigDirName, ChromiumDirName);
+        yield return Path.Combine(home, ".var", "app", "com.brave.Browser", FlatpakConfigDirName, "BraveSoftware",
             "Brave-Browser");
-        yield return Path.Combine(home, ".var", "app", "com.microsoft.Edge", "config", "microsoft-edge");
+        yield return Path.Combine(home, ".var", "app", "com.microsoft.Edge", FlatpakConfigDirName, MicrosoftEdgeDirName);
     }
 
     // Test hooks

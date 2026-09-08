@@ -31,11 +31,13 @@ internal static class PrivilegePrompt
     internal static string[] TakeInternalArgs(string[] args)
     {
         var list = new List<string>(args.Length);
-        for (var i = 0; i < args.Length; i++)
+        var i = 0;
+        while (i < args.Length)
         {
             if (args[i] == RelaunchFlag)
             {
                 HasRelaunchFlag = true;
+                i++;
                 continue;
             }
 
@@ -43,11 +45,12 @@ internal static class PrivilegePrompt
                 && uint.TryParse(args[i + 1], out var pid))
             {
                 ParentPid = pid;
-                i++;
+                i += 2;
                 continue;
             }
 
             list.Add(args[i]);
+            i++;
         }
 
         return list.ToArray();
@@ -269,24 +272,14 @@ internal static class PrivilegePrompt
         }
     }
 
-    internal static string? ResolveSudoPath()
-    {
-        foreach (var candidate in new[] { "/usr/bin/sudo", "/usr/local/bin/sudo" })
-        {
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        return null;
-    }
+    internal static string? ResolveSudoPath() =>
+        new[] { "/usr/bin/sudo", "/usr/local/bin/sudo" }.FirstOrDefault(File.Exists);
 
     [SupportedOSPlatform("windows")]
     [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool AttachConsole(uint dwProcessId);
+    private static extern bool AttachConsole(uint dwProcessId); // NOSONAR SYSLIB1054 -- Legacy console attach marshalling is required by this existing interop signature.
 
     [SupportedOSPlatform("windows")]
     [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool FreeConsole();
+    private static extern bool FreeConsole(); // NOSONAR SYSLIB1054 -- Legacy console detach marshalling is required by this existing interop signature.
 }

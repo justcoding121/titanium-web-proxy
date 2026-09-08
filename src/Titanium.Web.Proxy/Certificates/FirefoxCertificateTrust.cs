@@ -59,7 +59,7 @@ public static class FirefoxCertificateTrust
             if (policiesWritten)
             {
                 return CertificateOsTrustResult.Ok(
-                    "Firefox policies.json updated (ImportEnterpriseRoots); restart Firefox to apply");
+                    "Firefox policies.json updated (" + ImportEnterpriseRootsValue + "); restart Firefox to apply");
             }
 
             // macOS/Linux: user.js is the supported way to enable OS-root trust without
@@ -77,7 +77,7 @@ public static class FirefoxCertificateTrust
         {
             return CertificateOsTrustResult.Fail(
                 CertificateOsTrustKind.Failed,
-                "Could not set Firefox ImportEnterpriseRoots policy and " +
+                "Could not set Firefox " + ImportEnterpriseRootsValue + " policy and " +
                 (resolveError ?? "no Firefox profile was found"));
         }
 
@@ -238,9 +238,9 @@ public static class FirefoxCertificateTrust
         }
 
         if (importEnterpriseRoots)
-            certificates["ImportEnterpriseRoots"] = true;
+            certificates[ImportEnterpriseRootsValue] = true;
         else
-            certificates.Remove("ImportEnterpriseRoots");
+            certificates.Remove(ImportEnterpriseRootsValue);
 
         return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n";
     }
@@ -314,7 +314,7 @@ public static class FirefoxCertificateTrust
                 if (!File.Exists(path))
                     continue;
                 var existing = File.ReadAllText(path);
-                if (!existing.Contains("ImportEnterpriseRoots", StringComparison.Ordinal))
+                if (!existing.Contains(ImportEnterpriseRootsValue, StringComparison.Ordinal))
                     continue;
                 var json = BuildOrMergeFirefoxPoliciesJson(existing, importEnterpriseRoots: false);
                 File.WriteAllText(path, json);
@@ -397,10 +397,10 @@ public static class FirefoxCertificateTrust
             return false;
         }
 
-        if (!certs.TryGetProperty("ImportEnterpriseRoots", out var flag) ||
+        if (!certs.TryGetProperty(ImportEnterpriseRootsValue, out var flag) ||
             flag.ValueKind != JsonValueKind.True)
         {
-            error = "ImportEnterpriseRoots is not true";
+            error = ImportEnterpriseRootsValue + " is not true";
             return false;
         }
 
@@ -753,7 +753,7 @@ public static class FirefoxCertificateTrust
     internal static string? ParseDefaultProfilePath(string profilesIni) =>
         ParseDefaultProfileEntry(profilesIni)?.Path;
 
-    internal static (string Path, bool IsRelative)? ParseDefaultProfileEntry(string profilesIni)
+    internal static (string Path, bool IsRelative)? ParseDefaultProfileEntry(string profilesIni) // NOSONAR S3776 -- profiles.ini parse is a single section walk.
     {
         string? fallbackPath = null;
         var fallbackRelative = true;

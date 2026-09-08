@@ -171,7 +171,7 @@ public partial class MacSslTrustWaitDialog : Window
         }
     }
 
-    private static async Task PollUntilTrustedAsync(
+    private static async Task PollUntilTrustedAsync( // NOSONAR S3776 -- Keychain wait loop shares dialog/cancel/verify callbacks.
         MacSslTrustWaitDialog dialog,
         Func<bool> verifySslTrust,
         Func<bool>? isInLoginKeychain,

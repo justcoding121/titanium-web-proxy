@@ -604,6 +604,22 @@ public class SonarNewCodeCoverageTests
         typeof(Http2OriginConnection).GetMethod("AttachExclusiveFrameWriter", PrivateInstance)!
             .Invoke(connection, null);
 
+        var ack = typeof(Http2OriginConnection).GetMethod("SendSettingsAckAsync", PrivateInstance)!;
+        await (Task)ack.Invoke(connection, [CancellationToken.None])!;
+        var ping = typeof(Http2OriginConnection).GetMethod("SendPingAckAsync", PrivateInstance)!;
+        await (Task)ping.Invoke(connection, [new byte[8], CancellationToken.None])!;
+        var rst = typeof(Http2OriginConnection).GetMethod("ResetStreamAsync", PrivateInstance)!;
+        await (Task)rst.Invoke(connection, [3, Http2ErrorCode.Cancel, CancellationToken.None])!;
+
+        var complete = typeof(Http2OriginConnection).GetMethod("CompleteStream", PrivateInstance)!;
+        complete.Invoke(connection, [99]);
+        var failStream = typeof(Http2OriginConnection).GetMethod("FailStream", PrivateInstance)!;
+        failStream.Invoke(connection, [99, new IOException("gone")]);
+
+        var writeTunnel = typeof(Http2OriginConnection).GetMethod("WriteTunnelDataAsync", PrivateInstance)!;
+        await Assert.ThrowsExactlyAsync<IOException>(async () =>
+            await (Task)writeTunnel.Invoke(connection, [7, ReadOnlyMemory<byte>.Empty, false, CancellationToken.None])!);
+
         var grant = typeof(Http2OriginConnection).GetMethod("GrantReceiveCreditAsync", PrivateInstance)!;
         await (Task)grant.Invoke(connection, [1, 0, false, CancellationToken.None])!;
         await (Task)grant.Invoke(connection, [1, 16, false, CancellationToken.None])!;
@@ -622,6 +638,7 @@ public class SonarNewCodeCoverageTests
         var violation = typeof(Http2OriginConnection).GetMethod("IsHttp2ProtocolViolation", PrivateStatic)!;
         Assert.IsTrue((bool)violation.Invoke(null, [new IOException("HTTP/2 protocol error: x")])!);
         Assert.IsFalse((bool)violation.Invoke(null, [new IOException("reset")])!);
+        connection.Retire();
     }
 
     [TestMethod]

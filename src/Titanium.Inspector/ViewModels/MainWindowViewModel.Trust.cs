@@ -184,7 +184,7 @@ public sealed partial class MainWindowViewModel
     /// <summary>
     /// Attempts user OS trust and adaptive recovery (certutil install / Keychain / elevate).
     /// </summary>
-    private async Task<bool> EnsureRootCaTrustedAsync(bool promptIfNeeded)
+    private async Task<bool> EnsureRootCaTrustedAsync(bool promptIfNeeded) // NOSONAR S3776 -- Adaptive OS-trust recovery loop shares dialog/state; splitting would hide the retry contract.
     {
         var owner = TryGetMainWindow();
         var ok = _interception.InstallRootCertificate(machineStore: false);

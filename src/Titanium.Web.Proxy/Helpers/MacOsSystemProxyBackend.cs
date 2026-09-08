@@ -105,7 +105,7 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
         RemoveProxy(ProxyProtocolType.AllHttp, saveOriginalConfig: false);
     }
 
-    public void RestoreOriginalSettings()
+    public void RestoreOriginalSettings() // NOSONAR S3776 -- Snapshot restore must apply every captured service in one pass.
     {
         if (!_hasSnapshot) return;
 
@@ -290,7 +290,7 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
         }
     }
 
-    private void VerifyMacApplied(
+    private void VerifyMacApplied( // NOSONAR S3776 -- Post-apply verify retries networksetup/scutil together.
         IReadOnlyList<string> services, string hostname, int port, ProxyProtocolType protocolType)
     {
         var scutil = _runner.Run("scutil", "--proxy");
@@ -343,7 +343,7 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
         throw last ?? new InvalidOperationException("macOS system proxy could not be verified after apply");
     }
 
-    internal static bool TryParseScutilProxy(string? output, out ScutilProxyState state)
+    internal static bool TryParseScutilProxy(string? output, out ScutilProxyState state) // NOSONAR S3776 -- scutil --proxy parse is a single key/value walk.
     {
         state = default;
         if (string.IsNullOrWhiteSpace(output))
@@ -430,24 +430,20 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
         if (state.PacEnabled)
             return false;
 
-        if ((protocolType & ProxyProtocolType.Http) != 0)
+        if ((protocolType & ProxyProtocolType.Http) != 0 &&
+            (!state.HttpEnabled ||
+             !state.HttpHost.Equals(hostname, StringComparison.OrdinalIgnoreCase) ||
+             state.HttpPort != port))
         {
-            if (!state.HttpEnabled ||
-                !state.HttpHost.Equals(hostname, StringComparison.OrdinalIgnoreCase) ||
-                state.HttpPort != port)
-            {
-                return false;
-            }
+            return false;
         }
 
-        if ((protocolType & ProxyProtocolType.Https) != 0)
+        if ((protocolType & ProxyProtocolType.Https) != 0 &&
+            (!state.HttpsEnabled ||
+             !state.HttpsHost.Equals(hostname, StringComparison.OrdinalIgnoreCase) ||
+             state.HttpsPort != port))
         {
-            if (!state.HttpsEnabled ||
-                !state.HttpsHost.Equals(hostname, StringComparison.OrdinalIgnoreCase) ||
-                state.HttpsPort != port)
-            {
-                return false;
-            }
+            return false;
         }
 
         return true;

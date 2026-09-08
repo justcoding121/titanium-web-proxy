@@ -6,6 +6,7 @@ namespace Titanium.Cli.Service;
 /// <summary>Pure builders for Windows binPath, systemd unit, and launchd plist text.</summary>
 internal static class ServiceUnitFactory
 {
+    private const string PlistStringElement = "string";
     public static string BuildWindowsBinPath(string exePath, string configPath, string serviceName) =>
         BuildWindowsBinPath([exePath], configPath, serviceName);
 
@@ -87,27 +88,27 @@ internal static class ServiceUnitFactory
     {
         var args = new XElement("array");
         foreach (var part in programPrefix)
-            args.Add(new XElement("string", part));
-        args.Add(new XElement("string", "run"));
-        args.Add(new XElement("string", "-c"));
-        args.Add(new XElement("string", configPath));
-        args.Add(new XElement("string", "--service"));
+            args.Add(new XElement(PlistStringElement, part));
+        args.Add(new XElement(PlistStringElement, "run"));
+        args.Add(new XElement(PlistStringElement, "-c"));
+        args.Add(new XElement(PlistStringElement, configPath));
+        args.Add(new XElement(PlistStringElement, "--service"));
 
         var dict = new XElement("dict",
             new XElement("key", "Label"),
-            new XElement("string", label),
+            new XElement(PlistStringElement, label),
             new XElement("key", "ProgramArguments"),
             args,
             new XElement("key", "WorkingDirectory"),
-            new XElement("string", workingDirectory),
+            new XElement(PlistStringElement, workingDirectory),
             new XElement("key", "RunAtLoad"),
             new XElement("true"),
             new XElement("key", "KeepAlive"),
             new XElement("true"),
             new XElement("key", "StandardOutPath"),
-            new XElement("string", standardOutPath),
+            new XElement(PlistStringElement, standardOutPath),
             new XElement("key", "StandardErrorPath"),
-            new XElement("string", standardErrorPath));
+            new XElement(PlistStringElement, standardErrorPath));
 
         if (environment is { Count: > 0 })
         {
@@ -115,7 +116,7 @@ internal static class ServiceUnitFactory
             foreach (var kv in environment)
             {
                 envDict.Add(new XElement("key", kv.Key));
-                envDict.Add(new XElement("string", kv.Value));
+                envDict.Add(new XElement(PlistStringElement, kv.Value));
             }
 
             dict.Add(new XElement("key", "EnvironmentVariables"));

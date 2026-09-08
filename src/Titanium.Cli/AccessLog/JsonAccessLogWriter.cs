@@ -51,7 +51,7 @@ public sealed class JsonAccessLogWriter : IDisposable
         return JsonSerializer.Serialize(record, JsonOptions);
     }
 
-    public string FormatLine(SessionEventArgs session)
+    public static string FormatLine(SessionEventArgs session)
     {
         var req = session.HttpClient.Request;
         var resp = session.HttpClient.Response;

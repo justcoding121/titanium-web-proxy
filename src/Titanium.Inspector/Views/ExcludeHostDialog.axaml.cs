@@ -47,7 +47,7 @@ public partial class ExcludeHostDialog : Window
     private void UpdateWarning() =>
         BypassWarning.IsVisible = BypassProxyRadio.IsChecked == true;
 
-    private void OnSave(object? sender, RoutedEventArgs e)
+    private void OnSave(object? sender, RoutedEventArgs e) // NOSONAR S3776 -- Dialog save writes bypass and decrypt-skip lists together.
     {
         var host = HostLabel.Text?["Exclude: ".Length..].Trim();
         if (string.IsNullOrWhiteSpace(host))
@@ -69,22 +69,16 @@ public partial class ExcludeHostDialog : Window
         var s = _settings.Current;
         if (SelectedKind == ExcludeHostKind.BypassProxy)
         {
-            foreach (var p in patterns)
+            foreach (var p in patterns.Where(p => !s.SystemProxyBypassHosts.Contains(p, StringComparer.OrdinalIgnoreCase)))
             {
-                if (!s.SystemProxyBypassHosts.Contains(p, StringComparer.OrdinalIgnoreCase))
-                {
-                    s.SystemProxyBypassHosts.Add(p);
-                }
+                s.SystemProxyBypassHosts.Add(p);
             }
         }
         else
         {
-            foreach (var p in patterns)
+            foreach (var p in patterns.Where(p => !s.DecryptSkipHosts.Contains(p, StringComparer.OrdinalIgnoreCase)))
             {
-                if (!s.DecryptSkipHosts.Contains(p, StringComparer.OrdinalIgnoreCase))
-                {
-                    s.DecryptSkipHosts.Add(p);
-                }
+                s.DecryptSkipHosts.Add(p);
             }
         }
 

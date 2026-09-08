@@ -35,6 +35,8 @@ internal static class LinuxBrowserLaunchProxy
     private const string ApplicationsDirName = "applications";
     private const string PoliciesManaged = "policies";
     private const string ManagedDirName = "managed";
+    private const string MicrosoftEdgeDirName = "microsoft-edge";
+    private const string FlatpakConfigDirName = "config";
 
     private static readonly string[] DesktopFieldCodes = [" %U", " %u", " %f", " %F", " %s", " \"%s\""];
 
@@ -75,8 +77,7 @@ internal static class LinuxBrowserLaunchProxy
         if (desktopOk)
             TryUpdateDesktopDatabase();
         var ok = policyOk || desktopOk || xfceOk || profileOk || firefoxOk;
-        // Already-running Chromium-family browsers ignore Preference file edits and often ignore gsettings;
-        // relaunch so traffic switches immediately.
+        // Relaunch running Chromium-family browsers so Preference edits take effect.
         LinuxChromiumRelaunch.TryRelaunchForProxyChange(hostname, port, enableProxy: true);
         return ok;
     }
@@ -313,17 +314,17 @@ internal static class LinuxBrowserLaunchProxy
         yield return Path.Combine(home, ConfigDirName, "google-chrome-unstable", PoliciesManaged, ManagedDirName);
         yield return Path.Combine(home, ConfigDirName, ChromiumDirName, PoliciesManaged, ManagedDirName);
         yield return Path.Combine(home, ConfigDirName, "BraveSoftware", "Brave-Browser", PoliciesManaged, ManagedDirName);
-        yield return Path.Combine(home, ConfigDirName, "microsoft-edge", PoliciesManaged, ManagedDirName);
+        yield return Path.Combine(home, ConfigDirName, MicrosoftEdgeDirName, PoliciesManaged, ManagedDirName);
         yield return Path.Combine(home, "snap", ChromiumDirName, "common", ChromiumDirName, PoliciesManaged, ManagedDirName);
         yield return Path.Combine(home, "snap", ChromiumDirName, "current", ConfigDirName, ChromiumDirName, PoliciesManaged, ManagedDirName);
-        yield return Path.Combine(home, "snap", "microsoft-edge", "common", "microsoft-edge", PoliciesManaged, ManagedDirName);
-        yield return Path.Combine(home, ".var", "app", "com.google.Chrome", "config", "google-chrome", PoliciesManaged,
+        yield return Path.Combine(home, "snap", MicrosoftEdgeDirName, "common", MicrosoftEdgeDirName, PoliciesManaged, ManagedDirName);
+        yield return Path.Combine(home, ".var", "app", "com.google.Chrome", FlatpakConfigDirName, "google-chrome", PoliciesManaged,
             ManagedDirName);
-        yield return Path.Combine(home, ".var", "app", "org.chromium.Chromium", "config", ChromiumDirName, PoliciesManaged,
+        yield return Path.Combine(home, ".var", "app", "org.chromium.Chromium", FlatpakConfigDirName, ChromiumDirName, PoliciesManaged,
             ManagedDirName);
-        yield return Path.Combine(home, ".var", "app", "com.brave.Browser", "config", "BraveSoftware", "Brave-Browser",
+        yield return Path.Combine(home, ".var", "app", "com.brave.Browser", FlatpakConfigDirName, "BraveSoftware", "Brave-Browser",
             PoliciesManaged, ManagedDirName);
-        yield return Path.Combine(home, ".var", "app", "com.microsoft.Edge", "config", "microsoft-edge", PoliciesManaged,
+        yield return Path.Combine(home, ".var", "app", "com.microsoft.Edge", FlatpakConfigDirName, MicrosoftEdgeDirName, PoliciesManaged,
             ManagedDirName);
         yield return "/etc/opt/chrome/policies/managed";
         yield return "/etc/chromium/policies/managed";

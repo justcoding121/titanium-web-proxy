@@ -98,7 +98,7 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     ///     warmup fail-fast before TCP fallback. Pass <see langword="false"/> for Forced H3 so the
     ///     dial uses the full <see cref="ProxyServer.ConnectTimeOutSeconds"/> budget.
     /// </param>
-    internal async ValueTask<QuicServerConnection> GetOrCreateAsync(
+    internal async ValueTask<QuicServerConnection> GetOrCreateAsync( // NOSONAR S107 -- Pool acquire keeps origin identity, proxy, and handshake flags explicit.
         string connectHost,
         int port,
         IPEndPoint? upStreamEndPoint,

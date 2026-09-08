@@ -202,7 +202,7 @@ public sealed class CliProcessHarness : IDisposable
     }
 
     [DllImport("libc", EntryPoint = "kill", SetLastError = true)]
-    private static extern int NativeKill(int pid, int sig);
+    private static extern int NativeKill(int pid, int sig); // NOSONAR SYSLIB1054 -- libc kill marshalling is required by this existing interop signature.
 
     public void Dispose()
     {

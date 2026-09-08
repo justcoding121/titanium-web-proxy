@@ -240,7 +240,7 @@ public class UnixCertificateTrustCoverageTests
             var find = new FakeProcessRunner();
             find.When("security", "find-certificate", $"SHA-1 hash: {sha1}AABBCCDDEEFF00112233445566778899AABBCC\n");
             Invoke("CollectMacCertificateHashes",
-                [typeof(IProcessRunner), typeof(string), typeof(ISet<string>)],
+                [typeof(IProcessRunner), typeof(string), typeof(HashSet<string>)],
                 find, cn, hashes);
             Assert.IsTrue(hashes.Count >= 1);
 

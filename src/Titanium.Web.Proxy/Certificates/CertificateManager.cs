@@ -1522,7 +1522,7 @@ public sealed class CertificateManager : IDisposable
     ///     <see langword="false"/> (user store only).
     /// </param>
     /// <returns>True if success.</returns>
-    public bool TrustRootCertificateAsAdmin(bool machineTrusted = false)
+    public bool TrustRootCertificateAsAdmin(bool machineTrusted = false) // NOSONAR S3776 -- User/machine store install shares Root-store mutation order.
     {
         var certificate = RootCertificate;
         if (certificate == null) return false;

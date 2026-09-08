@@ -63,7 +63,7 @@ internal static class ProtoJson
         }
     }
 
-    private static object? ReadValue(FieldDescriptor field, JsonElement el, bool ignoreUnknown)
+    private static object? ReadValue(FieldDescriptor field, JsonElement el, bool ignoreUnknown) // NOSONAR S3776 -- Proto JSON scalar switch stays in one bind helper.
     {
         if (el.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
             return null;
@@ -97,7 +97,7 @@ internal static class ProtoJson
         };
     }
 
-    private static object ReadEnum(FieldDescriptor field, JsonElement el)
+    private static int ReadEnum(FieldDescriptor field, JsonElement el)
     {
         if (el.ValueKind == JsonValueKind.Number)
             return el.GetInt32();
@@ -118,7 +118,7 @@ internal static class ProtoJson
         return nested;
     }
 
-    private static void WriteObject(
+    private static void WriteObject( // NOSONAR S3776 -- Proto JSON format walks fields once with preserve-name/always-print flags.
         Utf8JsonWriter writer,
         DescriptorMessage message,
         bool preserveProtoFieldNames,

@@ -13,6 +13,8 @@ namespace Titanium.Web.Proxy.UnitTests;
 [TestClass]
 public class BootstrapAndFirefoxHelperCoverageTests
 {
+    private static readonly string[] HelpAndRunArgs = ["--help", "run"];
+
     [TestMethod]
     public void Http3NativeBootstrap_EarlyOutsAndPathHelpers_DoNotRelaunch()
     {
@@ -62,7 +64,7 @@ public class BootstrapAndFirefoxHelperCoverageTests
 
         var append = typeof(Http3NativeBootstrap).GetMethod("AppendRelaunchArguments", flags)!;
         var psi = new System.Diagnostics.ProcessStartInfo { FileName = "dotnet" };
-        append.Invoke(null, [psi, Environment.ProcessPath ?? "dotnet", new[] { "--help", "run" }]);
+        append.Invoke(null, [psi, Environment.ProcessPath ?? "dotnet", HelpAndRunArgs]);
         Assert.IsTrue(psi.ArgumentList.Count >= 1);
         var psiApp = new System.Diagnostics.ProcessStartInfo { FileName = "titanium" };
         append.Invoke(null, [psiApp, "/tmp/titanium-app", Array.Empty<string>()]);
@@ -130,8 +132,15 @@ public class BootstrapAndFirefoxHelperCoverageTests
         InvokeFf("HasBackup", Type.EmptyTypes);
         InvokeFf("BackupPath", Type.EmptyTypes);
         _ = LinuxFirefoxProxy.BuildFirefoxBypassListForTests("<local>;*.corp;<-loopback>");
-        _ = LinuxFirefoxProxy.MergePrefsForTests("", new Dictionary<string, string> { ["k"] = "1" });
-        _ = LinuxFirefoxProxy.RemoveKeysForTests("user_pref(\"k\", 1);\n", ["k"]);
+        _ = LinuxFirefoxProxy.MergePrefsForTests(
+            "user_pref(\"k\", 1);\n# comment\nuser_pref(\"keep\", true);\n",
+            new Dictionary<string, string> { ["k"] = "2", ["added"] = "\"x\"" });
+        _ = LinuxFirefoxProxy.RemoveKeysForTests(
+            "user_pref(\"k\", 1);\nnot-a-pref\nuser_pref(\"keep\", true);\n", ["k", "missing"]);
+        _ = LinuxFirefoxProxy.BuildFirefoxBypassListForTests(null);
+        _ = LinuxFirefoxProxy.BuildFirefoxBypassListForTests("");
+        typeof(LinuxFirefoxProxy).GetMethod("ResolveFirefoxLaunch",
+            BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, []);
 
         var quote = typeof(LinuxBrowserLaunchProxy).GetMethod("QuoteShellArg",
             BindingFlags.NonPublic | BindingFlags.Static)!;
@@ -152,9 +161,12 @@ public class BootstrapAndFirefoxHelperCoverageTests
         using var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
         listener.Start();
         var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
-        _ = TcpHelper.GetProcessIdByLocalPort(System.Net.Sockets.AddressFamily.InterNetwork, port);
-        _ = TcpHelper.GetProcessIdByLocalPort(System.Net.Sockets.AddressFamily.InterNetworkV6, port);
-        _ = TcpHelper.GetProcessIdByLocalPort(System.Net.Sockets.AddressFamily.InterNetwork, 1);
+        var pid4 = TcpHelper.GetProcessIdByLocalPort(System.Net.Sockets.AddressFamily.InterNetwork, port);
+        var pid6 = TcpHelper.GetProcessIdByLocalPort(System.Net.Sockets.AddressFamily.InterNetworkV6, port);
+        var missing = TcpHelper.GetProcessIdByLocalPort(System.Net.Sockets.AddressFamily.InterNetwork, 1);
+        Assert.IsTrue(pid4 >= -1);
+        Assert.IsTrue(pid6 >= -1);
+        Assert.IsTrue(missing >= -1);
         listener.Stop();
     }
 

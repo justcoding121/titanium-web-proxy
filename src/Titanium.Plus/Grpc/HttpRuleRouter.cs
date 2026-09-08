@@ -20,7 +20,7 @@ internal sealed class PathTemplate
 
     private PathTemplate(List<Segment> segments) => _segments = segments;
 
-    public static PathTemplate Parse(string pattern)
+    public static PathTemplate Parse(string pattern) // NOSONAR S3776 -- HTTP path-template parse is a single segment walk.
     {
         if (string.IsNullOrWhiteSpace(pattern) || pattern[0] != '/')
             throw new ArgumentException($"HTTP path template must start with '/': {pattern}");
@@ -96,7 +96,7 @@ internal sealed class HttpRuleRouter
 
     private HttpRuleRouter(List<TranscodedRoute> routes) => _routes = routes;
 
-    public static HttpRuleRouter Build(
+    public static HttpRuleRouter Build( // NOSONAR S3776 -- Annotation walk builds the route table in one pass.
         IReadOnlyList<FileDescriptor> fileDescriptors,
         IReadOnlyCollection<string> serviceAllowList)
     {

@@ -118,7 +118,7 @@ public static class JsonReverseProxyDocument
             _ => PathMatchKind.Prefix,
         };
 
-    private static IReadOnlyList<TransformConfig>? MapTransforms(List<TransformDto>? transforms)
+    private static List<TransformConfig>? MapTransforms(List<TransformDto>? transforms)
     {
         if (transforms is null || transforms.Count == 0)
         {

@@ -248,7 +248,7 @@ internal static class MitmCompressedRelayHelper
         private bool TryMatchUniqueHeadersAllowingGrowth(
             HeaderCollection after, int maxAdds, ref AddedHeaderBuffer added)
         {
-            var unique = _unique!;
+            var unique = _unique!; // NOSONAR S8969 -- Capture snapshot is initialized before match; operator documents that contract.
             foreach (var kv in unique)
             {
                 if (after.NonUniqueHeaders.TryGetValue(kv.Key, out var grownList))
@@ -290,7 +290,7 @@ internal static class MitmCompressedRelayHelper
         private bool TryAppendNewUniqueHeaders(
             HeaderCollection after, int maxAdds, ref AddedHeaderBuffer added)
         {
-            var unique = _unique!;
+            var unique = _unique!; // NOSONAR S8969 -- Capture snapshot is initialized before match; operator documents that contract.
             foreach (var kv in after.Headers)
             {
                 if (unique.ContainsKey(kv.Key))
@@ -349,7 +349,7 @@ internal static class MitmCompressedRelayHelper
 
         private bool NonUniqueNamesAreKnown(HeaderCollection after)
         {
-            var unique = _unique!;
+            var unique = _unique!; // NOSONAR S8969 -- Capture snapshot is initialized before match; operator documents that contract.
             var nonUniqueSnapshot = _nonUniqueSnapshot!;
             foreach (var name in after.NonUniqueHeaders.Keys) // NOSONAR S3267 -- Explicit loop avoids LINQ enumerator allocation on hot path.
             {
@@ -377,7 +377,7 @@ internal static class MitmCompressedRelayHelper
             if (!TryCollectDrops(after, maxDrops, out dropped, out var dropCount) || dropCount == 0)
                 return false;
 
-            var unique = _unique!;
+            var unique = _unique!; // NOSONAR S8969 -- Capture snapshot is initialized before match; operator documents that contract.
             foreach (var kv in after.Headers) // NOSONAR S3267 -- Explicit loop avoids LINQ enumerator allocation on hot path.
             {
                 if (!unique.ContainsKey(kv.Key))
@@ -392,7 +392,7 @@ internal static class MitmCompressedRelayHelper
         {
             dropped = default;
             dropCount = 0;
-            var unique = _unique!;
+            var unique = _unique!; // NOSONAR S8969 -- Capture snapshot is initialized before match; operator documents that contract.
             foreach (var kv in unique)
             {
                 if (after.Headers.TryGetValue(kv.Key, out var header))

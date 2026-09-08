@@ -18,6 +18,8 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
     private readonly bool _preserveProtoFieldNames;
     private readonly bool _alwaysPrintPrimitiveFields;
     private readonly bool _enableGzipCompression;
+    private const string GrpcStatusHeader = "grpc-status";
+    private const string GrpcMessageHeader = "grpc-message";
 
     public GrpcJsonTranscoderImpl(
         HttpRuleRouter router,
@@ -118,7 +120,8 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
         }
 
         var framed = GrpcFrames.Encode(protoBytes, compressed: _enableGzipCompression);
-        var upstreamPath = "/" + route.Method.Service.FullName + "/" + route.Method.Name;
+        const string grpcPathDelimiter = "/";
+        var upstreamPath = grpcPathDelimiter + route.Method.Service.FullName + grpcPathDelimiter + route.Method.Name;
 
         var mark = new GrpcJsonTranscodeSessionMark
         {
@@ -250,14 +253,14 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
     private static (int Status, string? Message) ReadGrpcStatusAndMessage(Response response)
     {
         var grpcStatus = TryReadGrpcStatus(response);
-        var grpcMessage = response.Headers.GetFirstHeader("grpc-status") is null
-            ? response.TrailingHeaders?.GetFirstHeader("grpc-message")?.Value
-            : response.Headers.GetFirstHeader("grpc-message")?.Value;
-        grpcMessage ??= response.TrailingHeaders?.GetFirstHeader("grpc-message")?.Value;
+        var grpcMessage = response.Headers.GetFirstHeader(GrpcStatusHeader) is null
+            ? response.TrailingHeaders?.GetFirstHeader(GrpcMessageHeader)?.Value
+            : response.Headers.GetFirstHeader(GrpcMessageHeader)?.Value;
+        grpcMessage ??= response.TrailingHeaders?.GetFirstHeader(GrpcMessageHeader)?.Value;
 
         if (grpcStatus is null)
         {
-            grpcStatus = response.TrailingHeaders?.GetFirstHeader("grpc-status")?.Value is { } ts
+            grpcStatus = response.TrailingHeaders?.GetFirstHeader(GrpcStatusHeader)?.Value is { } ts
                 && int.TryParse(ts, out var code)
                 ? code
                 : 0;
@@ -273,8 +276,8 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
         response.StatusDescription = HttpStatusDescription(httpStatus);
         response.Headers.RemoveHeader("Content-Type");
         response.ContentType = "application/json";
-        response.Headers.RemoveHeader("grpc-status");
-        response.Headers.RemoveHeader("grpc-message");
+        response.Headers.RemoveHeader(GrpcStatusHeader);
+        response.Headers.RemoveHeader(GrpcMessageHeader);
     }
 
     private static string HttpStatusDescription(int httpStatus) => httpStatus switch
@@ -314,7 +317,7 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
             : "[" + string.Join(",", jsonParts) + "]";
     }
 
-    private bool TryReadAllFrames(byte[] body, out List<byte[]> payloads)
+    private static bool TryReadAllFrames(byte[] body, out List<byte[]> payloads)
     {
         payloads = [];
         var offset = 0;
@@ -360,8 +363,8 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
 
     private static int? TryReadGrpcStatus(Response response)
     {
-        var header = response.Headers.GetFirstHeader("grpc-status")?.Value
-                     ?? response.TrailingHeaders?.GetFirstHeader("grpc-status")?.Value;
+        var header = response.Headers.GetFirstHeader(GrpcStatusHeader)?.Value
+                     ?? response.TrailingHeaders?.GetFirstHeader(GrpcStatusHeader)?.Value;
         return header is not null && int.TryParse(header, out var code) ? code : null;
     }
 

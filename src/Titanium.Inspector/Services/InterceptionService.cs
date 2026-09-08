@@ -998,7 +998,7 @@ public sealed class InterceptionService : IDisposable
         };
     }
 
-    private async Task OnBeforeRequest(object sender, SessionEventArgs e)
+    private async Task OnBeforeRequest(object sender, SessionEventArgs e) // NOSONAR S3776 -- Capture pipeline (scripts, AutoResponder, breakpoints) shares session state; splitting would hide ordering.
     {
         try
         {
@@ -1357,7 +1357,7 @@ public sealed class InterceptionService : IDisposable
         SessionUpdated?.Invoke(this, work.Snap);
     }
 
-    private static void FillResponse(SessionSnapshot snap, SessionEventArgs e)
+    private static void FillResponse(SessionSnapshot snap, SessionEventArgs e) // NOSONAR S3776 -- Snapshot fill walks protocol-specific body/header branches in one place.
     {
         var resp = e.HttpClient.Response;
         snap.StatusCode = resp.StatusCode;
@@ -1441,7 +1441,7 @@ public sealed class InterceptionService : IDisposable
             return;
         }
 
-        var delay = NetworkThrottle.DelayFor(profile, e.BodyBytes?.Length ?? 0, applyLatency: e.IsChunked == false || e.BodyBytes?.Length > 0);
+        var delay = NetworkThrottle.DelayFor(profile, e.BodyBytes?.Length ?? 0, applyLatency: !e.IsChunked || e.BodyBytes?.Length > 0);
         if (delay > TimeSpan.Zero)
         {
             await Task.Delay(delay, _processResolveCts?.Token ?? CancellationToken.None).ConfigureAwait(false);

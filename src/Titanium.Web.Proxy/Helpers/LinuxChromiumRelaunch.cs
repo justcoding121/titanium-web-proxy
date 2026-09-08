@@ -107,7 +107,7 @@ internal static class LinuxChromiumRelaunch
         }
     }
 
-    private static string BuildRelaunchScript(
+    private static string BuildRelaunchScript( // NOSONAR S107 -- Script fields map 1:1 onto the generated shell.
         string scriptPath,
         List<(int Pid, BrowserFamily Family)> mains,
         List<string> launchLines,
@@ -218,7 +218,7 @@ internal static class LinuxChromiumRelaunch
     private static string ShellQuote(string value) =>
         "'" + (value ?? string.Empty).Replace("'", "'\\''", StringComparison.Ordinal) + "'";
 
-    private static IEnumerable<(int Pid, BrowserFamily Family)> FindMainBrowsers()
+    private static IEnumerable<(int Pid, BrowserFamily Family)> FindMainBrowsers() // NOSONAR S3776 -- /proc walk identifies Chromium mains without extra process snapshots.
     {
         IEnumerable<string> dirs;
         try { dirs = Directory.EnumerateDirectories("/proc"); }

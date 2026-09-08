@@ -226,7 +226,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         RemoveProxy(ProxyProtocolType.AllHttp, saveOriginalConfig: false);
     }
 
-    public void RestoreOriginalSettings()
+    public void RestoreOriginalSettings() // NOSONAR S3776 -- Snapshot restore must apply gsettings/env together.
     {
         if (!_hasSnapshot) return;
 
@@ -686,7 +686,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     ///     Ensure child gsettings processes do not inherit a poisoned bus address even if something
     ///     re-set <c>DBUS_SESSION_BUS_ADDRESS</c> after <see cref="EnsureUsableDbusSession"/>.
     /// </summary>
-    private static IDictionary<string, string?>? DbusEnvironmentOverride()
+    private static Dictionary<string, string?>? DbusEnvironmentOverride()
     {
         var address = Environment.GetEnvironmentVariable(DbusSessionBusAddress);
         if (!IsUnusableDbusAddress(address))
