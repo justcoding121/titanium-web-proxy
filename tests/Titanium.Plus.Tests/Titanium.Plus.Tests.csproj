@@ -4,6 +4,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);ASPDEPR004;ASPDEPR008</NoWarn>
     <SignAssembly>True</SignAssembly>
     <AssemblyOriginatorKeyFile>..\..\src\Titanium.Plus\StrongNameKey.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>

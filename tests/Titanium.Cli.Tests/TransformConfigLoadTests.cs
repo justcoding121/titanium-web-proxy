@@ -34,9 +34,10 @@ public class TransformConfigLoadTests
             """;
         var c = TwpConfigLoader.LoadJson(json);
         Assert.AreEqual(1, c.Routes.Count);
-        Assert.IsNotNull(c.Routes[0].Transforms);
-        Assert.AreEqual(1, c.Routes[0].Transforms!.Count);
-        Assert.AreEqual("PathPrefix", c.Routes[0].Transforms[0].Kind);
-        Assert.AreEqual("/gw", c.Routes[0].Transforms[0].Parameters!["prefix"]);
+        var transforms = c.Routes[0].Transforms;
+        Assert.IsNotNull(transforms);
+        Assert.AreEqual(1, transforms.Count);
+        Assert.AreEqual("PathPrefix", transforms[0].Kind);
+        Assert.AreEqual("/gw", transforms[0].Parameters!["prefix"]);
     }
 }

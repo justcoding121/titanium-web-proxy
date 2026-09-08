@@ -57,7 +57,17 @@ public class InspectorHeadlessUiE2ETests
         await Task.Delay(100);
         Assert.AreEqual(1, recorder.SetCount, "System proxy should go through controller seam");
         Assert.IsTrue(vm.SystemProxy);
-        Assert.IsTrue(vm.StatusText.Contains("quic", StringComparison.OrdinalIgnoreCase), vm.StatusText);
+        Assert.IsTrue(
+            vm.StatusText.StartsWith("System proxy enabled", StringComparison.Ordinal),
+            vm.StatusText);
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.IsTrue(vm.StatusText.Contains("quic", StringComparison.OrdinalIgnoreCase), vm.StatusText);
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            Assert.IsTrue(vm.StatusText.Contains("Firefox", StringComparison.OrdinalIgnoreCase), vm.StatusText);
+        }
 
         vm.AutoResponderMatch = "*ui-e2e*";
         vm.AutoResponderStatus = 201;
