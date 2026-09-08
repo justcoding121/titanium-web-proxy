@@ -703,7 +703,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             }
         }
 
-        throw last ?? new InvalidOperationException("UI marshal failed after retries.");
+        throw last!;
     }
 
     private void LoadPlusPanels()

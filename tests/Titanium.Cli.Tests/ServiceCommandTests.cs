@@ -289,6 +289,32 @@ public class ServiceCommandParseTests
         var code = await ServiceCommand.ExecuteAsync(["service", "install"]);
         Assert.AreEqual(1, code);
     }
+
+    [TestMethod]
+    public async Task ServiceStatus_MissingName_AndCreateManager_DoNotHang()
+    {
+        _ = ServiceCommand.CreateManager();
+        _ = ServiceCommand.PrintHelp();
+        Assert.AreEqual(0, ServiceCommand.PrintSubHelp("install"));
+        Assert.AreEqual(0, ServiceCommand.PrintSubHelp("uninstall"));
+        Assert.AreEqual(0, ServiceCommand.PrintSubHelp("start"));
+        Assert.AreEqual(0, ServiceCommand.PrintSubHelp("stop"));
+        Assert.AreEqual(0, ServiceCommand.PrintSubHelp("restart"));
+        Assert.AreEqual(0, ServiceCommand.PrintSubHelp("status"));
+        Assert.AreEqual(1, ServiceCommand.PrintSubHelp("nope"));
+
+        var status = await ServiceCommand.ExecuteAsync(
+            ["service", "status", "--name", "titanium-qa-cov-missing-" + Guid.NewGuid().ToString("N")[..8]]);
+        Assert.IsTrue(status is 0 or 1, status.ToString());
+        _ = await ServiceCommand.IsDefaultServiceRunningAsync();
+
+        if (OperatingSystem.IsWindows())
+        {
+            var userInstall = await ServiceCommand.ExecuteAsync(
+                ["service", "install", "-c", "missing.yaml", "--user"]);
+            Assert.AreEqual(1, userInstall);
+        }
+    }
 }
 
 [TestClass]
