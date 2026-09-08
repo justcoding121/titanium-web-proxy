@@ -203,7 +203,8 @@ public class QuicConnectionPoolTests
             IExternalProxy? upStreamProxy,
             string cacheKey,
             RemoteCertificateValidationCallback? remoteCertificateValidationCallback,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            bool failFastHandshake = true)
         {
             Interlocked.Increment(ref _createCount);
             if (HandshakeDelay > TimeSpan.Zero)

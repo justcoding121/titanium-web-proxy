@@ -455,6 +455,8 @@ public class Http3BridgeTests
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp3 = true;
         proxy.EnableHttpsSvcbDnsDiscovery = false;
+        // Forced H3 uses the full connect budget (no 3s fail-fast). Keep this negative case short.
+        proxy.ConnectTimeOutSeconds = 2;
         proxy.BeforeRequest += (_, args) =>
         {
             args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;

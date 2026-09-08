@@ -93,6 +93,11 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     ///     security identity so different origins sharing the same connect target are not coalesced.
     ///     When <see langword="null" />, defaults to <paramref name="connectHost" />.
     /// </param>
+    /// <param name="failFastHandshake">
+    ///     When <see langword="true"/> (default), cap QUIC handshake at 3s for Alt-Svc/SVCB and
+    ///     warmup fail-fast before TCP fallback. Pass <see langword="false"/> for Forced H3 so the
+    ///     dial uses the full <see cref="ProxyServer.ConnectTimeOutSeconds"/> budget.
+    /// </param>
     internal async ValueTask<QuicServerConnection> GetOrCreateAsync(
         string connectHost,
         int port,
@@ -100,7 +105,8 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
         IExternalProxy? upStreamProxy,
         RemoteCertificateValidationCallback? remoteCertificateValidationCallback,
         CancellationToken cancellationToken,
-        string? sniHost = null)
+        string? sniHost = null,
+        bool failFastHandshake = true)
     {
         if (_draining) throw new InvalidOperationException("QuicConnectionPool is draining.");
 
@@ -129,7 +135,8 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
 
                 var created = await _factory.CreateAsync(
                     connectHost, effectiveSniHost, port, upStreamEndPoint, upStreamProxy,
-                    cacheKey, remoteCertificateValidationCallback, cancellationToken);
+                    cacheKey, remoteCertificateValidationCallback, cancellationToken,
+                    failFastHandshake);
 
                 // Nothing else can see `created` yet, so this cannot fail.
                 created.TryAcquireStream();

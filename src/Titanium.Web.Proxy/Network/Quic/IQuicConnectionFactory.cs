@@ -21,5 +21,6 @@ internal interface IQuicConnectionFactory
         IExternalProxy? upStreamProxy,
         string cacheKey,
         RemoteCertificateValidationCallback? remoteCertificateValidationCallback,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        bool failFastHandshake = true);
 }

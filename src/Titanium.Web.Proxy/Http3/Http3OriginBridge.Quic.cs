@@ -115,7 +115,8 @@ internal static partial class Http3OriginBridge
                 (sender, certificate, chain, errors) =>
                     server.ValidateServerCertificate(sender, sessionArgs, certificate, chain, errors),
                 cancellationToken,
-                sniHost: sniHost);
+                sniHost: sniHost,
+                failFastHandshake: !isForcedH3);
 
             reused = !quicConn.ClaimFirstUse();
             sessionArgs.Timing?.MarkConnectionReady(quicConn.Id, reused);

@@ -51,16 +51,19 @@ internal sealed class QuicConnectionFactory : IQuicConnectionFactory
         IExternalProxy? upStreamProxy,
         string cacheKey,
         RemoteCertificateValidationCallback? remoteCertificateValidationCallback,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool failFastHandshake = true)
     {
         if (upStreamProxy != null)
             throw new QuicProxyNotSupportedException(upStreamProxy.ToString() ?? "unknown");
 
-        // Auto-policy H3 (SVCB/Alt-Svc) must fail fast when UDP/443 is filtered: the .NET default
-        // HandshakeTimeout is 10s, which makes every first request to an H3-advertising origin hang
-        // before TCP fallback. Cap at ConnectTimeOutSeconds but never above 3s so page loads stay
-        // responsive on networks that advertise H3 but cannot complete a QUIC handshake.
-        var handshakeSeconds = Math.Clamp(_proxyServer.ConnectTimeOutSeconds, 1, 3);
+        // Auto-policy H3 (SVCB/Alt-Svc) and pool warmups must fail fast when UDP is filtered: the
+        // .NET default HandshakeTimeout is 10s, which makes every first request to an H3-advertising
+        // origin hang before TCP fallback. Cap at 3s so page loads stay responsive.
+        // Forced H3 has no TCP fallback — use the full ConnectTimeOutSeconds budget (same as TCP).
+        var handshakeSeconds = failFastHandshake
+            ? Math.Clamp(_proxyServer.ConnectTimeOutSeconds, 1, 3)
+            : Math.Max(1, _proxyServer.ConnectTimeOutSeconds);
 
         var clientOptions = new QuicClientConnectionOptions
         {
