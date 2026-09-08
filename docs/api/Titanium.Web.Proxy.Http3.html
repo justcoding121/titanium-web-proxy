@@ -5,9 +5,9 @@
   <head>
     <meta charset="utf-8">
       <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-      <title>Namespace Titanium.Web.Proxy.Network | Titanium Web Proxy </title>
+      <title>Namespace Titanium.Web.Proxy.Http3 | Titanium Web Proxy </title>
       <meta name="viewport" content="width=device-width">
-      <meta name="title" content="Namespace Titanium.Web.Proxy.Network | Titanium Web Proxy ">
+      <meta name="title" content="Namespace Titanium.Web.Proxy.Http3 | Titanium Web Proxy ">
     
     
       <link rel="shortcut icon" href="../favicon.ico">
@@ -76,45 +76,18 @@
         </div>
         <div class="article row grid-right">
           <div class="col-md-10">
-            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.Network">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.Http3">
 
-  <h1 id="Titanium_Web_Proxy_Network" data-uid="Titanium.Web.Proxy.Network" class="text-break">Namespace Titanium.Web.Proxy.Network</h1>
+  <h1 id="Titanium_Web_Proxy_Http3" data-uid="Titanium.Web.Proxy.Http3" class="text-break">Namespace Titanium.Web.Proxy.Http3</h1>
   <div class="markdown level0 summary"></div>
   <div class="markdown level0 conceptual"></div>
   <div class="markdown level0 remarks"></div>
     <h3 id="classes">
 Classes
 </h3>
-      <h4><a class="xref" href="Titanium.Web.Proxy.Network.CertificateManager.html">CertificateManager</a></h4>
-      <section><p>A class to manage SSL certificates used by this proxy server.</p>
-</section>
-      <h4><a class="xref" href="Titanium.Web.Proxy.Network.CertificateOsTrustResult.html">CertificateOsTrustResult</a></h4>
-      <section><p>Structured result from Unix OS trust or related helper operations.</p>
-</section>
-      <h4><a class="xref" href="Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.html">DefaultCertificateDiskCache</a></h4>
-      <section></section>
-      <h4><a class="xref" href="Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html">FirefoxCertificateTrust</a></h4>
-      <section><p>Firefox-specific CA trust: Windows ImportEnterpriseRoots policy / policies.json,
-profile <code>user.js</code> (and <code>prefs.js</code> when Firefox is not running) so Firefox
-uses OS roots, plus optional NSS import into the default profile (<code>cert9.db</code>).
-Does not write into the Firefox.app bundle (that would invalidate the code signature).</p>
-</section>
-    <h3 id="interfaces">
-Interfaces
-</h3>
-      <h4><a class="xref" href="Titanium.Web.Proxy.Network.ICertificateCache.html">ICertificateCache</a></h4>
-      <section></section>
-    <h3 id="enums">
-Enums
-</h3>
-      <h4><a class="xref" href="Titanium.Web.Proxy.Network.CertificateEngine.html">CertificateEngine</a></h4>
-      <section><p>Certificate Engine option.</p>
-</section>
-      <h4><a class="xref" href="Titanium.Web.Proxy.Network.CertificateKeyAlgorithm.html">CertificateKeyAlgorithm</a></h4>
-      <section><p>Key algorithm used for the leaf (&quot;fake&quot;) certificates the proxy generates per intercepted host.</p>
-</section>
-      <h4><a class="xref" href="Titanium.Web.Proxy.Network.CertificateOsTrustKind.html">CertificateOsTrustKind</a></h4>
-      <section><p>Outcome kind for OS / browser SSL trust helpers (Keychain, NSS, package install).</p>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Http3.Http3NativeBootstrap.html">Http3NativeBootstrap</a></h4>
+      <section><p>Ensures app-local MsQuic natives are visible to <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.net.quic.quiclistener">QuicListener</a> on macOS
+framework-dependent hosts (typical Debug / <code>dotnet run</code>).</p>
 </section>
 
 

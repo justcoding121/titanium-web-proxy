@@ -131,6 +131,25 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.TryGet
   nameWithType: MemoryHttpResponseCache.TryGet
+- uid: Titanium.Web.Proxy.ClientProcessId
+  name: ClientProcessId
+  href: api/Titanium.Web.Proxy.ClientProcessId.html
+  commentId: T:Titanium.Web.Proxy.ClientProcessId
+  fullName: Titanium.Web.Proxy.ClientProcessId
+  nameWithType: ClientProcessId
+- uid: Titanium.Web.Proxy.ClientProcessId.IsSupported
+  name: IsSupported
+  href: api/Titanium.Web.Proxy.ClientProcessId.html#Titanium_Web_Proxy_ClientProcessId_IsSupported
+  commentId: P:Titanium.Web.Proxy.ClientProcessId.IsSupported
+  fullName: Titanium.Web.Proxy.ClientProcessId.IsSupported
+  nameWithType: ClientProcessId.IsSupported
+- uid: Titanium.Web.Proxy.ClientProcessId.IsSupported*
+  name: IsSupported
+  href: api/Titanium.Web.Proxy.ClientProcessId.html#Titanium_Web_Proxy_ClientProcessId_IsSupported_
+  commentId: Overload:Titanium.Web.Proxy.ClientProcessId.IsSupported
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ClientProcessId.IsSupported
+  nameWithType: ClientProcessId.IsSupported
 - uid: Titanium.Web.Proxy.Clusters
   name: Titanium.Web.Proxy.Clusters
   href: api/Titanium.Web.Proxy.Clusters.html
@@ -2539,6 +2558,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UpstreamConnectionTiming
   nameWithType: SessionEventArgsBase.UpstreamConnectionTiming
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UpstreamDestinationId
+  name: UpstreamDestinationId
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_UpstreamDestinationId
+  commentId: P:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UpstreamDestinationId
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UpstreamDestinationId
+  nameWithType: SessionEventArgsBase.UpstreamDestinationId
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UpstreamDestinationId*
+  name: UpstreamDestinationId
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_UpstreamDestinationId_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UpstreamDestinationId
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UpstreamDestinationId
+  nameWithType: SessionEventArgsBase.UpstreamDestinationId
 - uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UserData
   name: UserData
   href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_UserData
@@ -3244,6 +3276,107 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Exceptions.UpstreamProxyConnectException.StatusDescription
   nameWithType: UpstreamProxyConnectException.StatusDescription
+- uid: Titanium.Web.Proxy.Helpers
+  name: Titanium.Web.Proxy.Helpers
+  href: api/Titanium.Web.Proxy.Helpers.html
+  commentId: N:Titanium.Web.Proxy.Helpers
+  fullName: Titanium.Web.Proxy.Helpers
+  nameWithType: Titanium.Web.Proxy.Helpers
+- uid: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper
+  name: UnixProxyBypassMapper
+  href: api/Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.html
+  commentId: T:Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper
+  fullName: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper
+  nameWithType: UnixProxyBypassMapper
+- uid: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.IsLocalHost(System.String)
+  name: IsLocalHost(string?)
+  href: api/Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.html#Titanium_Web_Proxy_Helpers_UnixProxyBypassMapper_IsLocalHost_System_String_
+  commentId: M:Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.IsLocalHost(System.String)
+  name.vb: IsLocalHost(String)
+  fullName: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.IsLocalHost(string?)
+  fullName.vb: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.IsLocalHost(String)
+  nameWithType: UnixProxyBypassMapper.IsLocalHost(string?)
+  nameWithType.vb: UnixProxyBypassMapper.IsLocalHost(String)
+- uid: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.IsLocalHost*
+  name: IsLocalHost
+  href: api/Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.html#Titanium_Web_Proxy_Helpers_UnixProxyBypassMapper_IsLocalHost_
+  commentId: Overload:Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.IsLocalHost
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.IsLocalHost
+  nameWithType: UnixProxyBypassMapper.IsLocalHost
+- uid: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToCommaSeparated(System.String)
+  name: ToCommaSeparated(string?)
+  href: api/Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.html#Titanium_Web_Proxy_Helpers_UnixProxyBypassMapper_ToCommaSeparated_System_String_
+  commentId: M:Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToCommaSeparated(System.String)
+  name.vb: ToCommaSeparated(String)
+  fullName: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToCommaSeparated(string?)
+  fullName.vb: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToCommaSeparated(String)
+  nameWithType: UnixProxyBypassMapper.ToCommaSeparated(string?)
+  nameWithType.vb: UnixProxyBypassMapper.ToCommaSeparated(String)
+- uid: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToCommaSeparated*
+  name: ToCommaSeparated
+  href: api/Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.html#Titanium_Web_Proxy_Helpers_UnixProxyBypassMapper_ToCommaSeparated_
+  commentId: Overload:Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToCommaSeparated
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToCommaSeparated
+  nameWithType: UnixProxyBypassMapper.ToCommaSeparated
+- uid: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToGsettingsArray(System.String)
+  name: ToGsettingsArray(string?)
+  href: api/Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.html#Titanium_Web_Proxy_Helpers_UnixProxyBypassMapper_ToGsettingsArray_System_String_
+  commentId: M:Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToGsettingsArray(System.String)
+  name.vb: ToGsettingsArray(String)
+  fullName: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToGsettingsArray(string?)
+  fullName.vb: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToGsettingsArray(String)
+  nameWithType: UnixProxyBypassMapper.ToGsettingsArray(string?)
+  nameWithType.vb: UnixProxyBypassMapper.ToGsettingsArray(String)
+- uid: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToGsettingsArray*
+  name: ToGsettingsArray
+  href: api/Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.html#Titanium_Web_Proxy_Helpers_UnixProxyBypassMapper_ToGsettingsArray_
+  commentId: Overload:Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToGsettingsArray
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToGsettingsArray
+  nameWithType: UnixProxyBypassMapper.ToGsettingsArray
+- uid: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv(System.String)
+  name: ToNoProxyEnv(string?)
+  href: api/Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.html#Titanium_Web_Proxy_Helpers_UnixProxyBypassMapper_ToNoProxyEnv_System_String_
+  commentId: M:Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv(System.String)
+  name.vb: ToNoProxyEnv(String)
+  fullName: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv(string?)
+  fullName.vb: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv(String)
+  nameWithType: UnixProxyBypassMapper.ToNoProxyEnv(string?)
+  nameWithType.vb: UnixProxyBypassMapper.ToNoProxyEnv(String)
+- uid: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv(System.String,System.Boolean)
+  name: ToNoProxyEnv(string?, bool)
+  href: api/Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.html#Titanium_Web_Proxy_Helpers_UnixProxyBypassMapper_ToNoProxyEnv_System_String_System_Boolean_
+  commentId: M:Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv(System.String,System.Boolean)
+  name.vb: ToNoProxyEnv(String, Boolean)
+  fullName: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv(string?, bool)
+  fullName.vb: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv(String, Boolean)
+  nameWithType: UnixProxyBypassMapper.ToNoProxyEnv(string?, bool)
+  nameWithType.vb: UnixProxyBypassMapper.ToNoProxyEnv(String, Boolean)
+- uid: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv*
+  name: ToNoProxyEnv
+  href: api/Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.html#Titanium_Web_Proxy_Helpers_UnixProxyBypassMapper_ToNoProxyEnv_
+  commentId: Overload:Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToNoProxyEnv
+  nameWithType: UnixProxyBypassMapper.ToNoProxyEnv
+- uid: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToUnixBypassHosts(System.String)
+  name: ToUnixBypassHosts(string?)
+  href: api/Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.html#Titanium_Web_Proxy_Helpers_UnixProxyBypassMapper_ToUnixBypassHosts_System_String_
+  commentId: M:Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToUnixBypassHosts(System.String)
+  name.vb: ToUnixBypassHosts(String)
+  fullName: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToUnixBypassHosts(string?)
+  fullName.vb: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToUnixBypassHosts(String)
+  nameWithType: UnixProxyBypassMapper.ToUnixBypassHosts(string?)
+  nameWithType.vb: UnixProxyBypassMapper.ToUnixBypassHosts(String)
+- uid: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToUnixBypassHosts*
+  name: ToUnixBypassHosts
+  href: api/Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.html#Titanium_Web_Proxy_Helpers_UnixProxyBypassMapper_ToUnixBypassHosts_
+  commentId: Overload:Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToUnixBypassHosts
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToUnixBypassHosts
+  nameWithType: UnixProxyBypassMapper.ToUnixBypassHosts
 - uid: Titanium.Web.Proxy.Http
   name: Titanium.Web.Proxy.Http
   href: api/Titanium.Web.Proxy.Http.html
@@ -4768,6 +4901,34 @@ references:
   commentId: F:Titanium.Web.Proxy.Http.TunnelType.Websocket
   fullName: Titanium.Web.Proxy.Http.TunnelType.Websocket
   nameWithType: TunnelType.Websocket
+- uid: Titanium.Web.Proxy.Http3
+  name: Titanium.Web.Proxy.Http3
+  href: api/Titanium.Web.Proxy.Http3.html
+  commentId: N:Titanium.Web.Proxy.Http3
+  fullName: Titanium.Web.Proxy.Http3
+  nameWithType: Titanium.Web.Proxy.Http3
+- uid: Titanium.Web.Proxy.Http3.Http3NativeBootstrap
+  name: Http3NativeBootstrap
+  href: api/Titanium.Web.Proxy.Http3.Http3NativeBootstrap.html
+  commentId: T:Titanium.Web.Proxy.Http3.Http3NativeBootstrap
+  fullName: Titanium.Web.Proxy.Http3.Http3NativeBootstrap
+  nameWithType: Http3NativeBootstrap
+- uid: Titanium.Web.Proxy.Http3.Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(System.String[])
+  name: EnsureAppLocalMsQuicVisible(string[]?)
+  href: api/Titanium.Web.Proxy.Http3.Http3NativeBootstrap.html#Titanium_Web_Proxy_Http3_Http3NativeBootstrap_EnsureAppLocalMsQuicVisible_System_String___
+  commentId: M:Titanium.Web.Proxy.Http3.Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(System.String[])
+  name.vb: EnsureAppLocalMsQuicVisible(String())
+  fullName: Titanium.Web.Proxy.Http3.Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(string[]?)
+  fullName.vb: Titanium.Web.Proxy.Http3.Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(String())
+  nameWithType: Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(string[]?)
+  nameWithType.vb: Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(String())
+- uid: Titanium.Web.Proxy.Http3.Http3NativeBootstrap.EnsureAppLocalMsQuicVisible*
+  name: EnsureAppLocalMsQuicVisible
+  href: api/Titanium.Web.Proxy.Http3.Http3NativeBootstrap.html#Titanium_Web_Proxy_Http3_Http3NativeBootstrap_EnsureAppLocalMsQuicVisible_
+  commentId: Overload:Titanium.Web.Proxy.Http3.Http3NativeBootstrap.EnsureAppLocalMsQuicVisible
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http3.Http3NativeBootstrap.EnsureAppLocalMsQuicVisible
+  nameWithType: Http3NativeBootstrap.EnsureAppLocalMsQuicVisible
 - uid: Titanium.Web.Proxy.Logging
   name: Titanium.Web.Proxy.Logging
   href: api/Titanium.Web.Proxy.Logging.html
@@ -4951,6 +5112,182 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Middleware.ProxyMiddlewarePipeline.InvokeEmptyAsync
   nameWithType: ProxyMiddlewarePipeline.InvokeEmptyAsync
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults
+  name: MitmExclusionDefaults
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html
+  commentId: T:Titanium.Web.Proxy.MitmExclusionDefaults
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults
+  nameWithType: MitmExclusionDefaults
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,System.Func{System.Boolean})
+  name: ApplyDecryptExclusions(ExplicitProxyEndPoint, Func<bool>)
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_ApplyDecryptExclusions_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_System_Func_System_Boolean__
+  commentId: M:Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,System.Func{System.Boolean})
+  name.vb: ApplyDecryptExclusions(ExplicitProxyEndPoint, Func(Of Boolean))
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint, System.Func<bool>)
+  fullName.vb: Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint, System.Func(Of Boolean))
+  nameWithType: MitmExclusionDefaults.ApplyDecryptExclusions(ExplicitProxyEndPoint, Func<bool>)
+  nameWithType.vb: MitmExclusionDefaults.ApplyDecryptExclusions(ExplicitProxyEndPoint, Func(Of Boolean))
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,System.Func{System.Boolean},System.Collections.Generic.IEnumerable{System.String},System.Collections.Generic.IEnumerable{System.String})
+  name: ApplyDecryptExclusions(ExplicitProxyEndPoint, Func<bool>, IEnumerable<string>?, IEnumerable<string>?)
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_ApplyDecryptExclusions_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_System_Func_System_Boolean__System_Collections_Generic_IEnumerable_System_String__System_Collections_Generic_IEnumerable_System_String__
+  commentId: M:Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,System.Func{System.Boolean},System.Collections.Generic.IEnumerable{System.String},System.Collections.Generic.IEnumerable{System.String})
+  name.vb: ApplyDecryptExclusions(ExplicitProxyEndPoint, Func(Of Boolean), IEnumerable(Of String), IEnumerable(Of String))
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint, System.Func<bool>, System.Collections.Generic.IEnumerable<string>?, System.Collections.Generic.IEnumerable<string>?)
+  fullName.vb: Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint, System.Func(Of Boolean), System.Collections.Generic.IEnumerable(Of String), System.Collections.Generic.IEnumerable(Of String))
+  nameWithType: MitmExclusionDefaults.ApplyDecryptExclusions(ExplicitProxyEndPoint, Func<bool>, IEnumerable<string>?, IEnumerable<string>?)
+  nameWithType.vb: MitmExclusionDefaults.ApplyDecryptExclusions(ExplicitProxyEndPoint, Func(Of Boolean), IEnumerable(Of String), IEnumerable(Of String))
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,System.Func{System.Boolean},System.Collections.Generic.IEnumerable{System.String},System.Collections.Generic.IEnumerable{System.String},Titanium.Web.Proxy.MitmExclusionMode)
+  name: ApplyDecryptExclusions(ExplicitProxyEndPoint, Func<bool>, IEnumerable<string>?, IEnumerable<string>?, MitmExclusionMode)
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_ApplyDecryptExclusions_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_System_Func_System_Boolean__System_Collections_Generic_IEnumerable_System_String__System_Collections_Generic_IEnumerable_System_String__Titanium_Web_Proxy_MitmExclusionMode_
+  commentId: M:Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,System.Func{System.Boolean},System.Collections.Generic.IEnumerable{System.String},System.Collections.Generic.IEnumerable{System.String},Titanium.Web.Proxy.MitmExclusionMode)
+  name.vb: ApplyDecryptExclusions(ExplicitProxyEndPoint, Func(Of Boolean), IEnumerable(Of String), IEnumerable(Of String), MitmExclusionMode)
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint, System.Func<bool>, System.Collections.Generic.IEnumerable<string>?, System.Collections.Generic.IEnumerable<string>?, Titanium.Web.Proxy.MitmExclusionMode)
+  fullName.vb: Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint, System.Func(Of Boolean), System.Collections.Generic.IEnumerable(Of String), System.Collections.Generic.IEnumerable(Of String), Titanium.Web.Proxy.MitmExclusionMode)
+  nameWithType: MitmExclusionDefaults.ApplyDecryptExclusions(ExplicitProxyEndPoint, Func<bool>, IEnumerable<string>?, IEnumerable<string>?, MitmExclusionMode)
+  nameWithType.vb: MitmExclusionDefaults.ApplyDecryptExclusions(ExplicitProxyEndPoint, Func(Of Boolean), IEnumerable(Of String), IEnumerable(Of String), MitmExclusionMode)
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions*
+  name: ApplyDecryptExclusions
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_ApplyDecryptExclusions_
+  commentId: Overload:Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions
+  nameWithType: MitmExclusionDefaults.ApplyDecryptExclusions
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings
+  name: CreateSystemProxySettings()
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_CreateSystemProxySettings
+  commentId: M:Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings()
+  nameWithType: MitmExclusionDefaults.CreateSystemProxySettings()
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(System.Boolean)
+  name: CreateSystemProxySettings(bool)
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_CreateSystemProxySettings_System_Boolean_
+  commentId: M:Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(System.Boolean)
+  name.vb: CreateSystemProxySettings(Boolean)
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(bool)
+  fullName.vb: Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(Boolean)
+  nameWithType: MitmExclusionDefaults.CreateSystemProxySettings(bool)
+  nameWithType.vb: MitmExclusionDefaults.CreateSystemProxySettings(Boolean)
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(System.Boolean,System.Collections.Generic.IEnumerable{System.String})
+  name: CreateSystemProxySettings(bool, IEnumerable<string>?)
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_CreateSystemProxySettings_System_Boolean_System_Collections_Generic_IEnumerable_System_String__
+  commentId: M:Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(System.Boolean,System.Collections.Generic.IEnumerable{System.String})
+  name.vb: CreateSystemProxySettings(Boolean, IEnumerable(Of String))
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(bool, System.Collections.Generic.IEnumerable<string>?)
+  fullName.vb: Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(Boolean, System.Collections.Generic.IEnumerable(Of String))
+  nameWithType: MitmExclusionDefaults.CreateSystemProxySettings(bool, IEnumerable<string>?)
+  nameWithType.vb: MitmExclusionDefaults.CreateSystemProxySettings(Boolean, IEnumerable(Of String))
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(System.Boolean,System.Collections.Generic.IEnumerable{System.String},Titanium.Web.Proxy.MitmExclusionMode)
+  name: CreateSystemProxySettings(bool, IEnumerable<string>?, MitmExclusionMode)
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_CreateSystemProxySettings_System_Boolean_System_Collections_Generic_IEnumerable_System_String__Titanium_Web_Proxy_MitmExclusionMode_
+  commentId: M:Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(System.Boolean,System.Collections.Generic.IEnumerable{System.String},Titanium.Web.Proxy.MitmExclusionMode)
+  name.vb: CreateSystemProxySettings(Boolean, IEnumerable(Of String), MitmExclusionMode)
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(bool, System.Collections.Generic.IEnumerable<string>?, Titanium.Web.Proxy.MitmExclusionMode)
+  fullName.vb: Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(Boolean, System.Collections.Generic.IEnumerable(Of String), Titanium.Web.Proxy.MitmExclusionMode)
+  nameWithType: MitmExclusionDefaults.CreateSystemProxySettings(bool, IEnumerable<string>?, MitmExclusionMode)
+  nameWithType.vb: MitmExclusionDefaults.CreateSystemProxySettings(Boolean, IEnumerable(Of String), MitmExclusionMode)
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings*
+  name: CreateSystemProxySettings
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_CreateSystemProxySettings_
+  commentId: Overload:Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings
+  nameWithType: MitmExclusionDefaults.CreateSystemProxySettings
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.HostnameMatches(System.String,System.String)
+  name: HostnameMatches(string, string)
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_HostnameMatches_System_String_System_String_
+  commentId: M:Titanium.Web.Proxy.MitmExclusionDefaults.HostnameMatches(System.String,System.String)
+  name.vb: HostnameMatches(String, String)
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.HostnameMatches(string, string)
+  fullName.vb: Titanium.Web.Proxy.MitmExclusionDefaults.HostnameMatches(String, String)
+  nameWithType: MitmExclusionDefaults.HostnameMatches(string, string)
+  nameWithType.vb: MitmExclusionDefaults.HostnameMatches(String, String)
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.HostnameMatches*
+  name: HostnameMatches
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_HostnameMatches_
+  commentId: Overload:Titanium.Web.Proxy.MitmExclusionDefaults.HostnameMatches
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.HostnameMatches
+  nameWithType: MitmExclusionDefaults.HostnameMatches
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.IsBuiltInSslBypass(System.String)
+  name: IsBuiltInSslBypass(string)
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_IsBuiltInSslBypass_System_String_
+  commentId: M:Titanium.Web.Proxy.MitmExclusionDefaults.IsBuiltInSslBypass(System.String)
+  name.vb: IsBuiltInSslBypass(String)
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.IsBuiltInSslBypass(string)
+  fullName.vb: Titanium.Web.Proxy.MitmExclusionDefaults.IsBuiltInSslBypass(String)
+  nameWithType: MitmExclusionDefaults.IsBuiltInSslBypass(string)
+  nameWithType.vb: MitmExclusionDefaults.IsBuiltInSslBypass(String)
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.IsBuiltInSslBypass*
+  name: IsBuiltInSslBypass
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_IsBuiltInSslBypass_
+  commentId: Overload:Titanium.Web.Proxy.MitmExclusionDefaults.IsBuiltInSslBypass
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.IsBuiltInSslBypass
+  nameWithType: MitmExclusionDefaults.IsBuiltInSslBypass
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(System.String)
+  name: ShouldDisableSslDecrypt(string?)
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_ShouldDisableSslDecrypt_System_String_
+  commentId: M:Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(System.String)
+  name.vb: ShouldDisableSslDecrypt(String)
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(string?)
+  fullName.vb: Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(String)
+  nameWithType: MitmExclusionDefaults.ShouldDisableSslDecrypt(string?)
+  nameWithType.vb: MitmExclusionDefaults.ShouldDisableSslDecrypt(String)
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(System.String,System.Collections.Generic.IEnumerable{System.String},System.Collections.Generic.IEnumerable{System.String})
+  name: ShouldDisableSslDecrypt(string?, IEnumerable<string>?, IEnumerable<string>?)
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_ShouldDisableSslDecrypt_System_String_System_Collections_Generic_IEnumerable_System_String__System_Collections_Generic_IEnumerable_System_String__
+  commentId: M:Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(System.String,System.Collections.Generic.IEnumerable{System.String},System.Collections.Generic.IEnumerable{System.String})
+  name.vb: ShouldDisableSslDecrypt(String, IEnumerable(Of String), IEnumerable(Of String))
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(string?, System.Collections.Generic.IEnumerable<string>?, System.Collections.Generic.IEnumerable<string>?)
+  fullName.vb: Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(String, System.Collections.Generic.IEnumerable(Of String), System.Collections.Generic.IEnumerable(Of String))
+  nameWithType: MitmExclusionDefaults.ShouldDisableSslDecrypt(string?, IEnumerable<string>?, IEnumerable<string>?)
+  nameWithType.vb: MitmExclusionDefaults.ShouldDisableSslDecrypt(String, IEnumerable(Of String), IEnumerable(Of String))
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(System.String,System.Collections.Generic.IEnumerable{System.String},System.Collections.Generic.IEnumerable{System.String},Titanium.Web.Proxy.MitmExclusionMode)
+  name: ShouldDisableSslDecrypt(string?, IEnumerable<string>?, IEnumerable<string>?, MitmExclusionMode)
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_ShouldDisableSslDecrypt_System_String_System_Collections_Generic_IEnumerable_System_String__System_Collections_Generic_IEnumerable_System_String__Titanium_Web_Proxy_MitmExclusionMode_
+  commentId: M:Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(System.String,System.Collections.Generic.IEnumerable{System.String},System.Collections.Generic.IEnumerable{System.String},Titanium.Web.Proxy.MitmExclusionMode)
+  name.vb: ShouldDisableSslDecrypt(String, IEnumerable(Of String), IEnumerable(Of String), MitmExclusionMode)
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(string?, System.Collections.Generic.IEnumerable<string>?, System.Collections.Generic.IEnumerable<string>?, Titanium.Web.Proxy.MitmExclusionMode)
+  fullName.vb: Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(String, System.Collections.Generic.IEnumerable(Of String), System.Collections.Generic.IEnumerable(Of String), Titanium.Web.Proxy.MitmExclusionMode)
+  nameWithType: MitmExclusionDefaults.ShouldDisableSslDecrypt(string?, IEnumerable<string>?, IEnumerable<string>?, MitmExclusionMode)
+  nameWithType.vb: MitmExclusionDefaults.ShouldDisableSslDecrypt(String, IEnumerable(Of String), IEnumerable(Of String), MitmExclusionMode)
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt*
+  name: ShouldDisableSslDecrypt
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_ShouldDisableSslDecrypt_
+  commentId: Overload:Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt
+  nameWithType: MitmExclusionDefaults.ShouldDisableSslDecrypt
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.SystemProxyBypassRules
+  name: SystemProxyBypassRules
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_SystemProxyBypassRules
+  commentId: F:Titanium.Web.Proxy.MitmExclusionDefaults.SystemProxyBypassRules
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.SystemProxyBypassRules
+  nameWithType: MitmExclusionDefaults.SystemProxyBypassRules
+- uid: Titanium.Web.Proxy.MitmExclusionDefaults.TunnelOnlyPinningDomains
+  name: TunnelOnlyPinningDomains
+  href: api/Titanium.Web.Proxy.MitmExclusionDefaults.html#Titanium_Web_Proxy_MitmExclusionDefaults_TunnelOnlyPinningDomains
+  commentId: F:Titanium.Web.Proxy.MitmExclusionDefaults.TunnelOnlyPinningDomains
+  fullName: Titanium.Web.Proxy.MitmExclusionDefaults.TunnelOnlyPinningDomains
+  nameWithType: MitmExclusionDefaults.TunnelOnlyPinningDomains
+- uid: Titanium.Web.Proxy.MitmExclusionMode
+  name: MitmExclusionMode
+  href: api/Titanium.Web.Proxy.MitmExclusionMode.html
+  commentId: T:Titanium.Web.Proxy.MitmExclusionMode
+  fullName: Titanium.Web.Proxy.MitmExclusionMode
+  nameWithType: MitmExclusionMode
+- uid: Titanium.Web.Proxy.MitmExclusionMode.Merge
+  name: Merge
+  href: api/Titanium.Web.Proxy.MitmExclusionMode.html#Titanium_Web_Proxy_MitmExclusionMode_Merge
+  commentId: F:Titanium.Web.Proxy.MitmExclusionMode.Merge
+  fullName: Titanium.Web.Proxy.MitmExclusionMode.Merge
+  nameWithType: MitmExclusionMode.Merge
+- uid: Titanium.Web.Proxy.MitmExclusionMode.Replace
+  name: Replace
+  href: api/Titanium.Web.Proxy.MitmExclusionMode.html#Titanium_Web_Proxy_MitmExclusionMode_Replace
+  commentId: F:Titanium.Web.Proxy.MitmExclusionMode.Replace
+  fullName: Titanium.Web.Proxy.MitmExclusionMode.Replace
+  nameWithType: MitmExclusionMode.Replace
 - uid: Titanium.Web.Proxy.Models
   name: Titanium.Web.Proxy.Models
   href: api/Titanium.Web.Proxy.Models.html
@@ -6339,6 +6676,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.ApplyFastColdStartLeafSettings
   nameWithType: CertificateManager.ApplyFastColdStartLeafSettings
+- uid: Titanium.Web.Proxy.Network.CertificateManager.AreInteractiveRootStoreMutationsSuppressed
+  name: AreInteractiveRootStoreMutationsSuppressed
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_AreInteractiveRootStoreMutationsSuppressed
+  commentId: P:Titanium.Web.Proxy.Network.CertificateManager.AreInteractiveRootStoreMutationsSuppressed
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.AreInteractiveRootStoreMutationsSuppressed
+  nameWithType: CertificateManager.AreInteractiveRootStoreMutationsSuppressed
+- uid: Titanium.Web.Proxy.Network.CertificateManager.AreInteractiveRootStoreMutationsSuppressed*
+  name: AreInteractiveRootStoreMutationsSuppressed
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_AreInteractiveRootStoreMutationsSuppressed_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.AreInteractiveRootStoreMutationsSuppressed
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.AreInteractiveRootStoreMutationsSuppressed
+  nameWithType: CertificateManager.AreInteractiveRootStoreMutationsSuppressed
 - uid: Titanium.Web.Proxy.Network.CertificateManager.CertificateCacheTimeOutMinutes
   name: CertificateCacheTimeOutMinutes
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_CertificateCacheTimeOutMinutes
@@ -6523,6 +6873,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.IntermediateCertificates
   nameWithType: CertificateManager.IntermediateCertificates
+- uid: Titanium.Web.Proxy.Network.CertificateManager.IsOsRootStillPresent
+  name: IsOsRootStillPresent()
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_IsOsRootStillPresent
+  commentId: M:Titanium.Web.Proxy.Network.CertificateManager.IsOsRootStillPresent
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.IsOsRootStillPresent()
+  nameWithType: CertificateManager.IsOsRootStillPresent()
+- uid: Titanium.Web.Proxy.Network.CertificateManager.IsOsRootStillPresent*
+  name: IsOsRootStillPresent
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_IsOsRootStillPresent_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.IsOsRootStillPresent
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.IsOsRootStillPresent
+  nameWithType: CertificateManager.IsOsRootStillPresent
 - uid: Titanium.Web.Proxy.Network.CertificateManager.IsRootCertificateMachineTrusted
   name: IsRootCertificateMachineTrusted()
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_IsRootCertificateMachineTrusted
@@ -6549,6 +6912,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.IsRootCertificateUserTrusted
   nameWithType: CertificateManager.IsRootCertificateUserTrusted
+- uid: Titanium.Web.Proxy.Network.CertificateManager.IsRootInLoginKeychain
+  name: IsRootInLoginKeychain()
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_IsRootInLoginKeychain
+  commentId: M:Titanium.Web.Proxy.Network.CertificateManager.IsRootInLoginKeychain
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.IsRootInLoginKeychain()
+  nameWithType: CertificateManager.IsRootInLoginKeychain()
+- uid: Titanium.Web.Proxy.Network.CertificateManager.IsRootInLoginKeychain*
+  name: IsRootInLoginKeychain
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_IsRootInLoginKeychain_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.IsRootInLoginKeychain
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.IsRootInLoginKeychain
+  nameWithType: CertificateManager.IsRootInLoginKeychain
 - uid: Titanium.Web.Proxy.Network.CertificateManager.LastOsTrustResult
   name: LastOsTrustResult
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_LastOsTrustResult
@@ -7172,6 +7548,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots
   nameWithType: FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref
+  name: TryEnableEnterpriseRootsUserPref()
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TryEnableEnterpriseRootsUserPref
+  commentId: M:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref()
+  nameWithType: FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref()
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref*
+  name: TryEnableEnterpriseRootsUserPref
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TryEnableEnterpriseRootsUserPref_
+  commentId: Overload:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref
+  nameWithType: FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref
 - uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots
   name: TryEnableWindowsEnterpriseRoots()
   href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TryEnableWindowsEnterpriseRoots
@@ -8892,6 +9281,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.IdleWriteTimeoutSeconds
   nameWithType: ProxyServer.IdleWriteTimeoutSeconds
+- uid: Titanium.Web.Proxy.ProxyServer.IgnoreServerCertificateErrors
+  name: IgnoreServerCertificateErrors
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_IgnoreServerCertificateErrors
+  commentId: P:Titanium.Web.Proxy.ProxyServer.IgnoreServerCertificateErrors
+  fullName: Titanium.Web.Proxy.ProxyServer.IgnoreServerCertificateErrors
+  nameWithType: ProxyServer.IgnoreServerCertificateErrors
+- uid: Titanium.Web.Proxy.ProxyServer.IgnoreServerCertificateErrors*
+  name: IgnoreServerCertificateErrors
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_IgnoreServerCertificateErrors_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.IgnoreServerCertificateErrors
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.IgnoreServerCertificateErrors
+  nameWithType: ProxyServer.IgnoreServerCertificateErrors
 - uid: Titanium.Web.Proxy.ProxyServer.ListenerBackLog
   name: ListenerBackLog
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ListenerBackLog
@@ -9475,6 +9877,32 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread
   nameWithType: ProxyServer.ThreadPoolWorkerThread
+- uid: Titanium.Web.Proxy.ProxyServer.TryDisableAllSystemProxies
+  name: TryDisableAllSystemProxies()
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TryDisableAllSystemProxies
+  commentId: M:Titanium.Web.Proxy.ProxyServer.TryDisableAllSystemProxies
+  fullName: Titanium.Web.Proxy.ProxyServer.TryDisableAllSystemProxies()
+  nameWithType: ProxyServer.TryDisableAllSystemProxies()
+- uid: Titanium.Web.Proxy.ProxyServer.TryDisableAllSystemProxies*
+  name: TryDisableAllSystemProxies
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TryDisableAllSystemProxies_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.TryDisableAllSystemProxies
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.TryDisableAllSystemProxies
+  nameWithType: ProxyServer.TryDisableAllSystemProxies
+- uid: Titanium.Web.Proxy.ProxyServer.TryDisableSystemProxy(Titanium.Web.Proxy.Models.ProxyProtocolType)
+  name: TryDisableSystemProxy(ProxyProtocolType)
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TryDisableSystemProxy_Titanium_Web_Proxy_Models_ProxyProtocolType_
+  commentId: M:Titanium.Web.Proxy.ProxyServer.TryDisableSystemProxy(Titanium.Web.Proxy.Models.ProxyProtocolType)
+  fullName: Titanium.Web.Proxy.ProxyServer.TryDisableSystemProxy(Titanium.Web.Proxy.Models.ProxyProtocolType)
+  nameWithType: ProxyServer.TryDisableSystemProxy(ProxyProtocolType)
+- uid: Titanium.Web.Proxy.ProxyServer.TryDisableSystemProxy*
+  name: TryDisableSystemProxy
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TryDisableSystemProxy_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.TryDisableSystemProxy
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.TryDisableSystemProxy
+  nameWithType: ProxyServer.TryDisableSystemProxy
 - uid: Titanium.Web.Proxy.ProxyServer.TryEnableHttp3IfSupported
   name: TryEnableHttp3IfSupported()
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TryEnableHttp3IfSupported
@@ -9488,6 +9916,35 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.TryEnableHttp3IfSupported
   nameWithType: ProxyServer.TryEnableHttp3IfSupported
+- uid: Titanium.Web.Proxy.ProxyServer.TryRestoreOriginalProxySettings
+  name: TryRestoreOriginalProxySettings()
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TryRestoreOriginalProxySettings
+  commentId: M:Titanium.Web.Proxy.ProxyServer.TryRestoreOriginalProxySettings
+  fullName: Titanium.Web.Proxy.ProxyServer.TryRestoreOriginalProxySettings()
+  nameWithType: ProxyServer.TryRestoreOriginalProxySettings()
+- uid: Titanium.Web.Proxy.ProxyServer.TryRestoreOriginalProxySettings*
+  name: TryRestoreOriginalProxySettings
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TryRestoreOriginalProxySettings_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.TryRestoreOriginalProxySettings
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.TryRestoreOriginalProxySettings
+  nameWithType: ProxyServer.TryRestoreOriginalProxySettings
+- uid: Titanium.Web.Proxy.ProxyServer.TrySetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,Titanium.Web.Proxy.Models.ProxyProtocolType,Titanium.Web.Proxy.SystemProxySettings)
+  name: TrySetAsSystemProxy(ExplicitProxyEndPoint, ProxyProtocolType, SystemProxySettings?)
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TrySetAsSystemProxy_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_Titanium_Web_Proxy_Models_ProxyProtocolType_Titanium_Web_Proxy_SystemProxySettings_
+  commentId: M:Titanium.Web.Proxy.ProxyServer.TrySetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,Titanium.Web.Proxy.Models.ProxyProtocolType,Titanium.Web.Proxy.SystemProxySettings)
+  name.vb: TrySetAsSystemProxy(ExplicitProxyEndPoint, ProxyProtocolType, SystemProxySettings)
+  fullName: Titanium.Web.Proxy.ProxyServer.TrySetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint, Titanium.Web.Proxy.Models.ProxyProtocolType, Titanium.Web.Proxy.SystemProxySettings?)
+  fullName.vb: Titanium.Web.Proxy.ProxyServer.TrySetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint, Titanium.Web.Proxy.Models.ProxyProtocolType, Titanium.Web.Proxy.SystemProxySettings)
+  nameWithType: ProxyServer.TrySetAsSystemProxy(ExplicitProxyEndPoint, ProxyProtocolType, SystemProxySettings?)
+  nameWithType.vb: ProxyServer.TrySetAsSystemProxy(ExplicitProxyEndPoint, ProxyProtocolType, SystemProxySettings)
+- uid: Titanium.Web.Proxy.ProxyServer.TrySetAsSystemProxy*
+  name: TrySetAsSystemProxy
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TrySetAsSystemProxy_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.TrySetAsSystemProxy
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.TrySetAsSystemProxy
+  nameWithType: ProxyServer.TrySetAsSystemProxy
 - uid: Titanium.Web.Proxy.ProxyServer.UpStreamEndPoint
   name: UpStreamEndPoint
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_UpStreamEndPoint
@@ -10425,6 +10882,89 @@ references:
   commentId: F:Titanium.Web.Proxy.SystemProxyBypassRuleMode.Replace
   fullName: Titanium.Web.Proxy.SystemProxyBypassRuleMode.Replace
   nameWithType: SystemProxyBypassRuleMode.Replace
+- uid: Titanium.Web.Proxy.SystemProxyChangeResult
+  name: SystemProxyChangeResult
+  href: api/Titanium.Web.Proxy.SystemProxyChangeResult.html
+  commentId: T:Titanium.Web.Proxy.SystemProxyChangeResult
+  fullName: Titanium.Web.Proxy.SystemProxyChangeResult
+  nameWithType: SystemProxyChangeResult
+- uid: Titanium.Web.Proxy.SystemProxyChangeResult.#ctor(System.Boolean,System.String)
+  name: SystemProxyChangeResult(bool, string)
+  href: api/Titanium.Web.Proxy.SystemProxyChangeResult.html#Titanium_Web_Proxy_SystemProxyChangeResult__ctor_System_Boolean_System_String_
+  commentId: M:Titanium.Web.Proxy.SystemProxyChangeResult.#ctor(System.Boolean,System.String)
+  name.vb: New(Boolean, String)
+  fullName: Titanium.Web.Proxy.SystemProxyChangeResult.SystemProxyChangeResult(bool, string)
+  fullName.vb: Titanium.Web.Proxy.SystemProxyChangeResult.New(Boolean, String)
+  nameWithType: SystemProxyChangeResult.SystemProxyChangeResult(bool, string)
+  nameWithType.vb: SystemProxyChangeResult.New(Boolean, String)
+- uid: Titanium.Web.Proxy.SystemProxyChangeResult.#ctor*
+  name: SystemProxyChangeResult
+  href: api/Titanium.Web.Proxy.SystemProxyChangeResult.html#Titanium_Web_Proxy_SystemProxyChangeResult__ctor_
+  commentId: Overload:Titanium.Web.Proxy.SystemProxyChangeResult.#ctor
+  isSpec: "True"
+  name.vb: New
+  fullName: Titanium.Web.Proxy.SystemProxyChangeResult.SystemProxyChangeResult
+  fullName.vb: Titanium.Web.Proxy.SystemProxyChangeResult.New
+  nameWithType: SystemProxyChangeResult.SystemProxyChangeResult
+  nameWithType.vb: SystemProxyChangeResult.New
+- uid: Titanium.Web.Proxy.SystemProxyChangeResult.Fail(System.String)
+  name: Fail(string)
+  href: api/Titanium.Web.Proxy.SystemProxyChangeResult.html#Titanium_Web_Proxy_SystemProxyChangeResult_Fail_System_String_
+  commentId: M:Titanium.Web.Proxy.SystemProxyChangeResult.Fail(System.String)
+  name.vb: Fail(String)
+  fullName: Titanium.Web.Proxy.SystemProxyChangeResult.Fail(string)
+  fullName.vb: Titanium.Web.Proxy.SystemProxyChangeResult.Fail(String)
+  nameWithType: SystemProxyChangeResult.Fail(string)
+  nameWithType.vb: SystemProxyChangeResult.Fail(String)
+- uid: Titanium.Web.Proxy.SystemProxyChangeResult.Fail*
+  name: Fail
+  href: api/Titanium.Web.Proxy.SystemProxyChangeResult.html#Titanium_Web_Proxy_SystemProxyChangeResult_Fail_
+  commentId: Overload:Titanium.Web.Proxy.SystemProxyChangeResult.Fail
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.SystemProxyChangeResult.Fail
+  nameWithType: SystemProxyChangeResult.Fail
+- uid: Titanium.Web.Proxy.SystemProxyChangeResult.Message
+  name: Message
+  href: api/Titanium.Web.Proxy.SystemProxyChangeResult.html#Titanium_Web_Proxy_SystemProxyChangeResult_Message
+  commentId: P:Titanium.Web.Proxy.SystemProxyChangeResult.Message
+  fullName: Titanium.Web.Proxy.SystemProxyChangeResult.Message
+  nameWithType: SystemProxyChangeResult.Message
+- uid: Titanium.Web.Proxy.SystemProxyChangeResult.Message*
+  name: Message
+  href: api/Titanium.Web.Proxy.SystemProxyChangeResult.html#Titanium_Web_Proxy_SystemProxyChangeResult_Message_
+  commentId: Overload:Titanium.Web.Proxy.SystemProxyChangeResult.Message
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.SystemProxyChangeResult.Message
+  nameWithType: SystemProxyChangeResult.Message
+- uid: Titanium.Web.Proxy.SystemProxyChangeResult.Ok(System.String)
+  name: Ok(string)
+  href: api/Titanium.Web.Proxy.SystemProxyChangeResult.html#Titanium_Web_Proxy_SystemProxyChangeResult_Ok_System_String_
+  commentId: M:Titanium.Web.Proxy.SystemProxyChangeResult.Ok(System.String)
+  name.vb: Ok(String)
+  fullName: Titanium.Web.Proxy.SystemProxyChangeResult.Ok(string)
+  fullName.vb: Titanium.Web.Proxy.SystemProxyChangeResult.Ok(String)
+  nameWithType: SystemProxyChangeResult.Ok(string)
+  nameWithType.vb: SystemProxyChangeResult.Ok(String)
+- uid: Titanium.Web.Proxy.SystemProxyChangeResult.Ok*
+  name: Ok
+  href: api/Titanium.Web.Proxy.SystemProxyChangeResult.html#Titanium_Web_Proxy_SystemProxyChangeResult_Ok_
+  commentId: Overload:Titanium.Web.Proxy.SystemProxyChangeResult.Ok
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.SystemProxyChangeResult.Ok
+  nameWithType: SystemProxyChangeResult.Ok
+- uid: Titanium.Web.Proxy.SystemProxyChangeResult.Succeeded
+  name: Succeeded
+  href: api/Titanium.Web.Proxy.SystemProxyChangeResult.html#Titanium_Web_Proxy_SystemProxyChangeResult_Succeeded
+  commentId: P:Titanium.Web.Proxy.SystemProxyChangeResult.Succeeded
+  fullName: Titanium.Web.Proxy.SystemProxyChangeResult.Succeeded
+  nameWithType: SystemProxyChangeResult.Succeeded
+- uid: Titanium.Web.Proxy.SystemProxyChangeResult.Succeeded*
+  name: Succeeded
+  href: api/Titanium.Web.Proxy.SystemProxyChangeResult.html#Titanium_Web_Proxy_SystemProxyChangeResult_Succeeded_
+  commentId: Overload:Titanium.Web.Proxy.SystemProxyChangeResult.Succeeded
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.SystemProxyChangeResult.Succeeded
+  nameWithType: SystemProxyChangeResult.Succeeded
 - uid: Titanium.Web.Proxy.SystemProxyLoopbackPlacement
   name: SystemProxyLoopbackPlacement
   href: api/Titanium.Web.Proxy.SystemProxyLoopbackPlacement.html
@@ -10449,6 +10989,22 @@ references:
   commentId: T:Titanium.Web.Proxy.SystemProxySettings
   fullName: Titanium.Web.Proxy.SystemProxySettings
   nameWithType: SystemProxySettings
+- uid: Titanium.Web.Proxy.SystemProxySettings.BuildProxyOverride(System.String)
+  name: BuildProxyOverride(string?)
+  href: api/Titanium.Web.Proxy.SystemProxySettings.html#Titanium_Web_Proxy_SystemProxySettings_BuildProxyOverride_System_String_
+  commentId: M:Titanium.Web.Proxy.SystemProxySettings.BuildProxyOverride(System.String)
+  name.vb: BuildProxyOverride(String)
+  fullName: Titanium.Web.Proxy.SystemProxySettings.BuildProxyOverride(string?)
+  fullName.vb: Titanium.Web.Proxy.SystemProxySettings.BuildProxyOverride(String)
+  nameWithType: SystemProxySettings.BuildProxyOverride(string?)
+  nameWithType.vb: SystemProxySettings.BuildProxyOverride(String)
+- uid: Titanium.Web.Proxy.SystemProxySettings.BuildProxyOverride*
+  name: BuildProxyOverride
+  href: api/Titanium.Web.Proxy.SystemProxySettings.html#Titanium_Web_Proxy_SystemProxySettings_BuildProxyOverride_
+  commentId: Overload:Titanium.Web.Proxy.SystemProxySettings.BuildProxyOverride
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.SystemProxySettings.BuildProxyOverride
+  nameWithType: SystemProxySettings.BuildProxyOverride
 - uid: Titanium.Web.Proxy.SystemProxySettings.BypassRuleMode
   name: BypassRuleMode
   href: api/Titanium.Web.Proxy.SystemProxySettings.html#Titanium_Web_Proxy_SystemProxySettings_BypassRuleMode
