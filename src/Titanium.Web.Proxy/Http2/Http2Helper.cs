@@ -227,15 +227,6 @@ namespace Titanium.Web.Proxy.Http2
             resourceLimits ??= ProxyResourceLimits.Default;
             var connectionState = new Http2ConnectionState(connectionId, cancellationTokenSource,
                 resourceLimits.MaxConcurrentStreamsPerConnection);
-            // MITM static-HPACK Lite: connection-local SessionEventArgs reuse (Reset, not ConcurrentBag).
-            // Abort on cool-pair collapse — prior ConcurrentBag reuse hit ~0.48÷Rev.
-            Func<SessionEventArgs> effectiveSessionFactory = sessionFactory;
-            if (httpInterceptionEnabled && forceStaticHpackForMitmUnchangedRelay)
-            {
-                connectionState.MitmSessionReuseEnabled = true;
-                var innerFactory = sessionFactory;
-                effectiveSessionFactory = () => connectionState.RentSessionArgs(innerFactory);
-            }
 
             // Dedicated writers (share the direction locks so control-frame paths cannot interleave).
             connectionState.ClientFrameWriter =
@@ -281,7 +272,7 @@ namespace Titanium.Web.Proxy.Http2
 
             var sendRelay =
                 CopyHttp2FrameAsync(clientStream, serverStream, connectionState,
-                    effectiveSessionFactory, onBeforeRequest, onAfterResponse, prepareRequestHeaders, true,
+                    sessionFactory, onBeforeRequest, onAfterResponse, prepareRequestHeaders, true,
                     cancellationTokenSource.Token, logger, maxDecodedHeaderListBytes, enableRfc8441,
                     resourceLimits, originConnection, httpInterceptionEnabled, shouldInterceptHttp,
                     forceStaticHpackForMitmUnchangedRelay: forceStaticHpackForMitmUnchangedRelay);
@@ -291,7 +282,7 @@ namespace Titanium.Web.Proxy.Http2
             {
                 // Each origin leg has its own read loop; remaps origin stream ids back to the client.
                 receiveRelay = RunMultiOriginReceiveAsync(clientStream, connectionState, originPool,
-                    effectiveSessionFactory, onBeforeResponse, onAfterResponse, cancellationTokenSource.Token, logger,
+                    sessionFactory, onBeforeResponse, onAfterResponse, cancellationTokenSource.Token, logger,
                     maxDecodedHeaderListBytes, enableRfc8441, resourceLimits, httpInterceptionEnabled,
                     shouldInterceptHttp);
             }
@@ -299,7 +290,7 @@ namespace Titanium.Web.Proxy.Http2
             {
                 receiveRelay =
                     CopyHttp2FrameAsync(serverStream, clientStream, connectionState,
-                        effectiveSessionFactory, onBeforeResponse, onAfterResponse, null, false,
+                        sessionFactory, onBeforeResponse, onAfterResponse, null, false,
                         cancellationTokenSource.Token,
                         logger, maxDecodedHeaderListBytes, enableRfc8441, resourceLimits, originConnection,
                         httpInterceptionEnabled, shouldInterceptHttp,
@@ -359,8 +350,6 @@ namespace Titanium.Web.Proxy.Http2
             {
                 await connectionState.PendingFinalizations.WhenAllAsync();
             }
-
-            connectionState.DisposePooledSessionArgs();
         }
 
         private static async Task RunMultiOriginReceiveAsync( // NOSONAR S107
@@ -496,7 +485,7 @@ namespace Titanium.Web.Proxy.Http2
             }
             finally
             {
-                connectionState?.ReturnOrDisposeSessionArgs(state.SessionArgs);
+                state.SessionArgs.Dispose();
                 connectionState?.ReturnStreamState(state);
             }
         }
@@ -524,27 +513,27 @@ namespace Titanium.Web.Proxy.Http2
                 }
 
                 // MITM unchanged-lite: both Before* dispatches finished before END_STREAM closed the
-                // stream. Prefer sync AfterResponse+reuse; async AfterResponse falls back to Task track.
+                // stream. Prefer sync AfterResponse+Dispose; async AfterResponse falls back to Task track.
                 try
                 {
                     var after = onAfterResponse(args);
                     if (after.IsCompletedSuccessfully)
                     {
-                        connectionState.ReturnOrDisposeSessionArgs(args);
+                        args.Dispose();
                         connectionState.ReturnStreamState(state);
                         return;
                     }
 
                     if (after.IsCompleted)
                     {
-                        // Faulted/canceled CompletedTask — still dispose/reuse; report like FinalizeStreamAsync.
+                        // Faulted/canceled CompletedTask — still dispose; report like FinalizeStreamAsync.
                         if (after.IsFaulted)
                         {
                             ReportException(logger, new ProxyHttpException("HTTP/2 AfterResponse handler failed",
                                 after.Exception?.GetBaseException(), args));
                         }
 
-                        connectionState.ReturnOrDisposeSessionArgs(args);
+                        args.Dispose();
                         connectionState.ReturnStreamState(state);
                         return;
                     }
@@ -557,7 +546,7 @@ namespace Titanium.Web.Proxy.Http2
                 catch (Exception ex)
                 {
                     ReportException(logger, new ProxyHttpException("HTTP/2 AfterResponse handler failed", ex, args));
-                    connectionState.ReturnOrDisposeSessionArgs(args);
+                    args.Dispose();
                     connectionState.ReturnStreamState(state);
                     return;
                 }
@@ -581,7 +570,7 @@ namespace Titanium.Web.Proxy.Http2
             }
             finally
             {
-                connectionState.ReturnOrDisposeSessionArgs(args);
+                args.Dispose();
                 connectionState.ReturnStreamState(state);
             }
         }
