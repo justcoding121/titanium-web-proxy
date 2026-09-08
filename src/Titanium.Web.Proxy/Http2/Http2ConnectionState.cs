@@ -357,4 +357,78 @@ internal sealed class Http2ConnectionState
 
     /// <summary>Returns a stream state shell to the connection pool after finalization.</summary>
     public void ReturnStreamState(Http2StreamState state) => StreamStatePool.Return(state);
+
+    /// <summary>
+    ///     When true, MITM static-HPACK streams may return <see cref="SessionEventArgs"/> to a
+    ///     connection-local stack instead of Dispose (Reset, never ConcurrentBag).
+    /// </summary>
+    internal bool MitmSessionReuseEnabled { get; set; }
+
+    private readonly object _mitmSessionPoolLock = new();
+    private SessionEventArgs?[] _mitmSessionPool = new SessionEventArgs?[64];
+    private int _mitmSessionPoolCount;
+
+    internal SessionEventArgs RentSessionArgs(Func<SessionEventArgs> factory)
+    {
+        lock (_mitmSessionPoolLock)
+        {
+            if (_mitmSessionPoolCount > 0)
+            {
+                var rented = _mitmSessionPool[--_mitmSessionPoolCount]!;
+                _mitmSessionPool[_mitmSessionPoolCount] = null;
+                rented.ResetForHttp2StreamReuse();
+                return rented;
+            }
+        }
+
+        return factory();
+    }
+
+    /// <summary>
+    ///     Return a session for reuse, or Dispose when the pool is full / reuse is off.
+    /// </summary>
+    internal void ReturnOrDisposeSessionArgs(SessionEventArgs? args)
+    {
+        if (args == null)
+            return;
+        if (!MitmSessionReuseEnabled)
+        {
+            args.Dispose();
+            return;
+        }
+
+        lock (_mitmSessionPoolLock)
+        {
+            if (_mitmSessionPoolCount < _mitmSessionPool.Length)
+            {
+                try
+                {
+                    args.ResetForHttp2StreamReuse();
+                    _mitmSessionPool[_mitmSessionPoolCount++] = args;
+                    return;
+                }
+                catch
+                {
+                    // Fall through to Dispose.
+                }
+            }
+        }
+
+        args.Dispose();
+    }
+
+    /// <summary>Dispose sessions still sitting in the connection-local MITM reuse stack.</summary>
+    internal void DisposePooledSessionArgs()
+    {
+        lock (_mitmSessionPoolLock)
+        {
+            for (var i = 0; i < _mitmSessionPoolCount; i++)
+            {
+                _mitmSessionPool[i]?.Dispose();
+                _mitmSessionPool[i] = null;
+            }
+
+            _mitmSessionPoolCount = 0;
+        }
+    }
 }

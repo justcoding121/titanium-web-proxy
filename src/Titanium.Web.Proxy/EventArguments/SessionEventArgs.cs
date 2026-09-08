@@ -92,6 +92,17 @@ public class SessionEventArgs : SessionEventArgsBase
     }
 
     /// <summary>
+    ///     Reset for H2 MITM stream reuse on the same connection (no <see cref="Dispose"/>).
+    ///     Connection-local pool only — avoids ConcurrentBag; never call after Dispose.
+    /// </summary>
+    internal void ResetForHttp2StreamReuse()
+    {
+        ResetForKeepAlive(null, UpstreamHttpProtocol);
+        MultipartRequestPartSent = null;
+        IsPromise = false;
+    }
+
+    /// <summary>
     ///     Is this session a HTTP/2 promise?
     /// </summary>
     public bool IsPromise { get; internal set; }
