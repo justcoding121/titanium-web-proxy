@@ -1442,14 +1442,30 @@ namespace Titanium.Web.Proxy.Http2
                                     && request.Authority.Equals(relayState.CapturedAuthority))
                                 {
                                     relayState.HeadersRelayBaseline = request.Headers.TakeMitmRelayBaseline();
+                                    byte[]? blockToRelay = null;
+                                    byte[]? appendSuffix = null;
                                     if (MitmCompressedRelayHelper.AllowsCompressedRelay(
                                             relayState.HeadersRelayBaseline.MutationCount,
                                             request.Headers,
                                             MitmCompressedRelayHelper.DefaultMaxAppendHeaders,
                                             out _))
                                     {
+                                        blockToRelay = relayState.CapturedCompressedHeaders;
+                                    }
+                                    else if (TryPrepareMitmStaticHpackRelay(
+                                        relayState.CapturedCompressedHeaders,
+                                        relayState.HeadersRelayBaseline, request.Headers,
+                                        injectVia: false,
+                                        viaValue: null,
+                                        out blockToRelay, out appendSuffix))
+                                    {
+                                        // Full append-only / drop-rebuild static finish
+                                    }
+
+                                    if (blockToRelay != null)
+                                    {
                                         var relayTask = RelayCompressedHeaderBlockAsync(hbStreamId,
-                                            relayState.CapturedCompressedHeaders, endStreamFlag);
+                                            blockToRelay, endStreamFlag, appendSuffix);
                                         if (relayTask.IsCompletedSuccessfully)
                                         {
                                             request.ReadHttp2BeforeHandlerTaskCompletionSource = null;
