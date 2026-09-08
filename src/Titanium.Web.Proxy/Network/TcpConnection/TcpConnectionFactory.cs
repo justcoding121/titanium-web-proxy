@@ -608,14 +608,16 @@ internal class TcpConnectionFactory : IDisposable
         var connectHostName = string.IsNullOrEmpty(connectHost) ? remoteHostName : connectHost;
         var connectPortNumber = connectPort ?? remotePort;
 
-        // deny connection to proxy end points to avoid infinite connection loop.
-        if (Server.ProxyEndPoints.Any(x => x.Port == connectPortNumber)
+        // Deny TCP origin connects that would loop into one of our TCP listeners.
+        // UDP-only QUIC endpoints (Listener == null) share a port number with a distinct transport —
+        // matching them here falsely blocks H3→TCP origin when Kestrel reuses that port.
+        if (Server.ProxyEndPoints.Any(x => x.Port == connectPortNumber && x.Listener != null)
             && NetworkHelper.IsLocalIpAddress(connectHostName))
             throw new InvalidOperationException(
                 $"A client is making HTTP request to one of the listening ports of this proxy {connectHostName}:{connectPortNumber}");
 
         if (externalProxy != null &&
-            Server.ProxyEndPoints.Any(x => x.Port == externalProxy.Port) &&
+            Server.ProxyEndPoints.Any(x => x.Port == externalProxy.Port && x.Listener != null) &&
             NetworkHelper.IsLocalIpAddress(externalProxy.HostName))
             throw new InvalidOperationException(
                 $"A client is making HTTP request via external proxy to one of the listening ports of this proxy {remoteHostName}:{remotePort}");

@@ -524,10 +524,15 @@ internal sealed class Http2OriginConnection : IDisposable
             // therefore misclassify a content-length-less h2 response as bodiless and silently drop its
             // DATA frames. Only the status/method exclusions and an explicit `content-length: 0` mean
             // "no body" here (1xx never reaches this point; the interim channel consumed those).
+            // Missing content-length is -1 (not 0) — do not treat omission as empty.
+            var hasExplicitZeroContentLength =
+                (response.Headers.TryGetUniqueHeader(KnownHeaders.ContentLength, out _)
+                 || response.Headers.TryGetUniqueHeader(KnownHeaders.ContentLengthHttp2, out _))
+                && response.ContentLength == 0;
             var noBody = response.StatusCode is 204 or 304
                          || request.Method == "HEAD"
                          || (request.Method == "CONNECT" && response.StatusCode is >= 200 and < 300)
-                         || response.ContentLength == 0;
+                         || hasExplicitZeroContentLength;
             if (noBody)
             {
                 response.IsBodyRead = true;
@@ -552,6 +557,15 @@ internal sealed class Http2OriginConnection : IDisposable
                 }
 
                 return new Http2OriginExchange(response, body, trailers);
+            }
+
+            // Inbound may have finished (HEADERS+END_STREAM or DATA already drained) before we attach.
+            // Never allocate a pipe whose writer will never run — that hangs CopyToAsync.
+            if (pending.IsInboundComplete && pending.BodyPipeOrNull == null)
+            {
+                response.IsBodyRead = true;
+                response.Body = Array.Empty<byte>();
+                return new Http2OriginExchange(response, Array.Empty<byte>(), trailers);
             }
 
             var bodyPipe = pending.EnsureBodyPipe();
@@ -1541,7 +1555,7 @@ internal sealed class Http2OriginConnection : IDisposable
         if (pending.InlineBody != null)
             pending.HeadersReceived.TrySetResult(true);
         else
-            pending.BodyPipeOrNull?.CompleteWriter();
+            pending.MarkInboundComplete();
         TryDisposeIfRetiredAndIdle();
     }
 
@@ -1734,8 +1748,16 @@ internal sealed class Http2OriginConnection : IDisposable
         private readonly long maxBodyBytes;
         private byte[]? inlineBody;
         private int inlineWritten;
+        private int inboundComplete;
 
         internal BoundedBodyPipe? BodyPipeOrNull => bodyPipe;
+
+        /// <summary>
+        ///     True after the ReadLoop observed END_STREAM (or equivalent) for this stream, even when no
+        ///     <see cref="BoundedBodyPipe" /> had been attached yet. SendAsync must not allocate a pipe
+        ///     whose writer will never complete.
+        /// </summary>
+        internal bool IsInboundComplete => Volatile.Read(ref inboundComplete) != 0;
 
         /// <summary>Pre-sized body for known tiny Content-Length; null when using <see cref="EnsureBodyPipe"/>.</summary>
         internal byte[]? InlineBody => inlineBody;
@@ -1845,8 +1867,39 @@ internal sealed class Http2OriginConnection : IDisposable
             return body;
         }
 
-        internal BoundedBodyPipe EnsureBodyPipe() =>
-            bodyPipe ??= new BoundedBodyPipe(maxBodyBytes);
+        /// <summary>
+        ///     Single-assignment body pipe shared by ReadLoop (DATA) and SendAsync (drain). CAS so a
+        ///     concurrent attach never orphans the pipe the peer already wrote into.
+        /// </summary>
+        internal BoundedBodyPipe EnsureBodyPipe()
+        {
+            var existing = bodyPipe;
+            if (existing != null) return existing;
+
+            var created = new BoundedBodyPipe(maxBodyBytes);
+            var prior = Interlocked.CompareExchange(ref bodyPipe, created, null);
+            if (prior != null)
+            {
+                created.Dispose();
+                return prior;
+            }
+
+            // END_STREAM raced ahead of pipe publish — complete immediately so CopyToAsync cannot hang.
+            if (Volatile.Read(ref inboundComplete) != 0)
+                created.CompleteWriter();
+
+            return created;
+        }
+
+        /// <summary>
+        ///     Records inbound END_STREAM and completes any attached body-pipe writer. Safe when no pipe
+        ///     exists yet; SendAsync observes <see cref="IsInboundComplete" /> and skips a dead pipe.
+        /// </summary>
+        internal void MarkInboundComplete()
+        {
+            Volatile.Write(ref inboundComplete, 1);
+            bodyPipe?.CompleteWriter();
+        }
 
         public void Dispose()
         {
