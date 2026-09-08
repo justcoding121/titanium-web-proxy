@@ -468,7 +468,29 @@ internal class Decoder
     private void IndexHeader(int index, IHeaderListener headerListener)
     {
         var headerField = GetHeaderField(index);
-        AddHeader(headerListener, headerField.NameData, headerField.ValueData, false);
+        // Static-table rows are immutable shared instances — avoid per-stream HttpHeader alloc.
+        if (index <= StaticTable.Length)
+            AddHeader(headerListener, headerField, sensitive: false);
+        else
+            AddHeader(headerListener, headerField.NameData, headerField.ValueData, false);
+    }
+
+    private void AddHeader(IHeaderListener headerListener, HttpHeader header, bool sensitive)
+    {
+        if (header.NameData.Length == 0) throw new ArgumentException("name is empty");
+
+        var newSize = headerSize + header.NameData.Length + header.ValueData.Length;
+        if (newSize <= maxHeaderSize)
+        {
+            headerSize = (int)newSize;
+            headerListener.AddHeader(header, sensitive);
+        }
+        else
+        {
+            // truncation always fails for now (RFC 7540 / 7541).
+            // mark as truncated; EndHeaderBlock will report.
+            headerSize = maxHeaderSize + 1;
+        }
     }
 
     private void InsertHeader(IHeaderListener headerListener, ByteString name, ByteString value,

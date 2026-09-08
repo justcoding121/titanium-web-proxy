@@ -683,7 +683,10 @@ public class HeaderCollection : IEnumerable<HttpHeader>
         {
             EnsureMitmRelayCowSnapshot();
             MutationCount++;
-            header.SetValue(value);
+            if (header.IsSharedStaticTableEntry)
+                headers[headerName.String] = new HttpHeader(headerName, value);
+            else
+                header.SetValue(value);
         }
         else
         {
@@ -697,7 +700,10 @@ public class HeaderCollection : IEnumerable<HttpHeader>
         {
             EnsureMitmRelayCowSnapshot();
             MutationCount++;
-            header.SetValue(value);
+            if (header.IsSharedStaticTableEntry)
+                headers[headerName.String] = new HttpHeader(headerName, value);
+            else
+                header.SetValue(value);
         }
         else
         {

@@ -5960,7 +5960,14 @@ namespace Titanium.Web.Proxy.Http2
                 MalformedReason = null;
             }
 
-            public void AddHeader(ByteString name, ByteString value, bool sensitive) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+            public void AddHeader(HttpHeader header, bool sensitive) =>
+                AddHeader(header.NameData, header.ValueData, sensitive, header);
+
+            public void AddHeader(ByteString name, ByteString value, bool sensitive) =>
+                AddHeader(name, value, sensitive, prebuilt: null);
+
+            private void AddHeader(ByteString name, ByteString value, bool sensitive, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+                HttpHeader? prebuilt)
             {
                 if (name.Length > 0 && name.Span[0] == ':')
                 {
@@ -6082,7 +6089,10 @@ namespace Titanium.Web.Proxy.Http2
                 }
 
                 addHeaderFunc?.Invoke(name, value);
-                decodeTarget?.AddHeader(new HttpHeader(name, value));
+                if (prebuilt != null)
+                    decodeTarget?.AddHeader(prebuilt);
+                else
+                    decodeTarget?.AddHeader(new HttpHeader(name, value));
             }
 
             private void MarkMalformed(string reason)
