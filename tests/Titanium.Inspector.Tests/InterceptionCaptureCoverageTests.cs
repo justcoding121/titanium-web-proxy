@@ -372,6 +372,32 @@ public class InterceptionCaptureCoverageTests
             interception.Breakpoints.Abort();
             var resp = await pending;
             Assert.AreEqual(HttpStatusCode.Forbidden, resp.StatusCode);
+
+            interception.Breakpoints.Enabled = true;
+            var pendingEdit = http.GetAsync($"http://127.0.0.1:{origin.Port}/brk-edit");
+            deadline = DateTime.UtcNow.AddSeconds(3);
+            while (interception.Breakpoints.Active is null && DateTime.UtcNow < deadline)
+                await Task.Delay(20);
+            Assert.IsNotNull(interception.Breakpoints.Active);
+            interception.Breakpoints.EditBody("edited");
+            interception.Breakpoints.Continue();
+            var edited = await pendingEdit;
+            Assert.AreEqual(HttpStatusCode.OK, edited.StatusCode);
+
+            interception.BreakpointOnResponse = true;
+            var pendingResp = http.GetAsync($"http://127.0.0.1:{origin.Port}/brk-resp");
+            deadline = DateTime.UtcNow.AddSeconds(3);
+            while (interception.Breakpoints.Active is null && DateTime.UtcNow < deadline)
+                await Task.Delay(20);
+            Assert.IsNotNull(interception.Breakpoints.Active);
+            interception.Breakpoints.Continue();
+            deadline = DateTime.UtcNow.AddSeconds(3);
+            while (interception.Breakpoints.Active is null && DateTime.UtcNow < deadline)
+                await Task.Delay(20);
+            Assert.IsNotNull(interception.Breakpoints.Active);
+            interception.Breakpoints.Continue();
+            var respContinued = await pendingResp;
+            Assert.AreEqual(HttpStatusCode.OK, respContinued.StatusCode);
         }
         finally
         {

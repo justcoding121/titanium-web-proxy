@@ -315,6 +315,46 @@ public class ServiceCommandParseTests
             Assert.AreEqual(1, userInstall);
         }
     }
+
+    [TestMethod]
+    public async Task ServiceInstall_InvalidConfig_ExitsBeforeElevation()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-svc-inv-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "twp.yaml");
+        File.WriteAllText(path, """
+            schemaVersion: "7.1"
+            listeners:
+              - host: "127.0.0.1"
+                port: 0
+                type: ftp
+            """);
+        var previous = Environment.GetEnvironmentVariable(PrivilegePrompt.NoElevateEnv);
+        try
+        {
+            Environment.SetEnvironmentVariable(PrivilegePrompt.NoElevateEnv, "1");
+            var code = await ServiceCommand.ExecuteAsync(["service", "install", "-c", path, "--name", "titanium-qa-cov-inv"]);
+            Assert.AreEqual(1, code);
+
+            var start = await ServiceCommand.ExecuteAsync(
+                ["service", "start", "--name", "titanium-qa-cov-missing-" + Guid.NewGuid().ToString("N")[..8]]);
+            Assert.IsTrue(start is 0 or 1, start.ToString());
+            var stop = await ServiceCommand.ExecuteAsync(
+                ["service", "stop", "--name", "titanium-qa-cov-missing-" + Guid.NewGuid().ToString("N")[..8]]);
+            Assert.IsTrue(stop is 0 or 1, stop.ToString());
+            var restart = await ServiceCommand.ExecuteAsync(
+                ["service", "restart", "--name", "titanium-qa-cov-missing-" + Guid.NewGuid().ToString("N")[..8]]);
+            Assert.IsTrue(restart is 0 or 1, restart.ToString());
+            var uninstall = await ServiceCommand.ExecuteAsync(
+                ["service", "uninstall", "--name", "titanium-qa-cov-missing-" + Guid.NewGuid().ToString("N")[..8]]);
+            Assert.IsTrue(uninstall is 0 or 1, uninstall.ToString());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(PrivilegePrompt.NoElevateEnv, previous);
+            try { Directory.Delete(dir, true); } catch { /* ignore */ }
+        }
+    }
 }
 
 [TestClass]
@@ -385,6 +425,32 @@ public class PrivilegePromptTests
         // Testhost redirects IO, so we must not pop UAC/sudo; caller prints the fallback.
         Assert.IsFalse(PrivilegePrompt.CanPromptInteractively());
         Assert.IsNull(result);
+    }
+
+    [TestMethod]
+    public async Task EnsureOrRelaunch_WhenRelaunchFlagSet_ReturnsOne()
+    {
+        if (PrivilegePrompt.IsElevated())
+        {
+            Assert.Inconclusive("already elevated");
+            return;
+        }
+
+        PrivilegePrompt.TakeInternalArgs([PrivilegePrompt.RelaunchFlag]);
+        try
+        {
+            var code = await PrivilegePrompt.EnsureOrRelaunchAsync(["service", "status"]);
+            Assert.AreEqual(1, code);
+            PrivilegePrompt.TryAttachParentConsole();
+            _ = PrivilegePrompt.AbsolutizeConfigArgs(["service", "install", "--config", "twp.yaml"]);
+            _ = PrivilegePrompt.JoinWindowsArguments(["plain"]);
+            _ = PrivilegePrompt.CanPromptInteractively();
+            _ = PrivilegePrompt.ResolveSudoPath();
+        }
+        finally
+        {
+            PrivilegePrompt.ResetForTests();
+        }
     }
 }
 

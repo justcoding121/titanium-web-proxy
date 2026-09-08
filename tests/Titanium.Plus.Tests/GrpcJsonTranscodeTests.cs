@@ -71,6 +71,16 @@ public class GrpcJsonTranscodeTests
         var json = ProtoJson.Format(msg, preserveProtoFieldNames: false, alwaysPrintPrimitiveFields: false);
         Assert.IsTrue(json.Contains("Ada", StringComparison.Ordinal));
 
+        _ = ProtoJson.Parse("", input, ignoreUnknown: true);
+        _ = ProtoJson.Parse("{}", input, ignoreUnknown: true);
+        Assert.ThrowsExactly<InvalidOperationException>(() => ProtoJson.Parse("[]", input, ignoreUnknown: true));
+        Assert.ThrowsExactly<InvalidOperationException>(() => ProtoJson.Parse("{\"nope\":1}", input, ignoreUnknown: false));
+        var ignored = ProtoJson.Parse("{\"nope\":1,\"name\":\"Bob\"}", input, ignoreUnknown: true);
+        _ = ProtoJson.Format(ignored, preserveProtoFieldNames: true, alwaysPrintPrimitiveFields: true);
+        var reply = greeter.MessageTypes.First(m => m.Name == "HelloReply");
+        var emptyReply = ProtoJson.Parse("{}", reply, ignoreUnknown: true);
+        _ = ProtoJson.Format(emptyReply, preserveProtoFieldNames: false, alwaysPrintPrimitiveFields: true);
+
         var wire = msg.ToByteArray();
         var framed = GrpcFrames.Encode(wire);
         Assert.IsTrue(GrpcFrames.TryRead(framed, out _, out var payload));

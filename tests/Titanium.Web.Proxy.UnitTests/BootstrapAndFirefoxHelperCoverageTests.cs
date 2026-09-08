@@ -59,6 +59,13 @@ public class BootstrapAndFirefoxHelperCoverageTests
         {
             Environment.SetEnvironmentVariable("DYLD_FALLBACK_LIBRARY_PATH", previousDyld);
         }
+
+        var append = typeof(Http3NativeBootstrap).GetMethod("AppendRelaunchArguments", flags)!;
+        var psi = new System.Diagnostics.ProcessStartInfo { FileName = "dotnet" };
+        append.Invoke(null, [psi, Environment.ProcessPath ?? "dotnet", new[] { "--help", "run" }]);
+        Assert.IsTrue(psi.ArgumentList.Count >= 1);
+        var psiApp = new System.Diagnostics.ProcessStartInfo { FileName = "titanium" };
+        append.Invoke(null, [psiApp, "/tmp/titanium-app", Array.Empty<string>()]);
     }
 
     [TestMethod]
@@ -137,6 +144,18 @@ public class BootstrapAndFirefoxHelperCoverageTests
         _ = LinuxGraphicalSession.EnumerateCandidateSessionPids().Take(1).ToList();
         _ = LinuxGraphicalSession.TryReadFromSessionProcess("DISPLAY");
         LinuxProxyFailOpen.Stop();
+    }
+
+    [TestMethod]
+    public void TcpHelper_GetProcessIdByLocalPort_DoesNotThrow()
+    {
+        using var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        _ = TcpHelper.GetProcessIdByLocalPort(System.Net.Sockets.AddressFamily.InterNetwork, port);
+        _ = TcpHelper.GetProcessIdByLocalPort(System.Net.Sockets.AddressFamily.InterNetworkV6, port);
+        _ = TcpHelper.GetProcessIdByLocalPort(System.Net.Sockets.AddressFamily.InterNetwork, 1);
+        listener.Stop();
     }
 
     [TestMethod]

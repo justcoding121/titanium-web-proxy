@@ -432,6 +432,86 @@ public class UnixCertificateTrustCoverageTests
         _ = FirefoxCertificateTrust.TryWriteOrMergeFirefoxPoliciesJson(importEnterpriseRoots: false);
     }
 
+    [TestMethod]
+    public void ProbeInstallAndMacTrustExport_CoverRemainingPrivateArms()
+    {
+        using var planted = PlantedCertutil.Acquire();
+        using var cert = CreateEphemeralRoot();
+        var sha1 = cert.GetCertHashString();
+        var cn = cert.GetNameInfo(X509NameType.SimpleName, forIssuer: false) ?? "TWP";
+
+        var none = new FakeProcessRunner { DefaultSuccess = false };
+        var linuxMissing = (CertificateOsTrustResult)Invoke(
+            "ProbeLinuxCertutilInstall", [typeof(IProcessRunner)], none)!;
+        Assert.AreEqual(CertificateOsTrustKind.CertutilMissing, linuxMissing.Kind);
+
+        var apt = new FakeProcessRunner();
+        apt.When("sh", "command -v apt-get", "/usr/bin/apt-get\n");
+        var linuxHint = (CertificateOsTrustResult)Invoke(
+            "ProbeLinuxCertutilInstall", [typeof(IProcessRunner)], apt)!;
+        Assert.AreEqual("libnss3-tools", linuxHint.PackageHint);
+
+        var macMissing = (CertificateOsTrustResult)Invoke(
+            "ProbeMacCertutilInstall", [typeof(IProcessRunner)], none)!;
+        Assert.IsTrue(macMissing.Kind is CertificateOsTrustKind.CertutilMissing
+            or CertificateOsTrustKind.HomebrewMissing, macMissing.Kind.ToString());
+
+        var elev = new FakeElevationPrompt { Cancel = true };
+        var cancelled = (CertificateOsTrustResult)Invoke(
+            "TryInstallLinuxNssCertutil",
+            [typeof(IProcessRunner), typeof(IElevationPrompt)],
+            apt, elev)!;
+        Assert.AreEqual(CertificateOsTrustKind.Cancelled, cancelled.Kind);
+
+        elev.Cancel = false;
+        apt.When("sh", "command -v certutil", planted.Path + "\n");
+        var installed = (CertificateOsTrustResult)Invoke(
+            "TryInstallLinuxNssCertutil",
+            [typeof(IProcessRunner), typeof(IElevationPrompt)],
+            apt, elev)!;
+        Assert.IsTrue(installed.Succeeded || installed.Kind == CertificateOsTrustKind.Failed, installed.Message);
+
+        var dumpEmpty = new FakeProcessRunner();
+        dumpEmpty.When("security", "dump-trust-settings", "No Trust Settings were found\n");
+        Assert.IsFalse((bool)Invoke(
+            "DumpTrustSettingsMentionsPolicies",
+            [typeof(IProcessRunner), typeof(string), typeof(string)],
+            dumpEmpty, sha1, cn)!);
+
+        var dumpHit = new FakeProcessRunner();
+        dumpHit.When("security", "dump-trust-settings",
+            $"SHA-1 hash: {sha1}\n{cn}\nkSecTrustSettingsResultTrustRoot\n");
+        Assert.IsTrue((bool)Invoke(
+            "DumpTrustSettingsMentionsPolicies",
+            [typeof(IProcessRunner), typeof(string), typeof(string)],
+            dumpHit, sha1, cn)!);
+
+        var export = new FakeProcessRunner { WriteFileOnMatch = "trust-settings-export" };
+        export.When("security", "trust-settings-export", "");
+        export.When("plutil", "-p", sha1 + "\ntrustSettings\nkSecTrustSettingsResultTrustRoot\n");
+        Assert.IsTrue((bool)Invoke(
+            "TrustSettingsExportHasPolicies",
+            [typeof(IProcessRunner), typeof(string)],
+            export, sha1)!);
+        Assert.IsTrue(UnixCertificateTrust.HasExplicitMacSslTrustSettings(export, cert));
+
+        var nicks = ((IEnumerable<string>)Invoke(
+            "ParseNssNicknames", [typeof(string)],
+            "Certificate Nickname                                         Trust Attributes\n" +
+            "SSL,S/MIME,JAR/XPI\n" +
+            "----------------------------------\n" +
+            "Titanium Root  C,,\n" +
+            "Other Nick  CT,C,C\n")!).ToList();
+        Assert.IsTrue(nicks.Count >= 2);
+
+        var listRunner = new FakeProcessRunner();
+        listRunner.When("certutil", " -L", "Titanium Root  C,,\n");
+        Assert.IsTrue((bool)Invoke(
+            "NssListContainsNickname",
+            [typeof(IProcessRunner), typeof(string), typeof(string), typeof(string)],
+            listRunner, "certutil", Path.GetTempPath(), "Titanium Root")!);
+    }
+
     /// <summary>
     /// On macOS/Linux <c>FindCertutil</c> asks the runner for <c>command -v certutil</c>.
     /// Without this, a real Homebrew certutil (or a missing one) is used instead of the fake.

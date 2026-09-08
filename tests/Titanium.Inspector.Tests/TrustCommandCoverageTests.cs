@@ -151,6 +151,109 @@ public class TrustCommandCoverageTests
         }
     }
 
+    [TestMethod]
+    public async Task TrustRecoveryAndCancelArms_StayHeadless()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-trust-rec-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var cer = Path.Combine(dir, "export.cer");
+        try
+        {
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var dialogs = new ScriptedInspectorDialogs
+            {
+                InstallRootCaBeforeFirefoxResult = false,
+                RemoveRootCaResult = false,
+                RotateRootCaResult = false,
+                PacReplaceResult = false,
+                InstallRootCaResult = false,
+                QuitFirefoxForTrustResult = false,
+                TrustRecoveryResult = TrustRecoveryChoice.Cancel,
+                DecryptTrustFailedResult = TrustRecoveryChoice.Cancel,
+                DeviceCaSetupResult = false,
+                MacSslTrustWaitResult = MacSslTrustWaitResult.NotSavedYet,
+            };
+            var picker = new ScriptedInspectorPathPicker { SavePath = cer };
+            var settings = new SettingsService(Path.Combine(dir, "settings.json"));
+            settings.Current.AutoStartCapture = false;
+            settings.Current.AutoSystemProxyOnStart = false;
+            settings.Current.WarnedAboutPacReplace = false;
+            settings.Save();
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                dialogs,
+                picker)
+            {
+                BindPort = 0,
+                BindAddress = "127.0.0.1",
+            };
+
+            await ExecuteAsync(vm.UntrustCaCommand);
+            await ExecuteAsync(vm.RotateCaCommand);
+            await ExecuteAsync(vm.InstallCaCommand);
+            await ExecuteAsync(vm.ToggleSystemProxyCommand);
+
+            var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+            var missing = CertificateOsTrustResult.Fail(CertificateOsTrustKind.CertutilMissing, "need certutil", brewAvailable: true);
+            await (Task<bool>)typeof(MainWindowViewModel).GetMethod("TryRecoverFirefoxCertutilAsync", flags)!
+                .Invoke(vm, [null, missing])!;
+            dialogs.TrustRecoveryResult = TrustRecoveryChoice.Secondary;
+            await (Task<bool>)typeof(MainWindowViewModel).GetMethod("TryRecoverFirefoxCertutilAsync", flags)!
+                .Invoke(vm, [null, missing])!;
+            dialogs.TrustRecoveryResult = TrustRecoveryChoice.Cancel;
+            await (Task<bool?>)typeof(MainWindowViewModel).GetMethod("TryRecoverFailedOsTrustAsync", flags)!
+                .Invoke(vm, [null, CertificateOsTrustResult.Fail(CertificateOsTrustKind.Failed, "nope")])!;
+            dialogs.TrustRecoveryResult = TrustRecoveryChoice.Primary;
+            await (Task<bool?>)typeof(MainWindowViewModel).GetMethod("TryRecoverFailedOsTrustAsync", flags)!
+                .Invoke(vm, [null, CertificateOsTrustResult.Fail(CertificateOsTrustKind.HomebrewMissing, "brew")])!;
+            dialogs.TrustRecoveryResult = TrustRecoveryChoice.Secondary;
+            await (Task<bool?>)typeof(MainWindowViewModel).GetMethod("TryRecoverFailedOsTrustAsync", flags)!
+                .Invoke(vm, [null, CertificateOsTrustResult.Fail(CertificateOsTrustKind.Failed, "nope")])!;
+            dialogs.TrustRecoveryResult = TrustRecoveryChoice.Primary;
+            await (Task<bool?>)typeof(MainWindowViewModel).GetMethod("TryRecoverFailedOsTrustAsync", flags)!
+                .Invoke(vm, [null, missing])!;
+            dialogs.TrustRecoveryResult = TrustRecoveryChoice.Secondary;
+            await (Task<bool?>)typeof(MainWindowViewModel).GetMethod("TryRecoverFailedOsTrustAsync", flags)!
+                .Invoke(vm, [null, missing])!;
+            await (Task<CertificateOsTrustResult?>)typeof(MainWindowViewModel).GetMethod("TryQuitFirefoxForTrustAsync", flags)!
+                .Invoke(vm, [null])!;
+            _ = (bool)typeof(MainWindowViewModel).GetMethod("IsFirefoxRunningTrustError", BindingFlags.NonPublic | BindingFlags.Static)!
+                .Invoke(null, [CertificateOsTrustResult.Fail(CertificateOsTrustKind.Failed, "Quit Firefox and retry")])!;
+            await (Task<bool>)typeof(MainWindowViewModel).GetMethod("ResolveTerminalTrustFailureAsync", flags)!
+                .Invoke(vm, [CertificateOsTrustResult.Fail(CertificateOsTrustKind.Failed, "nope")])!;
+            await (Task<MacSslTrustWaitResult>)typeof(MainWindowViewModel).GetMethod("WaitForMacSslTrustAsync", flags)!
+                .Invoke(vm, [null])!;
+            await (Task<bool>)typeof(MainWindowViewModel).GetMethod("TryCompleteMacManualTrustAsync", flags)!
+                .Invoke(vm, [null])!;
+
+            await ExecuteAsync(vm.StartCaptureCommand);
+            await ExecuteAsync(vm.TrustFirefoxCaCommand);
+            StringAssert.Contains(vm.StatusText, "cancelled");
+            await ExecuteAsync(vm.UntrustCaCommand);
+            StringAssert.Contains(vm.StatusText, "cancelled");
+            await ExecuteAsync(vm.RotateCaCommand);
+            StringAssert.Contains(vm.StatusText, "cancelled");
+            dialogs.RotateRootCaResult = true;
+            dialogs.InstallRootCaResult = false;
+            await ExecuteAsync(vm.RotateCaCommand);
+            await ExecuteAsync(vm.DeviceCaSetupCommand);
+            await ExecuteAsync(vm.ToggleSystemProxyCommand);
+            await ExecuteAsync(vm.StopCaptureCommand);
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { /* ignore */ }
+        }
+    }
+
     private static void InvokeProcessResolve(InterceptionService service, SessionSnapshot snap)
     {
         var workType = typeof(InterceptionService).GetNestedTypes(BindingFlags.NonPublic)

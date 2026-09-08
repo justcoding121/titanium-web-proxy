@@ -1092,6 +1092,29 @@ public class SonarNewCodeCoverageTests
         }
     }
 
+    [TestMethod]
+    public void CertificateManager_OsTrustSuppressArms_DoNotOpenDialogs()
+    {
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle
+        };
+        mgr.CreateRootCertificate(false);
+        Assert.IsNotNull(mgr.RootCertificate);
+        mgr.EnsureRootCertificate(false, false, false);
+        mgr.TrustRootCertificate(false);
+        Assert.IsNotNull(mgr.LastOsTrustResult);
+        _ = mgr.TrustRootCertificateAsAdmin(false);
+        var nss = mgr.InstallNssCertutilAndRetryUserTrust();
+        Assert.AreEqual(CertificateOsTrustKind.Cancelled, nss.Kind);
+        _ = mgr.VerifyOsUserSslTrust();
+        _ = mgr.IsRootCertificateUserTrusted();
+        _ = mgr.IsRootCertificateMachineTrusted();
+        _ = mgr.IsRootInLoginKeychain();
+        _ = mgr.IsOsRootStillPresent();
+        Assert.IsNull(mgr.OpenMacKeychainGuidance());
+    }
+
     private sealed class FailingWriteStream : Stream
     {
         public int WriteAttempts;
