@@ -43,11 +43,20 @@ public sealed class RecordingSystemProxyController : ISystemProxyController
     public bool LastEnabled { get; private set; }
     public InspectorSettings? LastSettings { get; private set; }
 
+    public bool FailSet { get; set; }
+    public bool FailRestore { get; set; }
+    public bool ThrowOnSet { get; set; }
+    public bool ThrowOnRestore { get; set; }
+
     public SystemProxyChangeResult SetAsSystemProxy(ProxyServer proxy, ExplicitProxyEndPoint endPoint, InspectorSettings settings)
     {
         SetCount++;
         LastEnabled = true;
         LastSettings = settings;
+        if (ThrowOnSet)
+            throw new InvalidOperationException("recorded set throw");
+        if (FailSet)
+            return SystemProxyChangeResult.Fail("recorded set failure");
         return SystemProxyChangeResult.Ok("System proxy recorded");
     }
 
@@ -55,6 +64,10 @@ public sealed class RecordingSystemProxyController : ISystemProxyController
     {
         RestoreCount++;
         LastEnabled = false;
+        if (ThrowOnRestore)
+            throw new InvalidOperationException("recorded restore throw");
+        if (FailRestore)
+            return SystemProxyChangeResult.Fail("recorded restore failure");
         return SystemProxyChangeResult.Ok("System proxy restore recorded");
     }
 }

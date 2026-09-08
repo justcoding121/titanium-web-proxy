@@ -147,4 +147,24 @@ public class DesktopShellAndPathTests
         Assert.IsFalse(DesktopShell.TryBuildRevealFile(null, OSPlatform.Windows, out _, out var error));
         Assert.IsFalse(string.IsNullOrEmpty(error));
     }
+
+    [TestMethod]
+    public void GetCurrentPlatform_AndUnsupportedBuild_DoNotLaunchShell()
+    {
+        var current = DesktopShell.GetCurrentPlatform();
+        Assert.IsTrue(
+            current == OSPlatform.Windows || current == OSPlatform.OSX || current == OSPlatform.Linux);
+
+        var unknown = OSPlatform.Create("Unknown");
+        Assert.IsFalse(DesktopShell.TryBuildOpenDirectory(Path.GetTempPath(), unknown, out _, out var openError));
+        Assert.IsFalse(string.IsNullOrEmpty(openError));
+        Assert.IsFalse(DesktopShell.TryBuildRevealFile(
+            Path.Combine(Path.GetTempPath(), "x.log"), unknown, out _, out var revealError));
+        Assert.IsFalse(string.IsNullOrEmpty(revealError));
+        Assert.IsFalse(DesktopShell.TryOpenDirectory("  ", out var emptyOpen));
+        Assert.IsFalse(string.IsNullOrEmpty(emptyOpen));
+        Assert.IsFalse(DesktopShell.TryRevealFileOrOpenDirectory(null, out var emptyReveal));
+        Assert.IsFalse(string.IsNullOrEmpty(emptyReveal));
+        Assert.IsFalse(DesktopShell.TryRevealFileOrOpenDirectory("  ", unknown, out _));
+    }
 }

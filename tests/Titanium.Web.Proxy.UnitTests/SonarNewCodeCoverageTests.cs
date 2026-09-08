@@ -1130,6 +1130,8 @@ public class SonarNewCodeCoverageTests
         _ = mgr.IsRootInLoginKeychain();
         _ = mgr.IsOsRootStillPresent();
         Assert.IsNull(mgr.OpenMacKeychainGuidance());
+        mgr.TrustRootCertificate(true);
+        _ = mgr.TrustRootCertificateAsAdmin(true);
     }
 
     private sealed class FailingWriteStream : Stream

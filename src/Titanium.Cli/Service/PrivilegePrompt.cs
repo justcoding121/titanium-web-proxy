@@ -10,11 +10,12 @@ namespace Titanium.Cli.Service;
 /// Non-interactive sessions (CI, redirected IO, <c>TITANIUM_NO_ELEVATE=1</c>) skip the
 /// prompt so the existing Administrator/sudo error can be printed.
 /// </summary>
-internal static class PrivilegePrompt
+internal static partial class PrivilegePrompt
 {
     internal const string RelaunchFlag = "--internal-elevated-relaunch";
     internal const string ParentPidFlag = "--internal-parent-pid";
     internal const string NoElevateEnv = "TITANIUM_NO_ELEVATE";
+    private static readonly string[] SudoCandidates = ["/usr/bin/sudo", "/usr/local/bin/sudo"];
 
     internal static bool HasRelaunchFlag { get; private set; }
     internal static uint? ParentPid { get; private set; }
@@ -273,13 +274,15 @@ internal static class PrivilegePrompt
     }
 
     internal static string? ResolveSudoPath() =>
-        new[] { "/usr/bin/sudo", "/usr/local/bin/sudo" }.FirstOrDefault(File.Exists);
+        SudoCandidates.FirstOrDefault(File.Exists);
 
     [SupportedOSPlatform("windows")]
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool AttachConsole(uint dwProcessId); // NOSONAR SYSLIB1054 -- Legacy console attach marshalling is required by this existing interop signature.
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool AttachConsole(uint dwProcessId);
 
     [SupportedOSPlatform("windows")]
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool FreeConsole(); // NOSONAR SYSLIB1054 -- Legacy console detach marshalling is required by this existing interop signature.
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool FreeConsole();
 }

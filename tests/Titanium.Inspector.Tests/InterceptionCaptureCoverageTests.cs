@@ -484,4 +484,48 @@ public class InterceptionCaptureCoverageTests
             try { _listener.Close(); } catch { /* ignore */ }
         }
     }
+
+    [TestMethod]
+    public async Task SystemProxy_FailAndThrowPaths_DoNotTouchOs()
+    {
+        var controller = new RecordingSystemProxyController();
+        using var interception = new InterceptionService(controller)
+        {
+            UseInMemoryTrustState = true,
+            UpstreamProxyAddress = "http://127.0.0.1:9",
+        };
+        Assert.IsFalse(interception.InstallRootCertificate(false));
+        Assert.IsFalse(interception.InstallRootCertificateAsAdmin(false));
+        Assert.IsFalse(interception.VerifyOsUserSslTrust());
+        Assert.AreEqual(CertificateOsTrustKind.Failed, interception.InstallNssToolsAndRetryTrust().Kind);
+        Assert.IsNull(interception.OpenMacKeychainGuidance());
+        Assert.IsFalse(interception.IsRootInLoginKeychain());
+        Assert.IsTrue(interception.ReapplySystemProxyIfEnabled());
+
+        await interception.StartAsync(IPAddress.Loopback, 0);
+        try
+        {
+            controller.FailSet = true;
+            Assert.IsFalse(interception.SetSystemProxy(true));
+            Assert.IsFalse(string.IsNullOrEmpty(interception.LastSystemProxyError));
+
+            controller.FailSet = false;
+            controller.ThrowOnSet = true;
+            Assert.IsFalse(interception.SetSystemProxy(true));
+
+            controller.ThrowOnSet = false;
+            Assert.IsTrue(interception.SetSystemProxy(true));
+            controller.FailRestore = true;
+            Assert.IsFalse(interception.SetSystemProxy(false));
+            controller.FailRestore = false;
+            controller.ThrowOnRestore = true;
+            Assert.IsFalse(interception.SetSystemProxy(false));
+            controller.ThrowOnRestore = false;
+            Assert.IsTrue(interception.SetSystemProxy(false));
+        }
+        finally
+        {
+            interception.EnsureShutdown();
+        }
+    }
 }

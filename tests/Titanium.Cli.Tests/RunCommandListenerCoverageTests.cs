@@ -204,6 +204,29 @@ public class RunCommandListenerCoverageTests
         }
     }
 
+    [TestMethod]
+    public async Task ExecuteCoreAsync_InvalidListenerPort_ReturnsOne()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-run-bad-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "twp.yaml");
+        File.WriteAllText(path, """
+            schemaVersion: "7.1"
+            listeners:
+              - host: "127.0.0.1"
+                port: 0
+            """);
+        try
+        {
+            var code = await RunCommand.ExecuteCoreAsync(path, verbose: false, serviceMode: false, CancellationToken.None);
+            Assert.AreEqual(1, code);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { /* ignore */ }
+        }
+    }
+
     private static object? Invoke(string name, params object?[] args)
     {
         var methods = typeof(RunCommand).GetMethods(Priv).Where(m => m.Name == name).ToArray();

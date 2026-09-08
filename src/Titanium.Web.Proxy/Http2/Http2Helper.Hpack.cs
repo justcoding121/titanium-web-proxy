@@ -647,12 +647,11 @@ namespace Titanium.Web.Proxy.Http2
             return offset;
         }
 
-        private static int WriteStaticLiteralWithoutIndexing(byte[] dest, int offset, string name, string value)
+        private static void WriteStaticLiteralWithoutIndexing(byte[] dest, int offset, string name, string value)
         {
             dest[offset++] = 0x00;
             offset += WriteHpackAsciiStringLiteral(dest.AsSpan(offset), name);
-            offset += WriteHpackAsciiStringLiteral(dest.AsSpan(offset), value);
-            return offset;
+            _ = WriteHpackAsciiStringLiteral(dest.AsSpan(offset), value);
         }
 
         private static int WriteHpackAsciiStringLiteral(Span<byte> dest, ReadOnlySpan<byte> value)

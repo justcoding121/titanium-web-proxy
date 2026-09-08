@@ -22,6 +22,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     private const string GnomeSystemProxyHttpsSchema = "org.gnome.system.proxy.https";
     private const string KdeProxyTypeKey = "ProxyType";
     private const string GsettingsCommand = "gsettings";
+    private const string GsettingsEnabledKey = "enabled";
     private const string DbusSessionBusAddress = "DBUS_SESSION_BUS_ADDRESS";
     private const string SessionEnvDropInFileName = "90-titanium-inspector-proxy.conf";
     private const string ConfigDirName = ".config";
@@ -168,7 +169,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
             if (HasGnome())
             {
                 GsettingsSet(GnomeSystemProxySchema, "mode", "'none'");
-                GsettingsSet(GnomeSystemProxyHttpSchema, "enabled", "false");
+                GsettingsSet(GnomeSystemProxyHttpSchema, GsettingsEnabledKey, "false");
             }
         }
         catch
@@ -237,7 +238,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
                 GsettingsSet(GnomeSystemProxySchema, "mode", QuoteGsettings(_gnome.Mode));
                 GsettingsSet(GnomeSystemProxyHttpSchema, "host", QuoteGsettings(_gnome.HttpHost));
                 GsettingsSet(GnomeSystemProxyHttpSchema, "port", _gnome.HttpPort.ToString());
-                GsettingsSet(GnomeSystemProxyHttpSchema, "enabled", _gnome.HttpEnabled ? "true" : "false");
+                GsettingsSet(GnomeSystemProxyHttpSchema, GsettingsEnabledKey, _gnome.HttpEnabled ? "true" : "false");
                 GsettingsSet(GnomeSystemProxyHttpsSchema, "host", QuoteGsettings(_gnome.HttpsHost));
                 GsettingsSet(GnomeSystemProxyHttpsSchema, "port", _gnome.HttpsPort.ToString());
                 GsettingsSet(GnomeSystemProxySchema, "ignore-hosts", _gnome.IgnoreHosts);
@@ -365,7 +366,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
                 GsettingsGet(GnomeSystemProxySchema, "mode")?.Trim('\'', '"') ?? "none",
                 GsettingsGet(GnomeSystemProxyHttpSchema, "host")?.Trim('\'', '"') ?? string.Empty,
                 ParseInt(GsettingsGet(GnomeSystemProxyHttpSchema, "port")),
-                ParseGsettingsBool(GsettingsGet(GnomeSystemProxyHttpSchema, "enabled")),
+                ParseGsettingsBool(GsettingsGet(GnomeSystemProxyHttpSchema, GsettingsEnabledKey)),
                 GsettingsGet(GnomeSystemProxyHttpsSchema, "host")?.Trim('\'', '"') ?? string.Empty,
                 ParseInt(GsettingsGet(GnomeSystemProxyHttpsSchema, "port")),
                 GsettingsGet(GnomeSystemProxySchema, "ignore-hosts") ?? "[]");
@@ -393,7 +394,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
             GsettingsSet(GnomeSystemProxyHttpSchema, "host", QuoteGsettings(hostname));
             GsettingsSet(GnomeSystemProxyHttpSchema, "port", port.ToString());
             // GIO/Chrome treat mode=manual with enabled=false as DIRECT (no sessions in Inspector).
-            GsettingsSet(GnomeSystemProxyHttpSchema, "enabled", "true");
+            GsettingsSet(GnomeSystemProxyHttpSchema, GsettingsEnabledKey, "true");
         }
 
         if ((protocolType & ProxyProtocolType.Https) != 0)
@@ -431,7 +432,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
                     $"Failed to apply GNOME HTTP proxy (got {host}:{appliedPort}, expected {hostname}:{port}).");
             }
 
-            if (!ParseGsettingsBool(GsettingsGet(GnomeSystemProxyHttpSchema, "enabled")))
+            if (!ParseGsettingsBool(GsettingsGet(GnomeSystemProxyHttpSchema, GsettingsEnabledKey)))
             {
                 throw new InvalidOperationException(
                     "Failed to apply GNOME HTTP proxy (org.gnome.system.proxy.http enabled is still false; " +

@@ -156,6 +156,8 @@ public class InspectorCommandCoverageTests
 
             vm.SetTransientStatus("transient-cov", StatusSeverity.Success, toastImportant: true, revertMs: 50);
             await Task.Delay(80);
+            vm.SetTransientStatus("zero-revert", StatusSeverity.Neutral, revertMs: 0);
+            await vm.TryAutoStartAsync();
 
             typeof(MainWindowViewModel).GetMethod("ApplyExclusionSettingsFromSettings",
                 BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(vm, null);

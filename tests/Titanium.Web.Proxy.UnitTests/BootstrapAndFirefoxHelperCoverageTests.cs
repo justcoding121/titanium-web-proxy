@@ -127,6 +127,34 @@ public class BootstrapAndFirefoxHelperCoverageTests
     }
 
     [TestMethod]
+    public void FirefoxEnterpriseRoots_HkcuAndTempProfile_DoNotTouchPoliciesJson()
+    {
+        var flags = BindingFlags.NonPublic | BindingFlags.Static;
+        var writePolicy = typeof(FirefoxCertificateTrust).GetMethod("TryWriteWindowsImportEnterpriseRootsPolicy", flags);
+        if (OperatingSystem.IsWindows() && writePolicy is not null)
+        {
+            Assert.IsTrue((bool)writePolicy.Invoke(null, [])!);
+        }
+
+        var dir = Path.Combine(Path.GetTempPath(), "twp-ff-er-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var writePref = typeof(FirefoxCertificateTrust).GetMethod("TryWriteEnterpriseRootsUserPref", flags)!;
+            var result = (CertificateOsTrustResult)writePref.Invoke(null, [dir, "temp-profile-ok"])!;
+            Assert.IsTrue(result.Succeeded, result.Message);
+            Assert.IsTrue(FirefoxCertificateTrust.VerifyEnterpriseRootsUserPref(dir));
+
+            var linuxPaths = typeof(FirefoxCertificateTrust).GetMethod("GetLinuxFirefoxPoliciesJsonPaths", flags);
+            _ = linuxPaths?.Invoke(null, [Path.Combine(Path.GetTempPath(), "no-such-home")]);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
     public void LinuxFirefoxAndBrowserLaunch_PrivateHelpers_StayFake()
     {
         InvokeFf("HasBackup", Type.EmptyTypes);

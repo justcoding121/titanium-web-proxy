@@ -6,7 +6,7 @@ using System.Text;
 namespace Titanium.Cli.Service;
 
 [SupportedOSPlatform("macos")]
-internal sealed class LaunchdServiceManager : IOsServiceManager
+internal sealed partial class LaunchdServiceManager : IOsServiceManager
 {
     public async Task InstallAsync(ServiceInstallRequest request)
     {
@@ -235,11 +235,11 @@ internal sealed class LaunchdServiceManager : IOsServiceManager
         }
     }
 
-    [DllImport("libc", EntryPoint = "geteuid", SetLastError = true)]
-    private static extern uint GetEuid(); // NOSONAR SYSLIB1054 -- libc geteuid marshalling is required by this existing interop signature.
+    [LibraryImport("libc", EntryPoint = "geteuid", SetLastError = true)]
+    private static partial uint GetEuid();
 
-    [DllImport("libc", EntryPoint = "getuid", SetLastError = true)]
-    private static extern uint GetUid(); // NOSONAR SYSLIB1054 -- libc getuid marshalling is required by this existing interop signature.
+    [LibraryImport("libc", EntryPoint = "getuid", SetLastError = true)]
+    private static partial uint GetUid();
 
     private static async Task<bool> IsLoadedAsync(string domain, string label)
     {

@@ -312,9 +312,11 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
             return ProtoJson.Format(message, _preserveProtoFieldNames, _alwaysPrintPrimitiveFields);
         }).ToList();
 
-        return jsonParts.Count <= 1
-            ? (jsonParts.Count == 0 ? "{}" : jsonParts[0])
-            : "[" + string.Join(",", jsonParts) + "]";
+        if (jsonParts.Count == 0)
+            return "{}";
+        if (jsonParts.Count == 1)
+            return jsonParts[0];
+        return "[" + string.Join(",", jsonParts) + "]";
     }
 
     private static bool TryReadAllFrames(byte[] body, out List<byte[]> payloads)

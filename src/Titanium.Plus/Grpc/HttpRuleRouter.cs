@@ -78,7 +78,6 @@ internal sealed class PathTemplate
             }
 
             vars[seg.Value] = string.Join('/', pathParts.Skip(i).Select(Uri.UnescapeDataString));
-            i = pathParts.Length;
             return s == _segments.Count - 1;
         }
 

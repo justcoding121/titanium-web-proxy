@@ -6,7 +6,7 @@ using System.Text;
 namespace Titanium.Cli.Service;
 
 [SupportedOSPlatform("linux")]
-internal sealed class SystemdServiceManager : IOsServiceManager
+internal sealed partial class SystemdServiceManager : IOsServiceManager
 {
     private const string UnitSuffix = ".service";
 
@@ -149,8 +149,8 @@ internal sealed class SystemdServiceManager : IOsServiceManager
     internal static bool IsRoot() =>
         RuntimeInformation.IsOSPlatform(OSPlatform.Linux) && GetEuid() == 0;
 
-    [DllImport("libc", EntryPoint = "geteuid", SetLastError = true)]
-    private static extern uint GetEuid(); // NOSONAR SYSLIB1054 -- libc geteuid marshalling is required by this existing interop signature.
+    [LibraryImport("libc", EntryPoint = "geteuid", SetLastError = true)]
+    private static partial uint GetEuid();
 
     private static async Task SystemctlAsync(bool user, params string[] args)
     {

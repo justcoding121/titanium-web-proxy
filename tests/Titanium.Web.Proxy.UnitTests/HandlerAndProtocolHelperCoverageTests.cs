@@ -505,4 +505,52 @@ public class HandlerAndProtocolHelperCoverageTests
         Assert.IsNotNull(result);
         Assert.AreEqual(443, result.AltPort);
     }
+
+    [TestMethod]
+    public void H1TerminateClientRequestedClose_ClassifiesKeepAliveAndClose()
+    {
+        var method = typeof(ProxyServer).GetMethod("H1TerminateClientRequestedClose", PrivateStatic)!;
+        var keep = new Request { HttpVersion = HttpHeader.Version11 };
+        keep.Headers.AddHeader("Connection", "keep-alive");
+        Assert.IsFalse((bool)method.Invoke(null, [keep])!);
+
+        var close = new Request { HttpVersion = HttpHeader.Version11 };
+        close.Headers.AddHeader("Connection", "close");
+        Assert.IsTrue((bool)method.Invoke(null, [close])!);
+
+        var http10 = new Request { HttpVersion = HttpHeader.Version10 };
+        Assert.IsTrue((bool)method.Invoke(null, [http10])!);
+        http10.Headers.AddHeader("Connection", "keep-alive");
+        Assert.IsFalse((bool)method.Invoke(null, [http10])!);
+    }
+
+#pragma warning disable TWP001
+    [TestMethod]
+    public void Http3MitmUnchangedLite_GatesWithoutLiveQuic()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        using var session = MakeSession(proxy);
+        using var cts = new CancellationTokenSource();
+        var auth = new BeforeQuicAuthenticateEventArgs(
+            proxy, cts, "sni.test", "origin.test", 443,
+            new IPEndPoint(IPAddress.Loopback, 1), new IPEndPoint(IPAddress.Loopback, 2));
+        auth.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+        var request = session.HttpClient.Request;
+        request.Method = "GET";
+        request.RequestUriString = "/";
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(request.Headers);
+        var flags = PrivateStatic;
+        var h1 = typeof(Http3RequestStream).GetMethod("TryMitmUnchangedH3ToH1Lite", flags)!;
+        var h3 = typeof(Http3RequestStream).GetMethod("TryMitmUnchangedH3ToH3Lite", flags)!;
+        var match = typeof(Http3RequestStream).GetMethod("MitmUnchangedLiteRequestMatches", flags)!;
+        var path = request.RequestUriString8;
+        var authority = request.Authority;
+        _ = h1.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"]);
+        auth.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;
+        _ = h3.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"]);
+        _ = match.Invoke(null, [session, request, baseline, "POST", path, authority, "POST"]);
+        session.IsFastPath = true;
+        _ = h1.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"]);
+    }
+#pragma warning restore TWP001
 }

@@ -233,7 +233,7 @@ public static class SessionDiff
             .ToList();
     }
 
-    private static int IndexOf(IReadOnlyList<string> lines, string value, int start)
+    private static int IndexOf(List<string> lines, string value, int start)
     {
         for (var i = start; i < lines.Count; i++)
         {

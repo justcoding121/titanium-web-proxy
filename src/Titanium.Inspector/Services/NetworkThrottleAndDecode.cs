@@ -78,7 +78,7 @@ public static class ProtobufMessageDecoder
         return JsonSerializer.Serialize(fields, WireFormatJsonOptions);
     }
 
-    private static object? ReadLengthDelimited(byte[] payload, ref int offset)
+    private static string? ReadLengthDelimited(byte[] payload, ref int offset)
     {
         if (!TryReadVarint(payload, ref offset, out var len) || len < 0 || offset + (int)len > payload.Length)
         {

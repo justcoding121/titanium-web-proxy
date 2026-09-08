@@ -386,6 +386,7 @@ public class PrivilegePromptTests
         Assert.AreEqual("-c", abs[2]);
         Assert.IsTrue(Path.IsPathRooted(abs[3]), abs[3]);
         StringAssert.EndsWith(abs[3], "twp.yaml");
+        _ = PrivilegePrompt.AbsolutizeConfigArgs(["run", "-c", "\0not-a-path"]);
     }
 
     [TestMethod]

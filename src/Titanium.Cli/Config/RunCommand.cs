@@ -183,7 +183,7 @@ internal static class RunCommand
 
             await AsyncConsole.FlushAsync().ConfigureAwait(false);
             Console.WriteLine("awaiting-shutdown-or-reload");
-            await Console.Out.FlushAsync().ConfigureAwait(false);
+            await Console.Out.FlushAsync(stoppingToken).ConfigureAwait(false);
             await WaitForShutdownOrReloadAsync(
                 stoppingToken,
                 onReload: async () =>
@@ -426,6 +426,7 @@ internal static class RunCommand
         }
     }
 
+#pragma warning disable CA1068 // Token stays first so POSIX signal registration can observe the run CTS.
     private static async Task WaitForShutdownOrReloadAsync(CancellationToken stoppingToken, Func<Task>? onReload) // NOSONAR CA1068 -- Token stays first so POSIX signal registration can observe the run CTS.
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -479,7 +480,7 @@ internal static class RunCommand
                         }, stoppingToken);
                     });
                     Console.WriteLine("sighup-handler-registered");
-                    await Console.Out.FlushAsync().ConfigureAwait(false);
+                    await Console.Out.FlushAsync(stoppingToken).ConfigureAwait(false);
                 }
             }
 
@@ -493,6 +494,7 @@ internal static class RunCommand
             sigHup?.Dispose();
         }
     }
+#pragma warning restore CA1068
 
     private static void StartAcmeIfConfigured(ProxyServer proxy, TwpConfig config)
     {

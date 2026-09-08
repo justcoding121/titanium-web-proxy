@@ -7,7 +7,7 @@ using System.Text;
 namespace Titanium.E2E.Tests.Harness;
 
 /// <summary>Spawns the titanium CLI from build output and tears it down.</summary>
-public sealed class CliProcessHarness : IDisposable
+public sealed partial class CliProcessHarness : IDisposable
 {
     private Process? _process;
     private readonly StringBuilder _stdout = new();
@@ -201,8 +201,8 @@ public sealed class CliProcessHarness : IDisposable
         }
     }
 
-    [DllImport("libc", EntryPoint = "kill", SetLastError = true)]
-    private static extern int NativeKill(int pid, int sig); // NOSONAR SYSLIB1054 -- libc kill marshalling is required by this existing interop signature.
+    [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
+    private static partial int NativeKill(int pid, int sig);
 
     public void Dispose()
     {

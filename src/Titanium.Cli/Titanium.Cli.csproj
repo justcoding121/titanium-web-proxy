@@ -14,6 +14,7 @@
     <AssemblyName>titanium</AssemblyName>
     <!-- CLI enables experimental HTTP/3 via listener config; suppress TWP001 like Core. -->
     <NoWarn>$(NoWarn);TWP001</NoWarn>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Titanium.Cli.Tests" />

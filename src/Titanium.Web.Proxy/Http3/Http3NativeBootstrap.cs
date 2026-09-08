@@ -117,8 +117,8 @@ public static class Http3NativeBootstrap
                 continue;
             }
 
-            foreach (var part in value.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                         .Where(p => PathsEqual(NormalizeDir(p), baseDir)))
+            if (value.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(p => PathsEqual(NormalizeDir(p), baseDir)))
             {
                 return true;
             }

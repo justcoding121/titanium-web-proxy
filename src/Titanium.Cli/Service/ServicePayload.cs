@@ -11,8 +11,9 @@ internal static class ServicePayload
 
     public static string? DiscoverAppDirectory(IReadOnlyList<string> programPrefix)
     {
-        foreach (var part in programPrefix.Where(p => p.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)))
-            return Path.GetDirectoryName(Path.GetFullPath(part));
+        var dll = programPrefix.FirstOrDefault(p => p.EndsWith(".dll", StringComparison.OrdinalIgnoreCase));
+        if (dll is not null)
+            return Path.GetDirectoryName(Path.GetFullPath(dll));
 
         if (programPrefix.Count > 0)
             return Path.GetDirectoryName(Path.GetFullPath(programPrefix[0]));
