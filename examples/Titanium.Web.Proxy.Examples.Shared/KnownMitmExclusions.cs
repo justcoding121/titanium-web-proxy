@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using Titanium.Web.Proxy;
 
 namespace Titanium.Web.Proxy.Examples.Shared;
