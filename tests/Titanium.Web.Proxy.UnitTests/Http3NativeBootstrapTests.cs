@@ -11,13 +11,13 @@ public class Http3NativeBootstrapTests
     [TestMethod]
     public void ForwardUnixSignalsToChild_ReturnsDisposableLease()
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            Assert.Inconclusive("POSIX signal forwarding is Unix-only.");
-        }
-
         using var self = Process.GetCurrentProcess();
         using var lease = Http3NativeBootstrap.ForwardUnixSignalsToChild(self);
         Assert.IsNotNull(lease);
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            lease.Dispose();
+            lease.Dispose();
+        }
     }
 }

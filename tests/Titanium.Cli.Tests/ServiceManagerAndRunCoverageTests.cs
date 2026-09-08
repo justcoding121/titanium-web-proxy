@@ -169,5 +169,22 @@ public class ServiceManagerAndRunCoverageTests
         listener.Start();
         return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
+
+    [TestMethod]
+    public void QuoteWindowsArg_AndEscapeSystemdArg_CoverEdges()
+    {
+        Assert.AreEqual("\"\"", ServiceUnitFactory.QuoteWindowsArg(""));
+        Assert.AreEqual("plain", ServiceUnitFactory.QuoteWindowsArg("plain"));
+        StringAssert.Contains(ServiceUnitFactory.QuoteWindowsArg("has space"), "\"");
+        StringAssert.Contains(ServiceUnitFactory.QuoteWindowsArg("has\ttab"), "\"");
+        StringAssert.Contains(ServiceUnitFactory.QuoteWindowsArg("say \"hi\""), "\\\"");
+
+        Assert.AreEqual("plain", ServiceUnitFactory.EscapeSystemdArg("plain"));
+        StringAssert.Contains(ServiceUnitFactory.EscapeSystemdArg(@"C:\tmp"), "\\\\");
+        StringAssert.Contains(ServiceUnitFactory.EscapeSystemdArg("%PATH%"), "%%");
+        StringAssert.Contains(ServiceUnitFactory.EscapeSystemdArg("$HOME"), "$$");
+        StringAssert.Contains(ServiceUnitFactory.EscapeSystemdArg("has space"), "\"");
+        StringAssert.Contains(ServiceUnitFactory.EscapeSystemdArg("say \"hi\""), "\\\"");
+    }
 }
 #pragma warning restore CA1416

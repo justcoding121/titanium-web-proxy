@@ -312,6 +312,28 @@ public class UnixCertificateTrustCoverageTests
         var publicProbe = UnixCertificateTrust.ProbeCertutilInstall(new FakeProcessRunner { DefaultSuccess = false });
         Assert.AreEqual(CertificateOsTrustKind.CertutilMissing, publicProbe.Kind);
 
+        using var guidanceCert = CreateEphemeralRoot("CN=TWP Guidance Root");
+        if (OperatingSystem.IsMacOS())
+        {
+            var fakeOpen = new FakeProcessRunner();
+            Assert.IsTrue(UnixCertificateTrust.OpenMacKeychainGuidance(null, fakeOpen));
+            var cer = UnixCertificateTrust.OpenMacKeychainGuidanceForCertificate(guidanceCert, fakeOpen);
+            try
+            {
+                Assert.IsNotNull(cer);
+            }
+            finally
+            {
+                if (cer is not null)
+                    TryDelete(cer);
+            }
+        }
+        else
+        {
+            Assert.IsFalse(UnixCertificateTrust.OpenMacKeychainGuidance(null, new FakeProcessRunner()));
+            Assert.IsNull(UnixCertificateTrust.OpenMacKeychainGuidanceForCertificate(guidanceCert, new FakeProcessRunner()));
+        }
+
         // Always pass fakes — a missing runner uses real `security` / osascript and pops a password dialog.
         using var unused = CreateEphemeralRoot();
         var dryRun = new FakeProcessRunner { DefaultSuccess = false };
@@ -322,6 +344,59 @@ public class UnixCertificateTrustCoverageTests
         _ = UnixCertificateTrust.UntrustMachineSsl(unused, "TWP", dryRun, elevation);
         _ = UnixCertificateTrust.VerifyUserSslTrust(unused, dryRun);
         _ = UnixCertificateTrust.IsCertificateInLoginKeychain(unused, dryRun);
+    }
+
+    [TestMethod]
+    public void LeftoverHelpers_EnsureNssDbSanitizeFindBrewAndMacNames()
+    {
+        using var planted = PlantedCertutil.Acquire();
+        using var cert = CreateEphemeralRoot("CN=TWP Space Name/Root?");
+        var runner = new FakeProcessRunner();
+        runner.When("sh", "command -v certutil", planted.Path);
+        runner.When("certutil", "-N --empty-password", "");
+        runner.When("security", "add-trusted-cert", "ok");
+        runner.When("security", "dump-trust-settings",
+            cert.GetNameInfo(X509NameType.SimpleName, forIssuer: false) + "\nTrust Root\n");
+
+        var nssDir = (string?)Invoke("EnsureLinuxNssDb", [typeof(IProcessRunner)], runner);
+        Assert.IsFalse(string.IsNullOrEmpty(nssDir));
+
+        var sanitized = (string)Invoke("SanitizeFileName", [typeof(string)], "bad name:with*chars")!;
+        Assert.IsFalse(sanitized.Contains(' '));
+        Assert.IsFalse(string.IsNullOrEmpty(sanitized));
+
+        var brewRunner = new FakeProcessRunner { DefaultSuccess = false };
+        if (OperatingSystem.IsMacOS())
+        {
+            _ = Invoke("FindBrew", [typeof(IProcessRunner)], brewRunner);
+        }
+        else
+        {
+            Assert.IsNull(Invoke("FindBrew", [typeof(IProcessRunner)], brewRunner));
+        }
+
+        Assert.IsTrue((bool)Invoke("CommandExists", [typeof(IProcessRunner), typeof(string)], runner, "certutil")!);
+
+        var names = ((IEnumerable<string>)Invoke(
+            "MacRootCommonNames", [typeof(string), typeof(X509Certificate2)],
+            "Friendly CA", cert)!).ToList();
+        Assert.IsTrue(names.Count >= 2);
+
+        var cerPath = UnixCertificateTrust.WriteTempCer(cert, forUserGuidance: true);
+        try
+        {
+            Assert.IsTrue((bool)Invoke("TrustMacUser", [typeof(IProcessRunner), typeof(string)], runner, cerPath)!);
+            Assert.IsTrue((bool)Invoke("VerifyMacSslTrust", [typeof(IProcessRunner), typeof(X509Certificate2)], runner, cert)!);
+        }
+        finally
+        {
+            TryDelete(cerPath);
+        }
+
+        using var unused = CreateEphemeralRoot();
+        var unsupported = UnixCertificateTrust.TrustUserSsl(unused, "TWP", new FakeProcessRunner());
+        if (OperatingSystem.IsWindows())
+            Assert.AreEqual(CertificateOsTrustKind.Unsupported, unsupported.Kind);
     }
 
     [TestMethod]

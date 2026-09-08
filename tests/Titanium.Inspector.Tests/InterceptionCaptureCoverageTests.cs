@@ -318,6 +318,67 @@ public class InterceptionCaptureCoverageTests
         Assert.AreEqual(2, HostListFormat.Parse("a.com\nb.com\na.com").Count);
     }
 
+    [TestMethod]
+    public void TrustHelpers_BeforeStart_DoNotTouchLiveOs()
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+        };
+        var nss = interception.InstallNssToolsAndRetryTrust();
+        Assert.AreEqual(CertificateOsTrustKind.Failed, nss.Kind);
+        StringAssert.Contains(nss.Message, "Start the proxy first");
+        var ff = interception.TrustFirefox();
+        Assert.AreEqual(CertificateOsTrustKind.Failed, ff.Kind);
+        Assert.IsNull(interception.OpenMacKeychainGuidance());
+        Assert.IsFalse(interception.IsRootInLoginKeychain());
+        Assert.IsFalse(interception.VerifyOsUserSslTrust());
+
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var snap = new SessionSnapshot { Id = 7, Url = "http://x.test/" };
+        typeof(InterceptionService).GetMethod("ScheduleProcessResolve", flags)!.Invoke(
+            interception, [snap, new Lazy<int>(() => 0)]);
+
+        var workType = typeof(InterceptionService).GetNestedType("ProcessResolveWork", BindingFlags.NonPublic)!;
+        var zero = Activator.CreateInstance(workType, snap, new Lazy<int>(() => 0))!;
+        typeof(InterceptionService).GetMethod("ApplyResolvedProcess", flags)!.Invoke(interception, [zero]);
+        var live = Activator.CreateInstance(workType, snap, new Lazy<int>(() => Environment.ProcessId))!;
+        typeof(InterceptionService).GetMethod("ApplyResolvedProcess", flags)!.Invoke(interception, [live]);
+        Assert.AreEqual(Environment.ProcessId, snap.ProcessId);
+        typeof(InterceptionService).GetMethod("ApplyResolvedProcess", flags)!.Invoke(interception, [live]);
+    }
+
+    [TestMethod]
+    public async Task BreakpointAbort_AndLteThrottle_CoverRequestHooks()
+    {
+        using var origin = StartOrigin("brk");
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+            Breakpoints = new BreakpointViewModel { Enabled = true, UrlFilter = "*" },
+            ThrottleProfile = NetworkThrottle.LTE,
+            DecryptHttps = false,
+            Capturing = true,
+        };
+        await interception.StartAsync(IPAddress.Loopback, 0);
+        try
+        {
+            using var http = ProxyClient(interception.BoundPort);
+            var pending = http.GetAsync($"http://127.0.0.1:{origin.Port}/brk");
+            var deadline = DateTime.UtcNow.AddSeconds(3);
+            while (interception.Breakpoints.Active is null && DateTime.UtcNow < deadline)
+                await Task.Delay(20);
+            Assert.IsNotNull(interception.Breakpoints.Active);
+            interception.Breakpoints.Abort();
+            var resp = await pending;
+            Assert.AreEqual(HttpStatusCode.Forbidden, resp.StatusCode);
+        }
+        finally
+        {
+            interception.EnsureShutdown();
+        }
+    }
+
     private static HttpClient ProxyClient(int port)
     {
         var handler = new HttpClientHandler

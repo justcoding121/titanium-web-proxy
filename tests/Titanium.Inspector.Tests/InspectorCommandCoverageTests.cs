@@ -1,8 +1,10 @@
 using System.Net;
+using System.Reflection;
 using System.Windows.Input;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.ViewModels;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Inspector.Tests;
 
@@ -132,6 +134,64 @@ public class InspectorCommandCoverageTests
             vm.AutoStartCapture = vm.AutoStartCapture;
             vm.SearchQuery = "host:a.test";
             vm.SearchQuery = "host:a.test";
+
+            await ExecuteAsync(vm.LoadIntoComposerCommand);
+            StringAssert.Contains(vm.StatusText, "Composer");
+            vm.SelectedSession = null;
+            vm.SetSelectedSessions([]);
+            await ExecuteAsync(vm.LoadIntoComposerCommand);
+            StringAssert.Contains(vm.StatusText, "Select a session");
+            await ExecuteAsync(vm.ReplayCommand);
+            StringAssert.Contains(vm.StatusText, "Select a session");
+            await ExecuteAsync(vm.FilterByProcessCommand);
+            StringAssert.Contains(vm.StatusText, "process");
+            await ExecuteAsync(vm.OpenAboutCommand);
+
+            vm.AutoResponder.SelectedRule = null;
+            await ExecuteAsync(vm.UpdateAutoResponderRuleCommand);
+            await ExecuteAsync(vm.DeleteAutoResponderRuleCommand);
+            vm.MapRemote.SelectedRule = null;
+            await ExecuteAsync(vm.UpdateMapRemoteRuleCommand);
+            await ExecuteAsync(vm.DeleteMapRemoteRuleCommand);
+
+            vm.SetTransientStatus("transient-cov", StatusSeverity.Success, toastImportant: true, revertMs: 50);
+            await Task.Delay(80);
+
+            typeof(MainWindowViewModel).GetMethod("ApplyExclusionSettingsFromSettings",
+                BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(vm, null);
+
+            var flags = BindingFlags.NonPublic | BindingFlags.Static;
+            var trustType = typeof(MainWindowViewModel);
+            _ = trustType.GetMethod("FormatOsTrustFailureStatus", flags)!.Invoke(null,
+                [CertificateOsTrustResult.Fail(CertificateOsTrustKind.Failed, "nope")]);
+            _ = trustType.GetMethod("FormatOsTrustFailureStatus", flags)!.Invoke(null, [null]);
+            _ = trustType.GetMethod("FormatUntrustStillPresentStatus", flags)!.Invoke(null, null);
+            _ = trustType.GetMethod("FormatUntrustRemovedStatus", flags)!.Invoke(null, null);
+            _ = trustType.GetMethod("FormatRotateCaTrustedStatus", flags)!.Invoke(null, [true]);
+            _ = trustType.GetMethod("FormatRotateCaTrustedStatus", flags)!.Invoke(null, [false]);
+            _ = trustType.GetMethod("FormatRotateCaDeferredTrustStatus", flags)!.Invoke(null, [true]);
+            _ = trustType.GetMethod("FormatRotateCaDeferredTrustStatus", flags)!.Invoke(null, [false]);
+            _ = trustType.GetMethod("FormatFirefoxTrustOutcome", flags)!.Invoke(null,
+                [CertificateOsTrustResult.Ok("trusted")]);
+            _ = trustType.GetMethod("FormatFirefoxTrustOutcome", flags)!.Invoke(null,
+                [CertificateOsTrustResult.Fail(CertificateOsTrustKind.CertutilMissing, "need certutil")]);
+            _ = trustType.GetMethod("FormatFirefoxTrustOutcome", flags)!.Invoke(null,
+                [CertificateOsTrustResult.Fail(CertificateOsTrustKind.Failed, "firefox down")]);
+
+            var proc = new SessionSnapshot
+            {
+                Id = 9, Method = "GET", Url = "https://p.test/", Host = "p.test",
+                ProcessName = "chrome", ProcessId = 42,
+            };
+            vm.SeedSession(proc);
+            vm.SelectedSession = proc;
+            vm.SetSelectedSessions([proc]);
+            await ExecuteAsync(vm.FilterByProcessCommand);
+            StringAssert.Contains(vm.StatusText, "chrome");
+            vm.ShowSessionDetails = true;
+            vm.SelectedInspectTabIndex = 1;
+            vm.SelectedInspectTabIndex = 2;
+            vm.SelectedInspectTabIndex = 4;
         }
         finally
         {

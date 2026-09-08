@@ -474,4 +474,63 @@ public class SessionSearchAndArchiveTests
             }
         }
     }
+
+    [TestMethod]
+    public async Task ImportHar_SkipsMalformedEntries_AndGuessMimeFromHeaders()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-har-edge-" + Guid.NewGuid().ToString("N") + ".har");
+        var zip = Path.Combine(Path.GetTempPath(), "twp-zip-empty-" + Guid.NewGuid().ToString("N") + ".zip");
+        try
+        {
+            File.WriteAllText(path, """
+                {"log":{"entries":[
+                  {},
+                  {"request":{"method":"GET","url":"not-absolute"}},
+                  {"request":{"method":"POST","url":"https://edge.test/q?a&b=1","headers":[{"name":"H","value":"v"}],"postData":{"text":"body","mimeType":""}},
+                   "response":{"status":204,"headers":[{"name":"Content-Type","value":"text/plain"}],"content":{"text":"","mimeType":""}},
+                   "timings":{"send":1,"wait":2,"receive":3},"startedDateTime":"not-a-date"}
+                ]}}
+                """);
+            var imported = await SessionArchive.ImportHarAsync(path, CancellationToken.None);
+            Assert.IsTrue(imported.Count >= 1);
+            Assert.IsTrue(imported.Exists(s => s.Url.Contains("edge.test", StringComparison.Ordinal)));
+
+            await SessionArchive.ExportHarAsync(
+            [
+                new SessionSnapshot
+                {
+                    Method = "GET",
+                    Url = "https://mime.test/",
+                    ResponseHeadersText = "Content-Type: image/png\r\n",
+                },
+            ], path);
+            var round = await SessionArchive.ImportHarAsync(path);
+            Assert.AreEqual(1, round.Count);
+
+            using (var fs = File.Create(zip))
+            using (var archive = new System.IO.Compression.ZipArchive(fs, System.IO.Compression.ZipArchiveMode.Create))
+            {
+                archive.CreateEntry("readme.txt");
+            }
+
+            var empty = await SessionArchive.ImportNativeArchiveAsync(zip);
+            Assert.AreEqual(0, empty.Count);
+
+            Assert.AreEqual(0, SessionStore.EstimateInMemoryBodyBytes(new SessionSnapshot { BodiesOnDisk = true, RequestBodyText = "x" }));
+            Assert.IsTrue(SessionStore.EstimateInMemoryBodyBytes(new SessionSnapshot
+            {
+                RequestBodyBytes = [1, 2],
+                ResponseBodyBytes = [3],
+                RequestBodyText = "ab",
+                ResponseBodyText = "cd",
+            }) > 0);
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+            if (File.Exists(zip))
+                File.Delete(zip);
+        }
+    }
 }

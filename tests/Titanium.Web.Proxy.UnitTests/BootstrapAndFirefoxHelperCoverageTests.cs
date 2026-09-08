@@ -139,6 +139,21 @@ public class BootstrapAndFirefoxHelperCoverageTests
         LinuxProxyFailOpen.Stop();
     }
 
+    [TestMethod]
+    public void TryRequestFirefoxQuit_WithFakeRunner_WhenNotRunning()
+    {
+        if (FirefoxCertificateTrust.IsFirefoxProcessRunning())
+        {
+            Assert.Inconclusive("Firefox is running on this machine");
+            return;
+        }
+
+        var runner = new FakeProcessRunner();
+        Assert.IsTrue(FirefoxCertificateTrust.TryRequestFirefoxQuit(TimeSpan.FromMilliseconds(50), runner));
+        typeof(FirefoxCertificateTrust).GetMethod("TermFirefoxProcesses",
+            BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, [runner]);
+    }
+
     private static void InvokeFf(string name, Type[] types, params object?[] args)
     {
         var method = typeof(LinuxFirefoxProxy).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static, types)

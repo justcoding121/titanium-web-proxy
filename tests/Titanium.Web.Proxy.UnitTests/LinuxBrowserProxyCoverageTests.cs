@@ -179,6 +179,73 @@ public class LinuxBrowserProxyCoverageTests
         LinuxProxyFailOpen.Stop();
     }
 
+    [TestMethod]
+    public void XfceHelpers_AndPolicyRejects_AndChromeMarkerCorruptPrefs()
+    {
+        Assert.IsFalse((bool)Invoke("WriteXfceWebBrowserHelper", [typeof(string), typeof(int)], "127.0.0.1", 8866)!);
+
+        var rcPath = (string)Invoke("UserXfceHelpersRcPath", Type.EmptyTypes)!;
+        var helperPath = (string)Invoke("UserXfceChromeHelperPath", Type.EmptyTypes)!;
+        string? rcBackup = File.Exists(rcPath) ? File.ReadAllText(rcPath) : null;
+        var rcExisted = File.Exists(rcPath);
+        try
+        {
+            Assert.IsTrue((bool)Invoke("WriteXfceHelpersRc", Type.EmptyTypes)!);
+            Invoke("RestoreXfceHelpersRc", Type.EmptyTypes);
+        }
+        finally
+        {
+            if (rcBackup is not null)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(rcPath)!);
+                File.WriteAllText(rcPath, rcBackup);
+            }
+            else if (!rcExisted && File.Exists(rcPath))
+            {
+                TryDelete(rcPath);
+            }
+
+            TryDelete(helperPath);
+        }
+
+        Assert.IsFalse(LinuxBrowserLaunchProxy.TryValidatePolicyJson("[]", "127.0.0.1", 8866, out _));
+        Assert.IsFalse(LinuxBrowserLaunchProxy.TryValidatePolicyJson("""{"ProxyServer":"http://127.0.0.1:8866"}""", "127.0.0.1", 8866, out _));
+        Assert.IsFalse(LinuxBrowserLaunchProxy.TryValidatePolicyJson(
+            """{"ProxyMode":"fixed_servers"}""", "127.0.0.1", 8866, out _));
+
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var roots = ((IEnumerable<string>)InvokeOn(
+            typeof(LinuxChromeProfileProxy), "BrowserConfigRoots", [typeof(string)], home)!).ToList();
+        Assert.IsTrue(roots.Count >= 8);
+        StringAssert.Contains(string.Join('\n', roots), "google-chrome");
+
+        var corrupt = Path.Combine(Path.GetTempPath(), "twp-prefs-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            File.WriteAllText(corrupt, "[1,2,3]");
+            _ = LinuxChromeProfileProxy.TryApplyToFileForTests(corrupt, "127.0.0.1", 1);
+            File.WriteAllText(corrupt, "{");
+            Assert.IsFalse(LinuxChromeProfileProxy.TryApplyToFileForTests(corrupt, "127.0.0.1", 1));
+        }
+        finally
+        {
+            TryDelete(corrupt);
+            TryDelete(corrupt + LinuxChromeProfileProxy.BackupSuffix);
+        }
+
+        InvokeOn(typeof(LinuxChromeProfileProxy), "WriteMarker", [typeof(string), typeof(int)], "127.0.0.1", 18866);
+        object?[] readArgs = ["", 0];
+        Assert.IsTrue((bool)InvokeOn(typeof(LinuxChromeProfileProxy), "TryReadMarker",
+            [typeof(string).MakeByRefType(), typeof(int).MakeByRefType()], readArgs)!);
+        Assert.AreEqual("127.0.0.1", readArgs[0]);
+        var markerPath = (string?)InvokeOn(typeof(LinuxChromeProfileProxy), "MarkerPath", Type.EmptyTypes);
+        if (!string.IsNullOrEmpty(markerPath))
+            File.WriteAllText(markerPath, "{not-json");
+        Assert.IsFalse((bool)InvokeOn(typeof(LinuxChromeProfileProxy), "TryReadMarker",
+            [typeof(string).MakeByRefType(), typeof(int).MakeByRefType()], readArgs)!);
+        InvokeOn(typeof(LinuxChromeProfileProxy), "DeleteMarker", Type.EmptyTypes);
+    }
+
     private static object? Invoke(string name, Type[] types, params object?[] args) =>
         InvokeOn(typeof(LinuxBrowserLaunchProxy), name, types, args);
 
