@@ -238,4 +238,52 @@ public class MitmCompressedRelayHelperTests
         Assert.AreEqual(1, added.Count);
         Assert.AreEqual("x-twp-rps-probe", added[0].Name);
     }
+
+    [TestMethod]
+    public void DropOnly_Rejected()
+    {
+        var before = new HeaderCollection();
+        before.AddHeader("accept", "*/*");
+        before.AddHeader("user-agent", "probe");
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(before);
+
+        var after = new HeaderCollection();
+        after.AddHeader("accept", "*/*");
+
+        Assert.IsFalse(MitmCompressedRelayHelper.AllowsCompressedRelay(
+            baseline, after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out _));
+    }
+
+    [TestMethod]
+    public void HopByHopConnectionAppend_IsUniqueAppend_AllowsRelay()
+    {
+        var before = new HeaderCollection();
+        before.AddHeader("accept", "*/*");
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(before);
+
+        var after = new HeaderCollection();
+        after.AddHeader("accept", "*/*");
+        after.AddHeader("Connection", "close");
+
+        Assert.IsTrue(MitmCompressedRelayHelper.AllowsCompressedRelay(
+            baseline, after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out var added));
+        Assert.AreEqual(1, added.Count);
+        Assert.AreEqual("Connection", added[0].Name);
+    }
+
+    [TestMethod]
+    public void MixedDropAndAppend_Rejected()
+    {
+        var before = new HeaderCollection();
+        before.AddHeader("accept", "*/*");
+        before.AddHeader("user-agent", "probe");
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(before);
+
+        var after = new HeaderCollection();
+        after.AddHeader("accept", "*/*");
+        after.AddHeader("X-New", "1");
+
+        Assert.IsFalse(MitmCompressedRelayHelper.AllowsCompressedRelay(
+            baseline, after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out _));
+    }
 }

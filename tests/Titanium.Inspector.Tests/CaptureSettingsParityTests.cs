@@ -367,14 +367,13 @@ public class CaptureSettingsParityTests
 [TestMethod]
     public void FormatRotateCaStatusHelpers_CoverChangedAndTrustedBranches()
     {
-        var install = typeof(ViewModels.MainWindowViewModel).GetMethod("FormatRotateCaInstallStatus",
+        var trusted = typeof(ViewModels.MainWindowViewModel).GetMethod("FormatRotateCaTrustedStatus",
             System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
         var deferred = typeof(ViewModels.MainWindowViewModel).GetMethod("FormatRotateCaDeferredTrustStatus",
             System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
 
-        Assert.IsTrue(((string)install.Invoke(null, [false, true])!).Contains("trust failed"));
-        Assert.IsTrue(((string)install.Invoke(null, [true, true])!).Contains("reinstalled"));
-        Assert.IsTrue(((string)install.Invoke(null, [true, false])!).Contains("recreate completed"));
+        Assert.IsTrue(((string)trusted.Invoke(null, [true])!).Contains("cleared and trusted"));
+        Assert.IsTrue(((string)trusted.Invoke(null, [false])!).Contains("Root CA trusted"));
         Assert.IsTrue(((string)deferred.Invoke(null, [true])!).Contains("Install root CA"));
         Assert.IsTrue(((string)deferred.Invoke(null, [false])!).Contains("recreate completed"));
     }

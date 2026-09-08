@@ -78,6 +78,7 @@ public interface IInspectorDialogs
 public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
 {
     private const string CancelLabel = "Cancel";
+    private const string ExportCaLabel = "Export CA";
     public Task<bool> ConfirmInstallRootCaAsync(Window? owner) =>
         SimpleConfirmDialog.ShowAsync(
             owner,
@@ -107,27 +108,29 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
     {
         var kind = result?.Kind ?? CertificateOsTrustKind.Failed;
         var message = result?.Message ?? "Root CA trust failed.";
+        var packageHint = result?.PackageHint;
+        var brewAvailable = result?.BrewAvailable == true;
 
         return kind switch
         {
-            CertificateOsTrustKind.CertutilMissing when result is { BrewAvailable: true } =>
+            CertificateOsTrustKind.CertutilMissing when brewAvailable =>
                 TrustRecoveryDialog.ShowAsync(
                     owner,
                     "Install browser certificate tools",
                     message + "\n\nThis runs: brew install nss",
                     primary: "Install via Homebrew",
-                    secondary: "Export CA",
+                    secondary: ExportCaLabel,
                     height: 280),
 
             CertificateOsTrustKind.CertutilMissing =>
                 TrustRecoveryDialog.ShowAsync(
                     owner,
                     "Install browser certificate tools",
-                    message + (string.IsNullOrEmpty(result?.PackageHint)
+                    message + (string.IsNullOrEmpty(packageHint)
                         ? ""
-                        : $"\n\nPackage: {result!.PackageHint}"),
+                        : $"\n\nPackage: {packageHint}"),
                     primary: "Install browser certificate tools",
-                    secondary: "Export CA",
+                    secondary: ExportCaLabel,
                     height: 280),
 
             CertificateOsTrustKind.HomebrewMissing =>
@@ -135,7 +138,7 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
                     owner,
                     "certutil not available",
                     message,
-                    primary: "Export CA",
+                    primary: ExportCaLabel,
                     secondary: null,
                     height: 260),
 
@@ -153,7 +156,7 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
                 "Install with administrator privileges",
                 OsTrustUxCopy.TrustRecoveryAdminBody(message),
                 primary: "Install with administrator",
-                secondary: "Export CA",
+                secondary: ExportCaLabel,
                 height: 280),
         };
     }
@@ -206,7 +209,7 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
             owner,
             "Device CA setup",
             message,
-            accept: "Export CA",
+            accept: ExportCaLabel,
             cancel: "Close",
             height: 320);
 

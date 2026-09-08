@@ -12,6 +12,7 @@ namespace Titanium.Web.Proxy.Helpers;
 /// </summary>
 internal static class UnixCertificateTrust
 {
+    private const string SecurityBinary = "security";
     /// <summary>
     ///     Trusts <paramref name="certificate"/> for SSL in the current-user store backends
     ///     (login keychain on macOS, NSS db on Linux).
@@ -139,45 +140,88 @@ internal static class UnixCertificateTrust
             return CertificateOsTrustResult.Ok("certutil is available");
 
         if (RunTime.IsLinux)
-        {
-            var hint = DetectLinuxNssPackage(runner);
-            if (hint is null)
-            {
-                return CertificateOsTrustResult.Fail(
-                    CertificateOsTrustKind.CertutilMissing,
-                    "certutil not found and no supported package manager (apt/dnf/zypper) was detected",
-                    packageHint: null);
-            }
-
-            return CertificateOsTrustResult.Fail(
-                CertificateOsTrustKind.CertutilMissing,
-                $"certutil not found. Install {hint.Package} for Chrome/Chromium (and Firefox profile) trust.",
-                packageHint: hint.Package);
-        }
+            return ProbeLinuxCertutilInstall(runner);
 
         if (RunTime.IsMac)
-        {
-            var brew = FindBrew(runner);
-            if (brew != null)
-            {
-                return CertificateOsTrustResult.Fail(
-                    CertificateOsTrustKind.CertutilMissing,
-                    "certutil not found. Install via Homebrew: brew install nss",
-                    packageHint: "nss",
-                    brewAvailable: true);
-            }
-
-            return CertificateOsTrustResult.Fail(
-                CertificateOsTrustKind.HomebrewMissing,
-                "certutil not found and Homebrew is not installed. Export the CA and import it in Firefox Authorities, or install Homebrew then retry.",
-                packageHint: "nss",
-                brewAvailable: false);
-        }
+            return ProbeMacCertutilInstall(runner);
 
         return CertificateOsTrustResult.Fail(
             CertificateOsTrustKind.CertutilMissing,
             "certutil not found on PATH",
             packageHint: null);
+    }
+
+    private static CertificateOsTrustResult ProbeLinuxCertutilInstall(IProcessRunner runner)
+    {
+        var hint = DetectLinuxNssPackage(runner);
+        if (hint is null)
+        {
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.CertutilMissing,
+                "certutil not found and no supported package manager (apt/dnf/zypper) was detected",
+                packageHint: null);
+        }
+
+        return CertificateOsTrustResult.Fail(
+            CertificateOsTrustKind.CertutilMissing,
+            $"certutil not found. Install {hint.Package} for Chrome/Chromium (and Firefox profile) trust.",
+            packageHint: hint.Package);
+    }
+
+    private static CertificateOsTrustResult ProbeMacCertutilInstall(IProcessRunner runner)
+    {
+        var brew = FindBrew(runner);
+        if (brew != null)
+        {
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.CertutilMissing,
+                "certutil not found. Install via Homebrew: brew install nss",
+                packageHint: "nss",
+                brewAvailable: true);
+        }
+
+        return CertificateOsTrustResult.Fail(
+            CertificateOsTrustKind.HomebrewMissing,
+            "certutil not found and Homebrew is not installed. Export the CA and import it in Firefox Authorities, or install Homebrew then retry.",
+            packageHint: "nss",
+            brewAvailable: false);
+    }
+
+    private static CertificateOsTrustResult TryInstallLinuxNssCertutil(
+        IProcessRunner runner, IElevationPrompt elevation)
+    {
+        var hint = DetectLinuxNssPackage(runner);
+        if (hint is null)
+        {
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.CertutilMissing,
+                "No supported package manager found to install certutil");
+        }
+
+        var result = elevation.RunElevated(hint.FileName, hint.Arguments);
+        if (result is null)
+        {
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Cancelled,
+                "Package install cancelled or elevation unavailable");
+        }
+
+        if (!result.Succeeded)
+        {
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed,
+                string.IsNullOrWhiteSpace(result.StandardError)
+                    ? $"Failed to install {hint.Package} (exit {result.ExitCode})"
+                    : result.StandardError.Trim(),
+                packageHint: hint.Package);
+        }
+
+        return FindCertutil(runner) != null
+            ? CertificateOsTrustResult.Ok($"Installed {hint.Package}")
+            : CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed,
+                $"{hint.Package} install finished but certutil is still not on PATH",
+                packageHint: hint.Package);
     }
 
     /// <summary>
@@ -195,40 +239,7 @@ internal static class UnixCertificateTrust
             return CertificateOsTrustResult.Ok("certutil already available");
 
         if (RunTime.IsLinux)
-        {
-            var hint = DetectLinuxNssPackage(runner);
-            if (hint is null)
-            {
-                return CertificateOsTrustResult.Fail(
-                    CertificateOsTrustKind.CertutilMissing,
-                    "No supported package manager found to install certutil");
-            }
-
-            var result = elevation.RunElevated(hint.FileName, hint.Arguments);
-            if (result is null)
-            {
-                return CertificateOsTrustResult.Fail(
-                    CertificateOsTrustKind.Cancelled,
-                    "Package install cancelled or elevation unavailable");
-            }
-
-            if (!result.Succeeded)
-            {
-                return CertificateOsTrustResult.Fail(
-                    CertificateOsTrustKind.Failed,
-                    string.IsNullOrWhiteSpace(result.StandardError)
-                        ? $"Failed to install {hint.Package} (exit {result.ExitCode})"
-                        : result.StandardError.Trim(),
-                    packageHint: hint.Package);
-            }
-
-            return FindCertutil(runner) != null
-                ? CertificateOsTrustResult.Ok($"Installed {hint.Package}")
-                : CertificateOsTrustResult.Fail(
-                    CertificateOsTrustKind.Failed,
-                    $"{hint.Package} install finished but certutil is still not on PATH",
-                    packageHint: hint.Package);
-        }
+            return TryInstallLinuxNssCertutil(runner, elevation);
 
         if (RunTime.IsMac)
         {
@@ -311,10 +322,8 @@ internal static class UnixCertificateTrust
         var certutil = FindCertutil(runner);
         if (certutil is null) return false;
 
-        foreach (var nssDir in LinuxNssDatabaseDirectories())
+        foreach (var nssDir in LinuxNssDatabaseDirectories().Where(Directory.Exists))
         {
-            if (!Directory.Exists(nssDir)) continue;
-
             var list = runner.Run(certutil, $"-d sql:{nssDir} -L");
             if (list is not { Succeeded: true })
                 continue;
@@ -345,7 +354,7 @@ internal static class UnixCertificateTrust
             return false;
 
         // -a: all matching; -Z: print SHA-1. Match our hash in the dump.
-        var byHash = runner.Run("security", $"find-certificate -a -Z {sha1}");
+        var byHash = runner.Run(SecurityBinary, $"find-certificate -a -Z {sha1}");
         if (byHash is { Succeeded: true } &&
             byHash.StandardOutput.Contains(sha1, StringComparison.OrdinalIgnoreCase))
             return true;
@@ -360,7 +369,7 @@ internal static class UnixCertificateTrust
         var args = File.Exists(loginDb)
             ? $"find-certificate -a -c \"{Escape(commonName)}\" -Z \"{loginDb}\""
             : $"find-certificate -a -c \"{Escape(commonName)}\" -Z";
-        var byName = runner.Run("security", args);
+        var byName = runner.Run(SecurityBinary, args);
         return byName is { Succeeded: true } &&
                byName.StandardOutput.Contains(sha1, StringComparison.OrdinalIgnoreCase);
     }
@@ -371,19 +380,13 @@ internal static class UnixCertificateTrust
         if (RunTime.IsWindows)
         {
             // Windows ships Microsoft certutil.exe — it is not NSS and must not be used for profile DBs.
-            foreach (var candidate in new[]
-                     {
-                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                             "NSS", "certutil.exe"),
-                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                             "Programs", "nss", "certutil.exe"),
-                     })
+            return new[]
             {
-                if (File.Exists(candidate))
-                    return candidate;
-            }
-
-            return null;
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    "NSS", "certutil.exe"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Programs", "nss", "certutil.exe"),
+            }.FirstOrDefault(File.Exists);
         }
 
         var which = runner.Run("sh", "-c \"command -v certutil\"");
@@ -397,15 +400,11 @@ internal static class UnixCertificateTrust
 
         if (RunTime.IsMac)
         {
-            foreach (var candidate in new[]
-                     {
-                         "/opt/homebrew/opt/nss/bin/certutil",
-                         "/usr/local/opt/nss/bin/certutil",
-                     })
+            return new[]
             {
-                if (File.Exists(candidate))
-                    return candidate;
-            }
+                "/opt/homebrew/opt/nss/bin/certutil",
+                "/usr/local/opt/nss/bin/certutil",
+            }.FirstOrDefault(File.Exists);
         }
 
         return null;
@@ -479,7 +478,7 @@ internal static class UnixCertificateTrust
         var keychain = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             "Library", "Keychains", "login.keychain-db");
-        var result = runner.Run("security",
+        var result = runner.Run(SecurityBinary,
             $"add-trusted-cert -r trustRoot -k \"{keychain}\" \"{cerPath}\"");
         if (result is { Succeeded: true }) return true;
 
@@ -487,7 +486,7 @@ internal static class UnixCertificateTrust
         keychain = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             "Library", "Keychains", "login.keychain");
-        result = runner.Run("security",
+        result = runner.Run(SecurityBinary,
             $"add-trusted-cert -r trustRoot -k \"{keychain}\" \"{cerPath}\"");
         return result is { Succeeded: true };
     }
@@ -521,7 +520,7 @@ internal static class UnixCertificateTrust
     {
         foreach (var args in new[] { "dump-trust-settings -d", "dump-trust-settings" })
         {
-            var dump = runner.Run("security", args);
+            var dump = runner.Run(SecurityBinary, args);
             if (dump is null)
                 continue;
 
@@ -567,7 +566,7 @@ internal static class UnixCertificateTrust
                 var args = adminDomain
                     ? $"trust-settings-export -d \"{path}\""
                     : $"trust-settings-export \"{path}\"";
-                var export = runner.Run("security", args);
+                var export = runner.Run(SecurityBinary, args);
                 if (export is not { Succeeded: true } || !File.Exists(path))
                     continue;
 
@@ -636,7 +635,7 @@ internal static class UnixCertificateTrust
             foreach (var hash in hashes)
             {
                 // -t also drops user trust settings for this cert.
-                var login = runner.Run("security", $"delete-certificate -Z {hash} -t");
+                var login = runner.Run(SecurityBinary, $"delete-certificate -Z {hash} -t");
                 if (login is { Succeeded: true })
                     any = true;
             }
@@ -658,7 +657,7 @@ internal static class UnixCertificateTrust
                     any = true;
             }
 
-            var userTrust = runner.Run("security", $"remove-trusted-cert \"{cerPath}\"");
+            var userTrust = runner.Run(SecurityBinary, $"remove-trusted-cert \"{cerPath}\"");
             if (userTrust is { Succeeded: true })
                 any = true;
         }
@@ -706,7 +705,7 @@ internal static class UnixCertificateTrust
 
         foreach (var args in searches)
         {
-            var dump = runner.Run("security", args);
+            var dump = runner.Run(SecurityBinary, args);
             if (dump is null)
                 continue;
 
@@ -742,7 +741,7 @@ internal static class UnixCertificateTrust
         if (string.IsNullOrWhiteSpace(sha1))
             return false;
 
-        var byHash = runner.Run("security", $"find-certificate -a -Z {sha1}");
+        var byHash = runner.Run(SecurityBinary, $"find-certificate -a -Z {sha1}");
         return byHash is { Succeeded: true } &&
                byHash.StandardOutput.Contains(sha1, StringComparison.OrdinalIgnoreCase);
     }
@@ -899,10 +898,8 @@ internal static class UnixCertificateTrust
 
         var anyDb = false;
         var deleted = false;
-        foreach (var nssDir in LinuxNssDatabaseDirectories())
+        foreach (var nssDir in LinuxNssDatabaseDirectories().Where(Directory.Exists))
         {
-            if (!Directory.Exists(nssDir))
-                continue;
             anyDb = true;
             if (UntrustLinuxNssDirectory(runner, certutil, nssDir, certificate, friendlyName))
                 deleted = true;
@@ -951,12 +948,10 @@ internal static class UnixCertificateTrust
     {
         var primary = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".pki", "nssdb");
-        foreach (var nssDir in LinuxNssDatabaseDirectories())
+        foreach (var nssDir in LinuxNssDatabaseDirectories()
+                     .Where(d => !string.Equals(d, primary, StringComparison.Ordinal))
+                     .Where(Directory.Exists))
         {
-            if (string.Equals(nssDir, primary, StringComparison.Ordinal))
-                continue;
-            if (!Directory.Exists(nssDir))
-                continue;
             try
             {
                 runner.Run(certutil, $"-d sql:{nssDir} -D -n \"{Escape(friendlyName)}\"");

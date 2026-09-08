@@ -1,8 +1,19 @@
 # Performance
 
-Titanium targets **low-overhead MITM proxying**: connection pooling, HTTP/2 multiplexing, and buffer reuse. Numbers below are **Release** measurements with [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe) (and BenchmarkDotNet / Basic example where noted). Publishable tables cite **GitHub Actions** medians on matched **4-core-class** runners (`ubuntu-latest` / `windows-latest`: **4 vCPU / 16 GiB**; `macos-15-intel`: **4-core / 14 GB**). Do not publish from `macos-latest` (3-core / 7 GB). Absolute RPS still varies by OS kernel, TLS, and MsQuic packaging — compare **within a table**, not across Windows vs Linux vs macOS.
+## Why this comparison is fair
 
-Control arms: **nginx** (native C reverse-proxy ceiling; Linux is authoritative) and **YARP** (`Yarp.ReverseProxy`, managed .NET reverse proxy). Neither can MITM (no CONNECT / forged certs). FiddlerCore is not compared (commercial debugger license; not a throughput peer).
+These tables are a **same-harness, same-origin, same-runner-class** reverse-proxy comparison — not a blog-post bake-off of mismatched labs.
+
+- **Same load generator** (`dotnet-httpclient`), **same origin process**, **same warmup/measure** (2s / 8s), **same concurrency ramp** (8, 16, 32, 64), **median of 3** GitHub Actions repeats.
+- Every reverse arm is **three OS processes** (load generator + origin child + proxy child). Origin-direct omits the proxy. Peers are never in-process with the client.
+- **Same runner class per table**: `windows-latest` / `ubuntu-latest` / `macos-15-intel` (4-core-class). Laptop High-perf and `macos-latest` are never mixed into these tables.
+- **YARP** is `Yarp.ReverseProxy` **2.3.0** with equivalent TLS/ALPN. **nginx** uses streaming knobs (`keepalive 256`, buffering off). Linux nginx (mainline + `http_v3`) is authoritative; Windows nginx has no QUIC — those cells are *Not possible*, not losses.
+- **MITM is TWP-only** (CONNECT + forged certs). nginx/YARP cannot MITM; Lite/Full tables are overhead vs TWP reverse, not vs peers. There are **no MITM charts**.
+- The product signal is **TWP÷YARP** (gated ≥ **0.95** reverse) and **MITM÷Reverse** (Lite ≥ **0.65**, Full ≥ **0.55**), not absolute RPS. Absolute RPS moves with runner heat; ratios are the claim.
+- Product fast paths (session-lite, skip-poll, compressed relay) are **in-tree defaults** for interception-off reverse — the same class of work YARP/nginx do. The harness does not disable TWP safety that peers also skip, and it does not retune to pass gates ([PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/PERF-GATES.md)).
+- **MITM leaf keys** are a shared RSA/ECDSA pair per `CertificateManager` (one key for all forged leaves). That is an intentional RPS tradeoff: compromise of that material affects every host minted by that manager. Reverse/YARP/nginx paths do not mint leaves.
+
+Numbers below are **Release** measurements with [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe). FiddlerCore is not compared (commercial debugger license; not a throughput peer).
 
 For pooling knobs and certificate first-visit tuning, see [Performance and pooling](Home#performance-and-pooling). For the local cool A/B lab, laptop tables, and profiling notes, see [Performance Profiling](Performance-Profiling).
 
@@ -204,6 +215,8 @@ Median of **3 repeats** on `windows-latest` (4 vCPU / 16 GiB). Bare reverse 5×5
 
 **Load generators:** Reverse inbound H3 arms use **`dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`). nginx/Windows is same-OS only (no QUIC).
 
+![Windows reverse](images/rps-product-reverse-windows.png)
+
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
 | HTTP/1 · plain | HTTP/1 · plain | 🥇 **43148**<br><sub>(72 MiB / 48.4% CPU)</sub> | 🥇 **43148**<br><sub>(72 MiB / 48.4% CPU)</sub> | **27494**<br><sub>(123 MiB / 24.8% CPU)</sub> | **27494**<br><sub>(123 MiB / 24.8% CPU)</sub> | **37946**<br><sub>(88 MiB / 50.5% CPU)</sub> | **37946**<br><sub>(88 MiB / 50.5% CPU)</sub> |
@@ -236,9 +249,9 @@ Median of **3 repeats** on `windows-latest` (4 vCPU / 16 GiB). Bare reverse 5×5
 
 Same Client×Origin wires with interception on (`compare-product` [34126809918](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34126809918)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via `MitmCompressedRelayHelper`). nginx/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (same job). Completion gate: Lite ≥ **0.65×** and Full ≥ **0.55×** reverse sustain @ c=64 (median of 3 GHA runs); reverse TWP÷YARP ≥ **0.95×** (no nginx gate).
 
-**v1 append-only relay (2026-08-27):** Pre-fix H2→H2 Full÷Reverse was **0.13–0.16×** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ `df172718`: H2 plain→H2 plain Full **0.77–0.79×**, H3→H1 Full **0.91–0.93×**, all MITM arms ≥ **0.70×** on median of [33041445371](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33041445371), [33055267086](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055267086), [33055272140](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055272140).
+**v1 append-only relay (2026-08-27):** Pre-fix H2→H2 Full÷Reverse was **0.13–0.16×** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ `df172718`: H2 plain→H2 plain Full **0.77–0.79×**, H3→H1 Full **0.91–0.93×**. Current product floors are Lite ≥ **0.65×** and Full ≥ **0.55×** reverse (not a historical “all MITM ≥ 0.70×” claim).
 
-**v2 drop-only + non-unique append (2026-08-27):** `MitmStaticRebuildHelper` rebuilds static HPACK/QPACK after 1–4 unique header drops; trailing non-unique appends stay on compressed relay. @ `024bd68d`: all MITM arms ≥ **0.70×** on GHA median ([33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622), [33105885748](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33105885748) Linux; [33087085235](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087085235), [33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622) Windows). H2 plain→H2 plain Full **0.77–0.79×** (Win) / **0.78×** (Lin).
+**v2 drop-only + non-unique append (2026-08-27):** `MitmStaticRebuildHelper` rebuilds static HPACK/QPACK after 1–4 unique header drops; trailing non-unique appends stay on compressed relay. Same 0.65 / 0.55 floors apply to later GHA medians. H2 multiplexed Full is the tightest arm (often ~0.56–0.68×).
 
 | Client | Origin | Lite sustain | Full sustain | Lite÷Reverse | Full÷Reverse |
 |---|---|---:|---:|---:|---:|
@@ -274,6 +287,8 @@ Same Client×Origin wires with interception on (`compare-product` [34126809918](
 
 Median of **3 repeats** on `ubuntu-latest` (4 vCPU / 16 GiB). Bare reverse 5×5 @ `024bd68d` — `compare-product` [34126809918](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34126809918). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** nginx terminate peers use `keepalive 256` + streaming buffers. The RPS workflow installs nginx.org mainline (`http_v3_module`) and `libmsquic`. Prefer ratios over absolute RPS.
 
+![Linux reverse](images/rps-product-reverse-linux.png)
+
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
 | HTTP/1 · plain | HTTP/1 · plain | **45442**<br><sub>(82 MiB / 50% CPU)</sub> | **45442**<br><sub>(82 MiB / 50% CPU)</sub> | 🥇 **54602**<br><sub>(73 MiB / 39.5% CPU)</sub> | 🥇 **54602**<br><sub>(73 MiB / 39.5% CPU)</sub> | **40514**<br><sub>(117 MiB / 49.4% CPU)</sub> | **40514**<br><sub>(117 MiB / 49.4% CPU)</sub> |
@@ -302,13 +317,25 @@ Median of **3 repeats** on `ubuntu-latest` (4 vCPU / 16 GiB). Bare reverse 5×5 
 | HTTP/3 · QUIC | HTTP/2 · TLS | 🥇 **33722**<br><sub>(166 MiB / 51.6% CPU)</sub> | 🥇 **33722**<br><sub>(166 MiB / 51.6% CPU)</sub> | *Not possible (no H3 to H2)* | *Not possible (no H3 to H2)* | **30263**<br><sub>(203 MiB / 46.8% CPU)</sub> | **30263**<br><sub>(203 MiB / 46.8% CPU)</sub> |
 | HTTP/3 · QUIC | HTTP/3 · QUIC | 🥇 **25361**<br><sub>(165 MiB / 44.6% CPU)</sub> | 🥇 **25361**<br><sub>(165 MiB / 44.6% CPU)</sub> | *Not possible (no QUIC)* | *Not possible (no QUIC)* | **21111**<br><sub>(209 MiB / 45.8% CPU)</sub> | **21111**<br><sub>(209 MiB / 45.8% CPU)</sub> |
 
+### Tiny JSON reverse is nginx’s best case on Linux
+
+The tiny keep-alive GET (small JSON, no request body) is where a native C reverse proxy spends almost no time in user code. On Linux, nginx often leads **HTTP/1 → HTTP/1** (plain and TLS) because that path is a handful of `epoll` + `writev` loops with `keepalive 256` and buffering off — the same shape the harness uses for TWP and YARP.
+
+That is **not** a TWP regression and **not** the product gate. The gated signal is **TWP÷YARP ≥ 0.95** on every reverse wire. nginx *Not possible* cells (H2/H3 upstream, Windows QUIC) are omitted from charts rather than plotted as zero. Multiplexed H2→H2 is TWP’s best reverse case (session-lite + compressed relay); nginx cannot peer that wire.
+
+### Why isn’t HTTP/3 > HTTP/2 > HTTP/1 in raw RPS?
+
+Raw RPS on this probe is **not** “newer protocol = faster.” HTTP/3 (QUIC/UDP, TLS 1.3, QPACK) does more CPU per tiny GET than HTTP/2-over-TCP or HTTP/1 keep-alive. H3 shines under loss, HOL blocking, and connection migration — see the lossy / high-RTT tables — not on a lossless 4-core loopback microbenchmark.
+
+HTTP/2 multiplexed same-protocol reverse can beat HTTP/1 here because one TCP connection carries many streams and TWP’s compressed-relay path avoids per-stream session objects. HTTP/1 still wins some terminate-lite H1→H1 wires (especially vs nginx on Linux). Compare **within a protocol pair**, using TWP÷YARP, not a stacked H3 > H2 > H1 ranking.
+
 ### MITM (TWP only)
 
 Same Client×Origin wires with interception on (`compare-product` [34126809918](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34126809918)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via `MitmCompressedRelayHelper`). nginx/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (same job). Completion gate: Lite ≥ **0.65×** and Full ≥ **0.55×** reverse sustain @ c=64 (median of 3 GHA runs); reverse TWP÷YARP ≥ **0.95×** (no nginx gate).
 
-**v1 append-only relay (2026-08-27):** Pre-fix H2→H2 Full÷Reverse was **0.13–0.16×** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ `df172718`: H2 plain→H2 plain Full **0.77–0.79×**, H3→H1 Full **0.91–0.93×**, all MITM arms ≥ **0.70×** on median of [33041445371](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33041445371), [33055267086](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055267086), [33055272140](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055272140).
+**v1 append-only relay (2026-08-27):** Pre-fix H2→H2 Full÷Reverse was **0.13–0.16×** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ `df172718`: H2 plain→H2 plain Full **0.77–0.79×**, H3→H1 Full **0.91–0.93×**. Current product floors are Lite ≥ **0.65×** and Full ≥ **0.55×** reverse (not a historical “all MITM ≥ 0.70×” claim).
 
-**v2 drop-only + non-unique append (2026-08-27):** `MitmStaticRebuildHelper` rebuilds static HPACK/QPACK after 1–4 unique header drops; trailing non-unique appends stay on compressed relay. @ `024bd68d`: all MITM arms ≥ **0.70×** on GHA median ([33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622), [33105885748](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33105885748) Linux; [33087085235](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087085235), [33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622) Windows). H2 plain→H2 plain Full **0.77–0.79×** (Win) / **0.78×** (Lin).
+**v2 drop-only + non-unique append (2026-08-27):** `MitmStaticRebuildHelper` rebuilds static HPACK/QPACK after 1–4 unique header drops; trailing non-unique appends stay on compressed relay. Same 0.65 / 0.55 floors apply to later GHA medians. H2 multiplexed Full is the tightest arm (often ~0.56–0.68×).
 
 | Client | Origin | Lite sustain | Full sustain | Lite÷Reverse | Full÷Reverse |
 |---|---|---:|---:|---:|---:|
@@ -346,6 +373,8 @@ Numbers are filled by `tools/RpsLoadProbe/apply-wiki-paste.ps1` after `compare-p
 
 Median of **3 repeats** on `macos-15-intel` (4-core / 14 GB). Bare reverse 5×5 @ `024bd68d` — `compare-product` [34126809918](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34126809918). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP÷peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as `<br><sub>(MiB / CPU%)</sub>`. The RPS workflow installs Homebrew nginx (`http_v3_module`), Homebrew `libmsquic` (+ `DYLD_*`), and YARP. Do not publish from `macos-latest` (3-core / 7 GB).
 
+![macOS reverse](images/rps-product-reverse-macos.png)
+
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
 | HTTP/1 · plain | HTTP/1 · plain | 🥇 **15024**<br><sub>(84 MiB / 34.6% CPU)</sub> | 🥇 **15024**<br><sub>(84 MiB / 34.6% CPU)</sub> | **7464**<br><sub>(51 MiB / 13.8% CPU)</sub> | **7464**<br><sub>(51 MiB / 13.8% CPU)</sub> | **11453**<br><sub>(105 MiB / 35.2% CPU)</sub> | **11453**<br><sub>(105 MiB / 35.2% CPU)</sub> |
@@ -378,9 +407,9 @@ Median of **3 repeats** on `macos-15-intel` (4-core / 14 GB). Bare reverse 5×5 
 
 Same Client×Origin wires with interception on (`compare-product` [34126809918](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34126809918)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via `MitmCompressedRelayHelper`). nginx/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (same job). Completion gate: Lite ≥ **0.65×** and Full ≥ **0.55×** reverse sustain @ c=64 (median of 3 GHA runs); reverse TWP÷YARP ≥ **0.95×** (no nginx gate).
 
-**v1 append-only relay (2026-08-27):** Pre-fix H2→H2 Full÷Reverse was **0.13–0.16×** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ `df172718`: H2 plain→H2 plain Full **0.77–0.79×**, H3→H1 Full **0.91–0.93×**, all MITM arms ≥ **0.70×** on median of [33041445371](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33041445371), [33055267086](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055267086), [33055272140](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055272140).
+**v1 append-only relay (2026-08-27):** Pre-fix H2→H2 Full÷Reverse was **0.13–0.16×** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ `df172718`: H2 plain→H2 plain Full **0.77–0.79×**, H3→H1 Full **0.91–0.93×**. Current product floors are Lite ≥ **0.65×** and Full ≥ **0.55×** reverse (not a historical “all MITM ≥ 0.70×” claim).
 
-**v2 drop-only + non-unique append (2026-08-27):** `MitmStaticRebuildHelper` rebuilds static HPACK/QPACK after 1–4 unique header drops; trailing non-unique appends stay on compressed relay. @ `024bd68d`: all MITM arms ≥ **0.70×** on GHA median ([33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622), [33105885748](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33105885748) Linux; [33087085235](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087085235), [33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622) Windows). H2 plain→H2 plain Full **0.77–0.79×** (Win) / **0.78×** (Lin).
+**v2 drop-only + non-unique append (2026-08-27):** `MitmStaticRebuildHelper` rebuilds static HPACK/QPACK after 1–4 unique header drops; trailing non-unique appends stay on compressed relay. Same 0.65 / 0.55 floors apply to later GHA medians. H2 multiplexed Full is the tightest arm (often ~0.56–0.68×).
 
 | Client | Origin | Lite sustain | Full sustain | Lite÷Reverse | Full÷Reverse |
 |---|---|---:|---:|---:|---:|

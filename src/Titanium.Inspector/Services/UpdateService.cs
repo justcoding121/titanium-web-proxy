@@ -207,21 +207,7 @@ public sealed class UpdateService
         }
 
         if (remoteSemver == localSemver)
-        {
-            if (!string.IsNullOrEmpty(installedReleaseChannel)
-                && !installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            // Unknown or different beta tag at the same semver.
-            if (isBetaChannel && remoteText.Contains('-', StringComparison.Ordinal) && !tagMatches)
-            {
-                return true;
-            }
-
-            return false;
-        }
+            return ShouldOfferSameSemverSwitch(channelDisplay, installedReleaseChannel, isBetaChannel, remoteText, tagMatches);
 
         // remote < local: only intentional channel / known-origin switches.
         if (!string.IsNullOrEmpty(installedReleaseChannel)
@@ -231,6 +217,22 @@ public sealed class UpdateService
         }
 
         return false;
+    }
+
+    private static bool ShouldOfferSameSemverSwitch(
+        string channelDisplay,
+        string? installedReleaseChannel,
+        bool isBetaChannel,
+        string remoteText,
+        bool tagMatches)
+    {
+        if (!string.IsNullOrEmpty(installedReleaseChannel)
+            && !installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return isBetaChannel && remoteText.Contains('-', StringComparison.Ordinal) && !tagMatches;
     }
 
     /// <summary>Classify an offered install for dialog copy.</summary>
@@ -329,7 +331,7 @@ public sealed class UpdateService
             }
 
             UpdateApplyHelper.StartDetached(
-                Process.GetCurrentProcess().Id,
+                Environment.ProcessId,
                 check.ApplyKind,
                 packagePath,
                 installDir,
@@ -405,7 +407,7 @@ public sealed class UpdateService
         return arm ? "linux-arm64" : "linux-x64";
     }
 
-    public (UpdateApplyKind Kind, ManifestAsset? Asset) ResolveAsset(InspectorReleaseManifest manifest)
+    public static (UpdateApplyKind Kind, ManifestAsset? Asset) ResolveAsset(InspectorReleaseManifest manifest)
     {
         var assets = manifest.Products?.Inspector?.Assets;
         if (assets is null)
@@ -437,7 +439,7 @@ public sealed class UpdateService
         return (UpdateApplyKind.Zip, null);
     }
 
-    private async Task<InspectorReleaseManifest?> TryGetManifestAsync(
+    private static async Task<InspectorReleaseManifest?> TryGetManifestAsync(
         HttpClient http,
         string channelDisplay,
         CancellationToken cancellationToken)

@@ -277,14 +277,17 @@ public partial class MainWindow : Window
     {
         if (e.PropertyName == nameof(MainWindowViewModel.StatusAttentionTick))
         {
-            PulseStatusAttention();
+            _ = PulseStatusAttentionAsync();
         }
     }
 
-    private async void PulseStatusAttention()
+    private async Task PulseStatusAttentionAsync()
     {
-        _attentionCts?.Cancel();
-        _attentionCts?.Dispose();
+        if (_attentionCts is not null)
+        {
+            await _attentionCts.CancelAsync();
+            _attentionCts.Dispose();
+        }
         _attentionCts = new CancellationTokenSource();
         var token = _attentionCts.Token;
 
@@ -306,7 +309,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private static IBrush ResolveStatusAttentionBackground()
+    private static SolidColorBrush ResolveStatusAttentionBackground()
     {
         if (Application.Current?.TryGetResource(
                 "StatusFeedbackBusyBrush",

@@ -46,13 +46,21 @@ internal sealed class Http2StreamStatePool
         return new Http2StreamState(streamId, sessionArgs);
     }
 
+    internal int Retained => Volatile.Read(ref retained);
+
     public void Return(Http2StreamState state)
     {
         state.PrepareForPool();
-        if (Volatile.Read(ref retained) >= maxRetained)
-            return;
-
-        pool.Add(state);
-        Interlocked.Increment(ref retained);
+        while (true)
+        {
+            var current = Volatile.Read(ref retained);
+            if (current >= maxRetained)
+                return;
+            if (Interlocked.CompareExchange(ref retained, current + 1, current) == current)
+            {
+                pool.Add(state);
+                return;
+            }
+        }
     }
 }

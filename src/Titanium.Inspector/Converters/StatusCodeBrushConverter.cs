@@ -18,14 +18,19 @@ public sealed class StatusCodeBrushConverter : IValueConverter, IMultiValueConve
     private static readonly IBrush FallbackClientError = new SolidColorBrush(Color.Parse("#C19C00"));
     private static readonly IBrush FallbackServerError = new SolidColorBrush(Color.Parse("#C42B1C"));
 
+    private static int? AsNullableInt(object? value)
+    {
+        if (value is int i)
+            return i;
+        return value as int?;
+    }
+
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-        => ConvertStatusCode(value as int? ?? (value is int i ? i : null));
+        => ConvertStatusCode(AsNullableInt(value));
 
     object? IMultiValueConverter.Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
     {
-        var status = values is { Count: > 0 }
-            ? values[0] as int? ?? (values[0] is int i ? i : null)
-            : null;
+        var status = values is { Count: > 0 } ? AsNullableInt(values[0]) : null;
         _ = values is { Count: > 1 } ? values[1] : null;
         return ConvertStatusCode(status);
     }

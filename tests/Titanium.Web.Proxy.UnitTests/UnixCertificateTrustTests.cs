@@ -554,6 +554,20 @@ public class FirefoxCertificateTrustTests
     }
 
     [TestMethod]
+    public void IsFirefoxProcessRunning_DoesNotThrow()
+    {
+        var running = FirefoxCertificateTrust.IsFirefoxProcessRunning();
+        Assert.AreEqual(running, FirefoxCertificateTrust.IsFirefoxProcessRunning());
+    }
+
+    [TestMethod]
+    public void TryValidateFirefoxPoliciesJson_RejectsNonObjectRoot()
+    {
+        Assert.IsFalse(FirefoxCertificateTrust.TryValidateFirefoxPoliciesJson("[]", out var error));
+        StringAssert.Contains(error, "object");
+    }
+
+    [TestMethod]
     [TestCategory("E2E-Slow")]
     [TestCategory("E2E-UI-Linux")]
     public void TrustAndUntrustDefaultProfile_Linux_RoundTripsWhenFirefoxIdle()

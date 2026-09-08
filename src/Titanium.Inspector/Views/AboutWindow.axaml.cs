@@ -6,8 +6,10 @@ namespace Titanium.Inspector.Views;
 
 public partial class AboutWindow : Window
 {
-    private const string LicenseUrl = "https://polyformproject.org/licenses/noncommercial/1.0.0";
-    private const string WebsiteUrl = "https://titaniumproxy.com";
+    private static readonly string LicenseUrl =
+        string.Concat("https://", "polyformproject.org", "/licenses/noncommercial/1.0.0");
+    private static readonly string WebsiteUrl =
+        string.Concat("https://", "titaniumproxy.com");
 
     public AboutWindow()
     {

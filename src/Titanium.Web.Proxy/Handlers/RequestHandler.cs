@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -140,7 +141,7 @@ public partial class ProxyServer
                             headersAlreadyRead = true;
 
                             if (CanUseH1TerminateLite(endPoint, preparedRequest, Enable100ContinueBehaviour,
-                                    EnableWinAuth, hasCustomUpstreamProxyFunc: false))
+                                    EnableWinAuth, hasCustomUpstreamProxyFunc: false, connectionUpstream))
                             {
                                 try
                                 {
@@ -476,7 +477,7 @@ public partial class ProxyServer
                                 && sessionUpstream is not UpstreamHttpProtocol.Http3
                                 && endPoint is TransparentBaseProxyEndPoint mitmTerminateEp
                                 && CanUseH1TerminateLite(endPoint, request, Enable100ContinueBehaviour,
-                                    EnableWinAuth, GetCustomUpStreamProxyFunc != null)
+                                    EnableWinAuth, GetCustomUpStreamProxyFunc != null, sessionUpstream)
                                 && !request.IsBodyRead
                                 && !request.BodyAvailable
                                 && MitmCompressedRelayHelper.AllowsCompressedRelay(
@@ -826,6 +827,10 @@ public partial class ProxyServer
                     && !args.EnableWinAuth)))
         {
             TcpServerConnection? connection = serverConnection;
+            // Sticky keep-alive already served a request on this socket — do not remap mid-response
+            // IO into a retry (that would replay a consumed body). Just-rented (including skip-poll
+            // pool hits) may be dead; first-IO IOException/SocketException falls through to RetryPolicy.
+            var justRented = serverConnection == null;
             try
             {
                 connection ??= await TcpConnectionFactory.GetServerConnection(this, args, false,
@@ -838,6 +843,18 @@ public partial class ProxyServer
                 return new RetryResult(connection, null, true);
             }
             catch (RetryableServerConnectionException)
+            {
+                if (connection != null)
+                    await TcpConnectionFactory.Release(connection, true);
+                serverConnection = null;
+            }
+            catch (IOException) when (justRented)
+            {
+                if (connection != null)
+                    await TcpConnectionFactory.Release(connection, true);
+                serverConnection = null;
+            }
+            catch (SocketException) when (justRented)
             {
                 if (connection != null)
                     await TcpConnectionFactory.Release(connection, true);

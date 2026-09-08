@@ -72,13 +72,13 @@ public class StatusFeedbackAndMenuGatingTests
             var settings = new SettingsService(path);
             var registry = new SessionRegistry();
             var notifier = new RecordingStatusNotifier();
-            var vm = new MainWindowViewModel(
+            var vm = new MainWindowViewModel(new InspectorViewModelServices(
                 new SessionStreamBuffer(registry),
                 registry,
                 new UpdateService(settings),
                 settings,
                 new InterceptionService(new RecordingSystemProxyController()),
-                statusNotifier: notifier);
+                StatusNotifier: notifier));
 
             vm.SetStatus("Working…", StatusSeverity.Busy);
             Assert.AreEqual("Working…", vm.StatusText);
@@ -118,13 +118,13 @@ public class StatusFeedbackAndMenuGatingTests
             var settings = new SettingsService(path);
             var registry = new SessionRegistry();
             var notifier = new RecordingStatusNotifier();
-            var vm = new MainWindowViewModel(
+            var vm = new MainWindowViewModel(new InspectorViewModelServices(
                 new SessionStreamBuffer(registry),
                 registry,
                 new UpdateService(settings),
                 settings,
                 new InterceptionService(new RecordingSystemProxyController()),
-                statusNotifier: notifier);
+                StatusNotifier: notifier));
 
             vm.SeedSession(new SessionSnapshot { Id = 1, Method = "GET", Url = "https://a/" });
             await ExecuteAsync(vm.ClearSessionsCommand);
@@ -229,6 +229,40 @@ public class StatusFeedbackAndMenuGatingTests
     }
 
     [TestMethod]
+    public async Task SetTransientStatus_IsCancelled_WhenANewerStatusIsSet()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-transient-cancel-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(new SessionRegistry()),
+                new SessionRegistry(),
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()) { UseInMemoryTrustState = true });
+
+            vm.SetTransientStatus("Exported 1 sessions", StatusSeverity.Success, revertMs: 800);
+            Assert.AreEqual("Exported 1 sessions", vm.StatusText);
+
+            vm.SetStatus("Working…", StatusSeverity.Busy);
+            await Task.Delay(120);
+            Assert.AreEqual("Working…", vm.StatusText);
+            Assert.AreEqual(StatusSeverity.Busy, vm.StatusSeverity);
+
+            await Task.Delay(900);
+            Assert.AreEqual("Working…", vm.StatusText);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
     public async Task SetTransientStatus_UsesToastSeveritySeparateFromBar()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-toast-severity-" + Guid.NewGuid().ToString("N") + ".json");
@@ -241,13 +275,13 @@ public class StatusFeedbackAndMenuGatingTests
             {
                 UseInMemoryTrustState = true,
             };
-            var vm = new MainWindowViewModel(
+            var vm = new MainWindowViewModel(new InspectorViewModelServices(
                 new SessionStreamBuffer(registry),
                 registry,
                 new UpdateService(settings),
                 settings,
                 interception,
-                statusNotifier: notifier);
+                StatusNotifier: notifier));
 
             vm.BindPort = 0;
             vm.StartCaptureCommand.Execute(null);
@@ -309,13 +343,13 @@ public class StatusFeedbackAndMenuGatingTests
         {
             var settings = new SettingsService(path);
             var notifier = new RecordingStatusNotifier();
-            var vm = new MainWindowViewModel(
+            var vm = new MainWindowViewModel(new InspectorViewModelServices(
                 new SessionStreamBuffer(new SessionRegistry()),
                 new SessionRegistry(),
                 new UpdateService(settings),
                 settings,
                 new InterceptionService(new RecordingSystemProxyController()),
-                statusNotifier: notifier);
+                StatusNotifier: notifier));
 
             var cmd = new RelayCommand(
                 () => throw new InvalidOperationException("boom-test"),

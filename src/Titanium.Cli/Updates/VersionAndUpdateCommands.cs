@@ -13,6 +13,7 @@ namespace Titanium.Cli.Updates;
 
 internal static class VersionCommand
 {
+    internal const string StableChannel = "stable";
     public static async Task<int> ExecuteAsync(string[] args)
     {
         if (CliHelp.RequestsHelp(args.AsSpan(1)))
@@ -184,7 +185,7 @@ internal static class VersionCommand
     /// <summary>Parse --channel; returns false when the value is not stable/beta.</summary>
     internal static bool TryResolveChannel(string[] args, out string channel, out string? error)
     {
-        channel = "stable";
+        channel = StableChannel;
         error = null;
         string? raw = null;
         for (var i = 0; i < args.Length; i++)
@@ -196,8 +197,8 @@ internal static class VersionCommand
             }
         }
 
-        raw ??= (Environment.GetEnvironmentVariable("TITANIUM_UPDATE_CHANNEL") ?? "stable").Trim().ToLowerInvariant();
-        if (raw is not ("stable" or "beta"))
+        raw ??= (Environment.GetEnvironmentVariable("TITANIUM_UPDATE_CHANNEL") ?? StableChannel).Trim().ToLowerInvariant();
+        if (raw is not (StableChannel or "beta"))
         {
             error = $"Unknown channel '{raw}'. Use --channel stable or --channel beta.";
             return false;
@@ -223,11 +224,11 @@ internal static class VersionCommand
             }
         }
 
-        return (Environment.GetEnvironmentVariable("TITANIUM_UPDATE_CHANNEL") ?? "stable").Trim().ToLowerInvariant();
+        return (Environment.GetEnvironmentVariable("TITANIUM_UPDATE_CHANNEL") ?? StableChannel).Trim().ToLowerInvariant();
     }
 
     internal static string FormatChannel(string channel) =>
-        channel.Equals("beta", StringComparison.OrdinalIgnoreCase) ? "beta" : "stable";
+        channel.Equals("beta", StringComparison.OrdinalIgnoreCase) ? "beta" : StableChannel;
 
     internal static string StripPrerelease(string? version) => ReleaseVersion.StripPrerelease(version);
 
@@ -255,15 +256,14 @@ internal static class VersionCommand
 
         // Same semver: install when switching to beta tag or channel identity differs.
         var isBeta = channelDisplay.Equals("beta", StringComparison.OrdinalIgnoreCase);
-        if (isBeta && remoteText.Contains('-', StringComparison.Ordinal))
-        {
-            if (string.IsNullOrEmpty(installedReleaseTag)
+        if (isBeta
+            && remoteText.Contains('-', StringComparison.Ordinal)
+            && (string.IsNullOrEmpty(installedReleaseTag)
                 || !installedReleaseTag.Equals(remoteText, StringComparison.OrdinalIgnoreCase)
                 || string.IsNullOrEmpty(installedReleaseChannel)
-                || !installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
+                || !installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
         }
 
         return false;

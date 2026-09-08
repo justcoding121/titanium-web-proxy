@@ -742,6 +742,7 @@ internal sealed class Http2OriginConnection : IDisposable
 
             if (response.StatusCode is < 200 or >= 300)
             {
+                // Enqueue-only; hang protection is Http2FrameWriter.DisposeAsync drain timeout (2s+1s).
                 await ResetStreamAsync(streamId, Http2ErrorCode.Cancel, CancellationToken.None);
                 leaseOwned = false;
                 ReleaseTunnelBookkeeping(streamId, pending, gate);
@@ -765,6 +766,7 @@ internal sealed class Http2OriginConnection : IDisposable
                 tunnelEx);
             try
             {
+                // Enqueue-only RST; Writer.DisposeAsync already bounds drain on a dead origin.
                 await ResetStreamAsync(streamId, Http2ErrorCode.Cancel, CancellationToken.None);
             }
             catch (Exception resetEx)

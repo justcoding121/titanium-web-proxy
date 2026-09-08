@@ -23,6 +23,8 @@ public static class FirefoxCertificateTrust
     private const string WindowsPolicySubKey = @"Software\Policies\Mozilla\Firefox\Certificates";
     private const string ImportEnterpriseRootsValue = "ImportEnterpriseRoots";
     private const string EnterpriseRootsPrefName = "security.enterprise_roots.enabled";
+    private const string FirefoxProcessName = "firefox";
+    private const string MozillaDirName = ".mozilla";
     private static readonly Regex EnterpriseRootsUserPrefLine = new(
         @"^\s*user_pref\s*\(\s*""" + Regex.Escape(EnterpriseRootsPrefName) + @"""\s*,\s*(true|false)\s*\)\s*;\s*$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -199,9 +201,7 @@ public static class FirefoxCertificateTrust
         JsonObject root;
         try
         {
-            root = string.IsNullOrWhiteSpace(existingJson)
-                ? new JsonObject()
-                : JsonNode.Parse(existingJson) as JsonObject ?? new JsonObject();
+            root = ParsePoliciesRoot(existingJson);
         }
         catch (JsonException)
         {
@@ -239,34 +239,7 @@ public static class FirefoxCertificateTrust
         try
         {
             using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.ValueKind != JsonValueKind.Object)
-            {
-                error = "policies.json root must be an object";
-                return false;
-            }
-
-            if (!doc.RootElement.TryGetProperty("policies", out var policies) ||
-                policies.ValueKind != JsonValueKind.Object)
-            {
-                error = "missing policies object";
-                return false;
-            }
-
-            if (!policies.TryGetProperty("Certificates", out var certs) ||
-                certs.ValueKind != JsonValueKind.Object)
-            {
-                error = "missing policies.Certificates";
-                return false;
-            }
-
-            if (!certs.TryGetProperty("ImportEnterpriseRoots", out var flag) ||
-                flag.ValueKind != JsonValueKind.True)
-            {
-                error = "ImportEnterpriseRoots is not true";
-                return false;
-            }
-
-            return true;
+            return TryValidateFirefoxPoliciesDocument(doc.RootElement, out error);
         }
         catch (Exception ex)
         {
@@ -372,15 +345,62 @@ public static class FirefoxCertificateTrust
 
         if (OperatingSystem.IsLinux())
         {
-            yield return "/etc/firefox/policies/policies.json";
-            yield return "/usr/lib/firefox/distribution/policies.json";
-            yield return "/usr/lib64/firefox/distribution/policies.json";
-            yield return Path.Combine(home, ".mozilla", "firefox", "distribution", "policies.json");
-            yield return Path.Combine(home, "snap", "firefox", "common", ".mozilla", "firefox", "distribution",
-                "policies.json");
-            yield return Path.Combine(home, ".var", "app", "org.mozilla.firefox", ".mozilla", "firefox", "distribution",
-                "policies.json");
+            foreach (var path in GetLinuxFirefoxPoliciesJsonPaths(home))
+                yield return path;
         }
+    }
+
+    private static JsonObject ParsePoliciesRoot(string? existingJson)
+    {
+        if (string.IsNullOrWhiteSpace(existingJson))
+            return new JsonObject();
+
+        return JsonNode.Parse(existingJson) as JsonObject ?? new JsonObject();
+    }
+
+    private static bool TryValidateFirefoxPoliciesDocument(JsonElement root, out string? error)
+    {
+        error = null;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            error = "policies.json root must be an object";
+            return false;
+        }
+
+        if (!root.TryGetProperty("policies", out var policies) ||
+            policies.ValueKind != JsonValueKind.Object)
+        {
+            error = "missing policies object";
+            return false;
+        }
+
+        if (!policies.TryGetProperty("Certificates", out var certs) ||
+            certs.ValueKind != JsonValueKind.Object)
+        {
+            error = "missing policies.Certificates";
+            return false;
+        }
+
+        if (!certs.TryGetProperty("ImportEnterpriseRoots", out var flag) ||
+            flag.ValueKind != JsonValueKind.True)
+        {
+            error = "ImportEnterpriseRoots is not true";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static IEnumerable<string> GetLinuxFirefoxPoliciesJsonPaths(string home)
+    {
+        yield return "/etc/firefox/policies/policies.json";
+        yield return "/usr/lib/firefox/distribution/policies.json";
+        yield return "/usr/lib64/firefox/distribution/policies.json";
+        yield return Path.Combine(home, MozillaDirName, FirefoxProcessName, "distribution", "policies.json");
+        yield return Path.Combine(home, "snap", FirefoxProcessName, "common", MozillaDirName, FirefoxProcessName,
+            "distribution", "policies.json");
+        yield return Path.Combine(home, ".var", "app", "org.mozilla.firefox", MozillaDirName, FirefoxProcessName,
+            "distribution", "policies.json");
     }
 
     internal static void EnsureEnterpriseRootsUserPref(string profileDirectory) =>
@@ -546,13 +566,8 @@ public static class FirefoxCertificateTrust
     /// <summary>True when a firefox process is running (best-effort).</summary>
     public static bool IsFirefoxProcessRunning()
     {
-        foreach (var process in EnumerateFirefoxProcesses())
-        {
-            process.Dispose();
-            return true;
-        }
-
-        return false;
+        using var process = EnumerateFirefoxProcesses().FirstOrDefault();
+        return process is not null;
     }
 
     /// <summary>
@@ -652,8 +667,8 @@ public static class FirefoxCertificateTrust
             try
             {
                 var name = process.ProcessName;
-                match = name.Equals("firefox", StringComparison.OrdinalIgnoreCase)
-                        || name.Equals("firefox-bin", StringComparison.OrdinalIgnoreCase);
+                match = name.Equals(FirefoxProcessName, StringComparison.OrdinalIgnoreCase)
+                        || name.Equals(FirefoxProcessName + "-bin", StringComparison.OrdinalIgnoreCase);
             }
             catch
             {
@@ -806,12 +821,12 @@ public static class FirefoxCertificateTrust
         {
             return
             [
-                Path.Combine(home, ".mozilla", "firefox"),
+                Path.Combine(home, MozillaDirName, FirefoxProcessName),
                 // Ubuntu Snap default Firefox
-                Path.Combine(home, "snap", "firefox", "common", ".mozilla", "firefox"),
+                Path.Combine(home, "snap", FirefoxProcessName, "common", MozillaDirName, FirefoxProcessName),
                 // Flatpak (org.mozilla.Firefox / org.mozilla.firefox)
-                Path.Combine(home, ".var", "app", "org.mozilla.firefox", ".mozilla", "firefox"),
-                Path.Combine(home, ".var", "app", "org.mozilla.Firefox", ".mozilla", "firefox"),
+                Path.Combine(home, ".var", "app", "org.mozilla.firefox", MozillaDirName, FirefoxProcessName),
+                Path.Combine(home, ".var", "app", "org.mozilla.Firefox", MozillaDirName, FirefoxProcessName),
             ];
         }
 

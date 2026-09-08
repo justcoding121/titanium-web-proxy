@@ -108,12 +108,13 @@ public class InspectorPathPickerAndFactoryTests
             var picker = new ScriptedInspectorPathPicker();
 
             var vm = InspectorAppFactory.CreateViewModel(
-                settings,
-                buffer,
-                registry,
-                updates,
-                new InterceptionService(new RecordingSystemProxyController()),
-                pathPicker: picker);
+                new InspectorViewModelServices(
+                    buffer,
+                    registry,
+                    updates,
+                    settings,
+                    Interception: new InterceptionService(new RecordingSystemProxyController()),
+                    PathPicker: picker));
 
             Assert.AreSame(picker, vm.PathPicker);
         }

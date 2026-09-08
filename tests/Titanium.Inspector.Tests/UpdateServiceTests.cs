@@ -19,8 +19,6 @@ public class UpdateServiceTests
     [TestMethod]
     public void ResolveAsset_UsesRidZip_WhenMsiAssetAbsent()
     {
-        var settings = new SettingsService(Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json"));
-        var svc = new UpdateService(settings);
         var rid = UpdateService.SuggestRid();
         var manifest = new InspectorReleaseManifest
         {
@@ -41,7 +39,7 @@ public class UpdateServiceTests
             },
         };
 
-        var (kind, asset) = svc.ResolveAsset(manifest);
+        var (kind, asset) = UpdateService.ResolveAsset(manifest);
         Assert.IsNotNull(asset);
         Assert.AreEqual(UpdateApplyKind.Zip, kind);
         Assert.AreEqual("https://example.test/rid.zip", asset!.Url);

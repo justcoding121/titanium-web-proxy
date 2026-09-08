@@ -103,7 +103,7 @@ public sealed class InterceptionService : IDisposable
         _proxy?.CertificateManager.RootCertificateName ?? "Titanium Inspector Root Certificate";
 
     /// <summary>True when a Firefox profiles.ini is present on this machine.</summary>
-    public bool IsFirefoxProfilePresent => FirefoxCertificateTrust.IsFirefoxProfilePresent();
+    public static bool IsFirefoxProfilePresent => FirefoxCertificateTrust.IsFirefoxProfilePresent();
 
     /// <summary>True when the running proxy currently allows HTTP/2.</summary>
     public bool Http2Enabled { get; private set; } = true;

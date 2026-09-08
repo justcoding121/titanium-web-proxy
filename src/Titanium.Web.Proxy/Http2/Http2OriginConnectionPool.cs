@@ -561,7 +561,7 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
                 {
                     while (true)
                     {
-                        await Task.Delay(2000).ConfigureAwait(false);
+                        await Task.Delay(2000, CancellationToken.None).ConfigureAwait(false); // NOSONAR S8949 -- env-gated diag loop; no product CTS
                         Emit("periodic");
                     }
                 }

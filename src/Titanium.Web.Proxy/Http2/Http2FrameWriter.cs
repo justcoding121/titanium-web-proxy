@@ -199,14 +199,14 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
         channel.Writer.TryComplete();
         try
         {
-            await drainTask.WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None).ConfigureAwait(false);
+            await drainTask.WaitAsync(TimeSpan.FromSeconds(2), cts.Token).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
             try { await cts.CancelAsync(); }
             catch { /* ignore */ }
 
-            try { await drainTask.WaitAsync(TimeSpan.FromSeconds(1), CancellationToken.None).ConfigureAwait(false); }
+            try { await drainTask.WaitAsync(TimeSpan.FromSeconds(1), CancellationToken.None).ConfigureAwait(false); } // NOSONAR S8949 -- drain after Cancel; cts is already cancelled
             catch { /* drain may fault if socket already closed */ }
         }
         catch

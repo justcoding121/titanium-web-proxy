@@ -226,25 +226,23 @@ public static class SessionSearch
         }
 
         if (searching && visibleCount == 0 && totalCount > 0)
-        {
-            if (bodyHint is not null)
-            {
-                if (retentionEvictedTotal > 0)
-                {
-                    text += retentionEvictedTotal == 1
-                        ? " · 1 removed by retention"
-                        : $" · {retentionEvictedTotal} removed by retention";
-                }
-            }
-            else if (retentionEvictedTotal > 0)
-            {
-                text += retentionEvictedTotal == 1
-                    ? " · no matches in current list · 1 removed by retention"
-                    : $" · no matches in current list · {retentionEvictedTotal} removed by retention";
-            }
-        }
+            text += FormatEmptySearchRetentionHint(bodyHint, retentionEvictedTotal);
 
         return text;
+    }
+
+    private static string FormatEmptySearchRetentionHint(string? bodyHint, int retentionEvictedTotal)
+    {
+        if (retentionEvictedTotal <= 0)
+            return "";
+
+        var retention = retentionEvictedTotal == 1
+            ? "1 removed by retention"
+            : $"{retentionEvictedTotal} removed by retention";
+
+        return bodyHint is not null
+            ? $" · {retention}"
+            : $" · no matches in current list · {retention}";
     }
 
     private static List<(string Key, string Value)> Tokenize(string query)

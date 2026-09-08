@@ -37,9 +37,13 @@ public partial class ProxyServer
     ///     <see cref="ProxyMiddlewareContext"/> without a session bag; AfterResponse subscribers
     ///     still force the full session path via <see cref="NeedsHttpInterception"/>.
     /// </summary>
-    private bool CanUseH1TerminateLite(ProxyEndPoint endPoint, Request request, bool enable100Continue,
-        bool enableWinAuth, bool hasCustomUpstreamProxyFunc)
+    internal bool CanUseH1TerminateLite(ProxyEndPoint endPoint, Request request, bool enable100Continue,
+        bool enableWinAuth, bool hasCustomUpstreamProxyFunc, UpstreamHttpProtocol? upstreamProtocol = null)
     {
+        // This path only speaks HTTP/1.1 TCP to the origin. H2/H3 must not take lite (historical 100% errors).
+        if (upstreamProtocol is UpstreamHttpProtocol.Http2 or UpstreamHttpProtocol.Http3)
+            return false;
+
         if (enable100Continue || enableWinAuth || hasCustomUpstreamProxyFunc)
             return false;
 
