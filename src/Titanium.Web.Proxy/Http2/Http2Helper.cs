@@ -1344,7 +1344,15 @@ namespace Titanium.Web.Proxy.Http2
 
                     var request = (Request)headerRr;
                     request.HttpVersion = HttpVersion.Version20;
-                    request.Method = method.GetString();
+                    // Intern common methods — probe / browser GETs avoid per-stream GetString alloc.
+                    var methodSpan = method.Span;
+                    request.Method = methodSpan.SequenceEqual("GET"u8) ? "GET"
+                        : methodSpan.SequenceEqual("HEAD"u8) ? "HEAD"
+                        : methodSpan.SequenceEqual("POST"u8) ? "POST"
+                        : methodSpan.SequenceEqual("PUT"u8) ? "PUT"
+                        : methodSpan.SequenceEqual("DELETE"u8) ? "DELETE"
+                        : methodSpan.SequenceEqual("OPTIONS"u8) ? "OPTIONS"
+                        : method.GetString();
                     request.IsHttps = headerListener.Scheme == ProxyServer.UriSchemeHttps;
                     request.Authority = headerListener.Authority;
                     request.RequestUriString8 = path;
