@@ -1873,9 +1873,115 @@ namespace Titanium.Web.Proxy.Http2
                         var dispatchFrameHeader = new Http2FrameHeader { StreamId = hbStreamId };
                         byte[]? dispatchFrameHeaderBuffer = null;
 
-                        async Task DispatchResponseAfterHeadersAsync()
+                        // Prefer Task.CompletedTask when BeforeResponse + compressed relay finish inline
+                        // (same shape as StartMitmStaticRequestDispatch) — avoids per-stream async SM.
+                        Task StartMitmStaticResponseDispatch()
                         {
                             var handler = onBeforeRequestResponse(sessionArgs, streamContext);
+                            if (tcs == null && handler.IsCompletedSuccessfully)
+                            {
+                                var finalResponse = sessionArgs.HttpClient.Response;
+                                if (!ReferenceEquals(finalResponse, response))
+                                    return DispatchResponseAfterHeadersAsync(handler);
+
+                                var injectViaResp = !sessionArgs.IsFastPath && !sessionArgs.IsTransparent
+                                                    && !sessionArgs.IsSocks
+                                                    && !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym);
+
+                                if (forceStaticHpackTable
+                                    && connectionState.Streams.TryGetValue(hbStreamId, out var respRelay)
+                                    && respRelay.CapturedCompressedHeaders != null
+                                    && !finalResponse.IsBodyRead
+                                    && finalResponse.StatusCode == respRelay.CapturedStatusCode)
+                                {
+                                    respRelay.HeadersRelayBaseline = finalResponse.Headers.TakeMitmRelayBaseline();
+                                    byte[]? blockToRelay = null;
+                                    byte[]? appendSuffix = null;
+                                    if (!injectViaResp
+                                        && MitmCompressedRelayHelper.AllowsCompressedRelay(
+                                            respRelay.HeadersRelayBaseline.MutationCount,
+                                            finalResponse.Headers,
+                                            MitmCompressedRelayHelper.DefaultMaxAppendHeaders,
+                                            out _))
+                                    {
+                                        blockToRelay = respRelay.CapturedCompressedHeaders;
+                                    }
+                                    else if (TryPrepareMitmStaticHpackRelay(
+                                        respRelay.CapturedCompressedHeaders,
+                                        respRelay.HeadersRelayBaseline, finalResponse.Headers,
+                                        injectViaResp,
+                                        injectViaResp
+                                            ? $"{finalResponse.HttpVersion.Major}.{finalResponse.HttpVersion.Minor} {sessionArgs.Server.ViaHeaderPseudonym}"
+                                            : null,
+                                        out blockToRelay, out appendSuffix))
+                                    {
+                                        // Full append-only / drop-rebuild static finish
+                                    }
+
+                                    if (blockToRelay != null)
+                                    {
+                                        var relayTask = RelayCompressedHeaderBlockAsync(hbStreamId,
+                                            blockToRelay, endStreamFlag, appendSuffix);
+                                        if (relayTask.IsCompletedSuccessfully)
+                                        {
+                                            FinishMitmStaticResponseRelay(finalResponse, respRelay);
+                                            return Task.CompletedTask;
+                                        }
+
+                                        return CompleteMitmLiteResponseRelayAsync(relayTask, finalResponse, respRelay);
+                                    }
+                                }
+
+                                // Re-encode still sync when QueueSendHeader only enqueues.
+                                if (injectViaResp)
+                                {
+                                    ProxyServer.AddViaHeader(finalResponse.Headers, finalResponse.HttpVersion,
+                                        sessionArgs.Server.ViaHeaderPseudonym);
+                                }
+
+                                if (connectionState.Streams.TryGetValue(hbStreamId, out var clearResp))
+                                    clearResp.CapturedCompressedHeaders = null;
+                                QueueSendHeader(connectionState, towardServer: false, outputWriteLock,
+                                    remoteSettings, dispatchFrameHeader,
+                                    dispatchFrameHeaderBuffer ??= new byte[9], finalResponse,
+                                    endStreamFlag, output, isPromise);
+                                FinishMitmStaticResponseLocked(finalResponse);
+                                return Task.CompletedTask;
+                            }
+
+                            return DispatchResponseAfterHeadersAsync(handler);
+
+                            void FinishMitmStaticResponseRelay(Response finalResponse, Http2StreamState respRelay)
+                            {
+                                response.ReadHttp2BeforeHandlerTaskCompletionSource = null;
+                                respRelay.EnableResponseDataCompressedRelay();
+                                FinishMitmStaticResponseLocked(finalResponse);
+                            }
+
+                            void FinishMitmStaticResponseLocked(Response finalResponse)
+                            {
+                                if (finalResponse.StatusCode is >= 200 and < 300
+                                    && connectionState.Streams.TryGetValue(hbStreamId, out var tunnelEstState)
+                                    && tunnelEstState.IsExtendedConnect
+                                    && tunnelEstState.InboundTunnelChannel == null)
+                                {
+                                    tunnelEstState.ExtendedConnectEstablished = true;
+                                }
+
+                                finalResponse.Locked = true;
+                            }
+
+                            async Task CompleteMitmLiteResponseRelayAsync(Task relayTask, Response finalResponse,
+                                Http2StreamState respRelay)
+                            {
+                                await relayTask;
+                                FinishMitmStaticResponseRelay(finalResponse, respRelay);
+                            }
+                        }
+
+                        async Task DispatchResponseAfterHeadersAsync(Task? prestartedHandler = null)
+                        {
+                            var handler = prestartedHandler ?? onBeforeRequestResponse(sessionArgs, streamContext);
                             bool handlerCompleted;
                             if (tcs == null)
                             {
@@ -2021,7 +2127,7 @@ namespace Titanium.Web.Proxy.Http2
 
                         if (forceStaticHpackTable && httpInterceptionEnabled)
                         {
-                            var dispatchTask = DispatchResponseAfterHeadersAsync();
+                            var dispatchTask = StartMitmStaticResponseDispatch();
                             response.Http2BeforeHandlerTask = dispatchTask;
                             pendingSynthetics.Track(dispatchTask);
                             return false;
