@@ -657,6 +657,9 @@ internal static class Http3RequestStream
                     {
                         qpackContext?.InFlightMinAbsoluteIndex.TryRemove(stream.Id, out _);
                         streamState.ResponseClosed = true;
+                        // Match SendResponseAsync / origin bridge: Flush before FIN so Darwin MsQuic
+                        // actually emits the verbatim HEADERS(+DATA) frames (skip-Flush was banned).
+                        await stream.FlushAsync(streamToken);
                         stream.CompleteWrites();
                         return;
                     }
