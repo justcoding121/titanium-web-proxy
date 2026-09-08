@@ -199,7 +199,7 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
         channel.Writer.TryComplete();
         try
         {
-            await drainTask.WaitAsync(TimeSpan.FromSeconds(2), cts.Token).ConfigureAwait(false);
+            await drainTask.WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None).ConfigureAwait(false); // NOSONAR S8949 -- drain queued frames; cts.Token would abort if already cancelled
         }
         catch (TimeoutException)
         {

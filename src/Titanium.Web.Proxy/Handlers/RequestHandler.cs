@@ -394,28 +394,28 @@ public partial class ProxyServer
                                 PrepareRequestHeaders(request.Headers);
                                 // Do NOT overwrite Host here — any value set by the BeforeRequest handler
                                 // must be preserved.  The default was already filled in above.
+                            }
 
-                                // Via loop detection and injection (RFC 9110 §7.6.3).
-                                if (!fastPath && !string.IsNullOrEmpty(ViaHeaderPseudonym))
+                            // Via loop detection and injection (RFC 9110 §7.6.3). Explicit and reverse.
+                            if (!fastPath && !string.IsNullOrEmpty(ViaHeaderPseudonym))
+                            {
+                                if (HasLoopedVia(request.Headers, ViaHeaderPseudonym))
                                 {
-                                    if (HasLoopedVia(request.Headers, ViaHeaderPseudonym))
+                                    args.HttpClient.Response = new Response
                                     {
-                                        args.HttpClient.Response = new Response
-                                        {
-                                            HttpVersion = request.HttpVersion,
-                                            StatusCode = 508,
-                                            StatusDescription = "Loop Detected"
-                                        };
-                                        // Drain any request body first so the client stream is clean.
-                                        if (!(Enable100ContinueBehaviour && request.ExpectContinue))
-                                            await args.SyphonOutBodyAsync(true, requestToken);
-                                        await clientStream.WriteResponseAsync(args.HttpClient.Response, requestToken);
-                                        args.IsClientResponseCommitted = true;
-                                        return;
-                                    }
-
-                                    AddViaHeader(request.Headers, request.HttpVersion, ViaHeaderPseudonym);
+                                        HttpVersion = request.HttpVersion,
+                                        StatusCode = 508,
+                                        StatusDescription = "Loop Detected"
+                                    };
+                                    // Drain any request body first so the client stream is clean.
+                                    if (!(Enable100ContinueBehaviour && request.ExpectContinue))
+                                        await args.SyphonOutBodyAsync(true, requestToken);
+                                    await clientStream.WriteResponseAsync(args.HttpClient.Response, requestToken);
+                                    args.IsClientResponseCommitted = true;
+                                    return;
                                 }
+
+                                AddViaHeader(request.Headers, request.HttpVersion, ViaHeaderPseudonym);
                             }
 
                             // if win auth is enabled
