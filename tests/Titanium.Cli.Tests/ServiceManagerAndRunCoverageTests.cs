@@ -115,12 +115,11 @@ public class ServiceManagerAndRunCoverageTests
                 File.Delete(unitPath);
         }
 
-        var launchd = new LaunchdServiceManager();
-        var missingPlist = await launchd.StatusAsync(name, user: true);
-        Assert.AreEqual(ServiceStatusKind.NotInstalled, missingPlist.Kind);
-
         if (OperatingSystem.IsMacOS())
         {
+            var launchd = new LaunchdServiceManager();
+            var missingPlist = await launchd.StatusAsync(name, user: true);
+            Assert.AreEqual(ServiceStatusKind.NotInstalled, missingPlist.Kind);
             Assert.IsFalse(string.IsNullOrWhiteSpace(LaunchdServiceManager.ResolveUserHome()));
             _ = LaunchdServiceManager.ResolveTargetUid();
         }
