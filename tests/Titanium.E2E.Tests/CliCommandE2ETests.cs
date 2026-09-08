@@ -185,7 +185,7 @@ public class CliCommandE2ETests
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
             await Task.Delay(400);
             Assert.IsTrue(File.Exists(accessPath), "access log file missing");
-            var text = await File.ReadAllTextAsync(accessPath);
+            var text = await ReadSharedTextAsync(accessPath);
             StringAssert.Contains(text, "access-log");
             StringAssert.Contains(text, "\"method\"");
             StringAssert.Contains(text, "\"status\"");
@@ -533,5 +533,12 @@ public class CliCommandE2ETests
         File.WriteAllText(certPath, PemEncoding.WriteString("CERTIFICATE", cert.RawData));
         File.WriteAllText(keyPath, PemEncoding.WriteString("PRIVATE KEY", rsa.ExportPkcs8PrivateKey()));
         return (certPath, keyPath);
+    }
+
+    private static async Task<string> ReadSharedTextAsync(string path)
+    {
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new StreamReader(stream);
+        return await reader.ReadToEndAsync();
     }
 }
