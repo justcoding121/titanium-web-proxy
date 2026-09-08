@@ -59,7 +59,7 @@ public class GraphQlMatchingIntegrationTests
 
         using var miss = new StringContent("""{"operationName":"Other","query":"query Other { x }"}""", Encoding.UTF8, "application/json");
         // Unresolvable host: missed AutoResponder fails fast rather than hanging DNS.
-        await Assert.ThrowsExceptionAsync<HttpRequestException>(async () =>
+        await Assert.ThrowsExactlyAsync<HttpRequestException>(async () =>
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
             _ = await http.PostAsync("http://127.0.0.1:9/graphql", miss, cts.Token);

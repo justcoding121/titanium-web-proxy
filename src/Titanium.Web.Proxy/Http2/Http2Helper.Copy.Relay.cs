@@ -35,7 +35,7 @@ namespace Titanium.Web.Proxy.Http2
         // forward the compressed block unchanged (valid when both legs negotiated table size 0).
         // Same-transport / patched scheme + no origin pool: sync enqueue (no async SM).
         // Async only for multi-origin AssignStreamAsync or rare scheme-decode RST/GOAWAY.
-        private static void EnqueueRelayedHeaderBlock(
+        private static void EnqueueRelayedHeaderBlock( // NOSONAR S107 -- Relay frame fields stay explicit; no options bag on the compressed-relay path.
         Http2ConnectionState connectionState,
         bool isClient,
         Http2Settings remoteSettings,
@@ -56,7 +56,7 @@ namespace Titanium.Web.Proxy.Http2
                     framed.Array!, framed.Count);
         }
 
-        private static Task RelayCompressedHeaderBlockAsync(
+        private static Task RelayCompressedHeaderBlockAsync( // NOSONAR S107 -- Relay collaborators stay explicit to avoid allocating a context on the compressed-relay path.
         Http2ConnectionState connectionState,
         Stream input,
         Stream output,
@@ -118,7 +118,7 @@ namespace Titanium.Web.Proxy.Http2
             return Task.CompletedTask;
         }
 
-        private static async Task RelayCompressedWithOriginPoolAsync(
+        private static async Task RelayCompressedWithOriginPoolAsync( // NOSONAR S107 -- Origin-pool assignment args stay explicit.
         Http2ConnectionState connectionState,
         bool isClient,
         Http2Settings remoteSettings,
@@ -126,14 +126,14 @@ namespace Titanium.Web.Proxy.Http2
         int hbStreamId, ReadOnlyMemory<byte> blockToRelay,
         bool endStreamFlag, byte[]? appendSuffix)
         {
-            var assignment = await connectionState.OriginRelayPool!
+            var assignment = await connectionState.OriginRelayPool! // NOSONAR S8969 -- Caller already gated OriginRelayPool != null.
                 .AssignStreamAsync(hbStreamId, cancellationToken).ConfigureAwait(false);
             EnqueueRelayedHeaderBlock(connectionState, isClient, remoteSettings,
                 assignment.OriginStreamId, blockToRelay, endStreamFlag, appendSuffix,
                 assignment.Leg.Writer, assignment.Leg.WriteLock, assignment.Leg.Stream);
         }
 
-        private static async Task RelayCompressedWithSchemeDecodeAsync(
+        private static async Task RelayCompressedWithSchemeDecodeAsync( // NOSONAR S107 -- Scheme-decode fallback keeps the same explicit relay signature as the fast path.
         Http2ConnectionState connectionState,
         Stream input,
         Stream output,

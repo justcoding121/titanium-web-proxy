@@ -14,14 +14,54 @@ namespace Titanium.Web.Proxy.Helpers;
 ///     Firefox often ignores GNOME/KDE system proxy. Write manual <c>network.proxy.*</c> prefs into
 ///     the default profile and quit/relaunch so enable/disable takes effect immediately.
 /// </summary>
-internal static class LinuxFirefoxProxy
+internal static partial class LinuxFirefoxProxy
 {
     private const string BackupFileName = "firefox-proxy-backup.json";
     private const string MarkerPref = "titanium.inspector.proxy.managed";
+    private const string NetworkProxyTypeKey = "network.proxy.type";
+    private const string NetworkProxyHttpKey = "network.proxy.http";
+    private const string NetworkProxyHttpPortKey = "network.proxy.http_port";
+    private const string NetworkProxySslKey = "network.proxy.ssl";
+    private const string NetworkProxySslPortKey = "network.proxy.ssl_port";
+    private const string NetworkProxyShareKey = "network.proxy.share_proxy_settings";
+    private const string NetworkProxyBypassKey = "network.proxy.no_proxies_on";
 
-    private static readonly Regex UserPrefLine = new(
+    [GeneratedRegex(
         @"^\s*user_pref\(\s*""(?<key>[^""]+)""\s*,\s*(?<value>.+?)\s*\)\s*;\s*$",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        RegexOptions.CultureInvariant,
+        matchTimeoutMilliseconds: 250)]
+    private static partial Regex UserPrefLine();
+
+    private static readonly string[] ManagedProxyKeys =
+    [
+        NetworkProxyTypeKey,
+        NetworkProxyHttpKey,
+        NetworkProxyHttpPortKey,
+        NetworkProxySslKey,
+        NetworkProxySslPortKey,
+        NetworkProxyShareKey,
+        NetworkProxyBypassKey,
+        MarkerPref,
+    ];
+
+    private static readonly string[] SnapshotProxyKeys =
+    [
+        NetworkProxyTypeKey,
+        NetworkProxyHttpKey,
+        NetworkProxyHttpPortKey,
+        NetworkProxySslKey,
+        NetworkProxySslPortKey,
+        NetworkProxyShareKey,
+        NetworkProxyBypassKey,
+    ];
+
+    private static readonly string[] FirefoxProcessNames = ["firefox", "firefox-bin"];
+    private static readonly string[] FirefoxLaunchCandidates =
+    [
+        "/usr/bin/firefox",
+        "/usr/bin/firefox-esr",
+        "/snap/bin/firefox",
+    ];
 
     /// <summary>Applies manual proxy prefs; returns true when prefs were written.</summary>
     internal static bool Apply(string hostname, int port, string? winInetProxyOverride = null)
@@ -43,13 +83,13 @@ internal static class LinuxFirefoxProxy
             var bypass = BuildFirefoxBypassList(winInetProxyOverride);
             var managed = new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                ["network.proxy.type"] = "1",
-                ["network.proxy.http"] = JsonSerializer.Serialize(hostname),
-                ["network.proxy.http_port"] = port.ToString(),
-                ["network.proxy.ssl"] = JsonSerializer.Serialize(hostname),
-                ["network.proxy.ssl_port"] = port.ToString(),
-                ["network.proxy.share_proxy_settings"] = "true",
-                ["network.proxy.no_proxies_on"] = JsonSerializer.Serialize(bypass),
+                [NetworkProxyTypeKey] = "1",
+                [NetworkProxyHttpKey] = JsonSerializer.Serialize(hostname),
+                [NetworkProxyHttpPortKey] = port.ToString(),
+                [NetworkProxySslKey] = JsonSerializer.Serialize(hostname),
+                [NetworkProxySslPortKey] = port.ToString(),
+                [NetworkProxyShareKey] = "true",
+                [NetworkProxyBypassKey] = JsonSerializer.Serialize(bypass),
                 [MarkerPref] = "true",
             };
 
@@ -91,17 +131,7 @@ internal static class LinuxFirefoxProxy
             if (TryReadBackup(out var backup) && backup.Count > 0)
             {
                 // Remove managed keys then re-apply snapshotted values (missing key = delete).
-                var withoutManaged = RemoveKeys(existing,
-                [
-                    "network.proxy.type",
-                    "network.proxy.http",
-                    "network.proxy.http_port",
-                    "network.proxy.ssl",
-                    "network.proxy.ssl_port",
-                    "network.proxy.share_proxy_settings",
-                    "network.proxy.no_proxies_on",
-                    MarkerPref,
-                ]);
+                var withoutManaged = RemoveKeys(existing, ManagedProxyKeys);
                 restored = MergePrefs(withoutManaged, backup);
                 restored = RemoveKeys(restored, [MarkerPref]);
             }
@@ -110,7 +140,7 @@ internal static class LinuxFirefoxProxy
                 // No backup: fall back to system proxy settings.
                 restored = MergePrefs(RemoveKeys(existing, [MarkerPref]), new Dictionary<string, string>
                 {
-                    ["network.proxy.type"] = "5",
+                    [NetworkProxyTypeKey] = "5",
                 });
             }
 
@@ -152,7 +182,7 @@ internal static class LinuxFirefoxProxy
         string? line;
         while ((line = reader.ReadLine()) != null)
         {
-            var match = UserPrefLine.Match(line);
+            var match = UserPrefLine().Match(line);
             if (match.Success)
             {
                 var key = match.Groups["key"].Value;
@@ -188,7 +218,7 @@ internal static class LinuxFirefoxProxy
         string? line;
         while ((line = reader.ReadLine()) != null)
         {
-            var match = UserPrefLine.Match(line);
+            var match = UserPrefLine().Match(line);
             if (match.Success && remove.Contains(match.Groups["key"].Value))
                 continue;
             sb.AppendLine(line);
@@ -202,27 +232,17 @@ internal static class LinuxFirefoxProxy
         if (HasBackup())
             return;
 
-        var keys =
-            new[]
-            {
-                "network.proxy.type",
-                "network.proxy.http",
-                "network.proxy.http_port",
-                "network.proxy.ssl",
-                "network.proxy.ssl_port",
-                "network.proxy.share_proxy_settings",
-                "network.proxy.no_proxies_on",
-            };
+        var snapshotKeys = new HashSet<string>(SnapshotProxyKeys, StringComparer.Ordinal);
         var snapshot = new Dictionary<string, string>(StringComparer.Ordinal);
         using var reader = new StringReader(existingPrefs ?? string.Empty);
         string? line;
         while ((line = reader.ReadLine()) != null)
         {
-            var match = UserPrefLine.Match(line);
+            var match = UserPrefLine().Match(line);
             if (!match.Success)
                 continue;
             var key = match.Groups["key"].Value;
-            if (keys.Contains(key, StringComparer.Ordinal))
+            if (snapshotKeys.Contains(key))
                 snapshot[key] = match.Groups["value"].Value.Trim();
         }
 
@@ -300,86 +320,83 @@ internal static class LinuxFirefoxProxy
 
             // Force remaining firefox processes if still up (proxy switch must not leave stale prefs in memory).
             if (FirefoxCertificateTrust.IsFirefoxProcessRunning())
-            {
-                foreach (var name in new[] { "firefox", "firefox-bin" })
-                {
-                    try
-                    {
-                        foreach (var p in Process.GetProcessesByName(name))
-                        {
-                            try { p.Kill(entireProcessTree: true); } catch { /* ignore */ }
-                            finally { p.Dispose(); }
-                        }
-                    }
-                    catch
-                    {
-                        // ignore
-                    }
-                }
-            }
+                ForceKillFirefoxProcesses();
 
             var launch = ResolveFirefoxLaunch();
             if (string.IsNullOrEmpty(launch))
                 return;
 
-            var display = LinuxGraphicalSession.TryGetDisplay()
-                          ?? Environment.GetEnvironmentVariable("DISPLAY")
-                          ?? string.Empty;
-            var dbus = LinuxGraphicalSession.TryGetDbusSessionAddress()
-                       ?? Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS")
-                       ?? string.Empty;
-            if (!LinuxGraphicalSession.IsUsableDbusAddress(dbus))
-                dbus = string.Empty;
-            var xauth = Environment.GetEnvironmentVariable("XAUTHORITY") ?? string.Empty;
-
-            var psi = new ProcessStartInfo
-            {
-                FileName = launch,
-                Arguments = "--new-instance",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            if (!string.IsNullOrWhiteSpace(display))
-                psi.Environment["DISPLAY"] = display;
-            if (!string.IsNullOrWhiteSpace(dbus))
-                psi.Environment["DBUS_SESSION_BUS_ADDRESS"] = dbus;
-            if (!string.IsNullOrWhiteSpace(xauth))
-                psi.Environment["XAUTHORITY"] = xauth;
-
-            // Detach so Inspector SIGTERM does not kill the new Firefox.
-            var scriptPath = Path.Combine(Path.GetTempPath(),
-                $"titanium-firefox-relaunch-{Environment.ProcessId}-{Guid.NewGuid():N}.sh");
-            var script = $"""
-                #!/bin/bash
-                set +e
-                [ -n {ShellQuote(display)} ] && export DISPLAY={ShellQuote(display)}
-                [ -n {ShellQuote(dbus)} ] && export DBUS_SESSION_BUS_ADDRESS={ShellQuote(dbus)}
-                [ -n {ShellQuote(xauth)} ] && export XAUTHORITY={ShellQuote(xauth)}
-                {ShellQuote(launch)} --new-instance >/dev/null 2>&1 &
-                rm -f -- {ShellQuote(scriptPath)}
-                """;
             _ = enableProxy; // reserved for future proxy-specific launch flags
-            File.WriteAllText(scriptPath, script.Replace("\r\n", "\n"));
-            if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+            StartDetachedFirefox(launch);
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
+    private static void ForceKillFirefoxProcesses()
+    {
+        foreach (var name in FirefoxProcessNames)
+        {
+            try
             {
-                try
+                foreach (var p in Process.GetProcessesByName(name))
                 {
-                    File.SetUnixFileMode(scriptPath,
-                        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-                }
-                catch
-                {
-                    // best-effort
+                    try { p.Kill(entireProcessTree: true); } catch { /* ignore */ }
+                    finally { p.Dispose(); }
                 }
             }
-
-            Process.Start(new ProcessStartInfo
+            catch
             {
-                FileName = "/usr/bin/setsid",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                ArgumentList = { "-f", "/bin/bash", scriptPath },
-            })?.Dispose();
+                // ignore
+            }
+        }
+    }
+
+    private static void StartDetachedFirefox(string launch)
+    {
+        var display = LinuxGraphicalSession.TryGetDisplay()
+                      ?? Environment.GetEnvironmentVariable("DISPLAY")
+                      ?? string.Empty;
+        var dbus = LinuxGraphicalSession.TryGetDbusSessionAddress()
+                   ?? Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS")
+                   ?? string.Empty;
+        if (!LinuxGraphicalSession.IsUsableDbusAddress(dbus))
+            dbus = string.Empty;
+        var xauth = Environment.GetEnvironmentVariable("XAUTHORITY") ?? string.Empty;
+
+        var scriptPath = Path.Combine(Path.GetTempPath(),
+            $"titanium-firefox-relaunch-{Environment.ProcessId}-{Guid.NewGuid():N}.sh");
+        var script = $"""
+            #!/bin/bash
+            set +e
+            [ -n {ShellQuote(display)} ] && export DISPLAY={ShellQuote(display)}
+            [ -n {ShellQuote(dbus)} ] && export DBUS_SESSION_BUS_ADDRESS={ShellQuote(dbus)}
+            [ -n {ShellQuote(xauth)} ] && export XAUTHORITY={ShellQuote(xauth)}
+            {ShellQuote(launch)} --new-instance >/dev/null 2>&1 &
+            rm -f -- {ShellQuote(scriptPath)}
+            """;
+        File.WriteAllText(scriptPath, script.Replace("\r\n", "\n"));
+        TryMakeExecutable(scriptPath);
+
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = "/usr/bin/setsid",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            ArgumentList = { "-f", "/bin/bash", scriptPath },
+        })?.Dispose();
+    }
+
+    private static void TryMakeExecutable(string scriptPath)
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+            return;
+        try
+        {
+            File.SetUnixFileMode(scriptPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
         catch
         {
@@ -389,12 +406,7 @@ internal static class LinuxFirefoxProxy
 
     private static string? ResolveFirefoxLaunch()
     {
-        foreach (var candidate in new[]
-                 {
-                     "/usr/bin/firefox",
-                     "/usr/bin/firefox-esr",
-                     "/snap/bin/firefox",
-                 })
+        foreach (var candidate in FirefoxLaunchCandidates)
         {
             if (File.Exists(candidate))
                 return candidate;

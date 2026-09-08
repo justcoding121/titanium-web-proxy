@@ -77,4 +77,23 @@ public class BreakpointViewModelTests
         var action = await hit.WaitAsync().WaitAsync(TimeSpan.FromSeconds(2));
         Assert.AreEqual(BreakpointAction.Continue, action);
     }
+
+    [TestMethod]
+    public async Task BreakpointHit_WaitAsync_CanceledToken_Throws()
+    {
+        var hit = new BreakpointHit(new SessionSnapshot { Url = "https://cancel/" }, TimeSpan.FromHours(1));
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        await Assert.ThrowsExactlyAsync<TaskCanceledException>(() => hit.WaitAsync(cts.Token));
+    }
+
+    [TestMethod]
+    public async Task BreakpointHit_WaitAsync_CancelAfterStart_Throws()
+    {
+        var hit = new BreakpointHit(new SessionSnapshot { Url = "https://cancel-later/" }, TimeSpan.FromHours(1));
+        using var cts = new CancellationTokenSource();
+        var wait = hit.WaitAsync(cts.Token);
+        cts.Cancel();
+        await Assert.ThrowsExactlyAsync<TaskCanceledException>(() => wait);
+    }
 }

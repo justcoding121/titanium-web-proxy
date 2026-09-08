@@ -41,6 +41,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private string _sessionDiffText = "";
     private const string StatusReady = "Ready";
     private const string StartProxyFirstStatus = "Start the proxy first";
+    private const string SystemProxyRestoredStatus = "System proxy restored";
     private const string TrustingRootCaWindowsStatus =
         "Trusting root CA… if Windows asks Trusted Root Yes/No, choose Yes";
     private const string TrustingRootCaStatus = "Trusting root CA…";
@@ -702,10 +703,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             }
         }
 
-        if (last is not null)
-        {
-            throw last;
-        }
+        throw last ?? new InvalidOperationException("UI marshal failed after retries.");
     }
 
     private void LoadPlusPanels()
@@ -754,7 +752,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            await Task.Run(() => _interception.Stop()).ConfigureAwait(false);
+            await Task.Run(() => _interception.Stop(), _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
 
             await MarshalToUiAsync(() =>
             {
@@ -971,8 +969,6 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             ? $"Added {selected.Host} to OS bypass exclusions (new connections)"
             : $"Added {selected.Host} to tunnel-only exclusions (new connections)";
     }
-
-    private async Task OpenHttpsDecryptHostsAsync() => await OpenExcludedHostsAsync();
 
     private async Task ResetSettingsAsync()
     {
@@ -1400,7 +1396,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
             SetSystemProxyCore(false);
             SetOutcomeStatus(
-                SystemProxyDisabledStatusMessage(),
+                SystemProxyRestoredStatus,
                 StatusSeverity.Success);
         }
     }
@@ -2026,142 +2022,148 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        var sb = new StringBuilder();
-        if (_selected.IsTunnel && _selected.OpaqueReason != OpaqueTunnelReason.None)
-        {
-            sb.AppendLine(_selected.OpaqueReasonDisplay);
-            sb.AppendLine();
-        }
-
-        if (_selected.IsTranscoded)
-        {
-            sb.AppendLine("=== gRPC-JSON transcoded ===");
-            sb.Append("Client: ").Append(_selected.ClientMethod ?? _selected.Method)
-                .Append(' ').AppendLine(_selected.ClientPathAndQuery ?? _selected.Url);
-            if (!string.IsNullOrEmpty(_selected.ClientContentType))
-                sb.Append("Client Content-Type: ").AppendLine(_selected.ClientContentType);
-            sb.Append("Upstream: ").Append(_selected.UpstreamMethod ?? "POST")
-                .Append(' ').AppendLine(_selected.UpstreamPath ?? "");
-            if (!string.IsNullOrEmpty(_selected.UpstreamContentType))
-                sb.Append("Upstream Content-Type: ").AppendLine(_selected.UpstreamContentType);
-            sb.AppendLine();
-        }
-
-        sb.AppendLine("=== Request ===");
-        sb.AppendLine(_selected.RequestHeadersText);
-        if (!string.IsNullOrEmpty(_selected.ResponseHeadersText))
-        {
-            sb.AppendLine("=== Response ===");
-            sb.AppendLine(_selected.ResponseHeadersText);
-        }
-
-        var cookies = SessionInspectors.ParseCookies(SessionInspectors.ParseHeaderBlock(_selected.RequestHeadersText));
-        var query = SessionInspectors.ParseQuery(_selected.Url);
-        if (cookies.Count > 0)
-        {
-            sb.AppendLine("=== Cookies ===");
-            foreach (var c in cookies)
-            {
-                sb.Append(c.Key).Append('=').AppendLine(c.Value);
-            }
-        }
-
-        if (query.Count > 0)
-        {
-            sb.AppendLine("=== Query ===");
-            foreach (var q in query)
-            {
-                sb.Append(q.Key).Append('=').AppendLine(q.Value);
-            }
-        }
-
-        SelectedHeaders = sb.ToString();
+        SelectedHeaders = BuildSelectedHeadersText(_selected);
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedOpaqueHint)));
-
-        SelectedBody = SessionInspectors.FormatLabeledBody(
-            _selected.RequestHeadersText,
-            _selected.ResponseHeadersText,
-            _selected.RequestBodyText,
-            _selected.ResponseBodyText,
-            _selected.RequestBodyBytes,
-            _selected.ResponseBodyBytes);
-        if (_selected.IsTranscoded)
-        {
-            var prefix = new StringBuilder();
-            prefix.AppendLine("=== Client (JSON/REST) ===");
-            prefix.AppendLine(_selected.RequestBodyText ?? "(empty)");
-            prefix.AppendLine();
-            prefix.AppendLine("=== Client response (JSON) ===");
-            prefix.AppendLine(_selected.ResponseBodyText ?? "(empty)");
-            if (_selected.UpstreamRequestBodyBytes is { Length: > 0 } ||
-                _selected.UpstreamResponseBodyBytes is { Length: > 0 })
-            {
-                prefix.AppendLine();
-                prefix.AppendLine("=== Upstream gRPC frames (see Hex / frame preview) ===");
-                if (_selected.GrpcFrames is { Count: > 0 } gf)
-                {
-                    foreach (var f in gf)
-                        prefix.Append("frame compressed=").Append(f.Compressed)
-                            .Append(" len=").Append(f.Length)
-                            .Append(" preview=").AppendLine(f.HexPreview);
-                }
-            }
-
-            prefix.AppendLine();
-            prefix.Append(SelectedBody);
-            SelectedBody = prefix.ToString();
-        }
+        SelectedBody = BuildSelectedBodyText(_selected);
         SelectedHex = SessionInspectors.FormatLabeledHex(
             _selected.RequestHeadersText,
             _selected.ResponseHeadersText,
             _selected.RequestBodyBytes,
             _selected.ResponseBodyBytes);
+        SelectedFrames = BuildSelectedFramesText(_selected);
+        SelectedSseEvents = BuildSelectedSseText(_selected);
+        SelectedProtobufDecoded = BuildSelectedProtobufText(_selected);
+    }
 
-        if (_selected.WebSocketFrames is { Count: > 0 } frames)
+    private static string BuildSelectedHeadersText(SessionSnapshot selected)
+    {
+        var sb = new StringBuilder();
+        if (selected.IsTunnel && selected.OpaqueReason != OpaqueTunnelReason.None)
         {
-            var fb = new StringBuilder();
-            foreach (var f in frames)
+            sb.AppendLine(selected.OpaqueReasonDisplay);
+            sb.AppendLine();
+        }
+
+        if (selected.IsTranscoded)
+        {
+            sb.AppendLine("=== gRPC-JSON transcoded ===");
+            sb.Append("Client: ").Append(selected.ClientMethod ?? selected.Method)
+                .Append(' ').AppendLine(selected.ClientPathAndQuery ?? selected.Url);
+            if (!string.IsNullOrEmpty(selected.ClientContentType))
+                sb.Append("Client Content-Type: ").AppendLine(selected.ClientContentType);
+            sb.Append("Upstream: ").Append(selected.UpstreamMethod ?? "POST")
+                .Append(' ').AppendLine(selected.UpstreamPath ?? "");
+            if (!string.IsNullOrEmpty(selected.UpstreamContentType))
+                sb.Append("Upstream Content-Type: ").AppendLine(selected.UpstreamContentType);
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("=== Request ===");
+        sb.AppendLine(selected.RequestHeadersText);
+        if (!string.IsNullOrEmpty(selected.ResponseHeadersText))
+        {
+            sb.AppendLine("=== Response ===");
+            sb.AppendLine(selected.ResponseHeadersText);
+        }
+
+        AppendNameValues(sb, "=== Cookies ===",
+            SessionInspectors.ParseCookies(SessionInspectors.ParseHeaderBlock(selected.RequestHeadersText)));
+        AppendNameValues(sb, "=== Query ===", SessionInspectors.ParseQuery(selected.Url));
+        return sb.ToString();
+    }
+
+    private static void AppendNameValues(
+        StringBuilder sb, string heading, IReadOnlyDictionary<string, string> values)
+    {
+        if (values.Count == 0)
+            return;
+        sb.AppendLine(heading);
+        foreach (var pair in values)
+            sb.Append(pair.Key).Append('=').AppendLine(pair.Value);
+    }
+
+    private static string BuildSelectedBodyText(SessionSnapshot selected)
+    {
+        var body = SessionInspectors.FormatLabeledBody(
+            selected.RequestHeadersText,
+            selected.ResponseHeadersText,
+            selected.RequestBodyText,
+            selected.ResponseBodyText,
+            selected.RequestBodyBytes,
+            selected.ResponseBodyBytes);
+        if (!selected.IsTranscoded)
+            return body;
+
+        var prefix = new StringBuilder();
+        prefix.AppendLine("=== Client (JSON/REST) ===");
+        prefix.AppendLine(selected.RequestBodyText ?? "(empty)");
+        prefix.AppendLine();
+        prefix.AppendLine("=== Client response (JSON) ===");
+        prefix.AppendLine(selected.ResponseBodyText ?? "(empty)");
+        if (selected.UpstreamRequestBodyBytes is { Length: > 0 } ||
+            selected.UpstreamResponseBodyBytes is { Length: > 0 })
+        {
+            prefix.AppendLine();
+            prefix.AppendLine("=== Upstream gRPC frames (see Hex / frame preview) ===");
+            if (selected.GrpcFrames is { Count: > 0 } gf)
             {
-                fb.Append('[').Append(f.Direction).Append(' ').Append(f.Opcode).Append("] ")
-                    .AppendLine(f.PayloadPreview);
+                foreach (var f in gf)
+                    prefix.Append("frame compressed=").Append(f.Compressed)
+                        .Append(" len=").Append(f.Length)
+                        .Append(" preview=").AppendLine(f.HexPreview);
             }
-
-            SelectedFrames = fb.ToString();
         }
-        else
+
+        prefix.AppendLine();
+        prefix.Append(body);
+        return prefix.ToString();
+    }
+
+    private static string BuildSelectedFramesText(SessionSnapshot selected)
+    {
+        if (selected.WebSocketFrames is not { Count: > 0 } frames)
+            return selected.IsWebSocket ? "(no frames parsed)" : "";
+
+        var fb = new StringBuilder();
+        foreach (var f in frames)
         {
-            SelectedFrames = _selected.IsWebSocket ? "(no frames parsed)" : "";
+            fb.Append('[').Append(f.Direction).Append(' ').Append(f.Opcode).Append("] ")
+                .AppendLine(f.PayloadPreview);
         }
 
-        if (_selected.SseEvents is { Count: > 0 } sse)
+        return fb.ToString();
+    }
+
+    private static string BuildSelectedSseText(SessionSnapshot selected)
+    {
+        if (selected.SseEvents is not { Count: > 0 } sse)
+            return selected.IsServerSentEvents ? "(no events parsed)" : "";
+
+        var sseSb = new StringBuilder();
+        foreach (var ev in sse)
         {
-            var sseSb = new StringBuilder();
-            foreach (var ev in sse)
-            {
-                sseSb.Append("event=").Append(ev.Event);
-                if (!string.IsNullOrEmpty(ev.Id))
-                {
-                    sseSb.Append(" id=").Append(ev.Id);
-                }
-
-                sseSb.AppendLine();
-                sseSb.AppendLine(ev.Data);
-                sseSb.AppendLine("---");
-            }
-
-            SelectedSseEvents = sseSb.ToString();
+            sseSb.Append("event=").Append(ev.Event);
+            if (!string.IsNullOrEmpty(ev.Id))
+                sseSb.Append(" id=").Append(ev.Id);
+            sseSb.AppendLine();
+            sseSb.AppendLine(ev.Data);
+            sseSb.AppendLine("---");
         }
-        else
+
+        return sseSb.ToString();
+    }
+
+    private static string BuildSelectedProtobufText(SessionSnapshot selected)
+    {
+        if (!string.IsNullOrEmpty(selected.ProtobufDecodedText))
+            return selected.ProtobufDecodedText;
+        if (selected.IsGrpc || selected.IsTranscoded)
         {
-            SelectedSseEvents = _selected.IsServerSentEvents ? "(no events parsed)" : "";
+            return ProtobufMessageDecoder.DecodeWireFormat(
+                selected.UpstreamResponseBodyBytes ?? selected.UpstreamRequestBodyBytes ?? selected.ResponseBodyBytes);
         }
 
-        SelectedProtobufDecoded = !string.IsNullOrEmpty(_selected.ProtobufDecodedText)
-            ? _selected.ProtobufDecodedText
-            : (_selected.IsGrpc || _selected.IsTranscoded
-                ? ProtobufMessageDecoder.DecodeWireFormat(
-                    _selected.UpstreamResponseBodyBytes ?? _selected.UpstreamRequestBodyBytes ?? _selected.ResponseBodyBytes)
-                : "");
+        return "";
     }
 
 
@@ -2201,7 +2203,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _interception.DecryptHttps = _decryptHttps;
         _interception.ConfigureLogging(_settings.Current);
         SetStatus("Starting proxy…", StatusSeverity.Busy);
-        await _interception.StartAsync(address, BindPort);
+        await _interception.StartAsync(address, BindPort, _statusRevertCts?.Token ?? CancellationToken.None);
         if (_interception.BoundPort > 0)
         {
             BindPort = _interception.BoundPort;
@@ -2323,9 +2325,6 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         return "System proxy enabled";
     }
-
-    private static string SystemProxyDisabledStatusMessage() =>
-        "System proxy restored";
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? name = null)
     {

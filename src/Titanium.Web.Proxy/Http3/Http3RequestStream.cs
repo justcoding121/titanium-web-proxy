@@ -762,7 +762,7 @@ internal static class Http3RequestStream
     ///     After H3→H1 / H3→H3 MITM lite origin fetch: BeforeResponse, then static QPACK relay or
     ///     full re-encode. Never emits before the response handler (noop-safe).
     /// </summary>
-    private static async Task FinishMitmPreencodedResponseAsync(
+    private static async Task FinishMitmPreencodedResponseAsync( // NOSONAR S3776 -- MITM lite emit stays one method; splitting adds await/state-machine risk.
         SessionEventArgs sessionArgs,
         H3H2FastForward fwd,
         QuicStream stream,

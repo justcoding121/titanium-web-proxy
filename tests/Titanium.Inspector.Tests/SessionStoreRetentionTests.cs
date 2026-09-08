@@ -91,7 +91,7 @@ public class SessionStoreRetentionTests
             await store.FlushSpillAsync();
             Assert.IsTrue(File.Exists(Path.Combine(dir, "1.bin")));
 
-            await store.EnsureBodiesLoadedAsync(s1);
+            await store.EnsureBodiesLoadedAsync(s1, CancellationToken.None);
             Assert.IsFalse(s1.BodiesOnDisk);
             Assert.IsNotNull(s1.RequestBodyBytes);
             Assert.AreEqual(200, s1.RequestBodyBytes!.Length);
@@ -288,6 +288,71 @@ public class SessionStoreRetentionTests
                 File.Delete(path);
             }
         }
+    }
+
+    [TestMethod]
+    public async Task EnsureBodiesLoadedAsync_CanceledToken_Throws()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            using var store = new SessionStore(
+                new SessionStoreOptions
+                {
+                    MaxSessionsInMemory = 100,
+                    HotBodySessions = 1,
+                    SpillBodiesToDisk = true,
+                    MaxCaptureBytesInMemory = long.MaxValue,
+                    DiskCacheMaxBytes = 64L * 1024 * 1024,
+                    DiskCacheMaxAgeDays = 1,
+                },
+                dir);
+
+            var hot = MakeSession(1, 80);
+            var spilled = MakeSession(2, 80);
+            store.Add(hot);
+            store.Add(spilled);
+            store.Add(MakeSession(3, 80));
+            Assert.IsTrue(hot.BodiesOnDisk || spilled.BodiesOnDisk);
+
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+
+            var onDisk = hot.BodiesOnDisk ? hot : spilled;
+            await Assert.ThrowsExactlyAsync<OperationCanceledException>(
+                () => store.EnsureBodiesLoadedAsync(onDisk, cts.Token));
+            await Assert.ThrowsExactlyAsync<OperationCanceledException>(
+                () => store.EnsureBodiesLoadedAsync(new[] { hot, spilled }, cts.Token));
+
+            await store.EnsureBodiesLoadedAsync(new[] { MakeSession(9, 0) }, CancellationToken.None);
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [TestMethod]
+    public async Task EnsureBodiesLoadedAsync_InMemorySnapshot_IsNoOpEvenWhenCanceled()
+    {
+        using var store = new SessionStore(
+            new SessionStoreOptions
+            {
+                SpillBodiesToDisk = false,
+                MaxSessionsInMemory = 10,
+                HotBodySessions = 10,
+                MaxCaptureBytesInMemory = long.MaxValue,
+            });
+
+        var snap = MakeSession(1, 32);
+        store.Add(snap);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        // Bodies are already in memory — early return before the cancel check.
+        await store.EnsureBodiesLoadedAsync(snap, cts.Token);
+        Assert.IsFalse(snap.BodiesOnDisk);
+        await store.EnsureBodiesLoadedAsync(new[] { snap }, CancellationToken.None);
     }
 
     private static void TryDeleteDir(string dir)

@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using Google.Protobuf;
 using Google.Protobuf.Reflection;
@@ -11,7 +12,7 @@ namespace Titanium.Plus.Grpc;
 internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
 {
     private readonly HttpRuleRouter _router;
-    private readonly IReadOnlyDictionary<string, MessageDescriptor> _messagesByFullName;
+    private readonly Dictionary<string, MessageDescriptor> _messagesByFullName;
     private readonly bool _convertGrpcStatus;
     private readonly bool _ignoreUnknownQueryParameters;
     private readonly bool _preserveProtoFieldNames;
@@ -20,7 +21,7 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
 
     public GrpcJsonTranscoderImpl(
         HttpRuleRouter router,
-        IReadOnlyDictionary<string, MessageDescriptor> messagesByFullName,
+        Dictionary<string, MessageDescriptor> messagesByFullName,
         bool convertGrpcStatus,
         bool ignoreUnknownQueryParameters,
         bool preserveProtoFieldNames,
@@ -103,52 +104,10 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
     {
         var request = args.HttpClient.Request;
         var message = new DescriptorMessage(route.Method.InputType);
-        byte[]? clientRequestBody = null;
-
-        foreach (var (name, value) in pathVars)
-            SetScalarField(message, name, value);
-
-        var query = QueryString.Parse(pathAndQuery);
-        foreach (var (name, value) in query)
-        {
-            if (pathVars.ContainsKey(name))
-                continue;
-
-            var field = FindField(message.Descriptor, name);
-            if (field is null)
-            {
-                if (!_ignoreUnknownQueryParameters)
-                    throw new InvalidOperationException($"Unknown query parameter '{name}'.");
-                continue;
-            }
-
-            SetScalarField(message, field.Name, value);
-        }
-
-        if (!string.IsNullOrEmpty(route.Body))
-        {
-            var bodyBytes = await args.GetRequestBody(cancellationToken).ConfigureAwait(false);
-            clientRequestBody = bodyBytes;
-            var json = bodyBytes.Length == 0 ? "{}" : Encoding.UTF8.GetString(bodyBytes);
-            if (route.Body == "*")
-            {
-                var parsed = ProtoJson.Parse(json, route.Method.InputType, ignoreUnknown: true);
-                foreach (var (num, val) in parsed.Values)
-                {
-                    if (!message.Values.ContainsKey(num))
-                        message.Values[num] = val;
-                }
-            }
-            else
-            {
-                var field = FindField(message.Descriptor, route.Body)
-                            ?? throw new InvalidOperationException($"Unknown body field '{route.Body}'.");
-                if (field.FieldType is FieldType.Message or FieldType.Group)
-                    message.Values[field.FieldNumber] = ProtoJson.Parse(json, field.MessageType, ignoreUnknown: true);
-                else
-                    SetScalarField(message, field.Name, json.Trim().Trim('"'));
-            }
-        }
+        ApplyPathVariables(message, pathVars);
+        ApplyQueryParameters(message, pathAndQuery, pathVars);
+        var clientRequestBody = await ApplyRequestBodyAsync(args, route, message, cancellationToken)
+            .ConfigureAwait(false);
 
         var protoBytes = message.ToByteArray();
         if (_enableGzipCompression)
@@ -177,6 +136,69 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
         };
         args.UserData = mark;
 
+        ApplyGrpcUpstreamRequest(args, request, framed, upstreamPath);
+        return true;
+    }
+
+    private static void ApplyPathVariables(DescriptorMessage message, Dictionary<string, string> pathVars)
+    {
+        foreach (var (name, value) in pathVars)
+            SetScalarField(message, name, value);
+    }
+
+    private void ApplyQueryParameters(
+        DescriptorMessage message, string pathAndQuery, Dictionary<string, string> pathVars)
+    {
+        foreach (var (name, value) in QueryString.Parse(pathAndQuery))
+        {
+            if (pathVars.ContainsKey(name))
+                continue;
+
+            var field = FindField(message.Descriptor, name);
+            if (field is null)
+            {
+                if (!_ignoreUnknownQueryParameters)
+                    throw new InvalidOperationException($"Unknown query parameter '{name}'.");
+                continue;
+            }
+
+            SetScalarField(message, field.Name, value);
+        }
+    }
+
+    private static async ValueTask<byte[]?> ApplyRequestBodyAsync(
+        SessionEventArgs args,
+        TranscodedRoute route,
+        DescriptorMessage message,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(route.Body))
+            return null;
+
+        var bodyBytes = await args.GetRequestBody(cancellationToken).ConfigureAwait(false);
+        var json = bodyBytes.Length == 0 ? "{}" : Encoding.UTF8.GetString(bodyBytes);
+        if (route.Body == "*")
+        {
+            var parsed = ProtoJson.Parse(json, route.Method.InputType, ignoreUnknown: true);
+            foreach (var (num, val) in parsed.Values.Where(pair => !message.Values.ContainsKey(pair.Key)))
+                message.Values[num] = val;
+        }
+        else
+        {
+            var field = FindField(message.Descriptor, route.Body)
+                        ?? throw new InvalidOperationException($"Unknown body field '{route.Body}'.");
+            if (field.FieldType is FieldType.Message or FieldType.Group)
+                message.Values[field.FieldNumber] = ProtoJson.Parse(json, field.MessageType, ignoreUnknown: true);
+            else
+                SetScalarField(message, field.Name, json.Trim().Trim('"'));
+        }
+
+        return bodyBytes;
+    }
+
+    private static void ApplyGrpcUpstreamRequest(
+        SessionEventArgs args, Request request, byte[] framed, string upstreamPath)
+    {
         request.Method = "POST";
         RewritePath(request, upstreamPath);
         request.ContentType = "application/grpc";
@@ -185,7 +207,6 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
         // Do not force `te: trailers` here — on HTTP/1.1 that can leave body reads waiting for
         // trailers the origin may never send. HTTP/2 gRPC origins still accept unary POSTs.
         args.SetRequestBody(framed);
-        return true;
     }
 
     public ValueTask<bool> TryRewriteResponseAsync(object session, CancellationToken cancellationToken = default)
@@ -208,6 +229,26 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
         var body = await args.GetResponseBody(cancellationToken).ConfigureAwait(false);
         mark.UpstreamResponseBody = body;
 
+        var (grpcStatus, grpcMessage) = ReadGrpcStatusAndMessage(response);
+        ApplyJsonResponseHeaders(response, grpcStatus);
+
+        if (grpcStatus != 0)
+        {
+            var errorJson = _convertGrpcStatus
+                ? GrpcStatusMapping.FormatStatusJson(grpcStatus, grpcMessage)
+                : "{}";
+            args.SetResponseBody(Encoding.UTF8.GetBytes(errorJson));
+            args.Respond(args.HttpClient.Response);
+            return true;
+        }
+
+        args.SetResponseBody(Encoding.UTF8.GetBytes(FormatSuccessJson(body, mark)));
+        args.Respond(args.HttpClient.Response);
+        return true;
+    }
+
+    private static (int Status, string? Message) ReadGrpcStatusAndMessage(Response response)
+    {
         var grpcStatus = TryReadGrpcStatus(response);
         var grpcMessage = response.Headers.GetFirstHeader("grpc-status") is null
             ? response.TrailingHeaders?.GetFirstHeader("grpc-message")?.Value
@@ -216,77 +257,61 @@ internal sealed class GrpcJsonTranscoderImpl : IGrpcJsonTranscoder
 
         if (grpcStatus is null)
         {
-            // Trailers may only appear after body consume.
             grpcStatus = response.TrailingHeaders?.GetFirstHeader("grpc-status")?.Value is { } ts
                 && int.TryParse(ts, out var code)
                 ? code
                 : 0;
         }
 
-        var httpStatus = GrpcStatusMapping.ToHttpStatus(grpcStatus.Value);
-        response.StatusCode = httpStatus;
-        response.StatusDescription = httpStatus switch
-        {
-            200 => "OK",
-            400 => "Bad Request",
-            401 => "Unauthorized",
-            403 => "Forbidden",
-            404 => "Not Found",
-            409 => "Conflict",
-            429 => "Too Many Requests",
-            499 => "Client Closed Request",
-            501 => "Not Implemented",
-            503 => "Service Unavailable",
-            504 => "Gateway Timeout",
-            _ => "Error"
-        };
+        return (grpcStatus.Value, grpcMessage);
+    }
 
+    private static void ApplyJsonResponseHeaders(Response response, int grpcStatus)
+    {
+        var httpStatus = GrpcStatusMapping.ToHttpStatus(grpcStatus);
+        response.StatusCode = httpStatus;
+        response.StatusDescription = HttpStatusDescription(httpStatus);
         response.Headers.RemoveHeader("Content-Type");
         response.ContentType = "application/json";
         response.Headers.RemoveHeader("grpc-status");
         response.Headers.RemoveHeader("grpc-message");
+    }
 
-        if (grpcStatus.Value != 0)
-        {
-            var errorJson = _convertGrpcStatus
-                ? GrpcStatusMapping.FormatStatusJson(grpcStatus.Value, grpcMessage)
-                : "{}";
-            args.SetResponseBody(Encoding.UTF8.GetBytes(errorJson));
-            // Lock so HandleHttpSessionResponse writes our body instead of re-reading origin.
-            args.Respond(args.HttpClient.Response);
-            return true;
-        }
+    private static string HttpStatusDescription(int httpStatus) => httpStatus switch
+    {
+        200 => "OK",
+        400 => "Bad Request",
+        401 => "Unauthorized",
+        403 => "Forbidden",
+        404 => "Not Found",
+        409 => "Conflict",
+        429 => "Too Many Requests",
+        499 => "Client Closed Request",
+        501 => "Not Implemented",
+        503 => "Service Unavailable",
+        504 => "Gateway Timeout",
+        _ => "Error"
+    };
 
-        if (!TryReadAllFrames(body, out var payloads))
-        {
-            args.SetResponseBody("{}"u8.ToArray());
-            args.Respond(args.HttpClient.Response);
-            return true;
-        }
-
-        if (mark.OutputMessageType is null ||
+    private string FormatSuccessJson(byte[] body, GrpcJsonTranscodeSessionMark mark)
+    {
+        if (!TryReadAllFrames(body, out var payloads) ||
+            mark.OutputMessageType is null ||
             !_messagesByFullName.TryGetValue(mark.OutputMessageType, out var outputType))
         {
-            args.SetResponseBody("{}"u8.ToArray());
-            args.Respond(args.HttpClient.Response);
-            return true;
+            return "{}";
         }
 
-        var jsonParts = new List<string>(payloads.Count);
-        foreach (var payload in payloads)
+        var jsonParts = payloads.Select(payload =>
         {
             var message = new DescriptorMessage(outputType);
             message.MergeFrom(payload);
-            jsonParts.Add(ProtoJson.Format(message, _preserveProtoFieldNames, _alwaysPrintPrimitiveFields));
-        }
+            return ProtoJson.Format(message, _preserveProtoFieldNames, _alwaysPrintPrimitiveFields);
+        }).ToList();
 
-        // Server streaming (multiple frames) → JSON array; unary → single object.
-        var json = jsonParts.Count <= 1
+        return jsonParts.Count <= 1
             ? (jsonParts.Count == 0 ? "{}" : jsonParts[0])
             : "[" + string.Join(",", jsonParts) + "]";
-        args.SetResponseBody(Encoding.UTF8.GetBytes(json));
-        args.Respond(args.HttpClient.Response);
-        return true;
     }
 
     private bool TryReadAllFrames(byte[] body, out List<byte[]> payloads)

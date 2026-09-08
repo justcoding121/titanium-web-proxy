@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
@@ -40,9 +41,13 @@ public static class SystemProxyPacHelper
     {
         try
         {
+            var scutil = File.Exists("/usr/sbin/scutil") ? "/usr/sbin/scutil" : null;
+            if (scutil is null)
+                return false;
+
             var psi = new ProcessStartInfo
             {
-                FileName = "scutil",
+                FileName = scutil,
                 Arguments = "--proxy",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,

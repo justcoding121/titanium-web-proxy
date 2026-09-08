@@ -337,9 +337,13 @@ public class PrivilegePromptTests
     [TestMethod]
     public void IsDotnetHostPath_DetectsHost()
     {
-        Assert.IsTrue(ServiceDefaults.IsDotnetHostPath(@"C:\Program Files\dotnet\dotnet.exe"));
-        Assert.IsTrue(ServiceDefaults.IsDotnetHostPath("/usr/bin/dotnet"));
-        Assert.IsFalse(ServiceDefaults.IsDotnetHostPath(@"C:\tools\titanium.exe"));
+        Assert.IsTrue(ServiceDefaults.IsDotnetHostPath("dotnet"));
+        Assert.IsTrue(ServiceDefaults.IsDotnetHostPath("dotnet.exe"));
+        Assert.IsFalse(ServiceDefaults.IsDotnetHostPath("titanium.exe"));
+        if (OperatingSystem.IsWindows())
+            Assert.IsTrue(ServiceDefaults.IsDotnetHostPath(@"C:\Program Files\dotnet\dotnet.exe"));
+        else
+            Assert.IsTrue(ServiceDefaults.IsDotnetHostPath("/usr/bin/dotnet"));
     }
 
     [TestMethod]

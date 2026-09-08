@@ -65,7 +65,8 @@ public sealed class InspectorHarness : IAsyncDisposable
             };
 
             (ViewModel, Window) = InspectorAppFactory.CreateMainWindow(
-                settings, buffer, registry, updates, Interception, Dialogs, PathPicker);
+                new InspectorViewModelServices(
+                    buffer, registry, updates, settings, Interception, Dialogs, PathPicker));
 
             ViewModel.BindPort = 0;
             ViewModel.BindAddress = "127.0.0.1";

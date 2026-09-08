@@ -125,7 +125,7 @@ internal static class ServiceUnitFactory
         var doc = new XDocument(
             new XDeclaration("1.0", "UTF-8", null),
             new XDocumentType("plist", "-//Apple//DTD PLIST 1.0//EN",
-                "http://www.apple.com/DTDs/PropertyList-1.0.dtd", null),
+                "http://www.apple.com/DTDs/PropertyList-1.0.dtd", null), // NOSONAR S5332 -- Apple PLIST DTD public identifier is http.
             new XElement("plist",
                 new XAttribute("version", "1.0"),
                 dict));

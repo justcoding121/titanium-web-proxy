@@ -383,7 +383,7 @@ public class CliPlusE2ETests
             ["TITANIUM_PLUS_ALLOW_DEV_SECRET"] = "1",
         };
 
-        await Assert.ThrowsExceptionAsync<InvalidOperationException>(async () =>
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(async () =>
         {
             await harness.StartRunAsync(cfg, env);
         });

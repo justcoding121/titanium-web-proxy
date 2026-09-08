@@ -95,13 +95,35 @@ internal static class LinuxChromiumRelaunch
         {
             var scriptPath = Path.Combine(Path.GetTempPath(),
                 $"titanium-chrome-relaunch-{Environment.ProcessId}-{Guid.NewGuid():N}.sh");
-            var pidList = string.Join(" ", mains.Select(m => m.Pid));
-            var quitCmds = string.Join("\n", launchLines.Select(l =>
-                $"{ShellQuote(l)} --quit >/dev/null 2>&1 || true"));
-            var startCmds = string.Join("\n", launchLines.Select(l =>
-                $"# shellcheck disable=SC2086\n{ShellQuote(l)} $ARGS >/dev/null 2>&1 &"));
+            var script = BuildRelaunchScript(scriptPath, mains, launchLines, args, display, dbus, xauth, enableProxy);
+            File.WriteAllText(scriptPath, script.Replace("\r\n", "\n"));
+            TryMakeExecutable(scriptPath);
+            StartDetachedScript(scriptPath);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
-            var script = $$"""
+    private static string BuildRelaunchScript(
+        string scriptPath,
+        List<(int Pid, BrowserFamily Family)> mains,
+        List<string> launchLines,
+        string args,
+        string display,
+        string dbus,
+        string xauth,
+        bool enableProxy)
+    {
+        var pidList = string.Join(" ", mains.Select(m => m.Pid));
+        var quitCmds = string.Join("\n", launchLines.Select(l =>
+            $"{ShellQuote(l)} --quit >/dev/null 2>&1 || true"));
+        var startCmds = string.Join("\n", launchLines.Select(l =>
+            $"# shellcheck disable=SC2086\n{ShellQuote(l)} $ARGS >/dev/null 2>&1 &"));
+
+        return $$"""
                 #!/bin/bash
                 set +e
                 ARGS={{ShellQuote(args)}}
@@ -151,34 +173,32 @@ internal static class LinuxChromiumRelaunch
                 fi
                 rm -f -- {{ShellQuote(scriptPath)}}
                 """;
-            File.WriteAllText(scriptPath, script.Replace("\r\n", "\n"));
-            if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                try
-                {
-                    File.SetUnixFileMode(scriptPath,
-                        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-                }
-                catch
-                {
-                    // best-effort
-                }
-            }
+    }
 
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = "/usr/bin/setsid",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                ArgumentList = { "-f", "/bin/bash", scriptPath },
-            })?.Dispose();
-
-            return true;
+    private static void TryMakeExecutable(string scriptPath)
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+            return;
+        try
+        {
+            File.SetUnixFileMode(scriptPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
         catch
         {
-            return false;
+            // best-effort
         }
+    }
+
+    private static void StartDetachedScript(string scriptPath)
+    {
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = "/usr/bin/setsid",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            ArgumentList = { "-f", "/bin/bash", scriptPath },
+        })?.Dispose();
     }
 
     /// <summary>Test hook: resolve launch binary for a running executable path.</summary>

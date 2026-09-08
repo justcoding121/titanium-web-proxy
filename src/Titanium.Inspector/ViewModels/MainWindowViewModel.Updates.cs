@@ -33,7 +33,7 @@ public sealed partial class MainWindowViewModel
     {
         var channel = _updates.ChannelDisplayName;
         SetStatus($"Checking for updates ({channel})…", StatusSeverity.Busy);
-        var result = await _updates.CheckAsync();
+        var result = await _updates.CheckAsync(_statusRevertCts?.Token ?? CancellationToken.None);
         if (!result.UpdateAvailable || string.IsNullOrEmpty(result.AssetUrl))
         {
             var upToDate = result.Message.Contains("up to date", StringComparison.OrdinalIgnoreCase);
@@ -69,7 +69,7 @@ public sealed partial class MainWindowViewModel
         }
 
         SetStatus("Downloading update…", StatusSeverity.Busy);
-        var (ok, message) = await _updates.DownloadAndStartApplyAsync(result);
+        var (ok, message) = await _updates.DownloadAndStartApplyAsync(result, _statusRevertCts?.Token ?? CancellationToken.None);
         SetOutcomeStatus(message, ok ? StatusSeverity.Success : StatusSeverity.Error, toastImportant: true);
         if (!ok)
         {
@@ -96,10 +96,11 @@ public sealed partial class MainWindowViewModel
         }
 
         SetStatus("Replaying…", StatusSeverity.Busy);
-        await _store.EnsureBodiesLoadedAsync(SelectedSession).ConfigureAwait(false);
+        await _store.EnsureBodiesLoadedAsync(SelectedSession, _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
         var result = await ReplayService.ReplayAsync(
             SelectedSession,
-            ignoreServerCertificateErrors: _interception.IgnoreServerCertificateErrors).ConfigureAwait(false);
+            ignoreServerCertificateErrors: _interception.IgnoreServerCertificateErrors,
+            cancellationToken: _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
         await MarshalToUiAsync(() =>
         {
             SetOutcomeStatus(
@@ -134,7 +135,8 @@ public sealed partial class MainWindowViewModel
             editedMethod: ComposerMethod,
             editedBody: ComposerBody,
             editedHeaders: ComposerHeaders,
-            ignoreServerCertificateErrors: _interception.IgnoreServerCertificateErrors);
+            ignoreServerCertificateErrors: _interception.IgnoreServerCertificateErrors,
+            cancellationToken: _statusRevertCts?.Token ?? CancellationToken.None);
 
         if (!result.Ok)
         {

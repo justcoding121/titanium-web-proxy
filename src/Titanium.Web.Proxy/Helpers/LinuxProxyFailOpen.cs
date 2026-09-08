@@ -24,19 +24,23 @@ internal static class LinuxProxyFailOpen
                 return;
             if (int.TryParse(File.ReadAllText(pidPath).Trim(), out var pid) && pid > 1)
             {
-                try
+                var kill = UnixProcessPath.Resolve("/bin/kill", "/usr/bin/kill");
+                if (kill is not null)
                 {
-                    Process.Start(new ProcessStartInfo
+                    try
                     {
-                        FileName = "kill",
-                        Arguments = $"-TERM {pid}",
-                        UseShellExecute = false,
-                        CreateNoWindow = true,
-                    })?.WaitForExit(2000);
-                }
-                catch
-                {
-                    // ignore
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = kill,
+                            Arguments = $"-TERM {pid}",
+                            UseShellExecute = false,
+                            CreateNoWindow = true,
+                        })?.WaitForExit(2000);
+                    }
+                    catch
+                    {
+                        // ignore
+                    }
                 }
             }
 
@@ -60,9 +64,13 @@ internal static class LinuxProxyFailOpen
             var script = Path.Combine(dir, ScriptFileName);
             File.WriteAllText(script, FailOpenScript);
             var pidPath = Path.Combine(dir, PidFileName);
+            var python = UnixProcessPath.Resolve("/usr/bin/python3", "/usr/local/bin/python3");
+            if (python is null)
+                return;
+
             var psi = new ProcessStartInfo
             {
-                FileName = "python3",
+                FileName = python,
                 Arguments = Quote(script) + " " + Quote(hostname) + " " + port + " " + Quote(pidPath),
                 UseShellExecute = false,
                 CreateNoWindow = true,

@@ -119,47 +119,18 @@ public sealed partial class MainWindowViewModel
 
             if (result.Kind is CertificateOsTrustKind.CertutilMissing or CertificateOsTrustKind.HomebrewMissing)
             {
-                var choice = await AwaitCancellableAsync(_dialogs.ShowTrustRecoveryAsync(owner, result));
-                if (choice == TrustRecoveryChoice.Primary &&
-                    result.Kind == CertificateOsTrustKind.CertutilMissing &&
-                    (OperatingSystem.IsLinux() || result.BrewAvailable))
-                {
-                    SetStatus("Installing browser certificate tools…", StatusSeverity.Busy);
-                    var install = _interception.InstallNssToolsAndRetryTrust();
-                    if (!install.Succeeded && install.Kind != CertificateOsTrustKind.Succeeded)
-                    {
-                        // InstallNssTools also retries OS NSS; for Firefox we only needed certutil.
-                        // Continue to retry TrustFirefox if certutil appeared.
-                    }
-
+                var recovered = await TryRecoverFirefoxCertutilAsync(owner, result);
+                if (recovered)
                     continue;
-                }
-
-                if (choice == TrustRecoveryChoice.Secondary ||
-                    (choice == TrustRecoveryChoice.Primary && result.Kind == CertificateOsTrustKind.HomebrewMissing))
-                {
-                    await ExportCaAsync();
-                }
-
                 return result;
             }
 
-            if (result.Message.Contains("Quit Firefox", StringComparison.OrdinalIgnoreCase) ||
-                result.Message.Contains("running", StringComparison.OrdinalIgnoreCase))
+            if (IsFirefoxRunningTrustError(result))
             {
-                if (!await AwaitCancellableAsync(_dialogs.ConfirmQuitFirefoxForTrustAsync(owner)))
-                    return CertificateOsTrustResult.Fail(CertificateOsTrustKind.Cancelled, "Firefox trust cancelled");
-
-                SetStatus("Quitting Firefox…", StatusSeverity.Busy);
-                if (!FirefoxCertificateTrust.TryRequestFirefoxQuit())
-                {
-                    return CertificateOsTrustResult.Fail(
-                        CertificateOsTrustKind.Failed,
-                        "Firefox is still running — close it fully, then retry Trust CA in Firefox");
-                }
-
-                SetStatus("Updating Firefox trust…", StatusSeverity.Busy);
-                continue;
+                var quitOk = await TryQuitFirefoxForTrustAsync(owner);
+                if (quitOk is null)
+                    continue;
+                return quitOk;
             }
 
             return result;
@@ -167,6 +138,48 @@ public sealed partial class MainWindowViewModel
 
         return CertificateOsTrustResult.Fail(
             CertificateOsTrustKind.Failed, "Firefox trust failed after retries");
+    }
+
+    private async Task<bool> TryRecoverFirefoxCertutilAsync(Window? owner, CertificateOsTrustResult result)
+    {
+        var choice = await AwaitCancellableAsync(_dialogs.ShowTrustRecoveryAsync(owner, result));
+        if (choice == TrustRecoveryChoice.Primary &&
+            result.Kind == CertificateOsTrustKind.CertutilMissing &&
+            (OperatingSystem.IsLinux() || result.BrewAvailable))
+        {
+            SetStatus("Installing browser certificate tools…", StatusSeverity.Busy);
+            _ = _interception.InstallNssToolsAndRetryTrust();
+            return true;
+        }
+
+        if (choice == TrustRecoveryChoice.Secondary ||
+            (choice == TrustRecoveryChoice.Primary && result.Kind == CertificateOsTrustKind.HomebrewMissing))
+        {
+            await ExportCaAsync();
+        }
+
+        return false;
+    }
+
+    private static bool IsFirefoxRunningTrustError(CertificateOsTrustResult result) =>
+        result.Message.Contains("Quit Firefox", StringComparison.OrdinalIgnoreCase) ||
+        result.Message.Contains("running", StringComparison.OrdinalIgnoreCase);
+
+    private async Task<CertificateOsTrustResult?> TryQuitFirefoxForTrustAsync(Window? owner)
+    {
+        if (!await AwaitCancellableAsync(_dialogs.ConfirmQuitFirefoxForTrustAsync(owner)))
+            return CertificateOsTrustResult.Fail(CertificateOsTrustKind.Cancelled, "Firefox trust cancelled");
+
+        SetStatus("Quitting Firefox…", StatusSeverity.Busy);
+        if (!FirefoxCertificateTrust.TryRequestFirefoxQuit())
+        {
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed,
+                "Firefox is still running — close it fully, then retry Trust CA in Firefox");
+        }
+
+        SetStatus("Updating Firefox trust…", StatusSeverity.Busy);
+        return null;
     }
     /// <summary>
     /// Attempts user OS trust and adaptive recovery (certutil install / Keychain / elevate).
@@ -192,75 +205,18 @@ public sealed partial class MainWindowViewModel
                 return true;
 
             if (result?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
-            {
-                // Busy status lives only inside the wait dialog — not the main window chrome.
-                var wait = await WaitForMacSslTrustAsync(owner);
-                // Final verify in case trust was saved just as the dialog closed.
-                if (wait == MacSslTrustWaitResult.Trusted || _interception.VerifyOsUserSslTrust())
-                    return true;
-
-                _interception.SetLastOsTrustCancelled();
-                if (wait == MacSslTrustWaitResult.NotSavedYet || _interception.IsRootInLoginKeychain())
-                    SetGuardStatus(OsTrustUxCopy.MacSslTrustNotSavedYet);
-                return false;
-            }
+                return await TryCompleteMacManualTrustAsync(owner);
 
             if (!ok)
             {
-                var choice = await AwaitCancellableAsync(_dialogs.ShowTrustRecoveryAsync(owner, result));
-                if (choice == TrustRecoveryChoice.Cancel)
-                {
-                    _interception.SetLastOsTrustCancelled();
+                var recovered = await TryRecoverFailedOsTrustAsync(owner, result);
+                if (recovered == true)
+                    return true;
+                if (recovered == false)
                     return false;
-                }
-
-                if (result?.Kind == CertificateOsTrustKind.CertutilMissing &&
-                    (result.BrewAvailable || OperatingSystem.IsLinux()))
-                {
-                    if (choice == TrustRecoveryChoice.Primary)
-                    {
-                        SetStatus("Installing browser certificate tools…", StatusSeverity.Busy);
-                        var install = _interception.InstallNssToolsAndRetryTrust();
-                        if (install.Succeeded ||
-                            install.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
-                        {
-                            ok = install.Succeeded ||
-                                 install.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
-                            if (install.Succeeded)
-                                return true;
-                            continue;
-                        }
-
-                        SetOutcomeStatus(install.Message, StatusSeverity.Error);
-                        continue;
-                    }
-
-                    if (choice == TrustRecoveryChoice.Secondary)
-                        await ExportCaAsync();
-                    return false;
-                }
-
-                if (result?.Kind == CertificateOsTrustKind.HomebrewMissing)
-                {
-                    if (choice == TrustRecoveryChoice.Primary)
-                        await ExportCaAsync();
-                    return false;
-                }
-
-                // Default: elevate or export
-                if (choice == TrustRecoveryChoice.Primary)
-                {
-                    SetStatus("Trusting root CA (administrator)…", StatusSeverity.Busy);
-                    ok = _interception.InstallRootCertificateAsAdmin(machineStore: false);
-                    if (ok && _interception.LastOsTrustResult?.Kind !=
-                        CertificateOsTrustKind.MacNeedsManualTrustConfirm)
-                        return true;
-                    continue;
-                }
-
-                if (choice == TrustRecoveryChoice.Secondary)
-                    await ExportCaAsync();
-                return false;
+                ok = _interception.IsRootTrusted ||
+                     _interception.LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
+                continue;
             }
 
             break;
@@ -268,6 +224,76 @@ public sealed partial class MainWindowViewModel
 
         return _interception.IsRootTrusted;
     }
+
+    private async Task<bool> TryCompleteMacManualTrustAsync(Window? owner)
+    {
+        var wait = await WaitForMacSslTrustAsync(owner);
+        if (wait == MacSslTrustWaitResult.Trusted || _interception.VerifyOsUserSslTrust())
+            return true;
+
+        _interception.SetLastOsTrustCancelled();
+        if (wait == MacSslTrustWaitResult.NotSavedYet || _interception.IsRootInLoginKeychain())
+            SetGuardStatus(OsTrustUxCopy.MacSslTrustNotSavedYet);
+        return false;
+    }
+
+    private async Task<bool?> TryRecoverFailedOsTrustAsync(Window? owner, CertificateOsTrustResult? result)
+    {
+        var choice = await AwaitCancellableAsync(_dialogs.ShowTrustRecoveryAsync(owner, result));
+        if (choice == TrustRecoveryChoice.Cancel)
+        {
+            _interception.SetLastOsTrustCancelled();
+            return false;
+        }
+
+        if (result?.Kind == CertificateOsTrustKind.CertutilMissing &&
+            (result.BrewAvailable || OperatingSystem.IsLinux()))
+        {
+            return await TryRecoverCertutilMissingAsync(choice);
+        }
+
+        if (result?.Kind == CertificateOsTrustKind.HomebrewMissing)
+        {
+            if (choice == TrustRecoveryChoice.Primary)
+                await ExportCaAsync();
+            return false;
+        }
+
+        if (choice == TrustRecoveryChoice.Primary)
+        {
+            SetStatus("Trusting root CA (administrator)…", StatusSeverity.Busy);
+            var ok = _interception.InstallRootCertificateAsAdmin(machineStore: false);
+            if (ok && _interception.LastOsTrustResult?.Kind !=
+                CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+                return true;
+            return null;
+        }
+
+        if (choice == TrustRecoveryChoice.Secondary)
+            await ExportCaAsync();
+        return false;
+    }
+
+    private async Task<bool?> TryRecoverCertutilMissingAsync(TrustRecoveryChoice choice)
+    {
+        if (choice == TrustRecoveryChoice.Primary)
+        {
+            SetStatus("Installing browser certificate tools…", StatusSeverity.Busy);
+            var install = _interception.InstallNssToolsAndRetryTrust();
+            if (install.Succeeded)
+                return true;
+            if (install.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+                return null;
+
+            SetOutcomeStatus(install.Message, StatusSeverity.Error);
+            return null;
+        }
+
+        if (choice == TrustRecoveryChoice.Secondary)
+            await ExportCaAsync();
+        return false;
+    }
+
     private Task<MacSslTrustWaitResult> WaitForMacSslTrustAsync(Window? owner)
     {
         // Waiting UX is entirely in the modal — clear main-window Busy so the status bar
@@ -577,39 +603,9 @@ public sealed partial class MainWindowViewModel
             }
 
             var kind = result?.Kind ?? CertificateOsTrustKind.Failed;
-
-            if (kind == CertificateOsTrustKind.HomebrewMissing)
-            {
-                // Primary is Export CA when brew is missing.
-                if (choice is TrustRecoveryChoice.Primary or TrustRecoveryChoice.Secondary)
-                    await ExportCaAsync();
-                return false;
-            }
-
-            if (kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
-            {
-                if (choice == TrustRecoveryChoice.Secondary)
-                {
-                    await ExportCaAsync();
-                    return false;
-                }
-
-                // Primary = Continue in Keychain Access → wait+poll dialog (spinner only in dialog).
-                var wait = await WaitForMacSslTrustAsync(owner);
-                if (wait == MacSslTrustWaitResult.Trusted || _interception.VerifyOsUserSslTrust())
-                    return true;
-
-                _interception.SetLastOsTrustCancelled();
-                if (wait == MacSslTrustWaitResult.NotSavedYet || _interception.IsRootInLoginKeychain())
-                    SetGuardStatus(OsTrustUxCopy.MacSslTrustNotSavedYet);
-                return false;
-            }
-
-            if (choice == TrustRecoveryChoice.Secondary)
-            {
-                await ExportCaAsync();
-                return false;
-            }
+            var handled = await TryHandleTerminalTrustChoiceAsync(owner, choice, kind);
+            if (handled.HasValue)
+                return handled.Value;
 
             // Primary = Try again
             SetBusyTrustingRootCa();
@@ -623,6 +619,37 @@ public sealed partial class MainWindowViewModel
 
         return _interception.IsRootTrusted || _interception.VerifyOsUserSslTrust();
     }
+
+    private async Task<bool?> TryHandleTerminalTrustChoiceAsync(
+        Window? owner, TrustRecoveryChoice choice, CertificateOsTrustKind kind)
+    {
+        if (kind == CertificateOsTrustKind.HomebrewMissing)
+        {
+            if (choice is TrustRecoveryChoice.Primary or TrustRecoveryChoice.Secondary)
+                await ExportCaAsync();
+            return false;
+        }
+
+        if (kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+        {
+            if (choice == TrustRecoveryChoice.Secondary)
+            {
+                await ExportCaAsync();
+                return false;
+            }
+
+            return await TryCompleteMacManualTrustAsync(owner);
+        }
+
+        if (choice == TrustRecoveryChoice.Secondary)
+        {
+            await ExportCaAsync();
+            return false;
+        }
+
+        return null;
+    }
+
     private void SetDecryptHttpsCore(bool enabled)
     {
         _decryptHttps = enabled;

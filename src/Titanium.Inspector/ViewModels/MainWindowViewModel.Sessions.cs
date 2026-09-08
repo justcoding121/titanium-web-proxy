@@ -95,7 +95,7 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        await _store.EnsureBodiesLoadedAsync(selected).ConfigureAwait(false);
+        await _store.EnsureBodiesLoadedAsync(selected, _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
         await MarshalToUiAsync(() =>
         {
             ComposerMethod = selected.Method;
@@ -103,7 +103,7 @@ public sealed partial class MainWindowViewModel
             ComposerHeaders = selected.RequestHeadersText ?? "";
             ComposerBody = selected.RequestBodyText ?? "";
             StatusText = "Composer loaded from selected session";
-        }, StatusCancelToken).ConfigureAwait(false);
+        }, _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
     }
     private async Task LoadIntoComposerAsync()
     {
@@ -114,7 +114,7 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        await _store.EnsureBodiesLoadedAsync(selected).ConfigureAwait(false);
+        await _store.EnsureBodiesLoadedAsync(selected, _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
         await MarshalToUiAsync(() =>
         {
             ComposerMethod = selected.Method;
@@ -219,7 +219,7 @@ public sealed partial class MainWindowViewModel
         fetch = SessionRequestCodegen.ToFetch(session);
         return true;
     }
-    private async Task CopyTextToClipboardAsync(string text)
+    private static async Task CopyTextToClipboardAsync(string text)
     {
         var window = TryGetMainWindow();
         if (window?.Clipboard is { } clipboard)
@@ -328,7 +328,9 @@ public sealed partial class MainWindowViewModel
             return _selectedSessions;
         }
 
-        return SelectedSession is null ? Array.Empty<SessionSnapshot>() : [SelectedSession];
+        return SelectedSession is null
+            ? Array.Empty<SessionSnapshot>()
+            : new List<SessionSnapshot> { SelectedSession };
     }
     private static string? ResolveSessionHost(SessionSnapshot session)
     {
@@ -538,7 +540,7 @@ public sealed partial class MainWindowViewModel
     {
         try
         {
-            await _store.EnsureBodiesLoadedAsync(snap).ConfigureAwait(false);
+            await _store.EnsureBodiesLoadedAsync(snap, _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
             await MarshalToUiAsync(() =>
             {
                 if (ReferenceEquals(_selected, snap))
@@ -646,8 +648,8 @@ public sealed partial class MainWindowViewModel
             // Stay on the UI sync context (RelayCommand). ConfigureAwait(false) + StatusText update
             // raced with headless WaitUntil pumps on macOS (file written, StatusText stayed Ready).
             SetStatus("Exporting HAR…", StatusSeverity.Busy);
-            await _store.EnsureBodiesLoadedAsync(sessions);
-            await SessionArchive.ExportHarAsync(sessions, path);
+            await _store.EnsureBodiesLoadedAsync(sessions, _statusRevertCts?.Token ?? CancellationToken.None);
+            await SessionArchive.ExportHarAsync(sessions, path, _statusRevertCts?.Token ?? CancellationToken.None);
             SetOutcomeStatus($"Exported {sessions.Count} sessions to {path}", StatusSeverity.Success, toastImportant: true);
         }
         catch (Exception ex)
@@ -674,8 +676,8 @@ public sealed partial class MainWindowViewModel
         try
         {
             SetStatus("Exporting HAR…", StatusSeverity.Busy);
-            await _store.EnsureBodiesLoadedAsync(sessions);
-            await SessionArchive.ExportHarAsync(sessions, path);
+            await _store.EnsureBodiesLoadedAsync(sessions, _statusRevertCts?.Token ?? CancellationToken.None);
+            await SessionArchive.ExportHarAsync(sessions, path, _statusRevertCts?.Token ?? CancellationToken.None);
             SetOutcomeStatus($"Exported {sessions.Count} sessions to {path}", StatusSeverity.Success, toastImportant: true);
         }
         catch (Exception ex)
@@ -696,11 +698,11 @@ public sealed partial class MainWindowViewModel
         List<SessionSnapshot> imported;
         if (path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
         {
-            imported = await SessionArchive.ImportNativeArchiveAsync(path);
+            imported = await SessionArchive.ImportNativeArchiveAsync(path, _statusRevertCts?.Token ?? CancellationToken.None);
         }
         else
         {
-            imported = await SessionArchive.ImportHarAsync(path);
+            imported = await SessionArchive.ImportHarAsync(path, _statusRevertCts?.Token ?? CancellationToken.None);
         }
 
         foreach (var snap in imported)
@@ -733,8 +735,8 @@ public sealed partial class MainWindowViewModel
             // Stay on the UI sync context (RelayCommand). ConfigureAwait(false) + StatusText update
             // raced with headless WaitUntil pumps on macOS (file written, StatusText stayed Ready).
             SetStatus("Exporting archive…", StatusSeverity.Busy);
-            await _store.EnsureBodiesLoadedAsync(sessions);
-            await SessionArchive.ExportNativeArchiveAsync(sessions, path);
+            await _store.EnsureBodiesLoadedAsync(sessions, _statusRevertCts?.Token ?? CancellationToken.None);
+            await SessionArchive.ExportNativeArchiveAsync(sessions, path, _statusRevertCts?.Token ?? CancellationToken.None);
             SetOutcomeStatus($"Exported {sessions.Count} sessions to {path}", StatusSeverity.Success, toastImportant: true);
         }
         catch (Exception ex)
@@ -761,8 +763,8 @@ public sealed partial class MainWindowViewModel
         try
         {
             SetStatus("Exporting archive…", StatusSeverity.Busy);
-            await _store.EnsureBodiesLoadedAsync(sessions);
-            await SessionArchive.ExportNativeArchiveAsync(sessions, path);
+            await _store.EnsureBodiesLoadedAsync(sessions, _statusRevertCts?.Token ?? CancellationToken.None);
+            await SessionArchive.ExportNativeArchiveAsync(sessions, path, _statusRevertCts?.Token ?? CancellationToken.None);
             SetOutcomeStatus($"Exported {sessions.Count} sessions to {path}", StatusSeverity.Success, toastImportant: true);
         }
         catch (Exception ex)
@@ -785,7 +787,7 @@ public sealed partial class MainWindowViewModel
             // Stay on the UI sync context (RelayCommand). ConfigureAwait(false) + off-thread
             // StatusText throws Avalonia "Call from invalid thread" on Windows CI, and
             // nested MarshalToUiAsync StatusText updates flaked on macOS headless.
-            var imported = await SessionArchive.ImportNativeArchiveAsync(path);
+            var imported = await SessionArchive.ImportNativeArchiveAsync(path, _statusRevertCts?.Token ?? CancellationToken.None);
             foreach (var snap in imported)
             {
                 _store.Add(snap);
@@ -807,6 +809,8 @@ public sealed partial class MainWindowViewModel
             return _selectedSessions.ToList();
         }
 
-        return SelectedSession is null ? Array.Empty<SessionSnapshot>() : [SelectedSession];
+        return SelectedSession is null
+            ? Array.Empty<SessionSnapshot>()
+            : new List<SessionSnapshot> { SelectedSession };
     }
 }

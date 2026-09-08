@@ -19,14 +19,4 @@ public static class InspectorAppFactory
         return (vm, window);
     }
 
-    public static (MainWindowViewModel ViewModel, MainWindow Window) CreateMainWindow(
-        SettingsService settings,
-        SessionStreamBuffer buffer,
-        SessionRegistry registry,
-        UpdateService updates,
-        InterceptionService? interception = null,
-        IInspectorDialogs? dialogs = null,
-        IInspectorPathPicker? pathPicker = null) =>
-        CreateMainWindow(new InspectorViewModelServices(
-            buffer, registry, updates, settings, interception, dialogs, pathPicker));
 }

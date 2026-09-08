@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace Titanium.Inspector.ViewModels;
 
@@ -138,7 +139,8 @@ public sealed class BreakpointHit
     public string? EditedBody { get; set; }
     public int? ContentLength { get; set; }
 
-    public Task<BreakpointAction> WaitAsync() => _tcs.Task;
+    public Task<BreakpointAction> WaitAsync(CancellationToken cancellationToken = default) =>
+        _tcs.Task.WaitAsync(cancellationToken);
 
     public void Complete(BreakpointAction action) => _tcs.TrySetResult(action);
 }

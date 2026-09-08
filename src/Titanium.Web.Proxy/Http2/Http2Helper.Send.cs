@@ -182,7 +182,7 @@ namespace Titanium.Web.Proxy.Http2
             RentFramedHeaderBlock(frameHeader, frameHeaderBuffer, streamId, type, endStream, hasPriority, data,
                 ReadOnlyMemory<byte>.Empty, maxFrameSize);
 
-        private static ArraySegment<byte> RentFramedHeaderBlock(Http2FrameHeader frameHeader, // NOSONAR S107 -- Frame fields stay explicit.
+        private static ArraySegment<byte> RentFramedHeaderBlock(Http2FrameHeader frameHeader, // NOSONAR S107, S1172 -- Frame fields stay explicit; frameHeaderBuffer retained for call-site IL match.
             byte[] frameHeaderBuffer, int streamId, Http2FrameType type, bool endStream, bool hasPriority,
             ReadOnlyMemory<byte> data, ReadOnlyMemory<byte> append, int maxFrameSize)
         {
@@ -492,7 +492,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     nested <c>settings.Sync</c> — Mac dual-TLS H1→H2 profiles nested-lock + encode under
         ///     writeLock as the multiplex convoy.
         /// </summary>
-        internal static void EnqueueHeader(Http2Settings settings, Http2FrameHeader frameHeader,
+        internal static void EnqueueHeader(Http2Settings settings, Http2FrameHeader frameHeader, // NOSONAR S107 -- Frame-writing state is kept explicit for this low-level helper.
             byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Http2FrameWriter writer,
             bool pushPromise = false, bool encoderAlreadyExclusive = false)
         {

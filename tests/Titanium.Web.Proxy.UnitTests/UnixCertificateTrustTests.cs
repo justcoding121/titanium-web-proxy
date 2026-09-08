@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Network;
@@ -429,6 +431,19 @@ public class FirefoxCertificateTrustTests
     {
         var merged = FirefoxCertificateTrust.BuildOrMergeFirefoxPoliciesJson("{not-json", importEnterpriseRoots: true);
         Assert.IsTrue(FirefoxCertificateTrust.TryValidateFirefoxPoliciesJson(merged, out var err), err);
+    }
+
+    [TestMethod]
+    public void EnterpriseRootsUserPrefRegex_HasMatchTimeout()
+    {
+        var field = typeof(FirefoxCertificateTrust).GetField(
+            "EnterpriseRootsUserPrefLine",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.IsNotNull(field);
+        var regex = (Regex)field!.GetValue(null)!;
+        Assert.AreNotEqual(Regex.InfiniteMatchTimeout, regex.MatchTimeout);
+        Assert.IsTrue(regex.IsMatch("user_pref(\"security.enterprise_roots.enabled\", true);"));
+        Assert.IsFalse(regex.IsMatch("lockPref(\"security.enterprise_roots.enabled\", true);"));
     }
 
     [TestMethod]

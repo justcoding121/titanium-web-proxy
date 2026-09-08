@@ -24,6 +24,13 @@ namespace Titanium.Cli.Config;
 
 internal static class RunCommand
 {
+    private static readonly string[] PlusRelativePathKeys =
+    [
+        "grpc.transcode.descriptorSet",
+        "waf.rulesFile",
+        "discovery.file",
+    ];
+
     public static async Task<int> ExecuteAsync(string[] args)
     {
         if (CliHelp.RequestsHelp(args.AsSpan(1)))
@@ -91,7 +98,7 @@ internal static class RunCommand
         var clusterManager = new ClusterManager();
         if (loaded.Config.Clusters.Count > 0)
         {
-            await clusterManager.ApplyAsync(loaded.Config.Clusters.ToList()).ConfigureAwait(false);
+            await clusterManager.ApplyAsync(loaded.Config.Clusters.ToList(), stoppingToken).ConfigureAwait(false);
         }
 
         foreach (var listener in loaded.Config.Listeners)
@@ -194,7 +201,8 @@ internal static class RunCommand
                             plusOptions,
                             () => grpcJsonTranscoder,
                             t => grpcJsonTranscoder = t,
-                            RefreshReverseProxy).ConfigureAwait(false);
+                            RefreshReverseProxy,
+                            stoppingToken).ConfigureAwait(false);
                         AsyncConsole.WriteLine("Config reloaded.");
                         await AsyncConsole.FlushAsync().ConfigureAwait(false);
                     }
@@ -261,7 +269,8 @@ internal static class RunCommand
         Dictionary<string, string> plusOptions,
         Func<IGrpcJsonTranscoder?> getGrpc,
         Action<IGrpcJsonTranscoder?> setGrpc,
-        Action refreshReverseProxy)
+        Action refreshReverseProxy,
+        CancellationToken stoppingToken = default)
     {
         var loaded = ConfigLoader.Load(configPath);
         var errors = TwpConfigValidator.Validate(loaded.Config);
@@ -273,11 +282,11 @@ internal static class RunCommand
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
         if (loaded.Config.Clusters.Count > 0)
         {
-            await clusterManager.ApplyAsync(loaded.Config.Clusters.ToList()).ConfigureAwait(false);
+            await clusterManager.ApplyAsync(loaded.Config.Clusters.ToList(), stoppingToken).ConfigureAwait(false);
         }
         else
         {
-            await clusterManager.ApplyAsync([]).ConfigureAwait(false);
+            await clusterManager.ApplyAsync([], stoppingToken).ConfigureAwait(false);
         }
 
         ReplaceRoutes(routes, loaded.Config.Routes);
@@ -467,7 +476,7 @@ internal static class RunCommand
                             {
                                 // Reload errors are logged by caller.
                             }
-                        });
+                        }, stoppingToken);
                     });
                     Console.WriteLine("sighup-handler-registered");
                     Console.Out.Flush();
@@ -484,9 +493,6 @@ internal static class RunCommand
             sigHup?.Dispose();
         }
     }
-
-    private static async Task WaitForShutdownAsync(CancellationToken stoppingToken) =>
-        await WaitForShutdownOrReloadAsync(stoppingToken, onReload: null).ConfigureAwait(false);
 
     private static void StartAcmeIfConfigured(ProxyServer proxy, TwpConfig config)
     {
@@ -628,12 +634,7 @@ internal static class RunCommand
             return;
         }
 
-        foreach (var key in new[]
-                 {
-                     "grpc.transcode.descriptorSet",
-                     "waf.rulesFile",
-                     "discovery.file",
-                 })
+        foreach (var key in PlusRelativePathKeys)
         {
             if (!plusOptions.TryGetValue(key, out var raw) || string.IsNullOrWhiteSpace(raw))
             {

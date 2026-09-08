@@ -31,6 +31,8 @@ namespace Titanium.Web.Proxy.Http2
 {
     internal partial class Http2Helper
     {
+        private const string AfterResponseFailedMessage = "HTTP/2 AfterResponse handler failed";
+
         internal static async Task FinalizeStreamAsync(Http2StreamState state,
             Func<SessionEventArgs, Task> onAfterResponse, ILogger logger,
             Http2ConnectionState? connectionState = null)
@@ -60,7 +62,7 @@ namespace Titanium.Web.Proxy.Http2
             }
             catch (Exception ex)
             {
-                ReportException(logger, new ProxyHttpException("HTTP/2 AfterResponse handler failed", ex,
+                ReportException(logger, new ProxyHttpException(AfterResponseFailedMessage, ex,
                     state.SessionArgs));
             }
             finally
@@ -109,7 +111,7 @@ namespace Titanium.Web.Proxy.Http2
                         // Faulted/canceled CompletedTask — still dispose; report like FinalizeStreamAsync.
                         if (after.IsFaulted)
                         {
-                            ReportException(logger, new ProxyHttpException("HTTP/2 AfterResponse handler failed",
+                            ReportException(logger, new ProxyHttpException(AfterResponseFailedMessage,
                                 after.Exception?.GetBaseException(), args));
                         }
 
@@ -125,8 +127,8 @@ namespace Titanium.Web.Proxy.Http2
                 }
                 catch (Exception ex)
                 {
-                    ReportException(logger, new ProxyHttpException("HTTP/2 AfterResponse handler failed", ex, args));
-                    args.Dispose();
+                    ReportException(logger, new ProxyHttpException(AfterResponseFailedMessage, ex, args));
+                    args.Dispose(); // NOSONAR S3966 -- Catch path after onAfterResponse threw; try returns before Dispose.
                     connectionState.ReturnStreamState(state);
                     return;
                 }
@@ -146,7 +148,7 @@ namespace Titanium.Web.Proxy.Http2
             }
             catch (Exception ex)
             {
-                ReportException(logger, new ProxyHttpException("HTTP/2 AfterResponse handler failed", ex, args));
+                ReportException(logger, new ProxyHttpException(AfterResponseFailedMessage, ex, args));
             }
             finally
             {

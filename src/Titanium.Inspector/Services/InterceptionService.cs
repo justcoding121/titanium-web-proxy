@@ -37,7 +37,6 @@ public sealed class InterceptionService : IDisposable
     private InspectorSettings? _loggingSettings;
     private Channel<ProcessResolveWork>? _processResolveChannel;
     private CancellationTokenSource? _processResolveCts;
-    private Task? _processResolveTask;
 
     private readonly record struct ProcessResolveWork(SessionSnapshot Snap, Lazy<int> ProcessId);
 
@@ -250,7 +249,7 @@ public sealed class InterceptionService : IDisposable
     {
         if (Interlocked.Exchange(ref _shutdownStarted, 1) != 0)
         {
-            _shutdownCompleted.Wait(TimeSpan.FromSeconds(3));
+            _shutdownCompleted.Wait(TimeSpan.FromSeconds(3), CancellationToken.None);
             return;
         }
 
@@ -649,7 +648,7 @@ public sealed class InterceptionService : IDisposable
     ///     Best-effort: if a Firefox profile exists, enable OS-root trust so Install root CA
     ///     is enough after a Firefox restart (no extra menu, no certutil).
     /// </summary>
-    public void TryEnableFirefoxEnterpriseRootsBestEffort()
+    public static void TryEnableFirefoxEnterpriseRootsBestEffort()
     {
         try
         {
@@ -1012,7 +1011,7 @@ public sealed class InterceptionService : IDisposable
             if (e.HttpClient.Request.HasBody && (ShouldBufferBody(e.HttpClient.Request, e) || needsBodyForTools))
             {
                 e.HttpClient.Request.KeepBody = true;
-                await e.GetRequestBody();
+                await e.GetRequestBody(CancellationToken.None);
             }
 
             if (SessionScriptHost.ApplyOnRequest(ScriptOnRequest, e))
@@ -1023,7 +1022,7 @@ public sealed class InterceptionService : IDisposable
             string? requestBody = null;
             if (needsBodyForTools && e.HttpClient.Request.IsBodyRead)
             {
-                requestBody = await e.GetRequestBodyAsString();
+                requestBody = await e.GetRequestBodyAsString(CancellationToken.None);
             }
 
             var requestUrl = e.HttpClient.Request.Url ?? "";
@@ -1057,7 +1056,7 @@ public sealed class InterceptionService : IDisposable
                  GraphQlOperationMatcher.MatchesOperation(requestBody, Breakpoints.GraphQlOperationName)) &&
                 Breakpoints.TryEnter(CreatePreviewSnapshot(e, assignId: false), out var hit))
             {
-                var action = await hit.WaitAsync();
+                var action = await hit.WaitAsync(CancellationToken.None);
                 if (action == BreakpointAction.Abort)
                 {
                     e.GenericResponse("Aborted by Titanium Inspector breakpoint", HttpStatusCode.Forbidden);
@@ -1093,7 +1092,7 @@ public sealed class InterceptionService : IDisposable
             if (e.HttpClient.Response.HasBody && ShouldBufferBody(e.HttpClient.Response, e))
             {
                 e.HttpClient.Response.KeepBody = true;
-                await e.GetResponseBody();
+                await e.GetResponseBody(CancellationToken.None);
             }
 
             SessionScriptHost.ApplyOnResponse(ScriptOnResponse, e);
@@ -1102,7 +1101,7 @@ public sealed class InterceptionService : IDisposable
                 Breakpoints is { Enabled: true } &&
                 Breakpoints.TryEnter(CreatePreviewSnapshot(e, assignId: false), out var hit))
             {
-                var action = await hit.WaitAsync();
+                var action = await hit.WaitAsync(CancellationToken.None);
                 if (action == BreakpointAction.Abort)
                 {
                     e.GenericResponse("Aborted by Titanium Inspector response breakpoint", HttpStatusCode.Forbidden);
@@ -1265,7 +1264,7 @@ public sealed class InterceptionService : IDisposable
         var cts = new CancellationTokenSource();
         _processResolveChannel = channel;
         _processResolveCts = cts;
-        _processResolveTask = Task.Run(() => ProcessResolveLoopAsync(channel.Reader, cts.Token), cts.Token);
+        _ = Task.Run(() => ProcessResolveLoopAsync(channel.Reader, cts.Token), cts.Token);
     }
 
     private void StopProcessResolveWorker()
@@ -1274,7 +1273,6 @@ public sealed class InterceptionService : IDisposable
         var channel = _processResolveChannel;
         _processResolveCts = null;
         _processResolveChannel = null;
-        _processResolveTask = null;
 
         try
         {
@@ -1318,34 +1316,7 @@ public sealed class InterceptionService : IDisposable
             {
                 try
                 {
-                    var processId = work.ProcessId.Value;
-                    string? processName = null;
-                    if (processId > 0)
-                    {
-                        try
-                        {
-                            processName = System.Diagnostics.Process.GetProcessById(processId).ProcessName;
-                        }
-                        catch
-                        {
-                            // process may have exited; keep pid when known
-                        }
-                    }
-
-                    if (processId <= 0 && string.IsNullOrEmpty(processName))
-                    {
-                        continue;
-                    }
-
-                    if (work.Snap.ProcessId == processId &&
-                        string.Equals(work.Snap.ProcessName, processName, StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-
-                    work.Snap.ProcessId = processId > 0 ? processId : 0;
-                    work.Snap.ProcessName = processName;
-                    SessionUpdated?.Invoke(this, work.Snap);
+                    ApplyResolvedProcess(work);
                 }
                 catch
                 {
@@ -1357,10 +1328,33 @@ public sealed class InterceptionService : IDisposable
         {
             // expected on stop
         }
-        catch (ChannelClosedException)
+    }
+
+    private void ApplyResolvedProcess(ProcessResolveWork work)
+    {
+        var processId = work.ProcessId.Value;
+        if (processId <= 0)
+            return;
+
+        string? processName = null;
+        try
         {
-            // expected on stop
+            processName = System.Diagnostics.Process.GetProcessById(processId).ProcessName;
         }
+        catch
+        {
+            // process may have exited; keep pid when known
+        }
+
+        if (work.Snap.ProcessId == processId &&
+            string.Equals(work.Snap.ProcessName, processName, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        work.Snap.ProcessId = processId;
+        work.Snap.ProcessName = processName;
+        SessionUpdated?.Invoke(this, work.Snap);
     }
 
     private static void FillResponse(SessionSnapshot snap, SessionEventArgs e)
@@ -1450,7 +1444,7 @@ public sealed class InterceptionService : IDisposable
         var delay = NetworkThrottle.DelayFor(profile, e.BodyBytes?.Length ?? 0, applyLatency: e.IsChunked == false || e.BodyBytes?.Length > 0);
         if (delay > TimeSpan.Zero)
         {
-            await Task.Delay(delay).ConfigureAwait(false);
+            await Task.Delay(delay, _processResolveCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
         }
     }
 
@@ -1465,7 +1459,7 @@ public sealed class InterceptionService : IDisposable
         var delay = NetworkThrottle.DelayFor(profile, e.BodyBytes?.Length ?? 0, applyLatency: true);
         if (delay > TimeSpan.Zero)
         {
-            await Task.Delay(delay).ConfigureAwait(false);
+            await Task.Delay(delay, _processResolveCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
         }
     }
 

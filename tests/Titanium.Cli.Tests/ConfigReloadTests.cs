@@ -155,7 +155,7 @@ public class ConfigReloadTests
             """);
 
         var refreshed = 0;
-        await Assert.ThrowsExceptionAsync<InvalidOperationException>(async () =>
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(async () =>
             await RunCommand.ReloadConfigAsync(
                 path,
                 proxy,

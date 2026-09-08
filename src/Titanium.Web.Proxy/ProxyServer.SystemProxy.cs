@@ -108,8 +108,7 @@ public partial class ProxyServer : IDisposable
     public SystemProxyChangeResult TrySetAsSystemProxy(ExplicitProxyEndPoint endPoint, ProxyProtocolType protocolType,
         SystemProxySettings? settings = null)
     {
-        if (endPoint is null)
-            throw new ArgumentNullException(nameof(endPoint));
+        ArgumentNullException.ThrowIfNull(endPoint);
 
         if (SystemProxySettingsManager == null)
             return SystemProxyChangeResult.Fail(SystemProxyNotSupportedMessage);

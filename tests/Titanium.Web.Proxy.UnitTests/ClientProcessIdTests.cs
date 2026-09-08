@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Helpers;
 
@@ -19,7 +19,7 @@ public class ClientProcessIdTests
     }
 
     [TestMethod]
-    public void GetProcessIdByLocalPort_ResolvesOwnListeningSocket_WhenSupported()
+    public async Task GetProcessIdByLocalPort_ResolvesOwnListeningSocket_WhenSupported()
     {
         if (!ClientProcessId.IsSupported)
         {
@@ -38,7 +38,7 @@ public class ClientProcessIdTests
             pid = TcpHelper.GetProcessIdByLocalPort(System.Net.Sockets.AddressFamily.InterNetwork, port);
             if (pid <= 0)
             {
-                Thread.Sleep(25);
+                await Task.Delay(25);
             }
         }
 

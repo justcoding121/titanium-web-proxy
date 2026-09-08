@@ -100,7 +100,7 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
     ///     <see cref="Invalidate" /> only when the connection is known bad (GOAWAY/fault) or the user
     ///     requested <c>CloseServerConnection</c>.
     /// </summary>
-    internal async ValueTask<Http2OriginConnection> RentAsync(
+    internal async ValueTask<Http2OriginConnection> RentAsync( // NOSONAR S3776 -- Pool pick stays one method so the lock-free probe path cannot regress.
         string poolKey,
         Func<CancellationToken, Task<Http2OriginConnection>> openAsync,
         CancellationToken cancellationToken)

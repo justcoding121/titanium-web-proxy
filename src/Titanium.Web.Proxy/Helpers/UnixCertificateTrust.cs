@@ -13,6 +13,41 @@ namespace Titanium.Web.Proxy.Helpers;
 internal static class UnixCertificateTrust
 {
     private const string SecurityBinary = "security";
+    private const string NssDbDirName = "nssdb";
+    private const string LibraryDirName = "Library";
+    private const string KeychainsDirName = "Keychains";
+    private const string LoginKeychainDbFile = "login.keychain-db";
+    private const string LoginKeychainFile = "login.keychain";
+
+    private static readonly string[] WindowsCertutilCandidates =
+    [
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "NSS", "certutil.exe"),
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Programs", "nss", "certutil.exe"),
+    ];
+
+    private static readonly string[] MacCertutilCandidates =
+    [
+        "/opt/homebrew/opt/nss/bin/certutil",
+        "/usr/local/opt/nss/bin/certutil",
+    ];
+
+    private static readonly string[] MacBrewCandidates =
+    [
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".homebrew", "bin", "brew"),
+        "/opt/homebrew/bin/brew",
+        "/usr/local/bin/brew",
+    ];
+
+    private static readonly string[] MacDumpTrustSettingsArgs =
+    [
+        "dump-trust-settings -d",
+        "dump-trust-settings",
+    ];
+
+    private static readonly bool[] MacTrustExportAdminDomain = [true, false];
     /// <summary>
     ///     Trusts <paramref name="certificate"/> for SSL in the current-user store backends
     ///     (login keychain on macOS, NSS db on Linux).
@@ -363,9 +398,7 @@ internal static class UnixCertificateTrust
         if (string.IsNullOrWhiteSpace(commonName))
             return false;
 
-        var loginDb = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "Library", "Keychains", "login.keychain-db");
+        var loginDb = UserLoginKeychainDbPath();
         var args = File.Exists(loginDb)
             ? $"find-certificate -a -c \"{Escape(commonName)}\" -Z \"{loginDb}\""
             : $"find-certificate -a -c \"{Escape(commonName)}\" -Z";
@@ -380,13 +413,7 @@ internal static class UnixCertificateTrust
         if (RunTime.IsWindows)
         {
             // Windows ships Microsoft certutil.exe — it is not NSS and must not be used for profile DBs.
-            return new[]
-            {
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                    "NSS", "certutil.exe"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "Programs", "nss", "certutil.exe"),
-            }.FirstOrDefault(File.Exists);
+            return WindowsCertutilCandidates.FirstOrDefault(File.Exists);
         }
 
         var which = runner.Run("sh", "-c \"command -v certutil\"");
@@ -400,11 +427,7 @@ internal static class UnixCertificateTrust
 
         if (RunTime.IsMac)
         {
-            return new[]
-            {
-                "/opt/homebrew/opt/nss/bin/certutil",
-                "/usr/local/opt/nss/bin/certutil",
-            }.FirstOrDefault(File.Exists);
+            return MacCertutilCandidates.FirstOrDefault(File.Exists);
         }
 
         return null;
@@ -430,13 +453,7 @@ internal static class UnixCertificateTrust
         if (which is { Succeeded: true } && !string.IsNullOrWhiteSpace(which.StandardOutput))
             return which.StandardOutput.Trim().Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)[0];
 
-        foreach (var candidate in new[]
-                 {
-                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                         ".homebrew", "bin", "brew"),
-                     "/opt/homebrew/bin/brew",
-                     "/usr/local/bin/brew",
-                 })
+        foreach (var candidate in MacBrewCandidates)
         {
             if (File.Exists(candidate))
                 return candidate;
@@ -475,17 +492,13 @@ internal static class UnixCertificateTrust
         // User trust domain (no -d). Using -d writes admin-domain stubs and often leaves
         // System.keychain copies that Chrome keeps trusting after "Remove CA".
         // -r trustRoot: trust as root CA in the login keychain.
-        var keychain = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "Library", "Keychains", "login.keychain-db");
+        var keychain = UserLoginKeychainDbPath();
         var result = runner.Run(SecurityBinary,
             $"add-trusted-cert -r trustRoot -k \"{keychain}\" \"{cerPath}\"");
         if (result is { Succeeded: true }) return true;
 
         // Older macOS keychain name
-        keychain = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "Library", "Keychains", "login.keychain");
+        keychain = UserLoginKeychainPath();
         result = runner.Run(SecurityBinary,
             $"add-trusted-cert -r trustRoot -k \"{keychain}\" \"{cerPath}\"");
         return result is { Succeeded: true };
@@ -518,7 +531,7 @@ internal static class UnixCertificateTrust
     private static bool DumpTrustSettingsMentionsPolicies(
         IProcessRunner runner, string sha1, string commonName)
     {
-        foreach (var args in new[] { "dump-trust-settings -d", "dump-trust-settings" })
+        foreach (var args in MacDumpTrustSettingsArgs)
         {
             var dump = runner.Run(SecurityBinary, args);
             if (dump is null)
@@ -558,7 +571,7 @@ internal static class UnixCertificateTrust
         if (string.IsNullOrEmpty(sha1))
             return false;
 
-        foreach (var adminDomain in new[] { true, false })
+        foreach (var adminDomain in MacTrustExportAdminDomain)
         {
             var path = Path.Combine(Path.GetTempPath(), "twp-trust-" + Guid.NewGuid().ToString("N") + ".plist");
             try
@@ -691,9 +704,7 @@ internal static class UnixCertificateTrust
         if (string.IsNullOrWhiteSpace(commonName))
             return;
 
-        var loginDb = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "Library", "Keychains", "login.keychain-db");
+        var loginDb = UserLoginKeychainDbPath();
         var searches = new List<string>
         {
             $"find-certificate -a -c \"{Escape(commonName)}\" -Z",
@@ -767,7 +778,10 @@ internal static class UnixCertificateTrust
                 "Could not initialize the user NSS database (~/.pki/nssdb)");
         }
 
-        var certutil = FindCertutil(runner)!;
+        var certutil = FindCertutil(runner);
+        if (certutil is null)
+            return ProbeCertutilInstall(runner);
+
         // Drop any prior nickname so -A is not a silent no-op when the DER already exists
         // under a different nickname (certutil exits 0 without listing the new name).
         runner.Run(certutil, $"-d sql:{nssDir} -D -n \"{Escape(friendlyName)}\"");
@@ -776,16 +790,15 @@ internal static class UnixCertificateTrust
             $"-d sql:{nssDir} -A -t \"C,,\" -n \"{Escape(friendlyName)}\" -i \"{cerPath}\"");
         if (result is not { Succeeded: true })
         {
+            var error = result?.StandardError;
             return CertificateOsTrustResult.Fail(
                 CertificateOsTrustKind.NssFailed,
-                string.IsNullOrWhiteSpace(result?.StandardError)
+                string.IsNullOrWhiteSpace(error)
                     ? "certutil failed to add the root CA to ~/.pki/nssdb"
-                    : result!.StandardError.Trim());
+                    : error.Trim());
         }
 
-        var list = runner.Run(certutil, $"-d sql:{nssDir} -L");
-        if (list is { Succeeded: true } &&
-            list.StandardOutput.Contains(friendlyName, StringComparison.OrdinalIgnoreCase))
+        if (NssListContainsNickname(runner, certutil, nssDir, friendlyName))
         {
             TryTrustAdditionalLinuxNss(runner, certutil, cerPath, friendlyName);
             return CertificateOsTrustResult.Ok("Root CA trusted in user NSS database");
@@ -797,10 +810,8 @@ internal static class UnixCertificateTrust
 
         result = runner.Run(certutil,
             $"-d sql:{nssDir} -A -t \"C,,\" -n \"{Escape(friendlyName)}\" -i \"{cerPath}\"");
-        list = runner.Run(certutil, $"-d sql:{nssDir} -L");
         if (result is { Succeeded: true } &&
-            list is { Succeeded: true } &&
-            list.StandardOutput.Contains(friendlyName, StringComparison.OrdinalIgnoreCase))
+            NssListContainsNickname(runner, certutil, nssDir, friendlyName))
         {
             TryTrustAdditionalLinuxNss(runner, certutil, cerPath, friendlyName);
             return CertificateOsTrustResult.Ok("Root CA trusted in user NSS database");
@@ -809,6 +820,14 @@ internal static class UnixCertificateTrust
         return CertificateOsTrustResult.Fail(
             CertificateOsTrustKind.NssFailed,
             "certutil reported success but the root CA nickname is missing from ~/.pki/nssdb");
+    }
+
+    private static bool NssListContainsNickname(
+        IProcessRunner runner, string certutil, string nssDir, string friendlyName)
+    {
+        var list = runner.Run(certutil, $"-d sql:{nssDir} -L");
+        return list is { Succeeded: true } &&
+               list.StandardOutput.Contains(friendlyName, StringComparison.OrdinalIgnoreCase);
     }
 
     private static X509Certificate2? TryReloadCertificateFromCer(string cerPath)
@@ -946,8 +965,7 @@ internal static class UnixCertificateTrust
     private static void TryTrustAdditionalLinuxNss(
         IProcessRunner runner, string certutil, string cerPath, string friendlyName)
     {
-        var primary = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".pki", "nssdb");
+        var primary = UserPkiNssDbPath();
         foreach (var nssDir in LinuxNssDatabaseDirectories()
                      .Where(d => !string.Equals(d, primary, StringComparison.Ordinal))
                      .Where(Directory.Exists))
@@ -968,18 +986,18 @@ internal static class UnixCertificateTrust
     internal static IEnumerable<string> LinuxNssDatabaseDirectories()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        yield return Path.Combine(home, ".pki", "nssdb");
-        yield return Path.Combine(home, "snap", "chromium", "common", ".pki", "nssdb");
-        yield return Path.Combine(home, "snap", "chromium", "current", ".pki", "nssdb");
-        yield return Path.Combine(home, "snap", "google-chrome", "common", ".pki", "nssdb");
-        yield return Path.Combine(home, "snap", "google-chrome", "current", ".pki", "nssdb");
-        yield return Path.Combine(home, ".var", "app", "org.chromium.Chromium", ".pki", "nssdb");
-        yield return Path.Combine(home, ".var", "app", "com.google.Chrome", ".pki", "nssdb");
-        yield return Path.Combine(home, ".var", "app", "com.brave.Browser", ".pki", "nssdb");
+        yield return Path.Combine(home, ".pki", NssDbDirName);
+        yield return Path.Combine(home, "snap", "chromium", "common", ".pki", NssDbDirName);
+        yield return Path.Combine(home, "snap", "chromium", "current", ".pki", NssDbDirName);
+        yield return Path.Combine(home, "snap", "google-chrome", "common", ".pki", NssDbDirName);
+        yield return Path.Combine(home, "snap", "google-chrome", "current", ".pki", NssDbDirName);
+        yield return Path.Combine(home, ".var", "app", "org.chromium.Chromium", ".pki", NssDbDirName);
+        yield return Path.Combine(home, ".var", "app", "com.google.Chrome", ".pki", NssDbDirName);
+        yield return Path.Combine(home, ".var", "app", "com.brave.Browser", ".pki", NssDbDirName);
         // Microsoft Edge (deb) shares ~/.pki/nssdb; Snap/Flatpak keep private DBs when present.
-        yield return Path.Combine(home, "snap", "microsoft-edge", "common", ".pki", "nssdb");
-        yield return Path.Combine(home, "snap", "microsoft-edge", "current", ".pki", "nssdb");
-        yield return Path.Combine(home, ".var", "app", "com.microsoft.Edge", ".pki", "nssdb");
+        yield return Path.Combine(home, "snap", "microsoft-edge", "common", ".pki", NssDbDirName);
+        yield return Path.Combine(home, "snap", "microsoft-edge", "current", ".pki", NssDbDirName);
+        yield return Path.Combine(home, ".var", "app", "com.microsoft.Edge", ".pki", NssDbDirName);
     }
 
     private static bool TrustLinuxSystem(IElevationPrompt elevation, string cerPath, string friendlyName)
@@ -1008,8 +1026,7 @@ internal static class UnixCertificateTrust
         if (certutil is null)
             return null;
 
-        var nssDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".pki", "nssdb");
+        var nssDir = UserPkiNssDbPath();
         Directory.CreateDirectory(nssDir);
         if (!File.Exists(Path.Combine(nssDir, "cert9.db")) &&
             !File.Exists(Path.Combine(nssDir, "cert8.db")))
@@ -1047,6 +1064,20 @@ internal static class UnixCertificateTrust
         try { File.Delete(path); }
         catch { /* best effort */ }
     }
+
+    private static string UserLoginKeychainDbPath() =>
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            LibraryDirName, KeychainsDirName, LoginKeychainDbFile);
+
+    private static string UserLoginKeychainPath() =>
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            LibraryDirName, KeychainsDirName, LoginKeychainFile);
+
+    private static string UserPkiNssDbPath() =>
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".pki", NssDbDirName);
 
     private static string Escape(string value) => value.Replace("\"", "\\\"");
 

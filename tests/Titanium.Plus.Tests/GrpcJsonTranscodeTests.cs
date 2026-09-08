@@ -84,7 +84,7 @@ public class GrpcJsonTranscodeTests
     public void Guard_RequiresDescriptorAndServices()
     {
         var ctx = new PlusActivationContext { ProxyServer = new object() };
-        Assert.ThrowsException<InvalidOperationException>(() =>
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
             GrpcTranscodeGuard.TryStart(ctx, new Dictionary<string, string>
             {
                 ["grpc.transcode.enabled"] = "true"

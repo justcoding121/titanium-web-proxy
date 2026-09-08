@@ -475,7 +475,7 @@ internal class Decoder
             AddHeader(headerListener, headerField.NameData, headerField.ValueData, false);
     }
 
-    private void AddHeader(IHeaderListener headerListener, HttpHeader header, bool sensitive)
+    private void AddHeader(IHeaderListener headerListener, HttpHeader header, bool sensitive) // NOSONAR S4136 -- Overloads stay next to the decode step that uses them; moving would scramble the HPACK state machine.
     {
         if (header.NameData.Length == 0) throw new ArgumentException("name is empty");
 

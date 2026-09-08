@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Reflection;
 using System.Runtime.Versioning;
+using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Helpers;
@@ -324,7 +326,7 @@ public class LinuxSystemProxyBackendTests
         runner.DefaultSuccess = true;
 
         using var backend = new LinuxSystemProxyBackend(runner, applyBrowserLaunchHooks: false);
-        var ex = Assert.ThrowsException<InvalidOperationException>(() =>
+        var ex = Assert.ThrowsExactly<InvalidOperationException>(() =>
             backend.SetProxy("127.0.0.1", 8866, ProxyProtocolType.AllHttp, "localhost"));
         StringAssert.Contains(ex.Message, "Failed to apply GNOME system proxy");
     }
@@ -542,6 +544,19 @@ public class LinuxBrowserLaunchProxyTests
         var bypass = LinuxFirefoxProxy.BuildFirefoxBypassListForTests("*.example.com;<local>");
         StringAssert.Contains(bypass, "*.example.com");
         StringAssert.Contains(bypass, "*.local");
+    }
+
+    [TestMethod]
+    public void FirefoxProxy_UserPrefRegex_HasMatchTimeout()
+    {
+        var method = typeof(LinuxFirefoxProxy).GetMethod(
+            "UserPrefLine",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.IsNotNull(method);
+        var regex = (Regex)method!.Invoke(null, null)!;
+        Assert.AreNotEqual(Regex.InfiniteMatchTimeout, regex.MatchTimeout);
+        Assert.IsTrue(regex.IsMatch("user_pref(\"network.proxy.type\", 1);"));
+        Assert.IsFalse(regex.IsMatch("lockPref(\"network.proxy.type\", 1);"));
     }
 
     [TestMethod]

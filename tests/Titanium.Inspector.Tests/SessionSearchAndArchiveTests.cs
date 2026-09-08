@@ -157,8 +157,8 @@ public class SessionSearchAndArchiveTests
             {
                 new() { Id = 9, Method = "GET", Url = "https://example/" },
             };
-            await SessionArchive.ExportNativeArchiveAsync(sessions, path);
-            var imported = await SessionArchive.ImportNativeArchiveAsync(path);
+            await SessionArchive.ExportNativeArchiveAsync(sessions, path, CancellationToken.None);
+            var imported = await SessionArchive.ImportNativeArchiveAsync(path, CancellationToken.None);
             Assert.AreEqual(1, imported.Count);
             Assert.AreEqual(9, imported[0].Id);
         }
@@ -197,8 +197,8 @@ public class SessionSearchAndArchiveTests
                 },
             };
 
-            await SessionArchive.ExportHarAsync(sessions, path);
-            var imported = await SessionArchive.ImportHarAsync(path);
+            await SessionArchive.ExportHarAsync(sessions, path, CancellationToken.None);
+            var imported = await SessionArchive.ImportHarAsync(path, CancellationToken.None);
             Assert.AreEqual(1, imported.Count);
             Assert.AreEqual("POST", imported[0].Method);
             Assert.AreEqual("https://api.example/v1?q=1", imported[0].Url);
@@ -430,5 +430,48 @@ public class SessionSearchAndArchiveTests
         StringAssert.Contains(bodyPlusRetention, "body search: in-memory only, 3 on disk skipped");
         StringAssert.Contains(bodyPlusRetention, "5 removed by retention");
         StringAssert.Contains(bodyPlusRetention, "since ");
+    }
+
+    [TestMethod]
+    public async Task Archive_CanceledToken_ThrowsBeforeWriteOrDuringRead()
+    {
+        var harPath = Path.Combine(Path.GetTempPath(), $"twp-har-ct-{Guid.NewGuid():N}.har");
+        var zipPath = Path.Combine(Path.GetTempPath(), $"twp-zip-ct-{Guid.NewGuid():N}.zip");
+        var sessions = new List<SessionSnapshot>
+        {
+            new() { Id = 3, Method = "GET", Url = "https://cancel.example/" },
+        };
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        try
+        {
+            await Assert.ThrowsExactlyAsync<OperationCanceledException>(
+                () => SessionArchive.ExportHarAsync(sessions, harPath, cts.Token));
+            Assert.IsFalse(File.Exists(harPath));
+
+            await Assert.ThrowsExactlyAsync<OperationCanceledException>(
+                () => SessionArchive.ExportNativeArchiveAsync(sessions, zipPath, cts.Token));
+            Assert.IsFalse(File.Exists(zipPath));
+
+            await SessionArchive.ExportHarAsync(sessions, harPath, CancellationToken.None);
+            await SessionArchive.ExportNativeArchiveAsync(sessions, zipPath, CancellationToken.None);
+
+            await Assert.ThrowsExactlyAsync<TaskCanceledException>(
+                () => SessionArchive.ImportHarAsync(harPath, cts.Token));
+            await Assert.ThrowsExactlyAsync<OperationCanceledException>(
+                () => SessionArchive.ImportNativeArchiveAsync(zipPath, cts.Token));
+        }
+        finally
+        {
+            if (File.Exists(harPath))
+            {
+                File.Delete(harPath);
+            }
+
+            if (File.Exists(zipPath))
+            {
+                File.Delete(zipPath);
+            }
+        }
     }
 }

@@ -40,7 +40,7 @@ namespace Titanium.Web.Proxy.Http2
         // final Request/Response. Returns true if this block was an interim (1xx) response, so the
         // caller does not treat a (spec-invalid, but let's be defensive) END_STREAM flag on it as ending
         // the stream.
-        private static async Task<bool> ProcessCompleteHeaderBlockAsync(
+        private static async Task<bool> ProcessCompleteHeaderBlockAsync( // NOSONAR S107, S3776, S1172 -- Hoisted header-block dispatch; params stay explicit (no per-frame context class). localSettings retained for call-site IL match with CopyHttp2FrameAsync.
         Http2ConnectionState connectionState,
         Stream input,
         Stream output,
@@ -391,7 +391,7 @@ namespace Titanium.Web.Proxy.Http2
                 request.HttpVersion = HttpVersion.Version20;
                 // Intern common methods — probe / browser GETs avoid per-stream GetString alloc.
                 var methodSpan = method.Span;
-                request.Method = methodSpan.SequenceEqual("GET"u8) ? "GET"
+                request.Method = methodSpan.SequenceEqual("GET"u8) ? "GET" // NOSONAR S3358 -- Interned method names; nested ternary avoids extra locals on the probe GET path.
                     : methodSpan.SequenceEqual("HEAD"u8) ? "HEAD"
                     : methodSpan.SequenceEqual("POST"u8) ? "POST"
                     : methodSpan.SequenceEqual("PUT"u8) ? "PUT"
@@ -415,7 +415,7 @@ namespace Titanium.Web.Proxy.Http2
                 }
 
                 // Per-stream predicate: gate is on but this stream may still be passthrough.
-                if (httpInterceptionEnabled && shouldInterceptHttp != null && isMainHeaders)
+                if (httpInterceptionEnabled && shouldInterceptHttp != null && isMainHeaders) // NOSONAR S2589 -- Predicate is optional; interception-on still allows a null passthrough callback.
                 {
                     var authority = headerListener.Authority.GetString();
                     var host = authority;
@@ -1202,7 +1202,6 @@ namespace Titanium.Web.Proxy.Http2
                         return false;
                     }
 
-                    {
                     var handler = onBeforeRequestResponse(sessionArgs, streamContext);
                     response.Http2BeforeHandlerTask = handler;
 
@@ -1358,7 +1357,6 @@ namespace Titanium.Web.Proxy.Http2
 
                     response.Locked = true;
                     return false;
-                    }
                 }
 
                 if (isInterim)

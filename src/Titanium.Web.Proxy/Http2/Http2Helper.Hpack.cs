@@ -586,7 +586,7 @@ namespace Titanium.Web.Proxy.Http2
             }
 
             if (extraName != null)
-                WriteStaticLiteralWithoutIndexing(result, offset, extraName, extraValue!);
+                offset = WriteStaticLiteralWithoutIndexing(result, offset, extraName, extraValue!);
 
             return result;
         }

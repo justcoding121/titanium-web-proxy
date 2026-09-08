@@ -24,6 +24,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     private const string GsettingsCommand = "gsettings";
     private const string DbusSessionBusAddress = "DBUS_SESSION_BUS_ADDRESS";
     private const string SessionEnvDropInFileName = "90-titanium-inspector-proxy.conf";
+    private const string ConfigDirName = ".config";
 
     private static readonly string[] EnvKeys =
     [
@@ -583,7 +584,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
             if (string.IsNullOrWhiteSpace(home))
                 return false;
 
-            var dir = Path.Combine(home, ".config", "environment.d");
+            var dir = Path.Combine(home, ConfigDirName, "environment.d");
             Directory.CreateDirectory(dir);
             var path = Path.Combine(dir, SessionEnvDropInFileName);
             var sb = new StringBuilder();
@@ -606,7 +607,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
             var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             if (string.IsNullOrWhiteSpace(home))
                 return;
-            File.Delete(Path.Combine(home, ".config", "environment.d", SessionEnvDropInFileName));
+            File.Delete(Path.Combine(home, ConfigDirName, "environment.d", SessionEnvDropInFileName));
         }
         catch
         {

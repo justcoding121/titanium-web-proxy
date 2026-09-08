@@ -156,12 +156,12 @@ public class WebSocketUpgradeTests
         // application-level frames that crossed the wire: the client's outgoing ping (a "sent" frame from
         // the proxy's point of view) and the origin's echo of it (a "received" frame), in addition to the
         // origin's initial greeting.
-        WaitForCondition(() => proxyReceivedTexts.Count >= 2, timeout,
+        await WaitForConditionAsync(() => proxyReceivedTexts.Count >= 2, timeout,
             "Expected the proxy to observe both the origin's greeting and its echo as 'received' frames.");
         Assert.AreEqual(OriginGreetingText, proxyReceivedTexts[0]);
         Assert.AreEqual(ClientPingText, proxyReceivedTexts[1]);
 
-        WaitForCondition(() => proxySentTexts.Count >= 1, timeout,
+        await WaitForConditionAsync(() => proxySentTexts.Count >= 1, timeout,
             "Expected the proxy to observe the client's outgoing ping as a 'sent' frame.");
         Assert.AreEqual(ClientPingText, proxySentTexts[0]);
     }
@@ -268,7 +268,7 @@ public class WebSocketUpgradeTests
         Assert.AreEqual(WebsocketOpCode.Ping, captured[1].Op);
         CollectionAssert.AreEqual(Encoding.UTF8.GetBytes("ctl"), captured[1].Payload);
 
-        WaitForCondition(() => observedSent.Contains("replaced"), timeout,
+        await WaitForConditionAsync(() => observedSent.Contains("replaced"), timeout,
             "DataSent must still observe the replaced frame on the wire.");
         Assert.IsFalse(observedSent.Contains("drop-me"), "Dropped frames must not appear in DataSent.");
     }
@@ -527,13 +527,13 @@ public class WebSocketUpgradeTests
             $"Nested query must survive the upstream-proxy path. Got:\n{capturedRequest}");
     }
 
-    private static void WaitForCondition(Func<bool> condition, TimeSpan timeout, string failureMessage)
+    private static async Task WaitForConditionAsync(Func<bool> condition, TimeSpan timeout, string failureMessage)
     {
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
             if (condition()) return;
-            Thread.Sleep(20);
+            await Task.Delay(20);
         }
 
         Assert.IsTrue(condition(), failureMessage);

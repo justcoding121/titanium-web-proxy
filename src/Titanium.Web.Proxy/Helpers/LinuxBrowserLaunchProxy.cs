@@ -28,6 +28,16 @@ internal static class LinuxBrowserLaunchProxy
     /// </summary>
     internal const int LegacyProxyServerModeFixedServers = 2;
 
+    private const string LocalDirName = ".local";
+    private const string ShareDirName = "share";
+    private const string ConfigDirName = ".config";
+    private const string ChromiumDirName = "chromium";
+    private const string ApplicationsDirName = "applications";
+    private const string PoliciesManaged = "policies";
+    private const string ManagedDirName = "managed";
+
+    private static readonly string[] DesktopFieldCodes = [" %U", " %u", " %f", " %F", " %s", " \"%s\""];
+
     private static readonly string[] DesktopSources =
     [
         "/usr/share/applications/google-chrome.desktop",
@@ -104,12 +114,17 @@ internal static class LinuxBrowserLaunchProxy
         try
         {
             var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            var apps = Path.Combine(home, ".local", "share", "applications");
+            var apps = Path.Combine(home, LocalDirName, ShareDirName, ApplicationsDirName);
             if (!Directory.Exists(apps))
                 return;
+            var updateDesktopDb = UnixProcessPath.Resolve(
+                "/usr/bin/update-desktop-database", "/usr/local/bin/update-desktop-database");
+            if (updateDesktopDb is null)
+                return;
+
             using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                FileName = "update-desktop-database",
+                FileName = updateDesktopDb,
                 Arguments = QuoteShellArg(apps),
                 UseShellExecute = false,
                 CreateNoWindow = true,
@@ -182,7 +197,7 @@ internal static class LinuxBrowserLaunchProxy
         if (port is <= 0 or > 65535)
             throw new ArgumentOutOfRangeException(nameof(port));
 
-        var server = $"http://{hostname}:{port}";
+        var server = $"http://{hostname}:{port}"; // NOSONAR S5332 -- Chromium ProxyServer is an http CONNECT proxy URL.
         var payload = new JsonObject
         {
             ["ProxyMode"] = "fixed_servers",
@@ -248,7 +263,7 @@ internal static class LinuxBrowserLaunchProxy
                 return false;
             }
 
-            var expected = $"http://{hostname}:{port}";
+            var expected = $"http://{hostname}:{port}"; // NOSONAR S5332 -- Chromium ProxyServer is an http CONNECT proxy URL.
             var actual = server.GetString() ?? string.Empty;
             if (!actual.Contains($"{hostname}:{port}", StringComparison.Ordinal) &&
                 !actual.Equals(expected, StringComparison.OrdinalIgnoreCase))
@@ -277,7 +292,7 @@ internal static class LinuxBrowserLaunchProxy
 
         // Insert before desktop field codes so every Chromium-family Exec line picks up flags.
         var insertAt = rest.Length;
-        foreach (var code in new[] { " %U", " %u", " %f", " %F", " %s", " \"%s\"" })
+            foreach (var code in DesktopFieldCodes)
         {
             var idx = rest.IndexOf(code, StringComparison.Ordinal);
             if (idx >= 0 && idx < insertAt)
@@ -288,28 +303,28 @@ internal static class LinuxBrowserLaunchProxy
     }
 
     internal static string ChromeProxyFlags(string hostname, int port) =>
-        $"--proxy-server=http://{hostname}:{port} --proxy-bypass-list={ProxyBypassList} --disable-quic";
+        $"--proxy-server=http://{hostname}:{port} --proxy-bypass-list={ProxyBypassList} --disable-quic"; // NOSONAR S5332 -- Chromium --proxy-server flag requires an http CONNECT proxy URL.
 
     internal static IEnumerable<string> PolicyDirectories()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        yield return Path.Combine(home, ".config", "google-chrome", "policies", "managed");
-        yield return Path.Combine(home, ".config", "google-chrome-beta", "policies", "managed");
-        yield return Path.Combine(home, ".config", "google-chrome-unstable", "policies", "managed");
-        yield return Path.Combine(home, ".config", "chromium", "policies", "managed");
-        yield return Path.Combine(home, ".config", "BraveSoftware", "Brave-Browser", "policies", "managed");
-        yield return Path.Combine(home, ".config", "microsoft-edge", "policies", "managed");
-        yield return Path.Combine(home, "snap", "chromium", "common", "chromium", "policies", "managed");
-        yield return Path.Combine(home, "snap", "chromium", "current", ".config", "chromium", "policies", "managed");
-        yield return Path.Combine(home, "snap", "microsoft-edge", "common", "microsoft-edge", "policies", "managed");
-        yield return Path.Combine(home, ".var", "app", "com.google.Chrome", "config", "google-chrome", "policies",
-            "managed");
-        yield return Path.Combine(home, ".var", "app", "org.chromium.Chromium", "config", "chromium", "policies",
-            "managed");
+        yield return Path.Combine(home, ConfigDirName, "google-chrome", PoliciesManaged, ManagedDirName);
+        yield return Path.Combine(home, ConfigDirName, "google-chrome-beta", PoliciesManaged, ManagedDirName);
+        yield return Path.Combine(home, ConfigDirName, "google-chrome-unstable", PoliciesManaged, ManagedDirName);
+        yield return Path.Combine(home, ConfigDirName, ChromiumDirName, PoliciesManaged, ManagedDirName);
+        yield return Path.Combine(home, ConfigDirName, "BraveSoftware", "Brave-Browser", PoliciesManaged, ManagedDirName);
+        yield return Path.Combine(home, ConfigDirName, "microsoft-edge", PoliciesManaged, ManagedDirName);
+        yield return Path.Combine(home, "snap", ChromiumDirName, "common", ChromiumDirName, PoliciesManaged, ManagedDirName);
+        yield return Path.Combine(home, "snap", ChromiumDirName, "current", ConfigDirName, ChromiumDirName, PoliciesManaged, ManagedDirName);
+        yield return Path.Combine(home, "snap", "microsoft-edge", "common", "microsoft-edge", PoliciesManaged, ManagedDirName);
+        yield return Path.Combine(home, ".var", "app", "com.google.Chrome", "config", "google-chrome", PoliciesManaged,
+            ManagedDirName);
+        yield return Path.Combine(home, ".var", "app", "org.chromium.Chromium", "config", ChromiumDirName, PoliciesManaged,
+            ManagedDirName);
         yield return Path.Combine(home, ".var", "app", "com.brave.Browser", "config", "BraveSoftware", "Brave-Browser",
-            "policies", "managed");
-        yield return Path.Combine(home, ".var", "app", "com.microsoft.Edge", "config", "microsoft-edge", "policies",
-            "managed");
+            PoliciesManaged, ManagedDirName);
+        yield return Path.Combine(home, ".var", "app", "com.microsoft.Edge", "config", "microsoft-edge", PoliciesManaged,
+            ManagedDirName);
         yield return "/etc/opt/chrome/policies/managed";
         yield return "/etc/chromium/policies/managed";
         yield return "/etc/opt/edge/policies/managed";
@@ -318,7 +333,7 @@ internal static class LinuxBrowserLaunchProxy
     private static int WriteBrowserDesktopOverrides(string hostname, int port)
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var destDir = Path.Combine(home, ".local", "share", "applications");
+        var destDir = Path.Combine(home, LocalDirName, ShareDirName, ApplicationsDirName);
         var written = 0;
         foreach (var source in DesktopSources)
         {
@@ -335,7 +350,7 @@ internal static class LinuxBrowserLaunchProxy
     private static IEnumerable<string> UserDesktopOverridePaths()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var destDir = Path.Combine(home, ".local", "share", "applications");
+        var destDir = Path.Combine(home, LocalDirName, ShareDirName, ApplicationsDirName);
         foreach (var source in DesktopSources)
             yield return Path.Combine(destDir, Path.GetFileName(source));
     }
@@ -487,12 +502,12 @@ internal static class LinuxBrowserLaunchProxy
     private static string UserXfceChromeHelperPath()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        return Path.Combine(home, ".local", "share", "xfce4", "helpers", "google-chrome.desktop");
+        return Path.Combine(home, LocalDirName, ShareDirName, "xfce4", "helpers", "google-chrome.desktop");
     }
 
     private static string UserXfceHelpersRcPath()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        return Path.Combine(home, ".config", "xfce4", "helpers.rc");
+        return Path.Combine(home, ConfigDirName, "xfce4", "helpers.rc");
     }
 }

@@ -25,9 +25,15 @@ public static class FirefoxCertificateTrust
     private const string EnterpriseRootsPrefName = "security.enterprise_roots.enabled";
     private const string FirefoxProcessName = "firefox";
     private const string MozillaDirName = ".mozilla";
+    private const string DistributionDirName = "distribution";
+    private const string PoliciesJsonFileName = "policies.json";
+    private const string LibraryDirName = "Library";
+    private const string ApplicationSupportDirName = "Application Support";
+    private const string FirefoxDirName = "Firefox";
     private static readonly Regex EnterpriseRootsUserPrefLine = new(
         @"^\s*user_pref\s*\(\s*""" + Regex.Escape(EnterpriseRootsPrefName) + @"""\s*,\s*(true|false)\s*\)\s*;\s*$",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled,
+        TimeSpan.FromMilliseconds(250));
 
     /// <summary>
     ///     Mozilla enterprise policies.json root shape. Extra keys are preserved on merge so we
@@ -61,31 +67,10 @@ public static class FirefoxCertificateTrust
             return TryEnableEnterpriseRootsUserPref();
         }
 
-        try
+        if (TryWriteWindowsImportEnterpriseRootsPolicy())
         {
-            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(WindowsPolicySubKey, true);
-            if (key is not null)
-            {
-                key.SetValue(ImportEnterpriseRootsValue, 1, Microsoft.Win32.RegistryValueKind.DWord);
-                // Re-read so a locked/redirected hive cannot look like success.
-                var verify = key.GetValue(ImportEnterpriseRootsValue);
-                var ok = verify switch
-                {
-                    int i => i == 1,
-                    long l => l == 1,
-                    null => false,
-                    _ => Convert.ToInt32(verify) == 1,
-                };
-                if (ok)
-                {
-                    return CertificateOsTrustResult.Ok(
-                        "Firefox will trust the Windows root CA after you restart Firefox");
-                }
-            }
-        }
-        catch
-        {
-            // Fall through to profile user.js (Policies key may be locked by enterprise).
+            return CertificateOsTrustResult.Ok(
+                "Firefox will trust the Windows root CA after you restart Firefox");
         }
 
         if (!TryResolveDefaultProfileDirectory(out var profileDir, out var resolveError))
@@ -96,6 +81,38 @@ public static class FirefoxCertificateTrust
                 (resolveError ?? "no Firefox profile was found"));
         }
 
+        return TryWriteEnterpriseRootsUserPref(
+            profileDir,
+            "Firefox will trust the Windows root CA after you restart Firefox (profile preference)");
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static bool TryWriteWindowsImportEnterpriseRootsPolicy()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(WindowsPolicySubKey, true);
+            if (key is null)
+                return false;
+
+            key.SetValue(ImportEnterpriseRootsValue, 1, Microsoft.Win32.RegistryValueKind.DWord);
+            var verify = key.GetValue(ImportEnterpriseRootsValue);
+            return verify switch
+            {
+                int i => i == 1,
+                long l => l == 1,
+                null => false,
+                _ => Convert.ToInt32(verify) == 1,
+            };
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static CertificateOsTrustResult TryWriteEnterpriseRootsUserPref(string profileDir, string successMessage)
+    {
         try
         {
             EnsureEnterpriseRootsUserPref(profileDir);
@@ -106,8 +123,7 @@ public static class FirefoxCertificateTrust
                     "Wrote Firefox user.js but security.enterprise_roots.enabled did not validate");
             }
 
-            return CertificateOsTrustResult.Ok(
-                "Firefox will trust the Windows root CA after you restart Firefox (profile preference)");
+            return CertificateOsTrustResult.Ok(successMessage);
         }
         catch (Exception ex)
         {
@@ -322,24 +338,24 @@ public static class FirefoxCertificateTrust
         {
             var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
             var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-            yield return Path.Combine(programFiles, "Mozilla Firefox", "distribution", "policies.json");
+            yield return Path.Combine(programFiles, "Mozilla Firefox", DistributionDirName, PoliciesJsonFileName);
             if (!string.IsNullOrEmpty(programFilesX86))
-                yield return Path.Combine(programFilesX86, "Mozilla Firefox", "distribution", "policies.json");
+                yield return Path.Combine(programFilesX86, "Mozilla Firefox", DistributionDirName, PoliciesJsonFileName);
             // User-level distribution next to the profile root (portable / some enterprise layouts).
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            yield return Path.Combine(appData, "Mozilla", "Firefox", "distribution", "policies.json");
+            yield return Path.Combine(appData, "Mozilla", FirefoxDirName, DistributionDirName, PoliciesJsonFileName);
             yield break;
         }
 
         if (OperatingSystem.IsMacOS())
         {
             // Never write Firefox.app/.../distribution — that invalidates the code signature.
-            yield return Path.Combine(home, "Library", "Application Support", "Firefox", "distribution",
-                "policies.json");
-            yield return Path.Combine(home, "Library", "Application Support", "FirefoxDeveloperEdition",
-                "distribution", "policies.json");
-            yield return Path.Combine(home, "Library", "Application Support", "Firefox Nightly", "distribution",
-                "policies.json");
+            yield return Path.Combine(home, LibraryDirName, ApplicationSupportDirName, FirefoxDirName, DistributionDirName,
+                PoliciesJsonFileName);
+            yield return Path.Combine(home, LibraryDirName, ApplicationSupportDirName, "FirefoxDeveloperEdition",
+                DistributionDirName, PoliciesJsonFileName);
+            yield return Path.Combine(home, LibraryDirName, ApplicationSupportDirName, "Firefox Nightly", DistributionDirName,
+                PoliciesJsonFileName);
             yield break;
         }
 
@@ -393,14 +409,14 @@ public static class FirefoxCertificateTrust
 
     private static IEnumerable<string> GetLinuxFirefoxPoliciesJsonPaths(string home)
     {
-        yield return "/etc/firefox/policies/policies.json";
-        yield return "/usr/lib/firefox/distribution/policies.json";
-        yield return "/usr/lib64/firefox/distribution/policies.json";
-        yield return Path.Combine(home, MozillaDirName, FirefoxProcessName, "distribution", "policies.json");
+        yield return "/etc/firefox/policies/" + PoliciesJsonFileName;
+        yield return Path.Combine("/usr/lib/firefox", DistributionDirName, PoliciesJsonFileName);
+        yield return Path.Combine("/usr/lib64/firefox", DistributionDirName, PoliciesJsonFileName);
+        yield return Path.Combine(home, MozillaDirName, FirefoxProcessName, DistributionDirName, PoliciesJsonFileName);
         yield return Path.Combine(home, "snap", FirefoxProcessName, "common", MozillaDirName, FirefoxProcessName,
-            "distribution", "policies.json");
+            DistributionDirName, PoliciesJsonFileName);
         yield return Path.Combine(home, ".var", "app", "org.mozilla.firefox", MozillaDirName, FirefoxProcessName,
-            "distribution", "policies.json");
+            DistributionDirName, PoliciesJsonFileName);
     }
 
     internal static void EnsureEnterpriseRootsUserPref(string profileDirectory) =>
@@ -516,7 +532,7 @@ public static class FirefoxCertificateTrust
                     CertificateOsTrustKind.NssFailed,
                     string.IsNullOrWhiteSpace(add?.StandardError)
                         ? "certutil failed to import the CA into the Firefox profile"
-                        : add!.StandardError.Trim());
+                        : add.StandardError.Trim());
             }
 
             // certutil -A can exit 0 as a silent no-op when the DER exists under another nickname.
@@ -698,7 +714,12 @@ public static class FirefoxCertificateTrust
 
         try
         {
-            var root = Path.GetDirectoryName(iniPath)!;
+            var root = Path.GetDirectoryName(iniPath);
+            if (string.IsNullOrEmpty(root))
+            {
+                error = "Firefox profiles.ini path is invalid";
+                return false;
+            }
             var text = File.ReadAllText(iniPath);
             var entry = ParseDefaultProfileEntry(text);
             if (entry is null || string.IsNullOrWhiteSpace(entry.Value.Path))
@@ -804,16 +825,16 @@ public static class FirefoxCertificateTrust
         if (OperatingSystem.IsWindows())
         {
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            return [Path.Combine(appData, "Mozilla", "Firefox")];
+            return [Path.Combine(appData, "Mozilla", FirefoxDirName)];
         }
 
         if (OperatingSystem.IsMacOS())
         {
             return
             [
-                Path.Combine(home, "Library", "Application Support", "Firefox"),
-                Path.Combine(home, "Library", "Application Support", "FirefoxDeveloperEdition"),
-                Path.Combine(home, "Library", "Application Support", "Firefox Nightly"),
+                Path.Combine(home, LibraryDirName, ApplicationSupportDirName, FirefoxDirName),
+                Path.Combine(home, LibraryDirName, ApplicationSupportDirName, "FirefoxDeveloperEdition"),
+                Path.Combine(home, LibraryDirName, ApplicationSupportDirName, "Firefox Nightly"),
             ];
         }
 

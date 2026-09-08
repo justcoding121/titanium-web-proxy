@@ -19,9 +19,14 @@ internal static class LinuxChromeProfileProxy
 {
     internal const string BackupSuffix = ".titanium-inspector-proxy.bak";
     private const string MarkerFileName = "chrome-profile-proxy.json";
+    private const string ConfigDirName = ".config";
+    private const string ProxyKey = "proxy";
+    private const string FixedServersMode = "fixed_servers";
+    private const string ChromiumDirName = "chromium";
 
     private static readonly object Gate = new();
     private static readonly List<FileSystemWatcher> Watchers = new();
+    private static readonly int[] ClearRetryDelaysMs = [300, 800, 1500, 3000];
     private static string? _activeHost;
     private static int _activePort;
     private static CancellationTokenSource? _clearRetryCts;
@@ -88,14 +93,14 @@ internal static class LinuxChromeProfileProxy
             {
                 try
                 {
-                    await Task.Delay(400).ConfigureAwait(false);
+                    await Task.Delay(400, _clearRetryCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
                     LinuxProxyFailOpen.Start(h, p);
                 }
                 catch
                 {
                     // ignore
                 }
-            });
+            }, _clearRetryCts?.Token ?? CancellationToken.None);
         }
     }
 
@@ -131,16 +136,16 @@ internal static class LinuxChromeProfileProxy
 
     private static IEnumerable<string> BrowserConfigRoots(string home)
     {
-        yield return Path.Combine(home, ".config", "google-chrome");
-        yield return Path.Combine(home, ".config", "google-chrome-beta");
-        yield return Path.Combine(home, ".config", "google-chrome-unstable");
-        yield return Path.Combine(home, ".config", "chromium");
-        yield return Path.Combine(home, ".config", "BraveSoftware", "Brave-Browser");
-        yield return Path.Combine(home, ".config", "microsoft-edge");
-        yield return Path.Combine(home, "snap", "chromium", "common", "chromium");
+        yield return Path.Combine(home, ConfigDirName, "google-chrome");
+        yield return Path.Combine(home, ConfigDirName, "google-chrome-beta");
+        yield return Path.Combine(home, ConfigDirName, "google-chrome-unstable");
+        yield return Path.Combine(home, ConfigDirName, ChromiumDirName);
+        yield return Path.Combine(home, ConfigDirName, "BraveSoftware", "Brave-Browser");
+        yield return Path.Combine(home, ConfigDirName, "microsoft-edge");
+        yield return Path.Combine(home, "snap", ChromiumDirName, "common", ChromiumDirName);
         yield return Path.Combine(home, "snap", "microsoft-edge", "common", "microsoft-edge");
         yield return Path.Combine(home, ".var", "app", "com.google.Chrome", "config", "google-chrome");
-        yield return Path.Combine(home, ".var", "app", "org.chromium.Chromium", "config", "chromium");
+        yield return Path.Combine(home, ".var", "app", "org.chromium.Chromium", "config", ChromiumDirName);
         yield return Path.Combine(home, ".var", "app", "com.brave.Browser", "config", "BraveSoftware",
             "Brave-Browser");
         yield return Path.Combine(home, ".var", "app", "com.microsoft.Edge", "config", "microsoft-edge");
@@ -180,16 +185,16 @@ internal static class LinuxChromeProfileProxy
             var backupPath = prefsPath + BackupSuffix;
             if (!File.Exists(backupPath))
             {
-                var original = root["proxy"]?.ToJsonString() ?? "null";
+                var original = root[ProxyKey]?.ToJsonString() ?? "null";
                 File.WriteAllText(backupPath, original);
             }
 
-            root["proxy"] = BuildFixedServersProxy(hostname, port);
+            root[ProxyKey] = BuildFixedServersProxy(hostname, port);
 
             AtomicWriteJson(prefsPath, root);
 
             var verify = File.ReadAllText(prefsPath);
-            return verify.Contains("fixed_servers", StringComparison.Ordinal) &&
+            return verify.Contains(FixedServersMode, StringComparison.Ordinal) &&
                    verify.Contains($"{hostname}:{port}", StringComparison.Ordinal);
         }
         catch
@@ -217,9 +222,9 @@ internal static class LinuxChromeProfileProxy
             var root = JsonNode.Parse(string.IsNullOrWhiteSpace(text) ? "{}" : text) as JsonObject
                        ?? new JsonObject();
             if (original == "null" || string.IsNullOrWhiteSpace(original))
-                root.Remove("proxy");
+                root.Remove(ProxyKey);
             else
-                root["proxy"] = JsonNode.Parse(original);
+                root[ProxyKey] = JsonNode.Parse(original);
 
             AtomicWriteJson(prefsPath, root);
             File.Delete(backupPath);
@@ -243,27 +248,27 @@ internal static class LinuxChromeProfileProxy
 
             var text = File.ReadAllText(prefsPath);
             if (!text.Contains($"{hostname}:{port}", StringComparison.Ordinal) &&
-                !text.Contains("fixed_servers", StringComparison.Ordinal))
+                !text.Contains(FixedServersMode, StringComparison.Ordinal))
                 return true;
 
             var root = JsonNode.Parse(string.IsNullOrWhiteSpace(text) ? "{}" : text) as JsonObject
                        ?? new JsonObject();
-            var proxy = root["proxy"] as JsonObject;
+            var proxy = root[ProxyKey] as JsonObject;
             if (proxy is null)
                 return true;
 
             var server = proxy["server"]?.GetValue<string>() ?? string.Empty;
             var mode = proxy["mode"]?.GetValue<string>() ?? string.Empty;
             var pointsAtUs = server.Contains($"{hostname}:{port}", StringComparison.OrdinalIgnoreCase) ||
-                             (mode.Equals("fixed_servers", StringComparison.OrdinalIgnoreCase) &&
+                             (mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase) &&
                               server.Contains(hostname, StringComparison.OrdinalIgnoreCase) &&
                               server.Contains(port.ToString(), StringComparison.Ordinal));
 
-            if (!pointsAtUs && !mode.Equals("fixed_servers", StringComparison.OrdinalIgnoreCase))
+            if (!pointsAtUs && !mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase))
                 return true;
 
             // Prefer OS/system proxy (gsettings already restored) over a dead fixed endpoint.
-            root["proxy"] = new JsonObject { ["mode"] = "system" };
+            root[ProxyKey] = new JsonObject { ["mode"] = "system" };
             AtomicWriteJson(prefsPath, root);
 
             // Drop backup if strip replaced our endpoint — original restore already attempted.
@@ -285,8 +290,8 @@ internal static class LinuxChromeProfileProxy
     private static JsonObject BuildFixedServersProxy(string hostname, int port) =>
         new()
         {
-            ["mode"] = "fixed_servers",
-            ["server"] = $"http://{hostname}:{port}",
+            ["mode"] = FixedServersMode,
+            ["server"] = $"http://{hostname}:{port}", // NOSONAR S5332 -- Chromium proxy.mode fixed_servers requires an http proxy URL.
             ["bypass_list"] = LinuxBrowserLaunchProxy.ProxyBypassList,
         };
 
@@ -309,7 +314,7 @@ internal static class LinuxChromeProfileProxy
         _ = Task.Run(async () =>
         {
             // Chrome often flushes Preferences shortly after Inspector restores them.
-            foreach (var delayMs in new[] { 300, 800, 1500, 3000 })
+            foreach (var delayMs in ClearRetryDelaysMs)
             {
                 try
                 {
@@ -351,7 +356,7 @@ internal static class LinuxChromeProfileProxy
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (string.IsNullOrWhiteSpace(home))
             return null;
-        return Path.Combine(home, ".config", "TitaniumInspector", MarkerFileName);
+        return Path.Combine(home, ConfigDirName, "TitaniumInspector", MarkerFileName);
     }
 
     private static void WriteMarker(string hostname, int port)
@@ -462,14 +467,14 @@ internal static class LinuxChromeProfileProxy
         {
             try
             {
-                await Task.Delay(250).ConfigureAwait(false);
+                await Task.Delay(250, _clearRetryCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
                 ReassertIfNeeded(e.FullPath);
             }
             catch
             {
                 // ignore
             }
-        });
+        }, _clearRetryCts?.Token ?? CancellationToken.None);
     }
 
     private static void ReassertIfNeeded(string fullPath)
@@ -490,7 +495,7 @@ internal static class LinuxChromeProfileProxy
             if (!File.Exists(fullPath))
                 return;
             var text = File.ReadAllText(fullPath);
-            if (text.Contains("fixed_servers", StringComparison.Ordinal) &&
+            if (text.Contains(FixedServersMode, StringComparison.Ordinal) &&
                 text.Contains($"{host}:{port}", StringComparison.Ordinal))
                 return;
 

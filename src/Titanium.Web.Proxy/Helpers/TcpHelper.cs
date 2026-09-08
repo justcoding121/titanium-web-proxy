@@ -111,7 +111,7 @@ internal static class TcpHelper
     }
 
     [SupportedOSPlatform("macos")]
-    private static int GetProcessIdByLocalPortMac(AddressFamily addressFamily, int localPort)
+    private static int GetProcessIdByLocalPortMac(AddressFamily addressFamily, int localPort) // NOSONAR S3776 -- macOS sysctl walk; splitting would not change Inspector-only cost.
     {
         var expectedFamily = addressFamily == AddressFamily.InterNetwork
             ? NativeMethods.DarwinAfInet
