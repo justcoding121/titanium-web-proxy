@@ -47,26 +47,29 @@ public class JsonAccessLogIntegrationTests
             using var proxy = new ProxyServer(userTrustRootCertificate: false);
             proxy.EnableHttpInterception = true;
             proxy.EnableRequestTimingCapture = true;
-            using var writer = new JsonAccessLogWriter(logPath, sampleRate: 1);
-            proxy.AfterResponse += (_, e) =>
+            using (var writer = new JsonAccessLogWriter(logPath, sampleRate: 1))
             {
-                writer.TryWrite(e);
-                return Task.CompletedTask;
-            };
+                proxy.AfterResponse += (_, e) =>
+                {
+                    writer.TryWrite(e);
+                    return Task.CompletedTask;
+                };
 
-            var listenPort = GetFreePort();
-            proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, listenPort, false));
-            proxy.Start();
+                var listenPort = GetFreePort();
+                proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, listenPort, false));
+                proxy.Start();
 
-            using var handler = new HttpClientHandler
-            {
-                Proxy = new WebProxy($"http://127.0.0.1:{listenPort}"),
-                UseProxy = true,
-            };
-            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
-            var resp = await http.GetAsync($"http://127.0.0.1:{originPort}/hello-access");
-            Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode);
-            await Task.Delay(200);
+                using var handler = new HttpClientHandler
+                {
+                    Proxy = new WebProxy($"http://127.0.0.1:{listenPort}"),
+                    UseProxy = true,
+                };
+                using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
+                var resp = await http.GetAsync($"http://127.0.0.1:{originPort}/hello-access");
+                Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode);
+                await Task.Delay(200);
+            }
+
             var text = await File.ReadAllTextAsync(logPath);
             Assert.IsTrue(text.Contains("hello-access", StringComparison.Ordinal));
             Assert.IsTrue(text.Contains("\"status\":200", StringComparison.Ordinal));

@@ -32,8 +32,11 @@ public class JsonAccessLogTests
         var path = Path.Combine(Path.GetTempPath(), "twp-access-" + Guid.NewGuid().ToString("N") + ".ndjson");
         try
         {
-            using var writer = new JsonAccessLogWriter(path, sampleRate: 0);
-            writer.TryWriteRecord("GET", "http://x/", "x", 200, null, "127.0.0.1");
+            using (var writer = new JsonAccessLogWriter(path, sampleRate: 0))
+            {
+                writer.TryWriteRecord("GET", "http://x/", "x", 200, null, "127.0.0.1");
+            }
+
             var text = File.Exists(path) ? File.ReadAllText(path) : "";
             Assert.AreEqual("", text.Trim());
         }
