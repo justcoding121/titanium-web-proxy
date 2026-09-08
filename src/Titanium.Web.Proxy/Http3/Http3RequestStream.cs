@@ -737,6 +737,9 @@ internal static class Http3RequestStream
         ByteString capturedRequestAuthority,
         string method)
     {
+        // Lite copies origin DATA without OnResponseBodyWrite; intercept body hooks need the full forward.
+        if (sessionArgs.Server.HasOnResponseBodyWriteSubscribers)
+            return false;
         if (request.CancelRequest
             || (sessionArgs.HttpClient.HasResponse && sessionArgs.HttpClient.Response.Locked))
             return false;

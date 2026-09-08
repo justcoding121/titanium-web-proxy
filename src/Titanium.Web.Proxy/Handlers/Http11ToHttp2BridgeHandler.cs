@@ -518,8 +518,10 @@ public partial class ProxyServer
             if (request.HasBody && !request.IsBodyRead)
             {
                 var clientBodyStream = args.ClientStream;
-                var isChunked = request.OriginalIsChunked;
-                var contentLength = request.OriginalContentLength;
+                // Fast path skips SetOriginalHeaders; OriginalContentLength stays 0 and LimitedStream
+                // would END_STREAM with no DATA while Content-Length is still advertised (origin RST).
+                var isChunked = args.IsFastPath ? request.IsChunked : request.OriginalIsChunked;
+                var contentLength = args.IsFastPath ? request.ContentLength : request.OriginalContentLength;
                 copyRequestBody = async (writeData, ct) =>
                 {
                     using var limited = new LimitedStream(clientBodyStream, BufferPool, isChunked,
