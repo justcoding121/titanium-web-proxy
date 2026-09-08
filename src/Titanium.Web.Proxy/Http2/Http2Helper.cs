@@ -4529,9 +4529,10 @@ namespace Titanium.Web.Proxy.Http2
 
             if (fromAt >= 0 && toCount == 0)
             {
-                patched = new byte[block.Length];
-                Buffer.BlockCopy(block, 0, patched, 0, block.Length);
-                patched[fromAt] = to;
+                // Owned fragment / CapturedCompressedHeaders / TryPrepare rebuild — patch in place
+                // (TLS↔h2c). Avoids per-stream alloc+copy on the mixed-transport hot path.
+                block[fromAt] = to;
+                patched = block;
                 return StaticSchemeOverrideResult.Patched;
             }
 
