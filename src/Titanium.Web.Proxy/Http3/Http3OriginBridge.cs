@@ -237,10 +237,12 @@ internal static class Http3OriginBridge
             }
 
             // Use the origin authority (sniHost) for the :authority pseudo-header, not the connect host.
-                    var encodedHeaders = EncodeOriginRequestHeaders(quicConn, request, sniHost);
-                    await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, encodedHeaders, cancellationToken);
-                    // HEADERS are on the wire — client DATA may be consumed next; retry is no longer safe.
-                    requestSent = true;
+            var encodedHeaders = EncodeOriginRequestHeaders(quicConn, request, sniHost);
+            var finOnHeaders = pendingCopy == null && body is not { Length: > 0 };
+            await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, encodedHeaders,
+                cancellationToken, completeWrites: finOnHeaders);
+            // HEADERS are on the wire — client DATA may be consumed next; retry is no longer safe.
+            requestSent = true;
 
             if (pendingCopy != null)
             {
@@ -248,7 +250,8 @@ internal static class Http3OriginBridge
             }
             else if (body is { Length: > 0 })
             {
-                await Http3Frame.WriteAsync(originStream, Http3FrameType.Data, body, cancellationToken);
+                await Http3Frame.WriteAsync(originStream, Http3FrameType.Data, body, cancellationToken,
+                    completeWrites: true);
             }
 
             // QuicStream WriteAsync may buffer; without Flush the peer can see the request hundreds of
@@ -854,7 +857,8 @@ internal static class Http3OriginBridge
                     originStream = await quicConn.OpenRequestStreamAsync(cancellationToken);
 
                     var encodedHeaders = EncodeOriginRequestHeaders(quicConn, request, sniHost);
-                    await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, encodedHeaders, cancellationToken);
+                    await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, encodedHeaders,
+                        cancellationToken, completeWrites: true);
                     requestSent = true;
                     // QuicStream WriteAsync may buffer; without Flush the peer can stall forever
                     // under multiplex (GHA Linux/Windows reverse H3→H3 @ c=64: 0 RPS / ~0% CPU).

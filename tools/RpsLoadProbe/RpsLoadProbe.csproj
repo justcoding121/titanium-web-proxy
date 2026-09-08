@@ -30,6 +30,14 @@
     <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
   </ItemGroup>
 
+  <!-- Local macOS: copy MsQuic beside the apphost so Http3NativeBootstrap can reexec with DYLD. -->
+  <Target Name="CopyMacHttp3Natives" AfterTargets="Build" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <Exec Command="bash &quot;$(MSBuildThisFileDirectory)..\packaging\copy-http3-natives-osx.sh&quot; &quot;$(TargetDir)&quot;"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low" />
+  </Target>
+
   <ItemGroup>
     <Compile Remove="results\**\*" />
     <None Remove="results\**\*" />

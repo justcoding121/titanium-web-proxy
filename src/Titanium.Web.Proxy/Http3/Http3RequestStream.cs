@@ -971,7 +971,7 @@ internal static class Http3RequestStream
     {
         var headers = new List<(string, string)> { (":status", statusCode.ToString()) };
         var encoded = QpackEncoder.Encode(headers, qpackContext);
-        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, encoded, ct);
+        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, encoded, ct, completeWrites: true);
         await stream.FlushAsync(ct);
         stream.CompleteWrites();
     }
@@ -1019,14 +1019,20 @@ internal static class Http3RequestStream
 
         if (body.Length >= 16 * 1024)
         {
-            await Http3Frame.WriteHeadersAndDataAsync(stream, qpackHeaders, body, ct);
+            await Http3Frame.WriteHeadersAndDataAsync(stream, qpackHeaders, body, ct, completeWrites: true);
             await stream.FlushAsync(ct);
             return;
         }
 
-        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
         if (body.Length > 0)
-            await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct);
+        {
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct, completeWrites: true);
+        }
+        else
+        {
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct, completeWrites: true);
+        }
 
         await stream.FlushAsync(ct);
     }
@@ -1076,14 +1082,20 @@ internal static class Http3RequestStream
         // there raised cool absolutes and missed Windows CI (latency bundle revert).
         if (body is { Length: >= 16 * 1024 })
         {
-            await Http3Frame.WriteHeadersAndDataAsync(stream, qpackHeaders, body, ct);
+            await Http3Frame.WriteHeadersAndDataAsync(stream, qpackHeaders, body, ct, completeWrites: true);
             await stream.FlushAsync(ct);
             return;
         }
 
-        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
         if (body is { Length: > 0 })
-            await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct);
+        {
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct, completeWrites: true);
+        }
+        else
+        {
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct, completeWrites: true);
+        }
 
         await stream.FlushAsync(ct);
     }
