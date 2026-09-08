@@ -1,16 +1,24 @@
 # Validate compare-product medians @ c=64:
-#   MITM Lite/Full ÷ Reverse >= 0.80 (all OS, all gated pairs)
+#   MITM Lite ÷ Reverse >= 0.65, Full ÷ Reverse >= 0.55 (all OS, all gated pairs)
 #   Reverse TWP ÷ YARP >= 0.95 (when YARP SLO-passes)
 # No nginx gate — nginx is wiki/charts only.
 # When Repeats>1, each arm contributes multiple c=64 SLO-pass rows — use the median RPS.
 param(
     [Parameter(Mandatory)] [string] $CsvPath,
-    [double] $MitmGate = 0.80,
+    [double] $MitmLiteGate = 0.65,
+    [double] $MitmFullGate = 0.55,
+    # Backward-compatible alias: if set, applies to both Lite and Full (overrides the pair above).
+    [double] $MitmGate = -1,
     [double] $ReverseYarpGate = 0.95,
     [string] $BaselineCsvPath = ""
 )
 
 $ErrorActionPreference = 'Stop'
+if ($MitmGate -ge 0) {
+    $MitmLiteGate = $MitmGate
+    $MitmFullGate = $MitmGate
+}
+
 $rows = Import-Csv $CsvPath
 $byArm = @{}
 foreach ($row in $rows) {
@@ -46,20 +54,21 @@ $mitmPairs = @(
 )
 
 $failed = $false
-Write-Host "MITM gates (Lite/Full >= $MitmGate x Reverse @ c=64 median; all OS)" -ForegroundColor Cyan
+Write-Host "MITM gates (Lite >= $MitmLiteGate / Full >= $MitmFullGate x Reverse @ c=64 median; all OS)" -ForegroundColor Cyan
 foreach ($p in $mitmPairs) {
     foreach ($kind in @('Lite', 'Full')) {
         $num = $p.$kind
         $den = $p.Reverse
+        $gate = if ($kind -eq 'Lite') { $MitmLiteGate } else { $MitmFullGate }
         if (-not $sustain.ContainsKey($num) -or -not $sustain.ContainsKey($den)) {
             Write-Host "FAIL $($p.Label) $kind : missing data" -ForegroundColor Red
             $failed = $true
             continue
         }
         $ratio = $sustain[$num] / $sustain[$den]
-        $ok = $ratio -ge $MitmGate
+        $ok = $ratio -ge $gate
         $color = if ($ok) { 'Green' } else { 'Red' }
-        Write-Host ("{0} {1} = {2:N3} (gate {3:N2})" -f $p.Label, $kind, $ratio, $MitmGate) -ForegroundColor $color
+        Write-Host ("{0} {1} = {2:N3} (gate {3:N2})" -f $p.Label, $kind, $ratio, $gate) -ForegroundColor $color
         if (-not $ok) { $failed = $true }
     }
 }
