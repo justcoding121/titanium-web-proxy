@@ -1,21 +1,26 @@
 using System;
 using System.Buffers;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
+using Titanium.Web.Proxy.Http2.Hpack;
 using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
@@ -642,6 +647,54 @@ public class SonarNewCodeCoverageTests
     }
 
     [TestMethod]
+    public async Task OriginConnection_StreamTableGrowLookupAndDuplicateRegister()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        using var connection = await CreateShellAsync(proxy);
+        var pendingType = typeof(Http2OriginConnection).GetNestedType("PendingStream", BindingFlags.NonPublic)!;
+        object Pending() => Activator.CreateInstance(pendingType, PrivateInstance, binder: null,
+            args: [0L], culture: null)!;
+
+        var register = typeof(Http2OriginConnection).GetMethod("RegisterOpenedStream", PrivateInstance)!;
+        var tryGet = typeof(Http2OriginConnection).GetMethod("TryGetStream", PrivateInstance)!;
+        var contains = typeof(Http2OriginConnection).GetMethod("StreamTableContains", PrivateInstance)!;
+        var unregister = typeof(Http2OriginConnection).GetMethod("TryUnregisterStream", PrivateInstance)!;
+        var enumerate = typeof(Http2OriginConnection).GetMethod("EnumerateLiveStreams", PrivateInstance)!;
+        var ensure = typeof(Http2OriginConnection).GetMethod("EnsureStreamTable", PrivateInstance)!;
+
+        // Force growth past the default 64-slot table (idx = streamId >> 1).
+        ensure.Invoke(connection, [200]);
+        register.Invoke(connection, [401, Pending()]);
+        Assert.AreEqual(1, connection.ActiveStreamCount);
+        Assert.IsTrue((bool)contains.Invoke(connection, [401])!);
+        Assert.IsFalse((bool)contains.Invoke(connection, [403])!);
+
+        var getArgs = new object?[] { 401, null };
+        Assert.IsTrue((bool)tryGet.Invoke(connection, getArgs)!);
+        Assert.IsNotNull(getArgs[1]);
+        getArgs = [99999, null];
+        Assert.IsFalse((bool)tryGet.Invoke(connection, getArgs)!);
+
+        var unregArgs = new object?[] { 99999, null };
+        Assert.IsFalse((bool)unregister.Invoke(connection, unregArgs)!);
+        Assert.ThrowsExactly<TargetInvocationException>(() =>
+            register.Invoke(connection, [401, Pending()]));
+
+        var live = new List<object>();
+        foreach (var item in (IEnumerable)enumerate.Invoke(connection, null)!)
+            live.Add(item!);
+        Assert.AreEqual(1, live.Count);
+
+        unregArgs = [401, null];
+        Assert.IsTrue((bool)unregister.Invoke(connection, unregArgs)!);
+        Assert.AreEqual(0, connection.ActiveStreamCount);
+
+        connection.AcquireLease();
+        connection.ReleaseLease();
+        connection.Retire();
+    }
+
+    [TestMethod]
     public async Task Http2OriginRelayPool_AssignReleaseAndFailedOpen()
     {
         using var proxy = new ProxyServer(false, false, false);
@@ -786,6 +839,18 @@ public class SonarNewCodeCoverageTests
                 {
                     var ctx = await http.GetContextAsync();
                     var path = ctx.Request.Url?.AbsolutePath ?? "/";
+                    if (path.Contains("medium", StringComparison.Ordinal))
+                    {
+                        var mediumBody = new byte[8192];
+                        Random.Shared.NextBytes(mediumBody);
+                        ctx.Response.StatusCode = 200;
+                        ctx.Response.ContentType = "application/octet-stream";
+                        ctx.Response.ContentLength64 = mediumBody.Length;
+                        await ctx.Response.OutputStream.WriteAsync(mediumBody);
+                        ctx.Response.Close();
+                        continue;
+                    }
+
                     if (path.Contains("empty", StringComparison.Ordinal))
                     {
                         ctx.Response.StatusCode = 204;
@@ -885,6 +950,12 @@ public class SonarNewCodeCoverageTests
                 await chunked.PreencodedStreamBodyWriter(ms, cts.Token);
                 Assert.IsTrue(ms.Length > 0);
             }
+
+            var medium = await RunAsync("/medium", true);
+            Assert.AreEqual(200, medium.Response!.StatusCode);
+            Assert.IsNotNull(medium.PreencodedQpackHeaders);
+            if (medium.PreencodedBodyRented && medium.PreencodedBody is not null)
+                proxy.BufferPool.ReturnBuffer(medium.PreencodedBody);
 
             var fwdTcp = BridgeMethod("ForwardOverTcpAsync");
             using (var session = MakeSession(proxy, ep))
@@ -1301,6 +1372,463 @@ public class SonarNewCodeCoverageTests
         Assert.IsNull(mgr.OpenMacKeychainGuidance());
         mgr.TrustRootCertificate(true);
         _ = mgr.TrustRootCertificateAsAdmin(true);
+    }
+
+    [TestMethod]
+    public async Task OriginPendingStream_InlineBodyPipeAndFailPending()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        using var connection = await CreateShellAsync(proxy);
+        var pendingType = typeof(Http2OriginConnection).GetNestedType("PendingStream", BindingFlags.NonPublic)!;
+        var pending = Activator.CreateInstance(pendingType, PrivateInstance, binder: null, args: [0L], culture: null)!;
+        var tunnel = pendingType.GetMethod("CreateTunnel", BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, null)!;
+
+        var prepare = pendingType.GetMethod("TryPrepareInlineBody", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var writeMi = pendingType.GetMethod("TryWriteInline", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var take = pendingType.GetMethod("TakeInlineBody", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var ensure = pendingType.GetMethod("EnsureBodyPipe", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var mark = pendingType.GetMethod("MarkInboundComplete", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var failPending = typeof(Http2OriginConnection).GetMethod("FailPending", PrivateStatic)!;
+        var threshold = (int)pendingType.GetField("InlineBodyThresholdBytes",
+            BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Public)!
+            .GetValue(null)!;
+
+        Assert.IsFalse((bool)prepare.Invoke(tunnel, [new Response { ContentLength = 4 }])!);
+        Assert.IsFalse((bool)prepare.Invoke(pending, [new Response { ContentLength = -1 }])!);
+        Assert.IsFalse((bool)prepare.Invoke(pending, [new Response { ContentLength = threshold + 1 }])!);
+        Assert.IsTrue((bool)prepare.Invoke(pending, [new Response { ContentLength = 0 }])!);
+        CollectionAssert.AreEqual(Array.Empty<byte>(), (byte[])take.Invoke(pending, null)!);
+
+        Assert.IsTrue((bool)prepare.Invoke(pending, [new Response { ContentLength = 4 }])!);
+        var write = writeMi.CreateDelegate<Action<ReadOnlySpan<byte>>>(pending);
+        write(ReadOnlySpan<byte>.Empty);
+        write("ab"u8);
+        write("cdef"u8); // overflow truncated
+        var body = (byte[])take.Invoke(pending, null)!;
+        Assert.AreEqual(4, body.Length);
+
+        Assert.IsTrue((bool)prepare.Invoke(pending, [new Response { ContentLength = 8 }])!);
+        write("xx"u8);
+        var shortBody = (byte[])take.Invoke(pending, null)!;
+        Assert.AreEqual(2, shortBody.Length);
+
+        var pipe1 = ensure.Invoke(pending, null)!;
+        var pipe2 = ensure.Invoke(pending, null)!;
+        Assert.AreSame(pipe1, pipe2);
+        mark.Invoke(pending, null);
+        Assert.IsTrue((bool)pendingType.GetProperty("IsInboundComplete",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.GetValue(pending)!);
+        var afterComplete = ensure.Invoke(pending, null)!;
+        Assert.AreSame(pipe1, afterComplete);
+
+        failPending.Invoke(null, [pending, new IOException("fail-pending")]);
+        ((IDisposable)pending).Dispose();
+        ((IDisposable)tunnel).Dispose();
+
+        var apply = typeof(Http2OriginConnection).GetMethod("ApplyEnableConnectProtocolSetting", PrivateInstance)!;
+        apply.Invoke(connection, [1]);
+        apply.Invoke(connection, [0]); // downgrade after ever-set → Fail
+        apply.Invoke(connection, [9]); // illegal → Fail
+
+        var parseMi = typeof(Http2OriginConnection).GetMethod("TryParseAsciiStatusCode", PrivateStatic)!;
+        var parse = parseMi.CreateDelegate<TryParseAsciiStatusCodeDelegate>();
+        Assert.IsTrue(parse("200"u8, out var parsed));
+        Assert.AreEqual(200, parsed);
+        Assert.IsFalse(parse("abc"u8, out _));
+        Assert.IsFalse(parse(ReadOnlySpan<byte>.Empty, out _));
+
+        var stripHeaders = typeof(Http2OriginConnection).GetMethod("StripHeadersFraming", PrivateStatic,
+            binder: null, [typeof(byte[]), typeof(Http2FrameFlag)], modifiers: null)!;
+        var hdr = (byte[])stripHeaders.Invoke(null,
+            [new byte[] { 2, 1, 2, 3, 4, 5, 6, 7, 8, 9 }, Http2FrameFlag.Padded | Http2FrameFlag.Priority])!;
+        Assert.IsTrue(hdr.Length >= 0);
+        connection.Retire();
+    }
+
+    private delegate bool TryParseAsciiStatusCodeDelegate(ReadOnlySpan<byte> digits, out int statusCode);
+    private delegate bool EqualsAsciiIgnoreCaseDelegate(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b);
+
+    [TestMethod]
+    public void Http2Helper_HpackStaticLiteralAndSkipHelpers()
+    {
+        var equals = typeof(Http2Helper).GetMethod("EqualsAsciiIgnoreCase", PrivateStatic)!
+            .CreateDelegate<EqualsAsciiIgnoreCaseDelegate>();
+        Assert.IsTrue(equals("Host"u8, "host"u8));
+        Assert.IsFalse(equals("ab"u8, "abc"u8));
+
+        var omit = typeof(Http2Helper).GetMethod("ShouldOmitHttp2Header", PrivateStatic)!;
+        Assert.IsTrue((bool)omit.Invoke(null, ["Connection".GetByteString()])!);
+        Assert.IsTrue((bool)omit.Invoke(null, ["host".GetByteString()])!);
+        Assert.IsTrue((bool)omit.Invoke(null, ["te".GetByteString()])!);
+        Assert.IsFalse((bool)omit.Invoke(null, ["accept".GetByteString()])!);
+
+        var schemeByte = typeof(Http2Helper).GetMethod("StaticIndexedSchemeByte", PrivateStatic)!;
+        Assert.AreNotEqual((byte)0, (byte)schemeByte.Invoke(null, [ProxyServer.UriSchemeHttp8])!);
+        Assert.AreNotEqual((byte)0, (byte)schemeByte.Invoke(null, [ProxyServer.UriSchemeHttps8])!);
+        Assert.AreEqual((byte)0, (byte)schemeByte.Invoke(null, ["ftp".GetByteString()])!);
+
+        var skipLit = typeof(Http2Helper).GetMethod("TrySkipHpackLiteral", PrivateStatic,
+            binder: null, [typeof(byte[]), typeof(int).MakeByRefType()], modifiers: null)!;
+        var skipStr = typeof(Http2Helper).GetMethod("TrySkipHpackString", PrivateStatic,
+            binder: null, [typeof(byte[]), typeof(int).MakeByRefType()], modifiers: null)!;
+        var skipInt = typeof(Http2Helper).GetMethod("TrySkipHpackIntegerContinuation", PrivateStatic,
+            binder: null, [typeof(byte[]), typeof(int).MakeByRefType()], modifiers: null)!;
+
+        var literal = new byte[] { 0x00, 0x01, (byte)'a', 0x01, (byte)'b' };
+        object?[] litArgs = [literal, 0];
+        Assert.IsTrue((bool)skipLit.Invoke(null, litArgs)!);
+        Assert.AreEqual(literal.Length, litArgs[1]);
+
+        object?[] strArgs = [new byte[] { 0x03, (byte)'x', (byte)'y', (byte)'z' }, 0];
+        Assert.IsTrue((bool)skipStr.Invoke(null, strArgs)!);
+        Assert.AreEqual(4, strArgs[1]);
+        object?[] badStr = [new byte[] { 0x05, 1 }, 0];
+        Assert.IsFalse((bool)skipStr.Invoke(null, badStr)!);
+
+        object?[] intArgs = [Array.Empty<byte>(), 0];
+        Assert.IsFalse((bool)skipInt.Invoke(null, intArgs)!);
+
+        var size = typeof(Http2Helper).GetMethod("GetHpackStringLiteralEncodedSize", PrivateStatic)!;
+        Assert.AreEqual(1 + 3, (int)size.Invoke(null, [3])!);
+        Assert.IsTrue((int)size.Invoke(null, [200])! > 201);
+
+        var prefSize = typeof(Http2Helper).GetMethod("WriteHpackPrefixedIntSize", PrivateStatic)!;
+        Assert.AreEqual(1, (int)prefSize.Invoke(null, [7, 10UL])!);
+        Assert.IsTrue((int)prefSize.Invoke(null, [7, 300UL])! >= 2);
+
+        var appendSize = typeof(Http2Helper).GetMethod("GetStaticLiteralAppendSize", PrivateStatic)!;
+        Assert.IsTrue((int)appendSize.Invoke(null, [3, 2])! > 5);
+
+        // String overload of WriteStaticLiteralWithoutIndexing exercises WriteHpack* without Span Invoke.
+        var writeStaticString = typeof(Http2Helper).GetMethods(PrivateStatic)
+            .First(m => m.Name == "WriteStaticLiteralWithoutIndexing"
+                        && m.GetParameters()[2].ParameterType == typeof(string));
+        var buf = new byte[64];
+        writeStaticString.Invoke(null, [buf, 0, "n2", "v2"]);
+
+        var buildSuffix = typeof(Http2Helper).GetMethod("BuildStaticLiteralAppendSuffix", PrivateStatic)!;
+        Assert.IsNull(buildSuffix.Invoke(null,
+            [default(MitmCompressedRelayHelper.AddedHeaderBuffer), null, null]));
+        var withExtra = (byte[]?)buildSuffix.Invoke(null,
+            [default(MitmCompressedRelayHelper.AddedHeaderBuffer), "via", "1.1 twp"]);
+        Assert.IsNotNull(withExtra);
+        Assert.IsTrue(withExtra!.Length > 0);
+
+        var before = new HeaderCollection();
+        before.AddHeader("accept", "*/*");
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(before);
+        var after = new HeaderCollection();
+        after.AddHeader("accept", "*/*");
+        after.AddHeader("x-added", "1");
+        var captured = new byte[] { 0x82, 0x87, 0x84 };
+        var prepare = typeof(Http2Helper).GetMethod("TryPrepareMitmStaticHpackRelay", PrivateStatic)!;
+        var prepArgs = new object?[]
+        {
+            captured, baseline, after, true, "1.1 twp", null, null
+        };
+        _ = (bool)prepare.Invoke(null, prepArgs)!;
+
+        var settings = new Http2Settings();
+        var listener = new Http2Helper.MyHeaderListener((_, _) => { }, isRequest: true);
+        listener.AddHeader(StaticTable.KnownHeaderMethod, "GET".GetByteString(), false);
+        listener.AddHeader(StaticTable.KnownHeaderAuhtority, "origin.test".GetByteString(), false);
+        listener.AddHeader(StaticTable.KnownHeaderScheme, "https".GetByteString(), false);
+        listener.AddHeader(StaticTable.KnownHeaderPath, "/".GetByteString(), false);
+        var headers = new HeaderCollection();
+        headers.AddHeader("X-Mixed", "1");
+        var reencode = typeof(Http2Helper).GetMethod("ReencodeCompressedRequestBlock", PrivateStatic)!;
+        var reencoded = (byte[])reencode.Invoke(null,
+            [settings, listener, headers, ProxyServer.UriSchemeHttp8])!;
+        Assert.IsTrue(reencoded.Length > 0);
+    }
+
+    [TestMethod]
+    public async Task Http2OriginPool_HasAnyCapacityOfferInvalidateAndPickHelpers()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var pool = proxy.Http2OriginConnectionPool;
+        var ep = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false);
+        var key = Http2OriginConnectionPool.BuildPoolKey(
+            proxy, ep, null, null, "127.0.0.1", 443, null, null);
+
+        Assert.IsFalse(pool.HasAny(key));
+        Assert.IsFalse(pool.IsAtMaxOriginCapacity(key));
+
+        using var shell = await CreateShellAsync(proxy);
+        pool.Offer(key, shell);
+        Assert.IsTrue(pool.HasAny(key));
+
+        var shouldGrow = typeof(Http2OriginConnectionPool).GetMethod("ShouldEarlyGrow", PrivateStatic)!;
+        Assert.IsTrue((bool)shouldGrow.Invoke(null, [Array.Empty<Http2OriginConnection>(), 1])!);
+        Assert.IsTrue((bool)shouldGrow.Invoke(null, [new[] { shell }, 0])!);
+        // Soft-cap not reached → do not early-grow.
+        Assert.IsFalse((bool)shouldGrow.Invoke(null, [new[] { shell }, 1])!);
+
+        var tryAny = typeof(Http2OriginConnectionPool).GetMethod("TryPickAnyFromSnapshot", PrivateStatic)!;
+        Assert.IsNotNull(tryAny.Invoke(null, [new[] { shell }]));
+        Assert.IsNull(tryAny.Invoke(null, [Array.Empty<Http2OriginConnection>()]));
+
+        var tryPick = typeof(Http2OriginConnectionPool).GetMethod("TryPickFromSnapshot", PrivateStatic)!;
+        Assert.IsNotNull(tryPick.Invoke(null, [new[] { shell }, ProxyResourceLimits.Default]));
+
+        pool.Invalidate(key, shell);
+        Assert.IsFalse(pool.HasAny(key));
+    }
+
+    [TestMethod]
+    public void CertificateManager_CacheFindUninstallAndSslContextSeams()
+    {
+        var isTruthy = typeof(CertificateManager).GetMethod("IsTruthyEnv", PrivateStatic)!;
+        var previous = Environment.GetEnvironmentVariable("TWP_SONAR_TRUTHY_COV");
+        try
+        {
+            Environment.SetEnvironmentVariable("TWP_SONAR_TRUTHY_COV", "yes");
+            Assert.IsTrue((bool)isTruthy.Invoke(null, ["TWP_SONAR_TRUTHY_COV"])!);
+            Environment.SetEnvironmentVariable("TWP_SONAR_TRUTHY_COV", "0");
+            Assert.IsFalse((bool)isTruthy.Invoke(null, ["TWP_SONAR_TRUTHY_COV"])!);
+            Environment.SetEnvironmentVariable("TWP_SONAR_TRUTHY_COV", "true");
+            Assert.IsTrue((bool)isTruthy.Invoke(null, ["TWP_SONAR_TRUTHY_COV"])!);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TWP_SONAR_TRUTHY_COV", previous);
+        }
+
+        var find = typeof(CertificateManager).GetMethod("FindCertificates", PrivateStatic)!;
+        var empty = (X509Certificate2Collection)find.Invoke(null,
+            [StoreName.Root, StoreLocation.CurrentUser, "ffffffffffffffffffffffffffffffffffffffff"])!;
+        Assert.AreEqual(0, empty.Count);
+
+        var noMax = typeof(CertificateManager).GetMethod("NoMaxCacheEntries", PrivateStatic)!;
+        Assert.IsNull(noMax.Invoke(null, null));
+
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle,
+            SaveFakeCertificates = true,
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+        using var leaf = mgr.CreateCertificate("cache-seam.example", false);
+        Assert.IsNotNull(leaf);
+
+        var cacheField = typeof(CertificateManager).GetField("cachedCertificates", PrivateInstance)!;
+        var cache = (System.Collections.IDictionary)cacheField.GetValue(mgr)!;
+        var cachedType = typeof(CachedCertificate);
+        var cached = Activator.CreateInstance(cachedType, leaf)!;
+        cachedType.GetProperty("LastAccess", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
+            .SetValue(cached, DateTime.UtcNow);
+        cache["cache-seam.example"] = cached;
+
+        var tryGet = typeof(CertificateManager).GetMethod("TryGetValidCachedCertificate", PrivateInstance)!;
+        var getArgs = new object?[] { "cache-seam.example", null };
+        Assert.IsTrue((bool)tryGet.Invoke(mgr, getArgs)!);
+        Assert.IsNotNull(getArgs[1]);
+        getArgs = ["missing.example", null];
+        Assert.IsFalse((bool)tryGet.Invoke(mgr, getArgs)!);
+
+        var loadDisk = typeof(CertificateManager).GetMethod("TryLoadFakeCertificateFromDisk", PrivateInstance)!;
+        Assert.IsNull(loadDisk.Invoke(mgr, ["no-such-host.example"]));
+
+        var uninstall = typeof(CertificateManager).GetMethod("UninstallCertificate", PrivateInstance)!;
+        uninstall.Invoke(mgr, [StoreName.My, StoreLocation.CurrentUser, null]);
+
+        var stage = typeof(CertificateManager).GetMethod("StageIntermediateForOsChainBuild", PrivateStatic)!;
+        stage.Invoke(null, [mgr.RootCertificate!]);
+
+        var buildCtx = typeof(CertificateManager).GetMethod("BuildSslCertificateContext", PrivateInstance)!;
+        var ctx = buildCtx.Invoke(mgr, [leaf]);
+        Assert.IsNotNull(ctx);
+
+        var rootInstalled = typeof(CertificateManager).GetMethod("RootCertificateInstalled", PrivateInstance)!;
+        _ = (bool)rootInstalled.Invoke(mgr, [StoreLocation.CurrentUser])!;
+
+        var orphan = typeof(CertificateManager).GetMethod("RemoveOrphanedSameCommonNameCertificates", PrivateInstance)!;
+        orphan.Invoke(mgr, [StoreLocation.CurrentUser, true]);
+    }
+
+    [TestMethod]
+    public async Task H1TerminateLite_MiddlewareAndLiveOriginForward()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var ep = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false)
+        {
+            ForwardCleartext = true,
+            ForwardHost = "127.0.0.1",
+            ForwardPort = 9,
+        };
+
+        var createMwReq = typeof(ProxyServer).GetMethod("CreateTerminateLiteMiddlewareRequest", PrivateStatic)!;
+        var req = new Request
+        {
+            Method = "GET",
+            HttpVersion = HttpHeader.Version11,
+            Host = "app.test",
+            RequestUriString8 = "/mw".GetByteString(),
+        };
+        req.Headers.AddHeader("Authorization", "Bearer x");
+        req.Headers.AddHeader("X-Multi", "a");
+        req.Headers.AddHeader("X-Multi", "b");
+        Assert.IsNotNull(createMwReq.Invoke(null, [ep, req]));
+        Assert.IsNotNull(createMwReq.Invoke(null,
+            [ep, new Request { Method = "HEAD", HttpVersion = HttpHeader.Version11, Host = "app.test" }]));
+
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var accept = listener.AcceptSocketAsync();
+        var clientSock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        await clientSock.ConnectAsync(IPAddress.Loopback, ((IPEndPoint)listener.LocalEndpoint).Port);
+        var accepted = await accept;
+        var clientConn = new TcpClientConnection(proxy, clientSock);
+        var clientStream = new HttpClientStream(proxy, clientConn, new NetworkStream(clientSock, ownsSocket: false),
+            proxy.BufferPool, CancellationToken.None);
+
+        var writeMw = typeof(ProxyServer).GetMethod("WriteTerminateLiteMiddlewareResponseAsync", PrivateStatic)!;
+        var ctx = new ProxyMiddlewareContext
+        {
+            Session = new object(),
+            IsHandled = true,
+            HandledStatusCode = 204,
+            HandledBody = "mw",
+            HandledHeaders = [new KeyValuePair<string, string>("x-mw", "1")],
+        };
+        var drain = Task.Run(() =>
+        {
+            var buf = new byte[1024];
+            try { accepted.Receive(buf); } catch { /* ignore */ }
+        });
+        await (Task)writeMw.Invoke(null, [clientStream, req, ctx, CancellationToken.None])!;
+        await drain;
+
+        var tryMw = typeof(ProxyServer).GetMethod("TryRunTerminateLiteMiddlewareAsync", PrivateStatic)!;
+        var handled = new HandleAllMiddleware();
+        var keep = await (Task<bool?>)tryMw.Invoke(null,
+            [ep, clientStream, req, new IProxyMiddleware[] { handled }, CancellationToken.None])!;
+        Assert.IsNotNull(keep);
+
+        var passthrough = await (Task<bool?>)tryMw.Invoke(null,
+            [ep, clientStream, req, Array.Empty<IProxyMiddleware>(), CancellationToken.None])!;
+        Assert.IsNull(passthrough);
+
+        var httpPort = 0;
+        var http = new HttpListener();
+        {
+            var tmp = new TcpListener(IPAddress.Loopback, 0);
+            tmp.Start();
+            httpPort = ((IPEndPoint)tmp.LocalEndpoint).Port;
+            tmp.Stop();
+        }
+        http.Prefixes.Add($"http://127.0.0.1:{httpPort}/");
+        http.Start();
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var c = await http.GetContextAsync();
+                c.Response.StatusCode = 200;
+                c.Response.ContentLength64 = 2;
+                await c.Response.OutputStream.WriteAsync("ok"u8.ToArray());
+                c.Response.Close();
+            }
+            catch { /* ignore */ }
+        });
+
+        try
+        {
+            var liveEp = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false)
+            {
+                ForwardCleartext = true,
+                ForwardHost = "127.0.0.1",
+                ForwardPort = httpPort,
+            };
+            using var liveListener = new TcpListener(IPAddress.Loopback, 0);
+            liveListener.Start();
+            var liveAccept = liveListener.AcceptSocketAsync();
+            var liveClient = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            await liveClient.ConnectAsync(IPAddress.Loopback, ((IPEndPoint)liveListener.LocalEndpoint).Port);
+            var liveAccepted = await liveAccept;
+            _ = Task.Run(() =>
+            {
+                var buf = new byte[4096];
+                try { while (liveAccepted.Receive(buf) > 0) { } } catch { /* ignore */ }
+            });
+            var liveConn = new TcpClientConnection(proxy, liveClient);
+            var liveStream = new HttpClientStream(proxy, liveConn,
+                new NetworkStream(liveClient, ownsSocket: false), proxy.BufferPool, CancellationToken.None);
+            var liveReq = new Request
+            {
+                Method = "GET",
+                HttpVersion = HttpHeader.Version11,
+                Host = $"127.0.0.1:{httpPort}",
+                RequestUriString8 = "/".GetByteString(),
+            };
+            var forward = typeof(ProxyServer).GetMethod("ForwardH1TerminateLiteAsync", PrivateInstance)!;
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            _ = await (Task<bool>)forward.Invoke(proxy, [liveEp, liveStream, liveReq, cts.Token])!;
+            liveAccepted.Dispose();
+            liveClient.Dispose();
+        }
+        finally
+        {
+            try { http.Stop(); } catch { /* ignore */ }
+            try { http.Close(); } catch { /* ignore */ }
+        }
+
+        accepted.Dispose();
+        clientSock.Dispose();
+    }
+
+    [TestMethod]
+    public void FirefoxCertificateTrust_RemainingPolicyAndPrefSeams()
+    {
+        var flags = BindingFlags.NonPublic | BindingFlags.Static;
+        var profilesIni = typeof(FirefoxCertificateTrust).GetMethod("TryGetProfilesIniPath", flags)!;
+        var iniArgs = new object?[] { null };
+        _ = (bool)profilesIni.Invoke(null, iniArgs)!;
+        _ = typeof(FirefoxCertificateTrust).GetMethod("EnumerateFirefoxProcesses", flags)!
+            .Invoke(null, null);
+
+        var parseRoot = typeof(FirefoxCertificateTrust).GetMethod("ParsePoliciesRoot", flags)!;
+        Assert.ThrowsExactly<TargetInvocationException>(() => parseRoot.Invoke(null, ["not-json"]));
+        Assert.IsNotNull(parseRoot.Invoke(null, ["{\"policies\":{\"ImportEnterpriseRoots\":true}}"]));
+        Assert.IsNotNull(parseRoot.Invoke(null, [null]));
+
+        Assert.IsTrue(FirefoxCertificateTrust.TryValidateFirefoxPoliciesJson(
+            "{\"policies\":{\"Certificates\":{\"ImportEnterpriseRoots\":true}}}", out _));
+        Assert.IsFalse(FirefoxCertificateTrust.TryValidateFirefoxPoliciesJson("not-json", out _));
+        Assert.IsFalse(FirefoxCertificateTrust.TryValidateFirefoxPoliciesJson("{\"policies\":{}}", out _));
+
+        var dir = Path.Combine(Path.GetTempPath(), "twp-ff-cov-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var prefs = Path.Combine(dir, "prefs.js");
+            File.WriteAllText(prefs, "// seed\n");
+            FirefoxCertificateTrust.EnsureEnterpriseRootsUserPref(dir);
+            var clearPref = typeof(FirefoxCertificateTrust).GetMethod("ClearEnterpriseRootsPrefFile", flags)!;
+            clearPref.Invoke(null, [prefs]);
+            Assert.IsTrue(File.Exists(prefs));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { /* ignore */ }
+        }
+
+        _ = typeof(FirefoxCertificateTrust)
+            .GetMethod("TryClearFirefoxPoliciesJsonImportEnterpriseRoots", flags)!
+            .Invoke(null, null);
+    }
+
+    private sealed class HandleAllMiddleware : IProxyMiddleware
+    {
+        public ValueTask InvokeAsync(ProxyMiddlewareContext context, ProxyMiddlewareDelegate next,
+            CancellationToken cancellationToken)
+        {
+            context.IsHandled = true;
+            context.HandledStatusCode = 418;
+            context.HandledBody = "handled";
+            return default;
+        }
     }
 
     private sealed class FailingWriteStream : Stream

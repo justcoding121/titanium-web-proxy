@@ -682,4 +682,62 @@ public class InterceptionCaptureCoverageTests
             interception.EnsureShutdown();
         }
     }
+
+    [TestMethod]
+    public async Task Interception_SessionIdLoggingPfxAndTunnelSnapshotSeams()
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+        };
+        interception.ResetSessionIdSequence();
+        var next = typeof(InterceptionService).GetMethod("NextSessionId", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        Assert.AreEqual(1L, (long)next.Invoke(interception, null)!);
+        Assert.AreEqual(2L, (long)next.Invoke(interception, null)!);
+        interception.ResetSessionIdSequence();
+        Assert.AreEqual(1L, (long)next.Invoke(interception, null)!);
+
+        await interception.StartAsync(IPAddress.Loopback, 0);
+        try
+        {
+            typeof(InterceptionService).GetMethod("ApplyLoggingOptions", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(interception, [new InspectorSettings { LoggingEnabled = true, LoggingEnableFile = false }]);
+            typeof(InterceptionService).GetMethod("ApplyLoggingOptions", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(interception, [null]);
+            typeof(InterceptionService).GetMethod("EnsureRootPfxPath", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(interception, null);
+            var pfx = typeof(InterceptionService).GetField("_rootPfxPath", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .GetValue(interception) as string;
+            Assert.IsFalse(string.IsNullOrEmpty(pfx));
+
+            _ = interception.IsRootPresentInStore(false);
+            _ = interception.IsRootPresentInStore(true);
+
+            using var proxy = new ProxyServer(false, false, false);
+            var endPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false);
+            var cts = new CancellationTokenSource();
+            var connection = new QuicClientConnection(
+                proxy, new IPEndPoint(IPAddress.Loopback, 4433), new IPEndPoint(IPAddress.Loopback, 12345));
+            var clientStream = new HttpClientStream(proxy, connection, Stream.Null, proxy.BufferPool, cts.Token);
+            var connect = new ConnectRequest("tunnel.example:443".GetByteString());
+            var tunnel = new TunnelConnectSessionEventArgs(proxy, endPoint, connect, clientStream, cts);
+
+            var createSnap = typeof(InterceptionService).GetMethod("CreateTunnelSnapshot", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            var snap = (SessionSnapshot)createSnap.Invoke(interception,
+                [tunnel, OpaqueTunnelReason.DecryptOff])!;
+            Assert.IsTrue(snap.IsTunnel);
+            Assert.AreEqual(OpaqueTunnelReason.DecryptOff, snap.OpaqueReason);
+
+            typeof(InterceptionService).GetMethod("AttachTunnelByteCounters",
+                    BindingFlags.NonPublic | BindingFlags.Static)!
+                .Invoke(null, [tunnel, snap]);
+            typeof(InterceptionService).GetMethod("ApplyConnectCompletion",
+                    BindingFlags.NonPublic | BindingFlags.Static)!
+                .Invoke(null, [snap, tunnel]);
+        }
+        finally
+        {
+            interception.EnsureShutdown();
+        }
+    }
 }

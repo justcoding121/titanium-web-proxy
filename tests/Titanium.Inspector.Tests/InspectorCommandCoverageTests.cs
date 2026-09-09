@@ -306,6 +306,80 @@ public class InspectorCommandCoverageTests
         }
     }
 
+    [TestMethod]
+    public async Task ViewModel_OpaqueHintExclusionStatusAndShutdownArms()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-vm-cov-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var settings = new SettingsService(Path.Combine(dir, "settings.json"));
+            settings.Current.AutoStartCapture = false;
+            settings.Current.SystemProxyBypassHosts = ["localhost"];
+            settings.Current.DecryptSkipHosts = ["pin.test"];
+            settings.Save();
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                new ScriptedInspectorDialogs())
+            {
+                BindPort = 0,
+                BindAddress = "127.0.0.1",
+            };
+
+            var notifier = new RecordingStatusNotifier();
+            vm.AttachStatusNotifier(notifier);
+            vm.SetStatus("busy-cov", StatusSeverity.Busy);
+            Assert.IsTrue(vm.IsStatusBusy);
+            vm.SetStatus("idle-cov", StatusSeverity.Neutral);
+            Assert.IsFalse(vm.IsStatusBusy);
+
+            Assert.IsTrue(vm.HasExclusionSummary);
+            StringAssert.Contains(vm.ExclusionSummaryText, "Exclusions");
+
+            var tunnel = new SessionSnapshot
+            {
+                Id = 9,
+                Method = "CONNECT",
+                Url = "tunnel.example:443",
+                Host = "tunnel.example",
+                IsTunnel = true,
+                OpaqueReason = OpaqueTunnelReason.DecryptOff,
+            };
+            vm.SeedSession(tunnel);
+            vm.SelectedSession = tunnel;
+            Assert.IsTrue(vm.ShowSelectedOpaqueHint);
+            Assert.IsFalse(string.IsNullOrEmpty(vm.SelectedOpaqueHint));
+
+            _ = vm.PlusPanelsSummary;
+            _ = vm.EndpointStatusText;
+            _ = vm.InterceptToggleText;
+            _ = vm.BindFieldsEnabled;
+            vm.BreakpointOnResponse = true;
+            Assert.IsTrue(vm.BreakpointOnResponse);
+            vm.ComposerMethod = "POST";
+            vm.ComposerUrl = "https://c.test/";
+            vm.ComposerHeaders = "X: 1";
+            vm.ComposerBody = "b";
+            Assert.AreEqual("POST", vm.ComposerMethod);
+
+            vm.BeginBackgroundShutdown();
+            await Task.Delay(50);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { /* ignore */ }
+        }
+    }
+
     private static async Task ExecuteAsync(ICommand command)
     {
         command.Execute(null);
