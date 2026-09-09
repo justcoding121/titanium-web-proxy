@@ -793,6 +793,14 @@ public class SonarNewCodeCoverageTests
                         continue;
                     }
 
+                    if (ctx.Request.HttpMethod == "HEAD")
+                    {
+                        ctx.Response.StatusCode = 200;
+                        ctx.Response.ContentLength64 = 0;
+                        ctx.Response.Close();
+                        continue;
+                    }
+
                     if (path.Contains("chunk", StringComparison.Ordinal))
                     {
                         var chunk = Encoding.UTF8.GetBytes("chunked-body");
@@ -876,6 +884,50 @@ public class SonarNewCodeCoverageTests
                 await using var ms = new MemoryStream();
                 await chunked.PreencodedStreamBodyWriter(ms, cts.Token);
                 Assert.IsTrue(ms.Length > 0);
+            }
+
+            var fwdTcp = BridgeMethod("ForwardOverTcpAsync");
+            using (var session = MakeSession(proxy, ep))
+            {
+                session.HttpClient.Request.Method = "GET";
+                session.HttpClient.Request.IsHttps = false;
+                session.HttpClient.Request.HttpVersion = HttpHeader.Version30;
+                session.HttpClient.Request.Host = $"127.0.0.1:{port}";
+                session.HttpClient.Request.Authority = $"127.0.0.1:{port}".GetByteString();
+                session.HttpClient.Request.RequestUriString8 = "/".GetByteString();
+                session.HttpClient.Request.Headers.AddHeader("Cookie", "a=1");
+                session.HttpClient.Request.Headers.AddHeader("Cookie", "b=2");
+                session.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+                await (Task)fwdTcp.Invoke(null, [session, proxy, cts.Token, null])!;
+                Assert.AreEqual(200, session.HttpClient.Response.StatusCode);
+            }
+
+            using (var post = MakeSession(proxy, ep))
+            {
+                post.HttpClient.Request.Method = "POST";
+                post.HttpClient.Request.IsHttps = false;
+                post.HttpClient.Request.HttpVersion = HttpHeader.Version30;
+                post.HttpClient.Request.Host = $"127.0.0.1:{port}";
+                post.HttpClient.Request.Authority = $"127.0.0.1:{port}".GetByteString();
+                post.HttpClient.Request.RequestUriString8 = "/".GetByteString();
+                post.HttpClient.Request.IsBodyRead = true;
+                post.HttpClient.Request.Body = "x=1"u8.ToArray();
+                post.HttpClient.Request.ContentType = "application/x-www-form-urlencoded";
+                post.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+                await (Task)fwdTcp.Invoke(null, [post, proxy, cts.Token, null])!;
+                Assert.AreEqual(200, post.HttpClient.Response.StatusCode);
+            }
+
+            using (var head = MakeSession(proxy, ep))
+            {
+                head.HttpClient.Request.Method = "HEAD";
+                head.HttpClient.Request.IsHttps = false;
+                head.HttpClient.Request.HttpVersion = HttpHeader.Version30;
+                head.HttpClient.Request.Host = $"127.0.0.1:{port}";
+                head.HttpClient.Request.Authority = $"127.0.0.1:{port}".GetByteString();
+                head.HttpClient.Request.RequestUriString8 = "/".GetByteString();
+                await (Task)fwdTcp.Invoke(null, [head, proxy, cts.Token, null])!;
+                Assert.IsTrue(head.HttpClient.Response.StatusCode is 200 or 204);
             }
         }
         finally
