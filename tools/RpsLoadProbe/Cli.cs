@@ -253,7 +253,8 @@ internal static class Cli
         or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
         or ProbeMode.CompareHttp3Cleartext or ProbeMode.CompareNginxHttps
         or ProbeMode.CompareMitm or ProbeMode.CompareMatrix or ProbeMode.CompareProduct
-        or ProbeMode.CompareCeiling or ProbeMode.CompareBodies
+        or ProbeMode.CompareProductSmoke or ProbeMode.CompareSpot or ProbeMode.CompareCeiling
+        or ProbeMode.CompareBodies
         or ProbeMode.ComparePost
         or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost or ProbeMode.CompareArch
         or ProbeMode.CompareSaturation

@@ -424,7 +424,12 @@ internal sealed class ChildProcessStack : IAsyncDisposable
                     $"Child exited early (code {process.ExitCode}). stderr: {err} stdout-keys: {leftover}");
             }
 
-            var line = await process.StandardOutput.ReadLineAsync(cancellationToken);
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+                break;
+
+            var line = await process.StandardOutput.ReadLineAsync(cancellationToken)
+                .AsTask().WaitAsync(remaining, cancellationToken);
             if (line == null)
             {
                 await Task.Delay(20, cancellationToken);

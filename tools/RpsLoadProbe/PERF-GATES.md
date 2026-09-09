@@ -33,8 +33,9 @@ Do **not** run full `compare-product` on every develop PR. Thresholds change onl
 | Milestone / investigation | before merge to main | `compare-terminate` or `compare-matrix` | ~1â2h |
 | Editions | after CLI/Plus changes | `compare-editions` + [`validate-edition-gates.ps1`](validate-edition-gates.ps1) | ~60 min |
 | Beta / stable publish | push to `beta`/`stable` | `compare-editions` + parallel `compare-spot` ([`run-spot-matrix.ps1`](run-spot-matrix.ps1)) | ~60 min wall |
-| Cross-version (Gate 2) | before `v7.0.0` tag | `compare-cross-version` + [`validate-cross-version.ps1`](validate-cross-version.ps1) | ~1â2h |
-| Release / wiki refresh | release SHA | `compare-product` (median of 3) on `ubuntu-latest` + `windows-latest` + `macos-15-intel` | ~3â4h |
+| Pre-wiki smoke (required) | after Core / harness changes | **`compare-product-smoke` all OS** (`repeats=1`) before full product | ~30–60 min |
+| Cross-version (Gate 2) | before `v7.0.0` tag | `compare-cross-version` + [`validate-cross-version.ps1`](validate-cross-version.ps1) | ~1–2h |
+| Release / wiki refresh | release SHA | `compare-product` (median of 3) on `ubuntu-latest` + `windows-latest` + `macos-15-intel` | ~3–4h |
 | Heavier wiki tables | as needed | `compare-bodies` / `post` / `lossy` / `arch` / `bridges` / `tls-cost` (independent dispatch) | 30â60 min each |
 
 Do **not** run full `compare-product` as a daily smoke. Prefer TWPÃ·YARP / TWPÃ·nginx / edition ratios over absolute RPS. Early-stop (`--stop-on-slo-fail`, default on) aborts an arm after the first SLO fail plus one peak confirmation step.

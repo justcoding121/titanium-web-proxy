@@ -227,6 +227,11 @@ internal sealed class RampOptions
     /// (peak confirmation) then stop the arm. Default on — matches industry load-tool behavior.
     /// </summary>
     public bool StopOnSloFail { get; init; } = true;
+    /// <summary>
+    /// Wall-clock cap per arm. Null = derive from concurrency steps × (warmup+measure) + overhead.
+    /// Prevents a single stuck measure (MsQuic/bombardier/child READY) from burning the 400m GHA step.
+    /// </summary>
+    public TimeSpan? ArmTimeout { get; init; }
     /// <summary>Default workload when an arm does not override (preserves tiny-GET matrix).</summary>
     public WorkloadOptions Workload { get; init; } = WorkloadOptions.TinyGet;
 }
@@ -319,10 +324,42 @@ internal static class RampOrchestrator
             if (repeats > 1)
                 ProbeLog.Info($"=== repeat {rep}/{repeats} ===");
 
+            var armTimeout = options.ArmTimeout ?? ComputeDefaultArmTimeout(options);
+            if (rep == 1)
+            {
+                ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
+                    $"ArmTimeout={armTimeout.TotalMinutes:F1}m (stuck measure/READY/MsQuic cannot burn the full job)."));
+            }
+
             foreach (var arm in arms)
             {
                 ProbeLog.Info($"--- arm {arm.Name} ---");
-                var peak = await RunArmAsync(arm, options, csv, nginxVersion, cancellationToken);
+                ArmPeakResult peak;
+                using (var armCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+                {
+                    armCts.CancelAfter(armTimeout);
+                    try
+                    {
+                        peak = await RunArmAsync(arm, options, csv, nginxVersion, armCts.Token)
+                            .WaitAsync(armTimeout + TimeSpan.FromSeconds(30), cancellationToken);
+                    }
+                    catch (Exception ex) when (ex is TimeoutException
+                                              || (ex is OperationCanceledException
+                                                  && !cancellationToken.IsCancellationRequested))
+                    {
+                        // Not a cert/OS prompt — usually MsQuic/bombardier/child stdout stall.
+                        ProbeLog.Error(
+                            $"Arm {arm.Name} timed out after {armTimeout.TotalMinutes:F1}m — skipping remaining steps for this arm.");
+                        peak = new ArmPeakResult(0, null, null);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException
+                                              || !cancellationToken.IsCancellationRequested)
+                    {
+                        ProbeLog.Error($"Arm {arm.Name} failed: {ex.GetType().Name}: {ex.Message}");
+                        peak = new ArmPeakResult(0, null, null);
+                    }
+                }
+
                 if (!peakByArm.TryGetValue(arm.Name, out var list))
                 {
                     list = [];
@@ -1438,6 +1475,22 @@ internal static class RampOrchestrator
 
     private sealed record ArmPeakResult(double PeakRps, long? RssPeakBytes, double? CpuAvgPct);
 
+    /// <summary>
+    /// Budget: child start + one full concurrency ramp (warmup+measure+overhead per step) + margin.
+    /// Floor 8m so short local smokes still tolerate cold starts; cap 25m so GHA cannot stall for hours.
+    /// </summary>
+    private static TimeSpan ComputeDefaultArmTimeout(RampOptions options)
+    {
+        var steps = Math.Max(1, options.ConcurrencySteps.Length);
+        var perStep = options.Warmup + options.StepDuration + TimeSpan.FromSeconds(45);
+        var budget = TimeSpan.FromSeconds(90) + TimeSpan.FromTicks(perStep.Ticks * steps) + TimeSpan.FromMinutes(2);
+        if (budget < TimeSpan.FromMinutes(8))
+            budget = TimeSpan.FromMinutes(8);
+        if (budget > TimeSpan.FromMinutes(25))
+            budget = TimeSpan.FromMinutes(25);
+        return budget;
+    }
+
     private static async Task<ArmPeakResult> RunArmAsync(ArmSpec arm, RampOptions options, StreamWriter csv,
         string? nginxVersionHint, CancellationToken cancellationToken)
     {
@@ -1630,9 +1683,11 @@ internal static class RampOrchestrator
                         ? ProcessResourceSampler.SampleDuringAsync(pid, options.StepDuration, cancellationToken)
                         : null;
 
-                    result = await measureTask;
+                    // Bound the measure even if the generator ignores CancellationToken (MsQuic/bombardier stalls).
+                    var measureBudget = options.StepDuration + TimeSpan.FromSeconds(45);
+                    result = await measureTask.WaitAsync(measureBudget, cancellationToken);
                     if (sampleTask != null)
-                        resources = await sampleTask;
+                        resources = await sampleTask.WaitAsync(measureBudget, cancellationToken);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                 {
