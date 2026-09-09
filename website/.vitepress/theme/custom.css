@@ -47,6 +47,18 @@
   color: var(--vp-c-brand-1);
 }
 
+.rps-preview {
+  margin: 0.75rem 0 1.5rem;
+}
+
+.rps-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 10px;
+}
+
 .inspector-preview {
   margin: 0.75rem 0 1.25rem;
   max-width: 40rem;

@@ -26,7 +26,7 @@ features:
   - title: HTTP/1 · HTTP/2 · HTTP/3
     details: HTTP/2 on by default. HTTP/3 (QUIC) opt-in. Bridges when the client and origin speak different protocol versions.
   - title: Measured performance
-    details: Typically at or above YARP; strong reverse-proxy throughput in requests per second (RPS). See the performance guide for publishable tables.
+    details: Typically at or above YARP; strong reverse-proxy throughput in requests per second (RPS). Linux chart below; Windows and macOS in the performance guide.
 ---
 
 ## Editions
@@ -52,6 +52,16 @@ features:
     <p class="license">MIT · NuGet</p>
     <p>Optional .NET library — embed a MITM and/or reverse proxy in your app.</p>
   </div>
+</div>
+
+## Performance
+
+Typically at or above **YARP**; ahead of **nginx** when the client speaks HTTP/2 or HTTP/3 and the origin is HTTP/1.1; near parity elsewhere. One Linux chart here; Windows and macOS live on the [performance](/docs/performance) page.
+
+<div class="rps-preview">
+
+![Practical reverse proxy throughput on Linux](../wiki/images/rps-practical-linux.png)
+
 </div>
 
 ## Quick start
@@ -99,6 +109,7 @@ proxyServer.Start();
 
 - [Download CLI & Inspector](/download)
 - [Getting started](/docs/getting-started)
+- [Performance](/docs/performance)
 - [Configuration reference](/docs/configuration)
 - [gRPC-JSON transcoding](/docs/grpc-json-transcoding)
 - [Release notes](/releases)
