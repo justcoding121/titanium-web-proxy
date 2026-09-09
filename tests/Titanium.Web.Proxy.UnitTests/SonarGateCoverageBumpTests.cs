@@ -16,6 +16,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy.UnitTests;
@@ -396,5 +397,36 @@ public class SonarGateCoverageBumpTests
         Assert.IsTrue((bool)mayHave.Invoke(null, [200, "PUT", -1L, false, true])!);
         Assert.IsFalse((bool)mayHave.Invoke(null, [304, "GET", -1L, true, true])!);
         Assert.IsTrue((bool)mayHave.Invoke(null, [200, "GET", 1L, false, false])!);
+    }
+
+    [TestMethod]
+    public void CertificateManager_IsSelfSignedAndInvalidateContext()
+    {
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle,
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+        var isSelf = typeof(CertificateManager).GetMethod("IsSelfSigned",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        Assert.IsTrue((bool)isSelf.Invoke(null, [mgr.RootCertificate!])!);
+        using var leaf = mgr.CreateCertificate("selfsig-check.example", false);
+        Assert.IsNotNull(leaf);
+        Assert.IsFalse((bool)isSelf.Invoke(null, [leaf!])!);
+        var invalidate = typeof(CertificateManager).GetMethod("InvalidateSslCertificateContext",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        invalidate.Invoke(mgr, [leaf]);
+        Assert.AreEqual(leaf!.Thumbprint, leaf.Thumbprint);
+    }
+
+    [TestMethod]
+    public void Http2Helper_HasUpperCaseAscii_EmptyAndMixed()
+    {
+        var upper = typeof(Http2Helper).GetMethod("HasUpperCaseAscii",
+            BindingFlags.NonPublic | BindingFlags.Static, null, [typeof(ByteString)], null)!;
+        Assert.IsTrue((bool)upper.Invoke(null, ["ABC".GetByteString()])!);
+        Assert.IsFalse((bool)upper.Invoke(null, ["abc".GetByteString()])!);
+        Assert.IsFalse((bool)upper.Invoke(null, [ByteString.Empty])!);
+        Assert.IsTrue((bool)upper.Invoke(null, ["aBc".GetByteString()])!);
     }
 }
