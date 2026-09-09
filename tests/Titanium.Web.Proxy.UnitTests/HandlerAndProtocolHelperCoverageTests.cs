@@ -696,6 +696,8 @@ public class HandlerAndProtocolHelperCoverageTests
         });
         await (Task)writeMw.Invoke(null, [clientStream, req, ctx, CancellationToken.None])!;
         await drain;
+        Assert.AreEqual(403, ctx.HandledStatusCode);
+        Assert.IsTrue(ctx.IsHandled);
         accepted.Dispose();
         clientSock.Dispose();
         listener.Stop();

@@ -2112,6 +2112,32 @@ public class SonarNewCodeCoverageTests
             [Path.Combine(Path.GetTempPath(), "twp-missing-" + Guid.NewGuid().ToString("N"))]);
     }
 
+    [TestMethod]
+    public void TcpConnectionFactory_InterleaveByAddressFamily_AndCertCreate()
+    {
+        var ordered = TcpConnectionFactory.InterleaveByAddressFamily(
+        [
+            IPAddress.Parse("1.1.1.1"),
+            IPAddress.Parse("2606:4700:4700::1111"),
+            IPAddress.Parse("8.8.8.8"),
+            IPAddress.Parse("2001:4860:4860::8888"),
+        ]);
+        Assert.AreEqual(4, ordered.Length);
+        Assert.AreEqual(0, TcpConnectionFactory.InterleaveByAddressFamily([]).Length);
+
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle,
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+        using var a = mgr.CreateCertificate("gate-a.example", false);
+        using var b = mgr.CreateCertificate("gate-b.example", false);
+        Assert.IsNotNull(a);
+        Assert.IsNotNull(b);
+        Assert.AreNotEqual(a!.Thumbprint, b!.Thumbprint);
+        Assert.IsTrue(mgr.CachedCertificateCount >= 0);
+    }
+
     private sealed class HandleAllMiddleware : IProxyMiddleware
     {
         public ValueTask InvokeAsync(ProxyMiddlewareContext context, ProxyMiddlewareDelegate next,

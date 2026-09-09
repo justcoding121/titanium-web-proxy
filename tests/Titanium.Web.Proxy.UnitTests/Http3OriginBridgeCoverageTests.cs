@@ -231,11 +231,14 @@ public class Http3OriginBridgeCoverageTests
         session.HttpClient.Request.IsBodyReceived = true;
         await (Task)BridgeMethod("EnsureHttp3BufferedBodyAsync")
             .Invoke(null, [session, CancellationToken.None])!;
+        Assert.IsTrue(session.HttpClient.Request.IsBodyReceived);
 
         session.HttpClient.Request.IsBodyReceived = false;
         session.Http3BufferedBodyReader = null;
         await (Task)BridgeMethod("EnsureHttp3BufferedBodyAsync")
             .Invoke(null, [session, CancellationToken.None])!;
+        Assert.IsFalse(session.HttpClient.Request.IsBodyReceived);
+        Assert.IsNull(session.Http3BufferedBodyReader);
     }
 
     private delegate void PopulateResponseFromQpackDelegate(Response response, ReadOnlySpan<byte> qpack);

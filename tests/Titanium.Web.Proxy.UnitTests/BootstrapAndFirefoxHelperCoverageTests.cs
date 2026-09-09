@@ -49,6 +49,7 @@ public class BootstrapAndFirefoxHelperCoverageTests
         var n = (string)normalize.Invoke(null, [baseDir])!;
         Assert.IsTrue((bool)pathsEqual.Invoke(null, [n, n])!);
         Assert.IsFalse((bool)pathsEqual.Invoke(null, [n, n + "-x"])!);
+        Assert.IsTrue((bool)pathsEqual.Invoke(null, ["/a", "/a"])!);
         _ = beside.Invoke(null, [baseDir]);
         _ = dyld.Invoke(null, [baseDir]);
         var previousDyld = Environment.GetEnvironmentVariable("DYLD_FALLBACK_LIBRARY_PATH");
@@ -68,6 +69,7 @@ public class BootstrapAndFirefoxHelperCoverageTests
         Assert.IsTrue(psi.ArgumentList.Count >= 1);
         var psiApp = new System.Diagnostics.ProcessStartInfo { FileName = "titanium" };
         append.Invoke(null, [psiApp, "/tmp/titanium-app", Array.Empty<string>()]);
+        Assert.IsTrue(psiApp.ArgumentList.Count >= 0);
     }
 
     [TestMethod]

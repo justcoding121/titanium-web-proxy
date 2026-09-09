@@ -239,6 +239,7 @@ public class TcpConnectionFactoryAuthCoverageTests
         var failed = Task.FromResult<(bool Ok, Socket? Socket, IPEndPoint? Bound, Exception? Error, IPAddress Address)>(
             (false, null, null, new IOException("x"), IPAddress.Loopback));
         abandon.Invoke(null, [new[] { done, failed }]);
+        Assert.ThrowsExactly<ObjectDisposedException>(() => _ = sock.RemoteEndPoint);
         try { sock.Dispose(); } catch { /* already abandoned */ }
         listener.Stop();
     }
