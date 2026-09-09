@@ -243,6 +243,11 @@ jobs:
         run: |
           set -euo pipefail
           . /etc/os-release
+          # Hosted runners sometimes ship a broken Google Chrome apt list (hash mismatch).
+          # Disable it so apt-get update cannot fail the RPS job for an unrelated mirror.
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list \
+            /etc/apt/sources.list.d/google-chrome.list.save \
+            /etc/apt/sources.list.d/chrome*.list || true
           sudo apt-get update
           sudo apt-get install -y ca-certificates curl gnupg
           curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
