@@ -112,35 +112,65 @@ $wires = @(
     @{ C='HTTP/3 · QUIC'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http3'; Yarp='yarp-reverse-http3-to-http3'; Nginx=$null; Lite='twp-mitm-http3'; Full='twp-mitm-full-http3' }
 )
 
+foreach ($w in $wires) {
+    if ($w.Nginx) {
+        $w.Haproxy = $w.Nginx -replace '^nginx-', 'haproxy-'
+        $w.Envoy = $w.Nginx -replace '^nginx-', 'envoy-'
+    }
+    else {
+        $w.Haproxy = $null
+        $w.Envoy = $null
+    }
+}
+
+function Get-PeerImpossibleReason([hashtable]$w, [string]$Arm) {
+    if ($Arm) { return $null }
+    if ($w.O -match 'QUIC' -and -not $Arm) { return 'Not possible (no QUIC)' }
+    if ($w.C -match 'HTTP/3' -and $w.O -match 'HTTP/2') { return 'Not possible (no H3 to H2)' }
+    return 'Not possible'
+}
+
+function Format-TerminatePeerCell(
+    [string]$OsFolder,
+    [hashtable]$w,
+    [string]$PeerKey,
+    $metrics,
+    [switch]$Medal,
+    [switch]$Peak
+) {
+    if ($PeerKey -in @('Haproxy', 'Envoy') -and $OsFolder -eq 'windows-latest') {
+        return Format-Impossible 'Not possible'
+    }
+    $arm = $w[$PeerKey]
+    if ($arm) {
+        return Format-RpsCell $metrics -Medal:$Medal -Peak:$Peak
+    }
+    $reason = Get-PeerImpossibleReason $w $arm
+    return Format-Impossible $reason
+}
+
 function Emit-ReverseTable([string]$OsFolder) {
-    Write-Output '| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |'
-    Write-Output '|---|---|---:|---:|---:|---:|---:|---:|'
+    Write-Output '| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | HAProxy sustain | HAProxy peak | Envoy sustain | Envoy peak | YARP sustain | YARP peak |'
+    Write-Output '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|'
     foreach ($w in $wires) {
         $twp = Get-MedianMetrics $OsFolder $w.Rev
         $yarp = Get-MedianMetrics $OsFolder $w.Yarp
         $nginx = if ($w.Nginx) { Get-MedianMetrics $OsFolder $w.Nginx } else { $null }
+        $haproxy = if ($w.Haproxy) { Get-MedianMetrics $OsFolder $w.Haproxy } else { $null }
+        $envoy = if ($w.Envoy) { Get-MedianMetrics $OsFolder $w.Envoy } else { $null }
         $candidates = @(@{ M = $twp; K = 'twp' }, @{ M = $yarp; K = 'yarp' })
-        if ($nginx -and $nginx.Sustain -gt 0) { $candidates += @{ M = $nginx; K = 'nginx' } }
+        foreach ($pair in @(@{ M = $nginx; K = 'nginx' }, @{ M = $haproxy; K = 'haproxy' }, @{ M = $envoy; K = 'envoy' })) {
+            if ($pair.M -and $pair.M.Sustain -gt 0) { $candidates += $pair }
+        }
         $best = ($candidates | Where-Object { $_.M } | Sort-Object { $_.M.Sustain } -Descending | Select-Object -First 1).K
-        if ($nginx) {
-            $nS = Format-RpsCell $nginx -Medal:($best -eq 'nginx')
-            $nP = Format-RpsCell $nginx -Medal:($best -eq 'nginx') -Peak
-        }
-        elseif ($w.Nginx -match 'nginx-reverse-http3' -or ($w.O -match 'QUIC' -and -not $w.Nginx)) {
-            $nS = Format-Impossible 'Not possible (no QUIC)'
-            $nP = $nS
-        }
-        elseif ($w.C -match 'HTTP/3' -and $w.O -match 'HTTP/2') {
-            $nS = Format-Impossible 'Not possible (no H3 to H2)'
-            $nP = $nS
-        }
-        else {
-            $nS = Format-Impossible
-            $nP = $nS
-        }
-        Write-Output ("| {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} |" -f $w.C, $w.O,
+        Write-Output ("| {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} | {8} | {9} | {10} | {11} |" -f $w.C, $w.O,
             (Format-RpsCell $twp -Medal:($best -eq 'twp')), (Format-RpsCell $twp -Medal:($best -eq 'twp') -Peak),
-            $nS, $nP,
+            (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx')),
+            (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx') -Peak),
+            (Format-TerminatePeerCell $OsFolder $w 'Haproxy' $haproxy -Medal:($best -eq 'haproxy')),
+            (Format-TerminatePeerCell $OsFolder $w 'Haproxy' $haproxy -Medal:($best -eq 'haproxy') -Peak),
+            (Format-TerminatePeerCell $OsFolder $w 'Envoy' $envoy -Medal:($best -eq 'envoy')),
+            (Format-TerminatePeerCell $OsFolder $w 'Envoy' $envoy -Medal:($best -eq 'envoy') -Peak),
             (Format-RpsCell $yarp -Medal:($best -eq 'yarp')), (Format-RpsCell $yarp -Medal:($best -eq 'yarp') -Peak))
     }
 }

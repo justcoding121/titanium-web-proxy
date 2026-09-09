@@ -104,6 +104,21 @@ def pick_medal(cands: List[Tuple[str, Optional[dict]]]) -> Optional[str]:
     return min(valid, key=lambda km: (-km[1]["Sustain"], km[1]["Rss"], km[1]["Cpu"]))[0]
 
 
+PEER_COLS = (
+    "TWP sustain | TWP peak | nginx sustain | nginx peak | "
+    "HAProxy sustain | HAProxy peak | Envoy sustain | Envoy peak | YARP sustain | YARP peak"
+)
+PEER_RULE = "---:|---:|---:|---:|---:|---:|---:|---:|---:|---:"
+
+
+def _peer_impossible(arm: Optional[str], nginx_a: Optional[str], win_no_quic: bool) -> Optional[str]:
+    if arm is not None:
+        if win_no_quic and nginx_a and "http3" in nginx_a:
+            return "Not possible (no QUIC)"
+        return None
+    return "Not possible"
+
+
 def peer_row(
     prefix: List[str],
     twp_a: Optional[str],
@@ -111,22 +126,36 @@ def peer_row(
     yarp_a: Optional[str],
     data: dict,
     win_no_quic: bool = False,
+    win_no_haproxy_envoy: bool = False,
 ) -> str:
     twp = data.get(twp_a) if twp_a else None
     nginx = data.get(nginx_a) if nginx_a else None
+    haproxy_a = nginx_a.replace("nginx-", "haproxy-", 1) if nginx_a else None
+    envoy_a = nginx_a.replace("nginx-", "envoy-", 1) if nginx_a else None
+    haproxy = data.get(haproxy_a) if haproxy_a else None
+    envoy = data.get(envoy_a) if envoy_a else None
     yarp = data.get(yarp_a) if yarp_a else None
-    nginx_imp = None
-    if nginx_a is None:
-        nginx_imp = "Not possible"
-    elif win_no_quic and "http3" in nginx_a:
+    nginx_imp = _peer_impossible(nginx_a, nginx_a, win_no_quic)
+    haproxy_imp = "Not possible" if win_no_haproxy_envoy else _peer_impossible(haproxy_a, nginx_a, win_no_quic)
+    envoy_imp = "Not possible" if win_no_haproxy_envoy else _peer_impossible(envoy_a, nginx_a, win_no_quic)
+    if win_no_quic and nginx_a and "http3" in nginx_a:
         nginx = None
         nginx_imp = "Not possible (no QUIC)"
-    medal = pick_medal([("twp", twp), ("nginx", nginx), ("yarp", yarp)])
+    if win_no_haproxy_envoy:
+        haproxy = None
+        envoy = None
+    medal = pick_medal(
+        [("twp", twp), ("nginx", nginx), ("haproxy", haproxy), ("envoy", envoy), ("yarp", yarp)]
+    )
     cells = prefix + [
         fmt_cell(twp, medal=(medal == "twp")),
         fmt_cell(twp, peak=True),
         fmt_cell(nginx, medal=(medal == "nginx"), impossible=nginx_imp),
         fmt_cell(nginx, peak=True, impossible=nginx_imp),
+        fmt_cell(haproxy, medal=(medal == "haproxy"), impossible=haproxy_imp),
+        fmt_cell(haproxy, peak=True, impossible=haproxy_imp),
+        fmt_cell(envoy, medal=(medal == "envoy"), impossible=envoy_imp),
+        fmt_cell(envoy, peak=True, impossible=envoy_imp),
         fmt_cell(yarp, medal=(medal == "yarp")),
         fmt_cell(yarp, peak=True),
     ]
@@ -171,11 +200,13 @@ def main() -> None:
 
     def bodies_table(data: dict, is_win: bool) -> str:
         rows = [
-            "| Body | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |",
-            "|---|---|---|---:|---:|---:|---:|---:|---:|",
+            f"| Body | Client | Origin | {PEER_COLS} |",
+            f"|---|---|---|{PEER_RULE}|",
         ]
         for body, c, o, t, n, y in body_spec:
-            rows.append(peer_row([body, c, o], t, n, y, data, win_no_quic=is_win))
+            rows.append(
+                peer_row([body, c, o], t, n, y, data, win_no_quic=is_win, win_no_haproxy_envoy=is_win)
+            )
         return "\n".join(rows)
 
     post_spec = [
@@ -186,11 +217,13 @@ def main() -> None:
 
     def post_table(data: dict, is_win: bool) -> str:
         rows = [
-            "| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |",
-            "|---|---|---:|---:|---:|---:|---:|---:|",
+            f"| Client | Origin | {PEER_COLS} |",
+            f"|---|---|{PEER_RULE}|",
         ]
         for c, o, t, n, y in post_spec:
-            rows.append(peer_row([c, o], t, n, y, data, win_no_quic=is_win))
+            rows.append(
+                peer_row([c, o], t, n, y, data, win_no_quic=is_win, win_no_haproxy_envoy=is_win)
+            )
         return "\n".join(rows)
 
     lossy_spec = [
@@ -201,11 +234,13 @@ def main() -> None:
 
     def lossy_table(data: dict, is_win: bool) -> str:
         rows = [
-            "| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |",
-            "|---|---|---:|---:|---:|---:|---:|---:|",
+            f"| Client | Origin | {PEER_COLS} |",
+            f"|---|---|{PEER_RULE}|",
         ]
         for c, o, t, n, y in lossy_spec:
-            rows.append(peer_row([c, o], t, n, y, data, win_no_quic=is_win))
+            rows.append(
+                peer_row([c, o], t, n, y, data, win_no_quic=is_win, win_no_haproxy_envoy=is_win)
+            )
         return "\n".join(rows)
 
     arch_spec = [
@@ -221,11 +256,21 @@ def main() -> None:
 
     def arch_table(data: dict, is_win: bool) -> str:
         rows = [
-            "| Scenario | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |",
-            "|---|---|---|---:|---:|---:|---:|---:|---:|",
+            f"| Scenario | Client | Origin | {PEER_COLS} |",
+            f"|---|---|---|{PEER_RULE}|",
         ]
         for sc, c, o, t, n, y in arch_spec:
-            rows.append(peer_row([sc, c, o], t, n, y, data, win_no_quic=is_win and bool(n and "http3" in n)))
+            rows.append(
+                peer_row(
+                    [sc, c, o],
+                    t,
+                    n,
+                    y,
+                    data,
+                    win_no_quic=is_win and bool(n and "http3" in n),
+                    win_no_haproxy_envoy=is_win,
+                )
+            )
         return "\n".join(rows)
 
     tls_spec = [
@@ -234,13 +279,13 @@ def main() -> None:
         ("Keep-alive · 256 KiB GET", "twp-reverse-http1-tls-ka-256k", "nginx-reverse-http1-tls-ka-256k", "yarp-reverse-http1-tls-ka-256k"),
     ]
 
-    def tls_table(data: dict) -> str:
+    def tls_table(data: dict, is_win: bool) -> str:
         rows = [
-            "| Workload | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |",
-            "|---|---:|---:|---:|---:|---:|---:|",
+            f"| Workload | {PEER_COLS} |",
+            f"|---|{PEER_RULE}|",
         ]
         for label, t, n, y in tls_spec:
-            rows.append(peer_row([label], t, n, y, data))
+            rows.append(peer_row([label], t, n, y, data, win_no_haproxy_envoy=is_win))
         return "\n".join(rows)
 
     def sat_block_a(data: dict) -> str:
@@ -374,7 +419,7 @@ def main() -> None:
     )
     text = text[:c] + block + text[how:]
 
-    def patch_heavier(heading: str, new_hdr: str, new_table: str) -> None:
+    def patch_heavier(heading: str, new_hdr: str, new_table: str, chart_md: Optional[str] = None) -> None:
         nonlocal text
         i = text.find(heading)
         if i < 0:
@@ -394,37 +439,48 @@ def main() -> None:
         )
         text = text[:i] + chunk2 + text[tbl:]
         tbl = text.find(m.group(1), i)
+        if chart_md:
+            before = text[i:tbl]
+            if chart_md not in before:
+                text = text[:tbl] + chart_md + "\n\n" + text[tbl:]
+                tbl = text.find(m.group(1), i)
         text = replace_table_at(text, tbl, new_table)
 
     patch_heavier(
         "### Windows — heavier reverse GET (64 KiB / 256 KiB)",
         f"Median of **3** repeats on `windows-latest` @ `{HEAD}`. Source: Actions [{rid_b}]({run_url(rid_b)}) (`compare-bodies`). Warmup 2s / measure 8s. **RPS cells** include `(MiB / CPU%)` footprints.\n",
         bodies_table(win["bodies"], True),
+        "![Windows heavier bodies](images/rps-heavier-bodies-windows.png)",
     )
     patch_heavier(
         "### Linux — heavier reverse GET (64 KiB / 256 KiB)",
         f"Median of **3** repeats @ `{HEAD}`. Source: Actions [{rid_b}]({run_url(rid_b)}) (`compare-bodies`). Warmup 2s / measure 8s.\n",
         bodies_table(lin["bodies"], False),
+        "![Linux heavier bodies](images/rps-heavier-bodies-linux.png)",
     )
     patch_heavier(
         "### Windows — POST 64 KiB request + 64 KiB response",
         f"Median of **3** repeats on `windows-latest` @ `{HEAD}`. Source: Actions [{rid_p}]({run_url(rid_p)}) (`compare-post`).\n",
         post_table(win["post"], True),
+        "![Windows heavier POST](images/rps-heavier-post-windows.png)",
     )
     patch_heavier(
         "### Linux — POST 64 KiB request + 64 KiB response",
         f"Median of **3** repeats @ `{HEAD}`. Source: Actions [{rid_p}]({run_url(rid_p)}) (`compare-post`).\n",
         post_table(lin["post"], False),
+        "![Linux heavier POST](images/rps-heavier-post-linux.png)",
     )
     patch_heavier(
         "### Windows — lossy / high-RTT (H2 HOL / H3 loss)",
         f"Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2) or UDP datagram drop (H3); **64 KiB** GET. Median of **3** repeats on `windows-latest` @ `{HEAD}` — [{rid_l}]({run_url(rid_l)}) (`compare-lossy`).\n",
         lossy_table(win["lossy"], True),
+        "![Windows heavier lossy](images/rps-heavier-lossy-windows.png)",
     )
     patch_heavier(
         "### Linux — lossy / high-RTT (H2 HOL / H3 loss)",
         f"Median of **3** repeats @ `{HEAD}`. Source: [{rid_l}]({run_url(rid_l)}) (`compare-lossy`; lossy H3 uses `quic-http3`).\n",
         lossy_table(lin["lossy"], False),
+        "![Linux heavier lossy](images/rps-heavier-lossy-linux.png)",
     )
 
     text = re.sub(
@@ -436,9 +492,21 @@ def main() -> None:
     arch = text.find("### Architecture-sensitive")
     w = text.find("#### Windows", arch)
     l = text.find("#### Linux", w)
-    text = replace_table_at(text, text.find("| Scenario |", w), arch_table(win["arch"], True))
+    arch_w = text.find("| Scenario |", w)
+    before_arch_w = text[w:arch_w]
+    arch_chart_w = "![Windows heavier arch](images/rps-heavier-arch-windows.png)"
+    if arch_chart_w not in before_arch_w:
+        text = text[:arch_w] + arch_chart_w + "\n\n" + text[arch_w:]
+        arch_w = text.find("| Scenario |", w)
+    text = replace_table_at(text, arch_w, arch_table(win["arch"], True))
     l = text.find("#### Linux", text.find("### Architecture-sensitive"))
-    text = replace_table_at(text, text.find("| Scenario |", l), arch_table(lin["arch"], False))
+    arch_l = text.find("| Scenario |", l)
+    before_arch_l = text[l:arch_l]
+    arch_chart_l = "![Linux heavier arch](images/rps-heavier-arch-linux.png)"
+    if arch_chart_l not in before_arch_l:
+        text = text[:arch_l] + arch_chart_l + "\n\n" + text[arch_l:]
+        arch_l = text.find("| Scenario |", l)
+    text = replace_table_at(text, arch_l, arch_table(lin["arch"], False))
 
     tls = text.find("### TLS termination cost")
     w = text.find("#### Windows", tls)
@@ -449,7 +517,12 @@ def main() -> None:
         text2,
         count=1,
     )
-    text2 = replace_table_at(text2, text2.find("| Workload |"), tls_table(win["tls"]))
+    tls_tbl_w = text2.find("| Workload |")
+    tls_chart_w = "![Windows heavier TLS cost](images/rps-heavier-tls-cost-windows.png)"
+    if tls_chart_w not in text2[:tls_tbl_w]:
+        text2 = text2[:tls_tbl_w] + tls_chart_w + "\n\n" + text2[tls_tbl_w:]
+        tls_tbl_w = text2.find("| Workload |")
+    text2 = replace_table_at(text2, tls_tbl_w, tls_table(win["tls"], True))
     text = text[:w] + text2
 
     tls = text.find("### TLS termination cost")
@@ -461,7 +534,12 @@ def main() -> None:
         text2,
         count=1,
     )
-    text2 = replace_table_at(text2, text2.find("| Workload |"), tls_table(lin["tls"]))
+    tls_tbl_l = text2.find("| Workload |")
+    tls_chart_l = "![Linux heavier TLS cost](images/rps-heavier-tls-cost-linux.png)"
+    if tls_chart_l not in text2[:tls_tbl_l]:
+        text2 = text2[:tls_tbl_l] + tls_chart_l + "\n\n" + text2[tls_tbl_l:]
+        tls_tbl_l = text2.find("| Workload |")
+    text2 = replace_table_at(text2, tls_tbl_l, tls_table(lin["tls"], False))
     text = text[:l] + text2
 
     WIKI.write_text(text, encoding="utf-8")

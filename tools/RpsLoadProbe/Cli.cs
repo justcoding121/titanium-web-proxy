@@ -15,6 +15,8 @@ internal static class Cli
         string? command = null;
         string? modeText = null;
         string? nginxPath = null;
+        string? haproxyPath = null;
+        string? envoyPath = null;
         string? resultsDir = null;
         var concurrency = new List<int>();
         var warmupSec = 5;
@@ -99,6 +101,12 @@ internal static class Cli
                     break;
                 case "--nginx-path":
                     nginxPath = RequireValue(args, ref i, "--nginx-path");
+                    break;
+                case "--haproxy-path":
+                    haproxyPath = RequireValue(args, ref i, "--haproxy-path");
+                    break;
+                case "--envoy-path":
+                    envoyPath = RequireValue(args, ref i, "--envoy-path");
                     break;
                 case "--results-dir":
                     resultsDir = RequireValue(args, ref i, "--results-dir");
@@ -210,9 +218,9 @@ internal static class Cli
                         ExtraHttpsOrigins = extraHttpsOrigins
                     }, cts.Token, workload).GetAwaiter().GetResult(),
                 "serve-proxy" => RunServeProxy(modeText, originHttpPort, originHttpsPort, originQuicPort,
-                    originHttpsExtraPorts, nginxPath, maxCachedConnections, cts.Token, workload),
-                "serve" => RunServe(modeText, nginxPath, maxCachedConnections, cts.Token, workload),
-                "ramp" => RunRamp(modeText, nginxPath, resultsDir, concurrency, warmupSec, durationSec,
+                    originHttpsExtraPorts, nginxPath, haproxyPath, envoyPath, maxCachedConnections, cts.Token, workload),
+                "serve" => RunServe(modeText, nginxPath, haproxyPath, envoyPath, maxCachedConnections, cts.Token, workload),
+                "ramp" => RunRamp(modeText, nginxPath, haproxyPath, envoyPath, resultsDir, concurrency, warmupSec, durationSec,
                     maxCachedConnections, repeats, workload, stopOnSloFail, cts.Token),
                 _ => Fail("Required: --serve | --serve-origin | --serve-proxy | --ramp")
             };
@@ -230,28 +238,30 @@ internal static class Cli
         }
     }
 
-    private static int RunServe(string? modeText, string? nginxPath, int? maxCachedConnections, CancellationToken ct,
-        WorkloadOptions workload)
+    private static int RunServe(string? modeText, string? nginxPath, string? haproxyPath, string? envoyPath,
+        int? maxCachedConnections, CancellationToken ct, WorkloadOptions workload)
     {
         if (modeText == null || !TryParseMode(modeText, out var mode))
             return Fail("Required: --serve --mode <see --help>");
-        return ServeHost.RunAsync(mode, nginxPath, maxCachedConnections, ct, workload).GetAwaiter().GetResult();
+        return ServeHost.RunAsync(mode, nginxPath, haproxyPath, envoyPath, maxCachedConnections, ct, workload)
+            .GetAwaiter().GetResult();
     }
 
     private static int RunServeProxy(string? modeText, int originHttpPort, int originHttpsPort, int originQuicPort,
-        IReadOnlyList<int> extraHttpsPorts, string? nginxPath, int? maxCachedConnections, CancellationToken ct,
-        WorkloadOptions workload)
+        IReadOnlyList<int> extraHttpsPorts, string? nginxPath, string? haproxyPath, string? envoyPath,
+        int? maxCachedConnections, CancellationToken ct, WorkloadOptions workload)
     {
         if (modeText == null || !TryParseMode(modeText, out var mode) || IsMultiArmMode(mode))
             return Fail("Required: --serve-proxy --mode <single arm>");
         return ServeProxyHost.RunAsync(mode, originHttpPort, originHttpsPort, originQuicPort, extraHttpsPorts,
-                nginxPath, maxCachedConnections, ct, workload)
+                nginxPath, haproxyPath, envoyPath, maxCachedConnections, ct, workload)
             .GetAwaiter().GetResult();
     }
 
     private static bool IsMultiArmMode(ProbeMode mode) => mode is ProbeMode.Compare or ProbeMode.CompareHttp2
         or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
-        or ProbeMode.CompareHttp3Cleartext or ProbeMode.CompareNginxHttps
+        or ProbeMode.CompareHttp3Cleartext or ProbeMode.CompareNginxHttps or ProbeMode.CompareHaproxySmoke
+        or ProbeMode.CompareEnvoySmoke
         or ProbeMode.CompareMitm or ProbeMode.CompareMatrix or ProbeMode.CompareProduct
         or ProbeMode.CompareProductSmoke or ProbeMode.CompareSpot or ProbeMode.CompareCeiling
         or ProbeMode.CompareBodies
@@ -261,9 +271,9 @@ internal static class Cli
         or ProbeMode.CompareEditions or ProbeMode.CompareCrossVersion
         or ProbeMode.ExplicitPoolSweep;
 
-    private static int RunRamp(string? modeText, string? nginxPath, string? resultsDir, List<int> concurrency,
-        int warmupSec, int durationSec, int? maxCachedConnections, int repeats, WorkloadOptions workload,
-        bool stopOnSloFail, CancellationToken ct)
+    private static int RunRamp(string? modeText, string? nginxPath, string? haproxyPath, string? envoyPath,
+        string? resultsDir, List<int> concurrency, int warmupSec, int durationSec, int? maxCachedConnections,
+        int repeats, WorkloadOptions workload, bool stopOnSloFail, CancellationToken ct)
     {
         if (modeText == null || !TryParseMode(modeText, out var mode))
             return Fail("Required: --ramp --mode <see --help>");
@@ -272,6 +282,8 @@ internal static class Cli
         {
             Mode = mode,
             NginxPath = nginxPath,
+            HaproxyPath = haproxyPath,
+            EnvoyPath = envoyPath,
             ResultsDir = resultsDir ?? Path.Combine(AppContext.BaseDirectory, "results"),
             Warmup = TimeSpan.FromSeconds(warmupSec),
             StepDuration = TimeSpan.FromSeconds(durationSec),
@@ -313,6 +325,9 @@ internal static class Cli
             case "nginx-reverse-http1":
                 mode = ProbeMode.NginxReverseHttp1;
                 return true;
+            case "haproxy-reverse-http1":
+                mode = ProbeMode.HaproxyReverseHttp1;
+                return true;
             case "yarp-reverse-http1":
                 mode = ProbeMode.YarpReverseHttp1;
                 return true;
@@ -342,6 +357,15 @@ internal static class Cli
                 return true;
             case "nginx-reverse-http1-tls-to-https":
                 mode = ProbeMode.NginxReverseHttp1TlsToHttps;
+                return true;
+            case "haproxy-reverse-http1-tls":
+                mode = ProbeMode.HaproxyReverseHttp1Tls;
+                return true;
+            case "haproxy-reverse-http1-to-https":
+                mode = ProbeMode.HaproxyReverseHttp1ToHttps;
+                return true;
+            case "haproxy-reverse-http1-tls-to-https":
+                mode = ProbeMode.HaproxyReverseHttp1TlsToHttps;
                 return true;
             case "yarp-reverse-http1-tls":
                 mode = ProbeMode.YarpReverseHttp1Tls;
@@ -397,8 +421,50 @@ internal static class Cli
             case "nginx-reverse-http3-to-https-http1":
                 mode = ProbeMode.NginxReverseHttp3ToHttpsHttp1;
                 return true;
+            case "haproxy-reverse-http2":
+                mode = ProbeMode.HaproxyReverseHttp2;
+                return true;
+            case "haproxy-reverse-http2-to-https-http1":
+                mode = ProbeMode.HaproxyReverseHttp2ToHttpsHttp1;
+                return true;
+            case "haproxy-reverse-http3-cleartext":
+                mode = ProbeMode.HaproxyReverseHttp3Cleartext;
+                return true;
+            case "haproxy-reverse-http3-to-https-http1":
+                mode = ProbeMode.HaproxyReverseHttp3ToHttpsHttp1;
+                return true;
             case "compare-nginx-https":
                 mode = ProbeMode.CompareNginxHttps;
+                return true;
+            case "compare-haproxy-smoke":
+                mode = ProbeMode.CompareHaproxySmoke;
+                return true;
+            case "envoy-reverse-http1":
+                mode = ProbeMode.EnvoyReverseHttp1;
+                return true;
+            case "envoy-reverse-http1-tls":
+                mode = ProbeMode.EnvoyReverseHttp1Tls;
+                return true;
+            case "envoy-reverse-http1-to-https":
+                mode = ProbeMode.EnvoyReverseHttp1ToHttps;
+                return true;
+            case "envoy-reverse-http1-tls-to-https":
+                mode = ProbeMode.EnvoyReverseHttp1TlsToHttps;
+                return true;
+            case "envoy-reverse-http2":
+                mode = ProbeMode.EnvoyReverseHttp2;
+                return true;
+            case "envoy-reverse-http2-to-https-http1":
+                mode = ProbeMode.EnvoyReverseHttp2ToHttpsHttp1;
+                return true;
+            case "envoy-reverse-http3-cleartext":
+                mode = ProbeMode.EnvoyReverseHttp3Cleartext;
+                return true;
+            case "envoy-reverse-http3-to-https-http1":
+                mode = ProbeMode.EnvoyReverseHttp3ToHttpsHttp1;
+                return true;
+            case "compare-envoy-smoke":
+                mode = ProbeMode.CompareEnvoySmoke;
                 return true;
             case "yarp-reverse-http2":
                 mode = ProbeMode.YarpReverseHttp2;
@@ -636,7 +702,7 @@ internal static class Cli
             Published comparisons: wiki/Performance.md
 
             Usage:
-              RpsLoadProbe --serve --mode <mode> [--nginx-path PATH] [--max-cached-connections N] [--response-bytes N]
+              RpsLoadProbe --serve --mode <mode> [--nginx-path PATH] [--haproxy-path PATH] [--envoy-path PATH] [--max-cached-connections N] [--response-bytes N]
               RpsLoadProbe --serve-origin [--https [--https-only] [--https-protocols http1|http1and2] [--extra-https-origins N] | --h2c | --quic]
               RpsLoadProbe --serve-proxy --mode <arm> [--origin-http-port N] [--origin-https-port N] [--origin-quic-port N]
               RpsLoadProbe --ramp  --mode <mode> [options]
@@ -646,11 +712,13 @@ internal static class Cli
               reverse-http1           TWP TransparentProxyEndPoint -> Kestrel HTTP/1
               bare-reverse-http1      Thin C# HTTP/1 reverse (runtime-ceiling control)
               nginx-reverse-http1     Control arm: native reverse -> same Kestrel HTTP/1 origin
+              haproxy-reverse-http1   Control arm: HAProxy reverse -> same Kestrel HTTP/1 origin
               yarp-reverse-http1      Control arm: managed reverse -> same Kestrel HTTP/1 origin
               reverse-http1-tls       TWP TLS terminate -> cleartext HTTP/1 origin
               reverse-http1-to-https  TWP cleartext HTTP/1 -> HTTPS HTTP/1 origin
               bare-reverse-http1-tls  Thin C# TLS-terminate HTTP/1 reverse
               nginx-reverse-http1-tls Control arm: TLS reverse -> cleartext HTTP/1 origin
+              haproxy-reverse-http1-tls Control arm: HAProxy TLS reverse -> cleartext HTTP/1 origin
               yarp-reverse-http1-tls  Control arm: TLS terminate -> cleartext HTTP/1 origin
               yarp-reverse-http1-to-https Control arm: cleartext HTTP/1 -> HTTPS HTTP/1
               https-mitm              TWP Explicit CONNECT MITM -> Kestrel HTTPS
@@ -676,7 +744,23 @@ internal static class Cli
               nginx-reverse-http3-to-https-http1 Control arm: QUIC/h3 -> HTTPS HTTP/1 (proxy_ssl)
               nginx-reverse-http1-to-https Control arm: cleartext HTTP/1 -> HTTPS HTTP/1 (proxy_ssl)
               nginx-reverse-http1-tls-to-https Control arm: TLS HTTP/1 -> HTTPS HTTP/1 (dual TLS)
+              haproxy-reverse-http2   Control arm: HAProxy ssl+alpn h2 -> cleartext HTTP/1 origin
+              haproxy-reverse-http2-to-https-http1 Control arm: HAProxy ssl+h2 -> HTTPS HTTP/1
+              haproxy-reverse-http3-cleartext Control arm: QUIC/h3 -> cleartext HTTP/1 (needs USE_QUIC)
+              haproxy-reverse-http3-to-https-http1 Control arm: QUIC/h3 -> HTTPS HTTP/1 (needs USE_QUIC)
+              haproxy-reverse-http1-to-https Control arm: cleartext HTTP/1 -> HTTPS HTTP/1
+              haproxy-reverse-http1-tls-to-https Control arm: TLS HTTP/1 -> HTTPS HTTP/1 (dual TLS)
               compare-nginx-https     Smoke: TWP+YARP+nginx on HTTPS-origin terminate wires
+              compare-haproxy-smoke   Smoke: TWP+YARP+HAProxy reverse peers
+              envoy-reverse-http1     Control arm: Envoy reverse -> same Kestrel HTTP/1 origin
+              envoy-reverse-http1-tls Control arm: Envoy TLS reverse -> cleartext HTTP/1 origin
+              envoy-reverse-http2     Control arm: Envoy ssl+alpn h2 -> cleartext HTTP/1 origin
+              envoy-reverse-http2-to-https-http1 Control arm: Envoy ssl+h2 -> HTTPS HTTP/1
+              envoy-reverse-http3-cleartext Control arm: QUIC/h3 -> cleartext HTTP/1 (needs HTTP/3)
+              envoy-reverse-http3-to-https-http1 Control arm: QUIC/h3 -> HTTPS HTTP/1
+              envoy-reverse-http1-to-https Control arm: cleartext HTTP/1 -> HTTPS HTTP/1
+              envoy-reverse-http1-tls-to-https Control arm: TLS HTTP/1 -> HTTPS HTTP/1 (dual TLS)
+              compare-envoy-smoke     Smoke: TWP+YARP+Envoy reverse peers
               yarp-reverse-http2      Control arm: TLS+h2 -> cleartext HTTP/1 origin
               reverse-http3           TWP TransparentQuic (h3) -> Quic HTTPS/h3 origin
               reverse-http3-cleartext TWP QUIC/h3 terminate -> cleartext HTTP/1 origin
@@ -733,6 +817,8 @@ internal static class Cli
 
             Options:
               --nginx-path PATH
+              --haproxy-path PATH
+              --envoy-path PATH
               --results-dir DIR
               --https / --https-only / --https-protocols http1|http1and2 / --extra-https-origins N
               --h2c / --quic         Origin listen shape for --serve-origin

@@ -10,21 +10,28 @@
 param(
     [ValidateSet(
         'compare', 'compare-http2', 'compare-tls', 'compare-terminate', 'compare-same', 'compare-bridges',
-        'compare-http3-cleartext', 'compare-nginx-https', 'compare-mitm', 'compare-matrix', 'compare-product', 'compare-product-smoke', 'compare-spot', 'compare-ceiling',
+        'compare-http3-cleartext', 'compare-nginx-https', 'compare-haproxy-smoke', 'compare-envoy-smoke', 'compare-mitm', 'compare-matrix', 'compare-product', 'compare-product-smoke', 'compare-spot', 'compare-ceiling',
         'compare-bodies', 'compare-post', 'compare-lossy', 'compare-tls-cost', 'compare-arch', 'compare-saturation',
         'compare-editions', 'compare-cross-version',
         'origin-direct', 'explicit-pool-sweep',
-        'reverse-http1', 'bare-reverse-http1', 'nginx-reverse-http1', 'yarp-reverse-http1',
-        'reverse-http1-tls', 'bare-reverse-http1-tls', 'nginx-reverse-http1-tls', 'yarp-reverse-http1-tls',
+        'reverse-http1', 'bare-reverse-http1', 'nginx-reverse-http1', 'haproxy-reverse-http1', 'envoy-reverse-http1', 'yarp-reverse-http1',
+        'reverse-http1-tls', 'bare-reverse-http1-tls', 'nginx-reverse-http1-tls', 'haproxy-reverse-http1-tls', 'envoy-reverse-http1-tls', 'yarp-reverse-http1-tls',
         'reverse-http1-to-https', 'yarp-reverse-http1-to-https',
         'nginx-reverse-http1-to-https', 'nginx-reverse-http1-tls-to-https',
+        'haproxy-reverse-http1-to-https', 'haproxy-reverse-http1-tls-to-https',
+        'envoy-reverse-http1-to-https', 'envoy-reverse-http1-tls-to-https',
         'https-mitm', 'http-mitm', 'reverse-http1-mitm', 'mitm-http2-to-http1', 'mitm-http3-to-http1',
         'reverse-http2', 'reverse-http2-cleartext', 'reverse-http2-to-h2c', 'yarp-reverse-http2-to-h2c',
         'reverse-h2c', 'yarp-reverse-h2c', 'reverse-h2c-to-h2c', 'yarp-reverse-h2c-to-h2c',
         'reverse-h2c-to-h1', 'yarp-reverse-h2c-to-h1', 'reverse-h2c-to-https', 'yarp-reverse-h2c-to-https',
         'reverse-h2c-to-h3', 'yarp-reverse-h2c-to-h3',
         'nginx-reverse-http2', 'nginx-reverse-http2-to-https-http1', 'nginx-reverse-http3-cleartext',
-        'nginx-reverse-http3-to-https-http1', 'yarp-reverse-http2', 'yarp-reverse-http2-to-https',
+        'nginx-reverse-http3-to-https-http1',
+        'haproxy-reverse-http2', 'haproxy-reverse-http2-to-https-http1', 'haproxy-reverse-http3-cleartext',
+        'haproxy-reverse-http3-to-https-http1',
+        'envoy-reverse-http2', 'envoy-reverse-http2-to-https-http1', 'envoy-reverse-http3-cleartext',
+        'envoy-reverse-http3-to-https-http1',
+        'yarp-reverse-http2', 'yarp-reverse-http2-to-https',
         'yarp-reverse-http2-to-https-http1', 'yarp-reverse-http1-tls-to-https', 'yarp-reverse-http3-to-https-http1',
         'reverse-http3', 'reverse-http3-cleartext', 'yarp-reverse-http3-cleartext',
         'reverse-http11-to-http2', 'yarp-reverse-http11-to-http2',
@@ -47,6 +54,8 @@ param(
     [string] $Mode = 'compare',
 
     [string] $NginxPath,
+    [string] $HaproxyPath,
+    [string] $EnvoyPath,
     [string] $Concurrency = '8,16,24,32,48,64,128,256,512',
     [int]    $WarmupSec = 5,
     [int]    $DurationSec = 20,
@@ -148,6 +157,12 @@ if ($NoKeepAlive) {
 }
 if ($NginxPath) {
     $probeArgs += @('--nginx-path', $NginxPath)
+}
+if ($HaproxyPath) {
+    $probeArgs += @('--haproxy-path', $HaproxyPath)
+}
+if ($EnvoyPath) {
+    $probeArgs += @('--envoy-path', $EnvoyPath)
 }
 if ($NoStopOnSloFail) {
     $probeArgs += '--no-stop-on-slo-fail'

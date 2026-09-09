@@ -52,33 +52,44 @@ $runUrl = "https://github.com/justcoding121/titanium-web-proxy/actions/runs/$Pri
 $productLine = "- Product refresh: ``compare-product`` @ ``$HeadSha`` $em [$PrimaryRunId]($runUrl). Heavier/saturation/tls:"
 $wiki = [regex]::Replace($wiki, '- Product refresh:.*', [System.Text.RegularExpressions.MatchEvaluator]{ $productLine }, 1)
 
-$winRevHeader = "Median of **3 repeats** on ``windows-latest`` (4 vCPU / 16 GiB). Bare reverse 5${mul}5 @ ``$HeadSha`` $em ``compare-product`` [$PrimaryRunId]($runUrl). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP${div}peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as ``<br><sub>(MiB / CPU%)</sub>``. nginx terminate peers use ``keepalive 256`` + streaming buffers. Laptop High-perf / cool-paired numbers stay on the [local lab](Performance-Local-Lab)."
+$winRevHeader = "Median of **3 repeats** on ``windows-latest`` (4 vCPU / 16 GiB). Bare reverse 5${mul}5 @ ``$HeadSha`` $em ``compare-product`` [$PrimaryRunId]($runUrl). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP${div}peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as ``<br><sub>(MiB / CPU%)</sub>``. nginx terminate peers use ``keepalive 256`` + streaming buffers. **HAProxy / Envoy are Linux-only peers** (no official Windows port). Laptop High-perf / cool-paired numbers stay on the [local lab](Performance-Local-Lab)."
 
-$linRevHeader = "Median of **3 repeats** on ``ubuntu-latest`` (4 vCPU / 16 GiB). Bare reverse 5${mul}5 @ ``$HeadSha`` $em ``compare-product`` [$PrimaryRunId]($runUrl). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** nginx terminate peers use ``keepalive 256`` + streaming buffers. The RPS workflow installs nginx.org mainline (``http_v3_module``) and ``libmsquic``. Prefer ratios over absolute RPS."
+$linRevHeader = "Median of **3 repeats** on ``ubuntu-latest`` (4 vCPU / 16 GiB). Bare reverse 5${mul}5 @ ``$HeadSha`` $em ``compare-product`` [$PrimaryRunId]($runUrl). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** HAProxy and Envoy run from upstream packages on the same loopback shape as nginx/YARP. nginx terminate peers use ``keepalive 256`` + streaming buffers. The RPS workflow installs nginx.org mainline (``http_v3_module``) and ``libmsquic``. Prefer ratios over absolute RPS."
 
-$macRevHeader = "Median of **3 repeats** on ``macos-15-intel`` (4-core / 14 GB). Bare reverse 5${mul}5 @ ``$HeadSha`` $em ``compare-product`` [$PrimaryRunId]($runUrl). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP${div}peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as ``<br><sub>(MiB / CPU%)</sub>``. The RPS workflow installs Homebrew nginx (``http_v3_module``), Homebrew ``libmsquic`` (+ ``DYLD_*``), and YARP. Do not publish from ``macos-latest`` (3-core / 7 GB)."
+$macRevHeader = "Median of **3 repeats** on ``macos-15-intel`` (4-core / 14 GB). Bare reverse 5${mul}5 @ ``$HeadSha`` $em ``compare-product`` [$PrimaryRunId]($runUrl). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP${div}peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as ``<br><sub>(MiB / CPU%)</sub>``. The RPS workflow installs Homebrew nginx (``http_v3_module``), Homebrew ``libmsquic`` (+ ``DYLD_*``), and YARP. HAProxy/Envoy are not published on macOS. Do not publish from ``macos-latest`` (3-core / 7 GB)."
 
 $mitmNote = @(
-    "Same Client${mul}Origin wires with interception on (``compare-product`` [$PrimaryRunId]($runUrl)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via ``MitmCompressedRelayHelper``). nginx/YARP cannot MITM. **Lite${div}Reverse** / **Full${div}Reverse** vs bare reverse (same job). Completion gate: Lite ${ge} **0.50${mul}** and Full ${ge} **0.50${mul}** reverse sustain @ c=64 (median of 3 GHA runs); reverse TWP${div}YARP ${ge} **0.85${mul}** (no nginx gate)."
+    "Same Client${mul}Origin wires with interception on (``compare-product`` [$PrimaryRunId]($runUrl)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via ``MitmCompressedRelayHelper``). nginx/HAProxy/Envoy/YARP cannot MITM. **Lite${div}Reverse** / **Full${div}Reverse** vs bare reverse (same job). Completion gate: Lite ${ge} **0.50${mul}** and Full ${ge} **0.50${mul}** reverse sustain @ c=64 (median of 3 GHA runs); reverse TWP${div}YARP ${ge} **0.85${mul}** (no terminate-peer gate)."
     ""
     "**v1 append-only relay (2026-08-27):** Pre-fix H2${rarr}H2 Full${div}Reverse was **0.13${endash}0.16${mul}** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ ``df172718``: H2 plain${rarr}H2 plain Full **0.77${endash}0.79${mul}**, H3${rarr}H1 Full **0.91${endash}0.93${mul}**, all MITM arms ${ge} **0.70${mul}** on median of [33041445371](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33041445371), [33055267086](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055267086), [33055272140](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055272140)."
     ""
     "**v2 drop-only + non-unique append (2026-08-27):** ``MitmStaticRebuildHelper`` rebuilds static HPACK/QPACK after 1${endash}4 unique header drops; trailing non-unique appends stay on compressed relay. @ ``$HeadSha``: all MITM arms ${ge} **0.70${mul}** on GHA median ([33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622), [33105885748](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33105885748) Linux; [33087085235](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087085235), [33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622) Windows). H2 plain${rarr}H2 plain Full **0.77${endash}0.79${mul}** (Win) / **0.78${mul}** (Lin)."
 ) -join "`n"
 
-$winHdr = "## Windows $em Titanium vs nginx vs YARP"
-$linHdr = "## Linux $em Titanium vs nginx vs YARP"
-$macHdr = "## macOS $em Titanium vs nginx vs YARP"
+$winHdrNew = "## Windows $em Titanium vs nginx vs HAProxy vs Envoy vs YARP"
+$linHdrNew = "## Linux $em Titanium vs nginx vs HAProxy vs Envoy vs YARP"
+$macHdrNew = "## macOS $em Titanium vs nginx vs HAProxy vs Envoy vs YARP"
+$productHdrPattern = '(?m)^## (Windows|Linux|macOS) .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP$'
 # After Linux product tables: macOS, then Editions / Heavier / Cross-version depending on wiki shape.
 $afterLinuxLookahead = '(?=\r?\n## (?:macOS|Editions|Heavier|Cross-version))'
 $afterMacLookahead = '(?=\r?\n## (?:Editions|Heavier|Cross-version))'
 
+# Normalize product section headings (old 3-peer or new 5-peer titles).
+$wiki = [regex]::Replace($wiki, $productHdrPattern, {
+    param($m)
+    switch ($m.Groups[1].Value) {
+        'Windows' { $winHdrNew }
+        'Linux' { $linHdrNew }
+        'macOS' { $macHdrNew }
+    }
+})
+
 # Allow optional intro lines between section heading and ### Reverse (Windows has a Client/Origin blurb).
 $wiki = [regex]::Replace($wiki,
-    "(?s)($([regex]::Escape($winHdr))\r?\n(?:.*?\r?\n)?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
+    "(?s)(## Windows .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?\n(?:.*?\r?\n)?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
     [System.Text.RegularExpressions.MatchEvaluator]{
         param($m)
-        $loadGen = "**Load generators:** Reverse inbound H3 arms use **``dotnet-httpclient``** (``http_version=3.0``, ``RequestVersionExact``). nginx/Windows is same-OS only (no QUIC)."
+        $loadGen = "**Load generators:** Reverse inbound H3 arms use **``dotnet-httpclient``** (``http_version=3.0``, ``RequestVersionExact``). nginx/Windows is same-OS only (no QUIC). HAProxy/Envoy are Linux-only terminate peers."
         $m.Groups[1].Value + $winRevHeader + "`n`n" + $loadGen + "`n`n" + $winRev + "`n"
     },
     1)
@@ -91,14 +102,14 @@ $wiki = [regex]::Replace($wiki,
     1)
 
 $wiki = [regex]::Replace($wiki,
-    "(?s)($([regex]::Escape($linHdr))\r?\n(?:.*?\r?\n)?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
+    "(?s)(## Linux .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?\n(?:.*?\r?\n)?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
     [System.Text.RegularExpressions.MatchEvaluator]{
         param($m) $m.Groups[1].Value + $linRevHeader + "`n`n" + $linRev + "`n"
     },
     1)
 
-$idx = $wiki.IndexOf($linHdr)
-if ($idx -lt 0) { throw "Missing wiki heading: $linHdr" }
+$idx = [regex]::Match($wiki, '(?m)^## Linux .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP$').Index
+if ($idx -lt 0) { throw "Missing wiki heading: Linux product section" }
 $head = $wiki.Substring(0, $idx)
 $tail = $wiki.Substring($idx)
 
@@ -110,7 +121,7 @@ $tail = [regex]::Replace($tail,
     1)
 
 $macBlock = @(
-    $macHdr
+    $macHdrNew
     ''
     '### Reverse'
     ''
@@ -126,14 +137,15 @@ $macBlock = @(
     ''
 ) -join "`n"
 
-if ($tail.Contains($macHdr)) {
+$macHdrMatch = [regex]::Match($tail, '(?m)^## macOS .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP$')
+if ($macHdrMatch.Success) {
     $tail = [regex]::Replace($tail,
-        "(?s)($([regex]::Escape($macHdr))\r?\n(?:.*?\r?\n)?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
+        "(?s)(## macOS .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?\n(?:.*?\r?\n)?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
         [System.Text.RegularExpressions.MatchEvaluator]{
             param($m) $m.Groups[1].Value + $macRevHeader + "`n`n" + $macRev + "`n"
         },
         1)
-    $macIdx = $tail.IndexOf($macHdr)
+    $macIdx = [regex]::Match($tail, '(?m)^## macOS .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP$').Index
     $macHead = $tail.Substring(0, $macIdx)
     $macTail = $tail.Substring($macIdx)
     $macTail = [regex]::Replace($macTail,

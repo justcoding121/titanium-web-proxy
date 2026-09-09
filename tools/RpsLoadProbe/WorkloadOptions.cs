@@ -178,12 +178,16 @@ internal sealed class WorkloadOptions
                 or ProbeMode.ReverseH2cToHttps or ProbeMode.YarpReverseH2cToHttps
                 or ProbeMode.YarpReverseH2c or ProbeMode.YarpReverseH2cToH2c or ProbeMode.YarpReverseH2cToH1
                 or ProbeMode.NginxReverseHttp2 or ProbeMode.NginxReverseHttp2ToHttpsHttp1
+                or ProbeMode.HaproxyReverseHttp2 or ProbeMode.HaproxyReverseHttp2ToHttpsHttp1
+                or ProbeMode.EnvoyReverseHttp2 or ProbeMode.EnvoyReverseHttp2ToHttpsHttp1
                 or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
                 or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
                 or ProbeMode.MitmHttp2ToHttp1 =>
                 http2,
             ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp3Cleartext or ProbeMode.YarpReverseHttp3Cleartext
                 or ProbeMode.NginxReverseHttp3Cleartext or ProbeMode.NginxReverseHttp3ToHttpsHttp1
+                or ProbeMode.HaproxyReverseHttp3Cleartext or ProbeMode.HaproxyReverseHttp3ToHttpsHttp1
+                or ProbeMode.EnvoyReverseHttp3Cleartext or ProbeMode.EnvoyReverseHttp3ToHttpsHttp1
                 or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.YarpReverseHttp3ToHttp2
                 or ProbeMode.ReverseHttp3ToH2c or ProbeMode.YarpReverseHttp3ToH2c
                 or ProbeMode.YarpReverseHttp3ToHttp3 or ProbeMode.YarpReverseHttp3ToHttpsHttp1

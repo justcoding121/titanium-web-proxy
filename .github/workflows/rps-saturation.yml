@@ -30,10 +30,28 @@ on:
           - compare-bridges
           - compare-http3-cleartext
           - compare-nginx-https
+          - compare-haproxy-smoke
+          - compare-envoy-smoke
           - compare-mitm
           - compare-matrix
           - compare-product
           - compare-product-smoke
+          - haproxy-reverse-http1
+          - haproxy-reverse-http1-tls
+          - haproxy-reverse-http1-to-https
+          - haproxy-reverse-http1-tls-to-https
+          - haproxy-reverse-http2
+          - haproxy-reverse-http2-to-https-http1
+          - haproxy-reverse-http3-cleartext
+          - haproxy-reverse-http3-to-https-http1
+          - envoy-reverse-http1
+          - envoy-reverse-http1-tls
+          - envoy-reverse-http1-to-https
+          - envoy-reverse-http1-tls-to-https
+          - envoy-reverse-http2
+          - envoy-reverse-http2-to-https-http1
+          - envoy-reverse-http3-cleartext
+          - envoy-reverse-http3-to-https-http1
           - compare-editions
           - compare-cross-version
           - compare-ceiling
@@ -162,7 +180,7 @@ jobs:
     # compare-editions (expanded Plus/CLI stress arms) needs ~60m; other modes keep the long ceiling.
     # compare-product-smoke is the minimal all-OS product-gate subset — run before full compare-product.
     # Ramp has per-arm wall timeout (~8–25m) so a stuck MsQuic/bombardier/READY wait cannot burn 400m.
-    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || (github.event_name == 'push' && 90 || (inputs.mode == 'compare-editions' && 90 || (inputs.mode == 'compare-product-smoke' && 60 || 420))) }}
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || (github.event_name == 'push' && 90 || (inputs.mode == 'compare-editions' && 90 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 60 || 420))) }}
     steps:
       - uses: actions/checkout@v6
 
@@ -304,6 +322,100 @@ jobs:
           fi
           nginx -V 2>&1 | tr ' ' '\n' | grep http_v3 || true
 
+      # HAProxy Community/GPL — Linux/macOS only (no official Windows port).
+      - name: Install HAProxy (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y haproxy
+          sudo systemctl stop haproxy || true
+          haproxy -v
+          if haproxy -vv 2>&1 | grep -q USE_QUIC; then
+            echo "HAProxy USE_QUIC present"
+          else
+            echo "HAProxy has no USE_QUIC — HTTP/3 HAProxy arms will be skipped." >&2
+            haproxy -vv 2>&1 | head -n 40 || true
+          fi
+
+      - name: Install HAProxy (macOS)
+        if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_INSTALL_UPGRADE: '1'
+        run: |
+          set -euo pipefail
+          if ! brew list --versions haproxy >/dev/null 2>&1; then
+            brew install haproxy
+          fi
+          brew services stop haproxy 2>/dev/null || true
+          pkill -x haproxy 2>/dev/null || true
+          HAP_BIN="$(brew --prefix haproxy)/bin"
+          echo "$HAP_BIN" >> "$GITHUB_PATH"
+          export PATH="$HAP_BIN:$PATH"
+          haproxy -v
+          if haproxy -vv 2>&1 | grep -q USE_QUIC; then
+            echo "HAProxy USE_QUIC present"
+          else
+            echo "HAProxy has no USE_QUIC — HTTP/3 HAProxy arms will be skipped." >&2
+          fi
+
+      # Envoy Apache 2.0 — Linux static binary from GitHub releases; macOS via Homebrew.
+      # Windows support discontinued — skip (cells are Not possible).
+      - name: Install Envoy (Linux)
+        if: runner.os == 'Linux'
+        env:
+          ENVOY_VERSION: '1.36.7'
+        run: |
+          set -euo pipefail
+          ver="$ENVOY_VERSION"
+          dest="${RUNNER_TEMP}/envoy"
+          mkdir -p "$dest"
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            "https://github.com/envoyproxy/envoy/releases/download/v${ver}/envoy-${ver}-linux-x86_64" \
+            -o "$dest/envoy"
+          chmod +x "$dest/envoy"
+          echo "$dest" >> "$GITHUB_PATH"
+          export PATH="$dest:$PATH"
+          envoy --version
+          if envoy --version 2>&1 | grep -Eiq 'quic|http/?3'; then
+            echo "Envoy version string mentions QUIC/HTTP3"
+          else
+            echo "Envoy HTTP/3 capability unclear from --version — H3 arms may be skipped." >&2
+          fi
+
+      - name: Install Envoy (macOS)
+        if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_INSTALL_UPGRADE: '1'
+        run: |
+          set -euo pipefail
+          if ! brew list --versions envoy >/dev/null 2>&1; then
+            brew install envoy || brew install envoyproxy/tap/envoy || {
+              echo "brew install envoy failed — Envoy arms will be skipped on this runner." >&2
+              exit 0
+            }
+          fi
+          brew services stop envoy 2>/dev/null || true
+          pkill -x envoy 2>/dev/null || true
+          # Prefer brew prefix bin when present.
+          if command -v brew >/dev/null 2>&1; then
+            for formula in envoy envoyproxy/tap/envoy; do
+              prefix="$(brew --prefix "$formula" 2>/dev/null || true)"
+              if [ -n "$prefix" ] && [ -x "$prefix/bin/envoy" ]; then
+                echo "$prefix/bin" >> "$GITHUB_PATH"
+                export PATH="$prefix/bin:$PATH"
+                break
+              fi
+            done
+          fi
+          if ! command -v envoy >/dev/null 2>&1; then
+            echo "envoy not on PATH after install attempt — Envoy arms will be skipped." >&2
+            exit 0
+          fi
+          envoy --version
+
       # .NET System.Net.Quic on Linux requires native libmsquic (shipped in-box on Windows).
       - name: Install libmsquic (HTTP/3)
         if: runner.os == 'Linux'
@@ -444,7 +556,7 @@ jobs:
       # Pass workflow_dispatch inputs via env (not ${{ }} in the script) to avoid
       # githubactions:S7630 script-injection findings on user-controlled values.
       - name: Run saturation ramp
-        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || (inputs.mode == 'compare-product-smoke' && 50 || 400))) }}
+        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 50 || 400))) }}
         shell: pwsh
         env:
           RPS_MODE: ${{ env.RPS_MODE }}

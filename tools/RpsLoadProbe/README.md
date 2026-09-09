@@ -149,7 +149,34 @@ python3 tools/RpsLoadProbe/render-practical-charts.py \
   --title-suffix '@ <sha>'
 ```
 
-Writes `wiki/images/rps-practical-{linux,windows,macos}.png` (Linux also embeds in the repo README; all three on the website Performance page).
+Writes `wiki/images/rps-practical-{linux,windows,macos}.png` (Linux also embeds in the repo README; all three on the website Performance page). Five series: Titanium / YARP / nginx / HAProxy / Envoy.
+
+### Heavier workload charts
+
+After downloading heavier-mode CSV sets:
+
+```bash
+python3 tools/RpsLoadProbe/render-heavier-charts.py \
+  --bodies-root tools/RpsLoadProbe/results/gha-dl/<bodiesRunId> \
+  --post-root tools/RpsLoadProbe/results/gha-dl/<postRunId> \
+  --lossy-root tools/RpsLoadProbe/results/gha-dl/<lossyRunId> \
+  --tls-root tools/RpsLoadProbe/results/gha-dl/<tlsRunId> \
+  --arch-root tools/RpsLoadProbe/results/gha-dl/<archRunId> \
+  --out-dir wiki/images
+```
+
+Writes `rps-heavier-{bodies,post,lossy,tls-cost,arch}-{windows,linux}.png`.
+
+### Native peer smoke (HAProxy / Envoy)
+
+Before a publishable `compare-product` run:
+
+```powershell
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-haproxy-smoke -Repeats 1
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-envoy-smoke -Repeats 1
+```
+
+On Windows both modes exit **0** with “skip OK” (peers not available). Linux/macOS GHA installs HAProxy and Envoy in [rps-saturation.yml](../../.github/workflows/rps-saturation.yml).
 
 ## Editions (`titanium run` daemon)
 

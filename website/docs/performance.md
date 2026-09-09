@@ -4,16 +4,11 @@ Titanium targets low-overhead man-in-the-middle (MITM) and reverse proxying: con
 
 ## Summary (from publishable CI tables)
 
-On matched **GitHub Actions 4 vCPU / 16 GiB** runners, Titanium is typically:
-
-- **at or above YARP** for reverse-proxy workloads
-- **ahead of nginx** on H2/H3→H1 reverse; **near parity** for the rest (nginx still edges tiny keep-alive H1)
-
-MITM is Titanium-only among those peers (they cannot MITM). Absolute requests per second (RPS) varies by OS, TLS, and MsQuic packaging — compare **within a table**, not across Windows vs Linux.
+On matched **GitHub Actions 4 vCPU / 16 GiB** runners, compare **TWP÷YARP** (gated ≥ **0.85** reverse) and peer ratios vs **nginx**, **HAProxy**, and **Envoy** on the same loopback harness. MITM is Titanium-only among those peers (they cannot MITM). Absolute requests per second (RPS) varies by OS, TLS, and MsQuic packaging — compare **within a table**, not across Windows vs Linux.
 
 ## Practical reverse RPS (CI)
 
-Sustain RPS @ concurrency 64 for common reverse wires (tiny keep-alive GET). Grouped bars: Titanium / YARP / nginx. nginx now includes **HTTPS-origin** peers via `proxy_ssl` (H1/H2/H3 → H1 TLS) in addition to cleartext-origin terminate. Missing nginx bars mean that wire is still *Not possible* for stock nginx (no H2/H3 upstream). Charts from `compare-product` @ `024bd68d` ([34126809918](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34126809918)); regenerate with [`render-practical-charts.py`](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/render-practical-charts.py).
+Sustain RPS @ concurrency 64 for common reverse wires (tiny keep-alive GET). Grouped bars: Titanium / YARP / nginx / HAProxy / Envoy. Missing bars mean *Not possible* for that wire or OS (e.g. Windows HAProxy/Envoy, nginx without H2/H3 upstream). Regenerate with [`render-practical-charts.py`](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/render-practical-charts.py) after `compare-product`.
 
 ### Windows
 
@@ -26,6 +21,22 @@ Sustain RPS @ concurrency 64 for common reverse wires (tiny keep-alive GET). Gro
 ### macOS
 
 ![Practical reverse RPS on macOS](../../wiki/images/rps-practical-macos.png)
+
+## Heavier reverse workloads
+
+Real-world shapes from independent GHA dispatches (`compare-bodies`, `compare-post`, `compare-lossy`, `compare-tls-cost`, `compare-arch`). Linux charts below; Windows tables and charts on the [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#heavier-reverse-workloads).
+
+![Heavier bodies (Linux)](../../wiki/images/rps-heavier-bodies-linux.png)
+
+![Heavier POST (Linux)](../../wiki/images/rps-heavier-post-linux.png)
+
+![Heavier lossy link (Linux)](../../wiki/images/rps-heavier-lossy-linux.png)
+
+![TLS termination cost (Linux)](../../wiki/images/rps-heavier-tls-cost-linux.png)
+
+![Architecture-sensitive (Linux)](../../wiki/images/rps-heavier-arch-linux.png)
+
+Regenerate with [`render-heavier-charts.py`](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/render-heavier-charts.py).
 
 ## Full measurements
 

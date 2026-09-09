@@ -25,7 +25,7 @@ Protocol coverage details: [protocol support matrix](https://github.com/justcodi
 
 ![Practical reverse proxy throughput on Linux](wiki/images/rps-practical-linux.png)
 
-**RPS** is requests per second — how many HTTP requests the reverse proxy completes under load. Typically at or above **YARP** (from Microsoft); ahead of **nginx** when the client speaks HTTP/2 or HTTP/3 and the origin is HTTP/1.1; near parity elsewhere. Full tables: [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
+**RPS** is requests per second — how many HTTP requests the reverse proxy completes under load. Same-harness comparisons vs **YARP** (gated), **nginx**, **HAProxy**, and **Envoy** on matched GitHub Actions runners — see [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
 
 ## Choose an edition
 

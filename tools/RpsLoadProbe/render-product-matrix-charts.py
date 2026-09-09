@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Render per-OS reverse product-matrix charts (TWP vs YARP vs nginx).
+"""Render per-OS reverse product-matrix charts (TWP vs YARP vs nginx vs HAProxy vs Envoy).
 
-25 Client×Origin wires as small-multiples by client protocol. nginx *Not possible*
+25 Client×Origin wires as small-multiples by client protocol. nginx/HAProxy/Envoy *Not possible*
 is omitted (not a zero bar). MITM Lite/Full are tables only — this script never
 plots interception arms.
 
@@ -30,6 +30,8 @@ assert _spec.loader is not None
 _spec.loader.exec_module(_mod)
 arm_sustain_c64 = _mod.arm_sustain_c64
 find_csv = _mod.find_csv
+COLORS = _mod.COLORS
+PRODUCTS = _mod.PRODUCTS
 
 CLIENTS = (
     "HTTP/1 · plain",
@@ -39,6 +41,9 @@ CLIENTS = (
     "HTTP/3 · QUIC",
 )
 ORIGINS = CLIENTS
+
+Row = Tuple[str, str, Optional[float], Optional[float], Optional[float], Optional[float], Optional[float]]
+
 
 # paste-compare-product-wiki.ps1 arm stems (client, origin) → CSV names.
 def arm_name(prefix: str, client: str, origin: str) -> str:
@@ -56,10 +61,8 @@ def arm_name(prefix: str, client: str, origin: str) -> str:
         "HTTP/2 · TLS": "https-http2",
         "HTTP/3 · QUIC": "http3",
     }
-    # Product wiki uses dedicated reverse arm names; fall back to composed ids.
     c, o = cmap[client], omap[origin]
     if prefix == "twp":
-        # Common compare-product names
         special = {
             ("http1", "http1"): "twp-reverse-http1",
             ("http1-tls", "http1"): "twp-reverse-http1-tls",
@@ -78,23 +81,50 @@ def arm_name(prefix: str, client: str, origin: str) -> str:
             ("http2", "https-http2"): "yarp-reverse-http2-to-https",
         }
         return special.get((c, o), f"yarp-reverse-{c}-to-{o}")
-    special = {
-        ("http1", "http1"): "nginx-reverse-http1",
-        ("http1-tls", "http1"): "nginx-reverse-http1-tls",
-        ("http1-tls", "https-http1"): "nginx-reverse-http1-tls-to-https",
-        ("http2", "http1"): "nginx-reverse-http2",
-        ("http2", "https-http1"): "nginx-reverse-http2-to-https-http1",
+    peer_special = {
+        ("http1", "http1"): f"{prefix}-reverse-http1",
+        ("http1-tls", "http1"): f"{prefix}-reverse-http1-tls",
+        ("http1-tls", "https-http1"): f"{prefix}-reverse-http1-tls-to-https",
+        ("http2", "http1"): f"{prefix}-reverse-http2",
+        ("http2", "https-http1"): f"{prefix}-reverse-http2-to-https-http1",
+        ("http3", "http1"): f"{prefix}-reverse-http3-cleartext",
+        ("http3", "https-http1"): f"{prefix}-reverse-http3-to-https-http1",
     }
-    return special.get((c, o), f"nginx-reverse-{c}-to-{o}")
+    if prefix in ("nginx", "haproxy", "envoy"):
+        return peer_special.get((c, o), f"{prefix}-reverse-{c}-to-{o}")
+    raise ValueError(f"unknown prefix {prefix}")
 
 
 OS_SPECS: List[Tuple[str, str, Tuple[str, ...], str]] = [
-    ("windows", "Windows (`windows-latest`)", ("windows", "win"), "Windows — Titanium vs nginx vs YARP"),
-    ("linux", "Linux (`ubuntu-latest`)", ("linux", "ubuntu"), "Linux — Titanium vs nginx vs YARP"),
-    ("macos", "macOS (`macos-15-intel`)", ("macos", "osx", "darwin"), "macOS — Titanium vs nginx vs YARP"),
+    (
+        "windows",
+        "Windows (`windows-latest`)",
+        ("windows", "win"),
+        "Windows — Titanium vs nginx vs HAProxy vs Envoy vs YARP",
+    ),
+    (
+        "linux",
+        "Linux (`ubuntu-latest`)",
+        ("linux", "ubuntu"),
+        "Linux — Titanium vs nginx vs HAProxy vs Envoy vs YARP",
+    ),
+    (
+        "macos",
+        "macOS (`macos-15-intel`)",
+        ("macos", "osx", "darwin"),
+        "macOS — Titanium vs nginx vs HAProxy vs Envoy vs YARP",
+    ),
 ]
 
-COLORS = {"Titanium": "#2E6BE6", "YARP": "#D97706", "nginx": "#14804A"}
+HEADING_TO_OS = {
+    "Windows — Titanium vs nginx vs YARP": "windows",
+    "Linux — Titanium vs nginx vs YARP": "linux",
+    "macOS — Titanium vs nginx vs YARP": "macos",
+    "Windows — Titanium vs nginx vs HAProxy vs Envoy vs YARP": "windows",
+    "Linux — Titanium vs nginx vs HAProxy vs Envoy vs YARP": "linux",
+    "macOS — Titanium vs nginx vs HAProxy vs Envoy vs YARP": "macos",
+}
+
 CELL_RE = re.compile(r"\*{0,2}(\d[\d,]*)")
 
 
@@ -112,21 +142,16 @@ def parse_rps_cell(cell: str) -> Optional[float]:
     return v
 
 
-def parse_wiki_reverse_tables(md: str) -> Dict[str, List[Tuple[str, str, Optional[float], Optional[float], Optional[float]]]]:
-    """os_key → list of (client, origin, twp, nginx, yarp)."""
+def parse_wiki_reverse_tables(md: str) -> Dict[str, List[Row]]:
+    """os_key → list of (client, origin, twp, nginx, haproxy, envoy, yarp)."""
     out: Dict[str, list] = {"windows": [], "linux": [], "macos": []}
-    heading_to_os = {
-        "Windows — Titanium vs nginx vs YARP": "windows",
-        "Linux — Titanium vs nginx vs YARP": "linux",
-        "macOS — Titanium vs nginx vs YARP": "macos",
-    }
     current_os: Optional[str] = None
     in_reverse = False
     in_table = False
     for line in md.splitlines():
         if line.startswith("## "):
             title = line[3:].strip()
-            current_os = heading_to_os.get(title)
+            current_os = HEADING_TO_OS.get(title)
             in_reverse = False
             in_table = False
             continue
@@ -149,20 +174,22 @@ def parse_wiki_reverse_tables(md: str) -> Dict[str, List[Tuple[str, str, Optiona
             continue
         if in_table and line.startswith("|"):
             cols = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cols) < 8:
+            if len(cols) < 12:
                 continue
             client, origin = cols[0], cols[1]
             twp = parse_rps_cell(cols[2])
             nginx = parse_rps_cell(cols[4])
-            yarp = parse_rps_cell(cols[6])
-            out[current_os].append((client, origin, twp, nginx, yarp))
+            haproxy = parse_rps_cell(cols[6])
+            envoy = parse_rps_cell(cols[8])
+            yarp = parse_rps_cell(cols[10])
+            out[current_os].append((client, origin, twp, nginx, haproxy, envoy, yarp))
         elif in_table and not line.startswith("|"):
             in_table = False
     return out
 
 
 def render_os(
-    rows: Sequence[Tuple[str, str, Optional[float], Optional[float], Optional[float]]],
+    rows: Sequence[Row],
     os_title: str,
     out_path: Path,
     title_suffix: str,
@@ -179,22 +206,20 @@ def render_os(
         fontsize=13,
         y=0.995,
     )
-    width = 0.25
-    products = ("Titanium", "YARP", "nginx")
-    offsets = (-width, 0.0, width)
+    width = 0.14
+    offsets = tuple((i - 2) * width for i in range(5))
 
-    by_client: Dict[str, List[Tuple[str, Optional[float], Optional[float], Optional[float]]]] = {
+    by_client: Dict[str, List[Tuple[str, Optional[float], Optional[float], Optional[float], Optional[float], Optional[float]]]] = {
         c: [] for c in CLIENTS
     }
-    for client, origin, twp, nginx, yarp in rows:
+    for client, origin, twp, nginx, haproxy, envoy, yarp in rows:
         if client in by_client:
-            by_client[client].append((origin, twp, nginx, yarp))
+            by_client[client].append((origin, twp, nginx, haproxy, envoy, yarp))
 
     for ax, client in zip(axes, CLIENTS):
         group = by_client.get(client) or []
-        # Keep origin order even if a row is missing.
         ordered = []
-        lookup = {o: (t, n, y) for o, t, n, y in group}
+        lookup = {o: (t, n, h, e, y) for o, t, n, h, e, y in group}
         for origin in ORIGINS:
             if origin in lookup:
                 ordered.append((origin, *lookup[origin]))
@@ -202,11 +227,13 @@ def render_os(
         x = np.arange(len(labels), dtype=float)
         series = {
             "Titanium": [r[1] for r in ordered],
-            "YARP": [r[3] for r in ordered],
             "nginx": [r[2] for r in ordered],
+            "HAProxy": [r[3] for r in ordered],
+            "Envoy": [r[4] for r in ordered],
+            "YARP": [r[5] for r in ordered],
         }
         ymax = 1.0
-        for product, offset in zip(products, offsets):
+        for product, offset in zip(PRODUCTS, offsets):
             vals = series[product]
             heights = [0.0 if v is None else float(v) for v in vals]
             present = [v is not None for v in vals]
@@ -234,11 +261,11 @@ def render_os(
         ax.grid(axis="y", linestyle=":", alpha=0.45, zorder=0)
         ax.set_axisbelow(True)
 
-    axes[0].legend(loc="upper right", framealpha=0.92, ncols=3)
+    axes[0].legend(loc="upper right", framealpha=0.92, ncols=5, fontsize=8)
     fig.text(
         0.01,
         0.004,
-        "Reverse only · TWP vs YARP vs nginx · nginx Not possible omitted · MITM Lite/Full stay tables-only",
+        "Reverse only · TWP vs YARP vs nginx vs HAProxy vs Envoy · Not possible omitted · MITM Lite/Full stay tables-only",
         fontsize=8,
         color="#444444",
     )
@@ -248,14 +275,16 @@ def render_os(
     plt.close(fig)
 
 
-def rows_from_csv(csv_path: Path) -> List[Tuple[str, str, Optional[float], Optional[float], Optional[float]]]:
+def rows_from_csv(csv_path: Path) -> List[Row]:
     rows = []
     for client in CLIENTS:
         for origin in ORIGINS:
             twp = arm_sustain_c64(csv_path, arm_name("twp", client, origin))
             yarp = arm_sustain_c64(csv_path, arm_name("yarp", client, origin))
             nginx = arm_sustain_c64(csv_path, arm_name("nginx", client, origin))
-            rows.append((client, origin, twp, nginx, yarp))
+            haproxy = arm_sustain_c64(csv_path, arm_name("haproxy", client, origin))
+            envoy = arm_sustain_c64(csv_path, arm_name("envoy", client, origin))
+            rows.append((client, origin, twp, nginx, haproxy, envoy, yarp))
     return rows
 
 

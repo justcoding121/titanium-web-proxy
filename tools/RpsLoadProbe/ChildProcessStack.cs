@@ -21,6 +21,8 @@ internal sealed class ChildProcessStack : IAsyncDisposable
     public IReadOnlyList<Uri> TargetUris { get; }
     public string? ExplicitProxyUrl { get; }
     public string? NginxVersion { get; }
+    public string? HaproxyVersion { get; }
+    public string? EnvoyVersion { get; }
     public string? YarpVersion { get; }
     public Version RequestHttpVersion { get; }
     public HttpVersionPolicy VersionPolicy { get; }
@@ -54,7 +56,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         string? loadGenerator = null, int? quicPort = null, int? originQuicPort = null,
         string? yarpVersion = null, string? controlPlaneUrl = null, string? controlPlaneSecret = null,
         string? dashboardUrl = null, string? authorizationBearer = null, string? discoveryFilePath = null,
-        int? originHttpPort = null)
+        int? originHttpPort = null, string? haproxyVersion = null, string? envoyVersion = null)
     {
         this.originProcess = originProcess;
         this.originStdout = originStdout;
@@ -64,6 +66,8 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         TargetUris = targetUris;
         ExplicitProxyUrl = explicitProxyUrl;
         NginxVersion = nginxVersion;
+        HaproxyVersion = haproxyVersion;
+        EnvoyVersion = envoyVersion;
         YarpVersion = yarpVersion;
         RequestHttpVersion = requestHttpVersion;
         VersionPolicy = versionPolicy;
@@ -83,8 +87,9 @@ internal sealed class ChildProcessStack : IAsyncDisposable
     }
 
     public static async Task<ChildProcessStack> StartAsync(ProbeMode mode, string? nginxPath,
-        int? maxCachedConnections, CancellationToken cancellationToken, WorkloadOptions? workload = null,
-        bool enableHttpInterception = false, bool mutateHttpInterception = false)
+        string? haproxyPath, string? envoyPath, int? maxCachedConnections, CancellationToken cancellationToken,
+        WorkloadOptions? workload = null, bool enableHttpInterception = false,
+        bool mutateHttpInterception = false)
     {
         workload ??= WorkloadOptions.TinyGet;
         var exe = Environment.ProcessPath
@@ -138,6 +143,10 @@ internal sealed class ChildProcessStack : IAsyncDisposable
             proxyArgs.Append(CultureInfo.InvariantCulture, $" --origin-https-extra-port {extraPort}");
         if (!string.IsNullOrWhiteSpace(nginxPath))
             proxyArgs.Append(CultureInfo.InvariantCulture, $" --nginx-path \"{nginxPath}\"");
+        if (!string.IsNullOrWhiteSpace(haproxyPath))
+            proxyArgs.Append(CultureInfo.InvariantCulture, $" --haproxy-path \"{haproxyPath}\"");
+        if (!string.IsNullOrWhiteSpace(envoyPath))
+            proxyArgs.Append(CultureInfo.InvariantCulture, $" --envoy-path \"{envoyPath}\"");
         if (maxCachedConnections is { } m)
             proxyArgs.Append(CultureInfo.InvariantCulture, $" --max-cached-connections {m}");
         proxyArgs.Append(FormatOriginWorkloadArgs(workload));
@@ -158,6 +167,8 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         var target = Require(proxyLines, "target_for_client");
         proxyLines.TryGetValue("explicit_proxy", out var explicitProxy);
         proxyLines.TryGetValue("nginx", out var nginxVersion);
+        proxyLines.TryGetValue("haproxy", out var haproxyVersion);
+        proxyLines.TryGetValue("envoy", out var envoyVersion);
         proxyLines.TryGetValue("yarp", out var yarpVersion);
         proxyLines.TryGetValue("http_version", out var httpVersionText);
         proxyLines.TryGetValue("load_generator", out var loadGenerator);
@@ -181,7 +192,9 @@ internal sealed class ChildProcessStack : IAsyncDisposable
             dashboardUrl: TryGet(proxyLines, "dashboard_url"),
             authorizationBearer: TryGet(proxyLines, "authorization_bearer"),
             discoveryFilePath: TryGet(proxyLines, "discovery_file"),
-            originHttpPort: originHttpPort);
+            originHttpPort: originHttpPort,
+            haproxyVersion: haproxyVersion,
+            envoyVersion: envoyVersion);
         if (stack.OriginProcessId is null)
             throw new InvalidOperationException("Ramp requires a split origin child; combined --serve is not used.");
         return stack;
@@ -215,11 +228,15 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         ProbeMode.HttpsMitm or ProbeMode.ReverseHttp1Mitm
             or ProbeMode.ReverseHttp1ToHttps or ProbeMode.YarpReverseHttp1ToHttps
             or ProbeMode.YarpReverseHttp1TlsToHttps
-            or ProbeMode.NginxReverseHttp1ToHttps or ProbeMode.NginxReverseHttp1TlsToHttps => OriginRecipe.Https,
+            or ProbeMode.NginxReverseHttp1ToHttps or ProbeMode.NginxReverseHttp1TlsToHttps
+            or ProbeMode.HaproxyReverseHttp1ToHttps or ProbeMode.HaproxyReverseHttp1TlsToHttps
+            or ProbeMode.EnvoyReverseHttp1ToHttps or ProbeMode.EnvoyReverseHttp1TlsToHttps => OriginRecipe.Https,
         ProbeMode.MitmHttp2ToHttp1 or ProbeMode.MitmHttp3ToHttp1
             or ProbeMode.ReverseH2cToHttps or ProbeMode.YarpReverseH2cToHttps
             or ProbeMode.YarpReverseHttp2ToHttpsHttp1 or ProbeMode.YarpReverseHttp3ToHttpsHttp1
-            or ProbeMode.NginxReverseHttp2ToHttpsHttp1 or ProbeMode.NginxReverseHttp3ToHttpsHttp1 =>
+            or ProbeMode.NginxReverseHttp2ToHttpsHttp1 or ProbeMode.NginxReverseHttp3ToHttpsHttp1
+            or ProbeMode.HaproxyReverseHttp2ToHttpsHttp1 or ProbeMode.HaproxyReverseHttp3ToHttpsHttp1
+            or ProbeMode.EnvoyReverseHttp2ToHttpsHttp1 or ProbeMode.EnvoyReverseHttp3ToHttpsHttp1 =>
             OriginRecipe.HttpsHttp1Only,
         ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi => OriginRecipe.HttpsMulti,
         ProbeMode.ReverseHttp2 or ProbeMode.ReverseH2c or ProbeMode.YarpReverseH2c
