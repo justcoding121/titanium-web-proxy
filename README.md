@@ -32,8 +32,6 @@ Protocol coverage details: [protocol support matrix](https://github.com/justcodi
 
 Requires .NET 10 or later for the library. CLI and Inspector downloads are self-contained (no SDK needed to run them).
 
-## Screenshots
-
 **Titanium Inspector** — session grid with request/response details:
 
 <img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
@@ -118,6 +116,8 @@ Task OnRequest(object sender, SessionEventArgs e)
     return Task.CompletedTask;
 }
 ```
+
+<img src="wiki/images/basic-screenshot.jpg" alt="Basic console proxy screenshot" width="900" />
 
 Point your client at `127.0.0.1:8000` as its HTTP and HTTPS proxy. Trusting a generated root certificate changes the current user's certificate store — only do this on a machine you control.
 
