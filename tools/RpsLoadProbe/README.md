@@ -6,7 +6,7 @@ Published numbers and external control-arm comparisons live only on the wiki [Pe
 
 Manual CI: [RPS saturation](../../.github/workflows/rps-saturation.yml) (`workflow_dispatch`, matrix `ubuntu-latest` + `windows-latest` + `macos-15-intel`). Do **not** use `macos-latest` (3-core M1 / 7 GiB) for publishable numbers.
 
-**macOS lab deps (workflow):** Homebrew nginx with `http_v3_module` (fail if missing), Homebrew `libmsquic` + `openssl@3` on `DYLD_LIBRARY_PATH` / `DYLD_FALLBACK_LIBRARY_PATH` (assert `QuicListener.IsSupported`), bombardier darwin-amd64, and YARP via the same .NET probe arms as Linux/Windows.
+**macOS lab deps (workflow):** Homebrew nginx with `http_v3_module` (fail if missing), Homebrew `haproxy` (`USE_QUIC` when present), Homebrew `envoy` when available, Homebrew `libmsquic` + `openssl@3` on `DYLD_LIBRARY_PATH` / `DYLD_FALLBACK_LIBRARY_PATH` (assert `QuicListener.IsSupported`), bombardier darwin-amd64, and YARP via the same .NET probe arms as Linux/Windows.
 
 ## Tiered cadence
 
@@ -80,9 +80,9 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
 
 | Block | Arms |
 |---|---|
-| **A — H1 plain** | `origin-direct`, `origin-direct-bombardier` (if PATH), `bare-reverse-http1`, `nginx-reverse-http1`, `yarp-reverse-http1`, `twp-reverse-http1` |
-| **B — H2 TLS→H1** | `nginx-reverse-http2` (if nginx), `yarp-reverse-http2`, `twp-reverse-http2-cleartext` |
-| **C — H3→H1** | `nginx-reverse-http3-cleartext` (if nginx + `http_v3_module`), `yarp-reverse-http3-cleartext`, `twp-reverse-http3-cleartext` (skipped when `QuicListener` unsupported) |
+| **A — H1 plain** | `origin-direct`, `origin-direct-bombardier` (if PATH), `bare-reverse-http1`, `nginx-reverse-http1`, `haproxy-reverse-http1` (if haproxy), `envoy-reverse-http1` (if envoy), `yarp-reverse-http1`, `twp-reverse-http1` |
+| **B — H2 TLS→H1** | `nginx-reverse-http2` (if nginx), `haproxy-reverse-http2` (if haproxy), `envoy-reverse-http2` (if envoy), `yarp-reverse-http2`, `twp-reverse-http2-cleartext` |
+| **C — H3→H1** | `nginx-reverse-http3-cleartext` (if nginx + `http_v3_module`), `haproxy-reverse-http3-cleartext` (if `USE_QUIC`), `envoy-reverse-http3-cleartext` (if envoy), `yarp-reverse-http3-cleartext`, `twp-reverse-http3-cleartext` (skipped when `QuicListener` unsupported) |
 
 **CSV resource columns** (every measure step): `proxy_rss_peak_bytes`, `proxy_cpu_avg_pct` (wiki label: **Memory (RSS)**). Names stay `proxy_*` even on origin-direct arms (those sample the **origin** child PID). Otherwise sample the **proxy** child PID plus its **full descendant tree** (so nginx workers under the serve-proxy → master chain are included). Empty when the PID cannot be sampled. Poll ~200ms during the measure window; peak Working Set / VmRSS sum and average CPU% (of all logical processors).
 

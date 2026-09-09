@@ -458,11 +458,12 @@ backend be
         """
         haproxy was not found on PATH (and no --haproxy-path was given), or this OS is Windows.
         TWP arms will still run. To enable the same-machine HAProxy control arm:
-          Linux:   sudo apt-get install -y haproxy   (Community/GPL; stop the distro service first)
-          macOS:   brew install haproxy
+          Linux:   GHA builds HAProxy 3.2 with USE_QUIC (Ubuntu distro 2.8 has no QUIC).
+                    Locally: build from source with USE_QUIC=1 USE_QUIC_OPENSSL_COMPAT=1, or a QUIC bottle.
+          macOS:   brew install haproxy (Homebrew bottles typically include USE_QUIC)
           Windows: not supported (no official HAProxy Windows port) — cells are Not possible.
         Then re-run with haproxy on PATH, or pass --haproxy-path <path-to-haproxy>.
-        HTTP/3 terminate needs a build with USE_QUIC (typical distro/Homebrew builds often lack it).
+        HTTP/3 terminate needs USE_QUIC (GHA Linux compiles it; distro apt does not).
         """;
 
     private static string ReadVersion(string exe)

@@ -1,9 +1,11 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Text.RegularExpressions;
 using Titanium.Web.Proxy.RpsLoadProbe.Support;
 
 namespace Titanium.Web.Proxy.RpsLoadProbe;
@@ -274,30 +276,31 @@ internal sealed class EnvoyHost : IDisposable
         public void QuicListener(string name, int port, string address, string statPrefix, string certPath,
             string keyPath)
         {
+            // Official downstream HTTP/3 shape: UDP + udp_listener_config.quic_options (not a
+            // listener filter). See configs/envoyproxy_io_proxy_http3_downstream.yaml.
             W(2, $"- name: {name}");
             W(4, "address:");
             W(6, "socket_address:");
             W(8, "protocol: UDP");
             W(8, $"address: {address}");
             W(8, $"port_value: {port}");
-            W(4, "listener_filters:");
-            W(4, "- name: envoy.filters.listener.quic");
-            W(6, "typed_config:");
-            W(8, "\"@type\": type.googleapis.com/envoy.extensions.filters.listener.quic.v3.QuicListenerFilter");
+            W(4, "udp_listener_config:");
+            W(6, "quic_options: {}");
+            W(6, "downstream_socket_config:");
+            W(8, "prefer_gro: true");
             W(4, "filter_chains:");
-            W(4, "- filter_chain_match:");
-            W(8, "transport_protocol: quic");
-            W(6, "transport_socket:");
-            W(10, "name: envoy.transport_sockets.quic");
-            W(10, "typed_config:");
-            W(12, "\"@type\": type.googleapis.com/envoy.extensions.transport_sockets.quic.v3.QuicDownstreamTransport");
-            W(12, "downstream_tls_context:");
-            W(14, "common_tls_context:");
-            W(16, "tls_certificates:");
-            W(16, "- certificate_chain:");
-            W(20, $"filename: \"{certPath}\"");
-            W(18, "private_key:");
-            W(20, $"filename: \"{keyPath}\"");
+            W(4, "- transport_socket:");
+            W(8, "name: envoy.transport_sockets.quic");
+            W(8, "typed_config:");
+            W(10, "\"@type\": type.googleapis.com/envoy.extensions.transport_sockets.quic.v3.QuicDownstreamTransport");
+            W(10, "downstream_tls_context:");
+            W(12, "common_tls_context:");
+            W(14, "alpn_protocols: [\"h3\"]");
+            W(14, "tls_certificates:");
+            W(14, "- certificate_chain:");
+            W(18, $"filename: \"{certPath}\"");
+            W(16, "private_key:");
+            W(18, $"filename: \"{keyPath}\"");
             W(6, "filters:");
             AppendHttpConnectionManager(8, statPrefix, "HTTP3", altSvc: null);
         }
@@ -310,6 +313,8 @@ internal sealed class EnvoyHost : IDisposable
                 "\"@type\": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager");
             W(col + 4, $"stat_prefix: {statPrefix}");
             W(col + 4, $"codec_type: {codecType}");
+            if (string.Equals(codecType, "HTTP3", StringComparison.Ordinal))
+                W(col + 4, "http3_protocol_options: {}");
             W(col + 4, "access_log: []");
             W(col + 4, "stream_idle_timeout: 65s");
             W(col + 4, "request_timeout: 65s");
@@ -513,14 +518,48 @@ internal sealed class EnvoyHost : IDisposable
             });
         };
 
-    /// <summary>Best-effort: true when <c>envoy --help</c> or <c>--version</c> mentions QUIC/HTTP/3.</summary>
+    /// <summary>
+    /// True for modern Envoy (HTTP/3 is compiled in on official GitHub/Homebrew builds).
+    /// <c>envoy --version</c> is typically <c>…/1.36.7/Clean/RELEASE/BoringSSL</c> with no "quic" token,
+    /// so grepping the version string used to skip H3 arms that the binary can run.
+    /// </summary>
     internal static bool SupportsHttp3(string exe)
     {
         var version = ReadEnvoyOutput(exe, "--version");
         if (ContainsHttp3Hint(version))
             return true;
+        if (TryParseEnvoyVersion(version, out var major, out var minor) &&
+            (major > 1 || (major == 1 && minor >= 20)))
+            return true;
         var help = ReadEnvoyOutput(exe, "--help");
-        return ContainsHttp3Hint(help);
+        if (ContainsHttp3Hint(help))
+            return true;
+        // Prefer running the arm over a silent skip when we resolved a binary.
+        return !string.IsNullOrWhiteSpace(version) &&
+               !string.Equals(version, "unknown", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static bool TryParseEnvoyVersion(string text, out int major, out int minor)
+    {
+        major = 0;
+        minor = 0;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+        // GitHub release: "envoy  version: <sha>/1.36.7/Clean/RELEASE/BoringSSL"
+        var slash = Regex.Match(text, @"/(\d+)\.(\d+)\.(\d+)");
+        if (slash.Success)
+        {
+            major = int.Parse(slash.Groups[1].Value, CultureInfo.InvariantCulture);
+            minor = int.Parse(slash.Groups[2].Value, CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        var dotted = Regex.Match(text, @"\b(\d+)\.(\d+)\.(\d+)\b");
+        if (!dotted.Success)
+            return false;
+        major = int.Parse(dotted.Groups[1].Value, CultureInfo.InvariantCulture);
+        minor = int.Parse(dotted.Groups[2].Value, CultureInfo.InvariantCulture);
+        return true;
     }
 
     private static bool ContainsHttp3Hint(string text) =>
@@ -590,7 +629,7 @@ internal sealed class EnvoyHost : IDisposable
           macOS:   brew install envoy
           Windows: not supported in this harness — cells are Not possible.
         Then re-run with envoy on PATH, or pass --envoy-path <path-to-envoy>.
-        HTTP/3 terminate needs a build with QUIC/HTTP/3 enabled (check `envoy --help` for quic/http3).
+        HTTP/3 terminate is enabled on official Envoy binaries (GitHub release / Homebrew).
         """;
 
     private static string ReadVersion(string exe)

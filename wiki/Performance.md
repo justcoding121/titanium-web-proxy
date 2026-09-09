@@ -88,8 +88,8 @@ See [PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/dev
 | RAM | **16** GiB |
 | Runtime | .NET 10.0.11 |
 | nginx | nginx/**1.31.4** (nginx.org mainline, `--with-http_v3_module`) |
-| HAProxy | distro `haproxy` (GHA install; `USE_QUIC` when present) |
-| Envoy | pinned GitHub release static binary (GHA install) |
+| HAProxy | HAProxy **3.2.23** built with `USE_QUIC` (GHA; Ubuntu distro 2.8 is not QUIC-capable) |
+| Envoy | pinned GitHub release static binary **1.36.7** (HTTP/3 compiled in) |
 | YARP | Yarp.ReverseProxy **2.3.0** |
 | Harness | RpsLoadProbe Release; median of 3 repeats where noted |
 
@@ -102,8 +102,8 @@ See [PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/dev
 | RAM | **14** GB |
 | Runtime | .NET 10.0.x |
 | nginx | Homebrew nginx with `--with-http_v3_module` (workflow fails if missing) |
-| HAProxy | Homebrew `haproxy` (GHA install; `USE_QUIC` when present) |
-| Envoy | Homebrew `envoy` when available (GHA install) |
+| HAProxy | Homebrew `haproxy` (GHA install; bottles typically include `USE_QUIC`) |
+| Envoy | Homebrew `envoy` when available (GHA install; HTTP/3 compiled in) |
 | MsQuic | Homebrew `libmsquic` + `openssl@3` on `DYLD_LIBRARY_PATH` / `DYLD_FALLBACK_LIBRARY_PATH` (`QuicListener.IsSupported`) |
 | YARP | Yarp.ReverseProxy **2.3.0** |
 | Harness | RpsLoadProbe Release; median of 3 repeats where noted |
@@ -175,7 +175,7 @@ Peer ratios (÷YARP / ÷nginx) on median peak; **RPS cells** embed `(MiB / CPU%)
 
 #### Block C — H3→H1
 
-Same layout as Block B. Requires QuicListener; nginx only with `http_v3_module` (Windows nginx has no QUIC).
+Same layout as Block B. Requires QuicListener. nginx needs `http_v3_module` (Windows nginx has no QUIC). HAProxy needs `USE_QUIC` (GHA Linux compiles it; Homebrew typically has it). Envoy official binaries include HTTP/3.
 
 **Windows** (`windows-latest`)
 
@@ -291,7 +291,7 @@ Same Client×Origin wires with interception on (`compare-product` [34355136373](
 
 ### Reverse
 
-Median of **3 repeats** on `ubuntu-latest` (4 vCPU / 16 GiB). Bare reverse 5×5 @ `84b225f7` — `compare-product` [34355136373](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34355136373). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** HAProxy and Envoy run from upstream packages on the same loopback shape as nginx/YARP. nginx terminate peers use `keepalive 256` + streaming buffers. The RPS workflow installs nginx.org mainline (`http_v3_module`) and `libmsquic`. Prefer ratios over absolute RPS.
+Median of **3 repeats** on `ubuntu-latest` (4 vCPU / 16 GiB). Bare reverse 5×5 @ `84b225f7` — `compare-product` [34355136373](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34355136373). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** HAProxy (3.2 `USE_QUIC`) and Envoy (GitHub release, HTTP/3 compiled in) run on the same loopback shape as nginx/YARP. nginx terminate peers use `keepalive 256` + streaming buffers. The RPS workflow installs nginx.org mainline (`http_v3_module`), a QUIC-enabled HAProxy, Envoy, and `libmsquic`. Prefer ratios over absolute RPS.
 
 ![Linux reverse](images/rps-product-reverse-linux.png)
 

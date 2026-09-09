@@ -332,21 +332,64 @@ jobs:
           nginx -V 2>&1 | tr ' ' '\n' | grep http_v3 || true
 
       # HAProxy Community/GPL — Linux/macOS only (no official Windows port).
-      - name: Install HAProxy (Linux)
+      # Ubuntu distro 2.8 has HTTP/3 parser code but is not built with USE_QUIC, so H3 bind
+      # lines are skipped. Build 3.2 from source with USE_QUIC + OpenSSL compat (no 0-RTT)
+      # against jammy/noble libssl — same idea as nginx.org mainline for http_v3_module.
+      - name: Cache HAProxy QUIC prefix
         if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/haproxy-quic
+          key: haproxy-3.2.23-quic-compat-linux-x64
+
+      - name: Install HAProxy with QUIC (Linux)
+        if: runner.os == 'Linux'
+        env:
+          HAPROXY_VERSION: '3.2.23'
+          HAPROXY_SHA256: '82d14ef33571e4edeb9197516c0d058a3775fb80541e46afe4377428e461fef0'
         run: |
           set -euo pipefail
           sudo find /etc/apt -type f \( -iname '*chrome*' -o -iname '*google*chrome*' \) -print -delete || true
           sudo apt-get update || true
-          sudo apt-get install -y haproxy
+          sudo apt-get install -y gcc make libssl-dev libpcre2-dev zlib1g-dev
+          # Stop any distro service so our temp-prefix HAProxy owns the ports we pick.
+          sudo apt-get install -y haproxy || true
           sudo systemctl stop haproxy || true
-          haproxy -v
-          if haproxy -vv 2>&1 | grep -q USE_QUIC; then
-            echo "HAProxy USE_QUIC present"
+          dest="${RUNNER_TEMP}/haproxy-quic"
+          mkdir -p "$dest"
+          if [ -x "$dest/sbin/haproxy" ] && "$dest/sbin/haproxy" -vv 2>&1 | grep -q USE_QUIC; then
+            echo "Using existing HAProxy QUIC build at $dest"
           else
-            echo "HAProxy has no USE_QUIC — HTTP/3 HAProxy arms will be skipped." >&2
-            haproxy -vv 2>&1 | head -n 40 || true
+            ver="$HAPROXY_VERSION"
+            src="${RUNNER_TEMP}/haproxy-src"
+            mkdir -p "$src"
+            tarball="${RUNNER_TEMP}/haproxy-${ver}.tar.gz"
+            curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+              "https://www.haproxy.org/download/3.2/src/haproxy-${ver}.tar.gz" \
+              -o "$tarball"
+            echo "${HAPROXY_SHA256}  ${tarball}" | sha256sum -c -
+            tar -xzf "$tarball" -C "$src" --strip-components=1
+            make -C "$src" -j "$(nproc)" \
+              TARGET=linux-glibc \
+              USE_OPENSSL=1 \
+              USE_QUIC=1 \
+              USE_QUIC_OPENSSL_COMPAT=1 \
+              USE_PCRE2=1 \
+              USE_PCRE2_JIT=1 \
+              USE_ZLIB=1
+            mkdir -p "$dest/sbin"
+            cp -f "$src/haproxy" "$dest/sbin/haproxy"
+            chmod +x "$dest/sbin/haproxy"
           fi
+          echo "$dest/sbin" >> "$GITHUB_PATH"
+          export PATH="$dest/sbin:$PATH"
+          haproxy -v
+          if ! haproxy -vv 2>&1 | grep -q USE_QUIC; then
+            echo "HAProxy was installed but lacks USE_QUIC; HTTP/3 HAProxy arms cannot run." >&2
+            haproxy -vv 2>&1 | head -n 40 || true
+            exit 1
+          fi
+          echo "HAProxy USE_QUIC present"
 
       - name: Install HAProxy (macOS)
         if: runner.os == 'macOS'
@@ -367,7 +410,8 @@ jobs:
           if haproxy -vv 2>&1 | grep -q USE_QUIC; then
             echo "HAProxy USE_QUIC present"
           else
-            echo "HAProxy has no USE_QUIC — HTTP/3 HAProxy arms will be skipped." >&2
+            echo "Homebrew HAProxy has no USE_QUIC — HTTP/3 HAProxy arms will be skipped." >&2
+            haproxy -vv 2>&1 | head -n 40 || true
           fi
 
       # Envoy Apache 2.0 — Linux static binary from GitHub releases; macOS via Homebrew.
@@ -388,11 +432,7 @@ jobs:
           echo "$dest" >> "$GITHUB_PATH"
           export PATH="$dest:$PATH"
           envoy --version
-          if envoy --version 2>&1 | grep -Eiq 'quic|http/?3'; then
-            echo "Envoy version string mentions QUIC/HTTP3"
-          else
-            echo "Envoy HTTP/3 capability unclear from --version — H3 arms may be skipped." >&2
-          fi
+          echo "Envoy official binaries include HTTP/3; H3 arms run when QuicListener is supported."
 
       - name: Install Envoy (macOS)
         if: runner.os == 'macOS'
@@ -425,6 +465,7 @@ jobs:
             exit 0
           fi
           envoy --version
+          echo "Envoy Homebrew builds include HTTP/3 when the formula ships QUIC; H3 arms run when QuicListener is supported."
 
       # .NET System.Net.Quic on Linux requires native libmsquic (shipped in-box on Windows).
       - name: Install libmsquic (HTTP/3)
