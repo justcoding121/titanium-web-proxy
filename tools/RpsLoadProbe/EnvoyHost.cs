@@ -317,27 +317,27 @@ internal sealed class EnvoyHost : IDisposable
             W(col + 4, "route_config:");
             W(col + 6, "name: local_route");
             W(col + 6, "virtual_hosts:");
+            // List item is a map: name + domains + routes are siblings (same indent as "name").
             W(col + 6, "- name: local");
-            W(col + 10, "domains: [\"*\"]");
-            W(col + 10, "routes:");
-            // Route: match + route are siblings under the routes[] map item.
-            W(col + 10, "- match:");
-            W(col + 14, "prefix: \"/\"");
-            W(col + 12, "route:");
-            W(col + 14, "cluster: origin");
-            W(col + 14, "timeout: 65s");
+            W(col + 8, "domains: [\"*\"]");
+            W(col + 8, "routes:");
+            W(col + 8, "- match:");
+            W(col + 12, "prefix: \"/\"");
+            W(col + 10, "route:");
+            W(col + 12, "cluster: origin");
+            W(col + 12, "timeout: 65s");
             if (altSvc != null)
             {
-                W(col + 14, "response_headers_to_add:");
-                W(col + 14, "- header:");
-                W(col + 18, "key: alt-svc");
-                W(col + 18, $"value: '{altSvc}'");
+                W(col + 12, "response_headers_to_add:");
+                W(col + 12, "- header:");
+                W(col + 16, "key: alt-svc");
+                W(col + 16, $"value: \"{altSvc}\"");
             }
 
             W(col + 4, "http_filters:");
             W(col + 4, "- name: envoy.filters.http.router");
-            W(col + 8, "typed_config:");
-            W(col + 10, "\"@type\": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router");
+            W(col + 6, "typed_config:");
+            W(col + 8, "\"@type\": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router");
         }
 
         public void Cluster(int originPort, bool upstreamTls)
