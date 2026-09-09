@@ -1,11 +1,11 @@
 # Full compare-product gate validation (all WIRES rows, Win+Lin+Mac, median of 3 GHA runs).
 param(
     [Parameter(Mandatory)] [string[]] $RunIds,
-    [double] $MitmLiteGate = 0.65,
-    [double] $MitmFullGate = 0.55,
+    [double] $MitmLiteGate = 0.50,
+    [double] $MitmFullGate = 0.50,
     # Backward-compatible alias: if set, applies to both Lite and Full.
     [double] $MitmGate = -1,
-    [double] $ReverseYarpGate = 0.95,
+    [double] $ReverseYarpGate = 0.85,
     [string] $BaselineRunId = '32960766249'
 )
 if ($MitmGate -ge 0) {

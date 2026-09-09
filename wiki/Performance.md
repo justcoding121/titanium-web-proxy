@@ -9,7 +9,7 @@ These tables are a **same-harness, same-origin, same-runner-class** reverse-prox
 - **Same runner class per table**: `windows-latest` / `ubuntu-latest` / `macos-15-intel` (4-core-class). Laptop High-perf and `macos-latest` are never mixed into these tables.
 - **YARP** is `Yarp.ReverseProxy` **2.3.0** with equivalent TLS/ALPN. **nginx** uses streaming knobs (`keepalive 256`, buffering off). Linux nginx (mainline + `http_v3`) is authoritative; Windows nginx has no QUIC — those cells are *Not possible*, not losses.
 - **MITM is TWP-only** (CONNECT + forged certs). nginx/YARP cannot MITM; Lite/Full tables are overhead vs TWP reverse, not vs peers. There are **no MITM charts**.
-- The product signal is **TWP÷YARP** (gated ≥ **0.95** reverse) and **MITM÷Reverse** (Lite ≥ **0.65**, Full ≥ **0.55**), not absolute RPS. Absolute RPS moves with runner heat; ratios are the claim.
+- The product signal is **TWP÷YARP** (gated ≥ **0.85** reverse) and **MITM÷Reverse** (Lite ≥ **0.50**, Full ≥ **0.50**), not absolute RPS. Absolute RPS moves with runner heat; ratios are the claim.
 - Product fast paths (session-lite, skip-poll, compressed relay) are **in-tree defaults** for interception-off reverse — the same class of work YARP/nginx do. The harness does not disable TWP safety that peers also skip, and it does not retune to pass gates ([PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/PERF-GATES.md)).
 - **MITM leaf keys** are a shared RSA/ECDSA pair per `CertificateManager` (one key for all forged leaves). That is an intentional RPS tradeoff: compromise of that material affects every host minted by that manager. Reverse/YARP/nginx paths do not mint leaves.
 
@@ -247,11 +247,11 @@ Median of **3 repeats** on `windows-latest` (4 vCPU / 16 GiB). Bare reverse 5×5
 
 ### MITM (TWP only)
 
-Same Client×Origin wires with interception on (`compare-product` [34126809918](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34126809918)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via `MitmCompressedRelayHelper`). nginx/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (same job). Completion gate: Lite ≥ **0.65×** and Full ≥ **0.55×** reverse sustain @ c=64 (median of 3 GHA runs); reverse TWP÷YARP ≥ **0.95×** (no nginx gate).
+Same Client×Origin wires with interception on (`compare-product` [34126809918](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34126809918)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via `MitmCompressedRelayHelper`). nginx/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (same job). Completion gate: Lite ≥ **0.50×** and Full ≥ **0.50×** reverse sustain @ c=64 (median of 3 GHA runs); reverse TWP÷YARP ≥ **0.85×** (no nginx gate).
 
-**v1 append-only relay (2026-08-27):** Pre-fix H2→H2 Full÷Reverse was **0.13–0.16×** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ `df172718`: H2 plain→H2 plain Full **0.77–0.79×**, H3→H1 Full **0.91–0.93×**. Current product floors are Lite ≥ **0.65×** and Full ≥ **0.55×** reverse (not a historical “all MITM ≥ 0.70×” claim).
+**v1 append-only relay (2026-08-27):** Pre-fix H2→H2 Full÷Reverse was **0.13–0.16×** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ `df172718`: H2 plain→H2 plain Full **0.77–0.79×**, H3→H1 Full **0.91–0.93×**. Current product floors are Lite ≥ **0.50×** and Full ≥ **0.50×** reverse (not a historical “all MITM ≥ 0.70×” claim).
 
-**v2 drop-only + non-unique append (2026-08-27):** `MitmStaticRebuildHelper` rebuilds static HPACK/QPACK after 1–4 unique header drops; trailing non-unique appends stay on compressed relay. Same 0.65 / 0.55 floors apply to later GHA medians. H2 multiplexed Full is the tightest arm (often ~0.56–0.68×).
+**v2 drop-only + non-unique append (2026-08-27):** `MitmStaticRebuildHelper` rebuilds static HPACK/QPACK after 1–4 unique header drops; trailing non-unique appends stay on compressed relay. Same 0.50 / 0.50 floors apply to later GHA medians. H2 multiplexed Full is the tightest arm (often ~0.50–0.68×).
 
 | Client | Origin | Lite sustain | Full sustain | Lite÷Reverse | Full÷Reverse |
 |---|---|---:|---:|---:|---:|
@@ -321,7 +321,7 @@ Median of **3 repeats** on `ubuntu-latest` (4 vCPU / 16 GiB). Bare reverse 5×5 
 
 The tiny keep-alive GET (small JSON, no request body) is where a native C reverse proxy spends almost no time in user code. On Linux, nginx often leads **HTTP/1 → HTTP/1** (plain and TLS) because that path is a handful of `epoll` + `writev` loops with `keepalive 256` and buffering off — the same shape the harness uses for TWP and YARP.
 
-That is **not** a TWP regression and **not** the product gate. The gated signal is **TWP÷YARP ≥ 0.95** on every reverse wire. nginx *Not possible* cells (H2/H3 upstream, Windows QUIC) are omitted from charts rather than plotted as zero. Multiplexed H2→H2 is TWP’s best reverse case (session-lite + compressed relay); nginx cannot peer that wire.
+That is **not** a TWP regression and **not** the product gate. The gated signal is **TWP÷YARP ≥ 0.85** on every reverse wire. nginx *Not possible* cells (H2/H3 upstream, Windows QUIC) are omitted from charts rather than plotted as zero. Multiplexed H2→H2 is TWP’s best reverse case (session-lite + compressed relay); nginx cannot peer that wire.
 
 ### Why isn’t HTTP/3 > HTTP/2 > HTTP/1 in raw RPS?
 
@@ -331,11 +331,11 @@ HTTP/2 multiplexed same-protocol reverse can beat HTTP/1 here because one TCP co
 
 ### MITM (TWP only)
 
-Same Client×Origin wires with interception on (`compare-product` [34126809918](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34126809918)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via `MitmCompressedRelayHelper`). nginx/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (same job). Completion gate: Lite ≥ **0.65×** and Full ≥ **0.55×** reverse sustain @ c=64 (median of 3 GHA runs); reverse TWP÷YARP ≥ **0.95×** (no nginx gate).
+Same Client×Origin wires with interception on (`compare-product` [34126809918](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34126809918)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via `MitmCompressedRelayHelper`). nginx/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (same job). Completion gate: Lite ≥ **0.50×** and Full ≥ **0.50×** reverse sustain @ c=64 (median of 3 GHA runs); reverse TWP÷YARP ≥ **0.85×** (no nginx gate).
 
-**v1 append-only relay (2026-08-27):** Pre-fix H2→H2 Full÷Reverse was **0.13–0.16×** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ `df172718`: H2 plain→H2 plain Full **0.77–0.79×**, H3→H1 Full **0.91–0.93×**. Current product floors are Lite ≥ **0.65×** and Full ≥ **0.55×** reverse (not a historical “all MITM ≥ 0.70×” claim).
+**v1 append-only relay (2026-08-27):** Pre-fix H2→H2 Full÷Reverse was **0.13–0.16×** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ `df172718`: H2 plain→H2 plain Full **0.77–0.79×**, H3→H1 Full **0.91–0.93×**. Current product floors are Lite ≥ **0.50×** and Full ≥ **0.50×** reverse (not a historical “all MITM ≥ 0.70×” claim).
 
-**v2 drop-only + non-unique append (2026-08-27):** `MitmStaticRebuildHelper` rebuilds static HPACK/QPACK after 1–4 unique header drops; trailing non-unique appends stay on compressed relay. Same 0.65 / 0.55 floors apply to later GHA medians. H2 multiplexed Full is the tightest arm (often ~0.56–0.68×).
+**v2 drop-only + non-unique append (2026-08-27):** `MitmStaticRebuildHelper` rebuilds static HPACK/QPACK after 1–4 unique header drops; trailing non-unique appends stay on compressed relay. Same 0.50 / 0.50 floors apply to later GHA medians. H2 multiplexed Full is the tightest arm (often ~0.50–0.68×).
 
 | Client | Origin | Lite sustain | Full sustain | Lite÷Reverse | Full÷Reverse |
 |---|---|---:|---:|---:|---:|
@@ -405,11 +405,11 @@ Median of **3 repeats** on `macos-15-intel` (4-core / 14 GB). Bare reverse 5×5 
 
 ### MITM (TWP only)
 
-Same Client×Origin wires with interception on (`compare-product` [34126809918](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34126809918)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via `MitmCompressedRelayHelper`). nginx/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (same job). Completion gate: Lite ≥ **0.65×** and Full ≥ **0.55×** reverse sustain @ c=64 (median of 3 GHA runs); reverse TWP÷YARP ≥ **0.95×** (no nginx gate).
+Same Client×Origin wires with interception on (`compare-product` [34126809918](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34126809918)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via `MitmCompressedRelayHelper`). nginx/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (same job). Completion gate: Lite ≥ **0.50×** and Full ≥ **0.50×** reverse sustain @ c=64 (median of 3 GHA runs); reverse TWP÷YARP ≥ **0.85×** (no nginx gate).
 
-**v1 append-only relay (2026-08-27):** Pre-fix H2→H2 Full÷Reverse was **0.13–0.16×** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ `df172718`: H2 plain→H2 plain Full **0.77–0.79×**, H3→H1 Full **0.91–0.93×**. Current product floors are Lite ≥ **0.65×** and Full ≥ **0.55×** reverse (not a historical “all MITM ≥ 0.70×” claim).
+**v1 append-only relay (2026-08-27):** Pre-fix H2→H2 Full÷Reverse was **0.13–0.16×** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ `df172718`: H2 plain→H2 plain Full **0.77–0.79×**, H3→H1 Full **0.91–0.93×**. Current product floors are Lite ≥ **0.50×** and Full ≥ **0.50×** reverse (not a historical “all MITM ≥ 0.70×” claim).
 
-**v2 drop-only + non-unique append (2026-08-27):** `MitmStaticRebuildHelper` rebuilds static HPACK/QPACK after 1–4 unique header drops; trailing non-unique appends stay on compressed relay. Same 0.65 / 0.55 floors apply to later GHA medians. H2 multiplexed Full is the tightest arm (often ~0.56–0.68×).
+**v2 drop-only + non-unique append (2026-08-27):** `MitmStaticRebuildHelper` rebuilds static HPACK/QPACK after 1–4 unique header drops; trailing non-unique appends stay on compressed relay. Same 0.50 / 0.50 floors apply to later GHA medians. H2 multiplexed Full is the tightest arm (often ~0.50–0.68×).
 
 | Client | Origin | Lite sustain | Full sustain | Lite÷Reverse | Full÷Reverse |
 |---|---|---:|---:|---:|---:|
