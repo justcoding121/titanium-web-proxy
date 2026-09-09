@@ -99,19 +99,19 @@ OS_SPECS: List[Tuple[str, str, Tuple[str, ...], str]] = [
     (
         "windows",
         "Windows (`windows-latest`)",
-        ("windows", "win"),
+        ("windows-latest", "windows", "win"),
         "Windows — Titanium vs nginx vs HAProxy vs Envoy vs YARP",
     ),
     (
         "linux",
         "Linux (`ubuntu-latest`)",
-        ("linux", "ubuntu"),
+        ("ubuntu-latest", "linux", "ubuntu"),
         "Linux — Titanium vs nginx vs HAProxy vs Envoy vs YARP",
     ),
     (
         "macos",
         "macOS (`macos-15-intel`)",
-        ("macos", "osx", "darwin"),
+        ("macos-15-intel", "macos", "osx", "darwin"),
         "macOS — Titanium vs nginx vs HAProxy vs Envoy vs YARP",
     ),
 ]

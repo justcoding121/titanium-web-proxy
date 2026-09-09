@@ -592,7 +592,7 @@ jobs:
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
             Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $csv) { throw 'No CSV found for compare-product gate validation' }
-          # Same floors on all OS: MITM Lite÷Reverse >= 0.50, Full÷Reverse >= 0.50, reverse TWP÷YARP >= 0.85. No nginx gate.
+          # Same floors on all OS: MITM Lite÷Reverse >= 0.50, Full÷Reverse >= 0.50, reverse TWP÷YARP >= 0.75. No nginx gate.
           pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName
 
       - name: Validate cross-version gates

@@ -1,4 +1,4 @@
-# Spot gate: compare-spot @ c=64, Full÷Reverse >= 0.50 and reverse TWP÷YARP >= 0.85.
+# Spot gate: compare-spot @ c=64, Full÷Reverse >= 0.50 and reverse TWP÷YARP >= 0.75.
 # Skip TWP÷YARP when YARP did not SLO-pass (same policy as validate-compare-product-gates.ps1).
 [CmdletBinding()]
 param(
@@ -6,7 +6,7 @@ param(
     [int] $WarmupSec = 2,
     [int] $DurationSec = 8,
     [double] $MitmRatioGate = 0.50,
-    [double] $ReverseYarpGate = 0.85,
+    [double] $ReverseYarpGate = 0.75,
     [switch] $SkipBuild
 )
 

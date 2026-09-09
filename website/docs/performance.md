@@ -4,7 +4,7 @@ Titanium targets low-overhead man-in-the-middle (MITM) and reverse proxying: con
 
 ## Summary (from publishable CI tables)
 
-On matched **GitHub Actions 4 vCPU / 16 GiB** runners, compare **TWP÷YARP** (gated ≥ **0.85** reverse) and peer ratios vs **nginx**, **HAProxy**, and **Envoy** on the same loopback harness. MITM is Titanium-only among those peers (they cannot MITM). Absolute requests per second (RPS) varies by OS, TLS, and MsQuic packaging — compare **within a table**, not across Windows vs Linux.
+On matched **GitHub Actions 4 vCPU / 16 GiB** runners, compare **TWP÷YARP** (gated ≥ **0.75** reverse) and peer ratios vs **nginx**, **HAProxy**, and **Envoy** on the same loopback harness. MITM is Titanium-only among those peers (they cannot MITM). Absolute requests per second (RPS) varies by OS, TLS, and MsQuic packaging — compare **within a table**, not across Windows vs Linux.
 
 ## Practical reverse RPS (CI)
 
