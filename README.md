@@ -32,10 +32,6 @@ Protocol coverage details: [protocol support matrix](https://github.com/justcodi
 
 Requires .NET 10 or later for the library. CLI and Inspector downloads are self-contained (no SDK needed to run them).
 
-**Titanium Inspector** — session grid with request/response details:
-
-<img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
-
 ## Performance
 
 ![Practical reverse proxy throughput on Linux](wiki/images/rps-practical-linux.png)
@@ -78,6 +74,8 @@ Each CLI zip also includes a `twp` alias binary.
 ### Titanium Inspector
 
 Prefer [Download](https://titaniumproxy.com/download). On Windows, winget id `justcoding121.TitaniumInspector` is **stable-only**; Chocolatey id `titanium-inspector` also accepts `--pre` for beta. Start interception from the Capture menu, install the root certificate authority (CA), then toggle system proxy.
+
+<img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
 
 ## Quick start (library)
 
