@@ -173,6 +173,9 @@ internal sealed class EnvoyHost : IDisposable
 
         var confPath = Path.GetFullPath(Path.Combine(prefixDir, "config.yaml"));
         var conf = confBuilder(prefixDir, port);
+        var conf = confBuilder(prefixDir, port);
+        if (!conf.EndsWith('\n'))
+            conf += "\n";
         await File.WriteAllTextAsync(confPath, conf, Encoding.ASCII);
 
         var baseId = Random.Shared.Next(1, 1000);
@@ -253,12 +256,13 @@ internal sealed class EnvoyHost : IDisposable
                 W(8, "common_tls_context:");
                 W(10, "tls_certificates:");
                 W(10, "- certificate_chain:");
-                W(12, $"filename: \"{certPath}\"");
-                W(10, "private_key:");
-                W(12, $"filename: \"{keyPath}\"");
+                W(14, $"filename: \"{certPath}\"");
+                W(12, "private_key:");
+                W(14, $"filename: \"{keyPath}\"");
                 W(10, $"alpn_protocols: [{string.Join(", ", alpnProtocols.Select(a => $"\"{a}\""))}]");
+                // Sibling of transport_socket inside the filter_chain list item.
                 W(6, "filters:");
-                AppendHttpConnectionManager(6, statPrefix, codecType, altSvc);
+                AppendHttpConnectionManager(8, statPrefix, codecType, altSvc);
             }
             else
             {
@@ -291,11 +295,11 @@ internal sealed class EnvoyHost : IDisposable
             W(12, "common_tls_context:");
             W(14, "tls_certificates:");
             W(14, "- certificate_chain:");
-            W(16, $"filename: \"{certPath}\"");
-            W(14, "private_key:");
-            W(16, $"filename: \"{keyPath}\"");
+            W(18, $"filename: \"{certPath}\"");
+            W(16, "private_key:");
+            W(18, $"filename: \"{keyPath}\"");
             W(6, "filters:");
-            AppendHttpConnectionManager(6, statPrefix, "HTTP3", altSvc: null);
+            AppendHttpConnectionManager(8, statPrefix, "HTTP3", altSvc: null);
         }
 
         private void AppendHttpConnectionManager(int col, string statPrefix, string codecType, string? altSvc)
@@ -315,25 +319,26 @@ internal sealed class EnvoyHost : IDisposable
             W(col + 6, "name: local_route");
             W(col + 6, "virtual_hosts:");
             W(col + 6, "- name: local");
-            W(col + 8, "domains: [\"*\"]");
-            W(col + 8, "routes:");
-            W(col + 8, "- match:");
-            W(col + 10, "prefix: \"/\"");
-            W(col + 8, "route:");
-            W(col + 10, "cluster: origin");
-            W(col + 10, "timeout: 65s");
+            W(col + 10, "domains: [\"*\"]");
+            W(col + 10, "routes:");
+            // Route: match + route are siblings under the routes[] map item.
+            W(col + 10, "- match:");
+            W(col + 14, "prefix: \"/\"");
+            W(col + 12, "route:");
+            W(col + 14, "cluster: origin");
+            W(col + 14, "timeout: 65s");
             if (altSvc != null)
             {
-                W(col + 10, "response_headers_to_add:");
-                W(col + 10, "- header:");
-                W(col + 12, "key: alt-svc");
-                W(col + 12, $"value: '{altSvc}'");
+                W(col + 14, "response_headers_to_add:");
+                W(col + 14, "- header:");
+                W(col + 18, "key: alt-svc");
+                W(col + 18, $"value: '{altSvc}'");
             }
 
             W(col + 4, "http_filters:");
             W(col + 4, "- name: envoy.filters.http.router");
-            W(col + 6, "typed_config:");
-            W(col + 8, "\"@type\": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router");
+            W(col + 8, "typed_config:");
+            W(col + 10, "\"@type\": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router");
         }
 
         public void Cluster(int originPort, bool upstreamTls)
@@ -353,10 +358,10 @@ internal sealed class EnvoyHost : IDisposable
             W(6, "endpoints:");
             W(6, "- lb_endpoints:");
             W(8, "- endpoint:");
-            W(10, "address:");
-            W(12, "socket_address:");
-            W(14, "address: 127.0.0.1");
-            W(14, $"port_value: {originPort}");
+            W(12, "address:");
+            W(14, "socket_address:");
+            W(16, "address: 127.0.0.1");
+            W(16, $"port_value: {originPort}");
             if (upstreamTls)
             {
                 W(4, "transport_socket:");
