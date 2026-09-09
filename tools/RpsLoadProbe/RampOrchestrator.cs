@@ -509,6 +509,19 @@ internal static class RampOrchestrator
 
         await csv.FlushAsync(cancellationToken);
         ProbeLog.Info($"CSV: {Path.GetFullPath(csvPath)}");
+
+        if (options.Mode is ProbeMode.CompareHaproxySmoke or ProbeMode.CompareEnvoySmoke)
+        {
+            var peerPrefix = options.Mode is ProbeMode.CompareHaproxySmoke ? "haproxy-reverse-" : "envoy-reverse-";
+            var peerPeaks = peakByArm.Where(kv => kv.Key.StartsWith(peerPrefix, StringComparison.Ordinal)).ToList();
+            if (peerPeaks.Count > 0 && peerPeaks.All(kv => Median(kv.Value) <= 0))
+            {
+                ProbeLog.Error(
+                    $"All {peerPrefix}* arms reported median_peak_rps=0 — peer likely failed to start or serve traffic.");
+                return 1;
+            }
+        }
+
         return 0;
     }
 

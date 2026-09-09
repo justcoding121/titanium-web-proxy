@@ -171,7 +171,7 @@ internal sealed class EnvoyHost : IDisposable
         Directory.CreateDirectory(prefixDir);
         Directory.CreateDirectory(Path.Combine(prefixDir, "certs"));
 
-        var confPath = Path.Combine(prefixDir, "config.yaml");
+        var confPath = Path.GetFullPath(Path.Combine(prefixDir, "config.yaml"));
         var conf = confBuilder(prefixDir, port);
         await File.WriteAllTextAsync(confPath, conf, Encoding.ASCII);
 
@@ -180,7 +180,7 @@ internal sealed class EnvoyHost : IDisposable
         {
             FileName = exe,
             Arguments =
-                $"-c \"{confPath}\" --concurrency {Environment.ProcessorCount} --disable-hot-restart --base-id {baseId}",
+                $"-c {QuotePath(confPath)} --concurrency {Environment.ProcessorCount} --disable-hot-restart --base-id {baseId}",
             WorkingDirectory = prefixDir,
             UseShellExecute = false,
             RedirectStandardOutput = true,
@@ -202,7 +202,7 @@ internal sealed class EnvoyHost : IDisposable
                 var stdout = await process.StandardOutput.ReadToEndAsync();
                 TryDeleteDir(prefixDir);
                 throw new InvalidOperationException(
-                    $"envoy exited early (code {process.ExitCode}). stderr: {err} stdout: {stdout}");
+                    $"envoy exited early (code {process.ExitCode}, config: {confPath}). stderr: {err} stdout: {stdout}");
             }
 
             Thread.Sleep(50);
@@ -213,132 +213,177 @@ internal sealed class EnvoyHost : IDisposable
         throw new TimeoutException($"envoy did not open port {port} in time.");
     }
 
-    private static string BootstrapHeader(int adminPort) => $$"""
-        admin:
-          address:
-            socket_address:
-              address: 127.0.0.1
-              port_value: {{adminPort}}
-        static_resources:
-        """;
+    private static string QuotePath(string path) => OperatingSystem.IsWindows() ? $"\"{path}\"" : path;
 
-    private static string HttpCluster(int originPort, bool upstreamTls) => upstreamTls
-        ? $$"""
-              clusters:
-              - name: origin
-                connect_timeout: 5s
-                type: STATIC
-                lb_policy: ROUND_ROBIN
-                circuit_breakers:
-                  thresholds:
-                  - priority: DEFAULT
-                    max_connections: 256
-                    max_pending_requests: 256
-                load_assignment:
-                  cluster_name: origin
-                  endpoints:
-                  - lb_endpoints:
-                    - endpoint:
-                        address:
-                          socket_address:
-                            address: 127.0.0.1
-                            port_value: {{originPort}}
-                transport_socket:
-                  name: envoy.transport_sockets.tls
-                  typed_config:
-                    "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
-                    sni: localhost
-                    common_tls_context:
-                      validation_context:
-                        trust_chain_verification: ACCEPT_UNTRUSTED
-                typed_extension_protocol_options:
-                  envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
-                    "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
-                    explicit_http_config:
-                      http_protocol_options: {}
-            """
-        : $$"""
-              clusters:
-              - name: origin
-                connect_timeout: 5s
-                type: STATIC
-                lb_policy: ROUND_ROBIN
-                circuit_breakers:
-                  thresholds:
-                  - priority: DEFAULT
-                    max_connections: 256
-                    max_pending_requests: 256
-                load_assignment:
-                  cluster_name: origin
-                  endpoints:
-                  - lb_endpoints:
-                    - endpoint:
-                        address:
-                          socket_address:
-                            address: 127.0.0.1
-                            port_value: {{originPort}}
-            """;
-
-    private static string RouteBlock(string? altSvcValue = null)
+    /// <summary>Emits Envoy v3 bootstrap YAML with explicit indent levels (no nested raw-string concat).</summary>
+    private sealed class YamlEmitter
     {
-        var altSvc = altSvcValue == null
-            ? string.Empty
-            : $$"""
+        private readonly StringBuilder sb = new();
 
-                          response_headers_to_add:
-                          - header:
-                              key: alt-svc
-                              value: '{{altSvcValue}}'
-                """;
-        return $$"""
-                      route_config:
-                        name: local_route
-                        virtual_hosts:
-                        - name: local
-                          domains: ["*"]
-                          routes:
-                          - match:
-                              prefix: "/"
-                            route:
-                              cluster: origin
-                              timeout: 65s{{altSvc}}
-            """;
+        private void W(int col, string line) => sb.Append(' ', col).AppendLine(line);
+
+        public void Admin(int adminPort)
+        {
+            W(0, "admin:");
+            W(2, "address:");
+            W(4, "socket_address:");
+            W(6, "address: 127.0.0.1");
+            W(6, $"port_value: {adminPort}");
+        }
+
+        public void StaticResourcesHeader() => W(0, "static_resources:");
+
+        public void TcpListener(string name, int port, string statPrefix, string codecType, string? altSvc,
+            string? certPath, string? keyPath, string[]? alpnProtocols)
+        {
+            W(2, "listeners:");
+            W(2, $"- name: {name}");
+            W(4, "address:");
+            W(6, "socket_address:");
+            W(8, "address: 127.0.0.1");
+            W(8, $"port_value: {port}");
+            W(4, "filter_chains:");
+            if (certPath != null && keyPath != null && alpnProtocols != null)
+            {
+                W(4, "- transport_socket:");
+                W(6, "name: envoy.transport_sockets.tls");
+                W(6, "typed_config:");
+                W(8,
+                    "\"@type\": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext");
+                W(8, "common_tls_context:");
+                W(10, "tls_certificates:");
+                W(10, "- certificate_chain:");
+                W(12, $"filename: \"{certPath}\"");
+                W(10, "private_key:");
+                W(12, $"filename: \"{keyPath}\"");
+                W(10, $"alpn_protocols: [{string.Join(", ", alpnProtocols.Select(a => $"\"{a}\""))}]");
+                W(6, "filters:");
+                AppendHttpConnectionManager(6, statPrefix, codecType, altSvc);
+            }
+            else
+            {
+                W(4, "- filters:");
+                AppendHttpConnectionManager(6, statPrefix, codecType, altSvc);
+            }
+        }
+
+        public void QuicListener(string name, int port, string address, string statPrefix, string certPath,
+            string keyPath)
+        {
+            W(2, $"- name: {name}");
+            W(4, "address:");
+            W(6, "socket_address:");
+            W(8, "protocol: UDP");
+            W(8, $"address: {address}");
+            W(8, $"port_value: {port}");
+            W(4, "listener_filters:");
+            W(4, "- name: envoy.filters.listener.quic");
+            W(6, "typed_config:");
+            W(8, "\"@type\": type.googleapis.com/envoy.extensions.filters.listener.quic.v3.QuicListenerFilter");
+            W(4, "filter_chains:");
+            W(4, "- filter_chain_match:");
+            W(8, "transport_protocol: quic");
+            W(6, "transport_socket:");
+            W(8, "name: envoy.transport_sockets.quic");
+            W(8, "typed_config:");
+            W(10, "\"@type\": type.googleapis.com/envoy.extensions.transport_sockets.quic.v3.QuicDownstreamTransport");
+            W(10, "downstream_tls_context:");
+            W(12, "common_tls_context:");
+            W(14, "tls_certificates:");
+            W(14, "- certificate_chain:");
+            W(16, $"filename: \"{certPath}\"");
+            W(14, "private_key:");
+            W(16, $"filename: \"{keyPath}\"");
+            W(6, "filters:");
+            AppendHttpConnectionManager(6, statPrefix, "HTTP3", altSvc: null);
+        }
+
+        private void AppendHttpConnectionManager(int col, string statPrefix, string codecType, string? altSvc)
+        {
+            W(col, "- name: envoy.filters.network.http_connection_manager");
+            W(col + 2, "typed_config:");
+            W(col + 4,
+                "\"@type\": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager");
+            W(col + 4, $"stat_prefix: {statPrefix}");
+            W(col + 4, $"codec_type: {codecType}");
+            W(col + 4, "access_log: []");
+            W(col + 4, "stream_idle_timeout: 65s");
+            W(col + 4, "request_timeout: 65s");
+            W(col + 4, "common_http_protocol_options:");
+            W(col + 6, "idle_timeout: 65s");
+            W(col + 4, "route_config:");
+            W(col + 6, "name: local_route");
+            W(col + 6, "virtual_hosts:");
+            W(col + 6, "- name: local");
+            W(col + 8, "domains: [\"*\"]");
+            W(col + 8, "routes:");
+            W(col + 8, "- match:");
+            W(col + 10, "prefix: \"/\"");
+            W(col + 8, "route:");
+            W(col + 10, "cluster: origin");
+            W(col + 10, "timeout: 65s");
+            if (altSvc != null)
+            {
+                W(col + 10, "response_headers_to_add:");
+                W(col + 10, "- header:");
+                W(col + 12, "key: alt-svc");
+                W(col + 12, $"value: '{altSvc}'");
+            }
+
+            W(col + 4, "http_filters:");
+            W(col + 4, "- name: envoy.filters.http.router");
+            W(col + 6, "typed_config:");
+            W(col + 8, "\"@type\": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router");
+        }
+
+        public void Cluster(int originPort, bool upstreamTls)
+        {
+            W(2, "clusters:");
+            W(2, "- name: origin");
+            W(4, "connect_timeout: 5s");
+            W(4, "type: STATIC");
+            W(4, "lb_policy: ROUND_ROBIN");
+            W(4, "circuit_breakers:");
+            W(6, "thresholds:");
+            W(6, "- priority: DEFAULT");
+            W(8, "max_connections: 256");
+            W(8, "max_pending_requests: 256");
+            W(4, "load_assignment:");
+            W(6, "cluster_name: origin");
+            W(6, "endpoints:");
+            W(6, "- lb_endpoints:");
+            W(8, "- endpoint:");
+            W(10, "address:");
+            W(12, "socket_address:");
+            W(14, "address: 127.0.0.1");
+            W(14, $"port_value: {originPort}");
+            if (upstreamTls)
+            {
+                W(4, "transport_socket:");
+                W(6, "name: envoy.transport_sockets.tls");
+                W(6, "typed_config:");
+                W(8, "\"@type\": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext");
+                W(8, "sni: localhost");
+                W(8, "common_tls_context:");
+                W(10, "validation_context:");
+                W(12, "trust_chain_verification: ACCEPT_UNTRUSTED");
+                W(4, "typed_extension_protocol_options:");
+                W(6, "envoy.extensions.upstreams.http.v3.HttpProtocolOptions:");
+                W(8, "\"@type\": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions");
+                W(8, "explicit_http_config:");
+                W(10, "http_protocol_options: {}");
+            }
+        }
+
+        public override string ToString() => sb.ToString();
     }
 
-    private static string HttpConnectionManager(string statPrefix, string codecType, string routeBlock) => $$"""
-                  - name: envoy.filters.network.http_connection_manager
-                    typed_config:
-                      "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
-                      stat_prefix: {{statPrefix}}
-                      codec_type: {{codecType}}
-                      access_log: []
-                      stream_idle_timeout: 65s
-                      request_timeout: 65s
-                      common_http_protocol_options:
-                        idle_timeout: 65s
-        {{routeBlock}}
-                      http_filters:
-                      - name: envoy.filters.http.router
-                        typed_config:
-                          "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
-        """;
-
-    private static string TlsFilterChain(string certPath, string keyPath, string alpnList, string hcm) => $$"""
-                filter_chains:
-                - transport_socket:
-                    name: envoy.transport_sockets.tls
-                    typed_config:
-                      "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
-                      common_tls_context:
-                        tls_certificates:
-                        - certificate_chain:
-                            filename: {{certPath}}
-                          private_key:
-                            filename: {{keyPath}}
-                        alpn_protocols: [{{alpnList}}]
-                  filters:
-        {{hcm}}
-        """;
+    private static string EmitBootstrap(Action<YamlEmitter> configure)
+    {
+        var yaml = new YamlEmitter();
+        configure(yaml);
+        return yaml.ToString();
+    }
 
     private static (string CertDest, string KeyDest) CopyPemFiles(string prefixDir, string certPem, string keyPem)
     {
@@ -349,268 +394,118 @@ internal sealed class EnvoyHost : IDisposable
         return (certDest.Replace('\\', '/'), keyDest.Replace('\\', '/'));
     }
 
-    private static Func<string, int, string> BuildHttp1Conf(int originHttpPort) => (prefixDir, port) =>
-    {
-        var adminPort = GetFreeTcpPort();
-        return $$"""
-            {{BootstrapHeader(adminPort)}}
-              listeners:
-              - name: listener_http1
-                address:
-                  socket_address:
-                    address: 127.0.0.1
-                    port_value: {{port}}
-                filter_chains:
-                - filters:
-            {{HttpConnectionManager("ingress_http1", "HTTP1", RouteBlock())}}
-            {{HttpCluster(originHttpPort, upstreamTls: false)}}
-            """;
-    };
+    private static Func<string, int, string> BuildHttp1Conf(int originHttpPort) => (_, port) =>
+        EmitBootstrap(y =>
+        {
+            y.Admin(GetFreeTcpPort());
+            y.StaticResourcesHeader();
+            y.TcpListener("listener_http1", port, "ingress_http1", "HTTP1", altSvc: null,
+                certPath: null, keyPath: null, alpnProtocols: null);
+            y.Cluster(originHttpPort, upstreamTls: false);
+        });
 
     private static Func<string, int, string> BuildHttp1TlsConf(int originHttpPort, string certPem, string keyPem) =>
         (prefixDir, port) =>
         {
-            var adminPort = GetFreeTcpPort();
             var (certDest, keyDest) = CopyPemFiles(prefixDir, certPem, keyPem);
-            var hcm = HttpConnectionManager("ingress_http1_tls", "HTTP1", RouteBlock());
-            return $$"""
-                {{BootstrapHeader(adminPort)}}
-                  listeners:
-                  - name: listener_http1_tls
-                    address:
-                      socket_address:
-                        address: 127.0.0.1
-                        port_value: {{port}}
-                {{TlsFilterChain(certDest, keyDest, "\"http/1.1\"", hcm)}}
-                {{HttpCluster(originHttpPort, upstreamTls: false)}}
-                """;
+            return EmitBootstrap(y =>
+            {
+                y.Admin(GetFreeTcpPort());
+                y.StaticResourcesHeader();
+                y.TcpListener("listener_http1_tls", port, "ingress_http1_tls", "HTTP1", altSvc: null,
+                    certDest, keyDest, ["http/1.1"]);
+                y.Cluster(originHttpPort, upstreamTls: false);
+            });
         };
 
     private static Func<string, int, string> BuildHttp2Conf(int originHttpPort, string certPem, string keyPem) =>
         (prefixDir, port) =>
         {
-            var adminPort = GetFreeTcpPort();
             var (certDest, keyDest) = CopyPemFiles(prefixDir, certPem, keyPem);
-            var hcm = HttpConnectionManager("ingress_http2", "AUTO", RouteBlock());
-            return $$"""
-                {{BootstrapHeader(adminPort)}}
-                  listeners:
-                  - name: listener_http2
-                    address:
-                      socket_address:
-                        address: 127.0.0.1
-                        port_value: {{port}}
-                {{TlsFilterChain(certDest, keyDest, "\"h2\", \"http/1.1\"", hcm)}}
-                {{HttpCluster(originHttpPort, upstreamTls: false)}}
-                """;
+            return EmitBootstrap(y =>
+            {
+                y.Admin(GetFreeTcpPort());
+                y.StaticResourcesHeader();
+                y.TcpListener("listener_http2", port, "ingress_http2", "AUTO", altSvc: null,
+                    certDest, keyDest, ["h2", "http/1.1"]);
+                y.Cluster(originHttpPort, upstreamTls: false);
+            });
         };
 
     private static Func<string, int, string> BuildHttp3CleartextConf(int originHttpPort, string certPem,
         string keyPem) =>
         (prefixDir, port) =>
         {
-            var adminPort = GetFreeTcpPort();
             var (certDest, keyDest) = CopyPemFiles(prefixDir, certPem, keyPem);
             var altSvc = $$"""h3=":{{port}}"; ma=86400""";
-            var tcpHcm = HttpConnectionManager("ingress_tcp", "AUTO", RouteBlock(altSvc));
-            var quicHcmV4 = HttpConnectionManager("ingress_quic_v4", "HTTP3", RouteBlock());
-            var quicHcmV6 = HttpConnectionManager("ingress_quic_v6", "HTTP3", RouteBlock());
-            return $$"""
-                {{BootstrapHeader(adminPort)}}
-                  listeners:
-                  - name: listener_tcp
-                    address:
-                      socket_address:
-                        address: 127.0.0.1
-                        port_value: {{port}}
-                {{TlsFilterChain(certDest, keyDest, "\"h2\", \"http/1.1\"", tcpHcm)}}
-                  - name: listener_quic_v4
-                    address:
-                      socket_address:
-                        protocol: UDP
-                        address: 127.0.0.1
-                        port_value: {{port}}
-                    listener_filters:
-                    - name: envoy.filters.listener.quic
-                      typed_config:
-                        "@type": type.googleapis.com/envoy.extensions.filters.listener.quic.v3.QuicListenerFilter
-                    filter_chains:
-                    - filter_chain_match:
-                        transport_protocol: quic
-                      transport_socket:
-                        name: envoy.transport_sockets.quic
-                        typed_config:
-                          "@type": type.googleapis.com/envoy.extensions.transport_sockets.quic.v3.QuicDownstreamTransport
-                          downstream_tls_context:
-                            common_tls_context:
-                              tls_certificates:
-                              - certificate_chain:
-                                  filename: {{certDest}}
-                                private_key:
-                                  filename: {{keyDest}}
-                      filters:
-                {{quicHcmV4}}
-                  - name: listener_quic_v6
-                    address:
-                      socket_address:
-                        protocol: UDP
-                        address: ::1
-                        port_value: {{port}}
-                    listener_filters:
-                    - name: envoy.filters.listener.quic
-                      typed_config:
-                        "@type": type.googleapis.com/envoy.extensions.filters.listener.quic.v3.QuicListenerFilter
-                    filter_chains:
-                    - filter_chain_match:
-                        transport_protocol: quic
-                      transport_socket:
-                        name: envoy.transport_sockets.quic
-                        typed_config:
-                          "@type": type.googleapis.com/envoy.extensions.transport_sockets.quic.v3.QuicDownstreamTransport
-                          downstream_tls_context:
-                            common_tls_context:
-                              tls_certificates:
-                              - certificate_chain:
-                                  filename: {{certDest}}
-                                private_key:
-                                  filename: {{keyDest}}
-                      filters:
-                {{quicHcmV6}}
-                {{HttpCluster(originHttpPort, upstreamTls: false)}}
-                """;
+            return EmitBootstrap(y =>
+            {
+                y.Admin(GetFreeTcpPort());
+                y.StaticResourcesHeader();
+                y.TcpListener("listener_tcp", port, "ingress_tcp", "AUTO", altSvc,
+                    certDest, keyDest, ["h2", "http/1.1"]);
+                y.QuicListener("listener_quic_v4", port, "127.0.0.1", "ingress_quic_v4", certDest, keyDest);
+                y.QuicListener("listener_quic_v6", port, "::1", "ingress_quic_v6", certDest, keyDest);
+                y.Cluster(originHttpPort, upstreamTls: false);
+            });
         };
 
-    private static Func<string, int, string> BuildHttp1ToHttpsConf(int originHttpsPort) => (prefixDir, port) =>
-    {
-        var adminPort = GetFreeTcpPort();
-        return $$"""
-            {{BootstrapHeader(adminPort)}}
-              listeners:
-              - name: listener_http1
-                address:
-                  socket_address:
-                    address: 127.0.0.1
-                    port_value: {{port}}
-                filter_chains:
-                - filters:
-            {{HttpConnectionManager("ingress_http1", "HTTP1", RouteBlock())}}
-            {{HttpCluster(originHttpsPort, upstreamTls: true)}}
-            """;
-    };
+    private static Func<string, int, string> BuildHttp1ToHttpsConf(int originHttpsPort) => (_, port) =>
+        EmitBootstrap(y =>
+        {
+            y.Admin(GetFreeTcpPort());
+            y.StaticResourcesHeader();
+            y.TcpListener("listener_http1", port, "ingress_http1", "HTTP1", altSvc: null,
+                certPath: null, keyPath: null, alpnProtocols: null);
+            y.Cluster(originHttpsPort, upstreamTls: true);
+        });
 
     private static Func<string, int, string> BuildHttp1TlsToHttpsConf(int originHttpsPort, string certPem,
         string keyPem) =>
         (prefixDir, port) =>
         {
-            var adminPort = GetFreeTcpPort();
             var (certDest, keyDest) = CopyPemFiles(prefixDir, certPem, keyPem);
-            var hcm = HttpConnectionManager("ingress_http1_tls", "HTTP1", RouteBlock());
-            return $$"""
-                {{BootstrapHeader(adminPort)}}
-                  listeners:
-                  - name: listener_http1_tls
-                    address:
-                      socket_address:
-                        address: 127.0.0.1
-                        port_value: {{port}}
-                {{TlsFilterChain(certDest, keyDest, "\"http/1.1\"", hcm)}}
-                {{HttpCluster(originHttpsPort, upstreamTls: true)}}
-                """;
+            return EmitBootstrap(y =>
+            {
+                y.Admin(GetFreeTcpPort());
+                y.StaticResourcesHeader();
+                y.TcpListener("listener_http1_tls", port, "ingress_http1_tls", "HTTP1", altSvc: null,
+                    certDest, keyDest, ["http/1.1"]);
+                y.Cluster(originHttpsPort, upstreamTls: true);
+            });
         };
 
     private static Func<string, int, string> BuildHttp2ToHttpsHttp1Conf(int originHttpsPort, string certPem,
         string keyPem) =>
         (prefixDir, port) =>
         {
-            var adminPort = GetFreeTcpPort();
             var (certDest, keyDest) = CopyPemFiles(prefixDir, certPem, keyPem);
-            var hcm = HttpConnectionManager("ingress_http2", "AUTO", RouteBlock());
-            return $$"""
-                {{BootstrapHeader(adminPort)}}
-                  listeners:
-                  - name: listener_http2
-                    address:
-                      socket_address:
-                        address: 127.0.0.1
-                        port_value: {{port}}
-                {{TlsFilterChain(certDest, keyDest, "\"h2\", \"http/1.1\"", hcm)}}
-                {{HttpCluster(originHttpsPort, upstreamTls: true)}}
-                """;
+            return EmitBootstrap(y =>
+            {
+                y.Admin(GetFreeTcpPort());
+                y.StaticResourcesHeader();
+                y.TcpListener("listener_http2", port, "ingress_http2", "AUTO", altSvc: null,
+                    certDest, keyDest, ["h2", "http/1.1"]);
+                y.Cluster(originHttpsPort, upstreamTls: true);
+            });
         };
 
     private static Func<string, int, string> BuildHttp3ToHttpsHttp1Conf(int originHttpsPort, string certPem,
         string keyPem) =>
         (prefixDir, port) =>
         {
-            var adminPort = GetFreeTcpPort();
             var (certDest, keyDest) = CopyPemFiles(prefixDir, certPem, keyPem);
             var altSvc = $$"""h3=":{{port}}"; ma=86400""";
-            var tcpHcm = HttpConnectionManager("ingress_tcp", "AUTO", RouteBlock(altSvc));
-            var quicHcmV4 = HttpConnectionManager("ingress_quic_v4", "HTTP3", RouteBlock());
-            var quicHcmV6 = HttpConnectionManager("ingress_quic_v6", "HTTP3", RouteBlock());
-            return $$"""
-                {{BootstrapHeader(adminPort)}}
-                  listeners:
-                  - name: listener_tcp
-                    address:
-                      socket_address:
-                        address: 127.0.0.1
-                        port_value: {{port}}
-                {{TlsFilterChain(certDest, keyDest, "\"h2\", \"http/1.1\"", tcpHcm)}}
-                  - name: listener_quic_v4
-                    address:
-                      socket_address:
-                        protocol: UDP
-                        address: 127.0.0.1
-                        port_value: {{port}}
-                    listener_filters:
-                    - name: envoy.filters.listener.quic
-                      typed_config:
-                        "@type": type.googleapis.com/envoy.extensions.filters.listener.quic.v3.QuicListenerFilter
-                    filter_chains:
-                    - filter_chain_match:
-                        transport_protocol: quic
-                      transport_socket:
-                        name: envoy.transport_sockets.quic
-                        typed_config:
-                          "@type": type.googleapis.com/envoy.extensions.transport_sockets.quic.v3.QuicDownstreamTransport
-                          downstream_tls_context:
-                            common_tls_context:
-                              tls_certificates:
-                              - certificate_chain:
-                                  filename: {{certDest}}
-                                private_key:
-                                  filename: {{keyDest}}
-                      filters:
-                {{quicHcmV4}}
-                  - name: listener_quic_v6
-                    address:
-                      socket_address:
-                        protocol: UDP
-                        address: ::1
-                        port_value: {{port}}
-                    listener_filters:
-                    - name: envoy.filters.listener.quic
-                      typed_config:
-                        "@type": type.googleapis.com/envoy.extensions.filters.listener.quic.v3.QuicListenerFilter
-                    filter_chains:
-                    - filter_chain_match:
-                        transport_protocol: quic
-                      transport_socket:
-                        name: envoy.transport_sockets.quic
-                        typed_config:
-                          "@type": type.googleapis.com/envoy.extensions.transport_sockets.quic.v3.QuicDownstreamTransport
-                          downstream_tls_context:
-                            common_tls_context:
-                              tls_certificates:
-                              - certificate_chain:
-                                  filename: {{certDest}}
-                                private_key:
-                                  filename: {{keyDest}}
-                      filters:
-                {{quicHcmV6}}
-                {{HttpCluster(originHttpsPort, upstreamTls: true)}}
-                """;
+            return EmitBootstrap(y =>
+            {
+                y.Admin(GetFreeTcpPort());
+                y.StaticResourcesHeader();
+                y.TcpListener("listener_tcp", port, "ingress_tcp", "AUTO", altSvc,
+                    certDest, keyDest, ["h2", "http/1.1"]);
+                y.QuicListener("listener_quic_v4", port, "127.0.0.1", "ingress_quic_v4", certDest, keyDest);
+                y.QuicListener("listener_quic_v6", port, "::1", "ingress_quic_v6", certDest, keyDest);
+                y.Cluster(originHttpsPort, upstreamTls: true);
+            });
         };
 
     /// <summary>Best-effort: true when <c>envoy --help</c> or <c>--version</c> mentions QUIC/HTTP/3.</summary>

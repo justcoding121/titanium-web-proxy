@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Text.RegularExpressions;
 using Titanium.Web.Proxy.RpsLoadProbe.Support;
 
 namespace Titanium.Web.Proxy.RpsLoadProbe;
@@ -170,9 +171,11 @@ internal sealed class HaproxyHost : IDisposable
         Directory.CreateDirectory(prefixDir);
         Directory.CreateDirectory(Path.Combine(prefixDir, "certs"));
 
-        var confPath = Path.Combine(prefixDir, "haproxy.cfg");
+        var confPath = Path.GetFullPath(Path.Combine(prefixDir, "haproxy.cfg"));
         var conf = confBuilder(prefixDir, port);
         await File.WriteAllTextAsync(confPath, conf, Encoding.ASCII);
+
+        await ValidateConfigAsync(exe, confPath);
 
         var startInfo = new ProcessStartInfo
         {
@@ -196,11 +199,12 @@ internal sealed class HaproxyHost : IDisposable
                 return new HaproxyHost(process, prefixDir, port, $"{listenScheme}://{listenHost}:{port}/", version);
             if (process.HasExited)
             {
+                await Task.Delay(100);
                 var err = await process.StandardError.ReadToEndAsync();
                 var stdout = await process.StandardOutput.ReadToEndAsync();
                 TryDeleteDir(prefixDir);
                 throw new InvalidOperationException(
-                    $"haproxy exited early (code {process.ExitCode}). stderr: {err} stdout: {stdout}");
+                    $"haproxy exited early (code {process.ExitCode}, config: {confPath}). stderr: {err} stdout: {stdout}");
             }
 
             Thread.Sleep(50);
@@ -211,66 +215,65 @@ internal sealed class HaproxyHost : IDisposable
         throw new TimeoutException($"haproxy did not open port {port} in time.");
     }
 
-    private static string GlobalDefaults() => $$"""
-        global
-            nbthread {{Environment.ProcessorCount}}
-            maxconn 4096
-            quiet
+    private static string GlobalDefaults() => $"""
+global
+    nbthread {Environment.ProcessorCount}
+    maxconn 4096
 
-        defaults
-            mode http
-            option http-keep-alive
-            timeout connect 5s
-            timeout client 65s
-            timeout server 65s
-            timeout http-keep-alive 65s
-            maxconn 4096
-        """;
+defaults
+    mode http
+    option http-keep-alive
+    timeout connect 5s
+    timeout client 65s
+    timeout server 65s
+    timeout http-keep-alive 65s
+    maxconn 4096
+""";
 
-    private static Func<string, int, string> BuildHttp1Conf(int originHttpPort) => (_, port) => $$"""
-        {{GlobalDefaults()}}
+    private static Func<string, int, string> BuildHttp1Conf(int originHttpPort) => (_, port) => $"""
+{GlobalDefaults()}
 
-        frontend fe
-            bind 127.0.0.1:{{port}}
-            default_backend be
+frontend fe
+    bind 127.0.0.1:{port}
+    default_backend be
 
-        backend be
-            http-reuse aggressive
-            server origin 127.0.0.1:{{originHttpPort}} maxconn 256
-        """;
+backend be
+    http-reuse aggressive
+    server origin 127.0.0.1:{originHttpPort} maxconn 256
+""";
 
     private static Func<string, int, string> BuildHttp1TlsConf(int originHttpPort, string pemPath) =>
         (prefixDir, port) =>
         {
             var pemDest = CopyPem(prefixDir, pemPath);
-            return $$"""
-                {{GlobalDefaults()}}
+            return $"""
+{GlobalDefaults()}
 
-                frontend fe
-                    bind 127.0.0.1:{{port}} ssl crt {{pemDest}} alpn http/1.1
-                    default_backend be
+frontend fe
+    bind 127.0.0.1:{port} ssl crt "{pemDest}" alpn http/1.1
+    default_backend be
 
-                backend be
-                    http-reuse aggressive
-                    server origin 127.0.0.1:{{originHttpPort}} maxconn 256
-                """;
+backend be
+    http-reuse aggressive
+    server origin 127.0.0.1:{originHttpPort} maxconn 256
+""";
         };
 
     private static Func<string, int, string> BuildHttp2Conf(int originHttpPort, string pemPath) =>
         (prefixDir, port) =>
         {
             var pemDest = CopyPem(prefixDir, pemPath);
-            return $$"""
-                {{GlobalDefaults()}}
+            return $"""
+{GlobalDefaults()}
 
-                frontend fe
-                    bind 127.0.0.1:{{port}} ssl crt {{pemDest}} alpn h2,http/1.1
-                    default_backend be
+frontend fe
+    bind 127.0.0.1:{port} ssl crt "{pemDest}" alpn h2,http/1.1
+    default_backend be
 
-                backend be
-                    http-reuse aggressive
-                    server origin 127.0.0.1:{{originHttpPort}} maxconn 256
-                """;
+backend be
+    http-reuse aggressive
+    server origin 127.0.0.1:{originHttpPort} maxconn 256
+""";
         };
 
     private static Func<string, int, string> BuildHttp3CleartextConf(int originHttpPort, string pemPath) =>
@@ -278,88 +281,114 @@ internal sealed class HaproxyHost : IDisposable
         {
             var pemDest = CopyPem(prefixDir, pemPath);
             // Dual bind: TCP TLS for readiness probe + QUIC for H3 clients (matches nginx pattern).
-            return $$"""
-                {{GlobalDefaults()}}
+            return $"""
+{GlobalDefaults()}
 
-                frontend fe
-                    bind 127.0.0.1:{{port}} ssl crt {{pemDest}} alpn h2,http/1.1
-                    bind quic4@127.0.0.1:{{port}} ssl crt {{pemDest}} alpn h3
-                    bind quic6@[::1]:{{port}} ssl crt {{pemDest}} alpn h3
-                    http-response set-header alt-svc 'h3=":{{port}}"; ma=86400'
-                    default_backend be
+frontend fe
+    bind 127.0.0.1:{port} ssl crt "{pemDest}" alpn h2,http/1.1
+    bind quic4@127.0.0.1:{port} ssl crt "{pemDest}" alpn h3
+    bind quic6@[::1]:{port} ssl crt "{pemDest}" alpn h3
+    http-response set-header alt-svc 'h3=":{port}"; ma=86400'
+    default_backend be
 
-                backend be
-                    http-reuse aggressive
-                    server origin 127.0.0.1:{{originHttpPort}} maxconn 256
-                """;
+backend be
+    http-reuse aggressive
+    server origin 127.0.0.1:{originHttpPort} maxconn 256
+""";
         };
 
     private static Func<string, int, string> BuildHttp1ToHttpsConf(int originHttpsPort) =>
-        (_, port) => $$"""
-            {{GlobalDefaults()}}
+        (_, port) => $"""
+{GlobalDefaults()}
 
-            frontend fe
-                bind 127.0.0.1:{{port}}
-                default_backend be
+frontend fe
+    bind 127.0.0.1:{port}
+    default_backend be
 
-            backend be
-                http-reuse aggressive
-                server origin 127.0.0.1:{{originHttpsPort}} ssl verify none sni str(localhost) maxconn 256
-            """;
+backend be
+    http-reuse aggressive
+    server origin 127.0.0.1:{originHttpsPort} ssl verify none sni str(localhost) maxconn 256
+""";
 
     private static Func<string, int, string> BuildHttp1TlsToHttpsConf(int originHttpsPort, string pemPath) =>
         (prefixDir, port) =>
         {
             var pemDest = CopyPem(prefixDir, pemPath);
-            return $$"""
-                {{GlobalDefaults()}}
+            return $"""
+{GlobalDefaults()}
 
-                frontend fe
-                    bind 127.0.0.1:{{port}} ssl crt {{pemDest}} alpn http/1.1
-                    default_backend be
+frontend fe
+    bind 127.0.0.1:{port} ssl crt "{pemDest}" alpn http/1.1
+    default_backend be
 
-                backend be
-                    http-reuse aggressive
-                    server origin 127.0.0.1:{{originHttpsPort}} ssl verify none sni str(localhost) maxconn 256
-                """;
+backend be
+    http-reuse aggressive
+    server origin 127.0.0.1:{originHttpsPort} ssl verify none sni str(localhost) maxconn 256
+""";
         };
 
     private static Func<string, int, string> BuildHttp2ToHttpsHttp1Conf(int originHttpsPort, string pemPath) =>
         (prefixDir, port) =>
         {
             var pemDest = CopyPem(prefixDir, pemPath);
-            return $$"""
-                {{GlobalDefaults()}}
+            return $"""
+{GlobalDefaults()}
 
-                frontend fe
-                    bind 127.0.0.1:{{port}} ssl crt {{pemDest}} alpn h2,http/1.1
-                    default_backend be
+frontend fe
+    bind 127.0.0.1:{port} ssl crt "{pemDest}" alpn h2,http/1.1
+    default_backend be
 
-                backend be
-                    http-reuse aggressive
-                    server origin 127.0.0.1:{{originHttpsPort}} ssl verify none sni str(localhost) maxconn 256
-                """;
+backend be
+    http-reuse aggressive
+    server origin 127.0.0.1:{originHttpsPort} ssl verify none sni str(localhost) maxconn 256
+""";
         };
 
     private static Func<string, int, string> BuildHttp3ToHttpsHttp1Conf(int originHttpsPort, string pemPath) =>
         (prefixDir, port) =>
         {
             var pemDest = CopyPem(prefixDir, pemPath);
-            return $$"""
-                {{GlobalDefaults()}}
+            return $"""
+{GlobalDefaults()}
 
-                frontend fe
-                    bind 127.0.0.1:{{port}} ssl crt {{pemDest}} alpn h2,http/1.1
-                    bind quic4@127.0.0.1:{{port}} ssl crt {{pemDest}} alpn h3
-                    bind quic6@[::1]:{{port}} ssl crt {{pemDest}} alpn h3
-                    http-response set-header alt-svc 'h3=":{{port}}"; ma=86400'
-                    default_backend be
+frontend fe
+    bind 127.0.0.1:{port} ssl crt "{pemDest}" alpn h2,http/1.1
+    bind quic4@127.0.0.1:{port} ssl crt "{pemDest}" alpn h3
+    bind quic6@[::1]:{port} ssl crt "{pemDest}" alpn h3
+    http-response set-header alt-svc 'h3=":{port}"; ma=86400'
+    default_backend be
 
-                backend be
-                    http-reuse aggressive
-                    server origin 127.0.0.1:{{originHttpsPort}} ssl verify none sni str(localhost) maxconn 256
-                """;
+backend be
+    http-reuse aggressive
+    server origin 127.0.0.1:{originHttpsPort} ssl verify none sni str(localhost) maxconn 256
+""";
         };
+
+    private static async Task ValidateConfigAsync(string exe, string confPath)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = exe,
+            Arguments = $"-c -f \"{confPath}\"",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(startInfo)
+                              ?? throw new InvalidOperationException("Failed to start haproxy config check.");
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"haproxy config check failed (exit {process.ExitCode}) for '{confPath}': stderr: {stderr} stdout: {stdout}");
+        }
+    }
 
     private static string CopyPem(string prefixDir, string pemPath)
     {
@@ -368,11 +397,14 @@ internal sealed class HaproxyHost : IDisposable
         return dest.Replace('\\', '/');
     }
 
-    /// <summary>True when <c>haproxy -vv</c> mentions <c>USE_QUIC</c>.</summary>
+    private static readonly Regex QuicConfigureFlag =
+        new(@"\bUSE_QUIC\b", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>True when <c>haproxy -vv</c> lists <c>USE_QUIC</c> as a configure flag.</summary>
     internal static bool SupportsQuic(string exe)
     {
         var text = ReadHaproxyOutput(exe, "-vv");
-        return text.Contains("USE_QUIC", StringComparison.OrdinalIgnoreCase);
+        return QuicConfigureFlag.IsMatch(text);
     }
 
     private static async Task<string> ExportLoopbackCombinedPemAsync(string dir)
