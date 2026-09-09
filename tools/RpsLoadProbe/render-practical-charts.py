@@ -37,6 +37,7 @@ PRACTICAL_ARMS: List[Tuple[str, str, str, Optional[str]]] = [
         "yarp-reverse-http2-to-https-http1",
         "nginx-reverse-http2-to-https-http1",
     ),
+    ("H2 TLS→h2c", "twp-reverse-http2-to-h2c", "yarp-reverse-http2-to-h2c", None),
     ("H2 TLS→H2 TLS", "twp-reverse-http2", "yarp-reverse-http2-to-https", None),
     (
         "H3→H1c",
