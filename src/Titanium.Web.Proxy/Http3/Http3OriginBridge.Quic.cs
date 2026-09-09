@@ -162,9 +162,12 @@ internal static partial class Http3OriginBridge
 
             // QuicStream WriteAsync may buffer; without Flush the peer can see the request hundreds of
             // ms late (observed ~450ms Cloudflare HTML TTFB with inFlight=1 after request "sent").
-            // Always Flush before CompleteWrites on all OS (Darwin skip-Flush A/B regressed Mac÷YARP).
+            // Always Flush on all OS (Darwin skip-Flush A/B regressed Mac÷YARP). When HEADERS/DATA
+            // already packed STREAM+FIN via completeWrites:true, CompleteWrites is a no-op / throw —
+            // only finish the write side if it is still open (body copy path).
             await originStream.FlushAsync(cancellationToken);
-            originStream.CompleteWrites();
+            if (originStream.CanWrite)
+                originStream.CompleteWrites();
             sessionArgs.Timing?.MarkRequestSent();
 
             const int maxInterimResponses = 20;
@@ -601,9 +604,8 @@ internal static partial class Http3OriginBridge
                     // QuicStream WriteAsync may buffer; without Flush the peer can stall forever
                     // under multiplex (GHA Linux/Windows reverse H3→H3 @ c=64: 0 RPS / ~0% CPU).
                     // Darwin A/B skipping Flush (27d2967d) dropped Mac reverse RPS (~5k→~3–4k) and
-                    // worsened H3÷YARP — keep Flush on all OS.
+                    // worsened H3÷YARP — keep Flush on all OS. completeWrites:true already FINs.
                     await originStream.FlushAsync(cancellationToken);
-                    originStream.CompleteWrites();
 
                     // Verbatim origin→client frame copy, or MITM capture when clientStream is null.
                     // Tiny GET: coalesce HEADERS+DATA into one Quic write (origin probe sends both).
