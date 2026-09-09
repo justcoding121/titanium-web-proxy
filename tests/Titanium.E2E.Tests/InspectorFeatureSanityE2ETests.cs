@@ -74,17 +74,26 @@ public class InspectorFeatureSanityE2ETests
             using var origin = new EchoOrigin();
             vm.ComposerMethod = "GET";
             vm.ComposerUrl = origin.BaseUrl + "sanity-composer";
+            // Wait for Composer *completion*. Matching bare "Composer" is wrong: SendComposerAsync
+            // immediately sets "Composer sending…", so the wait would return while ReplayAsync is
+            // still in flight and race ExportCaAsync on StatusText (clobbering "Exported CA").
             vm.SendComposerCommand.Execute(null);
-            await WaitAsync(() =>
-                vm.StatusText.Contains("Composer", StringComparison.OrdinalIgnoreCase) ||
-                vm.StatusText.Contains("HTTP", StringComparison.OrdinalIgnoreCase) ||
-                vm.Sessions.Count > 0);
+            await WaitAsync(
+                () => IsComposerSettled(vm),
+                () => "Composer did not settle. Status=" + vm.StatusText + " sessions=" + vm.Sessions.Count);
 
             pathPicker.SavePath = exportCaPath;
+            var savesBefore = pathPicker.SaveCalls;
             vm.ExportCaCommand.Execute(null);
-            await WaitAsync(() => vm.StatusText.Contains("Exported CA", StringComparison.Ordinal));
+            // Prefer durable signals (picker + file). StatusText alone is racy with transient revert
+            // and any concurrent command that calls SetStatus / SetOutcomeStatus.
+            await WaitAsync(
+                () => pathPicker.SaveCalls > savesBefore && File.Exists(exportCaPath),
+                () => "Export CA did not finish. Status=" + vm.StatusText
+                      + " saves=" + pathPicker.SaveCalls
+                      + " exists=" + File.Exists(exportCaPath));
             Assert.IsTrue(File.Exists(exportCaPath), vm.StatusText);
-            Assert.AreEqual(1, pathPicker.SaveCalls);
+            Assert.AreEqual(savesBefore + 1, pathPicker.SaveCalls);
             Assert.IsNotNull(pathPicker.LastSaveFileTypes);
             Assert.AreEqual(2, pathPicker.LastSaveFileTypes!.Count);
             Assert.AreEqual("*.cer", pathPicker.LastSaveFileTypes[0].Pattern);
@@ -205,11 +214,20 @@ public class InspectorFeatureSanityE2ETests
             RuntimeInformation.OSDescription);
     }
 
-    private static async Task WaitAsync(Func<bool> condition, int timeoutMs = 15000)
+    private static bool IsComposerSettled(MainWindowViewModel vm)
+    {
+        // Final outcomes from SendComposerAsync — never the in-flight "Composer sending…" busy text.
+        var status = vm.StatusText;
+        return status.Contains("Composer →", StringComparison.Ordinal)
+               || status.Contains("Composer failed", StringComparison.OrdinalIgnoreCase)
+               || vm.Sessions.Count > 0;
+    }
+
+    private static async Task WaitAsync(Func<bool> condition, Func<string>? detail = null, int timeoutMs = 15000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         while (!condition() && DateTime.UtcNow < deadline)
             await Task.Delay(40);
-        Assert.IsTrue(condition(), "Timed out waiting for condition");
+        Assert.IsTrue(condition(), detail?.Invoke() ?? "Timed out waiting for condition");
     }
 }

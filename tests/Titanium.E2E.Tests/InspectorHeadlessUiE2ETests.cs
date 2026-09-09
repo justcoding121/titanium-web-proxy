@@ -79,19 +79,14 @@ public class InspectorHeadlessUiE2ETests
         vm.ComposerMethod = "GET";
         vm.ComposerUrl = origin.BaseUrl + "ui-composer";
         vm.SendComposerCommand.Execute(null);
+        // Do not match "Composer sending…" (set immediately before ReplayAsync); wait for settle.
         deadline = DateTime.UtcNow.AddSeconds(20);
-        while (!vm.StatusText.Contains("Composer", StringComparison.OrdinalIgnoreCase) &&
-               !vm.StatusText.Contains("HTTP", StringComparison.OrdinalIgnoreCase) &&
-               DateTime.UtcNow < deadline)
+        while (!IsComposerSettled(vm) && DateTime.UtcNow < deadline)
         {
             await Task.Delay(50);
         }
 
-        Assert.IsTrue(
-            vm.StatusText.Contains("Composer", StringComparison.OrdinalIgnoreCase) ||
-            vm.StatusText.Contains("HTTP", StringComparison.OrdinalIgnoreCase) ||
-            vm.Sessions.Count > 0,
-            vm.StatusText);
+        Assert.IsTrue(IsComposerSettled(vm), vm.StatusText);
 
         vm.StopCaptureCommand.Execute(null);
         await Task.Delay(100);
@@ -190,5 +185,13 @@ public class InspectorHeadlessUiE2ETests
         Assert.IsNotNull(vm.Interception);
         Assert.IsFalse(vm.Interception.IsRunning);
         try { File.Delete(settingsPath); } catch { /* ignore */ }
+    }
+
+    private static bool IsComposerSettled(MainWindowViewModel vm)
+    {
+        var status = vm.StatusText;
+        return status.Contains("Composer →", StringComparison.Ordinal)
+               || status.Contains("Composer failed", StringComparison.OrdinalIgnoreCase)
+               || vm.Sessions.Count > 0;
     }
 }
