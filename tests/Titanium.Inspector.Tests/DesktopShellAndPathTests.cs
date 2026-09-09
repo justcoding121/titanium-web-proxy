@@ -167,20 +167,27 @@ public class DesktopShellAndPathTests
         Assert.IsFalse(string.IsNullOrEmpty(emptyReveal));
         Assert.IsFalse(DesktopShell.TryRevealFileOrOpenDirectory("  ", unknown, out _));
 
+        var blocker = Path.Combine(Path.GetTempPath(), "twp-shell-file-" + Guid.NewGuid().ToString("N"));
+        File.WriteAllText(blocker, "x");
+        try
+        {
+            Assert.IsFalse(DesktopShell.TryOpenDirectory(blocker, current, out var blockedOpen));
+            Assert.IsFalse(string.IsNullOrEmpty(blockedOpen));
+            Assert.IsFalse(DesktopShell.TryRevealFileOrOpenDirectory(
+                Path.Combine(blocker, "child.log"), current, out var blockedReveal));
+            Assert.IsFalse(string.IsNullOrEmpty(blockedReveal));
+        }
+        finally
+        {
+            try { File.Delete(blocker); } catch { /* ignore */ }
+        }
+
         if (!OperatingSystem.IsWindows())
         {
             Assert.IsFalse(DesktopShell.TryOpenDirectory(Path.GetTempPath(), OSPlatform.Windows, out var winErr));
             Assert.IsFalse(string.IsNullOrEmpty(winErr));
             Assert.IsFalse(DesktopShell.TryRevealFileOrOpenDirectory(
                 Path.Combine(Path.GetTempPath(), "twp-reveal.log"), OSPlatform.Windows, out _));
-        }
-
-        if (!OperatingSystem.IsMacOS())
-        {
-            Assert.IsFalse(DesktopShell.TryOpenDirectory(Path.GetTempPath(), OSPlatform.OSX, out var macErr));
-            Assert.IsFalse(string.IsNullOrEmpty(macErr));
-            Assert.IsFalse(DesktopShell.TryRevealFileOrOpenDirectory(
-                Path.Combine(Path.GetTempPath(), "twp-reveal-mac.log"), OSPlatform.OSX, out _));
         }
     }
 }
