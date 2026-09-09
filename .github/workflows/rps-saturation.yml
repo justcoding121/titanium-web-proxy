@@ -462,11 +462,10 @@ jobs:
             -ResultsDir tools/RpsLoadProbe/results `
             -BombardierCheck
 
-      # Post-ramp gates: hard-fail on PR / push checks. Manual workflow_dispatch still
-      # runs them (logs misses) but continue-on-error so every OS finishes + uploads CSVs.
+      # Post-ramp gates: hard-fail on every event (including workflow_dispatch).
+      # fail-fast: false keeps sibling OS jobs running; Upload CSV uses if: always().
       - name: Validate edition gates
         if: env.RPS_MODE == 'compare-editions'
-        continue-on-error: ${{ github.event_name == 'workflow_dispatch' }}
         shell: pwsh
         run: |
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
@@ -476,7 +475,6 @@ jobs:
 
       - name: Validate compare-product gates
         if: env.RPS_MODE == 'compare-product' || env.RPS_MODE == 'compare-product-smoke'
-        continue-on-error: ${{ github.event_name == 'workflow_dispatch' }}
         shell: pwsh
         run: |
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
@@ -487,7 +485,6 @@ jobs:
 
       - name: Validate cross-version gates
         if: env.RPS_MODE == 'compare-cross-version'
-        continue-on-error: ${{ github.event_name == 'workflow_dispatch' }}
         shell: pwsh
         run: |
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
