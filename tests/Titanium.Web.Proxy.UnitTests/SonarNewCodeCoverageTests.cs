@@ -768,6 +768,124 @@ public class SonarNewCodeCoverageTests
         }
     }
 
+    [TestMethod]
+    public async Task Http3FastForward_TcpLiveOrigin_CoversBufferedEmptyAndChunked()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        var http = new HttpListener();
+        http.Prefixes.Add($"http://127.0.0.1:{port}/");
+        http.Start();
+        _ = Task.Run(async () =>
+        {
+            while (http.IsListening)
+            {
+                try
+                {
+                    var ctx = await http.GetContextAsync();
+                    var path = ctx.Request.Url?.AbsolutePath ?? "/";
+                    if (path.Contains("empty", StringComparison.Ordinal))
+                    {
+                        ctx.Response.StatusCode = 204;
+                        ctx.Response.Close();
+                        continue;
+                    }
+
+                    if (path.Contains("chunk", StringComparison.Ordinal))
+                    {
+                        var chunk = Encoding.UTF8.GetBytes("chunked-body");
+                        ctx.Response.StatusCode = 200;
+                        ctx.Response.SendChunked = true;
+                        ctx.Response.ContentType = "text/plain";
+                        await ctx.Response.OutputStream.WriteAsync(chunk);
+                        ctx.Response.Close();
+                        continue;
+                    }
+
+                    var body = Encoding.UTF8.GetBytes("hello-tcp-fast");
+                    ctx.Response.StatusCode = 200;
+                    ctx.Response.ContentType = "text/plain";
+                    ctx.Response.ContentLength64 = body.Length;
+                    await ctx.Response.OutputStream.WriteAsync(body);
+                    ctx.Response.Close();
+                }
+                catch
+                {
+                    return;
+                }
+            }
+        });
+
+        try
+        {
+            using var proxy = new ProxyServer(false, false, false);
+            var ep = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false)
+            {
+                ForwardCleartext = true,
+                ForwardHost = "127.0.0.1",
+                ForwardPort = port
+            };
+            SessionEventArgs Cold() => MakeSession(proxy, ep);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+
+            async Task<H3H2FastForward> RunAsync(string path, bool withResponse)
+            {
+                var request = new Request
+                {
+                    Method = "GET",
+                    IsHttps = false,
+                    HttpVersion = HttpHeader.Version30,
+                    Host = "origin.example",
+                    Authority = $"127.0.0.1:{port}".GetByteString(),
+                    RequestUriString8 = path.GetByteString()
+                };
+                request.Headers.AddHeader("Host", $"127.0.0.1:{port}");
+                var fwd = new H3H2FastForward
+                {
+                    Request = request,
+                    ProxyEndPoint = ep,
+                    MaxBufferedBodyBytes = 1024,
+                    OriginAuthorityHost = "origin.example",
+                    Response = withResponse ? new Response() : null,
+                };
+                await Http3OriginBridge.ForwardOverTcpFastAsync(
+                    fwd, proxy, NullLogger.Instance, cts.Token, Cold);
+                return fwd;
+            }
+
+            var small = await RunAsync("/", true);
+            Assert.IsNotNull(small.PreencodedQpackHeaders);
+            Assert.AreEqual(200, small.Response!.StatusCode);
+            if (small.PreencodedBodyRented && small.PreencodedBody is not null)
+                proxy.BufferPool.ReturnBuffer(small.PreencodedBody);
+
+            var pooled = await RunAsync("/", false);
+            Assert.IsNotNull(pooled.PreencodedQpackHeaders);
+            if (pooled.PreencodedBodyRented && pooled.PreencodedBody is not null)
+                proxy.BufferPool.ReturnBuffer(pooled.PreencodedBody);
+
+            var empty = await RunAsync("/empty", true);
+            Assert.AreEqual(204, empty.Response!.StatusCode);
+
+            var chunked = await RunAsync("/chunk", false);
+            Assert.IsTrue(chunked.PreencodedQpackHeaders is { Length: > 0 }
+                          || chunked.PreencodedStreamBodyWriter is not null);
+            if (chunked.PreencodedStreamBodyWriter is not null)
+            {
+                await using var ms = new MemoryStream();
+                await chunked.PreencodedStreamBodyWriter(ms, cts.Token);
+                Assert.IsTrue(ms.Length > 0);
+            }
+        }
+        finally
+        {
+            try { http.Stop(); } catch { /* ignore */ }
+            try { http.Close(); } catch { /* ignore */ }
+        }
+    }
+
     private delegate bool TryReadPrefixedIntDelegate(ReadOnlySpan<byte> data, int prefixBits, out ulong value,
         out int consumed);
     private delegate bool TryReadStringLiteralDelegate(ReadOnlySpan<byte> data, out string result, out int consumed);

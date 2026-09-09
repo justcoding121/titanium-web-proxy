@@ -380,6 +380,8 @@ public class InterceptionCaptureCoverageTests
         interception.DecryptHttps = false;
         ((Task)beforeTunnel.Invoke(interception, [interception, tunnel])!).GetAwaiter().GetResult();
         ((Task)afterTunnel.Invoke(interception, [interception, tunnel])!).GetAwaiter().GetResult();
+        var afterResponse = typeof(InterceptionService).GetMethod("OnAfterResponse", flags)!;
+        ((Task)afterResponse.Invoke(interception, [interception, session])!).GetAwaiter().GetResult();
         Assert.AreEqual(200, tunnel.HttpClient.Response.StatusCode == 0 ? 200 : tunnel.HttpClient.Response.StatusCode);
     }
 
@@ -527,6 +529,29 @@ public class InterceptionCaptureCoverageTests
             interception.Breakpoints.Continue();
             var respContinued = await pendingResp;
             Assert.AreEqual(HttpStatusCode.OK, respContinued.StatusCode);
+        }
+        finally
+        {
+            interception.EnsureShutdown();
+        }
+    }
+
+    [TestMethod]
+    public async Task AutoTrustOnStart_AndSecondStart_CoverStartBranches()
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+            AutoTrustRootOnStart = true,
+            UpstreamProxyAddress = "http://127.0.0.1:9",
+        };
+        await interception.StartAsync(IPAddress.Loopback, 0);
+        try
+        {
+            Assert.IsTrue(interception.IsRunning);
+            interception.ApplyHttpProtocols();
+            await interception.StartAsync(IPAddress.Loopback, 0);
+            Assert.IsTrue(interception.IsRunning);
         }
         finally
         {
