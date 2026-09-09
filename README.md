@@ -60,13 +60,15 @@ dotnet add package Titanium.Web.Proxy --prerelease
 
 ### CLI (`titanium` / `twp`)
 
-On Windows, **winget is stable-only**:
+On Windows, **winget is stable-only**; Chocolatey also supports beta (`--pre`):
 
 ```shell
 winget install justcoding121.TitaniumCli
+choco install titanium-cli
+choco install titanium-cli --pre
 ```
 
-For **beta**, download a self-contained zip from [Download](https://titaniumproxy.com/download) / [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) (stable is `v7.0.5`; use the newest beta tag when published). Extract and run:
+For **beta** on other channels, download a self-contained zip from [Download](https://titaniumproxy.com/download) / [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) (stable is `v7.0.5`; use the newest beta tag when published). Extract and run:
 
 ```shell
 titanium run -c twp.yaml
@@ -81,7 +83,7 @@ Each CLI zip also includes a `twp` alias binary.
 
 ### Titanium Inspector
 
-Prefer [Download](https://titaniumproxy.com/download). On Windows, winget id `justcoding121.TitaniumInspector` is **stable-only**. Start interception from the Capture menu, install the root certificate authority (CA), then toggle system proxy.
+Prefer [Download](https://titaniumproxy.com/download). On Windows, winget id `justcoding121.TitaniumInspector` is **stable-only**; Chocolatey id `titanium-inspector` also accepts `--pre` for beta. Start interception from the Capture menu, install the root certificate authority (CA), then toggle system proxy.
 
 ## Quick start (library)
 

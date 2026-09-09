@@ -2,8 +2,8 @@
 
 | Product | Role | License | How you get it |
 |---------|------|---------|----------------|
-| **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse / edge proxy for any stack, managed by the command line interface (CLI) | MIT | [Download](/download) zips, winget |
-| **Titanium Inspector** | Desktop man-in-the-middle (MITM) debugger | [PolyForm Noncommercial](https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt) | [Download](/download) (Windows / macOS / Linux), winget |
+| **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse / edge proxy for any stack, managed by the command line interface (CLI) | MIT | [Download](/download) zips, winget, Chocolatey |
+| **Titanium Inspector** | Desktop man-in-the-middle (MITM) debugger | [PolyForm Noncommercial](https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt) | [Download](/download) (Windows / macOS / Linux), winget, Chocolatey |
 | **Titanium.Plus** | Control plane, ops, observability, dashboard, gRPC-JSON transcoding | PolyForm Noncommercial | After installing CLI: `titanium update --plus` |
 | **Titanium.Web.Proxy** | Optional embeddable library for .NET apps | MIT | NuGet |
 

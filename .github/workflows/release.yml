@@ -659,3 +659,69 @@ jobs:
           # blocked by environment protection rules).
           echo "Dispatching deploy-website.yml --ref develop (channel=$RELEASE_CHANNEL)"
           gh workflow run deploy-website.yml --ref develop
+
+  publish-chocolatey:
+    needs: [resolve-version, publish-release]
+    if: needs.publish-release.result == 'success'
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Skip when CHOCOLATEY_API_KEY unset
+        id: gate
+        env:
+          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CHOCOLATEY_API_KEY)) {
+            Write-Host "CHOCOLATEY_API_KEY not set; skipping chocolatey push."
+            "skip=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          } else {
+            "skip=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          }
+
+      - uses: actions/checkout@v6
+        if: steps.gate.outputs.skip != 'true'
+
+      # Runs on every product release cut from beta/stable (via cut-product-tag → this workflow).
+      - name: Pack and push chocolatey packages
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+          RELEASE_TAG: ${{ needs.resolve-version.outputs.release_tag }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = $env:RELEASE_TAG
+          if (-not (Test-Path ./tools/packaging/chocolatey/bump-packages.ps1)) {
+            Write-Host "Chocolatey stubs not on this ref; skipping push."
+            exit 0
+          }
+          $cliAsset = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/Titanium.Cli-win-x64.zip"
+          $msiAsset = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/TitaniumInspector-win-x64.msi"
+          $ready = $false
+          foreach ($i in 1..12) {
+            try {
+              Invoke-WebRequest -Method Head -Uri $cliAsset -UseBasicParsing | Out-Null
+              Invoke-WebRequest -Method Head -Uri $msiAsset -UseBasicParsing | Out-Null
+              $ready = $true
+              break
+            } catch {
+              Write-Host "Waiting for release assets ($i/12)..."
+              Start-Sleep -Seconds 10
+            }
+          }
+          if (-not $ready) {
+            Write-Host "Win-x64 CLI zip or Inspector MSI missing for $tag; skipping chocolatey push."
+            exit 0
+          }
+          pwsh ./tools/packaging/chocolatey/bump-packages.ps1 -Tag $tag
+          Push-Location tools/packaging/chocolatey/titanium-cli
+          choco pack --output-directory .
+          Pop-Location
+          Push-Location tools/packaging/chocolatey/titanium-inspector
+          choco pack --output-directory .
+          Pop-Location
+          Get-ChildItem tools/packaging/chocolatey -Recurse -Filter *.nupkg | ForEach-Object {
+            choco push $_.FullName --source https://push.chocolatey.org/ --api-key $env:CHOCOLATEY_API_KEY
+          }

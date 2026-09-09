@@ -1,0 +1,51 @@
+name: chocolatey-publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'GitHub release tag (e.g. v7.0.5 or v7.0.5-beta)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - name: Require CHOCOLATEY_API_KEY
+        env:
+          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CHOCOLATEY_API_KEY)) {
+            throw 'CHOCOLATEY_API_KEY repository secret is not set.'
+          }
+
+      - uses: actions/checkout@v6
+
+      - name: Pack and push chocolatey packages
+        env:
+          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = $env:RELEASE_TAG.Trim()
+          if ($tag -notmatch '^v') { $tag = "v$tag" }
+          pwsh ./tools/packaging/chocolatey/bump-packages.ps1 -Tag $tag
+          $cliAsset = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/Titanium.Cli-win-x64.zip"
+          $msiAsset = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/TitaniumInspector-win-x64.msi"
+          Invoke-WebRequest -Method Head -Uri $cliAsset -UseBasicParsing | Out-Null
+          Invoke-WebRequest -Method Head -Uri $msiAsset -UseBasicParsing | Out-Null
+          Push-Location tools/packaging/chocolatey/titanium-cli
+          choco pack --output-directory .
+          Pop-Location
+          Push-Location tools/packaging/chocolatey/titanium-inspector
+          choco pack --output-directory .
+          Pop-Location
+          Get-ChildItem tools/packaging/chocolatey -Recurse -Filter *.nupkg | ForEach-Object {
+            choco push $_.FullName --source https://push.chocolatey.org/ --api-key $env:CHOCOLATEY_API_KEY
+          }

@@ -11,7 +11,7 @@ const channels = [
 
 Get CLI and Inspector builds from GitHub Releases. This page lists the **latest stable** and **latest beta** product releases (NuGet-only tags are skipped). Prefer the primary format per OS (MSI / DMG / AppImage / deb / rpm); portable zips remain on GitHub for `titanium update` and Alpine (musl) images.
 
-**Windows:** Authenticode-signed assets show publisher **Jehonathan Thomas**. **winget** is stable-only. **macOS CLI:** `brew tap justcoding121/titanium && brew install titanium` when the tap is published. **Linux desktop:** use AppImage / `.deb` / `.rpm` from GitHub Releases.
+**Windows:** Authenticode-signed assets show publisher **Jehonathan Thomas**. **winget** is stable-only. **Chocolatey** packages `titanium-cli` / `titanium-inspector` support stable and `--pre` beta. **macOS CLI:** `brew tap justcoding121/titanium && brew install titanium` when the tap is published. **Linux desktop:** use AppImage / `.deb` / `.rpm` from GitHub Releases.
 
 HTTP/3 (QUIC) native libraries ship inside each platform zip / package (except Windows OS MsQuic). Alpine / Kubernetes: use **`linux-musl-*`**, not `linux-x64`. Details: [HTTP/3](/docs/http3).
 
@@ -171,6 +171,19 @@ winget install justcoding121.TitaniumCli
 winget install justcoding121.TitaniumInspector
 ```
 
+## Chocolatey (Windows)
+
+```shell
+choco install titanium-cli
+choco install titanium-inspector
+choco install titanium-cli --pre
+choco install titanium-inspector --pre
+choco uninstall titanium-cli
+choco uninstall titanium-inspector
+```
+
+Packages appear on chocolatey.org after moderation. Beta uses the same ids with `--pre`.
+
 ## Homebrew (macOS CLI)
 
 ```shell
@@ -230,7 +243,7 @@ dotnet add package Titanium.Web.Proxy --prerelease
 See [Releases](/releases) or [all assets on GitHub](https://github.com/justcoding121/titanium-web-proxy/releases).
 
 ::: tip Product zips vs NuGet tags
-Some tags publish **NuGet only**. CLI / Inspector zip assets appear above only when a full product release is cut (`v*` tag via the release workflow). Prefer this page or GitHub Releases for binaries; **winget** remains stable-only.
+Some tags publish **NuGet only**. CLI / Inspector zip assets appear above only when a full product release is cut (`v*` tag via the release workflow). Prefer this page or GitHub Releases for binaries; **winget** remains stable-only; **Chocolatey** also ships beta via `--pre`.
 :::
 
 ## See also

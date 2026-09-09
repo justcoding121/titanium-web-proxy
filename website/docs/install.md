@@ -29,10 +29,12 @@ dotnet add package Titanium.Web.Proxy --prerelease
 
 ## CLI
 
-On Windows, **winget is stable-only**:
+On Windows, **winget is stable-only**; Chocolatey can install stable or beta (`--pre`):
 
 ```shell
 winget install justcoding121.TitaniumCli
+choco install titanium-cli
+choco install titanium-cli --pre
 ```
 
 **macOS (Homebrew tap, when published):**
@@ -42,7 +44,7 @@ brew tap justcoding121/titanium
 brew install titanium
 ```
 
-Stable CLI packages are on the [Download](/download) page (`v7.0.5`). For **beta** (or any OS), use the beta section or [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when a beta tag is published.
+Stable CLI packages are on the [Download](/download) page (`v7.0.5`). For **beta** (or any OS), use Chocolatey `--pre`, the beta section, or [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when a beta tag is published.
 
 Pick the **matching RID** (e.g. Alpine/K8s → `linux-musl-x64` or `linux-musl-arm64`, not `linux-x64`). Prefer AppImage / deb / rpm on glibc Linux; musl stays zip-only. HTTP/3 natives ship inside those packages — see [HTTP/3](/docs/http3).
 
@@ -68,10 +70,12 @@ titanium update --remove-plus
 
 ## Inspector
 
-Prefer [Download](/download). **winget is stable-only**:
+Prefer [Download](/download). **winget is stable-only**; Chocolatey supports beta with `--pre`:
 
 ```shell
 winget install justcoding121.TitaniumInspector
+choco install titanium-inspector
+choco install titanium-inspector --pre
 ```
 
 Or MSI / DMG / AppImage / deb / rpm / portable zip from [Download](/download) / [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) (stable: `v7.0.5`; beta when a beta tag is published). **Windows:** MSI (signed). **macOS:** DMG when published (else zip + `install-app.sh`). **Linux glibc:** AppImage / `.deb` / `.rpm` when published. **Alpine musl:** zip only. HTTP/3 natives are bundled the same way as the CLI ([HTTP/3](/docs/http3)).

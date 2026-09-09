@@ -446,6 +446,8 @@ jobs:
 
   # Product zips stay on release.yml (v* tags). After beta/stable merge, create/move the
   # version tag and dispatch release.yml (GITHUB_TOKEN tag pushes do not re-trigger workflows).
+  # release.yml also packs/pushes Chocolatey (titanium-cli / titanium-inspector) after the
+  # GitHub Release exists — no separate chocolatey step here.
   cut-product-tag:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
     needs: [build, ui-portable, rps-publish-gate, rps-peer-gate]

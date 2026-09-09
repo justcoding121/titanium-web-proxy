@@ -16,6 +16,8 @@ Prefer the [Download](/download) page (resolves the newest release that has Insp
 ```shell
 # Stable winget package
 winget install justcoding121.TitaniumInspector
+# Chocolatey (stable; use --pre for beta)
+choco install titanium-inspector
 ```
 
 Windows **stable** (`v7.0.5`):
@@ -23,7 +25,7 @@ Windows **stable** (`v7.0.5`):
 - [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.5/TitaniumInspector-win-x64.msi)
 - [Portable zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.5/TitaniumInspector-win-x64.zip)
 
-For **beta**, use the [Download](/download) beta section or [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when a beta tag is published.
+For **beta**, use `choco install titanium-inspector --pre`, the [Download](/download) beta section, or [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when a beta tag is published.
 ### Linux
 
 Extract the RID zip, then either run `./TitaniumInspector` (portable) or:

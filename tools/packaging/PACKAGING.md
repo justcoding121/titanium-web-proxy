@@ -96,6 +96,17 @@ Winget package IDs:
 
 Manifest stubs live in `tools/packaging/winget/`. Resubmit to `microsoft/winget-pkgs` only after the **first signed stable** with fresh SHA256s (do not resubmit unsigned `7.0.4`).
 
+### Chocolatey (Windows)
+
+Package ids: `titanium-cli` (zip), `titanium-inspector` (MSI). Stubs in [`chocolatey/`](chocolatey/). **Automatic:** merge to `beta` / `stable` → `cut-product-tag` → [`release.yml`](../../.github/workflows/release.yml) `publish-chocolatey` (bump SHA256s + `choco push` for stable and `-beta`). Re-push an existing tag with [`chocolatey-publish.yml`](../../.github/workflows/chocolatey-publish.yml). Secret name only: `CHOCOLATEY_API_KEY` — see [`CHOCOLATEY_FOLLOWUP.md`](CHOCOLATEY_FOLLOWUP.md).
+
+```shell
+choco install titanium-cli
+choco install titanium-inspector
+choco install titanium-cli --pre
+choco install titanium-inspector --pre
+```
+
 ## HTTP/3 native lock file
 
 - **Lock:** [`http3-native.lock.json`](http3-native.lock.json) — pinned URLs + SHA256 per RID.
