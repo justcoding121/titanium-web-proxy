@@ -572,23 +572,41 @@ internal static class RunCommand
 
         var cacheMiddleware = new HttpResponseCacheMiddleware(responseCache);
         middleware.Add(cacheMiddleware);
-        proxy.AfterResponse += async (_, e) =>
+
+        // Buffer in BeforeResponse so fill does not depend on MITM session-lite coalescing.
+        // After the body is streamed, IsBodyReceived is set without IsBodyRead and
+        // AfterResponse GetResponseBody throws — perpetual misses (~0.64× CLI vs ~0.99× hits).
+        proxy.BeforeResponse += async (_, e) =>
         {
             try
             {
-                if (e.HttpClient.Response.StatusCode == 200 &&
-                    !e.HttpClient.Response.IsBodyRead &&
-                    e.HttpClient.Response.HasBody)
+                var response = e.HttpClient.Response;
+                if (response.StatusCode == 200 &&
+                    response.HasBody &&
+                    !response.IsBodyRead)
                 {
+                    response.KeepBody = true;
                     await e.GetResponseBody().ConfigureAwait(false);
                 }
+            }
+            catch
+            {
+                // Cache best-effort only.
+            }
+        };
 
+        proxy.AfterResponse += (_, e) =>
+        {
+            try
+            {
                 cacheMiddleware.TryCacheCurrentResponse(e);
             }
             catch
             {
                 // Cache best-effort only.
             }
+
+            return Task.CompletedTask;
         };
     }
 
