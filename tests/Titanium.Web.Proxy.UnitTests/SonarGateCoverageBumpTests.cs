@@ -361,4 +361,40 @@ public class SonarGateCoverageBumpTests
 
     private delegate ReadOnlySpan<byte> StripHeadersSpanDelegate(
         ReadOnlySpan<byte> payload, Http2FrameFlag flags);
+
+    [TestMethod]
+    public void StatusCodeBytesAndShouldOmitHttp2Header_CoverCommonBranches()
+    {
+        var status = typeof(Http2Helper).GetMethod("StatusCodeBytes",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        foreach (var code in new[] { 200, 204, 206, 301, 302, 304, 400, 404, 500, 502, 418, 503 })
+        {
+            var bytes = (ByteString)status.Invoke(null, [code])!;
+            Assert.IsTrue(bytes.Length >= 3, "status "+code);
+        }
+
+        var omit = typeof(Http2Helper).GetMethod("ShouldOmitHttp2Header",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        Assert.IsTrue((bool)omit.Invoke(null, ["Upgrade".GetByteString()])!);
+        Assert.IsTrue((bool)omit.Invoke(null, ["Keep-Alive".GetByteString()])!);
+        Assert.IsTrue((bool)omit.Invoke(null, ["Proxy-Connection".GetByteString()])!);
+        Assert.IsTrue((bool)omit.Invoke(null, ["Transfer-Encoding".GetByteString()])!);
+        Assert.IsTrue((bool)omit.Invoke(null, ["te".GetByteString()])!);
+        Assert.IsTrue((bool)omit.Invoke(null, ["host".GetByteString()])!);
+        Assert.IsFalse((bool)omit.Invoke(null, ["content-length".GetByteString()])!);
+        Assert.IsFalse((bool)omit.Invoke(null, ["accept".GetByteString()])!);
+    }
+
+    [TestMethod]
+    public void Http3ResponseMayHaveBody_ExtraMatrix_CoversRemainingCombos()
+    {
+        var mayHave = typeof(Http3OriginBridge).GetMethod("ResponseMayHaveBody",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        Assert.IsFalse((bool)mayHave.Invoke(null, [101, "GET", 10L, false, false])!);
+        Assert.IsFalse((bool)mayHave.Invoke(null, [204, "POST", 5L, true, true])!);
+        Assert.IsTrue((bool)mayHave.Invoke(null, [201, "POST", -1L, true, false])!);
+        Assert.IsTrue((bool)mayHave.Invoke(null, [200, "PUT", -1L, false, true])!);
+        Assert.IsFalse((bool)mayHave.Invoke(null, [304, "GET", -1L, true, true])!);
+        Assert.IsTrue((bool)mayHave.Invoke(null, [200, "GET", 1L, false, false])!);
+    }
 }
