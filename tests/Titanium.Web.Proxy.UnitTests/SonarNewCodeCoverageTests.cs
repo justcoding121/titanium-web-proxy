@@ -1819,6 +1819,244 @@ public class SonarNewCodeCoverageTests
             .Invoke(null, null);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Additional Sonar new-code seams (~220+ LOC push toward 80%)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private delegate int ReadHttp2FrameLengthDelegate(byte[] frameHeaderBuffer);
+    private delegate int ReadHttp2StreamIdDelegate(byte[] frameHeaderBuffer);
+    private delegate int ReadHttp2UInt31Delegate(byte[] buffer);
+    private delegate int ReadHttp2ErrorCodeDelegate(byte[] buffer);
+    private delegate string InternCommonHttpMethodDelegate(ReadOnlySpan<byte> methodSpan, ByteString method);
+    private delegate ReadOnlySpan<byte> StripDataFramingSpanDelegate(ReadOnlySpan<byte> payload, Http2FrameFlag flags);
+    private delegate byte[] StripDataFramingFromSpanDelegate(ReadOnlySpan<byte> payload, Http2FrameFlag flags);
+    private delegate int WriteHpackPrefixedIntDelegate(Span<byte> dest, byte patternByte, int prefixBits, ulong value);
+    private delegate int WriteHpackAsciiLiteralBytesDelegate(Span<byte> dest, ReadOnlySpan<byte> value);
+    private delegate int WriteHpackAsciiLiteralStringDelegate(Span<byte> dest, string value);
+    private delegate ReadOnlyMemory<byte> GetMemoryStreamMemoryDelegate(MemoryStream ms);
+
+    [TestMethod]
+    public void Http2CopyParseHelpers_FrameLengthStreamIdErrorAndPadding()
+    {
+        var length = typeof(Http2Helper).GetMethod("ReadHttp2FrameLength", PrivateStatic)!
+            .CreateDelegate<ReadHttp2FrameLengthDelegate>();
+        Assert.AreEqual(0x010203, length([0x01, 0x02, 0x03, 0, 0, 0, 0, 0, 0]));
+
+        var streamId = typeof(Http2Helper).GetMethod("ReadHttp2StreamId", PrivateStatic)!
+            .CreateDelegate<ReadHttp2StreamIdDelegate>();
+        Assert.AreEqual(0x01020304, streamId([0, 0, 0, 0, 0, 0x81, 0x02, 0x03, 0x04]));
+
+        var u31 = typeof(Http2Helper).GetMethod("ReadHttp2UInt31", PrivateStatic)!
+            .CreateDelegate<ReadHttp2UInt31Delegate>();
+        Assert.AreEqual(0x01020304, u31([0x81, 0x02, 0x03, 0x04]));
+
+        var err = typeof(Http2Helper).GetMethod("ReadHttp2ErrorCode", PrivateStatic)!
+            .CreateDelegate<ReadHttp2ErrorCodeDelegate>();
+        Assert.AreEqual(unchecked((int)0x01020304), err([0x01, 0x02, 0x03, 0x04]));
+
+        var padded = typeof(Http2Helper).GetMethod("GetHttp2PaddedDataRange", PrivateStatic)!;
+        object?[] args = [new byte[] { 2, 9, 8, 7, 0, 0 }, 6, true, 0, 0];
+        padded.Invoke(null, args);
+        Assert.AreEqual(1, args[3]);
+        Assert.AreEqual(3, args[4]); // 6 - 1 - 2
+
+        args = [new byte[] { 9, 1, 2 }, 3, true, 0, 0];
+        padded.Invoke(null, args);
+        Assert.AreEqual(1, args[3]);
+        Assert.AreEqual(0, args[4]); // clamp when pad too large
+
+        args = [new byte[] { 1, 2, 3 }, 3, false, 0, 0];
+        padded.Invoke(null, args);
+        Assert.AreEqual(0, args[3]);
+        Assert.AreEqual(3, args[4]);
+    }
+
+    [TestMethod]
+    public void Http2Origin_StripDataFramingOverloads_CoverPaddedAndEmpty()
+    {
+        var byteOverload = typeof(Http2OriginConnection).GetMethod("StripDataFraming", PrivateStatic,
+            binder: null, [typeof(byte[]), typeof(Http2FrameFlag)], modifiers: null)!;
+        var unpadded = new byte[] { 1, 2, 3 };
+        Assert.AreSame(unpadded, byteOverload.Invoke(null, [unpadded, (Http2FrameFlag)0]));
+        var padded = new byte[] { 1, 9, 0 };
+        CollectionAssert.AreEqual(new byte[] { 9 },
+            (byte[])byteOverload.Invoke(null, [padded, Http2FrameFlag.Padded])!);
+        Assert.AreSame(Array.Empty<byte>(),
+            byteOverload.Invoke(null, [Array.Empty<byte>(), Http2FrameFlag.Padded]));
+
+        var fromSpan = typeof(Http2OriginConnection).GetMethod("StripDataFraming", PrivateStatic,
+            binder: null, [typeof(ReadOnlySpan<byte>), typeof(Http2FrameFlag)], modifiers: null)!
+            .CreateDelegate<StripDataFramingFromSpanDelegate>();
+        CollectionAssert.AreEqual(unpadded, fromSpan(unpadded, 0));
+        CollectionAssert.AreEqual(new byte[] { 9 }, fromSpan(padded, Http2FrameFlag.Padded));
+
+        var spanOnly = typeof(Http2OriginConnection).GetMethod("StripDataFramingSpan", PrivateStatic)!
+            .CreateDelegate<StripDataFramingSpanDelegate>();
+        CollectionAssert.AreEqual(unpadded, spanOnly(unpadded, 0).ToArray());
+        CollectionAssert.AreEqual(new byte[] { 9 }, spanOnly(padded, Http2FrameFlag.Padded).ToArray());
+        Assert.AreEqual(0, spanOnly(ReadOnlySpan<byte>.Empty, Http2FrameFlag.Padded).Length);
+    }
+
+    [TestMethod]
+    public void Http2Helper_AsciiLowerInternMethodReportAndBind()
+    {
+        var lower = typeof(Http2Helper).GetMethod("AsciiToLowerByteString", PrivateStatic)!;
+        Assert.AreEqual("host", ((ByteString)lower.Invoke(null, ["Host".GetByteString()])!).GetString());
+        Assert.AreEqual("already", ((ByteString)lower.Invoke(null, ["already".GetByteString()])!).GetString());
+
+        var intern = typeof(Http2Helper).GetMethod("InternCommonHttpMethod", PrivateStatic)!
+            .CreateDelegate<InternCommonHttpMethodDelegate>();
+        foreach (var name in new[] { "GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS" })
+            Assert.AreEqual(name, intern(Encoding.ASCII.GetBytes(name), name.GetByteString()));
+        Assert.AreEqual("PATCH", intern("PATCH"u8, "PATCH".GetByteString()));
+
+        typeof(Http2Helper).GetMethod("Breakpoint", PrivateStatic)!.Invoke(null, null);
+        typeof(Http2Helper).GetMethod("ReportException", PrivateStatic)!
+            .Invoke(null, [NullLogger.Instance, new ProxyHttpException("cov", new IOException("peer"), null)]);
+    }
+
+    [TestMethod]
+    public async Task Http2Helper_BindOriginAndSendMemoryHelpers()
+    {
+        using var proxy = new ProxyServer(false, false, false) { EnableRequestTimingCapture = true };
+        using var session = MakeSession(proxy);
+        Assert.IsNotNull(session.Timing);
+        using var shell = await CreateShellAsync(proxy);
+        typeof(Http2Helper).GetMethod("BindOriginForHttp2Stream", PrivateStatic)!
+            .Invoke(null, [session, shell.ServerConnection]);
+        typeof(Http2Helper).GetMethod("BindOriginForHttp2Stream", PrivateStatic)!
+            .Invoke(null, [session, shell.ServerConnection]); // reused path
+
+        var getMem = typeof(Http2Helper).GetMethod("GetMemoryStreamMemory", PrivateStatic)!
+            .CreateDelegate<GetMemoryStreamMemoryDelegate>();
+        using (var expandable = new MemoryStream())
+        {
+            expandable.Write("abc"u8);
+            CollectionAssert.AreEqual("abc"u8.ToArray(), getMem(expandable).ToArray());
+        }
+
+        using (var fixedBuf = new MemoryStream(new byte[8], 0, 8, writable: true, publiclyVisible: false))
+        {
+            fixedBuf.Write("xy"u8);
+            var mem = getMem(fixedBuf); // TryGetBuffer fails → ToArray path (Length stays capacity)
+            Assert.IsTrue(mem.Length >= 2);
+            Assert.AreEqual((byte)'x', mem.Span[0]);
+            Assert.AreEqual((byte)'y', mem.Span[1]);
+        }
+
+        var asVt = typeof(Http2Helper).GetMethod("AsValueTask", PrivateStatic)!;
+        await (ValueTask)asVt.Invoke(null, [Task.CompletedTask])!;
+
+        using var syncOut = new MemoryStream();
+        var writeTwo = typeof(Http2Helper).GetMethod("WriteTwoAsync", PrivateStatic)!;
+        await (ValueTask)writeTwo.Invoke(null,
+            [syncOut, new ReadOnlyMemory<byte>([1, 2]), new ReadOnlyMemory<byte>([3]), CancellationToken.None])!;
+        CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, syncOut.ToArray());
+
+        await using var deferred = new DeferredFirstWriteStream();
+        var slow = (ValueTask)writeTwo.Invoke(null,
+            [deferred, new ReadOnlyMemory<byte>([9]), new ReadOnlyMemory<byte>([8]), CancellationToken.None])!;
+        deferred.Unblock();
+        await slow;
+        CollectionAssert.AreEqual(new byte[] { 9, 8 }, deferred.Written.ToArray());
+
+        Span<byte> dest = stackalloc byte[16];
+        var writePref = typeof(Http2Helper).GetMethod("WriteHpackPrefixedInt", PrivateStatic)!
+            .CreateDelegate<WriteHpackPrefixedIntDelegate>();
+        Assert.AreEqual(1, writePref(dest, 0x00, 7, 10UL));
+        Assert.IsTrue(writePref(dest, 0x00, 7, 300UL) >= 2);
+
+        var litBytes = typeof(Http2Helper).GetMethods(PrivateStatic)
+            .First(m => m.Name == "WriteHpackAsciiStringLiteral"
+                        && m.GetParameters()[1].ParameterType == typeof(ReadOnlySpan<byte>))
+            .CreateDelegate<WriteHpackAsciiLiteralBytesDelegate>();
+        Assert.AreEqual(4, litBytes(dest, "abc"u8));
+
+        var litStr = typeof(Http2Helper).GetMethods(PrivateStatic)
+            .First(m => m.Name == "WriteHpackAsciiStringLiteral"
+                        && m.GetParameters()[1].ParameterType == typeof(string))
+            .CreateDelegate<WriteHpackAsciiLiteralStringDelegate>();
+        Assert.AreEqual(3, litStr(dest, "xy"));
+    }
+
+    [TestMethod]
+    public async Task Http2OriginPool_AuthorityEntrySnapshotPruneAndCapacity()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var pool = proxy.Http2OriginConnectionPool;
+        var entryType = typeof(Http2OriginConnectionPool).GetNestedType("AuthorityEntry", BindingFlags.NonPublic)!;
+        var entry = Activator.CreateInstance(entryType, nonPublic: true)!;
+        var connections = (System.Collections.IList)entryType
+            .GetField("Connections", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!
+            .GetValue(entry)!;
+
+        using var usable = await CreateShellAsync(proxy);
+        using var retired = await CreateShellAsync(proxy);
+        retired.Retire();
+        connections.Add(usable);
+        connections.Add(retired);
+
+        var snapshot = typeof(Http2OriginConnectionPool).GetMethod("SnapshotMembers", PrivateStatic)!;
+        var snap = (Http2OriginConnection[])snapshot.Invoke(null, [entry])!;
+        Assert.AreEqual(1, snap.Length);
+        Assert.AreSame(usable, snap[0]);
+
+        var limits = ProxyResourceLimits.Default.WithMaxOriginHttp2ConnectionsPerAuthority(4);
+        var canOpen = typeof(Http2OriginConnectionPool).GetMethod("CanOpenAnother", PrivateStatic)!;
+        Assert.IsTrue((bool)canOpen.Invoke(null, [entry, limits])!);
+        Assert.IsFalse((bool)canOpen.Invoke(null, [entry, ProxyResourceLimits.Default])!); // default max=1
+
+        for (var i = connections.Count; i < 4; i++)
+            connections.Add(await CreateShellAsync(proxy));
+        Assert.IsFalse((bool)canOpen.Invoke(null, [entry, limits])!);
+
+        var tryAny = typeof(Http2OriginConnectionPool).GetMethod("TryPickAnyUsable", PrivateStatic)!;
+        Assert.IsNotNull(tryAny.Invoke(null, [entry]));
+
+        var prune = typeof(Http2OriginConnectionPool).GetMethod("PruneUnusableUnderLock", PrivateStatic)!;
+        typeof(Http2OriginConnection).GetField("lastStreamId", PrivateInstance)!.SetValue(usable, int.MaxValue - 1);
+        lock (entryType.GetField("Gate", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!
+                  .GetValue(entry)!)
+            prune.Invoke(null, [entry]);
+        Assert.AreEqual(3, connections.Count); // exhausted usable pruned
+
+        await pool.DrainAsync();
+    }
+
+    [TestMethod]
+    public void RequestHandler_ThrowIfHeaderDeadlineTimedOut_CoversFiredAndIdle()
+    {
+        var throwIf = typeof(ProxyServer).GetMethod("ThrowIfHeaderDeadlineTimedOut", PrivateStatic)!;
+        var registry = new DeadlineRegistry();
+        var idle = registry.Start(CancellationToken.None, null, ProxyTimeoutKind.ClientHeader);
+        throwIf.Invoke(null, [idle]); // no-op
+
+        using var cts = new CancellationTokenSource();
+        var fired = registry.Start(cts.Token, TimeSpan.FromMilliseconds(5), ProxyTimeoutKind.ClientHeader);
+        Assert.IsTrue(SpinWait.SpinUntil(() => fired.Token.IsCancellationRequested, TimeSpan.FromSeconds(2)));
+        var ex = Assert.ThrowsExactly<TargetInvocationException>(() => throwIf.Invoke(null, [fired]));
+        Assert.IsInstanceOfType<ProxyTimeoutException>(ex.InnerException);
+    }
+
+    [TestMethod]
+    public void FirefoxAndUnixTrust_EscapeAndPathHelpers()
+    {
+        var ffEscape = typeof(FirefoxCertificateTrust).GetMethod("Escape", PrivateStatic)!;
+        Assert.AreEqual("a\\\"b", (string)ffEscape.Invoke(null, ["a\"b"])!);
+
+        var unix = typeof(UnixCertificateTrust);
+        Assert.AreEqual("a\\\"b", (string)unix.GetMethod("Escape", PrivateStatic)!.Invoke(null, ["a\"b"])!);
+        Assert.AreEqual("a\\\"b", (string)unix.GetMethod("EscapeShell", PrivateStatic)!.Invoke(null, ["a\"b"])!);
+        StringAssert.Contains((string)unix.GetMethod("UserLoginKeychainDbPath", PrivateStatic)!.Invoke(null, null)!,
+            "login.keychain-db");
+        StringAssert.Contains((string)unix.GetMethod("UserLoginKeychainPath", PrivateStatic)!.Invoke(null, null)!,
+            "login.keychain");
+        StringAssert.Contains((string)unix.GetMethod("UserPkiNssDbPath", PrivateStatic)!.Invoke(null, null)!,
+            ".pki");
+        unix.GetMethod("TryDelete", PrivateStatic)!.Invoke(null,
+            [Path.Combine(Path.GetTempPath(), "twp-missing-" + Guid.NewGuid().ToString("N"))]);
+    }
+
     private sealed class HandleAllMiddleware : IProxyMiddleware
     {
         public ValueTask InvokeAsync(ProxyMiddlewareContext context, ProxyMiddlewareDelegate next,
@@ -1848,6 +2086,40 @@ public class SonarNewCodeCoverageTests
         {
             WriteAttempts++;
             return ValueTask.FromException(new IOException("fail"));
+        }
+    }
+
+    private sealed class DeferredFirstWriteStream : Stream
+    {
+        private readonly TaskCompletionSource _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _writes;
+        public MemoryStream Written { get; } = new();
+        public void Unblock() => _gate.TrySetResult();
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => Written.Length;
+        public override long Position { get => Written.Position; set => Written.Position = value; }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => Written.Write(buffer, offset, count);
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Increment(ref _writes) == 1)
+            {
+                return new ValueTask(WriteAfterGateAsync(buffer));
+            }
+
+            Written.Write(buffer.Span);
+            return ValueTask.CompletedTask;
+        }
+
+        private async Task WriteAfterGateAsync(ReadOnlyMemory<byte> buffer)
+        {
+            await _gate.Task;
+            Written.Write(buffer.Span);
         }
     }
 }

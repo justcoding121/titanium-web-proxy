@@ -562,4 +562,56 @@ public class HandlerAndProtocolHelperCoverageTests
         Assert.IsFalse((bool)h1.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"])!);
     }
 #pragma warning restore TWP001
+
+    [TestMethod]
+    public void TransparentClientHandler_ResolveInboundHttp2CleartextPort_Branches()
+    {
+        var resolve = typeof(ProxyServer).GetMethod("ResolveInboundHttp2CleartextPort", PrivateStatic)!;
+        var clear = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false) { ForwardCleartext = true };
+        var tls = new TransparentProxyEndPoint(IPAddress.Loopback, 0, true) { ForwardCleartext = false };
+        var fwd = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false) { ForwardPort = 9443 };
+
+        Assert.AreEqual(8080, (int)resolve.Invoke(null, ["socks.host", 8080, clear])!);
+        Assert.AreEqual(9443, (int)resolve.Invoke(null, [null, 1, fwd])!);
+        Assert.AreEqual(80, (int)resolve.Invoke(null, [null, 1, clear])!);
+        Assert.AreEqual(443, (int)resolve.Invoke(null, [null, 1, tls])!);
+    }
+
+    [TestMethod]
+    public async Task TransparentClientHandler_ConsumeHttp2Preface_ValidAndInvalid()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var consume = typeof(ProxyServer).GetMethod("ConsumeHttp2ConnectionPrefaceAsync", PrivateStatic)!;
+        var valid = Encoding.ASCII.GetBytes("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n");
+        await using (var ms = new MemoryStream(valid))
+        {
+            var conn = new TcpClientConnection(proxy, new System.Net.Sockets.Socket(
+                System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Stream,
+                System.Net.Sockets.ProtocolType.Tcp));
+            var clientStream = new HttpClientStream(proxy, conn, ms, proxy.BufferPool, CancellationToken.None);
+            await (Task)consume.Invoke(null, [clientStream, CancellationToken.None])!;
+        }
+
+        await using (var bad = new MemoryStream(Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\n")))
+        {
+            var conn = new TcpClientConnection(proxy, new System.Net.Sockets.Socket(
+                System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Stream,
+                System.Net.Sockets.ProtocolType.Tcp));
+            var clientStream = new HttpClientStream(proxy, conn, bad, proxy.BufferPool, CancellationToken.None);
+            await Assert.ThrowsExactlyAsync<InvalidDataException>(async () =>
+                await (Task)consume.Invoke(null, [clientStream, CancellationToken.None])!);
+        }
+    }
+
+    [TestMethod]
+    public void TcpConnectionFactory_PreviewToString_EmptyAndContent()
+    {
+        var preview = typeof(TcpConnectionFactory).GetMethod("PreviewToString", PrivateStatic)!;
+        using var empty = new MemoryStream();
+        Assert.IsNull(preview.Invoke(null, [empty]));
+
+        using var content = new MemoryStream();
+        content.Write(Encoding.UTF8.GetBytes("preview-body"));
+        Assert.AreEqual("preview-body", (string?)preview.Invoke(null, [content]));
+    }
 }

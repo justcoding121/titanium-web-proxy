@@ -955,3 +955,85 @@ public class SystemProxyBackendFactoryPlatformTests
         Assert.IsNotNull(backend);
     }
 }
+
+[TestClass]
+public class SystemProxyParserCoverageTests
+{
+    private static readonly BindingFlags PrivateStatic = BindingFlags.Static | BindingFlags.NonPublic;
+
+    [TestMethod]
+    public void LinuxSystemProxyBackend_ParseAndQuoteHelpers()
+    {
+        var t = typeof(LinuxSystemProxyBackend);
+        Assert.AreEqual(0, (int)t.GetMethod("ParseInt", PrivateStatic)!.Invoke(null, [null])!);
+        Assert.AreEqual(0, (int)t.GetMethod("ParseInt", PrivateStatic)!.Invoke(null, ["nope"])!);
+        Assert.AreEqual(8888, (int)t.GetMethod("ParseInt", PrivateStatic)!.Invoke(null, [" 8888 "])!);
+
+        Assert.IsTrue((bool)t.GetMethod("ParseGsettingsBool", PrivateStatic)!.Invoke(null, ["true"])!);
+        Assert.IsTrue((bool)t.GetMethod("ParseGsettingsBool", PrivateStatic)!.Invoke(null, ["'True'"])!);
+        Assert.IsTrue((bool)t.GetMethod("ParseGsettingsBool", PrivateStatic)!.Invoke(null, ["1"])!);
+        Assert.IsFalse((bool)t.GetMethod("ParseGsettingsBool", PrivateStatic)!.Invoke(null, ["false"])!);
+        Assert.IsFalse((bool)t.GetMethod("ParseGsettingsBool", PrivateStatic)!.Invoke(null, [null])!);
+
+        Assert.AreEqual("localhost;127.0.0.1",
+            (string)t.GetMethod("ParseGsettingsArray", PrivateStatic)!
+                .Invoke(null, ["['localhost', '127.0.0.1']"])!);
+        Assert.AreEqual("a",
+            (string)t.GetMethod("ParseGsettingsArray", PrivateStatic)!.Invoke(null, ["a"])!);
+
+        Assert.AreEqual("'o'\\''ne'", (string)t.GetMethod("QuoteGsettings", PrivateStatic)!.Invoke(null, ["o'ne"])!);
+        Assert.AreEqual("\"a\\\"b\"", (string)t.GetMethod("QuoteShell", PrivateStatic)!.Invoke(null, ["a\"b"])!);
+
+        var tryParse = t.GetMethod("TryParseProxyUri", PrivateStatic)!;
+        object?[] ok = ["http://127.0.0.1:8888", null, 0];
+        Assert.IsTrue((bool)tryParse.Invoke(null, ok)!);
+        Assert.AreEqual("127.0.0.1", ok[1]);
+        Assert.AreEqual(8888, ok[2]);
+        object?[] bad = ["not-a-uri", null, 0];
+        Assert.IsFalse((bool)tryParse.Invoke(null, bad)!);
+        object?[] empty = [null, null, 0];
+        Assert.IsFalse((bool)tryParse.Invoke(null, empty)!);
+    }
+
+    [TestMethod]
+    public void MacOsSystemProxyBackend_ScutilAndNetworkSetupParsers()
+    {
+        var t = typeof(MacOsSystemProxyBackend);
+        Assert.IsTrue((bool)t.GetMethod("IsScutilEnabled", PrivateStatic)!.Invoke(null, ["1"])!);
+        Assert.IsTrue((bool)t.GetMethod("IsScutilEnabled", PrivateStatic)!.Invoke(null, ["true"])!);
+        Assert.IsTrue((bool)t.GetMethod("IsScutilEnabled", PrivateStatic)!.Invoke(null, ["YES"])!);
+        Assert.IsFalse((bool)t.GetMethod("IsScutilEnabled", PrivateStatic)!.Invoke(null, ["0"])!);
+
+        Assert.IsTrue((bool)t.GetMethod("LooksLikeAuthFailure", PrivateStatic)!
+            .Invoke(null, ["Permission denied by admin"])!);
+        Assert.IsTrue((bool)t.GetMethod("LooksLikeAuthFailure", PrivateStatic)!
+            .Invoke(null, ["authorization required"])!);
+        Assert.IsFalse((bool)t.GetMethod("LooksLikeAuthFailure", PrivateStatic)!
+            .Invoke(null, ["network offline"])!);
+
+        Assert.AreEqual("Empty", (string)t.GetMethod("FormatBypassArgs", PrivateStatic)!.Invoke(null, [""])!);
+        Assert.AreEqual("Empty", (string)t.GetMethod("FormatBypassArgs", PrivateStatic)!.Invoke(null, ["Empty"])!);
+        StringAssert.Contains((string)t.GetMethod("FormatBypassArgs", PrivateStatic)!
+            .Invoke(null, ["localhost,*.corp"])!, "\"localhost\"");
+        Assert.AreEqual("a\\\"b", (string)t.GetMethod("Escape", PrivateStatic)!.Invoke(null, ["a\"b"])!);
+
+        var parse = t.GetMethod("ParseProxyState", PrivateStatic)!;
+        var nullState = ((bool Enabled, string Host, int Port))parse.Invoke(null, [null])!;
+        Assert.IsFalse(nullState.Enabled);
+        Assert.AreEqual(0, nullState.Port);
+
+        var result = new ProcessRunResult(0, "Enabled: Yes\nServer: 10.0.0.1\nPort: 8080\n", "");
+        var parsed = ((bool Enabled, string Host, int Port))parse.Invoke(null, [result])!;
+        Assert.IsTrue(parsed.Enabled);
+        Assert.AreEqual("10.0.0.1", parsed.Host);
+        Assert.AreEqual(8080, parsed.Port);
+
+        Assert.IsTrue((bool)t.GetMethod("ParseAutoDiscovery", PrivateStatic)!
+            .Invoke(null, [new ProcessRunResult(0, "Auto Proxy Discovery: On\n", "")])!);
+        Assert.IsFalse((bool)t.GetMethod("ParseAutoDiscovery", PrivateStatic)!.Invoke(null, [null])!);
+        var pac = ((bool Enabled, string Url))t.GetMethod("ParseAutoProxyUrl", PrivateStatic)!
+            .Invoke(null, [new ProcessRunResult(0, "Enabled: Yes\nURL: http://pac.test/x\n", "")])!;
+        Assert.IsTrue(pac.Enabled);
+        Assert.AreEqual("http://pac.test/x", pac.Url);
+    }
+}

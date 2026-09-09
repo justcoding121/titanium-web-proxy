@@ -385,4 +385,137 @@ public class InspectorCommandCoverageTests
         command.Execute(null);
         await Task.Delay(120);
     }
+
+    [TestMethod]
+    public void SelectedInspectFormatters_AndBindDebugHelpers_CoverBranches()
+    {
+        var flags = BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
+        var vmType = typeof(MainWindowViewModel);
+
+        var headers = (string)vmType.GetMethod("BuildSelectedHeadersText", flags)!
+            .Invoke(null, [new SessionSnapshot
+            {
+                IsTunnel = true,
+                OpaqueReason = OpaqueTunnelReason.DecryptOff,
+                IsTranscoded = true,
+                Method = "POST",
+                Url = "https://api.test/v1?q=1",
+                ClientMethod = "POST",
+                ClientPathAndQuery = "/v1?q=1",
+                ClientContentType = "application/json",
+                UpstreamMethod = "POST",
+                UpstreamPath = "/pkg.Svc/Method",
+                UpstreamContentType = "application/grpc",
+                RequestHeadersText = "Cookie: a=1\r\nHost: api.test\r\n",
+                ResponseHeadersText = "Content-Type: application/json\r\n",
+            }])!;
+        StringAssert.Contains(headers, "=== Request ===");
+        StringAssert.Contains(headers, "=== Response ===");
+        StringAssert.Contains(headers, "gRPC-JSON");
+        StringAssert.Contains(headers, "=== Cookies ===");
+        StringAssert.Contains(headers, "=== Query ===");
+
+        var plainHeaders = (string)vmType.GetMethod("BuildSelectedHeadersText", flags)!
+            .Invoke(null, [new SessionSnapshot
+            {
+                RequestHeadersText = "Accept: */*\r\n",
+                Url = "https://plain.test/",
+            }])!;
+        Assert.IsFalse(plainHeaders.Contains("=== Cookies ===", StringComparison.Ordinal));
+
+        var append = vmType.GetMethod("AppendNameValues", flags)!;
+        var sb = new System.Text.StringBuilder();
+        append.Invoke(null, [sb, "=== Empty ===", new Dictionary<string, string>()]);
+        Assert.AreEqual(0, sb.Length);
+        append.Invoke(null, [sb, "=== Pair ===", new Dictionary<string, string> { ["k"] = "v" }]);
+        StringAssert.Contains(sb.ToString(), "k=v");
+
+        var body = (string)vmType.GetMethod("BuildSelectedBodyText", flags)!
+            .Invoke(null, [new SessionSnapshot
+            {
+                IsTranscoded = true,
+                RequestBodyText = "{\"a\":1}",
+                ResponseBodyText = "{\"ok\":true}",
+                UpstreamRequestBodyBytes = [1, 2],
+                GrpcFrames = [new GrpcFrameSnapshot { Compressed = false, Length = 2, HexPreview = "0102" }],
+            }])!;
+        StringAssert.Contains(body, "Client (JSON/REST)");
+        StringAssert.Contains(body, "Upstream gRPC frames");
+
+        Assert.AreEqual("(no frames parsed)",
+            (string)vmType.GetMethod("BuildSelectedFramesText", flags)!
+                .Invoke(null, [new SessionSnapshot { IsWebSocket = true }])!);
+        StringAssert.Contains(
+            (string)vmType.GetMethod("BuildSelectedFramesText", flags)!
+                .Invoke(null, [new SessionSnapshot
+                {
+                    WebSocketFrames =
+                    [
+                        new WebSocketFrameSnapshot
+                        {
+                            Direction = "Client", Opcode = "Text", PayloadPreview = "hi"
+                        }
+                    ]
+                }])!,
+            "hi");
+
+        Assert.AreEqual("(no events parsed)",
+            (string)vmType.GetMethod("BuildSelectedSseText", flags)!
+                .Invoke(null, [new SessionSnapshot { IsServerSentEvents = true }])!);
+        StringAssert.Contains(
+            (string)vmType.GetMethod("BuildSelectedSseText", flags)!
+                .Invoke(null, [new SessionSnapshot
+                {
+                    SseEvents = [new SseEventSnapshot { Event = "msg", Id = "1", Data = "ping" }]
+                }])!,
+            "ping");
+
+        Assert.AreEqual("{}",
+            (string)vmType.GetMethod("BuildSelectedProtobufText", flags)!
+                .Invoke(null, [new SessionSnapshot { ProtobufDecodedText = "{}" }])!);
+        _ = (string)vmType.GetMethod("BuildSelectedProtobufText", flags)!
+            .Invoke(null, [new SessionSnapshot { IsGrpc = true, ResponseBodyBytes = [0] }])!;
+
+        Assert.AreEqual("text/plain",
+            (string?)vmType.GetMethod("GuessContentType", flags)!
+                .Invoke(null, ["Content-Type: text/plain\r\n"])!);
+        Assert.IsNull(vmType.GetMethod("GuessContentType", flags)!.Invoke(null, ["Accept: */*\r\n"]));
+
+        Assert.IsTrue((bool)vmType.GetMethod("IsDebugFileLoggingEnabled", flags)!
+            .Invoke(null, [new InspectorSettings { LoggingEnableFile = true, LoggingMinimumLevel = "Debug" }])!);
+        Assert.IsFalse((bool)vmType.GetMethod("IsDebugFileLoggingEnabled", flags)!
+            .Invoke(null, [new InspectorSettings { LoggingEnableFile = true, LoggingMinimumLevel = "Error" }])!);
+
+        var dir = Path.Combine(Path.GetTempPath(), "ti-fmt-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var settings = new SettingsService(Path.Combine(dir, "settings.json"));
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                new ScriptedInspectorDialogs())
+            {
+                BindPort = 8888,
+                BindAddress = "0.0.0.0",
+            };
+            Assert.AreEqual("0.0.0.0",
+                (string)vmType.GetMethod("FormatBindDisplay", flags)!.Invoke(vm, null)!);
+            vm.BindAddress = "127.0.0.1";
+            Assert.AreEqual("127.0.0.1",
+                (string)vmType.GetMethod("FormatBindDisplay", flags)!.Invoke(vm, null)!);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { /* ignore */ }
+        }
+    }
 }

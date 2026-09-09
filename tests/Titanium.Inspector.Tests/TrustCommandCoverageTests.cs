@@ -290,4 +290,46 @@ public class TrustCommandCoverageTests
             await Task.Delay(25);
         }
     }
+
+    [TestMethod]
+    public void TrustStatusHelpers_SetOsTrustSuccessAndBusy()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-trust-status-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var settings = new SettingsService(Path.Combine(dir, "settings.json"));
+            settings.Current.AutoStartCapture = false;
+            settings.Save();
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                new ScriptedInspectorDialogs())
+            {
+                BindPort = 0,
+                BindAddress = "127.0.0.1",
+            };
+
+            var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+            typeof(MainWindowViewModel).GetMethod("SetBusyTrustingRootCa", flags)!.Invoke(vm, null);
+            StringAssert.Contains(vm.StatusText, "Trust");
+
+            typeof(MainWindowViewModel).GetMethod("SetOsTrustSuccessStatus", flags)!.Invoke(vm, null);
+            StringAssert.Contains(vm.StatusText, "trusted");
+            typeof(MainWindowViewModel).GetMethod("SetOsTrustSuccessStatus", flags)!.Invoke(vm, null);
+            StringAssert.Contains(vm.StatusText, "trusted");
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { /* ignore */ }
+        }
+    }
 }
