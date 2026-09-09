@@ -173,7 +173,6 @@ internal sealed class EnvoyHost : IDisposable
 
         var confPath = Path.GetFullPath(Path.Combine(prefixDir, "config.yaml"));
         var conf = confBuilder(prefixDir, port);
-        var conf = confBuilder(prefixDir, port);
         if (!conf.EndsWith('\n'))
             conf += "\n";
         await File.WriteAllTextAsync(confPath, conf, Encoding.ASCII);
