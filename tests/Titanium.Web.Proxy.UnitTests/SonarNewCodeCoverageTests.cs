@@ -1648,6 +1648,61 @@ public class SonarNewCodeCoverageTests
     }
 
     [TestMethod]
+    public void CreateH1TerminateLiteColdSession_AndCanUseLiteGates()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var ep = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false)
+        {
+            ForwardCleartext = true,
+            ForwardHost = "127.0.0.1",
+            ForwardPort = 9,
+        };
+        var sock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        var conn = new TcpClientConnection(proxy, sock);
+        var clientStream = new HttpClientStream(proxy, conn, Stream.Null, proxy.BufferPool, CancellationToken.None);
+        var create = typeof(ProxyServer).GetMethod("CreateH1TerminateLiteColdSession", PrivateInstance)!;
+        using var cold = (SessionEventArgs)create.Invoke(proxy, [ep, clientStream])!;
+        Assert.IsTrue(cold.IsFastPath);
+        cold.CancellationTokenSource.Dispose();
+
+        var get = new Request { Method = "GET", HttpVersion = HttpHeader.Version11 };
+        Assert.IsTrue(proxy.CanUseH1TerminateLite(ep, get, false, false, false, null));
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, get, true, false, false, null));
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, get, false, true, false, null));
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, get, false, false, true, null));
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, get, false, false, false, UpstreamHttpProtocol.Http2));
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, get, false, false, false, UpstreamHttpProtocol.Http3));
+
+        var head = new Request { Method = "HEAD", HttpVersion = HttpHeader.Version11 };
+        Assert.IsTrue(proxy.CanUseH1TerminateLite(ep, head, false, false, false, null));
+    }
+
+    [TestMethod]
+    public void CertificateManager_RemoveTrustedAndEnsureRoot_SuppressArms()
+    {
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+        mgr.RemoveTrustedRootCertificate(false);
+        _ = mgr.RemoveTrustedRootCertificateAsAdmin(false);
+        mgr.EnsureRootCertificate(userTrustRootCertificate: false, machineTrustRootCertificate: false);
+        mgr.EnsureRootCertificate();
+        _ = mgr.InstallNssCertutilAndRetryUserTrust();
+        Assert.AreEqual(CertificateOsTrustKind.Cancelled, mgr.LastOsTrustResult?.Kind);
+
+        var invalidate = typeof(CertificateManager).GetMethod("InvalidateSslCertificateContext", PrivateInstance)!;
+        using var leaf = mgr.CreateCertificate("invalidate-seam.example", false);
+        Assert.IsNotNull(leaf);
+        invalidate.Invoke(mgr, [leaf]);
+        invalidate.Invoke(mgr, [leaf]); // second dispose path
+
+        var disposePending = typeof(CertificateManager).GetMethod("DisposePendingEvictions", PrivateInstance)!;
+        disposePending.Invoke(mgr, null);
+    }
+
+    [TestMethod]
     public async Task H1TerminateLite_MiddlewareAndLiveOriginForward()
     {
         using var proxy = new ProxyServer(false, false, false);

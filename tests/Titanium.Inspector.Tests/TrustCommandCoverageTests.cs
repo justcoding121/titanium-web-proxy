@@ -332,4 +332,155 @@ public class TrustCommandCoverageTests
             try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { /* ignore */ }
         }
     }
+
+    [TestMethod]
+    public async Task DecryptTrustTerminalChoice_AndCertutilRecovery_StayHeadless()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-trust-term-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var cer = Path.Combine(dir, "export.cer");
+        try
+        {
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            OverrideRootPfx(interception, Path.Combine(dir, "rootCert.pfx"));
+            var dialogs = new ScriptedInspectorDialogs
+            {
+                InstallRootCaResult = true,
+                DecryptTrustFailedResult = TrustRecoveryChoice.Secondary,
+                TrustRecoveryResult = TrustRecoveryChoice.Secondary,
+                MacSslTrustWaitResult = MacSslTrustWaitResult.NotSavedYet,
+                StartProxyForDecryptResult = true,
+            };
+            var picker = new ScriptedInspectorPathPicker { SavePath = cer };
+            var settings = new SettingsService(Path.Combine(dir, "settings.json"));
+            settings.Current.AutoStartCapture = false;
+            settings.Current.AutoSystemProxyOnStart = false;
+            settings.Save();
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                dialogs,
+                picker)
+            {
+                BindPort = 0,
+                BindAddress = "127.0.0.1",
+            };
+
+            var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+            typeof(MainWindowViewModel).GetMethod("NotifyDecryptHttpsUnchanged", flags)!.Invoke(vm, null);
+            typeof(MainWindowViewModel).GetMethod("SetDecryptHttpsCore", flags)!.Invoke(vm, [false]);
+            Assert.IsFalse(vm.DecryptHttps);
+            typeof(MainWindowViewModel).GetMethod("SetDecryptHttpsCore", flags)!.Invoke(vm, [true]);
+            Assert.IsTrue(vm.DecryptHttps);
+            typeof(MainWindowViewModel).GetMethod("SetDecryptHttpsCore", flags)!.Invoke(vm, [false]);
+
+            var handle = typeof(MainWindowViewModel).GetMethod("TryHandleTerminalTrustChoiceAsync", flags)!;
+            dialogs.DecryptTrustFailedResult = TrustRecoveryChoice.Primary;
+            Assert.IsFalse(await (Task<bool?>)handle.Invoke(vm,
+                [null, TrustRecoveryChoice.Primary, CertificateOsTrustKind.HomebrewMissing])!);
+            Assert.IsFalse(await (Task<bool?>)handle.Invoke(vm,
+                [null, TrustRecoveryChoice.Secondary, CertificateOsTrustKind.HomebrewMissing])!);
+            Assert.IsFalse(await (Task<bool?>)handle.Invoke(vm,
+                [null, TrustRecoveryChoice.Secondary, CertificateOsTrustKind.MacNeedsManualTrustConfirm])!);
+            Assert.IsFalse(await (Task<bool?>)handle.Invoke(vm,
+                [null, TrustRecoveryChoice.Primary, CertificateOsTrustKind.MacNeedsManualTrustConfirm])!);
+            Assert.IsFalse(await (Task<bool?>)handle.Invoke(vm,
+                [null, TrustRecoveryChoice.Secondary, CertificateOsTrustKind.Failed])!);
+            Assert.IsNull(await (Task<bool?>)handle.Invoke(vm,
+                [null, TrustRecoveryChoice.Primary, CertificateOsTrustKind.Failed])!);
+
+            var recoverCertutil = typeof(MainWindowViewModel).GetMethod("TryRecoverCertutilMissingAsync", flags)!;
+            dialogs.TrustRecoveryResult = TrustRecoveryChoice.Cancel;
+            Assert.IsFalse(await (Task<bool?>)recoverCertutil.Invoke(vm, [TrustRecoveryChoice.Cancel])!);
+            dialogs.TrustRecoveryResult = TrustRecoveryChoice.Secondary;
+            Assert.IsFalse(await (Task<bool?>)recoverCertutil.Invoke(vm, [TrustRecoveryChoice.Secondary])!);
+            dialogs.TrustRecoveryResult = TrustRecoveryChoice.Primary;
+            _ = await (Task<bool?>)recoverCertutil.Invoke(vm, [TrustRecoveryChoice.Primary])!;
+
+            await ExecuteAsync(vm.StartCaptureCommand);
+            Assert.IsTrue(interception.IsRunning, vm.StatusText);
+            Assert.IsTrue(interception.InstallRootCertificate(false));
+            Assert.IsTrue(interception.IsRootTrusted);
+
+            // Proxy + root already trusted → decrypt enable should succeed without OS dialogs.
+            await (Task)typeof(MainWindowViewModel).GetMethod("EnableDecryptHttpsAsync", flags)!
+                .Invoke(vm, null)!;
+            Assert.IsTrue(vm.DecryptHttps, vm.StatusText);
+
+            dialogs.DecryptTrustFailedResult = TrustRecoveryChoice.Cancel;
+            Assert.IsFalse(await (Task<bool>)typeof(MainWindowViewModel)
+                .GetMethod("ResolveTerminalTrustFailureAsync", flags)!
+                .Invoke(vm, [CertificateOsTrustResult.Fail(CertificateOsTrustKind.Failed, "nope")])!);
+            Assert.AreEqual(CertificateOsTrustKind.Cancelled, interception.LastOsTrustResult?.Kind);
+
+            Assert.IsFalse(await (Task<bool>)typeof(MainWindowViewModel)
+                .GetMethod("ResolveTerminalTrustFailureAsync", flags)!
+                .Invoke(vm, [CertificateOsTrustResult.Fail(CertificateOsTrustKind.Cancelled, "cancel")])!);
+
+            await ExecuteAsync(vm.StopCaptureCommand);
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public async Task DecryptHttps_CancelInstallRoot_LeavesDecryptOff()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-decrypt-root-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var dialogs = new ScriptedInspectorDialogs
+            {
+                StartProxyForDecryptResult = true,
+                InstallRootCaResult = false,
+            };
+            var settings = new SettingsService(Path.Combine(dir, "settings.json"));
+            settings.Current.AutoStartCapture = false;
+            settings.Save();
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                dialogs)
+            {
+                BindPort = 0,
+                BindAddress = "127.0.0.1",
+            };
+
+            await ExecuteAsync(vm.StartCaptureCommand);
+            Assert.IsTrue(interception.IsRunning);
+            Assert.IsFalse(interception.IsRootTrusted);
+
+            var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+            Assert.IsFalse(await (Task<bool>)typeof(MainWindowViewModel)
+                .GetMethod("TryTrustRootForDecryptAsync", flags)!.Invoke(vm, null)!);
+            StringAssert.Contains(vm.StatusText, "cancelled");
+
+            Assert.IsTrue(await (Task<bool>)typeof(MainWindowViewModel)
+                .GetMethod("TryStartProxyForDecryptAsync", flags)!.Invoke(vm, null)!);
+
+            await ExecuteAsync(vm.StopCaptureCommand);
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { /* ignore */ }
+        }
+    }
 }

@@ -213,6 +213,59 @@ public class BootstrapAndFirefoxHelperCoverageTests
             BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, [runner]);
     }
 
+    [TestMethod]
+    public void FirefoxEnterpriseRoots_EnableClearAndValidateDocument_StayTempSafe()
+    {
+        // HKCU write/clear is Windows-only; on macOS/Linux this hits policies.json + user.js best-effort.
+        _ = FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots();
+        _ = FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots();
+        _ = FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref();
+
+        var flags = BindingFlags.NonPublic | BindingFlags.Static;
+        var validateDoc = typeof(FirefoxCertificateTrust).GetMethod("TryValidateFirefoxPoliciesDocument", flags)!;
+        using (var doc = System.Text.Json.JsonDocument.Parse(
+                   "{\"policies\":{\"Certificates\":{\"ImportEnterpriseRoots\":true}}}"))
+        {
+            var args = new object?[] { doc.RootElement, null };
+            Assert.IsTrue((bool)validateDoc.Invoke(null, args)!);
+        }
+
+        using (var bad = System.Text.Json.JsonDocument.Parse("{\"policies\":{}}"))
+        {
+            var args = new object?[] { bad.RootElement, null };
+            Assert.IsFalse((bool)validateDoc.Invoke(null, args)!);
+            Assert.IsFalse(string.IsNullOrEmpty((string?)args[1]));
+        }
+
+        using (var arr = System.Text.Json.JsonDocument.Parse("[]"))
+        {
+            var args = new object?[] { arr.RootElement, null };
+            Assert.IsFalse((bool)validateDoc.Invoke(null, args)!);
+        }
+
+        var mergedCorrupt = FirefoxCertificateTrust.BuildOrMergeFirefoxPoliciesJson(
+            "not-json{", importEnterpriseRoots: true);
+        StringAssert.Contains(mergedCorrupt, "ImportEnterpriseRoots");
+        var cleared = FirefoxCertificateTrust.BuildOrMergeFirefoxPoliciesJson(mergedCorrupt, importEnterpriseRoots: false);
+        Assert.IsFalse(cleared.Contains("\"ImportEnterpriseRoots\": true", StringComparison.Ordinal));
+
+        var dir = Path.Combine(Path.GetTempPath(), "twp-ff-enable-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var writePref = typeof(FirefoxCertificateTrust).GetMethod("TryWriteEnterpriseRootsUserPref", flags)!;
+            var ok = (CertificateOsTrustResult)writePref.Invoke(null, [dir, "enabled-ok"])!;
+            Assert.IsTrue(ok.Succeeded, ok.Message);
+            Assert.IsTrue(FirefoxCertificateTrust.VerifyEnterpriseRootsUserPref(dir));
+            typeof(FirefoxCertificateTrust).GetMethod("ClearEnterpriseRootsUserPref", flags)!
+                .Invoke(null, [dir]);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { /* ignore */ }
+        }
+    }
+
     private static void InvokeFf(string name, Type[] types, params object?[] args)
     {
         var method = typeof(LinuxFirefoxProxy).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static, types)

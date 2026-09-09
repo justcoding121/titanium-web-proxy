@@ -740,4 +740,79 @@ public class InterceptionCaptureCoverageTests
             interception.EnsureShutdown();
         }
     }
+
+    [TestMethod]
+    public async Task Interception_CompleteRootTrustAndLegacyCrtsSeams()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-legacy-crts-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var shared = Path.Combine(dir, "shared-crts");
+        Directory.CreateDirectory(shared);
+        File.WriteAllText(Path.Combine(shared, "leaf.cer"), "x");
+        try
+        {
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+                LegacyCrtsTestRoot = dir,
+            };
+            OverrideRootPfx(interception, Path.Combine(dir, "rootCert.pfx"));
+
+            var complete = typeof(InterceptionService).GetMethod("CompleteRootTrustInstall",
+                BindingFlags.NonPublic | BindingFlags.Instance)!;
+            Assert.IsFalse((bool)complete.Invoke(interception, [false])!);
+            Assert.IsTrue((bool)complete.Invoke(interception, [true])!);
+
+            await interception.StartAsync(IPAddress.Loopback, 0);
+            try
+            {
+                Assert.IsTrue(interception.InstallRootCertificate(false));
+                Assert.IsTrue(interception.IsRootTrusted);
+                // Trusted path also best-effort enables Firefox enterprise roots.
+                Assert.IsTrue((bool)complete.Invoke(interception, [true])!);
+            }
+            finally
+            {
+                interception.EnsureShutdown();
+            }
+
+            var eval = typeof(InterceptionService).GetMethod("EvaluateUnixTrustSuccess",
+                BindingFlags.NonPublic | BindingFlags.Static)!;
+            Assert.IsTrue((bool)eval.Invoke(null, [CertificateOsTrustResult.Ok("ok")])!);
+            Assert.IsFalse((bool)eval.Invoke(null, [null])!);
+            Assert.IsFalse((bool)eval.Invoke(null,
+                [CertificateOsTrustResult.Fail(CertificateOsTrustKind.Failed, "nope")])!);
+            Assert.IsFalse((bool)eval.Invoke(null,
+                [CertificateOsTrustResult.Fail(CertificateOsTrustKind.MacNeedsManualTrustConfirm, "mac")])!);
+            Assert.IsFalse((bool)eval.Invoke(null,
+                [CertificateOsTrustResult.Fail(CertificateOsTrustKind.Cancelled, "cancel")])!);
+
+            interception.PruneLegacySharedCrts(force: false);
+            Assert.IsTrue(File.Exists(Path.Combine(dir, "legacy-shared-crts-cleared")));
+            Assert.IsFalse(Directory.Exists(shared));
+
+            // Marker present → TryPruneLegacySharedCrtsOnce is a no-op.
+            Directory.CreateDirectory(shared);
+            typeof(InterceptionService).GetMethod("TryPruneLegacySharedCrtsOnce",
+                BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(interception, null);
+            Assert.IsTrue(Directory.Exists(shared));
+
+            var marker = (string)typeof(InterceptionService).GetMethod("LegacySharedCrtsMarkerPath",
+                BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(interception, null)!;
+            var resolved = (string)typeof(InterceptionService).GetMethod("ResolveLegacySharedCrtsDirectory",
+                BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(interception, null)!;
+            Assert.AreEqual(Path.Combine(dir, "legacy-shared-crts-cleared"), marker);
+            Assert.AreEqual(shared, resolved);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { /* ignore */ }
+        }
+    }
+
+    private static void OverrideRootPfx(InterceptionService interception, string path)
+    {
+        var field = typeof(InterceptionService).GetField("_rootPfxPath", BindingFlags.NonPublic | BindingFlags.Instance);
+        field!.SetValue(interception, path);
+    }
 }

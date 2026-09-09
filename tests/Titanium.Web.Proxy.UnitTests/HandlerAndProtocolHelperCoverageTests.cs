@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -613,5 +614,90 @@ public class HandlerAndProtocolHelperCoverageTests
         using var content = new MemoryStream();
         content.Write(Encoding.UTF8.GetBytes("preview-body"));
         Assert.AreEqual("preview-body", (string?)preview.Invoke(null, [content]));
+    }
+
+    [TestMethod]
+    public void CreateH1TerminateLiteColdSession_MarksFastPath()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var ep = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false)
+        {
+            ForwardCleartext = true,
+            ForwardHost = "127.0.0.1",
+            ForwardPort = 9,
+        };
+        var sock = new System.Net.Sockets.Socket(
+            System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Stream,
+            System.Net.Sockets.ProtocolType.Tcp);
+        var conn = new TcpClientConnection(proxy, sock);
+        var clientStream = new HttpClientStream(proxy, conn, Stream.Null, proxy.BufferPool, CancellationToken.None);
+        var create = typeof(ProxyServer).GetMethod("CreateH1TerminateLiteColdSession", PrivateInstance)!;
+        using var cold = (SessionEventArgs)create.Invoke(proxy, [ep, clientStream])!;
+        Assert.IsTrue(cold.IsFastPath);
+        cold.CancellationTokenSource.Dispose();
+    }
+
+    [TestMethod]
+    public void CanUseH1TerminateLite_RejectsContinueWinAuthBodyAndUpgrade()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var ep = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = 80,
+            ForwardCleartext = true,
+        };
+        var get = new Request { Method = "GET", HttpVersion = HttpHeader.Version11 };
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, get, enable100Continue: true, false, false, null));
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, get, false, enableWinAuth: true, false, null));
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, get, false, false, hasCustomUpstreamProxyFunc: true, null));
+
+        var withBody = new Request { Method = "GET", ContentLength = 1, HttpVersion = HttpHeader.Version11 };
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, withBody, false, false, false, null));
+
+        var upgrade = new Request { Method = "GET", HttpVersion = HttpHeader.Version11 };
+        upgrade.Headers.AddHeader(KnownHeaders.Upgrade, "websocket");
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, upgrade, false, false, false, null));
+
+        var options = new Request { Method = "OPTIONS", HttpVersion = HttpHeader.Version11 };
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, options, false, false, false, null));
+    }
+
+    [TestMethod]
+    public async Task WriteTerminateLiteMiddlewareResponse_ConnectionCloseWhenClientAsked()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        using var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var accept = listener.AcceptSocketAsync();
+        var clientSock = new System.Net.Sockets.Socket(
+            System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Stream,
+            System.Net.Sockets.ProtocolType.Tcp);
+        await clientSock.ConnectAsync(IPAddress.Loopback, ((IPEndPoint)listener.LocalEndpoint).Port);
+        var accepted = await accept;
+        var clientConn = new TcpClientConnection(proxy, clientSock);
+        var clientStream = new HttpClientStream(proxy, clientConn, new System.Net.Sockets.NetworkStream(clientSock, ownsSocket: false),
+            proxy.BufferPool, CancellationToken.None);
+
+        var req = new Request { Method = "GET", HttpVersion = HttpHeader.Version11 };
+        req.Headers.AddHeader("Connection", "close");
+        var writeMw = typeof(ProxyServer).GetMethod("WriteTerminateLiteMiddlewareResponseAsync", PrivateStatic)!;
+        var ctx = new ProxyMiddlewareContext
+        {
+            Session = new object(),
+            IsHandled = true,
+            HandledStatusCode = 403,
+            HandledBody = null,
+        };
+        var drain = Task.Run(() =>
+        {
+            var buf = new byte[2048];
+            try { accepted.Receive(buf); } catch { /* ignore */ }
+        });
+        await (Task)writeMw.Invoke(null, [clientStream, req, ctx, CancellationToken.None])!;
+        await drain;
+        accepted.Dispose();
+        clientSock.Dispose();
+        listener.Stop();
     }
 }

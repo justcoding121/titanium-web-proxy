@@ -12,9 +12,11 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy.UnitTests;
@@ -237,6 +239,74 @@ public class Http3OriginBridgeCoverageTests
     }
 
     private delegate void PopulateResponseFromQpackDelegate(Response response, ReadOnlySpan<byte> qpack);
+
+    [TestMethod]
+    public async Task EncodeOriginRequestHeaders_DetachedQuic_UsesQpackAndAuthorityHelpers()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        await using var detached = QuicServerConnection.CreateDetachedForTests(proxy, "sni.example", 443, "cache");
+        var request = new Request
+        {
+            Method = "GET",
+            IsHttps = true,
+            RequestUriString8 = "/q".GetByteString(),
+            Authority = "auth.example".GetByteString(),
+        };
+        request.Headers.AddHeader("X-Keep", "1");
+
+        var encoded = (byte[])BridgeMethod("EncodeOriginRequestHeaders")
+            .Invoke(null, [detached, request, "sni.example"])!;
+        Assert.IsTrue(encoded.Length > 0);
+
+        var hostOnly = new Request { Method = "HEAD", Host = "host.example" };
+        var fp = (int)BridgeMethod("ComputeOriginRequestQpackFingerprint")
+            .Invoke(null, [hostOnly, "sni.example"])!;
+        Assert.AreNotEqual(0, fp);
+
+        var empty = new Request { Method = "OPTIONS" };
+        var fpEmpty = (int)BridgeMethod("ComputeOriginRequestQpackFingerprint")
+            .Invoke(null, [empty, "fallback.example"])!;
+        Assert.AreNotEqual(0, fpEmpty);
+
+        // Encode again (still null session) — covers QpackEncoder path without cache hit.
+        var again = (byte[])BridgeMethod("EncodeOriginRequestHeaders")
+            .Invoke(null, [detached, hostOnly, "sni.example"])!;
+        Assert.IsTrue(again.Length > 0);
+    }
+
+    [TestMethod]
+    public void CanReplayHttp2OriginRequest_RejectsStreamingBodyWithoutBuffer()
+    {
+        var request = new Request { Method = "POST", ContentLength = 4 };
+        request.IsBodyReceived = false;
+        request.IsBodyRead = false;
+        Assert.IsTrue(request.HasBody);
+        Func<Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask>, CancellationToken, Task> pump =
+            (_, _) => Task.CompletedTask;
+        Assert.IsFalse((bool)BridgeMethod("CanReplayHttp2OriginRequest").Invoke(null, [request, pump])!);
+
+        request.IsBodyRead = true;
+        Assert.IsTrue((bool)BridgeMethod("CanReplayHttp2OriginRequest").Invoke(null, [request, pump])!);
+
+        var noBody = new Request { Method = "GET" };
+        Assert.IsTrue((bool)BridgeMethod("CanReplayHttp2OriginRequest").Invoke(null, [noBody, pump])!);
+    }
+
+    [TestMethod]
+    public void ResolveTransparentForwardTarget_EmptyForwardHost_ReturnsNull()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var ep = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false) { ForwardHost = "" };
+        var connection = new QuicClientConnection(
+            proxy, new IPEndPoint(IPAddress.Loopback, 4433), new IPEndPoint(IPAddress.Loopback, 12345));
+        var cts = new CancellationTokenSource();
+        var clientStream = new HttpClientStream(proxy, connection, Stream.Null, proxy.BufferPool, cts.Token);
+        using var session = new SessionEventArgs(proxy, ep, clientStream, null, cts);
+        var fwd = ((string? Host, int? Port))BridgeMethod("ResolveTransparentForwardTarget")
+            .Invoke(null, [session])!;
+        Assert.IsNull(fwd.Host);
+        Assert.IsNull(fwd.Port);
+    }
 
 }
 #pragma warning restore CA1416

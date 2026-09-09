@@ -512,6 +512,40 @@ public class UnixCertificateTrustCoverageTests
             listRunner, "certutil", Path.GetTempPath(), "Titanium Root")!);
     }
 
+    [TestMethod]
+    public void IsMacRootStillPresent_AndDetectPackage_WithFakes()
+    {
+        using var planted = PlantedCertutil.Acquire();
+        using var cert = CreateEphemeralRoot();
+        var sha1 = cert.GetCertHashString();
+        var cn = cert.GetNameInfo(X509NameType.SimpleName, forIssuer: false) ?? "TWP";
+
+        var present = new FakeProcessRunner();
+        present.When("security", "find-certificate", sha1 + "\n");
+        Assert.IsTrue((bool)Invoke(
+            "IsMacRootStillPresent",
+            [typeof(IProcessRunner), typeof(X509Certificate2), typeof(string)],
+            present, cert, cn)!);
+
+        var missing = new FakeProcessRunner { DefaultSuccess = false };
+        Assert.IsFalse((bool)Invoke(
+            "IsMacRootStillPresent",
+            [typeof(IProcessRunner), typeof(X509Certificate2), typeof(string)],
+            missing, cert, cn)!);
+
+        var apt = new FakeProcessRunner();
+        apt.When("sh", "command -v apt-get", "/usr/bin/apt-get\n");
+        var hint = UnixCertificateTrust.DetectLinuxNssPackage(apt);
+        Assert.IsNotNull(hint);
+        Assert.AreEqual("libnss3-tools", hint!.Package);
+
+        var none = new FakeProcessRunner { DefaultSuccess = false };
+        Assert.IsNull(UnixCertificateTrust.DetectLinuxNssPackage(none));
+
+        var dirs = UnixCertificateTrust.LinuxNssDatabaseDirectories().ToList();
+        Assert.IsTrue(dirs.Count >= 1);
+    }
+
     /// <summary>
     /// On macOS/Linux <c>FindCertutil</c> asks the runner for <c>command -v certutil</c>.
     /// Without this, a real Homebrew certutil (or a missing one) is used instead of the fake.
