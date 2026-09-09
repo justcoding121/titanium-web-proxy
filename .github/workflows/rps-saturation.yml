@@ -244,11 +244,13 @@ jobs:
           set -euo pipefail
           . /etc/os-release
           # Hosted runners sometimes ship a broken Google Chrome apt list (hash mismatch).
-          # Disable it so apt-get update cannot fail the RPS job for an unrelated mirror.
-          sudo rm -f /etc/apt/sources.list.d/google-chrome.list \
-            /etc/apt/sources.list.d/google-chrome.list.save \
-            /etc/apt/sources.list.d/chrome*.list || true
-          sudo apt-get update
+          # Remove any Chrome/Google Chrome apt entries so apt-get update cannot fail the RPS job.
+          sudo find /etc/apt -type f \( -iname '*chrome*' -o -iname '*google*chrome*' \) -print -delete || true
+          if [ -f /etc/apt/sources.list ]; then
+            sudo sed -i '/dl\.google\.com\/linux\/chrome/d' /etc/apt/sources.list || true
+          fi
+          # Tolerate residual third-party mirror failures; nginx.org install below is the real gate.
+          sudo apt-get update || true
           sudo apt-get install -y ca-certificates curl gnupg
           curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
             https://nginx.org/keys/nginx_signing.key \
@@ -258,7 +260,9 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/nginx.list
           printf 'Package: *\nPin: origin nginx.org\nPin-Priority: 900\n' \
             | sudo tee /etc/apt/preferences.d/99nginx
-          sudo apt-get update
+          # Re-disable Chrome before the second update (some images re-add it).
+          sudo find /etc/apt -type f \( -iname '*chrome*' -o -iname '*google*chrome*' \) -print -delete || true
+          sudo apt-get update || true
           sudo apt-get install -y nginx
           # Stop the distro/package default site so our temp-prefix nginx owns the ports we pick.
           sudo systemctl stop nginx || true
