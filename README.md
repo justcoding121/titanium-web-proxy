@@ -29,12 +29,12 @@ Protocol coverage details: [protocol support matrix](https://github.com/justcodi
 
 ## Choose an edition
 
-| Product | Best for | How you get it |
-|---------|----------|----------------|
-| **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse / edge proxy for any backend stack, managed by the command line interface (CLI) | [Download](https://titaniumproxy.com/download#cli) (Windows, Linux, macOS) |
-| **Titanium Inspector** | Desktop MITM debugger — session grid, inspectors, AutoResponder, breakpoints, HTTP Archive (HAR) export | [Download](https://titaniumproxy.com/download#inspector) |
-| **Titanium.Plus** | Optional ops: control plane, dashboard, observability (non-commercial license) | After installing CLI: `titanium update --plus` |
-| **Titanium.Web.Proxy** | Embed a proxy (MITM and/or reverse) in a .NET app | [NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy) |
+| Product | Best for |
+|---------|----------|
+| **Titanium.Cli** (`titanium` / `twp`)<br>[Download](https://titaniumproxy.com/download#cli) (Windows, Linux, macOS) | Standalone reverse / edge proxy for any backend stack, managed by the command line interface (CLI) |
+| **Titanium Inspector**<br>[Download](https://titaniumproxy.com/download#inspector) | Desktop MITM debugger — session grid, inspectors, AutoResponder, breakpoints, HTTP Archive (HAR) export |
+| **Titanium.Plus**<br>`titanium update --plus` (after installing CLI) | Optional ops: control plane, dashboard, observability (non-commercial license) |
+| **Titanium.Web.Proxy**<br>[NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy) | Embed a proxy (MITM and/or reverse) in a .NET app |
 
 Requires .NET 10 or later for the library. CLI and Inspector downloads are self-contained (no SDK needed to run them).
 
