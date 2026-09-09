@@ -440,7 +440,9 @@ internal static class Http3RequestStream
                 qpackContext?.InFlightMinAbsoluteIndex.TryRemove(stream.Id, out _);
 
                 streamState.ResponseClosed = true;
-                stream.CompleteWrites();
+                // SendResponse often already FINed via completeWrites:true; only finish if still open.
+                if (stream.CanWrite)
+                    stream.CompleteWrites();
             }
             catch (Http3ConnectionException ex)
             {
@@ -613,8 +615,10 @@ internal static class Http3RequestStream
                         streamState.ResponseClosed = true;
                         // Match SendResponseAsync / origin bridge: Flush before FIN so Darwin MsQuic
                         // actually emits the verbatim HEADERS(+DATA) frames (skip-Flush was banned).
+                        // Verbatim coalesce may already have FINed via completeWrites:true.
                         await stream.FlushAsync(streamToken);
-                        stream.CompleteWrites();
+                        if (stream.CanWrite)
+                            stream.CompleteWrites();
                         return;
                     }
                     break;
@@ -658,7 +662,10 @@ internal static class Http3RequestStream
 
                 qpackContext?.InFlightMinAbsoluteIndex.TryRemove(stream.Id, out _);
                 streamState.ResponseClosed = true;
-                stream.CompleteWrites();
+                // SendPreencoded / SendResponse often already FIN via completeWrites:true + Flush.
+                // Only CompleteWrites when the write side is still open (streamed body path).
+                if (stream.CanWrite)
+                    stream.CompleteWrites();
             }
             catch (Exception ex) when (ex is QuicException || ex.GetBaseException() is QuicException)
             {
@@ -1060,7 +1067,7 @@ internal static class Http3RequestStream
         var encoded = QpackEncoder.Encode(headers, qpackContext);
         await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, encoded, ct, completeWrites: true);
         await stream.FlushAsync(ct);
-        stream.CompleteWrites();
+        // completeWrites:true already FINed the QuicStream write side.
     }
 
     /// <summary>
