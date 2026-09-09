@@ -518,4 +518,24 @@ public class InspectorCommandCoverageTests
             try { Directory.Delete(dir, true); } catch { /* ignore */ }
         }
     }
+
+    [TestMethod]
+    public void ResolveSessionHostAndProcess_CoverHostUrlAndPidFallbacks()
+    {
+        var flags = BindingFlags.NonPublic | BindingFlags.Static;
+        var host = typeof(MainWindowViewModel).GetMethod("ResolveSessionHost", flags)!;
+        var process = typeof(MainWindowViewModel).GetMethod("ResolveSessionProcess", flags)!;
+
+        Assert.AreEqual("from-host",
+            (string?)host.Invoke(null, [new SessionSnapshot { Host = "  from-host  " }]));
+        Assert.AreEqual("url.example",
+            (string?)host.Invoke(null, [new SessionSnapshot { Url = "https://url.example/x" }]));
+        Assert.IsNull(host.Invoke(null, [new SessionSnapshot { Url = "not-a-url" }]));
+
+        Assert.AreEqual("chrome",
+            (string?)process.Invoke(null, [new SessionSnapshot { ProcessName = "  chrome  " }]));
+        Assert.AreEqual("4242",
+            (string?)process.Invoke(null, [new SessionSnapshot { ProcessId = 4242 }]));
+        Assert.IsNull(process.Invoke(null, [new SessionSnapshot()]));
+    }
 }
