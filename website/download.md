@@ -250,8 +250,6 @@ plus:
     sharedSecret: "<shared-secret>"
 ```
 
-Plus is licensed under [PolyForm Noncommercial](https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt) — not for commercial use without a separate license agreement.
-
 ## Library (NuGet)
 
 ```shell

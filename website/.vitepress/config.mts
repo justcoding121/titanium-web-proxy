@@ -77,7 +77,7 @@ export default defineConfig({
       text: 'Edit this page on GitHub',
     },
     footer: {
-      message: 'Core & CLI: MIT · Plus & Inspector: PolyForm Noncommercial',
+      message: 'Core, CLI, and website: MIT',
       copyright: 'Copyright © 2015–present Jehonathan Thomas',
     },
   },

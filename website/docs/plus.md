@@ -1,6 +1,6 @@
 # Plus
 
-Optional ops plugin for the CLI (and Inspector panels). Licensed under [PolyForm Noncommercial](https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt) — **not for commercial use** without a separate agreement.
+Optional ops plugin for the CLI (and Inspector panels).
 
 ## Install
 
@@ -35,7 +35,7 @@ Set `plus.enabled: false` (or remove the `plus:` block) to stop using Plus witho
 
 ## Remove
 
-To delete Plus from disk (cleanup, or when you must not keep the NC binary — e.g. commercial environments):
+To delete Plus from disk:
 
 ```shell
 titanium update --remove-plus

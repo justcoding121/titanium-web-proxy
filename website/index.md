@@ -39,12 +39,12 @@ features:
   </div>
   <div class="edition-card">
     <h3>Titanium Inspector</h3>
-    <p class="license">PolyForm Noncommercial · Windows / macOS / Linux</p>
+    <p class="license">Windows / macOS / Linux</p>
     <p>Desktop man-in-the-middle (MITM) debugger — session grid, inspectors, AutoResponder, breakpoints, HTTP Archive (HAR) export.</p>
   </div>
   <div class="edition-card">
     <h3>Titanium.Plus</h3>
-    <p class="license">PolyForm Noncommercial</p>
+    <p class="license">optional CLI add-on</p>
     <p>Control plane, dashboard, observability, discovery, and a thin web application firewall (WAF). After installing CLI: <code>titanium update --plus</code>.</p>
   </div>
   <div class="edition-card">

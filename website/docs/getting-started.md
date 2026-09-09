@@ -8,7 +8,7 @@ Titanium Web Proxy is a lightweight, high-performance HTTP(S) proxy: reverse / e
 |------|------------|
 | Run a reverse / edge proxy from YAML | [Download CLI](/download) → [CLI](/docs/cli) → [Configuration](/docs/configuration) |
 | Desktop HTTPS traffic debugging | [Download Inspector](/download) → [Inspector](/docs/inspector) |
-| Ops / control plane (non-commercial) | [Plus](/docs/plus) (`titanium update --plus`) |
+| Ops / control plane | [Plus](/docs/plus) (`titanium update --plus`) |
 | Embed in a .NET app | [Library](/docs/library) + NuGet (`--prerelease` for beta) |
 
 ## CLI reverse in 30 seconds

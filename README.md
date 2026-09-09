@@ -33,7 +33,7 @@ Protocol coverage details: [protocol support matrix](https://github.com/justcodi
 |---------|----------|
 | **Titanium.Cli** (`titanium` / `twp`)<br>[Download](https://titaniumproxy.com/download#cli) (Windows, Linux, macOS) | Standalone reverse / edge proxy for any backend stack, managed by the command line interface (CLI) |
 | **Titanium Inspector**<br>[Download](https://titaniumproxy.com/download#inspector) | Desktop MITM debugger — session grid, inspectors, AutoResponder, breakpoints, HTTP Archive (HAR) export |
-| **Titanium.Plus**<br>`titanium update --plus` (after installing CLI) | Optional ops: control plane, dashboard, observability (non-commercial license) |
+| **Titanium.Plus**<br>`titanium update --plus` (after installing CLI) | Optional ops: control plane, dashboard, observability |
 | **Titanium.Web.Proxy**<br>[NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy) | Embed a proxy (MITM and/or reverse) in a .NET app |
 
 Requires .NET 10 or later for the library. CLI and Inspector downloads are self-contained (no SDK needed to run them).
@@ -89,7 +89,7 @@ titanium update
 
 Each CLI zip also includes a `twp` alias binary.
 
-**Optional Plus** ([PolyForm Noncommercial](licenses/PolyForm-Noncommercial-1.0.0.txt) — not for commercial use): `titanium update --plus`, then set `plus.enabled: true` with a control-plane shared secret. Turn features off with `plus.enabled: false`; remove the DLL with `titanium update --remove-plus`. Details: [Plus](https://titaniumproxy.com/docs/plus).
+**Optional Plus:** `titanium update --plus`, then set `plus.enabled: true` with a control-plane shared secret. Turn features off with `plus.enabled: false`; remove the DLL with `titanium update --remove-plus`. Details: [Plus](https://titaniumproxy.com/docs/plus).
 
 ### Library (.NET)
 

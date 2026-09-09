@@ -1,6 +1,6 @@
 # Inspector
 
-Desktop man-in-the-middle (MITM) debugger (Avalonia). Licensed under [PolyForm Noncommercial](https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt).
+Desktop man-in-the-middle (MITM) debugger (Avalonia).
 
 ![Titanium Inspector screenshot](../../wiki/images/inspector-screenshot.jpg)
 
