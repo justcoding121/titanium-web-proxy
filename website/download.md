@@ -2,6 +2,7 @@
 
 <script setup>
 import { data as links } from './download.data.ts'
+import inspectorScreenshot from '../wiki/images/inspector-screenshot.jpg'
 
 const channels = [
   { id: 'stable', label: 'Stable', hint: 'Recommended for production', data: links.stable },
@@ -36,6 +37,13 @@ HTTP/3 (QUIC) native libraries ship inside each platform zip / package (except W
     <strong>Linux glibc:</strong> AppImage / <code>.deb</code> / <code>.rpm</code> when published; otherwise zip.
     <strong>Alpine musl:</strong> zip only.
   </p>
+  <figure v-if="ch.id === 'stable'" class="inspector-preview">
+    <img :src="inspectorScreenshot" alt="Titanium Inspector session grid with HTTPS decrypt and headers pane" width="1400" height="888" />
+    <figcaption>
+      Session grid, HTTPS decrypt, and inspectors.
+      <a href="/docs/inspector">Inspector guide</a>
+    </figcaption>
+  </figure>
   <div class="download-grid">
     <div class="download-row">
       <strong>Windows MSI</strong>
