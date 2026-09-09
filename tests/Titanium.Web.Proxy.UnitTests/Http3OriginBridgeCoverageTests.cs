@@ -128,6 +128,9 @@ public class Http3OriginBridgeCoverageTests
         var fp = (int)BridgeMethod("ComputeOriginRequestQpackFingerprint")
             .Invoke(null, [request, "sni.example"])!;
         Assert.AreNotEqual(0, fp);
+        var fpEmpty = (int)BridgeMethod("ComputeOriginRequestQpackFingerprint")
+            .Invoke(null, [empty, "fallback.test"])!;
+        Assert.AreNotEqual(0, fpEmpty);
     }
 
     [TestMethod]

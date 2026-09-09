@@ -159,6 +159,22 @@ public class InspectorCommandCoverageTests
             vm.SetTransientStatus("zero-revert", StatusSeverity.Neutral, revertMs: 0);
             await vm.TryAutoStartAsync();
 
+            await ExecuteAsync(vm.StartCaptureCommand);
+            Assert.IsTrue(interception.IsRunning, vm.StatusText);
+            await ExecuteAsync(vm.ToggleCapturingCommand);
+            await ExecuteAsync(vm.ToggleDecryptHttpsCommand);
+            await ExecuteAsync(vm.OpenToolsComposerCommand);
+            await ExecuteAsync(vm.OpenToolsBreakpointsCommand);
+            await ExecuteAsync(vm.OpenToolsAutoResponderCommand);
+            await ExecuteAsync(vm.ClearFiltersCommand);
+            vm.SetSelectedSessions([a]);
+            await ExecuteAsync(vm.RemoveSelectedSessionsCommand);
+            await ExecuteAsync(vm.StopCaptureCommand);
+            Assert.IsFalse(interception.IsRunning);
+            await ExecuteAsync(vm.ToggleInterceptCommand);
+            if (interception.IsRunning)
+                await ExecuteAsync(vm.StopCaptureCommand);
+
             typeof(MainWindowViewModel).GetMethod("ApplyExclusionSettingsFromSettings",
                 BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(vm, null);
 
@@ -190,6 +206,47 @@ public class InspectorCommandCoverageTests
             vm.SetSelectedSessions([proc]);
             await ExecuteAsync(vm.FilterByProcessCommand);
             StringAssert.Contains(vm.StatusText, "chrome");
+            await ExecuteAsync(vm.CheckForUpdatesCommand);
+
+            vm.PersistSessionGridLayout(new SessionGridLayoutDto { SortColumnKey = "Id" });
+            Assert.AreEqual("Id", vm.GetSessionGridLayout()?.SortColumnKey);
+            vm.NotifyThemeVariantChanged();
+            vm.ReportActionFailure(new OperationCanceledException());
+            vm.ReportActionFailure(new InvalidOperationException("cov-fail"));
+            StringAssert.Contains(vm.StatusText, "Action failed");
+
+            var flagsVm = BindingFlags.NonPublic | BindingFlags.Static;
+            Assert.AreEqual(IPAddress.Any,
+                (IPAddress)typeof(MainWindowViewModel).GetMethod("ParseBindAddress", flagsVm)!.Invoke(null, ["0.0.0.0"])!);
+            Assert.AreEqual(IPAddress.Any,
+                (IPAddress)typeof(MainWindowViewModel).GetMethod("ParseBindAddress", flagsVm)!.Invoke(null, ["  "])!);
+            Assert.AreEqual(IPAddress.Loopback,
+                (IPAddress)typeof(MainWindowViewModel).GetMethod("ParseBindAddress", flagsVm)!.Invoke(null, ["127.0.0.1"])!);
+            Assert.AreEqual("h.test",
+                (string?)typeof(MainWindowViewModel).GetMethod("TryHost", flagsVm)!.Invoke(null, ["https://h.test/x"]));
+            Assert.IsNull(typeof(MainWindowViewModel).GetMethod("TryHost", flagsVm)!.Invoke(null, ["not-a-url"]));
+            Assert.AreEqual("hi",
+                (string)typeof(MainWindowViewModel).GetMethod("Truncate", flagsVm)!.Invoke(null, ["hi", 10])!);
+            Assert.AreEqual("hello…",
+                (string)typeof(MainWindowViewModel).GetMethod("Truncate", flagsVm)!.Invoke(null, ["hello world", 5])!);
+            _ = typeof(MainWindowViewModel).GetMethod("SystemProxyEnabledStatusMessage", flagsVm)!.Invoke(null, []);
+            _ = typeof(MainWindowViewModel).GetMethod("DescribePanel", flagsVm)!
+                .Invoke(null, [new { Title = "Tools", Description = "cov" }]);
+            _ = typeof(MainWindowViewModel).GetMethod("DescribePanel", flagsVm)!.Invoke(null, [new object()]);
+
+            var proto = new SessionSnapshot
+            {
+                Id = 12, Method = "GET", Url = "wss://ws.test/", Host = "ws.test",
+                IsWebSocket = true, IsServerSentEvents = true, IsGrpc = true,
+                SseEvents = [new SseEventSnapshot { Data = "x" }],
+                ProtobufDecodedText = "{}",
+            };
+            vm.SeedSession(proto);
+            vm.SelectedSession = proto;
+            vm.SelectedInspectTabIndex = 4;
+            vm.SelectedInspectTabIndex = 5;
+            vm.SelectedInspectTabIndex = 6;
+
             vm.ShowSessionDetails = true;
             vm.SelectedInspectTabIndex = 1;
             vm.SelectedInspectTabIndex = 2;
@@ -235,6 +292,13 @@ public class InspectorCommandCoverageTests
             _ = OsTrustUxCopy.TrustRecoveryAdminBody("msg");
             _ = OsTrustUxCopy.ExcludedHostsIntro();
             _ = OsTrustUxCopy.ExcludedHostsLoopbackHint();
+            _ = OsTrustUxCopy.FormatDecryptTrustFailed(
+                CertificateOsTrustResult.Fail(CertificateOsTrustKind.HomebrewMissing, ""));
+            _ = OsTrustUxCopy.FormatDecryptTrustFailed(
+                CertificateOsTrustResult.Fail(CertificateOsTrustKind.CertutilMissing, "need tools"));
+            _ = OsTrustUxCopy.FormatDecryptTrustFailed(
+                CertificateOsTrustResult.Fail(CertificateOsTrustKind.Failed, ""));
+            _ = OsTrustUxCopy.FormatDecryptTrustFailed(null);
         }
         finally
         {

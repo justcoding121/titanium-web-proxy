@@ -286,4 +286,23 @@ public class MitmCompressedRelayHelperTests
         Assert.IsFalse(MitmCompressedRelayHelper.AllowsCompressedRelay(
             baseline, after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out _));
     }
+
+    [TestMethod]
+    public void NonUniqueSetCookie_AppendExtraValue_AllowsRelay()
+    {
+        var before = new HeaderCollection();
+        before.AddHeader("set-cookie", "a=1");
+        before.AddHeader("set-cookie", "b=2");
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(before);
+
+        var after = new HeaderCollection();
+        after.AddHeader("set-cookie", "a=1");
+        after.AddHeader("set-cookie", "b=2");
+        after.AddHeader("set-cookie", "c=3");
+
+        Assert.IsTrue(baseline.TryDiffAppendOnly(
+            after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out var added));
+        Assert.AreEqual(1, added.Count);
+        Assert.AreEqual("c=3", added[0].Value);
+    }
 }

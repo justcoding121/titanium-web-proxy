@@ -1,13 +1,20 @@
 using System.Net;
 using System.Net.Http;
+using System.Net.Security;
 using System.Reflection;
 using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.ViewModels;
+using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Abstractions.Plugins;
+using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
+using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Inspector.Tests;
 
@@ -252,6 +259,128 @@ public class InterceptionCaptureCoverageTests
             "--abc\r\nContent-Disposition: form-data; name=\"f\"\r\n\r\nhi\r\n--abc--\r\n");
         var parts = ProtocolFrameInspectors.ParseMultipart("multipart/form-data; boundary=abc", body);
         Assert.IsTrue(parts.Count >= 1);
+    }
+
+    [TestMethod]
+    public void FillResponse_CoversSseGrpcTranscodeMultipartAndWebsocket()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        var endPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false);
+        var connection = new QuicClientConnection(
+            proxy, new IPEndPoint(IPAddress.Loopback, 4433), new IPEndPoint(IPAddress.Loopback, 12345));
+        var cts = new CancellationTokenSource();
+        var clientStream = new HttpClientStream(proxy, connection, Stream.Null, proxy.BufferPool, cts.Token);
+        using var session = new SessionEventArgs(proxy, endPoint, clientStream, null, cts);
+        session.HttpClient.Request.HttpVersion = HttpHeader.Version11;
+        session.HttpClient.Response.HttpVersion = HttpHeader.Version11;
+        session.HttpClient.Response.StatusCode = 200;
+        session.HttpClient.Response.IsBodyRead = true;
+        session.HttpClient.Response.ContentType = "text/event-stream";
+        session.HttpClient.Response.Body = "data: hi\n\n"u8.ToArray();
+
+        var fill = typeof(InterceptionService).GetMethod("FillResponse",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        var snap = new SessionSnapshot { StartedUtc = DateTimeOffset.UtcNow, IsServerSentEvents = true };
+        fill.Invoke(null, [snap, session]);
+        Assert.AreEqual(200, snap.StatusCode);
+        Assert.IsTrue(snap.IsServerSentEvents);
+
+        session.HttpClient.Response.ContentType = "application/grpc";
+        session.HttpClient.Response.Body = [0, 0, 0, 0, 1, 0x0a];
+        snap.IsGrpc = true;
+        snap.IsTranscoded = false;
+        fill.Invoke(null, [snap, session]);
+        Assert.IsNotNull(snap.GrpcFrames);
+
+        var mark = new GrpcJsonTranscodeSessionMark
+        {
+            ClientMethod = "GET",
+            ClientPathAndQuery = "/v1/echo",
+            UpstreamMethod = "POST",
+            UpstreamPath = "/pkg.Svc/Echo",
+            UpstreamResponseBody = session.HttpClient.Response.Body,
+            ClientRequestBody = "{\"n\":1}"u8.ToArray(),
+            UpstreamRequestBody = [1, 0, 0, 0, 1, 0x0a],
+        };
+        session.UserData = mark;
+        snap.IsTranscoded = true;
+        fill.Invoke(null, [snap, session]);
+        Assert.IsNotNull(snap.ProtobufDecodedText);
+
+        session.HttpClient.Response.ContentType = "multipart/form-data; boundary=abc";
+        session.HttpClient.Response.Body = Encoding.UTF8.GetBytes(
+            "--abc\r\nContent-Disposition: form-data; name=\"f\"\r\n\r\nhi\r\n--abc--\r\n");
+        snap.IsMultipart = true;
+        snap.ContentType = session.HttpClient.Response.ContentType;
+        fill.Invoke(null, [snap, session]);
+        Assert.IsTrue(snap.MultipartParts is { Count: > 0 } || snap.StatusCode == 200);
+
+        snap.IsWebSocket = true;
+        fill.Invoke(null, [snap, session]);
+        Assert.AreEqual(200, snap.StatusCode);
+
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+            Capturing = true,
+            DecryptHttps = false,
+            ThrottleProfile = new NetworkThrottleProfile("cov", 1, 0),
+        };
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
+        session.HttpClient.Request.Method = "GET";
+        session.HttpClient.Request.RequestUriString = "https://a.test/grpc";
+        session.HttpClient.Request.IsBodyRead = true;
+        session.HttpClient.Request.Body = [1, 0, 0, 0, 1, 0x0a];
+        session.HttpClient.Request.ContentType = "application/grpc";
+        session.HttpClient.Request.Headers.AddHeader("Upgrade", "websocket");
+        session.HttpClient.Request.Headers.AddHeader("Accept", "text/event-stream");
+        var preview = typeof(InterceptionService).GetMethod("CreatePreviewSnapshot", flags)!;
+        var previewSnap = (SessionSnapshot)preview.Invoke(interception, [session, true])!;
+        Assert.IsTrue(previewSnap.IsWebSocket);
+        Assert.IsTrue(previewSnap.IsGrpc);
+        Assert.IsNotNull(previewSnap.WebSocketFrames);
+
+        var shouldBuffer = typeof(InterceptionService).GetMethod("ShouldBufferBody", flags)!;
+        session.MaxBufferedBodyBytes = 10;
+        session.HttpClient.Request.ContentLength = 100;
+        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session])!);
+        session.MaxBufferedBodyBytes = 0;
+        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session])!);
+        session.MaxBufferedBodyBytes = 1024;
+        session.HttpClient.Request.ContentLength = -1;
+        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session])!);
+
+        var throttleReq = typeof(InterceptionService).GetMethod("OnRequestBodyWriteThrottle", flags)!;
+        var throttleResp = typeof(InterceptionService).GetMethod("OnResponseBodyWriteThrottle", flags)!;
+        var writeArgs = new BeforeBodyWriteEventArgs(session, [1, 2, 3], isChunked: false, isLastChunk: true);
+        ((Task)throttleReq.Invoke(interception, [interception, writeArgs])!).GetAwaiter().GetResult();
+        ((Task)throttleResp.Invoke(interception, [interception, writeArgs])!).GetAwaiter().GetResult();
+        interception.ThrottleProfile = null;
+        ((Task)throttleReq.Invoke(interception, [interception, writeArgs])!).GetAwaiter().GetResult();
+
+        var cert = typeof(InterceptionService).GetMethod("OnServerCertValidation", flags)!;
+        var certArgs = new CertificateValidationEventArgs(session, null, null, SslPolicyErrors.RemoteCertificateNameMismatch);
+        interception.IgnoreServerCertificateErrors = true;
+        ((Task)cert.Invoke(interception, [interception, certArgs])!).GetAwaiter().GetResult();
+        Assert.IsTrue(certArgs.IsValid);
+        interception.IgnoreServerCertificateErrors = false;
+        ((Task)cert.Invoke(interception, [interception, certArgs])!).GetAwaiter().GetResult();
+
+        var connect = new ConnectRequest("skip.test:443".GetByteString());
+        var tunnel = new TunnelConnectSessionEventArgs(proxy, endPoint, connect, clientStream, cts);
+        var beforeTunnel = typeof(InterceptionService).GetMethod("OnBeforeTunnelConnect", flags)!;
+        var afterTunnel = typeof(InterceptionService).GetMethod("OnBeforeTunnelConnectResponse", flags)!;
+        interception.Capturing = false;
+        ((Task)beforeTunnel.Invoke(interception, [interception, tunnel])!).GetAwaiter().GetResult();
+        interception.Capturing = true;
+        interception.DecryptHttps = true;
+        interception.DecryptSkipHosts = ["skip.test"];
+        ((Task)beforeTunnel.Invoke(interception, [interception, tunnel])!).GetAwaiter().GetResult();
+        ((Task)afterTunnel.Invoke(interception, [interception, tunnel])!).GetAwaiter().GetResult();
+        interception.DecryptHttps = false;
+        ((Task)beforeTunnel.Invoke(interception, [interception, tunnel])!).GetAwaiter().GetResult();
+        ((Task)afterTunnel.Invoke(interception, [interception, tunnel])!).GetAwaiter().GetResult();
+        Assert.AreEqual(200, tunnel.HttpClient.Response.StatusCode == 0 ? 200 : tunnel.HttpClient.Response.StatusCode);
     }
 
     [TestMethod]

@@ -545,12 +545,21 @@ public class HandlerAndProtocolHelperCoverageTests
         var match = typeof(Http3RequestStream).GetMethod("MitmUnchangedLiteRequestMatches", flags)!;
         var path = request.RequestUriString8;
         var authority = request.Authority;
-        _ = h1.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"]);
+        var h1Result = (bool)h1.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"])!;
+        Assert.IsTrue(h1Result);
         auth.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;
-        _ = h3.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"]);
-        _ = match.Invoke(null, [session, request, baseline, "POST", path, authority, "POST"]);
+        var h3Result = (bool)h3.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"])!;
+        Assert.IsTrue(h3Result);
+        var matchPost = (bool)match.Invoke(null, [session, request, baseline, "POST", path, authority, "POST"])!;
+        Assert.IsFalse(matchPost);
+        request.CancelRequest = true;
+        Assert.IsFalse((bool)match.Invoke(null, [session, request, baseline, "GET", path, authority, "GET"])!);
+        request.CancelRequest = false;
+        request.IsBodyRead = true;
+        Assert.IsFalse((bool)match.Invoke(null, [session, request, baseline, "GET", path, authority, "GET"])!);
+        request.IsBodyRead = false;
         session.IsFastPath = true;
-        _ = h1.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"]);
+        Assert.IsFalse((bool)h1.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"])!);
     }
 #pragma warning restore TWP001
 }

@@ -166,5 +166,21 @@ public class DesktopShellAndPathTests
         Assert.IsFalse(DesktopShell.TryRevealFileOrOpenDirectory(null, out var emptyReveal));
         Assert.IsFalse(string.IsNullOrEmpty(emptyReveal));
         Assert.IsFalse(DesktopShell.TryRevealFileOrOpenDirectory("  ", unknown, out _));
+
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.IsFalse(DesktopShell.TryOpenDirectory(Path.GetTempPath(), OSPlatform.Windows, out var winErr));
+            Assert.IsFalse(string.IsNullOrEmpty(winErr));
+            Assert.IsFalse(DesktopShell.TryRevealFileOrOpenDirectory(
+                Path.Combine(Path.GetTempPath(), "twp-reveal.log"), OSPlatform.Windows, out _));
+        }
+
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.IsFalse(DesktopShell.TryOpenDirectory(Path.GetTempPath(), OSPlatform.OSX, out var macErr));
+            Assert.IsFalse(string.IsNullOrEmpty(macErr));
+            Assert.IsFalse(DesktopShell.TryRevealFileOrOpenDirectory(
+                Path.Combine(Path.GetTempPath(), "twp-reveal-mac.log"), OSPlatform.OSX, out _));
+        }
     }
 }
