@@ -336,7 +336,8 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           set -euo pipefail
-          sudo apt-get update
+          sudo find /etc/apt -type f \( -iname '*chrome*' -o -iname '*google*chrome*' \) -print -delete || true
+          sudo apt-get update || true
           sudo apt-get install -y haproxy
           sudo systemctl stop haproxy || true
           haproxy -v
@@ -436,7 +437,8 @@ jobs:
             -o packages-microsoft-prod.deb
           sudo dpkg -i packages-microsoft-prod.deb
           rm -f packages-microsoft-prod.deb
-          sudo apt-get update
+          sudo find /etc/apt -type f \( -iname '*chrome*' -o -iname '*google*chrome*' \) -print -delete || true
+          sudo apt-get update || true
           sudo apt-get install -y libmsquic
           pwsh -NoProfile -Command 'if (-not [System.Net.Quic.QuicListener]::IsSupported) { throw "QuicListener.IsSupported is false after libmsquic install" }; Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"'
 
