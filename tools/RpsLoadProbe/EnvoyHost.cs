@@ -247,18 +247,19 @@ internal sealed class EnvoyHost : IDisposable
             W(4, "filter_chains:");
             if (certPath != null && keyPath != null && alpnProtocols != null)
             {
+                // Under `- key:`, nested map fields must indent past the key (not sit as FilterChain siblings).
                 W(4, "- transport_socket:");
-                W(6, "name: envoy.transport_sockets.tls");
-                W(6, "typed_config:");
-                W(8,
+                W(8, "name: envoy.transport_sockets.tls");
+                W(8, "typed_config:");
+                W(10,
                     "\"@type\": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext");
-                W(8, "common_tls_context:");
-                W(10, "tls_certificates:");
-                W(10, "- certificate_chain:");
-                W(14, $"filename: \"{certPath}\"");
-                W(12, "private_key:");
-                W(14, $"filename: \"{keyPath}\"");
-                W(10, $"alpn_protocols: [{string.Join(", ", alpnProtocols.Select(a => $"\"{a}\""))}]");
+                W(10, "common_tls_context:");
+                W(12, "tls_certificates:");
+                W(12, "- certificate_chain:");
+                W(16, $"filename: \"{certPath}\"");
+                W(14, "private_key:");
+                W(16, $"filename: \"{keyPath}\"");
+                W(12, $"alpn_protocols: [{string.Join(", ", alpnProtocols.Select(a => $"\"{a}\""))}]");
                 // Sibling of transport_socket inside the filter_chain list item.
                 W(6, "filters:");
                 AppendHttpConnectionManager(8, statPrefix, codecType, altSvc);
@@ -287,16 +288,16 @@ internal sealed class EnvoyHost : IDisposable
             W(4, "- filter_chain_match:");
             W(8, "transport_protocol: quic");
             W(6, "transport_socket:");
-            W(8, "name: envoy.transport_sockets.quic");
-            W(8, "typed_config:");
-            W(10, "\"@type\": type.googleapis.com/envoy.extensions.transport_sockets.quic.v3.QuicDownstreamTransport");
-            W(10, "downstream_tls_context:");
-            W(12, "common_tls_context:");
-            W(14, "tls_certificates:");
-            W(14, "- certificate_chain:");
-            W(18, $"filename: \"{certPath}\"");
-            W(16, "private_key:");
-            W(18, $"filename: \"{keyPath}\"");
+            W(10, "name: envoy.transport_sockets.quic");
+            W(10, "typed_config:");
+            W(12, "\"@type\": type.googleapis.com/envoy.extensions.transport_sockets.quic.v3.QuicDownstreamTransport");
+            W(12, "downstream_tls_context:");
+            W(14, "common_tls_context:");
+            W(16, "tls_certificates:");
+            W(16, "- certificate_chain:");
+            W(20, $"filename: \"{certPath}\"");
+            W(18, "private_key:");
+            W(20, $"filename: \"{keyPath}\"");
             W(6, "filters:");
             AppendHttpConnectionManager(8, statPrefix, "HTTP3", altSvc: null);
         }
