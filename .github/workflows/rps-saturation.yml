@@ -333,8 +333,9 @@ jobs:
 
       # HAProxy Community/GPL — Linux/macOS only (no official Windows port).
       # Ubuntu distro 2.8 has HTTP/3 parser code but is not built with USE_QUIC, so H3 bind
-      # lines are skipped. Build 3.2 from source with USE_QUIC + OpenSSL compat (no 0-RTT)
-      # against jammy/noble libssl — same idea as nginx.org mainline for http_v3_module.
+      # lines are skipped. GHA Linux compiles 3.2 with USE_QUIC + OpenSSL compat (no 0-RTT)
+      # against jammy/noble libssl. macOS uses Homebrew (typically USE_QUIC) and fails the
+      # job if QUIC is still missing after a 3.2 osx source fallback.
       - name: Cache HAProxy QUIC prefix
         if: runner.os == 'Linux'
         uses: actions/cache@v4
@@ -391,30 +392,98 @@ jobs:
           fi
           echo "HAProxy USE_QUIC present"
 
-      - name: Install HAProxy (macOS)
+      - name: Cache HAProxy QUIC prefix (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/haproxy-quic
+          key: haproxy-3.2.23-quic-osx-x64
+
+      - name: Install HAProxy with QUIC (macOS)
         if: runner.os == 'macOS'
         env:
           HOMEBREW_NO_AUTO_UPDATE: '1'
           HOMEBREW_NO_INSTALL_UPGRADE: '1'
+          HAPROXY_VERSION: '3.2.23'
+          HAPROXY_SHA256: '82d14ef33571e4edeb9197516c0d058a3775fb80541e46afe4377428e461fef0'
         run: |
           set -euo pipefail
           if ! brew list --versions haproxy >/dev/null 2>&1; then
-            brew install haproxy
+            brew install haproxy || echo "brew install haproxy failed; will build ${HAPROXY_VERSION} from source with USE_QUIC" >&2
           fi
           brew services stop haproxy 2>/dev/null || true
           pkill -x haproxy 2>/dev/null || true
-          HAP_BIN="$(brew --prefix haproxy)/bin"
-          echo "$HAP_BIN" >> "$GITHUB_PATH"
-          export PATH="$HAP_BIN:$PATH"
-          haproxy -v
-          if haproxy -vv 2>&1 | grep -q USE_QUIC; then
-            echo "HAProxy USE_QUIC present"
-          else
-            echo "Homebrew HAProxy has no USE_QUIC — HTTP/3 HAProxy arms will be skipped." >&2
-            haproxy -vv 2>&1 | head -n 40 || true
+          if brew list --versions haproxy >/dev/null 2>&1; then
+            HAP_BIN="$(brew --prefix haproxy)/bin"
+            echo "$HAP_BIN" >> "$GITHUB_PATH"
+            export PATH="$HAP_BIN:$PATH"
           fi
 
-      # Envoy Apache 2.0 — Linux static binary from GitHub releases; macOS via Homebrew.
+          have_quic() { command -v haproxy >/dev/null 2>&1 && haproxy -vv 2>&1 | grep -q USE_QUIC; }
+
+          if ! have_quic; then
+            echo "Homebrew HAProxy lacks USE_QUIC; building ${HAPROXY_VERSION} with USE_QUIC (TARGET=osx)…" >&2
+            dest="${RUNNER_TEMP}/haproxy-quic"
+            mkdir -p "$dest/sbin"
+            if [ -x "$dest/sbin/haproxy" ] && "$dest/sbin/haproxy" -vv 2>&1 | grep -q USE_QUIC; then
+              echo "Using cached HAProxy QUIC build at $dest"
+            else
+              brew list --versions openssl@3 || brew install openssl@3
+              brew list --versions pcre2 || brew install pcre2
+              ssl="$(brew --prefix openssl@3)"
+              pcre="$(brew --prefix pcre2)"
+              src="${RUNNER_TEMP}/haproxy-src"
+              mkdir -p "$src"
+              tarball="${RUNNER_TEMP}/haproxy-${HAPROXY_VERSION}.tar.gz"
+              curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+                "https://www.haproxy.org/download/3.2/src/haproxy-${HAPROXY_VERSION}.tar.gz" \
+                -o "$tarball"
+              echo "${HAPROXY_SHA256}  ${tarball}" | shasum -a 256 -c -
+              tar -xzf "$tarball" -C "$src" --strip-components=1
+              make -C "$src" -j "$(sysctl -n hw.ncpu)" \
+                TARGET=osx \
+                USE_OPENSSL=1 \
+                USE_QUIC=1 \
+                USE_PCRE2=1 \
+                USE_PCRE2_JIT=1 \
+                USE_ZLIB=1 \
+                SSL_INC="${ssl}/include" \
+                SSL_LIB="${ssl}/lib" \
+                PCRE2_INC="${pcre}/include" \
+                PCRE2_LIB="${pcre}/lib" \
+                LDFLAGS="-Wl,-rpath,${ssl}/lib" \
+              || make -C "$src" -j "$(sysctl -n hw.ncpu)" \
+                TARGET=osx \
+                USE_OPENSSL=1 \
+                USE_QUIC=1 \
+                USE_QUIC_OPENSSL_COMPAT=1 \
+                USE_PCRE2=1 \
+                USE_PCRE2_JIT=1 \
+                USE_ZLIB=1 \
+                SSL_INC="${ssl}/include" \
+                SSL_LIB="${ssl}/lib" \
+                PCRE2_INC="${pcre}/include" \
+                PCRE2_LIB="${pcre}/lib" \
+                LDFLAGS="-Wl,-rpath,${ssl}/lib"
+              cp -f "$src/haproxy" "$dest/sbin/haproxy"
+              chmod +x "$dest/sbin/haproxy"
+            fi
+            echo "$dest/sbin" >> "$GITHUB_PATH"
+            export PATH="$dest/sbin:$PATH"
+          fi
+
+          haproxy -v
+          if ! have_quic; then
+            echo "HAProxy was installed but lacks USE_QUIC; HTTP/3 HAProxy arms cannot run." >&2
+            haproxy -vv 2>&1 | head -n 40 || true
+            exit 1
+          fi
+          echo "HAProxy USE_QUIC present"
+
+      # Envoy Apache 2.0 — Linux static binary from GitHub releases; macOS via Homebrew
+      # (HTTP/3 compiled in). Official GitHub assets are Linux-only; Intel Mac has no
+      # current Homebrew bottle, so fall back to the pinned Kuma/CNCF darwin-amd64 build
+      # of the same 1.36.7 tag (do not bazel-build Envoy on the runner).
       # Windows support discontinued — skip (cells are Not possible).
       - name: Install Envoy (Linux)
         if: runner.os == 'Linux'
@@ -439,17 +508,50 @@ jobs:
         env:
           HOMEBREW_NO_AUTO_UPDATE: '1'
           HOMEBREW_NO_INSTALL_UPGRADE: '1'
+          ENVOY_VERSION: '1.36.7'
         run: |
           set -euo pipefail
-          if ! brew list --versions envoy >/dev/null 2>&1; then
-            brew install envoy || brew install envoyproxy/tap/envoy || {
-              echo "brew install envoy failed — Envoy arms will be skipped on this runner." >&2
-              exit 0
-            }
-          fi
           brew services stop envoy 2>/dev/null || true
           pkill -x envoy 2>/dev/null || true
-          # Prefer brew prefix bin when present.
+
+          # Pour a bottle only. Intel Homebrew has no envoy bottle; bazel-from-source
+          # would burn the job timeout. ARM bottles (macos-latest) still pour here.
+          brew_has_envoy_bottle() {
+            python3 -c '
+          import json, platform, subprocess, sys
+          formula = sys.argv[1]
+          try:
+              raw = subprocess.check_output(["brew", "info", "--json=v2", formula], stderr=subprocess.DEVNULL)
+          except subprocess.CalledProcessError:
+              raise SystemExit(1)
+          formulae = json.loads(raw).get("formulae") or []
+          if not formulae:
+              raise SystemExit(1)
+          files = ((formulae[0].get("bottle") or {}).get("stable") or {}).get("files") or {}
+          intel = platform.machine().lower() in ("x86_64", "amd64", "i386")
+          for tag in files:
+              t = tag.lower()
+              if "linux" in t:
+                  continue
+              if intel and t.startswith("arm64"):
+                  continue
+              if (not intel) and not t.startswith("arm64"):
+                  continue
+              raise SystemExit(0)
+          raise SystemExit(1)
+          ' "$1"
+          }
+
+          if ! brew list --versions envoy >/dev/null 2>&1 && ! brew list --versions envoyproxy/tap/envoy >/dev/null 2>&1; then
+            if brew_has_envoy_bottle envoy; then
+              brew install envoy
+            elif brew_has_envoy_bottle envoyproxy/tap/envoy; then
+              brew install envoyproxy/tap/envoy
+            else
+              echo "No Homebrew Envoy bottle for this Mac; skipping brew install (would compile from source)." >&2
+            fi
+          fi
+
           if command -v brew >/dev/null 2>&1; then
             for formula in envoy envoyproxy/tap/envoy; do
               prefix="$(brew --prefix "$formula" 2>/dev/null || true)"
@@ -460,12 +562,40 @@ jobs:
               fi
             done
           fi
+
+          if ! command -v envoy >/dev/null 2>&1; then
+            echo "Downloading pinned darwin-amd64 Envoy ${ENVOY_VERSION} (Kuma/CNCF builds; official GitHub assets are Linux-only)…" >&2
+            dest="${RUNNER_TEMP}/envoy"
+            mkdir -p "$dest"
+            tarball="${RUNNER_TEMP}/envoy-darwin-amd64.tar.gz"
+            if ! curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+              "https://github.com/kumahq/envoy-builds/releases/download/v${ENVOY_VERSION}/envoy-darwin-amd64-v${ENVOY_VERSION}.tar.gz" \
+              -o "$tarball"; then
+              echo "darwin-amd64 Envoy download failed — Envoy arms will be skipped." >&2
+              exit 0
+            fi
+            tar -xzf "$tarball" -C "$dest"
+            bin=""
+            if [ -x "$dest/envoy" ]; then
+              bin="$dest/envoy"
+            else
+              bin="$(find "$dest" -type f -name envoy | awk 'NR==1 { print; exit }')"
+            fi
+            if [ -z "${bin}" ] || [ ! -f "$bin" ]; then
+              echo "darwin-amd64 Envoy tarball had no envoy binary — Envoy arms will be skipped." >&2
+              exit 0
+            fi
+            chmod +x "$bin"
+            echo "$(dirname "$bin")" >> "$GITHUB_PATH"
+            export PATH="$(dirname "$bin"):$PATH"
+          fi
+
           if ! command -v envoy >/dev/null 2>&1; then
             echo "envoy not on PATH after install attempt — Envoy arms will be skipped." >&2
             exit 0
           fi
           envoy --version
-          echo "Envoy Homebrew builds include HTTP/3 when the formula ships QUIC; H3 arms run when QuicListener is supported."
+          echo "Envoy present (Homebrew or pinned darwin-amd64); H3 arms run when QuicListener is supported."
 
       # .NET System.Net.Quic on Linux requires native libmsquic (shipped in-box on Windows).
       - name: Install libmsquic (HTTP/3)

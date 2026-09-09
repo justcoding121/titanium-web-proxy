@@ -326,7 +326,7 @@ internal static class RampOrchestrator
 
         var haproxyQuic = haproxyExe != null && HaproxyHost.SupportsQuic(haproxyExe);
         if (haproxyExe != null && !haproxyQuic)
-            ProbeLog.Info("haproxy has no USE_QUIC — skipping HTTP/3 HAProxy reverse arms (GHA Linux builds 3.2 with QUIC).");
+            ProbeLog.Info("haproxy has no USE_QUIC — skipping HTTP/3 HAProxy reverse arms (GHA Linux/macOS require QUIC).");
 
         var envoyHttp3 = envoyExe != null && EnvoyHost.SupportsHttp3(envoyExe);
         if (envoyExe != null && !envoyHttp3)

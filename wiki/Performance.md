@@ -102,8 +102,8 @@ See [PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/dev
 | RAM | **14** GB |
 | Runtime | .NET 10.0.x |
 | nginx | Homebrew nginx with `--with-http_v3_module` (workflow fails if missing) |
-| HAProxy | Homebrew `haproxy` (GHA install; bottles typically include `USE_QUIC`) |
-| Envoy | Homebrew `envoy` when available (GHA install; HTTP/3 compiled in) |
+| HAProxy | Homebrew `haproxy` with `USE_QUIC` (workflow fails if missing; 3.2.23 osx source fallback) |
+| Envoy | Homebrew bottle when present; else pinned darwin-amd64 **1.36.7** (official GitHub assets are Linux-only). HTTP/3 compiled in. |
 | MsQuic | Homebrew `libmsquic` + `openssl@3` on `DYLD_LIBRARY_PATH` / `DYLD_FALLBACK_LIBRARY_PATH` (`QuicListener.IsSupported`) |
 | YARP | Yarp.ReverseProxy **2.3.0** |
 | Harness | RpsLoadProbe Release; median of 3 repeats where noted |
@@ -175,7 +175,7 @@ Peer ratios (÷YARP / ÷nginx) on median peak; **RPS cells** embed `(MiB / CPU%)
 
 #### Block C — H3→H1
 
-Same layout as Block B. Requires QuicListener. nginx needs `http_v3_module` (Windows nginx has no QUIC). HAProxy needs `USE_QUIC` (GHA Linux compiles it; Homebrew typically has it). Envoy official binaries include HTTP/3.
+Same layout as Block B. Requires QuicListener. nginx needs `http_v3_module` (Windows nginx has no QUIC). HAProxy needs `USE_QUIC` (GHA Linux/macOS require it). Envoy 1.20+ includes HTTP/3.
 
 **Windows** (`windows-latest`)
 
@@ -365,7 +365,7 @@ Numbers are filled by `tools/RpsLoadProbe/apply-wiki-paste.ps1` after `compare-p
 
 ### Reverse
 
-Median of **3 repeats** on `macos-15-intel` (4-core / 14 GB). Bare reverse 5×5 @ `84b225f7` — `compare-product` [34355136373](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34355136373). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP÷peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as `<br><sub>(MiB / CPU%)</sub>`. The RPS workflow installs Homebrew nginx (`http_v3_module`), Homebrew `libmsquic` (+ `DYLD_*`), and YARP. HAProxy/Envoy are not published on macOS. Do not publish from `macos-latest` (3-core / 7 GB).
+Median of **3 repeats** on `macos-15-intel` (4-core / 14 GB). Bare reverse 5×5 @ `84b225f7` — `compare-product` [34355136373](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34355136373). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP÷peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as `<br><sub>(MiB / CPU%)</sub>`. The RPS workflow installs Homebrew nginx (`http_v3_module`), Homebrew HAProxy with `USE_QUIC` (3.2 source fallback), Envoy (Homebrew bottle or pinned darwin-amd64 1.36.7), Homebrew `libmsquic` (+ `DYLD_*`), and YARP. Do not publish from `macos-latest` (3-core / 7 GB).
 
 ![macOS reverse](images/rps-product-reverse-macos.png)
 

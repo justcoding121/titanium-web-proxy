@@ -519,7 +519,8 @@ internal sealed class EnvoyHost : IDisposable
         };
 
     /// <summary>
-    /// True for modern Envoy (HTTP/3 is compiled in on official GitHub/Homebrew builds).
+    /// True for modern Envoy (HTTP/3 is compiled in on official GitHub, Homebrew, and
+    /// pinned darwin-amd64 builds).
     /// <c>envoy --version</c> is typically <c>…/1.36.7/Clean/RELEASE/BoringSSL</c> with no "quic" token,
     /// so grepping the version string used to skip H3 arms that the binary can run.
     /// </summary>
@@ -626,10 +627,11 @@ internal sealed class EnvoyHost : IDisposable
         envoy was not found on PATH (and no --envoy-path was given), or this OS is Windows.
         TWP arms will still run. To enable the same-machine Envoy control arm:
           Linux:   install envoy from https://github.com/envoyproxy/envoy/releases or your distro package
-          macOS:   brew install envoy
+          macOS:   brew install envoy when a bottle exists; GHA also pins darwin-amd64 1.36.7
+                    (official GitHub assets are Linux-only)
           Windows: not supported in this harness — cells are Not possible.
         Then re-run with envoy on PATH, or pass --envoy-path <path-to-envoy>.
-        HTTP/3 terminate is enabled on official Envoy binaries (GitHub release / Homebrew).
+        HTTP/3 terminate is enabled on Envoy 1.20+ (GitHub release / Homebrew / pinned darwin-amd64).
         """;
 
     private static string ReadVersion(string exe)

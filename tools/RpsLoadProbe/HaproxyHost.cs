@@ -460,10 +460,10 @@ backend be
         TWP arms will still run. To enable the same-machine HAProxy control arm:
           Linux:   GHA builds HAProxy 3.2 with USE_QUIC (Ubuntu distro 2.8 has no QUIC).
                     Locally: build from source with USE_QUIC=1 USE_QUIC_OPENSSL_COMPAT=1, or a QUIC bottle.
-          macOS:   brew install haproxy (Homebrew bottles typically include USE_QUIC)
+          macOS:   brew install haproxy (GHA fails the job if USE_QUIC is missing after a 3.2 osx source fallback)
           Windows: not supported (no official HAProxy Windows port) — cells are Not possible.
         Then re-run with haproxy on PATH, or pass --haproxy-path <path-to-haproxy>.
-        HTTP/3 terminate needs USE_QUIC (GHA Linux compiles it; distro apt does not).
+        HTTP/3 terminate needs USE_QUIC (GHA Linux/macOS require it; distro apt does not).
         """;
 
     private static string ReadVersion(string exe)

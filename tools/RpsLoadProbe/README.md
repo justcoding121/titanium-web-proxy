@@ -6,7 +6,7 @@ Published numbers and external control-arm comparisons live only on the wiki [Pe
 
 Manual CI: [RPS saturation](../../.github/workflows/rps-saturation.yml) (`workflow_dispatch`, matrix `ubuntu-latest` + `windows-latest` + `macos-15-intel`). Do **not** use `macos-latest` (3-core M1 / 7 GiB) for publishable numbers.
 
-**macOS lab deps (workflow):** Homebrew nginx with `http_v3_module` (fail if missing), Homebrew `haproxy` (`USE_QUIC` when present), Homebrew `envoy` when available, Homebrew `libmsquic` + `openssl@3` on `DYLD_LIBRARY_PATH` / `DYLD_FALLBACK_LIBRARY_PATH` (assert `QuicListener.IsSupported`), bombardier darwin-amd64, and YARP via the same .NET probe arms as Linux/Windows.
+**macOS lab deps (workflow):** Homebrew nginx with `http_v3_module` (fail if missing), Homebrew `haproxy` with `USE_QUIC` (fail if missing; 3.2 osx source fallback), Homebrew `envoy` when a bottle exists otherwise pinned darwin-amd64 1.36.7, Homebrew `libmsquic` + `openssl@3` on `DYLD_LIBRARY_PATH` / `DYLD_FALLBACK_LIBRARY_PATH` (assert `QuicListener.IsSupported`), bombardier darwin-amd64, and YARP via the same .NET probe arms as Linux/Windows.
 
 ## Tiered cadence
 
