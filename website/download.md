@@ -172,25 +172,43 @@ HTTP/3 (QUIC) native libraries ship inside each platform zip / package (except W
   </div>
 </div>
 
+## Optional Windows package managers
+
+Use **one** of winget or Chocolatey if you already have it — not both. If you have neither, use the download buttons above. Each command below is a separate product; run only the one you want.
+
 ## winget (Windows, stable only)
+
+Built into Windows 10/11.
+
+CLI:
 
 ```shell
 winget install justcoding121.TitaniumCli
+```
+
+Inspector:
+
+```shell
 winget install justcoding121.TitaniumInspector
 ```
 
 ## Chocolatey (Windows)
 
+If you already use [Chocolatey](https://chocolatey.org). Packages appear on chocolatey.org after moderation.
+
+CLI (stable):
+
 ```shell
 choco install titanium-cli
-choco install titanium-inspector
-choco install titanium-cli --pre
-choco install titanium-inspector --pre
-choco uninstall titanium-cli
-choco uninstall titanium-inspector
 ```
 
-Packages appear on chocolatey.org after moderation. Beta uses the same ids with `--pre`.
+Inspector (stable):
+
+```shell
+choco install titanium-inspector
+```
+
+Beta uses the same ids with `--pre` (do not also run the stable install): `choco install titanium-cli --pre` or `choco install titanium-inspector --pre`. Uninstall: `choco uninstall titanium-cli` or `choco uninstall titanium-inspector`.
 
 ## Homebrew (macOS CLI)
 

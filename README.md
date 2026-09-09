@@ -42,21 +42,41 @@ Requires .NET 10 or later for the library. CLI and Inspector downloads are self-
 
 ### Titanium Inspector
 
-Prefer [Download](https://titaniumproxy.com/download). On Windows, winget id `justcoding121.TitaniumInspector` is **stable-only**; Chocolatey id `titanium-inspector` also accepts `--pre` for beta. Start interception from the Capture menu, install the root certificate authority (CA), then toggle system proxy.
+Prefer [Download](https://titaniumproxy.com/download) if you do not already use a Windows package manager. If you do, pick **one**:
+
+**winget** (built into Windows 10/11; stable only):
+
+```shell
+winget install justcoding121.TitaniumInspector
+```
+
+**Chocolatey** (if you already have it):
+
+```shell
+choco install titanium-inspector
+```
+
+For **beta**, use `choco install titanium-inspector --pre`. Start interception from the Capture menu, install the root certificate authority (CA), then toggle system proxy.
 
 <img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
 
 ### CLI (`titanium` / `twp`)
 
-On Windows, **winget is stable-only**; Chocolatey also supports beta (`--pre`):
+On Windows, package managers are optional — use **one** you already have, not both. If you have neither, [download a zip](https://titaniumproxy.com/download).
+
+**winget** (built into Windows 10/11; stable only):
 
 ```shell
 winget install justcoding121.TitaniumCli
-choco install titanium-cli
-choco install titanium-cli --pre
 ```
 
-For **beta** on other channels, download a self-contained zip from [Download](https://titaniumproxy.com/download) / [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) (stable is `v7.0.5`; use the newest beta tag when published). Extract and run:
+**Chocolatey** (if you already have it):
+
+```shell
+choco install titanium-cli
+```
+
+For **beta**, use `choco install titanium-cli --pre`, or download a self-contained zip from [Download](https://titaniumproxy.com/download) / [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) (stable is `v7.0.5`; use the newest beta tag when published). Extract and run:
 
 ```shell
 titanium run -c twp.yaml

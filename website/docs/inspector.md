@@ -13,10 +13,17 @@ Prefer the [Download](/download) page (resolves the newest release that has Insp
 - **MSI** — guided wizard (license, install folder, progress, Finished with optional Launch). Uninstall from **Settings → Apps** (or Programs and Features); the entry uses the Inspector icon.
 - **Portable zip** — extract and run `TitaniumInspector.exe`.
 
+Optional Windows package managers — use **one** you already have, not both:
+
+**winget** (built into Windows 10/11; stable only):
+
 ```shell
-# Stable winget package
 winget install justcoding121.TitaniumInspector
-# Chocolatey (stable; use --pre for beta)
+```
+
+**Chocolatey** (if you already have it):
+
+```shell
 choco install titanium-inspector
 ```
 
@@ -26,6 +33,7 @@ Windows **stable** (`v7.0.5`):
 - [Portable zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.5/TitaniumInspector-win-x64.zip)
 
 For **beta**, use `choco install titanium-inspector --pre`, the [Download](/download) beta section, or [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when a beta tag is published.
+
 ### Linux
 
 Extract the RID zip, then either run `./TitaniumInspector` (portable) or:
