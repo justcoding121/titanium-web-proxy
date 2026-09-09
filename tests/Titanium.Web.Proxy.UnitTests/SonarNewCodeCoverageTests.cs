@@ -837,11 +837,10 @@ public class SonarNewCodeCoverageTests
                     Method = "GET",
                     IsHttps = false,
                     HttpVersion = HttpHeader.Version30,
-                    Host = "origin.example",
+                    Host = $"127.0.0.1:{port}",
                     Authority = $"127.0.0.1:{port}".GetByteString(),
                     RequestUriString8 = path.GetByteString()
                 };
-                request.Headers.AddHeader("Host", $"127.0.0.1:{port}");
                 var fwd = new H3H2FastForward
                 {
                     Request = request,
