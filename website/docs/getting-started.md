@@ -33,6 +33,8 @@ titanium test -c twp.yaml
 titanium run -c twp.yaml
 ```
 
+`titanium run` is foreground (stops when you Ctrl+C). To start at boot and keep running through OS restarts: `titanium service install -c twp.yaml`. Details: [CLI — service](/docs/cli#service).
+
 ## Library in 30 seconds (.NET)
 
 ```shell

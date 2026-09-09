@@ -21,6 +21,12 @@ A lightweight, high-performance HTTP(S) proxy for Windows, Linux, and macOS — 
 
 Protocol coverage details: [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support). HTTP/3 packaging: [HTTP/3 wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3).
 
+## Performance
+
+![Practical reverse proxy throughput on Linux](wiki/images/rps-practical-linux.png)
+
+**RPS** is requests per second — how many HTTP requests the reverse proxy completes under load. Typically at or above **YARP** (from Microsoft); ahead of **nginx** when the client speaks HTTP/2 or HTTP/3 and the origin is HTTP/1.1; near parity elsewhere. Full tables: [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
+
 ## Choose an edition
 
 | Product | Best for | How you get it |
@@ -32,21 +38,13 @@ Protocol coverage details: [protocol support matrix](https://github.com/justcodi
 
 Requires .NET 10 or later for the library. CLI and Inspector downloads are self-contained (no SDK needed to run them).
 
-## Performance
-
-![Practical reverse proxy throughput on Linux](wiki/images/rps-practical-linux.png)
-
-**RPS** is requests per second — how many HTTP requests the reverse proxy completes under load. Typically at or above **YARP** (from Microsoft); ahead of **nginx** when the client speaks HTTP/2 or HTTP/3 and the origin is HTTP/1.1; near parity elsewhere. Full tables: [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
-
 ## Installation
 
-### Library (.NET)
+### Titanium Inspector
 
-```shell
-dotnet add package Titanium.Web.Proxy
-# Prerelease / beta:
-dotnet add package Titanium.Web.Proxy --prerelease
-```
+Prefer [Download](https://titaniumproxy.com/download). On Windows, winget id `justcoding121.TitaniumInspector` is **stable-only**; Chocolatey id `titanium-inspector` also accepts `--pre` for beta. Start interception from the Capture menu, install the root certificate authority (CA), then toggle system proxy.
+
+<img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
 
 ### CLI (`titanium` / `twp`)
 
@@ -67,15 +65,19 @@ titanium version --check
 titanium update
 ```
 
+`titanium run` is foreground (stops when you Ctrl+C). To start at boot and keep running through OS restarts: `titanium service install -c twp.yaml`. Details: [CLI — service](https://titaniumproxy.com/docs/cli#service).
+
 Each CLI zip also includes a `twp` alias binary.
 
 **Optional Plus** ([PolyForm Noncommercial](licenses/PolyForm-Noncommercial-1.0.0.txt) — not for commercial use): `titanium update --plus`, then set `plus.enabled: true` with a control-plane shared secret. Turn features off with `plus.enabled: false`; remove the DLL with `titanium update --remove-plus`. Details: [Plus](https://titaniumproxy.com/docs/plus).
 
-### Titanium Inspector
+### Library (.NET)
 
-Prefer [Download](https://titaniumproxy.com/download). On Windows, winget id `justcoding121.TitaniumInspector` is **stable-only**; Chocolatey id `titanium-inspector` also accepts `--pre` for beta. Start interception from the Capture menu, install the root certificate authority (CA), then toggle system proxy.
-
-<img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
+```shell
+dotnet add package Titanium.Web.Proxy
+# Prerelease / beta:
+dotnet add package Titanium.Web.Proxy --prerelease
+```
 
 ## Quick start (library)
 
