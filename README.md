@@ -38,10 +38,6 @@ Requires .NET 10 or later for the library. CLI and Inspector downloads are self-
 
 <img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
 
-**Basic console example** — compact per-request traffic tape:
-
-<img src="wiki/images/basic-screenshot.jpg" alt="Basic console proxy screenshot" width="900" />
-
 ## Performance
 
 ![Practical reverse proxy throughput on Linux](wiki/images/rps-practical-linux.png)
