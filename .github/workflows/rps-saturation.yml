@@ -358,7 +358,9 @@ jobs:
           sudo systemctl stop haproxy || true
           dest="${RUNNER_TEMP}/haproxy-quic"
           mkdir -p "$dest"
-          if [ -x "$dest/sbin/haproxy" ] && "$dest/sbin/haproxy" -vv 2>&1 | grep -q USE_QUIC; then
+          # Do not use grep -q under pipefail: early close SIGPIPEs haproxy -vv (BSD grep on macOS).
+          have_quic() { case "$("$1" -vv 2>&1 || true)" in *USE_QUIC*) return 0 ;; *) return 1 ;; esac; }
+          if [ -x "$dest/sbin/haproxy" ] && have_quic "$dest/sbin/haproxy"; then
             echo "Using existing HAProxy QUIC build at $dest"
           else
             ver="$HAPROXY_VERSION"
@@ -385,7 +387,7 @@ jobs:
           echo "$dest/sbin" >> "$GITHUB_PATH"
           export PATH="$dest/sbin:$PATH"
           haproxy -v
-          if ! haproxy -vv 2>&1 | grep -q USE_QUIC; then
+          if ! have_quic haproxy; then
             echo "HAProxy was installed but lacks USE_QUIC; HTTP/3 HAProxy arms cannot run." >&2
             haproxy -vv 2>&1 | head -n 40 || true
             exit 1
@@ -419,13 +421,20 @@ jobs:
             export PATH="$HAP_BIN:$PATH"
           fi
 
-          have_quic() { command -v haproxy >/dev/null 2>&1 && haproxy -vv 2>&1 | grep -q USE_QUIC; }
+          have_quic() {
+            command -v haproxy >/dev/null 2>&1 || return 1
+            # Do not use grep -q under pipefail: BSD grep -q closes the pipe early (SIGPIPE).
+            case "$(haproxy -vv 2>&1 || true)" in
+              *USE_QUIC*) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
 
           if ! have_quic; then
             echo "Homebrew HAProxy lacks USE_QUIC; building ${HAPROXY_VERSION} with USE_QUIC (TARGET=osx)…" >&2
             dest="${RUNNER_TEMP}/haproxy-quic"
             mkdir -p "$dest/sbin"
-            if [ -x "$dest/sbin/haproxy" ] && "$dest/sbin/haproxy" -vv 2>&1 | grep -q USE_QUIC; then
+            if [ -x "$dest/sbin/haproxy" ] && case "$("$dest/sbin/haproxy" -vv 2>&1 || true)" in *USE_QUIC*) true ;; *) false ;; esac; then
               echo "Using cached HAProxy QUIC build at $dest"
             else
               brew list --versions openssl@3 || brew install openssl@3
