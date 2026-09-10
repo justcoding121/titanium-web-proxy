@@ -138,8 +138,8 @@ OS_SPECS = (
 
 MERGED_FOOTER = (
     "Wires: tiny keep-alive GET · Workloads: POST / WS / gRPC (RPC/s) from compare-post / "
-    "compare-arch / compare-grpc · GHA 4-core · missing bars = n/a · do not compare absolute "
-    "RPS across clusters (shards)"
+    "compare-arch / compare-grpc · GHA 4-core · 0 / n/a peers omitted (no empty slots) · "
+    "do not compare absolute RPS across clusters (shards)"
 )
 
 
@@ -148,6 +148,64 @@ def median(vals: Sequence[float]) -> Optional[float]:
         return None
     s = sorted(vals)
     return s[(len(s) - 1) // 2]
+
+
+def plot_packed_product_bars(
+    ax,
+    series: Dict[str, List[Optional[float]]],
+    x,
+    *,
+    products: Sequence[str] = PRODUCTS,
+    colors: Optional[Dict[str, str]] = None,
+    bar_width: float = 0.14,
+    legend_once: bool = True,
+    add_legend_labels: bool = True,
+) -> float:
+    """Draw per-cluster packed bars; omit None and <=0 so no empty slots remain.
+
+    Bars for the peers that measured are centered on each cluster's x position.
+    """
+    palette = colors or COLORS
+    labeled: set = set()
+    ymax = 1.0
+    for i, xi in enumerate(x):
+        present: List[Tuple[str, float]] = []
+        for product in products:
+            vals = series.get(product)
+            if not vals or i >= len(vals):
+                continue
+            v = vals[i]
+            if v is None:
+                continue
+            h = float(v)
+            if h <= 0:
+                continue
+            present.append((product, h))
+        n = len(present)
+        if n == 0:
+            continue
+        start = float(xi) - (n - 1) * bar_width / 2.0
+        for j, (product, h) in enumerate(present):
+            label = None
+            if add_legend_labels:
+                if legend_once:
+                    if product not in labeled:
+                        label = product
+                        labeled.add(product)
+                else:
+                    label = product
+            ax.bar(
+                start + j * bar_width,
+                h,
+                bar_width,
+                label=label,
+                color=palette[product],
+                edgecolor="white",
+                linewidth=0.4,
+                zorder=3,
+            )
+            ymax = max(ymax, h)
+    return ymax
 
 
 def arm_sustain_c64(csv_path: Path, arm: str) -> Optional[float]:
@@ -317,32 +375,10 @@ def render_chart(
 
     labels = list(labels) if labels is not None else [a[0] for a in PRACTICAL_ARMS]
     x = np.arange(len(labels), dtype=float)
-    width = 0.14
-    offsets = tuple((i - 2) * width for i in range(5))
 
     fig_w = 16.0 if len(labels) >= 10 else 14.5
     fig, ax = plt.subplots(figsize=(fig_w, 5.4), dpi=140)
-    ymax = 1.0
-    for product, offset in zip(PRODUCTS, offsets):
-        vals = series[product]
-        heights = [0.0 if v is None else float(v) for v in vals]
-        present = [v is not None for v in vals]
-        # Hide missing bars (n/a cells) by setting height 0 and no edge; hatch optional.
-        bars = ax.bar(
-            x + offset,
-            [h if p else 0.0 for h, p in zip(heights, present)],
-            width,
-            label=product,
-            color=COLORS[product],
-            edgecolor="white",
-            linewidth=0.4,
-            zorder=3,
-        )
-        for bar, p, h in zip(bars, present, heights):
-            if not p:
-                bar.set_visible(False)
-            elif h > 0:
-                ymax = max(ymax, h)
+    ymax = plot_packed_product_bars(ax, series, x)
 
     if workload_start is not None and 0 < workload_start < len(labels):
         ax.axvline(

@@ -33,6 +33,7 @@ _spec.loader.exec_module(_mod)
 arm_sustain_union = _mod.arm_sustain_union
 find_csvs = _mod.find_csvs
 parse_path_list = _mod.parse_path_list
+plot_packed_product_bars = _mod.plot_packed_product_bars
 COLORS = _mod.COLORS
 PRODUCTS = _mod.PRODUCTS
 
@@ -242,8 +243,6 @@ def render_os(
         fontsize=13,
         y=0.995,
     )
-    width = 0.14
-    offsets = tuple((i - 2) * width for i in range(5))
 
     by_client: Dict[str, List[Tuple[str, Optional[float], Optional[float], Optional[float], Optional[float], Optional[float]]]] = {
         c: [] for c in CLIENTS
@@ -268,26 +267,7 @@ def render_os(
             "Envoy": [r[4] for r in ordered],
             "YARP": [r[5] for r in ordered],
         }
-        ymax = 1.0
-        for product, offset in zip(PRODUCTS, offsets):
-            vals = series[product]
-            heights = [0.0 if v is None else float(v) for v in vals]
-            present = [v is not None for v in vals]
-            bars = ax.bar(
-                x + offset,
-                [h if p else 0.0 for h, p in zip(heights, present)],
-                width,
-                label=product if ax is axes[0] else None,
-                color=COLORS[product],
-                edgecolor="white",
-                linewidth=0.4,
-                zorder=3,
-            )
-            for bar, p, h in zip(bars, present, heights):
-                if not p:
-                    bar.set_visible(False)
-                elif h > 0:
-                    ymax = max(ymax, h)
+        ymax = plot_packed_product_bars(ax, series, x, add_legend_labels=False)
         ax.set_title(f"Client {client}", loc="left", fontsize=10)
         ax.set_xticks(x)
         ax.set_xticklabels(labels, fontsize=8)
@@ -297,11 +277,20 @@ def render_os(
         ax.grid(axis="y", linestyle=":", alpha=0.45, zorder=0)
         ax.set_axisbelow(True)
 
-    axes[0].legend(loc="upper right", framealpha=0.92, ncols=5, fontsize=8)
+    # Stable legend: one proxy entry each, even if first panel omitted some peers.
+    from matplotlib.patches import Patch
+
+    axes[0].legend(
+        handles=[Patch(facecolor=COLORS[p], edgecolor="white", label=p) for p in PRODUCTS],
+        loc="upper right",
+        framealpha=0.92,
+        ncols=5,
+        fontsize=8,
+    )
     fig.text(
         0.01,
         0.004,
-        "Reverse only · TWP vs YARP vs nginx vs HAProxy vs Envoy · Not possible omitted · MITM Lite/Full stay tables-only",
+        "Reverse only · TWP vs YARP vs nginx vs HAProxy vs Envoy · 0 / n/a peers omitted (no empty slots) · MITM Lite/Full stay tables-only",
         fontsize=8,
         color="#444444",
     )

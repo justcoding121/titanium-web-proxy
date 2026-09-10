@@ -30,6 +30,7 @@ _spec.loader.exec_module(_mod)
 arm_sustain_union = _mod.arm_sustain_union
 find_csvs = _mod.find_csvs
 parse_path_list = _mod.parse_path_list
+plot_packed_product_bars = _mod.plot_packed_product_bars
 COLORS = _mod.COLORS
 PRODUCTS = _mod.PRODUCTS
 
@@ -333,30 +334,8 @@ def render_chart(
     import numpy as np
 
     x = np.arange(len(labels), dtype=float)
-    width = 0.14
-    offsets = tuple((i - 2) * width for i in range(5))
-
     fig, ax = plt.subplots(figsize=(14.5, 5.4), dpi=140)
-    ymax = 1.0
-    for product, offset in zip(PRODUCTS, offsets):
-        vals = series[product]
-        heights = [0.0 if v is None else float(v) for v in vals]
-        present = [v is not None for v in vals]
-        bars = ax.bar(
-            x + offset,
-            [h if p else 0.0 for h, p in zip(heights, present)],
-            width,
-            label=product,
-            color=COLORS[product],
-            edgecolor="white",
-            linewidth=0.4,
-            zorder=3,
-        )
-        for bar, p, h in zip(bars, present, heights):
-            if not p:
-                bar.set_visible(False)
-            elif h > 0:
-                ymax = max(ymax, h)
+    ymax = plot_packed_product_bars(ax, series, x)
 
     ax.set_ylabel("Sustain RPS @ concurrency 64")
     ax.set_title(chart_title)
@@ -459,8 +438,7 @@ def main() -> int:
             if suffix:
                 chart_title = f"{chart_title} {suffix}"
             footer = (
-                "Heavier reverse workloads · GHA 4-core · missing bars = Not possible · "
-                "SLO-miss sustain plotted as 0"
+                "Heavier reverse workloads · GHA 4-core · 0 / n/a peers omitted (no empty slots)"
             )
             if not include_he:
                 footer += " · Windows: no HAProxy/Envoy official port"
