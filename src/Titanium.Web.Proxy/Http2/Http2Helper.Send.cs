@@ -71,14 +71,13 @@ namespace Titanium.Web.Proxy.Http2
                 frameHeaderBuffer, rr, endStream, output, pushPromise);
 
         /// <summary>
-        ///     Frames <paramref name="payload"/> as one client-bound DATA frame into a rented buffer and
-        ///     queues it on the dedicated client frame writer. The caller must already hold the
-        ///     flow-control reservation for <paramref name="payload"/>. Used by the synthetic/bridge
-        ///     response paths so responses from many concurrent streams coalesce into few socket writes
-        ///     instead of each taking <see cref="Http2ConnectionState.ClientWriteLock"/> per frame.
+        ///     Frames <paramref name="payload"/> as one DATA frame into a rented buffer and queues it on the
+        ///     same dedicated writer FIFO as <see cref="QueueSendHeader"/> so DATA cannot overtake HEADERS
+        ///     on that direction. The caller must already hold the flow-control reservation for
+        ///     <paramref name="payload"/> when the payload is non-empty.
         /// </summary>
-        private static void QueueDataFrame(Http2ConnectionState connectionState, Stream clientStream,
-            int streamId, ReadOnlyMemory<byte> payload, bool endStream)
+        private static void QueueDataFrame(Http2ConnectionState connectionState, bool towardServer,
+            SemaphoreSlim writeLock, Stream output, int streamId, ReadOnlyMemory<byte> payload, bool endStream)
         {
             var total = 9 + payload.Length;
             var rented = ArrayPool<byte>.Shared.Rent(total);
@@ -91,8 +90,51 @@ namespace Titanium.Web.Proxy.Http2
             };
             dataFrameHeader.CopyToBuffer(rented);
             payload.Span.CopyTo(rented.AsSpan(9));
-            connectionState.EnqueueWriteRented(towardServer: false, connectionState.ClientWriteLock,
-                clientStream, rented, total);
+            connectionState.EnqueueWriteRented(towardServer, writeLock, output, rented, total);
+        }
+
+        /// <summary>
+        ///     Frames <paramref name="payload"/> as one client-bound DATA frame into a rented buffer and
+        ///     queues it on the dedicated client frame writer. The caller must already hold the
+        ///     flow-control reservation for <paramref name="payload"/>. Used by the synthetic/bridge
+        ///     response paths so responses from many concurrent streams coalesce into few socket writes
+        ///     instead of each taking <see cref="Http2ConnectionState.ClientWriteLock"/> per frame.
+        /// </summary>
+        private static void QueueDataFrame(Http2ConnectionState connectionState, Stream clientStream,
+            int streamId, ReadOnlyMemory<byte> payload, bool endStream) =>
+            QueueDataFrame(connectionState, towardServer: false, connectionState.ClientWriteLock,
+                clientStream, streamId, payload, endStream);
+
+        /// <summary>
+        ///     Same framing and flow-control reservation as <see cref="SendData"/>, but the frames are
+        ///     queued on the dedicated writer FIFO used by <see cref="QueueSendHeader"/>. The per-chunk
+        ///     <c>OnRequestBodyWrite</c>/<c>OnResponseBodyWrite</c> path previously called <see cref="SendData"/>
+        ///     (direct locked write). That raced the MITM HEADERS enqueue: DATA could hit the peer socket
+        ///     first, which Chrome treats as DATA on an idle stream (<c>ERR_HTTP2_PROTOCOL_ERROR</c>).
+        /// </summary>
+        private static async ValueTask QueueSendData(Http2ConnectionState connectionState, bool towardServer, // NOSONAR S107 -- Frame-writing state is kept explicit for this low-level helper.
+            SemaphoreSlim writeLock, int streamId, ReadOnlyMemory<byte> data, bool endStream, int maxFrameSize,
+            Http2FlowController flow, Stream output, CancellationToken cancellationToken)
+        {
+            if (maxFrameSize <= 0) maxFrameSize = 16384;
+
+            if (data.Length == 0)
+            {
+                QueueDataFrame(connectionState, towardServer, writeLock, output, streamId,
+                    ReadOnlyMemory<byte>.Empty, endStream);
+                return;
+            }
+
+            var pos = 0;
+            while (pos < data.Length)
+            {
+                var frameLength = Math.Min(maxFrameSize, data.Length - pos);
+                var isLastFrame = pos + frameLength >= data.Length;
+                await flow.ReserveAsync(streamId, frameLength, cancellationToken).ConfigureAwait(false);
+                QueueDataFrame(connectionState, towardServer, writeLock, output, streamId,
+                    data.Slice(pos, frameLength), isLastFrame && endStream);
+                pos += frameLength;
+            }
         }
 
         /// <summary>

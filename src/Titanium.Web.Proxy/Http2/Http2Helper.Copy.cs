@@ -1293,10 +1293,13 @@ namespace Titanium.Web.Proxy.Http2
 
                             var outBytes = bodyWriteArgs.BodyBytes ?? Array.Empty<byte>();
 
-                            // Reserve outside outputWriteLock — same ordering as the default DATA relay above.
-                            await SendData(frameHeader, frameHeaderBuffer, streamId, outBytes,
-                                endStreamFlag, remoteSettings.MaxFrameSize, outboundFlow, output, cancellationToken,
-                                outputWriteLock);
+                            // Queue on the same FIFO as QueueSendHeader. A direct SendData write can
+                            // overtake MITM-re-encoded HEADERS still sitting on ClientFrameWriter /
+                            // ServerFrameWriter (Inspector always subscribes OnResponseBodyWrite),
+                            // which Chrome treats as DATA on an idle stream (PROTOCOL_ERROR).
+                            await QueueSendData(connectionState, towardServer: isClient, outputWriteLock,
+                                streamId, outBytes, endStreamFlag, remoteSettings.MaxFrameSize, outboundFlow,
+                                output, cancellationToken);
 
                             // we have emitted our own (possibly re-sized) DATA frame(s); suppress the default relay
                             sendPacket = false;
