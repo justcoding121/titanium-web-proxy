@@ -158,12 +158,14 @@ def plot_packed_product_bars(
     products: Sequence[str] = PRODUCTS,
     colors: Optional[Dict[str, str]] = None,
     bar_width: float = 0.14,
+    group_width: float = 0.72,
     legend_once: bool = True,
     add_legend_labels: bool = True,
 ) -> float:
     """Draw per-cluster packed bars; omit None and <=0 so no empty slots remain.
 
-    Bars for the peers that measured are centered on each cluster's x position.
+    Surviving peers are packed edge-to-edge and centered on the cluster. Bar width
+    grows when fewer peers remain so the group still fills ``group_width``.
     """
     palette = colors or COLORS
     labeled: set = set()
@@ -184,7 +186,10 @@ def plot_packed_product_bars(
         n = len(present)
         if n == 0:
             continue
-        start = float(xi) - (n - 1) * bar_width / 2.0
+        # Pack into a fixed group width (≈ 5 × default bar) so omitting peers
+        # does not leave holes or a sparse left-aligned stub.
+        width = group_width / n
+        start = float(xi) - group_width / 2.0 + width / 2.0
         for j, (product, h) in enumerate(present):
             label = None
             if add_legend_labels:
@@ -195,9 +200,9 @@ def plot_packed_product_bars(
                 else:
                     label = product
             ax.bar(
-                start + j * bar_width,
+                start + j * width,
                 h,
-                bar_width,
+                width,
                 label=label,
                 color=palette[product],
                 edgecolor="white",
