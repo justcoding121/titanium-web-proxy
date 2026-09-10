@@ -17,6 +17,10 @@ internal enum ProbeMode
     ReverseHttp1ToHttps,
     BareReverseHttp1Tls,
     NginxReverseHttp1Tls,
+    /// <summary>Native reverse: cleartext HTTP/1 → HTTPS HTTP/1 (<c>proxy_ssl</c>).</summary>
+    NginxReverseHttp1ToHttps,
+    /// <summary>Native reverse: TLS HTTP/1 → HTTPS HTTP/1 (dual TLS; <c>proxy_ssl</c>).</summary>
+    NginxReverseHttp1TlsToHttps,
     YarpReverseHttp1Tls,
     YarpReverseHttp1ToHttps,
     ReverseHttp2,
@@ -33,8 +37,82 @@ internal enum ProbeMode
     /// <summary>Client prior-knowledge h2c → H2→H3 bridge → QUIC/h3.</summary>
     ReverseH2cToH3,
     NginxReverseHttp2,
+    /// <summary>Native reverse: client TLS+h2 → HTTPS HTTP/1 (<c>proxy_ssl</c>).</summary>
+    NginxReverseHttp2ToHttpsHttp1,
+    /// <summary>Native reverse: client TLS+h2 → HTTPS/h2 gRPC origin via <c>grpc_pass</c>.</summary>
+    NginxReverseGrpc,
     /// <summary>Native reverse: client QUIC/h3 → cleartext HTTP/1. Requires nginx <c>http_v3_module</c>.</summary>
     NginxReverseHttp3Cleartext,
+    /// <summary>Native reverse: client QUIC/h3 → HTTPS HTTP/1 (<c>proxy_ssl</c>). Requires <c>http_v3_module</c>.</summary>
+    NginxReverseHttp3ToHttpsHttp1,
+    /// <summary>HAProxy Community/GPL reverse: cleartext HTTP/1 → cleartext HTTP/1. Linux/macOS only.</summary>
+    HaproxyReverseHttp1,
+    /// <summary>HAProxy: TLS HTTP/1 → cleartext HTTP/1.</summary>
+    HaproxyReverseHttp1Tls,
+    /// <summary>HAProxy: cleartext HTTP/1 → HTTPS HTTP/1.</summary>
+    HaproxyReverseHttp1ToHttps,
+    /// <summary>HAProxy: TLS HTTP/1 → HTTPS HTTP/1 (dual TLS).</summary>
+    HaproxyReverseHttp1TlsToHttps,
+    /// <summary>HAProxy: client TLS+h2 → cleartext HTTP/1.</summary>
+    HaproxyReverseHttp2,
+    /// <summary>HAProxy: client TLS+h2 → HTTPS HTTP/1.</summary>
+    HaproxyReverseHttp2ToHttpsHttp1,
+    /// <summary>HAProxy: client QUIC/h3 → cleartext HTTP/1. Requires <c>USE_QUIC</c>.</summary>
+    HaproxyReverseHttp3Cleartext,
+    /// <summary>HAProxy: client QUIC/h3 → HTTPS HTTP/1. Requires <c>USE_QUIC</c>.</summary>
+    HaproxyReverseHttp3ToHttpsHttp1,
+    /// <summary>Envoy reverse: cleartext HTTP/1 → cleartext HTTP/1. Linux/macOS only.</summary>
+    EnvoyReverseHttp1,
+    /// <summary>Envoy: TLS HTTP/1 → cleartext HTTP/1.</summary>
+    EnvoyReverseHttp1Tls,
+    /// <summary>Envoy: cleartext HTTP/1 → HTTPS HTTP/1.</summary>
+    EnvoyReverseHttp1ToHttps,
+    /// <summary>Envoy: TLS HTTP/1 → HTTPS HTTP/1 (dual TLS).</summary>
+    EnvoyReverseHttp1TlsToHttps,
+    /// <summary>Envoy: client TLS+h2 → cleartext HTTP/1.</summary>
+    EnvoyReverseHttp2,
+    /// <summary>Envoy: client TLS+h2 → HTTPS HTTP/1.</summary>
+    EnvoyReverseHttp2ToHttpsHttp1,
+    /// <summary>Envoy: client QUIC/h3 → cleartext HTTP/1.</summary>
+    EnvoyReverseHttp3Cleartext,
+    /// <summary>Envoy: client QUIC/h3 → HTTPS HTTP/1.</summary>
+    EnvoyReverseHttp3ToHttpsHttp1,
+    NginxReverseH2cToH1,
+    NginxReverseH2cToHttps,
+    HaproxyReverseHttp1PlainToH2c,
+    HaproxyReverseHttp1PlainToHttp2,
+    HaproxyReverseHttp1PlainToHttp3,
+    HaproxyReverseHttp1ToH2c,
+    HaproxyReverseHttp11ToHttp2,
+    HaproxyReverseHttp1ToHttp3,
+    HaproxyReverseH2cToH1,
+    HaproxyReverseH2cToHttps,
+    HaproxyReverseH2cToH2c,
+    HaproxyReverseH2c,
+    HaproxyReverseH2cToH3,
+    HaproxyReverseHttp2ToH2c,
+    HaproxyReverseHttp2ToHttps,
+    HaproxyReverseHttp2ToHttp3,
+    HaproxyReverseHttp3ToH2c,
+    HaproxyReverseHttp3ToHttp2,
+    HaproxyReverseHttp3ToHttp3,
+    EnvoyReverseHttp1PlainToH2c,
+    EnvoyReverseHttp1PlainToHttp2,
+    EnvoyReverseHttp1PlainToHttp3,
+    EnvoyReverseHttp1ToH2c,
+    EnvoyReverseHttp11ToHttp2,
+    EnvoyReverseHttp1ToHttp3,
+    EnvoyReverseH2cToH1,
+    EnvoyReverseH2cToHttps,
+    EnvoyReverseH2cToH2c,
+    EnvoyReverseH2c,
+    EnvoyReverseH2cToH3,
+    EnvoyReverseHttp2ToH2c,
+    EnvoyReverseHttp2ToHttps,
+    EnvoyReverseHttp2ToHttp3,
+    EnvoyReverseHttp3ToH2c,
+    EnvoyReverseHttp3ToHttp2,
+    EnvoyReverseHttp3ToHttp3,
     /// <summary>Managed reverse peer client TLS+h2 → cleartext HTTP/1 origin (native reverse peer parity).</summary>
     YarpReverseHttp2,
     YarpReverseHttp2ToH2c,
@@ -105,6 +183,18 @@ internal enum ProbeMode
     /// <summary>H3→H1 cleartext only: TWP + YARP (+ nginx when http_v3_module).</summary>
     CompareHttp3Cleartext,
     /// <summary>
+    /// Quick smoke for nginx <c>proxy_ssl</c> HTTPS-origin peers (H1 plain/TLS, H2 TLS, H3→HTTPS H1).
+    /// </summary>
+    CompareNginxHttps,
+    /// <summary>
+    /// HAProxy smoke: terminate-to-H1 plus remainder 5×5 wires (repeats=1). Windows skips (no port).
+    /// </summary>
+    CompareHaproxySmoke,
+    /// <summary>
+    /// Envoy smoke: terminate-to-H1 plus remainder 5×5 wires (repeats=1). Windows skips (no port).
+    /// </summary>
+    CompareEnvoySmoke,
+    /// <summary>
     /// True MITM 5×5: same Client×Origin wires as reverse, but TWP_RPS_HTTP_INTERCEPTION=1
     /// (no-op BeforeRequest/BeforeResponse = lite finish possible). TWP-only; plus explicit CONNECT.
     /// compare-mitm / compare-product also append mutate (full-session) twins.
@@ -139,6 +229,10 @@ internal enum ProbeMode
     CompareTlsCost,
     /// <summary>Architecture-sensitive reverse: slow consumer, early response, H2 duplex, WebSocket echo.</summary>
     CompareArch,
+    /// <summary>
+    /// Unary gRPC Echo over H2 TLS (TWP / YARP / nginx grpc_pass / HAProxy / Envoy) — RPC/s @ c=64.
+    /// </summary>
+    CompareGrpc,
     /// <summary>
     /// Saturation control: origin-direct (+ optional bombardier) and H1 plain reverse peers in one session.
     /// </summary>
@@ -198,6 +292,8 @@ internal sealed class RampOptions
 {
     public required ProbeMode Mode { get; init; }
     public string? NginxPath { get; init; }
+    public string? HaproxyPath { get; init; }
+    public string? EnvoyPath { get; init; }
     public string ResultsDir { get; init; } = Path.Combine("results");
     public int[] ConcurrencySteps { get; init; } = [8, 16, 24, 32, 48, 64, 128, 256, 512];
     public TimeSpan Warmup { get; init; } = TimeSpan.FromSeconds(5);
@@ -215,12 +311,64 @@ internal sealed class RampOptions
     /// (peak confirmation) then stop the arm. Default on — matches industry load-tool behavior.
     /// </summary>
     public bool StopOnSloFail { get; init; } = true;
+    /// <summary>
+    /// Wall-clock cap per arm. Null = derive from concurrency steps × (warmup+measure) + overhead.
+    /// Prevents a single stuck measure (MsQuic/bombardier/child READY) from burning the 345m GHA step.
+    /// </summary>
+    public TimeSpan? ArmTimeout { get; init; }
+    /// <summary>
+    /// Exclusive comparison-group partition for GHA (1-based <c>i/n</c>). Null or <c>all</c> = no
+    /// split. Shards wiki rows (Client×Origin + workload), not individual arms, so TWP÷YARP and
+    /// Lite÷Reverse stay same-job. Applied after capability / QuicListener filtering.
+    /// </summary>
+    public (int Index, int Count)? ArmShard { get; init; }
     /// <summary>Default workload when an arm does not override (preserves tiny-GET matrix).</summary>
     public WorkloadOptions Workload { get; init; } = WorkloadOptions.TinyGet;
 }
 
 internal static class RampOrchestrator
 {
+    /// <summary>
+    /// Resolve runnable arm names for <paramref name="options"/> (capability filter + optional shard).
+    /// Used by <c>--print-arms</c> for local shard atomicity checks.
+    /// </summary>
+    public static IReadOnlyList<string> ListArmNames(RampOptions options)
+    {
+        var nginxExe = NginxHost.ResolveNginxExecutable(options.NginxPath);
+        var haproxyExe = HaproxyHost.ResolveHaproxyExecutable(options.HaproxyPath);
+        var envoyExe = EnvoyHost.ResolveEnvoyExecutable(options.EnvoyPath);
+        var nginxHttp3 = nginxExe != null && NginxHost.SupportsHttp3Module(NginxHost.ReadConfigureArguments(nginxExe));
+        var haproxyQuic = haproxyExe != null && HaproxyHost.SupportsQuic(haproxyExe);
+        var envoyHttp3 = envoyExe != null && EnvoyHost.SupportsHttp3(envoyExe);
+        var bombardierAvailable = BombardierLoadGenerator.IsAvailable();
+        var arms = ResolveArms(options.Mode, nginxExe != null, nginxHttp3, bombardierAvailable,
+            haproxyExe != null, haproxyQuic, envoyExe != null, envoyHttp3).ToList();
+        if (!System.Net.Quic.QuicListener.IsSupported)
+        {
+            arms = arms.Where(a =>
+                a.Mode is not (ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp3Cleartext
+                    or ProbeMode.YarpReverseHttp3Cleartext or ProbeMode.NginxReverseHttp3Cleartext
+                    or ProbeMode.NginxReverseHttp3ToHttpsHttp1
+                    or ProbeMode.HaproxyReverseHttp3Cleartext or ProbeMode.HaproxyReverseHttp3ToHttpsHttp1
+                    or ProbeMode.EnvoyReverseHttp3Cleartext or ProbeMode.EnvoyReverseHttp3ToHttpsHttp1
+                    or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.YarpReverseHttp1ToHttp3
+                    or ProbeMode.ReverseHttp1PlainToHttp3 or ProbeMode.YarpReverseHttp1PlainToHttp3
+                    or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
+                    or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.YarpReverseHttp3ToHttp2
+                    or ProbeMode.ReverseHttp3ToH2c or ProbeMode.YarpReverseHttp3ToH2c
+                    or ProbeMode.YarpReverseHttp3ToHttp3
+                    or ProbeMode.YarpReverseHttp3ToHttpsHttp1
+                    or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
+                    or ProbeMode.MitmHttp3ToHttp1)
+                && !PeerWire.IsHttp3ClientOrOrigin(a.Mode)).ToList();
+        }
+
+        if (options.ArmShard is { } shard)
+            arms = ApplyArmShard(arms, shard.Index, shard.Count);
+
+        return arms.Select(a => a.Name).ToList();
+    }
+
     public static async Task<int> RunAsync(RampOptions options, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(options.ResultsDir);
@@ -232,7 +380,17 @@ internal static class RampOrchestrator
         if (nginxExe != null)
             nginxVersion = ProbeNginxVersion(nginxExe);
 
-        ProbeLog.Info(MachineInfo.FormatReport(nginxVersion));
+        string? haproxyVersion = null;
+        var haproxyExe = HaproxyHost.ResolveHaproxyExecutable(options.HaproxyPath);
+        if (haproxyExe != null)
+            haproxyVersion = ProbeHaproxyVersion(haproxyExe);
+
+        string? envoyVersion = null;
+        var envoyExe = EnvoyHost.ResolveEnvoyExecutable(options.EnvoyPath);
+        if (envoyExe != null)
+            envoyVersion = ProbeEnvoyVersion(envoyExe);
+
+        ProbeLog.Info(MachineInfo.FormatReport(nginxVersion, haproxyVersion, envoyVersion));
         ProbeLog.Info("Close browsers and other heavy apps before a publishable run.");
         if (options.Mode is ProbeMode.CompareSaturation or ProbeMode.OriginDirect)
         {
@@ -255,13 +413,25 @@ internal static class RampOrchestrator
         if (nginxExe != null && !nginxHttp3)
             ProbeLog.Info("nginx has no http_v3_module — skipping HTTP/3 native reverse arms (install nginx.org mainline on Linux).");
 
+        var haproxyQuic = haproxyExe != null && HaproxyHost.SupportsQuic(haproxyExe);
+        if (haproxyExe != null && !haproxyQuic)
+            ProbeLog.Info("haproxy has no USE_QUIC — skipping HTTP/3 HAProxy reverse arms (GHA Linux/macOS require QUIC).");
+
+        var envoyHttp3 = envoyExe != null && EnvoyHost.SupportsHttp3(envoyExe);
+        if (envoyExe != null && !envoyHttp3)
+            ProbeLog.Info("envoy has no HTTP/3 — skipping HTTP/3 Envoy reverse arms.");
+
         var bombardierAvailable = BombardierLoadGenerator.IsAvailable();
-        var arms = ResolveArms(options.Mode, nginxExe != null, nginxHttp3, bombardierAvailable).ToList();
+        var arms = ResolveArms(options.Mode, nginxExe != null, nginxHttp3, bombardierAvailable,
+            haproxyExe != null, haproxyQuic, envoyExe != null, envoyHttp3).ToList();
         if (!System.Net.Quic.QuicListener.IsSupported)
         {
             var removed = arms.RemoveAll(a =>
                 a.Mode is ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp3Cleartext
                     or ProbeMode.YarpReverseHttp3Cleartext or ProbeMode.NginxReverseHttp3Cleartext
+                    or ProbeMode.NginxReverseHttp3ToHttpsHttp1
+                    or ProbeMode.HaproxyReverseHttp3Cleartext or ProbeMode.HaproxyReverseHttp3ToHttpsHttp1
+                    or ProbeMode.EnvoyReverseHttp3Cleartext or ProbeMode.EnvoyReverseHttp3ToHttpsHttp1
                     or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.YarpReverseHttp1ToHttp3
                     or ProbeMode.ReverseHttp1PlainToHttp3 or ProbeMode.YarpReverseHttp1PlainToHttp3
                     or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
@@ -270,27 +440,88 @@ internal static class RampOrchestrator
                     or ProbeMode.YarpReverseHttp3ToHttp3
                     or ProbeMode.YarpReverseHttp3ToHttpsHttp1
                     or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
-                    or ProbeMode.MitmHttp3ToHttp1);
+                    or ProbeMode.MitmHttp3ToHttp1
+                || PeerWire.IsHttp3ClientOrOrigin(a.Mode));
             if (removed > 0)
                 ProbeLog.Info("QuicListener is not supported on this host — skipping HTTP/3 arms.");
         }
 
+        if (options.ArmShard is { } shard)
+        {
+            var before = arms.Count;
+            arms = ApplyArmShard(arms, shard.Index, shard.Count);
+            ProbeLog.Info(
+                $"arm-shard {shard.Index}/{shard.Count}: {arms.Count}/{before} arms after capability filter.");
+        }
+
         if (arms.Count == 0)
         {
+            // CompareHaproxySmoke on Windows: HAProxy unavailable is the expected outcome (skip).
+            if (options.Mode is ProbeMode.CompareHaproxySmoke && haproxyExe == null)
+            {
+                ProbeLog.Info("compare-haproxy-smoke: HAProxy not available on this OS (expected on Windows) — skip OK.");
+                return 0;
+            }
+
+            if (options.Mode is ProbeMode.CompareEnvoySmoke && envoyExe == null)
+            {
+                ProbeLog.Info("compare-envoy-smoke: Envoy not available on this OS (expected on Windows) — skip OK.");
+                return 0;
+            }
+
             ProbeLog.Error("No arms to run for this mode/host combination.");
             return 2;
         }
 
         if ((options.Mode is ProbeMode.NginxReverseHttp1 or ProbeMode.NginxReverseHttp1Tls
-                or ProbeMode.NginxReverseHttp2 or ProbeMode.NginxReverseHttp3Cleartext
+                or ProbeMode.NginxReverseHttp1ToHttps or ProbeMode.NginxReverseHttp1TlsToHttps
+                or ProbeMode.NginxReverseHttp2 or ProbeMode.NginxReverseHttp2ToHttpsHttp1
+                or ProbeMode.NginxReverseGrpc or ProbeMode.NginxReverseHttp3Cleartext
+                or ProbeMode.NginxReverseHttp3ToHttpsHttp1
                 or ProbeMode.Compare or ProbeMode.CompareHttp2
                 or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame
                 or ProbeMode.CompareBridges or ProbeMode.CompareHttp3Cleartext
                 or ProbeMode.CompareBodies or ProbeMode.ComparePost or ProbeMode.CompareLossy
-                or ProbeMode.CompareTlsCost or ProbeMode.CompareArch or ProbeMode.CompareSaturation)
+                or ProbeMode.CompareTlsCost or ProbeMode.CompareArch or ProbeMode.CompareSaturation
+                or ProbeMode.CompareNginxHttps or ProbeMode.CompareGrpc
+            || PeerWire.IsProduct(options.Mode, PeerProduct.Nginx))
             && nginxExe == null)
         {
             ProbeLog.Info(NginxHost.NginxMissingMessage());
+            ProbeLog.Info(string.Empty);
+        }
+
+        if ((options.Mode is ProbeMode.HaproxyReverseHttp1 or ProbeMode.HaproxyReverseHttp1Tls
+                or ProbeMode.HaproxyReverseHttp1ToHttps or ProbeMode.HaproxyReverseHttp1TlsToHttps
+                or ProbeMode.HaproxyReverseHttp2 or ProbeMode.HaproxyReverseHttp2ToHttpsHttp1
+                or ProbeMode.HaproxyReverseHttp3Cleartext or ProbeMode.HaproxyReverseHttp3ToHttpsHttp1
+                or ProbeMode.Compare or ProbeMode.CompareHttp2
+                or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame
+                or ProbeMode.CompareBridges or ProbeMode.CompareHttp3Cleartext
+                or ProbeMode.CompareBodies or ProbeMode.ComparePost or ProbeMode.CompareLossy
+                or ProbeMode.CompareTlsCost or ProbeMode.CompareArch or ProbeMode.CompareSaturation
+                or ProbeMode.CompareCeiling or ProbeMode.CompareHaproxySmoke
+            || PeerWire.IsProduct(options.Mode, PeerProduct.Haproxy))
+            && haproxyExe == null)
+        {
+            ProbeLog.Info(HaproxyHost.HaproxyMissingMessage());
+            ProbeLog.Info(string.Empty);
+        }
+
+        if ((options.Mode is ProbeMode.EnvoyReverseHttp1 or ProbeMode.EnvoyReverseHttp1Tls
+                or ProbeMode.EnvoyReverseHttp1ToHttps or ProbeMode.EnvoyReverseHttp1TlsToHttps
+                or ProbeMode.EnvoyReverseHttp2 or ProbeMode.EnvoyReverseHttp2ToHttpsHttp1
+                or ProbeMode.EnvoyReverseHttp3Cleartext or ProbeMode.EnvoyReverseHttp3ToHttpsHttp1
+                or ProbeMode.Compare or ProbeMode.CompareHttp2
+                or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame
+                or ProbeMode.CompareBridges or ProbeMode.CompareHttp3Cleartext
+                or ProbeMode.CompareBodies or ProbeMode.ComparePost or ProbeMode.CompareLossy
+                or ProbeMode.CompareTlsCost or ProbeMode.CompareArch or ProbeMode.CompareSaturation
+                or ProbeMode.CompareCeiling or ProbeMode.CompareEnvoySmoke
+            || PeerWire.IsProduct(options.Mode, PeerProduct.Envoy))
+            && envoyExe == null)
+        {
+            ProbeLog.Info(EnvoyHost.EnvoyMissingMessage());
             ProbeLog.Info(string.Empty);
         }
 
@@ -303,10 +534,43 @@ internal static class RampOrchestrator
             if (repeats > 1)
                 ProbeLog.Info($"=== repeat {rep}/{repeats} ===");
 
+            var armTimeout = options.ArmTimeout ?? ComputeDefaultArmTimeout(options);
+            if (rep == 1)
+            {
+                ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
+                    $"ArmTimeout={armTimeout.TotalMinutes:F1}m (stuck measure/READY/MsQuic cannot burn the full job)."));
+            }
+
             foreach (var arm in arms)
             {
                 ProbeLog.Info($"--- arm {arm.Name} ---");
-                var peak = await RunArmAsync(arm, options, csv, nginxVersion, cancellationToken);
+                ArmPeakResult peak;
+                using (var armCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+                {
+                    armCts.CancelAfter(armTimeout);
+                    try
+                    {
+                        peak = await RunArmAsync(arm, options, csv, nginxVersion, haproxyVersion, envoyVersion,
+                            armCts.Token)
+                            .WaitAsync(armTimeout + TimeSpan.FromSeconds(30), cancellationToken);
+                    }
+                    catch (Exception ex) when (ex is TimeoutException
+                                              || (ex is OperationCanceledException
+                                                  && !cancellationToken.IsCancellationRequested))
+                    {
+                        // Not a cert/OS prompt — usually MsQuic/bombardier/child stdout stall.
+                        ProbeLog.Error(
+                            $"Arm {arm.Name} timed out after {armTimeout.TotalMinutes:F1}m — skipping remaining steps for this arm.");
+                        peak = new ArmPeakResult(0, null, null);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException
+                                              || !cancellationToken.IsCancellationRequested)
+                    {
+                        ProbeLog.Error($"Arm {arm.Name} failed: {ex.GetType().Name}: {ex.Message}");
+                        peak = new ArmPeakResult(0, null, null);
+                    }
+                }
+
                 if (!peakByArm.TryGetValue(arm.Name, out var list))
                 {
                     list = [];
@@ -347,6 +611,19 @@ internal static class RampOrchestrator
 
         await csv.FlushAsync(cancellationToken);
         ProbeLog.Info($"CSV: {Path.GetFullPath(csvPath)}");
+
+        if (options.Mode is ProbeMode.CompareHaproxySmoke or ProbeMode.CompareEnvoySmoke)
+        {
+            var peerPrefix = options.Mode is ProbeMode.CompareHaproxySmoke ? "haproxy-reverse-" : "envoy-reverse-";
+            var peerPeaks = peakByArm.Where(kv => kv.Key.StartsWith(peerPrefix, StringComparison.Ordinal)).ToList();
+            if (peerPeaks.Count > 0 && peerPeaks.All(kv => Median(kv.Value) <= 0))
+            {
+                ProbeLog.Error(
+                    $"All {peerPrefix}* arms reported median_peak_rps=0 — peer likely failed to start or serve traffic.");
+                return 1;
+            }
+        }
+
         return 0;
     }
 
@@ -554,42 +831,161 @@ internal static class RampOrchestrator
         bool WarmCacheFirst = false);
 
     private static IReadOnlyList<ArmSpec> HeavierReverseArms(bool nginxAvailable, bool nginxHttp3Available,
+        bool haproxyAvailable, bool haproxyHttp3Available, bool envoyAvailable, bool envoyHttp3Available,
         WorkloadOptions workload, string nameSuffix, bool includeHttp3 = true)
     {
         var arms = new List<ArmSpec>
         {
-            new($"twp-reverse-http1-tls-{nameSuffix}", ProbeMode.ReverseHttp1Tls, null, workload),
-            new($"yarp-reverse-http1-tls-{nameSuffix}", ProbeMode.YarpReverseHttp1Tls, null, workload),
-            new($"twp-reverse-http2-cleartext-{nameSuffix}", ProbeMode.ReverseHttp2Cleartext, null, workload),
-            new($"yarp-reverse-http2-{nameSuffix}", ProbeMode.YarpReverseHttp2, null, workload)
+            new($"twp-reverse-http1-tls-{nameSuffix}", ProbeMode.ReverseHttp1Tls, null, workload)
         };
+        if (nginxAvailable)
+            arms.Add(new($"nginx-reverse-http1-tls-{nameSuffix}", ProbeMode.NginxReverseHttp1Tls, null, workload));
+        if (haproxyAvailable)
+            arms.Add(new($"haproxy-reverse-http1-tls-{nameSuffix}", ProbeMode.HaproxyReverseHttp1Tls, null, workload));
+        if (envoyAvailable)
+            arms.Add(new($"envoy-reverse-http1-tls-{nameSuffix}", ProbeMode.EnvoyReverseHttp1Tls, null, workload));
+        arms.Add(new($"yarp-reverse-http1-tls-{nameSuffix}", ProbeMode.YarpReverseHttp1Tls, null, workload));
+        arms.Add(new($"twp-reverse-http2-cleartext-{nameSuffix}", ProbeMode.ReverseHttp2Cleartext, null, workload));
+        if (nginxAvailable)
+            arms.Add(new($"nginx-reverse-http2-{nameSuffix}", ProbeMode.NginxReverseHttp2, null, workload));
+        if (haproxyAvailable)
+            arms.Add(new($"haproxy-reverse-http2-{nameSuffix}", ProbeMode.HaproxyReverseHttp2, null, workload));
+        if (envoyAvailable)
+            arms.Add(new($"envoy-reverse-http2-{nameSuffix}", ProbeMode.EnvoyReverseHttp2, null, workload));
+        arms.Add(new($"yarp-reverse-http2-{nameSuffix}", ProbeMode.YarpReverseHttp2, null, workload));
         if (includeHttp3)
         {
             arms.Add(new($"twp-reverse-http3-cleartext-{nameSuffix}", ProbeMode.ReverseHttp3Cleartext, null, workload));
             if (nginxHttp3Available)
                 arms.Add(new($"nginx-reverse-http3-cleartext-{nameSuffix}", ProbeMode.NginxReverseHttp3Cleartext, null,
                     workload));
+            if (haproxyHttp3Available)
+                arms.Add(new($"haproxy-reverse-http3-cleartext-{nameSuffix}", ProbeMode.HaproxyReverseHttp3Cleartext,
+                    null, workload));
+            if (envoyHttp3Available)
+                arms.Add(new($"envoy-reverse-http3-cleartext-{nameSuffix}", ProbeMode.EnvoyReverseHttp3Cleartext, null,
+                    workload));
             arms.Add(new($"yarp-reverse-http3-cleartext-{nameSuffix}", ProbeMode.YarpReverseHttp3Cleartext, null,
                 workload));
         }
 
-        if (nginxAvailable)
+        AppendHeavierWire(arms, nameSuffix, workload, "h2c-to-h1", ProbeMode.ReverseH2cToH1,
+            ProbeMode.YarpReverseH2cToH1, nginxAvailable ? ProbeMode.NginxReverseH2cToH1 : null,
+            haproxyAvailable ? ProbeMode.HaproxyReverseH2cToH1 : null,
+            envoyAvailable ? ProbeMode.EnvoyReverseH2cToH1 : null);
+        AppendHeavierWire(arms, nameSuffix, workload, "http2-to-h2c", ProbeMode.ReverseHttp2ToH2c,
+            ProbeMode.YarpReverseHttp2ToH2c, nginxMode: null,
+            haproxyAvailable ? ProbeMode.HaproxyReverseHttp2ToH2c : null,
+            envoyAvailable ? ProbeMode.EnvoyReverseHttp2ToH2c : null);
+        AppendHeavierWire(arms, nameSuffix, workload, "http2-to-https", ProbeMode.ReverseHttp2,
+            ProbeMode.YarpReverseHttp2ToHttps, nginxMode: null,
+            haproxyAvailable ? ProbeMode.HaproxyReverseHttp2ToHttps : null,
+            envoyAvailable ? ProbeMode.EnvoyReverseHttp2ToHttps : null);
+        if (includeHttp3)
         {
-            arms.Insert(1, new($"nginx-reverse-http1-tls-{nameSuffix}", ProbeMode.NginxReverseHttp1Tls, null, workload));
-            // After insert: twp H1, native H1, managed H1, twp H2, managed H2 — put native H2 after twp H2.
-            arms.Insert(4, new($"nginx-reverse-http2-{nameSuffix}", ProbeMode.NginxReverseHttp2, null, workload));
+            AppendHeavierWire(arms, nameSuffix, workload, "http3-to-http2", ProbeMode.ReverseHttp3ToHttp2,
+                ProbeMode.YarpReverseHttp3ToHttp2, nginxMode: null,
+                haproxyHttp3Available ? ProbeMode.HaproxyReverseHttp3ToHttp2 : null,
+                envoyHttp3Available ? ProbeMode.EnvoyReverseHttp3ToHttp2 : null);
+            AppendHeavierWire(arms, nameSuffix, workload, "http3-to-https-http1", ProbeMode.MitmHttp3ToHttp1,
+                ProbeMode.YarpReverseHttp3ToHttpsHttp1,
+                nginxHttp3Available ? ProbeMode.NginxReverseHttp3ToHttpsHttp1 : null,
+                haproxyHttp3Available ? ProbeMode.HaproxyReverseHttp3ToHttpsHttp1 : null,
+                envoyHttp3Available ? ProbeMode.EnvoyReverseHttp3ToHttpsHttp1 : null);
         }
 
         return arms;
     }
 
-    private static IReadOnlyList<ArmSpec> ResolveArms(ProbeMode mode, bool nginxAvailable,
-        bool nginxHttp3Available = false, bool bombardierAvailable = false)
+    private static void AppendHeavierWire(List<ArmSpec> arms, string nameSuffix, WorkloadOptions workload,
+        string stem, ProbeMode twpMode, ProbeMode yarpMode, ProbeMode? nginxMode, ProbeMode? haproxyMode,
+        ProbeMode? envoyMode)
     {
+        arms.Add(new($"twp-reverse-{stem}-{nameSuffix}", twpMode, null, workload));
+        if (nginxMode is { } nm)
+            arms.Add(new($"nginx-reverse-{stem}-{nameSuffix}", nm, null, workload));
+        if (haproxyMode is { } hm)
+            arms.Add(new($"haproxy-reverse-{stem}-{nameSuffix}", hm, null, workload));
+        if (envoyMode is { } em)
+            arms.Add(new($"envoy-reverse-{stem}-{nameSuffix}", em, null, workload));
+        arms.Add(new($"yarp-reverse-{stem}-{nameSuffix}", yarpMode, null, workload));
+    }
+
+    private static void AppendComparePeers(List<ArmSpec> arms, string baseName, ProbeMode twpMode, ProbeMode yarpMode,
+        ProbeMode? nginxMode, ProbeMode? haproxyMode, ProbeMode? envoyMode,
+        bool nginxAvailable, bool haproxyAvailable, bool envoyAvailable,
+        int? maxCached = null, WorkloadOptions? workload = null)
+    {
+        arms.Add(new($"twp-{baseName}", twpMode, maxCached, workload));
+        if (nginxAvailable && nginxMode is { } nm)
+            arms.Add(new($"nginx-{baseName}", nm, maxCached, workload));
+        if (haproxyAvailable && haproxyMode is { } hm)
+            arms.Add(new($"haproxy-{baseName}", hm, maxCached, workload));
+        if (envoyAvailable && envoyMode is { } em)
+            arms.Add(new($"envoy-{baseName}", em, maxCached, workload));
+        arms.Add(new($"yarp-{baseName}", yarpMode, maxCached, workload));
+    }
+
+    private static void InsertTerminatePeersAfterYarp(List<ArmSpec> arms, ProbeMode yarpMode,
+        bool nginxAvailable, string? nginxName, ProbeMode? nginxMode,
+        bool haproxyAvailable, string haproxyName, ProbeMode haproxyMode,
+        bool envoyAvailable, string envoyName, ProbeMode envoyMode,
+        WorkloadOptions? workload = null)
+    {
+        var i = arms.FindIndex(a => a.Mode == yarpMode);
+        if (i < 0)
+            return;
+        var insertAt = i + 1;
+        if (nginxAvailable && nginxMode is { } nm && nginxName != null)
+            arms.Insert(insertAt++, new(nginxName, nm, null, workload));
+        if (haproxyAvailable)
+            arms.Insert(insertAt++, new(haproxyName, haproxyMode, null, workload));
+        if (envoyAvailable)
+            arms.Insert(insertAt, new(envoyName, envoyMode, null, workload));
+    }
+
+    private static bool NativeWireAvailable(NativePeerWire wire, bool nginxAvailable, bool haproxyAvailable,
+        bool haproxyQuicAvailable, bool envoyAvailable, bool envoyHttp3Available) =>
+        wire.Product switch
+        {
+            PeerProduct.Nginx => nginxAvailable,
+            PeerProduct.Haproxy => haproxyAvailable && (!PeerWire.NeedsQuicBuild(wire) || haproxyQuicAvailable),
+            PeerProduct.Envoy => envoyAvailable && (!PeerWire.NeedsQuicBuild(wire) || envoyHttp3Available),
+            _ => false
+        };
+
+    private static void InsertNativeRemainderAfterYarp(List<ArmSpec> arms, ProbeMode yarpMode,
+        bool nginxAvailable, bool haproxyAvailable, bool envoyAvailable,
+        string? nginxName, string? haproxyName, string? envoyName)
+    {
+        var i = arms.FindIndex(a => a.Mode == yarpMode);
+        if (i < 0)
+            return;
+        var insertAt = i + 1;
+        if (nginxAvailable && nginxName != null && PeerWire.TryParseName(nginxName, out var nginxMode))
+            arms.Insert(insertAt++, new(nginxName, nginxMode, null));
+        if (haproxyAvailable && haproxyName != null && PeerWire.TryParseName(haproxyName, out var haproxyMode))
+            arms.Insert(insertAt++, new(haproxyName, haproxyMode, null));
+        if (envoyAvailable && envoyName != null && PeerWire.TryParseName(envoyName, out var envoyMode))
+            arms.Insert(insertAt, new(envoyName, envoyMode, null));
+    }
+
+    private static IReadOnlyList<ArmSpec> ResolveArms(ProbeMode mode, bool nginxAvailable,
+        bool nginxHttp3Available = false, bool bombardierAvailable = false,
+        bool haproxyAvailable = false, bool haproxyQuicAvailable = false,
+        bool envoyAvailable = false, bool envoyHttp3Available = false)
+    {
+        if (PeerWire.TryGet(mode, out var nativeWire))
+            return NativeWireAvailable(nativeWire, nginxAvailable, haproxyAvailable, haproxyQuicAvailable,
+                envoyAvailable, envoyHttp3Available)
+                ? [new(nativeWire.Name, nativeWire.Mode, null)]
+                : [];
+
         return mode switch
         {
             ProbeMode.OriginDirect => [new("origin-direct", ProbeMode.OriginDirect, null)],
-            ProbeMode.CompareSaturation => BuildSaturationArms(nginxAvailable, bombardierAvailable, nginxHttp3Available),
+            ProbeMode.CompareSaturation => BuildSaturationArms(nginxAvailable, bombardierAvailable,
+                nginxHttp3Available, haproxyAvailable, haproxyQuicAvailable, envoyAvailable, envoyHttp3Available),
             ProbeMode.ReverseHttp1 => [new("twp-reverse-http1", ProbeMode.ReverseHttp1, null)],
             ProbeMode.BareReverseHttp1 => [new("bare-reverse-http1", ProbeMode.BareReverseHttp1, null)],
             ProbeMode.NginxReverseHttp1 => nginxAvailable
@@ -604,6 +1000,12 @@ internal static class RampOrchestrator
             ProbeMode.BareReverseHttp1Tls => [new("bare-reverse-http1-tls", ProbeMode.BareReverseHttp1Tls, null)],
             ProbeMode.NginxReverseHttp1Tls => nginxAvailable
                 ? [new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null)]
+                : [],
+            ProbeMode.NginxReverseHttp1ToHttps => nginxAvailable
+                ? [new("nginx-reverse-http1-to-https", ProbeMode.NginxReverseHttp1ToHttps, null)]
+                : [],
+            ProbeMode.NginxReverseHttp1TlsToHttps => nginxAvailable
+                ? [new("nginx-reverse-http1-tls-to-https", ProbeMode.NginxReverseHttp1TlsToHttps, null)]
                 : [],
             ProbeMode.YarpReverseHttp1Tls => [new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null)],
             ProbeMode.YarpReverseHttp1ToHttps => [new("yarp-reverse-http1-to-https", ProbeMode.YarpReverseHttp1ToHttps, null)],
@@ -631,9 +1033,66 @@ internal static class RampOrchestrator
             ProbeMode.NginxReverseHttp2 => nginxAvailable
                 ? [new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null)]
                 : [],
+            ProbeMode.NginxReverseHttp2ToHttpsHttp1 => nginxAvailable
+                ? [new("nginx-reverse-http2-to-https-http1", ProbeMode.NginxReverseHttp2ToHttpsHttp1, null)]
+                : [],
             ProbeMode.NginxReverseHttp3Cleartext => nginxHttp3Available
                 ? [new("nginx-reverse-http3-cleartext", ProbeMode.NginxReverseHttp3Cleartext, null)]
                 : [],
+            ProbeMode.NginxReverseHttp3ToHttpsHttp1 => nginxHttp3Available
+                ? [new("nginx-reverse-http3-to-https-http1", ProbeMode.NginxReverseHttp3ToHttpsHttp1, null)]
+                : [],
+            ProbeMode.HaproxyReverseHttp1 => haproxyAvailable
+                ? [new("haproxy-reverse-http1", ProbeMode.HaproxyReverseHttp1, null)]
+                : [],
+            ProbeMode.HaproxyReverseHttp1Tls => haproxyAvailable
+                ? [new("haproxy-reverse-http1-tls", ProbeMode.HaproxyReverseHttp1Tls, null)]
+                : [],
+            ProbeMode.HaproxyReverseHttp1ToHttps => haproxyAvailable
+                ? [new("haproxy-reverse-http1-to-https", ProbeMode.HaproxyReverseHttp1ToHttps, null)]
+                : [],
+            ProbeMode.HaproxyReverseHttp1TlsToHttps => haproxyAvailable
+                ? [new("haproxy-reverse-http1-tls-to-https", ProbeMode.HaproxyReverseHttp1TlsToHttps, null)]
+                : [],
+            ProbeMode.HaproxyReverseHttp2 => haproxyAvailable
+                ? [new("haproxy-reverse-http2", ProbeMode.HaproxyReverseHttp2, null)]
+                : [],
+            ProbeMode.HaproxyReverseHttp2ToHttpsHttp1 => haproxyAvailable
+                ? [new("haproxy-reverse-http2-to-https-http1", ProbeMode.HaproxyReverseHttp2ToHttpsHttp1, null)]
+                : [],
+            ProbeMode.HaproxyReverseHttp3Cleartext => haproxyQuicAvailable
+                ? [new("haproxy-reverse-http3-cleartext", ProbeMode.HaproxyReverseHttp3Cleartext, null)]
+                : [],
+            ProbeMode.HaproxyReverseHttp3ToHttpsHttp1 => haproxyQuicAvailable
+                ? [new("haproxy-reverse-http3-to-https-http1", ProbeMode.HaproxyReverseHttp3ToHttpsHttp1, null)]
+                : [],
+            ProbeMode.EnvoyReverseHttp1 => envoyAvailable
+                ? [new("envoy-reverse-http1", ProbeMode.EnvoyReverseHttp1, null)]
+                : [],
+            ProbeMode.EnvoyReverseHttp1Tls => envoyAvailable
+                ? [new("envoy-reverse-http1-tls", ProbeMode.EnvoyReverseHttp1Tls, null)]
+                : [],
+            ProbeMode.EnvoyReverseHttp1ToHttps => envoyAvailable
+                ? [new("envoy-reverse-http1-to-https", ProbeMode.EnvoyReverseHttp1ToHttps, null)]
+                : [],
+            ProbeMode.EnvoyReverseHttp1TlsToHttps => envoyAvailable
+                ? [new("envoy-reverse-http1-tls-to-https", ProbeMode.EnvoyReverseHttp1TlsToHttps, null)]
+                : [],
+            ProbeMode.EnvoyReverseHttp2 => envoyAvailable
+                ? [new("envoy-reverse-http2", ProbeMode.EnvoyReverseHttp2, null)]
+                : [],
+            ProbeMode.EnvoyReverseHttp2ToHttpsHttp1 => envoyAvailable
+                ? [new("envoy-reverse-http2-to-https-http1", ProbeMode.EnvoyReverseHttp2ToHttpsHttp1, null)]
+                : [],
+            ProbeMode.EnvoyReverseHttp3Cleartext => envoyHttp3Available
+                ? [new("envoy-reverse-http3-cleartext", ProbeMode.EnvoyReverseHttp3Cleartext, null)]
+                : [],
+            ProbeMode.EnvoyReverseHttp3ToHttpsHttp1 => envoyHttp3Available
+                ? [new("envoy-reverse-http3-to-https-http1", ProbeMode.EnvoyReverseHttp3ToHttpsHttp1, null)]
+                : [],
+            ProbeMode.CompareNginxHttps => BuildNginxHttpsArms(nginxAvailable, nginxHttp3Available),
+            ProbeMode.CompareHaproxySmoke => BuildHaproxySmokeArms(haproxyAvailable, haproxyQuicAvailable),
+            ProbeMode.CompareEnvoySmoke => BuildEnvoySmokeArms(envoyAvailable, envoyHttp3Available),
             ProbeMode.YarpReverseHttp2 => [new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null)],
             ProbeMode.ReverseHttp3 => [new("twp-reverse-http3", ProbeMode.ReverseHttp3, null)],
             ProbeMode.ReverseHttp3Cleartext =>
@@ -696,124 +1155,12 @@ internal static class RampOrchestrator
                 [new("twp-mitm-http2-to-http1", ProbeMode.MitmHttp2ToHttp1, null)],
             ProbeMode.MitmHttp3ToHttp1 =>
                 [new("twp-mitm-http3-to-http1", ProbeMode.MitmHttp3ToHttp1, null)],
-            ProbeMode.Compare => nginxAvailable
-                ?
-                [
-                    new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
-                    new("nginx-reverse-http1", ProbeMode.NginxReverseHttp1, null),
-                    new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null),
-                    new("twp-https-mitm", ProbeMode.HttpsMitm, null)
-                ]
-                :
-                [
-                    new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
-                    new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null),
-                    new("twp-https-mitm", ProbeMode.HttpsMitm, null)
-                ],
-            ProbeMode.CompareHttp2 => nginxAvailable
-                ?
-                [
-                    new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
-                    new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null),
-                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
-                    new("twp-reverse-http3", ProbeMode.ReverseHttp3, null)
-                ]
-                :
-                [
-                    new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
-                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
-                    new("twp-reverse-http3", ProbeMode.ReverseHttp3, null)
-                ],
-            ProbeMode.CompareTls => nginxAvailable
-                ?
-                [
-                    new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
-                    new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null),
-                    new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
-                    new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
-                    new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null),
-                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
-                    new("twp-reverse-http3", ProbeMode.ReverseHttp3, null)
-                ]
-                :
-                [
-                    new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
-                    new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
-                    new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
-                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
-                    new("twp-reverse-http3", ProbeMode.ReverseHttp3, null)
-                ],
-            ProbeMode.CompareTerminate => nginxAvailable
-                ?
-                [
-                    new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
-                    new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null),
-                    new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
-                    new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null),
-                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
-                    new("twp-reverse-h2c-to-h1", ProbeMode.ReverseH2cToH1, null),
-                    new("yarp-reverse-h2c-to-h1", ProbeMode.YarpReverseH2cToH1, null),
-                    new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null),
-                    new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null),
-                    ..(nginxHttp3Available
-                        ? new ArmSpec[]
-                        {
-                            new("nginx-reverse-http3-cleartext", ProbeMode.NginxReverseHttp3Cleartext, null)
-                        }
-                        : []),
-                    new("yarp-reverse-http3-cleartext", ProbeMode.YarpReverseHttp3Cleartext, null)
-                ]
-                :
-                [
-                    new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
-                    new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
-                    new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null),
-                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
-                    new("twp-reverse-h2c-to-h1", ProbeMode.ReverseH2cToH1, null),
-                    new("yarp-reverse-h2c-to-h1", ProbeMode.YarpReverseH2cToH1, null),
-                    new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null),
-                    new("yarp-reverse-http3-cleartext", ProbeMode.YarpReverseHttp3Cleartext, null)
-                ],
-            ProbeMode.CompareSame => nginxAvailable
-                ?
-                [
-                    new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
-                    new("nginx-reverse-http1", ProbeMode.NginxReverseHttp1, null),
-                    new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null),
-                    new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
-                    new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null),
-                    new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
-                    new("twp-reverse-http1-to-https", ProbeMode.ReverseHttp1ToHttps, null),
-                    new("yarp-reverse-http1-to-https", ProbeMode.YarpReverseHttp1ToHttps, null),
-                    new("twp-https-mitm", ProbeMode.HttpsMitm, null),
-                    new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
-                    new("twp-reverse-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null),
-                    new("yarp-reverse-h2c-to-h2c", ProbeMode.YarpReverseH2cToH2c, null),
-                    new("twp-reverse-h2c", ProbeMode.ReverseH2c, null),
-                    new("yarp-reverse-h2c", ProbeMode.YarpReverseH2c, null),
-                    new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null),
-                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
-                    new("twp-reverse-http3", ProbeMode.ReverseHttp3, null),
-                    new("yarp-reverse-http3-to-http3", ProbeMode.YarpReverseHttp3ToHttp3, null)
-                ]
-                :
-                [
-                    new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
-                    new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null),
-                    new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
-                    new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
-                    new("twp-reverse-http1-to-https", ProbeMode.ReverseHttp1ToHttps, null),
-                    new("yarp-reverse-http1-to-https", ProbeMode.YarpReverseHttp1ToHttps, null),
-                    new("twp-https-mitm", ProbeMode.HttpsMitm, null),
-                    new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
-                    new("twp-reverse-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null),
-                    new("yarp-reverse-h2c-to-h2c", ProbeMode.YarpReverseH2cToH2c, null),
-                    new("twp-reverse-h2c", ProbeMode.ReverseH2c, null),
-                    new("yarp-reverse-h2c", ProbeMode.YarpReverseH2c, null),
-                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
-                    new("twp-reverse-http3", ProbeMode.ReverseHttp3, null),
-                    new("yarp-reverse-http3-to-http3", ProbeMode.YarpReverseHttp3ToHttp3, null)
-                ],
+            ProbeMode.Compare => BuildCompareArms(nginxAvailable, haproxyAvailable, envoyAvailable),
+            ProbeMode.CompareHttp2 => BuildCompareHttp2Arms(nginxAvailable, haproxyAvailable, envoyAvailable),
+            ProbeMode.CompareTls => BuildCompareTlsArms(nginxAvailable, haproxyAvailable, envoyAvailable),
+            ProbeMode.CompareTerminate => BuildCompareTerminateArms(nginxAvailable, nginxHttp3Available,
+                haproxyAvailable, haproxyQuicAvailable, envoyAvailable, envoyHttp3Available),
+            ProbeMode.CompareSame => BuildCompareSameArms(nginxAvailable, haproxyAvailable, envoyAvailable),
             ProbeMode.CompareBridges =>
             [
                 new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null),
@@ -850,30 +1197,35 @@ internal static class RampOrchestrator
                         new("nginx-reverse-http3-cleartext", ProbeMode.NginxReverseHttp3Cleartext, null)
                     }
                     : []),
+                ..(haproxyQuicAvailable
+                    ? new ArmSpec[]
+                    {
+                        new("haproxy-reverse-http3-cleartext", ProbeMode.HaproxyReverseHttp3Cleartext, null)
+                    }
+                    : []),
+                ..(envoyHttp3Available
+                    ? new ArmSpec[]
+                    {
+                        new("envoy-reverse-http3-cleartext", ProbeMode.EnvoyReverseHttp3Cleartext, null)
+                    }
+                    : []),
                 new("twp-reverse-http3-to-h2c", ProbeMode.ReverseHttp3ToH2c, null),
                 new("yarp-reverse-http3-to-h2c", ProbeMode.YarpReverseHttp3ToH2c, null),
                 new("twp-reverse-http3-to-http2", ProbeMode.ReverseHttp3ToHttp2, null),
                 new("yarp-reverse-http3-to-http2", ProbeMode.YarpReverseHttp3ToHttp2, null),
                 new("yarp-reverse-http3-to-http3", ProbeMode.YarpReverseHttp3ToHttp3, null)
             ],
-            ProbeMode.CompareHttp3Cleartext =>
-            [
-                new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null),
-                new("yarp-reverse-http3-cleartext", ProbeMode.YarpReverseHttp3Cleartext, null),
-                ..(nginxHttp3Available
-                    ? new ArmSpec[]
-                    {
-                        new("nginx-reverse-http3-cleartext", ProbeMode.NginxReverseHttp3Cleartext, null)
-                    }
-                    : [])
-            ],
+            ProbeMode.CompareHttp3Cleartext => BuildCompareHttp3CleartextArms(nginxAvailable, nginxHttp3Available,
+                haproxyAvailable, haproxyQuicAvailable, envoyAvailable, envoyHttp3Available),
             ProbeMode.CompareMitm =>
             [
                 ..BuildMitmArms(),
                 ..BuildMitmFullArms()
             ],
-            ProbeMode.CompareMatrix => BuildFullMatrixArms(nginxAvailable, nginxHttp3Available),
-            ProbeMode.CompareCrossVersion => BuildFullMatrixArms(nginxAvailable, nginxHttp3Available),
+            ProbeMode.CompareMatrix => BuildFullMatrixArms(nginxAvailable, nginxHttp3Available, haproxyAvailable,
+                haproxyQuicAvailable, envoyAvailable, envoyHttp3Available),
+            ProbeMode.CompareCrossVersion => BuildFullMatrixArms(nginxAvailable, nginxHttp3Available,
+                haproxyAvailable, haproxyQuicAvailable, envoyAvailable, envoyHttp3Available),
             ProbeMode.CompareEditions => BuildEditionArms(),
             ProbeMode.TwpCliReverseHttp1 => [new("twp-cli-reverse-http1", ProbeMode.TwpCliReverseHttp1, null)],
             ProbeMode.TwpCliReverseHttp1Tls =>
@@ -915,56 +1267,37 @@ internal static class RampOrchestrator
                 [new("twp-cli-dialect-twp-http1", ProbeMode.TwpCliDialectTwpHttp1, null)],
             ProbeMode.CompareProduct =>
             [
-                ..BuildFullMatrixArms(nginxAvailable, nginxHttp3Available),
+                ..BuildFullMatrixArms(nginxAvailable, nginxHttp3Available, haproxyAvailable, haproxyQuicAvailable,
+                    envoyAvailable, envoyHttp3Available),
                 ..BuildMitmArms(),
                 ..BuildMitmFullArms()
             ],
-            ProbeMode.CompareProductSmoke => BuildProductSmokeArms(),
+            ProbeMode.CompareProductSmoke => BuildProductSmokeArms(nginxAvailable, haproxyAvailable, envoyAvailable),
             ProbeMode.CompareSpot => BuildSpotArms(),
-            ProbeMode.CompareCeiling => nginxAvailable
-                ?
-                [
-                    new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
-                    new("bare-reverse-http1", ProbeMode.BareReverseHttp1, null),
-                    new("nginx-reverse-http1", ProbeMode.NginxReverseHttp1, null),
-                    new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null),
-                    new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
-                    new("bare-reverse-http1-tls", ProbeMode.BareReverseHttp1Tls, null),
-                    new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null),
-                    new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
-                    new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null),
-                    new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null),
-                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null)
-                ]
-                :
-                [
-                    new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
-                    new("bare-reverse-http1", ProbeMode.BareReverseHttp1, null),
-                    new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null),
-                    new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
-                    new("bare-reverse-http1-tls", ProbeMode.BareReverseHttp1Tls, null),
-                    new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
-                    new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null),
-                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null)
-                ],
+            ProbeMode.CompareCeiling => BuildCompareCeilingArms(nginxAvailable, haproxyAvailable, envoyAvailable),
             ProbeMode.CompareBodies =>
             [
-                ..HeavierReverseArms(nginxAvailable, nginxHttp3Available, WorkloadOptions.ForBodyGet(64 * 1024),
-                    "body64k"),
-                ..HeavierReverseArms(nginxAvailable, nginxHttp3Available, WorkloadOptions.ForBodyGet(256 * 1024),
-                    "body256k")
+                ..HeavierReverseArms(nginxAvailable, nginxHttp3Available, haproxyAvailable, haproxyQuicAvailable,
+                    envoyAvailable, envoyHttp3Available, WorkloadOptions.ForBodyGet(64 * 1024), "body64k"),
+                ..HeavierReverseArms(nginxAvailable, nginxHttp3Available, haproxyAvailable, haproxyQuicAvailable,
+                    envoyAvailable, envoyHttp3Available, WorkloadOptions.ForBodyGet(256 * 1024), "body256k")
             ],
             ProbeMode.ComparePost =>
-                HeavierReverseArms(nginxAvailable, nginxHttp3Available,
-                    WorkloadOptions.ForPost(64 * 1024, 64 * 1024), "post64k"),
+                HeavierReverseArms(nginxAvailable, nginxHttp3Available, haproxyAvailable, haproxyQuicAvailable,
+                    envoyAvailable, envoyHttp3Available, WorkloadOptions.ForPost(64 * 1024, 64 * 1024), "post64k"),
             ProbeMode.CompareLossy =>
-                // H1/H2: TCP delay + connection stall (HOL). H3: UDP delay + datagram drop (QUIC).
-                HeavierReverseArms(nginxAvailable, nginxHttp3Available,
+                HeavierReverseArms(nginxAvailable, nginxHttp3Available, haproxyAvailable, haproxyQuicAvailable,
+                    envoyAvailable, envoyHttp3Available,
                     WorkloadOptions.ForLossy(64 * 1024, 5, 1.0), "lossy"),
-            ProbeMode.CompareTlsCost => BuildTlsCostArms(nginxAvailable),
-            ProbeMode.CompareArch => BuildArchArms(nginxAvailable, nginxHttp3Available),
+            ProbeMode.CompareTlsCost => BuildTlsCostArms(nginxAvailable, haproxyAvailable, envoyAvailable),
+            ProbeMode.CompareArch => BuildArchArms(nginxAvailable, nginxHttp3Available, haproxyAvailable,
+                haproxyQuicAvailable, envoyAvailable, envoyHttp3Available),
+            ProbeMode.CompareGrpc => BuildCompareGrpcArms(nginxAvailable, haproxyAvailable, envoyAvailable),
             ProbeMode.YarpReverseHttp2ToHttps =>
                 [new("yarp-reverse-http2-to-https", ProbeMode.YarpReverseHttp2ToHttps, null)],
+            ProbeMode.NginxReverseGrpc => nginxAvailable
+                ? [new("nginx-grpc-http2", ProbeMode.NginxReverseGrpc, null, WorkloadOptions.ForGrpc())]
+                : [],
             ProbeMode.ExplicitPoolSweep =>
             [
                 new("twp-explicit-http1-multi-c4", ProbeMode.ExplicitHttp1Multi, 4),
@@ -973,6 +1306,27 @@ internal static class RampOrchestrator
             ],
             _ => throw new ArgumentOutOfRangeException(nameof(mode))
         };
+    }
+
+    /// <summary>
+    /// Unary gRPC Echo @ H2 TLS→H2 TLS: TWP + YARP + nginx grpc_pass + HAProxy + Envoy.
+    /// </summary>
+    private static IReadOnlyList<ArmSpec> BuildCompareGrpcArms(bool nginxAvailable, bool haproxyAvailable,
+        bool envoyAvailable)
+    {
+        var grpc = WorkloadOptions.ForGrpc();
+        var arms = new List<ArmSpec>
+        {
+            new("twp-grpc-http2", ProbeMode.ReverseHttp2, null, grpc),
+            new("yarp-grpc-http2", ProbeMode.YarpReverseHttp2ToHttps, null, grpc)
+        };
+        if (nginxAvailable)
+            arms.Add(new("nginx-grpc-http2", ProbeMode.NginxReverseGrpc, null, grpc));
+        if (haproxyAvailable)
+            arms.Add(new("haproxy-grpc-http2", ProbeMode.HaproxyReverseHttp2ToHttps, null, grpc));
+        if (envoyAvailable)
+            arms.Add(new("envoy-grpc-http2", ProbeMode.EnvoyReverseHttp2ToHttps, null, grpc));
+        return arms;
     }
 
     /// <summary>
@@ -1118,12 +1472,13 @@ internal static class RampOrchestrator
     /// Minimal arm set for <c>validate-compare-product-gates.ps1</c> (every Lite/Full/Reverse
     /// pair the script scores, plus YARP H3 reverse peers). Intended for Mac-only GHA smoke.
     /// </summary>
-    private static IReadOnlyList<ArmSpec> BuildProductSmokeArms()
+    private static IReadOnlyList<ArmSpec> BuildProductSmokeArms(bool nginxAvailable, bool haproxyAvailable,
+        bool envoyAvailable)
     {
         const bool intercept = true;
         const bool mutate = true;
-        return
-        [
+        var arms = new List<ArmSpec>
+        {
             // H3→H1 plain
             new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null),
             new("twp-mitm-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null,
@@ -1169,7 +1524,29 @@ internal static class RampOrchestrator
             new("twp-mitm-http2", ProbeMode.ReverseHttp2, null, EnableHttpInterception: intercept),
             new("twp-mitm-full-http2", ProbeMode.ReverseHttp2, null,
                 EnableHttpInterception: intercept, MutateHttpInterception: mutate)
-        ];
+        };
+
+        // Remainder canaries (1a1d78f2) — fail Phase-1 smoke on config typos before full product.
+        // TWP reverse twins keep each canary in a comparison group (not a singleton peer).
+        if (nginxAvailable)
+        {
+            arms.Add(new("twp-reverse-h2c-to-h1", ProbeMode.ReverseH2cToH1, null));
+            arms.Add(new("nginx-reverse-h2c-to-h1", ProbeMode.NginxReverseH2cToH1, null));
+        }
+
+        if (haproxyAvailable)
+        {
+            // twp-reverse-http2-to-h2c already in the gate set above.
+            arms.Add(new("haproxy-reverse-http2-to-h2c", ProbeMode.HaproxyReverseHttp2ToH2c, null));
+        }
+
+        if (envoyAvailable)
+        {
+            // twp-reverse-http2 already in the gate set above (H2 TLS→H2 TLS).
+            arms.Add(new("envoy-reverse-http2-to-https", ProbeMode.EnvoyReverseHttp2ToHttps, null));
+        }
+
+        return arms;
     }
 
     /// <summary>
@@ -1201,9 +1578,10 @@ internal static class RampOrchestrator
         new("twp-cli-dialect-twp-http1", ProbeMode.TwpCliDialectTwpHttp1, null)
     ];
 
-    private static IReadOnlyList<ArmSpec> BuildFullMatrixArms(bool nginxAvailable, bool nginxHttp3Available)
+    private static IReadOnlyList<ArmSpec> BuildFullMatrixArms(bool nginxAvailable, bool nginxHttp3Available,
+        bool haproxyAvailable, bool haproxyHttp3Available, bool envoyAvailable, bool envoyHttp3Available)
     {
-        // Full 5×5 Client×Origin reverse cartesian: TWP + YARP for each cell; nginx on terminate peers.
+        // Full 5×5 Client×Origin reverse cartesian: TWP + YARP for each cell; native peers after YARP.
         var arms = new List<ArmSpec>
         {
             // H1 plain client
@@ -1263,31 +1641,419 @@ internal static class RampOrchestrator
             new("yarp-reverse-http3-to-http3", ProbeMode.YarpReverseHttp3ToHttp3, null)
         };
 
-        if (nginxAvailable)
-        {
-            var i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp1);
-            if (i >= 0)
-                arms.Insert(i + 1, new("nginx-reverse-http1", ProbeMode.NginxReverseHttp1, null));
-            i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp1Tls);
-            if (i >= 0)
-                arms.Insert(i + 1, new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null));
-            i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp2);
-            if (i >= 0)
-                arms.Insert(i + 1, new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null));
-        }
-
-        if (nginxHttp3Available)
+        // Native terminate peers: H1/H2/H3 inbound → H1 origin, plus product-possible remainder (PeerWire).
+        InsertTerminatePeersAfterYarp(arms, ProbeMode.YarpReverseHttp1, nginxAvailable,
+            "nginx-reverse-http1", ProbeMode.NginxReverseHttp1, haproxyAvailable,
+            "haproxy-reverse-http1", ProbeMode.HaproxyReverseHttp1, envoyAvailable,
+            "envoy-reverse-http1", ProbeMode.EnvoyReverseHttp1);
+        InsertTerminatePeersAfterYarp(arms, ProbeMode.YarpReverseHttp1ToHttps, nginxAvailable,
+            "nginx-reverse-http1-to-https", ProbeMode.NginxReverseHttp1ToHttps, haproxyAvailable,
+            "haproxy-reverse-http1-to-https", ProbeMode.HaproxyReverseHttp1ToHttps, envoyAvailable,
+            "envoy-reverse-http1-to-https", ProbeMode.EnvoyReverseHttp1ToHttps);
+        InsertTerminatePeersAfterYarp(arms, ProbeMode.YarpReverseHttp1Tls, nginxAvailable,
+            "nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, haproxyAvailable,
+            "haproxy-reverse-http1-tls", ProbeMode.HaproxyReverseHttp1Tls, envoyAvailable,
+            "envoy-reverse-http1-tls", ProbeMode.EnvoyReverseHttp1Tls);
+        InsertTerminatePeersAfterYarp(arms, ProbeMode.YarpReverseHttp1TlsToHttps, nginxAvailable,
+            "nginx-reverse-http1-tls-to-https", ProbeMode.NginxReverseHttp1TlsToHttps, haproxyAvailable,
+            "haproxy-reverse-http1-tls-to-https", ProbeMode.HaproxyReverseHttp1TlsToHttps, envoyAvailable,
+            "envoy-reverse-http1-tls-to-https", ProbeMode.EnvoyReverseHttp1TlsToHttps);
+        InsertTerminatePeersAfterYarp(arms, ProbeMode.YarpReverseHttp2, nginxAvailable,
+            "nginx-reverse-http2", ProbeMode.NginxReverseHttp2, haproxyAvailable,
+            "haproxy-reverse-http2", ProbeMode.HaproxyReverseHttp2, envoyAvailable,
+            "envoy-reverse-http2", ProbeMode.EnvoyReverseHttp2);
+        InsertTerminatePeersAfterYarp(arms, ProbeMode.YarpReverseHttp2ToHttpsHttp1, nginxAvailable,
+            "nginx-reverse-http2-to-https-http1", ProbeMode.NginxReverseHttp2ToHttpsHttp1, haproxyAvailable,
+            "haproxy-reverse-http2-to-https-http1", ProbeMode.HaproxyReverseHttp2ToHttpsHttp1, envoyAvailable,
+            "envoy-reverse-http2-to-https-http1", ProbeMode.EnvoyReverseHttp2ToHttpsHttp1);
+        if (nginxHttp3Available || haproxyHttp3Available || envoyHttp3Available)
         {
             var i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp3Cleartext);
             if (i >= 0)
-                arms.Insert(i + 1, new("nginx-reverse-http3-cleartext", ProbeMode.NginxReverseHttp3Cleartext, null));
+            {
+                var insertAt = i + 1;
+                if (nginxHttp3Available)
+                    arms.Insert(insertAt++,
+                        new("nginx-reverse-http3-cleartext", ProbeMode.NginxReverseHttp3Cleartext, null));
+                if (haproxyHttp3Available)
+                    arms.Insert(insertAt++,
+                        new("haproxy-reverse-http3-cleartext", ProbeMode.HaproxyReverseHttp3Cleartext, null));
+                if (envoyHttp3Available)
+                    arms.Insert(insertAt,
+                        new("envoy-reverse-http3-cleartext", ProbeMode.EnvoyReverseHttp3Cleartext, null));
+            }
+
+            i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp3ToHttpsHttp1);
+            if (i >= 0)
+            {
+                var insertAt = i + 1;
+                if (nginxHttp3Available)
+                    arms.Insert(insertAt++,
+                        new("nginx-reverse-http3-to-https-http1", ProbeMode.NginxReverseHttp3ToHttpsHttp1, null));
+                if (haproxyHttp3Available)
+                    arms.Insert(insertAt++,
+                        new("haproxy-reverse-http3-to-https-http1", ProbeMode.HaproxyReverseHttp3ToHttpsHttp1, null));
+                if (envoyHttp3Available)
+                    arms.Insert(insertAt,
+                        new("envoy-reverse-http3-to-https-http1", ProbeMode.EnvoyReverseHttp3ToHttpsHttp1, null));
+            }
+        }
+
+        // Native remainder: product-possible h2c inbound and H2/H3 origin (see PeerWire).
+        InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp1PlainToH2c, nginxAvailable: false,
+            haproxyAvailable, envoyAvailable, null,
+            "haproxy-reverse-http1-plain-to-h2c", "envoy-reverse-http1-plain-to-h2c");
+        InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp1PlainToHttp2, nginxAvailable: false,
+            haproxyAvailable, envoyAvailable, null,
+            "haproxy-reverse-http1-plain-to-http2", "envoy-reverse-http1-plain-to-http2");
+        InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp1PlainToHttp3, nginxAvailable: false,
+            haproxyHttp3Available, envoyHttp3Available, null,
+            "haproxy-reverse-http1-plain-to-http3", "envoy-reverse-http1-plain-to-http3");
+        InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp1ToH2c, nginxAvailable: false,
+            haproxyAvailable, envoyAvailable, null,
+            "haproxy-reverse-http1-to-h2c", "envoy-reverse-http1-to-h2c");
+        InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp11ToHttp2, nginxAvailable: false,
+            haproxyAvailable, envoyAvailable, null,
+            "haproxy-reverse-http11-to-http2", "envoy-reverse-http11-to-http2");
+        InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp1ToHttp3, nginxAvailable: false,
+            haproxyHttp3Available, envoyHttp3Available, null,
+            "haproxy-reverse-http1-to-http3", "envoy-reverse-http1-to-http3");
+        InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseH2cToH1, nginxAvailable,
+            haproxyAvailable, envoyAvailable,
+            "nginx-reverse-h2c-to-h1", "haproxy-reverse-h2c-to-h1", "envoy-reverse-h2c-to-h1");
+        InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseH2cToHttps, nginxAvailable,
+            haproxyAvailable, envoyAvailable,
+            "nginx-reverse-h2c-to-https", "haproxy-reverse-h2c-to-https", "envoy-reverse-h2c-to-https");
+        InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseH2cToH2c, nginxAvailable: false,
+            haproxyAvailable, envoyAvailable, null,
+            "haproxy-reverse-h2c-to-h2c", "envoy-reverse-h2c-to-h2c");
+        InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseH2c, nginxAvailable: false,
+            haproxyAvailable, envoyAvailable, null,
+            "haproxy-reverse-h2c", "envoy-reverse-h2c");
+        InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseH2cToH3, nginxAvailable: false,
+            haproxyHttp3Available, envoyHttp3Available, null,
+            "haproxy-reverse-h2c-to-h3", "envoy-reverse-h2c-to-h3");
+        InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp2ToH2c, nginxAvailable: false,
+            haproxyAvailable, envoyAvailable, null,
+            "haproxy-reverse-http2-to-h2c", "envoy-reverse-http2-to-h2c");
+        InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp2ToHttps, nginxAvailable: false,
+            haproxyAvailable, envoyAvailable, null,
+            "haproxy-reverse-http2-to-https", "envoy-reverse-http2-to-https");
+        InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp2ToHttp3, nginxAvailable: false,
+            haproxyHttp3Available, envoyHttp3Available, null,
+            "haproxy-reverse-http2-to-http3", "envoy-reverse-http2-to-http3");
+        InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp3ToH2c, nginxAvailable: false,
+            haproxyHttp3Available, envoyHttp3Available, null,
+            "haproxy-reverse-http3-to-h2c", "envoy-reverse-http3-to-h2c");
+        InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp3ToHttp2, nginxAvailable: false,
+            haproxyHttp3Available, envoyHttp3Available, null,
+            "haproxy-reverse-http3-to-http2", "envoy-reverse-http3-to-http2");
+        InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp3ToHttp3, nginxAvailable: false,
+            haproxyHttp3Available, envoyHttp3Available, null,
+            "haproxy-reverse-http3-to-http3", "envoy-reverse-http3-to-http3");
+
+        return arms;
+    }
+
+    private static IReadOnlyList<ArmSpec> BuildNginxHttpsArms(bool nginxAvailable, bool nginxHttp3Available)
+    {
+        // Peer TWP+YARP on the same wires so local/GHA smoke can confirm ÷nginx ratios.
+        var arms = new List<ArmSpec>
+        {
+            new("twp-reverse-http1-to-https", ProbeMode.ReverseHttp1ToHttps, null),
+            new("yarp-reverse-http1-to-https", ProbeMode.YarpReverseHttp1ToHttps, null)
+        };
+        if (nginxAvailable)
+            arms.Add(new("nginx-reverse-http1-to-https", ProbeMode.NginxReverseHttp1ToHttps, null));
+
+        arms.Add(new("twp-reverse-http1-mitm", ProbeMode.ReverseHttp1Mitm, null));
+        arms.Add(new("yarp-reverse-http1-tls-to-https", ProbeMode.YarpReverseHttp1TlsToHttps, null));
+        if (nginxAvailable)
+            arms.Add(new("nginx-reverse-http1-tls-to-https", ProbeMode.NginxReverseHttp1TlsToHttps, null));
+
+        arms.Add(new("twp-reverse-http2-to-https-http1", ProbeMode.MitmHttp2ToHttp1, null));
+        arms.Add(new("yarp-reverse-http2-to-https-http1", ProbeMode.YarpReverseHttp2ToHttpsHttp1, null));
+        if (nginxAvailable)
+            arms.Add(new("nginx-reverse-http2-to-https-http1", ProbeMode.NginxReverseHttp2ToHttpsHttp1, null));
+
+        arms.Add(new("twp-reverse-http3-to-https-http1", ProbeMode.MitmHttp3ToHttp1, null));
+        arms.Add(new("yarp-reverse-http3-to-https-http1", ProbeMode.YarpReverseHttp3ToHttpsHttp1, null));
+        if (nginxHttp3Available)
+            arms.Add(new("nginx-reverse-http3-to-https-http1", ProbeMode.NginxReverseHttp3ToHttpsHttp1, null));
+
+        arms.Add(new("twp-reverse-h2c-to-h1", ProbeMode.ReverseH2cToH1, null));
+        arms.Add(new("yarp-reverse-h2c-to-h1", ProbeMode.YarpReverseH2cToH1, null));
+        if (nginxAvailable)
+            arms.Add(new("nginx-reverse-h2c-to-h1", ProbeMode.NginxReverseH2cToH1, null));
+        arms.Add(new("twp-reverse-h2c-to-https", ProbeMode.ReverseH2cToHttps, null));
+        arms.Add(new("yarp-reverse-h2c-to-https", ProbeMode.YarpReverseH2cToHttps, null));
+        if (nginxAvailable)
+            arms.Add(new("nginx-reverse-h2c-to-https", ProbeMode.NginxReverseH2cToHttps, null));
+
+        return arms;
+    }
+
+    private static IReadOnlyList<ArmSpec> BuildHaproxySmokeArms(bool haproxyAvailable, bool haproxyHttp3Available)
+    {
+        if (!haproxyAvailable)
+            return [];
+        var arms = new List<ArmSpec>
+        {
+            new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
+            new("haproxy-reverse-http1", ProbeMode.HaproxyReverseHttp1, null),
+            new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null),
+            new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
+            new("haproxy-reverse-http1-tls", ProbeMode.HaproxyReverseHttp1Tls, null),
+            new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
+            new("twp-reverse-http1-to-https", ProbeMode.ReverseHttp1ToHttps, null),
+            new("haproxy-reverse-http1-to-https", ProbeMode.HaproxyReverseHttp1ToHttps, null),
+            new("yarp-reverse-http1-to-https", ProbeMode.YarpReverseHttp1ToHttps, null),
+            new("twp-reverse-http1-mitm", ProbeMode.ReverseHttp1Mitm, null),
+            new("haproxy-reverse-http1-tls-to-https", ProbeMode.HaproxyReverseHttp1TlsToHttps, null),
+            new("yarp-reverse-http1-tls-to-https", ProbeMode.YarpReverseHttp1TlsToHttps, null),
+            new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null),
+            new("haproxy-reverse-http2", ProbeMode.HaproxyReverseHttp2, null),
+            new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
+            new("twp-reverse-http2-to-https-http1", ProbeMode.MitmHttp2ToHttp1, null),
+            new("haproxy-reverse-http2-to-https-http1", ProbeMode.HaproxyReverseHttp2ToHttpsHttp1, null),
+            new("yarp-reverse-http2-to-https-http1", ProbeMode.YarpReverseHttp2ToHttpsHttp1, null)
+        };
+        if (haproxyHttp3Available)
+        {
+            arms.Add(new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null));
+            arms.Add(new("haproxy-reverse-http3-cleartext", ProbeMode.HaproxyReverseHttp3Cleartext, null));
+            arms.Add(new("yarp-reverse-http3-cleartext", ProbeMode.YarpReverseHttp3Cleartext, null));
+            arms.Add(new("twp-reverse-http3-to-https-http1", ProbeMode.MitmHttp3ToHttp1, null));
+            arms.Add(new("haproxy-reverse-http3-to-https-http1", ProbeMode.HaproxyReverseHttp3ToHttpsHttp1, null));
+            arms.Add(new("yarp-reverse-http3-to-https-http1", ProbeMode.YarpReverseHttp3ToHttpsHttp1, null));
+        }
+
+        foreach (var wire in PeerWire.All)
+        {
+            if (wire.Product != PeerProduct.Haproxy)
+                continue;
+            if (!NativeWireAvailable(wire, nginxAvailable: false, haproxyAvailable: true, haproxyHttp3Available,
+                    envoyAvailable: false, envoyHttp3Available: false))
+                continue;
+            arms.Add(new(wire.Name, wire.Mode, null));
+        }
+
+        return arms;
+    }
+
+    private static IReadOnlyList<ArmSpec> BuildEnvoySmokeArms(bool envoyAvailable, bool envoyHttp3Available)
+    {
+        if (!envoyAvailable)
+            return [];
+        var arms = new List<ArmSpec>
+        {
+            new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
+            new("envoy-reverse-http1", ProbeMode.EnvoyReverseHttp1, null),
+            new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null),
+            new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
+            new("envoy-reverse-http1-tls", ProbeMode.EnvoyReverseHttp1Tls, null),
+            new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
+            new("twp-reverse-http1-to-https", ProbeMode.ReverseHttp1ToHttps, null),
+            new("envoy-reverse-http1-to-https", ProbeMode.EnvoyReverseHttp1ToHttps, null),
+            new("yarp-reverse-http1-to-https", ProbeMode.YarpReverseHttp1ToHttps, null),
+            new("twp-reverse-http1-mitm", ProbeMode.ReverseHttp1Mitm, null),
+            new("envoy-reverse-http1-tls-to-https", ProbeMode.EnvoyReverseHttp1TlsToHttps, null),
+            new("yarp-reverse-http1-tls-to-https", ProbeMode.YarpReverseHttp1TlsToHttps, null),
+            new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null),
+            new("envoy-reverse-http2", ProbeMode.EnvoyReverseHttp2, null),
+            new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
+            new("twp-reverse-http2-to-https-http1", ProbeMode.MitmHttp2ToHttp1, null),
+            new("envoy-reverse-http2-to-https-http1", ProbeMode.EnvoyReverseHttp2ToHttpsHttp1, null),
+            new("yarp-reverse-http2-to-https-http1", ProbeMode.YarpReverseHttp2ToHttpsHttp1, null)
+        };
+        if (envoyHttp3Available)
+        {
+            arms.Add(new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null));
+            arms.Add(new("envoy-reverse-http3-cleartext", ProbeMode.EnvoyReverseHttp3Cleartext, null));
+            arms.Add(new("yarp-reverse-http3-cleartext", ProbeMode.YarpReverseHttp3Cleartext, null));
+            arms.Add(new("twp-reverse-http3-to-https-http1", ProbeMode.MitmHttp3ToHttp1, null));
+            arms.Add(new("envoy-reverse-http3-to-https-http1", ProbeMode.EnvoyReverseHttp3ToHttpsHttp1, null));
+            arms.Add(new("yarp-reverse-http3-to-https-http1", ProbeMode.YarpReverseHttp3ToHttpsHttp1, null));
+        }
+
+        foreach (var wire in PeerWire.All)
+        {
+            if (wire.Product != PeerProduct.Envoy)
+                continue;
+            if (!NativeWireAvailable(wire, nginxAvailable: false, haproxyAvailable: false, haproxyQuicAvailable: false,
+                    envoyAvailable: true, envoyHttp3Available))
+                continue;
+            arms.Add(new(wire.Name, wire.Mode, null));
+        }
+
+        return arms;
+    }
+
+    private static IReadOnlyList<ArmSpec> BuildCompareArms(bool nginxAvailable, bool haproxyAvailable,
+        bool envoyAvailable)
+    {
+        var arms = new List<ArmSpec>();
+        AppendComparePeers(arms, "reverse-http1", ProbeMode.ReverseHttp1, ProbeMode.YarpReverseHttp1,
+            ProbeMode.NginxReverseHttp1, ProbeMode.HaproxyReverseHttp1, ProbeMode.EnvoyReverseHttp1,
+            nginxAvailable, haproxyAvailable, envoyAvailable);
+        arms.Add(new("twp-https-mitm", ProbeMode.HttpsMitm, null));
+        return arms;
+    }
+
+    private static IReadOnlyList<ArmSpec> BuildCompareHttp2Arms(bool nginxAvailable, bool haproxyAvailable,
+        bool envoyAvailable)
+    {
+        var arms = new List<ArmSpec>();
+        AppendComparePeers(arms, "reverse-http2", ProbeMode.ReverseHttp2, ProbeMode.YarpReverseHttp2,
+            ProbeMode.NginxReverseHttp2, ProbeMode.HaproxyReverseHttp2, ProbeMode.EnvoyReverseHttp2,
+            nginxAvailable, haproxyAvailable, envoyAvailable);
+        arms.Add(new("twp-reverse-http3", ProbeMode.ReverseHttp3, null));
+        return arms;
+    }
+
+    private static IReadOnlyList<ArmSpec> BuildCompareTlsArms(bool nginxAvailable, bool haproxyAvailable,
+        bool envoyAvailable)
+    {
+        var arms = new List<ArmSpec>();
+        AppendComparePeers(arms, "reverse-http1-tls", ProbeMode.ReverseHttp1Tls, ProbeMode.YarpReverseHttp1Tls,
+            ProbeMode.NginxReverseHttp1Tls, ProbeMode.HaproxyReverseHttp1Tls, ProbeMode.EnvoyReverseHttp1Tls,
+            nginxAvailable, haproxyAvailable, envoyAvailable);
+        AppendComparePeers(arms, "reverse-http2", ProbeMode.ReverseHttp2, ProbeMode.YarpReverseHttp2,
+            ProbeMode.NginxReverseHttp2, ProbeMode.HaproxyReverseHttp2, ProbeMode.EnvoyReverseHttp2,
+            nginxAvailable, haproxyAvailable, envoyAvailable);
+        arms.Add(new("twp-reverse-http3", ProbeMode.ReverseHttp3, null));
+        return arms;
+    }
+
+    private static IReadOnlyList<ArmSpec> BuildCompareTerminateArms(bool nginxAvailable, bool nginxHttp3Available,
+        bool haproxyAvailable, bool haproxyHttp3Available, bool envoyAvailable, bool envoyHttp3Available)
+    {
+        var arms = new List<ArmSpec>();
+        AppendComparePeers(arms, "reverse-http1-tls", ProbeMode.ReverseHttp1Tls, ProbeMode.YarpReverseHttp1Tls,
+            ProbeMode.NginxReverseHttp1Tls, ProbeMode.HaproxyReverseHttp1Tls, ProbeMode.EnvoyReverseHttp1Tls,
+            nginxAvailable, haproxyAvailable, envoyAvailable);
+        arms.Add(new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null));
+        arms.Add(new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null));
+        arms.Add(new("twp-reverse-h2c-to-h1", ProbeMode.ReverseH2cToH1, null));
+        arms.Add(new("yarp-reverse-h2c-to-h1", ProbeMode.YarpReverseH2cToH1, null));
+        if (nginxAvailable)
+            arms.Add(new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null));
+        if (haproxyAvailable)
+            arms.Add(new("haproxy-reverse-http2", ProbeMode.HaproxyReverseHttp2, null));
+        if (envoyAvailable)
+            arms.Add(new("envoy-reverse-http2", ProbeMode.EnvoyReverseHttp2, null));
+        arms.Add(new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null));
+        if (nginxHttp3Available)
+            arms.Add(new("nginx-reverse-http3-cleartext", ProbeMode.NginxReverseHttp3Cleartext, null));
+        if (haproxyHttp3Available)
+            arms.Add(new("haproxy-reverse-http3-cleartext", ProbeMode.HaproxyReverseHttp3Cleartext, null));
+        if (envoyHttp3Available)
+            arms.Add(new("envoy-reverse-http3-cleartext", ProbeMode.EnvoyReverseHttp3Cleartext, null));
+        arms.Add(new("yarp-reverse-http3-cleartext", ProbeMode.YarpReverseHttp3Cleartext, null));
+        return arms;
+    }
+
+    private static IReadOnlyList<ArmSpec> BuildCompareSameArms(bool nginxAvailable, bool haproxyAvailable,
+        bool envoyAvailable)
+    {
+        var arms = new List<ArmSpec>();
+        AppendComparePeers(arms, "reverse-http1", ProbeMode.ReverseHttp1, ProbeMode.YarpReverseHttp1,
+            ProbeMode.NginxReverseHttp1, ProbeMode.HaproxyReverseHttp1, ProbeMode.EnvoyReverseHttp1,
+            nginxAvailable, haproxyAvailable, envoyAvailable);
+        AppendComparePeers(arms, "reverse-http1-tls", ProbeMode.ReverseHttp1Tls, ProbeMode.YarpReverseHttp1Tls,
+            ProbeMode.NginxReverseHttp1Tls, ProbeMode.HaproxyReverseHttp1Tls, ProbeMode.EnvoyReverseHttp1Tls,
+            nginxAvailable, haproxyAvailable, envoyAvailable);
+        arms.Add(new("twp-reverse-http1-to-https", ProbeMode.ReverseHttp1ToHttps, null));
+        arms.Add(new("yarp-reverse-http1-to-https", ProbeMode.YarpReverseHttp1ToHttps, null));
+        arms.Add(new("twp-https-mitm", ProbeMode.HttpsMitm, null));
+        arms.Add(new("twp-reverse-http2", ProbeMode.ReverseHttp2, null));
+        arms.Add(new("twp-reverse-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null));
+        arms.Add(new("yarp-reverse-h2c-to-h2c", ProbeMode.YarpReverseH2cToH2c, null));
+        arms.Add(new("twp-reverse-h2c", ProbeMode.ReverseH2c, null));
+        arms.Add(new("yarp-reverse-h2c", ProbeMode.YarpReverseH2c, null));
+        if (nginxAvailable)
+            arms.Add(new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null));
+        if (haproxyAvailable)
+            arms.Add(new("haproxy-reverse-http2", ProbeMode.HaproxyReverseHttp2, null));
+        if (envoyAvailable)
+            arms.Add(new("envoy-reverse-http2", ProbeMode.EnvoyReverseHttp2, null));
+        arms.Add(new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null));
+        arms.Add(new("twp-reverse-http3", ProbeMode.ReverseHttp3, null));
+        arms.Add(new("yarp-reverse-http3-to-http3", ProbeMode.YarpReverseHttp3ToHttp3, null));
+        return arms;
+    }
+
+    private static IReadOnlyList<ArmSpec> BuildCompareHttp3CleartextArms(bool nginxAvailable,
+        bool nginxHttp3Available, bool haproxyAvailable, bool haproxyHttp3Available, bool envoyAvailable,
+        bool envoyHttp3Available)
+    {
+        var arms = new List<ArmSpec>
+        {
+            new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null),
+            new("yarp-reverse-http3-cleartext", ProbeMode.YarpReverseHttp3Cleartext, null)
+        };
+        if (nginxHttp3Available)
+            arms.Add(new("nginx-reverse-http3-cleartext", ProbeMode.NginxReverseHttp3Cleartext, null));
+        if (haproxyHttp3Available)
+            arms.Add(new("haproxy-reverse-http3-cleartext", ProbeMode.HaproxyReverseHttp3Cleartext, null));
+        if (envoyHttp3Available)
+            arms.Add(new("envoy-reverse-http3-cleartext", ProbeMode.EnvoyReverseHttp3Cleartext, null));
+        return arms;
+    }
+
+    private static IReadOnlyList<ArmSpec> BuildCompareCeilingArms(bool nginxAvailable, bool haproxyAvailable,
+        bool envoyAvailable)
+    {
+        var arms = new List<ArmSpec>
+        {
+            new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
+            new("bare-reverse-http1", ProbeMode.BareReverseHttp1, null),
+            new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null),
+            new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
+            new("bare-reverse-http1-tls", ProbeMode.BareReverseHttp1Tls, null),
+            new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
+            new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null),
+            new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null)
+        };
+        if (nginxAvailable)
+        {
+            arms.Insert(2, new("nginx-reverse-http1", ProbeMode.NginxReverseHttp1, null));
+            arms.Insert(6, new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null));
+            arms.Insert(10, new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null));
+        }
+
+        if (haproxyAvailable)
+        {
+            var i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp1);
+            if (i >= 0)
+                arms.Insert(i + 1, new("haproxy-reverse-http1", ProbeMode.HaproxyReverseHttp1, null));
+            i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp1Tls);
+            if (i >= 0)
+                arms.Insert(i + 1, new("haproxy-reverse-http1-tls", ProbeMode.HaproxyReverseHttp1Tls, null));
+            i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp2);
+            if (i >= 0)
+                arms.Insert(i + 1, new("haproxy-reverse-http2", ProbeMode.HaproxyReverseHttp2, null));
+        }
+
+        if (envoyAvailable)
+        {
+            var i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp1);
+            if (i >= 0)
+                arms.Insert(i + 1, new("envoy-reverse-http1", ProbeMode.EnvoyReverseHttp1, null));
+            i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp1Tls);
+            if (i >= 0)
+                arms.Insert(i + 1, new("envoy-reverse-http1-tls", ProbeMode.EnvoyReverseHttp1Tls, null));
+            i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp2);
+            if (i >= 0)
+                arms.Insert(i + 1, new("envoy-reverse-http2", ProbeMode.EnvoyReverseHttp2, null));
         }
 
         return arms;
     }
 
     private static IReadOnlyList<ArmSpec> BuildSaturationArms(bool nginxAvailable, bool bombardierAvailable,
-        bool nginxHttp3Available)
+        bool nginxHttp3Available, bool haproxyAvailable, bool haproxyHttp3Available, bool envoyAvailable,
+        bool envoyHttp3Available)
     {
         // Block A — H1 plain
         var arms = new List<ArmSpec>
@@ -1303,25 +2069,38 @@ internal static class RampOrchestrator
         arms.Add(new("bare-reverse-http1", ProbeMode.BareReverseHttp1, null));
         if (nginxAvailable)
             arms.Add(new("nginx-reverse-http1", ProbeMode.NginxReverseHttp1, null));
+        if (haproxyAvailable)
+            arms.Add(new("haproxy-reverse-http1", ProbeMode.HaproxyReverseHttp1, null));
+        if (envoyAvailable)
+            arms.Add(new("envoy-reverse-http1", ProbeMode.EnvoyReverseHttp1, null));
         arms.Add(new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null));
         arms.Add(new("twp-reverse-http1", ProbeMode.ReverseHttp1, null));
 
         // Block B — H2 TLS → H1 cleartext (peer ratios, not % of H1 origin-direct)
         if (nginxAvailable)
             arms.Add(new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null));
+        if (haproxyAvailable)
+            arms.Add(new("haproxy-reverse-http2", ProbeMode.HaproxyReverseHttp2, null));
+        if (envoyAvailable)
+            arms.Add(new("envoy-reverse-http2", ProbeMode.EnvoyReverseHttp2, null));
         arms.Add(new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null));
         arms.Add(new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null));
 
         // Block C — H3 → H1 cleartext (QuicListener skip happens in RunAsync RemoveAll)
         if (nginxHttp3Available)
             arms.Add(new("nginx-reverse-http3-cleartext", ProbeMode.NginxReverseHttp3Cleartext, null));
+        if (haproxyHttp3Available)
+            arms.Add(new("haproxy-reverse-http3-cleartext", ProbeMode.HaproxyReverseHttp3Cleartext, null));
+        if (envoyHttp3Available)
+            arms.Add(new("envoy-reverse-http3-cleartext", ProbeMode.EnvoyReverseHttp3Cleartext, null));
         arms.Add(new("yarp-reverse-http3-cleartext", ProbeMode.YarpReverseHttp3Cleartext, null));
         arms.Add(new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null));
 
         return arms;
     }
 
-    private static IReadOnlyList<ArmSpec> BuildTlsCostArms(bool nginxAvailable)
+    private static IReadOnlyList<ArmSpec> BuildTlsCostArms(bool nginxAvailable, bool haproxyAvailable,
+        bool envoyAvailable)
     {
         var tinyKa = WorkloadOptions.ForTlsKeepAlive(WorkloadOptions.TinyJsonBytes);
         var tinyNc = WorkloadOptions.ForTlsNewConnection();
@@ -1342,37 +2121,102 @@ internal static class RampOrchestrator
             arms.Insert(7, new("nginx-reverse-http1-tls-ka-256k", ProbeMode.NginxReverseHttp1Tls, null, largeKa));
         }
 
+        if (haproxyAvailable)
+        {
+            var i = arms.FindIndex(a => a.Name == "yarp-reverse-http1-tls-ka-tiny");
+            if (i >= 0)
+                arms.Insert(i, new("haproxy-reverse-http1-tls-ka-tiny", ProbeMode.HaproxyReverseHttp1Tls, null, tinyKa));
+            i = arms.FindIndex(a => a.Name == "yarp-reverse-http1-tls-nc-tiny");
+            if (i >= 0)
+                arms.Insert(i, new("haproxy-reverse-http1-tls-nc-tiny", ProbeMode.HaproxyReverseHttp1Tls, null, tinyNc));
+            i = arms.FindIndex(a => a.Name == "yarp-reverse-http1-tls-ka-256k");
+            if (i >= 0)
+                arms.Insert(i, new("haproxy-reverse-http1-tls-ka-256k", ProbeMode.HaproxyReverseHttp1Tls, null, largeKa));
+        }
+
+        if (envoyAvailable)
+        {
+            var i = arms.FindIndex(a => a.Name == "yarp-reverse-http1-tls-ka-tiny");
+            if (i >= 0)
+                arms.Insert(i, new("envoy-reverse-http1-tls-ka-tiny", ProbeMode.EnvoyReverseHttp1Tls, null, tinyKa));
+            i = arms.FindIndex(a => a.Name == "yarp-reverse-http1-tls-nc-tiny");
+            if (i >= 0)
+                arms.Insert(i, new("envoy-reverse-http1-tls-nc-tiny", ProbeMode.EnvoyReverseHttp1Tls, null, tinyNc));
+            i = arms.FindIndex(a => a.Name == "yarp-reverse-http1-tls-ka-256k");
+            if (i >= 0)
+                arms.Insert(i, new("envoy-reverse-http1-tls-ka-256k", ProbeMode.EnvoyReverseHttp1Tls, null, largeKa));
+        }
+
         return arms;
     }
 
-    private static IReadOnlyList<ArmSpec> BuildArchArms(bool nginxAvailable, bool nginxHttp3Available)
+    private static IReadOnlyList<ArmSpec> BuildArchArms(bool nginxAvailable, bool nginxHttp3Available,
+        bool haproxyAvailable, bool haproxyHttp3Available, bool envoyAvailable, bool envoyHttp3Available)
     {
         var slow = WorkloadOptions.ForSlowConsumer();
         var early = WorkloadOptions.ForEarlyResponse();
         var duplex = WorkloadOptions.ForDuplexH2();
         var ws = WorkloadOptions.ForWebSocket();
         var arms = new List<ArmSpec>();
-        arms.AddRange(HeavierReverseArms(nginxAvailable, nginxHttp3Available, slow, "slow256k"));
-        arms.AddRange(HeavierReverseArms(nginxAvailable, nginxHttp3Available, early, "early64k"));
+        arms.AddRange(HeavierReverseArms(nginxAvailable, nginxHttp3Available, haproxyAvailable, haproxyHttp3Available,
+            envoyAvailable, envoyHttp3Available, slow, "slow256k"));
+        arms.AddRange(HeavierReverseArms(nginxAvailable, nginxHttp3Available, haproxyAvailable, haproxyHttp3Available,
+            envoyAvailable, envoyHttp3Available, early, "early64k"));
         arms.Add(new("twp-reverse-http2-duplex-h2", ProbeMode.ReverseHttp2, null, duplex));
+        if (haproxyAvailable)
+            arms.Add(new("haproxy-reverse-http2-duplex-h2", ProbeMode.HaproxyReverseHttp2ToHttps, null, duplex));
+        if (envoyAvailable)
+            arms.Add(new("envoy-reverse-http2-duplex-h2", ProbeMode.EnvoyReverseHttp2ToHttps, null, duplex));
         arms.Add(new("yarp-reverse-http2-to-https-duplex-h2", ProbeMode.YarpReverseHttp2ToHttps, null, duplex));
         arms.Add(new("twp-reverse-http1-tls-duplex-ws", ProbeMode.ReverseHttp1Tls, null, ws));
         if (nginxAvailable)
             arms.Add(new("nginx-reverse-http1-tls-duplex-ws", ProbeMode.NginxReverseHttp1Tls, null, ws));
+        if (haproxyAvailable)
+            arms.Add(new("haproxy-reverse-http1-tls-duplex-ws", ProbeMode.HaproxyReverseHttp1Tls, null, ws));
+        if (envoyAvailable)
+            arms.Add(new("envoy-reverse-http1-tls-duplex-ws", ProbeMode.EnvoyReverseHttp1Tls, null, ws));
         arms.Add(new("yarp-reverse-http1-tls-duplex-ws", ProbeMode.YarpReverseHttp1Tls, null, ws));
         return arms;
     }
 
     private sealed record ArmPeakResult(double PeakRps, long? RssPeakBytes, double? CpuAvgPct);
 
+    /// <summary>
+    /// Keep comparison groups (wiki rows) assigned to shard <paramref name="shardIndex"/> of
+    /// <paramref name="shardCount"/> (1-based). Groups are first-seen order; group k → shard
+    /// (k % n) + 1. Preserves original arm order inside the shard so peers stay back-to-back.
+    /// </summary>
+    private static List<ArmSpec> ApplyArmShard(List<ArmSpec> arms, int shardIndex, int shardCount) =>
+        ComparisonGroup.ApplyShard(arms, a => ComparisonGroup.Key(a.Mode, a.Name), shardIndex, shardCount);
+
+    /// <summary>
+    /// Budget: child start + one full concurrency ramp (warmup+measure+overhead per step) + margin.
+    /// Floor 8m so short local smokes still tolerate cold starts; cap 25m so GHA cannot stall for hours.
+    /// </summary>
+    private static TimeSpan ComputeDefaultArmTimeout(RampOptions options)
+    {
+        var steps = Math.Max(1, options.ConcurrencySteps.Length);
+        var perStep = options.Warmup + options.StepDuration + TimeSpan.FromSeconds(45);
+        var budget = TimeSpan.FromSeconds(90) + TimeSpan.FromTicks(perStep.Ticks * steps) + TimeSpan.FromMinutes(2);
+        if (budget < TimeSpan.FromMinutes(8))
+            budget = TimeSpan.FromMinutes(8);
+        if (budget > TimeSpan.FromMinutes(25))
+            budget = TimeSpan.FromMinutes(25);
+        return budget;
+    }
+
     private static async Task<ArmPeakResult> RunArmAsync(ArmSpec arm, RampOptions options, StreamWriter csv,
-        string? nginxVersionHint, CancellationToken cancellationToken)
+        string? nginxVersionHint, string? haproxyVersionHint, string? envoyVersionHint,
+        CancellationToken cancellationToken)
     {
         var workload = arm.Workload ?? options.Workload;
         var maxCached = arm.MaxCachedConnections ?? options.MaxCachedConnections;
-        await using var stack = await ChildProcessStack.StartAsync(arm.Mode, options.NginxPath, maxCached,
-            cancellationToken, workload, arm.EnableHttpInterception, arm.MutateHttpInterception);
+        await using var stack = await ChildProcessStack.StartAsync(arm.Mode, options.NginxPath, options.HaproxyPath,
+            options.EnvoyPath, maxCached, cancellationToken, workload, arm.EnableHttpInterception,
+            arm.MutateHttpInterception);
         var nginxVersion = stack.NginxVersion ?? nginxVersionHint;
+        var haproxyVersion = stack.HaproxyVersion ?? haproxyVersionHint;
+        var envoyVersion = stack.EnvoyVersion ?? envoyVersionHint;
 
         if (!string.IsNullOrWhiteSpace(stack.AuthorizationBearer))
         {
@@ -1459,13 +2303,16 @@ internal static class RampOrchestrator
             var discoveryRewritten = false;
 
             var useQuic = (stackUsesQuicGenerator || forceLossyQuicGenerator) && quicPort is > 0;
-            var useBombardier = string.Equals(arm.PreferredGenerator, BombardierLoadGenerator.GeneratorName,
+            var useGrpc = workload.IsGrpc;
+            var useBombardier = !useGrpc && string.Equals(arm.PreferredGenerator, BombardierLoadGenerator.GeneratorName,
                 StringComparison.OrdinalIgnoreCase);
             var generatorLabel = useQuic
                 ? "quic-http3"
-                : useBombardier
-                    ? BombardierLoadGenerator.GeneratorName
-                    : "dotnet-httpclient";
+                : useGrpc
+                    ? GrpcLoadGenerator.GeneratorName
+                    : useBombardier
+                        ? BombardierLoadGenerator.GeneratorName
+                        : "dotnet-httpclient";
             var loadOptions = new LoadRequestOptions
             {
                 Target = targetUri,
@@ -1523,6 +2370,11 @@ internal static class RampOrchestrator
                         await QuicHttp3LoadGenerator.WarmupAsync(ep, "localhost", authority,
                             concurrency, options.Warmup, cancellationToken, workload);
                     }
+                    else if (useGrpc)
+                    {
+                        await GrpcLoadGenerator.WarmupAsync(targetUri, concurrency, options.Warmup,
+                            cancellationToken);
+                    }
                     else if (useBombardier)
                     {
                         await BombardierLoadGenerator.WarmupAsync(targetUri, concurrency, options.Warmup, workload,
@@ -1542,6 +2394,11 @@ internal static class RampOrchestrator
                         measureTask = QuicHttp3LoadGenerator.RunAsync(ep, "localhost", authority,
                             concurrency, options.StepDuration, cancellationToken, workload);
                     }
+                    else if (useGrpc)
+                    {
+                        measureTask = GrpcLoadGenerator.RunAsync(targetUri, concurrency, options.StepDuration,
+                            cancellationToken);
+                    }
                     else if (useBombardier)
                     {
                         measureTask = BombardierLoadGenerator.RunAsync(targetUri, concurrency, options.StepDuration,
@@ -1557,9 +2414,11 @@ internal static class RampOrchestrator
                         ? ProcessResourceSampler.SampleDuringAsync(pid, options.StepDuration, cancellationToken)
                         : null;
 
-                    result = await measureTask;
+                    // Bound the measure even if the generator ignores CancellationToken (MsQuic/bombardier stalls).
+                    var measureBudget = options.StepDuration + TimeSpan.FromSeconds(45);
+                    result = await measureTask.WaitAsync(measureBudget, cancellationToken);
                     if (sampleTask != null)
-                        resources = await sampleTask;
+                        resources = await sampleTask.WaitAsync(measureBudget, cancellationToken);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                 {
@@ -1581,7 +2440,7 @@ internal static class RampOrchestrator
 
                 var meetsSlo = result.ErrorRatePercent < options.MaxErrorRatePercent && result.P99Ms <= p99Slo;
                 await CsvWriter.WriteRowAsync(csv, arm.Name, result, meetsSlo, nginxVersion, maxCached, workload,
-                    stack.YarpVersion, resources);
+                    stack.YarpVersion, resources, haproxyVersion, envoyVersion);
                 await csv.FlushAsync(cancellationToken);
 
                 var resourceHint = resources is { } r
@@ -1695,7 +2554,11 @@ internal static class RampOrchestrator
         var yarpInboundH3 = mode is ProbeMode.YarpReverseHttp3Cleartext
             or ProbeMode.YarpReverseHttp3ToHttp2
             or ProbeMode.YarpReverseHttp3ToHttp3
-            or ProbeMode.NginxReverseHttp3Cleartext;
+            or ProbeMode.YarpReverseHttp3ToHttpsHttp1
+            or ProbeMode.NginxReverseHttp3Cleartext or ProbeMode.NginxReverseHttp3ToHttpsHttp1
+            or ProbeMode.HaproxyReverseHttp3Cleartext or ProbeMode.HaproxyReverseHttp3ToHttpsHttp1
+            or ProbeMode.EnvoyReverseHttp3Cleartext or ProbeMode.EnvoyReverseHttp3ToHttpsHttp1
+            || (PeerWire.TryGet(mode, out var wire) && wire.Inbound == PeerInboundProto.H3);
         if (yarpInboundH3)
             return "localhost";
 
@@ -1740,6 +2603,58 @@ internal static class RampOrchestrator
             var stdout = p.StandardOutput.ReadToEnd();
             p.WaitForExit(5000);
             var text = string.IsNullOrWhiteSpace(err) ? stdout : err;
+            return text.Trim().Replace('\n', ' ');
+        }
+        catch
+        {
+            return "unknown";
+        }
+    }
+
+    private static string ProbeHaproxyVersion(string exe)
+    {
+        try
+        {
+            using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = exe,
+                Arguments = "-v",
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true
+            });
+            if (p == null) return "unknown";
+            var stdout = p.StandardOutput.ReadToEnd();
+            var err = p.StandardError.ReadToEnd();
+            p.WaitForExit(5000);
+            var text = string.IsNullOrWhiteSpace(stdout) ? err : stdout;
+            return text.Trim().Replace('\n', ' ');
+        }
+        catch
+        {
+            return "unknown";
+        }
+    }
+
+    private static string ProbeEnvoyVersion(string exe)
+    {
+        try
+        {
+            using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = exe,
+                Arguments = "--version",
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true
+            });
+            if (p == null) return "unknown";
+            var stdout = p.StandardOutput.ReadToEnd();
+            var err = p.StandardError.ReadToEnd();
+            p.WaitForExit(5000);
+            var text = string.IsNullOrWhiteSpace(stdout) ? err : stdout;
             return text.Trim().Replace('\n', ' ');
         }
         catch

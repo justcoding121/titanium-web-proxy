@@ -88,6 +88,16 @@ public class HttpHeader
         ValueData = value;
     }
 
+    /// <summary>
+    ///     True for HPACK static-table rows shared across streams. Must not be mutated in place —
+    ///     <see cref="HeaderCollection"/> replaces the entry on SetOrAdd.
+    /// </summary>
+    internal bool IsSharedStaticTableEntry { get; private init; }
+
+    /// <summary>HPACK Appendix A entry — immutable shared instance.</summary>
+    internal static HttpHeader CreateSharedStaticTableEntry(ByteString name, ByteString value) =>
+        new(name, value) { IsSharedStaticTableEntry = true };
+
     private protected HttpHeader(ByteString name, ByteString value, bool headerEntry)
     {
         // special header entry created in inherited class with empty name
@@ -118,12 +128,16 @@ public class HttpHeader
 
     internal void SetValue(string value)
     {
+        if (IsSharedStaticTableEntry)
+            throw new InvalidOperationException("HPACK static-table headers are immutable; replace the HeaderCollection entry instead.");
         valueString = value;
         ValueData = value.GetByteString();
     }
 
     internal void SetValue(KnownHeader value)
     {
+        if (IsSharedStaticTableEntry)
+            throw new InvalidOperationException("HPACK static-table headers are immutable; replace the HeaderCollection entry instead.");
         valueString = value.String;
         ValueData = value.String8;
     }

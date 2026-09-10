@@ -292,7 +292,7 @@ public class WebSocketInterceptionSafetyTests
 
         // The proxy must have intercepted at least the server-to-client greeting
         // and the server's echo of the client frame.
-        WaitForCondition(() => interceptedDirections.Count >= 2, timeout,
+        await WaitForConditionAsync(() => interceptedDirections.Count >= 2, timeout,
             "Expected the proxy to intercept at least 2 frames (server?client greeting and echo).");
 
         Assert.IsTrue(interceptedDirections.Contains(WebSocketFrameDirection.ServerToClient),
@@ -624,13 +624,13 @@ public class WebSocketInterceptionSafetyTests
         }
     }
 
-    private static void WaitForCondition(Func<bool> condition, TimeSpan timeout, string failureMessage)
+    private static async Task WaitForConditionAsync(Func<bool> condition, TimeSpan timeout, string failureMessage)
     {
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
             if (condition()) return;
-            Thread.Sleep(20);
+            await Task.Delay(20);
         }
 
         Assert.IsTrue(condition(), failureMessage);

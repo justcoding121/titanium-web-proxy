@@ -19,6 +19,15 @@ See [CLA.md](CLA.md) and [README.md](README.md) Editions section.
 4. Do not introduce third-party product names of other proxies or traffic debuggers into source, tests, CLI help, or docs.
 5. Keep hot-path changes minimal; preserve `ForwardHost` terminate-lite eligibility when routes are unset or equivalent to a single sticky destination.
 
+### Local QA tooling (maintainers)
+
+Not for end users. Per-OS checklists and on-demand probes live under `tools/`:
+
+- [LOCAL-QA.md](tools/LOCAL-QA.md) — solo checklist (E2E + probes)
+- [CliQaProbe](tools/CliQaProbe) — CLI help / dialects / live `run` / optional OS service
+- [InspectorDesktopProbe](tools/InspectorDesktopProbe) — system proxy / CA / browser UX
+- [RpsLoadProbe](tools/RpsLoadProbe) — concurrent breaking-point load in requests per second (RPS)
+
 ## PR checklist
 
 Use the pull request template. Include tests for behavior changes. Do not weaken performance gates or skip PublicAPI analyzer updates for intentional API surface changes.

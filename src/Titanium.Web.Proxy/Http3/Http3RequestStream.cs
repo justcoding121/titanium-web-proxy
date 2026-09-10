@@ -247,8 +247,7 @@ internal static class Http3RequestStream
                 }
 
                 // 6. Fire BeforeRequest (stamp timing milestone just before).
-                var requestHeaderRelayBaseline =
-                    MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(request.Headers);
+                request.Headers.ArmMitmRelayBaseline();
                 var capturedRequestMethod = request.Method;
                 var capturedRequestPath = request.RequestUriString8;
                 var capturedRequestAuthority = request.Authority;
@@ -274,16 +273,20 @@ internal static class Http3RequestStream
                 // Inject Via only when we stay on the full session forward path (not MITM
                 // unchanged-lite / IsFastPath). Adding Via before the unchanged check would
                 // dirtied MutationCount and defeat the lite finish.
+                var requestHeaderRelayBaseline = request.Headers.TakeMitmRelayBaseline();
                 var mitmUnchangedH3H1 = TryMitmUnchangedH3ToH1Lite(
                     sessionArgs, authArgs, request, requestHeaderRelayBaseline,
                     capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
+                var mitmUnchangedH3H3 = !mitmUnchangedH3H1 && TryMitmUnchangedH3ToH3Lite(
+                    sessionArgs, authArgs, request, requestHeaderRelayBaseline,
+                    capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
 
-                if (!mitmUnchangedH3H1 && !sessionArgs.IsFastPath
+                if (!mitmUnchangedH3H1 && !mitmUnchangedH3H3 && !sessionArgs.IsFastPath
                                        && !string.IsNullOrEmpty(server.ViaHeaderPseudonym))
                     sessionArgs.HttpClient.Request.Headers.AddHeader(
                         new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
 
-                if (sessionArgs.HttpClient.Response.Locked)
+                if (sessionArgs.HttpClient.HasResponse && sessionArgs.HttpClient.Response.Locked)
                 {
                     // Synthetic response: abort unread request DATA rather than draining an
                     // endless upload (matches RespondStreaming closeServerConnection guidance).
@@ -301,10 +304,11 @@ internal static class Http3RequestStream
                             new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
                     await SendResponseAsync(stream, sessionArgs.HttpClient.Response, qpackContext, cancellationToken);
                 }
-                else if (mitmUnchangedH3H1)
+                else if (mitmUnchangedH3H1 || mitmUnchangedH3H3)
                 {
-                    // True MITM noop-safe H3→H1: reuse ForwardOverTcpFastAsync after handlers left
-                    // the request unchanged (same lite machinery as reverse).
+                    // True MITM noop-safe: H3→H1 uses ForwardOverTcpFastAsync; H3→H3 captures QPACK
+                    // via ForwardOverQuicFastAsync(clientStream: null) then SendPreencoded after
+                    // BeforeResponse (same shape as H3→H1 lite — never emit before the handler).
                     if (!streamState.RequestClosed)
                     {
                         sessionArgs.Http3BufferedBodyReader = null;
@@ -347,89 +351,39 @@ internal static class Http3RequestStream
                         var stub = new SessionEventArgs(server, endPoint, nullStream, null, stubCts);
                         stub.IsFastPath = true;
                         stub.CustomUpStreamProxy = fwd.CustomUpStreamProxy;
-                        stub.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+                        stub.UpstreamHttpProtocol = mitmUnchangedH3H3
+                            ? UpstreamHttpProtocol.Http3
+                            : UpstreamHttpProtocol.Http11;
                         return stub;
                     }
 
-                    await Http3OriginBridge.ForwardOverTcpFastAsync(fwd, server, logger, cancellationToken,
-                        ColdOpenSessionFactory, qpackContext);
-
-                    var response = sessionArgs.HttpClient.Response;
-                    var respHeaderRelayBaseline =
-                        MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(response.Headers);
-                    var respStatusBaseline = response.StatusCode;
-                    var respBodyRead = response.IsBodyRead;
-                    var respBodyAvailable = response.BodyAvailable;
-                    var respWriter = response.StreamBodyWriter;
-
-                    await onBeforeResponse(sessionArgs);
-
-                    var responseBodyUnchanged = response.StatusCode == respStatusBaseline
-                                                && response.IsBodyRead == respBodyRead
-                                                && response.BodyAvailable == respBodyAvailable
-                                                && response.StreamBodyWriter == respWriter;
-
-                    // Match H2 fast-path: skip Via on transparent/SOCKS; append handler/Via literals
-                    // onto static QPACK instead of full re-encode when handlers left body unchanged.
-                    var injectVia = !sessionArgs.IsFastPath
-                                    && !sessionArgs.IsTransparent
-                                    && !sessionArgs.IsSocks
-                                    && !string.IsNullOrEmpty(server.ViaHeaderPseudonym);
-                    byte[] qpackHeaders = null!;
-                    MitmCompressedRelayHelper.AddedHeaderBuffer addedRespHeaders = default;
-                    var canRelayPreencoded = responseBodyUnchanged
-                                             && fwd.PreencodedQpackHeaders != null
-                                             && IsStaticOnlyQpackBlock(fwd.PreencodedQpackHeaders)
-                                             && MitmStaticRebuildHelper.TryPrepareStaticQpackRelay(
-                                                 fwd.PreencodedQpackHeaders, respHeaderRelayBaseline,
-                                                 response.Headers, out qpackHeaders, out addedRespHeaders);
-
-                    if (canRelayPreencoded)
+                    if (mitmUnchangedH3H3)
                     {
-                        for (var i = 0; i < addedRespHeaders.Count; i++)
+                        var captured = await Http3OriginBridge.ForwardOverQuicFastAsync(
+                            fwd, server, logger, cancellationToken, ColdOpenSessionFactory,
+                            clientStream: null);
+                        if (!captured)
                         {
-                            var h = addedRespHeaders[i];
-                            qpackHeaders = QpackEncoder.AppendLiteralHeader(qpackHeaders, h.Name, h.Value);
+                            // Bad gateway was assigned onto fwd.Response — sync onto the session bag.
+                            sessionArgs.HttpClient.Response = fwd.Response
+                                                              ?? sessionArgs.HttpClient.Response;
+                            await onBeforeResponse(sessionArgs);
+                            await SendResponseAsync(stream, sessionArgs.HttpClient.Response, qpackContext,
+                                cancellationToken);
                         }
-
-                        if (injectVia && !addedRespHeaders.ContainsName("via")
-                                       && !response.Headers.HeaderExists("via"))
+                        else
                         {
-                            qpackHeaders = QpackEncoder.AppendLiteralHeader(qpackHeaders, "via",
-                                $"3.0 {server.ViaHeaderPseudonym}");
-                        }
-
-                        var body = fwd.PreencodedBody;
-                        var bodyLen = fwd.PreencodedBodyLength > 0
-                            ? fwd.PreencodedBodyLength
-                            : body?.Length ?? 0;
-                        ReadOnlyMemory<byte> bodyMem = body is { Length: > 0 }
-                            ? body.AsMemory(0, Math.Min(bodyLen, body.Length))
-                            : ReadOnlyMemory<byte>.Empty;
-                        try
-                        {
-                            await SendPreencodedResponseAsync(stream, qpackHeaders,
-                                bodyMem, fwd.PreencodedStreamBodyWriter, cancellationToken);
-                        }
-                        finally
-                        {
-                            if (fwd.PreencodedBodyRented && body != null)
-                                server.BufferPool.ReturnBuffer(body);
+                            await FinishMitmPreencodedResponseAsync(sessionArgs, fwd, stream, server,
+                                onBeforeResponse, qpackContext, cancellationToken);
                         }
                     }
                     else
                     {
-                        if (injectVia)
-                            response.Headers.AddHeader(
-                                new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
-                        if (fwd.PreencodedBodyRented && fwd.PreencodedBody != null)
-                        {
-                            // Response.Body holds an owned copy; return the rented Preencoded buffer.
-                            server.BufferPool.ReturnBuffer(fwd.PreencodedBody);
-                            fwd.PreencodedBodyRented = false;
-                        }
+                        await Http3OriginBridge.ForwardOverTcpFastAsync(fwd, server, logger, cancellationToken,
+                            ColdOpenSessionFactory, qpackContext);
 
-                        await SendResponseAsync(stream, response, qpackContext, cancellationToken);
+                        await FinishMitmPreencodedResponseAsync(sessionArgs, fwd, stream, server,
+                            onBeforeResponse, qpackContext, cancellationToken);
                     }
                 }
                 else
@@ -486,7 +440,9 @@ internal static class Http3RequestStream
                 qpackContext?.InFlightMinAbsoluteIndex.TryRemove(stream.Id, out _);
 
                 streamState.ResponseClosed = true;
-                stream.CompleteWrites();
+                // SendResponse often already FINed via completeWrites:true; only finish if still open.
+                if (stream.CanWrite)
+                    stream.CompleteWrites();
             }
             catch (Http3ConnectionException ex)
             {
@@ -657,7 +613,12 @@ internal static class Http3RequestStream
                     {
                         qpackContext?.InFlightMinAbsoluteIndex.TryRemove(stream.Id, out _);
                         streamState.ResponseClosed = true;
-                        stream.CompleteWrites();
+                        // Match SendResponseAsync / origin bridge: Flush before FIN so Darwin MsQuic
+                        // actually emits the verbatim HEADERS(+DATA) frames (skip-Flush was banned).
+                        // Verbatim coalesce may already have FINed via completeWrites:true.
+                        await stream.FlushAsync(streamToken);
+                        if (stream.CanWrite)
+                            stream.CompleteWrites();
                         return;
                     }
                     break;
@@ -701,7 +662,10 @@ internal static class Http3RequestStream
 
                 qpackContext?.InFlightMinAbsoluteIndex.TryRemove(stream.Id, out _);
                 streamState.ResponseClosed = true;
-                stream.CompleteWrites();
+                // SendPreencoded / SendResponse often already FIN via completeWrites:true + Flush.
+                // Only CompleteWrites when the write side is still open (streamed body path).
+                if (stream.CanWrite)
+                    stream.CompleteWrites();
             }
             catch (Exception ex) when (ex is QuicException || ex.GetBaseException() is QuicException)
             {
@@ -742,7 +706,49 @@ internal static class Http3RequestStream
             return false;
         if (authArgs.UpstreamHttpProtocol != UpstreamHttpProtocol.Http11)
             return false;
-        if (request.CancelRequest || sessionArgs.HttpClient.Response.Locked)
+        return MitmUnchangedLiteRequestMatches(
+            sessionArgs, request, requestHeaderRelayBaseline,
+            capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
+    }
+
+    /// <summary>
+    ///     True MITM H3→H3: same unchanged gate as H3→H1, but capture QPACK via
+    ///     <see cref="Http3OriginBridge.ForwardOverQuicFastAsync"/> (<c>clientStream: null</c>)
+    ///     then <see cref="FinishMitmPreencodedResponseAsync"/> after BeforeResponse.
+    /// </summary>
+    private static bool TryMitmUnchangedH3ToH3Lite( // NOSONAR S107 -- Baseline capture args kept explicit to avoid allocating context structs on the H3 MITM hot path.
+        SessionEventArgs sessionArgs,
+        BeforeQuicAuthenticateEventArgs authArgs,
+        Request request,
+        MitmCompressedRelayHelper.HeaderRelayBaseline requestHeaderRelayBaseline,
+        string? capturedRequestMethod,
+        ByteString capturedRequestPath,
+        ByteString capturedRequestAuthority,
+        string method)
+    {
+        if (sessionArgs.IsFastPath)
+            return false;
+        if (authArgs.UpstreamHttpProtocol != UpstreamHttpProtocol.Http3)
+            return false;
+        return MitmUnchangedLiteRequestMatches(
+            sessionArgs, request, requestHeaderRelayBaseline,
+            capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
+    }
+
+    private static bool MitmUnchangedLiteRequestMatches( // NOSONAR S107
+        SessionEventArgs sessionArgs,
+        Request request,
+        MitmCompressedRelayHelper.HeaderRelayBaseline requestHeaderRelayBaseline,
+        string? capturedRequestMethod,
+        ByteString capturedRequestPath,
+        ByteString capturedRequestAuthority,
+        string method)
+    {
+        // Lite copies origin DATA without OnResponseBodyWrite; intercept body hooks need the full forward.
+        if (sessionArgs.Server.HasOnResponseBodyWriteSubscribers)
+            return false;
+        if (request.CancelRequest
+            || (sessionArgs.HttpClient.HasResponse && sessionArgs.HttpClient.Response.Locked))
             return false;
         if (request.IsBodyRead || request.BodyAvailable)
             return false;
@@ -757,6 +763,98 @@ internal static class Http3RequestStream
         if (!request.RequestUriString8.Equals(capturedRequestPath))
             return false;
         return request.Authority.Equals(capturedRequestAuthority);
+    }
+
+    /// <summary>
+    ///     After H3→H1 / H3→H3 MITM lite origin fetch: BeforeResponse, then static QPACK relay or
+    ///     full re-encode. Never emits before the response handler (noop-safe).
+    /// </summary>
+    private static async Task FinishMitmPreencodedResponseAsync( // NOSONAR S3776 -- MITM lite emit stays one method; splitting adds await/state-machine risk.
+        SessionEventArgs sessionArgs,
+        H3H2FastForward fwd,
+        QuicStream stream,
+        ProxyServer server,
+        Func<SessionEventArgs, Task> onBeforeResponse,
+        QpackContext? qpackContext,
+        CancellationToken cancellationToken)
+    {
+        var response = sessionArgs.HttpClient.Response;
+        response.Headers.ArmMitmRelayBaseline();
+        var respStatusBaseline = response.StatusCode;
+        var respBodyRead = response.IsBodyRead;
+        var respBodyAvailable = response.BodyAvailable;
+        var respWriter = response.StreamBodyWriter;
+
+        await onBeforeResponse(sessionArgs);
+
+        var respHeaderRelayBaseline = response.Headers.TakeMitmRelayBaseline();
+        var responseBodyUnchanged = response.StatusCode == respStatusBaseline
+                                    && response.IsBodyRead == respBodyRead
+                                    && response.BodyAvailable == respBodyAvailable
+                                    && response.StreamBodyWriter == respWriter;
+
+        // Match H2 fast-path: skip Via on transparent/SOCKS; append handler/Via literals
+        // onto static QPACK instead of full re-encode when handlers left body unchanged.
+        var injectVia = !sessionArgs.IsFastPath
+                        && !sessionArgs.IsTransparent
+                        && !sessionArgs.IsSocks
+                        && !string.IsNullOrEmpty(server.ViaHeaderPseudonym);
+        byte[] qpackHeaders = null!;
+        MitmCompressedRelayHelper.AddedHeaderBuffer addedRespHeaders = default;
+        var canRelayPreencoded = responseBodyUnchanged
+                                 && fwd.PreencodedQpackHeaders != null
+                                 && IsStaticOnlyQpackBlock(fwd.PreencodedQpackHeaders)
+                                 && MitmStaticRebuildHelper.TryPrepareStaticQpackRelay(
+                                     fwd.PreencodedQpackHeaders, respHeaderRelayBaseline,
+                                     response.Headers, out qpackHeaders, out addedRespHeaders);
+
+        if (canRelayPreencoded)
+        {
+            for (var i = 0; i < addedRespHeaders.Count; i++)
+            {
+                var h = addedRespHeaders[i];
+                qpackHeaders = QpackEncoder.AppendLiteralHeader(qpackHeaders, h.Name, h.Value);
+            }
+
+            if (injectVia && !addedRespHeaders.ContainsName("via")
+                           && !response.Headers.HeaderExists("via"))
+            {
+                qpackHeaders = QpackEncoder.AppendLiteralHeader(qpackHeaders, "via",
+                    $"3.0 {server.ViaHeaderPseudonym}");
+            }
+
+            var body = fwd.PreencodedBody;
+            var bodyLen = fwd.PreencodedBodyLength > 0
+                ? fwd.PreencodedBodyLength
+                : body?.Length ?? 0;
+            ReadOnlyMemory<byte> bodyMem = body is { Length: > 0 }
+                ? body.AsMemory(0, Math.Min(bodyLen, body.Length))
+                : ReadOnlyMemory<byte>.Empty;
+            try
+            {
+                await SendPreencodedResponseAsync(stream, qpackHeaders,
+                    bodyMem, fwd.PreencodedStreamBodyWriter, cancellationToken);
+            }
+            finally
+            {
+                if (fwd.PreencodedBodyRented && body != null)
+                    server.BufferPool.ReturnBuffer(body);
+            }
+        }
+        else
+        {
+            if (injectVia)
+                response.Headers.AddHeader(
+                    new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
+            if (fwd.PreencodedBodyRented && fwd.PreencodedBody != null)
+            {
+                // Response.Body holds an owned copy; return the rented Preencoded buffer.
+                server.BufferPool.ReturnBuffer(fwd.PreencodedBody);
+                fwd.PreencodedBodyRented = false;
+            }
+
+            await SendResponseAsync(stream, response, qpackContext, cancellationToken);
+        }
     }
 
     /// <summary>
@@ -967,9 +1065,9 @@ internal static class Http3RequestStream
     {
         var headers = new List<(string, string)> { (":status", statusCode.ToString()) };
         var encoded = QpackEncoder.Encode(headers, qpackContext);
-        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, encoded, ct);
+        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, encoded, ct, completeWrites: true);
         await stream.FlushAsync(ct);
-        stream.CompleteWrites();
+        // completeWrites:true already FINed the QuicStream write side.
     }
 
     /// <summary>
@@ -1015,14 +1113,20 @@ internal static class Http3RequestStream
 
         if (body.Length >= 16 * 1024)
         {
-            await Http3Frame.WriteHeadersAndDataAsync(stream, qpackHeaders, body, ct);
+            await Http3Frame.WriteHeadersAndDataAsync(stream, qpackHeaders, body, ct, completeWrites: true);
             await stream.FlushAsync(ct);
             return;
         }
 
-        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
         if (body.Length > 0)
-            await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct);
+        {
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct, completeWrites: true);
+        }
+        else
+        {
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct, completeWrites: true);
+        }
 
         await stream.FlushAsync(ct);
     }
@@ -1072,14 +1176,20 @@ internal static class Http3RequestStream
         // there raised cool absolutes and missed Windows CI (latency bundle revert).
         if (body is { Length: >= 16 * 1024 })
         {
-            await Http3Frame.WriteHeadersAndDataAsync(stream, qpackHeaders, body, ct);
+            await Http3Frame.WriteHeadersAndDataAsync(stream, qpackHeaders, body, ct, completeWrites: true);
             await stream.FlushAsync(ct);
             return;
         }
 
-        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
         if (body is { Length: > 0 })
-            await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct);
+        {
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct, completeWrites: true);
+        }
+        else
+        {
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct, completeWrites: true);
+        }
 
         await stream.FlushAsync(ct);
     }

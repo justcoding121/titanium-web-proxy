@@ -42,6 +42,7 @@ public class SettingsPersistenceTests
                 },
             ];
             svc.Current.IgnoreServerCertificateErrors = true;
+            svc.Current.AddViaHeader = false;
             svc.Current.UpdateChannel = "Beta";
             svc.Current.LoggingEnableFile = true;
             svc.Current.LoggingMinimumLevel = "Debug";
@@ -73,6 +74,7 @@ public class SettingsPersistenceTests
             Assert.AreEqual(1, loaded.AutoResponderRules.Count);
             Assert.AreEqual(201, loaded.AutoResponderRules[0].StatusCode);
             Assert.IsTrue(loaded.IgnoreServerCertificateErrors);
+            Assert.IsFalse(loaded.AddViaHeader);
             Assert.AreEqual("Beta", loaded.UpdateChannel);
             Assert.IsTrue(loaded.LoggingEnableFile);
             Assert.AreEqual("Debug", loaded.LoggingMinimumLevel);
@@ -95,6 +97,7 @@ public class SettingsPersistenceTests
         var settings = new InspectorSettings();
         Assert.IsTrue(settings.LoggingEnabled);
         Assert.IsFalse(settings.IgnoreServerCertificateErrors);
+        Assert.IsTrue(settings.AddViaHeader);
 #if DEBUG
         Assert.IsTrue(settings.LoggingEnableFile);
         Assert.AreEqual("Debug", settings.LoggingMinimumLevel);

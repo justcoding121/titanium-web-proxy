@@ -1,73 +1,52 @@
 # Inspector
 
-Desktop MITM debugger (Avalonia). Licensed under [PolyForm Noncommercial](https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt).
+Desktop debugger for HTTP and HTTPS traffic. Decrypt HTTPS (man-in-the-middle / MITM) only on machines you control.
 
 ![Titanium Inspector screenshot](../../wiki/images/inspector-screenshot.jpg)
 
+## Quick use
+
+1. [Download](/download) and install Inspector for your OS.
+2. Launch it — by default it starts listening and turns on system proxy (**Capturing** on). Default bind is usually `127.0.0.1:8866`.
+3. Turn on **Decrypt HTTPS** when you need to see inside HTTPS (installs a local root certificate if needed; you may get an OS trust prompt).
+4. Use the toolbar **System proxy** / **Capturing** checkboxes to pause either without quitting.
+
+HTTPS stays encrypted (opaque tunnels) until **Decrypt HTTPS** is on.
+
+Capture menu options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs) show a check when on. Preferences such as **Session retention…**, **Excluded hosts…**, **Ignore insecure server certificates**, and **Logging…** live under **Options**.
+
 ## Install
 
-Prefer the [Download](/download) page (resolves the newest release that has Inspector assets, including prereleases).
+Prefer the [Download](/download) page.
 
 ### Windows
 
-- **MSI** — guided wizard (license, install folder, progress, Finished with optional Launch). Uninstall from **Settings → Apps** (or Programs and Features); the entry uses the Inspector icon.
+- **MSI** — installer wizard; uninstall from **Settings → Apps**.
 - **Portable zip** — extract and run `TitaniumInspector.exe`.
 
-```shell
-# Stable community package only — not the 7.0 beta
-winget install justcoding121.TitaniumInspector
-```
-
-Windows examples for the **7.0 beta** product tag:
-
-- [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.4-beta/TitaniumInspector-win-x64.msi)
-- [Portable zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.4-beta/TitaniumInspector-win-x64.zip)
+Stable links (`v7.0.5`): [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.5/TitaniumInspector-win-x64.msi) · [zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.5/TitaniumInspector-win-x64.zip). Beta: the Download beta section.
 
 ### Linux
 
-Extract the RID zip, then either run `./TitaniumInspector` (portable) or:
+Extract the zip, then run `./TitaniumInspector`, or:
 
 ```shell
 chmod +x install.sh uninstall.sh TitaniumInspector
 ./install.sh          # ~/.local/share/TitaniumInspector + desktop entry
-# later:
-./uninstall.sh
 ```
 
 ### macOS
 
-Extract the RID zip, then either run `./TitaniumInspector` (portable) or:
+Extract the zip, then run `./TitaniumInspector`, or:
 
 ```shell
 chmod +x install-app.sh uninstall-app.sh TitaniumInspector
 ./install-app.sh      # ~/Applications/Titanium Inspector.app
-# later:
-./uninstall-app.sh
 ```
 
 ## Updates
 
-**Options → Update channel** — Stable (default) or Beta. **Help → Check for updates…** checks only that channel and labels it in the dialog (e.g. *Update 7.0.4 (Stable)*). Choosing **Install and restart** downloads the package (MSI for a Program Files install, otherwise the RID zip), closes Inspector, applies the update, and relaunches.
-
-**Options → Check for updates on startup** uses the same channel and confirm dialog (never silent-install).
-
-## Quick use
-
-1. Launch Inspector — by default it starts listening and enables system proxy (Capturing on).
-2. Check **Decrypt HTTPS** when you want MITM (installs the root CA if needed; may prompt for admin).
-3. Use the toolbar **System proxy** / **Capturing** checkboxes to pause either without quitting.
-
-Default bind is typically `127.0.0.1:8866`. Bind address/port are **start-time** settings on the toolbar: editable when the proxy is stopped; disabled while running. Use **Start proxy** / **Stop proxy** (toolbar button or Capture menu) to switch. After Stop → Start, system proxy is turned back on if it was on before Stop, or if **Auto system proxy on start** is checked.
-
-HTTPS stays encrypted (opaque tunnels) until **Decrypt HTTPS** is enabled.
-
-Capture menu latching options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs) show a check when on. Preferences such as **Session retention…**, **HTTPS sites to decrypt…**, **Ignore insecure server certificates** (off by default), and **Logging…** live under **Options**. **Reset Inspector settings…** restores preferences to factory defaults; it does not remove the root CA or clear sessions.
-
-The status strip keeps command feedback on the left and a live **Sessions: N** count on the right, so capture traffic does not wipe tips or export paths.
-
-**Install root CA (current user)** trusts the MITM CA on this PC. On Windows, the OS may show a Trusted Root **Yes/No** security dialog the first time that certificate is added (this is not UAC). Re-installing when the CA is already trusted does not prompt again; orphan same-name roots are cleaned up only when a new thumbprint is installed, or via **Remove** / **Clear and reinstall**. **Remove root CA** clears every same-name Titanium root in the current-user Trusted Root store (including orphans from earlier installs). **Clear and reinstall root CA…** mints a new private key, clears this install’s leaf certificate cache (next to `%AppData%\TitaniumInspector\rootCert.pfx`), removes same-name trusted roots, and prompts to reinstall trust. **Device CA setup…** opens a dialog with steps for phones/other devices and can **Export CA** from there (or use **Export root CA…** on the Capture menu).
-
-Leaf certificates for Inspector are stored under `%AppData%\TitaniumInspector\crts\` (beside the root PFX), not under the shared `%LocalAppData%\Titanium.Web.Proxy\crts` folder used by the library default. On first start after upgrade (and on every clear/reinstall), Inspector best-effort deletes that legacy shared `crts` folder; it never deletes a shared `rootCert.pfx`.
+**Help → Update channel** — Stable (default) or Beta. **Help → Check for updates…** offers install only when there is a real change (newer build or channel switch). Accept downloads the package, closes Inspector, replaces the install, and relaunches.
 
 ## Right pane: Inspect vs Tools
 
@@ -85,15 +64,19 @@ Use **Tools → Composer / Breakpoints / AutoResponder / Scripts…** to open th
 - **Headers** — request/response headers, cookies, query (labeled sections)
 - **Body** — request and response bodies as `=== Request ===` / `=== Response ===` (decoded / JSON when possible; `(empty)` if missing)
 - **Hex** — same labeled sections for raw bytes
-- **WS Frames** — shown **only for WebSocket** sessions; best-effort text preview of messages (not a full opcode stream)
+- **WS Frames** — shown for WebSocket sessions; live frames when available (direction, opcode, payload preview)
+- **SSE** — shown for `text/event-stream` (or `Accept: text/event-stream`) responses; parses `event` / `id` / `data` blocks into a readable event list
+- **Protobuf** — wire-format field dump for gRPC and gRPC-JSON-transcoded upstream frames (field number, wire type, value). MVP does **not** require a `.protoset` / descriptor set; the optional settings field `ProtobufDescriptorSetPath` is stored for a future typed decode. Until then, the Protobuf tab always shows the JSON wire dump.
 
-Search for WebSocket traffic with `is:ws`. Quick filters on the toolbar toggle `hide:tunnel`, `hide:image`, and `is:error` into the same search box. Status classes (`status:2xx` … `status:5xx`), `process:`, and `content-type:` are also supported. The status strip shows **Sessions: N** with no filter, and **visible / total** when a search or quick filter is active.
+Search for WebSocket traffic with `is:ws`. Search for gRPC with `is:grpc`, and for gRPC-JSON transcoded sessions with `is:transcoded` (client REST/JSON vs upstream gRPC faces appear in the Headers/Body inspect panes). Quick filters on the toolbar toggle `hide:tunnel`, `hide:image`, and `is:error` into the same search box. Status classes (`status:2xx` … `status:5xx`), `process:`, and `content-type:` are also supported. The status strip shows **Sessions: N** with no filter, and **visible / total** when a search or quick filter is active.
+
+**Network throttle:** use the toolbar **Throttle** combo (`None`, `Slow 3G`, `Fast 3G`, `LTE`) to add latency and bandwidth shaping on body writes / WebSocket frames during capture. Off by default (`None`); the hot path skips delay work when no profile is enabled.
 
 ### Tools (all traffic)
 
 Pipeline order on each request:
 
-**Scripts → AutoResponder → Breakpoints → origin**
+**Scripts → AutoResponder → Map Remote → Breakpoints → origin**
 
 #### Composer
 
@@ -107,6 +90,14 @@ Pause matching requests (URL glob; `*` = all) so you can edit the body, **Contin
 
 If **Enabled**, the first matching rule returns a fake status/body **before** the real server (and before breakpoints). Match URLs with `*` wildcards.
 
+**Map Local:** set an optional file path on the rule (or use **Browse…**). When the path is set, the response body is read from that file instead of the inline body field. Inline body is used when Map Local is empty. Missing files cause the rule to be skipped (request continues to breakpoints/origin).
+
+Optional **GraphQL operationName** on AutoResponder, Map Remote, and Breakpoints: when set, the rule only matches requests whose JSON body has that `operationName` (or a matching named operation in the `query` string). Same URL, different operations can take different rules.
+
+#### Map Remote
+
+If **Enabled**, the first matching rule rewrites the request URL to another absolute origin **before** breakpoints and the real server. Match with `*` wildcards. A single `*` in both match and target preserves the captured path/query suffix (for example match `https://prod.example/*` → target `http://127.0.0.1:5000/*`). Map Remote does not run when AutoResponder / Map Local already answered the request.
+
 #### Scripts
 
 **Not JavaScript or C#.** One directive per line (comments with `#` or `//`):
@@ -119,25 +110,52 @@ abort
 
 Applies to every captured request/response. On request, `abort` or `set-status` short-circuits AutoResponder, breakpoints, and the origin.
 
+## Advanced
 
-## Platform matrix (system proxy and root CA)
+### Excluded hosts
+
+**Options → Excluded hosts…** edits two lists:
+
+| Layer | Effect |
+|-------|--------|
+| **OS bypass** | Traffic never reaches Inspector (when **System proxy** is on) |
+| **Tunnel only** | Session stays visible but HTTPS stays opaque |
+
+Factory seeds keep common identity / SSO hosts on OS bypass so sign-in keeps working. Right-click a session → **Exclude host…**. Search: `is:opaque`. **Chrome QUIC** may bypass the proxy entirely — not fixable via host lists.
+
+### Root certificate (Decrypt HTTPS)
+
+**Install root CA (current user)** trusts the decrypt certificate on this PC (OS may show a Yes/No trust dialog). Use **Export root CA…** / **Device CA setup…** for phones or other devices. **Remove root CA** / **Clear and reinstall…** / **Trust CA in Firefox…** are on the Capture menu when you need cleanup or Firefox-specific trust. Prefer those menu actions over editing certificate stores by hand.
+
+### Platform matrix (system proxy and root CA)
 
 | Feature | Windows | macOS | Linux |
 |---------|---------|-------|-------|
-| System proxy | WinINET (automatic) | `networksetup` (admin prompt if required) | GNOME `gsettings` + KDE + process `http(s)_proxy` |
-| Root CA user trust | Current-user Root store | Login keychain (`security`) + .NET store | .NET store + user NSS (`certutil`, Chromium) |
+| System proxy | WinINET (automatic) | `networksetup` (disables PAC/WPAD/SOCKS so CFNetwork/Firefox see HTTP(S); admin prompt if required) | GNOME `gsettings` + KDE + process `http(s)_proxy` + Chromium/Edge launch hooks + Firefox profile prefs |
+| Instant browser switch | OS settings (live for most apps) | OS settings (live for most apps; Firefox may need restart) | Chromium/Edge quit+relaunch with `--proxy-server`; Firefox prefs + quit/relaunch |
+| Root CA user trust | Current-user Root store | Login keychain (`security`) + .NET store | .NET store + user NSS (`certutil`, Chrome/Edge/Chromium incl. Snap/Flatpak DBs) |
 | Root CA machine / admin | UAC + `certutil` | System keychain (macOS auth dialog) | `pkexec` + `update-ca-certificates` |
-| Cancel elevation | Leaves settings unchanged | Leaves settings unchanged | Leaves settings unchanged |
+| Missing `certutil` | N/A for OS trust | **Trust CA in Firefox…** can run `brew install nss` when Homebrew is present | Recovery dialog can install `libnss3-tools` / `nss-tools` / `mozilla-nss-tools` via `pkexec` |
+| Firefox | **Trust CA in Firefox…** sets `ImportEnterpriseRoots` (restart Firefox) | Install root CA writes profile `user.js` (`security.enterprise_roots.enabled`); NSS `certutil` is the fallback. Never modifies `Firefox.app`. | Profile `user.js` OS-root trust first; NSS import fallback; system proxy also writes `network.proxy.*` in the default profile |
+| Cancel elevation / recovery | Leaves settings unchanged | Leaves settings unchanged | Leaves settings unchanged |
 
 Notes:
 
 - Headless Linux without polkit/GUI cannot show an admin dialog; use Export CA and install manually.
-- Firefox may require trusting the CA in its own certificate store.
+- **Trust CA in Firefox…** remains available for NSS profile import. **Install root CA** also best-effort writes `security.enterprise_roots.enabled` in the default profile `user.js` (macOS includes `FirefoxDeveloperEdition` and `Firefox Nightly` profile roots; Linux includes Snap and Flatpak). Inspector does **not** write into `Firefox.app`. If Firefox is running, Inspector can ask it to quit gracefully (with consent) before writing `cert9.db`; on macOS it falls back to SIGTERM if osascript is blocked.
+- On Linux, **System proxy** also updates Chromium-family managed policy / Preferences / `.desktop` helpers and Firefox `prefs.js`, then relaunches already-open Chrome, Edge, Chromium, Brave, and Firefox so traffic switches without a manual restart. On exit or proxy off, settings are restored and browsers are relaunched without the Inspector endpoint (with a short fail-open tunnel if Chromium still pointed at a dead port).
+- On Windows, the first Current User Root install may show an OS Trusted Root **Yes/No** dialog (not UAC); choose **Yes**. Inspector cannot replace that dialog.
+- macOS without Homebrew: OS-root trust via `user.js` does not need `certutil`. Export CA and import under Firefox → Authorities only if enterprise-roots is not enough.
+- Enabling **System proxy** on macOS turns off PAC, WPAD, and SOCKS so Firefox (CFNetwork) sees the HTTP(S) proxy; previous PAC/SOCKS settings are restored when System proxy is turned off. Firefox that was already open may need a restart.
 - KDE proxy reload is best-effort; a session restart may be needed if apps do not pick up changes.
-- If user-level CA install fails, Inspector offers an elevated retry (OS admin prompt).
+- If user-level CA install fails, Inspector offers an adaptive recovery dialog (tools / Keychain / admin).
+- **Contributors:** unit/integration tests never open OS cert UI (`TITANIUM_SKIP_ROOT_STORE_UI=1`). For live System proxy / Install CA / browsers / Store apps UX, run [`tools/InspectorDesktopProbe`](../../tools/InspectorDesktopProbe/README.md) (`dotnet run --project tools/InspectorDesktopProbe -- all`). Results: `tools/InspectorDesktopProbe/results/last-run.json`.
+
 ## Other features
 
-- Session grid: method, status, host, URL, Protocol, duration, Wait (TTFB), size, process. Right-click menu: Replay, Load into Composer, Export selected HAR/archive, Copy URL.
+- Session grid: method, status, host, URL, Protocol, duration, Wait (TTFB), size, process. Right-click menu: Replay, Load into Composer, Export selected HAR/archive, Copy URL, Copy as curl, Copy as fetch, Diff selected (exactly two sessions).
+- **Copy as curl / fetch:** with one session selected, generate a shell `curl` command or a JavaScript `fetch(...)` call from the request URL, method, headers, and body (CONNECT tunnels are skipped). The snippet is copied to the clipboard.
+- **Session Diff:** with exactly two sessions selected, compare method/URL/status/headers/bodies offline. The result opens on the Inspect **Diff** tab and is copied to the clipboard.
 - HAR / archive: Export all writes every captured session; Export selected writes the grid multi-selection. Import appends sessions from the file. Replay selected session.
 - System proxy and root CA install / untrust / export; Device CA setup dialog for external devices; **Allow Store apps…** on Windows
 - Search (`method:GET status:2xx host:example process:chrome is:ws hide:tunnel`); quick filters: Hide CONNECT, Hide images, Errors only

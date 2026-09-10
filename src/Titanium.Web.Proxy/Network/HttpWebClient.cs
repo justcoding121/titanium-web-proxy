@@ -43,7 +43,6 @@ public class HttpWebClient
     {
         ConnectRequest = connectRequest;
         Request = request;
-        Response = new Response();
         ProcessId = processIdFunc;
     }
 
@@ -88,9 +87,11 @@ public class HttpWebClient
     internal bool CloseServerConnection { get; set; }
 
     /// <summary>
-    ///     Stores internal data for the session.
+    ///     Stores internal data for the session (lazy — most H2/H3 Lite streams never touch it).
     /// </summary>
-    internal InternalDataStore Data { get; } = new();
+    internal InternalDataStore Data => data ??= new();
+
+    private InternalDataStore? data;
 
     /// <summary>
     ///     Gets or sets the user data.
@@ -127,13 +128,32 @@ public class HttpWebClient
     public Request Request { get; }
 
     /// <summary>
-    ///     Web Response.
+    ///     Web Response. Created on first access so H2/H3 MITM Lite request-only work
+    ///     does not allocate a Response + HeaderCollection graph per stream up front.
+    ///     CompareExchange: H2 request/response legs can race the first access.
     /// </summary>
-    public Response Response { get; internal set; }
+    public Response Response
+    {
+        get
+        {
+            var existing = response;
+            if (existing != null)
+                return existing;
+            var created = new Response();
+            return Interlocked.CompareExchange(ref response, created, null) ?? created;
+        }
+        internal set => response = value;
+    }
+
+    /// <summary>True when a response object has already been materialized for this exchange.</summary>
+    internal bool HasResponse => response != null;
+
+    private Response? response;
 
     /// <summary>
-    ///     PID of the process that is created the current session when client is running in this machine
-    ///     If client is remote then this will return
+    ///     PID of the local client process for this session (Windows, Linux, and macOS).
+    ///     Remote clients, unsupported platforms, and unresolved sockets yield a non-positive value.
+    ///     See <see cref="ClientProcessId.IsSupported"/>.
     /// </summary>
     public Lazy<int> ProcessId { get; internal set; }
 
@@ -368,8 +388,8 @@ public class HttpWebClient
         upstreamConnectionTiming = null;
         CloseServerConnection = false;
         Request.ResetForKeepAlive();
-        Response.ResetForKeepAlive();
-        Data.Clear();
+        response?.ResetForKeepAlive();
+        data?.Clear();
         UserData = null;
     }
 

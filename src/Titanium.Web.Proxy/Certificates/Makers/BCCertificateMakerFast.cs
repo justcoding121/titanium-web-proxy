@@ -37,6 +37,9 @@ internal class BcCertificateMakerFast : ICertificateMaker
     /// <summary>
     ///     Shared key pair used for every leaf. Roots always get a fresh RSA-2048 pair so the
     ///     documented "root stays RSA" contract holds when leaves are ECDSA.
+    ///     Intentional MITM first-visit RPS tradeoff: one pair per <see cref="BcCertificateMakerFast"/>
+    ///     instance. Compromise of this material compromises all forged leaves from this maker;
+    ///     do not generate per-host keys on the hot path.
     /// </summary>
     private readonly AsymmetricCipherKeyPair leafKeyPair;
 

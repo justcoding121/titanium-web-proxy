@@ -6,7 +6,7 @@ namespace Titanium.Web.Proxy.RpsLoadProbe;
 
 internal static class MachineInfo
 {
-    public static string FormatReport(string? nginxVersion)
+    public static string FormatReport(string? nginxVersion, string? haproxyVersion = null, string? envoyVersion = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("=== Machine info ===");
@@ -21,6 +21,14 @@ internal static class MachineInfo
             sb.AppendLine($"nginx: {nginxVersion}");
         else
             sb.AppendLine("nginx: (not detected)");
+        if (!string.IsNullOrWhiteSpace(haproxyVersion))
+            sb.AppendLine($"haproxy: {haproxyVersion}");
+        else
+            sb.AppendLine("haproxy: (not detected)");
+        if (!string.IsNullOrWhiteSpace(envoyVersion))
+            sb.AppendLine($"envoy: {envoyVersion}");
+        else
+            sb.AppendLine("envoy: (not detected)");
         return sb.ToString();
     }
 
@@ -103,11 +111,12 @@ internal static class CsvWriter
 {
     public static Task WriteHeaderAsync(StreamWriter writer) =>
         writer.WriteLineAsync(
-            "timestamp_utc,arm,generator,concurrency,duration_s,ok,errors,rps,error_rate_pct,p50_ms,p99_ms,max_ms,meets_slo,nginx_version,yarp_version,http_versions,max_cached_connections,method,response_bytes,request_bytes,delay_ms,loss_percent,keepalive,proxy_rss_peak_bytes,proxy_cpu_avg_pct");
+            "timestamp_utc,arm,generator,concurrency,duration_s,ok,errors,rps,error_rate_pct,p50_ms,p99_ms,max_ms,meets_slo,nginx_version,haproxy_version,envoy_version,yarp_version,http_versions,max_cached_connections,method,response_bytes,request_bytes,delay_ms,loss_percent,keepalive,proxy_rss_peak_bytes,proxy_cpu_avg_pct");
 
     public static Task WriteRowAsync(StreamWriter writer, string arm, LoadResult result, bool meetsSlo,
         string? nginxVersion, int? maxCachedConnections = null, WorkloadOptions? workload = null,
-        string? yarpVersion = null, ProcessResourceSample? resources = null)
+        string? yarpVersion = null, ProcessResourceSample? resources = null, string? haproxyVersion = null,
+        string? envoyVersion = null)
     {
         workload ??= WorkloadOptions.TinyGet;
         var rss = resources is { } r ? r.PeakRssBytes.ToString(CultureInfo.InvariantCulture) : "";
@@ -115,7 +124,7 @@ internal static class CsvWriter
             ? c.AvgCpuPercent.ToString("F2", CultureInfo.InvariantCulture)
             : "";
         return writer.WriteLineAsync(string.Create(CultureInfo.InvariantCulture,
-            $"{DateTime.UtcNow:O},{arm},{result.Generator},{result.Concurrency},{result.DurationSeconds:F3},{result.Ok},{result.Errors},{result.Rps:F1},{result.ErrorRatePercent:F4},{result.P50Ms:F2},{result.P99Ms:F2},{result.MaxMs:F2},{(meetsSlo ? 1 : 0)},{Escape(nginxVersion)},{Escape(yarpVersion)},{Escape(result.NegotiatedVersionHint)},{(maxCachedConnections?.ToString(CultureInfo.InvariantCulture) ?? "")},{workload.Method},{workload.ResponseBytes},{workload.RequestBytes},{workload.DelayMs},{workload.LossPercent:F2},{(workload.KeepAlive ? 1 : 0)},{rss},{cpu}"));
+            $"{DateTime.UtcNow:O},{arm},{result.Generator},{result.Concurrency},{result.DurationSeconds:F3},{result.Ok},{result.Errors},{result.Rps:F1},{result.ErrorRatePercent:F4},{result.P50Ms:F2},{result.P99Ms:F2},{result.MaxMs:F2},{(meetsSlo ? 1 : 0)},{Escape(nginxVersion)},{Escape(haproxyVersion)},{Escape(envoyVersion)},{Escape(yarpVersion)},{Escape(result.NegotiatedVersionHint)},{(maxCachedConnections?.ToString(CultureInfo.InvariantCulture) ?? "")},{workload.Method},{workload.ResponseBytes},{workload.RequestBytes},{workload.DelayMs},{workload.LossPercent:F2},{(workload.KeepAlive ? 1 : 0)},{rss},{cpu}"));
     }
 
     private static string Escape(string? value)

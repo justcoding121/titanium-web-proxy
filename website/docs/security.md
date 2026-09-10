@@ -1,6 +1,6 @@
 # Security considerations
 
-## HTTPS decryption (MITM)
+## HTTPS decryption — man-in-the-middle (MITM)
 
 Decrypting HTTPS requires a root certificate that clients trust. Only install generated roots on machines you control. Machine-wide trust is stronger and riskier than per-user trust.
 

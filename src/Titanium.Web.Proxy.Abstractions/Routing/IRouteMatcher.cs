@@ -73,4 +73,7 @@ public sealed class TransformRequestContext
 {
     public required string Path { get; set; }
     public Dictionary<string, string> Headers { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> HeadersToRemove { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> ResponseHeadersToSet { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> ResponseHeadersToRemove { get; } = new(StringComparer.OrdinalIgnoreCase);
 }

@@ -22,8 +22,10 @@ public abstract class TransparentBaseProxyEndPoint : ProxyEndPoint
 
     /// <summary>
     ///     Optional fixed upstream server to forward all traffic on this endpoint to.
-    ///     Only the TCP connection target is changed; the original host is still used
-    ///     for TLS SNI/certificate validation and the HTTP Host header.
+    ///     TCP connects to this host. For re-encrypt (<see cref="ForwardCleartext"/> false),
+    ///     TLS SNI and HTTP Host stay on the client authority. For TLS terminate
+    ///     (<see cref="ForwardCleartext"/> true), Host is rewritten to this host and
+    ///     <see cref="ForwardPort"/> so HTTP origins see their own bind identity.
     /// </summary>
     public string? ForwardHost { get; set; }
 

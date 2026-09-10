@@ -12,7 +12,7 @@
 |---------|------|
 | `Titanium.Web.Proxy` | Engine (MIT) |
 | `Titanium.Web.Proxy.Abstractions` | Shared route/cluster/middleware/plugin contracts (MIT) |
-| `Titanium.Web.Proxy.Configuration` | YAML/JSON + dialect readers (MIT) — **optional** for embedders |
+| `Titanium.Web.Proxy.Configuration` | YAML/JSON + dialect readers (MIT) — **optional** for library users |
 
 Apps that only construct `ProxyServer` and set `ForwardHost` **do not** need Configuration.
 
@@ -35,7 +35,7 @@ Simple reverse configs in the CLI must **not** set `EnableHttpInterception` or s
 ## Editions
 
 - **Titanium.Cli** (`titanium` / `twp`) — MIT daemon
-- **Titanium.Plus** — PolyForm Noncommercial plugin DLL (ALC); not on nuget.org
-- **Titanium Inspector** — PolyForm Noncommercial desktop app
+- **Titanium.Plus** — plugin DLL (ALC); not on nuget.org
+- **Titanium Inspector** — desktop app
 
-See the README Editions table for licenses and distribution channels.
+See the README [License](https://github.com/justcoding121/titanium-web-proxy/blob/develop/README.md#license) section for licenses and distribution channels.

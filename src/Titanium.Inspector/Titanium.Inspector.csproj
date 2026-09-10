@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <SignAssembly>false</SignAssembly>
-    <VersionPrefix>7.0.4</VersionPrefix>
+    <VersionPrefix>7.0.6</VersionPrefix>
     <Authors>Jehonathan Thomas</Authors>
     <Description>Titanium Inspector desktop traffic debugger (PolyForm Noncommercial).</Description>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
@@ -18,6 +18,9 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <!-- Bundle id: com.justcoding121.titaniuminspector -->
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Titanium.Inspector.Tests, PublicKey=0024000004800000940000000602000000240000525341310004000001000100e7368e0ccc717eeb4d57d35ad6a8305cbbed14faa222e13869405e92c83856266d400887d857005f1393ffca2b92de7f3ba0bdad35ec2d6057ee1846091b34be2abc3f97dc7e72c16fd4958c15126b12923df769647d84922c3f4f3b80ee0ae8e4cb40bc1973b782afb90bb00519fd16adf960f217e23696e7c3165401d0acd6" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.2.8" />
     <PackageReference Include="Avalonia.Desktop" Version="11.2.8" />
@@ -34,4 +37,19 @@
     <AvaloniaResource Include="Assets\app.ico" />
     <None Include="LICENSE" Pack="true" PackagePath="" />
   </ItemGroup>
+  <!-- Local macOS Debug/dotnet run: copy Homebrew MsQuic beside the apphost (Release zips use bundle-http3-native.ps1). -->
+  <Target Name="CopyMacHttp3Natives" AfterTargets="Build" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <Exec Command="bash &quot;$(MSBuildThisFileDirectory)..\..\tools\packaging\copy-http3-natives-osx.sh&quot; &quot;$(TargetDir)&quot;"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low" />
+    <!-- Avoid a re-exec when launching via `dotnet run` / IDE: Quic only dlopen()s by leaf name. -->
+    <PropertyGroup>
+      <_Http3LaunchSettings>$(MSBuildProjectDirectory)\Properties\launchSettings.json</_Http3LaunchSettings>
+      <_Http3TargetDir>$([System.IO.Path]::GetFullPath('$(TargetDir)').TrimEnd('\').TrimEnd('/'))</_Http3TargetDir>
+    </PropertyGroup>
+    <MakeDir Directories="$(MSBuildProjectDirectory)\Properties" />
+    <WriteLinesToFile File="$(_Http3LaunchSettings)" Overwrite="true" Encoding="UTF-8"
+      Lines='{"profiles":{"TitaniumInspector":{"commandName":"Project","environmentVariables":{"DYLD_FALLBACK_LIBRARY_PATH":"$(_Http3TargetDir)"}}}}' />
+  </Target>
 </Project>

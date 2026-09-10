@@ -294,16 +294,23 @@ internal static class CertificateBootstrap
                 ext.Equals(".p12", StringComparison.OrdinalIgnoreCase))
             {
                 var password = Environment.GetEnvironmentVariable("TITANIUM_CERT_PASSWORD");
+                // Exportable (not EphemeralKeySet): Windows Schannel needs a usable private key
+                // for SslStream.AuthenticateAsServer on TLS-terminate listeners.
                 leaf = X509CertificateLoader.LoadPkcs12(
                     File.ReadAllBytes(certPath),
                     password,
-                    X509KeyStorageFlags.EphemeralKeySet);
+                    X509KeyStorageFlags.Exportable);
                 return true;
             }
 
             if (!string.IsNullOrEmpty(keyPath) && File.Exists(keyPath))
             {
-                leaf = X509Certificate2.CreateFromPemFile(certPath, keyPath);
+                using var pem = X509Certificate2.CreateFromPemFile(certPath, keyPath);
+                // Re-wrap as PKCS#12 with Exportable so Schannel can present the leaf.
+                leaf = X509CertificateLoader.LoadPkcs12(
+                    pem.Export(X509ContentType.Pfx),
+                    password: null,
+                    X509KeyStorageFlags.Exportable);
                 return true;
             }
 

@@ -16,6 +16,8 @@
         <MenuItem Header="Export all archive…" Command="{Binding ExportArchiveCommand}" AutomationProperties.AutomationId="MenuExportArchive" />
         <MenuItem Header="Export selected archive…" Command="{Binding ExportSelectedArchiveCommand}" AutomationProperties.AutomationId="MenuExportSelectedArchive" />
         <MenuItem Header="Import archive…" Command="{Binding ImportArchiveCommand}" AutomationProperties.AutomationId="MenuImportArchive" />
+        <Separator />
+        <MenuItem Header="E_xit" Command="{Binding ExitCommand}" AutomationProperties.AutomationId="MenuExit" />
       </MenuItem>
       <MenuItem Header="_Capture" AutomationProperties.AutomationId="MenuCapture">
         <MenuItem Header="Start proxy" Command="{Binding StartCaptureCommand}" AutomationProperties.AutomationId="MenuStartCapture" />
@@ -49,6 +51,8 @@
         <MenuItem Header="Remove root CA (current user)" Command="{Binding UntrustCaCommand}" AutomationProperties.AutomationId="MenuRemoveCa" />
         <MenuItem Header="Clear and reinstall root CA…" Command="{Binding RotateCaCommand}" AutomationProperties.AutomationId="MenuRotateCa" />
         <MenuItem Header="Export root CA…" Command="{Binding ExportCaCommand}" AutomationProperties.AutomationId="MenuExportCa" />
+        <MenuItem Header="Trust CA in Firefox…" Command="{Binding TrustFirefoxCaCommand}"
+                  AutomationProperties.AutomationId="MenuTrustFirefoxCa" />
         <MenuItem Header="Device CA setup…" Command="{Binding DeviceCaSetupCommand}" AutomationProperties.AutomationId="MenuDeviceCa" />
         <MenuItem Header="Allow Store apps…" Command="{Binding OpenLoopbackExemptCommand}"
                   IsVisible="{Binding ShowLoopbackExemptMenu}"
@@ -59,17 +63,52 @@
         <MenuItem Header="Breakpoints…" Command="{Binding OpenToolsBreakpointsCommand}" AutomationProperties.AutomationId="MenuToolsBreakpoints" />
         <MenuItem Header="AutoResponder…" Command="{Binding OpenToolsAutoResponderCommand}" AutomationProperties.AutomationId="MenuToolsAutoResponder" />
         <MenuItem Header="Scripts…" Command="{Binding OpenToolsScriptsCommand}" AutomationProperties.AutomationId="MenuToolsScripts" />
+        <MenuItem Header="Map Remote…" Command="{Binding OpenToolsMapRemoteCommand}" AutomationProperties.AutomationId="MenuToolsMapRemote" />
       </MenuItem>
       <MenuItem Header="_Options" AutomationProperties.AutomationId="MenuOptions">
+        <MenuItem Header="_Theme" AutomationProperties.AutomationId="MenuTheme">
+          <MenuItem Header="Light" ToggleType="Radio"
+                    IsChecked="{Binding ThemeModeIsLight, Mode=OneWay}"
+                    Command="{Binding SetThemeLightCommand}"
+                    AutomationProperties.AutomationId="MenuThemeLight" />
+          <MenuItem Header="Dark" ToggleType="Radio"
+                    IsChecked="{Binding ThemeModeIsDark, Mode=OneWay}"
+                    Command="{Binding SetThemeDarkCommand}"
+                    AutomationProperties.AutomationId="MenuThemeDark" />
+          <MenuItem Header="Automatic" ToggleType="Radio"
+                    IsChecked="{Binding ThemeModeIsAutomatic, Mode=OneWay}"
+                    Command="{Binding SetThemeAutomaticCommand}"
+                    AutomationProperties.AutomationId="MenuThemeAutomatic" />
+        </MenuItem>
+        <Separator />
         <MenuItem Header="Session retention…" Command="{Binding OpenSessionRetentionCommand}"
                   AutomationProperties.AutomationId="MenuSessionRetention" />
-        <MenuItem Header="HTTPS sites to decrypt…" Command="{Binding OpenHttpsDecryptHostsCommand}"
+        <MenuItem Header="Excluded hosts…" Command="{Binding OpenHttpsDecryptHostsCommand}"
+                  ToolTip.Tip="HTTPS decrypt skip lists and OS bypass rules"
                   AutomationProperties.AutomationId="MenuHttpsDecryptHosts" />
         <MenuItem Header="Ignore insecure server certificates" ToggleType="CheckBox"
                   IsChecked="{Binding IgnoreServerCertificateErrors, Mode=OneWay}"
                   Command="{Binding ToggleIgnoreServerCertificateErrorsCommand}"
                   AutomationProperties.AutomationId="MenuIgnoreServerCertErrors" />
+        <MenuItem Header="Add Via header" ToggleType="CheckBox"
+                  IsChecked="{Binding AddViaHeader, Mode=OneWay}"
+                  Command="{Binding ToggleAddViaHeaderCommand}"
+                  ToolTip.Tip="Append Via: … titanium-web-proxy on intercepted traffic (RFC 9110). Off disables injection and Via loop detection."
+                  AutomationProperties.AutomationId="MenuAddViaHeader" />
         <Separator />
+        <MenuItem Header="Logging…" Command="{Binding OpenLoggingSettingsCommand}"
+                  AutomationProperties.AutomationId="MenuLogging" />
+        <Separator />
+        <MenuItem Header="Reset Inspector settings…" Command="{Binding ResetSettingsCommand}"
+                  AutomationProperties.AutomationId="MenuResetSettings" />
+      </MenuItem>
+      <MenuItem Header="_Help" AutomationProperties.AutomationId="MenuHelp">
+        <MenuItem Header="Check for updates…" Command="{Binding CheckForUpdatesCommand}"
+                  AutomationProperties.AutomationId="MenuCheckForUpdates" />
+        <MenuItem Header="Check for updates on startup" ToggleType="CheckBox"
+                  IsChecked="{Binding CheckForUpdatesOnStartup, Mode=OneWay}"
+                  Command="{Binding ToggleCheckForUpdatesOnStartupCommand}"
+                  AutomationProperties.AutomationId="MenuCheckUpdatesOnStartup" />
         <MenuItem Header="Update channel" AutomationProperties.AutomationId="MenuUpdateChannel">
           <MenuItem Header="Stable" ToggleType="CheckBox"
                     IsChecked="{Binding UpdateChannelIsStable, Mode=OneWay}"
@@ -80,18 +119,10 @@
                     Command="{Binding SetUpdateChannelBetaCommand}"
                     AutomationProperties.AutomationId="MenuUpdateChannelBeta" />
         </MenuItem>
-        <MenuItem Header="Check for updates on startup" ToggleType="CheckBox"
-                  IsChecked="{Binding CheckForUpdatesOnStartup, Mode=OneWay}"
-                  Command="{Binding ToggleCheckForUpdatesOnStartupCommand}"
-                  AutomationProperties.AutomationId="MenuCheckUpdatesOnStartup" />
         <Separator />
-        <MenuItem Header="Logging…" Command="{Binding OpenLoggingSettingsCommand}"
-                  AutomationProperties.AutomationId="MenuLogging" />
-        <Separator />
-        <MenuItem Header="Reset Inspector settings…" Command="{Binding ResetSettingsCommand}"
-                  AutomationProperties.AutomationId="MenuResetSettings" />
+        <MenuItem Header="About Titanium Inspector…" Command="{Binding OpenAboutCommand}"
+                  AutomationProperties.AutomationId="MenuAbout" />
       </MenuItem>
-      <MenuItem Header="_Help" AutomationProperties.AutomationId="MenuHelp"><MenuItem Header="Check for updates…" Command="{Binding CheckForUpdatesCommand}" AutomationProperties.AutomationId="MenuCheckForUpdates" /></MenuItem>
     </Menu>
     <Grid RowDefinitions="Auto,*,Auto">
       <Grid.ColumnDefinitions>
@@ -105,7 +136,7 @@
         <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarSearchFilters">
           <TextBox MinWidth="160" Width="320" MaxWidth="420" Margin="0,0,12,6"
                    Watermark="Search sessions… (e.g. method:GET host:api)"
-                   ToolTip.Tip="Advanced tokens: method: status: host: url: body: process: content-type: is:ws|grpc|tunnel|error hide:tunnel|image"
+                   ToolTip.Tip="Advanced tokens: method: status: host: url: body: process: content-type: is:ws|grpc|tunnel|error hide:tunnel|image. Metadata search covers all listed sessions (including spilled). body: searches in-memory bodies only — sessions with bodies on disk are skipped until you inspect them."
                    Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
           <CheckBox Content="Hide CONNECT" IsChecked="{Binding HideTunnelsFilter}"
                     VerticalAlignment="Center" Margin="0,0,12,6"
@@ -132,6 +163,12 @@
           <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}"
                     VerticalAlignment="Center" Margin="0,0,12,6"
                     AutomationProperties.AutomationId="SystemProxyCheck" />
+          <TextBlock Text="Throttle" VerticalAlignment="Center" Margin="0,0,6,6" Opacity="0.85" />
+          <ComboBox Width="110" Margin="0,0,12,6" VerticalAlignment="Center"
+                    ItemsSource="{Binding NetworkThrottleProfileNames}"
+                    SelectedItem="{Binding NetworkThrottleProfile}"
+                    ToolTip.Tip="Add latency and bandwidth shaping during capture (body writes / WebSocket frames). Off by default."
+                    AutomationProperties.AutomationId="ComboNetworkThrottle" />
         </WrapPanel>
         <!-- Bind / intercept controls wrap independently of the rows above. -->
         <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarEndpoint">
@@ -190,9 +227,21 @@
             <MenuItem Header="Copy URL" Command="{Binding CopyUrlCommand}"
                       IsVisible="{Binding CanCopyUrl}"
                       AutomationProperties.AutomationId="CtxCopyUrl" />
+            <MenuItem Header="Copy as curl" Command="{Binding CopyAsCurlCommand}"
+                      IsVisible="{Binding CanCopyAsCurl}"
+                      AutomationProperties.AutomationId="CtxCopyAsCurl" />
+            <MenuItem Header="Copy as fetch" Command="{Binding CopyAsFetchCommand}"
+                      IsVisible="{Binding CanCopyAsCurl}"
+                      AutomationProperties.AutomationId="CtxCopyAsFetch" />
+            <MenuItem Header="Diff selected…" Command="{Binding DiffSessionsCommand}"
+                      IsVisible="{Binding CanDiffSessions}"
+                      AutomationProperties.AutomationId="CtxDiffSessions" />
             <MenuItem Header="Filter by host" Command="{Binding FilterByHostCommand}"
                       IsVisible="{Binding CanFilterByHost}"
                       AutomationProperties.AutomationId="CtxFilterByHost" />
+            <MenuItem Header="Exclude host…" Command="{Binding ExcludeHostCommand}"
+                      IsVisible="{Binding CanExcludeHost}"
+                      AutomationProperties.AutomationId="CtxExcludeHost" />
             <MenuItem Header="Filter by process" Command="{Binding FilterByProcessCommand}"
                       IsVisible="{Binding CanFilterByProcess}"
                       AutomationProperties.AutomationId="CtxFilterByProcess" />
@@ -210,13 +259,26 @@
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate x:DataType="svc:SessionSnapshot">
                 <TextBlock Text="{Binding StatusCode}"
-                           Foreground="{Binding StatusCode, Converter={StaticResource StatusCodeBrushConverter}}"
                            FontWeight="{Binding StatusCode, Converter={StaticResource StatusCodeFontWeightConverter}}"
-                           VerticalAlignment="Center" />
+                           VerticalAlignment="Center">
+                  <TextBlock.Foreground>
+                    <MultiBinding Converter="{StaticResource StatusCodeBrushConverter}">
+                      <Binding Path="StatusCode" />
+                      <Binding Path="DataContext.ThemeRefreshTick" RelativeSource="{RelativeSource AncestorType=Window}" />
+                    </MultiBinding>
+                  </TextBlock.Foreground>
+                </TextBlock>
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
-          <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="180" MinWidth="120" />
+          <DataGridTemplateColumn Header="Host" Width="180" MinWidth="120" SortMemberPath="Host">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate x:DataType="svc:SessionSnapshot">
+                <TextBlock Text="{Binding Host}" VerticalAlignment="Center"
+                           ToolTip.Tip="{Binding OpaqueReasonDisplay}" />
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
           <DataGridTextColumn Header="URL" Binding="{Binding Url}" Width="320" MinWidth="160" />
           <DataGridTextColumn Header="Protocol" Binding="{Binding Protocol}" Width="130" MinWidth="120" />
           <DataGridTextColumn Header="Duration (ms)" Binding="{Binding DurationMs, StringFormat={}{0:0}}"
@@ -255,8 +317,14 @@
                           IsVisible="{Binding HasSelectedSession}"
                           SelectedIndex="{Binding SelectedInspectTabIndex}">
                 <TabItem Header="Headers" AutomationProperties.AutomationId="TabHeaders">
-                  <TextBox IsReadOnly="True" Text="{Binding SelectedHeaders}" AcceptsReturn="True" TextWrapping="Wrap"
-                           FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="HeadersText" />
+                  <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="{Binding SelectedOpaqueHint}" Margin="0,0,0,8"
+                               TextWrapping="Wrap" Opacity="0.85" FontSize="12"
+                               IsVisible="{Binding ShowSelectedOpaqueHint}"
+                               AutomationProperties.AutomationId="SelectedOpaqueHint" />
+                    <TextBox IsReadOnly="True" Text="{Binding SelectedHeaders}" AcceptsReturn="True" TextWrapping="Wrap"
+                             FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="HeadersText" />
+                  </DockPanel>
                 </TabItem>
                 <TabItem Header="Body" AutomationProperties.AutomationId="TabBody">
                   <TextBox IsReadOnly="True" Text="{Binding SelectedBody}" AcceptsReturn="True" TextWrapping="Wrap"
@@ -266,15 +334,35 @@
                   <TextBox IsReadOnly="True" Text="{Binding SelectedHex}" AcceptsReturn="True" TextWrapping="Wrap"
                            FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="HexText" />
                 </TabItem>
+                <TabItem Header="Diff" AutomationProperties.AutomationId="TabDiff"
+                         IsVisible="{Binding CanShowSessionDiffTab}">
+                  <TextBox IsReadOnly="True" Text="{Binding SessionDiffText}" AcceptsReturn="True" TextWrapping="Wrap"
+                           FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="DiffText" />
+                </TabItem>
                 <TabItem Header="WS Frames" AutomationProperties.AutomationId="TabFrames"
                          IsVisible="{Binding ShowWsFramesTab}">
                   <DockPanel>
                     <TextBlock DockPanel.Dock="Top" Margin="8,8,8,0" Opacity="0.75" TextWrapping="Wrap"
-                               Text="WebSocket message preview for this session (best-effort text)." />
+                               Text="Live WebSocket frames for this session (direction, opcode, payload preview)." />
                     <TextBox IsReadOnly="True" Text="{Binding SelectedFrames}" AcceptsReturn="True" TextWrapping="Wrap"
                              Margin="0,4,0,0"
                              FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="FramesText" />
                   </DockPanel>
+                </TabItem>
+                <TabItem Header="SSE" AutomationProperties.AutomationId="TabSse"
+                         IsVisible="{Binding ShowSseTab}">
+                  <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Margin="8,8,8,0" Opacity="0.75" TextWrapping="Wrap"
+                               Text="Server-Sent Events parsed from the response body." />
+                    <TextBox IsReadOnly="True" Text="{Binding SelectedSseEvents}" AcceptsReturn="True" TextWrapping="Wrap"
+                             Margin="0,4,0,0"
+                             FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="SseText" />
+                  </DockPanel>
+                </TabItem>
+                <TabItem Header="Protobuf" AutomationProperties.AutomationId="TabProtobuf"
+                         IsVisible="{Binding ShowProtobufTab}">
+                  <TextBox IsReadOnly="True" Text="{Binding SelectedProtobufDecoded}" AcceptsReturn="True" TextWrapping="Wrap"
+                           FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="ProtobufText" />
                 </TabItem>
               </TabControl>
             </Grid>
@@ -319,6 +407,8 @@
                             AutomationProperties.AutomationId="BreakpointOnResponse" />
                   <TextBox Watermark="URL filter (* = all, e.g. *api*/users*)" Text="{Binding Breakpoints.UrlFilter}"
                            AutomationProperties.AutomationId="BreakpointUrlFilter" />
+                  <TextBox Watermark="GraphQL operationName (optional)" Text="{Binding Breakpoints.GraphQlOperationName}"
+                           AutomationProperties.AutomationId="BreakpointGraphQlOperation" />
                   <TextBox Watermark="Edit body (Apply edit body, then Continue)" Text="{Binding BreakpointEditBody}"
                            AcceptsReturn="True" Height="80" FontFamily="Consolas,Courier New,monospace"
                            AutomationProperties.AutomationId="BreakpointEditBody" />
@@ -335,7 +425,7 @@
               <TabItem Header="AutoResponder" AutomationProperties.AutomationId="TabAutoResponder">
                 <StackPanel Margin="8" Spacing="8">
                   <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                             Text="Return a fake response for matching URLs before the real server (and before breakpoints)." />
+                             Text="Return a fake response for matching URLs before the real server (and before breakpoints). Map Local loads the body from a file when a path is set." />
                   <CheckBox Content="Enabled (before breakpoints)" IsChecked="{Binding AutoResponder.Enabled}"
                             AutomationProperties.AutomationId="AutoResponderEnabled" />
                   <ListBox ItemsSource="{Binding AutoResponder.Rules}"
@@ -356,7 +446,16 @@
                              AutomationProperties.AutomationId="AutoResponderStatus" />
                     <TextBox Watermark="Content-Type" Text="{Binding AutoResponderContentType}" Width="160" AutomationProperties.AutomationId="AutoResponderContentType" />
                   </StackPanel>
-                  <TextBox Watermark="Response body" Text="{Binding AutoResponderBody}" AcceptsReturn="True" Height="80"
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBox Watermark="Map Local file (optional)" Text="{Binding AutoResponderLocalFilePath}"
+                             MinWidth="280" HorizontalAlignment="Stretch"
+                             AutomationProperties.AutomationId="AutoResponderLocalFile" />
+                    <Button Content="Browse…" Command="{Binding BrowseAutoResponderLocalFileCommand}"
+                            AutomationProperties.AutomationId="AutoResponderBrowseLocal" />
+                  </StackPanel>
+                  <TextBox Watermark="GraphQL operationName (optional)" Text="{Binding AutoResponderGraphQlOperation}"
+                           AutomationProperties.AutomationId="AutoResponderGraphQlOperation" />
+                  <TextBox Watermark="Response body (used when Map Local is empty)" Text="{Binding AutoResponderBody}" AcceptsReturn="True" Height="80"
                            AutomationProperties.AutomationId="AutoResponderBody" />
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button Content="Add rule" Command="{Binding AddAutoResponderRuleCommand}"
@@ -385,15 +484,62 @@
                            AutomationProperties.AutomationId="ScriptOnResponse" />
                 </StackPanel>
               </TabItem>
+              <TabItem Header="Map Remote" AutomationProperties.AutomationId="TabMapRemote">
+                <StackPanel Margin="8" Spacing="8">
+                  <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                             Text="Rewrite matching request URLs to another origin before the real server. Use a single * in match and target to preserve a path/query suffix. Runs after AutoResponder / Map Local." />
+                  <CheckBox Content="Enabled" IsChecked="{Binding MapRemote.Enabled}"
+                            AutomationProperties.AutomationId="MapRemoteEnabled" />
+                  <ListBox ItemsSource="{Binding MapRemote.Rules}"
+                           SelectedItem="{Binding MapRemote.SelectedRule}"
+                           Height="120"
+                           MinHeight="80"
+                           AutomationProperties.AutomationId="MapRemoteRules">
+                    <ListBox.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{Binding Display}" />
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                  <TextBox Watermark="Match URL (* wildcards)" Text="{Binding MapRemoteMatch}"
+                           AutomationProperties.AutomationId="MapRemoteMatch" />
+                  <TextBox Watermark="Target URL (absolute, optional *)" Text="{Binding MapRemoteTarget}"
+                           AutomationProperties.AutomationId="MapRemoteTarget" />
+                  <TextBox Watermark="GraphQL operationName (optional)" Text="{Binding MapRemoteGraphQlOperation}"
+                           AutomationProperties.AutomationId="MapRemoteGraphQlOperation" />
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="Add rule" Command="{Binding AddMapRemoteRuleCommand}"
+                            AutomationProperties.AutomationId="MapRemoteAdd" />
+                    <Button Content="Update rule" Command="{Binding UpdateMapRemoteRuleCommand}"
+                            AutomationProperties.AutomationId="MapRemoteUpdate" />
+                    <Button Content="Delete rule" Command="{Binding DeleteMapRemoteRuleCommand}"
+                            AutomationProperties.AutomationId="MapRemoteDelete" />
+                  </StackPanel>
+                </StackPanel>
+              </TabItem>
             </TabControl>
           </TabItem>
         </TabControl>
       </DockPanel>
-      <Grid Grid.Row="2" Grid.ColumnSpan="3" Margin="8" ColumnDefinitions="*,Auto">
-        <TextBlock Grid.Column="0" Text="{Binding StatusText}" TextWrapping="Wrap" VerticalAlignment="Center"
-                   AutomationProperties.AutomationId="StatusText" />
-        <TextBlock Grid.Column="1" Text="{Binding SessionCountText}" Margin="16,0,0,0" VerticalAlignment="Center"
+      <Grid Grid.Row="2" Grid.ColumnSpan="3" Margin="8" ColumnDefinitions="Auto,*,Auto,Auto"
+            x:Name="StatusBarPanel" AutomationProperties.AutomationId="StatusBarPanel">
+        <ProgressBar Grid.Column="0" Width="72" Height="4" Margin="0,0,8,0"
+                     IsIndeterminate="True" VerticalAlignment="Center"
+                     IsVisible="{Binding IsStatusBusy}"
+                     AutomationProperties.AutomationId="StatusBusyProgress" />
+        <Border Grid.Column="1" x:Name="StatusTextHost" Background="Transparent" CornerRadius="3" Padding="4,2">
+          <TextBlock x:Name="StatusTextBlock" Text="{Binding StatusText}" TextWrapping="Wrap" VerticalAlignment="Center"
+                     Foreground="{Binding StatusSeverity, Converter={StaticResource StatusSeverityBrushConverter}}"
+                     AutomationProperties.AutomationId="StatusText" />
+        </Border>
+        <TextBlock Grid.Column="2" Text="{Binding SessionCountText}" Margin="16,0,0,0" VerticalAlignment="Center"
                    Opacity="0.8" AutomationProperties.AutomationId="SessionCountText" />
+        <Button Grid.Column="3" Content="{Binding ExclusionSummaryText}" Margin="8,0,0,0"
+                VerticalAlignment="Center" Padding="4,0" Background="Transparent" BorderThickness="0"
+                Command="{Binding OpenExclusionSummaryCommand}"
+                IsVisible="{Binding HasExclusionSummary}"
+                Opacity="0.85" FontSize="11"
+                AutomationProperties.AutomationId="ExclusionSummaryLink" />
       </Grid>
     </Grid>
   </DockPanel>

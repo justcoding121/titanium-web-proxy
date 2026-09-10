@@ -1,9 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Reflection;
 using System.Runtime.Versioning;
+using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.UnitTests;
 
@@ -28,12 +35,20 @@ public class UnixProxyBypassMapperTests
     }
 
     [TestMethod]
-    public void ToNoProxyEnv_IncludesLocalhost()
+    public void ToNoProxyEnv_OmitsLocalhost_WhenLoopbackRulePresent()
     {
-        var env = UnixProxyBypassMapper.ToNoProxyEnv("*.corp");
+        var env = UnixProxyBypassMapper.ToNoProxyEnv("<-loopback>;*.corp");
+        Assert.IsFalse(env.Contains("localhost", StringComparison.OrdinalIgnoreCase));
+        Assert.IsFalse(env.Contains("127.0.0.1", StringComparison.Ordinal));
+        StringAssert.Contains(env, "*.corp");
+    }
+
+    [TestMethod]
+    public void ToNoProxyEnv_ExplicitLoopbackFalse_IncludesLocalhost()
+    {
+        var env = UnixProxyBypassMapper.ToNoProxyEnv("*.corp", proxyLoopback: false);
         StringAssert.Contains(env, "localhost");
         StringAssert.Contains(env, "127.0.0.1");
-        StringAssert.Contains(env, "*.corp");
     }
 
     [TestMethod]
@@ -53,13 +68,26 @@ public class MacOsSystemProxyBackendTests
     [TestMethod]
     public void SetProxy_InvokesNetworkSetup_ForHttpAndHttps()
     {
-        var runner = new FakeProcessRunner();
+        var runner = new FakeProcessRunner { TrackNetworkSetup = true };
         runner.When("networksetup", "-listallnetworkservices",
             "An asterisk (*) denotes that a network service is disabled.\nWi-Fi\n*Ethernet\n");
-        runner.When("networksetup", "-getwebproxy", "Enabled: No\nServer: \nPort: 0\n");
-        runner.When("networksetup", "-getsecurewebproxy", "Enabled: No\nServer: \nPort: 0\n");
         runner.When("networksetup", "-getproxybypassdomains",
             "There aren't any bypass domains currently set.\n");
+        runner.When("networksetup", "-getautoproxyurl", "URL: (null)\nEnabled: No\n");
+        runner.When("networksetup", "-getproxyautodiscovery", "Auto Proxy Discovery: Off\n");
+        runner.When("networksetup", "-getsocksfirewallproxy", "Enabled: No\nServer:\nPort: 0\n");
+        runner.When("scutil", "--proxy", """
+            <dictionary> {
+              HTTPEnable : 1
+              HTTPPort : 8000
+              HTTPProxy : 127.0.0.1
+              HTTPSEnable : 1
+              HTTPSPort : 8000
+              HTTPSProxy : 127.0.0.1
+              ProxyAutoConfigEnable : 0
+              SOCKSEnable : 0
+            }
+            """);
         runner.DefaultSuccess = true;
 
         using var backend = new MacOsSystemProxyBackend(runner, new FakeElevationPrompt());
@@ -69,27 +97,153 @@ public class MacOsSystemProxyBackendTests
             c.Contains("-setwebproxy") && c.Contains("127.0.0.1") && c.Contains("8000")));
         Assert.IsTrue(runner.Commands.Exists(c => c.Contains("-setsecurewebproxy")));
         Assert.IsTrue(runner.Commands.Exists(c => c.Contains("-setproxybypassdomains")));
+        Assert.IsTrue(runner.Commands.Exists(c => c.Contains("-setautoproxystate") && c.Contains("off")));
+        Assert.IsTrue(runner.Commands.Exists(c => c.Contains("-setproxyautodiscovery") && c.Contains("off")));
+        Assert.IsTrue(runner.Commands.Exists(c => c.Contains("-setsocksfirewallproxystate") && c.Contains("off")));
         Assert.IsFalse(runner.Commands.Exists(c => c.Contains("\"Ethernet\"")),
             "Disabled (*Ethernet) services must be skipped");
+        Assert.AreEqual("Enabled: Yes\nServer: 127.0.0.1\nPort: 8000\n",
+            runner.NetworkSetupProxy("Wi-Fi", secure: false));
+        Assert.AreEqual("Enabled: Yes\nServer: 127.0.0.1\nPort: 8000\n",
+            runner.NetworkSetupProxy("Wi-Fi", secure: true));
     }
 
     [TestMethod]
     public void SetProxy_Elevates_WhenNetworkSetupDenies()
+    {
+        var runner = new FakeProcessRunner { TrackNetworkSetup = true };
+        runner.When("networksetup", "-listallnetworkservices", "Wi-Fi\n");
+        runner.When("networksetup", "-getproxybypassdomains", "Empty\n");
+        runner.When("networksetup", "-getautoproxyurl", "URL: (null)\nEnabled: No\n");
+        runner.When("networksetup", "-getproxyautodiscovery", "Auto Proxy Discovery: Off\n");
+        runner.When("networksetup", "-getsocksfirewallproxy", "Enabled: No\nServer:\nPort: 0\n");
+        runner.When("scutil", "--proxy", """
+            <dictionary> {
+              HTTPEnable : 1
+              HTTPPort : 8000
+              HTTPProxy : 127.0.0.1
+              HTTPSEnable : 0
+              ProxyAutoConfigEnable : 0
+              SOCKSEnable : 0
+            }
+            """);
+        // First non-elevated -setwebproxy fails; elevation applies TrackNetworkSetup state and
+        // scutil stub proves CFNetwork-visible apply.
+        runner.FailMatching = "-setwebproxy";
+        runner.FailError = "You must be an administrator to perform this operation.";
+        runner.ClearFailMatchingAfterElevatedSet = true;
+
+        var elevation = new FakeElevationPrompt { ApplyNetworkSetupTo = runner };
+        using var backend = new MacOsSystemProxyBackend(runner, elevation);
+        backend.SetProxy("127.0.0.1", 8000, ProxyProtocolType.Http, null);
+
+        Assert.IsTrue(elevation.Calls.Count > 0);
+        Assert.IsTrue(elevation.Calls[0].FileName.Contains("networksetup"));
+        Assert.AreEqual("Enabled: Yes\nServer: 127.0.0.1\nPort: 8000\n",
+            runner.NetworkSetupProxy("Wi-Fi", secure: false));
+    }
+
+    [TestMethod]
+    public void SetProxy_RestoresPacSocksAndAutoDiscovery()
     {
         var runner = new FakeProcessRunner();
         runner.When("networksetup", "-listallnetworkservices", "Wi-Fi\n");
         runner.When("networksetup", "-getwebproxy", "Enabled: No\nServer:\nPort: 0\n");
         runner.When("networksetup", "-getsecurewebproxy", "Enabled: No\nServer:\nPort: 0\n");
         runner.When("networksetup", "-getproxybypassdomains", "Empty\n");
-        runner.FailMatching = "-setwebproxy";
-        runner.FailError = "You must be an administrator to perform this operation.";
+        runner.When("networksetup", "-getautoproxyurl", "URL: http://wpad.example/proxy.pac\nEnabled: Yes\n");
+        runner.When("networksetup", "-getproxyautodiscovery", "Auto Proxy Discovery: On\n");
+        runner.When("networksetup", "-getsocksfirewallproxy", "Enabled: Yes\nServer: 10.0.0.1\nPort: 1080\n");
+        runner.When("scutil", "--proxy", """
+            <dictionary> {
+              HTTPEnable : 1
+              HTTPPort : 8000
+              HTTPProxy : 127.0.0.1
+              HTTPSEnable : 1
+              HTTPSPort : 8000
+              HTTPSProxy : 127.0.0.1
+              ProxyAutoConfigEnable : 0
+              SOCKSEnable : 0
+            }
+            """);
+        runner.DefaultSuccess = true;
 
-        var elevation = new FakeElevationPrompt();
-        using var backend = new MacOsSystemProxyBackend(runner, elevation);
-        backend.SetProxy("127.0.0.1", 8000, ProxyProtocolType.Http, null);
+        using var backend = new MacOsSystemProxyBackend(runner, new FakeElevationPrompt());
+        backend.SetProxy("127.0.0.1", 8000, ProxyProtocolType.AllHttp, null);
+        runner.Commands.Clear();
+        backend.RestoreOriginalSettings();
 
-        Assert.IsTrue(elevation.Calls.Count > 0);
-        Assert.IsTrue(elevation.Calls[0].FileName.Contains("networksetup"));
+        Assert.IsTrue(runner.Commands.Exists(c =>
+            c.Contains("-setautoproxyurl") && c.Contains("http://wpad.example/proxy.pac")));
+        Assert.IsTrue(runner.Commands.Exists(c => c.Contains("-setautoproxystate") && c.Contains("on")));
+        Assert.IsTrue(runner.Commands.Exists(c => c.Contains("-setproxyautodiscovery") && c.Contains("on")));
+        Assert.IsTrue(runner.Commands.Exists(c =>
+            c.Contains("-setsocksfirewallproxy") && c.Contains("10.0.0.1") && c.Contains("1080")));
+    }
+
+    [TestMethod]
+    public void TryParseScutilProxy_ReadsHttpHttpsAndRejectsPac()
+    {
+        const string output = """
+            <dictionary> {
+              HTTPEnable : 1
+              HTTPPort : 8866
+              HTTPProxy : 127.0.0.1
+              HTTPSEnable : 1
+              HTTPSPort : 8866
+              HTTPSProxy : 127.0.0.1
+              ProxyAutoConfigEnable : 1
+              SOCKSEnable : 0
+            }
+            """;
+        Assert.IsTrue(MacOsSystemProxyBackend.TryParseScutilProxy(output, out var state));
+        Assert.IsTrue(state.HttpEnabled);
+        Assert.AreEqual("127.0.0.1", state.HttpHost);
+        Assert.AreEqual(8866, state.HttpPort);
+        Assert.IsTrue(state.PacEnabled);
+        Assert.IsFalse(MacOsSystemProxyBackend.ScutilMatches(
+            state, "127.0.0.1", 8866, ProxyProtocolType.AllHttp),
+            "PAC still enabled must not count as applied for Firefox/CFNetwork");
+    }
+
+    [TestMethod]
+    public void TryParseScutilProxy_MatchesManualProxy()
+    {
+        const string output = """
+            HTTPEnable : 1
+            HTTPPort : 8866
+            HTTPProxy : 127.0.0.1
+            HTTPSEnable : 1
+            HTTPSPort : 8866
+            HTTPSProxy : 127.0.0.1
+            ProxyAutoConfigEnable : 0
+            """;
+        Assert.IsTrue(MacOsSystemProxyBackend.TryParseScutilProxy(output, out var state));
+        Assert.IsTrue(MacOsSystemProxyBackend.ScutilMatches(
+            state, "127.0.0.1", 8866, ProxyProtocolType.AllHttp));
+    }
+
+    [TestMethod]
+    public void ParseAutoDiscovery_OffIsFalse()
+    {
+        var result = new ProcessRunResult(0, "Auto Proxy Discovery: Off\n", "");
+        Assert.IsFalse(MacOsSystemProxyBackend.ParseAutoDiscovery(result));
+        result = new ProcessRunResult(0, "Auto Proxy Discovery: On\n", "");
+        Assert.IsTrue(MacOsSystemProxyBackend.ParseAutoDiscovery(result));
+    }
+}
+
+[TestClass]
+public class SystemProxyHostnameTests
+{
+    [TestMethod]
+    public void FormatSystemProxyHostname_UsesIpv4LiteralForLoopbackAndAny()
+    {
+        Assert.AreEqual("127.0.0.1", ProxyServer.FormatSystemProxyHostname(IPAddress.Loopback));
+        Assert.AreEqual("127.0.0.1", ProxyServer.FormatSystemProxyHostname(IPAddress.Any));
+        Assert.AreEqual("::1", ProxyServer.FormatSystemProxyHostname(IPAddress.IPv6Loopback));
+        Assert.AreEqual("::1", ProxyServer.FormatSystemProxyHostname(IPAddress.IPv6Any));
+        Assert.AreEqual("192.168.1.10", ProxyServer.FormatSystemProxyHostname(IPAddress.Parse("192.168.1.10")));
     }
 }
 
@@ -98,17 +252,29 @@ public class MacOsSystemProxyBackendTests
 public class LinuxSystemProxyBackendTests
 {
     [TestMethod]
+    public void IsUnusableDbusAddress_DetectsPoisonedAndEmpty()
+    {
+        Assert.IsTrue(LinuxSystemProxyBackend.IsUnusableDbusAddress(null));
+        Assert.IsTrue(LinuxSystemProxyBackend.IsUnusableDbusAddress(""));
+        Assert.IsTrue(LinuxSystemProxyBackend.IsUnusableDbusAddress("disabled:"));
+        Assert.IsTrue(LinuxSystemProxyBackend.IsUnusableDbusAddress("disabled"));
+        Assert.IsFalse(LinuxSystemProxyBackend.IsUnusableDbusAddress(
+            "unix:path=/tmp/dbus-test,guid=abc"));
+    }
+
+    [TestMethod]
     public void SetProxy_AppliesGnomeAndEnvironment()
     {
-        var runner = new FakeProcessRunner();
+        var runner = new FakeProcessRunner { TrackGsettings = true };
         runner.When("sh", "command -v gsettings", "/usr/bin/gsettings\n");
         runner.When("gsettings", "list-schemas", "org.gnome.system.proxy\n");
-        runner.When("gsettings", "get org.gnome.system.proxy mode", "'none'\n");
-        runner.When("gsettings", "get org.gnome.system.proxy.http host", "''\n");
-        runner.When("gsettings", "get org.gnome.system.proxy.http port", "0\n");
-        runner.When("gsettings", "get org.gnome.system.proxy.https host", "''\n");
-        runner.When("gsettings", "get org.gnome.system.proxy.https port", "0\n");
-        runner.When("gsettings", "get org.gnome.system.proxy ignore-hosts", "[]\n");
+        runner.SeedGsettings("org.gnome.system.proxy", "mode", "'none'");
+        runner.SeedGsettings("org.gnome.system.proxy.http", "host", "''");
+        runner.SeedGsettings("org.gnome.system.proxy.http", "port", "0");
+        runner.SeedGsettings("org.gnome.system.proxy.http", "enabled", "false");
+        runner.SeedGsettings("org.gnome.system.proxy.https", "host", "''");
+        runner.SeedGsettings("org.gnome.system.proxy.https", "port", "0");
+        runner.SeedGsettings("org.gnome.system.proxy", "ignore-hosts", "[]");
         runner.When("sh", "command -v kwriteconfig6", "\n");
         runner.When("sh", "command -v kwriteconfig5", "\n");
         runner.DefaultSuccess = true;
@@ -118,7 +284,7 @@ public class LinuxSystemProxyBackendTests
         Environment.SetEnvironmentVariable("HTTP_PROXY", null);
         Environment.SetEnvironmentVariable("HTTPS_PROXY", null);
 
-        using var backend = new LinuxSystemProxyBackend(runner);
+        using var backend = new LinuxSystemProxyBackend(runner, applyBrowserLaunchHooks: false);
         backend.SetProxy("127.0.0.1", 8866, ProxyProtocolType.AllHttp, "localhost");
 
         Assert.IsTrue(runner.Commands.Exists(c =>
@@ -127,9 +293,390 @@ public class LinuxSystemProxyBackendTests
             c.Contains("manual", StringComparison.Ordinal)));
         Assert.AreEqual("http://127.0.0.1:8866", Environment.GetEnvironmentVariable("http_proxy"));
         Assert.AreEqual("http://127.0.0.1:8866", Environment.GetEnvironmentVariable("https_proxy"));
+        Assert.AreEqual("'manual'", runner.GsettingsValue("org.gnome.system.proxy", "mode"));
+        Assert.AreEqual("'127.0.0.1'", runner.GsettingsValue("org.gnome.system.proxy.http", "host"));
+        Assert.AreEqual("8866", runner.GsettingsValue("org.gnome.system.proxy.http", "port"));
+        Assert.AreEqual("true", runner.GsettingsValue("org.gnome.system.proxy.http", "enabled"));
+        Assert.IsTrue(runner.Commands.Exists(c =>
+            c.Contains("systemctl", StringComparison.Ordinal) &&
+            c.Contains("set-environment", StringComparison.Ordinal)));
 
         backend.RestoreOriginalSettings();
         Assert.IsTrue(string.IsNullOrEmpty(Environment.GetEnvironmentVariable("http_proxy")));
+        Assert.IsTrue(runner.Commands.Exists(c =>
+            c.Contains("unset-environment", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void SetProxy_WhenGnomeWriteDoesNotStick_Throws()
+    {
+        var runner = new FakeProcessRunner();
+        runner.When("sh", "command -v gsettings", "/usr/bin/gsettings\n");
+        runner.When("gsettings", "list-schemas", "org.gnome.system.proxy\n");
+        // Gets always return none/empty — simulates dconf commit failure with exit 0.
+        runner.When("gsettings", "get org.gnome.system.proxy mode", "'none'\n");
+        runner.When("gsettings", "get org.gnome.system.proxy.http host", "''\n");
+        runner.When("gsettings", "get org.gnome.system.proxy.http port", "0\n");
+        runner.When("gsettings", "get org.gnome.system.proxy.http enabled", "false\n");
+        runner.When("gsettings", "get org.gnome.system.proxy.https host", "''\n");
+        runner.When("gsettings", "get org.gnome.system.proxy.https port", "0\n");
+        runner.When("gsettings", "get org.gnome.system.proxy ignore-hosts", "[]\n");
+        runner.When("sh", "command -v kwriteconfig6", "\n");
+        runner.When("sh", "command -v kwriteconfig5", "\n");
+        runner.DefaultSuccess = true;
+
+        using var backend = new LinuxSystemProxyBackend(runner, applyBrowserLaunchHooks: false);
+        var ex = Assert.ThrowsExactly<InvalidOperationException>(() =>
+            backend.SetProxy("127.0.0.1", 8866, ProxyProtocolType.AllHttp, "localhost"));
+        StringAssert.Contains(ex.Message, "Failed to apply GNOME system proxy");
+    }
+}
+
+[TestClass]
+[SupportedOSPlatform("linux")]
+public class LinuxBrowserLaunchProxyTests
+{
+    [TestMethod]
+    public void InjectChromeProxyArgs_InsertsFlagsBeforePercentU()
+    {
+        var line = LinuxBrowserLaunchProxy.InjectChromeProxyArgs(
+            "Exec=/usr/bin/google-chrome-stable %U", "127.0.0.1", 8866);
+        StringAssert.Contains(line, "--proxy-server=http://127.0.0.1:8866");
+        StringAssert.Contains(line, "--proxy-bypass-list=<-loopback>");
+        StringAssert.Contains(line, "--disable-quic");
+        Assert.IsTrue(line.EndsWith(" %U", StringComparison.Ordinal), line);
+    }
+
+    [TestMethod]
+    public void InjectChromeProxyArgs_WorksForChromiumAndBraveExecLines()
+    {
+        var chromium = LinuxBrowserLaunchProxy.InjectChromeProxyArgs(
+            "Exec=/usr/bin/chromium %U", "127.0.0.1", 8866);
+        StringAssert.Contains(chromium, "--proxy-server=http://127.0.0.1:8866");
+        StringAssert.Contains(chromium, "--disable-quic");
+        Assert.IsTrue(chromium.EndsWith(" %U", StringComparison.Ordinal), chromium);
+
+        var brave = LinuxBrowserLaunchProxy.InjectChromeProxyArgs(
+            "Exec=/usr/bin/brave-browser %u", "10.0.0.1", 8888);
+        StringAssert.Contains(brave, "--proxy-server=http://10.0.0.1:8888");
+    }
+
+    [TestMethod]
+    public void PolicyDirectories_IncludeSnapAndFlatpakChromeRoots()
+    {
+        var dirs = LinuxBrowserLaunchProxy.PolicyDirectories().ToList();
+        Assert.IsTrue(dirs.Any(d => d.Contains("snap", StringComparison.Ordinal) && d.Contains("chromium", StringComparison.Ordinal)));
+        Assert.IsTrue(dirs.Any(d => d.Contains(".var/app/com.google.Chrome", StringComparison.Ordinal) ||
+                                    d.Contains($".var{Path.DirectorySeparatorChar}app{Path.DirectorySeparatorChar}com.google.Chrome", StringComparison.Ordinal)));
+        Assert.IsTrue(dirs.Any(d => d.Contains("BraveSoftware", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void InjectChromeProxyArgs_IsIdempotent()
+    {
+        var once = LinuxBrowserLaunchProxy.InjectChromeProxyArgs(
+            "Exec=/usr/bin/google-chrome-stable %U", "127.0.0.1", 8866);
+        var twice = LinuxBrowserLaunchProxy.InjectChromeProxyArgs(once, "127.0.0.1", 8866);
+        Assert.AreEqual(once, twice);
+    }
+
+    [TestMethod]
+    public void WritePolicies_WritesManagedJson()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-chrome-policy-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            Assert.AreEqual(1, LinuxBrowserLaunchProxy.WritePolicies("127.0.0.1", 8866, [dir]));
+            var json = File.ReadAllText(Path.Combine(dir, LinuxBrowserLaunchProxy.PolicyFileName));
+            Assert.IsTrue(LinuxBrowserLaunchProxy.TryValidatePolicyJson(json, "127.0.0.1", 8866, out var err), err);
+            StringAssert.Contains(json, "fixed_servers");
+            StringAssert.Contains(json, "http://127.0.0.1:8866");
+            StringAssert.Contains(json, "<-loopback>");
+            StringAssert.Contains(json, "\"QuicAllowed\": false");
+            // Legacy int enum for older Chromium builds that still read ProxyServerMode.
+            StringAssert.Contains(json, "\"ProxyServerMode\": 2");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public void ChromeProfileProxy_WritesFixedServersAndRestoresBackup()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-chrome-prefs-" + Guid.NewGuid().ToString("N"));
+        var prefs = Path.Combine(dir, "Preferences");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(prefs, """{"proxy":{"mode":"system"},"homepage":"x"}""");
+            Assert.IsTrue(LinuxChromeProfileProxy.TryApplyToFileForTests(prefs, "127.0.0.1", 8866));
+            var after = File.ReadAllText(prefs);
+            StringAssert.Contains(after, "fixed_servers");
+            StringAssert.Contains(after, "127.0.0.1:8866");
+            Assert.IsTrue(File.Exists(prefs + LinuxChromeProfileProxy.BackupSuffix));
+            LinuxChromeProfileProxy.TryRestoreFileForTests(prefs);
+            var restored = File.ReadAllText(prefs);
+            StringAssert.Contains(restored, "\"mode\":\"system\"");
+            Assert.IsFalse(File.Exists(prefs + LinuxChromeProfileProxy.BackupSuffix));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public void ChromeProfileProxy_StripRemovesDeadFixedServersWithoutBackup()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-chrome-strip-" + Guid.NewGuid().ToString("N"));
+        var prefs = Path.Combine(dir, "Preferences");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(prefs,
+                """{"proxy":{"mode":"fixed_servers","server":"http://127.0.0.1:8866","bypass_list":"<-loopback>"}}""");
+            Assert.IsTrue(LinuxChromeProfileProxy.TryStripInspectorProxyForTests(prefs, "127.0.0.1", 8866));
+            var text = File.ReadAllText(prefs);
+            StringAssert.Contains(text, "\"mode\":\"system\"");
+            Assert.IsFalse(text.Contains("8866", StringComparison.Ordinal));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public void BuildPolicyJson_EscapesSpecialHostCharacters()
+    {
+        var json = LinuxBrowserLaunchProxy.BuildPolicyJson("weird\"host", 8866);
+        Assert.IsTrue(LinuxBrowserLaunchProxy.TryValidatePolicyJson(json, "weird\"host", 8866, out var err), err);
+        // Must be valid JSON even with quotes in the host fragment.
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        Assert.AreEqual("fixed_servers", doc.RootElement.GetProperty("ProxyMode").GetString());
+    }
+
+    [TestMethod]
+    public void TryValidatePolicyJson_AcceptsLegacyProxyServerModeOnly()
+    {
+        const string legacy =
+            """
+            {
+              "ProxyServerMode": 2,
+              "ProxyServer": "http://10.0.0.1:8888"
+            }
+            """;
+        Assert.IsTrue(LinuxBrowserLaunchProxy.TryValidatePolicyJson(legacy, "10.0.0.1", 8888, out var err), err);
+    }
+
+    [TestMethod]
+    public void TryValidatePolicyJson_RejectsCorruptOrWrongEndpoint()
+    {
+        Assert.IsFalse(LinuxBrowserLaunchProxy.TryValidatePolicyJson("{", "127.0.0.1", 8866, out _));
+        Assert.IsFalse(LinuxBrowserLaunchProxy.TryValidatePolicyJson(
+            """{"ProxyMode":"fixed_servers","ProxyServer":"http://127.0.0.1:1"}""",
+            "127.0.0.1", 8866, out _));
+    }
+
+    [TestMethod]
+    public void ChromiumRelaunch_ClassifiesEdgeAndChromeFamilies()
+    {
+        Assert.AreEqual("Edge", LinuxChromiumRelaunch.ClassifyFamilyForTests("/opt/microsoft/msedge/msedge"));
+        Assert.AreEqual("Chrome", LinuxChromiumRelaunch.ClassifyFamilyForTests("/opt/google/chrome/chrome"));
+        Assert.AreEqual("Chromium", LinuxChromiumRelaunch.ClassifyFamilyForTests("/usr/lib/chromium/chromium"));
+        Assert.IsNull(LinuxChromiumRelaunch.ClassifyFamilyForTests("/opt/google/chrome/chrome_crashpad_handler"));
+    }
+
+    [TestMethod]
+    public void ChromiumRelaunch_ResolvesEdgeLaunchWhenEdgeBinaryExists()
+    {
+        if (!File.Exists("/usr/bin/microsoft-edge-stable") && !File.Exists("/usr/bin/microsoft-edge"))
+        {
+            Assert.Inconclusive("Edge not installed on this host");
+            return;
+        }
+
+        var launch = LinuxChromiumRelaunch.ResolveLaunchBinaryForExeForTests("/opt/microsoft/msedge/msedge");
+        Assert.IsNotNull(launch);
+        StringAssert.Contains(launch, "microsoft-edge");
+    }
+
+    [TestMethod]
+    public void FirefoxProxy_MergePrefsWritesManualProxyAndMarker()
+    {
+        var existing = """
+            user_pref("browser.startup.homepage", "about:home");
+            user_pref("network.proxy.type", 5);
+            """;
+        var managed = new Dictionary<string, string>
+        {
+            ["network.proxy.type"] = "1",
+            ["network.proxy.http"] = "\"127.0.0.1\"",
+            ["network.proxy.http_port"] = "8866",
+            ["titanium.inspector.proxy.managed"] = "true",
+        };
+        var merged = LinuxFirefoxProxy.MergePrefsForTests(existing, managed);
+        StringAssert.Contains(merged, "user_pref(\"network.proxy.type\", 1);");
+        StringAssert.Contains(merged, "user_pref(\"network.proxy.http\", \"127.0.0.1\");");
+        StringAssert.Contains(merged, "user_pref(\"network.proxy.http_port\", 8866);");
+        StringAssert.Contains(merged, "titanium.inspector.proxy.managed");
+        StringAssert.Contains(merged, "browser.startup.homepage");
+    }
+
+    [TestMethod]
+    public void FirefoxProxy_RemoveKeysDropsManagedLines()
+    {
+        var existing = """
+            user_pref("network.proxy.type", 1);
+            user_pref("browser.startup.homepage", "about:home");
+            """;
+        var cleaned = LinuxFirefoxProxy.RemoveKeysForTests(existing, ["network.proxy.type"]);
+        Assert.IsFalse(cleaned.Contains("network.proxy.type", StringComparison.Ordinal));
+        StringAssert.Contains(cleaned, "browser.startup.homepage");
+    }
+
+    [TestMethod]
+    public void FirefoxProxy_BypassListUsesUnixMapperHosts()
+    {
+        var bypass = LinuxFirefoxProxy.BuildFirefoxBypassListForTests("*.example.com;<local>");
+        StringAssert.Contains(bypass, "*.example.com");
+        StringAssert.Contains(bypass, "*.local");
+    }
+
+    [TestMethod]
+    public void FirefoxProxy_UserPrefRegex_HasMatchTimeout()
+    {
+        var method = typeof(LinuxFirefoxProxy).GetMethod(
+            "UserPrefLine",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.IsNotNull(method);
+        var regex = (Regex)method!.Invoke(null, null)!;
+        Assert.AreNotEqual(Regex.InfiniteMatchTimeout, regex.MatchTimeout);
+        Assert.IsTrue(regex.IsMatch("user_pref(\"network.proxy.type\", 1);"));
+        Assert.IsFalse(regex.IsMatch("lockPref(\"network.proxy.type\", 1);"));
+    }
+
+    [TestMethod]
+    public void PolicyDirectories_IncludeMicrosoftEdge()
+    {
+        Assert.IsTrue(LinuxBrowserLaunchProxy.PolicyDirectories()
+            .Any(p => p.Contains("microsoft-edge", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Linux")]
+    public void FirefoxProxy_ApplyClear_WritesAndRestoresPrefsWhenProfileExists()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Inconclusive("Linux-only");
+            return;
+        }
+
+        if (FirefoxCertificateTrust.IsFirefoxProcessRunning())
+        {
+            Assert.Inconclusive("Firefox is running; skip prefs mutation");
+            return;
+        }
+
+        if (!FirefoxCertificateTrust.TryResolveDefaultProfileDirectory(out var profileDir, out var err))
+        {
+            Assert.Inconclusive(err ?? "no profile");
+            return;
+        }
+
+        var prefsPath = Path.Combine(profileDir, "prefs.js");
+        var before = File.Exists(prefsPath) ? File.ReadAllText(prefsPath) : string.Empty;
+        var backupMarker = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".config", "TitaniumInspector", "firefox-proxy-backup.json");
+        try
+        {
+            Assert.IsTrue(LinuxFirefoxProxy.Apply("127.0.0.1", 8866, "<-loopback>;localhost"),
+                "Firefox proxy Apply should write prefs");
+            var after = File.ReadAllText(prefsPath);
+            StringAssert.Contains(after, "network.proxy.type\", 1)");
+            StringAssert.Contains(after, "127.0.0.1");
+            StringAssert.Contains(after, "8866");
+            StringAssert.Contains(after, "titanium.inspector.proxy.managed");
+
+            LinuxFirefoxProxy.Clear();
+            var cleared = File.ReadAllText(prefsPath);
+            Assert.IsFalse(cleared.Contains("titanium.inspector.proxy.managed", StringComparison.Ordinal));
+            Assert.IsFalse(File.Exists(backupMarker));
+        }
+        finally
+        {
+            try
+            {
+                if (before.Length == 0 && File.Exists(prefsPath))
+                    File.Delete(prefsPath);
+                else
+                    File.WriteAllText(prefsPath, before);
+            }
+            catch
+            {
+                // best-effort restore
+            }
+
+            try
+            {
+                if (File.Exists(backupMarker))
+                    File.Delete(backupMarker);
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-Slow")]
+    [TestCategory("E2E-UI-Linux")]
+    public void TrustUserSsl_Linux_SharesNssDbUsedByChromeAndEdge()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Inconclusive("Linux-only");
+            return;
+        }
+
+        if (CertificateManager.AreInteractiveRootStoreMutationsSuppressed)
+        {
+            Assert.Inconclusive(
+                "Skipped: live Chrome/Edge NSS mutation blocked while interactive root-store UI is suppressed " +
+                "(unset TITANIUM_SKIP_ROOT_STORE_UI and SuppressInteractiveRootStoreMutations to run)");
+            return;
+        }
+
+        var runner = new ProcessRunner();
+        if (UnixCertificateTrust.FindCertutil(runner) is null)
+        {
+            Assert.Inconclusive("certutil required");
+            return;
+        }
+
+        using var rsa = System.Security.Cryptography.RSA.Create(2048);
+        var req = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+            "CN=TWP-ChromiumEdgeCA-" + Guid.NewGuid().ToString("N")[..8],
+            rsa,
+            System.Security.Cryptography.HashAlgorithmName.SHA256,
+            System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+        req.CertificateExtensions.Add(
+            new System.Security.Cryptography.X509Certificates.X509BasicConstraintsExtension(true, false, 0, true));
+        using var cert = req.CreateSelfSigned(
+            DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+        var friendly = "TWP-ChromiumEdgeCA-" + Guid.NewGuid().ToString("N")[..8];
+
+        var trust = UnixCertificateTrust.TrustUserSsl(cert, friendly, runner);
+        Assert.IsTrue(trust.Succeeded, trust.Message);
+        Assert.IsTrue(UnixCertificateTrust.VerifyUserSslTrust(cert, runner));
+        Assert.IsTrue(UnixCertificateTrust.UntrustUserSsl(cert, friendly, runner));
+        Assert.IsFalse(UnixCertificateTrust.VerifyUserSslTrust(cert, runner));
     }
 }
 
@@ -157,14 +704,53 @@ public class ElevationPromptCancelTests
 internal sealed class FakeProcessRunner : IProcessRunner
 {
     private readonly List<(string Match, string Output)> _responses = new();
+    private readonly Dictionary<string, string> _gsettings = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (bool Enabled, string Host, int Port)> _webProxy =
+        new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (bool Enabled, string Host, int Port)> _secureWebProxy =
+        new(StringComparer.Ordinal);
 
     public List<string> Commands { get; } = new();
     public bool DefaultSuccess { get; set; } = true;
     public string? FailMatching { get; set; }
     public string FailError { get; set; } = "error";
+    /// <summary>When set, matching commands that contain a quoted path create that empty file.</summary>
+    public string? WriteFileOnMatch { get; set; }
+    /// <summary>When true, gsettings set/get are tracked in-memory for apply verification.</summary>
+    public bool TrackGsettings { get; set; }
+    /// <summary>When true, networksetup set/get web proxy are tracked for post-apply verify.</summary>
+    public bool TrackNetworkSetup { get; set; }
+    /// <summary>
+    /// After an elevated <c>-setwebproxy</c> succeeds, clear <see cref="FailMatching"/> so
+    /// subsequent verify/get calls are not treated as failures.
+    /// </summary>
+    public bool ClearFailMatchingAfterElevatedSet { get; set; }
 
     public void When(string fileName, string argsContains, string stdout) =>
         _responses.Add((fileName + " " + argsContains, stdout));
+
+    public void SeedGsettings(string schema, string key, string value) =>
+        _gsettings[$"{schema} {key}"] = value;
+
+    public string? GsettingsValue(string schema, string key) =>
+        _gsettings.TryGetValue($"{schema} {key}", out var value) ? value : null;
+
+    public string NetworkSetupProxy(string service, bool secure)
+    {
+        var map = secure ? _secureWebProxy : _webProxy;
+        if (!map.TryGetValue(service, out var state))
+            return "Enabled: No\nServer: \nPort: 0\n";
+        return $"Enabled: {(state.Enabled ? "Yes" : "No")}\nServer: {state.Host}\nPort: {state.Port}\n";
+    }
+
+    /// <summary>Applies an elevated networksetup argument list into tracked proxy state.</summary>
+    public void ApplyElevatedNetworkSetup(string arguments)
+    {
+        ApplyNetworkSetupMutation(arguments);
+        if (ClearFailMatchingAfterElevatedSet &&
+            arguments.Contains("-setwebproxy", StringComparison.Ordinal))
+            FailMatching = null;
+    }
 
     public ProcessRunResult? Run(string fileName, string arguments,
         IDictionary<string, string?>? environment = null, string? workingDirectory = null)
@@ -175,6 +761,21 @@ internal sealed class FakeProcessRunner : IProcessRunner
         if (FailMatching != null && cmd.Contains(FailMatching, StringComparison.Ordinal))
             return new ProcessRunResult(1, string.Empty, FailError);
 
+        if (TrackGsettings && fileName == "gsettings")
+        {
+            var tracked = TryTrackGsettings(arguments);
+            if (tracked is not null)
+                return tracked;
+        }
+
+        if (TrackNetworkSetup &&
+            (fileName == "networksetup" || fileName.EndsWith("/networksetup", StringComparison.Ordinal)))
+        {
+            var tracked = TryTrackNetworkSetup(arguments);
+            if (tracked is not null)
+                return tracked;
+        }
+
         foreach (var (match, output) in _responses)
         {
             var space = match.IndexOf(' ');
@@ -182,12 +783,116 @@ internal sealed class FakeProcessRunner : IProcessRunner
             var args = space < 0 ? string.Empty : match[(space + 1)..];
             if (cmd.Contains(file, StringComparison.Ordinal) &&
                 (args.Length == 0 || cmd.Contains(args, StringComparison.Ordinal)))
+            {
+                if (WriteFileOnMatch != null &&
+                    cmd.Contains(WriteFileOnMatch, StringComparison.Ordinal))
+                {
+                    TryTouchQuotedPath(arguments);
+                }
+
                 return new ProcessRunResult(0, output, string.Empty);
+            }
         }
 
         return DefaultSuccess
             ? new ProcessRunResult(0, string.Empty, string.Empty)
             : new ProcessRunResult(1, string.Empty, "fail");
+    }
+
+    private ProcessRunResult? TryTrackGsettings(string arguments)
+    {
+        var parts = arguments.Split(' ', 4, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 4 && parts[0] == "set")
+        {
+            _gsettings[$"{parts[1]} {parts[2]}"] = parts[3];
+            return new ProcessRunResult(0, string.Empty, string.Empty);
+        }
+
+        if (parts.Length >= 3 && parts[0] == "get")
+        {
+            var key = $"{parts[1]} {parts[2]}";
+            if (_gsettings.TryGetValue(key, out var value))
+                return new ProcessRunResult(0, value + "\n", string.Empty);
+        }
+
+        return null;
+    }
+
+    private ProcessRunResult? TryTrackNetworkSetup(string arguments)
+    {
+        if (ApplyNetworkSetupMutation(arguments))
+            return new ProcessRunResult(0, string.Empty, string.Empty);
+
+        if (arguments.StartsWith("-getwebproxy ", StringComparison.Ordinal) ||
+            arguments.StartsWith("-getsecurewebproxy ", StringComparison.Ordinal))
+        {
+            var secure = arguments.StartsWith("-getsecurewebproxy ", StringComparison.Ordinal);
+            var service = ExtractQuotedService(arguments);
+            return new ProcessRunResult(0, NetworkSetupProxy(service, secure), string.Empty);
+        }
+
+        return null;
+    }
+
+    private bool ApplyNetworkSetupMutation(string arguments)
+    {
+        // -setwebproxy "Wi-Fi" 127.0.0.1 8000
+        if (arguments.StartsWith("-setwebproxy ", StringComparison.Ordinal) ||
+            arguments.StartsWith("-setsecurewebproxy ", StringComparison.Ordinal))
+        {
+            var secure = arguments.StartsWith("-setsecurewebproxy ", StringComparison.Ordinal);
+            var service = ExtractQuotedService(arguments);
+            var afterQuote = arguments[(arguments.IndexOf('"', StringComparison.Ordinal) + 1)..];
+            var close = afterQuote.IndexOf('"');
+            var rest = afterQuote[(close + 1)..].Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var host = rest.Length > 0 ? rest[0] : "127.0.0.1";
+            var port = rest.Length > 1 && int.TryParse(rest[1], out var p) ? p : 0;
+            var map = secure ? _secureWebProxy : _webProxy;
+            var prev = map.TryGetValue(service, out var existing) ? existing : (false, host, port);
+            map[service] = (prev.Item1, host, port);
+            return true;
+        }
+
+        // -setwebproxystate "Wi-Fi" on|off
+        if (arguments.StartsWith("-setwebproxystate ", StringComparison.Ordinal) ||
+            arguments.StartsWith("-setsecurewebproxystate ", StringComparison.Ordinal))
+        {
+            var secure = arguments.StartsWith("-setsecurewebproxystate ", StringComparison.Ordinal);
+            var service = ExtractQuotedService(arguments);
+            var on = arguments.EndsWith(" on", StringComparison.OrdinalIgnoreCase);
+            var map = secure ? _secureWebProxy : _webProxy;
+            var prev = map.TryGetValue(service, out var existing) ? existing : (false, "127.0.0.1", 0);
+            map[service] = (on, prev.Item2, prev.Item3);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string ExtractQuotedService(string arguments)
+    {
+        var start = arguments.IndexOf('"');
+        var end = arguments.IndexOf('"', start + 1);
+        if (start < 0 || end <= start)
+            return "Wi-Fi";
+        return arguments[(start + 1)..end].Replace("\\\"", "\"", StringComparison.Ordinal);
+    }
+
+    private static void TryTouchQuotedPath(string arguments)
+    {
+        var start = arguments.IndexOf('"');
+        var end = arguments.LastIndexOf('"');
+        if (start < 0 || end <= start)
+            return;
+        var path = arguments[(start + 1)..end];
+        try
+        {
+            File.WriteAllText(path, string.Empty);
+        }
+        catch
+        {
+            // ignore
+        }
     }
 }
 
@@ -195,11 +900,17 @@ internal sealed class FakeElevationPrompt : IElevationPrompt
 {
     public bool Cancel { get; set; }
     public List<(string FileName, string Arguments)> Calls { get; } = new();
+    public FakeProcessRunner? ApplyNetworkSetupTo { get; set; }
 
     public ProcessRunResult? RunElevated(string fileName, string arguments)
     {
         Calls.Add((fileName, arguments));
-        return Cancel ? null : new ProcessRunResult(0, string.Empty, string.Empty);
+        if (Cancel) return null;
+        if (ApplyNetworkSetupTo is not null &&
+            (fileName.Contains("networksetup", StringComparison.Ordinal) ||
+             arguments.Contains("-set", StringComparison.Ordinal)))
+            ApplyNetworkSetupTo.ApplyElevatedNetworkSetup(arguments);
+        return new ProcessRunResult(0, string.Empty, string.Empty);
     }
 }
 
@@ -242,5 +953,87 @@ public class SystemProxyBackendFactoryPlatformTests
     {
         using var backend = SystemProxyBackendFactory.Create();
         Assert.IsNotNull(backend);
+    }
+}
+
+[TestClass]
+public class SystemProxyParserCoverageTests
+{
+    private static readonly BindingFlags PrivateStatic = BindingFlags.Static | BindingFlags.NonPublic;
+
+    [TestMethod]
+    public void LinuxSystemProxyBackend_ParseAndQuoteHelpers()
+    {
+        var t = typeof(LinuxSystemProxyBackend);
+        Assert.AreEqual(0, (int)t.GetMethod("ParseInt", PrivateStatic)!.Invoke(null, [null])!);
+        Assert.AreEqual(0, (int)t.GetMethod("ParseInt", PrivateStatic)!.Invoke(null, ["nope"])!);
+        Assert.AreEqual(8888, (int)t.GetMethod("ParseInt", PrivateStatic)!.Invoke(null, [" 8888 "])!);
+
+        Assert.IsTrue((bool)t.GetMethod("ParseGsettingsBool", PrivateStatic)!.Invoke(null, ["true"])!);
+        Assert.IsTrue((bool)t.GetMethod("ParseGsettingsBool", PrivateStatic)!.Invoke(null, ["'True'"])!);
+        Assert.IsTrue((bool)t.GetMethod("ParseGsettingsBool", PrivateStatic)!.Invoke(null, ["1"])!);
+        Assert.IsFalse((bool)t.GetMethod("ParseGsettingsBool", PrivateStatic)!.Invoke(null, ["false"])!);
+        Assert.IsFalse((bool)t.GetMethod("ParseGsettingsBool", PrivateStatic)!.Invoke(null, [null])!);
+
+        Assert.AreEqual("localhost;127.0.0.1",
+            (string)t.GetMethod("ParseGsettingsArray", PrivateStatic)!
+                .Invoke(null, ["['localhost', '127.0.0.1']"])!);
+        Assert.AreEqual("a",
+            (string)t.GetMethod("ParseGsettingsArray", PrivateStatic)!.Invoke(null, ["a"])!);
+
+        Assert.AreEqual("'o'\\''ne'", (string)t.GetMethod("QuoteGsettings", PrivateStatic)!.Invoke(null, ["o'ne"])!);
+        Assert.AreEqual("\"a\\\"b\"", (string)t.GetMethod("QuoteShell", PrivateStatic)!.Invoke(null, ["a\"b"])!);
+
+        var tryParse = t.GetMethod("TryParseProxyUri", PrivateStatic)!;
+        object?[] ok = ["http://127.0.0.1:8888", null, 0];
+        Assert.IsTrue((bool)tryParse.Invoke(null, ok)!);
+        Assert.AreEqual("127.0.0.1", ok[1]);
+        Assert.AreEqual(8888, ok[2]);
+        object?[] bad = ["not-a-uri", null, 0];
+        Assert.IsFalse((bool)tryParse.Invoke(null, bad)!);
+        object?[] empty = [null, null, 0];
+        Assert.IsFalse((bool)tryParse.Invoke(null, empty)!);
+    }
+
+    [TestMethod]
+    public void MacOsSystemProxyBackend_ScutilAndNetworkSetupParsers()
+    {
+        var t = typeof(MacOsSystemProxyBackend);
+        Assert.IsTrue((bool)t.GetMethod("IsScutilEnabled", PrivateStatic)!.Invoke(null, ["1"])!);
+        Assert.IsTrue((bool)t.GetMethod("IsScutilEnabled", PrivateStatic)!.Invoke(null, ["true"])!);
+        Assert.IsTrue((bool)t.GetMethod("IsScutilEnabled", PrivateStatic)!.Invoke(null, ["YES"])!);
+        Assert.IsFalse((bool)t.GetMethod("IsScutilEnabled", PrivateStatic)!.Invoke(null, ["0"])!);
+
+        Assert.IsTrue((bool)t.GetMethod("LooksLikeAuthFailure", PrivateStatic)!
+            .Invoke(null, ["Permission denied by admin"])!);
+        Assert.IsTrue((bool)t.GetMethod("LooksLikeAuthFailure", PrivateStatic)!
+            .Invoke(null, ["authorization required"])!);
+        Assert.IsFalse((bool)t.GetMethod("LooksLikeAuthFailure", PrivateStatic)!
+            .Invoke(null, ["network offline"])!);
+
+        Assert.AreEqual("Empty", (string)t.GetMethod("FormatBypassArgs", PrivateStatic)!.Invoke(null, [""])!);
+        Assert.AreEqual("Empty", (string)t.GetMethod("FormatBypassArgs", PrivateStatic)!.Invoke(null, ["Empty"])!);
+        StringAssert.Contains((string)t.GetMethod("FormatBypassArgs", PrivateStatic)!
+            .Invoke(null, ["localhost,*.corp"])!, "\"localhost\"");
+        Assert.AreEqual("a\\\"b", (string)t.GetMethod("Escape", PrivateStatic)!.Invoke(null, ["a\"b"])!);
+
+        var parse = t.GetMethod("ParseProxyState", PrivateStatic)!;
+        var nullState = ((bool Enabled, string Host, int Port))parse.Invoke(null, [null])!;
+        Assert.IsFalse(nullState.Enabled);
+        Assert.AreEqual(0, nullState.Port);
+
+        var result = new ProcessRunResult(0, "Enabled: Yes\nServer: 10.0.0.1\nPort: 8080\n", "");
+        var parsed = ((bool Enabled, string Host, int Port))parse.Invoke(null, [result])!;
+        Assert.IsTrue(parsed.Enabled);
+        Assert.AreEqual("10.0.0.1", parsed.Host);
+        Assert.AreEqual(8080, parsed.Port);
+
+        Assert.IsTrue((bool)t.GetMethod("ParseAutoDiscovery", PrivateStatic)!
+            .Invoke(null, [new ProcessRunResult(0, "Auto Proxy Discovery: On\n", "")])!);
+        Assert.IsFalse((bool)t.GetMethod("ParseAutoDiscovery", PrivateStatic)!.Invoke(null, [null])!);
+        var pac = ((bool Enabled, string Url))t.GetMethod("ParseAutoProxyUrl", PrivateStatic)!
+            .Invoke(null, [new ProcessRunResult(0, "Enabled: Yes\nURL: http://pac.test/x\n", "")])!;
+        Assert.IsTrue(pac.Enabled);
+        Assert.AreEqual("http://pac.test/x", pac.Url);
     }
 }

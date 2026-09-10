@@ -154,4 +154,22 @@ public class Http3FrameTests
         headersFrame.ReturnPayload();
         dataFrame.ReturnPayload();
     }
+
+    [TestMethod]
+    public async Task WriteAsync_CompleteWritesOnMemoryStream_StillRoundTrips()
+    {
+        await using var ms = new MemoryStream();
+        var payload = new byte[] { 0x01, 0x02, 0x03 };
+
+        await Http3Frame.WriteAsync(ms, Http3FrameType.Data, payload, CancellationToken.None,
+            completeWrites: true);
+        ms.Position = 0;
+
+        var frame = await Http3Frame.ReadAsync(ms, maxPayloadBytes: 1024, CancellationToken.None);
+
+        Assert.IsNotNull(frame);
+        Assert.AreEqual(Http3FrameType.Data, frame!.Type);
+        CollectionAssert.AreEqual(payload, frame.Payload.ToArray());
+        frame.ReturnPayload();
+    }
 }

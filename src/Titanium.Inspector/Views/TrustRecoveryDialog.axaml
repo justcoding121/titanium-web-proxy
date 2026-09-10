@@ -1,0 +1,22 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Titanium.Inspector.Views.TrustRecoveryDialog"
+        Title="Root CA trust"
+        Width="480" Height="260"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False"
+        AutomationProperties.AutomationId="TrustRecoveryDialog">
+  <DockPanel Margin="16">
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+      <Button x:Name="PrimaryButton" MinWidth="88" IsDefault="True"
+              AutomationProperties.AutomationId="TrustRecoveryPrimary" />
+      <Button x:Name="SecondaryButton" MinWidth="88"
+              AutomationProperties.AutomationId="TrustRecoverySecondary" />
+      <Button x:Name="CancelButton" MinWidth="88" IsCancel="True" Content="Not now"
+              AutomationProperties.AutomationId="TrustRecoveryCancel" />
+    </StackPanel>
+    <TextBlock x:Name="MessageText" TextWrapping="Wrap" VerticalAlignment="Top"
+               AutomationProperties.AutomationId="TrustRecoveryMessage" />
+  </DockPanel>
+</Window>

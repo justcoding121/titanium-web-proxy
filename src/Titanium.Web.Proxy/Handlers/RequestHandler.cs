@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -140,7 +141,7 @@ public partial class ProxyServer
                             headersAlreadyRead = true;
 
                             if (CanUseH1TerminateLite(endPoint, preparedRequest, Enable100ContinueBehaviour,
-                                    EnableWinAuth, hasCustomUpstreamProxyFunc: false))
+                                    EnableWinAuth, hasCustomUpstreamProxyFunc: false, connectionUpstream))
                             {
                                 try
                                 {
@@ -323,15 +324,16 @@ public partial class ProxyServer
 
                         args.IsFastPath = fastPath;
 
-                        // Middleware requires BeforeRequest; never skip it when configured.
-                        if (fastPath && ReverseProxy?.Middleware is { Count: > 0 })
+                        // Middleware / gRPC-JSON transcoder require BeforeRequest; never skip when configured.
+                        if (fastPath &&
+                            (ReverseProxy?.Middleware is { Count: > 0 } ||
+                             ReverseProxy?.GrpcJsonTranscoder is not null))
                         {
                             fastPath = false;
                             args.IsFastPath = false;
                         }
 
-                        var requestHeaderRelayBaseline =
-                            MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(request.Headers);
+                        request.Headers.ArmMitmRelayBaseline();
                         var capturedRequestMethod = request.Method;
                         var capturedRequestPath = request.RequestUriString8;
                         var capturedRequestAuthority = request.Authority;
@@ -363,6 +365,8 @@ public partial class ProxyServer
                             return;
                         }
 
+                        var requestHeaderRelayBaseline = request.Headers.TakeMitmRelayBaseline();
+
                         // Total per-request deadline starts after BeforeRequest so session overrides apply.
                         using var requestDeadline = args.Deadlines.Start(cancellationToken,
                             ResolveRequestTimeout(args), ProxyTimeoutKind.Request);
@@ -390,28 +394,28 @@ public partial class ProxyServer
                                 PrepareRequestHeaders(request.Headers);
                                 // Do NOT overwrite Host here — any value set by the BeforeRequest handler
                                 // must be preserved.  The default was already filled in above.
+                            }
 
-                                // Via loop detection and injection (RFC 9110 §7.6.3).
-                                if (!fastPath && !string.IsNullOrEmpty(ViaHeaderPseudonym))
+                            // Via loop detection and injection (RFC 9110 §7.6.3). Explicit and reverse.
+                            if (!fastPath && !string.IsNullOrEmpty(ViaHeaderPseudonym))
+                            {
+                                if (HasLoopedVia(request.Headers, ViaHeaderPseudonym))
                                 {
-                                    if (HasLoopedVia(request.Headers, ViaHeaderPseudonym))
+                                    args.HttpClient.Response = new Response
                                     {
-                                        args.HttpClient.Response = new Response
-                                        {
-                                            HttpVersion = request.HttpVersion,
-                                            StatusCode = 508,
-                                            StatusDescription = "Loop Detected"
-                                        };
-                                        // Drain any request body first so the client stream is clean.
-                                        if (!(Enable100ContinueBehaviour && request.ExpectContinue))
-                                            await args.SyphonOutBodyAsync(true, requestToken);
-                                        await clientStream.WriteResponseAsync(args.HttpClient.Response, requestToken);
-                                        args.IsClientResponseCommitted = true;
-                                        return;
-                                    }
-
-                                    AddViaHeader(request.Headers, request.HttpVersion, ViaHeaderPseudonym);
+                                        HttpVersion = request.HttpVersion,
+                                        StatusCode = 508,
+                                        StatusDescription = "Loop Detected"
+                                    };
+                                    // Drain any request body first so the client stream is clean.
+                                    if (!(Enable100ContinueBehaviour && request.ExpectContinue))
+                                        await args.SyphonOutBodyAsync(true, requestToken);
+                                    await clientStream.WriteResponseAsync(args.HttpClient.Response, requestToken);
+                                    args.IsClientResponseCommitted = true;
+                                    return;
                                 }
+
+                                AddViaHeader(request.Headers, request.HttpVersion, ViaHeaderPseudonym);
                             }
 
                             // if win auth is enabled
@@ -473,7 +477,7 @@ public partial class ProxyServer
                                 && sessionUpstream is not UpstreamHttpProtocol.Http3
                                 && endPoint is TransparentBaseProxyEndPoint mitmTerminateEp
                                 && CanUseH1TerminateLite(endPoint, request, Enable100ContinueBehaviour,
-                                    EnableWinAuth, GetCustomUpStreamProxyFunc != null)
+                                    EnableWinAuth, GetCustomUpStreamProxyFunc != null, sessionUpstream)
                                 && !request.IsBodyRead
                                 && !request.BodyAvailable
                                 && MitmCompressedRelayHelper.AllowsCompressedRelay(
@@ -823,6 +827,10 @@ public partial class ProxyServer
                     && !args.EnableWinAuth)))
         {
             TcpServerConnection? connection = serverConnection;
+            // Sticky keep-alive already served a request on this socket — do not remap mid-response
+            // IO into a retry (that would replay a consumed body). Just-rented (including skip-poll
+            // pool hits) may be dead; first-IO IOException/SocketException falls through to RetryPolicy.
+            var justRented = serverConnection == null;
             try
             {
                 connection ??= await TcpConnectionFactory.GetServerConnection(this, args, false,
@@ -835,6 +843,18 @@ public partial class ProxyServer
                 return new RetryResult(connection, null, true);
             }
             catch (RetryableServerConnectionException)
+            {
+                if (connection != null)
+                    await TcpConnectionFactory.Release(connection, true);
+                serverConnection = null;
+            }
+            catch (IOException) when (justRented)
+            {
+                if (connection != null)
+                    await TcpConnectionFactory.Release(connection, true);
+                serverConnection = null;
+            }
+            catch (SocketException) when (justRented)
             {
                 if (connection != null)
                     await TcpConnectionFactory.Release(connection, true);
@@ -887,6 +907,7 @@ public partial class ProxyServer
     {
         var cancellationToken = args.CancellationToken;
         var request = args.HttpClient.Request;
+        request.ApplyTransparentForwardCleartextHost(args.ProxyEndPoint);
 
         // Transparent reverse tiny GET: send + receive + write without WinAuth / 1xx loop /
         // SetOriginalHeaders / BeforeResponse. Probe and no-interception servers hit this.
@@ -1145,28 +1166,55 @@ public partial class ProxyServer
     /// </summary>
     /// <param name="args">The session event arguments.</param>
     /// <returns></returns>
-    private async Task OnBeforeRequest(SessionEventArgs args)
+    private Task OnBeforeRequest(SessionEventArgs args)
     {
         if (args.IsFastPath)
-            return;
+            return Task.CompletedTask;
 
         args.Timing?.MarkRequestHeadersReceived();
+
+        // Rewrite REST/JSON → gRPC before middleware / user handlers / routing when configured.
+        if (ReverseProxy?.GrpcJsonTranscoder is { } transcoder)
+            return OnBeforeRequestWithTranscoderAsync(args, transcoder);
+
+        var middleware = ReverseProxy?.Middleware;
+        if (middleware is { Count: > 0 })
+            return OnBeforeRequestWithMiddlewareAsync(args, middleware);
+
+        if (BeforeRequest != null)
+            return BeforeRequest.InvokeAsync(this, args, logger);
+
+        return Task.CompletedTask;
+    }
+
+    private async Task OnBeforeRequestWithTranscoderAsync(
+        SessionEventArgs args,
+        Abstractions.Plugins.IGrpcJsonTranscoder transcoder)
+    {
+        await transcoder.TryRewriteRequestAsync(args, args.CancellationToken).ConfigureAwait(false);
 
         var middleware = ReverseProxy?.Middleware;
         if (middleware is { Count: > 0 })
         {
-            var ctx = new Abstractions.Middleware.ProxyMiddlewareContext { Session = args };
-            Abstractions.Middleware.ProxyMiddlewareDelegate terminus = async (_, _) =>
-            {
-                if (BeforeRequest != null)
-                    await BeforeRequest.InvokeAsync(this, args, logger);
-            };
-            await Middleware.ProxyMiddlewarePipeline.Build(middleware, terminus)(ctx, args.CancellationToken);
+            await OnBeforeRequestWithMiddlewareAsync(args, middleware).ConfigureAwait(false);
             return;
         }
 
         if (BeforeRequest != null)
-            await BeforeRequest.InvokeAsync(this, args, logger);
+            await BeforeRequest.InvokeAsync(this, args, logger).ConfigureAwait(false);
+    }
+
+    private async Task OnBeforeRequestWithMiddlewareAsync(
+        SessionEventArgs args,
+        IReadOnlyList<Abstractions.Middleware.IProxyMiddleware> middleware)
+    {
+        var ctx = new Abstractions.Middleware.ProxyMiddlewareContext { Session = args };
+        Abstractions.Middleware.ProxyMiddlewareDelegate terminus = async (_, _) =>
+        {
+            if (BeforeRequest != null)
+                await BeforeRequest.InvokeAsync(this, args, logger);
+        };
+        await Middleware.ProxyMiddlewarePipeline.Build(middleware, terminus)(ctx, args.CancellationToken);
     }
 
     /// <summary>

@@ -1,5 +1,7 @@
 # Titanium.Web.Proxy.Benchmarks
 
+> **For maintainers / contributors** — BenchmarkDotNet harness for throughput and allocation measurements (not run in CI).
+
 Measurement harness required by the hardening plan's "Measurement prerequisite": nothing in the
 repository measured throughput or allocation before this project existed, yet several later plan
 items (the HTTP/2 proxy-owned concurrency default, the graduation gates) depend on real numbers

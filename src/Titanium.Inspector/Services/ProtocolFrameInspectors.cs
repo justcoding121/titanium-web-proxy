@@ -1,12 +1,12 @@
-using System.Buffers.Binary;
 using System.Text;
+using System.Buffers.Binary;
 
 namespace Titanium.Inspector.Services;
 
 /// <summary>WebSocket frame and gRPC length-prefixed frame inspectors.</summary>
 public static class ProtocolFrameInspectors
 {
-    public static IReadOnlyList<WebSocketFrameSnapshot> ParseWebSocketFrames(byte[]? payload)
+    public static IReadOnlyList<WebSocketFrameSnapshot> ParseWebSocketFrames(byte[]? payload) // NOSONAR S3776 -- RFC6455 frame walk is a single offset state machine.
     {
         var list = new List<WebSocketFrameSnapshot>();
         if (payload is null || payload.Length == 0)
@@ -14,14 +14,108 @@ public static class ProtocolFrameInspectors
             return list;
         }
 
-        // Best-effort: treat text payloads as a single text frame preview.
-        list.Add(new WebSocketFrameSnapshot
+        // Best-effort RFC6455 frame walk when bytes look framed; else single text preview.
+        var offset = 0;
+        var parsedAny = false;
+        while (offset + 2 <= payload.Length)
         {
-            Direction = "Unknown",
-            Opcode = "Text",
-            PayloadPreview = Encoding.UTF8.GetString(payload, 0, Math.Min(payload.Length, 512)),
-        });
+            var b0 = payload[offset];
+            var b1 = payload[offset + 1];
+            var opcode = b0 & 0x0F;
+            var masked = (b1 & 0x80) != 0;
+            ulong len = (ulong)(b1 & 0x7F);
+            var header = 2;
+            if (len == 126)
+            {
+                if (offset + 4 > payload.Length) break;
+                len = BinaryPrimitives.ReadUInt16BigEndian(payload.AsSpan(offset + 2, 2));
+                header = 4;
+            }
+            else if (len == 127)
+            {
+                if (offset + 10 > payload.Length) break;
+                len = BinaryPrimitives.ReadUInt64BigEndian(payload.AsSpan(offset + 2, 8));
+                header = 10;
+            }
+
+            if (masked)
+            {
+                header += 4;
+            }
+
+            if (offset + header + (int)len > payload.Length || len > int.MaxValue)
+            {
+                break;
+            }
+
+            var dataStart = offset + header;
+            var data = payload.AsSpan(dataStart, (int)len).ToArray();
+            if (masked)
+            {
+                var mask = payload.AsSpan(offset + header - 4, 4);
+                for (var i = 0; i < data.Length; i++)
+                {
+                    data[i] ^= mask[i % 4];
+                }
+            }
+
+            list.Add(new WebSocketFrameSnapshot
+            {
+                Direction = "Unknown",
+                Opcode = OpcodeName(opcode),
+                PayloadPreview = Preview(data, opcode),
+            });
+            parsedAny = true;
+            offset = dataStart + (int)len;
+        }
+
+        if (!parsedAny)
+        {
+            list.Add(new WebSocketFrameSnapshot
+            {
+                Direction = "Unknown",
+                Opcode = "Text",
+                PayloadPreview = Encoding.UTF8.GetString(payload, 0, Math.Min(payload.Length, 512)),
+            });
+        }
+
         return list;
+    }
+
+    public static WebSocketFrameSnapshot FromLiveFrame(string direction, string opcode, byte[] data) =>
+        new()
+        {
+            Direction = direction,
+            Opcode = opcode,
+            PayloadPreview = Preview(data, opcode.Equals("Binary", StringComparison.OrdinalIgnoreCase) ? 2 : 1),
+        };
+
+    private static string OpcodeName(int opcode) => opcode switch
+    {
+        0 => "Continuation",
+        1 => "Text",
+        2 => "Binary",
+        8 => "Close",
+        9 => "Ping",
+        10 => "Pong",
+        _ => "Op" + opcode,
+    };
+
+    private static string Preview(byte[] data, int opcode)
+    {
+        if (data.Length == 0)
+        {
+            return "";
+        }
+
+        if (opcode == 1)
+        {
+            var text = Encoding.UTF8.GetString(data);
+            return text.Length > 512 ? text[..512] + "…" : text;
+        }
+
+        var hex = Convert.ToHexString(data.AsSpan(0, Math.Min(data.Length, 64)));
+        return data.Length > 64 ? hex + "…" : hex;
     }
 
     public static IReadOnlyList<GrpcFrameSnapshot> ParseGrpcFrames(byte[]? payload)

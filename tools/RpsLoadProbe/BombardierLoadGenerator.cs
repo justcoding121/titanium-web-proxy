@@ -48,7 +48,7 @@ internal static class BombardierLoadGenerator
             throw new NotSupportedException("bombardier arm requires keep-alive (saturation control is tiny-GET KA).");
         if (!string.Equals(workload.Method, "GET", StringComparison.OrdinalIgnoreCase))
             throw new NotSupportedException("bombardier arm supports GET only.");
-        if (workload.RequestBytes > 0 || workload.IsWebSocket || workload.IsEarlyResponse || workload.IsSlowConsumer)
+        if (workload.RequestBytes > 0 || workload.IsWebSocket || workload.IsGrpc || workload.IsEarlyResponse || workload.IsSlowConsumer)
             throw new NotSupportedException("bombardier arm supports tiny GET only.");
 
         var durationSec = Math.Max(1, (int)Math.Ceiling(duration.TotalSeconds));
@@ -85,9 +85,32 @@ internal static class BombardierLoadGenerator
         using var process = Process.Start(psi)
                             ?? throw new InvalidOperationException($"Failed to start bombardier: {exe}");
 
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
+        using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        // bombardier -d should exit; if it sticks, kill so saturation cannot hang for hours.
+        waitCts.CancelAfter(duration + TimeSpan.FromSeconds(30));
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(waitCts.Token);
+        var stderrTask = process.StandardError.ReadToEndAsync(waitCts.Token);
+        try
+        {
+            await process.WaitForExitAsync(waitCts.Token)
+                .WaitAsync(duration + TimeSpan.FromSeconds(45), cancellationToken);
+        }
+        catch (Exception ex) when (ex is TimeoutException or OperationCanceledException)
+        {
+            try
+            {
+                if (!process.HasExited)
+                    process.Kill(entireProcessTree: true);
+            }
+            catch
+            {
+                // best-effort
+            }
+
+            throw new TimeoutException(
+                $"bombardier did not exit within {duration.TotalSeconds:F0}s+grace (possible hang).", ex);
+        }
+
         var stdout = await stdoutTask;
         var stderr = await stderrTask;
 

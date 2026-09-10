@@ -53,7 +53,49 @@ public class CliCommandE2ETests
         var (code, stdout, _) = await harness.RunOnceAsync(["help"]);
         Assert.AreEqual(0, code);
         StringAssert.Contains(stdout, "titanium run");
+        StringAssert.Contains(stdout, "titanium service");
     }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Run_Help_DoesNotRequireConfig_Exit0()
+    {
+        using var harness = new CliProcessHarness();
+        var (code, stdout, _) = await harness.RunOnceAsync(["run", "--help"]);
+        Assert.AreEqual(0, code);
+        StringAssert.Contains(stdout, "titanium run");
+        StringAssert.Contains(stdout, DocsUrlHint);
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Update_Help_DoesNotHitNetwork_Exit0()
+    {
+        using var harness = new CliProcessHarness();
+        var (code, stdout, _) = await harness.RunOnceAsync(
+            ["update", "--help"],
+            timeout: TimeSpan.FromSeconds(15));
+        Assert.AreEqual(0, code);
+        StringAssert.Contains(stdout, "titanium update");
+        StringAssert.Contains(stdout, "--plus");
+        StringAssert.Contains(stdout, "--remove-plus");
+        Assert.IsFalse(
+            stdout.Contains("Checking for updates", StringComparison.OrdinalIgnoreCase),
+            stdout);
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Service_Help_Exit0()
+    {
+        using var harness = new CliProcessHarness();
+        var (code, stdout, _) = await harness.RunOnceAsync(["service", "--help"]);
+        Assert.AreEqual(0, code);
+        StringAssert.Contains(stdout, "install");
+        StringAssert.Contains(stdout, "status");
+    }
+
+    private const string DocsUrlHint = "titaniumproxy.com/docs/cli";
 
     [TestMethod]
     [TestCategory("E2E")]
@@ -84,7 +126,7 @@ public class CliCommandE2ETests
         using var harness = new CliProcessHarness();
         var (code, stdout, _) = await harness.RunOnceAsync(["version"]);
         Assert.AreEqual(0, code);
-        StringAssert.Contains(stdout, "7.0.4");
+        StringAssert.Contains(stdout, "7.0.6");
     }
 
     [TestMethod]
@@ -127,6 +169,35 @@ public class CliCommandE2ETests
 
     [TestMethod]
     [TestCategory("E2E")]
+    public async Task Run_AccessLog_WritesNdjsonLine()
+    {
+        using var origin = new EchoOrigin();
+        var listen = CliProcessHarness.GetFreePort();
+        var accessPath = Path.Combine(_tempDir, "access.ndjson");
+        var cfg = ConfigFixtures.WriteAccessLog(_tempDir, listen, origin.Port, accessPath);
+        using var harness = new CliProcessHarness();
+        harness.EnsurePlusDllBesideCli(copy: false);
+        await harness.StartRunAsync(cfg);
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+            var response = await http.GetAsync($"http://127.0.0.1:{listen}/access-log");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            await Task.Delay(400);
+            Assert.IsTrue(File.Exists(accessPath), "access log file missing");
+            var text = await ReadSharedTextAsync(accessPath);
+            StringAssert.Contains(text, "access-log");
+            StringAssert.Contains(text, "\"method\"");
+            StringAssert.Contains(text, "\"status\"");
+        }
+        finally
+        {
+            harness.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
     public async Task Run_RoutesAndClusters_ProxiesHttp()
     {
         using var origin = new EchoOrigin();
@@ -151,6 +222,81 @@ public class CliCommandE2ETests
         {
             harness.Dispose();
         }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Run_Transforms_PathPrefixApplied()
+    {
+        using var origin = new EchoOrigin();
+        var listen = CliProcessHarness.GetFreePort();
+        var cfg = ConfigFixtures.WriteTransforms(_tempDir, listen, origin.Port);
+        using var harness = new CliProcessHarness();
+        harness.EnsurePlusDllBesideCli(copy: false);
+        await harness.StartRunAsync(cfg);
+        try
+        {
+            using var handler = new HttpClientHandler
+            {
+                Proxy = new WebProxy($"http://127.0.0.1:{listen}"),
+                UseProxy = true,
+            };
+            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
+            // Absolute-form to origin host so EchoOrigin's HttpListener Host prefix matches
+            // (transform.test would 404 at HttpListener even when reverse-proxy routing works).
+            var response = await http.GetAsync($"http://127.0.0.1:{origin.Port}/api");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            var body = await response.Content.ReadAsStringAsync();
+            StringAssert.Contains(body, "/gw/api");
+        }
+        finally
+        {
+            harness.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Run_SIGHUP_ReloadsRouteTransforms()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("SIGHUP config reload is Unix-only.");
+        }
+
+        using var origin = new EchoOrigin();
+        var listen = CliProcessHarness.GetFreePort();
+        var cfg = ConfigFixtures.WriteTransforms(_tempDir, listen, origin.Port, pathPrefix: "/v1");
+        using var harness = new CliProcessHarness();
+        harness.EnsurePlusDllBesideCli(copy: false);
+            await harness.StartRunAsync(cfg);
+            await harness.WaitForOutputAsync("sighup-handler-registered", TimeSpan.FromSeconds(15));
+            try
+            {
+                Assert.IsTrue(harness.ProcessId is > 0);
+                using var handler = new HttpClientHandler
+                {
+                    Proxy = new WebProxy($"http://127.0.0.1:{listen}"),
+                    UseProxy = true,
+                };
+                using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
+
+                var before = await http.GetAsync($"http://127.0.0.1:{origin.Port}/api");
+                Assert.AreEqual(HttpStatusCode.OK, before.StatusCode);
+                StringAssert.Contains(await before.Content.ReadAsStringAsync(), "/v1/api");
+
+                ConfigFixtures.WriteTransforms(_tempDir, listen, origin.Port, pathPrefix: "/v2");
+                harness.SendSighup();
+                await harness.WaitForOutputAsync("Config reloaded.", TimeSpan.FromSeconds(15));
+
+                var after = await http.GetAsync($"http://127.0.0.1:{origin.Port}/api");
+                Assert.AreEqual(HttpStatusCode.OK, after.StatusCode);
+                StringAssert.Contains(await after.Content.ReadAsStringAsync(), "/v2/api");
+            }
+            finally
+            {
+                harness.Dispose();
+            }
     }
 
     [TestMethod]
@@ -346,7 +492,7 @@ public class CliCommandE2ETests
         var combined = stdout + stderr;
         // 0 = up to date, 2 = update available, 1 = feed unreachable (transient CI / network).
         Assert.IsTrue(code is 0 or 1 or 2, $"Unexpected exit {code}. Output: {combined}");
-        StringAssert.Contains(combined, "7.0.4");
+        StringAssert.Contains(combined, "7.0.6");
         if (code == 1)
         {
             StringAssert.Contains(combined, "Unable to query update feed");
@@ -387,5 +533,12 @@ public class CliCommandE2ETests
         File.WriteAllText(certPath, PemEncoding.WriteString("CERTIFICATE", cert.RawData));
         File.WriteAllText(keyPath, PemEncoding.WriteString("PRIVATE KEY", rsa.ExportPkcs8PrivateKey()));
         return (certPath, keyPath);
+    }
+
+    private static async Task<string> ReadSharedTextAsync(string path)
+    {
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new StreamReader(stream);
+        return await reader.ReadToEndAsync();
     }
 }

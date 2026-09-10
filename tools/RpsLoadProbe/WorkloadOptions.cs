@@ -23,6 +23,8 @@ internal sealed class WorkloadOptions
     public int EarlyResponseAfterBytes { get; init; }
     public bool IsDuplexHttp { get; init; }
     public bool IsWebSocket { get; init; }
+    /// <summary>Unary gRPC Echo over H2 TLS (compare-grpc arms).</summary>
+    public bool IsGrpc { get; init; }
     /// <summary>Optional extra request headers (e.g. Authorization Bearer for JWT edition arm).</summary>
     public IReadOnlyDictionary<string, string>? ExtraHeaders { get; init; }
 
@@ -118,6 +120,13 @@ internal sealed class WorkloadOptions
         IsWebSocket = true
     };
 
+    public static WorkloadOptions ForGrpc() => new()
+    {
+        Method = "GET",
+        KeepAlive = true,
+        IsGrpc = true
+    };
+
     public WorkloadOptions WithCaptureTlsTiming(bool capture) => Copy(captureTlsTiming: capture);
 
     public WorkloadOptions WithExtraHeaders(IReadOnlyDictionary<string, string>? headers) =>
@@ -136,6 +145,7 @@ internal sealed class WorkloadOptions
         int? earlyResponseAfterBytes = null,
         bool? isDuplexHttp = null,
         bool? isWebSocket = null,
+        bool? isGrpc = null,
         IReadOnlyDictionary<string, string>? extraHeaders = null,
         bool replaceExtraHeaders = false) => new()
     {
@@ -151,6 +161,7 @@ internal sealed class WorkloadOptions
         EarlyResponseAfterBytes = earlyResponseAfterBytes ?? EarlyResponseAfterBytes,
         IsDuplexHttp = isDuplexHttp ?? IsDuplexHttp,
         IsWebSocket = isWebSocket ?? IsWebSocket,
+        IsGrpc = isGrpc ?? IsGrpc,
         ExtraHeaders = replaceExtraHeaders ? extraHeaders : (extraHeaders ?? ExtraHeaders)
     };
 
@@ -171,18 +182,28 @@ internal sealed class WorkloadOptions
             ProbeMode.HttpsMitm or ProbeMode.ReverseHttp1Mitm
                 or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi =>
                 httpsMitm,
+            _ when PeerWire.TryGet(mode, out var wire) &&
+                   wire.Inbound is PeerInboundProto.H2c or PeerInboundProto.H2Tls =>
+                http2,
+            _ when PeerWire.TryGet(mode, out var h3Wire) && h3Wire.Inbound == PeerInboundProto.H3 =>
+                http3,
             ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp2Cleartext or ProbeMode.ReverseHttp2ToH2c
                 or ProbeMode.YarpReverseHttp2 or ProbeMode.YarpReverseHttp2ToH2c
                 or ProbeMode.YarpReverseHttp2ToHttps or ProbeMode.YarpReverseHttp2ToHttpsHttp1
                 or ProbeMode.ReverseH2c or ProbeMode.ReverseH2cToH2c or ProbeMode.ReverseH2cToH1
                 or ProbeMode.ReverseH2cToHttps or ProbeMode.YarpReverseH2cToHttps
                 or ProbeMode.YarpReverseH2c or ProbeMode.YarpReverseH2cToH2c or ProbeMode.YarpReverseH2cToH1
-                or ProbeMode.NginxReverseHttp2 or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
+                or ProbeMode.NginxReverseHttp2 or ProbeMode.NginxReverseHttp2ToHttpsHttp1
+                or ProbeMode.HaproxyReverseHttp2 or ProbeMode.HaproxyReverseHttp2ToHttpsHttp1
+                or ProbeMode.EnvoyReverseHttp2 or ProbeMode.EnvoyReverseHttp2ToHttpsHttp1
+                or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
                 or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
                 or ProbeMode.MitmHttp2ToHttp1 =>
                 http2,
             ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp3Cleartext or ProbeMode.YarpReverseHttp3Cleartext
-                or ProbeMode.NginxReverseHttp3Cleartext
+                or ProbeMode.NginxReverseHttp3Cleartext or ProbeMode.NginxReverseHttp3ToHttpsHttp1
+                or ProbeMode.HaproxyReverseHttp3Cleartext or ProbeMode.HaproxyReverseHttp3ToHttpsHttp1
+                or ProbeMode.EnvoyReverseHttp3Cleartext or ProbeMode.EnvoyReverseHttp3ToHttpsHttp1
                 or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.YarpReverseHttp3ToHttp2
                 or ProbeMode.ReverseHttp3ToH2c or ProbeMode.YarpReverseHttp3ToH2c
                 or ProbeMode.YarpReverseHttp3ToHttp3 or ProbeMode.YarpReverseHttp3ToHttpsHttp1
@@ -209,6 +230,8 @@ internal sealed class WorkloadOptions
                 suffix += "-duplex";
             if (IsWebSocket)
                 suffix += "-ws";
+            if (IsGrpc)
+                suffix += "-grpc";
             return suffix;
         }
     }

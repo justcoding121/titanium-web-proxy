@@ -9,7 +9,7 @@ namespace Titanium.Web.Proxy.Helpers;
 /// <summary>
 ///     Maps WinINET-style semicolon bypass lists to macOS/Linux formats.
 /// </summary>
-internal static class UnixProxyBypassMapper
+public static class UnixProxyBypassMapper
 {
     public static IReadOnlyList<string> ToUnixBypassHosts(string? winInetProxyOverride)
     {
@@ -59,14 +59,41 @@ internal static class UnixProxyBypassMapper
         return sb.ToString();
     }
 
-    public static string ToNoProxyEnv(string? winInetProxyOverride)
+    public static string ToNoProxyEnv(string? winInetProxyOverride) =>
+        ToNoProxyEnv(winInetProxyOverride, HasLoopbackSubtractRule(winInetProxyOverride));
+
+    /// <summary>
+    ///     Builds a <c>NO_PROXY</c> value. When <paramref name="proxyLoopback"/> is true, localhost is omitted
+    ///     so loopback traffic can use the proxy (parity with WinINET <c>&lt;-loopback&gt;</c>).
+    /// </summary>
+    public static string ToNoProxyEnv(string? winInetProxyOverride, bool proxyLoopback)
     {
         var hosts = ToUnixBypassHosts(winInetProxyOverride).ToList();
-        if (!hosts.Any(h => h.Equals("localhost", StringComparison.OrdinalIgnoreCase)))
-            hosts.Insert(0, "localhost");
-        if (!hosts.Any(h => h.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase)))
-            hosts.Insert(0, "127.0.0.1");
+        if (!proxyLoopback)
+        {
+            if (!hosts.Any(h => h.Equals("localhost", StringComparison.OrdinalIgnoreCase)))
+            {
+                hosts.Insert(0, "localhost");
+            }
+
+            if (!hosts.Any(h => h.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase)))
+            {
+                hosts.Insert(0, "127.0.0.1");
+            }
+        }
+
         return string.Join(",", hosts);
+    }
+
+    private static bool HasLoopbackSubtractRule(string? winInetProxyOverride)
+    {
+        if (string.IsNullOrWhiteSpace(winInetProxyOverride))
+        {
+            return false;
+        }
+
+        return winInetProxyOverride.Split(';')
+            .Any(r => r.Trim().Equals("<-loopback>", StringComparison.OrdinalIgnoreCase));
     }
 
     public static bool IsLocalHost(string? host)

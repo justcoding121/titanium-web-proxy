@@ -204,6 +204,93 @@ public class PlusModuleTests
     }
 
     [TestMethod]
+    public void TryParseSnapshotBody_RejectsNonObjectAndEmptyObject()
+    {
+        Assert.IsFalse(ControlPlaneServer.TryParseSnapshotBody("true", out _, out _, out var notObject));
+        Assert.AreEqual("invalid body", notObject);
+        Assert.IsFalse(ControlPlaneServer.TryParseSnapshotBody("123", out _, out _, out var number));
+        Assert.AreEqual("invalid body", number);
+        Assert.IsFalse(ControlPlaneServer.TryParseSnapshotBody("{}", out _, out _, out var empty));
+        Assert.AreEqual("body must include clusters and/or routes", empty);
+    }
+
+    [TestMethod]
+    public void TryParseSnapshotBody_LoadBalanceAlgorithmAliases()
+    {
+        Assert.IsTrue(ControlPlaneServer.TryParseSnapshotBody(
+            """[{"id":"c","algorithm":"random","destinations":[{"id":"d","address":"10.0.0.1","port":80}]}]""",
+            out var random, out _, out _));
+        Assert.AreEqual(LoadBalanceAlgorithm.Random, random![0].Algorithm);
+
+        Assert.IsTrue(ControlPlaneServer.TryParseSnapshotBody(
+            """[{"id":"c","algorithm":"least-requests","destinations":[{"id":"d","address":"10.0.0.1","port":80}]}]""",
+            out var leastReq, out _, out _));
+        Assert.AreEqual(LoadBalanceAlgorithm.LeastRequests, leastReq![0].Algorithm);
+
+        Assert.IsTrue(ControlPlaneServer.TryParseSnapshotBody(
+            """[{"id":"c","algorithm":2,"destinations":[{"id":"d","address":"10.0.0.1","port":80}]}]""",
+            out var numeric, out _, out _));
+        Assert.AreEqual(LoadBalanceAlgorithm.LeastRequests, numeric![0].Algorithm);
+
+        Assert.IsTrue(ControlPlaneServer.TryParseSnapshotBody(
+            """[{"id":"c","algorithm":"bogus","destinations":[{"id":"d","address":"10.0.0.1","port":80}]}]""",
+            out var fallback, out _, out _));
+        Assert.AreEqual(LoadBalanceAlgorithm.RoundRobin, fallback![0].Algorithm);
+
+        Assert.IsTrue(ControlPlaneServer.TryParseSnapshotBody(
+            """[{"id":"c","algorithm":"","destinations":[{"id":"d","address":"10.0.0.1","port":80}]}]""",
+            out var emptyAlg, out _, out _));
+        Assert.AreEqual(LoadBalanceAlgorithm.RoundRobin, emptyAlg![0].Algorithm);
+    }
+
+    [TestMethod]
+    public async Task ControlPlane_UnknownPathAndMissingServices_Return404And503()
+    {
+        using var server = StartControlPlaneOrRetry(clusters: null, "test-secret");
+        Assert.AreEqual("127.0.0.1", server.Host);
+        await Task.Delay(100);
+
+        using var http = new HttpClient();
+        using var missing = new HttpRequestMessage(HttpMethod.Get, $"{server.Prefix}v1/nope");
+        missing.Headers.Add(ControlPlaneServer.SharedSecretHeader, "test-secret");
+        var notFound = await http.SendAsync(missing);
+        Assert.AreEqual(HttpStatusCode.NotFound, notFound.StatusCode);
+
+        using var putClusters = new HttpRequestMessage(HttpMethod.Put, $"{server.Prefix}v1/snapshot")
+        {
+            Content = new StringContent(
+                """[{"id":"c","destinations":[{"id":"d","address":"10.0.0.1","port":80}]}]""",
+                Encoding.UTF8, "application/json"),
+        };
+        putClusters.Headers.Add(ControlPlaneServer.SharedSecretHeader, "test-secret");
+        var noClusters = await http.SendAsync(putClusters);
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, noClusters.StatusCode);
+
+        using var putRoutes = new HttpRequestMessage(HttpMethod.Put, $"{server.Prefix}v1/snapshot")
+        {
+            Content = new StringContent(
+                """{"routes":[{"id":"r1","clusterId":"c","match":{"path":"/","pathKind":"Prefix"}}]}""",
+                Encoding.UTF8, "application/json"),
+        };
+        putRoutes.Headers.Add(ControlPlaneServer.SharedSecretHeader, "test-secret");
+        var noRoutes = await http.SendAsync(putRoutes);
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, noRoutes.StatusCode);
+
+        using var purge = new HttpRequestMessage(HttpMethod.Post, $"{server.Prefix}v1/cache/purge");
+        purge.Headers.Add(ControlPlaneServer.SharedSecretHeader, "test-secret");
+        var noCache = await http.SendAsync(purge);
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, noCache.StatusCode);
+
+        using var badJson = new HttpRequestMessage(HttpMethod.Put, $"{server.Prefix}v1/snapshot")
+        {
+            Content = new StringContent("{", Encoding.UTF8, "application/json"),
+        };
+        badJson.Headers.Add(ControlPlaneServer.SharedSecretHeader, "test-secret");
+        var bad = await http.SendAsync(badJson);
+        Assert.AreEqual(HttpStatusCode.BadRequest, bad.StatusCode);
+    }
+
+    [TestMethod]
     public async Task Resilience_ActiveHealth_MarksUnhealthy()
     {
         var manager = new ClusterManager();

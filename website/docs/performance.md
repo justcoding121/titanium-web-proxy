@@ -1,26 +1,45 @@
 # Performance
 
-Titanium targets low-overhead MITM and reverse proxying: connection pooling, HTTP/2 multiplexing, and buffer reuse.
+Titanium targets low-overhead reverse proxying and HTTPS interception: connection pooling, HTTP/2 multiplexing, and buffer reuse.
 
-## Summary (from publishable CI tables)
+**RPS** is requests per second. gRPC bars are **RPC/s** (unary calls). Read **within** a chart (same OS), not Windows vs Linux as one number. Missing bars mean that peer cannot run that wire on that OS.
 
-On matched **GitHub Actions 4 vCPU / 16 GiB** runners, Titanium is typically:
+## Practical reverse RPS (tiny requests)
 
-- **at or above YARP** for reverse-proxy workloads
-- **ahead of nginx** on H2/H3→H1 reverse; **near parity** for the rest (nginx still edges tiny keep-alive H1)
+Common reverse wires with **tiny keep-alive GET (~56 B)**, plus WebSocket and unary gRPC — one chart per OS. How to read medals and workload shape: [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#why-this-comparison-is-fair).
 
-MITM is Titanium-only among those peers (they cannot MITM). Absolute RPS varies by OS, TLS, and MsQuic packaging — compare **within a table**, not across Windows vs Linux.
+### Windows
+
+![Practical reverse RPS on Windows (tiny requests)](../../wiki/images/rps-practical-windows.png)
+
+### Linux
+
+![Practical reverse RPS on Linux (tiny requests)](../../wiki/images/rps-practical-linux.png)
+
+### macOS
+
+![Practical reverse RPS on macOS (tiny requests)](../../wiki/images/rps-practical-macos.png)
+
+## Practical reverse RPS (64 KB)
+
+Typical reverse wires with **64 KB GET/POST** (plus 256 KB H1 terminate) — body work separate from the tiny-GET chart above. Windows and Linux below; macOS heavier bodies are not published yet.
+
+### Windows
+
+![Practical reverse RPS on Windows (64 KB)](../../wiki/images/rps-practical-heavier-windows.png)
+
+### Linux
+
+![Practical reverse RPS on Linux (64 KB)](../../wiki/images/rps-practical-heavier-linux.png)
+
+## Heavier reverse workloads
+
+Larger bodies, POST, lossy links, TLS termination cost, and architecture-sensitive shapes (slow consumers, duplex, WebSocket). Full tables are on the [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#heavier-reverse-workloads).
 
 ## Full measurements
 
-Detailed tables, harness knobs, and methodology live in the project wiki:
+Detailed tables and methodology: [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance) · [Performance profiling](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance-Profiling)
 
-- [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance)
-- [Performance profiling](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance-Profiling)
-- Local cool A/B lab (not publishable): [Performance Local Lab](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance-Local-Lab)
+---
 
-Harness: [`tools/RpsLoadProbe`](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe) and [PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/PERF-GATES.md).
-
-```powershell
-pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
-```
+*How we measure:* matched GitHub Actions runners (~4 vCPU / 16 GiB) on Windows, Linux, and macOS; Titanium vs YARP, nginx, HAProxy, and Envoy; same client, origin, warmup, duration, and concurrency (sustain at 64). Absolute RPS varies slightly with runner noise.

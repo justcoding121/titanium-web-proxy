@@ -13,12 +13,15 @@ public static class SessionArchive
     {
         ct.ThrowIfCancellationRequested();
         var entries = sessions.Select(ToHarEntry).ToList();
+        var creatorVersion = typeof(SessionArchive).Assembly.GetName().Version is { } v
+            ? $"{v.Major}.{v.Minor}.{v.Build}"
+            : "0.0.0";
         var har = new
         {
             log = new
             {
                 version = "1.2",
-                creator = new { name = "Titanium Inspector", version = "7.0.4" },
+                creator = new { name = "Titanium Inspector", version = creatorVersion },
                 entries,
             },
         };

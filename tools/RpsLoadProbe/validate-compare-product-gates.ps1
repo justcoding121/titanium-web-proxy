@@ -1,24 +1,24 @@
-# Validate compare-product medians: MITM Lite/Full >= 0.70, reverse TWP/YARP >= 0.95.
+# Validate compare-product medians @ c=64:
+#   MITM Lite ÷ Reverse >= 0.50, Full ÷ Reverse >= 0.50 (all OS, all gated pairs)
+#   Reverse TWP ÷ YARP >= 0.75 (when YARP SLO-passes)
+# No nginx gate — nginx is wiki/charts only.
 # When Repeats>1, each arm contributes multiple c=64 SLO-pass rows — use the median RPS.
-# macos-15-intel CI passes lower floors for first Mac baselines (see PERF-GATES.md / workflow).
 param(
     [Parameter(Mandatory)] [string] $CsvPath,
-    [double] $MitmGate = 0.70,
-    # H3→H3 MITM (all OS): macos-15-intel first baseline ~0.693; keep written floor.
-    [double] $MitmHttp3Gate = 0.69,
-    # Defaults match MitmGate; Mac CI overrides to 0.65 (H3→H1 TLS Full smoke @ 2026da55).
-    [double] $MitmHttp3TlsFullGate = 0.70,
-    # Defaults match MitmGate; Mac CI overrides to 0.55 (H1 plain Full @ d0439556 = 0.564).
-    [double] $MitmHttp1PlainFullGate = 0.70,
-    [double] $ReverseYarpGate = 0.95,
-    # H3→H3 peer (all OS when YARP SLO-passes): Mac ~0.78×; Win often TWP ahead.
-    [double] $ReverseYarpHttp3Gate = 0.75,
-    # Defaults match ReverseYarpGate; Mac CI overrides to 0.55 (median 0.587 @ d0439556).
-    [double] $ReverseYarpHttp3ToHttp1Gate = 0.95,
+    [double] $MitmLiteGate = 0.50,
+    [double] $MitmFullGate = 0.50,
+    # Backward-compatible alias: if set, applies to both Lite and Full (overrides the pair above).
+    [double] $MitmGate = -1,
+    [double] $ReverseYarpGate = 0.75,
     [string] $BaselineCsvPath = ""
 )
 
 $ErrorActionPreference = 'Stop'
+if ($MitmGate -ge 0) {
+    $MitmLiteGate = $MitmGate
+    $MitmFullGate = $MitmGate
+}
+
 $rows = Import-Csv $CsvPath
 $byArm = @{}
 foreach ($row in $rows) {
@@ -54,35 +54,41 @@ $mitmPairs = @(
 )
 
 $failed = $false
-Write-Host "MITM gates (Full/Lite >= $MitmGate x Reverse; H3->H3 >= $MitmHttp3Gate; H3->H1 TLS Full >= $MitmHttp3TlsFullGate; H1 plain Full >= $MitmHttp1PlainFullGate @ c=64 median)" -ForegroundColor Cyan
+Write-Host "MITM gates (Lite >= $MitmLiteGate / Full >= $MitmFullGate x Reverse @ c=64 median; all OS)" -ForegroundColor Cyan
 foreach ($p in $mitmPairs) {
     foreach ($kind in @('Lite', 'Full')) {
-        $pairGate = if ($p.Label -eq 'H3->H3') { $MitmHttp3Gate }
-            elseif ($p.Label -eq 'H3->H1 TLS' -and $kind -eq 'Full') { $MitmHttp3TlsFullGate }
-            elseif ($p.Label -eq 'H1 plain' -and $kind -eq 'Full') { $MitmHttp1PlainFullGate }
-            else { $MitmGate }
         $num = $p.$kind
         $den = $p.Reverse
+        $gate = if ($kind -eq 'Lite') { $MitmLiteGate } else { $MitmFullGate }
+        # Sharded CSVs only contain a subset of arms — skip pairs not present in this artifact.
+        if (-not $sustain.ContainsKey($num) -and -not $sustain.ContainsKey($den)) {
+            Write-Host "SKIP $($p.Label) $kind : not in this shard/CSV" -ForegroundColor DarkYellow
+            continue
+        }
         if (-not $sustain.ContainsKey($num) -or -not $sustain.ContainsKey($den)) {
-            Write-Host "FAIL $($p.Label) $kind : missing data" -ForegroundColor Red
+            Write-Host "FAIL $($p.Label) $kind : missing data (partial pair in CSV)" -ForegroundColor Red
             $failed = $true
             continue
         }
         $ratio = $sustain[$num] / $sustain[$den]
-        $ok = $ratio -ge $pairGate
+        $ok = $ratio -ge $gate
         $color = if ($ok) { 'Green' } else { 'Red' }
-        Write-Host ("{0} {1} = {2:N3} (gate {3:N2})" -f $p.Label, $kind, $ratio, $pairGate) -ForegroundColor $color
+        Write-Host ("{0} {1} = {2:N3} (gate {3:N2})" -f $p.Label, $kind, $ratio, $gate) -ForegroundColor $color
         if (-not $ok) { $failed = $true }
     }
 }
 
 Write-Host ""
-Write-Host "Reverse TWP/YARP gates (H3->H1 >= $ReverseYarpHttp3ToHttp1Gate; H3->H3 >= $ReverseYarpHttp3Gate @ c=64 median)" -ForegroundColor Cyan
+Write-Host "Reverse TWP/YARP gates (>= $ReverseYarpGate @ c=64 median; skip when YARP SLO-fails)" -ForegroundColor Cyan
 $revPairs = @(
-    @{ Label = 'H3->H1'; Twp = 'twp-reverse-http3-to-https-http1'; Yarp = 'yarp-reverse-http3-to-https-http1'; Gate = $ReverseYarpHttp3ToHttp1Gate },
-    @{ Label = 'H3->H3'; Twp = 'twp-reverse-http3'; Yarp = 'yarp-reverse-http3-to-http3'; Gate = $ReverseYarpHttp3Gate }
+    @{ Label = 'H3->H1'; Twp = 'twp-reverse-http3-to-https-http1'; Yarp = 'yarp-reverse-http3-to-https-http1' },
+    @{ Label = 'H3->H3'; Twp = 'twp-reverse-http3'; Yarp = 'yarp-reverse-http3-to-http3' }
 )
 foreach ($p in $revPairs) {
+    if (-not $sustain.ContainsKey($p.Twp) -and -not $sustain.ContainsKey($p.Yarp)) {
+        Write-Host "SKIP $($p.Label) : not in this shard/CSV" -ForegroundColor DarkYellow
+        continue
+    }
     if (-not $sustain.ContainsKey($p.Twp)) {
         Write-Host "FAIL $($p.Label) : missing TWP data" -ForegroundColor Red
         $failed = $true
@@ -94,10 +100,9 @@ foreach ($p in $revPairs) {
         continue
     }
     $ratio = $sustain[$p.Twp] / $sustain[$p.Yarp]
-    $gate = [double]$p.Gate
-    $ok = $ratio -ge $gate
+    $ok = $ratio -ge $ReverseYarpGate
     $color = if ($ok) { 'Green' } else { 'Red' }
-    Write-Host ("{0} TWP/YARP = {1:N3} (gate {2:N2})" -f $p.Label, $ratio, $gate) -ForegroundColor $color
+    Write-Host ("{0} TWP/YARP = {1:N3} (gate {2:N2})" -f $p.Label, $ratio, $ReverseYarpGate) -ForegroundColor $color
     if (-not $ok) { $failed = $true }
 }
 

@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      <title>Class MitmExclusionDefaults | Titanium Web Proxy </title>
+      <meta name="viewport" content="width=device-width">
+      <meta name="title" content="Class MitmExclusionDefaults | Titanium Web Proxy ">
+    
+    <meta name="description" content="Default hostname exclusions for MITM proxies (Microsoft identity / certificate pinning). Use with  and .">
+      <link rel="shortcut icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
+      <link rel="stylesheet" href="../styles/docfx.css">
+      <link rel="stylesheet" href="../styles/main.css">
+      <meta property="docfx:navrel" content="">
+      <meta property="docfx:tocrel" content="toc.html">
+    
+    <meta property="docfx:rel" content="../">
+    
+  </head>
+  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div class="container body-content">
+
+        <div id="search-results">
+          <div class="search-list">Search Results for <span></span></div>
+          <div class="sr-items">
+            <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
+          </div>
+          <ul id="pagination" data-first=First data-prev=Previous data-next=Next data-last=Last></ul>
+        </div>
+      </div>
+      <div role="main" class="container body-content hide-when-search">
+
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults">
+
+
+
+  <h1 id="Titanium_Web_Proxy_MitmExclusionDefaults" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults" class="text-break">Class MitmExclusionDefaults</h1>
+  <div class="markdown level0 summary"><p>Default hostname exclusions for MITM proxies (Microsoft identity / certificate pinning).
+Use with <a class="xref" href="Titanium.Web.Proxy.SystemProxySettings.html#Titanium_Web_Proxy_SystemProxySettings_BypassRules">BypassRules</a> and
+<a class="xref" href="Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html#Titanium_Web_Proxy_EventArguments_TunnelConnectSessionEventArgs_DecryptSsl">DecryptSsl</a>.</p>
+</div>
+  <div class="markdown level0 conceptual"></div>
+  <div class="inheritance">
+    <h5>Inheritance</h5>
+    <div class="level0"><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object">object</a></div>
+    <div class="level1"><span class="xref">MitmExclusionDefaults</span></div>
+  </div>
+  <div class="inheritedMembers">
+    <h5>Inherited Members</h5>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object)">object.Equals(object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object-system-object)">object.Equals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gethashcode">object.GetHashCode()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gettype">object.GetType()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.memberwiseclone">object.MemberwiseClone()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.referenceequals">object.ReferenceEquals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.tostring">object.ToString()</a>
+    </div>
+  </div>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.html">Titanium</a>.<a class="xref" href="Titanium.Web.html">Web</a>.<a class="xref" href="Titanium.Web.Proxy.html">Proxy</a></h6>
+  <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
+  <h5 id="Titanium_Web_Proxy_MitmExclusionDefaults_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static class MitmExclusionDefaults</code></pre>
+  </div>
+  <h3 id="fields">Fields
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_MitmExclusionDefaults_SystemProxyBypassRules.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.MitmExclusionDefaults.SystemProxyBypassRules%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/MitmExclusionDefaults.cs/#L18">View Source</a>
+  </span>
+  <h4 id="Titanium_Web_Proxy_MitmExclusionDefaults_SystemProxyBypassRules" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.SystemProxyBypassRules">SystemProxyBypassRules</h4>
+  <div class="markdown level1 summary"><p>WinINET / system-proxy bypass patterns for Microsoft identity endpoints (Entra / WAM / RDP).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static readonly string[] SystemProxyBypassRules</code></pre>
+  </div>
+  <h5 class="fieldValue">Field Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>[]</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_MitmExclusionDefaults_TunnelOnlyPinningDomains.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.MitmExclusionDefaults.TunnelOnlyPinningDomains%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/MitmExclusionDefaults.cs/#L32">View Source</a>
+  </span>
+  <h4 id="Titanium_Web_Proxy_MitmExclusionDefaults_TunnelOnlyPinningDomains" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.TunnelOnlyPinningDomains">TunnelOnlyPinningDomains</h4>
+  <div class="markdown level1 summary"><p>Pinning hosts that should tunnel (DecryptSsl=false) but stay visible.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static readonly string[] TunnelOnlyPinningDomains</code></pre>
+  </div>
+  <h5 class="fieldValue">Field Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>[]</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="methods">Methods
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_MitmExclusionDefaults_ApplyDecryptExclusions_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_System_Func_System_Boolean__.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint%2CSystem.Func%7BSystem.Boolean%7D)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/MitmExclusionDefaults.cs/#L165">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_MitmExclusionDefaults_ApplyDecryptExclusions_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions*"></a>
+  <h4 id="Titanium_Web_Proxy_MitmExclusionDefaults_ApplyDecryptExclusions_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_System_Func_System_Boolean__" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,System.Func{System.Boolean})">ApplyDecryptExclusions(ExplicitProxyEndPoint, Func&lt;bool&gt;)</h4>
+  <div class="markdown level1 summary"><p>Registers per-CONNECT <code>DecryptSsl</code> gating on an explicit endpoint (Merge mode).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static void ApplyDecryptExclusions(ExplicitProxyEndPoint endPoint, Func&lt;bool&gt; decryptHttpsEnabled)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.html">ExplicitProxyEndPoint</a></td>
+        <td><span class="parametername">endPoint</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.func-1">Func</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a>&gt;</td>
+        <td><span class="parametername">decryptHttpsEnabled</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_MitmExclusionDefaults_ApplyDecryptExclusions_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_System_Func_System_Boolean__System_Collections_Generic_IEnumerable_System_String__System_Collections_Generic_IEnumerable_System_String__.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint%2CSystem.Func%7BSystem.Boolean%7D%2CSystem.Collections.Generic.IEnumerable%7BSystem.String%7D%2CSystem.Collections.Generic.IEnumerable%7BSystem.String%7D)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/MitmExclusionDefaults.cs/#L171">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_MitmExclusionDefaults_ApplyDecryptExclusions_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions*"></a>
+  <h4 id="Titanium_Web_Proxy_MitmExclusionDefaults_ApplyDecryptExclusions_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_System_Func_System_Boolean__System_Collections_Generic_IEnumerable_System_String__System_Collections_Generic_IEnumerable_System_String__" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,System.Func{System.Boolean},System.Collections.Generic.IEnumerable{System.String},System.Collections.Generic.IEnumerable{System.String})">ApplyDecryptExclusions(ExplicitProxyEndPoint, Func&lt;bool&gt;, IEnumerable&lt;string&gt;?, IEnumerable&lt;string&gt;?)</h4>
+  <div class="markdown level1 summary"><p>Registers per-CONNECT <code>DecryptSsl</code> gating on an explicit endpoint (Merge mode).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static void ApplyDecryptExclusions(ExplicitProxyEndPoint endPoint, Func&lt;bool&gt; decryptHttpsEnabled, IEnumerable&lt;string&gt;? decryptSkipHosts, IEnumerable&lt;string&gt;? decryptOnlyHosts)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.html">ExplicitProxyEndPoint</a></td>
+        <td><span class="parametername">endPoint</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.func-1">Func</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a>&gt;</td>
+        <td><span class="parametername">decryptHttpsEnabled</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.ienumerable-1">IEnumerable</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>&gt;</td>
+        <td><span class="parametername">decryptSkipHosts</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.ienumerable-1">IEnumerable</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>&gt;</td>
+        <td><span class="parametername">decryptOnlyHosts</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_MitmExclusionDefaults_ApplyDecryptExclusions_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_System_Func_System_Boolean__System_Collections_Generic_IEnumerable_System_String__System_Collections_Generic_IEnumerable_System_String__Titanium_Web_Proxy_MitmExclusionMode_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint%2CSystem.Func%7BSystem.Boolean%7D%2CSystem.Collections.Generic.IEnumerable%7BSystem.String%7D%2CSystem.Collections.Generic.IEnumerable%7BSystem.String%7D%2CTitanium.Web.Proxy.MitmExclusionMode)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/MitmExclusionDefaults.cs/#L180">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_MitmExclusionDefaults_ApplyDecryptExclusions_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions*"></a>
+  <h4 id="Titanium_Web_Proxy_MitmExclusionDefaults_ApplyDecryptExclusions_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_System_Func_System_Boolean__System_Collections_Generic_IEnumerable_System_String__System_Collections_Generic_IEnumerable_System_String__Titanium_Web_Proxy_MitmExclusionMode_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.ApplyDecryptExclusions(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,System.Func{System.Boolean},System.Collections.Generic.IEnumerable{System.String},System.Collections.Generic.IEnumerable{System.String},Titanium.Web.Proxy.MitmExclusionMode)">ApplyDecryptExclusions(ExplicitProxyEndPoint, Func&lt;bool&gt;, IEnumerable&lt;string&gt;?, IEnumerable&lt;string&gt;?, MitmExclusionMode)</h4>
+  <div class="markdown level1 summary"><p>Registers per-CONNECT <code>DecryptSsl</code> gating on an explicit endpoint.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static void ApplyDecryptExclusions(ExplicitProxyEndPoint endPoint, Func&lt;bool&gt; decryptHttpsEnabled, IEnumerable&lt;string&gt;? decryptSkipHosts, IEnumerable&lt;string&gt;? decryptOnlyHosts, MitmExclusionMode mode)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.html">ExplicitProxyEndPoint</a></td>
+        <td><span class="parametername">endPoint</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.func-1">Func</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a>&gt;</td>
+        <td><span class="parametername">decryptHttpsEnabled</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.ienumerable-1">IEnumerable</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>&gt;</td>
+        <td><span class="parametername">decryptSkipHosts</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.ienumerable-1">IEnumerable</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>&gt;</td>
+        <td><span class="parametername">decryptOnlyHosts</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.MitmExclusionMode.html">MitmExclusionMode</a></td>
+        <td><span class="parametername">mode</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_MitmExclusionDefaults_CreateSystemProxySettings.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/MitmExclusionDefaults.cs/#L38">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_MitmExclusionDefaults_CreateSystemProxySettings_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings*"></a>
+  <h4 id="Titanium_Web_Proxy_MitmExclusionDefaults_CreateSystemProxySettings" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings">CreateSystemProxySettings()</h4>
+  <div class="markdown level1 summary"><p>Builds <a class="xref" href="Titanium.Web.Proxy.SystemProxySettings.html">SystemProxySettings</a> with factory identity bypass rules and loopback
+(<a class="xref" href="Titanium.Web.Proxy.MitmExclusionMode.html#Titanium_Web_Proxy_MitmExclusionMode_Merge">Merge</a>).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static SystemProxySettings CreateSystemProxySettings()</code></pre>
+  </div>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.SystemProxySettings.html">SystemProxySettings</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_MitmExclusionDefaults_CreateSystemProxySettings_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(System.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/MitmExclusionDefaults.cs/#L45">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_MitmExclusionDefaults_CreateSystemProxySettings_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings*"></a>
+  <h4 id="Titanium_Web_Proxy_MitmExclusionDefaults_CreateSystemProxySettings_System_Boolean_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(System.Boolean)">CreateSystemProxySettings(bool)</h4>
+  <div class="markdown level1 summary"><p>Builds <a class="xref" href="Titanium.Web.Proxy.SystemProxySettings.html">SystemProxySettings</a> with factory identity bypass rules
+(<a class="xref" href="Titanium.Web.Proxy.MitmExclusionMode.html#Titanium_Web_Proxy_MitmExclusionMode_Merge">Merge</a>).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static SystemProxySettings CreateSystemProxySettings(bool proxyLoopback)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td><span class="parametername">proxyLoopback</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.SystemProxySettings.html">SystemProxySettings</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_MitmExclusionDefaults_CreateSystemProxySettings_System_Boolean_System_Collections_Generic_IEnumerable_System_String__.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(System.Boolean%2CSystem.Collections.Generic.IEnumerable%7BSystem.String%7D)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/MitmExclusionDefaults.cs/#L52">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_MitmExclusionDefaults_CreateSystemProxySettings_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings*"></a>
+  <h4 id="Titanium_Web_Proxy_MitmExclusionDefaults_CreateSystemProxySettings_System_Boolean_System_Collections_Generic_IEnumerable_System_String__" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(System.Boolean,System.Collections.Generic.IEnumerable{System.String})">CreateSystemProxySettings(bool, IEnumerable&lt;string&gt;?)</h4>
+  <div class="markdown level1 summary"><p>Builds <a class="xref" href="Titanium.Web.Proxy.SystemProxySettings.html">SystemProxySettings</a> with identity bypass rules and optional user additions
+(<a class="xref" href="Titanium.Web.Proxy.MitmExclusionMode.html#Titanium_Web_Proxy_MitmExclusionMode_Merge">Merge</a>).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static SystemProxySettings CreateSystemProxySettings(bool proxyLoopback, IEnumerable&lt;string&gt;? additionalBypassRules)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td><span class="parametername">proxyLoopback</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.ienumerable-1">IEnumerable</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>&gt;</td>
+        <td><span class="parametername">additionalBypassRules</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.SystemProxySettings.html">SystemProxySettings</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_MitmExclusionDefaults_CreateSystemProxySettings_System_Boolean_System_Collections_Generic_IEnumerable_System_String__Titanium_Web_Proxy_MitmExclusionMode_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(System.Boolean%2CSystem.Collections.Generic.IEnumerable%7BSystem.String%7D%2CTitanium.Web.Proxy.MitmExclusionMode)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/MitmExclusionDefaults.cs/#L66">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_MitmExclusionDefaults_CreateSystemProxySettings_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings*"></a>
+  <h4 id="Titanium_Web_Proxy_MitmExclusionDefaults_CreateSystemProxySettings_System_Boolean_System_Collections_Generic_IEnumerable_System_String__Titanium_Web_Proxy_MitmExclusionMode_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.CreateSystemProxySettings(System.Boolean,System.Collections.Generic.IEnumerable{System.String},Titanium.Web.Proxy.MitmExclusionMode)">CreateSystemProxySettings(bool, IEnumerable&lt;string&gt;?, MitmExclusionMode)</h4>
+  <div class="markdown level1 summary"><p>Builds <a class="xref" href="Titanium.Web.Proxy.SystemProxySettings.html">SystemProxySettings</a> from factory and/or caller bypass rules.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static SystemProxySettings CreateSystemProxySettings(bool proxyLoopback, IEnumerable&lt;string&gt;? bypassRules, MitmExclusionMode mode)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td><span class="parametername">proxyLoopback</span></td>
+        <td><p>When true, localhost uses the proxy (platform-specific loopback rule).</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.ienumerable-1">IEnumerable</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>&gt;</td>
+        <td><span class="parametername">bypassRules</span></td>
+        <td><p>Extra rules in <a class="xref" href="Titanium.Web.Proxy.MitmExclusionMode.html#Titanium_Web_Proxy_MitmExclusionMode_Merge">Merge</a>, or the full authoritative list in
+<a class="xref" href="Titanium.Web.Proxy.MitmExclusionMode.html#Titanium_Web_Proxy_MitmExclusionMode_Replace">Replace</a>.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.MitmExclusionMode.html">MitmExclusionMode</a></td>
+        <td><span class="parametername">mode</span></td>
+        <td><p>Merge factory OS-bypass defaults, or replace them with <code class="paramref">bypassRules</code>.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.SystemProxySettings.html">SystemProxySettings</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_MitmExclusionDefaults_HostnameMatches_System_String_System_String_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.MitmExclusionDefaults.HostnameMatches(System.String%2CSystem.String)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/MitmExclusionDefaults.cs/#L145">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_MitmExclusionDefaults_HostnameMatches_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.HostnameMatches*"></a>
+  <h4 id="Titanium_Web_Proxy_MitmExclusionDefaults_HostnameMatches_System_String_System_String_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.HostnameMatches(System.String,System.String)">HostnameMatches(string, string)</h4>
+  <div class="markdown level1 summary"><p>Wildcard-aware hostname match (<code>*.example.com</code>).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static bool HostnameMatches(string hostname, string pattern)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td><span class="parametername">hostname</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td><span class="parametername">pattern</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_MitmExclusionDefaults_IsBuiltInSslBypass_System_String_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.MitmExclusionDefaults.IsBuiltInSslBypass(System.String)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/MitmExclusionDefaults.cs/#L198">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_MitmExclusionDefaults_IsBuiltInSslBypass_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.IsBuiltInSslBypass*"></a>
+  <h4 id="Titanium_Web_Proxy_MitmExclusionDefaults_IsBuiltInSslBypass_System_String_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.IsBuiltInSslBypass(System.String)">IsBuiltInSslBypass(string)</h4>
+  <div class="markdown level1 summary"><p>True when <code class="paramref">hostname</code> matches factory OS-bypass or tunnel-only defaults.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static bool IsBuiltInSslBypass(string hostname)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td><span class="parametername">hostname</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_MitmExclusionDefaults_ShouldDisableSslDecrypt_System_String_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(System.String)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/MitmExclusionDefaults.cs/#L93">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_MitmExclusionDefaults_ShouldDisableSslDecrypt_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt*"></a>
+  <h4 id="Titanium_Web_Proxy_MitmExclusionDefaults_ShouldDisableSslDecrypt_System_String_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(System.String)">ShouldDisableSslDecrypt(string?)</h4>
+  <div class="markdown level1 summary"><p>Returns true when CONNECT should use SSL passthrough instead of MITM (Merge mode).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static bool ShouldDisableSslDecrypt(string? hostname)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td><span class="parametername">hostname</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_MitmExclusionDefaults_ShouldDisableSslDecrypt_System_String_System_Collections_Generic_IEnumerable_System_String__System_Collections_Generic_IEnumerable_System_String__.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(System.String%2CSystem.Collections.Generic.IEnumerable%7BSystem.String%7D%2CSystem.Collections.Generic.IEnumerable%7BSystem.String%7D)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/MitmExclusionDefaults.cs/#L99">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_MitmExclusionDefaults_ShouldDisableSslDecrypt_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt*"></a>
+  <h4 id="Titanium_Web_Proxy_MitmExclusionDefaults_ShouldDisableSslDecrypt_System_String_System_Collections_Generic_IEnumerable_System_String__System_Collections_Generic_IEnumerable_System_String__" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(System.String,System.Collections.Generic.IEnumerable{System.String},System.Collections.Generic.IEnumerable{System.String})">ShouldDisableSslDecrypt(string?, IEnumerable&lt;string&gt;?, IEnumerable&lt;string&gt;?)</h4>
+  <div class="markdown level1 summary"><p>Returns true when TLS should stay opaque (no MITM decrypt) using <a class="xref" href="Titanium.Web.Proxy.MitmExclusionMode.html#Titanium_Web_Proxy_MitmExclusionMode_Merge">Merge</a>.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static bool ShouldDisableSslDecrypt(string? hostname, IEnumerable&lt;string&gt;? userSkipHosts, IEnumerable&lt;string&gt;? userOnlyHosts)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td><span class="parametername">hostname</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.ienumerable-1">IEnumerable</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>&gt;</td>
+        <td><span class="parametername">userSkipHosts</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.ienumerable-1">IEnumerable</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>&gt;</td>
+        <td><span class="parametername">userOnlyHosts</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_MitmExclusionDefaults_ShouldDisableSslDecrypt_System_String_System_Collections_Generic_IEnumerable_System_String__System_Collections_Generic_IEnumerable_System_String__Titanium_Web_Proxy_MitmExclusionMode_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(System.String%2CSystem.Collections.Generic.IEnumerable%7BSystem.String%7D%2CSystem.Collections.Generic.IEnumerable%7BSystem.String%7D%2CTitanium.Web.Proxy.MitmExclusionMode)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/MitmExclusionDefaults.cs/#L112">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_MitmExclusionDefaults_ShouldDisableSslDecrypt_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt*"></a>
+  <h4 id="Titanium_Web_Proxy_MitmExclusionDefaults_ShouldDisableSslDecrypt_System_String_System_Collections_Generic_IEnumerable_System_String__System_Collections_Generic_IEnumerable_System_String__Titanium_Web_Proxy_MitmExclusionMode_" data-uid="Titanium.Web.Proxy.MitmExclusionDefaults.ShouldDisableSslDecrypt(System.String,System.Collections.Generic.IEnumerable{System.String},System.Collections.Generic.IEnumerable{System.String},Titanium.Web.Proxy.MitmExclusionMode)">ShouldDisableSslDecrypt(string?, IEnumerable&lt;string&gt;?, IEnumerable&lt;string&gt;?, MitmExclusionMode)</h4>
+  <div class="markdown level1 summary"><p>Returns true when TLS should stay opaque (no MITM decrypt).
+<a class="xref" href="Titanium.Web.Proxy.MitmExclusionMode.html#Titanium_Web_Proxy_MitmExclusionMode_Merge">Merge</a>: factory SSO/pinning hosts always skip, then user skip /
+optional decrypt-only allowlist.
+<a class="xref" href="Titanium.Web.Proxy.MitmExclusionMode.html#Titanium_Web_Proxy_MitmExclusionMode_Replace">Replace</a>: only <code class="paramref">userSkipHosts</code> and optional
+<code class="paramref">userOnlyHosts</code> apply (factory hosts are not forced).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static bool ShouldDisableSslDecrypt(string? hostname, IEnumerable&lt;string&gt;? userSkipHosts, IEnumerable&lt;string&gt;? userOnlyHosts, MitmExclusionMode mode)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td><span class="parametername">hostname</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.ienumerable-1">IEnumerable</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>&gt;</td>
+        <td><span class="parametername">userSkipHosts</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.ienumerable-1">IEnumerable</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>&gt;</td>
+        <td><span class="parametername">userOnlyHosts</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.MitmExclusionMode.html">MitmExclusionMode</a></td>
+        <td><span class="parametername">mode</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_MitmExclusionDefaults.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.MitmExclusionDefaults%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
+                  </li>
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/MitmExclusionDefaults.cs/#L15" class="contribution-link">View Source</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>

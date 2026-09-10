@@ -1,5 +1,7 @@
 # Migration guide: 4.x → 5.0
 
+> For developers upgrading embedded Titanium.Web.Proxy apps.
+
 Version 5.0 bundles a large security- and correctness-hardening pass (RFC-compliance fixes, resource
 budgets, and defense-in-depth limits across every protocol the proxy speaks). Rather than stage these
 across an interim 6.0, all of them ship together in 5.0.0, since most of the individually-breaking

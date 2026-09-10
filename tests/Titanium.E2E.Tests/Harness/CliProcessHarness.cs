@@ -1,12 +1,13 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Titanium.E2E.Tests.Harness;
 
 /// <summary>Spawns the titanium CLI from build output and tears it down.</summary>
-public sealed class CliProcessHarness : IDisposable
+public sealed partial class CliProcessHarness : IDisposable
 {
     private Process? _process;
     private readonly StringBuilder _stdout = new();
@@ -26,6 +27,9 @@ public sealed class CliProcessHarness : IDisposable
     }
 
     public int? ExitCode => _process is { HasExited: true } ? _process.ExitCode : null;
+
+    /// <summary>PID of a long-running <c>run</c> process started via <see cref="StartRunAsync"/>.</summary>
+    public int? ProcessId => _process is { HasExited: false } p ? p.Id : _process?.Id;
 
     public CliProcessHarness()
     {
@@ -176,6 +180,29 @@ public sealed class CliProcessHarness : IDisposable
         throw new TimeoutException(
             $"Timed out waiting for '{substring}'. stdout={StdOut} stderr={StdErr}");
     }
+
+    /// <summary>Sends SIGHUP to the running CLI (Unix). Throws on Windows.</summary>
+    public void SendSighup()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("SIGHUP is not available on Windows.");
+        }
+
+        if (_process is null || _process.HasExited)
+        {
+            throw new InvalidOperationException("CLI process is not running.");
+        }
+
+        // SIGHUP = 1 on Linux/macOS
+        if (NativeKill(_process.Id, 1) != 0)
+        {
+            throw new InvalidOperationException($"kill(SIGHUP) failed for pid {_process.Id} (errno may be set).");
+        }
+    }
+
+    [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
+    private static partial int NativeKill(int pid, int sig);
 
     public void Dispose()
     {

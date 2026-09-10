@@ -219,7 +219,7 @@ public class RotateRootCaTests
             {
                 RotateRootCaResult = true,
                 InstallRootCaResult = true,
-                ElevateRootCaResult = false
+                TrustRecoveryResult = TrustRecoveryChoice.Cancel
             };
             var registry = new SessionRegistry();
             var vm = new MainWindowViewModel(
@@ -234,7 +234,7 @@ public class RotateRootCaTests
             await ExecuteAsync(vm.RotateCaCommand);
             Assert.IsFalse(vm.DecryptHttps);
             Assert.IsTrue(dialogs.InstallRootCaCalls >= 1);
-            StringAssert.Contains(vm.StatusText, "reinstalled");
+            StringAssert.Contains(vm.StatusText, "trusted");
             interception.EnsureShutdown();
         }
         finally
@@ -261,7 +261,7 @@ public class RotateRootCaTests
             {
                 RotateRootCaResult = true,
                 InstallRootCaResult = true,
-                ElevateRootCaResult = true
+                TrustRecoveryResult = TrustRecoveryChoice.Primary
             };
             var settings = new SettingsService(Path.Combine(dir, "settings.json"));
             var registry = new SessionRegistry();
@@ -274,8 +274,8 @@ public class RotateRootCaTests
                 dialogs);
 
             await ExecuteAsync(vm.RotateCaCommand);
-            Assert.AreEqual(1, dialogs.ElevateRootCaCalls);
-            StringAssert.Contains(vm.StatusText, "reinstalled");
+            Assert.AreEqual(1, dialogs.TrustRecoveryCalls);
+            StringAssert.Contains(vm.StatusText, "trusted");
             interception.EnsureShutdown();
         }
         finally

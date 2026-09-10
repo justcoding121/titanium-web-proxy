@@ -45,11 +45,10 @@ public class InspectorHeadlessUiE2ETests
 
         Assert.IsTrue(interception.IsRunning, vm.StatusText);
         Assert.IsTrue(vm.Capturing);
+        Assert.AreEqual("Ready", vm.StatusText);
         Assert.IsTrue(
-            vm.StatusText.Contains("Proxy running", StringComparison.OrdinalIgnoreCase) ||
-            vm.StatusText.Contains("Decrypt HTTPS", StringComparison.OrdinalIgnoreCase) ||
-            vm.StatusText.Contains("encrypted tunnels", StringComparison.OrdinalIgnoreCase),
-            vm.StatusText);
+            vm.EndpointStatusText.Contains("Proxy running", StringComparison.OrdinalIgnoreCase),
+            vm.EndpointStatusText);
 
         vm.InstallCaCommand.Execute(null);
         await Task.Delay(100);
@@ -58,7 +57,17 @@ public class InspectorHeadlessUiE2ETests
         await Task.Delay(100);
         Assert.AreEqual(1, recorder.SetCount, "System proxy should go through controller seam");
         Assert.IsTrue(vm.SystemProxy);
-        Assert.IsTrue(vm.StatusText.Contains("quic", StringComparison.OrdinalIgnoreCase), vm.StatusText);
+        Assert.IsTrue(
+            vm.StatusText.StartsWith("System proxy enabled", StringComparison.Ordinal),
+            vm.StatusText);
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.IsTrue(vm.StatusText.Contains("quic", StringComparison.OrdinalIgnoreCase), vm.StatusText);
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            Assert.IsTrue(vm.StatusText.Contains("Firefox", StringComparison.OrdinalIgnoreCase), vm.StatusText);
+        }
 
         vm.AutoResponderMatch = "*ui-e2e*";
         vm.AutoResponderStatus = 201;
@@ -70,19 +79,14 @@ public class InspectorHeadlessUiE2ETests
         vm.ComposerMethod = "GET";
         vm.ComposerUrl = origin.BaseUrl + "ui-composer";
         vm.SendComposerCommand.Execute(null);
+        // Do not match "Composer sending…" (set immediately before ReplayAsync); wait for settle.
         deadline = DateTime.UtcNow.AddSeconds(20);
-        while (!vm.StatusText.Contains("Composer", StringComparison.OrdinalIgnoreCase) &&
-               !vm.StatusText.Contains("HTTP", StringComparison.OrdinalIgnoreCase) &&
-               DateTime.UtcNow < deadline)
+        while (!IsComposerSettled(vm) && DateTime.UtcNow < deadline)
         {
             await Task.Delay(50);
         }
 
-        Assert.IsTrue(
-            vm.StatusText.Contains("Composer", StringComparison.OrdinalIgnoreCase) ||
-            vm.StatusText.Contains("HTTP", StringComparison.OrdinalIgnoreCase) ||
-            vm.Sessions.Count > 0,
-            vm.StatusText);
+        Assert.IsTrue(IsComposerSettled(vm), vm.StatusText);
 
         vm.StopCaptureCommand.Execute(null);
         await Task.Delay(100);
@@ -181,5 +185,13 @@ public class InspectorHeadlessUiE2ETests
         Assert.IsNotNull(vm.Interception);
         Assert.IsFalse(vm.Interception.IsRunning);
         try { File.Delete(settingsPath); } catch { /* ignore */ }
+    }
+
+    private static bool IsComposerSettled(MainWindowViewModel vm)
+    {
+        var status = vm.StatusText;
+        return status.Contains("Composer →", StringComparison.Ordinal)
+               || status.Contains("Composer failed", StringComparison.OrdinalIgnoreCase)
+               || vm.Sessions.Count > 0;
     }
 }

@@ -14,6 +14,9 @@ internal class HeaderBuilder
     private static HeaderBuilder? cached;
 
     private readonly MemoryStream stream = new(256);
+#if DEBUG
+    private bool inUse;
+#endif
 
     /// <summary>Rents a thread-local builder (cleared). Caller must <see cref="Return"/> it.</summary>
     public static HeaderBuilder Rent()
@@ -23,10 +26,17 @@ internal class HeaderBuilder
         {
             cached = null;
             builder.stream.SetLength(0);
+#if DEBUG
+            builder.inUse = true;
+#endif
             return builder;
         }
 
-        return new HeaderBuilder();
+        var created = new HeaderBuilder();
+#if DEBUG
+        created.inUse = true;
+#endif
+        return created;
     }
 
     /// <summary>Returns a builder to the thread-local cache.</summary>
@@ -36,6 +46,9 @@ internal class HeaderBuilder
     /// </remarks>
     public static void Return(HeaderBuilder builder)
     {
+#if DEBUG
+        builder.inUse = false;
+#endif
         if (cached == null)
             cached = builder;
     }
@@ -208,6 +221,10 @@ internal class HeaderBuilder
 
     public ArraySegment<byte> GetBuffer()
     {
+#if DEBUG
+        if (!inUse)
+            throw new InvalidOperationException("HeaderBuilder.GetBuffer after Return; the instance may have been reused.");
+#endif
         if (!stream.TryGetBuffer(out var buffer))
             throw new InvalidOperationException("The header buffer is unexpectedly unavailable.");
 

@@ -85,6 +85,14 @@
     <h3 id="classes">
 Classes
 </h3>
+      <h4><a class="xref" href="Titanium.Web.Proxy.ClientProcessId.html">ClientProcessId</a></h4>
+      <section><p>Capability for resolving the local client process that owns a TCP connection to the proxy.</p>
+</section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.MitmExclusionDefaults.html">MitmExclusionDefaults</a></h4>
+      <section><p>Default hostname exclusions for MITM proxies (Microsoft identity / certificate pinning).
+Use with <a class="xref" href="Titanium.Web.Proxy.SystemProxySettings.html#Titanium_Web_Proxy_SystemProxySettings_BypassRules">BypassRules</a> and
+<a class="xref" href="Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html#Titanium_Web_Proxy_EventArguments_TunnelConnectSessionEventArgs_DecryptSsl">DecryptSsl</a>.</p>
+</section>
       <h4><a class="xref" href="Titanium.Web.Proxy.ProxyLimits.html">ProxyLimits</a></h4>
       <section><p>Reference values for a handful of resource-limit defaults, kept here for documentation and
 cross-checking purposes.</p>
@@ -128,9 +136,19 @@ close code 1009).</p>
     decoder waits for a frame that will never legitimately complete.
 </p>
 </section>
+    <h3 id="structs">
+Structs
+</h3>
+      <h4><a class="xref" href="Titanium.Web.Proxy.SystemProxyChangeResult.html">SystemProxyChangeResult</a></h4>
+      <section><p>Outcome of enabling or disabling OS system proxy. Callers must treat failure as
+non-fatal: log <a class="xref" href="Titanium.Web.Proxy.SystemProxyChangeResult.html#Titanium_Web_Proxy_SystemProxyChangeResult_Message">Message</a> and continue (do not crash the process).</p>
+</section>
     <h3 id="enums">
 Enums
 </h3>
+      <h4><a class="xref" href="Titanium.Web.Proxy.MitmExclusionMode.html">MitmExclusionMode</a></h4>
+      <section><p>How factory MITM exclusion defaults interact with caller-supplied host lists.</p>
+</section>
       <h4><a class="xref" href="Titanium.Web.Proxy.SystemProxyBypassRuleMode.html">SystemProxyBypassRuleMode</a></h4>
       <section><p>Controls how configured bypass rules are combined with the current Windows system proxy bypass list.</p>
 </section>

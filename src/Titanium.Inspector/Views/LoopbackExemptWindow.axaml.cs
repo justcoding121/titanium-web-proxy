@@ -8,12 +8,16 @@ public partial class LoopbackExemptWindow : Window
 {
     private List<AppContainerInfo> _items = [];
     private string? _pendingStatus;
+    private bool _suppressExemptCheckChanged;
+    private List<AppContainerInfo> _visibleItems = [];
 
     public LoopbackExemptWindow()
     {
         InitializeComponent();
         ExemptButton.Click += OnExempt;
         ClearButton.Click += OnClear;
+        CheckAllButton.Click += OnCheckAll;
+        UncheckAllButton.Click += OnUncheckAll;
         CloseButton.Click += (_, _) => Close();
         FilterBox.TextChanged += (_, _) => ApplyFilter();
         Opened += (_, _) => Reload();
@@ -59,7 +63,10 @@ public partial class LoopbackExemptWindow : Window
                 i.PackageFamilyName.Contains(query, StringComparison.OrdinalIgnoreCase));
         }
 
-        var filtered = view.ToList();
+        var filtered = view
+            .OrderByDescending(i => i.IsExempt)
+            .ThenBy(i => i.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
         SetGridItems(filtered);
 
         if (_pendingStatus is not null)
@@ -79,8 +86,69 @@ public partial class LoopbackExemptWindow : Window
     private void SetGridItems(IReadOnlyList<AppContainerInfo> items)
     {
         // Clearing selection before replacing ItemsSource avoids Avalonia DataGrid crashes.
-        PackageGrid.SelectedItem = null;
-        PackageGrid.ItemsSource = items;
+        _suppressExemptCheckChanged = true;
+        try
+        {
+            PackageGrid.SelectedItem = null;
+            _visibleItems = items.ToList();
+            PackageGrid.ItemsSource = _visibleItems;
+        }
+        finally
+        {
+            _suppressExemptCheckChanged = false;
+        }
+    }
+
+    private void OnExemptCheckChanged(object? sender, RoutedEventArgs e)
+    {
+        if (_suppressExemptCheckChanged)
+            return;
+
+        // Do not call ApplyFilter() here. Rebinding ItemsSource while template CheckBoxes
+        // raise IsCheckedChanged (Check all / Uncheck all / row toggle) re-enters and hangs.
+        UpdateStatusCounts();
+    }
+
+    private void OnCheckAll(object? sender, RoutedEventArgs e)
+    {
+        _suppressExemptCheckChanged = true;
+        try
+        {
+            foreach (var item in _visibleItems)
+                item.IsExempt = true;
+        }
+        finally
+        {
+            _suppressExemptCheckChanged = false;
+        }
+
+        ApplyFilter();
+    }
+
+    private void OnUncheckAll(object? sender, RoutedEventArgs e)
+    {
+        _suppressExemptCheckChanged = true;
+        try
+        {
+            foreach (var item in _visibleItems)
+                item.IsExempt = false;
+        }
+        finally
+        {
+            _suppressExemptCheckChanged = false;
+        }
+
+        ApplyFilter();
+    }
+
+    private void UpdateStatusCounts()
+    {
+        var query = FilterBox.Text?.Trim() ?? "";
+        var exemptCount = _items.Count(i => i.IsExempt);
+        if (string.IsNullOrEmpty(query))
+            StatusText.Text = $"{_items.Count} apps; {exemptCount} currently allowed.";
+        else
+            StatusText.Text = $"Showing {_visibleItems.Count} of {_items.Count}; {exemptCount} currently allowed.";
     }
 
     private void OnExempt(object? sender, RoutedEventArgs e)

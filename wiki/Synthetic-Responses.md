@@ -1,5 +1,7 @@
 # Synthetic Responses
 
+> For .NET library users answering the client from a handler without contacting the origin (block, redirect, mock, or stream a local body).
+
 Answer the client directly from a handler without contacting the origin, or replace an origin response entirely. Use **`e.Respond(ProxyResults.*)`** as the entry point for synthetic (locally generated) responses.
 
 This page covers:

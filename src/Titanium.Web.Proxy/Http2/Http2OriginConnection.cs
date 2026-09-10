@@ -1,8 +1,8 @@
 using System;
 using System.Buffers;
 using System.Buffers.Binary;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -67,7 +67,9 @@ internal sealed class Http2OriginConnection : IDisposable
     private readonly SemaphoreSlim writeLock = new(1, 1);
     private readonly Http2FlowController sendFlow = new();
     private readonly Http2Settings originSettings = new();
-    private readonly ConcurrentDictionary<int, PendingStream> streams = new();
+    // Client-initiated stream ids are odd (1,3,5,…). Index = streamId >> 1.
+    // Volatile slot publishes replace ConcurrentDictionary on the origin ReadLoop / SendAsync path.
+    private PendingStream?[] streamTable = new PendingStream?[64];
     private readonly CancellationTokenSource connectionCts = new();
     private readonly TaskCompletionSource<bool> initialSettingsReceived =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -79,6 +81,7 @@ internal sealed class Http2OriginConnection : IDisposable
     private SemaphoreSlim? concurrencyGate;
     private int concurrencyGateCapacity;
     private Decoder? decoder;
+    private readonly HeaderCollectorListener headerCollector = new();
     private int lastStreamId = -1;
     private volatile bool faulted;
     private volatile bool goingAway;
@@ -108,8 +111,8 @@ internal sealed class Http2OriginConnection : IDisposable
     internal bool IsUsable => !faulted && !goingAway && !connection.IsClosed;
 
     /// <summary>
-    ///     In-flight streams currently registered on this connection. Interlocked — do not use
-    ///     <c>streams.Count</c> (that takes every ConcurrentDictionary lock).
+    ///     In-flight streams currently registered on this connection. Interlocked — do not scan
+    ///     <c>streamTable</c> for the count.
     /// </summary>
     internal int ActiveStreamCount => Volatile.Read(ref activeStreamCount);
 
@@ -117,24 +120,29 @@ internal sealed class Http2OriginConnection : IDisposable
     internal int LeaseCount => Volatile.Read(ref leaseCount);
 
     /// <summary>
-    ///     Grow the origin pool once every member has this many active streams, well before
-    ///     <c>SETTINGS_MAX_CONCURRENT_STREAMS</c> (common default 100). One connection serializes
-    ///     encode+enqueue under <c>writeLock</c>; spreading across a few TLS+H2 sessions matches
-    ///     SocketsHttpHandler <c>EnableMultipleHttp2Connections</c>.
-    ///     Profiled at c=16 with threshold 16: dumpasync showed a single
-    ///     <c>ReadLoopAsync</c> and hundreds of <c>SemaphoreSlim</c> waiters — grow earlier so
-    ///     low concurrency is not pinned to one origin TLS+H2 session.
-    ///     Soft=4 (was 1←2←4): grow once a member has 4 in-flight streams. Soft=1 opened a new
-    ///     TLS+H2 session on the first concurrent stream and fanned out to MaxOrigin (=8) on CI
-    ///     4 vCPU — cool hid the cost; Windows H3→H2 CI sat ~0.94× YARP. Soft=4 still spreads
-    ///     writeLocks before SETTINGS_MAX_CONCURRENT_STREAMS while keeping fewer ReadLoops.
-    ///     Cap remains <see cref="ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority"/>.
+    ///     Historical SoftGrow=16 TLS constant. Live TLS grow uses <see cref="SoftStreamCapacity"/> —
+    ///     long 20s Mac pairs: SoftGrow=16 ~0.90× H1 / ~0.89× H3; SoftGrow=SoftPick ~0.92× H1 /
+    ///     ~0.96× H3. SoftGrow=8 peaked short-arm H1 ~0.83× but hurt H3. Cap remains
+    ///     <see cref="ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority"/>.
     /// </summary>
-    internal const int PoolGrowActiveStreamThreshold = 4;
+    internal const int PoolGrowActiveStreamThresholdTls = 16;
 
     /// <summary>
-    ///     Soft multiplex capacity used by <see cref="Http2OriginConnectionPool" /> to decide when to
-    ///     open another origin connection. Prefers filling existing connections before growing the pool.
+    ///     Early-grow threshold for cleartext h2c. SoftGrow=4 was the Soft=16-as-pick-cap era;
+    ///     with SoftPick=SETTINGS, SoftGrow=8 lifts Mac H3→h2c (~0.88→~0.94×). SoftGrow=12
+    ///     regresses (~0.88×). SoftGrow=16 on cleartext starved ReadLoops under Soft=16-as-pick.
+    /// </summary>
+    internal const int PoolGrowActiveStreamThresholdCleartext = 8;
+
+    /// <summary>Alias — TLS SoftGrow (tests / wiki that reference the historical name).</summary>
+    internal const int PoolGrowActiveStreamThreshold = PoolGrowActiveStreamThresholdTls;
+
+    /// <summary>
+    ///     Soft multiplex pick capacity used by <see cref="Http2OriginConnectionPool" /> —
+    ///     <c>SETTINGS_MAX_CONCURRENT_STREAMS</c> / concurrency gate (not the early-grow dial).
+    ///     Prefer filling under this cap; grow is driven separately by
+    ///     <see cref="PoolGrowActiveStreamThreshold"/> /
+    ///     <see cref="PoolGrowActiveStreamThresholdCleartext"/>.
     /// </summary>
     internal int SoftStreamCapacity
     {
@@ -143,9 +151,17 @@ internal sealed class Http2OriginConnection : IDisposable
             var cap = concurrencyGateCapacity;
             if (cap <= 0)
                 cap = resourceLimits.MaxConcurrentStreamsPerConnection;
-            return Math.Max(1, Math.Min(cap, PoolGrowActiveStreamThreshold));
+            return Math.Max(1, cap);
         }
     }
+
+    /// <summary>
+    ///     Early-grow dial for TLS and cleartext: SoftGrow = SoftStreamCapacity (SETTINGS/gate).
+    ///     Offer-once + MaxOrigin=1 SoftPick SoftGrow SoftCap: Mac H1 TLS→H2 ~0.91–0.95×; GHA
+    ///     H3→H2 led ~1.15× (33990406830). SoftGrow=8 cleartext Offer-once MaxOrigin=8 regresses
+    ///     local H3→h2c / H1plain (~0.84–0.89×). SoftGrow=16 Offer-once TLS rejected (~0.89×).
+    /// </summary>
+    internal int PoolGrowThreshold => SoftStreamCapacity;
 
     /// <summary>True when the next odd stream id would approach int wraparound.</summary>
     internal bool IsNearStreamIdExhaustion => Volatile.Read(ref lastStreamId) >= StreamIdExhaustionThreshold;
@@ -193,17 +209,75 @@ internal sealed class Http2OriginConnection : IDisposable
 
     private void RegisterOpenedStream(int streamId, PendingStream pending)
     {
-        if (!streams.TryAdd(streamId, pending))
+        var idx = streamId >> 1;
+        EnsureStreamTable(idx);
+        // Odd client stream ids; one slot per id. CompareExchange publishes to the ReadLoop.
+        if (Interlocked.CompareExchange(ref streamTable[idx], pending, null) != null)
             throw new InvalidOperationException($"HTTP/2 stream {streamId} is already registered on this origin connection.");
         Interlocked.Increment(ref activeStreamCount);
     }
 
     private bool TryUnregisterStream(int streamId, out PendingStream? pending)
     {
-        if (!streams.TryRemove(streamId, out pending))
+        var idx = streamId >> 1;
+        var table = streamTable;
+        if ((uint)idx >= (uint)table.Length)
+        {
+            pending = null;
+            return false;
+        }
+
+        pending = Interlocked.Exchange(ref table[idx], null);
+        if (pending == null)
             return false;
         Interlocked.Decrement(ref activeStreamCount);
         return true;
+    }
+
+    private bool TryGetStream(int streamId, [NotNullWhen(true)] out PendingStream? pending)
+    {
+        var idx = streamId >> 1;
+        var table = streamTable;
+        if ((uint)idx >= (uint)table.Length)
+        {
+            pending = null;
+            return false;
+        }
+
+        pending = Volatile.Read(ref table[idx]);
+        return pending != null;
+    }
+
+    private bool StreamTableContains(int streamId)
+    {
+        var idx = streamId >> 1;
+        var table = streamTable;
+        return (uint)idx < (uint)table.Length && Volatile.Read(ref table[idx]) != null;
+    }
+
+    private void EnsureStreamTable(int idx)
+    {
+        var table = streamTable;
+        if ((uint)idx < (uint)table.Length)
+            return;
+
+        // Resize under writeLock (RegisterOpenedStream only); ReadLoop may still see the old
+        // array until the new one is published — copy keeps live slots.
+        var newLen = Math.Max(table.Length * 2, idx + 1);
+        var next = new PendingStream?[newLen];
+        Array.Copy(table, next, table.Length);
+        Volatile.Write(ref streamTable, next);
+    }
+
+    private IEnumerable<PendingStream> EnumerateLiveStreams()
+    {
+        var table = streamTable;
+        for (var i = 0; i < table.Length; i++)
+        {
+            var pending = Volatile.Read(ref table[i]);
+            if (pending != null)
+                yield return pending;
+        }
     }
 
     /// <summary>
@@ -334,7 +408,7 @@ internal sealed class Http2OriginConnection : IDisposable
 
                 var headersEndStream = !streamRequest && bufferedBody == null && !enqueueBufferedTrailers;
                 Http2Helper.EnqueueHeader(originSettings, frameHeader, frameHeaderBuffer, request,
-                    headersEndStream, Writer);
+                    headersEndStream, Writer, encoderAlreadyExclusive: true);
             }
             finally
             {
@@ -424,6 +498,8 @@ internal sealed class Http2OriginConnection : IDisposable
             // writer as soon as final response headers arrive, so this loop exits cleanly before
             // body drainage begins. When on1xx is null (passthrough lite / no 1xx relay), wait on the
             // HeadersReceived TCS instead — otherwise we race ProcessHeaderBlock and synthesize 502.
+            // Inline tiny-CL delays HeadersReceived until END_STREAM; always await it after interims
+            // so the body buffer is complete before TakeInlineBody.
             if (on1xx != null)
             {
                 var interimReader = pending.InterimChannel?.Reader
@@ -431,10 +507,8 @@ internal sealed class Http2OriginConnection : IDisposable
                 await foreach (var interim in interimReader.ReadAllAsync(cancellationToken))
                     await on1xx(interim.StatusCode, interim.Headers, cancellationToken);
             }
-            else
-            {
-                await pending.HeadersReceived.Task.WaitAsync(cancellationToken);
-            }
+
+            await pending.HeadersReceived.Task.WaitAsync(cancellationToken);
 
             var response = pending.Response ??
                            new Response
@@ -450,10 +524,15 @@ internal sealed class Http2OriginConnection : IDisposable
             // therefore misclassify a content-length-less h2 response as bodiless and silently drop its
             // DATA frames. Only the status/method exclusions and an explicit `content-length: 0` mean
             // "no body" here (1xx never reaches this point; the interim channel consumed those).
+            // Missing content-length is -1 (not 0) — do not treat omission as empty.
+            var hasExplicitZeroContentLength =
+                (response.Headers.TryGetUniqueHeader(KnownHeaders.ContentLength, out _)
+                 || response.Headers.TryGetUniqueHeader(KnownHeaders.ContentLengthHttp2, out _))
+                && response.ContentLength == 0;
             var noBody = response.StatusCode is 204 or 304
                          || request.Method == "HEAD"
                          || (request.Method == "CONNECT" && response.StatusCode is >= 200 and < 300)
-                         || response.ContentLength == 0;
+                         || hasExplicitZeroContentLength;
             if (noBody)
             {
                 response.IsBodyRead = true;
@@ -461,13 +540,39 @@ internal sealed class Http2OriginConnection : IDisposable
                 return new Http2OriginExchange(response, Array.Empty<byte>(), pending.TrailingHeaders);
             }
 
-            var bodyPipe = pending.BodyPipe;
             var trailers = pending.TrailingHeaders;
 
-            // Tiny fixed-length bodies (probe GET ~56 B): buffer then return so H1 deliver can
-            // coalesce headers+body in one write. Streaming via StreamBodyWriter pays an extra
-            // pipe+async hop per request for these. Read into an exact-size buffer (no
-            // MemoryStream + ToArray double copy).
+            // Tiny fixed-length bodies (probe GET ~56 B): ReadLoop already filled InlineBody and
+            // delayed HeadersReceived until END_STREAM — skip Pipe + second byte[] alloc.
+            if (pending.InlineBody != null)
+            {
+                var body = pending.TakeInlineBody();
+                response.IsBodyRead = true;
+                response.Body = body;
+                response.BodyIsWireEncoded = true;
+                if (trailers != null)
+                {
+                    foreach (var header in trailers)
+                        response.TrailingHeaders.AddHeader(header);
+                }
+
+                return new Http2OriginExchange(response, body, trailers);
+            }
+
+            // Inbound may have finished (HEADERS+END_STREAM or DATA already drained) before we attach.
+            // Never allocate a pipe whose writer will never run — that hangs CopyToAsync.
+            if (pending.IsInboundComplete && pending.BodyPipeOrNull == null)
+            {
+                response.IsBodyRead = true;
+                response.Body = Array.Empty<byte>();
+                return new Http2OriginExchange(response, Array.Empty<byte>(), trailers);
+            }
+
+            var bodyPipe = pending.EnsureBodyPipe();
+
+            // Known-CL bodies that exceeded the inline threshold still buffer then return so H1
+            // deliver can coalesce headers+body. Streaming via StreamBodyWriter pays an extra
+            // pipe+async hop per request for these.
             if (response.ContentLength is >= 0 and <= 8 * 1024)
             {
                 var expected = (int)response.ContentLength;
@@ -604,7 +709,7 @@ internal sealed class Http2OriginConnection : IDisposable
                 // Must use SendHeader with endStream=false: SendBody derives END_STREAM from the body
                 // and would half-close a bodiless CONNECT before the first tunnel byte.
                 Http2Helper.EnqueueHeader(originSettings, frameHeader, frameHeaderBuffer, request,
-                    endStream: false, Writer);
+                    endStream: false, Writer, encoderAlreadyExclusive: true);
             }
             finally
             {
@@ -651,6 +756,7 @@ internal sealed class Http2OriginConnection : IDisposable
 
             if (response.StatusCode is < 200 or >= 300)
             {
+                // Enqueue-only; hang protection is Http2FrameWriter.DisposeAsync drain timeout (2s+1s).
                 await ResetStreamAsync(streamId, Http2ErrorCode.Cancel, CancellationToken.None);
                 leaseOwned = false;
                 ReleaseTunnelBookkeeping(streamId, pending, gate);
@@ -674,6 +780,7 @@ internal sealed class Http2OriginConnection : IDisposable
                 tunnelEx);
             try
             {
+                // Enqueue-only RST; Writer.DisposeAsync already bounds drain on a dead origin.
                 await ResetStreamAsync(streamId, Http2ErrorCode.Cancel, CancellationToken.None);
             }
             catch (Exception resetEx)
@@ -697,7 +804,7 @@ internal sealed class Http2OriginConnection : IDisposable
     private async Task WriteTunnelDataAsync(int streamId, ReadOnlyMemory<byte> payload, bool endStream,
         CancellationToken cancellationToken)
     {
-        if (!streams.ContainsKey(streamId) && !endStream)
+        if (!StreamTableContains(streamId) && !endStream)
             throw new IOException($"HTTP/2 tunnel stream {streamId} is no longer open.");
 
         await EnqueueDataWithFlowAsync(streamId, payload, endStream, cancellationToken);
@@ -789,7 +896,7 @@ internal sealed class Http2OriginConnection : IDisposable
         if (connectionBytes <= 0 && streamBytes <= 0)
             return Task.CompletedTask;
 
-        var streamStillTracked = streamBytes > 0 && streams.ContainsKey(streamId);
+        var streamStillTracked = streamBytes > 0 && StreamTableContains(streamId);
         if (connectionBytes > 0)
             Http2Helper.EnqueueWindowUpdate(Writer, 0, connectionBytes);
         if (streamStillTracked)
@@ -996,7 +1103,7 @@ internal sealed class Http2OriginConnection : IDisposable
                             byte[]? rented = null;
                             try
                             {
-                                if (streams.TryGetValue(streamId, out var pendingData))
+                                if (TryGetStream(streamId, out var pendingData))
                                 {
                                     if (pendingData.IsTunnel)
                                     {
@@ -1030,6 +1137,15 @@ internal sealed class Http2OriginConnection : IDisposable
                                             }
                                         }
                                     }
+                                    else if (pendingData.InlineBody != null)
+                                    {
+                                        // Known tiny CL: copy straight into the pre-sized buffer — no Pipe /
+                                        // ArrayPool Gen0 on the probe GET path (H1→H2 / H3→H2 Mac residual).
+                                        var bodyData = StripDataFramingSpan(payloadSpan, flags);
+                                        intake.Advance(length);
+                                        if (!bodyData.IsEmpty)
+                                            pendingData.TryWriteInline(bodyData);
+                                    }
                                     else
                                     {
                                         // Copy out of intake before Advance so BodyPipe may hold the memory
@@ -1042,7 +1158,8 @@ internal sealed class Http2OriginConnection : IDisposable
                                         {
                                             try
                                             {
-                                                var writeVt = pendingData.BodyPipe.WriteAsync(bodyData, cancellationToken);
+                                                var writeVt = pendingData.EnsureBodyPipe()
+                                                    .WriteAsync(bodyData, cancellationToken);
                                                 if (writeVt.IsCompletedSuccessfully)
                                                 {
                                                     writeVt.GetAwaiter().GetResult();
@@ -1122,13 +1239,17 @@ internal sealed class Http2OriginConnection : IDisposable
                             intake.Advance(length);
                             goAwayLastStreamId = lastId;
                             goingAway = true;
-                            foreach (var kvp in streams)
+                            var table = streamTable;
+                            for (var i = 0; i < table.Length; i++)
                             {
-                                if (kvp.Key > lastId)
+                                var pendingGoAway = Volatile.Read(ref table[i]);
+                                if (pendingGoAway == null) continue;
+                                var sid = (i << 1) | 1;
+                                if (sid > lastId)
                                 {
                                     var goAwayEx = new Http2OriginGoAwayException(
-                                        $"The origin sent GOAWAY ({errorCode}) before stream {kvp.Key} was processed; it is safe to retry.");
-                                    FailPending(kvp.Value, goAwayEx);
+                                        $"The origin sent GOAWAY ({errorCode}) before stream {sid} was processed; it is safe to retry.");
+                                    FailPending(pendingGoAway, goAwayEx);
                                 }
                             }
                         }
@@ -1269,6 +1390,17 @@ internal sealed class Http2OriginConnection : IDisposable
     private static byte[] StripHeadersFraming(byte[] payload, Http2FrameFlag flags) // NOSONAR S1144 -- reflection test seam
         => StripHeadersFraming(payload.AsSpan(), flags).ToArray();
 
+    /// <summary>Strips DATA PADDED framing without allocating (inline-body hot path).</summary>
+    private static ReadOnlySpan<byte> StripDataFramingSpan(ReadOnlySpan<byte> payload, Http2FrameFlag flags)
+    {
+        if ((flags & Http2FrameFlag.Padded) == 0 || payload.Length == 0)
+            return payload;
+
+        var padLength = payload[0];
+        var end = Math.Max(1, payload.Length - padLength);
+        return payload.Slice(1, end - 1);
+    }
+
     /// <summary>Strips DATA PADDED framing into a new array (tunnel channel ownership).</summary>
     private static byte[] StripDataFraming(ReadOnlySpan<byte> payload, Http2FrameFlag flags)
     {
@@ -1309,60 +1441,14 @@ internal sealed class Http2OriginConnection : IDisposable
     {
         // Decode into the Response's own HeaderCollection (or a temporary for 1xx) so we do not
         // allocate a second HeaderCollection and copy every field — H3→H2 tiny-GET pays this
-        // once per request on the origin ReadLoop.
-        ByteString status = default;
-        Response? buildingResponse = null;
-        HeaderCollection? interimHeaders = null;
-
-        var listener = new HeaderCollectorListener((name, value) =>
-        {
-            if (name.Length > 0 && name.Span[0] == (byte)':')
-            {
-                if (name.Equals(StaticTable.KnownHeaderStatus)) status = value;
-                return;
-            }
-
-            // Regular fields: after :status in response HEADERS, or with no :status in a trailer block.
-            if (status.Length == 0)
-            {
-                // Trailer HEADERS (RFC 9113 §8.1) — no :status. Park in interimHeaders as a trailer bag.
-                interimHeaders ??= new HeaderCollection();
-                interimHeaders.AddHeader(new HttpHeader(name, value));
-                return;
-            }
-
-            if (interimHeaders != null)
-            {
-                interimHeaders.AddHeader(new HttpHeader(name, value));
-                return;
-            }
-
-            if (buildingResponse == null)
-            {
-                var statusCodeEarly = TryParseAsciiStatusCode(status.Span, out var early) ? early : 0;
-                if (statusCodeEarly is >= 100 and <= 199)
-                {
-                    interimHeaders = new HeaderCollection();
-                    interimHeaders.AddHeader(new HttpHeader(name, value));
-                    return;
-                }
-
-                buildingResponse = new Response
-                {
-                    StatusCode = statusCodeEarly != 0 ? statusCodeEarly : 502,
-                    StatusDescription = string.Empty,
-                    HttpVersion = HttpHeader.Version11,
-                    HeaderNamesAreHttp2Normalized = true
-                };
-            }
-
-            buildingResponse.Headers.AddHeader(new HttpHeader(name, value));
-        });
+        // once per request on the origin ReadLoop. Reuse the connection's HeaderCollectorListener
+        // (no per-HEADERS lambda/listener Gen0 on the shared ReadLoop).
+        headerCollector.Begin();
 
         try
         {
             decoder ??= new Decoder(8192, 4096);
-            decoder.Decode(compressed, listener);
+            decoder.Decode(compressed, headerCollector);
             decoder.EndHeaderBlock();
         }
         catch (Exception ex)
@@ -1371,7 +1457,11 @@ internal sealed class Http2OriginConnection : IDisposable
             return;
         }
 
-        if (!streams.TryGetValue(streamId, out var pending)) return;
+        if (!TryGetStream(streamId, out var pending)) return;
+
+        var status = headerCollector.Status;
+        var buildingResponse = headerCollector.BuildingResponse;
+        var interimHeaders = headerCollector.InterimHeaders;
 
         if (status.Length > 0)
         {
@@ -1399,8 +1489,15 @@ internal sealed class Http2OriginConnection : IDisposable
                 pending.Response = response;
                 // Signal that no more interim responses will arrive; unblocks SendAsync's interim drain loop.
                 pending.InterimChannel?.Writer.TryComplete();
-                // Unblock OpenTunnelAsync / passthrough lite waiting on the final response headers.
-                pending.HeadersReceived.TrySetResult(true);
+
+                // Probe-shaped tiny GET (known CL ≤ 8 KiB): buffer DATA into InlineBody and delay
+                // HeadersReceived until END_STREAM so SendAsync skips Pipe + second alloc.
+                // Unknown / large CL: signal headers immediately (streaming BodyPipe path).
+                var delayForInline = pending.TryPrepareInlineBody(response) && !endStream
+                                     && response.ContentLength > 0
+                                     && statusCode is not (204 or 304);
+                if (!delayForInline)
+                    pending.HeadersReceived.TrySetResult(true);
             }
         }
         else
@@ -1444,7 +1541,7 @@ internal sealed class Http2OriginConnection : IDisposable
 
     private void CompleteStream(int streamId)
     {
-        if (!streams.TryGetValue(streamId, out var pending)) return;
+        if (!TryGetStream(streamId, out var pending)) return;
 
         if (pending.IsTunnel)
         {
@@ -1455,7 +1552,10 @@ internal sealed class Http2OriginConnection : IDisposable
 
         // Use TryRemove so subsequent DATA frames for this stream-id are ignored in the read loop.
         if (!TryUnregisterStream(streamId, out pending) || pending == null) return;
-        pending.BodyPipe.CompleteWriter();
+        if (pending.InlineBody != null)
+            pending.HeadersReceived.TrySetResult(true);
+        else
+            pending.MarkInboundComplete();
         TryDisposeIfRetiredAndIdle();
     }
 
@@ -1468,7 +1568,7 @@ internal sealed class Http2OriginConnection : IDisposable
 
     private static void FailPending(PendingStream pending, Exception ex)
     {
-        pending.BodyPipe.CompleteWriter(ex);
+        pending.BodyPipeOrNull?.CompleteWriter(ex);
         pending.InterimChannel?.Writer.TryComplete(ex);
         pending.TunnelDataChannel?.Writer.TryComplete(ex);
         pending.HeadersReceived.TrySetException(ex);
@@ -1505,8 +1605,8 @@ internal sealed class Http2OriginConnection : IDisposable
                     "The HTTP/1.1-to-HTTP/2 origin bridge connection failed.", wrapped);
         }
 
-        foreach (var kvp in streams)
-            FailPending(kvp.Value, ex);
+        foreach (var pendingFail in EnumerateLiveStreams())
+            FailPending(pendingFail, ex);
 
         initialSettingsReceived.TrySetException(ex);
     }
@@ -1554,6 +1654,17 @@ internal sealed class Http2OriginConnection : IDisposable
         // Explicit None: zero-timeout poll must not observe cancellation (would throw before WaitAsync).
         if (writeLock.Wait(0, CancellationToken.None)) // NOSONAR S6966 -- intentional sync try-take before WaitAsync
             return default;
+
+        // Brief spin before WaitAsync: under SoftGrow=SoftPick a single TLS origin conn sees
+        // heavy writeLock convoy at c=64; WaitAsync alone allocates Task nodes per miss.
+        // spin64 (past yield) long A/B: H1 ~0.88× regress vs brief spin ~0.95× — keep brief.
+        var spinner = new SpinWait();
+        while (!spinner.NextSpinWillYield)
+        {
+            spinner.SpinOnce();
+            if (writeLock.Wait(0, CancellationToken.None)) // NOSONAR S6966 -- same sync try-take
+                return default;
+        }
 
         return new ValueTask(writeLock.WaitAsync(cancellationToken));
     }
@@ -1628,7 +1739,29 @@ internal sealed class Http2OriginConnection : IDisposable
 
     private sealed class PendingStream : IDisposable
     {
-        internal readonly BoundedBodyPipe BodyPipe;
+        /// <summary>
+        ///     Known Content-Length bodies ≤ 8 KiB are filled here on the ReadLoop (no <see cref="BoundedBodyPipe" />).
+        /// </summary>
+        internal const int InlineBodyThresholdBytes = 8 * 1024;
+
+        private BoundedBodyPipe? bodyPipe;
+        private readonly long maxBodyBytes;
+        private byte[]? inlineBody;
+        private int inlineWritten;
+        private int inboundComplete;
+
+        internal BoundedBodyPipe? BodyPipeOrNull => bodyPipe;
+
+        /// <summary>
+        ///     True after the ReadLoop observed END_STREAM (or equivalent) for this stream, even when no
+        ///     <see cref="BoundedBodyPipe" /> had been attached yet. SendAsync must not allocate a pipe
+        ///     whose writer will never complete.
+        /// </summary>
+        internal bool IsInboundComplete => Volatile.Read(ref inboundComplete) != 0;
+
+        /// <summary>Pre-sized body for known tiny Content-Length; null when using <see cref="EnsureBodyPipe"/>.</summary>
+        internal byte[]? InlineBody => inlineBody;
+
         internal readonly bool IsTunnel;
 
         /// <summary>
@@ -1641,16 +1774,16 @@ internal sealed class Http2OriginConnection : IDisposable
         internal readonly Channel<(int StatusCode, HeaderCollection Headers)>? InterimChannel;
 
         /// <summary>
-        ///     Completed when the final (non-1xx) response HEADERS arrive. Used by
-        ///     <see cref="OpenTunnelAsync" /> and by <see cref="SendAsync" /> when <c>on1xx</c> is null
-        ///     (no InterimChannel drain).
+        ///     Completed when the final (non-1xx) response HEADERS arrive — or, for known tiny Content-Length
+        ///     bodies, when the body has been fully buffered into <see cref="InlineBody" /> (END_STREAM).
+        ///     Used by <see cref="OpenTunnelAsync" /> and by <see cref="SendAsync" /> when <c>on1xx</c> is null.
         /// </summary>
         internal readonly TaskCompletionSource<bool> HeadersReceived =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         /// <summary>
         ///     Inbound DATA payloads for an RFC 8441 tunnel. Null for ordinary request/response streams,
-        ///     which use <see cref="BodyPipe" /> instead (and enforce <c>MaxBufferedBodyBytes</c>).
+        ///     which use <see cref="EnsureBodyPipe" /> or <see cref="InlineBody" /> instead.
         /// </summary>
         internal readonly Channel<byte[]>? TunnelDataChannel;
 
@@ -1662,7 +1795,7 @@ internal sealed class Http2OriginConnection : IDisposable
         {
         }
 
-        /// <param name="maxBodyBytes">Max buffered body bytes for <see cref="BodyPipe" />.</param>
+        /// <param name="maxBodyBytes">Max buffered body bytes for <see cref="EnsureBodyPipe" />.</param>
         /// <param name="createInterimChannel">
         ///     When <see langword="true"/>, allocate the 1xx relay channel. Tests and interception paths
         ///     that expect 1xx use this; <see cref="SendAsync" /> passes <see langword="false"/> when
@@ -1671,7 +1804,8 @@ internal sealed class Http2OriginConnection : IDisposable
         internal PendingStream(long maxBodyBytes, bool createInterimChannel)
         {
             IsTunnel = false;
-            BodyPipe = new BoundedBodyPipe(maxBodyBytes);
+            this.maxBodyBytes = maxBodyBytes;
+            // BodyPipe is lazy: probe tiny-GET uses InlineBody; streaming / unknown CL creates on demand.
             if (createInterimChannel)
             {
                 InterimChannel = Channel.CreateUnbounded<(int, HeaderCollection)>(
@@ -1682,9 +1816,8 @@ internal sealed class Http2OriginConnection : IDisposable
         private PendingStream(bool isTunnel)
         {
             IsTunnel = isTunnel;
-            // Tunnel streams never buffer a finite HTTP body; BodyPipe is unused but kept non-null
-            // so FailPending can CompleteWriter unconditionally.
-            BodyPipe = new BoundedBodyPipe(0);
+            maxBodyBytes = 0;
+            // Tunnel streams never buffer a finite HTTP body; BodyPipe unused.
             TunnelDataChannel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(256)
             {
                 SingleReader = true,
@@ -1695,9 +1828,82 @@ internal sealed class Http2OriginConnection : IDisposable
 
         internal static PendingStream CreateTunnel() => new(true);
 
+        /// <summary>
+        ///     When Content-Length is known and ≤ <see cref="InlineBodyThresholdBytes"/>, allocate a
+        ///     single body buffer for the ReadLoop. Returns true when inline mode is active.
+        /// </summary>
+        internal bool TryPrepareInlineBody(Response response)
+        {
+            if (IsTunnel || response.ContentLength is < 0 or > InlineBodyThresholdBytes)
+                return false;
+
+            var expected = (int)response.ContentLength;
+            inlineBody = expected == 0 ? Array.Empty<byte>() : new byte[expected];
+            inlineWritten = 0;
+            return true;
+        }
+
+        internal void TryWriteInline(ReadOnlySpan<byte> data)
+        {
+            if (inlineBody == null || data.IsEmpty) return;
+            var space = inlineBody.Length - inlineWritten;
+            if (space <= 0) return;
+            var toCopy = Math.Min(space, data.Length);
+            data.Slice(0, toCopy).CopyTo(inlineBody.AsSpan(inlineWritten));
+            inlineWritten += toCopy;
+            // Full buffer: unblock SendAsync even if END_STREAM is slightly delayed.
+            if (inlineWritten >= inlineBody.Length)
+                HeadersReceived.TrySetResult(true);
+        }
+
+        internal byte[] TakeInlineBody()
+        {
+            var body = inlineBody ?? Array.Empty<byte>();
+            if (inlineWritten > 0 && inlineWritten < body.Length)
+                Array.Resize(ref body, inlineWritten);
+            else if (inlineWritten == 0 && body.Length > 0)
+                body = Array.Empty<byte>();
+            inlineBody = null;
+            return body;
+        }
+
+        /// <summary>
+        ///     Single-assignment body pipe shared by ReadLoop (DATA) and SendAsync (drain). CAS so a
+        ///     concurrent attach never orphans the pipe the peer already wrote into.
+        /// </summary>
+        internal BoundedBodyPipe EnsureBodyPipe()
+        {
+            var existing = bodyPipe;
+            if (existing != null) return existing;
+
+            var created = new BoundedBodyPipe(maxBodyBytes);
+            var prior = Interlocked.CompareExchange(ref bodyPipe, created, null);
+            if (prior != null)
+            {
+                created.Dispose();
+                return prior;
+            }
+
+            // END_STREAM raced ahead of pipe publish — complete immediately so CopyToAsync cannot hang.
+            if (Volatile.Read(ref inboundComplete) != 0)
+                created.CompleteWriter();
+
+            return created;
+        }
+
+        /// <summary>
+        ///     Records inbound END_STREAM and completes any attached body-pipe writer. Safe when no pipe
+        ///     exists yet; SendAsync observes <see cref="IsInboundComplete" /> and skips a dead pipe.
+        /// </summary>
+        internal void MarkInboundComplete()
+        {
+            Volatile.Write(ref inboundComplete, 1);
+            bodyPipe?.CompleteWriter();
+        }
+
         public void Dispose()
         {
-            BodyPipe.Dispose();
+            bodyPipe?.Dispose();
             // Release any reader blocking on WaitToReadAsync if Dispose is called without a prior Complete.
             InterimChannel?.Writer.TryComplete();
             TunnelDataChannel?.Writer.TryComplete();
@@ -1707,16 +1913,58 @@ internal sealed class Http2OriginConnection : IDisposable
 
     private sealed class HeaderCollectorListener : IHeaderListener
     {
-        private readonly Action<ByteString, ByteString> addHeader;
+        internal ByteString Status;
+        internal Response? BuildingResponse;
+        internal HeaderCollection? InterimHeaders;
 
-        internal HeaderCollectorListener(Action<ByteString, ByteString> addHeader)
+        internal void Begin()
         {
-            this.addHeader = addHeader;
+            Status = default;
+            BuildingResponse = null;
+            InterimHeaders = null;
         }
 
         public void AddHeader(ByteString name, ByteString value, bool sensitive)
         {
-            addHeader(name, value);
+            if (name.Length > 0 && name.Span[0] == (byte)':')
+            {
+                if (name.Equals(StaticTable.KnownHeaderStatus)) Status = value;
+                return;
+            }
+
+            if (Status.Length == 0)
+            {
+                InterimHeaders ??= new HeaderCollection();
+                InterimHeaders.AddHeader(new HttpHeader(name, value));
+                return;
+            }
+
+            if (InterimHeaders != null)
+            {
+                InterimHeaders.AddHeader(new HttpHeader(name, value));
+                return;
+            }
+
+            if (BuildingResponse == null)
+            {
+                var statusCodeEarly = TryParseAsciiStatusCode(Status.Span, out var early) ? early : 0;
+                if (statusCodeEarly is >= 100 and <= 199)
+                {
+                    InterimHeaders = new HeaderCollection();
+                    InterimHeaders.AddHeader(new HttpHeader(name, value));
+                    return;
+                }
+
+                BuildingResponse = new Response
+                {
+                    StatusCode = statusCodeEarly != 0 ? statusCodeEarly : 502,
+                    StatusDescription = string.Empty,
+                    HttpVersion = HttpHeader.Version11,
+                    HeaderNamesAreHttp2Normalized = true
+                };
+            }
+
+            BuildingResponse.Headers.AddHeader(new HttpHeader(name, value));
         }
     }
 }

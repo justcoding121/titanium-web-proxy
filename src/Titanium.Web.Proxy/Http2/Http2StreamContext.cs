@@ -11,8 +11,9 @@ namespace Titanium.Web.Proxy.Http2;
 ///     delegate can reach the connection-wide HPACK/flow-control/synchronization state
 ///     (<see cref="ConnectionState" />) and the real client-facing transport (<see cref="ClientStream" />) it
 ///     needs to answer a stream on its own schedule, independently of the frame-relay loop that invoked it.
+///     Readonly struct so same-protocol MITM (handlers ignore this) does not allocate per stream.
 /// </summary>
-internal sealed class Http2StreamContext
+internal readonly struct Http2StreamContext
 {
     internal Http2StreamContext(int streamId, Http2ConnectionState connectionState, Stream clientStream,
         CancellationToken cancellationToken)

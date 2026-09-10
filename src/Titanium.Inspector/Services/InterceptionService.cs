@@ -3,13 +3,16 @@ using System.Net;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Titanium.Inspector.ViewModels;
 using Titanium.Web.Proxy;
+using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Inspector.Services;
 
@@ -32,6 +35,10 @@ public sealed class InterceptionService : IDisposable
     private readonly ManualResetEventSlim _shutdownCompleted = new(false);
     private string? _rootPfxPath;
     private InspectorSettings? _loggingSettings;
+    private Channel<ProcessResolveWork>? _processResolveChannel;
+    private CancellationTokenSource? _processResolveCts;
+
+    private readonly record struct ProcessResolveWork(SessionSnapshot Snap, Lazy<int> ProcessId);
 
     public InterceptionService(ISystemProxyController? systemProxy = null)
     {
@@ -58,6 +65,14 @@ public sealed class InterceptionService : IDisposable
     /// <summary>When non-empty, only these hosts are decrypted (built-in bypasses still never decrypt).</summary>
     public List<string> DecryptOnlyHosts { get; set; } = [];
 
+    /// <summary>User WinINET bypass patterns when System proxy is on.</summary>
+    public List<string> SystemProxyBypassHosts { get; set; } = [];
+
+    /// <summary>Proxy localhost through the system proxy when enabled.</summary>
+    public bool ProxyLoopback { get; set; } = true;
+
+    public InspectorSettings? SystemProxySettings { get; set; }
+
     /// <summary>True when the OS can host QUIC (MsQuic / <c>QuicListener.IsSupported</c>).</summary>
     public static bool IsHttp3Supported => System.Net.Quic.QuicListener.IsSupported;
 
@@ -76,6 +91,19 @@ public sealed class InterceptionService : IDisposable
     public X509Certificate2? RootCertificate => _proxy?.CertificateManager.RootCertificate;
     public bool IsRootTrusted { get; private set; }
 
+    /// <summary>Last OS trust outcome from Install root CA (Keychain / NSS / package hints).</summary>
+    public CertificateOsTrustResult? LastOsTrustResult { get; private set; }
+
+    /// <summary>Last system-proxy enable/disable failure message (null after success).</summary>
+    public string? LastSystemProxyError { get; private set; }
+
+    /// <summary>Root certificate display name used as NSS nickname.</summary>
+    public string RootCertificateName =>
+        _proxy?.CertificateManager.RootCertificateName ?? "Titanium Inspector Root Certificate";
+
+    /// <summary>True when a Firefox profiles.ini is present on this machine.</summary>
+    public static bool IsFirefoxProfilePresent => FirefoxCertificateTrust.IsFirefoxProfilePresent();
+
     /// <summary>True when the running proxy currently allows HTTP/2.</summary>
     public bool Http2Enabled { get; private set; } = true;
 
@@ -83,12 +111,30 @@ public sealed class InterceptionService : IDisposable
     public bool Http3Enabled { get; private set; }
     public string? UpstreamProxyAddress { get; set; }
     public string? PacUrl { get; set; }
+
     public bool IgnoreServerCertificateErrors { get; set; }
+
+    private bool _addViaHeader = true;
+
+    /// <summary>
+    /// When true, inject <see cref="ProxyServer.DefaultViaHeaderPseudonym"/> on intercepted traffic.
+    /// Applied on start and when toggled while the proxy is running.
+    /// </summary>
+    public bool AddViaHeader
+    {
+        get => _addViaHeader;
+        set
+        {
+            _addViaHeader = value;
+            ApplyViaHeaderOption();
+        }
+    }
 
     /// <summary>When true, call <see cref="InstallRootCertificate"/> after start (explicit trust).</summary>
     public bool AutoTrustRootOnStart { get; set; }
 
     public AutoResponderViewModel? AutoResponder { get; set; }
+    public MapRemoteViewModel? MapRemote { get; set; }
     public BreakpointViewModel? Breakpoints { get; set; }
 
     /// <summary>When true, breakpoints also fire on BeforeResponse.</summary>
@@ -99,6 +145,12 @@ public sealed class InterceptionService : IDisposable
 
     /// <summary>Optional light response script (set-header / set-status / abort).</summary>
     public string? ScriptOnResponse { get; set; }
+
+    /// <summary>Active network throttle profile (null / None = off).</summary>
+    public NetworkThrottleProfile? ThrottleProfile { get; set; }
+
+    /// <summary>Optional FileDescriptorSet path for protobuf decode hints.</summary>
+    public string? ProtobufDescriptorSetPath { get; set; }
 
     public event EventHandler<SessionSnapshot>? SessionCaptured;
     public event EventHandler<SessionSnapshot>? SessionUpdated;
@@ -119,6 +171,7 @@ public sealed class InterceptionService : IDisposable
         ApplyLoggingOptions(_loggingSettings);
         _proxy.EnableHttpInterception = true;
         _proxy.EnableRequestTimingCapture = true;
+        ApplyViaHeaderOption();
         // Inspector eagerly buffers bodies for the session grid; 4 MiB trips too often on
         // normal browsing (images, JS bundles) and RST'd the H2 stream. 32 MiB still bounds
         // memory while covering typical inspected payloads.
@@ -127,6 +180,8 @@ public sealed class InterceptionService : IDisposable
         _proxy.BeforeRequest += OnBeforeRequest;
         _proxy.BeforeResponse += OnBeforeResponse;
         _proxy.AfterResponse += OnAfterResponse;
+        _proxy.OnRequestBodyWrite += OnRequestBodyWriteThrottle;
+        _proxy.OnResponseBodyWrite += OnResponseBodyWriteThrottle;
         _proxy.ServerCertificateValidationCallback += OnServerCertValidation;
 
         if (!string.IsNullOrWhiteSpace(UpstreamProxyAddress) &&
@@ -149,8 +204,12 @@ public sealed class InterceptionService : IDisposable
         _proxy.AddEndPoint(_endPoint);
         _proxy.Start();
         BoundPort = _endPoint.Port;
+        StartProcessResolveWorker();
 
-        IsRootTrusted = UseInMemoryTrustState ? _inMemoryTrusted : IsRootPresentInStore(machineStore: false);
+        // Do not treat Unix store/Keychain presence as SSL trust (see RefreshTrustState).
+        IsRootTrusted = UseInMemoryTrustState
+            ? _inMemoryTrusted
+            : RefreshTrustState(machineStore: false);
 
         TryPruneLegacySharedCrtsOnce();
 
@@ -197,6 +256,18 @@ public sealed class InterceptionService : IDisposable
         _proxy.ApplyLoggingConfiguration();
     }
 
+    private void ApplyViaHeaderOption()
+    {
+        if (_proxy is null)
+        {
+            return;
+        }
+
+        _proxy.ViaHeaderPseudonym = AddViaHeader
+            ? ProxyServer.DefaultViaHeaderPseudonym
+            : string.Empty;
+    }
+
     /// <summary>
     /// Idempotent shutdown: restore system proxy (even if already stopped) and dispose the proxy.
     /// Matches WPF example <c>EnsureProxyShutdown</c> semantics.
@@ -208,7 +279,7 @@ public sealed class InterceptionService : IDisposable
     {
         if (Interlocked.Exchange(ref _shutdownStarted, 1) != 0)
         {
-            _shutdownCompleted.Wait(TimeSpan.FromSeconds(3));
+            _shutdownCompleted.Wait(TimeSpan.FromSeconds(3), CancellationToken.None);
             return;
         }
 
@@ -316,6 +387,8 @@ public sealed class InterceptionService : IDisposable
         _proxy.BeforeRequest -= OnBeforeRequest;
         _proxy.BeforeResponse -= OnBeforeResponse;
         _proxy.AfterResponse -= OnAfterResponse;
+        _proxy.OnRequestBodyWrite -= OnRequestBodyWriteThrottle;
+        _proxy.OnResponseBodyWrite -= OnResponseBodyWriteThrottle;
         _proxy.ServerCertificateValidationCallback -= OnServerCertValidation;
         if (_endPoint is not null)
         {
@@ -329,6 +402,7 @@ public sealed class InterceptionService : IDisposable
         _endPoint = null;
         BoundPort = 0;
         _live.Clear();
+        StopProcessResolveWorker();
         IsRootTrusted = false;
         _systemProxyEnabled = false;
         Http3Enabled = false;
@@ -337,10 +411,12 @@ public sealed class InterceptionService : IDisposable
     /// <summary>
     /// Enable or disable system proxy. Returns false if the proxy is not running or the underlying call failed.
     /// </summary>
-    public bool SetSystemProxy(bool enable)
+    public bool SetSystemProxy(bool enable, InspectorSettings? settings = null)
     {
+        LastSystemProxyError = null;
         if (_proxy is null || _endPoint is null || !_proxy.ProxyRunning)
         {
+            LastSystemProxyError = "Proxy is not running";
             return false;
         }
 
@@ -348,25 +424,62 @@ public sealed class InterceptionService : IDisposable
         {
             if (enable)
             {
-                _systemProxy.SetAsSystemProxy(_proxy, _endPoint);
+                var effective = settings ?? SystemProxySettings ?? new InspectorSettings();
+                SystemProxySettings = effective;
+                var result = _systemProxy.SetAsSystemProxy(_proxy, _endPoint, effective);
+                if (!result.Succeeded)
+                {
+                    LastSystemProxyError = result.Message;
+                    _proxy.Logger.LogWarning("System proxy enable failed: {Message}", result.Message);
+                    return false;
+                }
+
                 _systemProxyEnabled = true;
             }
             else
             {
-                _systemProxy.RestoreOriginalProxySettings(_proxy);
+                var result = _systemProxy.RestoreOriginalProxySettings(_proxy);
+                if (!result.Succeeded)
+                {
+                    LastSystemProxyError = result.Message;
+                    _proxy.Logger.LogWarning("System proxy disable failed: {Message}", result.Message);
+                    return false;
+                }
+
                 _systemProxyEnabled = false;
             }
 
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            LastSystemProxyError = ex.Message;
+            try
+            {
+                _proxy.Logger.LogWarning(ex, "System proxy {Action} failed", enable ? "enable" : "disable");
+            }
+            catch
+            {
+                // logging must not hide the original failure
+            }
+
             return false;
         }
     }
 
+    /// <summary>Re-applies system proxy bypass rules when already enabled (after settings change).</summary>
+    public bool ReapplySystemProxyIfEnabled()
+    {
+        if (!_systemProxyEnabled || SystemProxySettings is null)
+        {
+            return true;
+        }
+
+        return SetSystemProxy(true, SystemProxySettings);
+    }
+
     /// <summary>Install root CA and refresh <see cref="IsRootTrusted"/> from the store.</summary>
-    /// <returns>True when the cert is present in the target Root store after install.</returns>
+    /// <returns>True when the cert is present in the target Root store after install (or Unix SSL trust succeeded / needs Keychain confirm).</returns>
     public bool InstallRootCertificate(bool machineStore)
     {
         if (_proxy is null)
@@ -377,6 +490,8 @@ public sealed class InterceptionService : IDisposable
         if (FailNextUserTrustInstall)
         {
             FailNextUserTrustInstall = false;
+            LastOsTrustResult = CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed, "Forced user-trust failure (test)");
             return false;
         }
 
@@ -384,21 +499,65 @@ public sealed class InterceptionService : IDisposable
         {
             _inMemoryTrusted = true;
             IsRootTrusted = true;
+            LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted (in-memory)");
             return true;
         }
 
-        // Already trusted: skip TrustRootCertificate so Windows does not show another
-        // Trusted Root security dialog (or orphan-removal prompt) on repeated Install CA.
+        // Already in the .NET Root store: on Windows that is SSL trust. On macOS/Linux the
+        // cert can sit in Keychain/NSS without "Always Trust" / SSL trust — do not treat
+        // presence alone as trusted (Chrome then gets NET::ERR_CERT_AUTHORITY_INVALID).
         if (IsRootPresentInStore(machineStore))
         {
-            IsRootTrusted = true;
-            return true;
+            if (OperatingSystem.IsWindows())
+            {
+                IsRootTrusted = true;
+                LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA already trusted");
+                return CompleteRootTrustInstall(true);
+            }
+
+            if (_proxy.CertificateManager.VerifyOsUserSslTrust())
+            {
+                IsRootTrusted = true;
+                LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA already trusted for SSL");
+                return CompleteRootTrustInstall(true);
+            }
+
+            // .NET/Keychain has the cert but SSL trust is incomplete — push OS trust again.
+            _proxy.CertificateManager.TrustRootCertificate(machineStore);
+            LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
+            IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
+                            _proxy.CertificateManager.VerifyOsUserSslTrust();
+            // MacNeedsManualTrustConfirm: cert was added; UI should guide Always Trust then re-verify.
+            // Return true so the recovery loop runs, but keep IsRootTrusted false until verified.
+            return CompleteRootTrustInstall(
+                IsRootTrusted ||
+                LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
         }
 
         _proxy.CertificateManager.TrustRootCertificate(machineStore);
-        IsRootTrusted = IsRootPresentInStore(machineStore);
-        return IsRootTrusted;
+        LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
+
+        if (OperatingSystem.IsWindows())
+        {
+            IsRootTrusted = IsRootPresentInStore(machineStore);
+            return CompleteRootTrustInstall(IsRootTrusted);
+        }
+
+        IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
+                        _proxy.CertificateManager.VerifyOsUserSslTrust();
+        // MacNeedsManualTrustConfirm: cert was added; UI should guide Always Trust then re-verify.
+        return CompleteRootTrustInstall(
+            IsRootTrusted ||
+            LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
     }
+
+    private bool CompleteRootTrustInstall(bool installed)
+    {
+        if (IsRootTrusted)
+            TryEnableFirefoxEnterpriseRootsBestEffort();
+        return installed;
+    }
+
     /// <summary>
     /// Installs the root CA with an OS admin prompt when required (UAC / macOS auth / polkit).
     /// </summary>
@@ -413,15 +572,135 @@ public sealed class InterceptionService : IDisposable
         {
             _inMemoryTrusted = true;
             IsRootTrusted = true;
+            LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted (in-memory)");
             return true;
         }
 
         var ok = _proxy.CertificateManager.TrustRootCertificateAsAdmin(machineStore);
-        // On non-Windows, OS trust may succeed even when X509Store presence checks are incomplete.
-        IsRootTrusted = ok && (IsRootPresentInStore(machineStore) || !OperatingSystem.IsWindows());
-        if (ok && !IsRootTrusted)
+        LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
+        if (OperatingSystem.IsWindows())
+        {
+            IsRootTrusted = ok && IsRootPresentInStore(machineStore);
+            return CompleteRootTrustInstall(IsRootTrusted);
+        }
+
+        IsRootTrusted = ok && (EvaluateUnixTrustSuccess(LastOsTrustResult) ||
+                               _proxy.CertificateManager.VerifyOsUserSslTrust());
+        return CompleteRootTrustInstall(
+            IsRootTrusted ||
+            LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
+    }
+
+    /// <summary>Installs certutil (package/brew) then retries user SSL trust.</summary>
+    public CertificateOsTrustResult InstallNssToolsAndRetryTrust()
+    {
+        if (_proxy is null)
+        {
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed, "Start the proxy first");
+        }
+
+        var result = _proxy.CertificateManager.InstallNssCertutilAndRetryUserTrust();
+        LastOsTrustResult = result;
+        if (EvaluateUnixTrustSuccess(result))
+        {
             IsRootTrusted = true;
-        return IsRootTrusted;
+        }
+        else if (result.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+        {
+            // Cert may be present; SSL trust still requires Always Trust confirmation.
+            IsRootTrusted = _proxy.CertificateManager.VerifyOsUserSslTrust();
+        }
+
+        return result;
+    }
+
+    /// <summary>Opens Keychain Access for Always Trust guidance.</summary>
+    public string? OpenMacKeychainGuidance() => _proxy?.CertificateManager.OpenMacKeychainGuidance();
+
+    /// <summary>Best-effort: root is present in the macOS login keychain (not necessarily SSL-trusted).</summary>
+    public bool IsRootInLoginKeychain() =>
+        _proxy?.CertificateManager.IsRootInLoginKeychain() == true;
+
+    /// <summary>Re-verifies macOS/Linux user SSL trust and updates <see cref="IsRootTrusted"/>.</summary>
+    public bool VerifyOsUserSslTrust()
+    {
+        if (_proxy is null) return false;
+        if (UseInMemoryTrustState) return IsRootTrusted;
+        // Windows: Root store presence is trust. Unix: require real SSL trust verification —
+        // Keychain/NSS can hold the CA without trusting it for SSL (Chrome MITM fails).
+        var ok = OperatingSystem.IsWindows()
+            ? IsRootPresentInStore(false)
+            : _proxy.CertificateManager.VerifyOsUserSslTrust();
+        IsRootTrusted = ok;
+        if (ok)
+            TryEnableFirefoxEnterpriseRootsBestEffort();
+        return ok;
+    }
+
+    /// <summary>
+    ///     Trust CA for Firefox: enable OS-root import (Windows policy / macOS Keychain via
+    ///     <c>user.js</c>) first; otherwise import into the default Firefox profile via certutil.
+    /// </summary>
+    public CertificateOsTrustResult TrustFirefox()
+    {
+        if (_proxy is null)
+        {
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed, "Start the proxy first");
+        }
+
+        var cert = _proxy.CertificateManager.RootCertificate;
+        if (cert is null)
+        {
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed, "Root certificate is not loaded");
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            var policy = FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots();
+            if (policy.Succeeded)
+                return policy;
+            // Fall through to profile NSS import.
+        }
+        else
+        {
+            var pref = FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref();
+            if (pref.Succeeded)
+                return pref;
+        }
+
+        return FirefoxCertificateTrust.TrustDefaultProfile(cert, RootCertificateName);
+    }
+
+    /// <summary>
+    ///     Best-effort: if a Firefox profile exists, enable OS-root trust so Install root CA
+    ///     is enough after a Firefox restart (no extra menu, no certutil).
+    /// </summary>
+    public static void TryEnableFirefoxEnterpriseRootsBestEffort()
+    {
+        try
+        {
+            if (!FirefoxCertificateTrust.IsFirefoxProfilePresent())
+                return;
+            FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref();
+        }
+        catch
+        {
+            // install path must not fail because Firefox prefs were locked
+        }
+    }
+
+    private static bool EvaluateUnixTrustSuccess(CertificateOsTrustResult? result) =>
+        result is { Succeeded: true };
+
+    /// <summary>Marks the last trust attempt as user-cancelled (recovery dialog dismissed).</summary>
+    public void SetLastOsTrustCancelled()
+    {
+        LastOsTrustResult = CertificateOsTrustResult.Fail(
+            CertificateOsTrustKind.Cancelled,
+            "Root CA install cancelled");
     }
 
     public void UntrustRootCertificate(bool machineStore)
@@ -439,7 +718,15 @@ public sealed class InterceptionService : IDisposable
         }
 
         _proxy.CertificateManager.RemoveTrustedRootCertificate(machineStore);
-        IsRootTrusted = IsRootPresentInStore(machineStore);
+        // Windows: Root store presence is trust. macOS: Chrome still trusts System.keychain
+        // copies after the .NET user store is cleared. Linux: Chrome reads NSS (~/.pki/nssdb),
+        // not the .NET store — leftover nicknames must keep IsRootTrusted true.
+        if (OperatingSystem.IsWindows())
+            IsRootTrusted = IsRootPresentInStore(machineStore);
+        else if (OperatingSystem.IsMacOS())
+            IsRootTrusted = _proxy.CertificateManager.IsOsRootStillPresent();
+        else
+            IsRootTrusted = _proxy.CertificateManager.VerifyOsUserSslTrust();
     }
 
     /// <summary>
@@ -550,7 +837,27 @@ public sealed class InterceptionService : IDisposable
 
     public bool RefreshTrustState(bool machineStore = false)
     {
-        IsRootTrusted = UseInMemoryTrustState ? _inMemoryTrusted : IsRootPresentInStore(machineStore);
+        if (UseInMemoryTrustState)
+        {
+            IsRootTrusted = _inMemoryTrusted;
+            return IsRootTrusted;
+        }
+
+        // Windows Root store presence == trust. On macOS/Linux, presence is not enough —
+        // VerifyOsUserSslTrust checks Keychain/NSS SSL trust (security verify-cert / certutil).
+        if (OperatingSystem.IsWindows())
+        {
+            IsRootTrusted = IsRootPresentInStore(machineStore);
+            return IsRootTrusted;
+        }
+
+        if (_proxy is null)
+        {
+            IsRootTrusted = false;
+            return false;
+        }
+
+        IsRootTrusted = _proxy.CertificateManager.VerifyOsUserSslTrust();
         return IsRootTrusted;
     }
 
@@ -593,8 +900,36 @@ public sealed class InterceptionService : IDisposable
         var path = destinationPath ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
             "TitaniumInspector-RootCA.cer");
-        File.WriteAllBytes(path, cert.Export(X509ContentType.Cert));
+        var der = cert.Export(X509ContentType.Cert);
+        if (IsPemExportPath(path))
+        {
+            File.WriteAllText(path, EncodeCertificatePem(der), Encoding.ASCII);
+        }
+        else
+        {
+            File.WriteAllBytes(path, der);
+        }
+
         return path;
+    }
+
+    internal static bool IsPemExportPath(string path) =>
+        Path.GetExtension(path).Equals(".pem", StringComparison.OrdinalIgnoreCase);
+
+    internal static string EncodeCertificatePem(byte[] der)
+    {
+        var b64 = Convert.ToBase64String(der);
+        var sb = new StringBuilder(b64.Length + 64);
+        sb.Append("-----BEGIN CERTIFICATE-----\n");
+        for (var i = 0; i < b64.Length; i += 64)
+        {
+            var len = Math.Min(64, b64.Length - i);
+            sb.Append(b64, i, len);
+            sb.Append('\n');
+        }
+
+        sb.Append("-----END CERTIFICATE-----\n");
+        return sb.ToString();
     }
 
     private void EnsureRootPfxPath()
@@ -615,10 +950,14 @@ public sealed class InterceptionService : IDisposable
     {
         var host = e.HttpClient.Request.RequestUri?.Host
                    ?? TryHost(e.HttpClient.Request);
-        e.DecryptSsl = DecryptHttps && !MitmBypass.ShouldDisableSslDecrypt(
+        var disableDecrypt = MitmBypass.ShouldDisableSslDecrypt(
             host,
             DecryptSkipHosts,
-            DecryptOnlyHosts);
+            userOnlyHosts: null);
+        e.DecryptSsl = DecryptHttps && !disableDecrypt;
+        var opaqueReason = disableDecrypt || !DecryptHttps
+            ? MitmBypass.ResolveOpaqueReason(host, DecryptHttps, DecryptSkipHosts, userOnlyHosts: null)
+            : OpaqueTunnelReason.None;
 
         if (!Capturing)
         {
@@ -629,10 +968,11 @@ public sealed class InterceptionService : IDisposable
         {
             // Opaque HTTPS (DecryptHttps=false) never hits BeforeRequest — publish CONNECT here
             // so the session list matches Fiddler when decryption is off.
-            var snap = CreateTunnelSnapshot(e);
+            var snap = CreateTunnelSnapshot(e, opaqueReason);
             AttachTunnelByteCounters(e, snap);
             _live[e.HttpClient] = snap;
             SessionCaptured?.Invoke(this, snap);
+            ScheduleProcessResolve(snap, e.HttpClient.ProcessId);
         }
         catch
         {
@@ -670,23 +1010,9 @@ public sealed class InterceptionService : IDisposable
         return Task.CompletedTask;
     }
 
-    private SessionSnapshot CreateTunnelSnapshot(TunnelConnectSessionEventArgs e)
+    private SessionSnapshot CreateTunnelSnapshot(TunnelConnectSessionEventArgs e, OpaqueTunnelReason opaqueReason)
     {
         var req = e.HttpClient.Request;
-        var processId = 0;
-        string? processName = null;
-        try
-        {
-            processId = e.HttpClient.ProcessId.Value;
-            if (processId > 0)
-            {
-                processName = System.Diagnostics.Process.GetProcessById(processId).ProcessName;
-            }
-        }
-        catch
-        {
-            // process may have exited
-        }
 
         return new SessionSnapshot
         {
@@ -697,20 +1023,25 @@ public sealed class InterceptionService : IDisposable
             StartedUtc = DateTimeOffset.UtcNow,
             RequestHeadersText = FormatHeaders(req.Headers),
             Protocol = SessionDisplayFormat.FormatHttpProtocol(req.HttpVersion),
-            ProcessId = processId,
-            ProcessName = processName,
             IsTunnel = true,
+            OpaqueReason = opaqueReason,
         };
     }
 
-    private async Task OnBeforeRequest(object sender, SessionEventArgs e)
+    private async Task OnBeforeRequest(object sender, SessionEventArgs e) // NOSONAR S3776 -- Capture pipeline (scripts, AutoResponder, breakpoints) shares session state; splitting would hide ordering.
     {
         try
         {
-            if (e.HttpClient.Request.HasBody && ShouldBufferBody(e.HttpClient.Request, e))
+            // Buffer body when tools need GraphQL operationName matching.
+            var needsBodyForTools =
+                (AutoResponder is { Enabled: true } && AutoResponder.Rules.Any(r => r.Enabled && !string.IsNullOrWhiteSpace(r.GraphQlOperationName))) ||
+                (MapRemote is { Enabled: true } && MapRemote.Rules.Any(r => r.Enabled && !string.IsNullOrWhiteSpace(r.GraphQlOperationName))) ||
+                (Breakpoints is { Enabled: true } && !string.IsNullOrWhiteSpace(Breakpoints.GraphQlOperationName));
+
+            if (e.HttpClient.Request.HasBody && (ShouldBufferBody(e.HttpClient.Request, e) || needsBodyForTools))
             {
                 e.HttpClient.Request.KeepBody = true;
-                await e.GetRequestBody();
+                await e.GetRequestBody(CancellationToken.None);
             }
 
             if (SessionScriptHost.ApplyOnRequest(ScriptOnRequest, e))
@@ -718,22 +1049,44 @@ public sealed class InterceptionService : IDisposable
                 return;
             }
 
-            // AutoResponder before breakpoints / origin.
+            string? requestBody = null;
+            if (needsBodyForTools && e.HttpClient.Request.IsBodyRead)
+            {
+                requestBody = await e.GetRequestBodyAsString(CancellationToken.None);
+            }
+
+            var requestUrl = e.HttpClient.Request.Url ?? "";
+
+            // AutoResponder / Map Local before breakpoints / origin.
+            var autoResponded = false;
             if (AutoResponder is not null &&
-                AutoResponder.TryMatch(e.HttpClient.Request.Url ?? "", out var rule) &&
-                rule is not null)
+                AutoResponder.TryMatch(requestUrl, requestBody, out var rule) &&
+                rule is not null &&
+                AutoResponderViewModel.TryResolveBody(rule, out var bodyBytes, out _))
             {
                 var headers = new List<HttpHeader>
                 {
                     new("Content-Type", rule.ContentType),
                 };
-                e.GenericResponse(rule.Body, (HttpStatusCode)rule.StatusCode, headers);
+                e.GenericResponse(bodyBytes, (HttpStatusCode)rule.StatusCode, headers);
+                autoResponded = true;
+            }
+
+            // Map Remote: rewrite URL before origin (only when not already answered).
+            if (!autoResponded &&
+                MapRemote is not null &&
+                MapRemote.TryRewrite(requestUrl, requestBody, out var rewritten, out _) &&
+                !string.IsNullOrEmpty(rewritten))
+            {
+                e.HttpClient.Request.Url = rewritten;
             }
 
             if (Breakpoints is { Enabled: true } &&
+                (string.IsNullOrWhiteSpace(Breakpoints.GraphQlOperationName) ||
+                 GraphQlOperationMatcher.MatchesOperation(requestBody, Breakpoints.GraphQlOperationName)) &&
                 Breakpoints.TryEnter(CreatePreviewSnapshot(e, assignId: false), out var hit))
             {
-                var action = await hit.WaitAsync();
+                var action = await hit.WaitAsync(CancellationToken.None);
                 if (action == BreakpointAction.Abort)
                 {
                     e.GenericResponse("Aborted by Titanium Inspector breakpoint", HttpStatusCode.Forbidden);
@@ -754,6 +1107,7 @@ public sealed class InterceptionService : IDisposable
             var snap = CreatePreviewSnapshot(e, assignId: true);
             _live[e.HttpClient] = snap;
             SessionCaptured?.Invoke(this, snap);
+            ScheduleProcessResolve(snap, e.HttpClient.ProcessId);
         }
         catch (Exception)
         {
@@ -768,7 +1122,7 @@ public sealed class InterceptionService : IDisposable
             if (e.HttpClient.Response.HasBody && ShouldBufferBody(e.HttpClient.Response, e))
             {
                 e.HttpClient.Response.KeepBody = true;
-                await e.GetResponseBody();
+                await e.GetResponseBody(CancellationToken.None);
             }
 
             SessionScriptHost.ApplyOnResponse(ScriptOnResponse, e);
@@ -777,7 +1131,7 @@ public sealed class InterceptionService : IDisposable
                 Breakpoints is { Enabled: true } &&
                 Breakpoints.TryEnter(CreatePreviewSnapshot(e, assignId: false), out var hit))
             {
-                var action = await hit.WaitAsync();
+                var action = await hit.WaitAsync(CancellationToken.None);
                 if (action == BreakpointAction.Abort)
                 {
                     e.GenericResponse("Aborted by Titanium Inspector response breakpoint", HttpStatusCode.Forbidden);
@@ -800,6 +1154,7 @@ public sealed class InterceptionService : IDisposable
                 snap = CreatePreviewSnapshot(e, assignId: true);
                 _live[e.HttpClient] = snap;
                 SessionCaptured?.Invoke(this, snap);
+                ScheduleProcessResolve(snap, e.HttpClient.ProcessId);
             }
 
             FillResponse(snap, e);
@@ -837,40 +1192,84 @@ public sealed class InterceptionService : IDisposable
         var req = e.HttpClient.Request;
         var bodyBytes = req.IsBodyRead ? TruncateBytes(req.Body) : null;
         var bodyText = bodyBytes is null ? null : TruncateText(Encoding.UTF8.GetString(bodyBytes));
-        var processId = 0;
-        string? processName = null;
-        try
-        {
-            processId = e.HttpClient.ProcessId.Value;
-            if (processId > 0)
-            {
-                processName = System.Diagnostics.Process.GetProcessById(processId).ProcessName;
-            }
-        }
-        catch
-        {
-            // process may have exited
-        }
+        GrpcJsonTranscodeSessionMark.TryGet(e.UserData, out var mark);
 
-        return new SessionSnapshot
+        var snap = new SessionSnapshot
         {
             Id = assignId ? NextSessionId() : 0,
-            Method = req.Method ?? "GET",
-            Url = req.Url ?? "",
+            Method = mark?.ClientMethod ?? req.Method ?? "GET",
+            Url = BuildDisplayUrl(req, mark),
             Host = TryHost(req),
             StartedUtc = DateTimeOffset.UtcNow,
             RequestHeadersText = FormatHeaders(req.Headers),
             RequestBodyBytes = bodyBytes,
             RequestBodyText = bodyText,
-            ContentType = req.ContentType,
+            ContentType = mark?.ClientContentType ?? req.ContentType,
             Protocol = SessionDisplayFormat.FormatHttpProtocol(req.HttpVersion),
-            ProcessId = processId,
-            ProcessName = processName,
             IsTunnel = req.Method?.Equals("CONNECT", StringComparison.OrdinalIgnoreCase) == true,
             IsWebSocket = req.UpgradeToWebSocket,
-            IsGrpc = req.ContentType?.Contains("grpc", StringComparison.OrdinalIgnoreCase) == true,
+            IsGrpc = req.ContentType?.Contains("grpc", StringComparison.OrdinalIgnoreCase) == true ||
+                     mark is not null,
+            IsTranscoded = mark is not null,
             IsMultipart = req.ContentType?.Contains("multipart/", StringComparison.OrdinalIgnoreCase) == true,
+            IsServerSentEvents =
+                (req.Headers.GetFirstHeader("Accept")?.Value?.Contains("text/event-stream", StringComparison.OrdinalIgnoreCase) == true),
         };
+
+        ApplyTranscodeMark(snap, mark);
+        if (mark?.ClientRequestBody is { Length: > 0 } clientBody)
+        {
+            snap.RequestBodyBytes = TruncateBytes(clientBody);
+            snap.RequestBodyText = TruncateText(Encoding.UTF8.GetString(clientBody));
+        }
+
+        if (mark?.UpstreamRequestBody is { Length: > 0 } upstreamReq)
+        {
+            snap.UpstreamRequestBodyBytes = TruncateBytes(upstreamReq);
+            snap.GrpcFrames = ProtocolFrameInspectors.ParseGrpcFrames(snap.UpstreamRequestBodyBytes);
+            snap.ProtobufDecodedText = ProtobufMessageDecoder.DecodeWireFormat(snap.UpstreamRequestBodyBytes);
+        }
+
+        if (assignId && snap.IsWebSocket)
+        {
+            AttachLiveWebSocketFrames(e, snap);
+        }
+
+        return snap;
+    }
+
+    private static void ApplyTranscodeMark(SessionSnapshot snap, GrpcJsonTranscodeSessionMark? mark)
+    {
+        if (mark is null) return;
+        snap.IsTranscoded = true;
+        snap.ClientMethod = mark.ClientMethod;
+        snap.ClientPathAndQuery = mark.ClientPathAndQuery;
+        snap.ClientContentType = mark.ClientContentType;
+        snap.UpstreamMethod = mark.UpstreamMethod;
+        snap.UpstreamPath = mark.UpstreamPath;
+        snap.UpstreamContentType = mark.UpstreamContentType;
+    }
+
+    private static string BuildDisplayUrl(Request req, GrpcJsonTranscodeSessionMark? mark)
+    {
+        if (mark is null)
+            return req.Url ?? "";
+
+        // Prefer absolute URL with client path when available.
+        var url = req.Url ?? "";
+        if (Uri.TryCreate(url, UriKind.Absolute, out var abs))
+        {
+            var builder = new UriBuilder(abs)
+            {
+                Path = mark.ClientPathAndQuery.Split('?', 2)[0],
+                Query = mark.ClientPathAndQuery.Contains('?', StringComparison.Ordinal)
+                    ? mark.ClientPathAndQuery.Split('?', 2)[1]
+                    : string.Empty
+            };
+            return builder.Uri.ToString();
+        }
+
+        return mark.ClientPathAndQuery;
     }
 
     private long NextSessionId() => Interlocked.Increment(ref _nextId);
@@ -878,7 +1277,117 @@ public sealed class InterceptionService : IDisposable
     /// <summary>Reset the session ID sequence (tests / clear-sessions).</summary>
     public void ResetSessionIdSequence() => Interlocked.Exchange(ref _nextId, 0);
 
-    private static void FillResponse(SessionSnapshot snap, SessionEventArgs e)
+    private void StartProcessResolveWorker()
+    {
+        StopProcessResolveWorker();
+        if (!ClientProcessId.IsSupported)
+        {
+            return;
+        }
+
+        var channel = Channel.CreateUnbounded<ProcessResolveWork>(new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = false,
+            AllowSynchronousContinuations = false,
+        });
+        var cts = new CancellationTokenSource();
+        _processResolveChannel = channel;
+        _processResolveCts = cts;
+        _ = Task.Run(() => ProcessResolveLoopAsync(channel.Reader, cts.Token), cts.Token);
+    }
+
+    private void StopProcessResolveWorker()
+    {
+        var cts = _processResolveCts;
+        var channel = _processResolveChannel;
+        _processResolveCts = null;
+        _processResolveChannel = null;
+
+        try
+        {
+            channel?.Writer.TryComplete();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        try
+        {
+            cts?.Cancel();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        cts?.Dispose();
+    }
+
+    private void ScheduleProcessResolve(SessionSnapshot snap, Lazy<int> processId)
+    {
+        var channel = _processResolveChannel;
+        if (channel is null)
+        {
+            return;
+        }
+
+        channel.Writer.TryWrite(new ProcessResolveWork(snap, processId));
+    }
+
+    private async Task ProcessResolveLoopAsync(
+        ChannelReader<ProcessResolveWork> reader,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await foreach (var work in reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+                try
+                {
+                    ApplyResolvedProcess(work);
+                }
+                catch
+                {
+                    // never break the resolve loop for a single session
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // expected on stop
+        }
+    }
+
+    private void ApplyResolvedProcess(ProcessResolveWork work)
+    {
+        var processId = work.ProcessId.Value;
+        if (processId <= 0)
+            return;
+
+        string? processName = null;
+        try
+        {
+            processName = System.Diagnostics.Process.GetProcessById(processId).ProcessName;
+        }
+        catch
+        {
+            // process may have exited; keep pid when known
+        }
+
+        if (work.Snap.ProcessId == processId &&
+            string.Equals(work.Snap.ProcessName, processName, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        work.Snap.ProcessId = processId;
+        work.Snap.ProcessName = processName;
+        SessionUpdated?.Invoke(this, work.Snap);
+    }
+
+    private static void FillResponse(SessionSnapshot snap, SessionEventArgs e) // NOSONAR S3776 -- Snapshot fill walks protocol-specific body/header branches in one place.
     {
         var resp = e.HttpClient.Response;
         snap.StatusCode = resp.StatusCode;
@@ -893,19 +1402,94 @@ public sealed class InterceptionService : IDisposable
 
         ApplyTiming(snap, e.Timing, snap.StartedUtc);
 
-        if (snap.IsWebSocket)
+        if (GrpcJsonTranscodeSessionMark.TryGet(e.UserData, out var mark) && mark is not null)
         {
-            snap.WebSocketFrames = ProtocolFrameInspectors.ParseWebSocketFrames(bodyBytes ?? snap.RequestBodyBytes);
+            ApplyTranscodeMark(snap, mark);
+            if (mark.UpstreamResponseBody is { Length: > 0 } upstreamResp)
+            {
+                snap.UpstreamResponseBodyBytes = TruncateBytes(upstreamResp);
+                snap.GrpcFrames = ProtocolFrameInspectors.ParseGrpcFrames(snap.UpstreamResponseBodyBytes);
+            }
         }
 
-        if (snap.IsGrpc && bodyBytes is { Length: > 0 })
+        if (snap.IsWebSocket)
+        {
+            // Prefer live frames when present; otherwise best-effort parse.
+            snap.WebSocketFrames ??= ProtocolFrameInspectors.ParseWebSocketFrames(bodyBytes ?? snap.RequestBodyBytes);
+        }
+
+        var contentType = resp.ContentType ?? snap.ContentType ?? "";
+        if (contentType.Contains("text/event-stream", StringComparison.OrdinalIgnoreCase) ||
+            snap.IsServerSentEvents)
+        {
+            snap.IsServerSentEvents = true;
+            snap.SseEvents = SseEventParser.Parse(snap.ResponseBodyText);
+        }
+
+        if (snap.IsGrpc && !snap.IsTranscoded && bodyBytes is { Length: > 0 })
         {
             snap.GrpcFrames = ProtocolFrameInspectors.ParseGrpcFrames(bodyBytes);
+            snap.ProtobufDecodedText = ProtobufMessageDecoder.DecodeWireFormat(bodyBytes);
+        }
+
+        if (snap.IsTranscoded && snap.UpstreamResponseBodyBytes is { Length: > 0 })
+        {
+            snap.ProtobufDecodedText = ProtobufMessageDecoder.DecodeWireFormat(snap.UpstreamResponseBodyBytes);
         }
 
         if (snap.IsMultipart && bodyBytes is { Length: > 0 })
         {
             snap.MultipartParts = ProtocolFrameInspectors.ParseMultipart(snap.ContentType, bodyBytes);
+        }
+    }
+
+    private void AttachLiveWebSocketFrames(SessionEventArgs e, SessionSnapshot snap)
+    {
+        var frames = new List<WebSocketFrameSnapshot>();
+        snap.WebSocketFrames = frames;
+        e.BeforeWebSocketFrame += (_, args) =>
+        {
+            var direction = args.Direction == WebSocketFrameDirection.ClientToServer ? "Client" : "Server";
+            var opcode = args.OpCode.ToString();
+            frames.Add(ProtocolFrameInspectors.FromLiveFrame(direction, opcode, args.Data));
+            var profile = ThrottleProfile;
+            if (profile is { IsEnabled: true })
+            {
+                args.Delay = NetworkThrottle.DelayFor(profile, args.Data.Length, applyLatency: true);
+            }
+
+            SessionUpdated?.Invoke(this, snap);
+            return Task.CompletedTask;
+        };
+    }
+
+    private async Task OnRequestBodyWriteThrottle(object sender, BeforeBodyWriteEventArgs e)
+    {
+        var profile = ThrottleProfile;
+        if (profile is not { IsEnabled: true })
+        {
+            return;
+        }
+
+        var delay = NetworkThrottle.DelayFor(profile, e.BodyBytes?.Length ?? 0, applyLatency: !e.IsChunked || e.BodyBytes?.Length > 0);
+        if (delay > TimeSpan.Zero)
+        {
+            await Task.Delay(delay, _processResolveCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+        }
+    }
+
+    private async Task OnResponseBodyWriteThrottle(object sender, BeforeBodyWriteEventArgs e)
+    {
+        var profile = ThrottleProfile;
+        if (profile is not { IsEnabled: true })
+        {
+            return;
+        }
+
+        var delay = NetworkThrottle.DelayFor(profile, e.BodyBytes?.Length ?? 0, applyLatency: true);
+        if (delay > TimeSpan.Zero)
+        {
+            await Task.Delay(delay, _processResolveCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
         }
     }
 

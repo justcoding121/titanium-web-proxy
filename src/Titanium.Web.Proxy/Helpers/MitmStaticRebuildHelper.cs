@@ -124,6 +124,18 @@ internal static class MitmStaticRebuildHelper
         blockToRelay = capturedBlock;
         appendLiterals = default;
 
+        // Unchanged Lite: MutationCount match → skip O(headers) append/drop diff.
+        if (baseline.MutationCount == after.MutationCount)
+            return true;
+
+        // Pure-append COW log (Full MITM probe / single AddHeader): skip snapshot diff.
+        if (baseline.TryGetPrecomputedAppends(out appendLiterals))
+            return true;
+
+        // MutationCount-only capture: no snapshot for append/drop — caller re-encodes.
+        if (baseline.IsMutationCountOnly)
+            return false;
+
         if (baseline.TryDiffAppendOnly(after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders,
                 out appendLiterals))
             return true;
@@ -144,6 +156,18 @@ internal static class MitmStaticRebuildHelper
     {
         blockToRelay = capturedBlock;
         appendLiterals = default;
+
+        // Unchanged Lite: MutationCount match → skip O(headers) append/drop diff.
+        if (baseline.MutationCount == after.MutationCount)
+            return true;
+
+        // Pure-append COW log (Full MITM probe / single AddHeader): skip snapshot diff.
+        if (baseline.TryGetPrecomputedAppends(out appendLiterals))
+            return true;
+
+        // MutationCount-only capture: no snapshot for append/drop — caller re-encodes.
+        if (baseline.IsMutationCountOnly)
+            return false;
 
         if (baseline.TryDiffAppendOnly(after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders,
                 out appendLiterals))

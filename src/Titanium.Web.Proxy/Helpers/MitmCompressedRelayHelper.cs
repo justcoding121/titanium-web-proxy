@@ -55,14 +55,18 @@ internal static class MitmCompressedRelayHelper
 
     internal readonly struct AddedHeader
     {
-        internal AddedHeader(string name, string value)
+        internal AddedHeader(HttpHeader header)
         {
-            Name = name;
-            Value = value;
+            Header = header;
         }
 
-        internal string Name { get; }
-        internal string Value { get; }
+        /// <summary>Wire header already holding NameData/ValueData — avoid string↔bytes on HPACK append.</summary>
+        internal HttpHeader Header { get; }
+
+        internal string Name => Header.Name;
+        internal string Value => Header.Value;
+        internal ByteString NameData => Header.NameData;
+        internal ByteString ValueData => Header.ValueData;
     }
 
     /// <summary>Stack-friendly buffer for up to four appended header literals.</summary>
@@ -71,16 +75,18 @@ internal static class MitmCompressedRelayHelper
         private AddedHeader _h0, _h1, _h2, _h3;
         internal int Count { get; private set; }
 
-        internal void Add(string name, string value)
+        internal void Add(HttpHeader header)
         {
             switch (Count++)
             {
-                case 0: _h0 = new AddedHeader(name, value); break;
-                case 1: _h1 = new AddedHeader(name, value); break;
-                case 2: _h2 = new AddedHeader(name, value); break;
-                default: _h3 = new AddedHeader(name, value); break;
+                case 0: _h0 = new AddedHeader(header); break;
+                case 1: _h1 = new AddedHeader(header); break;
+                case 2: _h2 = new AddedHeader(header); break;
+                default: _h3 = new AddedHeader(header); break;
             }
         }
+
+        internal void Add(string name, string value) => Add(new HttpHeader(name, value));
 
         internal readonly AddedHeader this[int index] => index switch
         {
@@ -107,17 +113,20 @@ internal static class MitmCompressedRelayHelper
     internal readonly struct HeaderRelayBaseline
     {
         private readonly int _mutationCount;
-        private readonly Dictionary<string, string> _unique;
-        private readonly Dictionary<string, List<string>> _nonUniqueSnapshot;
+        private readonly Dictionary<string, string>? _unique;
+        private readonly Dictionary<string, List<string>>? _nonUniqueSnapshot;
         private readonly int _nonUniqueNamesAtCapture;
+        private readonly AddedHeaderBuffer _precomputedAppends;
 
-        internal HeaderRelayBaseline(int mutationCount, Dictionary<string, string> unique,
-            Dictionary<string, List<string>> nonUniqueSnapshot, int nonUniqueNamesAtCapture)
+        internal HeaderRelayBaseline(int mutationCount, Dictionary<string, string>? unique,
+            Dictionary<string, List<string>>? nonUniqueSnapshot, int nonUniqueNamesAtCapture,
+            AddedHeaderBuffer precomputedAppends = default)
         {
             _mutationCount = mutationCount;
             _unique = unique;
             _nonUniqueSnapshot = nonUniqueSnapshot;
             _nonUniqueNamesAtCapture = nonUniqueNamesAtCapture;
+            _precomputedAppends = precomputedAppends;
         }
 
         internal static HeaderRelayBaseline Capture(HeaderCollection headers)
@@ -139,11 +148,52 @@ internal static class MitmCompressedRelayHelper
                 headers.NonUniqueHeaders.Count);
         }
 
+        /// <summary>
+        ///     MITM unchanged-lite hot path: store <see cref="MutationCount"/> only.
+        ///     Avoids cloning unique/non-unique dictionaries when the finish path is
+        ///     <see cref="AllowsCompressedRelay(int, HeaderCollection, int, out AddedHeaderBuffer)"/>.
+        ///     Append/drop diff (<see cref="TryDiffAppendOnly"/>) returns false — callers fall back
+        ///     to full HPACK/QPACK re-encode when handlers mutate.
+        /// </summary>
+        internal static HeaderRelayBaseline CaptureMutationCount(HeaderCollection headers) =>
+            new(headers.MutationCount, null, null, MutationCountOnlySentinel);
+
+        /// <summary>MutationCount-only baseline from a previously armed COW count (no live collection).</summary>
+        internal static HeaderRelayBaseline CaptureMutationCountFromCount(int mutationCount) =>
+            new(mutationCount, null, null, MutationCountOnlySentinel);
+
+        /// <summary>
+        ///     Pure-append COW log: handlers only added new unique headers (no wire snapshot).
+        /// </summary>
+        internal static HeaderRelayBaseline FromAppendLog(int mutationCount, AddedHeaderBuffer appends) =>
+            new(mutationCount, null, null, AppendLogSentinel, appends);
+
+        private const int MutationCountOnlySentinel = -1;
+        private const int AppendLogSentinel = -2;
+
         internal int MutationCount => _mutationCount;
+
+        internal bool IsMutationCountOnly => _nonUniqueNamesAtCapture == MutationCountOnlySentinel;
+
+        internal bool TryGetPrecomputedAppends(out AddedHeaderBuffer added)
+        {
+            if (_nonUniqueNamesAtCapture == AppendLogSentinel && _precomputedAppends.Count > 0)
+            {
+                added = _precomputedAppends;
+                return true;
+            }
+
+            added = default;
+            return false;
+        }
 
         internal bool TryDiffAppendOnly(HeaderCollection after, int maxAdds, out AddedHeaderBuffer added)
         {
             added = default;
+
+            // MutationCount-only baselines cannot append-diff (no pre-handler header snapshot).
+            if (_unique is null || IsMutationCountOnly)
+                return false;
 
             if (_nonUniqueNamesAtCapture > 0 || after.NonUniqueHeaders.Count > 0)
                 return TryDiffNonUniqueTrailingAppend(after, maxAdds, out added);
@@ -198,7 +248,8 @@ internal static class MitmCompressedRelayHelper
         private bool TryMatchUniqueHeadersAllowingGrowth(
             HeaderCollection after, int maxAdds, ref AddedHeaderBuffer added)
         {
-            foreach (var kv in _unique)
+            var unique = _unique!; // NOSONAR S8969 -- Capture snapshot is initialized before match; operator documents that contract.
+            foreach (var kv in unique)
             {
                 if (after.NonUniqueHeaders.TryGetValue(kv.Key, out var grownList))
                 {
@@ -239,9 +290,10 @@ internal static class MitmCompressedRelayHelper
         private bool TryAppendNewUniqueHeaders(
             HeaderCollection after, int maxAdds, ref AddedHeaderBuffer added)
         {
+            var unique = _unique!; // NOSONAR S8969 -- Capture snapshot is initialized before match; operator documents that contract.
             foreach (var kv in after.Headers)
             {
-                if (_unique.ContainsKey(kv.Key))
+                if (unique.ContainsKey(kv.Key))
                     continue;
 
                 if (added.Count >= maxAdds)
@@ -256,7 +308,8 @@ internal static class MitmCompressedRelayHelper
         private bool TryMatchNonUniqueTrailing(
             HeaderCollection after, int maxAdds, ref AddedHeaderBuffer added)
         {
-            foreach (var kv in _nonUniqueSnapshot)
+            var nonUniqueSnapshot = _nonUniqueSnapshot!;
+            foreach (var kv in nonUniqueSnapshot)
             {
                 if (!after.NonUniqueHeaders.TryGetValue(kv.Key, out var afterList))
                     return false;
@@ -296,9 +349,11 @@ internal static class MitmCompressedRelayHelper
 
         private bool NonUniqueNamesAreKnown(HeaderCollection after)
         {
+            var unique = _unique!; // NOSONAR S8969 -- Capture snapshot is initialized before match; operator documents that contract.
+            var nonUniqueSnapshot = _nonUniqueSnapshot!;
             foreach (var name in after.NonUniqueHeaders.Keys) // NOSONAR S3267 -- Explicit loop avoids LINQ enumerator allocation on hot path.
             {
-                if (!_nonUniqueSnapshot.ContainsKey(name) && !_unique.ContainsKey(name))
+                if (!nonUniqueSnapshot.ContainsKey(name) && !unique.ContainsKey(name))
                     return false;
             }
 
@@ -310,6 +365,9 @@ internal static class MitmCompressedRelayHelper
         {
             dropped = default;
 
+            if (_unique is null || IsMutationCountOnly)
+                return false;
+
             if (_mutationCount == after.MutationCount)
                 return false;
 
@@ -319,9 +377,10 @@ internal static class MitmCompressedRelayHelper
             if (!TryCollectDrops(after, maxDrops, out dropped, out var dropCount) || dropCount == 0)
                 return false;
 
+            var unique = _unique!; // NOSONAR S8969 -- Capture snapshot is initialized before match; operator documents that contract.
             foreach (var kv in after.Headers) // NOSONAR S3267 -- Explicit loop avoids LINQ enumerator allocation on hot path.
             {
-                if (!_unique.ContainsKey(kv.Key))
+                if (!unique.ContainsKey(kv.Key))
                     return false;
             }
 
@@ -333,7 +392,8 @@ internal static class MitmCompressedRelayHelper
         {
             dropped = default;
             dropCount = 0;
-            foreach (var kv in _unique)
+            var unique = _unique!; // NOSONAR S8969 -- Capture snapshot is initialized before match; operator documents that contract.
+            foreach (var kv in unique)
             {
                 if (after.Headers.TryGetValue(kv.Key, out var header))
                 {
@@ -356,8 +416,20 @@ internal static class MitmCompressedRelayHelper
         HeaderRelayBaseline baseline,
         HeaderCollection after,
         int maxAdds,
-        out AddedHeaderBuffer added) =>
-        baseline.TryDiffAppendOnly(after, maxAdds, out added);
+        out AddedHeaderBuffer added)
+    {
+        // COW Lite Take produces MutationCount-only baselines — TryDiffAppendOnly always
+        // returns false without a header snapshot. Match the int overload (H2 unchanged-lite).
+        if (baseline.IsMutationCountOnly)
+            return AllowsCompressedRelay(baseline.MutationCount, after, maxAdds, out added);
+
+        // COW Full append-log: adds are already applied on `after`; finish paths that speak H1
+        // (H3→H1 ForwardOverTcpFastAsync) or static append (H2/H3 QPACK) can proceed.
+        if (baseline.TryGetPrecomputedAppends(out added))
+            return added.Count <= maxAdds;
+
+        return baseline.TryDiffAppendOnly(after, maxAdds, out added);
+    }
 
     /// <summary>
     ///     MutationCount-only gate for unchanged headers. When counts diverge, caller must use

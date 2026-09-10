@@ -227,7 +227,15 @@ Titanium.Web.Proxy.Configuration.Models.PoolingConfig.TcpTimeWaitSeconds.get -> 
 Titanium.Web.Proxy.Configuration.Models.PoolingConfig.TcpTimeWaitSeconds.set -> void
 Titanium.Web.Proxy.Configuration.Models.PoolingConfig.ThreadPoolWorkerThread.get -> int?
 Titanium.Web.Proxy.Configuration.Models.PoolingConfig.ThreadPoolWorkerThread.set -> void
+Titanium.Web.Proxy.Configuration.Models.AccessLogConfig
+Titanium.Web.Proxy.Configuration.Models.AccessLogConfig.AccessLogConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.AccessLogConfig.Path.get -> string?
+Titanium.Web.Proxy.Configuration.Models.AccessLogConfig.Path.set -> void
+Titanium.Web.Proxy.Configuration.Models.AccessLogConfig.SampleRate.get -> double?
+Titanium.Web.Proxy.Configuration.Models.AccessLogConfig.SampleRate.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.AccessLog.get -> Titanium.Web.Proxy.Configuration.Models.AccessLogConfig?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.AccessLog.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.BlockPrivateNetworkDestinations.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.BlockPrivateNetworkDestinations.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.CertificateManager.get -> Titanium.Web.Proxy.Configuration.Models.CertificateManagerConfig?
@@ -236,6 +244,10 @@ Titanium.Web.Proxy.Configuration.Models.ServerConfig.CheckCertificateRevocation.
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.CheckCertificateRevocation.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.CompatibilityMode100Continue.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.CompatibilityMode100Continue.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.DecryptOnlyHosts.get -> System.Collections.Generic.List<string!>?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.DecryptOnlyHosts.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.DecryptSkipHosts.get -> System.Collections.Generic.List<string!>?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.DecryptSkipHosts.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.DnsServerEndPoint.get -> string?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.DnsServerEndPoint.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Enable100ContinueBehaviour.get -> bool?
@@ -252,6 +264,8 @@ Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableRfc8441.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableRfc8441.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableWinAuth.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableWinAuth.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.IgnoreServerCertificateErrors.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.IgnoreServerCertificateErrors.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Limits.get -> Titanium.Web.Proxy.Configuration.Models.LimitsConfig?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Limits.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.OriginHttpVersionPolicy.get -> string?
@@ -262,7 +276,11 @@ Titanium.Web.Proxy.Configuration.Models.ServerConfig.Pooling.get -> Titanium.Web
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Pooling.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Profile.get -> string?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Profile.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ProxyLoopback.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ProxyLoopback.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.ServerConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.SystemProxyBypassHosts.get -> System.Collections.Generic.List<string!>?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.SystemProxyBypassHosts.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Timeouts.get -> Titanium.Web.Proxy.Configuration.Models.TimeoutsConfig?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Timeouts.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Tls.get -> Titanium.Web.Proxy.Configuration.Models.TlsConfig?

@@ -62,11 +62,12 @@ public static class JsonReverseProxyDocument
                     Order = r.Order ?? order,
                     Match = new RouteMatch
                     {
-                        Host = r.Match?.Hosts?.FirstOrDefault(),
+                        Host = r.Match?.Hosts?.FirstOrDefault() ?? r.Match?.Host,
                         Path = r.Match?.Path,
                         PathKind = ParsePathKind(r.Match?.PathKind),
-                        Method = r.Match?.Methods?.FirstOrDefault(),
+                        Method = r.Match?.Methods?.FirstOrDefault() ?? r.Match?.Method,
                     },
+                    Transforms = MapTransforms(r.Transforms),
                 });
                 order++;
             }
@@ -79,7 +80,7 @@ public static class JsonReverseProxyDocument
             {
                 listeners.Add(new ListenerConfig
                 {
-                    Host = l.Address ?? "0.0.0.0",
+                    Host = l.Address ?? l.Host ?? "0.0.0.0",
                     Port = l.Port ?? 8000,
                     DecryptSsl = l.DecryptSsl ?? false,
                     ForwardHost = l.ForwardHost,
@@ -117,6 +118,23 @@ public static class JsonReverseProxyDocument
             _ => PathMatchKind.Prefix,
         };
 
+    private static List<TransformConfig>? MapTransforms(List<TransformDto>? transforms)
+    {
+        if (transforms is null || transforms.Count == 0)
+        {
+            return null;
+        }
+
+        return transforms
+            .Where(t => !string.IsNullOrWhiteSpace(t.Kind))
+            .Select(t => new TransformConfig
+            {
+                Kind = t.Kind!,
+                Parameters = t.Parameters,
+            })
+            .ToList();
+    }
+
     // System.Text.Json populates these DTO setters via reflection; Sonar S1144 is a false positive.
 #pragma warning disable S1144, S3459
     private sealed class ReverseProxyDocument
@@ -129,6 +147,7 @@ public static class JsonReverseProxyDocument
     private sealed class ListenerDto
     {
         public string? Address { get; set; }
+        public string? Host { get; set; }
         public int? Port { get; set; }
         public bool? DecryptSsl { get; set; }
         public string? ForwardHost { get; set; }
@@ -143,14 +162,23 @@ public static class JsonReverseProxyDocument
         public string? ClusterId { get; set; }
         public int? Order { get; set; }
         public MatchDto? Match { get; set; }
+        public List<TransformDto>? Transforms { get; set; }
+    }
+
+    private sealed class TransformDto
+    {
+        public string? Kind { get; set; }
+        public Dictionary<string, string>? Parameters { get; set; }
     }
 
     private sealed class MatchDto
     {
         public List<string>? Hosts { get; set; }
+        public string? Host { get; set; }
         public string? Path { get; set; }
         public string? PathKind { get; set; }
         public List<string>? Methods { get; set; }
+        public string? Method { get; set; }
     }
 
     private sealed class ClusterDto

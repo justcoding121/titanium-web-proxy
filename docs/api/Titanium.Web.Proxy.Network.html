@@ -88,8 +88,17 @@ Classes
       <h4><a class="xref" href="Titanium.Web.Proxy.Network.CertificateManager.html">CertificateManager</a></h4>
       <section><p>A class to manage SSL certificates used by this proxy server.</p>
 </section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Network.CertificateOsTrustResult.html">CertificateOsTrustResult</a></h4>
+      <section><p>Structured result from Unix OS trust or related helper operations.</p>
+</section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.html">DefaultCertificateDiskCache</a></h4>
       <section></section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html">FirefoxCertificateTrust</a></h4>
+      <section><p>Firefox-specific CA trust: Windows ImportEnterpriseRoots policy / policies.json,
+profile <code>user.js</code> (and <code>prefs.js</code> when Firefox is not running) so Firefox
+uses OS roots, plus optional NSS import into the default profile (<code>cert9.db</code>).
+Does not write into the Firefox.app bundle (that would invalidate the code signature).</p>
+</section>
     <h3 id="interfaces">
 Interfaces
 </h3>
@@ -103,6 +112,9 @@ Enums
 </section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Network.CertificateKeyAlgorithm.html">CertificateKeyAlgorithm</a></h4>
       <section><p>Key algorithm used for the leaf (&quot;fake&quot;) certificates the proxy generates per intercepted host.</p>
+</section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Network.CertificateOsTrustKind.html">CertificateOsTrustKind</a></h4>
+      <section><p>Outcome kind for OS / browser SSL trust helpers (Keychain, NSS, package install).</p>
 </section>
 
 

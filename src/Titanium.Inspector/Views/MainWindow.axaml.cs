@@ -4,10 +4,13 @@ using System.Reflection;
 using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls;
+using Avalonia.Controls.Notifications;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Titanium.Inspector.Services;
@@ -30,10 +33,15 @@ public partial class MainWindow : Window
     private bool _sessionGridLayoutApplied;
     private ScrollBar? _sessionsVScroll;
     private MainWindowViewModel? _sessionsVm;
+    private MainWindowViewModel? _statusVm;
+    private WindowNotificationManager? _notificationManager;
+    private CancellationTokenSource? _attentionCts;
+    private EventHandler? _themeVariantChangedHandler;
 
     public MainWindow()
     {
         InitializeComponent();
+        MacOsNativeMenu.AttachIfMac(this, MainMenu);
         Closing += OnClosing;
         Opened += OnOpened;
         DataContextChanged += OnDataContextChanged;
@@ -45,11 +53,39 @@ public partial class MainWindow : Window
             OnSessionsGridPointerPressed,
             RoutingStrategies.Tunnel);
         HookSessionsCollection(DataContext as MainWindowViewModel);
+        HookStatusAttention(DataContext as MainWindowViewModel);
+        HookThemeVariantChanged();
+    }
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        base.OnApplyTemplate(e);
+        EnsureNotificationManager();
+    }
+
+    private void EnsureNotificationManager()
+    {
+        if (_notificationManager is not null)
+        {
+            return;
+        }
+
+        _notificationManager = new WindowNotificationManager(this)
+        {
+            Position = NotificationPosition.BottomRight,
+            MaxItems = 3,
+        };
+
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.AttachStatusNotifier(new AvaloniaStatusNotifier(() => _notificationManager));
+        }
     }
 
     private void OnSessionsGridLoaded(object? sender, RoutedEventArgs e)
     {
         AttachSessionsScroll();
+        ApplyProcessColumnVisibility();
         ApplySessionGridLayoutIfNeeded();
         ApplySessionColumnHeaderTips();
     }
@@ -118,6 +154,7 @@ public partial class MainWindow : Window
 
     private async void OnOpened(object? sender, EventArgs e)
     {
+        EnsureNotificationManager();
         AttachSessionsScroll();
         ApplySessionGridLayoutIfNeeded();
 
@@ -155,6 +192,11 @@ public partial class MainWindow : Window
     {
         CaptureAndPersistSessionGridLayout();
         HookSessionsCollection(null);
+        HookStatusAttention(null);
+        HookThemeVariantChanged(unhook: true);
+        _attentionCts?.Cancel();
+        _attentionCts?.Dispose();
+        _attentionCts = null;
         if (_sessionsVScroll is not null)
         {
             _sessionsVScroll.PropertyChanged -= OnSessionsScrollBarPropertyChanged;
@@ -171,7 +213,115 @@ public partial class MainWindow : Window
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
         HookSessionsCollection(DataContext as MainWindowViewModel);
+        HookStatusAttention(DataContext as MainWindowViewModel);
+        if (_notificationManager is not null && DataContext is MainWindowViewModel vm)
+        {
+            vm.AttachStatusNotifier(new AvaloniaStatusNotifier(() => _notificationManager));
+        }
+
+        ApplyProcessColumnVisibility();
         ApplySessionGridLayoutIfNeeded();
+        HookThemeVariantChanged();
+    }
+
+    private void HookThemeVariantChanged(bool unhook = false)
+    {
+        if (Application.Current is not { } app)
+        {
+            return;
+        }
+
+        if (_themeVariantChangedHandler is not null)
+        {
+            app.ActualThemeVariantChanged -= _themeVariantChangedHandler;
+            _themeVariantChangedHandler = null;
+        }
+
+        if (unhook)
+        {
+            return;
+        }
+
+        _themeVariantChangedHandler = OnActualThemeVariantChanged;
+        app.ActualThemeVariantChanged += _themeVariantChangedHandler;
+    }
+
+    private void OnActualThemeVariantChanged(object? sender, EventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.NotifyThemeVariantChanged();
+        }
+    }
+
+    private void HookStatusAttention(MainWindowViewModel? vm)
+    {
+        if (ReferenceEquals(_statusVm, vm))
+        {
+            return;
+        }
+
+        if (_statusVm is not null)
+        {
+            _statusVm.PropertyChanged -= OnStatusVmPropertyChanged;
+        }
+
+        _statusVm = vm;
+        if (_statusVm is not null)
+        {
+            _statusVm.PropertyChanged += OnStatusVmPropertyChanged;
+        }
+    }
+
+    private void OnStatusVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainWindowViewModel.StatusAttentionTick))
+        {
+            _ = PulseStatusAttentionAsync();
+        }
+    }
+
+    private async Task PulseStatusAttentionAsync()
+    {
+        if (_attentionCts is not null)
+        {
+            await _attentionCts.CancelAsync();
+            _attentionCts.Dispose();
+        }
+        _attentionCts = new CancellationTokenSource();
+        var token = _attentionCts.Token;
+
+        try
+        {
+            // Brief highlight behind the status text so results are harder to miss.
+            StatusTextHost.Background = ResolveStatusAttentionBackground();
+            StatusTextBlock.Opacity = 1;
+            await Task.Delay(180, token);
+            StatusTextBlock.Opacity = 0.55;
+            await Task.Delay(160, token);
+            StatusTextBlock.Opacity = 1;
+            await Task.Delay(900, token);
+            StatusTextHost.Background = Brushes.Transparent;
+        }
+        catch (OperationCanceledException)
+        {
+            // superseded by a newer status result
+        }
+    }
+
+    private static SolidColorBrush ResolveStatusAttentionBackground()
+    {
+        if (Application.Current?.TryGetResource(
+                "StatusFeedbackBusyBrush",
+                Application.Current.ActualThemeVariant,
+                out var resource) == true
+            && resource is SolidColorBrush busy)
+        {
+            var c = busy.Color;
+            return new SolidColorBrush(Color.FromArgb(56, c.R, c.G, c.B));
+        }
+
+        return new SolidColorBrush(Color.FromArgb(56, 0, 120, 212));
     }
 
     private void HookSessionsCollection(MainWindowViewModel? vm)
@@ -345,6 +495,20 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ApplyProcessColumnVisibility()
+    {
+        if (DataContext is not MainWindowViewModel vm || SessionsGrid.Columns.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var column in SessionsGrid.Columns.Where(c =>
+                     string.Equals(SessionGridLayout.GetColumnKey(c.Header), "Process", StringComparison.Ordinal)))
+        {
+            column.IsVisible = vm.ShowProcessColumn;
+        }
+    }
+
     private void ApplySessionGridLayoutIfNeeded()
     {
         if (_sessionGridLayoutApplied
@@ -355,6 +519,7 @@ public partial class MainWindow : Window
         }
 
         _sessionGridLayoutApplied = true;
+        ApplyProcessColumnVisibility();
         var layout = vm.GetSessionGridLayout();
         var byKey = SessionGridLayout.IndexByKey(layout?.Columns);
 
@@ -437,6 +602,11 @@ public partial class MainWindow : Window
         var layout = new SessionGridLayoutDto();
         foreach (var column in SessionsGrid.Columns)
         {
+            if (!column.IsVisible)
+            {
+                continue;
+            }
+
             var key = SessionGridLayout.GetColumnKey(column.Header);
             if (key is null)
             {

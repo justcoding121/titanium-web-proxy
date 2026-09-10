@@ -2,6 +2,7 @@ using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.Views;
+using Titanium.Web.Proxy;
 
 namespace Titanium.Inspector.Tests;
 
@@ -38,6 +39,9 @@ public class CaptureSettingsParityTests
             svc.Current.IgnoreServerCertificateErrors = true;
             svc.Current.DecryptSkipHosts = ["*.corp.example.com", "auth.example.com"];
             svc.Current.DecryptOnlyHosts = ["api.example.com"];
+            svc.Current.SystemProxyBypassHosts = ["sso.corp.example.com"];
+            svc.Current.ProxyLoopback = false;
+            svc.Current.WarnedAboutPacReplace = true;
             svc.Current.LoggingEnabled = true;
             svc.Current.LoggingEnableFile = true;
             svc.Current.LoggingMinimumLevel = "Warning";
@@ -54,6 +58,19 @@ public class CaptureSettingsParityTests
             Assert.IsTrue(loaded.IgnoreServerCertificateErrors);
             CollectionAssert.AreEqual(ExpectedSkipHosts, loaded.DecryptSkipHosts);
             CollectionAssert.AreEqual(ExpectedOnlyHosts, loaded.DecryptOnlyHosts);
+            // Load merges any missing factory OS-bypass hosts into the saved list.
+            Assert.IsTrue(
+                loaded.SystemProxyBypassHosts.Contains("sso.corp.example.com"),
+                "Custom OS-bypass host must round-trip");
+            foreach (var rule in MitmExclusionDefaults.SystemProxyBypassRules)
+            {
+                Assert.IsTrue(
+                    loaded.SystemProxyBypassHosts.Any(h =>
+                        string.Equals(h, rule, StringComparison.OrdinalIgnoreCase)),
+                    "Expected factory OS-bypass host after merge: " + rule);
+            }
+            Assert.IsFalse(loaded.ProxyLoopback);
+            Assert.IsTrue(loaded.WarnedAboutPacReplace);
             Assert.AreEqual("Warning", loaded.LoggingMinimumLevel);
             Assert.AreEqual(@"C:\tmp\inspector.log", loaded.LoggingFilePath);
         }
@@ -75,7 +92,7 @@ public class CaptureSettingsParityTests
     }
 
     [TestMethod]
-    public void MitmBypass_UserSkipAndOnlyLists()
+    public void MitmBypass_UserSkipAndOnlyLists_ReplaceMode()
     {
         Assert.IsFalse(MitmBypass.ShouldDisableSslDecrypt("api.example.com", null, null));
 
@@ -94,8 +111,8 @@ public class CaptureSettingsParityTests
             null,
             ["api.example.com"]));
 
-        // Built-in still wins even if on include list
-        Assert.IsTrue(MitmBypass.ShouldDisableSslDecrypt(
+        // Replace: factory identity hosts are not forced when omitted from skip list
+        Assert.IsFalse(MitmBypass.ShouldDisableSslDecrypt(
             "login.live.com",
             null,
             ["login.live.com"]));
@@ -176,6 +193,39 @@ public class CaptureSettingsParityTests
     }
 
     [TestMethod]
+    public void AddViaHeader_PersistsViaViewModel_DefaultOn()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-via-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var vm = new ViewModels.MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+
+            Assert.IsTrue(vm.AddViaHeader);
+            Assert.IsTrue(settings.Current.AddViaHeader);
+
+            vm.AddViaHeader = false;
+            Assert.IsFalse(settings.Current.AddViaHeader);
+
+            var loaded = new SettingsService(path);
+            Assert.IsFalse(loaded.Current.AddViaHeader);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
     public async Task ResetSettings_RestoresFactoryDefaults_WithoutClearingSessions()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-reset-settings-" + Guid.NewGuid().ToString("N") + ".json");
@@ -184,6 +234,7 @@ public class CaptureSettingsParityTests
             var settings = new SettingsService(path);
             settings.Current.BindPort = 9999;
             settings.Current.IgnoreServerCertificateErrors = true;
+            settings.Current.AddViaHeader = false;
             settings.Current.DecryptHttps = true;
             settings.Current.DecryptSkipHosts = ["*.corp.example.com"];
             settings.Current.MaxSessionsInMemory = 42;
@@ -217,8 +268,11 @@ public class CaptureSettingsParityTests
             Assert.AreEqual(1, dialogs.ResetSettingsCalls);
             Assert.AreEqual(8866, vm.BindPort);
             Assert.IsFalse(vm.IgnoreServerCertificateErrors);
+            Assert.IsTrue(vm.AddViaHeader);
             Assert.IsFalse(vm.DecryptHttps);
-            Assert.AreEqual(0, settings.Current.DecryptSkipHosts.Count);
+            CollectionAssert.AreEquivalent(
+                Titanium.Web.Proxy.MitmExclusionDefaults.TunnelOnlyPinningDomains,
+                settings.Current.DecryptSkipHosts);
             Assert.AreEqual(10_000, settings.Current.MaxSessionsInMemory);
             Assert.AreEqual(1, registry.VisibleSessions.Count);
             StringAssert.Contains(vm.StatusText, "Root CA and sessions were not changed");
@@ -348,14 +402,13 @@ public class CaptureSettingsParityTests
 [TestMethod]
     public void FormatRotateCaStatusHelpers_CoverChangedAndTrustedBranches()
     {
-        var install = typeof(ViewModels.MainWindowViewModel).GetMethod("FormatRotateCaInstallStatus",
+        var trusted = typeof(ViewModels.MainWindowViewModel).GetMethod("FormatRotateCaTrustedStatus",
             System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
         var deferred = typeof(ViewModels.MainWindowViewModel).GetMethod("FormatRotateCaDeferredTrustStatus",
             System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
 
-        Assert.IsTrue(((string)install.Invoke(null, [false, true])!).Contains("trust failed"));
-        Assert.IsTrue(((string)install.Invoke(null, [true, true])!).Contains("reinstalled"));
-        Assert.IsTrue(((string)install.Invoke(null, [true, false])!).Contains("recreate completed"));
+        Assert.IsTrue(((string)trusted.Invoke(null, [true])!).Contains("cleared and trusted"));
+        Assert.IsTrue(((string)trusted.Invoke(null, [false])!).Contains("Root CA trusted"));
         Assert.IsTrue(((string)deferred.Invoke(null, [true])!).Contains("Install root CA"));
         Assert.IsTrue(((string)deferred.Invoke(null, [false])!).Contains("recreate completed"));
     }

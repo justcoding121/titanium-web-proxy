@@ -1,9 +1,11 @@
 using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Win32;
+using Titanium.Web.Proxy.Abstractions.Updates;
 
 namespace Titanium.Inspector.Services;
 
@@ -11,6 +13,15 @@ public enum UpdateApplyKind
 {
     Msi,
     Zip,
+}
+
+/// <summary>How an offered channel install should be described to the user.</summary>
+public enum UpdateOfferKind
+{
+    None,
+    Upgrade,
+    ChannelSwitch,
+    Downgrade,
 }
 
 public sealed class UpdateCheckResult
@@ -22,6 +33,9 @@ public sealed class UpdateCheckResult
     public string? AssetUrl { get; init; }
     public string? AssetSha256 { get; init; }
     public UpdateApplyKind ApplyKind { get; init; } = UpdateApplyKind.Zip;
+    /// <summary>True when remote semver is lower than the running build (channel switch / downgrade).</summary>
+    public bool IsDowngrade { get; init; }
+    public UpdateOfferKind OfferKind { get; init; }
 }
 
 /// <summary>GitHub Releases + release-manifest updater for Stable/Beta channels.</summary>
@@ -77,22 +91,33 @@ public sealed class UpdateService
                 };
             }
 
-            var remoteText = manifest.Version?.TrimStart('v') ?? "0.0.0";
-            if (!Version.TryParse(remoteText.Split('-')[0], out var remote))
-            {
-                remote = new Version(0, 0);
-            }
+            var remoteText = NormalizeReleaseTag(manifest.Version);
+            var remote = ReleaseVersion.ParseComparable(remoteText);
+            var localComparable = ReleaseVersion.ToComparable(local);
+            var localInfo = AssemblyInformationalVersion();
 
-            if (remote <= local)
+            var installedTag = _settings.Current.InstalledReleaseTag;
+            var installedChannel = _settings.Current.InstalledReleaseChannel;
+            if (!ShouldOfferChannelInstall(
+                    local, remoteText, channelDisplay, installedTag, installedChannel, localInfo))
             {
+                var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(local, localInfo, installedTag);
+                var message = FormatNoOfferMessage(localLabel, remoteText, channelDisplay);
+                if (ShouldSeedInstalledIdentity(localInfo, installedTag, remoteText))
+                {
+                    SeedInstalledIdentity(remoteText, channelDisplay);
+                }
+
                 return new UpdateCheckResult
                 {
                     RemoteVersion = remoteText,
                     ChannelDisplay = channelDisplay,
-                    Message = $"Titanium Inspector is up to date ({channelDisplay}).",
+                    Message = message,
                 };
             }
 
+            var offerKind = ClassifyOfferKind(
+                local, remoteText, channelDisplay, installedTag, installedChannel, localInfo);
             var (kind, asset) = ResolveAsset(manifest);
             if (asset?.Url is null)
             {
@@ -101,10 +126,34 @@ public sealed class UpdateService
                     UpdateAvailable = true,
                     RemoteVersion = remoteText,
                     ChannelDisplay = channelDisplay,
+                    IsDowngrade = offerKind == UpdateOfferKind.Downgrade,
+                    OfferKind = offerKind,
                     Message =
-                        $"Update {remoteText} ({channelDisplay}) is available, but no package was found for this install.",
+                        $"Install {remoteText} ({channelDisplay}) is available, but no package was found for this install.",
                 };
             }
+
+            // Same ProductVersion is a MajorUpgrade (AllowSameVersionUpgrades). Older is still blocked.
+            if (kind == UpdateApplyKind.Msi && MsiOfferIsDowngrade(localComparable, remote))
+            {
+                return new UpdateCheckResult
+                {
+                    RemoteVersion = remoteText,
+                    ChannelDisplay = channelDisplay,
+                    OfferKind = UpdateOfferKind.None,
+                    Message =
+                        $"Windows Installer cannot replace this install with {remoteText} ({channelDisplay}) " +
+                        "(older version). Uninstall Titanium Inspector first, or download from the website.",
+                };
+            }
+
+            var offerMessage = offerKind switch
+            {
+                UpdateOfferKind.Upgrade => $"Update available: {remoteText} ({channelDisplay})",
+                UpdateOfferKind.Downgrade =>
+                    $"Install older {channelDisplay} {remoteText} (replaces your current build)",
+                _ => $"Switch to {channelDisplay} {remoteText} (replaces your current build)",
+            };
 
             return new UpdateCheckResult
             {
@@ -114,7 +163,9 @@ public sealed class UpdateService
                 AssetUrl = asset.Url,
                 AssetSha256 = asset.Sha256,
                 ApplyKind = kind,
-                Message = $"Update available: {remoteText} ({channelDisplay})",
+                IsDowngrade = offerKind == UpdateOfferKind.Downgrade,
+                OfferKind = offerKind,
+                Message = offerMessage,
             };
         }
         catch (Exception ex)
@@ -124,6 +175,229 @@ public sealed class UpdateService
                 ChannelDisplay = channelDisplay,
                 Message = $"Update check failed: {ex.Message}",
             };
+        }
+    }
+
+    /// <summary>
+    /// Whether the selected channel's latest release should be offered — upgrades and intentional
+    /// channel/build switches (not phantom same-version reinstalls from 3-part vs 4-part Version).
+    /// Same-core prerelease is never newer than a release (Stable 7.0.5 is not offered 7.0.5-beta).
+    /// </summary>
+    /// <param name="localInformationalVersion">
+    /// Optional assembly informational version (e.g. <c>7.0.5-beta</c>). When it matches
+    /// <paramref name="remoteText"/>, the install is treated as already up to date.
+    /// </param>
+    public static bool ShouldOfferChannelInstall(
+        Version local,
+        string remoteText,
+        string channelDisplay,
+        string? installedReleaseTag,
+        string? installedReleaseChannel,
+        string? localInformationalVersion = null)
+    {
+        remoteText = NormalizeReleaseTag(remoteText);
+        var remoteSemver = ReleaseVersion.ParseComparable(remoteText);
+        var localSemver = ReleaseVersion.ToComparable(local);
+        var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(
+            local, localInformationalVersion, installedReleaseTag);
+
+        if (!string.IsNullOrEmpty(localInformationalVersion)
+            && localLabel.Equals(remoteText, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var tagMatches = !string.IsNullOrEmpty(installedReleaseTag)
+            && installedReleaseTag.Equals(remoteText, StringComparison.OrdinalIgnoreCase);
+        var channelMatches = !string.IsNullOrEmpty(installedReleaseChannel)
+            && installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase);
+
+        // Exact channel build already installed and assembly matches remote semver.
+        if (tagMatches && channelMatches && remoteSemver == localSemver)
+        {
+            return false;
+        }
+
+        // Persisted tag matches remote but assembly does not (e.g. failed MSI/UAC) — re-offer.
+        if (tagMatches && channelMatches && remoteSemver != localSemver)
+        {
+            return true;
+        }
+
+        // SemVer-ish: remote must be newer than the known local label (release > same-core beta).
+        if (ReleaseVersion.IsRemoteNewer(localLabel, remoteText))
+        {
+            return true;
+        }
+
+        // Same core / older remote: only intentional channel switch from a known other channel
+        // when remote is not a same-or-older prerelease relative to a release local.
+        if (remoteSemver == localSemver)
+        {
+            return ShouldOfferSameSemverSwitch(
+                channelDisplay,
+                installedReleaseChannel,
+                localLabel,
+                remoteText,
+                tagMatches);
+        }
+
+        // remote core < local: only intentional channel / known-origin switches.
+        if (!string.IsNullOrEmpty(installedReleaseChannel)
+            && !installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase)
+            && !ReleaseVersion.IsPrereleaseTag(remoteText))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrEmpty(installedReleaseChannel)
+            && !installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase)
+            && ReleaseVersion.IsPrereleaseTag(localLabel))
+        {
+            // Known beta install switching channels to an older remote (intentional downgrade).
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// MSI MajorUpgrade replaces the same ProductVersion (last install wins). A lower
+    /// ProductVersion is still a WiX downgrade and cannot apply in-place.
+    /// </summary>
+    public static bool MsiOfferIsDowngrade(Version localComparable, Version remoteComparable) =>
+        remoteComparable < localComparable;
+
+    private static bool ShouldOfferSameSemverSwitch(
+        string channelDisplay,
+        string? installedReleaseChannel,
+        string localLabel,
+        string remoteText,
+        bool tagMatches)
+    {
+        if (tagMatches)
+        {
+            return false;
+        }
+
+        // Never offer same-core prerelease over a release-looking local (Stable 7.0.5 ↛ 7.0.5-beta).
+        if (ReleaseVersion.IsPrereleaseTag(remoteText) && !ReleaseVersion.IsPrereleaseTag(localLabel))
+        {
+            return false;
+        }
+
+        // Beta → Stable at same core: Stable supersedes prerelease.
+        if (!ReleaseVersion.IsPrereleaseTag(remoteText) && ReleaseVersion.IsPrereleaseTag(localLabel))
+        {
+            return true;
+        }
+
+        // Known channel identity differs (e.g. intentional Stable↔Beta when both are releases — rare).
+        if (!string.IsNullOrEmpty(installedReleaseChannel)
+            && !installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Classify an offered install for dialog copy.</summary>
+    public static UpdateOfferKind ClassifyOfferKind(
+        Version local,
+        string remoteText,
+        string channelDisplay,
+        string? installedReleaseTag,
+        string? installedReleaseChannel,
+        string? localInformationalVersion = null)
+    {
+        if (!ShouldOfferChannelInstall(
+                local, remoteText, channelDisplay, installedReleaseTag, installedReleaseChannel,
+                localInformationalVersion))
+        {
+            return UpdateOfferKind.None;
+        }
+
+        var remoteSemver = ReleaseVersion.ParseComparable(remoteText);
+        var localSemver = ReleaseVersion.ToComparable(local);
+        if (remoteSemver > localSemver)
+        {
+            return UpdateOfferKind.Upgrade;
+        }
+
+        if (remoteSemver < localSemver)
+        {
+            return UpdateOfferKind.Downgrade;
+        }
+
+        // Same core: Stable over beta is a channel switch (or upgrade-ish promotion).
+        return UpdateOfferKind.ChannelSwitch;
+    }
+
+    /// <summary>
+    /// Status text when nothing is offered. Distinguishes true up-to-date from
+    /// "latest Beta is not newer than your Stable".
+    /// </summary>
+    public static string FormatNoOfferMessage(string localLabel, string remoteText, string channelDisplay)
+    {
+        remoteText = NormalizeReleaseTag(remoteText);
+        localLabel = NormalizeReleaseTag(localLabel);
+        var isBetaChannel = channelDisplay.Equals("Beta", StringComparison.OrdinalIgnoreCase);
+        if (isBetaChannel
+            && ReleaseVersion.IsPrereleaseTag(remoteText)
+            && !ReleaseVersion.IsPrereleaseTag(localLabel)
+            && ReleaseVersion.ParseComparable(localLabel) == ReleaseVersion.ParseComparable(remoteText))
+        {
+            return
+                $"No newer Beta than your current build ({localLabel}). Latest Beta is {remoteText}.";
+        }
+
+        return $"Titanium Inspector is up to date ({channelDisplay}).";
+    }
+
+    /// <summary>
+    /// Only seed identity when the remote tag is the build we actually have — never mark a
+    /// Stable install as <c>7.0.5-beta</c> after a "no newer beta" check.
+    /// </summary>
+    public static bool ShouldSeedInstalledIdentity(
+        string? localInformationalVersion,
+        string? installedReleaseTag,
+        string remoteText)
+    {
+        remoteText = NormalizeReleaseTag(remoteText);
+        if (!string.IsNullOrEmpty(localInformationalVersion)
+            && NormalizeReleaseTag(localInformationalVersion)
+                .Equals(remoteText, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return !string.IsNullOrEmpty(installedReleaseTag)
+            && installedReleaseTag.Equals(remoteText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static string NormalizeReleaseTag(string? tag) => ReleaseVersion.NormalizeTag(tag);
+
+    public static string StripPrerelease(string tag) => ReleaseVersion.StripPrerelease(tag);
+
+    private void SeedInstalledIdentity(string remoteText, string channelDisplay)
+    {
+        var changed = false;
+        if (!string.Equals(_settings.Current.InstalledReleaseTag, remoteText, StringComparison.OrdinalIgnoreCase))
+        {
+            _settings.Current.InstalledReleaseTag = remoteText;
+            changed = true;
+        }
+
+        if (!string.Equals(_settings.Current.InstalledReleaseChannel, channelDisplay, StringComparison.OrdinalIgnoreCase))
+        {
+            _settings.Current.InstalledReleaseChannel = channelDisplay;
+            changed = true;
+        }
+
+        if (changed)
+        {
+            _settings.Save();
         }
     }
 
@@ -170,13 +444,19 @@ public sealed class UpdateService
             }
 
             UpdateApplyHelper.StartDetached(
-                Process.GetCurrentProcess().Id,
+                Environment.ProcessId,
                 check.ApplyKind,
                 packagePath,
                 installDir,
                 relaunchPath,
                 check.RemoteVersion ?? "",
                 check.ChannelDisplay);
+
+            // Persist after the helper starts so a failed spawn does not claim the build is installed.
+            // If MSI UAC is cancelled later, tag may ahead of assembly — ShouldOffer re-offers when they differ.
+            _settings.Current.InstalledReleaseTag = check.RemoteVersion;
+            _settings.Current.InstalledReleaseChannel = check.ChannelDisplay;
+            _settings.Save();
 
             return (true, $"Installing {check.RemoteVersion} ({check.ChannelDisplay})…");
         }
@@ -188,6 +468,46 @@ public sealed class UpdateService
 
     public static Version AssemblyVersion() =>
         System.Reflection.Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0);
+
+    /// <summary>
+    /// Assembly informational version without Source Link <c>+commit</c> metadata
+    /// (e.g. <c>7.0.5-beta</c>). Null when the attribute is missing.
+    /// </summary>
+    public static string? AssemblyInformationalVersion() =>
+        FormatInformationalVersion(
+            Assembly.GetExecutingAssembly()
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                ?.InformationalVersion);
+
+    /// <summary>User-facing version for About: informational when present, else Major.Minor.Build.</summary>
+    public static string FormatAssemblyDisplayVersion()
+    {
+        var info = AssemblyInformationalVersion();
+        if (!string.IsNullOrEmpty(info))
+        {
+            return info;
+        }
+
+        return ReleaseVersion.FormatDisplay(AssemblyVersion());
+    }
+
+    /// <summary>Strip Source Link metadata from an informational version string.</summary>
+    public static string? FormatInformationalVersion(string? informationalVersion)
+    {
+        if (string.IsNullOrWhiteSpace(informationalVersion))
+        {
+            return null;
+        }
+
+        var trimmed = informationalVersion.Trim();
+        var plus = trimmed.IndexOf('+');
+        if (plus >= 0)
+        {
+            trimmed = trimmed[..plus];
+        }
+
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
 
     public static bool IsMsiInstall(string baseDirectory)
     {
@@ -240,7 +560,7 @@ public sealed class UpdateService
         return arm ? "linux-arm64" : "linux-x64";
     }
 
-    public (UpdateApplyKind Kind, ManifestAsset? Asset) ResolveAsset(InspectorReleaseManifest manifest)
+    public static (UpdateApplyKind Kind, ManifestAsset? Asset) ResolveAsset(InspectorReleaseManifest manifest)
     {
         var assets = manifest.Products?.Inspector?.Assets;
         if (assets is null)
@@ -272,7 +592,7 @@ public sealed class UpdateService
         return (UpdateApplyKind.Zip, null);
     }
 
-    private async Task<InspectorReleaseManifest?> TryGetManifestAsync(
+    private static async Task<InspectorReleaseManifest?> TryGetManifestAsync(
         HttpClient http,
         string channelDisplay,
         CancellationToken cancellationToken)

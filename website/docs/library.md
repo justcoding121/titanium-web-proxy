@@ -1,14 +1,18 @@
 # Library (embed)
 
+> **For .NET library users** — operators who want a reverse proxy or desktop debugger should start with the [CLI](/docs/cli) or [Inspector](/docs/inspector) instead.
+
 NuGet package **Titanium.Web.Proxy** (MIT). Target framework: **.NET 10**.
 
 ```shell
 dotnet add package Titanium.Web.Proxy
-# Latest prerelease (e.g. 7.0.4-beta):
+# Prerelease when newer than the stable NuGet feed:
 dotnet add package Titanium.Web.Proxy --prerelease
 ```
 
-## Explicit MITM proxy
+Related MIT packages (also on NuGet): **Titanium.Web.Proxy.Abstractions** (shared contracts) and **Titanium.Web.Proxy.Configuration** (`twp.yaml` / dialect loaders — optional for library users). See [migration 6→7](https://github.com/justcoding121/titanium-web-proxy/blob/develop/docs/migration-6-to-7.md).
+
+## Explicit man-in-the-middle (MITM) proxy
 
 ```csharp
 using System.Net;
@@ -59,4 +63,34 @@ Use `ForwardHost` on a transparent endpoint for a zero-cost terminate-lite path,
 
 `ProxyServer.SetAsSystemProxy` / `RestoreOriginalProxySettings` work on Windows (WinINET), macOS (`networksetup`), and Linux (GNOME + KDE + process environment). Unsupported platforms throw `NotSupportedException`.
 
-`CertificateManager.TrustRootCertificate` installs into the current-user store on all platforms and additionally trusts for SSL on macOS (login keychain) and Linux (user NSS db). `TrustRootCertificateAsAdmin` shows an OS admin prompt (UAC / macOS authentication / polkit) for machine-wide trust.
+`CertificateManager.TrustRootCertificate` installs into the current-user store on all platforms and additionally trusts for SSL on macOS (login keychain) and Linux (user NSS db). Check `LastOsTrustResult` for structured outcomes (e.g. missing `certutil`, Keychain Always Trust needed). `InstallNssCertutilAndRetryUserTrust` installs NSS tools via package manager / Homebrew after user consent. `FirefoxCertificateTrust` enables Windows `ImportEnterpriseRoots` or profile `user.js` (`security.enterprise_roots.enabled`) so Firefox trusts OS roots, and can import into the default Firefox NSS profile. `TrustRootCertificateAsAdmin` shows an OS admin prompt (UAC / macOS authentication / polkit) for machine-wide trust.
+
+## MITM hostname exclusions
+
+Two layers (both work with system proxy on **Windows**, **macOS**, and **Linux**):
+
+1. **OS bypass** — `SystemProxySettings.BypassRules` + `SetAsSystemProxy(..., settings)`. Traffic never hits the proxy when System proxy is on. Factory seed: `MitmExclusionDefaults.SystemProxyBypassRules` (Microsoft identity / SSO / RDP).
+2. **Tunnel only** — `BeforeTunnelConnectRequest` → `e.DecryptSsl = false`, or `MitmExclusionDefaults.ApplyDecryptExclusions(...)`. CONNECT stays visible; no decrypt. Factory seed: `MitmExclusionDefaults.TunnelOnlyPinningDomains` (`dropbox.com`, `webex.com`).
+
+Use **`MitmExclusionMode.Merge`** (default, back-compat) to always re-inject factory hosts, or **`Replace`** so the caller lists are authoritative (you can remove identity hosts — risk breaking SSO while System proxy is on).
+
+```csharp
+// Merge: factory identity hosts + extras
+var settings = MitmExclusionDefaults.CreateSystemProxySettings(
+    proxyLoopback: true,
+    additionalBypassRules: ["*.corp.example.com"]);
+proxyServer.SetAsSystemProxy(endPoint, ProxyProtocolType.AllHttp, settings);
+
+// Replace: full list you provide (factory not re-added)
+var custom = MitmExclusionDefaults.CreateSystemProxySettings(
+    proxyLoopback: true,
+    MitmExclusionDefaults.SystemProxyBypassRules.Append("*.corp.example.com"),
+    MitmExclusionMode.Replace);
+
+MitmExclusionDefaults.ApplyDecryptExclusions(endPoint, () => true,
+    decryptSkipHosts: ["*.bank.example.com"],
+    decryptOnlyHosts: null,
+    MitmExclusionMode.Replace);
+```
+
+CLI: when `server.decryptSkipHosts` and/or `server.decryptOnlyHosts` are present in `twp.yaml`, exclusions apply with **Replace**. Omit both to leave Merge defaults. Optional `server.systemProxyBypassHosts` / `server.proxyLoopback` build OS-bypass settings the same way (present ⇒ Replace; omit ⇒ Merge). Removing identity hosts from OS bypass can break Microsoft SSO while System proxy is enabled.

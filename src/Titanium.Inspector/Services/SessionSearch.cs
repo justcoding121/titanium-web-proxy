@@ -165,6 +165,86 @@ public static class SessionSearch
     /// <summary>Clear the entire search/filter query.</summary>
     public static string ClearFilters(string? _) => "";
 
+    /// <summary>True when the query includes a <c>body:</c> token.</summary>
+    public static bool HasBodyToken(string? query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return false;
+        }
+
+        return Tokenize(query).Any(t => t.Key == "body");
+    }
+
+    /// <summary>
+    /// Hint when <c>body:</c> is active but some session bodies live only on disk
+    /// (search does not hydrate spilled bodies).
+    /// </summary>
+    public static string? FormatBodySearchScopeHint(string? query, int spilledCount)
+    {
+        if (spilledCount <= 0 || !HasBodyToken(query))
+        {
+            return null;
+        }
+
+        return spilledCount == 1
+            ? "body search: in-memory only, 1 on disk skipped"
+            : $"body search: in-memory only, {spilledCount} on disk skipped";
+    }
+
+    /// <summary>
+    /// Status-bar session count / search-scope text. Metadata search always covers listed rows;
+    /// <c>body:</c> is in-memory only unless bodies are hot.
+    /// </summary>
+    public static string BuildSessionCountText(
+        int visibleCount,
+        int totalCount,
+        string? searchQuery,
+        int spilledCount,
+        int retentionEvictedTotal,
+        DateTimeOffset? oldestStartedUtc)
+    {
+        var searching = !string.IsNullOrWhiteSpace(searchQuery);
+        var text = searching
+            ? $"Sessions: {visibleCount} / {totalCount}"
+            : $"Sessions: {totalCount}";
+
+        if (spilledCount > 0)
+        {
+            text += $" ({spilledCount} bodies on disk)";
+        }
+
+        if (retentionEvictedTotal > 0 && oldestStartedUtc is { } oldest)
+        {
+            text += $" · since {oldest.ToLocalTime():HH:mm}";
+        }
+
+        var bodyHint = FormatBodySearchScopeHint(searchQuery, spilledCount);
+        if (bodyHint is not null)
+        {
+            text += $" · {bodyHint}";
+        }
+
+        if (searching && visibleCount == 0 && totalCount > 0)
+            text += FormatEmptySearchRetentionHint(bodyHint, retentionEvictedTotal);
+
+        return text;
+    }
+
+    private static string FormatEmptySearchRetentionHint(string? bodyHint, int retentionEvictedTotal)
+    {
+        if (retentionEvictedTotal <= 0)
+            return "";
+
+        var retention = retentionEvictedTotal == 1
+            ? "1 removed by retention"
+            : $"{retentionEvictedTotal} removed by retention";
+
+        return bodyHint is not null
+            ? $" · {retention}"
+            : $" · no matches in current list · {retention}";
+    }
+
     private static List<(string Key, string Value)> Tokenize(string query)
     {
         var list = new List<(string, string)>();
@@ -200,9 +280,13 @@ public static class SessionSearch
             {
                 "ws" or "websocket" => s.IsWebSocket,
                 "grpc" => s.IsGrpc,
+                "transcoded" => s.IsTranscoded,
                 "tunnel" => s.IsTunnel,
                 "multipart" => s.IsMultipart,
                 "error" or "errors" => IsErrorStatus(s.StatusCode),
+                "opaque" or "encrypted" => s.IsTunnel && s.OpaqueReason != OpaqueTunnelReason.None,
+                _ when token.Value.StartsWith("opaque-reason:", StringComparison.OrdinalIgnoreCase) =>
+                    MatchOpaqueReason(s, token.Value["opaque-reason:".Length..]),
                 _ => true,
             },
             "hide" => token.Value.ToLowerInvariant() switch
@@ -285,5 +369,25 @@ public static class SessionSearch
 
         return ImageOrStaticExtensions.Any(ext =>
             path.EndsWith(ext, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool MatchOpaqueReason(SessionSnapshot s, string reasonToken)
+    {
+        if (!s.IsTunnel || s.OpaqueReason == OpaqueTunnelReason.None)
+        {
+            return false;
+        }
+
+        return reasonToken.ToLowerInvariant() switch
+        {
+            "builtin" or "built-in" => s.OpaqueReason is OpaqueTunnelReason.BuiltInIdentity
+                or OpaqueTunnelReason.BuiltInPinning,
+            "identity" or "microsoft" => s.OpaqueReason == OpaqueTunnelReason.BuiltInIdentity,
+            "pinning" => s.OpaqueReason == OpaqueTunnelReason.BuiltInPinning,
+            "skip" or "skiplist" => s.OpaqueReason == OpaqueTunnelReason.UserSkipList,
+            "only" or "onlylist" => s.OpaqueReason == OpaqueTunnelReason.UserOnlyList,
+            "decrypt-off" or "decryptoff" => s.OpaqueReason == OpaqueTunnelReason.DecryptOff,
+            _ => s.OpaqueReason.ToString().Equals(reasonToken, StringComparison.OrdinalIgnoreCase),
+        };
     }
 }

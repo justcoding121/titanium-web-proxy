@@ -127,7 +127,7 @@ internal sealed class Http2OriginRelayPool : IAsyncDisposable
     {
         // Spread streams across origin legs before any single connection saturates. Dividing by
         // MaxOrigin*4 (default 8) opens additional legs under typical RPS concurrency (32–128).
-        // Soft=1/2 fan-out was tried; cool remasure showed no gain vs Soft≈8 (extra legs tax
+        // Soft=1/2 fan-out was tried; cool remeasure showed no gain vs Soft≈8 (extra legs tax
         // cleartext connect without helping FrameWriter parallelism enough).
         return Math.Max(1, resourceLimits.MaxConcurrentStreamsPerConnection /
                            Math.Max(1, resourceLimits.MaxOriginHttp2ConnectionsPerAuthority * 4));

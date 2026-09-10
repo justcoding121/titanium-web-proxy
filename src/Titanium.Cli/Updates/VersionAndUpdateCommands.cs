@@ -6,18 +6,31 @@ using System.Text.Json;
 using Titanium.Cli;
 using Titanium.Cli.Config;
 using Titanium.Cli.Http3;
+using Titanium.Cli.Service;
+using Titanium.Web.Proxy.Abstractions.Updates;
 
 namespace Titanium.Cli.Updates;
 
 internal static class VersionCommand
 {
+    internal const string StableChannel = "stable";
     public static async Task<int> ExecuteAsync(string[] args)
     {
+        if (CliHelp.RequestsHelp(args.AsSpan(1)))
+        {
+            return PrintHelp();
+        }
+
         var check = args.Contains("--check", StringComparer.OrdinalIgnoreCase);
         var plus = args.Contains("--plus", StringComparer.OrdinalIgnoreCase);
-        var channel = ParseChannel(args);
-        var channelDisplay = FormatChannel(channel);
 
+        if (!TryResolveChannel(args, out var channel, out var channelError))
+        {
+            AsyncConsole.WriteError(channelError!);
+            return 1;
+        }
+
+        var channelDisplay = FormatChannel(channel);
         PrintLocalVersions(plus);
 
         if (!check)
@@ -26,50 +39,125 @@ internal static class VersionCommand
         }
 
         var client = new UpdateFeedClient(channel);
-        var manifest = await client.TryGetManifestAsync();
+        var (manifest, feedError) = await client.TryGetManifestWithErrorAsync();
         if (manifest is null)
         {
-            AsyncConsole.WriteError("Unable to query update feed.");
+            AsyncConsole.WriteError(feedError ?? "Unable to query update feed.");
             return 1;
         }
 
         var local = typeof(Program).Assembly.GetName().Version ?? new Version(0, 0);
-        var remote = Version.TryParse(StripPrerelease(manifest.Version), out var v) ? v : new Version(0, 0);
-        AsyncConsole.WriteLine($"Remote Cli ({channelDisplay}): {manifest.Version}");
+        var remoteText = ReleaseVersion.NormalizeTag(manifest.Version);
+        var localInfo = AssemblyInformationalVersion();
+        var (installedTag, installedChannel) = UpdateCommand.ReadCliIdentity();
+        var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(local, localInfo, installedTag);
+        var localDisplay = string.IsNullOrEmpty(localInfo)
+            ? ReleaseVersion.FormatDisplay(local)
+            : localLabel;
+
+        AsyncConsole.WriteLine($"Remote Cli ({channelDisplay}): {remoteText}");
+        AsyncConsole.WriteLine($"Local Cli: {localDisplay} → remote {remoteText} ({channelDisplay})");
 
         var exit = 0;
-        if (remote > local)
+        if (ShouldInstallCliRelease(
+                local, remoteText, channelDisplay, installedTag, installedChannel, localInfo))
         {
-            AsyncConsole.WriteLine($"A newer Cli build is available ({channelDisplay}). Run: titanium update --channel {channel}");
+            AsyncConsole.WriteLine(
+                $"A newer Cli build is available ({localDisplay} → {remoteText}, {channelDisplay}). Run: titanium update --channel {channel}");
             exit = 2;
+        }
+        else if (ReleaseVersion.CompareReleaseTags(localLabel, remoteText) > 0
+                 && !ReleaseVersion.IsPrereleaseTag(remoteText))
+        {
+            AsyncConsole.WriteLine(
+                $"Local Cli {localDisplay} is newer than {channelDisplay} {remoteText}.");
+        }
+        else if (channelDisplay.Equals("beta", StringComparison.OrdinalIgnoreCase)
+                 && ReleaseVersion.IsPrereleaseTag(remoteText)
+                 && !ReleaseVersion.IsPrereleaseTag(localLabel)
+                 && ReleaseVersion.ParseComparable(localLabel) == ReleaseVersion.ParseComparable(remoteText))
+        {
+            AsyncConsole.WriteLine(
+                $"No newer Beta than your current build ({localLabel}). Latest Beta is {remoteText}.");
         }
         else
         {
-            AsyncConsole.WriteLine($"Cli is up to date ({channelDisplay}).");
+            AsyncConsole.WriteLine($"Cli is up to date ({remoteText}, {channelDisplay}).");
         }
 
         if (plus)
         {
-            var plusLocal = TryGetLocalPlusVersion();
-            var plusRemote = manifest.Products?.Plus?.Version;
-            if (!string.IsNullOrEmpty(plusRemote) &&
-                Version.TryParse(StripPrerelease(plusRemote), out var pr) &&
-                (plusLocal is null || pr > plusLocal))
-            {
-                AsyncConsole.WriteLine(
-                    $"A newer Plus build is available ({plusRemote}, {channelDisplay}). Run: titanium update --plus --channel {channel}");
-                exit = 2;
-            }
-            else if (plusLocal is not null)
-            {
-                AsyncConsole.WriteLine($"Plus is up to date ({plusLocal}, {channelDisplay}).");
-            }
+            exit = Math.Max(exit, PrintPlusCheck(manifest, channel, channelDisplay));
         }
 
         return exit;
     }
 
-    private static Version? TryGetLocalPlusVersion()
+    internal static int PrintHelp()
+    {
+        AsyncConsole.WriteLine("""
+            titanium version [--check] [--plus] [--channel stable|beta]
+
+              (default)   Print local Cli / Core / Abstractions / Configuration versions.
+              --check     Compare local Cli (and optionally Plus) to the update feed.
+              --plus      Include Plus DLL version (with or without --check).
+              --channel   stable (default) or beta. Also: TITANIUM_UPDATE_CHANNEL.
+
+            Exit codes with --check: 0 up to date, 2 update available, 1 feed error.
+            """);
+        CliHelp.WriteDocsFooter();
+        return 0;
+    }
+
+    private static int PrintPlusCheck(ReleaseManifest manifest, string channel, string channelDisplay)
+    {
+        var plusLocal = TryGetLocalPlusVersion();
+        var plusInfo = TryGetLocalPlusInformationalVersion();
+        var plusRemoteText = ReleaseVersion.NormalizeTag(
+            manifest.Products?.Plus?.Version ?? manifest.Version);
+
+        if (plusLocal is null)
+        {
+            AsyncConsole.WriteLine(
+                $"Plus is not installed. Run: titanium update --plus --channel {channel}");
+            return 2;
+        }
+
+        var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(plusLocal, plusInfo, null);
+        var plusLocalDisplay = string.IsNullOrEmpty(plusInfo)
+            ? ReleaseVersion.FormatDisplay(plusLocal)
+            : localLabel;
+        AsyncConsole.WriteLine($"Local Plus: {plusLocalDisplay} → remote {plusRemoteText} ({channelDisplay})");
+
+        if (ShouldInstallPlusRelease(plusLocal, plusRemoteText, plusInfo))
+        {
+            AsyncConsole.WriteLine(
+                $"A newer Plus build is available ({plusLocalDisplay} → {plusRemoteText}, {channelDisplay}). Run: titanium update --plus --channel {channel}");
+            return 2;
+        }
+
+        if (ReleaseVersion.CompareReleaseTags(localLabel, plusRemoteText) > 0)
+        {
+            AsyncConsole.WriteLine(
+                $"Local Plus {plusLocalDisplay} is newer than {channelDisplay} {plusRemoteText}.");
+            return 0;
+        }
+
+        if (channelDisplay.Equals("beta", StringComparison.OrdinalIgnoreCase)
+            && ReleaseVersion.IsPrereleaseTag(plusRemoteText)
+            && !ReleaseVersion.IsPrereleaseTag(localLabel)
+            && ReleaseVersion.ParseComparable(localLabel) == ReleaseVersion.ParseComparable(plusRemoteText))
+        {
+            AsyncConsole.WriteLine(
+                $"No newer Beta Plus than your current build ({localLabel}). Latest Beta is {plusRemoteText}.");
+            return 0;
+        }
+
+        AsyncConsole.WriteLine($"Plus is up to date ({plusRemoteText}, {channelDisplay}).");
+        return 0;
+    }
+
+    internal static Version? TryGetLocalPlusVersion()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Titanium.Plus.dll");
         if (!File.Exists(path))
@@ -87,12 +175,31 @@ internal static class VersionCommand
         }
     }
 
+    internal static string? TryGetLocalPlusInformationalVersion()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Titanium.Plus.dll");
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            var info = FileVersionInfo.GetVersionInfo(path);
+            return FormatInformationalVersion(info.ProductVersion);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static void PrintLocalVersions(bool includePlus)
     {
         void Print(string name, Assembly? asm)
         {
-            var ver = asm?.GetName().Version?.ToString() ?? "(not loaded)";
-            AsyncConsole.WriteLine($"{name}: {ver}");
+            var ver = asm?.GetName().Version;
+            AsyncConsole.WriteLine($"{name}: {(ver is null ? "(not loaded)" : ReleaseVersion.FormatDisplay(ver))}");
         }
 
         Print("Cli", typeof(Program).Assembly);
@@ -109,7 +216,8 @@ internal static class VersionCommand
             }
             else if (module is not null)
             {
-                AsyncConsole.WriteLine($"Plus: {module.GetType().Assembly.GetName().Version} (RequiredAbstractions={module.RequiredAbstractionsVersion})");
+                AsyncConsole.WriteLine(
+                    $"Plus: {ReleaseVersion.FormatDisplay(module.GetType().Assembly.GetName().Version)} (RequiredAbstractions={module.RequiredAbstractionsVersion})");
             }
             else
             {
@@ -118,8 +226,40 @@ internal static class VersionCommand
         }
     }
 
+    /// <summary>Parse --channel; returns false when the value is not stable/beta.</summary>
+    internal static bool TryResolveChannel(string[] args, out string channel, out string? error)
+    {
+        channel = StableChannel;
+        error = null;
+        string? raw = null;
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (args[i] is "--channel" && i + 1 < args.Length)
+            {
+                raw = args[i + 1].Trim().ToLowerInvariant();
+                break;
+            }
+        }
+
+        raw ??= (Environment.GetEnvironmentVariable("TITANIUM_UPDATE_CHANNEL") ?? StableChannel).Trim().ToLowerInvariant();
+        if (raw is not (StableChannel or "beta"))
+        {
+            error = $"Unknown channel '{raw}'. Use --channel stable or --channel beta.";
+            return false;
+        }
+
+        channel = raw;
+        return true;
+    }
+
     internal static string ParseChannel(string[] args)
     {
+        if (TryResolveChannel(args, out var channel, out _))
+        {
+            return channel;
+        }
+
+        // Legacy tests / callers: invalid values previously fell through as stable via FormatChannel.
         for (var i = 0; i < args.Length; i++)
         {
             if (args[i] is "--channel" && i + 1 < args.Length)
@@ -128,42 +268,180 @@ internal static class VersionCommand
             }
         }
 
-        return (Environment.GetEnvironmentVariable("TITANIUM_UPDATE_CHANNEL") ?? "stable").Trim().ToLowerInvariant();
+        return (Environment.GetEnvironmentVariable("TITANIUM_UPDATE_CHANNEL") ?? StableChannel).Trim().ToLowerInvariant();
     }
 
     internal static string FormatChannel(string channel) =>
-        channel.Equals("beta", StringComparison.OrdinalIgnoreCase) ? "beta" : "stable";
+        channel.Equals("beta", StringComparison.OrdinalIgnoreCase) ? "beta" : StableChannel;
 
-    internal static string StripPrerelease(string? version)
+    internal static string StripPrerelease(string? version) => ReleaseVersion.StripPrerelease(version);
+
+    /// <summary>
+    /// Whether CLI should install the remote release. Same-core prerelease is never newer than a
+    /// release (Stable 7.0.5 is not replaced by 7.0.5-beta). Beta→Stable at the same core is offered.
+    /// </summary>
+    internal static bool ShouldInstallCliRelease(
+        Version local,
+        string remoteText,
+        string channelDisplay,
+        string? installedReleaseTag,
+        string? installedReleaseChannel,
+        string? localInformationalVersion = null)
     {
-        if (string.IsNullOrEmpty(version))
+        remoteText = ReleaseVersion.NormalizeTag(remoteText);
+        var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(
+            local, localInformationalVersion, installedReleaseTag);
+
+        if (localLabel.Equals(remoteText, StringComparison.OrdinalIgnoreCase))
         {
-            return "0.0.0";
+            return false;
         }
 
-        var trimmed = version.TrimStart('v');
-        var dash = trimmed.IndexOf('-');
-        return dash > 0 ? trimmed[..dash] : trimmed;
+        if (ReleaseVersion.IsRemoteNewer(localLabel, remoteText))
+        {
+            return true;
+        }
+
+        var remoteSemver = ReleaseVersion.ParseComparable(remoteText);
+        var localSemver = ReleaseVersion.ToComparable(local);
+        if (remoteSemver != localSemver)
+        {
+            return false;
+        }
+
+        // Same core: Stable supersedes known local beta.
+        if (!ReleaseVersion.IsPrereleaseTag(remoteText) && ReleaseVersion.IsPrereleaseTag(localLabel))
+        {
+            return true;
+        }
+
+        // Never Stable → same-core beta.
+        if (ReleaseVersion.IsPrereleaseTag(remoteText) && !ReleaseVersion.IsPrereleaseTag(localLabel))
+        {
+            return false;
+        }
+
+        _ = channelDisplay;
+        _ = installedReleaseChannel;
+        return false;
+    }
+
+    /// <summary>Whether Plus DLL should be installed/replaced from the feed.</summary>
+    internal static bool ShouldInstallPlusRelease(
+        Version? localPlusVersion,
+        string remoteText,
+        string? localInformationalVersion = null)
+    {
+        remoteText = ReleaseVersion.NormalizeTag(remoteText);
+        if (localPlusVersion is null)
+        {
+            return true;
+        }
+
+        var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(
+            localPlusVersion, localInformationalVersion, null);
+        if (localLabel.Equals(remoteText, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (ReleaseVersion.IsRemoteNewer(localLabel, remoteText))
+        {
+            return true;
+        }
+
+        // Same core: Stable supersedes known local beta Plus.
+        if (!ReleaseVersion.IsPrereleaseTag(remoteText) && ReleaseVersion.IsPrereleaseTag(localLabel))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    internal static string? AssemblyInformationalVersion() =>
+        FormatInformationalVersion(
+            typeof(Program).Assembly
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                ?.InformationalVersion);
+
+    internal static string? FormatInformationalVersion(string? informationalVersion)
+    {
+        if (string.IsNullOrWhiteSpace(informationalVersion))
+        {
+            return null;
+        }
+
+        var trimmed = informationalVersion.Trim();
+        var plus = trimmed.IndexOf('+');
+        if (plus >= 0)
+        {
+            trimmed = trimmed[..plus];
+        }
+
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 }
 
 internal static class UpdateCommand
 {
+    private static readonly string CliIdentityPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "TitaniumCli",
+        "installed-release.json");
+
     public static async Task<int> ExecuteAsync(string[] args)
     {
+        if (CliHelp.RequestsHelp(args.AsSpan(1)))
+        {
+            return PrintHelp();
+        }
+
         var plus = args.Contains("--plus", StringComparer.OrdinalIgnoreCase);
-        var channel = VersionCommand.ParseChannel(args);
+        var removePlus = args.Contains("--remove-plus", StringComparer.OrdinalIgnoreCase);
+        if (plus && removePlus)
+        {
+            AsyncConsole.WriteError("Use either --plus or --remove-plus, not both.");
+            return 1;
+        }
+
+        if (removePlus)
+        {
+            if (await ServiceCommand.IsDefaultServiceRunningAsync().ConfigureAwait(false))
+            {
+                AsyncConsole.WriteError(
+                    "Warning: the Titanium OS service appears to be running. Stop it before removing Plus " +
+                    "(`titanium service stop`) — the DLL may be locked, and the in-process control plane " +
+                    "keeps running until the proxy restarts.");
+            }
+
+            return RemovePlus();
+        }
+
+        if (!VersionCommand.TryResolveChannel(args, out var channel, out var channelError))
+        {
+            AsyncConsole.WriteError(channelError!);
+            return 1;
+        }
+
         var channelDisplay = VersionCommand.FormatChannel(channel);
+
+        if (await ServiceCommand.IsDefaultServiceRunningAsync().ConfigureAwait(false))
+        {
+            AsyncConsole.WriteError(
+                "Warning: the Titanium OS service appears to be running. Stop it before updating " +
+                "(`titanium service stop`), then run update again, then `titanium service start`.");
+        }
 
         AsyncConsole.WriteLine(plus
             ? $"Checking Plus updates ({channelDisplay})…"
             : $"Checking for updates ({channelDisplay})…");
 
         var client = new UpdateFeedClient(channel);
-        var manifest = await client.TryGetManifestAsync();
+        var (manifest, feedError) = await client.TryGetManifestWithErrorAsync();
         if (manifest is null)
         {
-            AsyncConsole.WriteError("Unable to query update feed.");
+            AsyncConsole.WriteError(feedError ?? "Unable to query update feed.");
             return 1;
         }
 
@@ -175,14 +453,102 @@ internal static class UpdateCommand
         return await UpdateCliAsync(manifest, channelDisplay);
     }
 
+    internal static int PrintHelp()
+    {
+        AsyncConsole.WriteLine("""
+            titanium update [--plus] [--remove-plus] [--channel stable|beta]
+
+              (default)      Download and install a newer CLI zip when the feed is ahead.
+              --plus         Install or update Titanium.Plus.dll beside the CLI.
+              --remove-plus  Delete Titanium.Plus.dll beside the CLI (no network).
+              --channel      stable (default) or beta. Also: TITANIUM_UPDATE_CHANNEL.
+
+            Does not use winget. If an OS service is running, stop it first so the exe can be replaced.
+            Plus is PolyForm Noncommercial — not for commercial use. Disable in config with
+            plus.enabled: false; use --remove-plus to delete the DLL from disk.
+            """);
+        CliHelp.WriteDocsFooter();
+        return 0;
+    }
+
+    /// <summary>
+    /// Deletes <c>Titanium.Plus.dll</c> (and <c>.bak</c> / <c>.new</c>) beside the CLI install.
+    /// Idempotent when Plus is already absent. <paramref name="installDir"/> is for tests.
+    /// </summary>
+    internal static int RemovePlus(string? installDir = null)
+    {
+        var dir = string.IsNullOrWhiteSpace(installDir)
+            ? AppContext.BaseDirectory
+            : installDir;
+        dir = dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var dest = Path.Combine(dir, "Titanium.Plus.dll");
+        var backup = dest + ".bak";
+        var staging = dest + ".new";
+
+        var removed = false;
+        try
+        {
+            foreach (var path in new[] { dest, backup, staging })
+            {
+                if (!File.Exists(path))
+                    continue;
+                File.Delete(path);
+                removed = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            AsyncConsole.WriteError($"Plus remove failed: {ex.Message}");
+            return 1;
+        }
+
+        if (removed)
+            AsyncConsole.WriteLine("Removed Titanium.Plus.dll from the CLI install directory.");
+        else
+            AsyncConsole.WriteLine("Plus is not installed beside the CLI (nothing to remove).");
+
+        AsyncConsole.WriteLine(
+            "If a titanium run / OS service is still up with Plus loaded, stop and restart it so the " +
+            "control plane and dashboard unload (remove-plus does not stop them). " +
+            "If your config still has plus.enabled: true, set it to false (or remove the plus: block). " +
+            "Plus is PolyForm Noncommercial — not for commercial use.");
+        return 0;
+    }
+
     private static async Task<int> UpdateCliAsync(ReleaseManifest manifest, string channelDisplay)
     {
         var local = typeof(Program).Assembly.GetName().Version ?? new Version(0, 0);
-        var remoteText = manifest.Version?.TrimStart('v') ?? "0.0.0";
-        var remote = Version.TryParse(VersionCommand.StripPrerelease(remoteText), out var v) ? v : new Version(0, 0);
-        if (remote <= local)
+        var remoteText = ReleaseVersion.NormalizeTag(manifest.Version);
+        var (installedTag, installedChannel) = ReadCliIdentity();
+        var localInfo = VersionCommand.AssemblyInformationalVersion();
+        var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(local, localInfo, installedTag);
+        var localDisplay = string.IsNullOrEmpty(localInfo)
+            ? ReleaseVersion.FormatDisplay(local)
+            : localLabel;
+
+        if (!VersionCommand.ShouldInstallCliRelease(
+                local, remoteText, channelDisplay, installedTag, installedChannel, localInfo))
         {
-            AsyncConsole.WriteLine($"Titanium CLI is up to date ({channelDisplay}).");
+            if (ReleaseVersion.CompareReleaseTags(localLabel, remoteText) > 0
+                && !ReleaseVersion.IsPrereleaseTag(remoteText))
+            {
+                AsyncConsole.WriteLine(
+                    $"Local Cli {localDisplay} is newer than {channelDisplay} {remoteText}. No changes.");
+            }
+            else if (channelDisplay.Equals("beta", StringComparison.OrdinalIgnoreCase)
+                     && ReleaseVersion.IsPrereleaseTag(remoteText)
+                     && !ReleaseVersion.IsPrereleaseTag(localLabel)
+                     && ReleaseVersion.ParseComparable(localLabel)
+                     == ReleaseVersion.ParseComparable(remoteText))
+            {
+                AsyncConsole.WriteLine(
+                    $"No newer Beta than your current build ({localLabel}). Latest Beta is {remoteText}.");
+            }
+            else
+            {
+                AsyncConsole.WriteLine($"Titanium CLI is up to date ({remoteText}, {channelDisplay}).");
+            }
+
             return 0;
         }
 
@@ -195,7 +561,11 @@ internal static class UpdateCommand
             return 1;
         }
 
-        AsyncConsole.WriteLine($"Update {remoteText} ({channelDisplay}) is available. Installing…");
+        var action = ReleaseVersion.IsRemoteNewer(localLabel, remoteText)
+            && ReleaseVersion.ParseComparable(remoteText) > ReleaseVersion.ToComparable(local)
+            ? $"Update {localDisplay} → {remoteText} ({channelDisplay})"
+            : $"Switching to {remoteText} ({channelDisplay})";
+        AsyncConsole.WriteLine($"{action}. Installing…");
         AsyncConsole.WriteLine("Downloading…");
 
         var workDir = Path.Combine(Path.GetTempPath(), "TitaniumCli-update");
@@ -232,8 +602,6 @@ internal static class UpdateCommand
         var relaunch = Path.Combine(installDir, exeName);
         if (!File.Exists(relaunch))
         {
-            // Published layout may use AssemblyName titanium without extension on Unix already handled;
-            // twp sibling is optional.
             relaunch = Path.Combine(installDir, OperatingSystem.IsWindows() ? "twp.exe" : "twp");
         }
 
@@ -246,9 +614,9 @@ internal static class UpdateCommand
             remoteText,
             channelDisplay);
 
+        WriteCliIdentity(remoteText, channelDisplay);
         AsyncConsole.WriteLine(
             $"Installing {remoteText} ({channelDisplay}) in the background. When finished, run: titanium version");
-        // Exit so the helper can replace locked binaries.
         return 0;
     }
 
@@ -261,9 +629,51 @@ internal static class UpdateCommand
             return 1;
         }
 
-        var remoteLabel = manifest.Products?.Plus?.Version ?? manifest.Version ?? "unknown";
+        var remoteLabel = ReleaseVersion.NormalizeTag(
+            manifest.Products?.Plus?.Version ?? manifest.Version ?? "unknown");
         var dest = Path.Combine(AppContext.BaseDirectory, "Titanium.Plus.dll");
         var backup = dest + ".bak";
+        var plusLocal = VersionCommand.TryGetLocalPlusVersion();
+        var plusInfo = VersionCommand.TryGetLocalPlusInformationalVersion();
+        var installing = plusLocal is null;
+
+        if (plusLocal is not null)
+        {
+            if (!string.IsNullOrEmpty(asset.Sha256) && File.Exists(dest) && FileSha256Matches(dest, asset.Sha256))
+            {
+                AsyncConsole.WriteLine(
+                    $"Plus is already at {remoteLabel} ({channelDisplay}).");
+                return 0;
+            }
+
+            if (!VersionCommand.ShouldInstallPlusRelease(plusLocal, remoteLabel, plusInfo))
+            {
+                var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(plusLocal, plusInfo, null);
+                if (ReleaseVersion.CompareReleaseTags(localLabel, remoteLabel) > 0)
+                {
+                    AsyncConsole.WriteLine(
+                        $"Local Plus {localLabel} is newer than {channelDisplay} {remoteLabel}. No changes.");
+                }
+                else if (channelDisplay.Equals("beta", StringComparison.OrdinalIgnoreCase)
+                         && ReleaseVersion.IsPrereleaseTag(remoteLabel)
+                         && !ReleaseVersion.IsPrereleaseTag(localLabel))
+                {
+                    AsyncConsole.WriteLine(
+                        $"No newer Beta Plus than your current build ({localLabel}). Latest Beta is {remoteLabel}.");
+                }
+                else
+                {
+                    AsyncConsole.WriteLine(
+                        $"Plus is already at {remoteLabel} ({channelDisplay}).");
+                }
+
+                return 0;
+            }
+        }
+
+        AsyncConsole.WriteLine(installing
+            ? $"Installing Titanium.Plus {remoteLabel} ({channelDisplay})…"
+            : $"Updating Plus {ReleaseVersion.FormatDisplay(plusLocal)} → {remoteLabel} ({channelDisplay})…");
         AsyncConsole.WriteLine("Downloading…");
         try
         {
@@ -288,14 +698,96 @@ internal static class UpdateCommand
 
             var staging = dest + ".new";
             await File.WriteAllBytesAsync(staging, bytes);
-            File.Move(staging, dest, overwrite: true);
-            AsyncConsole.WriteLine($"Updated Titanium.Plus.dll to {remoteLabel} ({channelDisplay}).");
+            try
+            {
+                File.Move(staging, dest, overwrite: true);
+            }
+            catch
+            {
+                TryRestorePlusBackup(dest, backup);
+                throw;
+            }
+
+            AsyncConsole.WriteLine(installing
+                ? $"Installed Titanium.Plus.dll {remoteLabel} ({channelDisplay})."
+                : $"Updated Titanium.Plus.dll to {remoteLabel} ({channelDisplay}).");
             return 0;
         }
         catch (Exception ex)
         {
+            TryRestorePlusBackup(dest, backup);
             AsyncConsole.WriteError($"Plus update failed: {ex.Message}");
             return 1;
+        }
+    }
+
+    private static bool FileSha256Matches(string path, string expectedHex)
+    {
+        try
+        {
+            var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
+            return hash.Equals(expectedHex, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void TryRestorePlusBackup(string dest, string backup)
+    {
+        try
+        {
+            if (File.Exists(backup))
+            {
+                File.Copy(backup, dest, overwrite: true);
+            }
+        }
+        catch
+        {
+            // Best-effort restore.
+        }
+    }
+
+    internal static (string? Tag, string? Channel) ReadCliIdentity()
+    {
+        try
+        {
+            if (!File.Exists(CliIdentityPath))
+            {
+                return (null, null);
+            }
+
+            var json = File.ReadAllText(CliIdentityPath);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            var tag = root.TryGetProperty("tag", out var t) ? t.GetString() : null;
+            var channel = root.TryGetProperty("channel", out var c) ? c.GetString() : null;
+            return (tag, channel);
+        }
+        catch
+        {
+            return (null, null);
+        }
+    }
+
+    private static void WriteCliIdentity(string tag, string channel)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(CliIdentityPath);
+            if (!string.IsNullOrEmpty(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            File.WriteAllText(
+                CliIdentityPath,
+                JsonSerializer.Serialize(new { tag, channel }));
+        }
+        catch
+        {
+            // Non-fatal.
         }
     }
 
@@ -424,10 +916,16 @@ internal sealed class UpdateFeedClient
 
     public async Task<ReleaseManifest?> TryGetManifestAsync()
     {
+        var (manifest, _) = await TryGetManifestWithErrorAsync();
+        return manifest;
+    }
+
+    public async Task<(ReleaseManifest? Manifest, string? Error)> TryGetManifestWithErrorAsync()
+    {
         var feed = Environment.GetEnvironmentVariable("TITANIUM_UPDATE_FEED");
         if (feed == string.Empty)
         {
-            return null;
+            return (null, "Update feed disabled (TITANIUM_UPDATE_FEED is empty).");
         }
 
         try
@@ -438,27 +936,50 @@ internal sealed class UpdateFeedClient
             if (!string.IsNullOrEmpty(feed))
             {
                 var json = await http.GetStringAsync(feed);
-                return JsonSerializer.Deserialize<ReleaseManifest>(json, ManifestJson);
+                var fromFeed = JsonSerializer.Deserialize<ReleaseManifest>(json, ManifestJson);
+                return fromFeed is null
+                    ? (null, "Update feed returned invalid JSON.")
+                    : (fromFeed, null);
             }
 
             var api = _channel.Equals("beta", StringComparison.OrdinalIgnoreCase)
                 ? "https://api.github.com/repos/justcoding121/titanium-web-proxy/releases"
                 : "https://api.github.com/repos/justcoding121/titanium-web-proxy/releases/latest";
 
-            var payload = await http.GetStringAsync(api);
+            using var response = await http.GetAsync(api);
+            if (!response.IsSuccessStatusCode)
+            {
+                return (null, $"Update feed HTTP {(int)response.StatusCode} from GitHub Releases.");
+            }
+
+            var payload = await response.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(payload);
             if (!TrySelectRelease(doc.RootElement, out var release))
             {
-                return null;
+                return (null, _channel.Equals("beta", StringComparison.OrdinalIgnoreCase)
+                    ? "No beta release found."
+                    : "No stable release found.");
             }
 
             var version = release.GetProperty("tag_name").GetString()?.TrimStart('v') ?? "0.0.0";
             var fromAsset = await TryLoadManifestAssetAsync(http, release, version);
-            return fromAsset ?? new ReleaseManifest { Version = version, Channel = _channel };
+            return (fromAsset ?? new ReleaseManifest { Version = version, Channel = _channel }, null);
         }
-        catch
+        catch (HttpRequestException ex)
         {
-            return null;
+            return (null, $"Update feed network error: {ex.Message}");
+        }
+        catch (TaskCanceledException)
+        {
+            return (null, "Update feed timed out.");
+        }
+        catch (JsonException ex)
+        {
+            return (null, $"Update feed JSON error: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            return (null, $"Unable to query update feed: {ex.Message}");
         }
     }
 

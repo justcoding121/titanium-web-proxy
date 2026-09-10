@@ -25,6 +25,12 @@ public sealed class PlusActivationContext
 
     /// <summary>Host logger (typically <c>ProxyServer.Logger</c>). Prefer this over Console.</summary>
     public ILogger? Logger { get; init; }
+
+    /// <summary>
+    /// Set by Plus when gRPC-JSON transcoding starts; CLI assigns it onto
+    /// <c>ReverseProxyOptions.GrpcJsonTranscoder</c> during refresh.
+    /// </summary>
+    public IGrpcJsonTranscoder? GrpcJsonTranscoder { get; set; }
 }
 
 /// <summary>Opt-in GET/HEAD response cache (empty/off = zero cost when unused).</summary>
@@ -66,10 +72,73 @@ public interface ILatencyRecorder
     TimeSpan? GetDestinationLatency(string destinationId) => null;
 }
 
-/// <summary>Optional gRPC-Web transcoding hook; Core never embeds protobuf.</summary>
-public interface IGrpcTranscodeHook
+/// <summary>
+/// Bidirectional gRPC-JSON HTTP transcoder. Core never embeds protobuf codecs;
+/// Plus (or another host) supplies the implementation. Call only when non-null.
+/// </summary>
+public interface IGrpcJsonTranscoder
 {
-    bool TryTranscode(ReadOnlySpan<byte> requestBody, out byte[]? responseBody);
+    /// <summary>
+    /// Match a REST/JSON request; on hit rewrite path/method/headers/body to gRPC in place and mark the session.
+    /// Must return a completed <see cref="ValueTask{TResult}"/> on miss without buffering the body.
+    /// </summary>
+    /// <param name="session">Typically a <c>SessionEventArgs</c> instance.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    ValueTask<bool> TryRewriteRequestAsync(object session, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// If the session was marked rewritten, rewrite the gRPC response to JSON in place.
+    /// No-op (completed false) when unmarked.
+    /// </summary>
+    /// <param name="session">Typically a <c>SessionEventArgs</c> instance.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    ValueTask<bool> TryRewriteResponseAsync(object session, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Session mark written by <see cref="IGrpcJsonTranscoder"/> after a successful request rewrite.
+/// Stored on session <c>UserData</c> (preserving any prior value). Inspector and response rewrite read this.
+/// </summary>
+public sealed class GrpcJsonTranscodeSessionMark
+{
+    /// <summary>Prior <c>UserData</c> when the transcoder attached this mark.</summary>
+    public object? PreviousUserData { get; init; }
+
+    public required string ClientMethod { get; init; }
+    public required string ClientPathAndQuery { get; init; }
+    public string? ClientContentType { get; init; }
+
+    public required string UpstreamMethod { get; init; }
+    public required string UpstreamPath { get; init; }
+    public string UpstreamContentType { get; init; } = "application/grpc";
+
+    /// <summary>Fully-qualified output message type name for response decoding.</summary>
+    public string? OutputMessageType { get; init; }
+
+    /// <summary>Fully-qualified RPC name (package.Service/Method).</summary>
+    public string? RpcFullName { get; init; }
+
+    /// <summary>Framed protobuf request body sent upstream (for Inspector).</summary>
+    public byte[]? UpstreamRequestBody { get; set; }
+
+    /// <summary>Framed protobuf response body from upstream before JSON rewrite (for Inspector).</summary>
+    public byte[]? UpstreamResponseBody { get; set; }
+
+    /// <summary>Original client request body before rewrite (for Inspector).</summary>
+    public byte[]? ClientRequestBody { get; set; }
+
+    /// <summary>Try read a mark from session <c>UserData</c>.</summary>
+    public static bool TryGet(object? userData, out GrpcJsonTranscodeSessionMark? mark)
+    {
+        if (userData is GrpcJsonTranscodeSessionMark m)
+        {
+            mark = m;
+            return true;
+        }
+
+        mark = null;
+        return false;
+    }
 }
 
 /// <summary>Context for Inspector Plus panels.</summary>

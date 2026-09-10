@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.IO;
+using System.Net.Quic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -87,12 +88,16 @@ internal sealed class Http3Frame
     ///     Writes a frame (type + length + payload) to <paramref name="stream" />.
     ///     Coalesces the VarInt header (and small payloads) into a single socket write —
     ///     single-span header flush pattern (VarInt header + small payload coalesced into one write).
+    ///     When <paramref name="completeWrites"/> is true and <paramref name="stream"/> is a
+    ///     <see cref="QuicStream"/>, STREAM data and FIN share one MsQuic write. Callers must still
+    ///     <c>FlushAsync</c> (Darwin skip-Flush is banned).
     /// </summary>
     public static async ValueTask WriteAsync(
         Stream stream,
         ulong frameType,
         ReadOnlyMemory<byte> payload,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool completeWrites = false)
     {
         // Max VarInt is 8 bytes each for type + length.
         const int headerCap = 16;
@@ -106,7 +111,8 @@ internal sealed class Http3Frame
                 var headerLen = typeLen + lengthLen;
                 if (!payload.IsEmpty)
                     payload.Span.CopyTo(rented.AsSpan(headerLen));
-                await stream.WriteAsync(rented.AsMemory(0, headerLen + payload.Length), cancellationToken);
+                await WriteBufferAsync(stream, rented.AsMemory(0, headerLen + payload.Length),
+                    completeWrites, cancellationToken);
             }
             finally
             {
@@ -123,7 +129,7 @@ internal sealed class Http3Frame
             var typeLen = Http3VarInt.Write(headerBytes, frameType);
             var lengthLen = Http3VarInt.Write(headerBytes.AsSpan(typeLen), (ulong)payload.Length);
             await stream.WriteAsync(headerBytes.AsMemory(0, typeLen + lengthLen), cancellationToken);
-            await stream.WriteAsync(payload, cancellationToken);
+            await WriteBufferAsync(stream, payload, completeWrites, cancellationToken);
         }
         finally
         {
@@ -150,7 +156,8 @@ internal sealed class Http3Frame
         Stream stream,
         ReadOnlyMemory<byte> headersPayload,
         ReadOnlyMemory<byte> dataPayload,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool completeWrites = false)
     {
         const int headerCap = 16;
         var total = headerCap + headersPayload.Length + headerCap + dataPayload.Length;
@@ -174,11 +181,28 @@ internal sealed class Http3Frame
                 o += dataPayload.Length;
             }
 
-            await stream.WriteAsync(rented.AsMemory(0, o), cancellationToken);
+            await WriteBufferAsync(stream, rented.AsMemory(0, o), completeWrites, cancellationToken);
         }
         finally
         {
             ArrayPool<byte>.Shared.Return(rented);
         }
     }
+
+#pragma warning disable CA1416 // QuicStream.WriteAsync(completeWrites) is gated on the runtime stream type.
+    /// <summary>
+    ///     When <paramref name="completeWrites"/> is set, pack STREAM payload + FIN on
+    ///     <see cref="QuicStream"/>; other streams ignore the flag (unit tests use MemoryStream).
+    /// </summary>
+    private static ValueTask WriteBufferAsync(
+        Stream stream,
+        ReadOnlyMemory<byte> buffer,
+        bool completeWrites,
+        CancellationToken cancellationToken)
+    {
+        if (completeWrites && stream is QuicStream quic)
+            return quic.WriteAsync(buffer, completeWrites: true, cancellationToken);
+        return stream.WriteAsync(buffer, cancellationToken);
+    }
+#pragma warning restore CA1416
 }

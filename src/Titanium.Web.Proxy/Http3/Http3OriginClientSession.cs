@@ -25,6 +25,10 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
     private Http3Settings? _peerSettings;
     private int _disposed;
 
+    // Connection-scoped reuse of identical bodiless reverse QPACK request blocks (probe tiny-GET).
+    // Published as one immutable slot so fingerprint and bytes cannot tear under c=64.
+    private CachedEncodedRequestHeaders? _cachedEncodedRequestHeaders;
+
     internal Http3OriginClientSession(QuicConnection connection, ProxyServer proxyServer)
     {
         _connection = connection;
@@ -177,6 +181,59 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
         }
 
         return settings;
+    }
+
+
+    internal byte[]? TryGetCachedEncodedRequestHeaders(
+        int fingerprint,
+        string method,
+        ReadOnlySpan<byte> authority,
+        ReadOnlySpan<byte> path)
+    {
+        var cached = Volatile.Read(ref _cachedEncodedRequestHeaders);
+        if (cached is null || cached.Fingerprint != fingerprint)
+            return null;
+        if (!string.Equals(cached.Method, method, StringComparison.Ordinal))
+            return null;
+        if (!cached.Authority.AsSpan().SequenceEqual(authority))
+            return null;
+        if (!cached.Path.AsSpan().SequenceEqual(path))
+            return null;
+        return cached.Encoded;
+    }
+
+    internal void SetCachedEncodedRequestHeaders(
+        int fingerprint,
+        string method,
+        ReadOnlySpan<byte> authority,
+        ReadOnlySpan<byte> path,
+        byte[] encoded)
+    {
+        Volatile.Write(ref _cachedEncodedRequestHeaders, new CachedEncodedRequestHeaders(
+            fingerprint,
+            method,
+            authority.ToArray(),
+            path.ToArray(),
+            encoded));
+    }
+
+    private sealed class CachedEncodedRequestHeaders
+    {
+        internal CachedEncodedRequestHeaders(
+            int fingerprint, string method, byte[] authority, byte[] path, byte[] encoded)
+        {
+            Fingerprint = fingerprint;
+            Method = method;
+            Authority = authority;
+            Path = path;
+            Encoded = encoded;
+        }
+
+        internal int Fingerprint { get; }
+        internal string Method { get; }
+        internal byte[] Authority { get; }
+        internal byte[] Path { get; }
+        internal byte[] Encoded { get; }
     }
 
     public async ValueTask DisposeAsync()

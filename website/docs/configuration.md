@@ -1,6 +1,27 @@
 # Configuration (`twp.yaml`)
 
-Native schema version **7.1**. Root document maps to the configuration models in `Titanium.Web.Proxy.Configuration`.
+Native schema version **7.1**. For CLI operators: start with a minimal reverse file, then add routes, certificates, or Plus as needed.
+
+**Next:** copy the minimal reverse below → `titanium test -c twp.yaml` → `titanium run -c twp.yaml`.
+
+## Minimal reverse
+
+```yaml
+schemaVersion: "7.1"
+listeners:
+  - host: "127.0.0.1"
+    port: 8000
+    decryptSsl: false
+    forwardHost: "127.0.0.1"
+    forwardPort: 8080
+```
+
+```shell
+titanium test -c twp.yaml
+titanium run -c twp.yaml
+```
+
+`forwardHost` / `forwardPort` is the classic single-origin reverse (no route table). For path-based routing and load balancing, add `routes` and `clusters` below.
 
 ## Top-level shape
 
@@ -16,7 +37,7 @@ logging: null
 server: null
 ```
 
-Engine knobs live under `server:` (this document). Plus feature options stay under `plus:` / `plus.options` — Plus does **not** configure `ProxyServer`.
+Engine knobs live under `server:` ([reference](#server-reference)). Plus feature options stay under `plus:` / `plus.options` — Plus does **not** configure the engine.
 
 ## Listeners
 
@@ -24,7 +45,7 @@ Engine knobs live under `server:` (this document). Plus feature options stay und
 |-------|------|-------|
 | `host` | string | Default `0.0.0.0` |
 | `port` | int | Default `8000` |
-| `decryptSsl` | bool | HTTPS MITM / TLS terminate |
+| `decryptSsl` | bool | Terminate TLS / decrypt HTTPS (man-in-the-middle when used for MITM) |
 | `type` | string? | `explicit`, `transparent`, `socks`, or `quic` (null uses ForwardHost heuristics) |
 | `forwardHost` / `forwardPort` | string / int | Classic single-origin reverse (no route table) |
 | `enableHttp2` | bool? | `false` forces H1 globally; null inherits `server` / proxy default |
@@ -65,7 +86,89 @@ Engine knobs live under `server:` (this document). Plus feature options stay und
 
 Match fields typically include host, path (`Exact` / `Prefix` / `Template`), method, headers, and query. Cluster algorithms include RoundRobin, Random, LeastRequests, and LeastTime; destinations support weight and sticky cookie/header. When any cluster uses `LeastTime`, the CLI automatically enables request timing capture so latency EWMA can drive selection.
 
-## Server (`ProxyServer` knobs)
+### Route transforms
+
+Optional `transforms` on a route rewrite the upstream request (and can stage response header changes). Empty/absent transforms keep the reverse fast path. Supported kinds:
+
+| Kind | Parameters | Effect |
+|------|------------|--------|
+| `PathRemovePrefix` | `prefix` | Strip a path prefix |
+| `PathPrefix` | `prefix` | Prepend a path prefix |
+| `QueryValueSet` | `name`, `value` | Set or replace a query parameter |
+| `RequestHeaderSet` | `name`, `value` | Set a request header |
+| `RequestHeaderRemove` | `name` | Remove a request header |
+| `ResponseHeaderSet` | `name`, `value` | Set a response header after the origin responds |
+| `ResponseHeaderRemove` | `name` | Remove a response header after the origin responds |
+
+```json
+"transforms": [
+  { "kind": "PathPrefix", "parameters": { "prefix": "/gw" } },
+  { "kind": "QueryValueSet", "parameters": { "name": "env", "value": "lab" } },
+  { "kind": "RequestHeaderSet", "parameters": { "name": "X-Edge", "value": "1" } }
+]
+```
+
+## Static files
+
+```yaml
+staticFiles:
+  root: "./www"
+  enableGzip: true
+  enableBrotli: false
+```
+
+## Certificates / ACME
+
+Automatic Certificate Management Environment (**ACME**) can obtain Let’s Encrypt (or other directory) certificates for public listeners:
+
+```yaml
+certificates:
+  certificatePath: "./certs/fullchain.pem"
+  privateKeyPath: "./certs/privkey.pem"
+  acmeEmail: "ops@example.com"
+  acmeDomain: "app.example.com"
+  acmeDirectory: "https://acme-v02.api.letsencrypt.org/directory"
+```
+
+Use real paths and emails in your environment. Do not commit private keys. MITM engine knobs are under `server.certificateManager`; this section is for listener leaf PEM/PFX and ACME.
+
+## Logging
+
+```yaml
+logging:
+  enabled: true
+  minimumLevel: "Error"
+  enableConsole: true
+  enableConsoleColors: true
+  enableFile: false
+  filePath: null
+  maxFileSizeBytes: null
+  maxRolledFiles: null
+  queueCapacity: null
+```
+
+## Plus
+
+```yaml
+plus:
+  enabled: true
+  controlPlane:
+    host: "127.0.0.1"
+    port: 9080
+    sharedSecret: "<shared-secret>"
+  options:
+    cache.enable: "true"
+```
+
+Common `plus.options` keys (string values): see the table on [Plus](/docs/plus) (`discovery.*`, `security.*`, `waf.*`, `state.*`, `resilience.*`, `cache.enable`, `grpc.transcode.*`). Enabling `grpc.transcode.enabled` forces the HTTP session interception path — see [gRPC-JSON transcoding](/docs/grpc-json-transcoding). Engine settings belong in `server:`, not `plus.options`.
+
+## Validate
+
+```shell
+titanium test -c twp.yaml
+```
+
+## Server reference
 
 Null nested objects and null properties leave the library or profile default. Apply order: `profile` first, then overlays.
 
@@ -85,6 +188,9 @@ server:
   blockPrivateNetworkDestinations: false
   checkCertificateRevocation: NoCheck
   dnsServerEndPoint: "8.8.8.8:53"
+  accessLog:
+    path: "logs/access.ndjson"   # omit or null = off (zero cost)
+    sampleRate: 1.0              # 0.0–1.0
   timeouts:
     connectionTimeOutSeconds: 60
     connectTimeOutSeconds: 20
@@ -148,6 +254,10 @@ server:
     upStreamEndPoint: null
     upStreamEndPointIPv4: null
     upStreamEndPointIPv6: null
+  decryptSkipHosts: []      # present ⇒ Replace tunnel-only list (omit key to keep Merge factory defaults)
+  decryptOnlyHosts: []      # when non-empty, only these hosts are decrypted (Replace with skip/only)
+  systemProxyBypassHosts: null  # present ⇒ Replace OS bypass (omit ⇒ Merge identity defaults); SSO risk if removed
+  proxyLoopback: true       # localhost via proxy when building SystemProxySettings from config
   certificateManager:
     certificateEngine: BouncyCastleFast
     leafCertificateKeyAlgorithm: EcdsaP256
@@ -161,76 +271,36 @@ server:
     rootCertificateIssuerName: null
     saveFakeCertificates: true
     disableWildCardCertificates: false
+  accessLog: null   # opt-in NDJSON access log (see below)
 ```
 
 Listener-level `enableHttp2: false` still forces HTTP/2 off after `server.enableHttp2`. Listener-level `enableHttp3: false` (or `server.enableHttp3: false`) disables HTTP/3.
 
-HTTP interception is not a YAML knob: the CLI turns it on automatically when the config needs the session path (transforms, static files, or ACME). Request timing capture is not a YAML knob either: it is enabled automatically when any cluster uses `LeastTime`.
+HTTP interception is not a YAML knob: the CLI turns it on automatically when the config needs the session path (transforms, static files, ACME, access logs, or gRPC-JSON). Request timing capture is not a YAML knob either: it is enabled automatically when any cluster uses `LeastTime` (and when access logs are enabled).
+
+### Access log (`server.accessLog`)
+
+Opt-in JSON Lines (NDJSON) access log written **after** each response. Bodies are never buffered for this feature.
+
+```yaml
+server:
+  accessLog:
+    path: "./logs/access.ndjson"
+    sampleRate: 1.0   # 0.0–1.0; omit for 1.0
+```
+
+Each line includes `ts`, `method`, `url`, `host`, `status`, `durationMs`, and `clientIp`. Omit `accessLog` (or leave `path` empty) for zero cost on the hot path.
+
+### Graceful reload
+
+On Unix, send **SIGHUP** to a running `titanium run` process to reload routes and clusters from the same config file without stopping listeners or aborting in-flight requests. Windows service hosts should use a process restart or the Plus control-plane snapshot API instead.
 
 ### Code-only callbacks
 
-These cannot be set from YAML; wire them in library / embedder code:
+These cannot be set from YAML; wire them in Library / C# code:
 
 - `ProxyBasicAuthenticateFunc`, `ProxySchemeAuthenticateFunc` (and related realm/schemes on `ProxyServer`)
 - `WinAuthCredentialsProvider`
 - `GetCustomUpStreamProxyFunc`, `CustomUpStreamProxyFailureFunc`
 - `ShouldInterceptHttp`
 - `BufferPool`, `Logging.LoggerFactory`, custom `CertificateStorage`
-
-## Static files
-
-```yaml
-staticFiles:
-  root: "./www"
-  enableGzip: true
-  enableBrotli: false
-```
-
-## Certificates / ACME
-
-```yaml
-certificates:
-  certificatePath: "./certs/fullchain.pem"
-  privateKeyPath: "./certs/privkey.pem"
-  acmeEmail: "ops@example.com"
-  acmeDomain: "app.example.com"
-  acmeDirectory: "https://acme-v02.api.letsencrypt.org/directory"
-```
-
-Use real paths and emails in your environment. Do not commit private keys. MITM engine knobs are under `server.certificateManager`; this section is for listener leaf PEM/PFX and ACME.
-
-## Logging
-
-```yaml
-logging:
-  enabled: true
-  minimumLevel: "Error"
-  enableConsole: true
-  enableConsoleColors: true
-  enableFile: false
-  filePath: null
-  maxFileSizeBytes: null
-  maxRolledFiles: null
-  queueCapacity: null
-```
-
-## Plus
-
-```yaml
-plus:
-  enabled: true
-  controlPlane:
-    host: "127.0.0.1"
-    port: 9080
-    sharedSecret: "<shared-secret>"
-  options:
-    cache.enable: "true"
-```
-
-Common `plus.options` keys (string values): discovery, security, WAF, rate-limit state (`state.mode=memory` or `state.redis`), resilience probes, and cache. See [Plus](/docs/plus). Engine settings belong in `server:`, not `plus.options`.
-
-## Validate
-
-```shell
-titanium test -c twp.yaml
-```

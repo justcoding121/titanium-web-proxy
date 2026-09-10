@@ -35,6 +35,14 @@ public sealed class ServerConfig
     /// <summary>NoCheck, Online, Offline, or OnlineNoCheck.</summary>
     public string? CheckCertificateRevocation { get; set; }
 
+    /// <summary>
+    ///     When true, accept origin certificates that fail OS chain validation (MITM of
+    ///     self-signed / private CA / loopback). When false, reject them. Omit to let the CLI
+    ///     default: true for explicit <c>decryptSsl</c> listeners (macOS cannot write
+    ///     CurrentUser\Root without Keychain UI).
+    /// </summary>
+    public bool? IgnoreServerCertificateErrors { get; set; }
+
     /// <summary>DNS resolver for HTTPS/SVCB discovery, e.g. <c>8.8.8.8:53</c>.</summary>
     public string? DnsServerEndPoint { get; set; }
 
@@ -51,6 +59,40 @@ public sealed class ServerConfig
     public UpstreamConfig? Upstream { get; set; }
 
     public CertificateManagerConfig? CertificateManager { get; set; }
+
+    /// <summary>
+    ///     Host patterns that skip HTTPS decryption on explicit listeners (tunnel only).
+    ///     When this property or <see cref="DecryptOnlyHosts"/> is present (non-null), exclusions use
+    ///     <c>MitmExclusionMode.Replace</c> — factory SSO/pinning hosts are not re-injected.
+    ///     Omit both to keep library Merge defaults (no CLI overlay).
+    /// </summary>
+    public List<string>? DecryptSkipHosts { get; set; }
+
+    /// <summary>When non-empty, only these hosts are decrypted on explicit listeners.</summary>
+    public List<string>? DecryptOnlyHosts { get; set; }
+
+    /// <summary>
+    ///     OS system-proxy bypass hosts for callers that build <c>SystemProxySettings</c> from this config.
+    ///     When non-null, lists use Replace mode (authoritative). Omit for Merge with factory identity hosts.
+    ///     Removing Microsoft identity hosts can break SSO / WAM while System proxy is on.
+    /// </summary>
+    public List<string>? SystemProxyBypassHosts { get; set; }
+
+    /// <summary>When true, localhost uses the proxy (platform loopback rule). Used with system-proxy helpers.</summary>
+    public bool? ProxyLoopback { get; set; }
+
+    /// <summary>Opt-in JSON access log (path + optional sample rate). Null = off (zero cost).</summary>
+    public AccessLogConfig? AccessLog { get; set; }
+}
+
+/// <summary>JSON access log under <c>server.accessLog</c>.</summary>
+public sealed class AccessLogConfig
+{
+    /// <summary>File path for NDJSON lines. Required to enable.</summary>
+    public string? Path { get; set; }
+
+    /// <summary>Sample rate 0.0–1.0 (default 1.0 = all). Values ≤0 disable writing.</summary>
+    public double? SampleRate { get; set; }
 }
 
 /// <summary>Deadline and retry knobs on <c>ProxyServer</c>.</summary>

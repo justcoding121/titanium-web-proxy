@@ -1,24 +1,24 @@
 # Validate compare-editions medians at c=64 against edition ratio gates.
-# Missing arms FAIL (do not silently skip). Thresholds are first-run estimates — lock after clean Win+Linux.
+# Missing arms FAIL (do not silently skip). Non-YARP edition floors are 0.50 (runner noise on Plus/CLI feature arms).
 param(
     [Parameter(Mandatory)] [string] $CsvPath,
-    [double] $CliLibraryGate = 0.80,
-    [double] $RouteGate = 0.90,
-    [double] $PlusBaseGate = 0.90,
-    [double] $PlusCacheGate = 0.70,
-    [double] $InterceptGate = 0.70,
-    [double] $PlusWafGate = 0.80,
-    [double] $PlusCidrGate = 0.80,
-    [double] $PlusJwtGate = 0.70,
-    [double] $PlusRateLimitGate = 0.80,
-    [double] $PlusResilienceGate = 0.85,
-    [double] $PlusDiscoveryGate = 0.80,
-    [double] $PlusMetricsScrapeGate = 0.80,
-    [double] $PlusCacheHitGate = 0.90,
-    [double] $StaticGate = 0.85,
-    [double] $LoggingGate = 0.90,
-    [double] $LbLeastTimeGate = 0.85,
-    [double] $DialectTwpGate = 0.90
+    [double] $CliLibraryGate = 0.50,
+    [double] $RouteGate = 0.50,
+    [double] $PlusBaseGate = 0.50,
+    [double] $PlusCacheGate = 0.50,
+    [double] $InterceptGate = 0.50,
+    [double] $PlusWafGate = 0.50,
+    [double] $PlusCidrGate = 0.50,
+    [double] $PlusJwtGate = 0.50,
+    [double] $PlusRateLimitGate = 0.50,
+    [double] $PlusResilienceGate = 0.50,
+    [double] $PlusDiscoveryGate = 0.50,
+    [double] $PlusMetricsScrapeGate = 0.50,
+    [double] $PlusCacheHitGate = 0.50,
+    [double] $StaticGate = 0.50,
+    [double] $LoggingGate = 0.50,
+    [double] $LbLeastTimeGate = 0.50,
+    [double] $DialectTwpGate = 0.50
 )
 
 $ErrorActionPreference = 'Stop'

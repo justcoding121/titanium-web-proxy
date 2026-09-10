@@ -60,6 +60,9 @@ internal static class EmbeddedLoadGenerator
     {
         if (options.Workload.IsWebSocket)
             return WebSocketLoadGenerator.RunAsync(options, concurrency, duration, collectLatency, cancellationToken);
+        if (options.Workload.IsGrpc)
+            return GrpcLoadGenerator.RunAsync(options.Target ?? throw new InvalidOperationException("gRPC requires Target"),
+                concurrency, duration, cancellationToken);
 
         var useRawH1 = options.Workload.IsEarlyResponse
                        && options.HttpVersion.Major < 2

@@ -1,5 +1,7 @@
 # HTTP/3 (QUIC) Support
 
+> For operators enabling HTTP/3 on CLI/Inspector hosts, and for .NET library users opting into QUIC.
+
 Titanium Web Proxy supports HTTP/3 as an **opt-in experimental** feature built on top of `System.Net.Quic`
 (which in turn uses the MsQuic native library).
 
@@ -81,7 +83,7 @@ titanium http3-deps status
 titanium http3-deps install
 ```
 
-Detects apt (Microsoft repo), dnf/zypper, `apk add libmsquic`, or `brew install libmsquic`. Opt-in; needs network and sudo/admin. Not automatic in MSI/winget.
+Detects apt (Microsoft repo), dnf/zypper, `apk add libmsquic`, or `brew install libmsquic`. Opt-in; needs network and sudo/admin. Not automatic in MSI / AppImage / zip installs.
 
 ## Quick start — reverse dual-listen (HttpClient / browsers)
 
@@ -402,10 +404,11 @@ pattern as `ExplicitProxyEndPoint` without touching the transparent implementati
 
 **CLI / Inspector:** Release `osx-x64` / `osx-arm64` zips already bundle `libmsquic`, `libssl`, and `libcrypto` with `@loader_path`. Prefer those zips over a manual Homebrew install.
 
+**Local Debug / `dotnet run` (macOS):** Builds copy Homebrew natives beside the output, but framework-dependent hosts still need that folder on `DYLD_FALLBACK_LIBRARY_PATH` because `System.Net.Quic` loads MsQuic by leaf name only (not from `AppContext.BaseDirectory`). Inspector and CLI call `Http3NativeBootstrap.EnsureAppLocalMsQuicVisible` at startup (and regenerate `Properties/launchSettings.json` on build) so a normal Debug launch enables HTTP/3 after `brew install libmsquic openssl@3`.
+
 **NuGet library hosts:** MsQuic is **not** bundled with the .NET runtime on macOS. Bundle `libmsquic`,
 `libssl`, and `libcrypto` alongside your application and configure `@loader_path` so the libraries
-can locate each other locally. When this is done correctly, `QuicListener.IsSupported` returns `true`.
-Alternatively: `brew install libmsquic` or `titanium http3-deps install` on a machine that has the CLI.
+can locate each other locally, then call `Http3NativeBootstrap.EnsureAppLocalMsQuicVisible` before the first `QuicListener.IsSupported` check (or ship self-contained so `System.Net.Quic.dll` sits next to the dylibs). Alternatively: `brew install libmsquic` or `titanium http3-deps install` on a machine that has the CLI.
 
 See the [MsQuic GitHub](https://github.com/microsoft/msquic) for library build and bundling instructions.
 
