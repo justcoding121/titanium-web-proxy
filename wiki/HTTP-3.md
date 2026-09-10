@@ -1,6 +1,6 @@
 # HTTP/3 (QUIC) Support
 
-> For operators enabling HTTP/3 on CLI/Inspector hosts, and for .NET embedders opting into QUIC.
+> For operators enabling HTTP/3 on CLI/Inspector hosts, and for .NET library users opting into QUIC.
 
 Titanium Web Proxy supports HTTP/3 as an **opt-in experimental** feature built on top of `System.Net.Quic`
 (which in turn uses the MsQuic native library).

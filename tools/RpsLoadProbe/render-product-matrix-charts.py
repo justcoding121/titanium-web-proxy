@@ -291,8 +291,8 @@ def render_os(
     fig.text(
         0.01,
         0.004,
-        "Reverse only · tiny keep-alive GET (~56 B) · H2↔H2 is compressed-relay "
-        "(Titanium best case) · TWP vs YARP vs nginx vs HAProxy vs Envoy · "
+        "Reverse only · tiny keep-alive GET (~56 B) · H2↔H2 is Titanium best case "
+        "(frame copy, not full re-encode) · TWP vs YARP vs nginx vs HAProxy vs Envoy · "
         "0 / n/a peers omitted (no empty slots) · MITM Lite/Full stay tables-only",
         fontsize=8,
         color="#444444",

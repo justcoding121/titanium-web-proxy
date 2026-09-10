@@ -1,6 +1,6 @@
 # Protocol feature support
 
-> For operators and .NET embedders evaluating what Titanium can speak end-to-end.
+> For operators and .NET library users evaluating what Titanium can speak end-to-end.
 
 A feature-by-feature snapshot of what Titanium Web Proxy actually implements for HTTP/1.0, HTTP/1.1,
 HTTP/2, and HTTP/3, so you can tell at a glance whether something you depend on is fully supported,

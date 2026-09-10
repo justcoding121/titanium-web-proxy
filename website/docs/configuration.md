@@ -297,7 +297,7 @@ On Unix, send **SIGHUP** to a running `titanium run` process to reload routes an
 
 ### Code-only callbacks
 
-These cannot be set from YAML; wire them in Library / embedder code:
+These cannot be set from YAML; wire them in Library / C# code:
 
 - `ProxyBasicAuthenticateFunc`, `ProxySchemeAuthenticateFunc` (and related realm/schemes on `ProxyServer`)
 - `WinAuthCredentialsProvider`

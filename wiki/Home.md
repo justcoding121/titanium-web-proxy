@@ -15,7 +15,7 @@ A lightweight, high-performance HTTP(S) proxy for Windows, Linux, and macOS — 
 - [Protocol feature support](Protocol-Support) ([bridges](Protocol-Support#protocol-bridges))
 - [Migrating from 4.x to 5.0](Migration-4.x-to-5.0)
 
-### Library API (embedders)
+### Library API (.NET)
 
 - [Endpoints](#endpoints)
 - [Decrypting HTTPS](#decrypting-https)
@@ -110,7 +110,7 @@ Outbound HTTP/2 probes that fail ALPN (`SEC_E_NO_APPLICATION_PROTOCOL` / “No c
 
 <img src="images/wpf-screenshot.jpg" alt="WPF proxy application screenshot" width="900" />
 
-## Library API (embedders)
+## Library API (.NET)
 
 This section covers the major `Titanium.Web.Proxy` APIs for embedding the engine in a .NET app. For the full type reference, see the [API documentation](https://titaniumproxy.com/api/Titanium.Web.Proxy.ProxyServer.html).
 

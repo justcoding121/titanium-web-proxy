@@ -144,10 +144,11 @@ OS_SPECS = (
 )
 
 MERGED_FOOTER = (
-    "Wires: tiny keep-alive GET (~56 B) · terminate first, H2↔H2/h2c last "
-    "(compressed-relay = Titanium best case) · Workloads: POST / WS / gRPC (RPC/s) "
-    "from compare-post / compare-arch / compare-grpc · GHA 4-core · 0 / n/a peers "
-    "omitted (no empty slots) · do not compare absolute RPS across clusters (shards)"
+    "Wires: tiny keep-alive GET (~56 B) · typical reverse paths first, "
+    "H2↔H2/h2c last (Titanium best case on tiny GET) · Workloads: POST / WS / "
+    "gRPC (RPC/s) from compare-post / compare-arch / compare-grpc · GHA 4-core · "
+    "0 / n/a peers omitted (no empty slots) · do not compare absolute RPS across "
+    "clusters (shards)"
 )
 
 # Practical wire label → (client, origin) cells in wiki Performance.md reverse tables.

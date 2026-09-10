@@ -1,6 +1,6 @@
 # Performance Profiling
 
-> **For contributors** — techniques used to find throughput hotspots; not required reading for operators or embedders.
+> **For contributors** — techniques used to find throughput hotspots; not required reading for operators or .NET library users.
 
 How the throughput hotspots behind the numbers on the [Performance](Performance) page were found. This page documents the techniques and tools so future performance work (or a regression hunt) can follow the same playbook instead of rediscovering it. Everything here was used in the 2026 pass that took the HTTP/2 bridge arms from ~6× behind the managed reverse peer to parity-or-close.
 

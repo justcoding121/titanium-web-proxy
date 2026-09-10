@@ -144,7 +144,7 @@ Two TWP-only MITM shapes on the same Client×Origin wires (+ CONNECT). nginx/YAR
 
 ### Practical reverse charts (README / website)
 
-One PNG per OS with **10 clusters**: seven industry reverse wires (tiny keep-alive GET ~56 B) plus POST 64 KiB / WebSocket / gRPC unary. Chart order is **terminate first**, then H2 same-protocol last (compressed-relay = Titanium best case on tiny GET). After downloading `compare-product` plus heavier roots:
+One PNG per OS with **10 clusters**: seven industry reverse wires (tiny keep-alive GET ~56 B) plus POST 64 KiB / WebSocket / gRPC unary. Chart order puts **typical reverse paths first** (TLS in → HTTP/1 out), then H2 same-protocol last (Titanium best case on tiny GET). After downloading `compare-product` plus heavier roots:
 
 ```bash
 pip install -r tools/RpsLoadProbe/requirements-charts.txt

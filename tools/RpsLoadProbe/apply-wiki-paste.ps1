@@ -52,7 +52,7 @@ $runUrl = "https://github.com/justcoding121/titanium-web-proxy/actions/runs/$Pri
 $productLine = "- Product refresh: ``compare-product`` @ ``$HeadSha`` $em [$PrimaryRunId]($runUrl). Heavier/saturation/tls:"
 $wiki = [regex]::Replace($wiki, '- Product refresh:.*', [System.Text.RegularExpressions.MatchEvaluator]{ $productLine }, 1)
 
-$tinyGetNote = "Product 5${mul}5 is **~56-byte JSON keep-alive GET**; H2/H3 same-protocol cells are header-dominated (Titanium compressed-relay best case) $em see [Why this comparison is fair](#why-this-comparison-is-fair)."
+$tinyGetNote = "Product 5${mul}5 is **~56-byte JSON keep-alive GET**; H2/H3 same-protocol cells are mostly header work with a tiny body (Titanium best case) $em see [Why this comparison is fair](#why-this-comparison-is-fair)."
 
 $winRevHeader = "Median of **3 repeats** on ``windows-latest`` (4 vCPU / 16 GiB). Bare reverse 5${mul}5 @ ``$HeadSha`` $em ``compare-product`` [$PrimaryRunId]($runUrl). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP${div}peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as ``<br><sub>(MiB / CPU%)</sub>``. nginx terminate peers use ``keepalive 256`` + streaming buffers. **HAProxy / Envoy are Linux-only peers** (no official Windows port). Laptop High-perf / cool-paired numbers stay on the [local lab](Performance-Local-Lab). $tinyGetNote"
 

@@ -12,7 +12,7 @@
 |---------|------|
 | `Titanium.Web.Proxy` | Engine (MIT) |
 | `Titanium.Web.Proxy.Abstractions` | Shared route/cluster/middleware/plugin contracts (MIT) |
-| `Titanium.Web.Proxy.Configuration` | YAML/JSON + dialect readers (MIT) — **optional** for embedders |
+| `Titanium.Web.Proxy.Configuration` | YAML/JSON + dialect readers (MIT) — **optional** for library users |
 
 Apps that only construct `ProxyServer` and set `ForwardHost` **do not** need Configuration.
 

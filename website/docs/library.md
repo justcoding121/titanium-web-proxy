@@ -1,6 +1,6 @@
 # Library (embed)
 
-> **For .NET embedders** — operators who want a reverse proxy or desktop debugger should start with the [CLI](/docs/cli) or [Inspector](/docs/inspector) instead.
+> **For .NET library users** — operators who want a reverse proxy or desktop debugger should start with the [CLI](/docs/cli) or [Inspector](/docs/inspector) instead.
 
 NuGet package **Titanium.Web.Proxy** (MIT). Target framework: **.NET 10**.
 
@@ -10,7 +10,7 @@ dotnet add package Titanium.Web.Proxy
 dotnet add package Titanium.Web.Proxy --prerelease
 ```
 
-Related MIT packages (also on NuGet): **Titanium.Web.Proxy.Abstractions** (shared contracts) and **Titanium.Web.Proxy.Configuration** (`twp.yaml` / dialect loaders — optional for embedders). See [migration 6→7](https://github.com/justcoding121/titanium-web-proxy/blob/develop/docs/migration-6-to-7.md).
+Related MIT packages (also on NuGet): **Titanium.Web.Proxy.Abstractions** (shared contracts) and **Titanium.Web.Proxy.Configuration** (`twp.yaml` / dialect loaders — optional for library users). See [migration 6→7](https://github.com/justcoding121/titanium-web-proxy/blob/develop/docs/migration-6-to-7.md).
 
 ## Explicit man-in-the-middle (MITM) proxy
 

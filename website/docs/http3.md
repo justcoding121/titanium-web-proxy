@@ -46,7 +46,7 @@ Edge OS / old glibc / missing host deps: `titanium http3-deps install` (apt / dn
 
 Use the **`linux-musl-*`** zip inside Alpine images. A `linux-x64` (glibc) zip will not load MsQuic on musl. Also install `numactl` + `lttng-ust` (or run `titanium http3-deps install`).
 
-## Library (for .NET embedders)
+## Library (for .NET library users)
 
 Embedding the Library in your own app does **not** bundle MsQuic:
 

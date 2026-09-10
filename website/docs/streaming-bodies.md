@@ -12,6 +12,6 @@ Full guidance, limitations, and examples: [Streaming-Bodies wiki](https://github
 
 ## Library hooks
 
-> **For .NET embedders** — use session events and body-write callbacks on `SessionEventArgs` / related types. Prefer streaming APIs when you do not need the full buffer.
+> **For .NET library users** — use session events and body-write callbacks on `SessionEventArgs` / related types. Prefer streaming APIs when you do not need the full buffer.
 
 For HTTP/3, per-chunk streaming hooks are part of the experimental surface (`TWP001`).

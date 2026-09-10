@@ -1,6 +1,6 @@
 # Streaming Bodies
 
-> For .NET embedders who need to inspect, transform, or generate request/response bodies without buffering them in memory.
+> For .NET library users who need to inspect, transform, or generate request/response bodies without buffering them in memory.
 
 By default Titanium relays request and response bodies as they flow, and only buffers a body in memory when you explicitly read it (`GetRequestBody()` / `GetResponseBody()`). For large downloads/uploads or endless streams (e.g. chunked server-sent events), buffering is undesirable or impossible.
 
