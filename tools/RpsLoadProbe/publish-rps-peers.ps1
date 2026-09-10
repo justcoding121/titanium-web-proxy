@@ -100,6 +100,9 @@ foreach ($id in $ProductRunIds) {
 foreach ($id in $BodiesRunIds) {
     $practicalArgs += @('--bodies-root', (Join-Path $GhaDlRoot $id))
 }
+foreach ($id in $PostRunIds) {
+    $practicalArgs += @('--post-root', (Join-Path $GhaDlRoot $id))
+}
 foreach ($id in $ArchRunIds) {
     $practicalArgs += @('--arch-root', (Join-Path $GhaDlRoot $id))
 }

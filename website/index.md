@@ -56,11 +56,11 @@ features:
 
 ## Performance
 
-Throughput (requests per second) vs **YARP**, **nginx**, **HAProxy**, and **Envoy** on matched GitHub Actions runners. Linux chart here; Windows, macOS, and heavier workloads on the [performance](/docs/performance) page.
+Throughput (requests per second) vs **YARP**, **nginx**, **HAProxy**, and **Envoy** on matched GitHub Actions runners. Linux tiny-GET chart here; Windows, macOS, 64 KB practical charts, and heavier workloads on the [performance](/docs/performance) page.
 
 <div class="rps-preview">
 
-![Practical reverse proxy throughput on Linux](../wiki/images/rps-practical-linux.png)
+![Practical reverse proxy throughput on Linux (tiny requests)](../wiki/images/rps-practical-linux.png)
 
 </div>
 
