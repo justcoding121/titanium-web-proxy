@@ -27,6 +27,7 @@ function Get-ArmMetrics([string]$CsvPath, [string]$Arm) {
     $rows = @(Import-Csv $CsvPath | Where-Object { $_.arm -eq $Arm })
     if ($rows.Count -eq 0) { return $null }
     $sustains = @(); $peaks = @(); $rss = @(); $cpu = @()
+    $sawC64 = $false
     for ($i = 0; $i + $Steps -le $rows.Count; $i += $Steps) {
         $chunk = $rows[$i..($i + $Steps - 1)]
         $c64Ok = $chunk | Where-Object { $_.concurrency -eq '64' -and $_.meets_slo -eq '1' } | Select-Object -Last 1
@@ -35,20 +36,42 @@ function Get-ArmMetrics([string]$CsvPath, [string]$Arm) {
             $peaks += [double]$c64Ok.rps
             $rss += [double]$c64Ok.proxy_rss_peak_bytes
             $cpu += [double]$c64Ok.proxy_cpu_avg_pct
+            $sawC64 = $true
             continue
         }
-        # SLO miss (e.g. Linux nginx H3): still publish peak @ c=64 with sustain 0.
+        # SLO miss: do not mix 0 into the sustain median (noisy Mac peer-fix arms).
         $c64Any = $chunk | Where-Object { $_.concurrency -eq '64' } | Select-Object -Last 1
         if ($c64Any) {
-            $sustains += 0
+            $sawC64 = $true
             $peaks += [double]$c64Any.rps
             $rss += [double]$c64Any.proxy_rss_peak_bytes
             $cpu += [double]$c64Any.proxy_cpu_avg_pct
         }
     }
-    if ($peaks.Count -eq 0) { return $null }
+    if ($sustains.Count -gt 0) {
+        return @{
+            Sustain = Median $sustains
+            Peak = Median $peaks
+            Rss = Median $rss
+            Cpu = Median $cpu
+        }
+    }
+    # Misaligned repeats (missing c=64 in a pass): use any SLO-pass c=64 rows.
+    $okAny = @($rows | Where-Object { $_.concurrency -eq '64' -and $_.meets_slo -eq '1' })
+    if ($okAny.Count -gt 0) {
+        $s = @($okAny | ForEach-Object { [double]$_.rps })
+        $r = @($okAny | ForEach-Object { [double]$_.proxy_rss_peak_bytes })
+        $c = @($okAny | ForEach-Object { [double]$_.proxy_cpu_avg_pct })
+        return @{
+            Sustain = Median $s
+            Peak = Median $s
+            Rss = Median $r
+            Cpu = Median $c
+        }
+    }
+    if (-not $sawC64 -or $peaks.Count -eq 0) { return $null }
     return @{
-        Sustain = Median $sustains
+        Sustain = 0
         Peak = Median $peaks
         Rss = Median $rss
         Cpu = Median $cpu

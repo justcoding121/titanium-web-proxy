@@ -27,10 +27,8 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 # Practical industry reverse wires (short labels → CSV arm names).
-# Order: terminate wires first (typical edge reverse), then H2 same-protocol
-# (tiny-GET compressed-relay best case). nginx H2/H3 origin stays None
-# (stock nginx has no H2/H3 upstream). HAProxy/Envoy H2→h2c / H2→H2 arms are
-# wired in the harness; missing CSV rows show n/a.
+# Order: H1 → H2 → H3 terminate/same-protocol, then POST / WS / gRPC workloads.
+# nginx H2/H3 origin stays None (stock nginx has no H2/H3 upstream).
 PRACTICAL_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], Optional[str]]] = [
     # label, twp, yarp, nginx, haproxy, envoy (None = product-impossible)
     (
@@ -66,14 +64,6 @@ PRACTICAL_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], Optional
         "envoy-reverse-http2-to-https-http1",
     ),
     (
-        "H3→H1c",
-        "twp-reverse-http3-cleartext",
-        "yarp-reverse-http3-cleartext",
-        "nginx-reverse-http3-cleartext",
-        "haproxy-reverse-http3-cleartext",
-        "envoy-reverse-http3-cleartext",
-    ),
-    (
         "H2 TLS→h2c",
         "twp-reverse-http2-to-h2c",
         "yarp-reverse-http2-to-h2c",
@@ -88,6 +78,14 @@ PRACTICAL_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], Optional
         None,
         "haproxy-reverse-http2-to-https",
         "envoy-reverse-http2-to-https",
+    ),
+    (
+        "H3→H1c",
+        "twp-reverse-http3-cleartext",
+        "yarp-reverse-http3-cleartext",
+        "nginx-reverse-http3-cleartext",
+        "haproxy-reverse-http3-cleartext",
+        "envoy-reverse-http3-cleartext",
     ),
 ]
 
@@ -144,9 +142,8 @@ OS_SPECS = (
 )
 
 MERGED_FOOTER = (
-    "Wires: tiny keep-alive GET (~56 B) · typical reverse paths first, "
-    "H2↔H2/h2c last (Titanium best case on tiny GET) · Workloads: POST / WS / "
-    "gRPC (RPC/s) from compare-post / compare-arch / compare-grpc · GHA 4-core · "
+    "Wires: tiny keep-alive GET (~56 B) · H1 → H2 → H3, then POST / WS / gRPC "
+    "(RPC/s) from compare-post / compare-arch / compare-grpc · GHA 4-core · "
     "0 / n/a peers omitted (no empty slots) · do not compare absolute RPS across "
     "clusters (shards)"
 )
@@ -157,9 +154,9 @@ WIKI_WIRE_CELLS: Dict[str, Tuple[str, str]] = {
     "H1 TLS→H1 TLS": ("HTTP/1 · TLS", "HTTP/1 · TLS"),
     "H2 TLS→H1c": ("HTTP/2 · TLS", "HTTP/1 · plain"),
     "H2 TLS→H1 TLS": ("HTTP/2 · TLS", "HTTP/1 · TLS"),
-    "H3→H1c": ("HTTP/3 · QUIC", "HTTP/1 · plain"),
     "H2 TLS→h2c": ("HTTP/2 · TLS", "HTTP/2 · plain"),
     "H2 TLS→H2 TLS": ("HTTP/2 · TLS", "HTTP/2 · TLS"),
+    "H3→H1c": ("HTTP/3 · QUIC", "HTTP/1 · plain"),
 }
 
 HEADING_TO_OS = {
@@ -429,32 +426,39 @@ def plot_packed_product_bars(
 
 
 def arm_sustain_c64(csv_path: Path, arm: str) -> Optional[float]:
-    """Sustain RPS @ c=64 (0 if SLO miss). Median across repeats in one CSV."""
+    """Sustain RPS @ c=64. Median of SLO-passing repeats; 0 if all c=64 steps miss SLO."""
     rows = [r for r in csv.DictReader(csv_path.open(newline="")) if r.get("arm") == arm]
     if not rows:
         return None
     # Group into ramp chunks of 4 concurrency steps when present; else last c=64 per pass.
     steps = 4
     sustains: List[float] = []
+    saw_c64 = False
     i = 0
     while i + steps <= len(rows):
         chunk = rows[i : i + steps]
         c64_ok = [r for r in chunk if r.get("concurrency") == "64" and r.get("meets_slo") == "1"]
         if c64_ok:
             sustains.append(float(c64_ok[-1]["rps"]))
+            saw_c64 = True
         else:
             c64_any = [r for r in chunk if r.get("concurrency") == "64"]
             if c64_any:
-                sustains.append(0.0)
+                saw_c64 = True
         i += steps
-    if not sustains:
-        # Fallback: last c=64 row
-        c64 = [r for r in rows if r.get("concurrency") == "64"]
-        if not c64:
-            return None
-        r = c64[-1]
-        return float(r["rps"]) if r.get("meets_slo") == "1" else 0.0
-    return median(sustains)
+    if sustains:
+        return median(sustains)
+    # Misaligned repeats (e.g. a pass missing c=64) — still use any SLO-pass c=64 rows.
+    ok_any = [
+        float(r["rps"])
+        for r in rows
+        if r.get("concurrency") == "64" and r.get("meets_slo") == "1"
+    ]
+    if ok_any:
+        return median(ok_any)
+    if not saw_c64:
+        return None
+    return 0.0
 
 
 def parse_path_list(values: Optional[Sequence[Union[Path, str]]]) -> List[Path]:
