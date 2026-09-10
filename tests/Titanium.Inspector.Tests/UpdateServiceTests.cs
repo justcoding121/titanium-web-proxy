@@ -173,6 +173,16 @@ public class UpdateServiceTests
     }
 
     [TestMethod]
+    public void MsiOfferIsDowngrade_OnlyLowerProductVersion()
+    {
+        var v704 = new Version(7, 0, 4);
+        var v705 = new Version(7, 0, 5);
+        Assert.IsFalse(UpdateService.MsiOfferIsDowngrade(v705, v705));
+        Assert.IsFalse(UpdateService.MsiOfferIsDowngrade(v704, v705));
+        Assert.IsTrue(UpdateService.MsiOfferIsDowngrade(v705, v704));
+    }
+
+    [TestMethod]
     public void ClassifyOfferKind_DistinguishesUpgradeChannelAndDowngrade()
     {
         Assert.AreEqual(

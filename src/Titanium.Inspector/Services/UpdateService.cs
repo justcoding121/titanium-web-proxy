@@ -123,8 +123,8 @@ public sealed class UpdateService
                 };
             }
 
-            // Windows MSI cannot MajorUpgrade to the same or older ProductVersion.
-            if (kind == UpdateApplyKind.Msi && remote <= localComparable)
+            // Same ProductVersion is a MajorUpgrade (AllowSameVersionUpgrades). Older is still blocked.
+            if (kind == UpdateApplyKind.Msi && MsiOfferIsDowngrade(localComparable, remote))
             {
                 return new UpdateCheckResult
                 {
@@ -133,7 +133,7 @@ public sealed class UpdateService
                     OfferKind = UpdateOfferKind.None,
                     Message =
                         $"Windows Installer cannot replace this install with {remoteText} ({channelDisplay}) " +
-                        "(same or older version). Uninstall Titanium Inspector first, or download from the website.",
+                        "(older version). Uninstall Titanium Inspector first, or download from the website.",
                 };
             }
 
@@ -218,6 +218,13 @@ public sealed class UpdateService
 
         return false;
     }
+
+    /// <summary>
+    /// MSI MajorUpgrade replaces the same ProductVersion (last install wins). A lower
+    /// ProductVersion is still a WiX downgrade and cannot apply in-place.
+    /// </summary>
+    public static bool MsiOfferIsDowngrade(Version localComparable, Version remoteComparable) =>
+        remoteComparable < localComparable;
 
     private static bool ShouldOfferSameSemverSwitch(
         string channelDisplay,
