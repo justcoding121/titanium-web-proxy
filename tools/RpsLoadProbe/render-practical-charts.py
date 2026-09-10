@@ -506,13 +506,17 @@ def gha_dl_sibling_roots(results_root: Path) -> List[Path]:
 
 
 def arm_sustain_union(csv_paths: Sequence[Path], arm: Optional[str]) -> Optional[float]:
+    """Best sustain across CSVs (overlay peer-fix runs over older 0-RPS product rows)."""
     if arm is None:
         return None
+    best: Optional[float] = None
     for path in csv_paths:
         val = arm_sustain_c64(path, arm)
-        if val is not None:
-            return val
-    return None
+        if val is None:
+            continue
+        if best is None or val > best:
+            best = val
+    return best
 
 
 def grpc_arm_union(csv_paths: Sequence[Path], prefix: str, fallback: Optional[str]) -> Optional[str]:

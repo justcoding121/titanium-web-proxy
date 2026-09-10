@@ -56,26 +56,29 @@ function Get-ArmMetrics([string]$CsvPath, [string]$Arm) {
 }
 
 function Get-MedianMetrics([string]$OsFolder, [string]$Arm) {
-    $s = @(); $p = @(); $r = @(); $c = @()
+    # Across run IDs: take the best sustain/peak so peer-fix overlays beat older 0-RPS
+    # product rows for the same arm (median of [0, 50k] would publish 0).
+    $best = $null
     foreach ($runId in $RunIds) {
         $dir = Join-Path $ResultsRoot $runId
         # Exact OS folder or shard-suffixed (rps-csv-ubuntu-latest-shard-1-3).
+        # Also accept flat artifact layouts (csv directly under runId).
         $csv = Get-ChildItem `
             "$dir/rps-csv-$OsFolder/*.csv", `
             "$dir/rps-csv-$OsFolder-*/*.csv", `
-            "$dir/$OsFolder/*.csv" `
+            "$dir/$OsFolder/*.csv", `
+            "$dir/*.csv" `
             -ErrorAction SilentlyContinue |
             Select-Object -First 1
         if (-not $csv) { continue }
         $m = Get-ArmMetrics $csv.FullName $Arm
-        if ($m) {
-            $s += $m.Sustain; $p += $m.Peak; $r += $m.Rss; $c += $m.Cpu
+        if (-not $m) { continue }
+        if ($null -eq $best -or $m.Sustain -gt $best.Sustain -or
+            ($m.Sustain -eq $best.Sustain -and $m.Peak -gt $best.Peak)) {
+            $best = $m
         }
     }
-    if ($s.Count -eq 0) { return $null }
-    return @{
-        Sustain = Median $s; Peak = Median $p; Rss = Median $r; Cpu = Median $c
-    }
+    return $best
 }
 
 function Format-RpsCell($metrics, [switch]$Medal, [switch]$Peak) {

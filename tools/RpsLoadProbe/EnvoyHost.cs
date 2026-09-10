@@ -219,11 +219,15 @@ internal sealed class EnvoyHost : IDisposable
         await File.WriteAllTextAsync(confPath, conf, Encoding.ASCII);
 
         var baseId = Random.Shared.Next(1, 1000);
+        // H3/QUIC on GHA Linux: multi-worker needs CAP_BPF for CID routing. Without it,
+        // packets hop workers and RPS collapses as concurrency rises (c=8 ok → c=64 ~0).
+        // Single worker avoids that path; Mac was already stable multi-worker at ~1–2k.
+        var workers = requireUdp ? 1 : Environment.ProcessorCount;
         var startInfo = new ProcessStartInfo
         {
             FileName = exe,
             Arguments =
-                $"-c {QuotePath(confPath)} --concurrency {Environment.ProcessorCount} --disable-hot-restart --base-id {baseId}",
+                $"-c {QuotePath(confPath)} --concurrency {workers} --disable-hot-restart --base-id {baseId}",
             WorkingDirectory = prefixDir,
             UseShellExecute = false,
             RedirectStandardOutput = true,
@@ -323,9 +327,17 @@ internal sealed class EnvoyHost : IDisposable
             W(8, "protocol: UDP");
             W(8, $"address: {address}");
             W(8, $"port_value: {port}");
+            // Required when concurrency > 1; harmless with concurrency 1.
+            W(4, "enable_reuse_port: true");
             W(4, "udp_listener_config:");
             W(6, "quic_options: {}");
             // prefer_gro breaks QuicListener bring-up on some GHA kernels; omit it.
+            // Larger UDP rcvbuf reduces datagram drops under load (Envoy H3 docs).
+            W(4, "socket_options:");
+            W(4, "- level: 1"); // SOL_SOCKET
+            W(6, "name: 8"); // SO_RCVBUF
+            W(6, "int_value: 425984");
+            W(6, "state: STATE_PREBIND");
             W(4, "filter_chains:");
             W(4, "- transport_socket:");
             W(8, "name: envoy.transport_sockets.quic");
