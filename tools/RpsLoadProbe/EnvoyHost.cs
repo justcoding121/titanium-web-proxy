@@ -384,7 +384,9 @@ internal sealed class EnvoyHost : IDisposable
                 W(col + 12, "response_headers_to_add:");
                 W(col + 12, "- header:");
                 W(col + 16, "key: alt-svc");
-                W(col + 16, $"value: \"{altSvc}\"");
+                // Single-quoted YAML so embedded h3=":port" doubles do not terminate the scalar
+                // (was: value: "h3=":443"; ma=86400" → yaml-cpp "end of map not found").
+                W(col + 16, $"value: '{altSvc}'");
             }
 
             W(col + 4, "http_filters:");
