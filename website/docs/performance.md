@@ -6,7 +6,7 @@ Titanium targets low-overhead reverse proxying and HTTPS interception: connectio
 
 ## Practical reverse RPS
 
-Common reverse wires plus POST 64 KiB, WebSocket, and unary gRPC — one chart per OS. How to read medals and workload shape: [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#why-this-comparison-is-fair).
+Common reverse wires plus GET 64 KiB (H1 TLS→H1c), WebSocket, and unary gRPC — one chart per OS. How to read medals and workload shape: [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#why-this-comparison-is-fair).
 
 ### Windows
 
