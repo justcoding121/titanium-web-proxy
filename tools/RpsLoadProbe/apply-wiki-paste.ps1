@@ -93,7 +93,7 @@ $wiki = [regex]::Replace($wiki,
     [System.Text.RegularExpressions.MatchEvaluator]{
         param($m)
         $loadGen = "**Load generators:** Reverse inbound H3 arms use **``dotnet-httpclient``** (``http_version=3.0``, ``RequestVersionExact``). nginx/Windows is same-OS only (no QUIC). HAProxy/Envoy are Linux-only terminate peers."
-        $m.Groups[1].Value + $winRevHeader + "`n`n" + $loadGen + "`n`n" + '![Windows reverse](images/rps-product-reverse-windows.png)' + "`n`n" + $winRev + "`n"
+        $m.Groups[1].Value + $winRevHeader + "`n`n" + $loadGen + "`n`n" + $winRev + "`n"
     },
     1)
 
@@ -107,7 +107,7 @@ $wiki = [regex]::Replace($wiki,
 $wiki = [regex]::Replace($wiki,
     "(?ms)(^## Linux .+? Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?\n(?:.*?\r?\n)*?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
     [System.Text.RegularExpressions.MatchEvaluator]{
-        param($m) $m.Groups[1].Value + $linRevHeader + "`n`n" + '![Linux reverse](images/rps-product-reverse-linux.png)' + "`n`n" + $linRev + "`n"
+        param($m) $m.Groups[1].Value + $linRevHeader + "`n`n" + $linRev + "`n"
     },
     1)
 
@@ -146,7 +146,7 @@ if ($macHdrMatch.Success) {
     $tail = [regex]::Replace($tail,
         "(?ms)(^## macOS .+? Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?\n(?:.*?\r?\n)*?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
         [System.Text.RegularExpressions.MatchEvaluator]{
-            param($m) $m.Groups[1].Value + $macRevHeader + "`n`n" + '![macOS reverse](images/rps-product-reverse-macos.png)' + "`n`n" + $macRev + "`n"
+            param($m) $m.Groups[1].Value + $macRevHeader + "`n`n" + $macRev + "`n"
         },
         1)
     $macHdrMatch2 = [regex]::Match($tail, '(?m)^## macOS .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?$')

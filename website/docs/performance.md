@@ -34,17 +34,7 @@ Typical reverse wires with **64 KB GET/POST** (plus 256 KB H1 terminate) — bod
 
 ## Heavier reverse workloads
 
-Larger bodies, POST, lossy links, TLS termination cost, and architecture-sensitive shapes (slow consumers, duplex, WebSocket). Linux charts below; Windows tables and charts are on the [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#heavier-reverse-workloads).
-
-![Heavier bodies (Linux)](../../wiki/images/rps-heavier-bodies-linux.png)
-
-![Heavier POST (Linux)](../../wiki/images/rps-heavier-post-linux.png)
-
-![Heavier lossy link (Linux)](../../wiki/images/rps-heavier-lossy-linux.png)
-
-![TLS termination cost (Linux)](../../wiki/images/rps-heavier-tls-cost-linux.png)
-
-![Architecture-sensitive (Linux)](../../wiki/images/rps-heavier-arch-linux.png)
+Larger bodies, POST, lossy links, TLS termination cost, and architecture-sensitive shapes (slow consumers, duplex, WebSocket). Full tables are on the [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#heavier-reverse-workloads).
 
 ## Full measurements
 

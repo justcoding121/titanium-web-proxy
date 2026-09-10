@@ -207,9 +207,6 @@ HEAVIER_FOOTER = (
     "256 KB H1) · GitHub Actions 4-core / 16 GiB (macOS 14 GiB)"
 )
 
-# Back-compat alias for importers (render-heavier-charts / product-matrix).
-MERGED_FOOTER = TINY_FOOTER
-
 # Practical wire label → (client, origin) cells in wiki Performance.md reverse tables.
 WIKI_WIRE_CELLS: Dict[str, Tuple[str, str]] = {
     "H1 TLS→H1c": ("HTTP/1 · TLS", "HTTP/1 · plain"),

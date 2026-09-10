@@ -517,7 +517,7 @@ def main() -> None:
     )
     text = text[:c] + block + text[how:]
 
-    def patch_heavier(heading: str, new_hdr: str, new_table: str, chart_md: Optional[str] = None) -> None:
+    def patch_heavier(heading: str, new_hdr: str, new_table: str) -> None:
         nonlocal text
         i = text.find(heading)
         if i < 0:
@@ -537,48 +537,37 @@ def main() -> None:
         )
         text = text[:i] + chunk2 + text[tbl:]
         tbl = text.find(m.group(1), i)
-        if chart_md:
-            before = text[i:tbl]
-            if chart_md not in before:
-                text = text[:tbl] + chart_md + "\n\n" + text[tbl:]
-                tbl = text.find(m.group(1), i)
         text = replace_table_at(text, tbl, new_table)
 
     patch_heavier(
         "### Windows — heavier reverse GET (64 KiB / 256 KiB)",
         f"Median of **3** repeats on `windows-latest` @ `{HEAD}`. Source: Actions [{rid_b}]({run_url(rid_b)}) (`compare-bodies`). Warmup 2s / measure 8s. **RPS cells** include `(MiB / CPU%)` footprints.\n",
         bodies_table(win["bodies"], True),
-        "![Windows heavier bodies](images/rps-heavier-bodies-windows.png)",
     )
     patch_heavier(
         "### Linux — heavier reverse GET (64 KiB / 256 KiB)",
         f"Median of **3** repeats @ `{HEAD}`. Source: Actions [{rid_b}]({run_url(rid_b)}) (`compare-bodies`). Warmup 2s / measure 8s.\n",
         bodies_table(lin["bodies"], False),
-        "![Linux heavier bodies](images/rps-heavier-bodies-linux.png)",
     )
     patch_heavier(
         "### Windows — POST 64 KiB request + 64 KiB response",
         f"Median of **3** repeats on `windows-latest` @ `{HEAD}`. Source: Actions [{rid_p}]({run_url(rid_p)}) (`compare-post`).\n",
         post_table(win["post"], True),
-        "![Windows heavier POST](images/rps-heavier-post-windows.png)",
     )
     patch_heavier(
         "### Linux — POST 64 KiB request + 64 KiB response",
         f"Median of **3** repeats @ `{HEAD}`. Source: Actions [{rid_p}]({run_url(rid_p)}) (`compare-post`).\n",
         post_table(lin["post"], False),
-        "![Linux heavier POST](images/rps-heavier-post-linux.png)",
     )
     patch_heavier(
         "### Windows — lossy / high-RTT (H2 HOL / H3 loss)",
         f"Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2) or UDP datagram drop (H3); **64 KiB** GET. Median of **3** repeats on `windows-latest` @ `{HEAD}` — [{rid_l}]({run_url(rid_l)}) (`compare-lossy`).\n",
         lossy_table(win["lossy"], True),
-        "![Windows heavier lossy](images/rps-heavier-lossy-windows.png)",
     )
     patch_heavier(
         "### Linux — lossy / high-RTT (H2 HOL / H3 loss)",
         f"Median of **3** repeats @ `{HEAD}`. Source: [{rid_l}]({run_url(rid_l)}) (`compare-lossy`; lossy H3 uses `quic-http3`).\n",
         lossy_table(lin["lossy"], False),
-        "![Linux heavier lossy](images/rps-heavier-lossy-linux.png)",
     )
 
     text = re.sub(
@@ -589,21 +578,10 @@ def main() -> None:
     )
     arch = text.find("### Architecture-sensitive")
     w = text.find("#### Windows", arch)
-    l = text.find("#### Linux", w)
     arch_w = text.find("| Scenario |", w)
-    before_arch_w = text[w:arch_w]
-    arch_chart_w = "![Windows heavier arch](images/rps-heavier-arch-windows.png)"
-    if arch_chart_w not in before_arch_w:
-        text = text[:arch_w] + arch_chart_w + "\n\n" + text[arch_w:]
-        arch_w = text.find("| Scenario |", w)
     text = replace_table_at(text, arch_w, arch_table(win["arch"], True))
     l = text.find("#### Linux", text.find("### Architecture-sensitive"))
     arch_l = text.find("| Scenario |", l)
-    before_arch_l = text[l:arch_l]
-    arch_chart_l = "![Linux heavier arch](images/rps-heavier-arch-linux.png)"
-    if arch_chart_l not in before_arch_l:
-        text = text[:arch_l] + arch_chart_l + "\n\n" + text[arch_l:]
-        arch_l = text.find("| Scenario |", l)
     text = replace_table_at(text, arch_l, arch_table(lin["arch"], False))
 
     tls = text.find("### TLS termination cost")
@@ -616,10 +594,6 @@ def main() -> None:
         count=1,
     )
     tls_tbl_w = text2.find("| Workload |")
-    tls_chart_w = "![Windows heavier TLS cost](images/rps-heavier-tls-cost-windows.png)"
-    if tls_chart_w not in text2[:tls_tbl_w]:
-        text2 = text2[:tls_tbl_w] + tls_chart_w + "\n\n" + text2[tls_tbl_w:]
-        tls_tbl_w = text2.find("| Workload |")
     text2 = replace_table_at(text2, tls_tbl_w, tls_table(win["tls"], True))
     text = text[:w] + text2
 
@@ -633,10 +607,6 @@ def main() -> None:
         count=1,
     )
     tls_tbl_l = text2.find("| Workload |")
-    tls_chart_l = "![Linux heavier TLS cost](images/rps-heavier-tls-cost-linux.png)"
-    if tls_chart_l not in text2[:tls_tbl_l]:
-        text2 = text2[:tls_tbl_l] + tls_chart_l + "\n\n" + text2[tls_tbl_l:]
-        tls_tbl_l = text2.find("| Workload |")
     text2 = replace_table_at(text2, tls_tbl_l, tls_table(lin["tls"], False))
     text = text[:l] + text2
 

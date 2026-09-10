@@ -1,4 +1,4 @@
-# Publish product + heavier peer numbers into wiki/Performance.md and regenerate charts.
+# Publish product + heavier peer numbers into wiki/Performance.md and regenerate practical charts.
 # Requires completed GHA CSV downloads under tools/RpsLoadProbe/results/gha-dl/<runId>/.
 #
 # Wiki-grade (repeats=3, warmup 2s / measure 8s, c=8,16,32,64):
@@ -112,18 +112,4 @@ foreach ($id in $GrpcRunIds) {
 
 & $py tools/RpsLoadProbe/render-practical-charts.py @practicalArgs
 
-& $py tools/RpsLoadProbe/render-product-matrix-charts.py `
-    --from-wiki wiki/Performance.md `
-    --out-dir wiki/images
-
-if ($BodiesRunIds.Count -and $PostRunIds.Count -and $LossyRunIds.Count -and $TlsRunIds.Count -and $ArchRunIds.Count) {
-    $heavierChartArgs = @('--out-dir', 'wiki/images')
-    foreach ($id in $BodiesRunIds) { $heavierChartArgs += @('--bodies-root', (Join-Path $GhaDlRoot $id)) }
-    foreach ($id in $PostRunIds) { $heavierChartArgs += @('--post-root', (Join-Path $GhaDlRoot $id)) }
-    foreach ($id in $LossyRunIds) { $heavierChartArgs += @('--lossy-root', (Join-Path $GhaDlRoot $id)) }
-    foreach ($id in $TlsRunIds) { $heavierChartArgs += @('--tls-root', (Join-Path $GhaDlRoot $id)) }
-    foreach ($id in $ArchRunIds) { $heavierChartArgs += @('--arch-root', (Join-Path $GhaDlRoot $id)) }
-    & $py tools/RpsLoadProbe/render-heavier-charts.py @heavierChartArgs
-}
-
-Write-Host 'Done. Review wiki/Performance.md and wiki/images/*.png before commit.' -ForegroundColor Green
+Write-Host 'Done. Review wiki/Performance.md and wiki/images/rps-practical-*.png before commit.' -ForegroundColor Green

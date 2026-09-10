@@ -172,23 +172,7 @@ python3 tools/RpsLoadProbe/render-practical-charts.py \
   --title-suffix '@ <sha>'
 ```
 
-Writes `wiki/images/rps-practical-{linux,windows,macos}.png` and `rps-practical-heavier-{linux,windows}.png` when data exists (Linux embeds both in the repo README; all OS tiny charts plus Win/Linux 64 KB on the website Performance page). Five series: Titanium / YARP / nginx / HAProxy / Envoy. Tiny wires: H1 TLS→H1c · H1 TLS→H1 TLS · H2 TLS→H1c · H2 TLS→H1 TLS · H2 TLS→h2c · H2 TLS→H2 TLS · H3→H1c · H3→h2c. Workloads fold in from `--arch-root` / `--grpc-root`; heavier bodies/POST from `--bodies-root` / `--post-root` (or sibling `gha-dl/` folders when omitted).
-
-### Heavier workload charts
-
-After downloading heavier-mode CSV sets:
-
-```bash
-python3 tools/RpsLoadProbe/render-heavier-charts.py \
-  --bodies-root tools/RpsLoadProbe/results/gha-dl/<bodiesRunId> \
-  --post-root tools/RpsLoadProbe/results/gha-dl/<postRunId> \
-  --lossy-root tools/RpsLoadProbe/results/gha-dl/<lossyRunId> \
-  --tls-root tools/RpsLoadProbe/results/gha-dl/<tlsRunId> \
-  --arch-root tools/RpsLoadProbe/results/gha-dl/<archRunId> \
-  --out-dir wiki/images
-```
-
-Writes `rps-heavier-{bodies,post,lossy,tls-cost,arch}-{windows,linux}.png`.
+Writes up to six PNGs: `wiki/images/rps-practical-{linux,windows,macos}.png` and `rps-practical-heavier-{linux,windows,macos}.png` when data exists (macOS heavier is skipped today). Linux embeds both in the repo README; the website Performance page shows all OS tiny charts plus Win/Linux 64 KB. Five series: Titanium / YARP / nginx / HAProxy / Envoy. Tiny wires: H1 TLS→H1c · H1 TLS→H1 TLS · H2 TLS→H1c · H2 TLS→H1 TLS · H2 TLS→h2c · H2 TLS→H2 TLS · H3→H1c · H3→h2c. Workloads fold in from `--arch-root` / `--grpc-root`; heavier bodies/POST from `--bodies-root` / `--post-root` (or sibling `gha-dl/` folders when omitted). Wiki Performance tables stay chart-free.
 
 ### Native peer smoke (HAProxy / Envoy)
 

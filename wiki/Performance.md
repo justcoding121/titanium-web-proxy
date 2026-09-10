@@ -2,7 +2,7 @@
 
 Throughput and footprint of **Titanium** as a reverse / edge proxy and as a decrypting (**MITM**) proxy, measured on the same harness against **YARP**, **nginx**, **HAProxy**, and **Envoy** where each OS can run them.
 
-**RPS** is requests per second (gRPC charts use **RPC/s**). Numbers are Release builds on matched GitHub-hosted runners: Windows and Linux at **4 vCPU / 16 GiB**, macOS at **`macos-15-intel` 4-core / 14 GB**. Read within one chart or table — absolute RPS is not comparable across operating systems. *Not possible* means that product cannot run that path on that OS; *Not measured* means the path exists but no published number yet.
+**RPS** is requests per second (gRPC tables use **RPC/s**). Numbers are Release builds on matched GitHub-hosted runners: Windows and Linux at **4 vCPU / 16 GiB**, macOS at **`macos-15-intel` 4-core / 14 GB**. Read within one table — absolute RPS is not comparable across operating systems. *Not possible* means that product cannot run that path on that OS; *Not measured* means the path exists but no published number yet.
 
 For pooling knobs and certificate first-visit tuning, see [Performance and pooling](Home#performance-and-pooling). Laptop cool A/B tables (not publishable) live on [Performance Local Lab](Performance-Local-Lab).
 
@@ -182,8 +182,6 @@ Median of **3 repeats** on `windows-latest` (4 vCPU / 16 GiB). Bare reverse 5×5
 
 **Load generators:** Reverse inbound H3 arms use **`dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`). nginx/Windows is same-OS only (no QUIC). HAProxy/Envoy are Linux-only terminate peers.
 
-![Windows reverse](images/rps-product-reverse-windows.png)
-
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | HAProxy sustain | HAProxy peak | Envoy sustain | Envoy peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | HTTP/1 · plain | HTTP/1 · plain | 🥇 **23134**<br><sub>(75 MiB / 47.5% CPU)</sub> | 🥇 **23134**<br><sub>(75 MiB / 47.5% CPU)</sub> | **13916**<br><sub>(125 MiB / 24.9% CPU)</sub> | **13916**<br><sub>(125 MiB / 24.9% CPU)</sub> | *Not possible* | *Not possible* | *Not possible* | *Not possible* | **21699**<br><sub>(86 MiB / 48.8% CPU)</sub> | **21699**<br><sub>(86 MiB / 48.8% CPU)</sub> |
@@ -254,8 +252,6 @@ Same Client×Origin wires with interception on (`compare-product` [34441526151](
 
 Median of **3 repeats** on `ubuntu-latest` (4 vCPU / 16 GiB). Bare reverse 5×5 @ `9a2b3a1e` — `compare-product` [34441526151](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34441526151). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** HAProxy (3.2 `USE_QUIC`) and Envoy (GitHub release, HTTP/3 compiled in) run on the same loopback shape as nginx/YARP. nginx terminate peers use `keepalive 256` + streaming buffers. The RPS workflow installs nginx.org mainline (`http_v3_module`), a QUIC-enabled HAProxy, Envoy, and `libmsquic`. Prefer ratios over absolute RPS. Product 5×5 is **~56-byte JSON keep-alive GET**; H2/H3 same-protocol cells are mostly header work with a tiny body (Titanium best case) — see [Why this comparison is fair](#why-this-comparison-is-fair).
 
-![Linux reverse](images/rps-product-reverse-linux.png)
-
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | HAProxy sustain | HAProxy peak | Envoy sustain | Envoy peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | HTTP/1 · plain | HTTP/1 · plain | **36672**<br><sub>(94 MiB / 50.5% CPU)</sub> | **36672**<br><sub>(94 MiB / 50.5% CPU)</sub> | 🥇 **44112**<br><sub>(76 MiB / 40.4% CPU)</sub> | 🥇 **44112**<br><sub>(76 MiB / 40.4% CPU)</sub> | **41748**<br><sub>(67 MiB / 41.3% CPU)</sub> | **41748**<br><sub>(67 MiB / 41.3% CPU)</sub> | **24415**<br><sub>(116 MiB / 59.5% CPU)</sub> | **24415**<br><sub>(116 MiB / 59.5% CPU)</sub> | **32393**<br><sub>(115 MiB / 48.8% CPU)</sub> | **32393**<br><sub>(115 MiB / 48.8% CPU)</sub> |
@@ -325,8 +321,6 @@ Same Client×Origin wires with interception on (`compare-product` [34441526151](
 ### Reverse
 
 Median of **3 repeats** on `macos-15-intel` (4-core / 14 GB). Bare reverse 5×5 @ `9a2b3a1e` — `compare-product` [34441526151](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34441526151). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP÷peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as `<br><sub>(MiB / CPU%)</sub>`. The RPS workflow installs Homebrew nginx (`http_v3_module`), Homebrew HAProxy with `USE_QUIC` (3.2 source fallback), Envoy (Homebrew bottle or pinned darwin-amd64 1.36.7), Homebrew `libmsquic` (+ `DYLD_*`), and YARP. Do not publish from `macos-latest` (3-core / 7 GB). Product 5×5 is **~56-byte JSON keep-alive GET**; H2/H3 same-protocol cells are mostly header work with a tiny body (Titanium best case) — see [Why this comparison is fair](#why-this-comparison-is-fair).
-
-![macOS reverse](images/rps-product-reverse-macos.png)
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | HAProxy sustain | HAProxy peak | Envoy sustain | Envoy peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -438,16 +432,13 @@ Same reverse matrix measured on Titanium 7.0 versus committed 6.0 baselines ([33
 
 Both OS CSVs passed the cross-version check for this run. MITM arms are measured with the product reverse matrix, not this reverse-only comparison.
 
-
 ## Heavier reverse workloads
 
-Same runners and harness as the tiny-GET tables, but with larger bodies, POST, lossy links, TLS cost, and architecture-sensitive paths (slow consumer / early response / duplex). Charts: `rps-heavier-*-{windows,linux}.png`. **PUT with the same body is the same proxy work as POST; DELETE with no body matches GET** — only POST is published. Bodies/POST/lossy stay **half-duplex**. Laptop numbers are on [Performance Local Lab](Performance-Local-Lab#architecture-sensitive). How maintainers refresh these tables (modes, shards, paste scripts) is under [Maintainer notes](#maintainer-notes). **Larger-body check:** 64 / 256 KiB H2 TLS→H2 TLS is where body copy dominates headers — Titanium is **behind** YARP here (~0.69–0.76× at 64 KiB), unlike the tiny-GET H2↔H2 medals above.
+Same runners and harness as the tiny-GET tables, but with larger bodies, POST, lossy links, TLS cost, and architecture-sensitive paths (slow consumer / early response / duplex). **PUT with the same body is the same proxy work as POST; DELETE with no body matches GET** — only POST is published. Bodies/POST/lossy stay **half-duplex**. Laptop numbers are on [Performance Local Lab](Performance-Local-Lab#architecture-sensitive). How maintainers refresh these tables (modes, shards, paste scripts) is under [Maintainer notes](#maintainer-notes). **Larger-body check:** 64 / 256 KiB H2 TLS→H2 TLS is where body copy dominates headers — Titanium is **behind** YARP here (~0.69–0.76× at 64 KiB), unlike the tiny-GET H2↔H2 medals above.
 
 Lossy link = **userspace** delay/drop shim (not kernel `netem`): TCP gets per-buffer delay + occasional whole-connection stalls (honest head-of-line for multiplexed HTTP/2); UDP gets per-datagram delay + drops (QUIC). Lossy tables publish HTTP/1, HTTP/2, and HTTP/3.
 
 ### Windows — heavier reverse GET (64 KiB / 256 KiB)
-
-![Windows heavier bodies](images/rps-heavier-bodies-windows.png)
 
 Median of **3** repeats on `windows-latest` @ `9a2b3a1e`. Source: Actions [34441570199](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34441570199) (`compare-bodies`). Warmup 2s / measure 8s. **RPS cells** include `(MiB / CPU%)` footprints.
 
@@ -474,8 +465,6 @@ nginx/Windows collapses on large reverse bodies in this harness; treat as same-O
 
 ### Linux — heavier reverse GET (64 KiB / 256 KiB)
 
-![Linux heavier bodies](images/rps-heavier-bodies-linux.png)
-
 Median of **3** repeats @ `9a2b3a1e`. Source: Actions [34441570199](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34441570199) (`compare-bodies`). Warmup 2s / measure 8s.
 
 | Body | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | HAProxy sustain | HAProxy peak | Envoy sustain | Envoy peak | YARP sustain | YARP peak |
@@ -501,8 +490,6 @@ On this GHA pass TWP÷YARP H1 TLS ≈ **1.23×** (64 KiB) / **1.28×** (256 KiB)
 
 ### Windows — POST 64 KiB request + 64 KiB response
 
-![Windows heavier POST](images/rps-heavier-post-windows.png)
-
 Median of **3** repeats on `windows-latest` @ `9a2b3a1e`. Source: Actions [34441591377](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34441591377) (`compare-post`).
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | HAProxy sustain | HAProxy peak | Envoy sustain | Envoy peak | YARP sustain | YARP peak |
@@ -519,8 +506,6 @@ Median of **3** repeats on `windows-latest` @ `9a2b3a1e`. Source: Actions [34441
 TWP leads H1 POST (~**1.5×** YARP), H2 POST (~**1.2×** YARP), and H3 POST (~**1.1×** YARP).
 
 ### Linux — POST 64 KiB request + 64 KiB response
-
-![Linux heavier POST](images/rps-heavier-post-linux.png)
 
 Median of **3** repeats @ `9a2b3a1e`. Source: Actions [34441591377](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34441591377) (`compare-post`).
 
@@ -539,8 +524,6 @@ Linux nginx H1/H2/H3 POST completed (nginx.org mainline). TWP÷YARP H1 ≈ **1.5
 
 ### Windows — lossy / high-RTT (H2 HOL / H3 loss)
 
-![Windows heavier lossy](images/rps-heavier-lossy-windows.png)
-
 Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2) or UDP datagram drop (H3); **64 KiB** GET. Median of **3** repeats on `windows-latest` @ `9a2b3a1e` — [34441595456](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34441595456) (`compare-lossy`).
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | HAProxy sustain | HAProxy peak | Envoy sustain | Envoy peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -556,8 +539,6 @@ Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2) or UDP da
 TWP H2 HOL leads (~**3.31×** YARP). H3 is the protocol-shape win vs H2 HOL on the same lossy session; Win H3 GHA remains 0 (laptop remeasure kept above).
 
 ### Linux — lossy / high-RTT (H2 HOL / H3 loss)
-
-![Linux heavier lossy](images/rps-heavier-lossy-linux.png)
 
 Median of **3** repeats @ `9a2b3a1e`. Source: [34441595456](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34441595456) (`compare-lossy`; lossy H3 uses `quic-http3`).
 
@@ -576,10 +557,6 @@ TWP H2 HOL ≫ YARP (~**7.7×**). H3 TWP÷YARP ≈ **1×**.
 
 ### Architecture-sensitive
 
-![Windows heavier architecture-sensitive workloads](images/rps-heavier-arch-windows.png)
-
-![Linux heavier architecture-sensitive workloads](images/rps-heavier-arch-linux.png)
-
 These runs isolate slow app readers, origin-early response, HTTP/2 duplex, and WebSocket echo. See [TWP vs YARP IO model](Performance-Profiling#twp-vs-yarp-io-model). Laptop 1-rep numbers are on [Performance Local Lab](Performance-Local-Lab#architecture-sensitive).
 
 Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `9a2b3a1e` ([34441578556](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34441578556)). Slow consumer = 256 KiB GET, 16 KiB read + 8 ms sleep. Early response = 64 KiB POST, origin writes after 8 KiB. Duplex HTTP/2 = overlapping 64 KiB POST on H2 TLS↔H2 TLS. WebSocket = echo round-trips/sec.
@@ -587,8 +564,6 @@ Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `9a2b3a1e` ([344415
 Lossy-link runs (slow **network**) are already published above; they are not a slow **app** reader.
 
 #### Windows
-
-![Windows heavier arch](images/rps-heavier-arch-windows.png)
 
 | Scenario | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | HAProxy sustain | HAProxy peak | Envoy sustain | Envoy peak | YARP sustain | YARP peak |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -605,8 +580,6 @@ Lossy-link runs (slow **network**) are already published above; they are not a s
 | Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | 🥇 **24,498**<br><sub>(97 MiB / 43.0% CPU)</sub> | **24,498**<br><sub>(97 MiB / 43.0% CPU)</sub> | **12,337**<br><sub>(143 MiB / 24.6% CPU)</sub> | **12,337**<br><sub>(143 MiB / 24.6% CPU)</sub> | *Not possible* | *Not possible* | *Not possible* | *Not possible* | **23,100**<br><sub>(89 MiB / 44.6% CPU)</sub> | **23,100**<br><sub>(89 MiB / 44.6% CPU)</sub> |
 
 #### Linux
-
-![Linux heavier arch](images/rps-heavier-arch-linux.png)
 
 | Scenario | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | HAProxy sustain | HAProxy peak | Envoy sustain | Envoy peak | YARP sustain | YARP peak |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -628,15 +601,9 @@ Slow consumer is sleep-bound; H1/H2/H3 sit in the same band. Early-response H1/H
 
 Isolates keep-alive tiny GET vs **new connection per request** (handshake-dominated) vs keep-alive **256 KiB**. Product comparison uses RPS and end-to-end latency; TWP can also capture `ClientTlsTiming` when `TWP_RPS_CAPTURE_TLS=1` (child process) — nginx/YARP have no equivalent hook.
 
-![Windows TLS termination cost](images/rps-heavier-tls-cost-windows.png)
-
-![Linux TLS termination cost](images/rps-heavier-tls-cost-linux.png)
-
 #### Windows
 
 Median of **3** repeats on `windows-latest` @ `9a2b3a1e`. Source: Actions [34441599658](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34441599658). Absolute RPS on GHA swings hard; prefer **TWP÷YARP**.
-
-![Windows heavier TLS cost](images/rps-heavier-tls-cost-windows.png)
 
 | Workload | TWP sustain | TWP peak | nginx sustain | nginx peak | HAProxy sustain | HAProxy peak | Envoy sustain | Envoy peak | YARP sustain | YARP peak |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -647,8 +614,6 @@ Median of **3** repeats on `windows-latest` @ `9a2b3a1e`. Source: Actions [34441
 #### Linux
 
 Median of **3** repeats @ `9a2b3a1e`. Source: Actions [34441599658](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34441599658).
-
-![Linux heavier TLS cost](images/rps-heavier-tls-cost-linux.png)
 
 | Workload | TWP sustain | TWP peak | nginx sustain | nginx peak | HAProxy sustain | HAProxy peak | Envoy sustain | Envoy peak | YARP sustain | YARP peak |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -667,8 +632,6 @@ Unary Echo **RPC/s** @ c=64 over H2 TLS→H2 TLS for Titanium, YARP, nginx (`grp
 | Windows | **53,762**<br><sub>(88 MiB / 23.6% CPU)</sub> | **30,754**<br><sub>(123 MiB / 46.9% CPU)</sub> | *Not measured* | *Not possible* | *Not possible* |
 | Linux | **42,675**<br><sub>(120 MiB / 30.3% CPU)</sub> | **24,232**<br><sub>(159 MiB / 41.6% CPU)</sub> | *Not measured* | **8,683**<br><sub>(84 MiB / 24.6% CPU)</sub> | **16,110**<br><sub>(128 MiB / 20.6% CPU)</sub> |
 | macOS | **14,924**<br><sub>(94 MiB / 20.1% CPU)</sub> | **8,581**<br><sub>(128 MiB / 28.4% CPU)</sub> | *Not measured* | *Not measured* | *Not measured* |
-
-
 
 ## Other measurements
 
