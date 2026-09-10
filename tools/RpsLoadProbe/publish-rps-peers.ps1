@@ -97,8 +97,8 @@ $practicalArgs = @('--out-dir', 'wiki/images', '--title-suffix', "@ $HeadSha")
 foreach ($id in $ProductRunIds) {
     $practicalArgs += @('--results-root', (Join-Path $GhaDlRoot $id))
 }
-foreach ($id in $PostRunIds) {
-    $practicalArgs += @('--post-root', (Join-Path $GhaDlRoot $id))
+foreach ($id in $BodiesRunIds) {
+    $practicalArgs += @('--bodies-root', (Join-Path $GhaDlRoot $id))
 }
 foreach ($id in $ArchRunIds) {
     $practicalArgs += @('--arch-root', (Join-Path $GhaDlRoot $id))

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Render practical reverse-proxy RPS grouped bar charts (TWP / YARP / nginx / HAProxy / Envoy).
 
-One PNG per OS: seven industry reverse wires (tiny keep-alive GET) plus POST 64 KiB /
+One PNG per OS: seven industry reverse wires (tiny keep-alive GET) plus GET 64 KiB /
 WebSocket / gRPC unary (10 clusters). Writes README (Linux) and website (Win / Linux / macOS).
 
 Example (CSV):
   python3 tools/RpsLoadProbe/render-practical-charts.py \\
     --results-root tools/RpsLoadProbe/results/gha-dl/<productRunId> \\
-    --post-root tools/RpsLoadProbe/results/gha-dl/<postRunId> \\
+    --bodies-root tools/RpsLoadProbe/results/gha-dl/<bodiesRunId> \\
     --arch-root tools/RpsLoadProbe/results/gha-dl/<archRunId> \\
     --grpc-root tools/RpsLoadProbe/results/gha-dl/<grpcRunId> \\
     --out-dir wiki/images \\
@@ -99,16 +99,16 @@ COLORS = {
 
 PRODUCTS = ("Titanium", "YARP", "nginx", "HAProxy", "Envoy")
 
-# Workload clusters @ c=64 (no Tiny GET — that is H1 TLS→H1c above).
+# Workload clusters @ c=64 (same H1 TLS→H1c wire as tiny GET; larger response body).
 INDUSTRY_WORKLOADS: List[Tuple[str, Dict[str, Optional[str]]]] = [
     (
-        "POST 64 KiB",
+        "GET 64 KiB · H1 TLS→H1c",
         {
-            "Titanium": "twp-reverse-http1-tls-post64k",
-            "YARP": "yarp-reverse-http1-tls-post64k",
-            "nginx": "nginx-reverse-http1-tls-post64k",
-            "HAProxy": "haproxy-reverse-http1-tls-post64k",
-            "Envoy": "envoy-reverse-http1-tls-post64k",
+            "Titanium": "twp-reverse-http1-tls-body64k",
+            "YARP": "yarp-reverse-http1-tls-body64k",
+            "nginx": "nginx-reverse-http1-tls-body64k",
+            "HAProxy": "haproxy-reverse-http1-tls-body64k",
+            "Envoy": "envoy-reverse-http1-tls-body64k",
         },
     ),
     (
@@ -142,8 +142,8 @@ OS_SPECS = (
 )
 
 MERGED_FOOTER = (
-    "Wires: tiny keep-alive GET (~56 B) · Workloads: POST / WebSocket / gRPC (RPC/s) · "
-    "GitHub Actions 4-core / 16 GiB (macOS 14 GiB)"
+    "Wires: tiny keep-alive GET (~56 B) · Workloads: GET 64 KiB (H1 TLS→H1c) / "
+    "WebSocket / gRPC (RPC/s) · GitHub Actions 4-core / 16 GiB (macOS 14 GiB)"
 )
 
 # Practical wire label → (client, origin) cells in wiki Performance.md reverse tables.
@@ -205,7 +205,7 @@ def parse_wiki_practical(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]
     }
 
     wire_index = {label: i for i, (label, *_rest) in enumerate(PRACTICAL_ARMS)}
-    post_idx = WIRE_COUNT + 0
+    body_idx = WIRE_COUNT + 0
     ws_idx = WIRE_COUNT + 1
     grpc_idx = WIRE_COUNT + 2
 
@@ -252,39 +252,40 @@ def parse_wiki_practical(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]
         elif in_table and not line.startswith("|"):
             in_table = False
 
-    # --- POST 64 KiB (H1 TLS→H1c) ---
-    post_os: Optional[str] = None
-    in_post_table = False
+    # --- GET 64 KiB (H1 TLS→H1c) from heavier reverse GET tables ---
+    body_os: Optional[str] = None
+    in_body_table = False
     for line in md.splitlines():
-        if line.startswith("### Windows — POST"):
-            post_os = "windows"
-            in_post_table = False
+        if line.startswith("### Windows — heavier reverse GET"):
+            body_os = "windows"
+            in_body_table = False
             continue
-        if line.startswith("### Linux — POST"):
-            post_os = "linux"
-            in_post_table = False
+        if line.startswith("### Linux — heavier reverse GET"):
+            body_os = "linux"
+            in_body_table = False
             continue
-        if line.startswith("### ") and post_os is not None and "POST" not in line:
-            post_os = None
-            in_post_table = False
+        if line.startswith("### ") and body_os is not None and "heavier reverse GET" not in line:
+            body_os = None
+            in_body_table = False
             continue
-        if post_os is None:
+        if body_os is None:
             continue
-        if line.startswith("| Client | Origin |"):
-            in_post_table = True
+        if line.startswith("| Body | Client | Origin |") or line.startswith("| Size | Client | Origin |"):
+            in_body_table = True
             continue
-        if in_post_table and line.startswith("|---"):
+        if in_body_table and line.startswith("|---"):
             continue
-        if in_post_table and line.startswith("|"):
+        if in_body_table and line.startswith("|"):
             cols = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cols) < 12:
+            if len(cols) < 13:
                 continue
-            if cols[0] == "HTTP/1 · TLS" and cols[1] == "HTTP/1 · plain":
-                vals = _product_row_from_cols(cols)
+            # cols: Body, Client, Origin, TWP, ...
+            if cols[0] == "64 KiB" and cols[1] == "HTTP/1 · TLS" and cols[2] == "HTTP/1 · plain":
+                vals = _product_row_from_cols(cols, offset=1)
                 for product in PRODUCTS:
-                    out[post_os][product][post_idx] = vals[product]
-        elif in_post_table and not line.startswith("|"):
-            in_post_table = False
+                    out[body_os][product][body_idx] = vals[product]
+        elif in_body_table and not line.startswith("|"):
+            in_body_table = False
 
     # --- WebSocket from architecture-sensitive ---
     arch_os: Optional[str] = None
@@ -549,13 +550,13 @@ def collect_series(csv_paths: Sequence[Path]) -> Dict[str, List[Optional[float]]
 
 
 def collect_industry_series(
-    post_csvs: Sequence[Path],
+    bodies_csvs: Sequence[Path],
     arch_csvs: Sequence[Path],
     grpc_csvs: Sequence[Path],
 ) -> Dict[str, List[Optional[float]]]:
-    """POST / WebSocket / gRPC @ c=64 from mode-specific CSV unions."""
+    """GET 64 KiB (H1 TLS→H1c) / WebSocket / gRPC @ c=64 from mode-specific CSV unions."""
     sources = {
-        "POST 64 KiB": post_csvs,
+        "GET 64 KiB · H1 TLS→H1c": bodies_csvs,
         "WebSocket": arch_csvs,
         "gRPC unary": grpc_csvs,
     }
@@ -678,10 +679,16 @@ def main() -> int:
         help="Subset of OS charts (default: all with a CSV)",
     )
     ap.add_argument(
+        "--bodies-root",
+        action="append",
+        default=[],
+        help="compare-bodies run root(s) for GET 64 KiB · H1 TLS→H1c cluster",
+    )
+    ap.add_argument(
         "--post-root",
         action="append",
         default=[],
-        help="compare-post run root(s) for POST 64 KiB cluster",
+        help="deprecated alias for --bodies-root (practical chart no longer uses POST)",
     )
     ap.add_argument(
         "--arch-root",
@@ -758,7 +765,12 @@ def main() -> int:
         )
 
     sibling_roots = gha_dl_sibling_roots(results_roots[0]) if results_roots else []
-    post_roots = parse_path_list(args.post_root) or results_roots or sibling_roots
+    bodies_roots = (
+        parse_path_list(args.bodies_root)
+        or parse_path_list(args.post_root)
+        or results_roots
+        or sibling_roots
+    )
     arch_roots = parse_path_list(args.arch_root) or results_roots or sibling_roots
     grpc_roots = parse_path_list(args.grpc_root) or results_roots or sibling_roots
 
@@ -768,11 +780,11 @@ def main() -> int:
         if key not in wanted or key not in csv_lists_by_os:
             continue
         paths = csv_lists_by_os[key]
-        post_csvs = find_csvs(post_roots, folder_keys)
+        bodies_csvs = find_csvs(bodies_roots, folder_keys)
         arch_csvs = find_csvs(arch_roots, folder_keys)
         grpc_csvs = find_csvs(grpc_roots, folder_keys)
         wire = collect_series(paths)
-        workload = collect_industry_series(post_csvs, arch_csvs, grpc_csvs)
+        workload = collect_industry_series(bodies_csvs, arch_csvs, grpc_csvs)
         series = merge_series(wire, workload)
         out = args.out_dir / f"rps-practical-{key}.png"
         render_chart(
@@ -788,7 +800,7 @@ def main() -> int:
         src = ", ".join(str(p) for p in paths)
         print(f"{title} <- product: {src}")
         print(
-            f"  workloads <- post={len(post_csvs)} arch={len(arch_csvs)} grpc={len(grpc_csvs)} CSV(s)"
+            f"  workloads <- bodies={len(bodies_csvs)} arch={len(arch_csvs)} grpc={len(grpc_csvs)} CSV(s)"
         )
         for i, label in enumerate(labels):
             parts = []
