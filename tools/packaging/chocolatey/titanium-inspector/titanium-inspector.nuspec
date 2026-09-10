@@ -6,9 +6,10 @@
     <title>Titanium Inspector</title>
     <authors>justcoding121</authors>
     <owners>justcoding121</owners>
+    <copyright>Copyright (c) Jehonathan Thomas</copyright>
     <projectUrl>https://github.com/justcoding121/titanium-web-proxy</projectUrl>
     <licenseUrl>https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt</licenseUrl>
-    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
     <projectSourceUrl>https://github.com/justcoding121/titanium-web-proxy</projectSourceUrl>
     <docsUrl>https://titaniumproxy.com/docs/inspector</docsUrl>
     <bugTrackerUrl>https://github.com/justcoding121/titanium-web-proxy/issues</bugTrackerUrl>

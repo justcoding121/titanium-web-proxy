@@ -6,6 +6,7 @@
     <title>Titanium CLI</title>
     <authors>justcoding121</authors>
     <owners>justcoding121</owners>
+    <copyright>Copyright (c) Jehonathan Thomas</copyright>
     <projectUrl>https://github.com/justcoding121/titanium-web-proxy</projectUrl>
     <licenseUrl>https://github.com/justcoding121/titanium-web-proxy/blob/develop/LICENSE</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>

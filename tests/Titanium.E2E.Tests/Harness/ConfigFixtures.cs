@@ -325,12 +325,15 @@ public static class ConfigFixtures
     public static string WriteTls(string dir, int listenPort, int originPort, string certPath, string keyPath)
     {
         var path = Path.Combine(dir, $"tls-{listenPort}.yaml");
+        // Leaf-cert load only — disable HTTP/3 so Windows CI QuicListener bind flakes
+        // do not fail Run_TlsLeaf_LoadsCertificate (decryptSsl would otherwise auto-enable H3).
         File.WriteAllText(path, $"""
             schemaVersion: "7.0"
             listeners:
               - host: "127.0.0.1"
                 port: {listenPort}
                 decryptSsl: true
+                enableHttp3: false
                 forwardHost: "127.0.0.1"
                 forwardPort: {originPort}
             certificates:
