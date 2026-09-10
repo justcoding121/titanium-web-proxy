@@ -812,8 +812,9 @@ jobs:
         if: always()
         shell: bash
         run: |
+          # macOS runners ship Bash 3.2; ${var//'/'/-} treats quotes as literal and leaves '/'.
           raw="${RPS_ARM_SHARD:-all}"
-          echo "RPS_ARTIFACT_SHARD=${raw//'/'/-}" >> "$GITHUB_ENV"
+          echo "RPS_ARTIFACT_SHARD=$(printf '%s' "$raw" | tr '/' '-')" >> "$GITHUB_ENV"
 
       # Post-ramp gates: hard-fail on every event (including workflow_dispatch).
       # fail-fast: false keeps sibling OS jobs running; Upload CSV uses if: always().
