@@ -144,7 +144,7 @@ Two TWP-only MITM shapes on the same Client×Origin wires (+ CONNECT). nginx/YAR
 
 ### Practical reverse charts (README / website)
 
-One PNG per OS with **10 clusters**: seven industry reverse wires (tiny keep-alive GET) plus POST 64 KiB / WebSocket / gRPC unary. After downloading `compare-product` plus heavier roots:
+One PNG per OS with **10 clusters**: seven industry reverse wires (tiny keep-alive GET ~56 B) plus POST 64 KiB / WebSocket / gRPC unary. Chart order is **terminate first**, then H2 same-protocol last (compressed-relay = Titanium best case on tiny GET). After downloading `compare-product` plus heavier roots:
 
 ```bash
 pip install -r tools/RpsLoadProbe/requirements-charts.txt
@@ -157,7 +157,16 @@ python3 tools/RpsLoadProbe/render-practical-charts.py \
   --title-suffix '@ <sha>'
 ```
 
-Writes `wiki/images/rps-practical-{linux,windows,macos}.png` (Linux also embeds in the repo README; all three on the website Performance page). Five series: Titanium / YARP / nginx / HAProxy / Envoy. Wires: H1 TLS→H1c · H1 TLS→H1 TLS · H2 TLS→H1c · H2 TLS→H1 TLS · H2 TLS→h2c · H2 TLS→H2 TLS · H3→H1c. Workloads fold in from `--post-root` / `--arch-root` / `--grpc-root` (or sibling `gha-dl/` folders when omitted).
+Wiki fallback (same numbers as published tables; no CSV):
+
+```bash
+python3 tools/RpsLoadProbe/render-practical-charts.py \
+  --from-wiki wiki/Performance.md \
+  --out-dir wiki/images \
+  --title-suffix '@ <sha>'
+```
+
+Writes `wiki/images/rps-practical-{linux,windows,macos}.png` (Linux also embeds in the repo README; all three on the website Performance page). Five series: Titanium / YARP / nginx / HAProxy / Envoy. Wires: H1 TLS→H1c · H1 TLS→H1 TLS · H2 TLS→H1c · H2 TLS→H1 TLS · H3→H1c · H2 TLS→h2c · H2 TLS→H2 TLS. Workloads fold in from `--post-root` / `--arch-root` / `--grpc-root` (or sibling `gha-dl/` folders when omitted).
 
 ### Heavier workload charts
 

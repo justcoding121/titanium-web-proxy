@@ -6,7 +6,7 @@ Titanium targets low-overhead reverse proxying and HTTPS interception: connectio
 
 ## Practical reverse RPS
 
-Common industry reverse wires (tiny keep-alive GET) plus POST 64 KiB, WebSocket, and unary gRPC — one chart per OS.
+Tiny keep-alive GET (~56 B JSON) plus POST 64 KiB, WebSocket, and unary gRPC — one chart per OS. Terminate wires (H1/H2/H3 → H1) and POST 64 KiB are the closer “edge reverse” read; H2→H2 / H2→h2c on tiny GET are small-JSON same-protocol (Titanium compressed-relay best case), not a typical terminate job.
 
 ### Windows
 
@@ -22,7 +22,7 @@ Common industry reverse wires (tiny keep-alive GET) plus POST 64 KiB, WebSocket,
 
 ## Heavier reverse workloads
 
-Larger bodies, POST, lossy links, TLS termination cost, and architecture-sensitive shapes (slow consumers, duplex, WebSocket). Linux charts below; Windows tables and charts are on the [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#heavier-reverse-workloads).
+Larger bodies, POST, lossy links, TLS termination cost, and architecture-sensitive shapes (slow consumers, duplex, WebSocket). At **64 KiB H2 TLS→H2 TLS**, Titanium does not lead YARP — that row is the payload counter-check to tiny-GET same-protocol. Linux charts below; Windows tables and charts are on the [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#heavier-reverse-workloads).
 
 ![Heavier bodies (Linux)](../../wiki/images/rps-heavier-bodies-linux.png)
 

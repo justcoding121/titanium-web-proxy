@@ -4,7 +4,7 @@
 One PNG per OS: seven industry reverse wires (tiny keep-alive GET) plus POST 64 KiB /
 WebSocket / gRPC unary (10 clusters). Writes README (Linux) and website (Win / Linux / macOS).
 
-Example:
+Example (CSV):
   python3 tools/RpsLoadProbe/render-practical-charts.py \\
     --results-root tools/RpsLoadProbe/results/gha-dl/<productRunId> \\
     --post-root tools/RpsLoadProbe/results/gha-dl/<postRunId> \\
@@ -12,18 +12,25 @@ Example:
     --grpc-root tools/RpsLoadProbe/results/gha-dl/<grpcRunId> \\
     --out-dir wiki/images \\
     --title-suffix '@ <sha>'
+
+Wiki fallback (current Performance.md reverse + heavier + gRPC tables):
+  python3 tools/RpsLoadProbe/render-practical-charts.py \\
+    --from-wiki wiki/Performance.md --out-dir wiki/images --title-suffix '@ <sha>'
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+import re
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 # Practical industry reverse wires (short labels → CSV arm names).
-# nginx H2/H3 origin stays None (stock nginx has no H2/H3 upstream). HAProxy/Envoy
-# H2→h2c / H2→H2 arms are wired in the harness; missing CSV rows show n/a.
+# Order: terminate wires first (typical edge reverse), then H2 same-protocol
+# (tiny-GET compressed-relay best case). nginx H2/H3 origin stays None
+# (stock nginx has no H2/H3 upstream). HAProxy/Envoy H2→h2c / H2→H2 arms are
+# wired in the harness; missing CSV rows show n/a.
 PRACTICAL_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], Optional[str]]] = [
     # label, twp, yarp, nginx, haproxy, envoy (None = product-impossible)
     (
@@ -59,6 +66,14 @@ PRACTICAL_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], Optional
         "envoy-reverse-http2-to-https-http1",
     ),
     (
+        "H3→H1c",
+        "twp-reverse-http3-cleartext",
+        "yarp-reverse-http3-cleartext",
+        "nginx-reverse-http3-cleartext",
+        "haproxy-reverse-http3-cleartext",
+        "envoy-reverse-http3-cleartext",
+    ),
+    (
         "H2 TLS→h2c",
         "twp-reverse-http2-to-h2c",
         "yarp-reverse-http2-to-h2c",
@@ -73,14 +88,6 @@ PRACTICAL_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], Optional
         None,
         "haproxy-reverse-http2-to-https",
         "envoy-reverse-http2-to-https",
-    ),
-    (
-        "H3→H1c",
-        "twp-reverse-http3-cleartext",
-        "yarp-reverse-http3-cleartext",
-        "nginx-reverse-http3-cleartext",
-        "haproxy-reverse-http3-cleartext",
-        "envoy-reverse-http3-cleartext",
     ),
 ]
 
@@ -137,10 +144,220 @@ OS_SPECS = (
 )
 
 MERGED_FOOTER = (
-    "Wires: tiny keep-alive GET · Workloads: POST / WS / gRPC (RPC/s) from compare-post / "
-    "compare-arch / compare-grpc · GHA 4-core · 0 / n/a peers omitted (no empty slots) · "
-    "do not compare absolute RPS across clusters (shards)"
+    "Wires: tiny keep-alive GET (~56 B) · terminate first, H2↔H2/h2c last "
+    "(compressed-relay = Titanium best case) · Workloads: POST / WS / gRPC (RPC/s) "
+    "from compare-post / compare-arch / compare-grpc · GHA 4-core · 0 / n/a peers "
+    "omitted (no empty slots) · do not compare absolute RPS across clusters (shards)"
 )
+
+# Practical wire label → (client, origin) cells in wiki Performance.md reverse tables.
+WIKI_WIRE_CELLS: Dict[str, Tuple[str, str]] = {
+    "H1 TLS→H1c": ("HTTP/1 · TLS", "HTTP/1 · plain"),
+    "H1 TLS→H1 TLS": ("HTTP/1 · TLS", "HTTP/1 · TLS"),
+    "H2 TLS→H1c": ("HTTP/2 · TLS", "HTTP/1 · plain"),
+    "H2 TLS→H1 TLS": ("HTTP/2 · TLS", "HTTP/1 · TLS"),
+    "H3→H1c": ("HTTP/3 · QUIC", "HTTP/1 · plain"),
+    "H2 TLS→h2c": ("HTTP/2 · TLS", "HTTP/2 · plain"),
+    "H2 TLS→H2 TLS": ("HTTP/2 · TLS", "HTTP/2 · TLS"),
+}
+
+HEADING_TO_OS = {
+    "Windows — Titanium vs nginx vs YARP": "windows",
+    "Linux — Titanium vs nginx vs YARP": "linux",
+    "macOS — Titanium vs nginx vs YARP": "macos",
+    "Windows — Titanium vs nginx vs HAProxy vs Envoy vs YARP": "windows",
+    "Linux — Titanium vs nginx vs HAProxy vs Envoy vs YARP": "linux",
+    "macOS — Titanium vs nginx vs HAProxy vs Envoy vs YARP": "macos",
+}
+
+CELL_RE = re.compile(r"\*{0,2}(\d[\d,]*)")
+
+
+def parse_rps_cell(cell: str) -> Optional[float]:
+    t = cell.strip()
+    if "Not possible" in t or "Not measured" in t or t in ("", "—", "-"):
+        return None
+    m = CELL_RE.search(t.replace(",", ""))
+    if not m:
+        return None
+    v = float(m.group(1).replace(",", ""))
+    if v == 0:
+        return None
+    return v
+
+
+def _product_row_from_cols(cols: Sequence[str], *, offset: int = 0) -> Dict[str, Optional[float]]:
+    """Parse TWP/nginx/HAProxy/Envoy/YARP sustain columns (offset skips Scenario)."""
+    # cols: [Client, Origin, TWP, TWP peak, nginx, nginx peak, HAProxy, ..., YARP, YARP peak]
+    i = offset
+    return {
+        "Titanium": parse_rps_cell(cols[i + 2]),
+        "nginx": parse_rps_cell(cols[i + 4]),
+        "HAProxy": parse_rps_cell(cols[i + 6]),
+        "Envoy": parse_rps_cell(cols[i + 8]),
+        "YARP": parse_rps_cell(cols[i + 10]),
+    }
+
+
+def parse_wiki_practical(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]:
+    """Build per-OS product series aligned with PRACTICAL_ARMS + INDUSTRY_WORKLOADS."""
+    empty = {p: [None] * (WIRE_COUNT + len(INDUSTRY_WORKLOADS)) for p in PRODUCTS}
+    out: Dict[str, Dict[str, List[Optional[float]]]] = {
+        "windows": {p: list(empty[p]) for p in PRODUCTS},
+        "linux": {p: list(empty[p]) for p in PRODUCTS},
+        "macos": {p: list(empty[p]) for p in PRODUCTS},
+    }
+
+    wire_index = {label: i for i, (label, *_rest) in enumerate(PRACTICAL_ARMS)}
+    post_idx = WIRE_COUNT + 0
+    ws_idx = WIRE_COUNT + 1
+    grpc_idx = WIRE_COUNT + 2
+
+    # --- reverse 5×5 → seven practical wires ---
+    current_os: Optional[str] = None
+    in_reverse = False
+    in_table = False
+    for line in md.splitlines():
+        if line.startswith("## "):
+            title = line[3:].strip()
+            current_os = HEADING_TO_OS.get(title)
+            in_reverse = False
+            in_table = False
+            continue
+        if current_os is None:
+            continue
+        if line.startswith("### Reverse"):
+            in_reverse = True
+            in_table = False
+            continue
+        if line.startswith("### ") and not line.startswith("### Reverse"):
+            in_reverse = False
+            in_table = False
+            continue
+        if not in_reverse:
+            continue
+        if line.startswith("| Client | Origin |"):
+            in_table = True
+            continue
+        if in_table and line.startswith("|---"):
+            continue
+        if in_table and line.startswith("|"):
+            cols = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cols) < 12:
+                continue
+            client, origin = cols[0], cols[1]
+            vals = _product_row_from_cols(cols)
+            for label, cell in WIKI_WIRE_CELLS.items():
+                if (client, origin) != cell:
+                    continue
+                idx = wire_index[label]
+                for product in PRODUCTS:
+                    out[current_os][product][idx] = vals[product]
+        elif in_table and not line.startswith("|"):
+            in_table = False
+
+    # --- POST 64 KiB (H1 TLS→H1c) ---
+    post_os: Optional[str] = None
+    in_post_table = False
+    for line in md.splitlines():
+        if line.startswith("### Windows — POST"):
+            post_os = "windows"
+            in_post_table = False
+            continue
+        if line.startswith("### Linux — POST"):
+            post_os = "linux"
+            in_post_table = False
+            continue
+        if line.startswith("### ") and post_os is not None and "POST" not in line:
+            post_os = None
+            in_post_table = False
+            continue
+        if post_os is None:
+            continue
+        if line.startswith("| Client | Origin |"):
+            in_post_table = True
+            continue
+        if in_post_table and line.startswith("|---"):
+            continue
+        if in_post_table and line.startswith("|"):
+            cols = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cols) < 12:
+                continue
+            if cols[0] == "HTTP/1 · TLS" and cols[1] == "HTTP/1 · plain":
+                vals = _product_row_from_cols(cols)
+                for product in PRODUCTS:
+                    out[post_os][product][post_idx] = vals[product]
+        elif in_post_table and not line.startswith("|"):
+            in_post_table = False
+
+    # --- WebSocket from architecture-sensitive ---
+    arch_os: Optional[str] = None
+    in_arch_table = False
+    for line in md.splitlines():
+        if line.startswith("#### Windows"):
+            arch_os = "windows"
+            in_arch_table = False
+            continue
+        if line.startswith("#### Linux"):
+            arch_os = "linux"
+            in_arch_table = False
+            continue
+        if line.startswith("#### ") and arch_os is not None:
+            arch_os = None
+            in_arch_table = False
+            continue
+        if arch_os is None:
+            continue
+        if line.startswith("| Scenario | Client | Origin |"):
+            in_arch_table = True
+            continue
+        if in_arch_table and line.startswith("|---"):
+            continue
+        if in_arch_table and line.startswith("|"):
+            cols = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cols) < 13:
+                continue
+            if "WebSocket" in cols[0]:
+                vals = _product_row_from_cols(cols, offset=1)
+                for product in PRODUCTS:
+                    out[arch_os][product][ws_idx] = vals[product]
+        elif in_arch_table and not line.startswith("|"):
+            in_arch_table = False
+
+    # --- Unary gRPC ---
+    in_grpc = False
+    in_grpc_table = False
+    grpc_os_map = {"Windows": "windows", "Linux": "linux", "macOS": "macos"}
+    for line in md.splitlines():
+        if line.startswith("## Unary gRPC"):
+            in_grpc = True
+            in_grpc_table = False
+            continue
+        if in_grpc and line.startswith("## ") and not line.startswith("## Unary gRPC"):
+            break
+        if not in_grpc:
+            continue
+        if line.startswith("| OS |"):
+            in_grpc_table = True
+            continue
+        if in_grpc_table and line.startswith("|---"):
+            continue
+        if in_grpc_table and line.startswith("|"):
+            cols = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cols) < 6:
+                continue
+            key = grpc_os_map.get(cols[0])
+            if not key:
+                continue
+            out[key]["Titanium"][grpc_idx] = parse_rps_cell(cols[1])
+            out[key]["YARP"][grpc_idx] = parse_rps_cell(cols[2])
+            out[key]["nginx"][grpc_idx] = parse_rps_cell(cols[3])
+            out[key]["HAProxy"][grpc_idx] = parse_rps_cell(cols[4])
+            out[key]["Envoy"][grpc_idx] = parse_rps_cell(cols[5])
+        elif in_grpc_table and not line.startswith("|"):
+            in_grpc_table = False
+
+    return out
 
 
 def median(vals: Sequence[float]) -> Optional[float]:
@@ -425,6 +642,11 @@ def main() -> int:
         default=[],
         help="gha-dl/<runId> folder(s) for compare-product; comma-separated or repeat flag",
     )
+    ap.add_argument(
+        "--from-wiki",
+        type=Path,
+        help="Render from wiki/Performance.md reverse + heavier + gRPC tables (no CSV)",
+    )
     ap.add_argument("--csv-linux", type=Path)
     ap.add_argument("--csv-windows", type=Path)
     ap.add_argument("--csv-macos", type=Path)
@@ -456,6 +678,45 @@ def main() -> int:
     )
     args = ap.parse_args()
 
+    suffix = args.title_suffix.strip()
+    written = []
+    labels = [a[0] for a in PRACTICAL_ARMS] + [w[0] for w in INDUSTRY_WORKLOADS]
+
+    if args.from_wiki:
+        md = args.from_wiki.read_text(encoding="utf-8")
+        by_os = parse_wiki_practical(md)
+        wanted = set(args.os) if args.os else {"linux", "windows", "macos"}
+        for key, title, _folder_keys in OS_SPECS:
+            if key not in wanted:
+                continue
+            series = by_os[key]
+            out = args.out_dir / f"rps-practical-{key}.png"
+            render_chart(
+                series,
+                title,
+                out,
+                suffix,
+                labels=labels,
+                footer=MERGED_FOOTER,
+                workload_start=WIRE_COUNT,
+            )
+            written.append(out)
+            print(f"{title} <- wiki {args.from_wiki}")
+            for i, label in enumerate(labels):
+                parts = []
+                for product in PRODUCTS:
+                    v = series[product][i]
+                    parts.append("n/a" if v is None else f"{v:.0f}")
+                print(
+                    f"  {label}: TWP={parts[0]} YARP={parts[1]} nginx={parts[2]} "
+                    f"HAProxy={parts[3]} Envoy={parts[4]}"
+                )
+            print(f"  wrote {out}")
+        if not written:
+            print("No charts written.", file=__import__("sys").stderr)
+            return 2
+        return 0
+
     results_roots = parse_path_list(args.results_root)
     csv_lists_by_os: Dict[str, List[Path]] = {}
     if args.csv_linux:
@@ -473,7 +734,9 @@ def main() -> int:
                 csv_lists_by_os[key] = found
 
     if not csv_lists_by_os:
-        ap.error("Provide --results-root and/or --csv-linux/--csv-windows/--csv-macos")
+        ap.error(
+            "Provide --from-wiki, --results-root, and/or --csv-linux/--csv-windows/--csv-macos"
+        )
 
     sibling_roots = gha_dl_sibling_roots(results_roots[0]) if results_roots else []
     post_roots = parse_path_list(args.post_root) or results_roots or sibling_roots
@@ -481,9 +744,6 @@ def main() -> int:
     grpc_roots = parse_path_list(args.grpc_root) or results_roots or sibling_roots
 
     wanted = set(args.os) if args.os else set(csv_lists_by_os)
-    suffix = args.title_suffix.strip()
-    written = []
-    labels = [a[0] for a in PRACTICAL_ARMS] + [w[0] for w in INDUSTRY_WORKLOADS]
 
     for key, title, folder_keys in OS_SPECS:
         if key not in wanted or key not in csv_lists_by_os:

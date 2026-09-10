@@ -239,7 +239,8 @@ def render_os(
 
     fig, axes = plt.subplots(5, 1, figsize=(12.5, 16.5), dpi=130, sharey=False)
     fig.suptitle(
-        f"Reverse RPS — {os_title}" + (f" {title_suffix}" if title_suffix else ""),
+        f"Reverse RPS — {os_title} · tiny keep-alive GET (~56 B)"
+        + (f" {title_suffix}" if title_suffix else ""),
         fontsize=13,
         y=0.995,
     )
@@ -290,7 +291,9 @@ def render_os(
     fig.text(
         0.01,
         0.004,
-        "Reverse only · TWP vs YARP vs nginx vs HAProxy vs Envoy · 0 / n/a peers omitted (no empty slots) · MITM Lite/Full stay tables-only",
+        "Reverse only · tiny keep-alive GET (~56 B) · H2↔H2 is compressed-relay "
+        "(Titanium best case) · TWP vs YARP vs nginx vs HAProxy vs Envoy · "
+        "0 / n/a peers omitted (no empty slots) · MITM Lite/Full stay tables-only",
         fontsize=8,
         color="#444444",
     )

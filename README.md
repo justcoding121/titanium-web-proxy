@@ -29,7 +29,7 @@ Protocol coverage: [protocol support matrix](https://github.com/justcoding121/ti
 
 ![Practical reverse proxy throughput on Linux](wiki/images/rps-practical-linux.png)
 
-**RPS** is requests per second (gRPC bars are **RPC/s**). Compared on the same test harness vs **YARP**, **nginx**, **HAProxy**, and **Envoy** — see [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
+**RPS** is requests per second (gRPC bars are **RPC/s**). Tiny keep-alive GET plus POST/WS/gRPC on the same harness vs **YARP**, **nginx**, **HAProxy**, and **Envoy** — terminate wires and POST are the typical reverse read; H2↔H2 on tiny GET is Titanium’s compressed-relay best case. See [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
 
 ## Installation
 
