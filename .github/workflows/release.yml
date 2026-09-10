@@ -154,10 +154,15 @@ jobs:
           # Exact RID only — cross-RID restore-keys previously pulled linux-x64 into musl jobs.
       - name: Publish Cli
         shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
         run: |
           $rid = "${{ matrix.rid }}"
           $out = "artifacts/cli/$rid"
-          dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r $rid --self-contained true -o $out
+          $ver = $env:RELEASE_VERSION
+          if ([string]::IsNullOrWhiteSpace($ver)) { $ver = "0.0.0" }
+          # Stamp InformationalVersion (e.g. 7.0.5-beta) while assembly Version stays numeric.
+          dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r $rid --self-contained true -o $out -p:Version=$ver
           if (Test-Path "$out/titanium.exe") {
             Copy-Item "$out/titanium.exe" "$out/twp.exe"
           } elseif (Test-Path "$out/titanium") {
@@ -266,8 +271,11 @@ jobs:
       - name: Build Plus
         env:
           RELEASE_TAG: ${{ needs.resolve-version.outputs.release_tag }}
+          RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
         run: |
-          dotnet build src/Titanium.Plus/Titanium.Plus.csproj -c Release -o artifacts/plus
+          ver="${RELEASE_VERSION:-0.0.0}"
+          # Stamp InformationalVersion (e.g. 7.0.5-beta) while assembly Version stays numeric.
+          dotnet build src/Titanium.Plus/Titanium.Plus.csproj -c Release -o artifacts/plus -p:Version="$ver"
           cp artifacts/plus/Titanium.Plus.dll "Titanium.Plus-${RELEASE_TAG}.dll"
       - uses: actions/upload-artifact@v4
         with:
@@ -326,10 +334,15 @@ jobs:
           # Exact RID only — avoid cross-RID cache pollution (see build-cli).
       - name: Publish Inspector
         shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
         run: |
           $rid = "${{ matrix.rid }}"
           $out = "artifacts/inspector/$rid"
-          dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r $rid --self-contained true -o $out
+          $ver = $env:RELEASE_VERSION
+          if ([string]::IsNullOrWhiteSpace($ver)) { $ver = "0.0.0" }
+          # Stamp InformationalVersion (e.g. 7.0.5-beta) while assembly Version stays numeric.
+          dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r $rid --self-contained true -o $out -p:Version=$ver
           ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
           Copy-Item -Force tools/packaging/THIRD-PARTY-INSPECTOR.txt (Join-Path $out "THIRD-PARTY-INSPECTOR.txt")
           Copy-Item -Force src/Titanium.Inspector/Assets/app.ico (Join-Path $out "app.ico")

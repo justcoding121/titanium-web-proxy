@@ -54,6 +54,7 @@ public class AutomationIdCoverageHeadlessTests
         "MenuSessionRetention",
         "MenuHttpsDecryptHosts",
         "MenuIgnoreServerCertErrors",
+        "MenuAddViaHeader",
         "MenuUpdateChannel",
         "MenuUpdateChannelStable",
         "MenuUpdateChannelBeta",

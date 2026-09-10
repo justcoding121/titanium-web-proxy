@@ -40,6 +40,12 @@ public sealed class AvaloniaStatusNotifier : IStatusNotifier
             _ => "Inspector",
         };
 
-        manager.Show(new Notification(title, message, type, TimeSpan.FromSeconds(3.5)));
+        // Errors/warnings stay long enough to read (SmartScreen, msiexec, update failures);
+        // Avalonia's notification chrome still lets the user dismiss early.
+        var duration = severity is StatusSeverity.Error or StatusSeverity.Warning
+            ? TimeSpan.FromSeconds(15)
+            : TimeSpan.FromSeconds(4);
+
+        manager.Show(new Notification(title, message, type, duration));
     }
 }

@@ -78,6 +78,12 @@ public sealed class InspectorSettings
     /// <summary>Accept upstream TLS that fails normal validation (lab / self-signed hosts). Off by default.</summary>
     public bool IgnoreServerCertificateErrors { get; set; }
 
+    /// <summary>
+    /// When true, inject the library default Via header (<c>titanium-web-proxy</c>) on intercepted
+    /// requests/responses. When false, Via injection and Via-based loop detection are disabled.
+    /// </summary>
+    public bool AddViaHeader { get; set; } = true;
+
     /// <summary>Start listener when the main window opens.</summary>
     public bool AutoStartCapture { get; set; } = true;
 

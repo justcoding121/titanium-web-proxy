@@ -7,7 +7,10 @@
            Version="$(var.ProductVersion)"
            UpgradeCode="A7C3E91B-4F2D-4A8E-9B1C-6D5E8F0A2B3C"
            Scope="perMachine">
-    <MajorUpgrade DowngradeErrorMessage="A newer version of Titanium Inspector is already installed." />
+    <!-- New ProductCode each build, shared UpgradeCode. Same ProductVersion (beta or stable)
+         is an upgrade so the last MSI that ran is the only install; a lower version is blocked. -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of Titanium Inspector is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
     <Icon Id="AppIcon" SourceFile="app.ico" />

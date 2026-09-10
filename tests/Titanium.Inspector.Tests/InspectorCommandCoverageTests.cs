@@ -106,6 +106,7 @@ public class InspectorCommandCoverageTests
             await ExecuteAsync(vm.ToggleAutoStartCaptureCommand);
             await ExecuteAsync(vm.ToggleAutoSystemProxyOnStartCommand);
             await ExecuteAsync(vm.ToggleIgnoreServerCertificateErrorsCommand);
+            await ExecuteAsync(vm.ToggleAddViaHeaderCommand);
             await ExecuteAsync(vm.ToggleDebugLoggingCommand);
             await ExecuteAsync(vm.ToggleCheckForUpdatesOnStartupCommand);
             await ExecuteAsync(vm.SetThemeLightCommand);

@@ -64,12 +64,59 @@ public class UpdateCommandTests
     }
 
     [TestMethod]
-    public void ShouldInstallCliRelease_SameSemverBetaSwitch()
+    public void ShouldInstallCliRelease_SameSemverBetaOverStable_DoesNotInstall()
     {
-        Assert.IsTrue(VersionCommand.ShouldInstallCliRelease(
+        Assert.IsFalse(VersionCommand.ShouldInstallCliRelease(
             new Version(7, 0, 5, 0), "7.0.5-beta", "beta", "7.0.5", "stable"));
         Assert.IsFalse(VersionCommand.ShouldInstallCliRelease(
+            new Version(7, 0, 5, 0), "7.0.5-beta", "beta", null, null));
+        Assert.IsFalse(VersionCommand.ShouldInstallCliRelease(
             new Version(7, 0, 5, 0), "7.0.5-beta", "beta", "7.0.5-beta", "beta"));
+    }
+
+    [TestMethod]
+    public void ShouldInstallCliRelease_NewerBetaOverStable_Installs()
+    {
+        Assert.IsTrue(VersionCommand.ShouldInstallCliRelease(
+            new Version(7, 0, 5, 0), "7.0.6-beta", "beta", "7.0.5", "stable"));
+    }
+
+    [TestMethod]
+    public void ShouldInstallCliRelease_SameSemverStableOverBeta_Installs()
+    {
+        Assert.IsTrue(VersionCommand.ShouldInstallCliRelease(
+            new Version(7, 0, 5, 0), "7.0.5", "stable", "7.0.5-beta", "beta"));
+        Assert.IsTrue(VersionCommand.ShouldInstallCliRelease(
+            new Version(7, 0, 5, 0), "7.0.5", "stable", null, null, "7.0.5-beta"));
+    }
+
+    [TestMethod]
+    public void ShouldInstallPlusRelease_SkipsEqualAndOlder_InstallsNewer()
+    {
+        Assert.IsTrue(VersionCommand.ShouldInstallPlusRelease(null, "7.0.5-beta"));
+        Assert.IsFalse(VersionCommand.ShouldInstallPlusRelease(new Version(7, 0, 5, 0), "7.0.5-beta"));
+        Assert.IsFalse(VersionCommand.ShouldInstallPlusRelease(new Version(7, 0, 6, 0), "7.0.5"));
+        Assert.IsTrue(VersionCommand.ShouldInstallPlusRelease(new Version(7, 0, 5, 0), "7.0.6-beta"));
+        Assert.IsTrue(VersionCommand.ShouldInstallPlusRelease(
+            new Version(7, 0, 5, 0), "7.0.5", "7.0.5-beta"));
+    }
+
+    [TestMethod]
+    public void ReleaseVersion_CompareReleaseTags_ReleaseBeatsSameCorePrerelease()
+    {
+        Assert.IsTrue(ReleaseVersion.CompareReleaseTags("7.0.5-beta", "7.0.5") < 0);
+        Assert.IsTrue(ReleaseVersion.CompareReleaseTags("7.0.5", "7.0.5-beta") > 0);
+        Assert.AreEqual(0, ReleaseVersion.CompareReleaseTags("7.0.5", "v7.0.5"));
+        Assert.IsTrue(ReleaseVersion.IsRemoteNewer("7.0.5", "7.0.6-beta"));
+        Assert.IsFalse(ReleaseVersion.IsRemoteNewer("7.0.5", "7.0.5-beta"));
+        Assert.IsTrue(ReleaseVersion.IsPrereleaseTag("7.0.5-beta"));
+        Assert.IsFalse(ReleaseVersion.IsPrereleaseTag("7.0.5"));
+        Assert.AreEqual(
+            "7.0.5-beta",
+            ReleaseVersion.ResolveLocalReleaseLabel(new Version(7, 0, 5, 0), "7.0.5-beta+abc", null));
+        Assert.AreEqual(
+            "7.0.5",
+            ReleaseVersion.ResolveLocalReleaseLabel(new Version(7, 0, 5, 0), null, null));
     }
 
     [TestMethod]

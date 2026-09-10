@@ -36,7 +36,8 @@ public sealed partial class MainWindowViewModel
         var result = await _updates.CheckAsync(_statusRevertCts?.Token ?? CancellationToken.None);
         if (!result.UpdateAvailable || string.IsNullOrEmpty(result.AssetUrl))
         {
-            var upToDate = result.Message.Contains("up to date", StringComparison.OrdinalIgnoreCase);
+            var upToDate = result.Message.Contains("up to date", StringComparison.OrdinalIgnoreCase)
+                || result.Message.Contains("No newer Beta", StringComparison.OrdinalIgnoreCase);
             if (upToDate)
             {
                 SetTransientStatus(

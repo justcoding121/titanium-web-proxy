@@ -3,7 +3,7 @@
 # Authenticode publisher: Jehonathan Thomas.
 
 PackageIdentifier: justcoding121.TitaniumInspector
-PackageVersion: 7.0.5
+PackageVersion: 7.0.6
 PackageLocale: en-US
 Publisher: justcoding121
 PublisherUrl: https://github.com/justcoding121/titanium-web-proxy
@@ -14,11 +14,11 @@ ShortDescription: Desktop HTTP(S) traffic debugger for Titanium Web Proxy.
 Installers:
   - Architecture: x64
     InstallerType: wix
-    InstallerUrl: https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.5/TitaniumInspector-win-x64.msi
+    InstallerUrl: https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.6/TitaniumInspector-win-x64.msi
     InstallerSha256: 15179C71A50B7724F55F421025086E0DA798B6A18EC9004FE64F22E04002124E
   - Architecture: x64
     InstallerType: portable
-    InstallerUrl: https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.5/TitaniumInspector-win-x64.zip
+    InstallerUrl: https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.6/TitaniumInspector-win-x64.zip
     InstallerSha256: 2A5F29234E2DFA4B29552CFB42E0D84E0CBC556C4787072196FD6EB0756AC15B
 ManifestType: singleton
 ManifestVersion: 1.6.0

@@ -90,6 +90,11 @@
                   IsChecked="{Binding IgnoreServerCertificateErrors, Mode=OneWay}"
                   Command="{Binding ToggleIgnoreServerCertificateErrorsCommand}"
                   AutomationProperties.AutomationId="MenuIgnoreServerCertErrors" />
+        <MenuItem Header="Add Via header" ToggleType="CheckBox"
+                  IsChecked="{Binding AddViaHeader, Mode=OneWay}"
+                  Command="{Binding ToggleAddViaHeaderCommand}"
+                  ToolTip.Tip="Append Via: … titanium-web-proxy on intercepted traffic (RFC 9110). Off disables injection and Via loop detection."
+                  AutomationProperties.AutomationId="MenuAddViaHeader" />
         <Separator />
         <MenuItem Header="Logging…" Command="{Binding OpenLoggingSettingsCommand}"
                   AutomationProperties.AutomationId="MenuLogging" />

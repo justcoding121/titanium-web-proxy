@@ -10,7 +10,7 @@
 class Titanium < Formula
   desc "Titanium Web Proxy CLI (MITM / reverse proxy)"
   homepage "https://github.com/justcoding121/titanium-web-proxy"
-  version "7.0.5"
+  version "7.0.6"
   license "MIT"
 
   on_macos do

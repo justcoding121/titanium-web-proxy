@@ -235,3 +235,4 @@ Titanium.Web.Proxy.ProxyServer.TryDisableAllSystemProxies() -> Titanium.Web.Prox
 Titanium.Web.Proxy.ProxyServer.TryDisableSystemProxy(Titanium.Web.Proxy.Models.ProxyProtocolType protocolType) -> Titanium.Web.Proxy.SystemProxyChangeResult
 Titanium.Web.Proxy.ProxyServer.TryRestoreOriginalProxySettings() -> Titanium.Web.Proxy.SystemProxyChangeResult
 Titanium.Web.Proxy.ProxyServer.TrySetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint! endPoint, Titanium.Web.Proxy.Models.ProxyProtocolType protocolType, Titanium.Web.Proxy.SystemProxySettings? settings = null) -> Titanium.Web.Proxy.SystemProxyChangeResult
+const Titanium.Web.Proxy.ProxyServer.DefaultViaHeaderPseudonym = "titanium-web-proxy" -> string!

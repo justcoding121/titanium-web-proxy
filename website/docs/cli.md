@@ -146,7 +146,7 @@ titanium update
 titanium service start
 ```
 
-Channels: `stable` (default) or `beta` via `--channel` or `TITANIUM_UPDATE_CHANNEL` (other values are rejected). Messages always label the channel and print local → remote versions. `titanium update` upgrades when the feed is newer; same-semver beta switches are allowed; it does not reinstall when already current. `titanium update` uses the product download feed on every OS (not OS package managers).
+Channels: `stable` (default) or `beta` via `--channel` or `TITANIUM_UPDATE_CHANNEL` (other values are rejected). Messages always label the channel and print local → remote versions. `titanium update` installs when the feed build is **newer** than your install (SemVer-ish: `7.0.6-beta` is newer than Stable `7.0.5`, but same-core `7.0.5-beta` is **not** newer than Stable `7.0.5`). Switching channel to Stable at the same version promotes off beta. It does not reinstall when already current. `titanium update` uses the product download feed on every OS (not OS package managers).
 
 ### `http3-deps`
 

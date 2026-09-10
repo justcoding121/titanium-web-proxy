@@ -48,25 +48,37 @@ internal static class VersionCommand
 
         var local = typeof(Program).Assembly.GetName().Version ?? new Version(0, 0);
         var remoteText = ReleaseVersion.NormalizeTag(manifest.Version);
-        var remote = ReleaseVersion.ParseComparable(remoteText);
-        var localComparable = ReleaseVersion.ToComparable(local);
-        var localDisplay = ReleaseVersion.FormatDisplay(local);
+        var localInfo = AssemblyInformationalVersion();
+        var (installedTag, installedChannel) = UpdateCommand.ReadCliIdentity();
+        var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(local, localInfo, installedTag);
+        var localDisplay = string.IsNullOrEmpty(localInfo)
+            ? ReleaseVersion.FormatDisplay(local)
+            : localLabel;
 
         AsyncConsole.WriteLine($"Remote Cli ({channelDisplay}): {remoteText}");
         AsyncConsole.WriteLine($"Local Cli: {localDisplay} → remote {remoteText} ({channelDisplay})");
 
         var exit = 0;
-        var cmp = remote.CompareTo(localComparable);
-        if (cmp > 0)
+        if (ShouldInstallCliRelease(
+                local, remoteText, channelDisplay, installedTag, installedChannel, localInfo))
         {
             AsyncConsole.WriteLine(
                 $"A newer Cli build is available ({localDisplay} → {remoteText}, {channelDisplay}). Run: titanium update --channel {channel}");
             exit = 2;
         }
-        else if (cmp < 0)
+        else if (ReleaseVersion.CompareReleaseTags(localLabel, remoteText) > 0
+                 && !ReleaseVersion.IsPrereleaseTag(remoteText))
         {
             AsyncConsole.WriteLine(
                 $"Local Cli {localDisplay} is newer than {channelDisplay} {remoteText}.");
+        }
+        else if (channelDisplay.Equals("beta", StringComparison.OrdinalIgnoreCase)
+                 && ReleaseVersion.IsPrereleaseTag(remoteText)
+                 && !ReleaseVersion.IsPrereleaseTag(localLabel)
+                 && ReleaseVersion.ParseComparable(localLabel) == ReleaseVersion.ParseComparable(remoteText))
+        {
+            AsyncConsole.WriteLine(
+                $"No newer Beta than your current build ({localLabel}). Latest Beta is {remoteText}.");
         }
         else
         {
@@ -100,9 +112,9 @@ internal static class VersionCommand
     private static int PrintPlusCheck(ReleaseManifest manifest, string channel, string channelDisplay)
     {
         var plusLocal = TryGetLocalPlusVersion();
+        var plusInfo = TryGetLocalPlusInformationalVersion();
         var plusRemoteText = ReleaseVersion.NormalizeTag(
             manifest.Products?.Plus?.Version ?? manifest.Version);
-        var plusRemote = ReleaseVersion.ParseComparable(plusRemoteText);
 
         if (plusLocal is null)
         {
@@ -111,20 +123,33 @@ internal static class VersionCommand
             return 2;
         }
 
-        var plusLocalDisplay = ReleaseVersion.FormatDisplay(plusLocal);
+        var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(plusLocal, plusInfo, null);
+        var plusLocalDisplay = string.IsNullOrEmpty(plusInfo)
+            ? ReleaseVersion.FormatDisplay(plusLocal)
+            : localLabel;
         AsyncConsole.WriteLine($"Local Plus: {plusLocalDisplay} → remote {plusRemoteText} ({channelDisplay})");
-        var cmp = plusRemote.CompareTo(ReleaseVersion.ToComparable(plusLocal));
-        if (cmp > 0)
+
+        if (ShouldInstallPlusRelease(plusLocal, plusRemoteText, plusInfo))
         {
             AsyncConsole.WriteLine(
                 $"A newer Plus build is available ({plusLocalDisplay} → {plusRemoteText}, {channelDisplay}). Run: titanium update --plus --channel {channel}");
             return 2;
         }
 
-        if (cmp < 0)
+        if (ReleaseVersion.CompareReleaseTags(localLabel, plusRemoteText) > 0)
         {
             AsyncConsole.WriteLine(
                 $"Local Plus {plusLocalDisplay} is newer than {channelDisplay} {plusRemoteText}.");
+            return 0;
+        }
+
+        if (channelDisplay.Equals("beta", StringComparison.OrdinalIgnoreCase)
+            && ReleaseVersion.IsPrereleaseTag(plusRemoteText)
+            && !ReleaseVersion.IsPrereleaseTag(localLabel)
+            && ReleaseVersion.ParseComparable(localLabel) == ReleaseVersion.ParseComparable(plusRemoteText))
+        {
+            AsyncConsole.WriteLine(
+                $"No newer Beta Plus than your current build ({localLabel}). Latest Beta is {plusRemoteText}.");
             return 0;
         }
 
@@ -143,6 +168,25 @@ internal static class VersionCommand
         try
         {
             return AssemblyName.GetAssemblyName(path).Version;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    internal static string? TryGetLocalPlusInformationalVersion()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Titanium.Plus.dll");
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            var info = FileVersionInfo.GetVersionInfo(path);
+            return FormatInformationalVersion(info.ProductVersion);
         }
         catch
         {
@@ -232,41 +276,110 @@ internal static class VersionCommand
 
     internal static string StripPrerelease(string? version) => ReleaseVersion.StripPrerelease(version);
 
-    /// <summary>Whether CLI should install the remote release (upgrade or same-semver channel/tag switch).</summary>
+    /// <summary>
+    /// Whether CLI should install the remote release. Same-core prerelease is never newer than a
+    /// release (Stable 7.0.5 is not replaced by 7.0.5-beta). Beta→Stable at the same core is offered.
+    /// </summary>
     internal static bool ShouldInstallCliRelease(
         Version local,
         string remoteText,
         string channelDisplay,
         string? installedReleaseTag,
-        string? installedReleaseChannel)
+        string? installedReleaseChannel,
+        string? localInformationalVersion = null)
     {
         remoteText = ReleaseVersion.NormalizeTag(remoteText);
-        var remoteSemver = ReleaseVersion.ParseComparable(remoteText);
-        var localSemver = ReleaseVersion.ToComparable(local);
+        var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(
+            local, localInformationalVersion, installedReleaseTag);
 
-        if (remoteSemver > localSemver)
-        {
-            return true;
-        }
-
-        if (remoteSemver < localSemver)
+        if (localLabel.Equals(remoteText, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        // Same semver: install when switching to beta tag or channel identity differs.
-        var isBeta = channelDisplay.Equals("beta", StringComparison.OrdinalIgnoreCase);
-        if (isBeta
-            && remoteText.Contains('-', StringComparison.Ordinal)
-            && (string.IsNullOrEmpty(installedReleaseTag)
-                || !installedReleaseTag.Equals(remoteText, StringComparison.OrdinalIgnoreCase)
-                || string.IsNullOrEmpty(installedReleaseChannel)
-                || !installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase)))
+        if (ReleaseVersion.IsRemoteNewer(localLabel, remoteText))
+        {
+            return true;
+        }
+
+        var remoteSemver = ReleaseVersion.ParseComparable(remoteText);
+        var localSemver = ReleaseVersion.ToComparable(local);
+        if (remoteSemver != localSemver)
+        {
+            return false;
+        }
+
+        // Same core: Stable supersedes known local beta.
+        if (!ReleaseVersion.IsPrereleaseTag(remoteText) && ReleaseVersion.IsPrereleaseTag(localLabel))
+        {
+            return true;
+        }
+
+        // Never Stable → same-core beta.
+        if (ReleaseVersion.IsPrereleaseTag(remoteText) && !ReleaseVersion.IsPrereleaseTag(localLabel))
+        {
+            return false;
+        }
+
+        _ = channelDisplay;
+        _ = installedReleaseChannel;
+        return false;
+    }
+
+    /// <summary>Whether Plus DLL should be installed/replaced from the feed.</summary>
+    internal static bool ShouldInstallPlusRelease(
+        Version? localPlusVersion,
+        string remoteText,
+        string? localInformationalVersion = null)
+    {
+        remoteText = ReleaseVersion.NormalizeTag(remoteText);
+        if (localPlusVersion is null)
+        {
+            return true;
+        }
+
+        var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(
+            localPlusVersion, localInformationalVersion, null);
+        if (localLabel.Equals(remoteText, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (ReleaseVersion.IsRemoteNewer(localLabel, remoteText))
+        {
+            return true;
+        }
+
+        // Same core: Stable supersedes known local beta Plus.
+        if (!ReleaseVersion.IsPrereleaseTag(remoteText) && ReleaseVersion.IsPrereleaseTag(localLabel))
         {
             return true;
         }
 
         return false;
+    }
+
+    internal static string? AssemblyInformationalVersion() =>
+        FormatInformationalVersion(
+            typeof(Program).Assembly
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                ?.InformationalVersion);
+
+    internal static string? FormatInformationalVersion(string? informationalVersion)
+    {
+        if (string.IsNullOrWhiteSpace(informationalVersion))
+        {
+            return null;
+        }
+
+        var trimmed = informationalVersion.Trim();
+        var plus = trimmed.IndexOf('+');
+        if (plus >= 0)
+        {
+            trimmed = trimmed[..plus];
+        }
+
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 }
 
@@ -407,22 +520,33 @@ internal static class UpdateCommand
         var local = typeof(Program).Assembly.GetName().Version ?? new Version(0, 0);
         var remoteText = ReleaseVersion.NormalizeTag(manifest.Version);
         var (installedTag, installedChannel) = ReadCliIdentity();
-        var localDisplay = ReleaseVersion.FormatDisplay(local);
+        var localInfo = VersionCommand.AssemblyInformationalVersion();
+        var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(local, localInfo, installedTag);
+        var localDisplay = string.IsNullOrEmpty(localInfo)
+            ? ReleaseVersion.FormatDisplay(local)
+            : localLabel;
 
         if (!VersionCommand.ShouldInstallCliRelease(
-                local, remoteText, channelDisplay, installedTag, installedChannel))
+                local, remoteText, channelDisplay, installedTag, installedChannel, localInfo))
         {
-            var remote = ReleaseVersion.ParseComparable(remoteText);
-            var localComparable = ReleaseVersion.ToComparable(local);
-            if (remote < localComparable)
+            if (ReleaseVersion.CompareReleaseTags(localLabel, remoteText) > 0
+                && !ReleaseVersion.IsPrereleaseTag(remoteText))
             {
                 AsyncConsole.WriteLine(
                     $"Local Cli {localDisplay} is newer than {channelDisplay} {remoteText}. No changes.");
             }
+            else if (channelDisplay.Equals("beta", StringComparison.OrdinalIgnoreCase)
+                     && ReleaseVersion.IsPrereleaseTag(remoteText)
+                     && !ReleaseVersion.IsPrereleaseTag(localLabel)
+                     && ReleaseVersion.ParseComparable(localLabel)
+                     == ReleaseVersion.ParseComparable(remoteText))
+            {
+                AsyncConsole.WriteLine(
+                    $"No newer Beta than your current build ({localLabel}). Latest Beta is {remoteText}.");
+            }
             else
             {
                 AsyncConsole.WriteLine($"Titanium CLI is up to date ({remoteText}, {channelDisplay}).");
-                WriteCliIdentity(remoteText, channelDisplay);
             }
 
             return 0;
@@ -437,9 +561,8 @@ internal static class UpdateCommand
             return 1;
         }
 
-        var remoteCmp = ReleaseVersion.ParseComparable(remoteText);
-        var localCmp = ReleaseVersion.ToComparable(local);
-        var action = remoteCmp > localCmp
+        var action = ReleaseVersion.IsRemoteNewer(localLabel, remoteText)
+            && ReleaseVersion.ParseComparable(remoteText) > ReleaseVersion.ToComparable(local)
             ? $"Update {localDisplay} → {remoteText} ({channelDisplay})"
             : $"Switching to {remoteText} ({channelDisplay})";
         AsyncConsole.WriteLine($"{action}. Installing…");
@@ -508,20 +631,42 @@ internal static class UpdateCommand
 
         var remoteLabel = ReleaseVersion.NormalizeTag(
             manifest.Products?.Plus?.Version ?? manifest.Version ?? "unknown");
-        var remoteSemver = ReleaseVersion.ParseComparable(remoteLabel);
         var dest = Path.Combine(AppContext.BaseDirectory, "Titanium.Plus.dll");
         var backup = dest + ".bak";
         var plusLocal = VersionCommand.TryGetLocalPlusVersion();
+        var plusInfo = VersionCommand.TryGetLocalPlusInformationalVersion();
         var installing = plusLocal is null;
 
         if (plusLocal is not null)
         {
-            var localComparable = ReleaseVersion.ToComparable(plusLocal);
-            if (remoteSemver == localComparable
-                || (!string.IsNullOrEmpty(asset.Sha256) && File.Exists(dest) && FileSha256Matches(dest, asset.Sha256)))
+            if (!string.IsNullOrEmpty(asset.Sha256) && File.Exists(dest) && FileSha256Matches(dest, asset.Sha256))
             {
                 AsyncConsole.WriteLine(
                     $"Plus is already at {remoteLabel} ({channelDisplay}).");
+                return 0;
+            }
+
+            if (!VersionCommand.ShouldInstallPlusRelease(plusLocal, remoteLabel, plusInfo))
+            {
+                var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(plusLocal, plusInfo, null);
+                if (ReleaseVersion.CompareReleaseTags(localLabel, remoteLabel) > 0)
+                {
+                    AsyncConsole.WriteLine(
+                        $"Local Plus {localLabel} is newer than {channelDisplay} {remoteLabel}. No changes.");
+                }
+                else if (channelDisplay.Equals("beta", StringComparison.OrdinalIgnoreCase)
+                         && ReleaseVersion.IsPrereleaseTag(remoteLabel)
+                         && !ReleaseVersion.IsPrereleaseTag(localLabel))
+                {
+                    AsyncConsole.WriteLine(
+                        $"No newer Beta Plus than your current build ({localLabel}). Latest Beta is {remoteLabel}.");
+                }
+                else
+                {
+                    AsyncConsole.WriteLine(
+                        $"Plus is already at {remoteLabel} ({channelDisplay}).");
+                }
+
                 return 0;
             }
         }
@@ -604,7 +749,7 @@ internal static class UpdateCommand
         }
     }
 
-    private static (string? Tag, string? Channel) ReadCliIdentity()
+    internal static (string? Tag, string? Channel) ReadCliIdentity()
     {
         try
         {

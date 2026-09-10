@@ -618,12 +618,18 @@ public partial class ProxyServer : IDisposable
     public int MaxWebSocketFramePayloadBytes { get; set; } = 16 * 1024 * 1024;
 
     /// <summary>
+    ///     Default Via header pseudonym (RFC 9110 §7.6.3). Used by <see cref="ViaHeaderPseudonym"/>
+    ///     and by Inspector when Add Via header is enabled.
+    /// </summary>
+    public const string DefaultViaHeaderPseudonym = "titanium-web-proxy";
+
+    /// <summary>
     ///     Pseudonym used in Via header fields appended to forwarded requests and responses
-    ///     (RFC 9110 §7.6.3). Defaults to <c>"titanium-web-proxy"</c>. Set to an empty string
+    ///     (RFC 9110 §7.6.3). Defaults to <see cref="DefaultViaHeaderPseudonym"/>. Set to an empty string
     ///     to disable Via header injection entirely. Loop detection uses this value: a request
     ///     arriving with this pseudonym already present in Via is refused with 508 Loop Detected.
     /// </summary>
-    public string ViaHeaderPseudonym { get; set; } = "titanium-web-proxy";
+    public string ViaHeaderPseudonym { get; set; } = DefaultViaHeaderPseudonym;
 
     /// <summary>
     ///     Controls which HTTP version is declared to the origin server on the request line, independently of

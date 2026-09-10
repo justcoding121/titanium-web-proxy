@@ -111,7 +111,24 @@ public sealed class InterceptionService : IDisposable
     public bool Http3Enabled { get; private set; }
     public string? UpstreamProxyAddress { get; set; }
     public string? PacUrl { get; set; }
+
     public bool IgnoreServerCertificateErrors { get; set; }
+
+    private bool _addViaHeader = true;
+
+    /// <summary>
+    /// When true, inject <see cref="ProxyServer.DefaultViaHeaderPseudonym"/> on intercepted traffic.
+    /// Applied on start and when toggled while the proxy is running.
+    /// </summary>
+    public bool AddViaHeader
+    {
+        get => _addViaHeader;
+        set
+        {
+            _addViaHeader = value;
+            ApplyViaHeaderOption();
+        }
+    }
 
     /// <summary>When true, call <see cref="InstallRootCertificate"/> after start (explicit trust).</summary>
     public bool AutoTrustRootOnStart { get; set; }
@@ -154,6 +171,7 @@ public sealed class InterceptionService : IDisposable
         ApplyLoggingOptions(_loggingSettings);
         _proxy.EnableHttpInterception = true;
         _proxy.EnableRequestTimingCapture = true;
+        ApplyViaHeaderOption();
         // Inspector eagerly buffers bodies for the session grid; 4 MiB trips too often on
         // normal browsing (images, JS bundles) and RST'd the H2 stream. 32 MiB still bounds
         // memory while covering typical inspected payloads.
@@ -236,6 +254,18 @@ public sealed class InterceptionService : IDisposable
 
         ApplyLoggingOptions(settings);
         _proxy.ApplyLoggingConfiguration();
+    }
+
+    private void ApplyViaHeaderOption()
+    {
+        if (_proxy is null)
+        {
+            return;
+        }
+
+        _proxy.ViaHeaderPseudonym = AddViaHeader
+            ? ProxyServer.DefaultViaHeaderPseudonym
+            : string.Empty;
     }
 
     /// <summary>

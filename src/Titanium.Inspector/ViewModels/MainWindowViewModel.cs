@@ -55,7 +55,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private CancellationToken StatusCancelToken => _statusRevertCts?.Token ?? CancellationToken.None;
     private const int GuardStatusRevertMs = 3000;
     private const int OutcomeSuccessRevertMs = 5000;
-    private const int OutcomeErrorRevertMs = 8000;
+    /// <summary>Match Error/Warning toast duration so status bar stays readable.</summary>
+    private const int OutcomeErrorRevertMs = 15000;
+    private const int OutcomeWarningRevertMs = 15000;
     private string _sessionCountText = "Sessions: 0";
     private string _exclusionSummaryText = "";
     private string _searchQuery = "";
@@ -218,6 +220,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             IgnoreServerCertificateErrors = !IgnoreServerCertificateErrors;
             return Task.CompletedTask;
         });
+        ToggleAddViaHeaderCommand = Cmd(() =>
+        {
+            AddViaHeader = !AddViaHeader;
+            return Task.CompletedTask;
+        });
         _clearSessionsCommand = Cmd(ClearSessionsAsync, () => HasSessions);
         ClearSessionsCommand = _clearSessionsCommand;
         _removeSelectedSessionsCommand = Cmd(RemoveSelectedSessionsAsync, () => HasSelectedSessions);
@@ -285,6 +292,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         LoadPlusPanels();
         _interception.ConfigureLogging(_settings.Current);
         _interception.IgnoreServerCertificateErrors = _settings.Current.IgnoreServerCertificateErrors;
+        _interception.AddViaHeader = _settings.Current.AddViaHeader;
         _interception.DecryptHttps = _decryptHttps;
         ApplyExclusionSettingsFromSettings();
         ShowLoopbackExemptMenu = AppContainerLoopback.IsSupported;
@@ -405,7 +413,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         bool toastImportant = false,
         StatusSeverity? toastSeverity = null)
     {
-        var revertMs = severity == StatusSeverity.Error ? OutcomeErrorRevertMs : OutcomeSuccessRevertMs;
+        var revertMs = severity switch
+        {
+            StatusSeverity.Error => OutcomeErrorRevertMs,
+            StatusSeverity.Warning => OutcomeWarningRevertMs,
+            _ => OutcomeSuccessRevertMs,
+        };
         SetTransientStatus(text, severity, toastImportant, revertMs, toastSeverity);
     }
 
@@ -1123,6 +1136,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public ICommand ToggleAutoSystemProxyOnStartCommand { get; }
     public ICommand ToggleDecryptHttpsCommand { get; }
     public ICommand ToggleIgnoreServerCertificateErrorsCommand { get; }
+    public ICommand ToggleAddViaHeaderCommand { get; }
     public ICommand ClearSessionsCommand { get; }
     public ICommand RemoveSelectedSessionsCommand { get; }
     public ICommand ToggleSystemProxyCommand { get; }
@@ -1538,6 +1552,26 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>When true, append the default Via header on intercepted traffic.</summary>
+    public bool AddViaHeader
+    {
+        get => _interception.AddViaHeader;
+        set
+        {
+            if (_interception.AddViaHeader == value)
+            {
+                return;
+            }
+
+            _interception.AddViaHeader = value;
+            PersistSettings();
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AddViaHeader)));
+            StatusText = value
+                ? $"Via header on ({ProxyServer.DefaultViaHeaderPseudonym})"
+                : "Via header off";
+        }
+    }
+
     public bool ShowLoopbackExemptMenu { get; }
 
     /// <summary>True when this OS can resolve local client process ids for the Process column.</summary>
@@ -1828,6 +1862,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _interception.ScriptOnRequest = _scriptOnRequest;
         _interception.ScriptOnResponse = _scriptOnResponse;
         _interception.IgnoreServerCertificateErrors = s.IgnoreServerCertificateErrors;
+        _interception.AddViaHeader = s.AddViaHeader;
         _interception.DecryptHttps = _decryptHttps;
         _interception.ProtobufDescriptorSetPath = s.ProtobufDescriptorSetPath;
         _networkThrottleProfile = string.IsNullOrWhiteSpace(s.NetworkThrottleProfile) ? "None" : s.NetworkThrottleProfile;
@@ -1855,6 +1890,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AutoSystemProxyOnStart)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IgnoreServerCertificateErrors)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AddViaHeader)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BreakpointOnResponse)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ScriptOnRequest)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ScriptOnResponse)));
@@ -1919,6 +1955,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         s.AutoSystemProxyOnStart = AutoSystemProxyOnStart;
         s.DecryptHttps = DecryptHttps;
         s.IgnoreServerCertificateErrors = _interception.IgnoreServerCertificateErrors;
+        s.AddViaHeader = _interception.AddViaHeader;
         s.AutoResponderEnabled = AutoResponder.Enabled;
         s.AutoResponderRules = AutoResponder.ToDtos();
         s.MapRemoteEnabled = MapRemote.Enabled;
@@ -2200,6 +2237,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _interception.ScriptOnRequest = ScriptOnRequest;
         _interception.ScriptOnResponse = ScriptOnResponse;
         _interception.IgnoreServerCertificateErrors = _settings.Current.IgnoreServerCertificateErrors;
+        _interception.AddViaHeader = _settings.Current.AddViaHeader;
         _interception.DecryptHttps = _decryptHttps;
         _interception.ConfigureLogging(_settings.Current);
         SetStatus("Starting proxy…", StatusSeverity.Busy);
