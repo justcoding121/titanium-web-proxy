@@ -381,12 +381,13 @@ internal sealed class EnvoyHost : IDisposable
             W(col + 12, "timeout: 65s");
             if (altSvc != null)
             {
-                W(col + 12, "response_headers_to_add:");
-                W(col + 12, "- header:");
-                W(col + 16, "key: alt-svc");
+                // Sibling of route/match on the Route message (not nested under RouteAction).
+                W(col + 10, "response_headers_to_add:");
+                W(col + 10, "- header:");
+                W(col + 14, "key: alt-svc");
                 // Single-quoted YAML so embedded h3=":port" doubles do not terminate the scalar
                 // (was: value: "h3=":443"; ma=86400" → yaml-cpp "end of map not found").
-                W(col + 16, $"value: '{altSvc}'");
+                W(col + 14, $"value: '{altSvc}'");
             }
 
             W(col + 4, "http_filters:");
