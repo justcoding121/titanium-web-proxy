@@ -87,46 +87,47 @@ function Format-Impossible([string]$Reason = 'Not possible') {
 $wires = @(
     @{ C='HTTP/1 · plain'; O='HTTP/1 · plain'; Rev='twp-reverse-http1'; Yarp='yarp-reverse-http1'; Nginx='nginx-reverse-http1'; Lite='twp-mitm-http1'; Full='twp-mitm-full-http1' },
     @{ C='HTTP/1 · plain'; O='HTTP/1 · TLS'; Rev='twp-reverse-http1-to-https'; Yarp='yarp-reverse-http1-to-https'; Nginx='nginx-reverse-http1-to-https'; Lite='twp-mitm-http1-to-https'; Full='twp-mitm-full-http1-to-https' },
-    @{ C='HTTP/1 · plain'; O='HTTP/2 · plain'; Rev='twp-reverse-http1-plain-to-h2c'; Yarp='yarp-reverse-http1-plain-to-h2c'; Nginx=$null; Lite='twp-mitm-http1-plain-to-h2c'; Full='twp-mitm-full-http1-plain-to-h2c' },
-    @{ C='HTTP/1 · plain'; O='HTTP/2 · TLS'; Rev='twp-reverse-http1-plain-to-http2'; Yarp='yarp-reverse-http1-plain-to-http2'; Nginx=$null; Lite='twp-mitm-http1-plain-to-http2'; Full='twp-mitm-full-http1-plain-to-http2' },
-    @{ C='HTTP/1 · plain'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http1-plain-to-http3'; Yarp='yarp-reverse-http1-plain-to-http3'; Nginx=$null; Lite='twp-mitm-http1-plain-to-http3'; Full='twp-mitm-full-http1-plain-to-http3' },
+    @{ C='HTTP/1 · plain'; O='HTTP/2 · plain'; Rev='twp-reverse-http1-plain-to-h2c'; Yarp='yarp-reverse-http1-plain-to-h2c'; Nginx=$null; Haproxy='haproxy-reverse-http1-plain-to-h2c'; Envoy='envoy-reverse-http1-plain-to-h2c'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-http1-plain-to-h2c'; Full='twp-mitm-full-http1-plain-to-h2c' },
+    @{ C='HTTP/1 · plain'; O='HTTP/2 · TLS'; Rev='twp-reverse-http1-plain-to-http2'; Yarp='yarp-reverse-http1-plain-to-http2'; Nginx=$null; Haproxy='haproxy-reverse-http1-plain-to-http2'; Envoy='envoy-reverse-http1-plain-to-http2'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-http1-plain-to-http2'; Full='twp-mitm-full-http1-plain-to-http2' },
+    @{ C='HTTP/1 · plain'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http1-plain-to-http3'; Yarp='yarp-reverse-http1-plain-to-http3'; Nginx=$null; Haproxy='haproxy-reverse-http1-plain-to-http3'; Envoy='envoy-reverse-http1-plain-to-http3'; NginxImpossible='Not possible (no H3 upstream)'; Lite='twp-mitm-http1-plain-to-http3'; Full='twp-mitm-full-http1-plain-to-http3' },
     @{ C='HTTP/1 · TLS'; O='HTTP/1 · plain'; Rev='twp-reverse-http1-tls'; Yarp='yarp-reverse-http1-tls'; Nginx='nginx-reverse-http1-tls'; Lite='twp-mitm-http1-tls'; Full='twp-mitm-full-http1-tls' },
     @{ C='HTTP/1 · TLS'; O='HTTP/1 · TLS'; Rev='twp-reverse-http1-mitm'; Yarp='yarp-reverse-http1-tls-to-https'; Nginx='nginx-reverse-http1-tls-to-https'; Lite='twp-mitm-http1-tls-to-https'; Full='twp-mitm-full-http1-tls-to-https' },
-    @{ C='HTTP/1 · TLS'; O='HTTP/2 · plain'; Rev='twp-reverse-http1-to-h2c'; Yarp='yarp-reverse-http1-to-h2c'; Nginx=$null; Lite='twp-mitm-http1-to-h2c'; Full='twp-mitm-full-http1-to-h2c' },
-    @{ C='HTTP/1 · TLS'; O='HTTP/2 · TLS'; Rev='twp-reverse-http11-to-http2'; Yarp='yarp-reverse-http11-to-http2'; Nginx=$null; Lite='twp-mitm-http11-to-http2'; Full='twp-mitm-full-http11-to-http2' },
-    @{ C='HTTP/1 · TLS'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http1-to-http3'; Yarp='yarp-reverse-http1-to-http3'; Nginx=$null; Lite='twp-mitm-http1-to-http3'; Full='twp-mitm-full-http1-to-http3' },
-    @{ C='HTTP/2 · plain'; O='HTTP/1 · plain'; Rev='twp-reverse-h2c-to-h1'; Yarp='yarp-reverse-h2c-to-h1'; Nginx=$null; Lite='twp-mitm-h2c-to-h1'; Full='twp-mitm-full-h2c-to-h1' },
-    @{ C='HTTP/2 · plain'; O='HTTP/1 · TLS'; Rev='twp-reverse-h2c-to-https'; Yarp='yarp-reverse-h2c-to-https'; Nginx=$null; Lite='twp-mitm-h2c-to-https'; Full='twp-mitm-full-h2c-to-https' },
-    @{ C='HTTP/2 · plain'; O='HTTP/2 · plain'; Rev='twp-reverse-h2c-to-h2c'; Yarp='yarp-reverse-h2c-to-h2c'; Nginx=$null; Lite='twp-mitm-h2c-to-h2c'; Full='twp-mitm-full-h2c-to-h2c' },
-    @{ C='HTTP/2 · plain'; O='HTTP/2 · TLS'; Rev='twp-reverse-h2c'; Yarp='yarp-reverse-h2c'; Nginx=$null; Lite='twp-mitm-h2c'; Full='twp-mitm-full-h2c' },
-    @{ C='HTTP/2 · plain'; O='HTTP/3 · QUIC'; Rev='twp-reverse-h2c-to-h3'; Yarp='yarp-reverse-h2c-to-h3'; Nginx=$null; Lite='twp-mitm-h2c-to-h3'; Full='twp-mitm-full-h2c-to-h3' },
+    @{ C='HTTP/1 · TLS'; O='HTTP/2 · plain'; Rev='twp-reverse-http1-to-h2c'; Yarp='yarp-reverse-http1-to-h2c'; Nginx=$null; Haproxy='haproxy-reverse-http1-to-h2c'; Envoy='envoy-reverse-http1-to-h2c'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-http1-to-h2c'; Full='twp-mitm-full-http1-to-h2c' },
+    @{ C='HTTP/1 · TLS'; O='HTTP/2 · TLS'; Rev='twp-reverse-http11-to-http2'; Yarp='yarp-reverse-http11-to-http2'; Nginx=$null; Haproxy='haproxy-reverse-http11-to-http2'; Envoy='envoy-reverse-http11-to-http2'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-http11-to-http2'; Full='twp-mitm-full-http11-to-http2' },
+    @{ C='HTTP/1 · TLS'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http1-to-http3'; Yarp='yarp-reverse-http1-to-http3'; Nginx=$null; Haproxy='haproxy-reverse-http1-to-http3'; Envoy='envoy-reverse-http1-to-http3'; NginxImpossible='Not possible (no H3 upstream)'; Lite='twp-mitm-http1-to-http3'; Full='twp-mitm-full-http1-to-http3' },
+    @{ C='HTTP/2 · plain'; O='HTTP/1 · plain'; Rev='twp-reverse-h2c-to-h1'; Yarp='yarp-reverse-h2c-to-h1'; Nginx='nginx-reverse-h2c-to-h1'; Lite='twp-mitm-h2c-to-h1'; Full='twp-mitm-full-h2c-to-h1' },
+    @{ C='HTTP/2 · plain'; O='HTTP/1 · TLS'; Rev='twp-reverse-h2c-to-https'; Yarp='yarp-reverse-h2c-to-https'; Nginx='nginx-reverse-h2c-to-https'; Lite='twp-mitm-h2c-to-https'; Full='twp-mitm-full-h2c-to-https' },
+    @{ C='HTTP/2 · plain'; O='HTTP/2 · plain'; Rev='twp-reverse-h2c-to-h2c'; Yarp='yarp-reverse-h2c-to-h2c'; Nginx=$null; Haproxy='haproxy-reverse-h2c-to-h2c'; Envoy='envoy-reverse-h2c-to-h2c'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-h2c-to-h2c'; Full='twp-mitm-full-h2c-to-h2c' },
+    @{ C='HTTP/2 · plain'; O='HTTP/2 · TLS'; Rev='twp-reverse-h2c'; Yarp='yarp-reverse-h2c'; Nginx=$null; Haproxy='haproxy-reverse-h2c'; Envoy='envoy-reverse-h2c'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-h2c'; Full='twp-mitm-full-h2c' },
+    @{ C='HTTP/2 · plain'; O='HTTP/3 · QUIC'; Rev='twp-reverse-h2c-to-h3'; Yarp='yarp-reverse-h2c-to-h3'; Nginx=$null; Haproxy='haproxy-reverse-h2c-to-h3'; Envoy='envoy-reverse-h2c-to-h3'; NginxImpossible='Not possible (no H3 upstream)'; Lite='twp-mitm-h2c-to-h3'; Full='twp-mitm-full-h2c-to-h3' },
     @{ C='HTTP/2 · TLS'; O='HTTP/1 · plain'; Rev='twp-reverse-http2-cleartext'; Yarp='yarp-reverse-http2'; Nginx='nginx-reverse-http2'; Lite='twp-mitm-http2-cleartext'; Full='twp-mitm-full-http2-cleartext' },
     @{ C='HTTP/2 · TLS'; O='HTTP/1 · TLS'; Rev='twp-reverse-http2-to-https-http1'; Yarp='yarp-reverse-http2-to-https-http1'; Nginx='nginx-reverse-http2-to-https-http1'; Lite='twp-mitm-http2-to-http1'; Full='twp-mitm-full-http2-to-http1' },
-    @{ C='HTTP/2 · TLS'; O='HTTP/2 · plain'; Rev='twp-reverse-http2-to-h2c'; Yarp='yarp-reverse-http2-to-h2c'; Nginx=$null; Lite='twp-mitm-http2-to-h2c'; Full='twp-mitm-full-http2-to-h2c' },
-    @{ C='HTTP/2 · TLS'; O='HTTP/2 · TLS'; Rev='twp-reverse-http2'; Yarp='yarp-reverse-http2-to-https'; Nginx=$null; Lite='twp-mitm-http2'; Full='twp-mitm-full-http2' },
-    @{ C='HTTP/2 · TLS'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http2-to-http3'; Yarp='yarp-reverse-http2-to-http3'; Nginx=$null; Lite='twp-mitm-http2-to-http3'; Full='twp-mitm-full-http2-to-http3' },
+    @{ C='HTTP/2 · TLS'; O='HTTP/2 · plain'; Rev='twp-reverse-http2-to-h2c'; Yarp='yarp-reverse-http2-to-h2c'; Nginx=$null; Haproxy='haproxy-reverse-http2-to-h2c'; Envoy='envoy-reverse-http2-to-h2c'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-http2-to-h2c'; Full='twp-mitm-full-http2-to-h2c' },
+    @{ C='HTTP/2 · TLS'; O='HTTP/2 · TLS'; Rev='twp-reverse-http2'; Yarp='yarp-reverse-http2-to-https'; Nginx=$null; Haproxy='haproxy-reverse-http2-to-https'; Envoy='envoy-reverse-http2-to-https'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-http2'; Full='twp-mitm-full-http2' },
+    @{ C='HTTP/2 · TLS'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http2-to-http3'; Yarp='yarp-reverse-http2-to-http3'; Nginx=$null; Haproxy='haproxy-reverse-http2-to-http3'; Envoy='envoy-reverse-http2-to-http3'; NginxImpossible='Not possible (no H3 upstream)'; Lite='twp-mitm-http2-to-http3'; Full='twp-mitm-full-http2-to-http3' },
     @{ C='HTTP/3 · QUIC'; O='HTTP/1 · plain'; Rev='twp-reverse-http3-cleartext'; Yarp='yarp-reverse-http3-cleartext'; Nginx='nginx-reverse-http3-cleartext'; Lite='twp-mitm-http3-cleartext'; Full='twp-mitm-full-http3-cleartext' },
     @{ C='HTTP/3 · QUIC'; O='HTTP/1 · TLS'; Rev='twp-reverse-http3-to-https-http1'; Yarp='yarp-reverse-http3-to-https-http1'; Nginx='nginx-reverse-http3-to-https-http1'; Lite='twp-mitm-http3-to-http1'; Full='twp-mitm-full-http3-to-http1' },
-    @{ C='HTTP/3 · QUIC'; O='HTTP/2 · plain'; Rev='twp-reverse-http3-to-h2c'; Yarp='yarp-reverse-http3-to-h2c'; Nginx=$null; Lite='twp-mitm-http3-to-h2c'; Full='twp-mitm-full-http3-to-h2c' },
-    @{ C='HTTP/3 · QUIC'; O='HTTP/2 · TLS'; Rev='twp-reverse-http3-to-http2'; Yarp='yarp-reverse-http3-to-http2'; Nginx=$null; Lite='twp-mitm-http3-to-http2'; Full='twp-mitm-full-http3-to-http2' },
-    @{ C='HTTP/3 · QUIC'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http3'; Yarp='yarp-reverse-http3-to-http3'; Nginx=$null; Lite='twp-mitm-http3'; Full='twp-mitm-full-http3' }
+    @{ C='HTTP/3 · QUIC'; O='HTTP/2 · plain'; Rev='twp-reverse-http3-to-h2c'; Yarp='yarp-reverse-http3-to-h2c'; Nginx=$null; Haproxy='haproxy-reverse-http3-to-h2c'; Envoy='envoy-reverse-http3-to-h2c'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-http3-to-h2c'; Full='twp-mitm-full-http3-to-h2c' },
+    @{ C='HTTP/3 · QUIC'; O='HTTP/2 · TLS'; Rev='twp-reverse-http3-to-http2'; Yarp='yarp-reverse-http3-to-http2'; Nginx=$null; Haproxy='haproxy-reverse-http3-to-http2'; Envoy='envoy-reverse-http3-to-http2'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-http3-to-http2'; Full='twp-mitm-full-http3-to-http2' },
+    @{ C='HTTP/3 · QUIC'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http3'; Yarp='yarp-reverse-http3-to-http3'; Nginx=$null; Haproxy='haproxy-reverse-http3-to-http3'; Envoy='envoy-reverse-http3-to-http3'; NginxImpossible='Not possible (no H3 upstream)'; Lite='twp-mitm-http3'; Full='twp-mitm-full-http3' }
 )
 
 foreach ($w in $wires) {
+    # Derive HAProxy/Envoy from nginx when the terminate-to-H1 arm already exists.
+    # Product-possible / harness-absent cells set Haproxy/Envoy explicitly (see
+    # product-arm-matrix.py). Do not copy nginx=$null onto those two — that used
+    # to label H3→H2 as *Not possible (no H3 to H2)* for HAProxy/Envoy.
     if ($w.Nginx) {
-        $w.Haproxy = $w.Nginx -replace '^nginx-', 'haproxy-'
-        $w.Envoy = $w.Nginx -replace '^nginx-', 'envoy-'
-    }
-    else {
-        $w.Haproxy = $null
-        $w.Envoy = $null
+        if (-not $w.Haproxy) { $w.Haproxy = $w.Nginx -replace '^nginx-', 'haproxy-' }
+        if (-not $w.Envoy) { $w.Envoy = $w.Nginx -replace '^nginx-', 'envoy-' }
     }
 }
 
-function Get-PeerImpossibleReason([hashtable]$w, [string]$Arm) {
+function Get-PeerImpossibleReason([hashtable]$w, [string]$PeerKey, [string]$Arm) {
     if ($Arm) { return $null }
-    if ($w.O -match 'QUIC' -and -not $Arm) { return 'Not possible (no QUIC)' }
-    if ($w.C -match 'HTTP/3' -and $w.O -match 'HTTP/2') { return 'Not possible (no H3 to H2)' }
+    if ($PeerKey -eq 'Nginx' -and $w.NginxImpossible) { return $w.NginxImpossible }
+    if ($w.O -match 'QUIC') { return 'Not possible (no H3 upstream)' }
+    if ($w.O -match 'HTTP/2') { return 'Not possible (no H2 upstream)' }
     return 'Not possible'
 }
 
@@ -145,7 +146,7 @@ function Format-TerminatePeerCell(
     if ($arm) {
         return Format-RpsCell $metrics -Medal:$Medal -Peak:$Peak
     }
-    $reason = Get-PeerImpossibleReason $w $arm
+    $reason = Get-PeerImpossibleReason $w $PeerKey $arm
     return Format-Impossible $reason
 }
 

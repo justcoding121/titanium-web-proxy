@@ -134,6 +134,42 @@ internal sealed class EnvoyHost : IDisposable
         }
     }
 
+    /// <summary>
+    /// Parameterized native reverse for product-possible wires that are not the original
+    /// eight terminate-to-H1 arms (h2c inbound, H2/H3 origin).
+    /// </summary>
+    public static async Task<EnvoyHost?> TryStartWireAsync(PeerInboundProto inbound, PeerOriginProto origin,
+        int originPort, string? envoyPath)
+    {
+        var exe = ResolveEnvoyExecutable(envoyPath);
+        if (exe == null)
+            return null;
+        if ((inbound == PeerInboundProto.H3 || origin == PeerOriginProto.H3) && !SupportsHttp3(exe))
+            return null;
+
+        var needsCerts = inbound is PeerInboundProto.H1Tls or PeerInboundProto.H2Tls or PeerInboundProto.H3;
+        var listenScheme = inbound is PeerInboundProto.H1c or PeerInboundProto.H2c ? "http" : "https";
+        var listenHost = inbound == PeerInboundProto.H3 ? "localhost" : "127.0.0.1";
+        var requireUdp = inbound == PeerInboundProto.H3;
+
+        if (!needsCerts)
+            return await TryStartAsync(BuildWireConf(inbound, origin, originPort, null, null), listenScheme,
+                envoyPath, listenHost, requireUdp);
+
+        var prefixProbe = Path.Combine(Path.GetTempPath(), "twp-rps-envoy-certs-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(prefixProbe);
+        try
+        {
+            var (certPem, keyPem) = await ExportLoopbackPemAsync(prefixProbe);
+            return await TryStartAsync(BuildWireConf(inbound, origin, originPort, certPem, keyPem), listenScheme,
+                envoyPath, listenHost, requireUdp);
+        }
+        finally
+        {
+            TryDeleteDir(prefixProbe);
+        }
+    }
+
     public static async Task<EnvoyHost?> TryStartHttp3ToHttpsHttp1Async(int originHttpsPort, string? envoyPath)
     {
         var exe = ResolveEnvoyExecutable(envoyPath);
@@ -346,7 +382,10 @@ internal sealed class EnvoyHost : IDisposable
             W(col + 8, "\"@type\": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router");
         }
 
-        public void Cluster(int originPort, bool upstreamTls)
+        public void Cluster(int originPort, bool upstreamTls) =>
+            Cluster(originPort, upstreamTls ? PeerOriginProto.H1Tls : PeerOriginProto.H1c);
+
+        public void Cluster(int originPort, PeerOriginProto origin)
         {
             W(2, "clusters:");
             W(2, "- name: origin");
@@ -365,24 +404,65 @@ internal sealed class EnvoyHost : IDisposable
             W(8, "- endpoint:");
             W(12, "address:");
             W(14, "socket_address:");
+            if (origin == PeerOriginProto.H3)
+                W(16, "protocol: UDP");
             W(16, "address: 127.0.0.1");
             W(16, $"port_value: {originPort}");
-            if (upstreamTls)
+            switch (origin)
             {
-                W(4, "transport_socket:");
-                W(6, "name: envoy.transport_sockets.tls");
-                W(6, "typed_config:");
-                W(8, "\"@type\": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext");
-                W(8, "sni: localhost");
-                W(8, "common_tls_context:");
-                W(10, "validation_context:");
-                W(12, "trust_chain_verification: ACCEPT_UNTRUSTED");
-                W(4, "typed_extension_protocol_options:");
-                W(6, "envoy.extensions.upstreams.http.v3.HttpProtocolOptions:");
-                W(8, "\"@type\": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions");
-                W(8, "explicit_http_config:");
-                W(10, "http_protocol_options: {}");
+                case PeerOriginProto.H1Tls:
+                    WriteUpstreamTls(alpn: null);
+                    WriteExplicitHttp("http_protocol_options: {}");
+                    break;
+                case PeerOriginProto.H2c:
+                    WriteExplicitHttp("http2_protocol_options: {}");
+                    break;
+                case PeerOriginProto.H2Tls:
+                    WriteUpstreamTls(["h2"]);
+                    WriteExplicitHttp("http2_protocol_options: {}");
+                    break;
+                case PeerOriginProto.H3:
+                    WriteUpstreamQuic();
+                    WriteExplicitHttp("http3_protocol_options: {}");
+                    break;
             }
+        }
+
+        private void WriteUpstreamTls(string[]? alpn)
+        {
+            W(4, "transport_socket:");
+            W(6, "name: envoy.transport_sockets.tls");
+            W(6, "typed_config:");
+            W(8, "\"@type\": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext");
+            W(8, "sni: localhost");
+            W(8, "common_tls_context:");
+            if (alpn is { Length: > 0 })
+                W(10, $"alpn_protocols: [{string.Join(", ", alpn.Select(a => $"\"{a}\""))}]");
+            W(10, "validation_context:");
+            W(12, "trust_chain_verification: ACCEPT_UNTRUSTED");
+        }
+
+        private void WriteUpstreamQuic()
+        {
+            W(4, "transport_socket:");
+            W(6, "name: envoy.transport_sockets.quic");
+            W(6, "typed_config:");
+            W(8, "\"@type\": type.googleapis.com/envoy.extensions.transport_sockets.quic.v3.QuicUpstreamTransport");
+            W(8, "upstream_tls_context:");
+            W(10, "sni: localhost");
+            W(10, "common_tls_context:");
+            W(12, "alpn_protocols: [\"h3\"]");
+            W(12, "validation_context:");
+            W(14, "trust_chain_verification: ACCEPT_UNTRUSTED");
+        }
+
+        private void WriteExplicitHttp(string protocolOptionsLine)
+        {
+            W(4, "typed_extension_protocol_options:");
+            W(6, "envoy.extensions.upstreams.http.v3.HttpProtocolOptions:");
+            W(8, "\"@type\": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions");
+            W(8, "explicit_http_config:");
+            W(10, protocolOptionsLine);
         }
 
         public override string ToString() => sb.ToString();
@@ -515,6 +595,53 @@ internal sealed class EnvoyHost : IDisposable
                 y.QuicListener("listener_quic_v4", port, "127.0.0.1", "ingress_quic_v4", certDest, keyDest);
                 y.QuicListener("listener_quic_v6", port, "::1", "ingress_quic_v6", certDest, keyDest);
                 y.Cluster(originHttpsPort, upstreamTls: true);
+            });
+        };
+
+    private static Func<string, int, string> BuildWireConf(PeerInboundProto inbound, PeerOriginProto origin,
+        int originPort, string? certPem, string? keyPem) =>
+        (prefixDir, port) =>
+        {
+            string? certDest = null;
+            string? keyDest = null;
+            if (certPem != null && keyPem != null)
+                (certDest, keyDest) = CopyPemFiles(prefixDir, certPem, keyPem);
+
+            return EmitBootstrap(y =>
+            {
+                y.Admin(GetFreeTcpPort());
+                y.StaticResourcesHeader();
+                switch (inbound)
+                {
+                    case PeerInboundProto.H1c:
+                        y.TcpListener("listener_http1", port, "ingress_http1", "HTTP1", altSvc: null,
+                            certPath: null, keyPath: null, alpnProtocols: null);
+                        break;
+                    case PeerInboundProto.H1Tls:
+                        y.TcpListener("listener_http1_tls", port, "ingress_http1_tls", "HTTP1", altSvc: null,
+                            certDest, keyDest, ["http/1.1"]);
+                        break;
+                    case PeerInboundProto.H2c:
+                        y.TcpListener("listener_h2c", port, "ingress_h2c", "HTTP2", altSvc: null,
+                            certPath: null, keyPath: null, alpnProtocols: null);
+                        break;
+                    case PeerInboundProto.H2Tls:
+                        y.TcpListener("listener_http2", port, "ingress_http2", "AUTO", altSvc: null,
+                            certDest, keyDest, ["h2", "http/1.1"]);
+                        break;
+                    case PeerInboundProto.H3:
+                    {
+                        var altSvc = $$"""h3=":{{port}}"; ma=86400""";
+                        y.TcpListener("listener_tcp", port, "ingress_tcp", "AUTO", altSvc,
+                            certDest, keyDest, ["h2", "http/1.1"]);
+                        y.QuicListener("listener_quic_v4", port, "127.0.0.1", "ingress_quic_v4", certDest!,
+                            keyDest!);
+                        y.QuicListener("listener_quic_v6", port, "::1", "ingress_quic_v6", certDest!, keyDest!);
+                        break;
+                    }
+                }
+
+                y.Cluster(originPort, origin);
             });
         };
 

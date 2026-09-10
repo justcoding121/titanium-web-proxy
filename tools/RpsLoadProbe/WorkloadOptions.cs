@@ -171,6 +171,11 @@ internal sealed class WorkloadOptions
             ProbeMode.HttpsMitm or ProbeMode.ReverseHttp1Mitm
                 or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi =>
                 httpsMitm,
+            _ when PeerWire.TryGet(mode, out var wire) &&
+                   wire.Inbound is PeerInboundProto.H2c or PeerInboundProto.H2Tls =>
+                http2,
+            _ when PeerWire.TryGet(mode, out var h3Wire) && h3Wire.Inbound == PeerInboundProto.H3 =>
+                http3,
             ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp2Cleartext or ProbeMode.ReverseHttp2ToH2c
                 or ProbeMode.YarpReverseHttp2 or ProbeMode.YarpReverseHttp2ToH2c
                 or ProbeMode.YarpReverseHttp2ToHttps or ProbeMode.YarpReverseHttp2ToHttpsHttp1

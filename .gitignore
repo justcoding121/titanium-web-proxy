@@ -230,6 +230,10 @@ tools/CliQaProbe/results/
 .tmp-rps/
 tmp/
 
+# Python bytecode (RpsLoadProbe chart / matrix scripts)
+__pycache__/
+*.py[cod]
+
 # Local trust/MITM validation screenshots (manual / agent runs)
 .validation-screenshots/
 

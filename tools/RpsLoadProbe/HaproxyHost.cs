@@ -132,6 +132,42 @@ internal sealed class HaproxyHost : IDisposable
         }
     }
 
+    /// <summary>
+    /// Parameterized native reverse for product-possible wires that are not the original
+    /// eight terminate-to-H1 arms (h2c inbound, H2/H3 origin).
+    /// </summary>
+    public static async Task<HaproxyHost?> TryStartWireAsync(PeerInboundProto inbound, PeerOriginProto origin,
+        int originPort, string? haproxyPath)
+    {
+        var exe = ResolveHaproxyExecutable(haproxyPath);
+        if (exe == null)
+            return null;
+        if ((inbound == PeerInboundProto.H3 || origin == PeerOriginProto.H3) && !SupportsQuic(exe))
+            return null;
+
+        var needsCerts = inbound is PeerInboundProto.H1Tls or PeerInboundProto.H2Tls or PeerInboundProto.H3;
+        var listenScheme = inbound is PeerInboundProto.H1c or PeerInboundProto.H2c ? "http" : "https";
+        var listenHost = inbound == PeerInboundProto.H3 ? "localhost" : "127.0.0.1";
+        var requireUdp = inbound == PeerInboundProto.H3;
+
+        if (!needsCerts)
+            return await TryStartAsync(BuildWireConf(inbound, origin, originPort, pemPath: null), listenScheme,
+                haproxyPath, listenHost, requireUdp);
+
+        var prefixProbe = Path.Combine(Path.GetTempPath(), "twp-rps-haproxy-certs-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(prefixProbe);
+        try
+        {
+            var pem = await ExportLoopbackCombinedPemAsync(prefixProbe);
+            return await TryStartAsync(BuildWireConf(inbound, origin, originPort, pem), listenScheme,
+                haproxyPath, listenHost, requireUdp);
+        }
+        finally
+        {
+            TryDeleteDir(prefixProbe);
+        }
+    }
+
     public static async Task<HaproxyHost?> TryStartHttp3ToHttpsHttp1Async(int originHttpsPort, string? haproxyPath)
     {
         var exe = ResolveHaproxyExecutable(haproxyPath);
@@ -362,9 +398,57 @@ frontend fe
 
 backend be
     http-reuse aggressive
-    server origin 127.0.0.1:{originHttpsPort} ssl verify none sni str(localhost) maxconn 256
+                server origin 127.0.0.1:{originHttpsPort} ssl verify none sni str(localhost) maxconn 256
 """;
         };
+
+    private static Func<string, int, string> BuildWireConf(PeerInboundProto inbound, PeerOriginProto origin,
+        int originPort, string? pemPath) =>
+        (prefixDir, port) =>
+        {
+            string? pemDest = null;
+            if (pemPath != null)
+                pemDest = CopyPem(prefixDir, pemPath);
+            return $"""
+{GlobalDefaults()}
+
+frontend fe
+{FrontendBinds(inbound, port, pemDest)}
+    default_backend be
+
+backend be
+    http-reuse aggressive
+{OriginServerLine(origin, originPort)}
+""";
+        };
+
+    private static string FrontendBinds(PeerInboundProto inbound, int port, string? pemDest) => inbound switch
+    {
+        PeerInboundProto.H1c => $"    bind 127.0.0.1:{port}",
+        PeerInboundProto.H1Tls => $"    bind 127.0.0.1:{port} ssl crt \"{pemDest}\" alpn http/1.1",
+        PeerInboundProto.H2c => $"    bind 127.0.0.1:{port} proto h2",
+        PeerInboundProto.H2Tls => $"    bind 127.0.0.1:{port} ssl crt \"{pemDest}\" alpn h2,http/1.1",
+        PeerInboundProto.H3 => $"""
+    bind 127.0.0.1:{port} ssl crt "{pemDest}" alpn h2,http/1.1
+    bind quic4@127.0.0.1:{port} ssl crt "{pemDest}" alpn h3
+    bind quic6@[::1]:{port} ssl crt "{pemDest}" alpn h3
+    http-response set-header alt-svc 'h3=":{port}"; ma=86400'
+""",
+        _ => throw new ArgumentOutOfRangeException(nameof(inbound))
+    };
+
+    private static string OriginServerLine(PeerOriginProto origin, int originPort) => origin switch
+    {
+        PeerOriginProto.H1c => $"    server origin 127.0.0.1:{originPort} maxconn 256",
+        PeerOriginProto.H1Tls =>
+            $"    server origin 127.0.0.1:{originPort} ssl verify none sni str(localhost) maxconn 256",
+        PeerOriginProto.H2c => $"    server origin 127.0.0.1:{originPort} proto h2 maxconn 256",
+        PeerOriginProto.H2Tls =>
+            $"    server origin 127.0.0.1:{originPort} ssl verify none sni str(localhost) alpn h2 proto h2 maxconn 256",
+        PeerOriginProto.H3 =>
+            $"    server origin quic4@127.0.0.1:{originPort} ssl verify none sni str(localhost) alpn h3 maxconn 256",
+        _ => throw new ArgumentOutOfRangeException(nameof(origin))
+    };
 
     private static async Task ValidateConfigAsync(string exe, string confPath)
     {

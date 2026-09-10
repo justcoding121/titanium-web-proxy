@@ -314,7 +314,11 @@ internal static class Cli
 
     private static bool TryParseMode(string text, out ProbeMode mode)
     {
-        switch (text.Trim().ToLowerInvariant())
+        var key = text.Trim();
+        if (PeerWire.TryParseName(key, out mode))
+            return true;
+
+        switch (key.ToLowerInvariant())
         {
             case "reverse-http1":
                 mode = ProbeMode.ReverseHttp1;
@@ -742,6 +746,8 @@ internal static class Cli
               nginx-reverse-http2-to-https-http1 Control arm: ssl+http2 -> HTTPS HTTP/1 (proxy_ssl)
               nginx-reverse-http3-cleartext Control arm: QUIC/h3 -> cleartext HTTP/1 (needs http_v3_module)
               nginx-reverse-http3-to-https-http1 Control arm: QUIC/h3 -> HTTPS HTTP/1 (proxy_ssl)
+              nginx-reverse-h2c-to-h1 / -to-https  Control: prior-knowledge h2c (nginx 1.25.1+ http2 on)
+              haproxy-/envoy- 5×5 remainder       h2c inbound and H2/H3 origin (see product-arm-matrix.py)
               nginx-reverse-http1-to-https Control arm: cleartext HTTP/1 -> HTTPS HTTP/1 (proxy_ssl)
               nginx-reverse-http1-tls-to-https Control arm: TLS HTTP/1 -> HTTPS HTTP/1 (dual TLS)
               haproxy-reverse-http2   Control arm: HAProxy ssl+alpn h2 -> cleartext HTTP/1 origin

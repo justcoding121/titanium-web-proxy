@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Render per-OS reverse product-matrix charts (TWP vs YARP vs nginx vs HAProxy vs Envoy).
 
-25 Client×Origin wires as small-multiples by client protocol. nginx/HAProxy/Envoy *Not possible*
-is omitted (not a zero bar). MITM Lite/Full are tables only — this script never
+25 Client×Origin wires as small-multiples by client protocol. Product-impossible
+cells (*Not possible*) are omitted (not a zero bar). Product-possible / harness-absent
+HAProxy/Envoy names live in product-arm-matrix.py — missing CSV rows are omitted
+until ProbeModes exist. MITM Lite/Full are tables only — this script never
 plots interception arms.
 
 CSV mode (same sustain @ c=64 rule as paste-compare-product-wiki.ps1):
@@ -103,6 +105,26 @@ def arm_name(prefix: str, client: str, origin: str) -> str:
         ("http2", "https-http1"): f"{prefix}-reverse-http2-to-https-http1",
         ("http3", "http1"): f"{prefix}-reverse-http3-cleartext",
         ("http3", "https-http1"): f"{prefix}-reverse-http3-to-https-http1",
+        # Product-possible / harness-absent (product-arm-matrix.py). nginx H2/H3
+        # origin is still omitted by wiki *Not possible*; these names are for
+        # HAProxy/Envoy CSV lookup once the arms exist.
+        ("http1", "http2-cleartext"): f"{prefix}-reverse-http1-plain-to-h2c",
+        ("http1", "https-http2"): f"{prefix}-reverse-http1-plain-to-http2",
+        ("http1", "http3"): f"{prefix}-reverse-http1-plain-to-http3",
+        ("http1-tls", "http2-cleartext"): f"{prefix}-reverse-http1-to-h2c",
+        ("http1-tls", "https-http2"): f"{prefix}-reverse-http11-to-http2",
+        ("http1-tls", "http3"): f"{prefix}-reverse-http1-to-http3",
+        ("http2-cleartext", "http1"): f"{prefix}-reverse-h2c-to-h1",
+        ("http2-cleartext", "https-http1"): f"{prefix}-reverse-h2c-to-https",
+        ("http2-cleartext", "http2-cleartext"): f"{prefix}-reverse-h2c-to-h2c",
+        ("http2-cleartext", "https-http2"): f"{prefix}-reverse-h2c",
+        ("http2-cleartext", "http3"): f"{prefix}-reverse-h2c-to-h3",
+        ("http2", "http2-cleartext"): f"{prefix}-reverse-http2-to-h2c",
+        ("http2", "https-http2"): f"{prefix}-reverse-http2-to-https",
+        ("http2", "http3"): f"{prefix}-reverse-http2-to-http3",
+        ("http3", "http2-cleartext"): f"{prefix}-reverse-http3-to-h2c",
+        ("http3", "https-http2"): f"{prefix}-reverse-http3-to-http2",
+        ("http3", "http3"): f"{prefix}-reverse-http3-to-http3",
     }
     if prefix in ("nginx", "haproxy", "envoy"):
         return peer_special.get((c, o), f"{prefix}-reverse-{c}-to-{o}")

@@ -43,6 +43,8 @@ New bridge arms that complete the grid (beyond the historical subset):
 
 YARP dual-crypto peers: `yarp-reverse-http1-tls-to-https`, `yarp-reverse-http2-to-https-http1`, `yarp-reverse-http3-to-https-http1`.
 
+**nginx / HAProxy / Envoy:** all product-possible 5×5 reverse cells have ProbeModes. nginx is H1 origin only (plus h2c inbound on 1.25.1+). HAProxy and Envoy cover H2/H3 origin (Envoy H3 upstream is alpha). Windows: HAProxy/Envoy are OS-impossible; nginx H3 inbound is OS-impossible. See [`product-arm-matrix.py`](product-arm-matrix.py).
+
 **Not supported:** `Upgrade: h2c`. Explicit-proxy inbound h2c is not implemented. Outbound and inbound prior-knowledge h2c on transparent reverse are supported. H3 is always QUIC/TLS for TWP (no cleartext H3 client or origin).
 
 ## Same-protocol matrix

@@ -52,6 +52,42 @@ on:
           - envoy-reverse-http2-to-https-http1
           - envoy-reverse-http3-cleartext
           - envoy-reverse-http3-to-https-http1
+          - nginx-reverse-h2c-to-h1
+          - nginx-reverse-h2c-to-https
+          - haproxy-reverse-http1-plain-to-h2c
+          - haproxy-reverse-http1-plain-to-http2
+          - haproxy-reverse-http1-plain-to-http3
+          - haproxy-reverse-http1-to-h2c
+          - haproxy-reverse-http11-to-http2
+          - haproxy-reverse-http1-to-http3
+          - haproxy-reverse-h2c-to-h1
+          - haproxy-reverse-h2c-to-https
+          - haproxy-reverse-h2c-to-h2c
+          - haproxy-reverse-h2c
+          - haproxy-reverse-h2c-to-h3
+          - haproxy-reverse-http2-to-h2c
+          - haproxy-reverse-http2-to-https
+          - haproxy-reverse-http2-to-http3
+          - haproxy-reverse-http3-to-h2c
+          - haproxy-reverse-http3-to-http2
+          - haproxy-reverse-http3-to-http3
+          - envoy-reverse-http1-plain-to-h2c
+          - envoy-reverse-http1-plain-to-http2
+          - envoy-reverse-http1-plain-to-http3
+          - envoy-reverse-http1-to-h2c
+          - envoy-reverse-http11-to-http2
+          - envoy-reverse-http1-to-http3
+          - envoy-reverse-h2c-to-h1
+          - envoy-reverse-h2c-to-https
+          - envoy-reverse-h2c-to-h2c
+          - envoy-reverse-h2c
+          - envoy-reverse-h2c-to-h3
+          - envoy-reverse-http2-to-h2c
+          - envoy-reverse-http2-to-https
+          - envoy-reverse-http2-to-http3
+          - envoy-reverse-http3-to-h2c
+          - envoy-reverse-http3-to-http2
+          - envoy-reverse-http3-to-http3
           - compare-editions
           - compare-cross-version
           - compare-ceiling
@@ -180,7 +216,7 @@ jobs:
     # compare-editions (expanded Plus/CLI stress arms) needs ~60m; other modes keep the long ceiling.
     # compare-product-smoke is the minimal all-OS product-gate subset — run before full compare-product.
     # Ramp has per-arm wall timeout (~8–25m) so a stuck MsQuic/bombardier/READY wait cannot burn 400m.
-    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || (github.event_name == 'push' && 90 || (inputs.mode == 'compare-editions' && 90 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 60 || 420))) }}
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || (github.event_name == 'push' && 90 || (inputs.mode == 'compare-editions' && 90 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 120 || 420))) }}
     steps:
       - uses: actions/checkout@v6
 
@@ -747,7 +783,7 @@ jobs:
       # Pass workflow_dispatch inputs via env (not ${{ }} in the script) to avoid
       # githubactions:S7630 script-injection findings on user-controlled values.
       - name: Run saturation ramp
-        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 50 || 400))) }}
+        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 110 || 400))) }}
         shell: pwsh
         env:
           RPS_MODE: ${{ env.RPS_MODE }}

@@ -92,6 +92,49 @@ BODY_ARMS: List[Arm6] = [
     ),
 ]
 
+BODY_REMAINDER_ARMS: List[Arm6] = [
+    (
+        "64k · h2c→H1",
+        "twp-reverse-h2c-to-h1-body64k",
+        "nginx-reverse-h2c-to-h1-body64k",
+        "haproxy-reverse-h2c-to-h1-body64k",
+        "envoy-reverse-h2c-to-h1-body64k",
+        "yarp-reverse-h2c-to-h1-body64k",
+    ),
+    (
+        "64k · H2→h2c",
+        "twp-reverse-http2-to-h2c-body64k",
+        None,
+        "haproxy-reverse-http2-to-h2c-body64k",
+        "envoy-reverse-http2-to-h2c-body64k",
+        "yarp-reverse-http2-to-h2c-body64k",
+    ),
+    (
+        "64k · H2→H2",
+        "twp-reverse-http2-to-https-body64k",
+        None,
+        "haproxy-reverse-http2-to-https-body64k",
+        "envoy-reverse-http2-to-https-body64k",
+        "yarp-reverse-http2-to-https-body64k",
+    ),
+    (
+        "64k · H3→H2",
+        "twp-reverse-http3-to-http2-body64k",
+        None,
+        "haproxy-reverse-http3-to-http2-body64k",
+        "envoy-reverse-http3-to-http2-body64k",
+        "yarp-reverse-http3-to-http2-body64k",
+    ),
+    (
+        "64k · H3→H1 TLS",
+        "twp-reverse-http3-to-https-http1-body64k",
+        "nginx-reverse-http3-to-https-http1-body64k",
+        "haproxy-reverse-http3-to-https-http1-body64k",
+        "envoy-reverse-http3-to-https-http1-body64k",
+        "yarp-reverse-http3-to-https-http1-body64k",
+    ),
+]
+
 POST_ARMS: List[Arm6] = [
     (
         "H1 TLS",
@@ -116,6 +159,22 @@ POST_ARMS: List[Arm6] = [
         "haproxy-reverse-http3-cleartext-post64k",
         "envoy-reverse-http3-cleartext-post64k",
         "yarp-reverse-http3-cleartext-post64k",
+    ),
+    (
+        "h2c→H1",
+        "twp-reverse-h2c-to-h1-post64k",
+        "nginx-reverse-h2c-to-h1-post64k",
+        "haproxy-reverse-h2c-to-h1-post64k",
+        "envoy-reverse-h2c-to-h1-post64k",
+        "yarp-reverse-h2c-to-h1-post64k",
+    ),
+    (
+        "H2→H2",
+        "twp-reverse-http2-to-https-post64k",
+        None,
+        "haproxy-reverse-http2-to-https-post64k",
+        "envoy-reverse-http2-to-https-post64k",
+        "yarp-reverse-http2-to-https-post64k",
     ),
 ]
 
@@ -173,7 +232,7 @@ TLS_ARMS: List[Arm6] = [
     ),
 ]
 
-# H2 duplex omitted (Not possible for nginx/HAProxy/Envoy).
+# H2 duplex uses HAProxy/Envoy H2 TLS→H2 TLS (nginx has no H2 upstream).
 ARCH_ARMS: List[Arm6] = [
     (
         "Slow · H1 TLS",
@@ -230,6 +289,14 @@ ARCH_ARMS: List[Arm6] = [
         "haproxy-reverse-http1-tls-duplex-ws",
         "envoy-reverse-http1-tls-duplex-ws",
         "yarp-reverse-http1-tls-duplex-ws",
+    ),
+    (
+        "Duplex H2 TLS↔H2",
+        "twp-reverse-http2-duplex-h2",
+        None,
+        "haproxy-reverse-http2-duplex-h2",
+        "envoy-reverse-http2-duplex-h2",
+        "yarp-reverse-http2-to-https-duplex-h2",
     ),
 ]
 
@@ -308,6 +375,7 @@ def render_chart(
 
 CHART_SPECS = (
     ("bodies", "bodies", BODY_ARMS, "Heavier GET bodies"),
+    ("bodies", "bodies-remainder", BODY_REMAINDER_ARMS, "Heavier GET remainder wires"),
     ("post", "post", POST_ARMS, "POST 64 KiB"),
     ("lossy", "lossy", LOSSY_ARMS, "Lossy / high-RTT"),
     ("tls", "tls-cost", TLS_ARMS, "TLS termination cost"),

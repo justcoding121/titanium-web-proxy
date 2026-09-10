@@ -127,11 +127,15 @@ def peer_row(
     data: dict,
     win_no_quic: bool = False,
     win_no_haproxy_envoy: bool = False,
+    haproxy_a: Optional[str] = None,
+    envoy_a: Optional[str] = None,
 ) -> str:
     twp = data.get(twp_a) if twp_a else None
     nginx = data.get(nginx_a) if nginx_a else None
-    haproxy_a = nginx_a.replace("nginx-", "haproxy-", 1) if nginx_a else None
-    envoy_a = nginx_a.replace("nginx-", "envoy-", 1) if nginx_a else None
+    if haproxy_a is None:
+        haproxy_a = nginx_a.replace("nginx-", "haproxy-", 1) if nginx_a else None
+    if envoy_a is None:
+        envoy_a = nginx_a.replace("nginx-", "envoy-", 1) if nginx_a else None
     haproxy = data.get(haproxy_a) if haproxy_a else None
     envoy = data.get(envoy_a) if envoy_a else None
     yarp = data.get(yarp_a) if yarp_a else None
@@ -196,6 +200,16 @@ def main() -> None:
         ("256 KiB", "HTTP/1 · TLS", "HTTP/1 · plain", "twp-reverse-http1-tls-body256k", "nginx-reverse-http1-tls-body256k", "yarp-reverse-http1-tls-body256k"),
         ("256 KiB", "HTTP/2 · TLS", "HTTP/1 · plain", "twp-reverse-http2-cleartext-body256k", "nginx-reverse-http2-body256k", "yarp-reverse-http2-body256k"),
         ("256 KiB", "HTTP/3 · QUIC", "HTTP/1 · plain", "twp-reverse-http3-cleartext-body256k", "nginx-reverse-http3-cleartext-body256k", "yarp-reverse-http3-cleartext-body256k"),
+        ("64 KiB", "HTTP/2 · plain", "HTTP/1 · plain", "twp-reverse-h2c-to-h1-body64k", "nginx-reverse-h2c-to-h1-body64k", "yarp-reverse-h2c-to-h1-body64k"),
+        ("64 KiB", "HTTP/2 · TLS", "HTTP/2 · plain", "twp-reverse-http2-to-h2c-body64k", None, "yarp-reverse-http2-to-h2c-body64k"),
+        ("64 KiB", "HTTP/2 · TLS", "HTTP/2 · TLS", "twp-reverse-http2-to-https-body64k", None, "yarp-reverse-http2-to-https-body64k"),
+        ("64 KiB", "HTTP/3 · QUIC", "HTTP/2 · TLS", "twp-reverse-http3-to-http2-body64k", None, "yarp-reverse-http3-to-http2-body64k"),
+        ("64 KiB", "HTTP/3 · QUIC", "HTTP/1 · TLS", "twp-reverse-http3-to-https-http1-body64k", "nginx-reverse-http3-to-https-http1-body64k", "yarp-reverse-http3-to-https-http1-body64k"),
+        ("256 KiB", "HTTP/2 · plain", "HTTP/1 · plain", "twp-reverse-h2c-to-h1-body256k", "nginx-reverse-h2c-to-h1-body256k", "yarp-reverse-h2c-to-h1-body256k"),
+        ("256 KiB", "HTTP/2 · TLS", "HTTP/2 · plain", "twp-reverse-http2-to-h2c-body256k", None, "yarp-reverse-http2-to-h2c-body256k"),
+        ("256 KiB", "HTTP/2 · TLS", "HTTP/2 · TLS", "twp-reverse-http2-to-https-body256k", None, "yarp-reverse-http2-to-https-body256k"),
+        ("256 KiB", "HTTP/3 · QUIC", "HTTP/2 · TLS", "twp-reverse-http3-to-http2-body256k", None, "yarp-reverse-http3-to-http2-body256k"),
+        ("256 KiB", "HTTP/3 · QUIC", "HTTP/1 · TLS", "twp-reverse-http3-to-https-http1-body256k", "nginx-reverse-http3-to-https-http1-body256k", "yarp-reverse-http3-to-https-http1-body256k"),
     ]
 
     def bodies_table(data: dict, is_win: bool) -> str:
@@ -204,8 +218,12 @@ def main() -> None:
             f"|---|---|---|{PEER_RULE}|",
         ]
         for body, c, o, t, n, y in body_spec:
+            extra = {}
+            if n is None:
+                stem = t.replace("twp-reverse-", "", 1)
+                extra = {"haproxy_a": f"haproxy-reverse-{stem}", "envoy_a": f"envoy-reverse-{stem}"}
             rows.append(
-                peer_row([body, c, o], t, n, y, data, win_no_quic=is_win, win_no_haproxy_envoy=is_win)
+                peer_row([body, c, o], t, n, y, data, win_no_quic=is_win, win_no_haproxy_envoy=is_win, **extra)
             )
         return "\n".join(rows)
 
@@ -213,6 +231,11 @@ def main() -> None:
         ("HTTP/1 · TLS", "HTTP/1 · plain", "twp-reverse-http1-tls-post64k", "nginx-reverse-http1-tls-post64k", "yarp-reverse-http1-tls-post64k"),
         ("HTTP/2 · TLS", "HTTP/1 · plain", "twp-reverse-http2-cleartext-post64k", "nginx-reverse-http2-post64k", "yarp-reverse-http2-post64k"),
         ("HTTP/3 · QUIC", "HTTP/1 · plain", "twp-reverse-http3-cleartext-post64k", "nginx-reverse-http3-cleartext-post64k", "yarp-reverse-http3-cleartext-post64k"),
+        ("HTTP/2 · plain", "HTTP/1 · plain", "twp-reverse-h2c-to-h1-post64k", "nginx-reverse-h2c-to-h1-post64k", "yarp-reverse-h2c-to-h1-post64k"),
+        ("HTTP/2 · TLS", "HTTP/2 · plain", "twp-reverse-http2-to-h2c-post64k", None, "yarp-reverse-http2-to-h2c-post64k"),
+        ("HTTP/2 · TLS", "HTTP/2 · TLS", "twp-reverse-http2-to-https-post64k", None, "yarp-reverse-http2-to-https-post64k"),
+        ("HTTP/3 · QUIC", "HTTP/2 · TLS", "twp-reverse-http3-to-http2-post64k", None, "yarp-reverse-http3-to-http2-post64k"),
+        ("HTTP/3 · QUIC", "HTTP/1 · TLS", "twp-reverse-http3-to-https-http1-post64k", "nginx-reverse-http3-to-https-http1-post64k", "yarp-reverse-http3-to-https-http1-post64k"),
     ]
 
     def post_table(data: dict, is_win: bool) -> str:
@@ -221,8 +244,12 @@ def main() -> None:
             f"|---|---|{PEER_RULE}|",
         ]
         for c, o, t, n, y in post_spec:
+            extra = {}
+            if n is None:
+                stem = t.replace("twp-reverse-", "", 1)
+                extra = {"haproxy_a": f"haproxy-reverse-{stem}", "envoy_a": f"envoy-reverse-{stem}"}
             rows.append(
-                peer_row([c, o], t, n, y, data, win_no_quic=is_win, win_no_haproxy_envoy=is_win)
+                peer_row([c, o], t, n, y, data, win_no_quic=is_win, win_no_haproxy_envoy=is_win, **extra)
             )
         return "\n".join(rows)
 
@@ -230,6 +257,11 @@ def main() -> None:
         ("HTTP/1 · TLS", "HTTP/1 · plain", "twp-reverse-http1-tls-lossy", "nginx-reverse-http1-tls-lossy", "yarp-reverse-http1-tls-lossy"),
         ("HTTP/2 · TLS", "HTTP/1 · plain", "twp-reverse-http2-cleartext-lossy", "nginx-reverse-http2-lossy", "yarp-reverse-http2-lossy"),
         ("HTTP/3 · QUIC", "HTTP/1 · plain", "twp-reverse-http3-cleartext-lossy", "nginx-reverse-http3-cleartext-lossy", "yarp-reverse-http3-cleartext-lossy"),
+        ("HTTP/2 · plain", "HTTP/1 · plain", "twp-reverse-h2c-to-h1-lossy", "nginx-reverse-h2c-to-h1-lossy", "yarp-reverse-h2c-to-h1-lossy"),
+        ("HTTP/2 · TLS", "HTTP/2 · plain", "twp-reverse-http2-to-h2c-lossy", None, "yarp-reverse-http2-to-h2c-lossy"),
+        ("HTTP/2 · TLS", "HTTP/2 · TLS", "twp-reverse-http2-to-https-lossy", None, "yarp-reverse-http2-to-https-lossy"),
+        ("HTTP/3 · QUIC", "HTTP/2 · TLS", "twp-reverse-http3-to-http2-lossy", None, "yarp-reverse-http3-to-http2-lossy"),
+        ("HTTP/3 · QUIC", "HTTP/1 · TLS", "twp-reverse-http3-to-https-http1-lossy", "nginx-reverse-http3-to-https-http1-lossy", "yarp-reverse-http3-to-https-http1-lossy"),
     ]
 
     def lossy_table(data: dict, is_win: bool) -> str:
@@ -238,8 +270,12 @@ def main() -> None:
             f"|---|---|{PEER_RULE}|",
         ]
         for c, o, t, n, y in lossy_spec:
+            extra = {}
+            if n is None:
+                stem = t.replace("twp-reverse-", "", 1)
+                extra = {"haproxy_a": f"haproxy-reverse-{stem}", "envoy_a": f"envoy-reverse-{stem}"}
             rows.append(
-                peer_row([c, o], t, n, y, data, win_no_quic=is_win, win_no_haproxy_envoy=is_win)
+                peer_row([c, o], t, n, y, data, win_no_quic=is_win, win_no_haproxy_envoy=is_win, **extra)
             )
         return "\n".join(rows)
 
@@ -250,6 +286,9 @@ def main() -> None:
         ("Early response (origin writes after first request chunk)", "HTTP/1 · TLS", "HTTP/1 · plain", "twp-reverse-http1-tls-early64k", "nginx-reverse-http1-tls-early64k", "yarp-reverse-http1-tls-early64k"),
         ("Early response (origin writes after first request chunk)", "HTTP/2 · TLS", "HTTP/1 · plain", "twp-reverse-http2-cleartext-early64k", "nginx-reverse-http2-early64k", "yarp-reverse-http2-early64k"),
         ("Early response (origin writes after first request chunk)", "HTTP/3 · QUIC", "HTTP/1 · plain", "twp-reverse-http3-cleartext-early64k", "nginx-reverse-http3-cleartext-early64k", "yarp-reverse-http3-cleartext-early64k"),
+        ("Slow consumer (256 KiB GET, throttled client read)", "HTTP/2 · plain", "HTTP/1 · plain", "twp-reverse-h2c-to-h1-slow256k", "nginx-reverse-h2c-to-h1-slow256k", "yarp-reverse-h2c-to-h1-slow256k"),
+        ("Slow consumer (256 KiB GET, throttled client read)", "HTTP/2 · TLS", "HTTP/2 · TLS", "twp-reverse-http2-to-https-slow256k", None, "yarp-reverse-http2-to-https-slow256k"),
+        ("Early response (origin writes after first request chunk)", "HTTP/2 · TLS", "HTTP/2 · TLS", "twp-reverse-http2-to-https-early64k", None, "yarp-reverse-http2-to-https-early64k"),
         ("Duplex (both directions live)", "HTTP/2 · TLS", "HTTP/2 · TLS", "twp-reverse-http2-duplex-h2", None, "yarp-reverse-http2-to-https-duplex-h2"),
         ("Duplex (WebSocket / extended CONNECT)", "HTTP/1 · TLS", "HTTP/1 · plain", "twp-reverse-http1-tls-duplex-ws", "nginx-reverse-http1-tls-duplex-ws", "yarp-reverse-http1-tls-duplex-ws"),
     ]
@@ -260,6 +299,13 @@ def main() -> None:
             f"|---|---|---|{PEER_RULE}|",
         ]
         for sc, c, o, t, n, y in arch_spec:
+            extra = {}
+            if n is None:
+                stem = t.replace("twp-reverse-", "", 1)
+                extra = {
+                    "haproxy_a": f"haproxy-reverse-{stem}",
+                    "envoy_a": f"envoy-reverse-{stem}",
+                }
             rows.append(
                 peer_row(
                     [sc, c, o],
@@ -269,6 +315,7 @@ def main() -> None:
                     data,
                     win_no_quic=is_win and bool(n and "http3" in n),
                     win_no_haproxy_envoy=is_win,
+                    **extra,
                 )
             )
         return "\n".join(rows)

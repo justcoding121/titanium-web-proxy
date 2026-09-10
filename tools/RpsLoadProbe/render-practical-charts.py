@@ -20,9 +20,11 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 # Practical industry reverse wires (short labels → CSV arm names).
 # nginx HTTPS-origin peers use proxy_ssl (http1-tls-to-https, http2/http3-to-https-http1).
-# H2→H2 / H3→H2 stay nginx=None — stock nginx has no H2/H3 upstream.
+# H2/H3 origin stays nginx=None (stock nginx has no H2/H3 upstream). HAProxy/Envoy H2
+# origin and H3→H2 names are product-possible; see product-arm-matrix.py (absent until
+# ProbeModes exist — chart shows n/a, not a zero bar).
 PRACTICAL_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], Optional[str]]] = [
-    # label, twp, yarp, nginx, haproxy, envoy (None = not possible)
+    # label, twp, yarp, nginx, haproxy, envoy (None = product-impossible)
     (
         "H1 TLS→H1c",
         "twp-reverse-http1-tls",
@@ -55,8 +57,22 @@ PRACTICAL_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], Optional
         "haproxy-reverse-http2-to-https-http1",
         "envoy-reverse-http2-to-https-http1",
     ),
-    ("H2 TLS→h2c", "twp-reverse-http2-to-h2c", "yarp-reverse-http2-to-h2c", None, None, None),
-    ("H2 TLS→H2 TLS", "twp-reverse-http2", "yarp-reverse-http2-to-https", None, None, None),
+    (
+        "H2 TLS→h2c",
+        "twp-reverse-http2-to-h2c",
+        "yarp-reverse-http2-to-h2c",
+        None,
+        "haproxy-reverse-http2-to-h2c",
+        "envoy-reverse-http2-to-h2c",
+    ),
+    (
+        "H2 TLS→H2 TLS",
+        "twp-reverse-http2",
+        "yarp-reverse-http2-to-https",
+        None,
+        "haproxy-reverse-http2-to-https",
+        "envoy-reverse-http2-to-https",
+    ),
     (
         "H3→H1c",
         "twp-reverse-http3-cleartext",
@@ -73,7 +89,14 @@ PRACTICAL_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], Optional
         "haproxy-reverse-http3-to-https-http1",
         "envoy-reverse-http3-to-https-http1",
     ),
-    ("H3→H2 TLS", "twp-reverse-http3-to-http2", "yarp-reverse-http3-to-http2", None, None, None),
+    (
+        "H3→H2 TLS",
+        "twp-reverse-http3-to-http2",
+        "yarp-reverse-http3-to-http2",
+        None,
+        "haproxy-reverse-http3-to-http2",
+        "envoy-reverse-http3-to-http2",
+    ),
 ]
 
 COLORS = {

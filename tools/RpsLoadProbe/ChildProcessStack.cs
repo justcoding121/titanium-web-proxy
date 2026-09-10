@@ -218,8 +218,22 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         };
     }
 
-    private static OriginRecipe OriginRecipeFor(ProbeMode mode) => mode switch
+    private static OriginRecipe OriginRecipeFor(ProbeMode mode)
     {
+        if (PeerWire.TryGet(mode, out var wire))
+        {
+            return wire.Origin switch
+            {
+                PeerOriginProto.H2c => OriginRecipe.H2c,
+                PeerOriginProto.H1Tls => OriginRecipe.HttpsHttp1Only,
+                PeerOriginProto.H2Tls => OriginRecipe.HttpsOnly,
+                PeerOriginProto.H3 => OriginRecipe.Quic,
+                _ => OriginRecipe.CleartextH1
+            };
+        }
+
+        return mode switch
+        {
         ProbeMode.ReverseHttp2ToH2c or ProbeMode.ReverseH2cToH2c
             or ProbeMode.YarpReverseHttp2ToH2c or ProbeMode.YarpReverseH2cToH2c
             or ProbeMode.ReverseHttp3ToH2c or ProbeMode.YarpReverseHttp3ToH2c
@@ -250,7 +264,8 @@ internal sealed class ChildProcessStack : IAsyncDisposable
             or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
             or ProbeMode.YarpReverseHttp3ToHttp3 => OriginRecipe.Quic,
         _ => OriginRecipe.CleartextH1
-    };
+        };
+    }
 
     private enum OriginRecipe
     {

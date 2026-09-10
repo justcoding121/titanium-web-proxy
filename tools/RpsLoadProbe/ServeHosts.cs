@@ -127,7 +127,63 @@ internal static class ServeProxyHost
         string? cliAuthorizationBearer = null;
         string? cliDiscoveryFile = null;
 
-        switch (mode)
+        if (PeerWire.TryGet(mode, out var nativeWire))
+        {
+            var originPort = PeerWire.OriginPort(nativeWire, originHttpPort, originHttpsPort, originQuicPort);
+            if (originPort <= 0)
+            {
+                throw new ArgumentException(nativeWire.Origin is PeerOriginProto.H3
+                    ? "origin-quic-port required"
+                    : nativeWire.Origin is PeerOriginProto.H1Tls or PeerOriginProto.H2Tls
+                        ? "origin-https-port required"
+                        : "origin-http-port required");
+            }
+
+            switch (nativeWire.Product)
+            {
+                case PeerProduct.Nginx:
+                {
+                    var nginx = (nativeWire.Inbound, nativeWire.Origin) switch
+                    {
+                        (PeerInboundProto.H2c, PeerOriginProto.H1c) =>
+                            await NginxHost.TryStartH2cToH1Async(originPort, nginxPath),
+                        (PeerInboundProto.H2c, PeerOriginProto.H1Tls) =>
+                            await NginxHost.TryStartH2cToHttpsAsync(originPort, nginxPath),
+                        _ => throw new ArgumentOutOfRangeException(nameof(mode))
+                    } ?? throw new InvalidOperationException(NginxHost.NginxMissingMessage());
+                    proxy = nginx;
+                    listenUrl = nginx.ListenUrl;
+                    targetForClient = nginx.ListenUrl;
+                    nginxVersion = nginx.Version;
+                    break;
+                }
+                case PeerProduct.Haproxy:
+                {
+                    var haproxy = await HaproxyHost.TryStartWireAsync(nativeWire.Inbound, nativeWire.Origin,
+                                      originPort, haproxyPath)
+                                  ?? throw new InvalidOperationException(HaproxyHost.HaproxyMissingMessage());
+                    proxy = haproxy;
+                    listenUrl = haproxy.ListenUrl;
+                    targetForClient = haproxy.ListenUrl;
+                    haproxyVersion = haproxy.Version;
+                    break;
+                }
+                case PeerProduct.Envoy:
+                {
+                    var envoy = await EnvoyHost.TryStartWireAsync(nativeWire.Inbound, nativeWire.Origin,
+                                    originPort, envoyPath)
+                                ?? throw new InvalidOperationException(EnvoyHost.EnvoyMissingMessage());
+                    proxy = envoy;
+                    listenUrl = envoy.ListenUrl;
+                    targetForClient = envoy.ListenUrl;
+                    envoyVersion = envoy.Version;
+                    break;
+                }
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(mode));
+            }
+        }
+        else switch (mode)
         {
             case ProbeMode.ReverseHttp1:
             {
@@ -985,7 +1041,9 @@ internal static class ServeProxyHost
                 throw new ArgumentOutOfRangeException(nameof(mode));
         }
 
-        var httpVersion = mode switch
+        var httpVersion = PeerWire.TryGet(mode, out var httpWire)
+            ? PeerWire.ClientHttpVersion(httpWire)
+            : mode switch
         {
             ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp2Cleartext or ProbeMode.ReverseHttp2ToH2c
                 or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.NginxReverseHttp2
@@ -1064,7 +1122,8 @@ internal static class ServeProxyHost
         return 0;
     }
 
-    internal static string ModeName(ProbeMode mode) => mode switch
+    internal static string ModeName(ProbeMode mode) =>
+        PeerWire.TryGet(mode, out var wire) ? wire.Name : mode switch
     {
         ProbeMode.ReverseHttp1 => "reverse-http1",
         ProbeMode.BareReverseHttp1 => "bare-reverse-http1",
@@ -1223,7 +1282,8 @@ internal static class ServeHost
         if ((mode is ProbeMode.NginxReverseHttp1 or ProbeMode.NginxReverseHttp1Tls
                 or ProbeMode.NginxReverseHttp1ToHttps or ProbeMode.NginxReverseHttp1TlsToHttps
                 or ProbeMode.NginxReverseHttp2 or ProbeMode.NginxReverseHttp2ToHttpsHttp1
-                or ProbeMode.NginxReverseHttp3Cleartext or ProbeMode.NginxReverseHttp3ToHttpsHttp1)
+                or ProbeMode.NginxReverseHttp3Cleartext or ProbeMode.NginxReverseHttp3ToHttpsHttp1
+            || PeerWire.IsProduct(mode, PeerProduct.Nginx))
             && NginxHost.ResolveNginxExecutable(nginxPath) == null)
         {
             ProbeLog.Error(NginxHost.NginxMissingMessage());
@@ -1233,9 +1293,8 @@ internal static class ServeHost
         if ((mode is ProbeMode.HaproxyReverseHttp1 or ProbeMode.HaproxyReverseHttp1Tls
                 or ProbeMode.HaproxyReverseHttp1ToHttps or ProbeMode.HaproxyReverseHttp1TlsToHttps
                 or ProbeMode.HaproxyReverseHttp2 or ProbeMode.HaproxyReverseHttp2ToHttpsHttp1
-                or ProbeMode.EnvoyReverseHttp2 or ProbeMode.EnvoyReverseHttp2ToHttpsHttp1
                 or ProbeMode.HaproxyReverseHttp3Cleartext or ProbeMode.HaproxyReverseHttp3ToHttpsHttp1
-                or ProbeMode.EnvoyReverseHttp3Cleartext or ProbeMode.EnvoyReverseHttp3ToHttpsHttp1)
+            || PeerWire.IsProduct(mode, PeerProduct.Haproxy))
             && HaproxyHost.ResolveHaproxyExecutable(haproxyPath) == null)
         {
             // On Windows Resolve always returns null (no official port) — message explains that.
@@ -1246,7 +1305,8 @@ internal static class ServeHost
         if ((mode is ProbeMode.EnvoyReverseHttp1 or ProbeMode.EnvoyReverseHttp1Tls
                 or ProbeMode.EnvoyReverseHttp1ToHttps or ProbeMode.EnvoyReverseHttp1TlsToHttps
                 or ProbeMode.EnvoyReverseHttp2 or ProbeMode.EnvoyReverseHttp2ToHttpsHttp1
-                or ProbeMode.EnvoyReverseHttp3Cleartext or ProbeMode.EnvoyReverseHttp3ToHttpsHttp1)
+                or ProbeMode.EnvoyReverseHttp3Cleartext or ProbeMode.EnvoyReverseHttp3ToHttpsHttp1
+            || PeerWire.IsProduct(mode, PeerProduct.Envoy))
             && EnvoyHost.ResolveEnvoyExecutable(envoyPath) == null)
         {
             ProbeLog.Error(EnvoyHost.EnvoyMissingMessage());
@@ -1376,12 +1436,150 @@ internal static class ServeHost
             ServerConnectionProbe = twp == null ? null : () => twp.Server.ServerConnectionCount;
         }
 
+        private static async Task<ServeStack> StartNativePeerServeStackAsync(NativePeerWire wire,
+            string? nginxPath, string? haproxyPath, string? envoyPath, int responseBytes,
+            CancellationToken cancellationToken, WorkloadOptions? workload)
+        {
+            if (wire.Inbound == PeerInboundProto.H3 || wire.Origin == PeerOriginProto.H3)
+            {
+                if (!System.Net.Quic.QuicListener.IsSupported)
+                    throw new PlatformNotSupportedException("QuicListener is not supported.");
+            }
+
+            IAsyncDisposable origin;
+            int originPort;
+            string originHttpUrl;
+            string? originHttpsUrl;
+            int? originQuicPort = null;
+            switch (wire.Origin)
+            {
+                case PeerOriginProto.H1c:
+                {
+                    var httpOrigin = await OriginServer.StartAsync(false, responseBytes, cancellationToken, workload);
+                    origin = httpOrigin;
+                    originPort = httpOrigin.HttpPort;
+                    originHttpUrl = httpOrigin.HttpUrl;
+                    originHttpsUrl = null;
+                    break;
+                }
+                case PeerOriginProto.H2c:
+                {
+                    var h2cOrigin = await OriginServer.StartAsync(new OriginListenOptions
+                    {
+                        EnableHttp = true,
+                        EnableHttps = false,
+                        HttpProtocols = HttpProtocols.Http2,
+                        ResponseBytes = responseBytes
+                    }, cancellationToken, workload);
+                    origin = h2cOrigin;
+                    originPort = h2cOrigin.HttpPort;
+                    originHttpUrl = h2cOrigin.HttpUrl;
+                    originHttpsUrl = null;
+                    break;
+                }
+                case PeerOriginProto.H1Tls:
+                {
+                    var tlsOrigin = await OriginServer.StartAsync(new OriginListenOptions
+                    {
+                        EnableHttp = false,
+                        EnableHttps = true,
+                        HttpsProtocols = HttpProtocols.Http1,
+                        ResponseBytes = responseBytes
+                    }, cancellationToken, workload);
+                    origin = tlsOrigin;
+                    originPort = tlsOrigin.HttpsPort;
+                    originHttpUrl = tlsOrigin.HttpUrl;
+                    originHttpsUrl = tlsOrigin.HttpsUrl;
+                    break;
+                }
+                case PeerOriginProto.H2Tls:
+                {
+                    var h2Origin = await OriginServer.StartAsync(new OriginListenOptions
+                    {
+                        EnableHttp = false,
+                        EnableHttps = true,
+                        HttpsProtocols = HttpProtocols.Http1AndHttp2,
+                        ResponseBytes = responseBytes
+                    }, cancellationToken, workload);
+                    origin = h2Origin;
+                    originPort = h2Origin.HttpsPort;
+                    originHttpUrl = h2Origin.HttpUrl;
+                    originHttpsUrl = h2Origin.HttpsUrl;
+                    break;
+                }
+                case PeerOriginProto.H3:
+                {
+                    var quic = new QuicHttp3OriginHost(responseBytes);
+                    origin = quic;
+                    originPort = quic.Port;
+                    originHttpUrl = $"quic://localhost:{quic.Port}/";
+                    originHttpsUrl = originHttpUrl;
+                    originQuicPort = quic.Port;
+                    break;
+                }
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(wire));
+            }
+
+            IDisposable proxy;
+            string listenUrl;
+            string? nginxVersion = null;
+            string? haproxyVersion = null;
+            string? envoyVersion = null;
+            switch (wire.Product)
+            {
+                case PeerProduct.Nginx:
+                {
+                    var nginx = (wire.Inbound, wire.Origin) switch
+                    {
+                        (PeerInboundProto.H2c, PeerOriginProto.H1c) =>
+                            await NginxHost.TryStartH2cToH1Async(originPort, nginxPath),
+                        (PeerInboundProto.H2c, PeerOriginProto.H1Tls) =>
+                            await NginxHost.TryStartH2cToHttpsAsync(originPort, nginxPath),
+                        _ => throw new ArgumentOutOfRangeException(nameof(wire))
+                    } ?? throw new InvalidOperationException("nginx not available.");
+                    proxy = nginx;
+                    listenUrl = nginx.ListenUrl;
+                    nginxVersion = nginx.Version;
+                    break;
+                }
+                case PeerProduct.Haproxy:
+                {
+                    var haproxy = await HaproxyHost.TryStartWireAsync(wire.Inbound, wire.Origin, originPort, haproxyPath)
+                                  ?? throw new InvalidOperationException("haproxy is not available.");
+                    proxy = haproxy;
+                    listenUrl = haproxy.ListenUrl;
+                    haproxyVersion = haproxy.Version;
+                    break;
+                }
+                case PeerProduct.Envoy:
+                {
+                    var envoy = await EnvoyHost.TryStartWireAsync(wire.Inbound, wire.Origin, originPort, envoyPath)
+                                ?? throw new InvalidOperationException("envoy is not available.");
+                    proxy = envoy;
+                    listenUrl = envoy.ListenUrl;
+                    envoyVersion = envoy.Version;
+                    break;
+                }
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(wire));
+            }
+
+            var httpVersion = PeerWire.ClientHttpVersion(wire);
+            return new ServeStack(origin, proxy, null, originHttpUrl, originHttpsUrl, [], listenUrl, null,
+                listenUrl, [listenUrl], nginxVersion, httpVersion, originQuicPort: originQuicPort,
+                haproxyVersion: haproxyVersion, envoyVersion: envoyVersion);
+        }
+
         public static async Task<ServeStack> StartAsync(ProbeMode mode, string? nginxPath, string? haproxyPath,
             string? envoyPath, int? maxCachedConnections, CancellationToken cancellationToken,
             WorkloadOptions? workload = null)
         {
             workload ??= WorkloadOptions.TinyGet;
             var responseBytes = workload.ResponseBytes;
+            if (PeerWire.TryGet(mode, out var nativeWire))
+                return await StartNativePeerServeStackAsync(nativeWire, nginxPath, haproxyPath, envoyPath,
+                    responseBytes, cancellationToken, workload);
             switch (mode)
             {
                 case ProbeMode.ReverseHttp1:

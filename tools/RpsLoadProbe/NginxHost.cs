@@ -149,6 +149,32 @@ internal sealed class NginxHost : IDisposable
     }
 
     /// <summary>
+    /// Client prior-knowledge h2c → cleartext HTTP/1. Requires nginx 1.25.1+ <c>http2 on</c> without ssl.
+    /// </summary>
+    public static async Task<NginxHost?> TryStartH2cToH1Async(int originHttpPort, string? nginxPath)
+    {
+        var exe = ResolveNginxExecutable(nginxPath);
+        if (exe == null)
+            return null;
+        if (!SupportsHttp2OnDirective(ReadVersion(exe)))
+            return null;
+        return await TryStartAsync(BuildH2cToH1Conf(originHttpPort), listenScheme: "http", nginxPath);
+    }
+
+    /// <summary>
+    /// Client prior-knowledge h2c → HTTPS HTTP/1. Requires nginx 1.25.1+ <c>http2 on</c> without ssl.
+    /// </summary>
+    public static async Task<NginxHost?> TryStartH2cToHttpsAsync(int originHttpsPort, string? nginxPath)
+    {
+        var exe = ResolveNginxExecutable(nginxPath);
+        if (exe == null)
+            return null;
+        if (!SupportsHttp2OnDirective(ReadVersion(exe)))
+            return null;
+        return await TryStartAsync(BuildH2cToHttpsConf(originHttpsPort), listenScheme: "http", nginxPath);
+    }
+
+    /// <summary>
     /// Client QUIC/h3 → HTTPS HTTP/1 origin. Requires <c>http_v3_module</c> (not nginx/Windows).
     /// </summary>
     public static async Task<NginxHost?> TryStartHttp3ToHttpsHttp1Async(int originHttpsPort, string? nginxPath)
@@ -272,6 +298,77 @@ internal sealed class NginxHost : IDisposable
                     proxy_request_buffering off;
                     proxy_pass http://origin;
                 }
+            }
+        }
+        """;
+
+    private static Func<string, int, string> BuildH2cToH1Conf(int originHttpPort) => (_, port) => $$"""
+        worker_processes auto;
+        daemon off;
+        error_log logs/error.log error;
+        pid nginx.pid;
+        events {
+            worker_connections 4096;
+        }
+        http {
+            access_log off;
+            sendfile on;
+            keepalive_timeout 65;
+            client_max_body_size 10m;
+            client_body_temp_path temp/client_body;
+            proxy_temp_path temp/proxy;
+            fastcgi_temp_path temp/fastcgi;
+            uwsgi_temp_path temp/uwsgi;
+            scgi_temp_path temp/scgi;
+            upstream origin {
+                server 127.0.0.1:{{originHttpPort}};
+                keepalive 256;
+            }
+            server {
+                listen 127.0.0.1:{{port}};
+                http2 on;
+                location / {
+                    proxy_http_version 1.1;
+                    proxy_set_header Connection "";
+                    proxy_set_header Host $host;
+                    proxy_buffering off;
+                    proxy_request_buffering off;
+                    proxy_pass http://origin;
+                }
+            }
+        }
+        """;
+
+    private static Func<string, int, string> BuildH2cToHttpsConf(int originHttpsPort) => (_, port) => $$"""
+        worker_processes auto;
+        daemon off;
+        error_log logs/error.log error;
+        pid nginx.pid;
+        events {
+            worker_connections 4096;
+        }
+        http {
+            access_log off;
+            sendfile on;
+            keepalive_timeout 65;
+            client_max_body_size 10m;
+            client_body_temp_path temp/client_body;
+            proxy_temp_path temp/proxy;
+            fastcgi_temp_path temp/fastcgi;
+            uwsgi_temp_path temp/uwsgi;
+            scgi_temp_path temp/scgi;
+            upstream origin {
+                server 127.0.0.1:{{originHttpsPort}};
+                keepalive 256;
+            }
+            map $http_upgrade $connection_upgrade {
+                default upgrade;
+                '' close;
+            }
+            server {
+                listen 127.0.0.1:{{port}};
+                http2 on;
+                {{HttpsOriginProxyLocations().Trim()}}
             }
         }
         """;
