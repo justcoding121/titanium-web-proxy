@@ -59,7 +59,12 @@ function Get-MedianMetrics([string]$OsFolder, [string]$Arm) {
     $s = @(); $p = @(); $r = @(); $c = @()
     foreach ($runId in $RunIds) {
         $dir = Join-Path $ResultsRoot $runId
-        $csv = Get-ChildItem "$dir/rps-csv-$OsFolder/*.csv", "$dir/$OsFolder/*.csv" -ErrorAction SilentlyContinue |
+        # Exact OS folder or shard-suffixed (rps-csv-ubuntu-latest-shard-1-3).
+        $csv = Get-ChildItem `
+            "$dir/rps-csv-$OsFolder/*.csv", `
+            "$dir/rps-csv-$OsFolder-*/*.csv", `
+            "$dir/$OsFolder/*.csv" `
+            -ErrorAction SilentlyContinue |
             Select-Object -First 1
         if (-not $csv) { continue }
         $m = Get-ArmMetrics $csv.FullName $Arm

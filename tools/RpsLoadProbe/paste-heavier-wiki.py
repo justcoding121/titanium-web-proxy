@@ -12,14 +12,15 @@ RunIds = Union[int, List[int]]
 
 ROOT = Path("tools/RpsLoadProbe/results/gha-dl")
 WIKI = Path("wiki/Performance.md")
-HEAD = "803a69bc"
+HEAD = "9a2b3a1e"
 RUNS = {
-    "saturation": 34394853191,
-    "bodies": 34394859668,
-    "post": 34394866049,
-    "lossy": 34394872353,
-    "tls": 34394878841,
-    "arch": 34394884256,
+    # Win+Linux (and shards) from the 2026-09-10 wiki-grade GHA batch.
+    "saturation": [34441539402, 34441541578],
+    "bodies": [34441570199, 34441572485, 34441574457, 34441576323],
+    "post": [34441591377, 34441593359],
+    "lossy": [34441595456, 34441597540],
+    "tls": [34441599658, 34441602032],
+    "arch": [34441578556, 34441580725, 34441583238, 34441585221, 34441587413, 34441589415],
 }
 MEDAL = "\U0001F947"
 STEPS = 4
@@ -83,12 +84,22 @@ def _run_id_list(run_ids: RunIds) -> List[int]:
     return [run_ids] if isinstance(run_ids, int) else list(run_ids)
 
 
+def _csv_files_for_os(run_dir: Path, os_folder: str) -> List[Path]:
+    """Exact rps-csv-<os> or shard-suffixed rps-csv-<os>-shard-* folders."""
+    exact = run_dir / f"rps-csv-{os_folder}"
+    files = sorted(exact.glob("*.csv")) if exact.is_dir() else []
+    if files:
+        return files
+    for d in sorted(run_dir.glob(f"rps-csv-{os_folder}-*")):
+        files.extend(sorted(d.glob("*.csv")))
+    return files
+
+
 def load_os(run_ids: RunIds, os_folder: str) -> Dict[str, dict]:
     """Union arm metrics across shard run ids; first non-empty wins per arm."""
     merged: Dict[str, dict] = {}
     for rid in _run_id_list(run_ids):
-        d = ROOT / str(rid) / f"rps-csv-{os_folder}"
-        files = list(d.glob("*.csv"))
+        files = _csv_files_for_os(ROOT / str(rid), os_folder)
         if not files:
             continue
         arms = {r["arm"] for r in csv.DictReader(files[0].open(newline=""))}
