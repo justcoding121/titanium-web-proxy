@@ -193,6 +193,39 @@ public class CaptureSettingsParityTests
     }
 
     [TestMethod]
+    public void AddViaHeader_PersistsViaViewModel_DefaultOn()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-via-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var vm = new ViewModels.MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+
+            Assert.IsTrue(vm.AddViaHeader);
+            Assert.IsTrue(settings.Current.AddViaHeader);
+
+            vm.AddViaHeader = false;
+            Assert.IsFalse(settings.Current.AddViaHeader);
+
+            var loaded = new SettingsService(path);
+            Assert.IsFalse(loaded.Current.AddViaHeader);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
     public async Task ResetSettings_RestoresFactoryDefaults_WithoutClearingSessions()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-reset-settings-" + Guid.NewGuid().ToString("N") + ".json");
@@ -201,6 +234,7 @@ public class CaptureSettingsParityTests
             var settings = new SettingsService(path);
             settings.Current.BindPort = 9999;
             settings.Current.IgnoreServerCertificateErrors = true;
+            settings.Current.AddViaHeader = false;
             settings.Current.DecryptHttps = true;
             settings.Current.DecryptSkipHosts = ["*.corp.example.com"];
             settings.Current.MaxSessionsInMemory = 42;
@@ -234,6 +268,7 @@ public class CaptureSettingsParityTests
             Assert.AreEqual(1, dialogs.ResetSettingsCalls);
             Assert.AreEqual(8866, vm.BindPort);
             Assert.IsFalse(vm.IgnoreServerCertificateErrors);
+            Assert.IsTrue(vm.AddViaHeader);
             Assert.IsFalse(vm.DecryptHttps);
             CollectionAssert.AreEquivalent(
                 Titanium.Web.Proxy.MitmExclusionDefaults.TunnelOnlyPinningDomains,

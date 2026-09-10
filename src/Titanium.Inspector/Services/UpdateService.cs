@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -93,21 +94,30 @@ public sealed class UpdateService
             var remoteText = NormalizeReleaseTag(manifest.Version);
             var remote = ReleaseVersion.ParseComparable(remoteText);
             var localComparable = ReleaseVersion.ToComparable(local);
+            var localInfo = AssemblyInformationalVersion();
 
             var installedTag = _settings.Current.InstalledReleaseTag;
             var installedChannel = _settings.Current.InstalledReleaseChannel;
-            if (!ShouldOfferChannelInstall(local, remoteText, channelDisplay, installedTag, installedChannel))
+            if (!ShouldOfferChannelInstall(
+                    local, remoteText, channelDisplay, installedTag, installedChannel, localInfo))
             {
-                SeedInstalledIdentity(remoteText, channelDisplay);
+                var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(local, localInfo, installedTag);
+                var message = FormatNoOfferMessage(localLabel, remoteText, channelDisplay);
+                if (ShouldSeedInstalledIdentity(localInfo, installedTag, remoteText))
+                {
+                    SeedInstalledIdentity(remoteText, channelDisplay);
+                }
+
                 return new UpdateCheckResult
                 {
                     RemoteVersion = remoteText,
                     ChannelDisplay = channelDisplay,
-                    Message = $"Titanium Inspector is up to date ({channelDisplay}).",
+                    Message = message,
                 };
             }
 
-            var offerKind = ClassifyOfferKind(local, remoteText, channelDisplay, installedTag, installedChannel);
+            var offerKind = ClassifyOfferKind(
+                local, remoteText, channelDisplay, installedTag, installedChannel, localInfo);
             var (kind, asset) = ResolveAsset(manifest);
             if (asset?.Url is null)
             {
@@ -137,7 +147,7 @@ public sealed class UpdateService
                 };
             }
 
-            var message = offerKind switch
+            var offerMessage = offerKind switch
             {
                 UpdateOfferKind.Upgrade => $"Update available: {remoteText} ({channelDisplay})",
                 UpdateOfferKind.Downgrade =>
@@ -155,7 +165,7 @@ public sealed class UpdateService
                 ApplyKind = kind,
                 IsDowngrade = offerKind == UpdateOfferKind.Downgrade,
                 OfferKind = offerKind,
-                Message = message,
+                Message = offerMessage,
             };
         }
         catch (Exception ex)
@@ -171,18 +181,31 @@ public sealed class UpdateService
     /// <summary>
     /// Whether the selected channel's latest release should be offered — upgrades and intentional
     /// channel/build switches (not phantom same-version reinstalls from 3-part vs 4-part Version).
+    /// Same-core prerelease is never newer than a release (Stable 7.0.5 is not offered 7.0.5-beta).
     /// </summary>
+    /// <param name="localInformationalVersion">
+    /// Optional assembly informational version (e.g. <c>7.0.5-beta</c>). When it matches
+    /// <paramref name="remoteText"/>, the install is treated as already up to date.
+    /// </param>
     public static bool ShouldOfferChannelInstall(
         Version local,
         string remoteText,
         string channelDisplay,
         string? installedReleaseTag,
-        string? installedReleaseChannel)
+        string? installedReleaseChannel,
+        string? localInformationalVersion = null)
     {
         remoteText = NormalizeReleaseTag(remoteText);
         var remoteSemver = ReleaseVersion.ParseComparable(remoteText);
         var localSemver = ReleaseVersion.ToComparable(local);
-        var isBetaChannel = channelDisplay.Equals("Beta", StringComparison.OrdinalIgnoreCase);
+        var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(
+            local, localInformationalVersion, installedReleaseTag);
+
+        if (!string.IsNullOrEmpty(localInformationalVersion)
+            && localLabel.Equals(remoteText, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
 
         var tagMatches = !string.IsNullOrEmpty(installedReleaseTag)
             && installedReleaseTag.Equals(remoteText, StringComparison.OrdinalIgnoreCase);
@@ -201,18 +224,37 @@ public sealed class UpdateService
             return true;
         }
 
-        if (remoteSemver > localSemver)
+        // SemVer-ish: remote must be newer than the known local label (release > same-core beta).
+        if (ReleaseVersion.IsRemoteNewer(localLabel, remoteText))
         {
             return true;
         }
 
+        // Same core / older remote: only intentional channel switch from a known other channel
+        // when remote is not a same-or-older prerelease relative to a release local.
         if (remoteSemver == localSemver)
-            return ShouldOfferSameSemverSwitch(channelDisplay, installedReleaseChannel, isBetaChannel, remoteText, tagMatches);
-
-        // remote < local: only intentional channel / known-origin switches.
-        if (!string.IsNullOrEmpty(installedReleaseChannel)
-            && !installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase))
         {
+            return ShouldOfferSameSemverSwitch(
+                channelDisplay,
+                installedReleaseChannel,
+                localLabel,
+                remoteText,
+                tagMatches);
+        }
+
+        // remote core < local: only intentional channel / known-origin switches.
+        if (!string.IsNullOrEmpty(installedReleaseChannel)
+            && !installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase)
+            && !ReleaseVersion.IsPrereleaseTag(remoteText))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrEmpty(installedReleaseChannel)
+            && !installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase)
+            && ReleaseVersion.IsPrereleaseTag(localLabel))
+        {
+            // Known beta install switching channels to an older remote (intentional downgrade).
             return true;
         }
 
@@ -229,17 +271,35 @@ public sealed class UpdateService
     private static bool ShouldOfferSameSemverSwitch(
         string channelDisplay,
         string? installedReleaseChannel,
-        bool isBetaChannel,
+        string localLabel,
         string remoteText,
         bool tagMatches)
     {
+        if (tagMatches)
+        {
+            return false;
+        }
+
+        // Never offer same-core prerelease over a release-looking local (Stable 7.0.5 ↛ 7.0.5-beta).
+        if (ReleaseVersion.IsPrereleaseTag(remoteText) && !ReleaseVersion.IsPrereleaseTag(localLabel))
+        {
+            return false;
+        }
+
+        // Beta → Stable at same core: Stable supersedes prerelease.
+        if (!ReleaseVersion.IsPrereleaseTag(remoteText) && ReleaseVersion.IsPrereleaseTag(localLabel))
+        {
+            return true;
+        }
+
+        // Known channel identity differs (e.g. intentional Stable↔Beta when both are releases — rare).
         if (!string.IsNullOrEmpty(installedReleaseChannel)
             && !installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
-        return isBetaChannel && remoteText.Contains('-', StringComparison.Ordinal) && !tagMatches;
+        return false;
     }
 
     /// <summary>Classify an offered install for dialog copy.</summary>
@@ -248,9 +308,12 @@ public sealed class UpdateService
         string remoteText,
         string channelDisplay,
         string? installedReleaseTag,
-        string? installedReleaseChannel)
+        string? installedReleaseChannel,
+        string? localInformationalVersion = null)
     {
-        if (!ShouldOfferChannelInstall(local, remoteText, channelDisplay, installedReleaseTag, installedReleaseChannel))
+        if (!ShouldOfferChannelInstall(
+                local, remoteText, channelDisplay, installedReleaseTag, installedReleaseChannel,
+                localInformationalVersion))
         {
             return UpdateOfferKind.None;
         }
@@ -267,7 +330,50 @@ public sealed class UpdateService
             return UpdateOfferKind.Downgrade;
         }
 
+        // Same core: Stable over beta is a channel switch (or upgrade-ish promotion).
         return UpdateOfferKind.ChannelSwitch;
+    }
+
+    /// <summary>
+    /// Status text when nothing is offered. Distinguishes true up-to-date from
+    /// "latest Beta is not newer than your Stable".
+    /// </summary>
+    public static string FormatNoOfferMessage(string localLabel, string remoteText, string channelDisplay)
+    {
+        remoteText = NormalizeReleaseTag(remoteText);
+        localLabel = NormalizeReleaseTag(localLabel);
+        var isBetaChannel = channelDisplay.Equals("Beta", StringComparison.OrdinalIgnoreCase);
+        if (isBetaChannel
+            && ReleaseVersion.IsPrereleaseTag(remoteText)
+            && !ReleaseVersion.IsPrereleaseTag(localLabel)
+            && ReleaseVersion.ParseComparable(localLabel) == ReleaseVersion.ParseComparable(remoteText))
+        {
+            return
+                $"No newer Beta than your current build ({localLabel}). Latest Beta is {remoteText}.";
+        }
+
+        return $"Titanium Inspector is up to date ({channelDisplay}).";
+    }
+
+    /// <summary>
+    /// Only seed identity when the remote tag is the build we actually have — never mark a
+    /// Stable install as <c>7.0.5-beta</c> after a "no newer beta" check.
+    /// </summary>
+    public static bool ShouldSeedInstalledIdentity(
+        string? localInformationalVersion,
+        string? installedReleaseTag,
+        string remoteText)
+    {
+        remoteText = NormalizeReleaseTag(remoteText);
+        if (!string.IsNullOrEmpty(localInformationalVersion)
+            && NormalizeReleaseTag(localInformationalVersion)
+                .Equals(remoteText, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return !string.IsNullOrEmpty(installedReleaseTag)
+            && installedReleaseTag.Equals(remoteText, StringComparison.OrdinalIgnoreCase);
     }
 
     public static string NormalizeReleaseTag(string? tag) => ReleaseVersion.NormalizeTag(tag);
@@ -362,6 +468,46 @@ public sealed class UpdateService
 
     public static Version AssemblyVersion() =>
         System.Reflection.Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0);
+
+    /// <summary>
+    /// Assembly informational version without Source Link <c>+commit</c> metadata
+    /// (e.g. <c>7.0.5-beta</c>). Null when the attribute is missing.
+    /// </summary>
+    public static string? AssemblyInformationalVersion() =>
+        FormatInformationalVersion(
+            Assembly.GetExecutingAssembly()
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                ?.InformationalVersion);
+
+    /// <summary>User-facing version for About: informational when present, else Major.Minor.Build.</summary>
+    public static string FormatAssemblyDisplayVersion()
+    {
+        var info = AssemblyInformationalVersion();
+        if (!string.IsNullOrEmpty(info))
+        {
+            return info;
+        }
+
+        return ReleaseVersion.FormatDisplay(AssemblyVersion());
+    }
+
+    /// <summary>Strip Source Link metadata from an informational version string.</summary>
+    public static string? FormatInformationalVersion(string? informationalVersion)
+    {
+        if (string.IsNullOrWhiteSpace(informationalVersion))
+        {
+            return null;
+        }
+
+        var trimmed = informationalVersion.Trim();
+        var plus = trimmed.IndexOf('+');
+        if (plus >= 0)
+        {
+            trimmed = trimmed[..plus];
+        }
+
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
 
     public static bool IsMsiInstall(string baseDirectory)
     {

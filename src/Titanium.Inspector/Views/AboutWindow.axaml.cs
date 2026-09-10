@@ -14,8 +14,7 @@ public partial class AboutWindow : Window
     public AboutWindow()
     {
         InitializeComponent();
-        var ver = UpdateService.AssemblyVersion();
-        VersionText.Text = $"Version {ver.Major}.{ver.Minor}.{ver.Build}";
+        VersionText.Text = $"Version {UpdateService.FormatAssemblyDisplayVersion()}";
         OkButton.Click += (_, _) => Close();
         LicenseLink.PointerPressed += (_, e) => OnLinkPressed(e, LicenseUrl);
         WebsiteLink.PointerPressed += (_, e) => OnLinkPressed(e, WebsiteUrl);

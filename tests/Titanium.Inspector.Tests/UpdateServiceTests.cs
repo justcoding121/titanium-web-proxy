@@ -127,12 +127,24 @@ public class UpdateServiceTests
     }
 
     [TestMethod]
-    public void ShouldOfferChannelInstall_SameSemverBetaBuildWhenUnknownInstall()
+    public void ShouldOfferChannelInstall_SameSemverBetaOverStable_DoesNotOffer()
+    {
+        // Stable-looking local (no prerelease identity) must not be offered same-core beta.
+        Assert.IsFalse(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 5), "7.0.5-beta", "Beta", null, null));
+        Assert.IsFalse(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 5, 0), "7.0.5-beta", "Beta", null, null));
+        Assert.IsFalse(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 5, 0), "7.0.5-beta", "Beta", "7.0.5", "Stable"));
+    }
+
+    [TestMethod]
+    public void ShouldOfferChannelInstall_NewerBetaOverStable_OffersUpgrade()
     {
         Assert.IsTrue(UpdateService.ShouldOfferChannelInstall(
-            new Version(7, 0, 4), "7.0.4-beta", "Beta", null, null));
+            new Version(7, 0, 5, 0), "7.0.6-beta", "Beta", null, null));
         Assert.IsTrue(UpdateService.ShouldOfferChannelInstall(
-            new Version(7, 0, 4, 0), "7.0.4-beta", "Beta", null, null));
+            new Version(7, 0, 5, 0), "7.0.6-beta", "Beta", "7.0.5", "Stable"));
     }
 
     [TestMethod]
@@ -173,6 +185,38 @@ public class UpdateServiceTests
     }
 
     [TestMethod]
+    public void ShouldOfferChannelInstall_UpToDateWhenInformationalMatchesRemote()
+    {
+        Assert.IsFalse(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 5, 0), "7.0.5-beta", "Beta", null, null, "7.0.5-beta"));
+        Assert.IsFalse(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 5, 0), "7.0.5-beta", "Beta", null, null, "v7.0.5-beta"));
+        // Without informational identity, assembly-only Stable-looking installs are not offered same-core beta.
+        Assert.IsFalse(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 5, 0), "7.0.5-beta", "Beta", null, null));
+    }
+
+    [TestMethod]
+    public void FormatNoOfferMessage_DistinguishesNoNewerBeta()
+    {
+        StringAssert.Contains(
+            UpdateService.FormatNoOfferMessage("7.0.5", "7.0.5-beta", "Beta"),
+            "No newer Beta");
+        Assert.AreEqual(
+            "Titanium Inspector is up to date (Stable).",
+            UpdateService.FormatNoOfferMessage("7.0.5", "7.0.5", "Stable"));
+    }
+
+    [TestMethod]
+    public void ShouldSeedInstalledIdentity_OnlyWhenRemoteIsLocalBuild()
+    {
+        Assert.IsTrue(UpdateService.ShouldSeedInstalledIdentity("7.0.5-beta", null, "7.0.5-beta"));
+        Assert.IsTrue(UpdateService.ShouldSeedInstalledIdentity(null, "7.0.5-beta", "7.0.5-beta"));
+        Assert.IsFalse(UpdateService.ShouldSeedInstalledIdentity(null, null, "7.0.5-beta"));
+        Assert.IsFalse(UpdateService.ShouldSeedInstalledIdentity(null, "7.0.5", "7.0.5-beta"));
+    }
+
+    [TestMethod]
     public void MsiOfferIsDowngrade_OnlyLowerProductVersion()
     {
         var v704 = new Version(7, 0, 4);
@@ -180,6 +224,17 @@ public class UpdateServiceTests
         Assert.IsFalse(UpdateService.MsiOfferIsDowngrade(v705, v705));
         Assert.IsFalse(UpdateService.MsiOfferIsDowngrade(v704, v705));
         Assert.IsTrue(UpdateService.MsiOfferIsDowngrade(v705, v704));
+    }
+
+    [TestMethod]
+    public void FormatInformationalVersion_StripsSourceLinkAndEmpty()
+    {
+        Assert.AreEqual("7.0.5-beta", UpdateService.FormatInformationalVersion("7.0.5-beta+abcdef"));
+        Assert.AreEqual("7.0.5", UpdateService.FormatInformationalVersion("7.0.5"));
+        Assert.IsNull(UpdateService.FormatInformationalVersion(null));
+        Assert.IsNull(UpdateService.FormatInformationalVersion(""));
+        Assert.IsNull(UpdateService.FormatInformationalVersion("   "));
+        Assert.IsNull(UpdateService.FormatInformationalVersion("+onlymeta"));
     }
 
     [TestMethod]
@@ -199,5 +254,11 @@ public class UpdateServiceTests
         Assert.AreEqual(
             UpdateOfferKind.None,
             UpdateService.ClassifyOfferKind(new Version(7, 0, 5, 0), "7.0.5", "Stable", null, null));
+        Assert.AreEqual(
+            UpdateOfferKind.None,
+            UpdateService.ClassifyOfferKind(new Version(7, 0, 5, 0), "7.0.5-beta", "Beta", null, null));
+        Assert.AreEqual(
+            UpdateOfferKind.Upgrade,
+            UpdateService.ClassifyOfferKind(new Version(7, 0, 5, 0), "7.0.6-beta", "Beta", null, null));
     }
 }

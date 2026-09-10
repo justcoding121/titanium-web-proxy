@@ -1,9 +1,13 @@
 #nullable enable
 static Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot.Empty.get -> Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot!
 static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.Compare(System.Version? left, System.Version? right) -> int
+static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.CompareReleaseTags(string? left, string? right) -> int
 static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.FormatDisplay(System.Version? version) -> string!
+static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.IsPrereleaseTag(string? tag) -> bool
+static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.IsRemoteNewer(string? localReleaseLabel, string? remoteTag) -> bool
 static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.NormalizeTag(string? tag) -> string!
 static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.ParseComparable(string? tag) -> System.Version!
+static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.ResolveLocalReleaseLabel(System.Version? assemblyVersion, string? informationalVersion, string? installedReleaseTag) -> string!
 static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.StripPrerelease(string? tag) -> string!
 static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.ToComparable(System.Version? version) -> System.Version!
 Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion
