@@ -8,7 +8,8 @@
 #    (repeat for compare-envoy-smoke)
 #
 # 2) Full publish (repeats=3, warmup 2s / measure 8s, c=8,16,32,64):
-#    compare-product, compare-saturation, compare-bodies, compare-post, compare-lossy, compare-tls-cost, compare-arch
+#    compare-product, compare-saturation, compare-bodies, compare-post, compare-lossy,
+#    compare-tls-cost, compare-arch, compare-grpc
 #
 # 3) Download artifacts into gha-dl/<runId>/rps-csv-{ubuntu-latest,windows-latest,macos-15-intel}/
 #
@@ -24,6 +25,7 @@ param(
     [string] $LossyRunId,
     [string] $TlsRunId,
     [string] $ArchRunId,
+    [string] $GrpcRunId,
     [string] $HeadSha = (git rev-parse --short HEAD),
     [string] $GhaDlRoot = 'tools/RpsLoadProbe/results/gha-dl'
 )
@@ -57,10 +59,22 @@ if ($SaturationRunId -or $BodiesRunId) {
 
 pip install -q -r tools/RpsLoadProbe/requirements-charts.txt
 
-python3 tools/RpsLoadProbe/render-practical-charts.py `
-    --results-root (Join-Path $GhaDlRoot $primary) `
-    --out-dir wiki/images `
-    --title-suffix "@ $HeadSha"
+$practicalArgs = @(
+    '--results-root', (Join-Path $GhaDlRoot $primary),
+    '--out-dir', 'wiki/images',
+    '--title-suffix', "@ $HeadSha"
+)
+if ($PostRunId) {
+    $practicalArgs += @('--post-root', (Join-Path $GhaDlRoot $PostRunId))
+}
+if ($ArchRunId) {
+    $practicalArgs += @('--arch-root', (Join-Path $GhaDlRoot $ArchRunId))
+}
+if ($GrpcRunId) {
+    $practicalArgs += @('--grpc-root', (Join-Path $GhaDlRoot $GrpcRunId))
+}
+
+python3 tools/RpsLoadProbe/render-practical-charts.py @practicalArgs
 
 python3 tools/RpsLoadProbe/render-product-matrix-charts.py `
     --from-wiki wiki/Performance.md `

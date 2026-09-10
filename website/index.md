@@ -56,7 +56,7 @@ features:
 
 ## Performance
 
-Same-harness reverse RPS vs **YARP** (gated), **nginx**, **HAProxy**, and **Envoy** on matched GitHub Actions runners. One Linux chart here; Windows, macOS, and heavier workloads live on the [performance](/docs/performance) page.
+Same-harness reverse RPS vs **YARP** (gated), **nginx**, **HAProxy**, and **Envoy** on matched GitHub Actions runners — industry wires plus POST / WebSocket / gRPC @ c=64. One Linux chart here; Windows, macOS, and heavier workloads live on the [performance](/docs/performance) page.
 
 <div class="rps-preview">
 

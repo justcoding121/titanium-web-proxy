@@ -8,7 +8,7 @@ On matched **GitHub Actions 4 vCPU / 16 GiB** runners, compare **TWP÷YARP** (ga
 
 ## Practical reverse RPS (CI)
 
-Sustain RPS @ concurrency 64 for common reverse wires (tiny keep-alive GET). Grouped bars: Titanium / YARP / nginx / HAProxy / Envoy. Missing bars mean *Not possible* for that wire or OS (e.g. Windows HAProxy/Envoy, nginx without H2/H3 upstream). Regenerate with [`render-practical-charts.py`](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/render-practical-charts.py) after `compare-product` (union sharded CSV roots when `arm_shard` was used).
+Sustain RPS @ concurrency 64 — **10 clusters** per OS: seven industry reverse wires (tiny keep-alive GET) plus POST 64 KiB / WebSocket / unary gRPC (RPC/s). Wires: H1 TLS→H1c · H1 TLS→H1 TLS · H2 TLS→H1c · H2 TLS→H1 TLS · H2 TLS→h2c · H2 TLS→H2 TLS · H3→H1c. Grouped bars: Titanium / YARP / nginx / HAProxy / Envoy. Missing bars mean *Not possible* / n/a for that wire or OS (e.g. Windows HAProxy/Envoy, nginx without H2/H3 upstream). Do not compare absolute RPS across clusters (shards). Regenerate with [`render-practical-charts.py`](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/render-practical-charts.py) after `compare-product` plus `--post-root` / `--arch-root` / `--grpc-root` (union sharded CSV roots when `arm_shard` was used).
 
 ### Windows
 

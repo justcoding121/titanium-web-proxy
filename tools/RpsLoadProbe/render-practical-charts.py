@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """Render practical reverse-proxy RPS grouped bar charts (TWP / YARP / nginx / HAProxy / Envoy).
 
-Reads compare-product CSVs (same sustain @ c=64 rule as paste-compare-product-wiki.ps1)
-and writes PNGs for README (Linux) and the website (Win / Linux / macOS).
+One PNG per OS: seven industry reverse wires (tiny keep-alive GET) plus POST 64 KiB /
+WebSocket / gRPC unary (10 clusters). Writes README (Linux) and website (Win / Linux / macOS).
 
 Example:
   python3 tools/RpsLoadProbe/render-practical-charts.py \\
-    --results-root tools/RpsLoadProbe/results/gha-dl/33480574506,33480581234 \\
-    --chart-b --chart-b-post-root tools/RpsLoadProbe/results/gha-dl/34394866049 \\
+    --results-root tools/RpsLoadProbe/results/gha-dl/<productRunId> \\
+    --post-root tools/RpsLoadProbe/results/gha-dl/<postRunId> \\
+    --arch-root tools/RpsLoadProbe/results/gha-dl/<archRunId> \\
+    --grpc-root tools/RpsLoadProbe/results/gha-dl/<grpcRunId> \\
     --out-dir wiki/images \\
-    --title-suffix '@ af6feb9c'
+    --title-suffix '@ <sha>'
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 # Practical industry reverse wires (short labels → CSV arm names).
 # nginx H2/H3 origin stays None (stock nginx has no H2/H3 upstream). HAProxy/Envoy
-# H2→h2c / H2→H2 / H3→H2 arms are wired in the harness; missing CSV rows show n/a.
+# H2→h2c / H2→H2 arms are wired in the harness; missing CSV rows show n/a.
 PRACTICAL_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], Optional[str]]] = [
     # label, twp, yarp, nginx, haproxy, envoy (None = product-impossible)
     (
@@ -80,22 +82,6 @@ PRACTICAL_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], Optional
         "haproxy-reverse-http3-cleartext",
         "envoy-reverse-http3-cleartext",
     ),
-    (
-        "H3→H1 TLS",
-        "twp-reverse-http3-to-https-http1",
-        "yarp-reverse-http3-to-https-http1",
-        "nginx-reverse-http3-to-https-http1",
-        "haproxy-reverse-http3-to-https-http1",
-        "envoy-reverse-http3-to-https-http1",
-    ),
-    (
-        "H3→H2 TLS",
-        "twp-reverse-http3-to-http2",
-        "yarp-reverse-http3-to-http2",
-        None,
-        "haproxy-reverse-http3-to-http2",
-        "envoy-reverse-http3-to-http2",
-    ),
 ]
 
 COLORS = {
@@ -108,18 +94,8 @@ COLORS = {
 
 PRODUCTS = ("Titanium", "YARP", "nginx", "HAProxy", "Envoy")
 
-# Chart B — industry workloads @ c=64 (Linux); arms may live in different compare-* CSVs.
+# Workload clusters @ c=64 (no Tiny GET — that is H1 TLS→H1c above).
 INDUSTRY_WORKLOADS: List[Tuple[str, Dict[str, Optional[str]]]] = [
-    (
-        "Tiny GET",
-        {
-            "Titanium": "twp-reverse-http1-tls",
-            "YARP": "yarp-reverse-http1-tls",
-            "nginx": "nginx-reverse-http1-tls",
-            "HAProxy": "haproxy-reverse-http1-tls",
-            "Envoy": "envoy-reverse-http1-tls",
-        },
-    ),
     (
         "POST 64 KiB",
         {
@@ -152,10 +128,18 @@ INDUSTRY_WORKLOADS: List[Tuple[str, Dict[str, Optional[str]]]] = [
     ),
 ]
 
+WIRE_COUNT = len(PRACTICAL_ARMS)
+
 OS_SPECS = (
     ("linux", "Linux", ("ubuntu-latest",)),
     ("windows", "Windows", ("windows-latest",)),
     ("macos", "macOS", ("macos-15-intel", "macos-latest")),
+)
+
+MERGED_FOOTER = (
+    "Wires: tiny keep-alive GET · Workloads: POST / WS / gRPC (RPC/s) from compare-post / "
+    "compare-arch / compare-grpc · GHA 4-core · missing bars = n/a · do not compare absolute "
+    "RPS across clusters (shards)"
 )
 
 
@@ -210,7 +194,9 @@ def find_csv(results_root: Path, os_keys: Iterable[str]) -> Optional[Path]:
     for key in os_keys:
         for pattern in (
             f"rps-csv-{key}/*.csv",
+            f"rps-csv-{key}-*/*.csv",
             f"{key}/*.csv",
+            f"**/*{key}*/**/*.csv",
             f"**/*{key}*.csv",
         ):
             hits = sorted(results_root.glob(pattern))
@@ -231,7 +217,7 @@ def find_csvs(results_roots: Sequence[Path], os_keys: Iterable[str]) -> List[Pat
 
 
 def gha_dl_sibling_roots(results_root: Path) -> List[Path]:
-    """Other gha-dl/<runId> folders beside a primary run (for Chart B defaults)."""
+    """Other gha-dl/<runId> folders beside a primary run (workload CSV defaults)."""
     run_dir = results_root
     if not run_dir.is_dir():
         run_dir = results_root.parent
@@ -279,14 +265,12 @@ def collect_series(csv_paths: Sequence[Path]) -> Dict[str, List[Optional[float]]
 
 
 def collect_industry_series(
-    product_csvs: Sequence[Path],
     post_csvs: Sequence[Path],
     arch_csvs: Sequence[Path],
     grpc_csvs: Sequence[Path],
 ) -> Dict[str, List[Optional[float]]]:
-    """Chart B: Tiny GET / POST / WebSocket / gRPC @ c=64 from mode-specific CSV unions."""
+    """POST / WebSocket / gRPC @ c=64 from mode-specific CSV unions."""
     sources = {
-        "Tiny GET": product_csvs,
         "POST 64 KiB": post_csvs,
         "WebSocket": arch_csvs,
         "gRPC unary": grpc_csvs,
@@ -309,6 +293,13 @@ def collect_industry_series(
     return out
 
 
+def merge_series(
+    wire: Dict[str, List[Optional[float]]],
+    workload: Dict[str, List[Optional[float]]],
+) -> Dict[str, List[Optional[float]]]:
+    return {p: list(wire[p]) + list(workload[p]) for p in PRODUCTS}
+
+
 def render_chart(
     series: Dict[str, List[Optional[float]]],
     os_title: str,
@@ -316,6 +307,7 @@ def render_chart(
     title_suffix: str,
     labels: Optional[Sequence[str]] = None,
     footer: Optional[str] = None,
+    workload_start: Optional[int] = None,
 ) -> None:
     import matplotlib
 
@@ -328,7 +320,8 @@ def render_chart(
     width = 0.14
     offsets = tuple((i - 2) * width for i in range(5))
 
-    fig, ax = plt.subplots(figsize=(14.5, 5.4), dpi=140)
+    fig_w = 16.0 if len(labels) >= 10 else 14.5
+    fig, ax = plt.subplots(figsize=(fig_w, 5.4), dpi=140)
     ymax = 1.0
     for product, offset in zip(PRODUCTS, offsets):
         vals = series[product]
@@ -351,6 +344,16 @@ def render_chart(
             elif h > 0:
                 ymax = max(ymax, h)
 
+    if workload_start is not None and 0 < workload_start < len(labels):
+        ax.axvline(
+            workload_start - 0.5,
+            color="#888888",
+            linestyle="--",
+            linewidth=1.0,
+            zorder=2,
+            alpha=0.7,
+        )
+
     ax.set_ylabel("Sustain RPS @ concurrency 64")
     title = f"Reverse proxy RPS — {os_title}"
     if title_suffix:
@@ -366,11 +369,7 @@ def render_chart(
     fig.text(
         0.01,
         0.01,
-        footer
-        or (
-            "Tiny keep-alive GET · GHA 4-core · nginx/HAProxy/Envoy HTTPS-origin peers · "
-            "missing bars = Not possible · SLO-miss sustain plotted as 0"
-        ),
+        footer or MERGED_FOOTER,
         fontsize=8,
         color="#444444",
     )
@@ -386,7 +385,7 @@ def main() -> int:
         "--results-root",
         action="append",
         default=[],
-        help="gha-dl/<runId> folder(s); comma-separated or repeat flag (union CSVs, first wins)",
+        help="gha-dl/<runId> folder(s) for compare-product; comma-separated or repeat flag",
     )
     ap.add_argument("--csv-linux", type=Path)
     ap.add_argument("--csv-windows", type=Path)
@@ -400,27 +399,22 @@ def main() -> int:
         help="Subset of OS charts (default: all with a CSV)",
     )
     ap.add_argument(
-        "--chart-b",
-        action="store_true",
-        help="Also render rps-industry-workloads-linux.png (Chart B)",
-    )
-    ap.add_argument(
-        "--chart-b-post-root",
+        "--post-root",
         action="append",
         default=[],
-        help="compare-post run root(s) for Chart B POST arm",
+        help="compare-post run root(s) for POST 64 KiB cluster",
     )
     ap.add_argument(
-        "--chart-b-arch-root",
+        "--arch-root",
         action="append",
         default=[],
-        help="compare-arch run root(s) for Chart B WebSocket arm",
+        help="compare-arch run root(s) for WebSocket cluster",
     )
     ap.add_argument(
-        "--chart-b-grpc-root",
+        "--grpc-root",
         action="append",
         default=[],
-        help="compare-grpc run root(s) for Chart B gRPC arm",
+        help="compare-grpc run root(s) for gRPC unary cluster",
     )
     args = ap.parse_args()
 
@@ -443,20 +437,43 @@ def main() -> int:
     if not csv_lists_by_os:
         ap.error("Provide --results-root and/or --csv-linux/--csv-windows/--csv-macos")
 
+    sibling_roots = gha_dl_sibling_roots(results_roots[0]) if results_roots else []
+    post_roots = parse_path_list(args.post_root) or results_roots or sibling_roots
+    arch_roots = parse_path_list(args.arch_root) or results_roots or sibling_roots
+    grpc_roots = parse_path_list(args.grpc_root) or results_roots or sibling_roots
+
     wanted = set(args.os) if args.os else set(csv_lists_by_os)
     suffix = args.title_suffix.strip()
     written = []
+    labels = [a[0] for a in PRACTICAL_ARMS] + [w[0] for w in INDUSTRY_WORKLOADS]
+
     for key, title, folder_keys in OS_SPECS:
         if key not in wanted or key not in csv_lists_by_os:
             continue
         paths = csv_lists_by_os[key]
-        series = collect_series(paths)
+        post_csvs = find_csvs(post_roots, folder_keys)
+        arch_csvs = find_csvs(arch_roots, folder_keys)
+        grpc_csvs = find_csvs(grpc_roots, folder_keys)
+        wire = collect_series(paths)
+        workload = collect_industry_series(post_csvs, arch_csvs, grpc_csvs)
+        series = merge_series(wire, workload)
         out = args.out_dir / f"rps-practical-{key}.png"
-        render_chart(series, title, out, suffix)
+        render_chart(
+            series,
+            title,
+            out,
+            suffix,
+            labels=labels,
+            footer=MERGED_FOOTER,
+            workload_start=WIRE_COUNT,
+        )
         written.append(out)
         src = ", ".join(str(p) for p in paths)
-        print(f"{title} ← {src}")
-        for i, (label, *_rest) in enumerate(PRACTICAL_ARMS):
+        print(f"{title} <- product: {src}")
+        print(
+            f"  workloads <- post={len(post_csvs)} arch={len(arch_csvs)} grpc={len(grpc_csvs)} CSV(s)"
+        )
+        for i, label in enumerate(labels):
             parts = []
             for product in PRODUCTS:
                 v = series[product][i]
@@ -466,49 +483,6 @@ def main() -> int:
                 f"HAProxy={parts[3]} Envoy={parts[4]}"
             )
         print(f"  wrote {out}")
-
-    render_chart_b = args.chart_b or bool(
-        args.chart_b_post_root or args.chart_b_arch_root or args.chart_b_grpc_root
-    )
-    if render_chart_b:
-        linux_keys = ("ubuntu-latest",)
-        product_csvs = csv_lists_by_os.get("linux") or find_csvs(results_roots, linux_keys)
-        sibling_roots = gha_dl_sibling_roots(results_roots[0]) if results_roots else []
-        post_roots = parse_path_list(args.chart_b_post_root) or results_roots or sibling_roots
-        arch_roots = parse_path_list(args.chart_b_arch_root) or results_roots or sibling_roots
-        grpc_roots = parse_path_list(args.chart_b_grpc_root) or results_roots or sibling_roots
-        post_csvs = find_csvs(post_roots, linux_keys)
-        arch_csvs = find_csvs(arch_roots, linux_keys)
-        grpc_csvs = find_csvs(grpc_roots, linux_keys)
-        if product_csvs:
-            series_b = collect_industry_series(product_csvs, post_csvs, arch_csvs, grpc_csvs)
-            labels_b = [w[0] for w in INDUSTRY_WORKLOADS]
-            out_b = args.out_dir / "rps-industry-workloads-linux.png"
-            render_chart(
-                series_b,
-                "Linux — industry workloads",
-                out_b,
-                suffix,
-                labels=labels_b,
-                footer=(
-                    "Industry workloads @ c=64 · GET from compare-product · POST / WS / gRPC from "
-                    "compare-post / compare-arch / compare-grpc · missing bars = n/a"
-                ),
-            )
-            written.append(out_b)
-            print("Linux — industry workloads (Chart B)")
-            for i, (label, _) in enumerate(INDUSTRY_WORKLOADS):
-                parts = []
-                for product in PRODUCTS:
-                    v = series_b[product][i]
-                    parts.append("n/a" if v is None else f"{v:.0f}")
-                print(
-                    f"  {label}: TWP={parts[0]} YARP={parts[1]} nginx={parts[2]} "
-                    f"HAProxy={parts[3]} Envoy={parts[4]}"
-                )
-            print(f"  wrote {out_b}")
-        else:
-            print("Chart B: no Linux product CSV found.", file=__import__("sys").stderr)
 
     if not written:
         print("No charts written (no matching CSVs).", file=__import__("sys").stderr)
