@@ -34,6 +34,9 @@ public readonly struct HttpInterceptionContext
     /// <summary>Remote IP endpoint of the connected client (null when unavailable).</summary>
     public IPEndPoint? ClientRemoteEndPoint { get; init; }
 
-    /// <summary>Process ID of the local client (explicit proxy / Windows only; null otherwise).</summary>
+    /// <summary>
+    ///     Process ID of the local client when available (Windows/Linux/macOS explicit-proxy paths).
+    ///     Null when unset on the fast path or when the client is remote / unresolved.
+    /// </summary>
     public int? ClientProcessId { get; init; }
 }

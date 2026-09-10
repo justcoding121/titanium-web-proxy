@@ -597,6 +597,7 @@ public class SessionEventArgs : SessionEventArgsBase
         if (request.Locked) throw new InvalidOperationException("You cannot call this function after request is made to server.");
 
         request.Body = body;
+        request.IsBodyRead = true;
     }
 
     /// <summary>
@@ -672,6 +673,7 @@ public class SessionEventArgs : SessionEventArgsBase
 
         var response = HttpClient.Response;
         response.Body = body;
+        response.IsBodyRead = true;
     }
 
     /// <summary>

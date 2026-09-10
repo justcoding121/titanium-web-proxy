@@ -157,6 +157,90 @@ public class InspectorFiddlerFlowE2ETests
 
     [TestMethod]
     [TestCategory("E2E-UI")]
+    public async Task DecryptHttps_WhenTrustFails_ShowsTerminalDialog_CancelLeavesOff()
+    {
+        await StartAsync();
+        if (_interception.IsRootTrusted)
+            _interception.UntrustRootCertificate(false);
+
+        _interception.FailNextUserTrustInstall = true;
+        // Exit adaptive recovery via Export (Secondary) so LastOsTrust stays Failed (not Cancelled).
+        _dialogs.TrustRecoveryResult = TrustRecoveryChoice.Secondary;
+        _dialogs.DecryptTrustFailedResult = TrustRecoveryChoice.Cancel;
+
+        _vm.DecryptHttps = true;
+        await WaitUntil(() => _dialogs.DecryptTrustFailedCalls > 0);
+        await Task.Delay(50);
+
+        Assert.IsTrue(_dialogs.TrustRecoveryCalls >= 1);
+        Assert.AreEqual(1, _dialogs.DecryptTrustFailedCalls);
+        Assert.IsNotNull(_dialogs.LastDecryptTrustFailedResult);
+        Assert.IsFalse(_vm.DecryptHttps);
+        Assert.IsFalse(_interception.DecryptHttps);
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI")]
+    public async Task DecryptHttps_WhenTrustFails_TerminalRetryEnables()
+    {
+        await StartAsync();
+        if (_interception.IsRootTrusted)
+            _interception.UntrustRootCertificate(false);
+
+        _interception.FailNextUserTrustInstall = true;
+        _dialogs.TrustRecoveryResult = TrustRecoveryChoice.Secondary;
+        // Terminal Primary retries Ensure; FailNext was already consumed, so install succeeds.
+        _dialogs.DecryptTrustFailedResult = TrustRecoveryChoice.Primary;
+
+        _vm.DecryptHttps = true;
+        await WaitUntil(() => _vm.DecryptHttps);
+        await Task.Delay(50);
+
+        Assert.AreEqual(1, _dialogs.DecryptTrustFailedCalls);
+        Assert.IsTrue(_vm.DecryptHttps, _vm.StatusText);
+        Assert.IsTrue(_interception.IsRootTrusted);
+        Assert.IsTrue(_interception.DecryptHttps);
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI")]
+    public async Task DecryptHttps_WhenProxyStopped_StartOfferAccepted_EnablesWhenTrusted()
+    {
+        Assert.IsFalse(_interception.IsRunning);
+        _dialogs.StartProxyForDecryptResult = true;
+        _dialogs.InstallRootCaResult = true;
+
+        _vm.DecryptHttps = true;
+        await WaitUntil(() => _dialogs.StartProxyForDecryptCalls > 0);
+        await WaitUntil(() => _interception.IsRunning);
+        await WaitUntil(() => _vm.DecryptHttps);
+        await Task.Delay(50);
+
+        Assert.AreEqual(1, _dialogs.StartProxyForDecryptCalls);
+        Assert.IsTrue(_interception.IsRunning, _vm.StatusText);
+        Assert.IsTrue(_vm.DecryptHttps, _vm.StatusText);
+        Assert.IsTrue(_interception.DecryptHttps);
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI")]
+    public async Task DecryptHttps_WhenProxyStopped_StartOfferDeclined_StaysOff()
+    {
+        Assert.IsFalse(_interception.IsRunning);
+        _dialogs.StartProxyForDecryptResult = false;
+
+        _vm.DecryptHttps = true;
+        await WaitUntil(() => _dialogs.StartProxyForDecryptCalls > 0);
+        await Task.Delay(50);
+
+        Assert.AreEqual(1, _dialogs.StartProxyForDecryptCalls);
+        Assert.IsFalse(_interception.IsRunning);
+        Assert.IsFalse(_vm.DecryptHttps);
+        Assert.IsFalse(_interception.DecryptHttps);
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI")]
     public async Task RemoveRoot_ForcesDecryptOff_InstallAgain_RestoresTrust()
     {
         await StartAsync();

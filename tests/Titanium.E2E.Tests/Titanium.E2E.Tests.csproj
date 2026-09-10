@@ -30,6 +30,7 @@
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy.Abstractions\Titanium.Web.Proxy.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy.Configuration\Titanium.Web.Proxy.Configuration.csproj" />
+    <ProjectReference Include="..\..\tools\InspectorDesktopProbe\Shared\Titanium.Inspector.DesktopProbe.Shared.csproj" />
   </ItemGroup>
 </Project>
 

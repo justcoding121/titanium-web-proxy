@@ -1,4 +1,4 @@
-﻿using Avalonia.Automation;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
@@ -23,6 +23,7 @@ public class AutomationIdCoverageHeadlessTests
         "MenuExportArchive",
         "MenuExportSelectedArchive",
         "MenuImportArchive",
+        "MenuExit",
         "MenuCapture",
         "MenuStartCapture",
         "MenuStopCapture",
@@ -37,6 +38,7 @@ public class AutomationIdCoverageHeadlessTests
         "MenuRemoveCa",
         "MenuRotateCa",
         "MenuExportCa",
+        "MenuTrustFirefoxCa",
         "MenuDeviceCa",
         "MenuLoopbackExempt",
         "MenuTools",
@@ -45,6 +47,10 @@ public class AutomationIdCoverageHeadlessTests
         "MenuToolsAutoResponder",
         "MenuToolsScripts",
         "MenuOptions",
+        "MenuTheme",
+        "MenuThemeLight",
+        "MenuThemeDark",
+        "MenuThemeAutomatic",
         "MenuSessionRetention",
         "MenuHttpsDecryptHosts",
         "MenuIgnoreServerCertErrors",
@@ -56,6 +62,7 @@ public class AutomationIdCoverageHeadlessTests
         "MenuResetSettings",
         "MenuHelp",
         "MenuCheckForUpdates",
+        "MenuAbout",
         "SearchBox",
         "HideTunnelsFilterCheck",
         "HideImagesFilterCheck",
@@ -76,7 +83,11 @@ public class AutomationIdCoverageHeadlessTests
         "CtxExportSelectedHar",
         "CtxExportSelectedArchive",
         "CtxCopyUrl",
+        "CtxCopyAsCurl",
+        "CtxCopyAsFetch",
+        "CtxDiffSessions",
         "CtxFilterByHost",
+        "CtxExcludeHost",
         "CtxFilterByProcess",
         "CtxRemoveSelected",
         "CloseDetailsButton",
@@ -90,8 +101,15 @@ public class AutomationIdCoverageHeadlessTests
         "BodyText",
         "TabHex",
         "HexText",
+        "TabDiff",
+        "DiffText",
         "TabFrames",
         "FramesText",
+        "TabSse",
+        "SseText",
+        "TabProtobuf",
+        "ProtobufText",
+        "ComboNetworkThrottle",
         "TabOuterTools",
         "ToolsTabs",
         "TabComposer",
@@ -116,13 +134,23 @@ public class AutomationIdCoverageHeadlessTests
         "AutoResponderStatus",
         "AutoResponderContentType",
         "AutoResponderBody",
+        "AutoResponderLocalFile",
+        "AutoResponderBrowseLocal",
         "AutoResponderAdd",
+        "MapRemoteEnabled",
+        "MapRemoteMatch",
+        "MapRemoteTarget",
+        "MapRemoteAdd",
+        "MenuToolsMapRemote",
+        "TabMapRemote",
         "AutoResponderUpdate",
         "AutoResponderDelete",
         "TabScripts",
         "ScriptOnRequest",
         "ScriptOnResponse",
         "StatusText",
+        "StatusBusyProgress",
+        "StatusBarPanel",
         "SessionCountText"
     ];
 
@@ -143,6 +171,13 @@ public class AutomationIdCoverageHeadlessTests
                 Url = "wss://id.test/ws",
                 Protocol = "HTTP/1.1",
                 IsWebSocket = true,
+                IsServerSentEvents = true,
+                SseEvents =
+                [
+                    new SseEventSnapshot { Event = "ping", Data = "1" },
+                ],
+                IsGrpc = true,
+                ProtobufDecodedText = "[{\"field\":1}]",
             });
             fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
             fx.Robot.Click("MenuToolsComposer");
@@ -254,10 +289,57 @@ public class AutomationIdCoverageHeadlessTests
             Assert.IsTrue(fx.ViewModel.ShowWsFramesTab);
 
             fx.Robot.Click("TabFrames");
-            Assert.AreEqual(3, fx.ViewModel.SelectedInspectTabIndex);
+            Assert.AreEqual(4, fx.ViewModel.SelectedInspectTabIndex);
 
             fx.Robot.Click("CloseDetailsButton");
             Assert.IsFalse(fx.ViewModel.ShowSessionDetails);
+        });
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Headless")]
+    public async Task Inspect_SseProtobufTabs_AndNetworkThrottleCombo()
+    {
+        await using var fx = new InspectorHeadlessFixture();
+        await fx.StartAsync();
+        await fx.DispatchAsync(() =>
+        {
+            fx.ViewModel.Sessions.Add(new SessionSnapshot
+            {
+                Id = 11,
+                Method = "GET",
+                StatusCode = 200,
+                Host = "sse.test",
+                Url = "http://sse.test/stream",
+                Protocol = "HTTP/1.1",
+                ContentType = "text/event-stream",
+                IsServerSentEvents = true,
+                ResponseBodyText = "data: hi\n\n",
+                SseEvents = SseEventParser.Parse("data: hi\n\n"),
+                IsGrpc = true,
+                ProtobufDecodedText = ProtobufMessageDecoder.DecodeWireFormat(
+                    [0x0a, 0x02, (byte)'o', (byte)'k'],
+                    stripGrpcFrame: false),
+            });
+            fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
+            Assert.IsTrue(fx.ViewModel.ShowSseTab);
+            Assert.IsTrue(fx.ViewModel.ShowProtobufTab);
+
+            fx.Robot.Click("TabSse");
+            Assert.AreEqual(5, fx.ViewModel.SelectedInspectTabIndex);
+            StringAssert.Contains(fx.ViewModel.SelectedSseEvents, "hi");
+
+            fx.Robot.Click("TabProtobuf");
+            Assert.AreEqual(6, fx.ViewModel.SelectedInspectTabIndex);
+            StringAssert.Contains(fx.ViewModel.SelectedProtobufDecoded, "ok");
+
+            Assert.IsTrue(fx.Robot.TryFind<Avalonia.Controls.ComboBox>("ComboNetworkThrottle", out var combo) && combo is not null);
+            fx.ViewModel.NetworkThrottleProfile = "Slow 3G";
+            Assert.AreEqual("Slow 3G", fx.ViewModel.NetworkThrottleProfile);
+            Assert.IsNotNull(fx.Interception.ThrottleProfile);
+            Assert.IsTrue(fx.Interception.ThrottleProfile!.IsEnabled);
+            fx.ViewModel.NetworkThrottleProfile = "None";
+            Assert.IsNull(fx.Interception.ThrottleProfile);
         });
     }
 
@@ -371,6 +453,22 @@ public class AutomationIdCoverageHeadlessTests
             AssertHasAutomationId(logging, "LoggingOpenFolder");
             AssertHasAutomationId(logging, "LoggingBrowse");
             AssertHasAutomationId(logging, "LoggingPath");
+
+            var about = new AboutWindow();
+            AssertHasAutomationId(about, "AboutWindow");
+            AssertHasAutomationId(about, "AboutOk");
+
+            var exclusions = new ExcludedHostsWindow(settings, readOnly: false, onSaved: null);
+            AssertHasAutomationId(exclusions, "ExcludedHostsWindow");
+            AssertHasAutomationId(exclusions, "ExcludedBypassHosts");
+            AssertHasAutomationId(exclusions, "ExcludedSkipHosts");
+            AssertHasAutomationId(exclusions, "ExcludedProxyLoopback");
+            AssertHasAutomationId(exclusions, "ExcludedOsPreview");
+            AssertHasAutomationId(exclusions, "ExcludedHostsResetDefaults");
+            AssertHasAutomationId(exclusions, "ExcludedHostsSave");
+            Assert.IsFalse(exclusions.GetLogicalDescendants().OfType<Control>().Any(c =>
+                string.Equals(AutomationProperties.GetAutomationId(c), "ExcludedOnlyHosts", StringComparison.Ordinal)
+                || string.Equals(AutomationProperties.GetAutomationId(c), "ExcludedBuiltInList", StringComparison.Ordinal)));
         });
     }
 

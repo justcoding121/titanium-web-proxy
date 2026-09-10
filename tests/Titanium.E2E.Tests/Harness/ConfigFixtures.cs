@@ -82,6 +82,90 @@ public sealed class EchoOrigin : IDisposable
     }
 }
 
+/// <summary>Echo origin that returns 500 for the first <paramref name="failCount"/> requests, then 200.</summary>
+public sealed class FlakyEchoOrigin : IDisposable
+{
+    private readonly HttpListener _listener;
+    private CancellationTokenSource? _cts;
+    private int _remainingFailures;
+
+    public int Port { get; }
+    public int Hits => _hits;
+    private int _hits;
+
+    public FlakyEchoOrigin(int failCount, int? port = null)
+    {
+        _remainingFailures = Math.Max(0, failCount);
+        if (port is > 0)
+        {
+            Port = port.Value;
+            _listener = new HttpListener();
+            _listener.Prefixes.Add($"http://127.0.0.1:{Port}/");
+            _listener.Start();
+        }
+        else
+        {
+            (_listener, Port) = CliProcessHarness.BindHttpListenerOrRetry(
+                p => $"http://127.0.0.1:{p}/");
+        }
+
+        _cts = new CancellationTokenSource();
+        _ = Task.Run(() => AcceptLoopAsync(_cts.Token));
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        try
+        {
+            _listener.Stop();
+            _listener.Close();
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    private async Task AcceptLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested && _listener.IsListening)
+        {
+            HttpListenerContext ctx;
+            try
+            {
+                ctx = await _listener.GetContextAsync().WaitAsync(ct);
+            }
+            catch
+            {
+                return;
+            }
+
+            _ = Task.Run(() => Handle(ctx), ct);
+        }
+    }
+
+    private void Handle(HttpListenerContext ctx)
+    {
+        try
+        {
+            Interlocked.Increment(ref _hits);
+            var fail = Interlocked.Decrement(ref _remainingFailures) >= 0;
+            var path = ctx.Request.Url?.AbsolutePath ?? "/";
+            var body = Encoding.UTF8.GetBytes(fail ? $"fail:{path}" : $"echo:{path}:{ctx.Request.HttpMethod}");
+            ctx.Response.StatusCode = fail ? 500 : 200;
+            ctx.Response.ContentType = "text/plain";
+            ctx.Response.ContentLength64 = body.Length;
+            ctx.Response.OutputStream.Write(body);
+            ctx.Response.Close();
+        }
+        catch
+        {
+            try { ctx.Response.Abort(); } catch { /* ignore */ }
+        }
+    }
+}
+
 /// <summary>Writes temp twp.yaml configs for CLI E2E.</summary>
 public static class ConfigFixtures
 {
@@ -115,6 +199,64 @@ public static class ConfigFixtures
                   "clusterId": "c1",
                   "order": 1,
                   "match": { "path": "/", "pathKind": "Prefix" }
+                }
+              ],
+              "clusters": [
+                {
+                  "id": "c1",
+                  "algorithm": "RoundRobin",
+                  "destinations": [
+                    { "id": "d1", "address": "127.0.0.1", "port": {{originPort}} }
+                  ]
+                }
+              ]
+            }
+            """);
+        return path;
+    }
+
+    public static string WriteAccessLog(string dir, int listenPort, int originPort, string accessLogPath)
+    {
+        var path = Path.Combine(dir, $"access-{listenPort}.yaml");
+        File.WriteAllText(path, $"""
+            schemaVersion: "7.0"
+            listeners:
+              - host: "127.0.0.1"
+                port: {listenPort}
+                decryptSsl: false
+                forwardHost: "127.0.0.1"
+                forwardPort: {originPort}
+            server:
+              accessLog:
+                path: "{accessLogPath.Replace("\\", "/")}"
+                sampleRate: 1.0
+            """);
+        return path;
+    }
+
+    public static string WriteTransforms(
+        string dir,
+        int listenPort,
+        int originPort,
+        string pathPrefix = "/gw")
+    {
+        var path = Path.Combine(dir, $"transforms-{listenPort}.json");
+        File.WriteAllText(path, $$"""
+            {
+              "schemaVersion": "7.0",
+              "listeners": [
+                { "host": "127.0.0.1", "port": {{listenPort}}, "decryptSsl": false }
+              ],
+              "routes": [
+                {
+                  "id": "r1",
+                  "clusterId": "c1",
+                  "order": 1,
+                  "match": { "path": "/", "pathKind": "Prefix" },
+                  "transforms": [
+                    { "kind": "PathPrefix", "parameters": { "prefix": "{{pathPrefix}}" } },
+                    { "kind": "QueryValueSet", "parameters": { "name": "env", "value": "lab" } }
+                  ]
                 }
               ],
               "clusters": [
@@ -183,12 +325,15 @@ public static class ConfigFixtures
     public static string WriteTls(string dir, int listenPort, int originPort, string certPath, string keyPath)
     {
         var path = Path.Combine(dir, $"tls-{listenPort}.yaml");
+        // Leaf-cert load only — disable HTTP/3 so Windows CI QuicListener bind flakes
+        // do not fail Run_TlsLeaf_LoadsCertificate (decryptSsl would otherwise auto-enable H3).
         File.WriteAllText(path, $"""
             schemaVersion: "7.0"
             listeners:
               - host: "127.0.0.1"
                 port: {listenPort}
                 decryptSsl: true
+                enableHttp3: false
                 forwardHost: "127.0.0.1"
                 forwardPort: {originPort}
             certificates:

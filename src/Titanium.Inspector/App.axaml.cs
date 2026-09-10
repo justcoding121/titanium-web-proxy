@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Titanium.Inspector.Services;
@@ -14,6 +15,7 @@ public partial class App : Application
     public override void OnFrameworkInitializationCompleted()
     {
         var settings = SettingsService.Load();
+        ThemeService.ApplyThemeMode(settings.Current.ThemeMode);
         var sessions = new SessionRegistry(SessionStoreOptions.FromSettings(settings.Current));
         var buffer = new SessionStreamBuffer();
         var updates = new UpdateService(settings);
@@ -42,5 +44,22 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// macOS application menu About — same <see cref="MainWindowViewModel.OpenAboutCommand"/> as Help.
+    /// </summary>
+    private void OnMacAboutClick(object? sender, EventArgs e)
+    {
+        if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime { MainWindow: Window window })
+        {
+            return;
+        }
+
+        if (window.DataContext is MainWindowViewModel vm
+            && vm.OpenAboutCommand.CanExecute(null))
+        {
+            vm.OpenAboutCommand.Execute(null);
+        }
     }
 }

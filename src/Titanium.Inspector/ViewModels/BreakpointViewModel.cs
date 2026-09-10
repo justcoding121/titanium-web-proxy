@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace Titanium.Inspector.ViewModels;
 
@@ -11,6 +12,7 @@ public sealed class BreakpointViewModel : System.ComponentModel.INotifyPropertyC
     private BreakpointHit? _active;
     private bool _enabled;
     private string _urlFilter = "*";
+    private string _graphQlOperationName = "";
 
     public bool Enabled
     {
@@ -29,6 +31,17 @@ public sealed class BreakpointViewModel : System.ComponentModel.INotifyPropertyC
         {
             _urlFilter = value;
             PropertyChanged?.Invoke(this, new(nameof(UrlFilter)));
+        }
+    }
+
+    /// <summary>Optional GraphQL operationName; when set, breakpoints only match that operation.</summary>
+    public string GraphQlOperationName
+    {
+        get => _graphQlOperationName;
+        set
+        {
+            _graphQlOperationName = value ?? "";
+            PropertyChanged?.Invoke(this, new(nameof(GraphQlOperationName)));
         }
     }
 
@@ -126,7 +139,8 @@ public sealed class BreakpointHit
     public string? EditedBody { get; set; }
     public int? ContentLength { get; set; }
 
-    public Task<BreakpointAction> WaitAsync() => _tcs.Task;
+    public Task<BreakpointAction> WaitAsync(CancellationToken cancellationToken = default) =>
+        _tcs.Task.WaitAsync(cancellationToken);
 
     public void Complete(BreakpointAction action) => _tcs.TrySetResult(action);
 }

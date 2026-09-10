@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Threading;
 using Microsoft.Extensions.Logging;
@@ -20,6 +20,12 @@ namespace Titanium.Web.Proxy.EventArguments;
 /// </summary>
 public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
 {
+    /// <summary>
+    ///     Shared process-id stub when lookup is unsupported or unused (transparent reverse / RPS).
+    ///     Avoids a <see cref="Lazy{T}"/> allocation per multiplexed H2/H3 stream.
+    /// </summary>
+    private static readonly Lazy<int> UnknownClientProcessId = new(() => 0);
+
     protected readonly IBufferPool BufferPool;
 
     internal readonly CancellationTokenSource CancellationTokenSource;
@@ -64,7 +70,9 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
 
         ClientStream = clientStream;
         HttpClient = new HttpWebClient(connectRequest, request,
-            new Lazy<int>(() => clientStream.Connection.GetProcessId(endPoint)));
+            ClientProcessId.IsSupported && endPoint is not TransparentBaseProxyEndPoint
+                ? new Lazy<int>(() => clientStream.Connection.GetProcessId(endPoint))
+                : UnknownClientProcessId);
         ProxyEndPoint = endPoint;
         EnableWinAuth = server.EnableWinAuth && IsWindowsAuthenticationSupported;
     }
@@ -122,6 +130,9 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
         get => HttpClient.UserData;
         set => HttpClient.UserData = value;
     }
+
+    /// <summary>Optional response header transforms staged during reverse-proxy request transforms.</summary>
+    internal object? ResponseHeaderTransformPlan { get; set; }
 
     /// <summary>
     ///     Per-session override for <see cref="ProxyServer.ConnectTimeOutSeconds" />.
@@ -213,9 +224,10 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     internal int? UpstreamConnectPort { get; set; }
 
     /// <summary>
-    ///     Selected cluster destination id for health / retry bookkeeping.
+    ///     Selected cluster destination id when reverse-proxy routing applied this session;
+    ///     otherwise <c>null</c>. Used by Plus circuit breaker / health bookkeeping.
     /// </summary>
-    internal string? UpstreamDestinationId { get; set; }
+    public string? UpstreamDestinationId { get; internal set; }
 
     /// <summary>Active-request lease for <see cref="Clusters.DestinationHealthTracker"/>.</summary>
     internal IDisposable? DestinationRequestLease { get; set; }

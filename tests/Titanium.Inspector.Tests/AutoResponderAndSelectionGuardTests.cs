@@ -66,6 +66,58 @@ public class AutoResponderAndSelectionGuardTests
     }
 
     [TestMethod]
+    public void MapLocal_TryResolveBody_ReadsFileAndFallsBackToInline()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-map-local-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            File.WriteAllText(path, "{\"mapped\":true}");
+            var fileRule = new AutoResponderRule
+            {
+                LocalFilePath = path,
+                Body = "ignored",
+                ContentType = "application/json",
+            };
+            Assert.IsTrue(AutoResponderViewModel.TryResolveBody(fileRule, out var fromFile, out var err));
+            Assert.IsNull(err);
+            Assert.AreEqual("{\"mapped\":true}", System.Text.Encoding.UTF8.GetString(fromFile));
+
+            var inline = new AutoResponderRule { Body = "inline-ok", LocalFilePath = "" };
+            Assert.IsTrue(AutoResponderViewModel.TryResolveBody(inline, out var fromInline, out _));
+            Assert.AreEqual("inline-ok", System.Text.Encoding.UTF8.GetString(fromInline));
+
+            var missing = new AutoResponderRule { LocalFilePath = path + ".missing" };
+            Assert.IsFalse(AutoResponderViewModel.TryResolveBody(missing, out _, out var missingErr));
+            StringAssert.Contains(missingErr, "not found");
+
+            var vm = new AutoResponderViewModel();
+            vm.LoadFromDtos(
+            [
+                new AutoResponderRuleDto
+                {
+                    MatchUrl = "*map*",
+                    StatusCode = 201,
+                    Body = "",
+                    ContentType = "application/json",
+                    Enabled = true,
+                    LocalFilePath = path,
+                },
+            ]);
+            Assert.AreEqual(path, vm.Rules[0].LocalFilePath);
+            StringAssert.Contains(vm.Rules[0].Display, "[Map Local]");
+            var dto = vm.ToDtos()[0];
+            Assert.AreEqual(path, dto.LocalFilePath);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
     public void MainWindowViewModel_NullSelectionGuards()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-insp-guards-" + Guid.NewGuid().ToString("N") + ".json");

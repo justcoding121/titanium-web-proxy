@@ -52,6 +52,18 @@ public sealed class InspectorUiRobot(Control root)
 
     public void SetText(string automationId, string text) => Find<TextBox>(automationId).Text = text;
 
+    public void RaiseKey(string automationId, Avalonia.Input.Key key)
+    {
+        var control = Find<Control>(automationId);
+        control.Focus();
+        control.RaiseEvent(new Avalonia.Input.KeyEventArgs
+        {
+            RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent,
+            Key = key,
+            Source = control,
+        });
+    }
+
     public void SetCheck(string automationId, bool value)
     {
         if (TryFind<CheckBox>(automationId, out var check) && check is not null)

@@ -36,6 +36,12 @@ internal static class PlusLoader
                     continue;
                 }
 
+                // Only modules with a public parameterless ctor (skip accidental assignable types).
+                if (type.GetConstructor(Type.EmptyTypes) is null)
+                {
+                    continue;
+                }
+
                 if (Activator.CreateInstance(type) is not ITitaniumPlusModule module)
                 {
                     continue;

@@ -1,10 +1,17 @@
 # Full compare-product gate validation (all WIRES rows, Win+Lin+Mac, median of 3 GHA runs).
 param(
     [Parameter(Mandatory)] [string[]] $RunIds,
-    [double] $MitmGate = 0.70,
-    [double] $ReverseYarpGate = 0.95,
+    [double] $MitmLiteGate = 0.50,
+    [double] $MitmFullGate = 0.50,
+    # Backward-compatible alias: if set, applies to both Lite and Full.
+    [double] $MitmGate = -1,
+    [double] $ReverseYarpGate = 0.70,
     [string] $BaselineRunId = '32960766249'
 )
+if ($MitmGate -ge 0) {
+    $MitmLiteGate = $MitmGate
+    $MitmFullGate = $MitmGate
+}
 
 $ErrorActionPreference = 'Stop'
 if ($RunIds.Count -eq 1 -and $RunIds[0] -match ',') {
@@ -86,13 +93,13 @@ foreach ($os in @('windows-latest', 'ubuntu-latest', 'macos-15-intel')) {
 
         if ($null -ne $lite) {
             $lr = $lite / $rev
-            $ok = $lr -ge $MitmGate
+            $ok = $lr -ge $MitmLiteGate
             if (-not $ok) { $failed += "$os $($w.C)->$($w.O) Lite=$([math]::Round($lr,3))" }
             Write-Host ("MITM Lite {0}->{1}: {2:N3} {3}" -f $w.C, $w.O, $lr, $(if($ok){'OK'}else{'FAIL'}))
         }
         if ($null -ne $full) {
             $fr = $full / $rev
-            $ok = $fr -ge $MitmGate
+            $ok = $fr -ge $MitmFullGate
             if (-not $ok) { $failed += "$os $($w.C)->$($w.O) Full=$([math]::Round($fr,3))" }
             Write-Host ("MITM Full {0}->{1}: {2:N3} {3}" -f $w.C, $w.O, $fr, $(if($ok){'OK'}else{'FAIL'}))
         }

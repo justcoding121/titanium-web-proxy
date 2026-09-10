@@ -1,7 +1,15 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Titanium.Web.Proxy;
 
 namespace Titanium.Inspector.Services;
+
+public enum ThemeMode
+{
+    Automatic,
+    Light,
+    Dark,
+}
 
 public sealed class AutoResponderRuleDto
 {
@@ -10,6 +18,20 @@ public sealed class AutoResponderRuleDto
     public string Body { get; set; } = string.Empty;
     public string ContentType { get; set; } = "text/plain";
     public bool Enabled { get; set; } = true;
+
+    /// <summary>When set, response body is read from this file (Map Local) instead of <see cref="Body"/>.</summary>
+    public string? LocalFilePath { get; set; }
+
+    /// <summary>Optional GraphQL operationName; when set, rule matches only that operation.</summary>
+    public string? GraphQlOperationName { get; set; }
+}
+
+public sealed class MapRemoteRuleDto
+{
+    public string MatchUrl { get; set; } = "*";
+    public string TargetUrl { get; set; } = "http://127.0.0.1/";
+    public bool Enabled { get; set; } = true;
+    public string? GraphQlOperationName { get; set; }
 }
 
 public sealed class InspectorSettings
@@ -18,15 +40,27 @@ public sealed class InspectorSettings
     public DateTimeOffset? LastUpdateCheckUtc { get; set; }
     public string UpdateChannel { get; set; } = "Stable";
 
+    /// <summary>Release tag last applied via in-app update (e.g. 7.0.5-beta). Null when unknown / manual install.</summary>
+    public string? InstalledReleaseTag { get; set; }
+
+    /// <summary>Channel of <see cref="InstalledReleaseTag"/> (Stable or Beta). Null when unknown.</summary>
+    public string? InstalledReleaseChannel { get; set; }
+
     public string BindAddress { get; set; } = "127.0.0.1";
     public int BindPort { get; set; } = 8866;
 
     public bool AutoResponderEnabled { get; set; }
     public List<AutoResponderRuleDto> AutoResponderRules { get; set; } = new();
 
+    public bool MapRemoteEnabled { get; set; }
+    public List<MapRemoteRuleDto> MapRemoteRules { get; set; } = new();
+
     public bool BreakpointEnabled { get; set; }
     public string BreakpointUrlFilter { get; set; } = "*";
     public bool BreakpointOnResponse { get; set; }
+
+    /// <summary>Optional GraphQL operationName for breakpoints.</summary>
+    public string? BreakpointGraphQlOperationName { get; set; }
 
     public string? ScriptOnRequest { get; set; }
     public string? ScriptOnResponse { get; set; }
@@ -53,6 +87,9 @@ public sealed class InspectorSettings
     /// <summary>When false, HTTPS stays opaque CONNECT tunnels (Fiddler-like default).</summary>
     public bool DecryptHttps { get; set; }
 
+    /// <summary>App color theme: follow OS (Automatic), Light, or Dark.</summary>
+    public ThemeMode ThemeMode { get; set; } = ThemeMode.Automatic;
+
     /// <summary>Session grid column widths, order, and sort across launches.</summary>
     public SessionGridLayoutDto? SessionGridLayout { get; set; }
 
@@ -74,13 +111,34 @@ public sealed class InspectorSettings
     /// <summary>Delete spill files older than this many days on startup.</summary>
     public int DiskCacheMaxAgeDays { get; set; } = 7;
 
-    /// <summary>Extra host patterns that skip HTTPS decryption (one pattern per entry; supports *.example.com).</summary>
+    /// <summary>Host patterns that skip HTTPS decryption (tunnel only). Supports *.example.com.</summary>
     public List<string> DecryptSkipHosts { get; set; } = new();
 
     /// <summary>
-    /// When non-empty, only these host patterns are decrypted (built-in bypass hosts still never decrypt).
+    /// Legacy decrypt-only allowlist. Inspector no longer edits or applies this; kept for settings back-compat.
     /// </summary>
     public List<string> DecryptOnlyHosts { get; set; } = new();
+
+    /// <summary>OS system-proxy bypass patterns when System proxy is on (Replace mode — full list).</summary>
+    public List<string> SystemProxyBypassHosts { get; set; } = new();
+
+    /// <summary>When true, localhost uses the proxy (WinINET &lt;-loopback&gt; / Unix NO_PROXY parity).</summary>
+    public bool ProxyLoopback { get; set; } = true;
+
+    /// <summary>
+    /// When true, <see cref="SystemProxyBypassHosts"/> and <see cref="DecryptSkipHosts"/> were seeded
+    /// from factory defaults (or saved by the user). When false, load applies factory seed once.
+    /// </summary>
+    public bool ExclusionsInitialized { get; set; }
+
+    /// <summary>User acknowledged PAC replace warning when enabling System proxy.</summary>
+    public bool WarnedAboutPacReplace { get; set; }
+
+    /// <summary>Optional FileDescriptorSet path for protobuf decode on inspect.</summary>
+    public string? ProtobufDescriptorSetPath { get; set; }
+
+    /// <summary>Active network throttle profile name (<c>None</c>, <c>Slow 3G</c>, …).</summary>
+    public string NetworkThrottleProfile { get; set; } = "None";
 }
 
 public sealed class SettingsService
@@ -114,12 +172,70 @@ public sealed class SettingsService
     }
 
     /// <summary>
+    /// Seeds OS-bypass and tunnel-only lists from <see cref="MitmExclusionDefaults"/> when not yet initialized.
+    /// Persists when seeding changes settings.
+    /// </summary>
+    public bool EnsureExclusionsSeeded()
+    {
+        if (Current.ExclusionsInitialized)
+        {
+            return false;
+        }
+
+        ApplyFactoryExclusionDefaults(Current);
+        Current.ExclusionsInitialized = true;
+        Save();
+        return true;
+    }
+
+    /// <summary>Restores factory OS-bypass and tunnel-only lists (and loopback).</summary>
+    public void ResetExclusionsToFactoryDefaults()
+    {
+        ApplyFactoryExclusionDefaults(Current);
+        Current.DecryptOnlyHosts = [];
+        Current.ExclusionsInitialized = true;
+        Save();
+    }
+
+    public static void ApplyFactoryExclusionDefaults(InspectorSettings settings)
+    {
+        settings.SystemProxyBypassHosts = MitmExclusionDefaults.SystemProxyBypassRules.ToList();
+        settings.DecryptSkipHosts = MitmExclusionDefaults.TunnelOnlyPinningDomains.ToList();
+        settings.ProxyLoopback = true;
+    }
+
+    /// <summary>
+    ///     Adds any factory OS-bypass hosts missing from the saved list (does not remove user entries).
+    ///     Returns true when the list changed.
+    /// </summary>
+    internal static bool MergeMissingFactoryOsBypassHosts(InspectorSettings settings)
+    {
+        settings.SystemProxyBypassHosts ??= [];
+        var changed = false;
+        foreach (var rule in MitmExclusionDefaults.SystemProxyBypassRules)
+        {
+            if (settings.SystemProxyBypassHosts.Any(h =>
+                    string.Equals(h, rule, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            settings.SystemProxyBypassHosts.Add(rule);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    /// <summary>
     /// Replace preferences with factory defaults and write settings.json.
     /// Does not touch the root CA, OS trust stores, or captured sessions / disk body cache.
     /// </summary>
     public void ResetToFactoryDefaults()
     {
         Current = new InspectorSettings();
+        ApplyFactoryExclusionDefaults(Current);
+        Current.ExclusionsInitialized = true;
         Save();
     }
 
@@ -127,7 +243,10 @@ public sealed class SettingsService
     {
         if (!File.Exists(_path))
         {
-            return new InspectorSettings();
+            var fresh = new InspectorSettings();
+            ApplyFactoryExclusionDefaults(fresh);
+            fresh.ExclusionsInitialized = true;
+            return fresh;
         }
 
         try
@@ -135,11 +254,46 @@ public sealed class SettingsService
             var json = File.ReadAllText(_path);
             var loaded = JsonSerializer.Deserialize<InspectorSettings>(json, JsonOptions)
                          ?? new InspectorSettings();
+            if (!loaded.ExclusionsInitialized)
+            {
+                // Migrate: empty lists previously relied on silent Merge of factory defaults.
+                if (loaded.SystemProxyBypassHosts.Count == 0 && loaded.DecryptSkipHosts.Count == 0)
+                {
+                    ApplyFactoryExclusionDefaults(loaded);
+                }
+
+                loaded.ExclusionsInitialized = true;
+                try
+                {
+                    File.WriteAllText(_path, JsonSerializer.Serialize(loaded, JsonOptions));
+                }
+                catch
+                {
+                    // best effort
+                }
+            }
+            else if (MergeMissingFactoryOsBypassHosts(loaded))
+            {
+                // Additive: new factory SSO/identity hosts must land in existing settings.json or
+                // Inspector Replace-mode system proxy omits them.
+                try
+                {
+                    File.WriteAllText(_path, JsonSerializer.Serialize(loaded, JsonOptions));
+                }
+                catch
+                {
+                    // best effort
+                }
+            }
+
             return loaded;
         }
         catch
         {
-            return new InspectorSettings();
+            var fallback = new InspectorSettings();
+            ApplyFactoryExclusionDefaults(fallback);
+            fallback.ExclusionsInitialized = true;
+            return fallback;
         }
     }
 }

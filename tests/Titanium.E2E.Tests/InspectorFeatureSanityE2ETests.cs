@@ -29,7 +29,9 @@ public class InspectorFeatureSanityE2ETests
         var recorder = new RecordingSystemProxyController();
         var interception = new InterceptionService(recorder) { UseInMemoryTrustState = true };
         var dialogs = new ScriptedInspectorDialogs();
-        var vm = new MainWindowViewModel(buffer, registry, updates, settings, interception, dialogs);
+        var pathPicker = new ScriptedInspectorPathPicker();
+        var vm = new MainWindowViewModel(buffer, registry, updates, settings, interception, dialogs, pathPicker);
+        var exportCaPath = Path.Combine(Path.GetTempPath(), "twp-feat-ca-" + Guid.NewGuid().ToString("N") + ".cer");
 
         try
         {
@@ -72,15 +74,30 @@ public class InspectorFeatureSanityE2ETests
             using var origin = new EchoOrigin();
             vm.ComposerMethod = "GET";
             vm.ComposerUrl = origin.BaseUrl + "sanity-composer";
+            // Wait for Composer *completion*. Matching bare "Composer" is wrong: SendComposerAsync
+            // immediately sets "Composer sending…", so the wait would return while ReplayAsync is
+            // still in flight and race ExportCaAsync on StatusText (clobbering "Exported CA").
             vm.SendComposerCommand.Execute(null);
-            await WaitAsync(() =>
-                vm.StatusText.Contains("Composer", StringComparison.OrdinalIgnoreCase) ||
-                vm.StatusText.Contains("HTTP", StringComparison.OrdinalIgnoreCase) ||
-                vm.Sessions.Count > 0);
+            await WaitAsync(
+                () => IsComposerSettled(vm),
+                () => "Composer did not settle. Status=" + vm.StatusText + " sessions=" + vm.Sessions.Count);
 
+            pathPicker.SavePath = exportCaPath;
+            var savesBefore = pathPicker.SaveCalls;
             vm.ExportCaCommand.Execute(null);
-            await Task.Delay(50);
-            Assert.IsFalse(string.IsNullOrWhiteSpace(vm.StatusText));
+            // Prefer durable signals (picker + file). StatusText alone is racy with transient revert
+            // and any concurrent command that calls SetStatus / SetOutcomeStatus.
+            await WaitAsync(
+                () => pathPicker.SaveCalls > savesBefore && File.Exists(exportCaPath),
+                () => "Export CA did not finish. Status=" + vm.StatusText
+                      + " saves=" + pathPicker.SaveCalls
+                      + " exists=" + File.Exists(exportCaPath));
+            Assert.IsTrue(File.Exists(exportCaPath), vm.StatusText);
+            Assert.AreEqual(savesBefore + 1, pathPicker.SaveCalls);
+            Assert.IsNotNull(pathPicker.LastSaveFileTypes);
+            Assert.AreEqual(2, pathPicker.LastSaveFileTypes!.Count);
+            Assert.AreEqual("*.cer", pathPicker.LastSaveFileTypes[0].Pattern);
+            Assert.AreEqual("*.pem", pathPicker.LastSaveFileTypes[1].Pattern);
 
             vm.ClearSessionsCommand.Execute(null);
             await Task.Delay(50);
@@ -89,6 +106,7 @@ public class InspectorFeatureSanityE2ETests
             vm.UntrustCaCommand.Execute(null);
             await WaitAsync(() => dialogs.RemoveRootCaCalls > 0);
             Assert.IsFalse(vm.DecryptHttps);
+            Assert.IsFalse(interception.IsRootTrusted);
 
             vm.ToggleSystemProxyCommand.Execute(null);
             await WaitAsync(() => recorder.RestoreCount >= 1);
@@ -101,6 +119,7 @@ public class InspectorFeatureSanityE2ETests
         {
             try { vm.EnsureShutdown(); } catch { /* ignore */ }
             try { File.Delete(settingsPath); } catch { /* ignore */ }
+            try { File.Delete(exportCaPath); } catch { /* ignore */ }
         }
     }
 
@@ -122,7 +141,7 @@ public class InspectorFeatureSanityE2ETests
             UseInMemoryTrustState = true,
             FailNextUserTrustInstall = true,
         };
-        var dialogs = new ScriptedInspectorDialogs { ElevateRootCaResult = true };
+        var dialogs = new ScriptedInspectorDialogs { TrustRecoveryResult = TrustRecoveryChoice.Primary };
         var vm = new MainWindowViewModel(buffer, registry, updates, settings, interception, dialogs);
 
         try
@@ -132,9 +151,9 @@ public class InspectorFeatureSanityE2ETests
             await WaitAsync(() => interception.IsRunning);
 
             vm.InstallCaCommand.Execute(null);
-            await WaitAsync(() => dialogs.ElevateRootCaCalls >= 1 || interception.IsRootTrusted);
+            await WaitAsync(() => dialogs.TrustRecoveryCalls >= 1 || interception.IsRootTrusted);
 
-            Assert.AreEqual(1, dialogs.ElevateRootCaCalls);
+            Assert.AreEqual(1, dialogs.TrustRecoveryCalls);
             Assert.IsTrue(interception.IsRootTrusted, vm.StatusText);
         }
         finally
@@ -162,7 +181,7 @@ public class InspectorFeatureSanityE2ETests
             UseInMemoryTrustState = true,
             FailNextUserTrustInstall = true,
         };
-        var dialogs = new ScriptedInspectorDialogs { ElevateRootCaResult = false };
+        var dialogs = new ScriptedInspectorDialogs { TrustRecoveryResult = TrustRecoveryChoice.Cancel };
         var vm = new MainWindowViewModel(buffer, registry, updates, settings, interception, dialogs);
 
         try
@@ -172,9 +191,9 @@ public class InspectorFeatureSanityE2ETests
             await WaitAsync(() => interception.IsRunning);
 
             vm.InstallCaCommand.Execute(null);
-            await WaitAsync(() => dialogs.ElevateRootCaCalls >= 1);
+            await WaitAsync(() => dialogs.TrustRecoveryCalls >= 1);
 
-            Assert.AreEqual(1, dialogs.ElevateRootCaCalls);
+            Assert.AreEqual(1, dialogs.TrustRecoveryCalls);
             Assert.IsFalse(interception.IsRootTrusted);
             StringAssert.Contains(vm.StatusText.ToLowerInvariant(), "cancel");
         }
@@ -195,11 +214,20 @@ public class InspectorFeatureSanityE2ETests
             RuntimeInformation.OSDescription);
     }
 
-    private static async Task WaitAsync(Func<bool> condition, int timeoutMs = 15000)
+    private static bool IsComposerSettled(MainWindowViewModel vm)
+    {
+        // Final outcomes from SendComposerAsync — never the in-flight "Composer sending…" busy text.
+        var status = vm.StatusText;
+        return status.Contains("Composer →", StringComparison.Ordinal)
+               || status.Contains("Composer failed", StringComparison.OrdinalIgnoreCase)
+               || vm.Sessions.Count > 0;
+    }
+
+    private static async Task WaitAsync(Func<bool> condition, Func<string>? detail = null, int timeoutMs = 15000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         while (!condition() && DateTime.UtcNow < deadline)
             await Task.Delay(40);
-        Assert.IsTrue(condition(), "Timed out waiting for condition");
+        Assert.IsTrue(condition(), detail?.Invoke() ?? "Timed out waiting for condition");
     }
 }

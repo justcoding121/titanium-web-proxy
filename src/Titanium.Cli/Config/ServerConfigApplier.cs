@@ -37,6 +37,70 @@ internal static class ServerConfigApplier
         ApplyTls(proxy, server.Tls);
         ApplyUpstream(proxy, server.Upstream);
         ApplyCertificateManager(proxy, server.CertificateManager);
+        ApplyDecryptExclusions(proxy, server);
+    }
+
+    /// <summary>
+    ///     After listeners exist: honor config, else default ignore-upstream-cert for explicit MITM.
+    ///     macOS denies CurrentUser\Root writes (Keychain UI); without this, decryptSsl cannot
+    ///     complete HTTPS to loopback/self-signed origins.
+    /// </summary>
+    public static void ApplyIgnoreServerCertificateErrorsAfterListeners(ProxyServer proxy, ServerConfig? server)
+    {
+        if (server?.IgnoreServerCertificateErrors is bool configured)
+        {
+            proxy.IgnoreServerCertificateErrors = configured;
+            return;
+        }
+
+        if (proxy.ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(endPoint => endPoint.DecryptSsl))
+        {
+            proxy.IgnoreServerCertificateErrors = true;
+        }
+    }
+
+    /// <summary>
+    ///     Builds system-proxy settings from config. Null <see cref="ServerConfig.SystemProxyBypassHosts"/>
+    ///     merges factory identity hosts; a present list (including empty) is authoritative (Replace).
+    /// </summary>
+    public static SystemProxySettings CreateSystemProxySettings(ServerConfig? server)
+    {
+        var loopback = server?.ProxyLoopback ?? true;
+        if (server?.SystemProxyBypassHosts is null)
+        {
+            return MitmExclusionDefaults.CreateSystemProxySettings(loopback);
+        }
+
+        return MitmExclusionDefaults.CreateSystemProxySettings(
+            loopback,
+            server.SystemProxyBypassHosts,
+            MitmExclusionMode.Replace);
+    }
+
+    private static void ApplyDecryptExclusions(ProxyServer proxy, ServerConfig server)
+    {
+        if (server.DecryptSkipHosts is null && server.DecryptOnlyHosts is null)
+        {
+            return;
+        }
+
+        var skip = server.DecryptSkipHosts ?? [];
+        var only = server.DecryptOnlyHosts ?? [];
+        foreach (var endPoint in proxy.ProxyEndPoints)
+        {
+            if (endPoint is not ExplicitProxyEndPoint explicitEp)
+            {
+                continue;
+            }
+
+            // Present lists are authoritative — do not re-inject factory SSO/pinning hosts.
+            MitmExclusionDefaults.ApplyDecryptExclusions(
+                explicitEp,
+                () => explicitEp.DecryptSsl,
+                skip,
+                only,
+                MitmExclusionMode.Replace);
+        }
     }
 
     private static void ApplyProtocolFlags(ProxyServer proxy, ServerConfig server)
@@ -80,6 +144,8 @@ internal static class ServerConfigApplier
         {
             proxy.CheckCertificateRevocation = revocation;
         }
+
+        ApplyBool(server.IgnoreServerCertificateErrors, v => proxy.IgnoreServerCertificateErrors = v);
 
         if (!string.IsNullOrWhiteSpace(server.DnsServerEndPoint) &&
             TryParseEndPoint(server.DnsServerEndPoint, out var dns))

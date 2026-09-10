@@ -182,6 +182,10 @@ public class BindEndpointUxTests
 
             Assert.IsTrue(vm.SystemProxy, vm.StatusText);
             Assert.AreEqual(1, recorder.SetCount);
+            StringAssert.Contains(
+                vm.StatusText,
+                "System proxy enabled",
+                "Auto system proxy on start should surface enable guidance, not wipe it with Ready");
 
             vm.EnsureShutdown();
         }

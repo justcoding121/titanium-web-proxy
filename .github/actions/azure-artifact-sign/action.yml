@@ -1,0 +1,47 @@
+name: Azure Artifact Sign
+description: Sign PE/MSI files with Azure Artifact Signing (OIDC via azure/login in the caller)
+
+inputs:
+  files:
+    description: Comma or newline-separated absolute paths to sign
+    required: true
+  endpoint:
+    description: Artifact Signing account endpoint
+    required: true
+  signing-account-name:
+    description: Artifact Signing account name
+    required: true
+  certificate-profile-name:
+    description: Certificate profile name
+    required: true
+  description:
+    description: Authenticode description
+    required: false
+    default: Titanium Web Proxy
+
+runs:
+  using: composite
+  steps:
+    - name: Sign files
+      uses: azure/artifact-signing-action@v2
+      with:
+        endpoint: ${{ inputs.endpoint }}
+        signing-account-name: ${{ inputs.signing-account-name }}
+        certificate-profile-name: ${{ inputs.certificate-profile-name }}
+        files: ${{ inputs.files }}
+        file-digest: SHA256
+        timestamp-rfc3161: http://timestamp.acs.microsoft.com
+        timestamp-digest: SHA256
+        description: ${{ inputs.description }}
+        description-url: https://github.com/justcoding121/titanium-web-proxy
+        # azure/login already established Azure CLI; skip slower credential types.
+        exclude-environment-credential: true
+        exclude-workload-identity-credential: true
+        exclude-managed-identity-credential: true
+        exclude-shared-token-cache-credential: true
+        exclude-visual-studio-credential: true
+        exclude-visual-studio-code-credential: true
+        exclude-azure-cli-credential: false
+        exclude-azure-powershell-credential: true
+        exclude-azure-developer-cli-credential: true
+        exclude-interactive-browser-credential: true

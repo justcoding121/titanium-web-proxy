@@ -29,4 +29,11 @@ internal interface IHeaderListener
     /// <param name="value">Value.</param>
     /// <param name="sensitive">If set to <c>true</c> sensitive.</param>
     void AddHeader(ByteString name, ByteString value, bool sensitive);
+
+    /// <summary>
+    ///     Prefer when the decoder already holds an <see cref="HttpHeader"/> (static-table index).
+    ///     Default copies name/value bytes into a new header via <see cref="AddHeader(ByteString, ByteString, bool)"/>.
+    /// </summary>
+    void AddHeader(HttpHeader header, bool sensitive) =>
+        AddHeader(header.NameData, header.ValueData, sensitive);
 }

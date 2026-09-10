@@ -14,7 +14,7 @@
       <Button x:Name="CancelButton" Content="Cancel" MinWidth="88" IsCancel="True" AutomationProperties.AutomationId="RetentionCancel" />
     </StackPanel>
     <TextBlock x:Name="StatusText" DockPanel.Dock="Bottom" Margin="0,8,0,0" TextWrapping="Wrap"
-               Foreground="#C0392B" AutomationProperties.AutomationId="RetentionStatus" />
+               Foreground="{DynamicResource InspectorErrorTextBrush}" AutomationProperties.AutomationId="RetentionStatus" />
     <ScrollViewer>
       <StackPanel Spacing="14">
         <TextBlock FontWeight="SemiBold" Text="Session list (memory)" />

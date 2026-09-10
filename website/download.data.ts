@@ -17,12 +17,22 @@ export interface DownloadAsset {
 }
 
 export interface ChannelDownloads {
-  /** GitHub release tag, or null when no product zip/MSI release exists for the channel. */
+  /** GitHub release tag, or null when no product zip/MSI/DMG release exists for the channel. */
   tag: string | null
-  cli: Partial<Record<CliRid, DownloadAsset>>
+  cli: Partial<Record<CliRid, DownloadAsset>> & {
+    /** Prefer AppImage / deb / rpm when present (glibc). */
+    appimage?: Partial<Record<'linux-x64' | 'linux-arm64', DownloadAsset>>
+    deb?: Partial<Record<'linux-x64' | 'linux-arm64', DownloadAsset>>
+    rpm?: Partial<Record<'linux-x64' | 'linux-arm64', DownloadAsset>>
+  }
   inspector: {
     msi?: DownloadAsset
     zip?: DownloadAsset
+    /** Prefer DMG when present (macOS). */
+    dmg?: Partial<Record<'osx-x64' | 'osx-arm64', DownloadAsset>>
+    appimage?: Partial<Record<'linux-x64' | 'linux-arm64', DownloadAsset>>
+    deb?: Partial<Record<'linux-x64' | 'linux-arm64', DownloadAsset>>
+    rpm?: Partial<Record<'linux-x64' | 'linux-arm64', DownloadAsset>>
   } & Partial<Record<CliRid, DownloadAsset>>
 }
 
@@ -73,7 +83,9 @@ function hasProductAssets(r: GhRelease): boolean {
     (a) =>
       a.name.startsWith('Titanium.Cli-') ||
       a.name.startsWith('TitaniumInspector-') ||
-      a.name.startsWith('Titanium.Plus-'),
+      a.name.startsWith('Titanium.Plus-') ||
+      a.name.startsWith('titanium-cli') ||
+      a.name.startsWith('titanium-inspector'),
   )
 }
 
@@ -89,13 +101,60 @@ function isBetaRelease(r: GhRelease): boolean {
   )
 }
 
+function ensureNested(
+  out: ChannelDownloads,
+  product: 'cli' | 'inspector',
+  kind: 'appimage' | 'deb' | 'rpm' | 'dmg',
+): Record<string, DownloadAsset> {
+  const bag = out[product] as Record<string, unknown>
+  if (!bag[kind] || typeof bag[kind] !== 'object') bag[kind] = {}
+  return bag[kind] as Record<string, DownloadAsset>
+}
+
 function assignAsset(out: ChannelDownloads, asset: DownloadAsset, name: string): void {
   for (const rid of CLI_RIDS) {
     if (name === `Titanium.Cli-${rid}.zip` && !out.cli[rid]) out.cli[rid] = asset
     if (name === `TitaniumInspector-${rid}.zip` && !out.inspector[rid]) out.inspector[rid] = asset
   }
+
   if (name === 'TitaniumInspector-win-x64.msi' && !out.inspector.msi) out.inspector.msi = asset
   if (name === 'TitaniumInspector-win-x64.zip' && !out.inspector.zip) out.inspector.zip = asset
+
+  // Mac DMG
+  for (const rid of ['osx-arm64', 'osx-x64'] as const) {
+    if (name === `TitaniumInspector-${rid}.dmg`) {
+      const dmg = ensureNested(out, 'inspector', 'dmg')
+      if (!dmg[rid]) dmg[rid] = asset
+    }
+  }
+
+  // Linux AppImage / deb / rpm (glibc only)
+  for (const rid of ['linux-x64', 'linux-arm64'] as const) {
+    if (name === `TitaniumInspector-${rid}.AppImage`) {
+      const m = ensureNested(out, 'inspector', 'appimage')
+      if (!m[rid]) m[rid] = asset
+    }
+    if (name === `Titanium.Cli-${rid}.AppImage`) {
+      const m = ensureNested(out, 'cli', 'appimage')
+      if (!m[rid]) m[rid] = asset
+    }
+    if (name === `TitaniumInspector-${rid}.deb`) {
+      const m = ensureNested(out, 'inspector', 'deb')
+      if (!m[rid]) m[rid] = asset
+    }
+    if (name === `Titanium.Cli-${rid}.deb`) {
+      const m = ensureNested(out, 'cli', 'deb')
+      if (!m[rid]) m[rid] = asset
+    }
+    if (name === `TitaniumInspector-${rid}.rpm`) {
+      const m = ensureNested(out, 'inspector', 'rpm')
+      if (!m[rid]) m[rid] = asset
+    }
+    if (name === `Titanium.Cli-${rid}.rpm`) {
+      const m = ensureNested(out, 'cli', 'rpm')
+      if (!m[rid]) m[rid] = asset
+    }
+  }
 }
 
 function channelFromRelease(r: GhRelease): ChannelDownloads {

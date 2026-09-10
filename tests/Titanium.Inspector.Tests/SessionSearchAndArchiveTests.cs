@@ -157,8 +157,8 @@ public class SessionSearchAndArchiveTests
             {
                 new() { Id = 9, Method = "GET", Url = "https://example/" },
             };
-            await SessionArchive.ExportNativeArchiveAsync(sessions, path);
-            var imported = await SessionArchive.ImportNativeArchiveAsync(path);
+            await SessionArchive.ExportNativeArchiveAsync(sessions, path, CancellationToken.None);
+            var imported = await SessionArchive.ImportNativeArchiveAsync(path, CancellationToken.None);
             Assert.AreEqual(1, imported.Count);
             Assert.AreEqual(9, imported[0].Id);
         }
@@ -197,8 +197,8 @@ public class SessionSearchAndArchiveTests
                 },
             };
 
-            await SessionArchive.ExportHarAsync(sessions, path);
-            var imported = await SessionArchive.ImportHarAsync(path);
+            await SessionArchive.ExportHarAsync(sessions, path, CancellationToken.None);
+            var imported = await SessionArchive.ImportHarAsync(path, CancellationToken.None);
             Assert.AreEqual(1, imported.Count);
             Assert.AreEqual("POST", imported[0].Method);
             Assert.AreEqual("https://api.example/v1?q=1", imported[0].Url);
@@ -352,5 +352,185 @@ public class SessionSearchAndArchiveTests
 
         var tunnel = new SessionSnapshot { Url = "https://t", IsTunnel = true };
         Assert.IsTrue(SessionSearch.Matches(tunnel, "is:tunnel"));
+    }
+
+    [TestMethod]
+    public void BodySearch_MissesSpilledBodies_AndScopeHintSurfaces()
+    {
+        var hot = new SessionSnapshot
+        {
+            Id = 1,
+            Url = "https://a/",
+            RequestBodyText = "secret-hot",
+            BodiesOnDisk = false,
+        };
+        var spilled = new SessionSnapshot
+        {
+            Id = 2,
+            Url = "https://b/",
+            RequestBodyText = null,
+            ResponseBodyText = null,
+            BodiesOnDisk = true,
+        };
+
+        Assert.IsTrue(SessionSearch.Matches(hot, "body:secret-hot"));
+        Assert.IsFalse(SessionSearch.Matches(spilled, "body:secret-hot"));
+        Assert.IsTrue(SessionSearch.HasBodyToken("host:a body:secret"));
+        Assert.IsFalse(SessionSearch.HasBodyToken("host:a"));
+
+        var hint = SessionSearch.FormatBodySearchScopeHint("body:secret", spilledCount: 2);
+        Assert.AreEqual("body search: in-memory only, 2 on disk skipped", hint);
+        Assert.IsNull(SessionSearch.FormatBodySearchScopeHint("host:a", spilledCount: 2));
+        Assert.IsNull(SessionSearch.FormatBodySearchScopeHint("body:x", spilledCount: 0));
+
+        var sessions = new[] { hot, spilled };
+        var filtered = SessionSearch.Filter(sessions, "body:secret-hot").ToList();
+        Assert.AreEqual(1, filtered.Count);
+        Assert.AreEqual(1, filtered[0].Id);
+    }
+
+    [TestMethod]
+    public void BuildSessionCountText_IncludesSpillBodyScopeAndRetentionHints()
+    {
+        Assert.AreEqual("Sessions: 3", SessionSearch.BuildSessionCountText(3, 3, null, 0, 0, null));
+        Assert.AreEqual(
+            "Sessions: 3 (2 bodies on disk)",
+            SessionSearch.BuildSessionCountText(3, 3, "", 2, 0, null));
+
+        var withBody = SessionSearch.BuildSessionCountText(
+            visibleCount: 0,
+            totalCount: 10,
+            searchQuery: "body:needle",
+            spilledCount: 4,
+            retentionEvictedTotal: 0,
+            oldestStartedUtc: null);
+        Assert.AreEqual(
+            "Sessions: 0 / 10 (4 bodies on disk) · body search: in-memory only, 4 on disk skipped",
+            withBody);
+
+        var oldest = new DateTimeOffset(2026, 9, 2, 19, 2, 0, TimeSpan.Zero);
+        var withRetention = SessionSearch.BuildSessionCountText(
+            visibleCount: 0,
+            totalCount: 50,
+            searchQuery: "host:missing",
+            spilledCount: 0,
+            retentionEvictedTotal: 120,
+            oldestStartedUtc: oldest);
+        StringAssert.Contains(withRetention, "Sessions: 0 / 50");
+        StringAssert.Contains(withRetention, "since ");
+        StringAssert.Contains(withRetention, "no matches in current list · 120 removed by retention");
+
+        var bodyPlusRetention = SessionSearch.BuildSessionCountText(
+            visibleCount: 0,
+            totalCount: 10,
+            searchQuery: "body:x",
+            spilledCount: 3,
+            retentionEvictedTotal: 5,
+            oldestStartedUtc: oldest);
+        StringAssert.Contains(bodyPlusRetention, "body search: in-memory only, 3 on disk skipped");
+        StringAssert.Contains(bodyPlusRetention, "5 removed by retention");
+        StringAssert.Contains(bodyPlusRetention, "since ");
+    }
+
+    [TestMethod]
+    public async Task Archive_CanceledToken_ThrowsBeforeWriteOrDuringRead()
+    {
+        var harPath = Path.Combine(Path.GetTempPath(), $"twp-har-ct-{Guid.NewGuid():N}.har");
+        var zipPath = Path.Combine(Path.GetTempPath(), $"twp-zip-ct-{Guid.NewGuid():N}.zip");
+        var sessions = new List<SessionSnapshot>
+        {
+            new() { Id = 3, Method = "GET", Url = "https://cancel.example/" },
+        };
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        try
+        {
+            await Assert.ThrowsExactlyAsync<OperationCanceledException>(
+                () => SessionArchive.ExportHarAsync(sessions, harPath, cts.Token));
+            Assert.IsFalse(File.Exists(harPath));
+
+            await Assert.ThrowsExactlyAsync<OperationCanceledException>(
+                () => SessionArchive.ExportNativeArchiveAsync(sessions, zipPath, cts.Token));
+            Assert.IsFalse(File.Exists(zipPath));
+
+            await SessionArchive.ExportHarAsync(sessions, harPath, CancellationToken.None);
+            await SessionArchive.ExportNativeArchiveAsync(sessions, zipPath, CancellationToken.None);
+
+            await Assert.ThrowsExactlyAsync<TaskCanceledException>(
+                () => SessionArchive.ImportHarAsync(harPath, cts.Token));
+            await Assert.ThrowsExactlyAsync<OperationCanceledException>(
+                () => SessionArchive.ImportNativeArchiveAsync(zipPath, cts.Token));
+        }
+        finally
+        {
+            if (File.Exists(harPath))
+            {
+                File.Delete(harPath);
+            }
+
+            if (File.Exists(zipPath))
+            {
+                File.Delete(zipPath);
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task ImportHar_SkipsMalformedEntries_AndGuessMimeFromHeaders()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-har-edge-" + Guid.NewGuid().ToString("N") + ".har");
+        var zip = Path.Combine(Path.GetTempPath(), "twp-zip-empty-" + Guid.NewGuid().ToString("N") + ".zip");
+        try
+        {
+            File.WriteAllText(path, """
+                {"log":{"entries":[
+                  {},
+                  {"request":{"method":"GET","url":"not-absolute"}},
+                  {"request":{"method":"POST","url":"https://edge.test/q?a&b=1","headers":[{"name":"H","value":"v"}],"postData":{"text":"body","mimeType":""}},
+                   "response":{"status":204,"headers":[{"name":"Content-Type","value":"text/plain"}],"content":{"text":"","mimeType":""}},
+                   "timings":{"send":1,"wait":2,"receive":3},"startedDateTime":"not-a-date"}
+                ]}}
+                """);
+            var imported = await SessionArchive.ImportHarAsync(path, CancellationToken.None);
+            Assert.IsTrue(imported.Count >= 1);
+            Assert.IsTrue(imported.Exists(s => s.Url.Contains("edge.test", StringComparison.Ordinal)));
+
+            await SessionArchive.ExportHarAsync(
+            [
+                new SessionSnapshot
+                {
+                    Method = "GET",
+                    Url = "https://mime.test/",
+                    ResponseHeadersText = "Content-Type: image/png\r\n",
+                },
+            ], path);
+            var round = await SessionArchive.ImportHarAsync(path);
+            Assert.AreEqual(1, round.Count);
+
+            using (var fs = File.Create(zip))
+            using (var archive = new System.IO.Compression.ZipArchive(fs, System.IO.Compression.ZipArchiveMode.Create))
+            {
+                archive.CreateEntry("readme.txt");
+            }
+
+            var empty = await SessionArchive.ImportNativeArchiveAsync(zip);
+            Assert.AreEqual(0, empty.Count);
+
+            Assert.AreEqual(0, SessionStore.EstimateInMemoryBodyBytes(new SessionSnapshot { BodiesOnDisk = true, RequestBodyText = "x" }));
+            Assert.IsTrue(SessionStore.EstimateInMemoryBodyBytes(new SessionSnapshot
+            {
+                RequestBodyBytes = [1, 2],
+                ResponseBodyBytes = [3],
+                RequestBodyText = "ab",
+                ResponseBodyText = "cd",
+            }) > 0);
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+            if (File.Exists(zip))
+                File.Delete(zip);
+        }
     }
 }

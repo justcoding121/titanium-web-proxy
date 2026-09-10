@@ -55,6 +55,7 @@ internal static class RunTime
     [SupportedOSPlatformGuard("windows")]
     public static bool IsUwpOnWindows => IsWindows && UwpHelper.IsRunningAsUwp();
 
+    [SupportedOSPlatformGuard("macos")]
     public static bool IsMac => IsRunningOnMac;
 
     private static bool? _isSocketReuseAvailable;

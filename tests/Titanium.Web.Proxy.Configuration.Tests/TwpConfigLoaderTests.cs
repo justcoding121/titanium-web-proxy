@@ -1,4 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Abstractions.Clusters;
+using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Configuration;
 using Titanium.Web.Proxy.Configuration.Models;
 using Titanium.Web.Proxy.Configuration.Parsers;
@@ -88,6 +90,56 @@ public class TwpConfigLoaderTests
         var config = JsonReverseProxyDocument.Parse(json);
         Assert.AreEqual("backend", config.Routes[0].ClusterId);
         Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count);
+    }
+
+    [TestMethod]
+    public void JsonReverseProxyDocument_ParsesAlgorithmsTransformsAndFile()
+    {
+        var json = """
+            {
+              "listeners": [{ "host": "127.0.0.1", "port": 9, "decryptSsl": true, "enableHttp2": true, "enableHttp3": false }],
+              "clusters": [
+                { "id": "rand", "loadBalancingPolicy": "random", "destinations": [{ "address": "10.0.0.1" }] },
+                { "id": "least", "algorithm": "least_requests", "destinations": [{ "id": "d", "address": "10.0.0.2", "port": 443, "useHttps": true, "weight": 2 }] },
+                { "id": "time", "loadBalancingPolicy": "leastresponsetime", "destinations": [{ "address": "10.0.0.3" }] }
+              ],
+              "routes": [
+                {
+                  "clusterId": "rand",
+                  "order": 2,
+                  "match": { "hosts": ["a.test"], "methods": ["POST"], "path": "/exact", "pathKind": "exact" },
+                  "transforms": [
+                    { "kind": "PathPrefix", "parameters": { "prefix": "/gw" } },
+                    { "kind": "  ", "parameters": {} }
+                  ]
+                },
+                {
+                  "id": "tmpl",
+                  "clusterId": "least",
+                  "match": { "host": "b.test", "method": "GET", "path": "/t/{id}", "pathKind": "template" }
+                }
+              ]
+            }
+            """;
+        var config = JsonReverseProxyDocument.Parse(json);
+        Assert.AreEqual(LoadBalanceAlgorithm.Random, config.Clusters[0].Algorithm);
+        Assert.AreEqual(LoadBalanceAlgorithm.LeastRequests, config.Clusters[1].Algorithm);
+        Assert.AreEqual(LoadBalanceAlgorithm.LeastTime, config.Clusters[2].Algorithm);
+        Assert.AreEqual(PathMatchKind.Exact, config.Routes[0].Match.PathKind);
+        Assert.AreEqual(PathMatchKind.Template, config.Routes[1].Match.PathKind);
+        Assert.AreEqual("POST", config.Routes[0].Match.Method);
+        Assert.AreEqual(1, config.Routes[0].Transforms!.Count);
+        var path = Path.Combine(Path.GetTempPath(), "twp-rp-" + Guid.NewGuid().ToString("N") + ".json");
+        File.WriteAllText(path, json);
+        try
+        {
+            var fromFile = JsonReverseProxyDocument.ParseFile(path);
+            Assert.AreEqual(3, fromFile.Clusters.Count);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { /* ignore */ }
+        }
     }
 
     [TestMethod]

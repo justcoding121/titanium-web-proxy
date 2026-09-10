@@ -1,6 +1,7 @@
 using Titanium.Plus.ControlPlane;
 using Titanium.Plus.Dashboard;
 using Titanium.Plus.Discovery;
+using Titanium.Plus.Grpc;
 using Titanium.Plus.Observability;
 using Titanium.Plus.Operations;
 using Titanium.Plus.Resilience;
@@ -62,5 +63,8 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
         _ = AccessSecurity.TryStart(context, options);
         _ = WafGuard.TryStart(context, options);
         _ = ResilienceController.TryStart(context, options);
+        _ = CircuitBreakerController.TryStart(context, options);
+        _ = IdempotentRetryGuard.TryStart(context, options);
+        _ = GrpcTranscodeGuard.TryStart(context, options);
     }
 }

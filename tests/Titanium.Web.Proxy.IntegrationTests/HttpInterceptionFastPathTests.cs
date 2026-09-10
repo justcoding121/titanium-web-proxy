@@ -525,4 +525,34 @@ public class HttpInterceptionFastPathTests
             proxy.Dispose();
         }
     }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task H1_Reverse_ViaHeader_SkippedOnFastPath_AppliedWhenIntercepting()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+        string? seenVia = null;
+        server.HandleRequest(context =>
+        {
+            seenVia = context.Request.Headers.TryGetValue("Via", out var via) ? via.ToString() : null;
+            return context.Response.WriteAsync("via-ok");
+        });
+
+        var proxy = testSuite.GetReverseProxy();
+        proxy.ViaHeaderPseudonym = "twp-test";
+        var endpoint = proxy.ProxyEndPoints.OfType<TransparentProxyEndPoint>().First();
+        endpoint.ForwardHost = "127.0.0.1";
+        endpoint.ForwardPort = new Uri(server.ListeningHttpUrl).Port;
+
+        using var client = testSuite.GetReverseProxyClient();
+        var fast = await client.GetAsync($"http://127.0.0.1:{proxy.ProxyEndPoints[0].Port}/fast");
+        Assert.AreEqual(HttpStatusCode.OK, fast.StatusCode);
+        Assert.IsTrue(string.IsNullOrEmpty(seenVia));
+
+        proxy.BeforeRequest += (_, _) => Task.CompletedTask;
+        var intercepted = await client.GetAsync($"http://127.0.0.1:{proxy.ProxyEndPoints[0].Port}/intercept");
+        Assert.AreEqual(HttpStatusCode.OK, intercepted.StatusCode);
+        StringAssert.Contains(seenVia ?? string.Empty, "twp-test");
+    }
 }

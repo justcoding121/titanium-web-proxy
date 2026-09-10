@@ -39,6 +39,12 @@ public class SystemProxySettings
     public SystemProxyBypassRuleMode BypassRuleMode { get; set; } = SystemProxyBypassRuleMode.Merge;
 
     /// <summary>
+    ///     Builds the WinINET-style semicolon-separated bypass list that would be applied to the OS.
+    /// </summary>
+    public string BuildProxyOverride(string? currentProxyOverride) =>
+        BuildProxyOverrideInternal(currentProxyOverride);
+
+    /// <summary>
     ///     Validates the configured bypass rules, throwing when any rule is malformed.
     /// </summary>
     internal void Validate()
@@ -54,7 +60,7 @@ public class SystemProxySettings
         }
     }
 
-    internal string BuildProxyOverride(string? currentProxyOverride)
+    internal string BuildProxyOverrideInternal(string? currentProxyOverride)
     {
         var result = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

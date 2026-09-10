@@ -226,7 +226,10 @@ public sealed class ProxyResourceLimits
             MaxOpenHeaderBlockDuration = maxOpenHeaderBlockDuration,
             ConnectionPoolingEnabled = connectionPoolingEnabled,
             MaxCachedConnectionsPerHost = maxCachedConnectionsPerHost,
-            MaxOriginHttp2ConnectionsPerAuthority = 8,
+            // SoftPick SoftGrow=SoftCap. Offer-once (seed only when pool empty) + MaxOrigin=1:
+            // H1 ALPN Offer flood ~0.89×; MaxOrigin=1 SoftPick long ~0.95× H1 TLS. SoftGrow=8
+            // cleartext MaxOrigin=8 Offer-once regresses local H3→h2c. SoftGrow=16 Offer-once rejected.
+            MaxOriginHttp2ConnectionsPerAuthority = 1,
             MaxCertificateCacheEntries = maxCertificateCacheEntries
         };
     }

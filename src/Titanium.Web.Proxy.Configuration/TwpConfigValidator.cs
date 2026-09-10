@@ -155,6 +155,25 @@ public static class TwpConfigValidator
         ValidatePolicyModes(server.PolicyModes, errors);
         ValidateUpstream(server.Upstream, errors);
         ValidateCertificateManager(server.CertificateManager, errors);
+        ValidateAccessLog(server.AccessLog, errors);
+    }
+
+    private static void ValidateAccessLog(AccessLogConfig? accessLog, List<string> errors)
+    {
+        if (accessLog is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(accessLog.Path))
+        {
+            errors.Add("server.accessLog.path is required when accessLog is set.");
+        }
+
+        if (accessLog.SampleRate is < 0 or > 1)
+        {
+            errors.Add("server.accessLog.sampleRate must be between 0 and 1.");
+        }
     }
 
     private static void ValidateTimeouts(TimeoutsConfig? timeouts, List<string> errors)

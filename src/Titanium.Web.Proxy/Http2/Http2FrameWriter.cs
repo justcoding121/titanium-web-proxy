@@ -30,6 +30,8 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
     private readonly SemaphoreSlim? writeLock;
     private readonly CancellationTokenSource cts = new();
     private readonly Task drainTask;
+    // SingleReader drain: reuse coalesce scratch (avoids new ArraySegment[64] under multiplex).
+    private readonly ArraySegment<byte>[] coalesceFrames = new ArraySegment<byte>[CoalesceMaxFrames];
     private int disposed;
 
     public Http2FrameWriter(System.IO.Stream output, SemaphoreSlim? writeLock = null)
@@ -40,6 +42,8 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
         {
             SingleReader = true,
             SingleWriter = false,
+            // Keep ASC=false: EnqueueRented runs under origin writeLock; ASC=true MaxOrigin=1
+            // SoftPick long A/B ~0.78× H1 / ~0.88× H3 — sync drain under writeLock regresses.
             AllowSynchronousContinuations = false
         });
         drainTask = Task.Run(() => DrainAsync(cts.Token), cts.Token);
@@ -70,10 +74,33 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
         {
             while (await reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
             {
+                // MaxOrigin=1 SoftPick: writeLock serializes EnqueueRented then Release; the drain
+                // often wakes after a single HEADERS. Brief spin lets the next producer enqueue so
+                // coalesce can batch SecureTransport writes (YARP/SHH contiguous outgoing buffer).
+                var spinner = new SpinWait();
+                while (!spinner.NextSpinWillYield)
+                {
+                    if (reader.TryPeek(out _))
+                        break;
+                    spinner.SpinOnce();
+                }
+
                 while (reader.TryRead(out var first))
                 {
                     try
                     {
+                        // Second grace after taking first frame — next writeLock holder may enqueue.
+                        if (!reader.TryPeek(out _))
+                        {
+                            spinner = new SpinWait();
+                            while (!spinner.NextSpinWillYield)
+                            {
+                                if (reader.TryPeek(out _))
+                                    break;
+                                spinner.SpinOnce();
+                            }
+                        }
+
                         if (!reader.TryPeek(out _))
                         {
                             await WriteLockedAsync(first.AsMemory(), cancellationToken).ConfigureAwait(false);
@@ -82,7 +109,7 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
                         }
 
                         var total = first.Count;
-                        var frames = new ArraySegment<byte>[CoalesceMaxFrames];
+                        var frames = coalesceFrames;
                         frames[0] = first;
                         var count = 1;
                         while (count < CoalesceMaxFrames
@@ -172,14 +199,14 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
         channel.Writer.TryComplete();
         try
         {
-            await drainTask.WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None).ConfigureAwait(false);
+            await drainTask.WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None).ConfigureAwait(false); // NOSONAR S8949 -- drain queued frames; cts.Token would abort if already cancelled
         }
         catch (TimeoutException)
         {
             try { await cts.CancelAsync(); }
             catch { /* ignore */ }
 
-            try { await drainTask.WaitAsync(TimeSpan.FromSeconds(1), CancellationToken.None).ConfigureAwait(false); }
+            try { await drainTask.WaitAsync(TimeSpan.FromSeconds(1), CancellationToken.None).ConfigureAwait(false); } // NOSONAR S8949 -- drain after Cancel; cts is already cancelled
             catch { /* drain may fault if socket already closed */ }
         }
         catch

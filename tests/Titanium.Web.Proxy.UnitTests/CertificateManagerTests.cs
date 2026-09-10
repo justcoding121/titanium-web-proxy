@@ -897,6 +897,50 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         /// <summary>
+        ///     Unix Keychain/NSS/elevate must not run when interactive Root UI is suppressed
+        ///     (unit ModuleInit sets flag + TITANIUM_SKIP_ROOT_STORE_UI).
+        /// </summary>
+        [TestMethod]
+        public void SuppressInteractiveRootStoreMutations_SkipsUnixOsSslTrustPath()
+        {
+            if (RunTime.IsWindows)
+                Assert.Inconclusive("Unix OS SSL trust skip path only.");
+
+            Assert.IsTrue(CertificateManager.AreInteractiveRootStoreMutationsSuppressed,
+                "Unit ModuleInit must keep interactive Root mutations suppressed");
+
+            const string cn = "Titanium UnitTest Suppress Unix SSL CA";
+            using var mgr = new CertificateManager(cn, "TitaniumUnitTest", false, false, false,
+                NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastle
+            };
+            Assert.IsTrue(mgr.CreateRootCertificate(false));
+
+            mgr.TrustRootCertificate(machineTrusted: false);
+            Assert.IsNotNull(mgr.LastOsTrustResult);
+            Assert.IsFalse(mgr.LastOsTrustResult!.Succeeded);
+            Assert.AreEqual(CertificateOsTrustKind.Cancelled, mgr.LastOsTrustResult.Kind);
+            StringAssert.Contains(mgr.LastOsTrustResult.Message, "suppressed");
+
+            var nss = mgr.InstallNssCertutilAndRetryUserTrust();
+            Assert.IsFalse(nss.Succeeded);
+            Assert.AreEqual(CertificateOsTrustKind.Cancelled, nss.Kind);
+        }
+
+        [TestMethod]
+        public void ModuleInit_AreInteractiveRootStoreMutationsSuppressed()
+        {
+            Assert.IsTrue(
+                CertificateManager.AreInteractiveRootStoreMutationsSuppressed,
+                "Unit ModuleInit must set SuppressInteractiveRootStoreMutations and/or TITANIUM_SKIP_ROOT_STORE_UI");
+            Assert.AreEqual(
+                "1",
+                Environment.GetEnvironmentVariable("TITANIUM_SKIP_ROOT_STORE_UI"),
+                "Unit suites must set TITANIUM_SKIP_ROOT_STORE_UI=1 so clearing the static flag still cannot open OS cert UI");
+        }
+
+        /// <summary>
         /// Only DefaultWindows is rewritten off Windows; BouncyCastleFast must remain selectable
         /// on Linux/macOS (it is fully managed BouncyCastle).
         /// </summary>

@@ -67,7 +67,7 @@ internal static class ReverseProxySessionDispatch
 
         if (route.Transforms is { Count: > 0 })
         {
-            ApplyTransforms(options, route.Transforms, request);
+            ApplyTransforms(options, route.Transforms, request, session);
         }
 
         return true;
@@ -132,7 +132,8 @@ internal static class ReverseProxySessionDispatch
     private static void ApplyTransforms(
         Titanium.Web.Proxy.Abstractions.ReverseProxyOptions options,
         IReadOnlyList<TransformConfig> transforms,
-        Request request)
+        Request request,
+        SessionEventArgsBase session)
     {
         var engine = options.TransformEngine ?? new TransformEngine();
         var path = request.RequestUriString8.GetString();
@@ -151,9 +152,51 @@ internal static class ReverseProxySessionDispatch
             request.RequestUriString8 = (ByteString)ctx.Path;
         }
 
+        foreach (var name in ctx.HeadersToRemove)
+        {
+            request.Headers.RemoveHeader(name);
+        }
+
         foreach (var pair in ctx.Headers)
         {
             request.Headers.SetOrAddHeaderValue(pair.Key, pair.Value);
+        }
+
+        if (ctx.ResponseHeadersToSet.Count > 0 || ctx.ResponseHeadersToRemove.Count > 0)
+        {
+            session.ResponseHeaderTransformPlan =
+                new TransformResponseHeaderPlan(ctx.ResponseHeadersToSet, ctx.ResponseHeadersToRemove);
+        }
+    }
+
+    /// <summary>Applies staged response header transforms when present.</summary>
+    public static void ApplyResponseTransforms(SessionEventArgsBase session)
+    {
+        if (session.ResponseHeaderTransformPlan is TransformResponseHeaderPlan plan)
+        {
+            plan.Apply(session.HttpClient.Response.Headers);
+        }
+    }
+}
+
+/// <summary>Stashed on the session so response transforms apply without an always-on middleware.</summary>
+internal sealed class TransformResponseHeaderPlan(
+    Dictionary<string, string> set,
+    HashSet<string> remove)
+{
+    public Dictionary<string, string> Set { get; } = set;
+    public HashSet<string> Remove { get; } = remove;
+
+    public void Apply(HeaderCollection headers)
+    {
+        foreach (var name in Remove)
+        {
+            headers.RemoveHeader(name);
+        }
+
+        foreach (var pair in Set)
+        {
+            headers.SetOrAddHeaderValue(pair.Key, pair.Value);
         }
     }
 }

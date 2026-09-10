@@ -187,7 +187,7 @@ public static class ProxyResults
         return Stream(status, contentType, async (stream, ct) =>
         {
             await using var fileStream = new FileStream(
-                path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
+                path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, bufferSize: 81920, useAsync: true);
             await fileStream.CopyToAsync(stream, ct).ConfigureAwait(false);
         }, fileInfo.Length);
     }

@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -504,5 +505,201 @@ public class HandlerAndProtocolHelperCoverageTests
             buf.ToArray(), id, "example.com", 443);
         Assert.IsNotNull(result);
         Assert.AreEqual(443, result.AltPort);
+    }
+
+    [TestMethod]
+    public void H1TerminateClientRequestedClose_ClassifiesKeepAliveAndClose()
+    {
+        var method = typeof(ProxyServer).GetMethod("H1TerminateClientRequestedClose", PrivateStatic)!;
+        var keep = new Request { HttpVersion = HttpHeader.Version11 };
+        keep.Headers.AddHeader("Connection", "keep-alive");
+        Assert.IsFalse((bool)method.Invoke(null, [keep])!);
+
+        var close = new Request { HttpVersion = HttpHeader.Version11 };
+        close.Headers.AddHeader("Connection", "close");
+        Assert.IsTrue((bool)method.Invoke(null, [close])!);
+
+        var http10 = new Request { HttpVersion = HttpHeader.Version10 };
+        Assert.IsTrue((bool)method.Invoke(null, [http10])!);
+        http10.Headers.AddHeader("Connection", "keep-alive");
+        Assert.IsFalse((bool)method.Invoke(null, [http10])!);
+    }
+
+#pragma warning disable TWP001
+    [TestMethod]
+    public void Http3MitmUnchangedLite_GatesWithoutLiveQuic()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        using var session = MakeSession(proxy);
+        using var cts = new CancellationTokenSource();
+        var auth = new BeforeQuicAuthenticateEventArgs(
+            proxy, cts, "sni.test", "origin.test", 443,
+            new IPEndPoint(IPAddress.Loopback, 1), new IPEndPoint(IPAddress.Loopback, 2));
+        auth.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+        var request = session.HttpClient.Request;
+        request.Method = "GET";
+        request.RequestUriString = "/";
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(request.Headers);
+        var flags = PrivateStatic;
+        var h1 = typeof(Http3RequestStream).GetMethod("TryMitmUnchangedH3ToH1Lite", flags)!;
+        var h3 = typeof(Http3RequestStream).GetMethod("TryMitmUnchangedH3ToH3Lite", flags)!;
+        var match = typeof(Http3RequestStream).GetMethod("MitmUnchangedLiteRequestMatches", flags)!;
+        var path = request.RequestUriString8;
+        var authority = request.Authority;
+        var h1Result = (bool)h1.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"])!;
+        Assert.IsTrue(h1Result);
+        auth.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;
+        var h3Result = (bool)h3.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"])!;
+        Assert.IsTrue(h3Result);
+        var matchPost = (bool)match.Invoke(null, [session, request, baseline, "POST", path, authority, "POST"])!;
+        Assert.IsFalse(matchPost);
+        request.CancelRequest = true;
+        Assert.IsFalse((bool)match.Invoke(null, [session, request, baseline, "GET", path, authority, "GET"])!);
+        request.CancelRequest = false;
+        request.IsBodyRead = true;
+        Assert.IsFalse((bool)match.Invoke(null, [session, request, baseline, "GET", path, authority, "GET"])!);
+        request.IsBodyRead = false;
+        session.IsFastPath = true;
+        Assert.IsFalse((bool)h1.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"])!);
+    }
+#pragma warning restore TWP001
+
+    [TestMethod]
+    public void TransparentClientHandler_ResolveInboundHttp2CleartextPort_Branches()
+    {
+        var resolve = typeof(ProxyServer).GetMethod("ResolveInboundHttp2CleartextPort", PrivateStatic)!;
+        var clear = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false) { ForwardCleartext = true };
+        var tls = new TransparentProxyEndPoint(IPAddress.Loopback, 0, true) { ForwardCleartext = false };
+        var fwd = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false) { ForwardPort = 9443 };
+
+        Assert.AreEqual(8080, (int)resolve.Invoke(null, ["socks.host", 8080, clear])!);
+        Assert.AreEqual(9443, (int)resolve.Invoke(null, [null, 1, fwd])!);
+        Assert.AreEqual(80, (int)resolve.Invoke(null, [null, 1, clear])!);
+        Assert.AreEqual(443, (int)resolve.Invoke(null, [null, 1, tls])!);
+    }
+
+    [TestMethod]
+    public async Task TransparentClientHandler_ConsumeHttp2Preface_ValidAndInvalid()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var consume = typeof(ProxyServer).GetMethod("ConsumeHttp2ConnectionPrefaceAsync", PrivateStatic)!;
+        var valid = Encoding.ASCII.GetBytes("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n");
+        await using (var ms = new MemoryStream(valid))
+        {
+            var conn = new TcpClientConnection(proxy, new System.Net.Sockets.Socket(
+                System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Stream,
+                System.Net.Sockets.ProtocolType.Tcp));
+            var clientStream = new HttpClientStream(proxy, conn, ms, proxy.BufferPool, CancellationToken.None);
+            await (Task)consume.Invoke(null, [clientStream, CancellationToken.None])!;
+        }
+
+        await using (var bad = new MemoryStream(Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\n")))
+        {
+            var conn = new TcpClientConnection(proxy, new System.Net.Sockets.Socket(
+                System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Stream,
+                System.Net.Sockets.ProtocolType.Tcp));
+            var clientStream = new HttpClientStream(proxy, conn, bad, proxy.BufferPool, CancellationToken.None);
+            await Assert.ThrowsExactlyAsync<InvalidDataException>(async () =>
+                await (Task)consume.Invoke(null, [clientStream, CancellationToken.None])!);
+        }
+    }
+
+    [TestMethod]
+    public void TcpConnectionFactory_PreviewToString_EmptyAndContent()
+    {
+        var preview = typeof(TcpConnectionFactory).GetMethod("PreviewToString", PrivateStatic)!;
+        using var empty = new MemoryStream();
+        Assert.IsNull(preview.Invoke(null, [empty]));
+
+        using var content = new MemoryStream();
+        content.Write(Encoding.UTF8.GetBytes("preview-body"));
+        Assert.AreEqual("preview-body", (string?)preview.Invoke(null, [content]));
+    }
+
+    [TestMethod]
+    public void CreateH1TerminateLiteColdSession_MarksFastPath()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var ep = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false)
+        {
+            ForwardCleartext = true,
+            ForwardHost = "127.0.0.1",
+            ForwardPort = 9,
+        };
+        var sock = new System.Net.Sockets.Socket(
+            System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Stream,
+            System.Net.Sockets.ProtocolType.Tcp);
+        var conn = new TcpClientConnection(proxy, sock);
+        var clientStream = new HttpClientStream(proxy, conn, Stream.Null, proxy.BufferPool, CancellationToken.None);
+        var create = typeof(ProxyServer).GetMethod("CreateH1TerminateLiteColdSession", PrivateInstance)!;
+        using var cold = (SessionEventArgs)create.Invoke(proxy, [ep, clientStream])!;
+        Assert.IsTrue(cold.IsFastPath);
+        cold.CancellationTokenSource.Dispose();
+    }
+
+    [TestMethod]
+    public void CanUseH1TerminateLite_RejectsContinueWinAuthBodyAndUpgrade()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var ep = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = 80,
+            ForwardCleartext = true,
+        };
+        var get = new Request { Method = "GET", HttpVersion = HttpHeader.Version11 };
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, get, enable100Continue: true, false, false, null));
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, get, false, enableWinAuth: true, false, null));
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, get, false, false, hasCustomUpstreamProxyFunc: true, null));
+
+        var withBody = new Request { Method = "GET", ContentLength = 1, HttpVersion = HttpHeader.Version11 };
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, withBody, false, false, false, null));
+
+        var upgrade = new Request { Method = "GET", HttpVersion = HttpHeader.Version11 };
+        upgrade.Headers.AddHeader(KnownHeaders.Upgrade, "websocket");
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, upgrade, false, false, false, null));
+
+        var options = new Request { Method = "OPTIONS", HttpVersion = HttpHeader.Version11 };
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, options, false, false, false, null));
+    }
+
+    [TestMethod]
+    public async Task WriteTerminateLiteMiddlewareResponse_ConnectionCloseWhenClientAsked()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        using var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var accept = listener.AcceptSocketAsync();
+        var clientSock = new System.Net.Sockets.Socket(
+            System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Stream,
+            System.Net.Sockets.ProtocolType.Tcp);
+        await clientSock.ConnectAsync(IPAddress.Loopback, ((IPEndPoint)listener.LocalEndpoint).Port);
+        var accepted = await accept;
+        var clientConn = new TcpClientConnection(proxy, clientSock);
+        var clientStream = new HttpClientStream(proxy, clientConn, new System.Net.Sockets.NetworkStream(clientSock, ownsSocket: false),
+            proxy.BufferPool, CancellationToken.None);
+
+        var req = new Request { Method = "GET", HttpVersion = HttpHeader.Version11 };
+        req.Headers.AddHeader("Connection", "close");
+        var writeMw = typeof(ProxyServer).GetMethod("WriteTerminateLiteMiddlewareResponseAsync", PrivateStatic)!;
+        var ctx = new ProxyMiddlewareContext
+        {
+            Session = new object(),
+            IsHandled = true,
+            HandledStatusCode = 403,
+            HandledBody = null,
+        };
+        var drain = Task.Run(() =>
+        {
+            var buf = new byte[2048];
+            try { accepted.Receive(buf); } catch { /* ignore */ }
+        });
+        await (Task)writeMw.Invoke(null, [clientStream, req, ctx, CancellationToken.None])!;
+        await drain;
+        Assert.AreEqual(403, ctx.HandledStatusCode);
+        Assert.IsTrue(ctx.IsHandled);
+        accepted.Dispose();
+        clientSock.Dispose();
+        listener.Stop();
     }
 }

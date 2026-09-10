@@ -63,6 +63,23 @@ public class RunCommandTests
     }
 
     [TestMethod]
+    public void ConfigNeedsSessionPath_True_ForGrpcTranscodeEnabled()
+    {
+        var cfg = new TwpConfig
+        {
+            Plus = new PlusConfig
+            {
+                Enabled = true,
+                Options = new Dictionary<string, string>
+                {
+                    ["grpc.transcode.enabled"] = "true",
+                },
+            },
+        };
+        Assert.IsTrue(RunCommand.ConfigNeedsSessionPath(cfg));
+    }
+
+    [TestMethod]
     public void ListenerConfig_EnableHttp2AndHttp3_FieldsExist()
     {
         var listener = new ListenerConfig
@@ -228,5 +245,18 @@ public class RunCommandTests
         Assert.IsFalse(proxy.Logging.EnableConsole);
         Assert.IsTrue(proxy.Logging.EnableFile);
         Assert.AreEqual("logs/cli-test.log", proxy.Logging.FilePath);
+    }
+
+    [TestMethod]
+    public void ConfigNeedsSessionPath_True_ForAccessLog()
+    {
+        var cfg = new TwpConfig
+        {
+            Server = new ServerConfig
+            {
+                AccessLog = new AccessLogConfig { Path = "/tmp/access.ndjson" },
+            },
+        };
+        Assert.IsTrue(RunCommand.ConfigNeedsSessionPath(cfg));
     }
 }

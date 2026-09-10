@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -1004,6 +1005,28 @@ public class HttpStreamCoverageTests
         public byte[] GetBuffer() => new byte[BufferSize];
         public byte[] GetBuffer(int bufferSize) => new byte[bufferSize];
         public void ReturnBuffer(byte[] buffer) { }
+        public void Dispose() { }
+    }
+
+    [TestMethod]
+    public async Task CopyToAsync_Cancel_DoesNotThrowAndReturnsBuffer()
+    {
+        var pool = new CountingBufferPool();
+        using var input = new MemoryStream(new byte[64 * 1024]);
+        using var output = new MemoryStream();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        await StreamExtensions.CopyToAsync(input, output, null, pool, cts.Token);
+        Assert.AreEqual(1, pool.Returned);
+    }
+
+    private sealed class CountingBufferPool : IBufferPool
+    {
+        public int Returned { get; private set; }
+        public int BufferSize => 4096;
+        public byte[] GetBuffer() => new byte[BufferSize];
+        public byte[] GetBuffer(int bufferSize) => new byte[bufferSize];
+        public void ReturnBuffer(byte[] buffer) => Returned++;
         public void Dispose() { }
     }
 }

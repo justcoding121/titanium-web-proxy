@@ -211,7 +211,7 @@ public class ExportAndSystemProxyCoverageTests
             var dialogs = new ScriptedInspectorDialogs
             {
                 RemoveRootCaResult = false,
-                ElevateRootCaResult = false,
+                TrustRecoveryResult = TrustRecoveryChoice.Cancel,
                 DeviceCaSetupResult = false,
             };
             using var interception = new InterceptionService(new RecordingSystemProxyController())

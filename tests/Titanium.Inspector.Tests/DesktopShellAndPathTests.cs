@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.Views;
@@ -146,5 +147,93 @@ public class DesktopShellAndPathTests
     {
         Assert.IsFalse(DesktopShell.TryBuildRevealFile(null, OSPlatform.Windows, out _, out var error));
         Assert.IsFalse(string.IsNullOrEmpty(error));
+    }
+
+    [TestMethod]
+    public void GetCurrentPlatform_AndUnsupportedBuild_DoNotLaunchShell()
+    {
+        var current = DesktopShell.GetCurrentPlatform();
+        Assert.IsTrue(
+            current == OSPlatform.Windows || current == OSPlatform.OSX || current == OSPlatform.Linux);
+
+        var unknown = OSPlatform.Create("Unknown");
+        Assert.IsFalse(DesktopShell.TryBuildOpenDirectory(Path.GetTempPath(), unknown, out _, out var openError));
+        Assert.IsFalse(string.IsNullOrEmpty(openError));
+        Assert.IsFalse(DesktopShell.TryBuildRevealFile(
+            Path.Combine(Path.GetTempPath(), "x.log"), unknown, out _, out var revealError));
+        Assert.IsFalse(string.IsNullOrEmpty(revealError));
+        Assert.IsFalse(DesktopShell.TryOpenDirectory("  ", out var emptyOpen));
+        Assert.IsFalse(string.IsNullOrEmpty(emptyOpen));
+        Assert.IsFalse(DesktopShell.TryRevealFileOrOpenDirectory(null, out var emptyReveal));
+        Assert.IsFalse(string.IsNullOrEmpty(emptyReveal));
+        Assert.IsFalse(DesktopShell.TryRevealFileOrOpenDirectory("  ", unknown, out _));
+
+        var blocker = Path.Combine(Path.GetTempPath(), "twp-shell-file-" + Guid.NewGuid().ToString("N"));
+        File.WriteAllText(blocker, "x");
+        try
+        {
+            Assert.IsFalse(DesktopShell.TryOpenDirectory(blocker, current, out var blockedOpen));
+            Assert.IsFalse(string.IsNullOrEmpty(blockedOpen));
+            Assert.IsFalse(DesktopShell.TryRevealFileOrOpenDirectory(
+                Path.Combine(blocker, "child.log"), current, out var blockedReveal));
+            Assert.IsFalse(string.IsNullOrEmpty(blockedReveal));
+        }
+        finally
+        {
+            try { File.Delete(blocker); } catch { /* ignore */ }
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.IsFalse(DesktopShell.TryOpenDirectory(Path.GetTempPath(), OSPlatform.Windows, out var winErr));
+            Assert.IsFalse(string.IsNullOrEmpty(winErr));
+            Assert.IsFalse(            DesktopShell.TryRevealFileOrOpenDirectory(
+                Path.Combine(Path.GetTempPath(), "twp-reveal.log"), OSPlatform.Windows, out _));
+        }
+    }
+
+    [TestMethod]
+    public void SessionBodyDiskCache_PruneExpired_BadVersion_AndBudget()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-disk-prune-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var stale = Path.Combine(dir, "1.bin");
+            File.WriteAllBytes(stale, new byte[24]);
+            File.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddDays(-3));
+            using (var cache = new SessionBodyDiskCache(dir, maxBytes: 1024, maxAge: TimeSpan.FromHours(1)))
+            {
+                Assert.IsFalse(File.Exists(stale));
+            }
+
+            var versioned = Path.Combine(dir, "2.bin");
+            using (var fs = File.Create(versioned))
+            using (var bw = new BinaryWriter(fs, Encoding.UTF8, leaveOpen: false))
+            {
+                bw.Write("TSIB"u8.ToArray());
+                bw.Write(99);
+            }
+
+            using var live = new SessionBodyDiskCache(dir, maxBytes: 40, maxAge: TimeSpan.Zero);
+            Assert.IsFalse(live.TryLoad(new SessionSnapshot { Id = 2 }));
+            live.Write(new SessionSnapshot
+            {
+                Id = 3,
+                RequestBodyBytes = new byte[80],
+                ResponseBodyBytes = new byte[80],
+            });
+            live.Write(new SessionSnapshot
+            {
+                Id = 4,
+                RequestBodyBytes = new byte[80],
+                ResponseBodyBytes = new byte[80],
+            });
+            Assert.IsFalse(live.TryLoad(new SessionSnapshot { Id = 2 }));
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
     }
 }

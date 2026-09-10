@@ -32,6 +32,9 @@ internal static class ProcessResourceSampler
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 return await SampleLinuxAsync(pid, duration, cancellationToken).ConfigureAwait(false);
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                return await SampleMacAsync(pid, duration, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -43,6 +46,194 @@ internal static class ProcessResourceSampler
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Darwin: <see cref="Process.WorkingSet64"/> + <see cref="Process.TotalProcessorTime"/> over the
+    /// descendant tree (serve-proxy → nginx master → workers). Same shape as the Windows sampler.
+    /// </summary>
+    private static async Task<ProcessResourceSample?> SampleMacAsync(int rootPid, TimeSpan duration,
+        CancellationToken cancellationToken)
+    {
+        var handles = new Dictionary<int, Process>();
+        try
+        {
+            AttachMacPids(handles, rootPid);
+            if (handles.Count == 0)
+                return null;
+
+            long peakRss = 0;
+            var cpuSamples = new List<double>(capacity: 64);
+            var prevCpuByPid = new Dictionary<int, TimeSpan>();
+            long? prevWall = null;
+            var deadline = Stopwatch.GetTimestamp() + (long)(duration.TotalSeconds * Stopwatch.Frequency);
+            var processors = Math.Max(1, Environment.ProcessorCount);
+
+            while (Stopwatch.GetTimestamp() < deadline)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                AttachMacPids(handles, rootPid);
+
+                long rssSum = 0;
+                double cpuDeltaSec = 0;
+                var wallNow = Stopwatch.GetTimestamp();
+                var dead = new List<int>();
+
+                foreach (var (pid, process) in handles)
+                {
+                    try
+                    {
+                        process.Refresh();
+                        if (process.HasExited)
+                        {
+                            dead.Add(pid);
+                            continue;
+                        }
+
+                        rssSum += process.WorkingSet64;
+                        var cpu = process.TotalProcessorTime;
+                        if (prevWall is not null && prevCpuByPid.TryGetValue(pid, out var prev))
+                            cpuDeltaSec += (cpu - prev).TotalSeconds;
+                        prevCpuByPid[pid] = cpu;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        dead.Add(pid);
+                    }
+                    catch (System.ComponentModel.Win32Exception)
+                    {
+                        dead.Add(pid);
+                    }
+                }
+
+                foreach (var pid in dead)
+                {
+                    if (handles.Remove(pid, out var gone))
+                        gone.Dispose();
+                    prevCpuByPid.Remove(pid);
+                }
+
+                if (handles.Count == 0)
+                    break;
+
+                if (rssSum > peakRss)
+                    peakRss = rssSum;
+
+                if (prevWall is { } wall)
+                {
+                    var wallSec = (wallNow - wall) / (double)Stopwatch.Frequency;
+                    if (wallSec > 0)
+                    {
+                        var pct = cpuDeltaSec / wallSec / processors * 100.0;
+                        if (pct >= 0 && !double.IsNaN(pct) && !double.IsInfinity(pct))
+                            cpuSamples.Add(pct);
+                    }
+                }
+
+                prevWall = wallNow;
+
+                var remainingTicks = deadline - Stopwatch.GetTimestamp();
+                if (remainingTicks <= 0)
+                    break;
+                var delay = TimeSpan.FromSeconds(Math.Min(PollInterval.TotalSeconds,
+                    remainingTicks / (double)Stopwatch.Frequency));
+                if (delay > TimeSpan.Zero)
+                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (peakRss <= 0 && cpuSamples.Count == 0)
+                return null;
+
+            var avgCpu = cpuSamples.Count > 0 ? cpuSamples.Average() : 0;
+            return new ProcessResourceSample(peakRss, avgCpu);
+        }
+        finally
+        {
+            foreach (var process in handles.Values)
+                process.Dispose();
+        }
+    }
+
+    private static void AttachMacPids(Dictionary<int, Process> handles, int rootPid)
+    {
+        foreach (var pid in GetMacTreePids(rootPid))
+        {
+            if (handles.ContainsKey(pid))
+                continue;
+            try
+            {
+                handles[pid] = Process.GetProcessById(pid);
+            }
+            catch (ArgumentException)
+            {
+                // exited
+            }
+        }
+    }
+
+    /// <summary>
+    /// Root PID plus descendants via repeated <c>pgrep -P</c> (nginx workers under serve-proxy).
+    /// </summary>
+    private static List<int> GetMacTreePids(int rootPid)
+    {
+        var result = new List<int>();
+        var seen = new HashSet<int> { rootPid };
+        var queue = new Queue<int>();
+        queue.Enqueue(rootPid);
+
+        try
+        {
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                result.Add(current);
+                foreach (var kid in TryPgrepChildren(current))
+                {
+                    if (seen.Add(kid))
+                        queue.Enqueue(kid);
+                }
+            }
+        }
+        catch
+        {
+            return [rootPid];
+        }
+
+        return result.Count > 0 ? result : [rootPid];
+    }
+
+    private static List<int> TryPgrepChildren(int parentPid)
+    {
+        var kids = new List<int>();
+        try
+        {
+            using var p = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "/usr/bin/pgrep",
+                    ArgumentList = { "-P", parentPid.ToString(CultureInfo.InvariantCulture) },
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                },
+            };
+            p.Start();
+            var stdout = p.StandardOutput.ReadToEnd();
+            p.WaitForExit(2000);
+            foreach (var line in stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (int.TryParse(line, NumberStyles.Integer, CultureInfo.InvariantCulture, out var kid) && kid > 0)
+                    kids.Add(kid);
+            }
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        return kids;
     }
 
     private static async Task<ProcessResourceSample?> SampleWindowsAsync(int rootPid, TimeSpan duration,

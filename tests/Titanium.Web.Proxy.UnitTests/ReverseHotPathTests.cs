@@ -1,3 +1,4 @@
+using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -143,6 +144,36 @@ namespace Titanium.Web.Proxy.UnitTests
                 HeaderBuilder.Return(builder);
             }
         }
+
+        [TestMethod]
+        public void HeaderBuilder_NestedRent_DoesNotShareInstance()
+        {
+            var first = HeaderBuilder.Rent();
+            var second = HeaderBuilder.Rent();
+            try
+            {
+                Assert.AreNotSame(first, second);
+                first.WriteRequestLine("GET", "/", HttpHeader.Version11);
+                second.WriteRequestLine("HEAD", "/", HttpHeader.Version11);
+                StringAssert.StartsWith(first.GetString(HttpHeader.Encoding), "GET /");
+                StringAssert.StartsWith(second.GetString(HttpHeader.Encoding), "HEAD /");
+            }
+            finally
+            {
+                HeaderBuilder.Return(first);
+                HeaderBuilder.Return(second);
+            }
+        }
+
+#if DEBUG
+        [TestMethod]
+        public void HeaderBuilder_GetBuffer_AfterReturn_Throws()
+        {
+            var builder = HeaderBuilder.Rent();
+            HeaderBuilder.Return(builder);
+            Assert.ThrowsExactly<InvalidOperationException>(() => builder.GetBuffer());
+        }
+#endif
 
         [TestMethod]
         public void ParseResponseLine_InternsOkDescription()

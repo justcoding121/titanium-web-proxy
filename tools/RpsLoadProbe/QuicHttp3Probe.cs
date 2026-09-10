@@ -443,22 +443,30 @@ internal static class QuicHttp3LoadGenerator
     private static async Task OpenControlAsync(QuicConnection connection,
         ConcurrentBag<QuicStream> retainedUnidirectional, CancellationToken cancellationToken)
     {
-        var control = await connection.OpenOutboundStreamAsync(QuicStreamType.Unidirectional, cancellationToken);
+        // Bound like ConnectAsync — MsQuic OpenOutboundStream can stall without honoring CT.
+        using var openCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        openCts.CancelAfter(TimeSpan.FromSeconds(5));
+        var ct = openCts.Token;
+
+        var control = await connection.OpenOutboundStreamAsync(QuicStreamType.Unidirectional, ct)
+            .AsTask().WaitAsync(TimeSpan.FromSeconds(6), cancellationToken);
         retainedUnidirectional.Add(control);
-        await control.WriteAsync(new byte[] { (byte)Http3StreamType.Control }, cancellationToken);
+        await control.WriteAsync(new byte[] { (byte)Http3StreamType.Control }, ct);
         var settings = new Http3Settings();
         settings.SetQpackMaxTableCapacity(0);
         settings.SetQpackBlockedStreams(0);
-        await Http3Frame.WriteAsync(control, Http3FrameType.Settings, settings.Serialize(), cancellationToken);
+        await Http3Frame.WriteAsync(control, Http3FrameType.Settings, settings.Serialize(), ct);
 
         // RFC 9114: QPACK encoder/decoder streams are critical; open them even with table capacity 0.
-        var qpackEncoder = await connection.OpenOutboundStreamAsync(QuicStreamType.Unidirectional, cancellationToken);
+        var qpackEncoder = await connection.OpenOutboundStreamAsync(QuicStreamType.Unidirectional, ct)
+            .AsTask().WaitAsync(TimeSpan.FromSeconds(6), cancellationToken);
         retainedUnidirectional.Add(qpackEncoder);
-        await qpackEncoder.WriteAsync(new byte[] { (byte)Http3StreamType.QpackEncoder }, cancellationToken);
+        await qpackEncoder.WriteAsync(new byte[] { (byte)Http3StreamType.QpackEncoder }, ct);
 
-        var qpackDecoder = await connection.OpenOutboundStreamAsync(QuicStreamType.Unidirectional, cancellationToken);
+        var qpackDecoder = await connection.OpenOutboundStreamAsync(QuicStreamType.Unidirectional, ct)
+            .AsTask().WaitAsync(TimeSpan.FromSeconds(6), cancellationToken);
         retainedUnidirectional.Add(qpackDecoder);
-        await qpackDecoder.WriteAsync(new byte[] { (byte)Http3StreamType.QpackDecoder }, cancellationToken);
+        await qpackDecoder.WriteAsync(new byte[] { (byte)Http3StreamType.QpackDecoder }, ct);
     }
 
     private static void DrainInbound(QuicConnection connection, CancellationToken cancellationToken)
@@ -488,6 +496,16 @@ internal static class QuicHttp3LoadGenerator
     }
 
     private static async Task<int> SendRequestAsync(QuicConnection connection, string authority, string path,
+        string method, byte[]? requestBody, WorkloadOptions workload, CancellationToken cancellationToken)
+    {
+        // Measure CancelAfter alone is not enough — MsQuic ReadAsync can ignore CT on a stalled stream.
+        using var reqCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        reqCts.CancelAfter(TimeSpan.FromSeconds(30));
+        return await SendRequestCoreAsync(connection, authority, path, method, requestBody, workload, reqCts.Token)
+            .WaitAsync(TimeSpan.FromSeconds(35), cancellationToken);
+    }
+
+    private static async Task<int> SendRequestCoreAsync(QuicConnection connection, string authority, string path,
         string method, byte[]? requestBody, WorkloadOptions workload, CancellationToken cancellationToken)
     {
         await using var stream = await connection.OpenOutboundStreamAsync(

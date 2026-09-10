@@ -1,0 +1,57 @@
+# InspectorDesktopProbe
+
+> **For maintainers / contributors** — on-demand desktop UX + OS proxy/CA validation (not CI).
+
+On-demand desktop UX + OS proxy/CA validation for Titanium Inspector. **Not CI.** Mutates system proxy and may show OS cert dialogs.
+
+## Prerequisites
+
+- Built Inspector dependencies (`dotnet build` restores Avalonia)
+- Browsers as needed: Edge, Chrome, Firefox; Safari on macOS
+- Interactive session (Windows Trusted Root **Yes/No**, macOS Keychain password still need a human click once)
+- Avalonia confirm dialogs are auto-accepted by the probe; file pickers are scripted (no Save/Open hang)
+
+## Commands
+
+```powershell
+dotnet run --project tools/InspectorDesktopProbe -- status
+dotnet run --project tools/InspectorDesktopProbe -- chrome
+dotnet run --project tools/InspectorDesktopProbe -- proxy --browser auto --timeout-sec 45
+dotnet run --project tools/InspectorDesktopProbe -- proxy --browser safari   # macOS
+dotnet run --project tools/InspectorDesktopProbe -- cert
+dotnet run --project tools/InspectorDesktopProbe -- firefox
+dotnet run --project tools/InspectorDesktopProbe -- loopback      # Windows Store apps
+dotnet run --project tools/InspectorDesktopProbe -- exclusions
+dotnet run --project tools/InspectorDesktopProbe -- pac
+dotnet run --project tools/InspectorDesktopProbe -- machine-trust status
+dotnet run --project tools/InspectorDesktopProbe -- machine-trust install   # admin password
+dotnet run --project tools/InspectorDesktopProbe -- machine-trust run
+dotnet run --project tools/InspectorDesktopProbe -- machine-trust curl-check
+dotnet run --project tools/InspectorDesktopProbe -- machine-trust remove
+dotnet run --project tools/InspectorDesktopProbe -- machine-trust clean
+dotnet run --project tools/InspectorDesktopProbe -- all
+```
+
+| Command | Validates |
+|---------|-----------|
+| `status` | OS proxy dump, trust suppress flag, optional `--ui` harness |
+| `chrome` | Full click-through: every File/Capture/Tools/Options/Help child, session context menu, **Delete key** (single + multi-select), toolbar, Inspect tabs, Composer/Breakpoints/AutoResponder/Scripts; `MenuExit` skipped |
+| `proxy` | System proxy checkbox → WinINET/gsettings/scutil → Edge/Chrome/Firefox (and Safari on macOS) HTTPS **without** `--proxy-server` |
+| `cert` | Install/Remove CA menus; **Decrypt HTTPS auto-off** after remove |
+| `firefox` | Trust CA in Firefox + system-proxy capture |
+| `loopback` | Allow Store apps dialog (Win8+) |
+| `exclusions` | Excluded hosts + Proxy localhost |
+| `pac` | PAC replace confirm cancel/accept when PAC is active |
+| `machine-trust` | Machine CA trust (`status` / `install` / `remove` / `run` / `curl-check` / `clean`); Core-only, no Avalonia. Aliases: `install-system`, `remove-system`. Flag: `run --no-system-proxy` |
+| `all` | **`chrome` first**, then applicable OS scenarios (**excludes** `machine-trust`) |
+
+## Logs (MCP-friendly)
+
+- `tools/InspectorDesktopProbe/results/*.log`
+- `tools/InspectorDesktopProbe/results/last-run.json` — structured step pass/fail
+
+## vs unit tests
+
+Unit/integration suites set `CertificateManager.SuppressInteractiveRootStoreMutations` and `TITANIUM_SKIP_ROOT_STORE_UI=1` so they **never** open CryptUI / Keychain / polkit. This probe clears suppress for OS scenarios and exercises the real Inspector window + OS. The `chrome` walk temporarily suppresses CryptUI only while clicking CA menus so the menu path is exercised without hanging; `cert` still does the interactive trust walk.
+
+Related local suites: `dotnet test --filter TestCategory=E2E-UI-Headless` (CI headless click coverage) and `TestCategory=E2E-Slow` (service-level, no desktop window).

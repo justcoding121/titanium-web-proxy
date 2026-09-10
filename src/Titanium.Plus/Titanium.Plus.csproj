@@ -7,7 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <SignAssembly>True</SignAssembly>
     <AssemblyOriginatorKeyFile>StrongNameKey.snk</AssemblyOriginatorKeyFile>
-    <VersionPrefix>7.0.4</VersionPrefix>
+    <VersionPrefix>7.0.5</VersionPrefix>
     <Authors>Jehonathan Thomas</Authors>
     <Description>Titanium Web Proxy Plus advanced features plugin (PolyForm Noncommercial).</Description>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
@@ -22,9 +22,14 @@
     <ProjectReference Include="..\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Titanium.Plus.Tests, PublicKey=0024000004800000940000000602000000240000525341310004000001000100e7368e0ccc717eeb4d57d35ad6a8305cbbed14faa222e13869405e92c83856266d400887d857005f1393ffca2b92de7f3ba0bdad35ec2d6057ee1846091b34be2abc3f97dc7e72c16fd4958c15126b12923df769647d84922c3f4f3b80ee0ae8e4cb40bc1973b782afb90bb00519fd16adf960f217e23696e7c3165401d0acd6" />
+  </ItemGroup>
+  <ItemGroup>
     <None Include="LICENSE" Pack="true" PackagePath="" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Google.Api.CommonProtos" Version="2.17.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.31.1" />
     <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="8.6.1" />
     <PackageReference Include="StackExchange.Redis" Version="2.8.31" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.6.1" />

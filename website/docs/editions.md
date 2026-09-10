@@ -1,18 +1,20 @@
 # Editions & licenses
 
-| Product | Role | License | How you get it |
-|---------|------|---------|----------------|
-| **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse / edge daemon for any stack | MIT | [Download](/download) zips, winget |
-| **Titanium Inspector** | Desktop MITM debugger | [PolyForm NC](https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt) | MSI / zip / winget |
-| **Titanium.Plus** | Control plane, ops, observability, dashboard | PolyForm NC | `titanium update --plus` |
-| **Titanium.Web.Proxy** | Optional embeddable library for .NET apps | MIT | NuGet |
+**CLI**, core engine, and this website are **MIT**. **Inspector** and **Plus** are optional add-ons; license details are in [License](#license) below.
 
-CLI and Plus target reverse-proxy / edge workloads (routing, load balancing, health, discovery) on Windows, Linux, and macOS. Inspector is the MITM debugging product. The Core library is for embedding the same engine in a .NET process.
+| Product | Role | How you get it |
+|---------|------|----------------|
+| **CLI** (`titanium` / `twp`) | Standalone reverse / edge proxy for any stack | [Download](/download) (all OS); optional Homebrew on macOS |
+| **Inspector** | Desktop man-in-the-middle (MITM) debugger — decrypt and inspect HTTPS traffic | [Download](/download) (Windows / macOS / Linux) |
+| **Plus** | Control plane, ops, observability, dashboard, gRPC-JSON transcoding | After installing CLI: `titanium update --plus` |
+| **Library** | Embed the same engine in a .NET app | NuGet (`Titanium.Web.Proxy`) |
 
-## What PolyForm NC means
+CLI and Plus target reverse-proxy / edge workloads (routing, load balancing, health, discovery) on Windows, Linux, and macOS. Inspector is the MITM debugging product. The Library is for embedding the same engine in a .NET process.
 
-Plus and Inspector are **noncommercial** under PolyForm Noncommercial 1.0.0: personal, research, education, government, and charity use are allowed; **commercial use is not** without a separate agreement. They are not a paid SKU in the open repository.
+## License
 
-## Website & docs
+The Library and CLI are [MIT](https://github.com/justcoding121/titanium-web-proxy/blob/develop/LICENSE). Inspector and Plus are [PolyForm Noncommercial 1.0.0](https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt).
+
+Plus and Inspector may be used for personal, research, education, government, and charity purposes. Commercial use of those two products needs a separate agreement. They are not a paid SKU in the open repository.
 
 Content under `/website` is MIT (see [`website/LICENSE`](https://github.com/justcoding121/titanium-web-proxy/blob/develop/website/LICENSE)). That does not relicense Plus or Inspector source.

@@ -29,10 +29,65 @@ on:
           - compare-same
           - compare-bridges
           - compare-http3-cleartext
+          - compare-nginx-https
+          - compare-haproxy-smoke
+          - compare-envoy-smoke
           - compare-mitm
           - compare-matrix
           - compare-product
           - compare-product-smoke
+          - haproxy-reverse-http1
+          - haproxy-reverse-http1-tls
+          - haproxy-reverse-http1-to-https
+          - haproxy-reverse-http1-tls-to-https
+          - haproxy-reverse-http2
+          - haproxy-reverse-http2-to-https-http1
+          - haproxy-reverse-http3-cleartext
+          - haproxy-reverse-http3-to-https-http1
+          - envoy-reverse-http1
+          - envoy-reverse-http1-tls
+          - envoy-reverse-http1-to-https
+          - envoy-reverse-http1-tls-to-https
+          - envoy-reverse-http2
+          - envoy-reverse-http2-to-https-http1
+          - envoy-reverse-http3-cleartext
+          - envoy-reverse-http3-to-https-http1
+          - nginx-reverse-h2c-to-h1
+          - nginx-reverse-h2c-to-https
+          - haproxy-reverse-http1-plain-to-h2c
+          - haproxy-reverse-http1-plain-to-http2
+          - haproxy-reverse-http1-plain-to-http3
+          - haproxy-reverse-http1-to-h2c
+          - haproxy-reverse-http11-to-http2
+          - haproxy-reverse-http1-to-http3
+          - haproxy-reverse-h2c-to-h1
+          - haproxy-reverse-h2c-to-https
+          - haproxy-reverse-h2c-to-h2c
+          - haproxy-reverse-h2c
+          - haproxy-reverse-h2c-to-h3
+          - haproxy-reverse-http2-to-h2c
+          - haproxy-reverse-http2-to-https
+          - haproxy-reverse-http2-to-http3
+          - haproxy-reverse-http3-to-h2c
+          - haproxy-reverse-http3-to-http2
+          - haproxy-reverse-http3-to-http3
+          - envoy-reverse-http1-plain-to-h2c
+          - envoy-reverse-http1-plain-to-http2
+          - envoy-reverse-http1-plain-to-http3
+          - envoy-reverse-http1-to-h2c
+          - envoy-reverse-http11-to-http2
+          - envoy-reverse-http1-to-http3
+          - envoy-reverse-h2c-to-h1
+          - envoy-reverse-h2c-to-https
+          - envoy-reverse-h2c-to-h2c
+          - envoy-reverse-h2c
+          - envoy-reverse-h2c-to-h3
+          - envoy-reverse-http2-to-h2c
+          - envoy-reverse-http2-to-https
+          - envoy-reverse-http2-to-http3
+          - envoy-reverse-http3-to-h2c
+          - envoy-reverse-http3-to-http2
+          - envoy-reverse-http3-to-http3
           - compare-editions
           - compare-cross-version
           - compare-ceiling
@@ -41,6 +96,7 @@ on:
           - compare-lossy
           - compare-tls-cost
           - compare-arch
+          - compare-grpc
           - compare-saturation
           - compare-spot
           - origin-direct
@@ -53,6 +109,8 @@ on:
           - reverse-http1-tls
           - bare-reverse-http1-tls
           - nginx-reverse-http1-tls
+          - nginx-reverse-http1-to-https
+          - nginx-reverse-http1-tls-to-https
           - yarp-reverse-http1-tls
           - https-mitm
           - mitm-http2-to-http1
@@ -96,7 +154,9 @@ on:
           - yarp-reverse-http2-to-https-http1
           - yarp-reverse-http3-to-https-http1
           - nginx-reverse-http2
+          - nginx-reverse-http2-to-https-http1
           - nginx-reverse-http3-cleartext
+          - nginx-reverse-http3-to-https-http1
           - yarp-reverse-http2
           - yarp-reverse-http2-to-https
           - twp-cli-reverse-http1
@@ -131,6 +191,10 @@ on:
           - ubuntu-latest
           - windows-latest
           - macos-15-intel
+      arm_shard:
+        description: 'Comparison-group partition (all = no split; i/n = exclusive 1-based shard of wiki rows / Client×Origin wires, not individual arms)'
+        required: true
+        default: all
 
 permissions:
   contents: read
@@ -146,6 +210,7 @@ jobs:
       RPS_WARMUP_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.warmup_sec || 2 }}
       RPS_DURATION_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.duration_sec || 8 }}
       RPS_REPEATS: ${{ github.event_name == 'workflow_dispatch' && inputs.repeats || 1 }}
+      RPS_ARM_SHARD: ${{ github.event_name == 'workflow_dispatch' && inputs.arm_shard || 'all' }}
     strategy:
       fail-fast: false
       matrix:
@@ -153,10 +218,10 @@ jobs:
         os: ${{ fromJSON(inputs.runner_os == 'macos-15-intel' && '["macos-15-intel"]' || inputs.runner_os == 'ubuntu-latest' && '["ubuntu-latest"]' || inputs.runner_os == 'windows-latest' && '["windows-latest"]' || '["ubuntu-latest","windows-latest","macos-15-intel"]') }}
     runs-on: ${{ matrix.os }}
     # Intentionally no jobs.*.container — saturation RPS on a container network measures the wrong thing.
-    # compare-product with MITM Lite+Full can exceed 3.5h per OS on hosted runners.
-    # compare-editions (expanded Plus/CLI stress arms) needs ~60m; other modes keep the long ceiling.
-    # compare-product-smoke is a short gate-arm subset (Mac quick check).
-    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || (github.event_name == 'push' && 90 || (inputs.mode == 'compare-editions' && 90 || (inputs.mode == 'compare-product-smoke' && 60 || 420))) }}
+    # GitHub-hosted runners hard-cap at 360 minutes — do not set timeout above that.
+    # Wiki-grade compare-product / bodies / arch use arm_shard i/n so each job stays under 345m ramp.
+    # compare-product-smoke / haproxy-smoke / envoy-smoke: 120m; compare-editions: 90m.
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || (github.event_name == 'push' && 90 || (inputs.mode == 'compare-editions' && 90 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 120 || 360))) }}
     steps:
       - uses: actions/checkout@v6
 
@@ -219,7 +284,14 @@ jobs:
         run: |
           set -euo pipefail
           . /etc/os-release
-          sudo apt-get update
+          # Hosted runners sometimes ship a broken Google Chrome apt list (hash mismatch).
+          # Remove any Chrome/Google Chrome apt entries so apt-get update cannot fail the RPS job.
+          sudo find /etc/apt -type f \( -iname '*chrome*' -o -iname '*google*chrome*' \) -print -delete || true
+          if [ -f /etc/apt/sources.list ]; then
+            sudo sed -i '/dl\.google\.com\/linux\/chrome/d' /etc/apt/sources.list || true
+          fi
+          # Tolerate residual third-party mirror failures; nginx.org install below is the real gate.
+          sudo apt-get update || true
           sudo apt-get install -y ca-certificates curl gnupg
           curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
             https://nginx.org/keys/nginx_signing.key \
@@ -229,7 +301,9 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/nginx.list
           printf 'Package: *\nPin: origin nginx.org\nPin-Priority: 900\n' \
             | sudo tee /etc/apt/preferences.d/99nginx
-          sudo apt-get update
+          # Re-disable Chrome before the second update (some images re-add it).
+          sudo find /etc/apt -type f \( -iname '*chrome*' -o -iname '*google*chrome*' \) -print -delete || true
+          sudo apt-get update || true
           sudo apt-get install -y nginx
           # Stop the distro/package default site so our temp-prefix nginx owns the ports we pick.
           sudo systemctl stop nginx || true
@@ -298,6 +372,312 @@ jobs:
           fi
           nginx -V 2>&1 | tr ' ' '\n' | grep http_v3 || true
 
+      # Ubuntu distro HAProxy is not USE_QUIC. GHA Linux builds 3.2 against QuicTLS
+      # (openssl-3.1.7+quic) so MsQuic clients can complete the handshake — OpenSSL
+      # USE_QUIC_OPENSSL_COMPAT + limited-quic starts but fails QUIC_STATUS_TLS_ERROR.
+      # macOS uses Homebrew (typically native USE_QUIC) with a 3.2 osx source fallback.
+      - name: Cache HAProxy QUIC prefix
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/haproxy-quic
+            ${{ runner.temp }}/quictls
+          key: haproxy-3.2.23-quictls-3.1.7-linux-x64
+
+      - name: Install HAProxy with QUIC (Linux)
+        if: runner.os == 'Linux'
+        env:
+          HAPROXY_VERSION: '3.2.23'
+          HAPROXY_SHA256: '82d14ef33571e4edeb9197516c0d058a3775fb80541e46afe4377428e461fef0'
+          QUICTLS_REF: 'openssl-3.1.7+quic'
+        run: |
+          set -euo pipefail
+          sudo find /etc/apt -type f \( -iname '*chrome*' -o -iname '*google*chrome*' \) -print -delete || true
+          sudo apt-get update || true
+          sudo apt-get install -y gcc make perl libpcre2-dev zlib1g-dev git
+          # Stop any distro service so our temp-prefix HAProxy owns the ports we pick.
+          sudo apt-get install -y haproxy || true
+          sudo systemctl stop haproxy || true
+          dest="${RUNNER_TEMP}/haproxy-quic"
+          qtls="${RUNNER_TEMP}/quictls"
+          mkdir -p "$dest" "$qtls"
+          # Do not use grep -q under pipefail: early close SIGPIPEs haproxy -vv.
+          have_quic() { case "$("$1" -vv 2>&1 || true)" in *USE_QUIC*) return 0 ;; *) return 1 ;; esac; }
+          have_native_quic() {
+            # OpenSSL-compat builds list USE_QUIC_OPENSSL_COMPAT and need limited-quic;
+            # MsQuic fails TLS against that stack. Prefer a QuicTLS-linked binary.
+            local vv
+            vv="$("$1" -vv 2>&1 || true)"
+            case "$vv" in *USE_QUIC_OPENSSL_COMPAT*) return 1 ;; esac
+            case "$vv" in *USE_QUIC*) return 0 ;; *) return 1 ;; esac
+          }
+          if [ -x "$dest/sbin/haproxy" ] && have_native_quic "$dest/sbin/haproxy"; then
+            echo "Using existing QuicTLS-linked HAProxy at $dest"
+          else
+            if [ ! -x "$qtls/bin/openssl" ]; then
+              echo "Building QuicTLS ${QUICTLS_REF}…"
+              src_qtls="${RUNNER_TEMP}/quictls-src"
+              rm -rf "$src_qtls"
+              git clone --depth 1 --branch "$QUICTLS_REF" https://github.com/quictls/openssl.git "$src_qtls"
+              (
+                cd "$src_qtls"
+                ./config --prefix="$qtls" --libdir=lib
+                make -j "$(nproc)"
+                make install_sw
+              )
+            else
+              echo "Using cached QuicTLS at $qtls"
+            fi
+            ver="$HAPROXY_VERSION"
+            src="${RUNNER_TEMP}/haproxy-src"
+            rm -rf "$src"
+            mkdir -p "$src"
+            tarball="${RUNNER_TEMP}/haproxy-${ver}.tar.gz"
+            curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+              "https://www.haproxy.org/download/3.2/src/haproxy-${ver}.tar.gz" \
+              -o "$tarball"
+            echo "${HAPROXY_SHA256}  ${tarball}" | sha256sum -c -
+            tar -xzf "$tarball" -C "$src" --strip-components=1
+            make -C "$src" -j "$(nproc)" \
+              TARGET=linux-glibc \
+              USE_OPENSSL=1 \
+              USE_QUIC=1 \
+              USE_PCRE2=1 \
+              USE_PCRE2_JIT=1 \
+              USE_ZLIB=1 \
+              SSL_INC="${qtls}/include" \
+              SSL_LIB="${qtls}/lib" \
+              LDFLAGS="-Wl,-rpath,${qtls}/lib"
+            mkdir -p "$dest/sbin"
+            cp -f "$src/haproxy" "$dest/sbin/haproxy"
+            chmod +x "$dest/sbin/haproxy"
+          fi
+          echo "$dest/sbin" >> "$GITHUB_PATH"
+          export PATH="$dest/sbin:$PATH"
+          # QuicTLS libs for runtime if rpath is missing on older caches.
+          echo "LD_LIBRARY_PATH=${qtls}/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          export LD_LIBRARY_PATH="${qtls}/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          haproxy -v
+          haproxy -vv 2>&1 | head -n 40 || true
+          if ! have_native_quic haproxy; then
+            echo "HAProxy lacks native USE_QUIC (QuicTLS); HTTP/3 HAProxy arms cannot run reliably with MsQuic." >&2
+            exit 1
+          fi
+          echo "HAProxy native USE_QUIC (QuicTLS) present"
+
+      - name: Cache HAProxy QUIC prefix (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/haproxy-quic
+          key: haproxy-3.2.23-quic-osx-x64
+
+      - name: Install HAProxy with QUIC (macOS)
+        if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_INSTALL_UPGRADE: '1'
+          HAPROXY_VERSION: '3.2.23'
+          HAPROXY_SHA256: '82d14ef33571e4edeb9197516c0d058a3775fb80541e46afe4377428e461fef0'
+        run: |
+          set -euo pipefail
+          if ! brew list --versions haproxy >/dev/null 2>&1; then
+            brew install haproxy || echo "brew install haproxy failed; will build ${HAPROXY_VERSION} from source with USE_QUIC" >&2
+          fi
+          brew services stop haproxy 2>/dev/null || true
+          pkill -x haproxy 2>/dev/null || true
+          if brew list --versions haproxy >/dev/null 2>&1; then
+            HAP_BIN="$(brew --prefix haproxy)/bin"
+            echo "$HAP_BIN" >> "$GITHUB_PATH"
+            export PATH="$HAP_BIN:$PATH"
+          fi
+
+          have_quic() {
+            command -v haproxy >/dev/null 2>&1 || return 1
+            # Do not use grep -q under pipefail: BSD grep -q closes the pipe early (SIGPIPE).
+            case "$(haproxy -vv 2>&1 || true)" in
+              *USE_QUIC*) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          if ! have_quic; then
+            echo "Homebrew HAProxy lacks USE_QUIC; building ${HAPROXY_VERSION} with USE_QUIC (TARGET=osx)…" >&2
+            dest="${RUNNER_TEMP}/haproxy-quic"
+            mkdir -p "$dest/sbin"
+            if [ -x "$dest/sbin/haproxy" ] && case "$("$dest/sbin/haproxy" -vv 2>&1 || true)" in *USE_QUIC*) true ;; *) false ;; esac; then
+              echo "Using cached HAProxy QUIC build at $dest"
+            else
+              brew list --versions openssl@3 || brew install openssl@3
+              brew list --versions pcre2 || brew install pcre2
+              ssl="$(brew --prefix openssl@3)"
+              pcre="$(brew --prefix pcre2)"
+              src="${RUNNER_TEMP}/haproxy-src"
+              mkdir -p "$src"
+              tarball="${RUNNER_TEMP}/haproxy-${HAPROXY_VERSION}.tar.gz"
+              curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+                "https://www.haproxy.org/download/3.2/src/haproxy-${HAPROXY_VERSION}.tar.gz" \
+                -o "$tarball"
+              echo "${HAPROXY_SHA256}  ${tarball}" | shasum -a 256 -c -
+              tar -xzf "$tarball" -C "$src" --strip-components=1
+              make -C "$src" -j "$(sysctl -n hw.ncpu)" \
+                TARGET=osx \
+                USE_OPENSSL=1 \
+                USE_QUIC=1 \
+                USE_PCRE2=1 \
+                USE_PCRE2_JIT=1 \
+                USE_ZLIB=1 \
+                SSL_INC="${ssl}/include" \
+                SSL_LIB="${ssl}/lib" \
+                PCRE2_INC="${pcre}/include" \
+                PCRE2_LIB="${pcre}/lib" \
+                LDFLAGS="-Wl,-rpath,${ssl}/lib" \
+              || make -C "$src" -j "$(sysctl -n hw.ncpu)" \
+                TARGET=osx \
+                USE_OPENSSL=1 \
+                USE_QUIC=1 \
+                USE_QUIC_OPENSSL_COMPAT=1 \
+                USE_PCRE2=1 \
+                USE_PCRE2_JIT=1 \
+                USE_ZLIB=1 \
+                SSL_INC="${ssl}/include" \
+                SSL_LIB="${ssl}/lib" \
+                PCRE2_INC="${pcre}/include" \
+                PCRE2_LIB="${pcre}/lib" \
+                LDFLAGS="-Wl,-rpath,${ssl}/lib"
+              cp -f "$src/haproxy" "$dest/sbin/haproxy"
+              chmod +x "$dest/sbin/haproxy"
+            fi
+            echo "$dest/sbin" >> "$GITHUB_PATH"
+            export PATH="$dest/sbin:$PATH"
+          fi
+
+          haproxy -v
+          if ! have_quic; then
+            echo "HAProxy was installed but lacks USE_QUIC; HTTP/3 HAProxy arms cannot run." >&2
+            haproxy -vv 2>&1 | head -n 40 || true
+            exit 1
+          fi
+          echo "HAProxy USE_QUIC present"
+
+      # Envoy Apache 2.0 — Linux static binary from GitHub releases; macOS via Homebrew
+      # (HTTP/3 compiled in). Official GitHub assets are Linux-only; Intel Mac has no
+      # current Homebrew bottle, so fall back to the pinned Kuma/CNCF darwin-amd64 build
+      # of the same 1.36.7 tag (do not bazel-build Envoy on the runner).
+      # Windows support discontinued — skip (cells are Not possible).
+      - name: Install Envoy (Linux)
+        if: runner.os == 'Linux'
+        env:
+          ENVOY_VERSION: '1.36.7'
+        run: |
+          set -euo pipefail
+          ver="$ENVOY_VERSION"
+          dest="${RUNNER_TEMP}/envoy"
+          mkdir -p "$dest"
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            "https://github.com/envoyproxy/envoy/releases/download/v${ver}/envoy-${ver}-linux-x86_64" \
+            -o "$dest/envoy"
+          chmod +x "$dest/envoy"
+          echo "$dest" >> "$GITHUB_PATH"
+          export PATH="$dest:$PATH"
+          envoy --version
+          echo "Envoy official binaries include HTTP/3; H3 arms run when QuicListener is supported."
+
+      - name: Install Envoy (macOS)
+        if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_INSTALL_UPGRADE: '1'
+          ENVOY_VERSION: '1.36.7'
+        run: |
+          set -euo pipefail
+          brew services stop envoy 2>/dev/null || true
+          pkill -x envoy 2>/dev/null || true
+
+          # Pour a bottle only. Intel Homebrew has no envoy bottle; bazel-from-source
+          # would burn the job timeout. ARM bottles (macos-latest) still pour here.
+          brew_has_envoy_bottle() {
+            python3 -c '
+          import json, platform, subprocess, sys
+          formula = sys.argv[1]
+          try:
+              raw = subprocess.check_output(["brew", "info", "--json=v2", formula], stderr=subprocess.DEVNULL)
+          except subprocess.CalledProcessError:
+              raise SystemExit(1)
+          formulae = json.loads(raw).get("formulae") or []
+          if not formulae:
+              raise SystemExit(1)
+          files = ((formulae[0].get("bottle") or {}).get("stable") or {}).get("files") or {}
+          intel = platform.machine().lower() in ("x86_64", "amd64", "i386")
+          for tag in files:
+              t = tag.lower()
+              if "linux" in t:
+                  continue
+              if intel and t.startswith("arm64"):
+                  continue
+              if (not intel) and not t.startswith("arm64"):
+                  continue
+              raise SystemExit(0)
+          raise SystemExit(1)
+          ' "$1"
+          }
+
+          if ! brew list --versions envoy >/dev/null 2>&1 && ! brew list --versions envoyproxy/tap/envoy >/dev/null 2>&1; then
+            if brew_has_envoy_bottle envoy; then
+              brew install envoy
+            elif brew_has_envoy_bottle envoyproxy/tap/envoy; then
+              brew install envoyproxy/tap/envoy
+            else
+              echo "No Homebrew Envoy bottle for this Mac; skipping brew install (would compile from source)." >&2
+            fi
+          fi
+
+          if command -v brew >/dev/null 2>&1; then
+            for formula in envoy envoyproxy/tap/envoy; do
+              prefix="$(brew --prefix "$formula" 2>/dev/null || true)"
+              if [ -n "$prefix" ] && [ -x "$prefix/bin/envoy" ]; then
+                echo "$prefix/bin" >> "$GITHUB_PATH"
+                export PATH="$prefix/bin:$PATH"
+                break
+              fi
+            done
+          fi
+
+          if ! command -v envoy >/dev/null 2>&1; then
+            echo "Downloading pinned darwin-amd64 Envoy ${ENVOY_VERSION} (Kuma/CNCF builds; official GitHub assets are Linux-only)…" >&2
+            dest="${RUNNER_TEMP}/envoy"
+            mkdir -p "$dest"
+            tarball="${RUNNER_TEMP}/envoy-darwin-amd64.tar.gz"
+            if ! curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+              "https://github.com/kumahq/envoy-builds/releases/download/v${ENVOY_VERSION}/envoy-darwin-amd64-v${ENVOY_VERSION}.tar.gz" \
+              -o "$tarball"; then
+              echo "darwin-amd64 Envoy download failed — Envoy arms will be skipped." >&2
+              exit 0
+            fi
+            tar -xzf "$tarball" -C "$dest"
+            bin=""
+            if [ -x "$dest/envoy" ]; then
+              bin="$dest/envoy"
+            else
+              bin="$(find "$dest" -type f -name envoy | awk 'NR==1 { print; exit }')"
+            fi
+            if [ -z "${bin}" ] || [ ! -f "$bin" ]; then
+              echo "darwin-amd64 Envoy tarball had no envoy binary — Envoy arms will be skipped." >&2
+              exit 0
+            fi
+            chmod +x "$bin"
+            echo "$(dirname "$bin")" >> "$GITHUB_PATH"
+            export PATH="$(dirname "$bin"):$PATH"
+          fi
+
+          if ! command -v envoy >/dev/null 2>&1; then
+            echo "envoy not on PATH after install attempt — Envoy arms will be skipped." >&2
+            exit 0
+          fi
+          envoy --version
+          echo "Envoy present (Homebrew or pinned darwin-amd64); H3 arms run when QuicListener is supported."
+
       # .NET System.Net.Quic on Linux requires native libmsquic (shipped in-box on Windows).
       - name: Install libmsquic (HTTP/3)
         if: runner.os == 'Linux'
@@ -309,7 +689,8 @@ jobs:
             -o packages-microsoft-prod.deb
           sudo dpkg -i packages-microsoft-prod.deb
           rm -f packages-microsoft-prod.deb
-          sudo apt-get update
+          sudo find /etc/apt -type f \( -iname '*chrome*' -o -iname '*google*chrome*' \) -print -delete || true
+          sudo apt-get update || true
           sudo apt-get install -y libmsquic
           pwsh -NoProfile -Command 'if (-not [System.Net.Quic.QuicListener]::IsSupported) { throw "QuicListener.IsSupported is false after libmsquic install" }; Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"'
 
@@ -438,7 +819,7 @@ jobs:
       # Pass workflow_dispatch inputs via env (not ${{ }} in the script) to avoid
       # githubactions:S7630 script-injection findings on user-controlled values.
       - name: Run saturation ramp
-        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || (inputs.mode == 'compare-product-smoke' && 50 || 400))) }}
+        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 110 || 345))) }}
         shell: pwsh
         env:
           RPS_MODE: ${{ env.RPS_MODE }}
@@ -446,16 +827,36 @@ jobs:
           RPS_WARMUP_SEC: ${{ env.RPS_WARMUP_SEC }}
           RPS_DURATION_SEC: ${{ env.RPS_DURATION_SEC }}
           RPS_REPEATS: ${{ env.RPS_REPEATS }}
+          RPS_ARM_SHARD: ${{ env.RPS_ARM_SHARD }}
         run: |
+          $hap = Join-Path $env:RUNNER_TEMP 'haproxy-quic/sbin/haproxy'
+          $hapArgs = @()
+          if ((Test-Path -LiteralPath $hap)) {
+            Write-Host "Pinning HAProxy QUIC binary: $hap"
+            $hapArgs = @('-HaproxyPath', $hap)
+          }
           pwsh tools/RpsLoadProbe/run-rps.ps1 `
             -Mode $env:RPS_MODE `
             -Concurrency $env:RPS_CONCURRENCY `
             -WarmupSec ([int]$env:RPS_WARMUP_SEC) `
             -DurationSec ([int]$env:RPS_DURATION_SEC) `
             -Repeats ([int]$env:RPS_REPEATS) `
+            -ArmShard $env:RPS_ARM_SHARD `
             -ResultsDir tools/RpsLoadProbe/results `
-            -BombardierCheck
+            -BombardierCheck `
+            @hapArgs
 
+      - name: Sanitize artifact shard label
+        if: always()
+        shell: bash
+        run: |
+          # macOS runners ship Bash 3.2; ${var//'/'/-} treats quotes as literal and leaves '/'.
+          raw="${RPS_ARM_SHARD:-all}"
+          echo "RPS_ARTIFACT_SHARD=$(printf '%s' "$raw" | tr '/' '-')" >> "$GITHUB_ENV"
+
+      # Post-ramp gates: hard-fail on every event (including workflow_dispatch).
+      # fail-fast: false keeps sibling OS jobs running; Upload CSV uses if: always().
+      # Sharded CSVs skip pairs whose arms are not in this artifact (union paste validates completeness).
       - name: Validate edition gates
         if: env.RPS_MODE == 'compare-editions'
         shell: pwsh
@@ -472,17 +873,8 @@ jobs:
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
             Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $csv) { throw 'No CSV found for compare-product gate validation' }
-          # macos-15-intel first-baseline floors (PERF-GATES.md) — Win/Linux keep defaults.
-          $macFloors = @()
-          if ('${{ matrix.os }}' -eq 'macos-15-intel') {
-            $macFloors = @(
-              '-MitmHttp3TlsFullGate', '0.65',
-              '-MitmHttp1PlainFullGate', '0.55',
-              '-ReverseYarpHttp3ToHttp1Gate', '0.55',
-              '-ReverseYarpHttp3Gate', '0.74'
-            )
-          }
-          pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName @macFloors
+          # Same floors on all OS: MITM Lite÷Reverse >= 0.50, Full÷Reverse >= 0.50, reverse TWP÷YARP >= 0.70. No nginx gate.
+          pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName
 
       - name: Validate cross-version gates
         if: env.RPS_MODE == 'compare-cross-version'
@@ -505,6 +897,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rps-csv-${{ matrix.os }}
+          # Include arm_shard so parallel shard dispatches do not collide (slash → dash via env sanitize).
+          name: rps-csv-${{ matrix.os }}-shard-${{ env.RPS_ARTIFACT_SHARD }}
           path: tools/RpsLoadProbe/results/rps-ramp-*.csv
           if-no-files-found: error

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
@@ -252,15 +253,16 @@ public class MitmStaticRebuildHelperTests
             (StaticTable.KnownHeaderMethod, (ByteString)"GET"),
             ((ByteString)"accept", (ByteString)"*/*"));
 
-        var before = new HeaderCollection();
-        before.AddHeader("accept", "*/*");
-        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(before);
-
-        var after = new HeaderCollection();
-        after.AddHeader("accept", "text/plain");
+        // Same HeaderCollection instance as production: Capture then mutate in place
+        // so MutationCount diverges (cross-instance equal counts are not a hot-path case).
+        var headers = new HeaderCollection();
+        headers.AddHeader("accept", "*/*");
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(headers);
+        headers.RemoveHeader("accept");
+        headers.AddHeader("accept", "text/plain");
 
         Assert.IsFalse(MitmStaticRebuildHelper.TryPrepareStaticHpackRelay(
-            original, baseline, after, out _, out _));
+            original, baseline, headers, out _, out _));
     }
 
     [TestMethod]
@@ -325,6 +327,135 @@ public class MitmStaticRebuildHelperTests
         dropped.Add("custom");
         Assert.IsFalse(MitmStaticRebuildHelper.TryRebuildStaticHpackBlock(block, dropped, out _));
     }
+
+    [TestMethod]
+    public void IsStaticOnlyHpackBlock_RejectsIndexedContinuationTableUpdateAndUnknownPrefix()
+    {
+        Assert.IsTrue(MitmStaticRebuildHelper.IsStaticOnlyHpackBlock([]));
+        Assert.IsTrue(MitmStaticRebuildHelper.IsStaticOnlyHpackBlock([0x82])); // :method GET
+        Assert.IsFalse(MitmStaticRebuildHelper.IsStaticOnlyHpackBlock([0xff])); // indexed 127 + continuation
+        Assert.IsFalse(MitmStaticRebuildHelper.IsStaticOnlyHpackBlock([0x20])); // dynamic table size update
+        Assert.IsFalse(MitmStaticRebuildHelper.IsStaticOnlyHpackBlock([0x40])); // incremental indexing
+        Assert.IsFalse(MitmStaticRebuildHelper.IsStaticOnlyHpackBlock([0x00])); // truncated literal
+        Assert.IsFalse(MitmStaticRebuildHelper.IsStaticOnlyHpackBlock([0x10])); // truncated never-indexed
+        Assert.IsFalse(MitmStaticRebuildHelper.IsStaticOnlyHpackBlock([0x0f])); // literal name-index 15, no continuation
+        Assert.IsFalse(MitmStaticRebuildHelper.IsStaticOnlyQpackBlock([]));
+        Assert.IsFalse(MitmStaticRebuildHelper.IsStaticOnlyQpackBlock([0x00]));
+        Assert.IsFalse(MitmStaticRebuildHelper.IsStaticOnlyQpackBlock([0x00, 0x01]));
+        Assert.IsTrue(MitmStaticRebuildHelper.IsStaticOnlyQpackBlock([0x00, 0x00]));
+    }
+
+    [TestMethod]
+    public void TryRebuildStaticBlocks_EmptyDroppedUnchangedAndMalformedReturnFalse()
+    {
+        var droppedNone = default(MitmCompressedRelayHelper.DroppedNameBuffer);
+        var droppedOne = default(MitmCompressedRelayHelper.DroppedNameBuffer);
+        droppedOne.Add("user-agent");
+
+        Assert.IsFalse(MitmStaticRebuildHelper.TryRebuildStaticHpackBlock([], droppedOne, out _));
+        Assert.IsFalse(MitmStaticRebuildHelper.TryRebuildStaticHpackBlock([0x82], droppedNone, out _));
+        Assert.IsFalse(MitmStaticRebuildHelper.TryRebuildStaticQpackBlock([], droppedOne, out _));
+        Assert.IsFalse(MitmStaticRebuildHelper.TryRebuildStaticQpackBlock([0x00, 0x01], droppedOne, out _));
+
+        var hpack = EncodeStaticHpack(
+            (StaticTable.KnownHeaderMethod, (ByteString)"GET"),
+            ((ByteString)"accept", (ByteString)"*/*"));
+        Assert.IsFalse(MitmStaticRebuildHelper.TryRebuildStaticHpackBlock(hpack, droppedOne, out _));
+
+        var qpack = QpackEncoder.Encode([(":method", "GET"), ("accept", "*/*")]);
+        Assert.IsFalse(MitmStaticRebuildHelper.TryRebuildStaticQpackBlock(qpack, droppedOne, out _));
+
+        // Required QPACK prefix with a truncated instruction — decoder throws, rebuild fails.
+        Assert.IsFalse(MitmStaticRebuildHelper.TryRebuildStaticQpackBlock([0x00, 0x00, 0x80], droppedOne, out _));
+    }
+
+    [TestMethod]
+    public void TryPrepareStaticRelay_MutationCountOnlyAndPrecomputedAppends()
+    {
+        var original = EncodeStaticHpack((StaticTable.KnownHeaderMethod, (ByteString)"GET"));
+        var headers = new HeaderCollection();
+        headers.AddHeader("accept", "*/*");
+        var unchanged = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(headers);
+        Assert.IsTrue(MitmStaticRebuildHelper.TryPrepareStaticHpackRelay(
+            original, unchanged, headers, out var same, out var added));
+        Assert.AreSame(original, same);
+        Assert.AreEqual(0, added.Count);
+
+        var countOnly = MitmCompressedRelayHelper.HeaderRelayBaseline.CaptureMutationCount(headers);
+        headers.AddHeader("x-new", "1");
+        Assert.IsFalse(MitmStaticRebuildHelper.TryPrepareStaticHpackRelay(
+            original, countOnly, headers, out _, out _));
+        Assert.IsFalse(MitmStaticRebuildHelper.TryPrepareStaticQpackRelay(
+            [0x00, 0x00], countOnly, headers, out _, out _));
+
+        var appends = default(MitmCompressedRelayHelper.AddedHeaderBuffer);
+        appends.Add("x-via", "1.1 twp");
+        var fromLog = MitmCompressedRelayHelper.HeaderRelayBaseline.FromAppendLog(headers.MutationCount - 1, appends);
+        Assert.IsTrue(MitmStaticRebuildHelper.TryPrepareStaticHpackRelay(
+            original, fromLog, headers, out var logged, out var precomputed));
+        Assert.AreSame(original, logged);
+        Assert.AreEqual(1, precomputed.Count);
+        Assert.IsTrue(MitmStaticRebuildHelper.TryPrepareStaticQpackRelay(
+            [0x00, 0x00], fromLog, headers, out _, out var qPrecomputed));
+        Assert.AreEqual(1, qPrecomputed.Count);
+    }
+
+    [TestMethod]
+    public void TrySkipHpackHelpers_CoverTruncationContinuationAndOverflow()
+    {
+        var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+        var skipLit = typeof(MitmStaticRebuildHelper)
+            .GetMethod("TrySkipHpackLiteral", flags)!
+            .CreateDelegate<SkipHpackSpan>();
+        var skipStr = typeof(MitmStaticRebuildHelper)
+            .GetMethod("TrySkipHpackString", flags)!
+            .CreateDelegate<SkipHpackSpan>();
+        var skipInt = typeof(MitmStaticRebuildHelper)
+            .GetMethods(flags)
+            .First(m => m.Name == "TrySkipHpackIntegerContinuation" && m.GetParameters().Length == 2)
+            .CreateDelegate<SkipHpackSpan>();
+        var skipIntOut = typeof(MitmStaticRebuildHelper)
+            .GetMethods(flags)
+            .First(m => m.Name == "TrySkipHpackIntegerContinuation" && m.GetParameters().Length == 3)
+            .CreateDelegate<SkipHpackSpanOut>();
+
+        var i = 0;
+        Assert.IsFalse(skipLit([], ref i));
+        i = 0;
+        Assert.IsFalse(skipStr([], ref i));
+        i = 0;
+        Assert.IsFalse(skipInt([], ref i));
+
+        i = 0;
+        Assert.IsFalse(skipLit([0x0f], ref i)); // name index 15, no continuation bytes
+        i = 0;
+        Assert.IsFalse(skipLit([0x1f], ref i)); // never-indexed name index 15
+        i = 0;
+        Assert.IsFalse(skipLit([0x00], ref i)); // new name, missing string
+        i = 0;
+        Assert.IsTrue(skipLit([0x00, 0x01, (byte)'a', 0x01, (byte)'b'], ref i));
+
+        i = 0;
+        Assert.IsFalse(skipStr([0x7f], ref i)); // 127+ continuation missing
+        i = 0;
+        Assert.IsFalse(skipStr([0x05, 1], ref i)); // declared length past buffer
+        i = 0;
+        Assert.IsTrue(skipStr([0x01, (byte)'x'], ref i));
+
+        i = 0;
+        Assert.IsFalse(skipInt([0x80], ref i)); // truncated continuation
+        i = 0;
+        Assert.IsFalse(skipInt([0x80, 0x80, 0x80, 0x80, 0x80], ref i)); // m > 28
+        i = 0;
+        Assert.IsTrue(skipInt([0x01], ref i));
+        i = 0;
+        Assert.IsTrue(skipIntOut([0x01], ref i, out var extra));
+        Assert.AreEqual(1, extra);
+    }
+
+    private delegate bool SkipHpackSpan(ReadOnlySpan<byte> block, ref int i);
+
+    private delegate bool SkipHpackSpanOut(ReadOnlySpan<byte> block, ref int i, out int value);
 
     private static byte[] EncodeStaticHpack(params (ByteString Name, ByteString Value)[] headers)
     {

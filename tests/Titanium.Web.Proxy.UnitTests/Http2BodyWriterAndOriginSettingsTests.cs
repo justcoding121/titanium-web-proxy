@@ -251,27 +251,30 @@ public class Http2BodyWriterAndOriginSettingsTests
     }
 
     [TestMethod]
-    public void HeaderCollectorListener_ForwardsAllHeadersToCallback()
+    public void HeaderCollectorListener_CollectsStatusAndInterimFields()
     {
         var listenerType = typeof(Http2OriginConnection).GetNestedType("HeaderCollectorListener",
             BindingFlags.NonPublic)!;
-        var headers = new System.Collections.Generic.List<(string Name, string Value)>();
-        var listener = Activator.CreateInstance(listenerType, PrivateInstance, null,
-            [(Action<ByteString, ByteString>)((n, v) =>
-            {
-                headers.Add((Encoding.ASCII.GetString(n.Span), Encoding.ASCII.GetString(v.Span)));
-            })], null)!;
+        var listener = Activator.CreateInstance(listenerType, nonPublic: true)!;
+        listenerType.GetMethod("Begin", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!
+            .Invoke(listener, null);
 
         var add = listenerType.GetMethod("AddHeader")!;
         add.Invoke(listener, [Bs(":status"), Bs("100"), false]);
         add.Invoke(listener, [Bs("x-a"), Bs("1"), false]);
         add.Invoke(listener, [Bs("x-b"), Bs("2"), true]);
 
-        Assert.AreEqual(3, headers.Count);
-        Assert.AreEqual(":status", headers[0].Name);
-        Assert.AreEqual("100", headers[0].Value);
-        Assert.AreEqual("x-a", headers[1].Name);
-        Assert.AreEqual("x-b", headers[2].Name);
+        var status = (ByteString)listenerType.GetField("Status",
+            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!.GetValue(listener)!;
+        Assert.AreEqual("100", Encoding.ASCII.GetString(status.Span));
+        var interim = listenerType.GetField("InterimHeaders",
+            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!.GetValue(listener);
+        Assert.IsNotNull(interim);
+        var headers = (HeaderCollection)interim!;
+        Assert.IsTrue(headers.HeaderExists("x-a"));
+        Assert.IsTrue(headers.HeaderExists("x-b"));
+        Assert.AreEqual("1", headers.GetHeaders("x-a")![0].Value);
+        Assert.AreEqual("2", headers.GetHeaders("x-b")![0].Value);
     }
 
     [TestMethod]
@@ -281,8 +284,7 @@ public class Http2BodyWriterAndOriginSettingsTests
         var pendingType = typeof(Http2OriginConnection).GetNestedType("PendingStream", BindingFlags.NonPublic)!;
         var pending = Activator.CreateInstance(pendingType, BindingFlags.Instance | BindingFlags.NonPublic,
             null, [1024L], null)!;
-        var streams = typeof(Http2OriginConnection).GetField("streams", PrivateInstance)!.GetValue(origin)!;
-        Assert.IsTrue((bool)streams.GetType().GetMethod("TryAdd")!.Invoke(streams, [1, pending])!);
+        RegisterOpenedStream(origin, 1, pending);
 
         var process = GetProcessHeaderBlock(origin);
         process(1, EncodeStatusBlock(100, ("x-hint", "1")), false);
@@ -314,8 +316,7 @@ public class Http2BodyWriterAndOriginSettingsTests
         Assert.IsNull(pendingType.GetField("InterimChannel", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!
             .GetValue(pending));
 
-        var streams = typeof(Http2OriginConnection).GetField("streams", PrivateInstance)!.GetValue(origin)!;
-        Assert.IsTrue((bool)streams.GetType().GetMethod("TryAdd")!.Invoke(streams, [1, pending])!);
+        RegisterOpenedStream(origin, 1, pending);
 
         var process = GetProcessHeaderBlock(origin);
         process(1, EncodeStatusBlock(100, ("x-hint", "1")), false);
@@ -340,9 +341,7 @@ public class Http2BodyWriterAndOriginSettingsTests
         var pendingType = typeof(Http2OriginConnection).GetNestedType("PendingStream", BindingFlags.NonPublic)!;
         var pending = Activator.CreateInstance(pendingType, BindingFlags.Instance | BindingFlags.NonPublic,
             null, [1024L], null)!;
-        var streamsField = typeof(Http2OriginConnection).GetField("streams", PrivateInstance)!;
-        var streams = streamsField.GetValue(origin)!;
-        Assert.IsTrue((bool)streams.GetType().GetMethod("TryAdd")!.Invoke(streams, [3, pending])!);
+        RegisterOpenedStream(origin, 3, pending);
 
         var process = GetProcessHeaderBlock(origin);
         process(3, EncodeStatusBlock(200), false);
@@ -444,6 +443,12 @@ public class Http2BodyWriterAndOriginSettingsTests
     {
         var method = typeof(Http2OriginConnection).GetMethod("ProcessHeaderBlock", PrivateInstance)!;
         return method.CreateDelegate<ProcessHeaderBlockDelegate>(origin);
+    }
+
+    private static void RegisterOpenedStream(Http2OriginConnection origin, int streamId, object pending)
+    {
+        var method = typeof(Http2OriginConnection).GetMethod("RegisterOpenedStream", PrivateInstance)!;
+        method.Invoke(origin, [streamId, pending]);
     }
 
     private sealed class RecordingHeaderListener : IHeaderListener

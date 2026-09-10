@@ -77,6 +77,31 @@ internal sealed class NginxHost : IDisposable
     }
 
     /// <summary>
+    /// Client TLS+h2 → HTTPS/h2 gRPC origin via <c>grpc_pass</c> (compare-grpc).
+    /// </summary>
+    public static async Task<NginxHost?> TryStartGrpcAsync(int originHttpsPort, string? nginxPath)
+    {
+        var exe = ResolveNginxExecutable(nginxPath);
+        if (exe == null)
+            return null;
+
+        var version = ReadVersion(exe);
+        var useHttp2OnDirective = SupportsHttp2OnDirective(version);
+        var prefixProbe = Path.Combine(Path.GetTempPath(), "twp-rps-nginx-certs-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(prefixProbe);
+        try
+        {
+            var (certPem, keyPem) = await ExportLoopbackPemAsync(prefixProbe);
+            return await TryStartAsync(BuildGrpcConf(originHttpsPort, certPem, keyPem, useHttp2OnDirective),
+                listenScheme: "https", nginxPath);
+        }
+        finally
+        {
+            TryDeleteDir(prefixProbe);
+        }
+    }
+
+    /// <summary>
     /// Client QUIC/h3 (plus TCP TLS for readiness) → cleartext HTTP/1 origin.
     /// Returns <see langword="null"/> when nginx is missing or was not built with <c>http_v3_module</c>
     /// (Ubuntu 24.04 distro nginx 1.24; nginx/Windows). Official nginx.org mainline packages include it.
@@ -95,6 +120,102 @@ internal sealed class NginxHost : IDisposable
         {
             var (certPem, keyPem) = await ExportLoopbackPemAsync(prefixProbe);
             return await TryStartAsync(BuildHttp3CleartextConf(originHttpPort, certPem, keyPem),
+                listenScheme: "https", nginxPath, listenHost: "localhost", requireUdp: true);
+        }
+        finally
+        {
+            TryDeleteDir(prefixProbe);
+        }
+    }
+
+    /// <summary>Client cleartext HTTP/1 → HTTPS HTTP/1 origin (<c>proxy_ssl</c> / <c>proxy_pass https://</c>).</summary>
+    public static Task<NginxHost?> TryStartHttp1ToHttpsAsync(int originHttpsPort, string? nginxPath) =>
+        TryStartAsync(BuildHttp1ToHttpsConf(originHttpsPort), listenScheme: "http", nginxPath);
+
+    /// <summary>Client TLS HTTP/1 → HTTPS HTTP/1 origin (dual TLS; industry-standard <c>proxy_ssl</c>).</summary>
+    public static async Task<NginxHost?> TryStartHttp1TlsToHttpsAsync(int originHttpsPort, string? nginxPath)
+    {
+        var prefixProbe = Path.Combine(Path.GetTempPath(), "twp-rps-nginx-certs-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(prefixProbe);
+        try
+        {
+            var (certPem, keyPem) = await ExportLoopbackPemAsync(prefixProbe);
+            return await TryStartAsync(BuildHttp1TlsToHttpsConf(originHttpsPort, certPem, keyPem),
+                listenScheme: "https", nginxPath);
+        }
+        finally
+        {
+            TryDeleteDir(prefixProbe);
+        }
+    }
+
+    /// <summary>Client TLS+h2 → HTTPS HTTP/1 origin (<c>proxy_ssl</c>).</summary>
+    public static async Task<NginxHost?> TryStartHttp2ToHttpsHttp1Async(int originHttpsPort, string? nginxPath)
+    {
+        var exe = ResolveNginxExecutable(nginxPath);
+        if (exe == null)
+            return null;
+
+        var version = ReadVersion(exe);
+        var useHttp2OnDirective = SupportsHttp2OnDirective(version);
+        var prefixProbe = Path.Combine(Path.GetTempPath(), "twp-rps-nginx-certs-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(prefixProbe);
+        try
+        {
+            var (certPem, keyPem) = await ExportLoopbackPemAsync(prefixProbe);
+            return await TryStartAsync(
+                BuildHttp2ToHttpsHttp1Conf(originHttpsPort, certPem, keyPem, useHttp2OnDirective),
+                listenScheme: "https", nginxPath);
+        }
+        finally
+        {
+            TryDeleteDir(prefixProbe);
+        }
+    }
+
+    /// <summary>
+    /// Client prior-knowledge h2c → cleartext HTTP/1. Requires nginx 1.25.1+ <c>http2 on</c> without ssl.
+    /// </summary>
+    public static async Task<NginxHost?> TryStartH2cToH1Async(int originHttpPort, string? nginxPath)
+    {
+        var exe = ResolveNginxExecutable(nginxPath);
+        if (exe == null)
+            return null;
+        if (!SupportsHttp2OnDirective(ReadVersion(exe)))
+            return null;
+        return await TryStartAsync(BuildH2cToH1Conf(originHttpPort), listenScheme: "http", nginxPath);
+    }
+
+    /// <summary>
+    /// Client prior-knowledge h2c → HTTPS HTTP/1. Requires nginx 1.25.1+ <c>http2 on</c> without ssl.
+    /// </summary>
+    public static async Task<NginxHost?> TryStartH2cToHttpsAsync(int originHttpsPort, string? nginxPath)
+    {
+        var exe = ResolveNginxExecutable(nginxPath);
+        if (exe == null)
+            return null;
+        if (!SupportsHttp2OnDirective(ReadVersion(exe)))
+            return null;
+        return await TryStartAsync(BuildH2cToHttpsConf(originHttpsPort), listenScheme: "http", nginxPath);
+    }
+
+    /// <summary>
+    /// Client QUIC/h3 → HTTPS HTTP/1 origin. Requires <c>http_v3_module</c> (not nginx/Windows).
+    /// </summary>
+    public static async Task<NginxHost?> TryStartHttp3ToHttpsHttp1Async(int originHttpsPort, string? nginxPath)
+    {
+        var exe = ResolveNginxExecutable(nginxPath);
+        if (exe == null)
+            return null;
+        if (!SupportsHttp3Module(ReadConfigureArguments(exe)))
+            return null;
+
+        var prefixProbe = Path.Combine(Path.GetTempPath(), "twp-rps-nginx-certs-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(prefixProbe);
+        try
+        {
+            var (certPem, keyPem) = await ExportLoopbackPemAsync(prefixProbe);
+            return await TryStartAsync(BuildHttp3ToHttpsHttp1Conf(originHttpsPort, certPem, keyPem),
                 listenScheme: "https", nginxPath, listenHost: "localhost", requireUdp: true);
         }
         finally
@@ -202,6 +323,77 @@ internal sealed class NginxHost : IDisposable
                     proxy_request_buffering off;
                     proxy_pass http://origin;
                 }
+            }
+        }
+        """;
+
+    private static Func<string, int, string> BuildH2cToH1Conf(int originHttpPort) => (_, port) => $$"""
+        worker_processes auto;
+        daemon off;
+        error_log logs/error.log error;
+        pid nginx.pid;
+        events {
+            worker_connections 4096;
+        }
+        http {
+            access_log off;
+            sendfile on;
+            keepalive_timeout 65;
+            client_max_body_size 10m;
+            client_body_temp_path temp/client_body;
+            proxy_temp_path temp/proxy;
+            fastcgi_temp_path temp/fastcgi;
+            uwsgi_temp_path temp/uwsgi;
+            scgi_temp_path temp/scgi;
+            upstream origin {
+                server 127.0.0.1:{{originHttpPort}};
+                keepalive 256;
+            }
+            server {
+                listen 127.0.0.1:{{port}};
+                http2 on;
+                location / {
+                    proxy_http_version 1.1;
+                    proxy_set_header Connection "";
+                    proxy_set_header Host $host;
+                    proxy_buffering off;
+                    proxy_request_buffering off;
+                    proxy_pass http://origin;
+                }
+            }
+        }
+        """;
+
+    private static Func<string, int, string> BuildH2cToHttpsConf(int originHttpsPort) => (_, port) => $$"""
+        worker_processes auto;
+        daemon off;
+        error_log logs/error.log error;
+        pid nginx.pid;
+        events {
+            worker_connections 4096;
+        }
+        http {
+            access_log off;
+            sendfile on;
+            keepalive_timeout 65;
+            client_max_body_size 10m;
+            client_body_temp_path temp/client_body;
+            proxy_temp_path temp/proxy;
+            fastcgi_temp_path temp/fastcgi;
+            uwsgi_temp_path temp/uwsgi;
+            scgi_temp_path temp/scgi;
+            upstream origin {
+                server 127.0.0.1:{{originHttpsPort}};
+                keepalive 256;
+            }
+            map $http_upgrade $connection_upgrade {
+                default upgrade;
+                '' close;
+            }
+            server {
+                listen 127.0.0.1:{{port}};
+                http2 on;
+                {{HttpsOriginProxyLocations().Trim()}}
             }
         }
         """;
@@ -323,6 +515,53 @@ internal sealed class NginxHost : IDisposable
                 """;
         };
 
+    private static Func<string, int, string> BuildGrpcConf(int originHttpsPort, string certPem, string keyPem,
+        bool useHttp2OnDirective) =>
+        (prefixDir, port) =>
+        {
+            var certDest = Path.Combine(prefixDir, "certs", "server.crt");
+            var keyDest = Path.Combine(prefixDir, "certs", "server.key");
+            File.Copy(certPem, certDest, overwrite: true);
+            File.Copy(keyPem, keyDest, overwrite: true);
+            certDest = certDest.Replace('\\', '/');
+            keyDest = keyDest.Replace('\\', '/');
+            var listenAndHttp2 = useHttp2OnDirective
+                ? $"listen 127.0.0.1:{port} ssl;\n                        http2 on;"
+                : $"listen 127.0.0.1:{port} ssl http2;";
+            return $$"""
+                worker_processes auto;
+                daemon off;
+                error_log logs/error.log error;
+                pid nginx.pid;
+                events {
+                    worker_connections 4096;
+                }
+                http {
+                    access_log off;
+                    sendfile on;
+                    keepalive_timeout 65;
+                    client_max_body_size 10m;
+                    client_body_temp_path temp/client_body;
+                    proxy_temp_path temp/proxy;
+                    fastcgi_temp_path temp/fastcgi;
+                    uwsgi_temp_path temp/uwsgi;
+                    scgi_temp_path temp/scgi;
+                    server {
+                        {{listenAndHttp2}}
+                        ssl_certificate {{certDest}};
+                        ssl_certificate_key {{keyDest}};
+                        ssl_protocols TLSv1.2 TLSv1.3;
+                        location / {
+                            grpc_pass grpcs://127.0.0.1:{{originHttpsPort}};
+                            grpc_ssl_verify off;
+                            grpc_read_timeout 60s;
+                            grpc_send_timeout 60s;
+                        }
+                    }
+                }
+                """;
+        };
+
     private static Func<string, int, string> BuildHttp3CleartextConf(int originHttpPort, string certPem, string keyPem) =>
         (prefixDir, port) =>
         {
@@ -374,6 +613,225 @@ internal sealed class NginxHost : IDisposable
                             proxy_request_buffering off;
                             proxy_pass http://origin;
                         }
+                    }
+                }
+                """;
+        };
+
+    /// <summary>
+    /// Shared <c>proxy_pass https://</c> location. Loopback origin leaf is CN/SAN <c>localhost</c>;
+    /// verify is off so the lab CA need not be in nginx's trust store.
+    /// </summary>
+    private static string HttpsOriginProxyLocations(string upgradeMapName = "$connection_upgrade") => $$"""
+                    location /ws {
+                        proxy_http_version 1.1;
+                        proxy_set_header Upgrade $http_upgrade;
+                        proxy_set_header Connection {{upgradeMapName}};
+                        proxy_set_header Host localhost;
+                        proxy_ssl_server_name on;
+                        proxy_ssl_name localhost;
+                        proxy_ssl_verify off;
+                        proxy_buffering off;
+                        proxy_request_buffering off;
+                        proxy_pass https://origin;
+                    }
+                    location / {
+                        proxy_http_version 1.1;
+                        proxy_set_header Connection "";
+                        proxy_set_header Host localhost;
+                        proxy_ssl_server_name on;
+                        proxy_ssl_name localhost;
+                        proxy_ssl_verify off;
+                        proxy_buffering off;
+                        proxy_request_buffering off;
+                        proxy_pass https://origin;
+                    }
+        """;
+
+    private static string HttpsOriginProxyLocationOnly() => """
+                    location / {
+                        proxy_http_version 1.1;
+                        proxy_set_header Connection "";
+                        proxy_set_header Host localhost;
+                        proxy_ssl_server_name on;
+                        proxy_ssl_name localhost;
+                        proxy_ssl_verify off;
+                        proxy_buffering off;
+                        proxy_request_buffering off;
+                        proxy_pass https://origin;
+                    }
+        """;
+
+    private static Func<string, int, string> BuildHttp1ToHttpsConf(int originHttpsPort) =>
+        (_, port) => $$"""
+            worker_processes auto;
+            daemon off;
+            error_log logs/error.log error;
+            pid nginx.pid;
+            events {
+                worker_connections 4096;
+            }
+            http {
+                access_log off;
+                sendfile on;
+                keepalive_timeout 65;
+                client_max_body_size 10m;
+                client_body_temp_path temp/client_body;
+                proxy_temp_path temp/proxy;
+                fastcgi_temp_path temp/fastcgi;
+                uwsgi_temp_path temp/uwsgi;
+                scgi_temp_path temp/scgi;
+                upstream origin {
+                    server 127.0.0.1:{{originHttpsPort}};
+                    keepalive 256;
+                }
+                map $http_upgrade $connection_upgrade {
+                    default upgrade;
+                    '' close;
+                }
+                server {
+                    listen 127.0.0.1:{{port}};
+                    {{HttpsOriginProxyLocations().Trim()}}
+                }
+            }
+            """;
+
+    private static Func<string, int, string> BuildHttp1TlsToHttpsConf(int originHttpsPort, string certPem,
+        string keyPem) =>
+        (prefixDir, port) =>
+        {
+            var certDest = Path.Combine(prefixDir, "certs", "server.crt");
+            var keyDest = Path.Combine(prefixDir, "certs", "server.key");
+            File.Copy(certPem, certDest, overwrite: true);
+            File.Copy(keyPem, keyDest, overwrite: true);
+            certDest = certDest.Replace('\\', '/');
+            keyDest = keyDest.Replace('\\', '/');
+            return $$"""
+                worker_processes auto;
+                daemon off;
+                error_log logs/error.log error;
+                pid nginx.pid;
+                events {
+                    worker_connections 4096;
+                }
+                http {
+                    access_log off;
+                    sendfile on;
+                    keepalive_timeout 65;
+                    client_max_body_size 10m;
+                    client_body_temp_path temp/client_body;
+                    proxy_temp_path temp/proxy;
+                    fastcgi_temp_path temp/fastcgi;
+                    uwsgi_temp_path temp/uwsgi;
+                    scgi_temp_path temp/scgi;
+                    upstream origin {
+                        server 127.0.0.1:{{originHttpsPort}};
+                        keepalive 256;
+                    }
+                    map $http_upgrade $connection_upgrade {
+                        default upgrade;
+                        '' close;
+                    }
+                    server {
+                        listen 127.0.0.1:{{port}} ssl;
+                        ssl_certificate {{certDest}};
+                        ssl_certificate_key {{keyDest}};
+                        ssl_protocols TLSv1.2 TLSv1.3;
+                        {{HttpsOriginProxyLocations().Trim()}}
+                    }
+                }
+                """;
+        };
+
+    private static Func<string, int, string> BuildHttp2ToHttpsHttp1Conf(int originHttpsPort, string certPem,
+        string keyPem, bool useHttp2OnDirective) =>
+        (prefixDir, port) =>
+        {
+            var certDest = Path.Combine(prefixDir, "certs", "server.crt");
+            var keyDest = Path.Combine(prefixDir, "certs", "server.key");
+            File.Copy(certPem, certDest, overwrite: true);
+            File.Copy(keyPem, keyDest, overwrite: true);
+            certDest = certDest.Replace('\\', '/');
+            keyDest = keyDest.Replace('\\', '/');
+            var listenAndHttp2 = useHttp2OnDirective
+                ? $"listen 127.0.0.1:{port} ssl;\n                        http2 on;"
+                : $"listen 127.0.0.1:{port} ssl http2;";
+            return $$"""
+                worker_processes auto;
+                daemon off;
+                error_log logs/error.log error;
+                pid nginx.pid;
+                events {
+                    worker_connections 4096;
+                }
+                http {
+                    access_log off;
+                    sendfile on;
+                    keepalive_timeout 65;
+                    client_max_body_size 10m;
+                    client_body_temp_path temp/client_body;
+                    proxy_temp_path temp/proxy;
+                    fastcgi_temp_path temp/fastcgi;
+                    uwsgi_temp_path temp/uwsgi;
+                    scgi_temp_path temp/scgi;
+                    upstream origin {
+                        server 127.0.0.1:{{originHttpsPort}};
+                        keepalive 256;
+                    }
+                    server {
+                        {{listenAndHttp2}}
+                        ssl_certificate {{certDest}};
+                        ssl_certificate_key {{keyDest}};
+                        ssl_protocols TLSv1.2 TLSv1.3;
+                        {{HttpsOriginProxyLocationOnly().Trim()}}
+                    }
+                }
+                """;
+        };
+
+    private static Func<string, int, string> BuildHttp3ToHttpsHttp1Conf(int originHttpsPort, string certPem,
+        string keyPem) =>
+        (prefixDir, port) =>
+        {
+            var certDest = Path.Combine(prefixDir, "certs", "server.crt");
+            var keyDest = Path.Combine(prefixDir, "certs", "server.key");
+            File.Copy(certPem, certDest, overwrite: true);
+            File.Copy(keyPem, keyDest, overwrite: true);
+            certDest = certDest.Replace('\\', '/');
+            keyDest = keyDest.Replace('\\', '/');
+            return $$"""
+                worker_processes auto;
+                daemon off;
+                error_log logs/error.log error;
+                pid nginx.pid;
+                events {
+                    worker_connections 4096;
+                }
+                http {
+                    access_log off;
+                    sendfile on;
+                    keepalive_timeout 65;
+                    client_max_body_size 10m;
+                    client_body_temp_path temp/client_body;
+                    proxy_temp_path temp/proxy;
+                    fastcgi_temp_path temp/fastcgi;
+                    uwsgi_temp_path temp/uwsgi;
+                    scgi_temp_path temp/scgi;
+                    upstream origin {
+                        server 127.0.0.1:{{originHttpsPort}};
+                        keepalive 256;
+                    }
+                    server {
+                        listen 127.0.0.1:{{port}} ssl;
+                        listen [::1]:{{port}} ssl ipv6only=on;
+                        listen 127.0.0.1:{{port}} quic reuseport;
+                        listen [::1]:{{port}} quic reuseport ipv6only=on;
+                        http3 on;
+                        ssl_certificate {{certDest}};
+                        ssl_certificate_key {{keyDest}};
+                        ssl_protocols TLSv1.3;
+                        add_header Alt-Svc 'h3=":{{port}}"; ma=86400';
+                        {{HttpsOriginProxyLocationOnly().Trim()}}
                     }
                 }
                 """;

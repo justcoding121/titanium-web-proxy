@@ -96,5 +96,14 @@ namespace Titanium.Web.Proxy.UnitTests
             Assert.IsFalse(validationInvoked);
             Assert.IsFalse(selectionInvoked);
         }
+
+        [TestMethod]
+        public void IgnoreServerCertificateErrors_AcceptsChainErrorsWithoutCallback()
+        {
+            var proxy = new ProxyServer { IgnoreServerCertificateErrors = true };
+            var accepted = proxy.ValidateServerCertificate(
+                proxy, null, null, null, SslPolicyErrors.RemoteCertificateChainErrors);
+            Assert.IsTrue(accepted);
+        }
     }
 }

@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>titanium-inspector</id>
+    <version>7.0.5</version>
+    <title>Titanium Inspector</title>
+    <authors>justcoding121</authors>
+    <owners>justcoding121</owners>
+    <copyright>Copyright (c) Jehonathan Thomas</copyright>
+    <projectUrl>https://github.com/justcoding121/titanium-web-proxy</projectUrl>
+    <licenseUrl>https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt</licenseUrl>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <projectSourceUrl>https://github.com/justcoding121/titanium-web-proxy</projectSourceUrl>
+    <docsUrl>https://titaniumproxy.com/docs/inspector</docsUrl>
+    <bugTrackerUrl>https://github.com/justcoding121/titanium-web-proxy/issues</bugTrackerUrl>
+    <tags>titanium proxy inspector mitm http https debugger</tags>
+    <summary>Desktop HTTP(S) traffic debugger for Titanium Web Proxy.</summary>
+    <description>Titanium Inspector MITM debugger. Installs the signed win-x64 MSI from GitHub Releases. PolyForm Noncommercial 1.0.0.</description>
+    <releaseNotes>https://github.com/justcoding121/titanium-web-proxy/releases/tag/v7.0.5</releaseNotes>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

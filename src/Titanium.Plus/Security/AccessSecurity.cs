@@ -22,14 +22,18 @@ public sealed class AccessSecurity
                      !string.IsNullOrWhiteSpace(authority);
         var hasCidr = options.TryGetValue("security.allowCidrs", out var cidrs) &&
                       !string.IsNullOrWhiteSpace(cidrs);
-        if (!hasJwt && !hasCidr)
+        var hasApiKey = !string.IsNullOrWhiteSpace(options.GetValueOrDefault("security.apiKeys"));
+        var hasBasic = !string.IsNullOrWhiteSpace(options.GetValueOrDefault("security.basicUsers"));
+        var hasCors = options.TryGetValue("cors.enabled", out var corsOn) &&
+                      string.Equals(corsOn, "true", StringComparison.OrdinalIgnoreCase);
+        if (!hasJwt && !hasCidr && !hasApiKey && !hasBasic && !hasCors)
         {
             return null;
         }
 
         if (context.Middleware is null)
         {
-            PlusLog.Warn(context, "Plus Security: Middleware list is null — CIDR/JWT not registered.");
+            PlusLog.Warn(context, "Plus Security: Middleware list is null — CIDR/JWT/API key/CORS not registered.");
             return new AccessSecurity();
         }
 
@@ -54,7 +58,87 @@ public sealed class AccessSecurity
                 $"Plus Security: JWT authority={authority} audience={audience ?? "(any)"} jwks={jwksUrl ?? "(oidc discovery)"}.");
         }
 
+        RegisterApiKeyBasic(context, options);
+        RegisterCors(context, options);
+
         return new AccessSecurity();
+    }
+
+    private static void RegisterApiKeyBasic(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
+    {
+        var keys = ParseCsv(options.GetValueOrDefault("security.apiKeys"));
+        var users = ParseBasicUsers(options.GetValueOrDefault("security.basicUsers"));
+        if (keys.Count == 0 && users.Count == 0)
+        {
+            return;
+        }
+
+        var header = options.GetValueOrDefault("security.apiKeyHeader") ?? "X-Api-Key";
+        context.Middleware!.Add(new ApiKeyBasicAuthMiddleware(keys, users, header));
+        PlusLog.Info(context,
+            $"Plus Security: API key/basic auth registered (keys={keys.Count} users={users.Count}).");
+    }
+
+    private static void RegisterCors(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
+    {
+        if (!options.TryGetValue("cors.enabled", out var enabled) ||
+            !string.Equals(enabled, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var origin = options.GetValueOrDefault("cors.allowOrigin") ?? "*";
+        var methods = options.GetValueOrDefault("cors.allowMethods") ?? "GET,POST,PUT,PATCH,DELETE,OPTIONS";
+        var headers = options.GetValueOrDefault("cors.allowHeaders") ?? "*";
+        var creds = string.Equals(options.GetValueOrDefault("cors.allowCredentials"), "true", StringComparison.OrdinalIgnoreCase);
+        var maxAge = int.TryParse(options.GetValueOrDefault("cors.maxAgeSeconds"), out var m) ? m : 86400;
+        var cors = new CorsMiddleware(origin, methods, headers, creds, maxAge);
+        context.Middleware!.Add(cors);
+
+        // Inject ACAO on successful proxied responses when session path is used.
+        if (context.ProxyServer is Titanium.Web.Proxy.ProxyServer proxy)
+        {
+            proxy.BeforeResponse += (_, e) =>
+            {
+                foreach (var h in cors.BuildResponseHeaders())
+                {
+                    e.HttpClient.Response.Headers.RemoveHeader(h.Name);
+                    e.HttpClient.Response.Headers.AddHeader(h);
+                }
+
+                return Task.CompletedTask;
+            };
+        }
+
+        PlusLog.Info(context, $"Plus CORS: enabled origin={origin}");
+    }
+
+    private static List<string> ParseCsv(string? csv) =>
+        string.IsNullOrWhiteSpace(csv)
+            ? []
+            : csv.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
+
+    private static Dictionary<string, string> ParseBasicUsers(string? raw)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return map;
+        }
+
+        // Format: user:pass,user2:pass2
+        foreach (var part in raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            var idx = part.IndexOf(':');
+            if (idx <= 0)
+            {
+                continue;
+            }
+
+            map[part[..idx]] = part[(idx + 1)..];
+        }
+
+        return map;
     }
 }
 

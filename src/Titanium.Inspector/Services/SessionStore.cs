@@ -117,7 +117,12 @@ public sealed class SessionStore : IDisposable
     /// <summary>Insert a new session, or refresh body budget if the id already exists.</summary>
     public void Add(SessionSnapshot snapshot)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        // Late UI-marshaled pipeline events may arrive after EnsureShutdown disposed the store.
+        if (_disposed)
+        {
+            return;
+        }
+
         var isNew = false;
         List<SessionSnapshot>? removed = null;
         lock (_gate)
@@ -158,7 +163,12 @@ public sealed class SessionStore : IDisposable
 
     public void NotifyUpdated(SessionSnapshot snapshot)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        // Same shutdown race as Add — do not crash Avalonia's dispatcher.
+        if (_disposed)
+        {
+            return;
+        }
+
         List<SessionSnapshot>? removed = null;
         lock (_gate)
         {

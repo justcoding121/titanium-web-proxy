@@ -12,13 +12,11 @@ internal static class FuncExtensions
     internal static Task InvokeAsync<T>(this AsyncEventHandler<T> callback, object sender, T args,
         ILogger logger)
     {
+        // Single subscriber is the common Lite case — avoid GetInvocationList() Delegate[] alloc.
+        if (callback.HasSingleTarget)
+            return InvokeOneAsync(callback, sender, args, logger);
+
         var invocationList = callback.GetInvocationList();
-
-        // Single subscriber is the common case — avoid GetInvocationList allocation churn is already
-        // paid, but skip an outer async state machine when the handler's Task completed inline.
-        if (invocationList.Length == 1)
-            return InvokeOneAsync((AsyncEventHandler<T>)invocationList[0], sender, args, logger);
-
         return InvokeManyAsync(invocationList, sender, args, logger);
     }
 

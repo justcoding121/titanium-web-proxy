@@ -197,7 +197,7 @@
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_ForwardCleartext.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardCleartext%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentBaseProxyEndPoint.cs/#L41">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentBaseProxyEndPoint.cs/#L43">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_ForwardCleartext_" data-uid="Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardCleartext*"></a>
   <h4 id="Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_ForwardCleartext" data-uid="Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardCleartext">ForwardCleartext</h4>
@@ -231,13 +231,15 @@ Defaults to <a href="https://learn.microsoft.com/dotnet/csharp/language-referenc
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_ForwardHost.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardHost%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentBaseProxyEndPoint.cs/#L28">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentBaseProxyEndPoint.cs/#L30">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_ForwardHost_" data-uid="Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardHost*"></a>
   <h4 id="Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_ForwardHost" data-uid="Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardHost">ForwardHost</h4>
   <div class="markdown level1 summary"><p>Optional fixed upstream server to forward all traffic on this endpoint to.
-Only the TCP connection target is changed; the original host is still used
-for TLS SNI/certificate validation and the HTTP Host header.</p>
+TCP connects to this host. For re-encrypt (<a class="xref" href="Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_ForwardCleartext">ForwardCleartext</a> false),
+TLS SNI and HTTP Host stay on the client authority. For TLS terminate
+(<a class="xref" href="Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_ForwardCleartext">ForwardCleartext</a> true), Host is rewritten to this host and
+<a class="xref" href="Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_ForwardPort">ForwardPort</a> so HTTP origins see their own bind identity.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="declaration">Declaration</h5>
@@ -264,7 +266,7 @@ for TLS SNI/certificate validation and the HTTP Host header.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_ForwardPort.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardPort%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentBaseProxyEndPoint.cs/#L33">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentBaseProxyEndPoint.cs/#L35">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_ForwardPort_" data-uid="Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardPort*"></a>
   <h4 id="Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_ForwardPort" data-uid="Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardPort">ForwardPort</h4>

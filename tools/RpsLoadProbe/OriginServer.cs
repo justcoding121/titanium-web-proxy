@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.RpsLoadProbe.Support;
@@ -66,6 +67,7 @@ internal sealed class OriginServer : IAsyncDisposable
             ResponseBytes = workload.ResponseBytes,
             EarlyResponseAfterBytes = workload.EarlyResponseAfterBytes,
             EnableWebSockets = workload.IsWebSocket,
+            EnableGrpc = workload.IsGrpc,
             CacheControl = options.CacheControl
         };
     }
@@ -87,13 +89,21 @@ internal sealed class OriginServer : IAsyncDisposable
         var responseBody = BuildResponseBody(options.ResponseBytes);
         var earlyAfter = Math.Max(0, options.EarlyResponseAfterBytes);
         var enableWebSockets = options.EnableWebSockets;
+        var enableGrpc = options.EnableGrpc;
         var cacheControl = options.CacheControl
                            ?? Environment.GetEnvironmentVariable("TWP_RPS_ORIGIN_CACHE_CONTROL");
-        var protocols = options.HttpsProtocols;
+        var protocols = enableGrpc
+            ? HttpProtocols.Http2
+            : options.HttpsProtocols;
         var builder = Host.CreateDefaultBuilder()
             .ConfigureLogging(logging => logging.ClearProviders())
             .ConfigureWebHostDefaults(webBuilder =>
             {
+                webBuilder.ConfigureServices(services =>
+                {
+                    if (enableGrpc)
+                        services.AddGrpc();
+                });
                 webBuilder.ConfigureKestrel(kestrel =>
                 {
                     // Large POST/GET bodies under reverse proxy load.
@@ -129,6 +139,16 @@ internal sealed class OriginServer : IAsyncDisposable
                 });
                 webBuilder.Configure(app =>
                 {
+                    if (enableGrpc)
+                    {
+                        app.UseRouting();
+                        app.UseEndpoints(endpoints =>
+                        {
+                            endpoints.MapGrpcService<EchoGrpcService>();
+                        });
+                        return;
+                    }
+
                     if (enableWebSockets)
                     {
                         app.UseWebSockets();
@@ -260,6 +280,8 @@ internal sealed class OriginListenOptions
     public int ResponseBytes { get; init; } = WorkloadOptions.TinyJsonBytes;
     public int EarlyResponseAfterBytes { get; init; }
     public bool EnableWebSockets { get; init; }
+    /// <summary>Map unary Echo gRPC service on HTTPS/h2 (compare-grpc).</summary>
+    public bool EnableGrpc { get; init; }
     /// <summary>Optional Cache-Control response header (edition cache-hit arm).</summary>
     public string? CacheControl { get; init; }
 }

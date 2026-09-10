@@ -62,7 +62,7 @@ public class Http2OriginConnectionPoolTests
         // Key construction is covered via TcpConnectionFactory; ensure pool helper is callable.
         // Full SessionEventArgs wiring is integration-tested on the bridges.
         Assert.IsNotNull(proxy.Http2OriginConnectionPool);
-        Assert.AreEqual(8, ProxyResourceLimits.Default.MaxOriginHttp2ConnectionsPerAuthority);
+        Assert.AreEqual(1, ProxyResourceLimits.Default.MaxOriginHttp2ConnectionsPerAuthority);
     }
 
     [TestMethod]

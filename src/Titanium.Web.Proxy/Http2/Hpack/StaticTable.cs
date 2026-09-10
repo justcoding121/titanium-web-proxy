@@ -121,7 +121,7 @@ internal static class StaticTable
 
         private void Create(ByteString name, string value)
         {
-            StaticTable.Add(new HttpHeader(name, (ByteString)value));
+            StaticTable.Add(HttpHeader.CreateSharedStaticTableEntry(name, (ByteString)value));
 
             // Record only the first (lowest) index for repeated names.
             if (!StaticIndexByName.ContainsKey(name))

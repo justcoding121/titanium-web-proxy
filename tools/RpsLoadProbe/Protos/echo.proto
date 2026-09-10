@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option csharp_namespace = "Titanium.Web.Proxy.RpsLoadProbe.GrpcEcho";
+
+package rps.echo;
+
+service Echo {
+  rpc UnaryEcho (EchoRequest) returns (EchoResponse);
+}
+
+message EchoRequest {
+  string message = 1;
+}
+
+message EchoResponse {
+  string message = 1;
+}

@@ -7,13 +7,14 @@
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <SignAssembly>false</SignAssembly>
-    <VersionPrefix>7.0.4</VersionPrefix>
+    <VersionPrefix>7.0.5</VersionPrefix>
     <Authors>Jehonathan Thomas</Authors>
     <Description>Titanium Web Proxy CLI (titanium / twp).</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <AssemblyName>titanium</AssemblyName>
     <!-- CLI enables experimental HTTP/3 via listener config; suppress TWP001 like Core. -->
     <NoWarn>$(NoWarn);TWP001</NoWarn>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Titanium.Cli.Tests" />
@@ -29,5 +30,22 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Certes" Version="3.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.0" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.0" />
   </ItemGroup>
+  <!-- Local macOS Debug/dotnet run: copy Homebrew MsQuic beside the apphost (Release zips use bundle-http3-native.ps1). -->
+  <Target Name="CopyMacHttp3Natives" AfterTargets="Build" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <Exec Command="bash &quot;$(MSBuildThisFileDirectory)..\..\tools\packaging\copy-http3-natives-osx.sh&quot; &quot;$(TargetDir)&quot;"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low" />
+    <PropertyGroup>
+      <_Http3LaunchSettings>$(MSBuildProjectDirectory)\Properties\launchSettings.json</_Http3LaunchSettings>
+      <_Http3TargetDir>$([System.IO.Path]::GetFullPath('$(TargetDir)').TrimEnd('\').TrimEnd('/'))</_Http3TargetDir>
+    </PropertyGroup>
+    <MakeDir Directories="$(MSBuildProjectDirectory)\Properties" />
+    <WriteLinesToFile File="$(_Http3LaunchSettings)" Overwrite="true" Encoding="UTF-8"
+      Lines='{"profiles":{"titanium":{"commandName":"Project","environmentVariables":{"DYLD_FALLBACK_LIBRARY_PATH":"$(_Http3TargetDir)"}}}}' />
+  </Target>
 </Project>

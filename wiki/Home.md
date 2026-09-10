@@ -1,13 +1,22 @@
 # Titanium Web Proxy
 
-> Canonical product docs, downloads, and release notes: **[https://titaniumproxy.com](https://titaniumproxy.com)**
+A lightweight, high-performance HTTP(S) proxy for Windows, Linux, and macOS — reverse / edge CLI, desktop Inspector, optional Plus, and an embeddable .NET library.
 
-A lightweight, high-performance HTTP(S) proxy — reverse / edge CLI, Inspector, and optional Plus on Windows, Linux, and macOS; embeddable .NET library via NuGet. This wiki documents major library APIs. For the full type reference, see the [API documentation](https://titaniumproxy.com/api/Titanium.Web.Proxy.ProxyServer.html).
+**[Website](https://titaniumproxy.com)** · [Download](https://titaniumproxy.com/download) · [Install](https://titaniumproxy.com/docs/install) · [Getting started](https://titaniumproxy.com/docs/getting-started) · [Releases](https://titaniumproxy.com/releases) · [API reference](https://titaniumproxy.com/api/Titanium.Web.Proxy.ProxyServer.html)
 
 ## Contents
 
+### Using Titanium
+
 - [Getting started](#getting-started)
 - [Screenshots](#screenshots)
+- [Performance](Performance) — measured throughput vs peers
+- [Security considerations](Security-Considerations)
+- [Protocol feature support](Protocol-Support) ([bridges](Protocol-Support#protocol-bridges))
+- [Migrating from 4.x to 5.0](Migration-4.x-to-5.0)
+
+### Library API (.NET)
+
 - [Endpoints](#endpoints)
 - [Decrypting HTTPS](#decrypting-https)
 - [Intercepting requests and responses](#intercepting-requests-and-responses)
@@ -19,23 +28,22 @@ A lightweight, high-performance HTTP(S) proxy — reverse / edge CLI, Inspector,
 - [Tunnel (CONNECT) interception](#tunnel-connect-interception)
 - [Upstream proxies](#upstream-proxies)
 - [Authentication](#authentication)
-- [Performance](Performance) — measured latency, throughput, saturation RPS, and footprint
-- [Performance profiling](Performance-Profiling) — how throughput hotspots are found (harness, dumps, stage timing)
-- [Performance local lab](Performance-Local-Lab) — laptop cool A/B tables (not publishable)
 - [Performance and pooling](#performance-and-pooling)
 - [Logging and diagnostics](#logging-and-diagnostics)
 - [Request timing](#request-timing)
 - [Supported frameworks](#supported-frameworks)
 - [Breaking changes: unified logging and timing](#breaking-changes-unified-logging-and-timing)
-- [Migrating from 4.x to 5.0](Migration-4.x-to-5.0)
-- [Security considerations](Security-Considerations)
-- [Protocol feature support](Protocol-Support) ([bridges](Protocol-Support#protocol-bridges))
+
+### For contributors
+
+- [Performance profiling](Performance-Profiling) — how throughput hotspots are found
+- [Performance local lab](Performance-Local-Lab) — laptop cool A/B tables (not publishable)
 
 ## Getting started
 
 Canonical downloads: **[https://titaniumproxy.com/download](https://titaniumproxy.com/download)** · install guide: **[https://titaniumproxy.com/docs/install](https://titaniumproxy.com/docs/install)**.
 
-Install from [NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy):
+To embed the library, install from [NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy):
 
 ```shell
 dotnet add package Titanium.Web.Proxy
@@ -56,8 +64,7 @@ using Titanium.Web.Proxy.Models;
 
 using var proxyServer = new ProxyServer();
 
-// Built-in console sink is a bounded channel + background writer, so LogInformation
-// never blocks a session thread on Console I/O.
+// Console logging is asynchronous so it does not block request handling.
 proxyServer.Logging.MinimumLevel = LogLevel.Information;
 
 proxyServer.BeforeRequest += OnRequest;
@@ -102,6 +109,10 @@ Outbound HTTP/2 probes that fail ALPN (`SEC_E_NO_APPLICATION_PROTOCOL` / “No c
 **WPF example** — session list with request/response inspection:
 
 <img src="images/wpf-screenshot.jpg" alt="WPF proxy application screenshot" width="900" />
+
+## Library API (.NET)
+
+This section covers the major `Titanium.Web.Proxy` APIs for embedding the engine in a .NET app. For the full type reference, see the [API documentation](https://titaniumproxy.com/api/Titanium.Web.Proxy.ProxyServer.html).
 
 ## Endpoints
 
@@ -566,8 +577,7 @@ proxyServer.AfterResponse += async (sender, e) =>
 
 - .NET 10
 
-Versions prior to 4.0 also supported .NET Framework 4.6.2 and .NET 8; starting with 4.0, the package targets
-.NET 10 only.
+Current packages target **.NET 10** only. Older product lines also supported .NET Framework 4.6.2 and earlier .NET (including .NET 8).
 
 ## Breaking changes: unified logging and timing
 
