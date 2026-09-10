@@ -56,7 +56,7 @@ features:
 
 ## Performance
 
-Throughput (requests per second) vs **YARP**, **nginx**, **HAProxy**, and **Envoy** on matched GitHub Actions runners. Tiny keep-alive GET plus POST/WS/gRPC — typical reverse paths (TLS in → HTTP/1 out) and POST are the usual comparison; H2↔H2 on tiny GET is Titanium’s best case (frame copy, not full re-encode). Linux chart here; Windows, macOS, and heavier workloads on the [performance](/docs/performance) page.
+Throughput (requests per second) vs **YARP**, **nginx**, **HAProxy**, and **Envoy** on matched GitHub Actions runners. Linux chart here; Windows, macOS, and heavier workloads on the [performance](/docs/performance) page.
 
 <div class="rps-preview">
 
