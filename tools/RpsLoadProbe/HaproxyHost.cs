@@ -258,6 +258,9 @@ internal sealed class HaproxyHost : IDisposable
 global
     nbthread {Environment.ProcessorCount}
     maxconn 4096
+    # Required when HAProxy is built with USE_QUIC_OPENSSL_COMPAT (GHA Linux); no-op on
+    # native QUIC TLS stacks (typical Homebrew). Without it, quic4@ binds ALERT and skip.
+    limited-quic
 
 defaults
     mode http
