@@ -142,10 +142,8 @@ OS_SPECS = (
 )
 
 MERGED_FOOTER = (
-    "Wires: tiny keep-alive GET (~56 B) · H1 → H2 → H3, then POST / WS / gRPC "
-    "(RPC/s) from compare-post / compare-arch / compare-grpc · GHA 4-core · "
-    "0 / n/a peers omitted (no empty slots) · do not compare absolute RPS across "
-    "clusters (shards)"
+    "Wires: tiny keep-alive GET (~56 B) · Workloads: POST / WebSocket / gRPC (RPC/s) · "
+    "GitHub Actions 4-core / 16 GiB (macOS 14 GiB)"
 )
 
 # Practical wire label → (client, origin) cells in wiki Performance.md reverse tables.
@@ -646,10 +644,10 @@ def render_chart(
         0.01,
         0.01,
         footer or MERGED_FOOTER,
-        fontsize=9,
+        fontsize=12,
         color="#444444",
     )
-    fig.tight_layout(rect=(0, 0.05, 1, 1))
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, bbox_inches="tight")
     plt.close(fig)
