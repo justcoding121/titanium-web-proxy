@@ -87,7 +87,7 @@ internal sealed class EnvoyHost : IDisposable
         {
             var (certPem, keyPem) = await ExportLoopbackPemAsync(prefixProbe);
             return await TryStartAsync(BuildHttp3CleartextConf(originHttpPort, certPem, keyPem),
-                listenScheme: "https", envoyPath, listenHost: "127.0.0.1", requireUdp: true);
+                listenScheme: "https", envoyPath, listenHost: "localhost", requireUdp: true);
         }
         finally
         {
@@ -149,8 +149,10 @@ internal sealed class EnvoyHost : IDisposable
 
         var needsCerts = inbound is PeerInboundProto.H1Tls or PeerInboundProto.H2Tls or PeerInboundProto.H3;
         var listenScheme = inbound is PeerInboundProto.H1c or PeerInboundProto.H2c ? "http" : "https";
-        // H3 QuicListener is IPv4-only (127.0.0.1); "localhost" prefers ::1 and misses the bind.
-        var listenHost = "127.0.0.1";
+        // H3: match nginx — listenHost localhost so MsQuic SNI is "localhost" (cert SAN) and
+        // dual-stack binds catch ::1-first resolution on Linux GHA. IPv4-only + 127.0.0.1
+        // caused QUIC_STATUS_TLS_ERROR for Envoy/HAProxy on Linux while Mac still worked.
+        var listenHost = inbound == PeerInboundProto.H3 ? "localhost" : "127.0.0.1";
         var requireUdp = inbound == PeerInboundProto.H3;
 
         if (!needsCerts)
@@ -183,7 +185,7 @@ internal sealed class EnvoyHost : IDisposable
         {
             var (certPem, keyPem) = await ExportLoopbackPemAsync(prefixProbe);
             return await TryStartAsync(BuildHttp3ToHttpsHttp1Conf(originHttpsPort, certPem, keyPem),
-                listenScheme: "https", envoyPath, listenHost: "127.0.0.1", requireUdp: true);
+                listenScheme: "https", envoyPath, listenHost: "localhost", requireUdp: true);
         }
         finally
         {
@@ -548,9 +550,9 @@ internal sealed class EnvoyHost : IDisposable
                 y.StaticResourcesHeader();
                 y.TcpListener("listener_tcp", port, "ingress_tcp", "AUTO", altSvc,
                     certDest, keyDest, ["h2", "http/1.1"]);
-                // IPv4-only QuicListener: dual-stack ::1 bind fails on some GHA images
-                // and aborts the whole process before READY (no CSV rows).
+                // Dual-stack QUIC like nginx: Linux MsQuic resolves localhost → ::1 first.
                 y.QuicListener("listener_quic_v4", port, "127.0.0.1", "ingress_quic_v4", certDest, keyDest);
+                y.QuicListener("listener_quic_v6", port, "::1", "ingress_quic_v6", certDest, keyDest);
                 y.Cluster(originHttpPort, upstreamTls: false);
             });
         };
@@ -608,6 +610,7 @@ internal sealed class EnvoyHost : IDisposable
                 y.TcpListener("listener_tcp", port, "ingress_tcp", "AUTO", altSvc,
                     certDest, keyDest, ["h2", "http/1.1"]);
                 y.QuicListener("listener_quic_v4", port, "127.0.0.1", "ingress_quic_v4", certDest, keyDest);
+                y.QuicListener("listener_quic_v6", port, "::1", "ingress_quic_v6", certDest, keyDest);
                 y.Cluster(originHttpsPort, upstreamTls: true);
             });
         };
@@ -648,10 +651,10 @@ internal sealed class EnvoyHost : IDisposable
                         var altSvc = $$"""h3=":{{port}}"; ma=86400""";
                         y.TcpListener("listener_tcp", port, "ingress_tcp", "AUTO", altSvc,
                             certDest, keyDest, ["h2", "http/1.1"]);
-                        // IPv4-only QuicListener: dual-stack ::1 bind fails on some GHA images
-                        // and aborts the whole process before READY (no CSV rows).
+                        // Dual-stack QUIC like nginx: Linux MsQuic resolves localhost → ::1 first.
                         y.QuicListener("listener_quic_v4", port, "127.0.0.1", "ingress_quic_v4", certDest!,
                             keyDest!);
+                        y.QuicListener("listener_quic_v6", port, "::1", "ingress_quic_v6", certDest!, keyDest!);
                         break;
                     }
                 }

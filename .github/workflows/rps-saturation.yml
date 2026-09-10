@@ -372,40 +372,66 @@ jobs:
           fi
           nginx -V 2>&1 | tr ' ' '\n' | grep http_v3 || true
 
-      # HAProxy Community/GPL — Linux/macOS only (no official Windows port).
-      # Ubuntu distro 2.8 has HTTP/3 parser code but is not built with USE_QUIC, so H3 bind
-      # lines are skipped. GHA Linux compiles 3.2 with USE_QUIC + OpenSSL compat (no 0-RTT)
-      # against jammy/noble libssl. macOS uses Homebrew (typically USE_QUIC) and fails the
-      # job if QUIC is still missing after a 3.2 osx source fallback.
+      # Ubuntu distro HAProxy is not USE_QUIC. GHA Linux builds 3.2 against QuicTLS
+      # (openssl-3.1.7+quic) so MsQuic clients can complete the handshake — OpenSSL
+      # USE_QUIC_OPENSSL_COMPAT + limited-quic starts but fails QUIC_STATUS_TLS_ERROR.
+      # macOS uses Homebrew (typically native USE_QUIC) with a 3.2 osx source fallback.
       - name: Cache HAProxy QUIC prefix
         if: runner.os == 'Linux'
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/haproxy-quic
-          key: haproxy-3.2.23-quic-compat-linux-x64
+          path: |
+            ${{ runner.temp }}/haproxy-quic
+            ${{ runner.temp }}/quictls
+          key: haproxy-3.2.23-quictls-3.1.7-linux-x64
 
       - name: Install HAProxy with QUIC (Linux)
         if: runner.os == 'Linux'
         env:
           HAPROXY_VERSION: '3.2.23'
           HAPROXY_SHA256: '82d14ef33571e4edeb9197516c0d058a3775fb80541e46afe4377428e461fef0'
+          QUICTLS_REF: 'openssl-3.1.7+quic'
         run: |
           set -euo pipefail
           sudo find /etc/apt -type f \( -iname '*chrome*' -o -iname '*google*chrome*' \) -print -delete || true
           sudo apt-get update || true
-          sudo apt-get install -y gcc make libssl-dev libpcre2-dev zlib1g-dev
+          sudo apt-get install -y gcc make perl libpcre2-dev zlib1g-dev git
           # Stop any distro service so our temp-prefix HAProxy owns the ports we pick.
           sudo apt-get install -y haproxy || true
           sudo systemctl stop haproxy || true
           dest="${RUNNER_TEMP}/haproxy-quic"
-          mkdir -p "$dest"
-          # Do not use grep -q under pipefail: early close SIGPIPEs haproxy -vv (BSD grep on macOS).
+          qtls="${RUNNER_TEMP}/quictls"
+          mkdir -p "$dest" "$qtls"
+          # Do not use grep -q under pipefail: early close SIGPIPEs haproxy -vv.
           have_quic() { case "$("$1" -vv 2>&1 || true)" in *USE_QUIC*) return 0 ;; *) return 1 ;; esac; }
-          if [ -x "$dest/sbin/haproxy" ] && have_quic "$dest/sbin/haproxy"; then
-            echo "Using existing HAProxy QUIC build at $dest"
+          have_native_quic() {
+            # OpenSSL-compat builds list USE_QUIC_OPENSSL_COMPAT and need limited-quic;
+            # MsQuic fails TLS against that stack. Prefer a QuicTLS-linked binary.
+            local vv
+            vv="$("$1" -vv 2>&1 || true)"
+            case "$vv" in *USE_QUIC_OPENSSL_COMPAT*) return 1 ;; esac
+            case "$vv" in *USE_QUIC*) return 0 ;; *) return 1 ;; esac
+          }
+          if [ -x "$dest/sbin/haproxy" ] && have_native_quic "$dest/sbin/haproxy"; then
+            echo "Using existing QuicTLS-linked HAProxy at $dest"
           else
+            if [ ! -x "$qtls/bin/openssl" ]; then
+              echo "Building QuicTLS ${QUICTLS_REF}…"
+              src_qtls="${RUNNER_TEMP}/quictls-src"
+              rm -rf "$src_qtls"
+              git clone --depth 1 --branch "$QUICTLS_REF" https://github.com/quictls/openssl.git "$src_qtls"
+              (
+                cd "$src_qtls"
+                ./config --prefix="$qtls" --libdir=lib
+                make -j "$(nproc)"
+                make install_sw
+              )
+            else
+              echo "Using cached QuicTLS at $qtls"
+            fi
             ver="$HAPROXY_VERSION"
             src="${RUNNER_TEMP}/haproxy-src"
+            rm -rf "$src"
             mkdir -p "$src"
             tarball="${RUNNER_TEMP}/haproxy-${ver}.tar.gz"
             curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
@@ -417,23 +443,28 @@ jobs:
               TARGET=linux-glibc \
               USE_OPENSSL=1 \
               USE_QUIC=1 \
-              USE_QUIC_OPENSSL_COMPAT=1 \
               USE_PCRE2=1 \
               USE_PCRE2_JIT=1 \
-              USE_ZLIB=1
+              USE_ZLIB=1 \
+              SSL_INC="${qtls}/include" \
+              SSL_LIB="${qtls}/lib" \
+              LDFLAGS="-Wl,-rpath,${qtls}/lib"
             mkdir -p "$dest/sbin"
             cp -f "$src/haproxy" "$dest/sbin/haproxy"
             chmod +x "$dest/sbin/haproxy"
           fi
           echo "$dest/sbin" >> "$GITHUB_PATH"
           export PATH="$dest/sbin:$PATH"
+          # QuicTLS libs for runtime if rpath is missing on older caches.
+          echo "LD_LIBRARY_PATH=${qtls}/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          export LD_LIBRARY_PATH="${qtls}/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           haproxy -v
-          if ! have_quic haproxy; then
-            echo "HAProxy was installed but lacks USE_QUIC; HTTP/3 HAProxy arms cannot run." >&2
-            haproxy -vv 2>&1 | head -n 40 || true
+          haproxy -vv 2>&1 | head -n 40 || true
+          if ! have_native_quic haproxy; then
+            echo "HAProxy lacks native USE_QUIC (QuicTLS); HTTP/3 HAProxy arms cannot run reliably with MsQuic." >&2
             exit 1
           fi
-          echo "HAProxy USE_QUIC present"
+          echo "HAProxy native USE_QUIC (QuicTLS) present"
 
       - name: Cache HAProxy QUIC prefix (macOS)
         if: runner.os == 'macOS'

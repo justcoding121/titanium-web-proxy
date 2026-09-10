@@ -85,7 +85,7 @@ internal sealed class HaproxyHost : IDisposable
         {
             var pem = await ExportLoopbackCombinedPemAsync(prefixProbe);
             return await TryStartAsync(BuildHttp3CleartextConf(originHttpPort, pem), listenScheme: "https",
-                haproxyPath, listenHost: "127.0.0.1", requireUdp: true);
+                haproxyPath, listenHost: "localhost", requireUdp: true);
         }
         finally
         {
@@ -147,8 +147,8 @@ internal sealed class HaproxyHost : IDisposable
 
         var needsCerts = inbound is PeerInboundProto.H1Tls or PeerInboundProto.H2Tls or PeerInboundProto.H3;
         var listenScheme = inbound is PeerInboundProto.H1c or PeerInboundProto.H2c ? "http" : "https";
-        // H3 quic4 bind is IPv4-only; "localhost" prefers ::1 and misses the bind on Linux GHA.
-        var listenHost = "127.0.0.1";
+        // H3: match nginx — localhost SNI + dual-stack QUIC (Linux MsQuic prefers ::1).
+        var listenHost = inbound == PeerInboundProto.H3 ? "localhost" : "127.0.0.1";
         var requireUdp = inbound == PeerInboundProto.H3;
 
         if (!needsCerts)
@@ -181,7 +181,7 @@ internal sealed class HaproxyHost : IDisposable
         {
             var pem = await ExportLoopbackCombinedPemAsync(prefixProbe);
             return await TryStartAsync(BuildHttp3ToHttpsHttp1Conf(originHttpsPort, pem), listenScheme: "https",
-                haproxyPath, listenHost: "127.0.0.1", requireUdp: true);
+                haproxyPath, listenHost: "localhost", requireUdp: true);
         }
         finally
         {
@@ -258,9 +258,6 @@ internal sealed class HaproxyHost : IDisposable
 global
     nbthread {Environment.ProcessorCount}
     maxconn 4096
-    # Required when HAProxy is built with USE_QUIC_OPENSSL_COMPAT (GHA Linux); no-op on
-    # native QUIC TLS stacks (typical Homebrew). Without it, quic4@ binds ALERT and skip.
-    limited-quic
 
 defaults
     mode http
@@ -322,14 +319,14 @@ backend be
         (prefixDir, port) =>
         {
             var pemDest = CopyPem(prefixDir, pemPath);
-            // IPv4-only QUIC: quic6@[::1] fails config check / bind on some GHA Linux images
-            // (arm then skipped — no CSV rows). HttpClient still reaches 127.0.0.1.
+            // Dual-stack QUIC like nginx: Linux MsQuic resolves localhost → ::1 first.
             return $"""
 {GlobalDefaults()}
 
 frontend fe
     bind 127.0.0.1:{port} ssl crt "{pemDest}" alpn h2,http/1.1
     bind quic4@127.0.0.1:{port} ssl crt "{pemDest}" alpn h3
+    bind quic6@[::1]:{port} ssl crt "{pemDest}" alpn h3
     http-response set-header alt-svc 'h3=":{port}"; ma=86400'
     default_backend be
 
@@ -396,6 +393,7 @@ backend be
 frontend fe
     bind 127.0.0.1:{port} ssl crt "{pemDest}" alpn h2,http/1.1
     bind quic4@127.0.0.1:{port} ssl crt "{pemDest}" alpn h3
+    bind quic6@[::1]:{port} ssl crt "{pemDest}" alpn h3
     http-response set-header alt-svc 'h3=":{port}"; ma=86400'
     default_backend be
 
@@ -459,6 +457,7 @@ backend be
         PeerInboundProto.H3 => $"""
     bind 127.0.0.1:{port} ssl crt "{pemDest}" alpn h2,http/1.1
     bind quic4@127.0.0.1:{port} ssl crt "{pemDest}" alpn h3
+    bind quic6@[::1]:{port} ssl crt "{pemDest}" alpn h3
     http-response set-header alt-svc 'h3=":{port}"; ma=86400'
 """,
         _ => throw new ArgumentOutOfRangeException(nameof(inbound))
