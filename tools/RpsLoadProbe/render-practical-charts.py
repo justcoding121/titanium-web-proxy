@@ -601,7 +601,7 @@ def render_chart(
     x = np.arange(len(labels), dtype=float)
 
     fig_w = 16.0 if len(labels) >= 10 else 14.5
-    fig, ax = plt.subplots(figsize=(fig_w, 5.4), dpi=140)
+    fig, ax = plt.subplots(figsize=(fig_w, 5.8), dpi=140)
     ymax = plot_packed_product_bars(ax, series, x)
 
     if workload_start is not None and 0 < workload_start < len(labels):
@@ -614,26 +614,38 @@ def render_chart(
             alpha=0.7,
         )
 
-    ax.set_ylabel("Sustain RPS @ concurrency 64")
+    ax.set_ylabel("Sustain RPS @ concurrency 64", fontsize=13)
     title = f"Reverse proxy RPS — {os_title}"
     if title_suffix:
         title = f"{title} {title_suffix}"
-    ax.set_title(title)
+    ax.set_title(title, fontsize=15)
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, rotation=18, ha="right")
+    ax.set_xticklabels(labels, rotation=18, ha="right", fontsize=12)
+    ax.tick_params(axis="y", labelsize=12)
     ax.set_ylim(0, ymax * 1.12)
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{int(v):,}"))
     ax.grid(axis="y", linestyle=":", alpha=0.45, zorder=0)
-    ax.legend(loc="upper right", framealpha=0.92, ncols=5, fontsize=8)
+    ax.legend(
+        loc="upper right",
+        framealpha=0.92,
+        ncols=5,
+        fontsize=13,
+        handlelength=1.8,
+        handleheight=1.4,
+        borderpad=0.6,
+        labelspacing=0.45,
+        columnspacing=1.4,
+        handletextpad=0.5,
+    )
     ax.set_axisbelow(True)
     fig.text(
         0.01,
         0.01,
         footer or MERGED_FOOTER,
-        fontsize=8,
+        fontsize=9,
         color="#444444",
     )
-    fig.tight_layout(rect=(0, 0.04, 1, 1))
+    fig.tight_layout(rect=(0, 0.05, 1, 1))
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, bbox_inches="tight")
     plt.close(fig)
