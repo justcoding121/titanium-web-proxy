@@ -815,11 +815,6 @@ jobs:
         run: |
           ulimit -n 65535 || true
           ulimit -n
-          if [ "$(uname -s)" = Linux ]; then
-            # Envoy H3 docs: enlarge UDP rcvbuf to avoid datagram drops under load.
-            sudo sysctl -w net.core.rmem_max=2500000 net.core.wmem_max=2500000 || true
-            sudo sysctl -w net.core.rmem_default=1048576 net.core.wmem_default=1048576 || true
-          fi
 
       # Pass workflow_dispatch inputs via env (not ${{ }} in the script) to avoid
       # githubactions:S7630 script-injection findings on user-controlled values.

@@ -17,22 +17,17 @@ namespace Titanium.Web.Proxy.RpsLoadProbe;
 /// </summary>
 internal sealed class EnvoyHost : IDisposable
 {
-    private const string SingleHttp3Env = "TWP_RPS_SINGLE_HTTP3_CONNECTION";
-
     private readonly Process process;
     private readonly string prefixDir;
-    private readonly bool pinnedSingleHttp3;
 
     public int Port { get; }
     public string ListenUrl { get; }
     public string Version { get; }
 
-    private EnvoyHost(Process process, string prefixDir, int port, string listenUrl, string version,
-        bool pinnedSingleHttp3)
+    private EnvoyHost(Process process, string prefixDir, int port, string listenUrl, string version)
     {
         this.process = process;
         this.prefixDir = prefixDir;
-        this.pinnedSingleHttp3 = pinnedSingleHttp3;
         Port = port;
         ListenUrl = listenUrl;
         Version = version;
@@ -224,25 +219,11 @@ internal sealed class EnvoyHost : IDisposable
         await File.WriteAllTextAsync(confPath, conf, Encoding.ASCII);
 
         var baseId = Random.Shared.Next(1, 1000);
-        // H3/QUIC on GHA Linux: multi-worker needs CAP_BPF for CID routing. Without it,
-        // packets hop workers and RPS collapses as concurrency rises (c=8 ok → c=64 ~0).
-        // Single worker avoids that path; Mac was already stable multi-worker at ~1–2k.
-        var workers = requireUdp ? 1 : Environment.ProcessorCount;
-        // HttpClient EnableMultipleHttp3Connections fans out many QUIC conns; Envoy on Linux
-        // GHA collapses under that (still ~3 RPS @ c=64 with concurrency=1). Pin one H3
-        // connection for the Envoy process lifetime so streams multiplex like HAProxy/nginx.
-        var pinnedSingleHttp3 = false;
-        if (requireUdp)
-        {
-            Environment.SetEnvironmentVariable(SingleHttp3Env, "1");
-            pinnedSingleHttp3 = true;
-        }
-
         var startInfo = new ProcessStartInfo
         {
             FileName = exe,
             Arguments =
-                $"-c {QuotePath(confPath)} --concurrency {workers} --disable-hot-restart --base-id {baseId}",
+                $"-c {QuotePath(confPath)} --concurrency {Environment.ProcessorCount} --disable-hot-restart --base-id {baseId}",
             WorkingDirectory = prefixDir,
             UseShellExecute = false,
             RedirectStandardOutput = true,
@@ -257,12 +238,9 @@ internal sealed class EnvoyHost : IDisposable
         while (DateTime.UtcNow < deadline)
         {
             if (IsPortOpen(port))
-                return new EnvoyHost(process, prefixDir, port, $"{listenScheme}://{listenHost}:{port}/", version,
-                    pinnedSingleHttp3);
+                return new EnvoyHost(process, prefixDir, port, $"{listenScheme}://{listenHost}:{port}/", version);
             if (process.HasExited)
             {
-                if (pinnedSingleHttp3)
-                    Environment.SetEnvironmentVariable(SingleHttp3Env, null);
                 var err = await process.StandardError.ReadToEndAsync();
                 var stdout = await process.StandardOutput.ReadToEndAsync();
                 TryDeleteDir(prefixDir);
@@ -273,8 +251,6 @@ internal sealed class EnvoyHost : IDisposable
             Thread.Sleep(50);
         }
 
-        if (pinnedSingleHttp3)
-            Environment.SetEnvironmentVariable(SingleHttp3Env, null);
         TryStop(process);
         TryDeleteDir(prefixDir);
         throw new TimeoutException($"envoy did not open port {port} in time.");
@@ -347,17 +323,9 @@ internal sealed class EnvoyHost : IDisposable
             W(8, "protocol: UDP");
             W(8, $"address: {address}");
             W(8, $"port_value: {port}");
-            // Required when concurrency > 1; harmless with concurrency 1.
-            W(4, "enable_reuse_port: true");
             W(4, "udp_listener_config:");
             W(6, "quic_options: {}");
             // prefer_gro breaks QuicListener bring-up on some GHA kernels; omit it.
-            // Larger UDP rcvbuf reduces datagram drops under load (Envoy H3 docs).
-            W(4, "socket_options:");
-            W(4, "- level: 1"); // SOL_SOCKET
-            W(6, "name: 8"); // SO_RCVBUF
-            W(6, "int_value: 425984");
-            W(6, "state: STATE_PREBIND");
             W(4, "filter_chains:");
             W(4, "- transport_socket:");
             W(8, "name: envoy.transport_sockets.quic");
@@ -384,12 +352,7 @@ internal sealed class EnvoyHost : IDisposable
             W(col + 4, $"stat_prefix: {statPrefix}");
             W(col + 4, $"codec_type: {codecType}");
             if (string.Equals(codecType, "HTTP3", StringComparison.Ordinal))
-            {
-                W(col + 4, "http3_protocol_options:");
-                W(col + 6, "quic_protocol_options:");
-                W(col + 8, "max_concurrent_streams: 1024");
-            }
-
+                W(col + 4, "http3_protocol_options: {}");
             // Kestrel rejects :scheme that does not match the upstream transport (https on h2c,
             // http on HTTPS). Align :scheme with the cluster socket, not the downstream TLS.
             W(col + 4, "scheme_header_transformation:");
@@ -448,10 +411,8 @@ internal sealed class EnvoyHost : IDisposable
             W(4, "circuit_breakers:");
             W(6, "thresholds:");
             W(6, "- priority: DEFAULT");
-            // High enough for H3 fan-in → H1 origin under c=64 multiplex (256 pending was tight).
-            W(8, "max_connections: 4096");
-            W(8, "max_pending_requests: 4096");
-            W(8, "max_requests: 100000");
+            W(8, "max_connections: 256");
+            W(8, "max_pending_requests: 256");
             W(4, "load_assignment:");
             W(6, "cluster_name: origin");
             W(6, "endpoints:");
@@ -789,8 +750,6 @@ internal sealed class EnvoyHost : IDisposable
     {
         TryStop(process);
         TryDeleteDir(prefixDir);
-        if (pinnedSingleHttp3)
-            Environment.SetEnvironmentVariable(SingleHttp3Env, null);
     }
 
     /// <summary>
