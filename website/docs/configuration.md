@@ -1,6 +1,27 @@
 # Configuration (`twp.yaml`)
 
-Native schema version **7.1**. Root document maps to the configuration models in `Titanium.Web.Proxy.Configuration`.
+Native schema version **7.1**. For CLI operators: start with a minimal reverse file, then add routes, certificates, or Plus as needed.
+
+**Next:** copy the minimal reverse below → `titanium test -c twp.yaml` → `titanium run -c twp.yaml`.
+
+## Minimal reverse
+
+```yaml
+schemaVersion: "7.1"
+listeners:
+  - host: "127.0.0.1"
+    port: 8000
+    decryptSsl: false
+    forwardHost: "127.0.0.1"
+    forwardPort: 8080
+```
+
+```shell
+titanium test -c twp.yaml
+titanium run -c twp.yaml
+```
+
+`forwardHost` / `forwardPort` is the classic single-origin reverse (no route table). For path-based routing and load balancing, add `routes` and `clusters` below.
 
 ## Top-level shape
 
@@ -16,7 +37,7 @@ logging: null
 server: null
 ```
 
-Engine knobs live under `server:` (this document). Plus feature options stay under `plus:` / `plus.options` — Plus does **not** configure `ProxyServer`.
+Engine knobs live under `server:` ([reference](#server-reference)). Plus feature options stay under `plus:` / `plus.options` — Plus does **not** configure the engine.
 
 ## Listeners
 
@@ -24,7 +45,7 @@ Engine knobs live under `server:` (this document). Plus feature options stay und
 |-------|------|-------|
 | `host` | string | Default `0.0.0.0` |
 | `port` | int | Default `8000` |
-| `decryptSsl` | bool | HTTPS MITM / TLS terminate |
+| `decryptSsl` | bool | Terminate TLS / decrypt HTTPS (man-in-the-middle when used for MITM) |
 | `type` | string? | `explicit`, `transparent`, `socks`, or `quic` (null uses ForwardHost heuristics) |
 | `forwardHost` / `forwardPort` | string / int | Classic single-origin reverse (no route table) |
 | `enableHttp2` | bool? | `false` forces H1 globally; null inherits `server` / proxy default |
@@ -87,7 +108,67 @@ Optional `transforms` on a route rewrite the upstream request (and can stage res
 ]
 ```
 
-## Server (`ProxyServer` knobs)
+## Static files
+
+```yaml
+staticFiles:
+  root: "./www"
+  enableGzip: true
+  enableBrotli: false
+```
+
+## Certificates / ACME
+
+Automatic Certificate Management Environment (**ACME**) can obtain Let’s Encrypt (or other directory) certificates for public listeners:
+
+```yaml
+certificates:
+  certificatePath: "./certs/fullchain.pem"
+  privateKeyPath: "./certs/privkey.pem"
+  acmeEmail: "ops@example.com"
+  acmeDomain: "app.example.com"
+  acmeDirectory: "https://acme-v02.api.letsencrypt.org/directory"
+```
+
+Use real paths and emails in your environment. Do not commit private keys. MITM engine knobs are under `server.certificateManager`; this section is for listener leaf PEM/PFX and ACME.
+
+## Logging
+
+```yaml
+logging:
+  enabled: true
+  minimumLevel: "Error"
+  enableConsole: true
+  enableConsoleColors: true
+  enableFile: false
+  filePath: null
+  maxFileSizeBytes: null
+  maxRolledFiles: null
+  queueCapacity: null
+```
+
+## Plus
+
+```yaml
+plus:
+  enabled: true
+  controlPlane:
+    host: "127.0.0.1"
+    port: 9080
+    sharedSecret: "<shared-secret>"
+  options:
+    cache.enable: "true"
+```
+
+Common `plus.options` keys (string values): see the table on [Plus](/docs/plus) (`discovery.*`, `security.*`, `waf.*`, `state.*`, `resilience.*`, `cache.enable`, `grpc.transcode.*`). Enabling `grpc.transcode.enabled` forces the HTTP session interception path — see [gRPC-JSON transcoding](/docs/grpc-json-transcoding). Engine settings belong in `server:`, not `plus.options`.
+
+## Validate
+
+```shell
+titanium test -c twp.yaml
+```
+
+## Server reference
 
 Null nested objects and null properties leave the library or profile default. Apply order: `profile` first, then overlays.
 
@@ -216,68 +297,10 @@ On Unix, send **SIGHUP** to a running `titanium run` process to reload routes an
 
 ### Code-only callbacks
 
-These cannot be set from YAML; wire them in library / embedder code:
+These cannot be set from YAML; wire them in Library / embedder code:
 
 - `ProxyBasicAuthenticateFunc`, `ProxySchemeAuthenticateFunc` (and related realm/schemes on `ProxyServer`)
 - `WinAuthCredentialsProvider`
 - `GetCustomUpStreamProxyFunc`, `CustomUpStreamProxyFailureFunc`
 - `ShouldInterceptHttp`
 - `BufferPool`, `Logging.LoggerFactory`, custom `CertificateStorage`
-
-## Static files
-
-```yaml
-staticFiles:
-  root: "./www"
-  enableGzip: true
-  enableBrotli: false
-```
-
-## Certificates / ACME
-
-```yaml
-certificates:
-  certificatePath: "./certs/fullchain.pem"
-  privateKeyPath: "./certs/privkey.pem"
-  acmeEmail: "ops@example.com"
-  acmeDomain: "app.example.com"
-  acmeDirectory: "https://acme-v02.api.letsencrypt.org/directory"
-```
-
-Use real paths and emails in your environment. Do not commit private keys. MITM engine knobs are under `server.certificateManager`; this section is for listener leaf PEM/PFX and ACME.
-
-## Logging
-
-```yaml
-logging:
-  enabled: true
-  minimumLevel: "Error"
-  enableConsole: true
-  enableConsoleColors: true
-  enableFile: false
-  filePath: null
-  maxFileSizeBytes: null
-  maxRolledFiles: null
-  queueCapacity: null
-```
-
-## Plus
-
-```yaml
-plus:
-  enabled: true
-  controlPlane:
-    host: "127.0.0.1"
-    port: 9080
-    sharedSecret: "<shared-secret>"
-  options:
-    cache.enable: "true"
-```
-
-Common `plus.options` keys (string values): see the table on [Plus](/docs/plus) (`discovery.*`, `security.*`, `waf.*`, `state.*`, `resilience.*`, `cache.enable`, `grpc.transcode.*`). Enabling `grpc.transcode.enabled` forces the HTTP session interception path — see [gRPC-JSON transcoding](/docs/grpc-json-transcoding). Engine settings belong in `server:`, not `plus.options`.
-
-## Validate
-
-```shell
-titanium test -c twp.yaml
-```

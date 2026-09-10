@@ -1,8 +1,17 @@
 # Titanium Web Proxy
 
-A lightweight, high-performance HTTP(S) proxy for Windows, Linux, and macOS — run a reverse / edge proxy from the CLI, debug traffic in the desktop Inspector, or embed the same engine in .NET.
+A lightweight, high-performance HTTP(S) proxy for Windows, Linux, and macOS.
 
 **[Website](https://titaniumproxy.com)** · [Download](https://titaniumproxy.com/download) · [Docs](https://titaniumproxy.com/docs/getting-started) · [Releases](https://titaniumproxy.com/releases)
+
+| Product | Best for |
+|---------|----------|
+| **Titanium.Cli** (`titanium` / `twp`)<br>[Download](https://titaniumproxy.com/download#cli) | Standalone reverse / edge proxy from the command line |
+| **Titanium Inspector**<br>[Download](https://titaniumproxy.com/download#inspector) | Desktop MITM debugger — session grid, inspectors, AutoResponder, breakpoints, HAR export |
+| **Titanium.Plus**<br>`titanium update --plus` (after installing CLI) | Optional ops: control plane, dashboard, observability |
+| **Titanium.Web.Proxy**<br>[NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy) | Embed a proxy (MITM and/or reverse) in a .NET app |
+
+Requires .NET 10 or later for the library. CLI and Inspector downloads are self-contained (no SDK needed to run them).
 
 [![Build](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/dotnetcore.yml/badge.svg?branch=develop)](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/dotnetcore.yml)
 [![NuGet](https://img.shields.io/nuget/v/Titanium.Web.Proxy.svg)](https://www.nuget.org/packages/Titanium.Web.Proxy)
@@ -10,33 +19,17 @@ A lightweight, high-performance HTTP(S) proxy for Windows, Linux, and macOS — 
 
 ## What you can do
 
-- Intercept, inspect, modify, redirect, or block HTTP and HTTPS traffic
-- Explicit, transparent, and SOCKS4/5 proxy endpoints
-- Decrypt HTTPS with man-in-the-middle (MITM) when you install and trust a local root certificate
-- Stream request and response bodies across HTTP/1.x, HTTP/2, and HTTP/3 (QUIC)
-- Upstream HTTP, HTTPS, and SOCKS proxies with automatic system proxy detection
-- Proxy authentication, mutual TLS, Kerberos, and NTLM
-- Connection, certificate, and buffer pooling
-- Built-in logging (zero cost when disabled) and optional request/connection timing — see [Logging and diagnostics](https://github.com/justcoding121/titanium-web-proxy/wiki/Home#logging-and-diagnostics)
+- Run a reverse / edge proxy in front of any backend, or inspect and modify HTTP(S) traffic in the desktop Inspector
+- Explicit, transparent, and SOCKS4/5 endpoints; decrypt HTTPS when you trust a local root certificate
+- Stream bodies across HTTP/1.x, HTTP/2, and HTTP/3; upstream proxies, auth, and mutual TLS
 
-Protocol coverage details: [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support). HTTP/3 packaging: [HTTP/3 wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3).
+Protocol coverage: [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support). HTTP/3 packaging: [HTTP/3 wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3).
 
 ## Performance
 
 ![Practical reverse proxy throughput on Linux](wiki/images/rps-practical-linux.png)
 
-**RPS** is requests per second (gRPC bars are **RPC/s**). Same-harness comparisons vs **YARP**, **nginx**, **HAProxy**, and **Envoy** on matched GitHub Actions runners — see [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
-
-## Choose an edition
-
-| Product | Best for |
-|---------|----------|
-| **Titanium.Cli** (`titanium` / `twp`)<br>[Download](https://titaniumproxy.com/download#cli) (Windows, Linux, macOS) | Standalone reverse / edge proxy for any backend stack, managed by the command line interface (CLI) |
-| **Titanium Inspector**<br>[Download](https://titaniumproxy.com/download#inspector) | Desktop MITM debugger — session grid, inspectors, AutoResponder, breakpoints, HTTP Archive (HAR) export |
-| **Titanium.Plus**<br>`titanium update --plus` (after installing CLI) | Optional ops: control plane, dashboard, observability |
-| **Titanium.Web.Proxy**<br>[NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy) | Embed a proxy (MITM and/or reverse) in a .NET app |
-
-Requires .NET 10 or later for the library. CLI and Inspector downloads are self-contained (no SDK needed to run them).
+**RPS** is requests per second (gRPC bars are **RPC/s**). Compared on the same test harness vs **YARP**, **nginx**, **HAProxy**, and **Envoy** — see [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
 
 ## Installation
 

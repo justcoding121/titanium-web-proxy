@@ -1,84 +1,75 @@
 # Getting started
 
-Titanium Web Proxy is a lightweight, high-performance HTTP(S) proxy: reverse / edge from the CLI, man-in-the-middle (MITM) debugging in the Inspector, optional ops via Plus, or embed the engine in a .NET app. CLI, Plus, and Inspector run on **Windows, Linux, and macOS**.
+Titanium Web Proxy helps you do three things:
+
+1. **Inspect** HTTP/HTTPS traffic in a desktop app (Inspector)
+2. **Run a reverse proxy** in front of your apps (CLI)
+3. **Embed** the same engine in a .NET application (Library)
+
+Optional **Plus** adds a dashboard and ops features on top of the CLI. Everything runs on **Windows, Linux, and macOS**.
 
 ## Choose a path
 
-| Goal | Start here |
-|------|------------|
-| Run a reverse / edge proxy from YAML | [Download CLI](/download) → [CLI](/docs/cli) → [Configuration](/docs/configuration) |
-| Desktop HTTPS traffic debugging | [Download Inspector](/download) → [Inspector](/docs/inspector) |
-| Ops / control plane | [Plus](/docs/plus) (`titanium update --plus`) |
-| Embed in a .NET app | [Library](/docs/library) + NuGet (`--prerelease` for beta) |
+| I want to… | Start here |
+|------------|------------|
+| Debug browser or app traffic | [Download Inspector](/download) → [Inspector guide](/docs/inspector) |
+| Put a proxy in front of my site or API | [Download CLI](/download) → create `twp.yaml` below → [CLI](/docs/cli) |
+| Add dashboard / metrics / auth helpers | [Plus](/docs/plus) after installing the CLI |
+| Use Titanium inside a .NET app | [Library](/docs/library) + [NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy) |
 
-## CLI reverse in 30 seconds
+## Reverse proxy in a minute (CLI)
 
-1. [Download](/download) the CLI zip for your OS and extract it.
-2. Create `twp.yaml`:
+1. [Download](/download) the CLI for your OS and extract it (or use winget / Homebrew — see [Install](/docs/install)).
+2. Create `twp.yaml` that forwards to your backend (example: local port 8080):
 
 ```yaml
 schemaVersion: "7.1"
 listeners:
   - host: "127.0.0.1"
     port: 8000
+    # false = do not decrypt HTTPS (plain reverse proxy)
     decryptSsl: false
     forwardHost: "127.0.0.1"
     forwardPort: 8080
 ```
 
-3. Run:
+3. Validate and run:
 
 ```shell
 titanium test -c twp.yaml
 titanium run -c twp.yaml
 ```
 
-`titanium run` is foreground (stops when you Ctrl+C). To start at boot and keep running through OS restarts: `titanium service install -c twp.yaml`. Details: [CLI — service](/docs/cli#service).
+`titanium run` stays in the foreground (Ctrl+C to stop). To start at boot: `titanium service install -c twp.yaml` — see [CLI — service](/docs/cli#service). More YAML: [Configuration](/docs/configuration).
 
-## Library in 30 seconds (.NET)
+## Inspect traffic (Inspector)
+
+1. [Download](/download) and install Inspector.
+2. Launch it — capturing and system proxy are on by default on the local machine.
+3. Turn on **Decrypt HTTPS** when you need to see inside HTTPS (installs a local root certificate — only on machines you control).
+
+Details: [Inspector](/docs/inspector).
+
+## Embed in .NET (Library)
 
 ```shell
 dotnet add package Titanium.Web.Proxy
-# beta / prerelease:
+# Newer than stable:
 dotnet add package Titanium.Web.Proxy --prerelease
 ```
 
-```csharp
-using System.Net;
-using Microsoft.Extensions.Logging;
-using Titanium.Web.Proxy;
-using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Models;
+Minimal sample and trust notes: [Library](/docs/library). Full API: [ProxyServer](/api/Titanium.Web.Proxy.ProxyServer.html){target="_blank" rel="noreferrer"}.
 
-using var proxyServer = new ProxyServer();
-proxyServer.Logging.MinimumLevel = LogLevel.Information;
-proxyServer.BeforeRequest += OnRequest;
+## Platforms at a glance
 
-var endPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 8000, decryptSsl: true);
-proxyServer.AddEndPoint(endPoint);
-proxyServer.CertificateManager.EnsureRootCertificate(
-    userTrustRootCertificate: true,
-    machineTrustRootCertificate: false);
-proxyServer.Start();
-
-Task OnRequest(object sender, SessionEventArgs e)
-{
-    proxyServer.Logger.LogInformation("{Url}", e.HttpClient.Request.Url);
-    return Task.CompletedTask;
-}
-```
-
-Point your client at `127.0.0.1:8000`. Only trust a generated root CA on a machine you control.
-
-## Platforms
-
-- **CLI, Plus, Core:** Windows, Linux, and macOS (self-contained CLI zips; no .NET SDK required to *run* the CLI).
-- **Inspector:** Windows (MSI / zip), macOS (DMG / zip), Linux (AppImage / deb / rpm / zip).
-- **Library:** .NET 10 (NuGet: `Titanium.Web.Proxy`; optional Abstractions / Configuration packages).
+| Product | Platforms |
+|---------|-----------|
+| CLI / Plus | Windows, Linux, macOS (self-contained — no .NET SDK to *run*) |
+| Inspector | Windows, macOS, Linux |
+| Library | .NET 10 (NuGet) |
 
 ## Next
 
 - [Install](/docs/install)
-- [Configuration (`twp.yaml`)](/docs/configuration)
 - [Editions & licenses](/docs/editions)
-- [API reference](/api/Titanium.Web.Proxy.ProxyServer.html){target="_blank" rel="noreferrer"}
+- [Performance](/docs/performance)

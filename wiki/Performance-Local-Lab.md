@@ -1,6 +1,8 @@
 # Performance Local Lab
 
-Local Windows laptop debugging / cool A/B tables. **Not publishable** � do not compare these absolutes to [Performance](Performance) GHA tables. Use cool paired ratios as a gate, then remeasure on matched Windows+Linux GHA and paste CI medians onto Performance.
+> **For contributors** — local laptop cool A/B tables. Not publishable; do not compare these absolutes to [Performance](Performance).
+
+Local Windows laptop debugging / cool A/B tables. **Not publishable** — do not compare these absolutes to [Performance](Performance) GHA tables. Use cool paired ratios as a gate, then remeasure on matched Windows+Linux GHA and paste CI medians onto Performance.
 
 Playbook (harness, dumps, stage timing, Memory techniques) stays on [Performance Profiling](Performance-Profiling).
 

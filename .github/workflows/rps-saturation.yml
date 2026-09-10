@@ -798,6 +798,12 @@ jobs:
           RPS_REPEATS: ${{ env.RPS_REPEATS }}
           RPS_ARM_SHARD: ${{ env.RPS_ARM_SHARD }}
         run: |
+          $hap = Join-Path $env:RUNNER_TEMP 'haproxy-quic/sbin/haproxy'
+          $hapArgs = @()
+          if ((Test-Path -LiteralPath $hap)) {
+            Write-Host "Pinning HAProxy QUIC binary: $hap"
+            $hapArgs = @('-HaproxyPath', $hap)
+          }
           pwsh tools/RpsLoadProbe/run-rps.ps1 `
             -Mode $env:RPS_MODE `
             -Concurrency $env:RPS_CONCURRENCY `
@@ -806,7 +812,8 @@ jobs:
             -Repeats ([int]$env:RPS_REPEATS) `
             -ArmShard $env:RPS_ARM_SHARD `
             -ResultsDir tools/RpsLoadProbe/results `
-            -BombardierCheck
+            -BombardierCheck `
+            @hapArgs
 
       - name: Sanitize artifact shard label
         if: always()

@@ -1,5 +1,7 @@
 # Security considerations
 
+> For operators and embedders deploying Titanium — what protections apply, and when they do not.
+
 The 5.0 hardening pass (see the [migration guide](Migration-4.x-to-5.0) for the full list of behavior
 changes) closes a lot of gaps, but none of it should be read as a blanket guarantee. This page calls
 out where a protection is **conditional** — it only applies under a specific configuration or code

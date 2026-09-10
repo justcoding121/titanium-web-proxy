@@ -1,102 +1,104 @@
 # Install
 
-Full download buttons live on the [Download](/download) page. This page is the short install guide.
+Prefer the [Download](/download) page for buttons. This page is a short install guide.
 
-## Trust / publisher
+## Inspector (desktop debugger)
 
-- **Windows:** Signed releases show Authenticode publisher **Jehonathan Thomas** (Azure Artifact Signing). SmartScreen reputation still builds over downloads/time.
-- **macOS:** Prefer the notarized **DMG** for Inspector when published. CLI zips are signed/notarized when Apple Developer secrets are configured in CI.
-- **Linux:** Prefer AppImage / `.deb` / `.rpm` (glibc). Verify GitHub assets with `SHA256SUMS` and the detached signature `SHA256SUMS.asc`:
+1. Open [Download](/download) and pick **Inspector** for your OS (Windows MSI, macOS DMG, Linux AppImage / deb / rpm, or a portable zip).
+2. Install or extract, then launch **Titanium Inspector**.
+3. Follow [Inspector](/docs/inspector) to capture and decrypt traffic.
 
-```shell
-# Import the Titanium Releases public key (once)
-curl -fsSL https://titaniumproxy.com/titanium-releases.asc | gpg --import
-# Or from the repo: website/public/titanium-releases.asc
-# Fingerprint: A824 E886 0DAB 01FA DA94  4E2D 8E5A B43F 41C8 DE8F
-
-# From a release asset directory
-sha256sum -c SHA256SUMS
-gpg --verify SHA256SUMS.asc SHA256SUMS
-```
-
-## Library
+**Optional Windows package managers** (use **one** you already have):
 
 ```shell
-dotnet add package Titanium.Web.Proxy
-# Prerelease when newer than stable:
-dotnet add package Titanium.Web.Proxy --prerelease
+winget install justcoding121.TitaniumInspector
+# or
+choco install titanium-inspector
 ```
 
-## CLI
+Beta: `choco install titanium-inspector --pre`, or the beta section on Download.
 
-On Windows, package managers are optional — use **one** you already have, not both. If you have neither, [download a zip](/download).
+## CLI (reverse proxy)
 
-**winget** (built into Windows 10/11; stable only):
+1. [Download](/download) the CLI for your OS (or use a package manager below).
+2. Extract if needed so `titanium` (and `twp`) are on your PATH or in the current folder.
+3. Create a config and run — see [Getting started](/docs/getting-started).
+
+**Windows** (use **one** manager if you already have it):
 
 ```shell
 winget install justcoding121.TitaniumCli
-```
-
-**Chocolatey** (if you already have it):
-
-```shell
+# or
 choco install titanium-cli
 ```
 
-**macOS (Homebrew tap, when published):**
+**macOS** (Homebrew tap, when published):
 
 ```shell
 brew tap justcoding121/titanium
 brew install titanium
 ```
 
-Stable CLI packages are on the [Download](/download) page (`v7.0.5`). For **beta** (or any OS), use `choco install titanium-cli --pre`, the beta section, or [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when a beta tag is published.
+Stable builds are on [Download](/download). For beta: `choco install titanium-cli --pre`, the Download beta section, or [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases).
 
-Pick the **matching RID** (e.g. Alpine/K8s → `linux-musl-x64` or `linux-musl-arm64`, not `linux-x64`). Prefer AppImage / deb / rpm on glibc Linux; musl stays zip-only. HTTP/3 natives ship inside those packages — see [HTTP/3](/docs/http3).
+**Start at boot:** `titanium service install -c <config>` (Administrator / sudo). Details: [CLI — service](/docs/cli#service).
+
+**Updates:**
 
 ```shell
-titanium update --channel beta
-titanium version --check --channel beta
-titanium http3-deps status
+titanium update
+titanium version --check
 ```
 
-`titanium update` checks the selected channel, downloads the RID **zip**, verifies SHA256, replaces the install directory after the process exits, and prints the new version. Use `--channel stable` (default) or `--channel beta` — it does not pick “whichever is newer” across channels. Same-version checks treat assembly `7.0.5.0` and feed tag `7.0.5` as equal; when already current it prints up to date (or that local is newer than the channel) instead of reinstalling. Unknown channel names are rejected.
+Use `--channel beta` when you intentionally follow beta.
 
-**Start at boot:** `titanium service install -c <config>` registers the CLI with Windows Service Control Manager, Linux systemd, or macOS launchd so the proxy survives reboot. Requires Administrator / sudo for a machine service. Details: [CLI — service](/docs/cli#service).
+## Plus (optional ops add-on)
 
-## Plus
+After the CLI is installed:
 
 ```shell
-titanium update --plus --channel beta
+titanium update --plus
 titanium version --check --plus
-titanium update --remove-plus
 ```
 
-`titanium update --plus` skips the download when the installed Plus DLL already matches the feed version (or SHA256). Disable in config with `plus.enabled: false`; remove the DLL with `--remove-plus`. See [Plus](/docs/plus). There is no separate Plus download link.
+There is no separate Plus download. Enable in config (`plus.enabled: true`). See [Plus](/docs/plus).
 
-## Inspector
-
-Prefer [Download](/download) if you do not already use a Windows package manager. If you do, pick **one**:
-
-**winget** (built into Windows 10/11; stable only):
+## Library (.NET)
 
 ```shell
-winget install justcoding121.TitaniumInspector
+dotnet add package Titanium.Web.Proxy
+# Newer than stable:
+dotnet add package Titanium.Web.Proxy --prerelease
 ```
 
-**Chocolatey** (if you already have it):
+## Advanced
+
+### Which Linux package?
+
+- Most Linux desktops and servers: **AppImage**, **`.deb`**, **`.rpm`**, or the regular `linux-x64` / `linux-arm64` zip.
+- **Alpine** or other **musl** containers: use the **Alpine / musl** zip (`linux-musl-x64` or `linux-musl-arm64`), not the regular Linux zip.
+- HTTP/3 support is bundled in the platform packages — see [HTTP/3](/docs/http3).
+
+### Trust / publisher
+
+- **Windows:** Signed releases show Authenticode publisher **Jehonathan Thomas**. SmartScreen reputation builds over time.
+- **macOS:** Prefer a notarized **DMG** for Inspector when published.
+- **Linux:** Prefer AppImage / `.deb` / `.rpm`. Verify releases with `SHA256SUMS` and `SHA256SUMS.asc`:
 
 ```shell
-choco install titanium-inspector
+curl -fsSL https://titaniumproxy.com/titanium-releases.asc | gpg --import
+# Fingerprint: A824 E886 0DAB 01FA DA94  4E2D 8E5A B43F 41C8 DE8F
+sha256sum -c SHA256SUMS
+gpg --verify SHA256SUMS.asc SHA256SUMS
 ```
 
-For **beta**, use `choco install titanium-inspector --pre`.
+### Update channels
 
-Or MSI / DMG / AppImage / deb / rpm / portable zip from [Download](/download) / [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) (stable: `v7.0.5`; beta when a beta tag is published). **Windows:** MSI (signed). **macOS:** DMG when published (else zip + `install-app.sh`). **Linux glibc:** AppImage / `.deb` / `.rpm` when published. **Alpine musl:** zip only. HTTP/3 natives are bundled the same way as the CLI ([HTTP/3](/docs/http3)).
+`titanium update` uses **stable** by default or **beta** when you pass `--channel beta`. It does not pick “whichever is newer” across channels. Same-version checks treat assembly `7.0.5.0` and feed tag `7.0.5` as equal.
 
 ## See also
 
 - [Download](/download)
-- [Releases](/releases)
 - [Getting started](/docs/getting-started)
-- [Packaging notes](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/packaging/PACKAGING.md)
+- [Releases](/releases)
+- [Packaging notes (for contributors / packagers)](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/packaging/PACKAGING.md)

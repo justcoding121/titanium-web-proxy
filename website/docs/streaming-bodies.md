@@ -1,6 +1,8 @@
 # Streaming bodies
 
-Titanium can stream request and response bodies across HTTP/1.x (plain and TLS), HTTP/2, and HTTP/3 instead of buffering entire payloads.
+Titanium can stream large uploads and downloads instead of buffering entire payloads — across HTTP/1.x, HTTP/2, and HTTP/3.
+
+Full guidance, limitations, and examples: [Streaming-Bodies wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Streaming-Bodies). Synthetic / custom responses: [Synthetic-Responses wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Synthetic-Responses).
 
 ## When to stream
 
@@ -10,12 +12,6 @@ Titanium can stream request and response bodies across HTTP/1.x (plain and TLS),
 
 ## Library hooks
 
-Use session events and body-write callbacks on `SessionEventArgs` / related types. Prefer streaming APIs when you do not need the full buffer.
+> **For .NET embedders** — use session events and body-write callbacks on `SessionEventArgs` / related types. Prefer streaming APIs when you do not need the full buffer.
 
 For HTTP/3, per-chunk streaming hooks are part of the experimental surface (`TWP001`).
-
-## Details
-
-Full guidance, limitations, and examples: [Streaming-Bodies wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Streaming-Bodies).
-
-Synthetic / custom responses: [Synthetic-Responses wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Synthetic-Responses).

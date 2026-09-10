@@ -1,5 +1,7 @@
 # Library (embed)
 
+> **For .NET embedders** — operators who want a reverse proxy or desktop debugger should start with the [CLI](/docs/cli) or [Inspector](/docs/inspector) instead.
+
 NuGet package **Titanium.Web.Proxy** (MIT). Target framework: **.NET 10**.
 
 ```shell

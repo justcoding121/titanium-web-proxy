@@ -10,11 +10,15 @@ const channels = [
 ]
 </script>
 
-Get CLI and Inspector builds from GitHub Releases. This page lists the **latest stable** and **latest beta** product releases (NuGet-only tags are skipped). Prefer the primary format per OS (MSI / DMG / AppImage / deb / rpm); portable zips remain on GitHub for `titanium update` and Alpine (musl) images.
+Download **Inspector** (desktop debugger) or the **CLI** (reverse proxy) for your OS. Prefer the primary installer when available: **Windows MSI**, **macOS DMG**, **Linux AppImage / deb / rpm**. Portable zips work everywhere and are what `titanium update` uses.
 
-**Windows:** Authenticode-signed assets show publisher **Jehonathan Thomas**. **winget** is stable-only. **Chocolatey** packages `titanium-cli` / `titanium-inspector` support stable and `--pre` beta. **macOS CLI:** `brew tap justcoding121/titanium && brew install titanium` when the tap is published. **Linux desktop:** use AppImage / `.deb` / `.rpm` from GitHub Releases.
+Pick **Stable** for production or **Beta** for the newest builds. Then choose Inspector or CLI below.
 
-HTTP/3 (QUIC) native libraries ship inside each platform zip / package (except Windows OS MsQuic). Alpine / Kubernetes: use **`linux-musl-*`**, not `linux-x64`. Details: [HTTP/3](/docs/http3).
+::: tip Quick picks
+- **Windows:** MSI (Inspector) or zip (CLI); or `winget` / Chocolatey under [Optional Windows package managers](#optional-windows-package-managers).
+- **macOS:** DMG when published, otherwise zip; CLI also via Homebrew when the tap is live.
+- **Linux:** AppImage / `.deb` / `.rpm` for normal desktops; Alpine containers need the **musl** zip — see [Advanced](#advanced).
+:::
 
 <div v-for="ch in channels" :key="ch.id" class="download-channel">
   <h2 :id="ch.id">
@@ -29,19 +33,15 @@ HTTP/3 (QUIC) native libraries ship inside each platform zip / package (except W
     </template>
   </p>
 
-  <h3 :id="ch.id + '-inspector'">Titanium Inspector</h3>
+  <h3 :id="ch.id + '-inspector'">Inspector</h3>
   <p>
-    Desktop man-in-the-middle (MITM) debugger.
-    <strong>Windows:</strong> MSI (signed).
-    <strong>macOS:</strong> DMG when published; otherwise zip + <code>install-app.sh</code>.
-    <strong>Linux glibc:</strong> AppImage / <code>.deb</code> / <code>.rpm</code> when published; otherwise zip.
-    <strong>Alpine musl:</strong> zip only.
+    Desktop HTTPS / HTTP debugger (decrypt on machines you control).
+    <a href="/docs/inspector">Inspector guide</a>.
   </p>
   <figure v-if="ch.id === 'stable'" class="inspector-preview">
     <img :src="inspectorScreenshot" alt="Titanium Inspector session grid with HTTPS decrypt and headers pane" width="1400" height="888" />
     <figcaption>
       Session grid, HTTPS decrypt, and inspectors.
-      <a href="/docs/inspector">Inspector guide</a>
     </figcaption>
   </figure>
   <div class="download-grid">
@@ -106,10 +106,10 @@ HTTP/3 (QUIC) native libraries ship inside each platform zip / package (except W
     </div>
   </div>
 
-  <h3 :id="ch.id + '-cli'">CLI (<code>titanium</code> / <code>twp</code>)</h3>
+  <h3 :id="ch.id + '-cli'">CLI</h3>
   <p>
-    Each package includes <code>titanium</code> and <code>twp</code>.
-    Prefer AppImage / deb / rpm on Linux glibc; zip on Windows / musl / macOS.
+    Command-line reverse / edge proxy (<code>titanium</code> / <code>twp</code>).
+    <a href="/docs/cli">CLI guide</a>.
   </p>
   <div class="download-grid">
     <div class="download-row">
@@ -174,104 +174,61 @@ HTTP/3 (QUIC) native libraries ship inside each platform zip / package (except W
 
 ## Optional Windows package managers
 
-Use **one** of winget or Chocolatey if you already have it — not both. If you have neither, use the download buttons above. Each command below is a separate product; run only the one you want.
+Use **one** of winget or Chocolatey if you already have it — not both. Otherwise use the buttons above.
 
-## winget (Windows, stable only)
-
-Built into Windows 10/11.
-
-CLI:
+### winget (stable only)
 
 ```shell
 winget install justcoding121.TitaniumCli
-```
-
-Inspector:
-
-```shell
 winget install justcoding121.TitaniumInspector
 ```
 
-## Chocolatey (Windows)
-
-If you already use [Chocolatey](https://chocolatey.org). Packages appear on chocolatey.org after moderation.
-
-CLI (stable):
+### Chocolatey
 
 ```shell
 choco install titanium-cli
-```
-
-Inspector (stable):
-
-```shell
 choco install titanium-inspector
 ```
 
-Beta uses the same ids with `--pre` (do not also run the stable install): `choco install titanium-cli --pre` or `choco install titanium-inspector --pre`. Uninstall: `choco uninstall titanium-cli` or `choco uninstall titanium-inspector`.
+Beta: `choco install titanium-cli --pre` or `choco install titanium-inspector --pre`.
 
-## Homebrew (macOS CLI)
+### Homebrew (macOS CLI)
 
 ```shell
 brew tap justcoding121/titanium
 brew install titanium
 ```
 
-Requires the public tap repo (`homebrew-titanium`) with formula SHA256s matching the release zip.
+## Plus
+
+Plus is **not** a separate download. After the CLI:
 
 ```shell
-titanium run -c twp.yaml
-titanium version --check
-titanium update
-titanium update --channel beta
-titanium http3-deps status
+titanium update --plus
 ```
 
-`titanium update` self-updates the CLI from the release feed for the selected channel (stable by default).
-## Titanium.Plus
-
-Plus is **not** a separate download on this page. After the CLI is installed:
-
-```shell
-titanium update --plus --channel beta
-titanium version --check --plus --channel beta
-```
-
-For stable Plus updates, omit `--channel beta` (default channel is `stable`).
-
-Place the DLL beside the CLI (the updater does this), then enable Plus in config:
-
-```yaml
-plus:
-  enabled: true
-  controlPlane:
-    host: "127.0.0.1"
-    port: 9080
-    sharedSecret: "<shared-secret>"
-```
+Then enable it in config — see [Plus](/docs/plus).
 
 ## Library (NuGet)
 
 ```shell
 dotnet add package Titanium.Web.Proxy
-```
-
-Prerelease:
-
-```shell
+# Newer than stable:
 dotnet add package Titanium.Web.Proxy --prerelease
 ```
+
+## Advanced
+
+- **Alpine / musl containers:** use the Alpine / musl zip rows above — not the regular Linux zip. Details: [HTTP/3](/docs/http3) and [Install](/docs/install#advanced).
+- **Windows signing:** Authenticode publisher **Jehonathan Thomas**.
+- **Some GitHub tags are NuGet-only** (no CLI/Inspector assets). Prefer this page or a release that lists the installers you need.
 
 ## Release notes
 
 See [Releases](/releases) or [all assets on GitHub](https://github.com/justcoding121/titanium-web-proxy/releases).
 
-::: tip Product zips vs NuGet tags
-Some tags publish **NuGet only**. CLI / Inspector zip assets appear above only when a full product release is cut (`v*` tag via the release workflow). Prefer this page or GitHub Releases for binaries; **winget** remains stable-only; **Chocolatey** also ships beta via `--pre`.
-:::
-
 ## See also
 
 - [Install](/docs/install)
+- [Getting started](/docs/getting-started)
 - [HTTP/3](/docs/http3)
-- [Releases](/releases)

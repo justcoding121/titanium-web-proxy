@@ -1,34 +1,53 @@
-# CLI (`titanium` / `twp`)
+# CLI
 
-Standalone reverse / edge proxy for any backend stack. MIT licensed. Self-contained binaries for Windows, Linux, and macOS — [Download](/download).
+Standalone reverse / edge proxy for any backend stack. MIT licensed. For operators who want YAML (or a familiar reverse-proxy dialect) instead of embedding .NET.
+
+**Next:** [Download](/download) a self-contained binary → write a config → `titanium test` / `titanium run`. Alias: `twp`.
+
+## Quick start
+
+```yaml
+schemaVersion: "7.1"
+listeners:
+  - host: "127.0.0.1"
+    port: 8000
+    decryptSsl: false
+    forwardHost: "127.0.0.1"
+    forwardPort: 8080
+```
+
+```shell
+titanium test -c twp.yaml
+titanium run -c twp.yaml
+```
+
+Foreground run blocks until Ctrl+C (or SIGTERM). Exit `0` on clean stop; `1` on config/start errors. Opt-in NDJSON access logs via `server.accessLog` (see [Configuration](/docs/configuration)); bodies are never buffered for logging.
+
+Path-based routing and load balancing: [Configuration](/docs/configuration).
 
 ## Commands
 
 ```text
 titanium run -c <config> [-v|--verbose] [--service]
 titanium test -c <config>
+titanium service install|uninstall|start|stop|restart|status
 titanium version [--check] [--plus] [--channel beta]
 titanium update [--plus] [--remove-plus] [--channel beta]
 titanium http3-deps status|install
-titanium service install|uninstall|start|stop|restart|status
 ```
 
-`twp` is an alias for the same binary. Nested help: `titanium <command> --help` (and `titanium service install --help`, etc.).
+Nested help: `titanium <command> --help` (and `titanium service install --help`, etc.).
 
 | Command | Purpose |
 |---------|---------|
-| `run` | Start the proxy from YAML/JSON (or other dialects) |
+| `run` | Start the proxy from a config file |
 | `test` | Validate config without serving traffic |
-| `version` | Print local version; `--check` compares to the update feed |
-| `update` | Self-update the CLI from the release feed (download, verify SHA256, replace install); `--plus` installs/updates the Plus DLL; `--remove-plus` deletes it |
-| `http3-deps` | Report Quic availability; optionally install system MsQuic on edge hosts |
 | `service` | Install / start / stop an OS service so the proxy survives reboot |
+| `version` | Print local version; `--check` compares to the update feed |
+| `update` | Self-update the CLI (download, verify SHA256, replace install); `--plus` installs/updates Plus; `--remove-plus` deletes it |
+| `http3-deps` | Report Quic availability; optionally install system MsQuic on edge hosts |
 
-Channels: `stable` (default) or `beta` via `--channel` or `TITANIUM_UPDATE_CHANNEL` (other values are rejected). Messages always label the channel and print local → remote versions. `titanium update` upgrades when the feed is newer; same-semver beta switches are allowed; it does not reinstall when already current. `titanium update` does **not** use winget (so beta and non-Windows stay consistent); use winget only for the initial install on Windows stable.
-
-**Alpine / Kubernetes:** download the `linux-musl-*` RID zip (not `linux-x64`). See [HTTP/3](/docs/http3).
-
-## `run`
+### `run`
 
 ```text
 titanium run -c <config> [-v|--verbose] [--service] [--name <service-name>]
@@ -41,11 +60,7 @@ titanium run -c <config> [-v|--verbose] [--service] [--name <service-name>]
 | `--service` | Service-worker mode (used by `titanium service install`; no “Press Ctrl+C” prompt; SIGTERM / SCM stop) |
 | `--name` | Windows SCM name when `--service` is set (default `titanium`) |
 
-Foreground run blocks until Ctrl+C (or SIGTERM). On Linux/macOS, **SIGHUP** reloads routes/clusters from the same config path without dropping the process or in-flight connections (listeners stay bound). Exit `0` on clean stop; `1` on config/start errors.
-
-Opt-in NDJSON access logs via `server.accessLog` in the config (see [Configuration](/docs/configuration)). Bodies are never buffered for logging.
-
-## `test`
+### `test`
 
 ```text
 titanium test -c <config>
@@ -53,37 +68,7 @@ titanium test -c <config>
 
 Loads and validates the config without opening listeners. Exit `0` when OK; `1` when validation fails.
 
-## `version`
-
-```text
-titanium version [--check] [--plus] [--channel stable|beta]
-```
-
-Prints local Cli / Core / Abstractions / Configuration versions. With `--check`, compares to the update feed (`0` up to date, `2` update available, `1` feed error). `--plus` includes the Plus DLL.
-
-## `update`
-
-```text
-titanium update [--plus] [--remove-plus] [--channel stable|beta]
-```
-
-Downloads the CLI zip (or Plus DLL with `--plus`), verifies SHA256, and replaces the install. `--remove-plus` deletes `Titanium.Plus.dll` beside the CLI (no network; mutually exclusive with `--plus`). If an OS service is running, stop it first so the executable can be replaced:
-
-```shell
-titanium service stop
-titanium update
-titanium service start
-```
-
-## `http3-deps`
-
-```text
-titanium http3-deps status|install
-```
-
-Reports `QuicListener.IsSupported` and optionally installs system MsQuic. Prefer the matching RID zip, which already bundles natives — see [HTTP/3](/docs/http3).
-
-## `service` {#service}
+### `service` {#service}
 
 Register the same `titanium run` binary with the OS so it starts at boot and restarts on failure (Windows Service, Linux systemd, or macOS launchd) — the same split nginx uses: one process, the OS supervises it.
 
@@ -108,7 +93,7 @@ titanium run -c <abs-config> --service
 
 Working directory is the config file’s directory (so relative cert / static paths in YAML still resolve). Machine services require **Administrator** (Windows) or **root** (Linux/macOS). In an interactive terminal, Titanium asks the OS for permission (UAC on Windows, sudo on Linux/macOS). If you cancel the prompt, or the session is not interactive (CI / redirected IO), re-run from an elevated prompt — or use `--user` on Linux/macOS.
 
-### Examples
+#### Examples
 
 ```shell
 # Windows — UAC prompt if you are not already Administrator
@@ -127,7 +112,7 @@ titanium service install -c ~/twp.yaml --user
 titanium service install -c /usr/local/etc/titanium/twp.yaml
 ```
 
-### Logs
+#### Logs
 
 | OS | Where to look |
 |----|----------------|
@@ -135,30 +120,41 @@ titanium service install -c /usr/local/etc/titanium/twp.yaml
 | Linux | `journalctl -u titanium` (system) or `journalctl --user -u titanium` (`--user`) |
 | macOS | `/Library/Logs/Titanium/` (daemon) or `~/Library/Logs/Titanium/` (`--user`) |
 
-### Status exit codes
+#### Status exit codes
 
 `titanium service status` exits `0` when the unit is installed (running or stopped), `1` when not installed.
 
-## Minimal ForwardHost reverse
+### `version`
 
-```yaml
-schemaVersion: "7.1"
-listeners:
-  - host: "127.0.0.1"
-    port: 8000
-    decryptSsl: false
-    forwardHost: "127.0.0.1"
-    forwardPort: 8080
+```text
+titanium version [--check] [--plus] [--channel stable|beta]
 ```
+
+Prints local CLI / Core / Abstractions / Configuration versions. With `--check`, compares to the update feed (`0` up to date, `2` update available, `1` feed error). `--plus` includes Plus.
+
+### `update`
+
+```text
+titanium update [--plus] [--remove-plus] [--channel stable|beta]
+```
+
+Downloads the CLI zip (or Plus with `--plus`), verifies SHA256, and replaces the install. `--remove-plus` deletes Plus beside the CLI (no network; mutually exclusive with `--plus`). If an OS service is running, stop it first so the executable can be replaced:
 
 ```shell
-titanium test -c twp.yaml
-titanium run -c twp.yaml
+titanium service stop
+titanium update
+titanium service start
 ```
 
-## Routes and clusters
+Channels: `stable` (default) or `beta` via `--channel` or `TITANIUM_UPDATE_CHANNEL` (other values are rejected). Messages always label the channel and print local → remote versions. `titanium update` upgrades when the feed is newer; same-semver beta switches are allowed; it does not reinstall when already current. `titanium update` does **not** use winget (so beta and non-Windows stay consistent); use winget only for the initial install on Windows stable.
 
-For path-based routing and load balancing, see [Configuration](/docs/configuration).
+### `http3-deps`
+
+```text
+titanium http3-deps status|install
+```
+
+Reports Quic support and optionally installs system MsQuic. Prefer the matching download zip, which already bundles natives — see [HTTP/3](/docs/http3).
 
 ## Plus sidecar
 
@@ -167,15 +163,25 @@ titanium update --plus
 titanium update --remove-plus
 ```
 
-Enable in config (`plus.enabled: true` + control-plane shared secret); disable with `plus.enabled: false`. Use `--remove-plus` to delete the DLL from disk. Details: [Plus](/docs/plus).
+Enable in config (`plus.enabled: true` + control-plane shared secret); disable with `plus.enabled: false`. Use `--remove-plus` to delete Plus from disk. Details: [Plus](/docs/plus).
 
-## Config dialects
+## More
+
+### Config dialects
 
 | Extension | Dialect |
 |-----------|---------|
 | `.yaml` / `.yml` / `.json` | Native `twp` schema 7.1 |
 | `.twp` | Compact site-file (`host / => http://origin`) |
 | `.conf` | HTTP-server style (`listen`, `server_name`, `location`, `proxy_pass`) for familiar reverse-proxy configs |
+
+### Alpine / containers
+
+Download the `linux-musl-*` zip (not `linux-x64`) for Alpine or musl-based Kubernetes images. See [HTTP/3](/docs/http3).
+
+### Reload without restart (Unix)
+
+On Linux/macOS, **SIGHUP** reloads routes/clusters from the same config path without dropping the process or in-flight connections (listeners stay bound).
 
 ## See also
 

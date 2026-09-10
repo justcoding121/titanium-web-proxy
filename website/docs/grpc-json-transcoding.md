@@ -1,10 +1,12 @@
 # gRPC-JSON transcoding
 
-Titanium Plus can translate REST/JSON HTTP calls into gRPC for an upstream service, and translate gRPC responses back to JSON for the client. Mapping comes from `google.api.http` annotations in a compiled protobuf FileDescriptorSet.
+Call a gRPC service with ordinary HTTP and JSON — Plus maps REST/JSON to gRPC (and back) using `google.api.http` annotations in a compiled protobuf FileDescriptorSet.
+
+**Next:** enable Plus → point at a descriptor set → hit the annotated HTTP paths with `curl` or any HTTP client.
 
 ## Requirements
 
-- Plus enabled (`plus.enabled: true`) with the Plus DLL installed
+- Plus enabled (`plus.enabled: true`) with Plus installed
 - A FileDescriptorSet (`.pb`) built with imports
 - Fully-qualified service names listed in config
 - HTTP/2 to the gRPC origin (enable HTTP/2 on the listener / server / cluster path)

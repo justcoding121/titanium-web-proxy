@@ -4,7 +4,7 @@ title: Titanium Web Proxy
 hero:
   name: Titanium Web Proxy
   text: High-performance HTTP(S) proxy
-  tagline: Reverse / edge CLI, desktop traffic debugger, and optional ops add-on — on Windows, Linux, and macOS. Embed the same engine in .NET when you need a library.
+  tagline: Inspect HTTPS traffic, put a reverse proxy in front of your apps, or embed the same engine in .NET — on Windows, Linux, and macOS.
   image:
     src: /logo.svg
     alt: Titanium Web Proxy
@@ -19,44 +19,44 @@ hero:
       text: GitHub
       link: https://github.com/justcoding121/titanium-web-proxy
 features:
-  - title: Intercept & modify
-    details: Explicit, transparent, and SOCKS4/5 endpoints. Decrypt HTTPS, stream bodies, and shape traffic — from the Inspector, CLI, or your own app.
-  - title: Reverse / edge CLI
-    details: Run `titanium` / `twp` with a YAML config — routes, clusters, load balancing, TLS terminate, and automatic certificates via Automatic Certificate Management Environment (ACME). Self-contained zips for every major OS.
+  - title: Debug HTTPS traffic
+    details: Decrypt and inspect requests in the desktop Inspector — sessions, headers, bodies, AutoResponder, and breakpoints. Only on machines you control.
+  - title: Reverse proxy from the CLI
+    details: Download the CLI, write a short YAML file, and run `titanium`. Routes, load balancing, TLS, and optional automatic certificates (ACME).
   - title: HTTP/1 · HTTP/2 · HTTP/3
-    details: HTTP/2 on by default. HTTP/3 (QUIC) opt-in. Bridges when the client and origin speak different protocol versions.
+    details: HTTP/2 is on by default. HTTP/3 (QUIC) is optional. Titanium can bridge when the client and backend speak different versions.
   - title: Measured performance
-    details: Same-harness RPS vs YARP, nginx, HAProxy, and Envoy on matched CI runners. Linux chart below; Windows and macOS in the performance guide.
+    details: Compared on the same test harness against YARP, nginx, HAProxy, and Envoy. See the charts below and the performance guide.
 ---
 
-## Editions
+## What do you want to do?
 
 <div class="edition-grid">
   <div class="edition-card">
-    <h3>Titanium.Cli</h3>
-    <p class="license">MIT · zip / winget</p>
-    <p>Standalone reverse / edge proxy for any backend stack, managed by the command line interface (CLI): <code>run</code>, <code>test</code>, <code>version</code>, <code>update</code>, <code>http3-deps</code>, <code>service</code>.</p>
+    <h3>Inspect traffic</h3>
+    <p class="license">Inspector · Windows / macOS / Linux</p>
+    <p>Desktop debugger for HTTP and HTTPS. <a href="/download#inspector">Download</a> → <a href="/docs/inspector">Inspector guide</a>.</p>
   </div>
   <div class="edition-card">
-    <h3>Titanium Inspector</h3>
-    <p class="license">Windows / macOS / Linux</p>
-    <p>Desktop man-in-the-middle (MITM) debugger — session grid, inspectors, AutoResponder, breakpoints, HTTP Archive (HAR) export.</p>
+    <h3>Run a reverse proxy</h3>
+    <p class="license">CLI · MIT</p>
+    <p>Standalone proxy for any backend stack. <a href="/download#cli">Download CLI</a> → <a href="/docs/cli">CLI guide</a>.</p>
   </div>
   <div class="edition-card">
-    <h3>Titanium.Plus</h3>
-    <p class="license">optional CLI add-on</p>
-    <p>Control plane, dashboard, observability, discovery, and a thin web application firewall (WAF). After installing CLI: <code>titanium update --plus</code>.</p>
+    <h3>Ops add-on</h3>
+    <p class="license">Plus · optional</p>
+    <p>Dashboard, metrics, auth helpers, and a thin WAF. After the CLI: <code>titanium update --plus</code>. <a href="/docs/plus">Plus</a>.</p>
   </div>
   <div class="edition-card">
-    <h3>Titanium.Web.Proxy</h3>
-    <p class="license">MIT · NuGet</p>
-    <p>Optional .NET library — embed a MITM and/or reverse proxy in your app.</p>
+    <h3>Embed in .NET</h3>
+    <p class="license">Library · NuGet · MIT</p>
+    <p>Same engine inside your app. <a href="/docs/library">Library guide</a> · <a href="https://www.nuget.org/packages/Titanium.Web.Proxy">NuGet</a>.</p>
   </div>
 </div>
 
 ## Performance
 
-Same-harness reverse RPS vs **YARP**, **nginx**, **HAProxy**, and **Envoy** on matched GitHub Actions runners — industry wires plus POST / WebSocket / gRPC. One Linux chart here; Windows, macOS, and heavier workloads live on the [performance](/docs/performance) page.
+Throughput (requests per second) vs **YARP**, **nginx**, **HAProxy**, and **Envoy** on matched GitHub Actions runners. Linux chart here; Windows, macOS, and heavier workloads on the [performance](/docs/performance) page.
 
 <div class="rps-preview">
 
@@ -70,8 +70,8 @@ Same-harness reverse RPS vs **YARP**, **nginx**, **HAProxy**, and **Envoy** on m
 
 ```shell [CLI]
 # Download a CLI zip from /download, then:
-titanium run -c twp.yaml
 titanium test -c twp.yaml
+titanium run -c twp.yaml
 ```
 
 ```yaml [twp.yaml]
@@ -79,6 +79,7 @@ schemaVersion: "7.1"
 listeners:
   - host: "127.0.0.1"
     port: 8000
+    # false = plain reverse proxy (no HTTPS decrypt)
     decryptSsl: false
     forwardHost: "127.0.0.1"
     forwardPort: 8080
@@ -110,7 +111,6 @@ proxyServer.Start();
 - [Download CLI & Inspector](/download)
 - [Getting started](/docs/getting-started)
 - [Performance](/docs/performance)
-- [Configuration reference](/docs/configuration)
-- [gRPC-JSON transcoding](/docs/grpc-json-transcoding)
+- [Configuration](/docs/configuration)
 - [Release notes](/releases)
 - [API reference](/api/Titanium.Web.Proxy.ProxyServer.html){target="_blank" rel="noreferrer"}

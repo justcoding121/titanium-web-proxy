@@ -1,107 +1,60 @@
 # Inspector
 
-Desktop man-in-the-middle (MITM) debugger (Avalonia).
+Desktop debugger for HTTP and HTTPS traffic. Decrypt HTTPS (man-in-the-middle / MITM) only on machines you control.
 
 ![Titanium Inspector screenshot](../../wiki/images/inspector-screenshot.jpg)
 
+## Quick use
+
+1. [Download](/download) and install Inspector for your OS.
+2. Launch it — by default it starts listening and turns on system proxy (**Capturing** on). Default bind is usually `127.0.0.1:8866`.
+3. Turn on **Decrypt HTTPS** when you need to see inside HTTPS (installs a local root certificate if needed; you may get an OS trust prompt).
+4. Use the toolbar **System proxy** / **Capturing** checkboxes to pause either without quitting.
+
+HTTPS stays encrypted (opaque tunnels) until **Decrypt HTTPS** is on.
+
+Capture menu options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs) show a check when on. Preferences such as **Session retention…**, **Excluded hosts…**, **Ignore insecure server certificates**, and **Logging…** live under **Options**.
+
 ## Install
 
-Prefer the [Download](/download) page (resolves the newest release that has Inspector assets, including prereleases).
+Prefer the [Download](/download) page.
 
 ### Windows
 
-- **MSI** — guided wizard (license, install folder, progress, Finished with optional Launch). Uninstall from **Settings → Apps** (or Programs and Features); the entry uses the Inspector icon.
+- **MSI** — installer wizard; uninstall from **Settings → Apps**.
 - **Portable zip** — extract and run `TitaniumInspector.exe`.
 
-Optional Windows package managers — use **one** you already have, not both:
-
-**winget** (built into Windows 10/11; stable only):
+Optional package managers (use **one** you already have):
 
 ```shell
 winget install justcoding121.TitaniumInspector
-```
-
-**Chocolatey** (if you already have it):
-
-```shell
+# or
 choco install titanium-inspector
 ```
 
-Windows **stable** (`v7.0.5`):
-
-- [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.5/TitaniumInspector-win-x64.msi)
-- [Portable zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.5/TitaniumInspector-win-x64.zip)
-
-For **beta**, use `choco install titanium-inspector --pre`, the [Download](/download) beta section, or [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when a beta tag is published.
+Stable links (`v7.0.5`): [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.5/TitaniumInspector-win-x64.msi) · [zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.5/TitaniumInspector-win-x64.zip). Beta: `choco install titanium-inspector --pre` or the Download beta section.
 
 ### Linux
 
-Extract the RID zip, then either run `./TitaniumInspector` (portable) or:
+Extract the zip, then run `./TitaniumInspector`, or:
 
 ```shell
 chmod +x install.sh uninstall.sh TitaniumInspector
 ./install.sh          # ~/.local/share/TitaniumInspector + desktop entry
-# later:
-./uninstall.sh
 ```
 
 ### macOS
 
-Extract the RID zip, then either run `./TitaniumInspector` (portable) or:
+Extract the zip, then run `./TitaniumInspector`, or:
 
 ```shell
 chmod +x install-app.sh uninstall-app.sh TitaniumInspector
 ./install-app.sh      # ~/Applications/Titanium Inspector.app
-# later:
-./uninstall-app.sh
 ```
 
 ## Updates
 
-**Help → Update channel** — Stable (default) or Beta. **Help → Check for updates…** checks the latest release on the selected channel and offers an install only when it is a real change:
-
-- **Newer** release → update dialog (**Update and restart**)
-- **Channel switch** (for example Beta → Stable at the same or older version) → switch dialog (**Switch and restart**)
-- Already on that channel build (including website/MSI installs of the same version) → **up to date** (no reinstall prompt)
-
-Choosing the accept action downloads the package (MSI for a Program Files install, otherwise the RID zip), closes Inspector, replaces the current installation, and relaunches. Windows Installer cannot apply the **same or an older** ProductVersion over an existing MSI install; in that case Inspector explains that you must uninstall first or use a website package. **Help → About Titanium Inspector…** shows the installed version and licensing details.
-
-**Help → Check for updates on startup** uses the same channel and confirm dialog (never silent-install).
-
-## Quick use
-
-1. Launch Inspector — by default it starts listening and enables system proxy (Capturing on).
-2. Check **Decrypt HTTPS** when you want MITM (installs the root CA if needed; may prompt for admin).
-3. Use the toolbar **System proxy** / **Capturing** checkboxes to pause either without quitting.
-
-Default bind is typically `127.0.0.1:8866`. Bind address/port are **start-time** settings on the toolbar: editable when the proxy is stopped; disabled while running. Use **Start proxy** / **Stop proxy** (toolbar button or Capture menu) to switch. After Stop → Start, system proxy is turned back on if it was on before Stop, or if **Auto system proxy on start** is checked.
-
-HTTPS stays encrypted (opaque tunnels) until **Decrypt HTTPS** is enabled.
-
-Capture menu latching options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs) show a check when on. Preferences such as **Session retention…**, **Excluded hosts…** (editable OS bypass and tunnel-only lists seeded from factory defaults), **Ignore insecure server certificates** (off by default), and **Logging…** live under **Options**. **Reset Inspector settings…** restores preferences to factory defaults (re-seeds exclusion lists); it does not remove the root CA, change OS proxy or Store loopback exemptions, or clear sessions.
-
-## Excluded hosts (proxy bypass vs tunnel-only)
-
-Inspector uses two editable lists (seeded once from factory defaults; **Reset to defaults** restores them):
-
-| Layer | Effect | When it applies |
-|-------|--------|-----------------|
-| **OS bypass** | Traffic never reaches Inspector | **System proxy** on — Windows WinINET, macOS `networksetup`, Linux GNOME/KDE/`NO_PROXY` |
-| **Tunnel only** | CONNECT row stays visible, TLS opaque | Always (manual or system proxy) |
-
-Factory seeds: Microsoft identity / SSO / RDP hosts → OS bypass; Dropbox/Webex → tunnel only. Removing identity hosts from OS bypass can break sign-in while System proxy is on. Lists are applied with **Replace** (no silent re-merge of removed defaults).
-
-**Options → Excluded hosts…** edits both lists, **Proxy localhost**, and shows an **Effective OS bypass** preview for the current OS. Right-click a session → **Exclude host…** (defaults to tunnel-only). Opaque sessions show a reason in the inspect pane and host tooltip. Search: `is:opaque`, `is:opaque-reason:builtin`.
-
-**Manual browser proxy** (`127.0.0.1:8866`): tunnel-only rules work; OS bypass does not apply unless **System proxy** is on. Enabling **System proxy** replaces a PAC script on Windows; existing bypass rules are merged with the OS override string. **Chrome QUIC** may bypass the proxy entirely — not fixable via host lists.
-
-On Windows, **Proxy localhost** uses the `<-loopback>` rule; on macOS/Linux it omits `localhost` from `NO_PROXY` for parity.
-
-The status strip keeps command feedback on the left and a live **Sessions: N** count on the right, so capture traffic does not wipe tips or export paths. When exclusions are configured, a compact **Exclusions: …** link opens the dialog.
-
-**Install root CA (current user)** trusts the MITM CA on this PC. On Windows, the OS may show a Trusted Root **Yes/No** security dialog the first time that certificate is added (this is not UAC). On macOS/Linux, Inspector also trusts the CA in Keychain / user NSS (`certutil`). If a Firefox profile exists, Inspector also enables `security.enterprise_roots.enabled` in that profile (`user.js`) so Firefox can trust the OS root after a restart — it never writes into `Firefox.app` (that would break code signing). If tools are missing or Keychain needs **Always Trust**, a single recovery dialog offers the next step (install NSS tools via package manager or Homebrew, open Keychain Access, or elevate). Re-installing when the CA is already trusted does not prompt again; orphan same-name roots are cleaned up only when a new thumbprint is installed, or via **Remove** / **Clear and reinstall**. **Remove root CA** clears every same-name Titanium root in the current-user Trusted Root store (including orphans from earlier installs) and best-effort clears Firefox policy/profile trust we added (`user.js` / `prefs.js` and NSS nickname). **Clear and reinstall root CA…** mints a new private key, clears this install’s leaf certificate cache (next to `%AppData%\TitaniumInspector\rootCert.pfx`), removes same-name trusted roots, and prompts to reinstall trust. **Trust CA in Firefox…** (opt-in) enables Windows `ImportEnterpriseRoots` or macOS/Linux profile `user.js` OS-root trust when possible, otherwise imports into the default Firefox profile via NSS `certutil` (may ask you to quit Firefox; on Linux/macOS can offer to install `certutil` first). **Device CA setup…** opens a dialog with steps for phones/other devices and can **Export CA** from there (or use **Export root CA…** on the Capture menu). Export prompts for a save location — **Certificate (*.cer)** DER by default, or **PEM (*.pem)**.
-
-Leaf certificates for Inspector are stored under `%AppData%\TitaniumInspector\crts\` (beside the root PFX), not under the shared `%LocalAppData%\Titanium.Web.Proxy\crts` folder used by the library default. On first start after upgrade (and on every clear/reinstall), Inspector best-effort deletes that legacy shared `crts` folder; it never deletes a shared `rootCert.pfx`.
+**Help → Update channel** — Stable (default) or Beta. **Help → Check for updates…** offers install only when there is a real change (newer build or channel switch). Accept downloads the package, closes Inspector, replaces the install, and relaunches.
 
 ## Right pane: Inspect vs Tools
 
@@ -165,8 +118,24 @@ abort
 
 Applies to every captured request/response. On request, `abort` or `set-status` short-circuits AutoResponder, breakpoints, and the origin.
 
+## Advanced
 
-## Platform matrix (system proxy and root CA)
+### Excluded hosts
+
+**Options → Excluded hosts…** edits two lists:
+
+| Layer | Effect |
+|-------|--------|
+| **OS bypass** | Traffic never reaches Inspector (when **System proxy** is on) |
+| **Tunnel only** | Session stays visible but HTTPS stays opaque |
+
+Factory seeds keep common identity / SSO hosts on OS bypass so sign-in keeps working. Right-click a session → **Exclude host…**. Search: `is:opaque`. **Chrome QUIC** may bypass the proxy entirely — not fixable via host lists.
+
+### Root certificate (Decrypt HTTPS)
+
+**Install root CA (current user)** trusts the decrypt certificate on this PC (OS may show a Yes/No trust dialog). Use **Export root CA…** / **Device CA setup…** for phones or other devices. **Remove root CA** / **Clear and reinstall…** / **Trust CA in Firefox…** are on the Capture menu when you need cleanup or Firefox-specific trust. Prefer those menu actions over editing certificate stores by hand.
+
+### Platform matrix (system proxy and root CA)
 
 | Feature | Windows | macOS | Linux |
 |---------|---------|-------|-------|

@@ -1,5 +1,7 @@
 # InspectorDesktopProbe
 
+> **For maintainers / contributors** — on-demand desktop UX + OS proxy/CA validation (not CI).
+
 On-demand desktop UX + OS proxy/CA validation for Titanium Inspector. **Not CI.** Mutates system proxy and may show OS cert dialogs.
 
 ## Prerequisites

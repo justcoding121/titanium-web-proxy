@@ -1,5 +1,7 @@
 # RpsLoadProbe
 
+> **For maintainers / contributors** — saturation RPS harness used to refresh wiki [Performance](../../wiki/Performance.md) tables.
+
 Saturation RPS harness for Titanium.Web.Proxy. Measures the **breaking point** (last concurrency that still meets error/latency SLOs) and **peak RPS**.
 
 Published numbers and external control-arm comparisons live only on the wiki [Performance](../../wiki/Performance.md) page (GitHub Actions medians on matched **4-core-class** runners: `ubuntu-latest` / `windows-latest` at 4 vCPU / 16 GiB, and `macos-15-intel` at 4-core / 14 GB). Local cool A/B and laptop tables live on [Performance Local Lab](../../wiki/Performance-Local-Lab.md); the playbook is on [Performance Profiling](../../wiki/Performance-Profiling.md). This README lists how to run the local harness.

@@ -85,7 +85,7 @@ internal sealed class HaproxyHost : IDisposable
         {
             var pem = await ExportLoopbackCombinedPemAsync(prefixProbe);
             return await TryStartAsync(BuildHttp3CleartextConf(originHttpPort, pem), listenScheme: "https",
-                haproxyPath, listenHost: "localhost", requireUdp: true);
+                haproxyPath, listenHost: "127.0.0.1", requireUdp: true);
         }
         finally
         {
@@ -147,7 +147,8 @@ internal sealed class HaproxyHost : IDisposable
 
         var needsCerts = inbound is PeerInboundProto.H1Tls or PeerInboundProto.H2Tls or PeerInboundProto.H3;
         var listenScheme = inbound is PeerInboundProto.H1c or PeerInboundProto.H2c ? "http" : "https";
-        var listenHost = inbound == PeerInboundProto.H3 ? "localhost" : "127.0.0.1";
+        // H3 quic4 bind is IPv4-only; "localhost" prefers ::1 and misses the bind on Linux GHA.
+        var listenHost = "127.0.0.1";
         var requireUdp = inbound == PeerInboundProto.H3;
 
         if (!needsCerts)
@@ -180,7 +181,7 @@ internal sealed class HaproxyHost : IDisposable
         {
             var pem = await ExportLoopbackCombinedPemAsync(prefixProbe);
             return await TryStartAsync(BuildHttp3ToHttpsHttp1Conf(originHttpsPort, pem), listenScheme: "https",
-                haproxyPath, listenHost: "localhost", requireUdp: true);
+                haproxyPath, listenHost: "127.0.0.1", requireUdp: true);
         }
         finally
         {
@@ -318,14 +319,14 @@ backend be
         (prefixDir, port) =>
         {
             var pemDest = CopyPem(prefixDir, pemPath);
-            // Dual bind: TCP TLS for readiness probe + QUIC for H3 clients (matches nginx pattern).
+            // IPv4-only QUIC: quic6@[::1] fails config check / bind on some GHA Linux images
+            // (arm then skipped — no CSV rows). HttpClient still reaches 127.0.0.1.
             return $"""
 {GlobalDefaults()}
 
 frontend fe
     bind 127.0.0.1:{port} ssl crt "{pemDest}" alpn h2,http/1.1
     bind quic4@127.0.0.1:{port} ssl crt "{pemDest}" alpn h3
-    bind quic6@[::1]:{port} ssl crt "{pemDest}" alpn h3
     http-response set-header alt-svc 'h3=":{port}"; ma=86400'
     default_backend be
 
@@ -392,13 +393,12 @@ backend be
 frontend fe
     bind 127.0.0.1:{port} ssl crt "{pemDest}" alpn h2,http/1.1
     bind quic4@127.0.0.1:{port} ssl crt "{pemDest}" alpn h3
-    bind quic6@[::1]:{port} ssl crt "{pemDest}" alpn h3
     http-response set-header alt-svc 'h3=":{port}"; ma=86400'
     default_backend be
 
 backend be
     http-reuse aggressive
-                server origin 127.0.0.1:{originHttpsPort} ssl verify none sni str(localhost) maxconn 256
+    server origin 127.0.0.1:{originHttpsPort} ssl verify none sni str(localhost) maxconn 256
 """;
         };
 
@@ -409,6 +409,16 @@ backend be
             string? pemDest = null;
             if (pemPath != null)
                 pemDest = CopyPem(prefixDir, pemPath);
+            // TLS (or H1) frontends talking cleartext HTTP/2 to the origin break under
+            // http-reuse aggressive (PROTOCOL_ERROR on reused connections). H2c→H2c is fine
+            // with aggressive because both sides stay prior-knowledge h2.
+            var reuse = origin == PeerOriginProto.H2c && inbound != PeerInboundProto.H2c
+                ? "never"
+                : "aggressive";
+            // Kestrel HTTP/2 requires :scheme to match the transport. HAProxy defaults H2
+            // upstream :scheme to https (and forwards client https after TLS terminate).
+            // https://github.com/haproxy/haproxy/issues/77
+            var schemeRewrite = OriginSchemeRewrite(inbound, origin);
             return $"""
 {GlobalDefaults()}
 
@@ -417,10 +427,25 @@ frontend fe
     default_backend be
 
 backend be
-    http-reuse aggressive
-{OriginServerLine(origin, originPort)}
+    http-reuse {reuse}
+{schemeRewrite}{OriginServerLine(origin, originPort)}
 """;
         };
+
+    /// <summary>
+    /// Force absolute URI scheme so HAProxy's H2 upstream :scheme matches cleartext vs TLS origin.
+    /// </summary>
+    private static string OriginSchemeRewrite(PeerInboundProto inbound, PeerOriginProto origin)
+    {
+        var cleartextInbound = inbound is PeerInboundProto.H1c or PeerInboundProto.H2c;
+        return origin switch
+        {
+            PeerOriginProto.H2c => "    http-request set-uri http://%[baseq]\n",
+            PeerOriginProto.H2Tls or PeerOriginProto.H3 when cleartextInbound =>
+                "    http-request set-uri https://%[baseq]\n",
+            _ => string.Empty
+        };
+    }
 
     private static string FrontendBinds(PeerInboundProto inbound, int port, string? pemDest) => inbound switch
     {
@@ -431,7 +456,6 @@ backend be
         PeerInboundProto.H3 => $"""
     bind 127.0.0.1:{port} ssl crt "{pemDest}" alpn h2,http/1.1
     bind quic4@127.0.0.1:{port} ssl crt "{pemDest}" alpn h3
-    bind quic6@[::1]:{port} ssl crt "{pemDest}" alpn h3
     http-response set-header alt-svc 'h3=":{port}"; ma=86400'
 """,
         _ => throw new ArgumentOutOfRangeException(nameof(inbound))
@@ -522,6 +546,7 @@ backend be
 
     /// <summary>
     /// Resolves HAProxy on PATH. Always returns null on Windows (no official port).
+    /// When PATH has both a distro binary and a QUIC build (GHA Linux), prefers USE_QUIC.
     /// </summary>
     public static string? ResolveHaproxyExecutable(string? haproxyPath)
     {
@@ -535,7 +560,35 @@ backend be
             return null;
         }
 
-        return FindOnPath("haproxy");
+        return FindPreferredOnPath("haproxy");
+    }
+
+    /// <summary>
+    /// Walk PATH; prefer a binary whose <c>-vv</c> lists <c>USE_QUIC</c> so apt HAProxy
+    /// does not shadow the GHA QUIC prefix when both are present.
+    /// </summary>
+    private static string? FindPreferredOnPath(string fileName)
+    {
+        string? first = null;
+        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            try
+            {
+                var candidate = Path.Combine(dir.Trim('"'), fileName);
+                if (!File.Exists(candidate))
+                    continue;
+                first ??= candidate;
+                if (SupportsQuic(candidate))
+                    return candidate;
+            }
+            catch
+            {
+                // ignore bad PATH entries
+            }
+        }
+
+        return first;
     }
 
     public static string HaproxyMissingMessage() =>

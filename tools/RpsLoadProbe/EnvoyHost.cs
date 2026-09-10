@@ -87,7 +87,7 @@ internal sealed class EnvoyHost : IDisposable
         {
             var (certPem, keyPem) = await ExportLoopbackPemAsync(prefixProbe);
             return await TryStartAsync(BuildHttp3CleartextConf(originHttpPort, certPem, keyPem),
-                listenScheme: "https", envoyPath, listenHost: "localhost", requireUdp: true);
+                listenScheme: "https", envoyPath, listenHost: "127.0.0.1", requireUdp: true);
         }
         finally
         {
@@ -149,7 +149,8 @@ internal sealed class EnvoyHost : IDisposable
 
         var needsCerts = inbound is PeerInboundProto.H1Tls or PeerInboundProto.H2Tls or PeerInboundProto.H3;
         var listenScheme = inbound is PeerInboundProto.H1c or PeerInboundProto.H2c ? "http" : "https";
-        var listenHost = inbound == PeerInboundProto.H3 ? "localhost" : "127.0.0.1";
+        // H3 QuicListener is IPv4-only (127.0.0.1); "localhost" prefers ::1 and misses the bind.
+        var listenHost = "127.0.0.1";
         var requireUdp = inbound == PeerInboundProto.H3;
 
         if (!needsCerts)
@@ -182,7 +183,7 @@ internal sealed class EnvoyHost : IDisposable
         {
             var (certPem, keyPem) = await ExportLoopbackPemAsync(prefixProbe);
             return await TryStartAsync(BuildHttp3ToHttpsHttp1Conf(originHttpsPort, certPem, keyPem),
-                listenScheme: "https", envoyPath, listenHost: "localhost", requireUdp: true);
+                listenScheme: "https", envoyPath, listenHost: "127.0.0.1", requireUdp: true);
         }
         finally
         {
@@ -322,8 +323,7 @@ internal sealed class EnvoyHost : IDisposable
             W(8, $"port_value: {port}");
             W(4, "udp_listener_config:");
             W(6, "quic_options: {}");
-            W(6, "downstream_socket_config:");
-            W(8, "prefer_gro: true");
+            // prefer_gro breaks QuicListener bring-up on some GHA kernels; omit it.
             W(4, "filter_chains:");
             W(4, "- transport_socket:");
             W(8, "name: envoy.transport_sockets.quic");
@@ -351,6 +351,10 @@ internal sealed class EnvoyHost : IDisposable
             W(col + 4, $"codec_type: {codecType}");
             if (string.Equals(codecType, "HTTP3", StringComparison.Ordinal))
                 W(col + 4, "http3_protocol_options: {}");
+            // Kestrel rejects :scheme that does not match the upstream transport (https on h2c,
+            // http on HTTPS). Align :scheme with the cluster socket, not the downstream TLS.
+            W(col + 4, "scheme_header_transformation:");
+            W(col + 6, "match_upstream: true");
             W(col + 4, "access_log: []");
             W(col + 4, "stream_idle_timeout: 65s");
             W(col + 4, "request_timeout: 65s");
@@ -541,8 +545,9 @@ internal sealed class EnvoyHost : IDisposable
                 y.StaticResourcesHeader();
                 y.TcpListener("listener_tcp", port, "ingress_tcp", "AUTO", altSvc,
                     certDest, keyDest, ["h2", "http/1.1"]);
+                // IPv4-only QuicListener: dual-stack ::1 bind fails on some GHA images
+                // and aborts the whole process before READY (no CSV rows).
                 y.QuicListener("listener_quic_v4", port, "127.0.0.1", "ingress_quic_v4", certDest, keyDest);
-                y.QuicListener("listener_quic_v6", port, "::1", "ingress_quic_v6", certDest, keyDest);
                 y.Cluster(originHttpPort, upstreamTls: false);
             });
         };
@@ -600,7 +605,6 @@ internal sealed class EnvoyHost : IDisposable
                 y.TcpListener("listener_tcp", port, "ingress_tcp", "AUTO", altSvc,
                     certDest, keyDest, ["h2", "http/1.1"]);
                 y.QuicListener("listener_quic_v4", port, "127.0.0.1", "ingress_quic_v4", certDest, keyDest);
-                y.QuicListener("listener_quic_v6", port, "::1", "ingress_quic_v6", certDest, keyDest);
                 y.Cluster(originHttpsPort, upstreamTls: true);
             });
         };
@@ -641,9 +645,10 @@ internal sealed class EnvoyHost : IDisposable
                         var altSvc = $$"""h3=":{{port}}"; ma=86400""";
                         y.TcpListener("listener_tcp", port, "ingress_tcp", "AUTO", altSvc,
                             certDest, keyDest, ["h2", "http/1.1"]);
+                        // IPv4-only QuicListener: dual-stack ::1 bind fails on some GHA images
+                        // and aborts the whole process before READY (no CSV rows).
                         y.QuicListener("listener_quic_v4", port, "127.0.0.1", "ingress_quic_v4", certDest!,
                             keyDest!);
-                        y.QuicListener("listener_quic_v6", port, "::1", "ingress_quic_v6", certDest!, keyDest!);
                         break;
                     }
                 }
