@@ -8909,6 +8909,12 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.CustomUpStreamProxyFailureFunc
   nameWithType: ProxyServer.CustomUpStreamProxyFailureFunc
+- uid: Titanium.Web.Proxy.ProxyServer.DefaultViaHeaderPseudonym
+  name: DefaultViaHeaderPseudonym
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_DefaultViaHeaderPseudonym
+  commentId: F:Titanium.Web.Proxy.ProxyServer.DefaultViaHeaderPseudonym
+  fullName: Titanium.Web.Proxy.ProxyServer.DefaultViaHeaderPseudonym
+  nameWithType: ProxyServer.DefaultViaHeaderPseudonym
 - uid: Titanium.Web.Proxy.ProxyServer.DisableAllSystemProxies
   name: DisableAllSystemProxies()
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_DisableAllSystemProxies
