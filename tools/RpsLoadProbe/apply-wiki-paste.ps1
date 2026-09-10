@@ -69,7 +69,8 @@ $mitmNote = @(
 $winHdrNew = "## Windows $em Titanium vs nginx vs HAProxy vs Envoy vs YARP"
 $linHdrNew = "## Linux $em Titanium vs nginx vs HAProxy vs Envoy vs YARP"
 $macHdrNew = "## macOS $em Titanium vs nginx vs HAProxy vs Envoy vs YARP"
-$productHdrPattern = '(?m)^## (Windows|Linux|macOS) .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP$'
+# Use \r?$ so CRLF wiki files still match (.$ alone can eat CR; bare $ before \n fails when \r remains).
+$productHdrPattern = '(?m)^## (Windows|Linux|macOS) .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?$'
 # After Linux product tables: macOS, then Editions / Heavier / Cross-version depending on wiki shape.
 $afterLinuxLookahead = '(?=\r?\n## (?:macOS|Editions|Heavier|Cross-version))'
 $afterMacLookahead = '(?=\r?\n## (?:Editions|Heavier|Cross-version))'
@@ -108,8 +109,9 @@ $wiki = [regex]::Replace($wiki,
     },
     1)
 
-$idx = [regex]::Match($wiki, '(?m)^## Linux .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP$').Index
-if ($idx -lt 0) { throw "Missing wiki heading: Linux product section" }
+$linuxHdrMatch = [regex]::Match($wiki, '(?m)^## Linux .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?$')
+if (-not $linuxHdrMatch.Success) { throw "Missing wiki heading: Linux product section" }
+$idx = $linuxHdrMatch.Index
 $head = $wiki.Substring(0, $idx)
 $tail = $wiki.Substring($idx)
 
@@ -137,7 +139,7 @@ $macBlock = @(
     ''
 ) -join "`n"
 
-$macHdrMatch = [regex]::Match($tail, '(?m)^## macOS .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP$')
+$macHdrMatch = [regex]::Match($tail, '(?m)^## macOS .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?$')
 if ($macHdrMatch.Success) {
     $tail = [regex]::Replace($tail,
         "(?ms)(^## macOS .+? Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?\n(?:.*?\r?\n)*?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
@@ -145,7 +147,9 @@ if ($macHdrMatch.Success) {
             param($m) $m.Groups[1].Value + $macRevHeader + "`n`n" + '![macOS reverse](images/rps-product-reverse-macos.png)' + "`n`n" + $macRev + "`n"
         },
         1)
-    $macIdx = [regex]::Match($tail, '(?m)^## macOS .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP$').Index
+    $macHdrMatch2 = [regex]::Match($tail, '(?m)^## macOS .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?$')
+    if (-not $macHdrMatch2.Success) { throw "Missing wiki heading: macOS product section after reverse paste" }
+    $macIdx = $macHdrMatch2.Index
     $macHead = $tail.Substring(0, $macIdx)
     $macTail = $tail.Substring($macIdx)
     $macTail = [regex]::Replace($macTail,

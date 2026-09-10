@@ -298,7 +298,7 @@ def main() -> int:
 
     wiki_rows = None
     if args.from_wiki:
-        wiki_rows = parse_wiki_reverse_tables(args.from_wiki.read_text())
+        wiki_rows = parse_wiki_reverse_tables(args.from_wiki.read_text(encoding="utf-8"))
 
     written = []
     for key, title, folder_keys, _heading in OS_SPECS:

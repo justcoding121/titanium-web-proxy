@@ -9,14 +9,14 @@ from typing import Dict, List, Optional, Tuple
 
 ROOT = Path("tools/RpsLoadProbe/results/gha-dl")
 WIKI = Path("wiki/Performance.md")
-HEAD = "84b225f7"
+HEAD = "803a69bc"
 RUNS = {
-    "saturation": 34355140813,
-    "bodies": 34355153953,
-    "post": 34355158209,
-    "lossy": 34355162890,
-    "tls": 34355173969,
-    "arch": 34355169025,
+    "saturation": 34394853191,
+    "bodies": 34394859668,
+    "post": 34394866049,
+    "lossy": 34394872353,
+    "tls": 34394878841,
+    "arch": 34394884256,
 }
 MEDAL = "\U0001F947"
 STEPS = 4
