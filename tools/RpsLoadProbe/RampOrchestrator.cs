@@ -39,6 +39,8 @@ internal enum ProbeMode
     NginxReverseHttp2,
     /// <summary>Native reverse: client TLS+h2 → HTTPS HTTP/1 (<c>proxy_ssl</c>).</summary>
     NginxReverseHttp2ToHttpsHttp1,
+    /// <summary>Native reverse: client TLS+h2 → HTTPS/h2 gRPC origin via <c>grpc_pass</c>.</summary>
+    NginxReverseGrpc,
     /// <summary>Native reverse: client QUIC/h3 → cleartext HTTP/1. Requires nginx <c>http_v3_module</c>.</summary>
     NginxReverseHttp3Cleartext,
     /// <summary>Native reverse: client QUIC/h3 → HTTPS HTTP/1 (<c>proxy_ssl</c>). Requires <c>http_v3_module</c>.</summary>
@@ -228,6 +230,10 @@ internal enum ProbeMode
     /// <summary>Architecture-sensitive reverse: slow consumer, early response, H2 duplex, WebSocket echo.</summary>
     CompareArch,
     /// <summary>
+    /// Unary gRPC Echo over H2 TLS (TWP / YARP / nginx grpc_pass / HAProxy / Envoy) — RPC/s @ c=64.
+    /// </summary>
+    CompareGrpc,
+    /// <summary>
     /// Saturation control: origin-direct (+ optional bombardier) and H1 plain reverse peers in one session.
     /// </summary>
     CompareSaturation,
@@ -307,15 +313,62 @@ internal sealed class RampOptions
     public bool StopOnSloFail { get; init; } = true;
     /// <summary>
     /// Wall-clock cap per arm. Null = derive from concurrency steps × (warmup+measure) + overhead.
-    /// Prevents a single stuck measure (MsQuic/bombardier/child READY) from burning the 400m GHA step.
+    /// Prevents a single stuck measure (MsQuic/bombardier/child READY) from burning the 345m GHA step.
     /// </summary>
     public TimeSpan? ArmTimeout { get; init; }
+    /// <summary>
+    /// Exclusive comparison-group partition for GHA (1-based <c>i/n</c>). Null or <c>all</c> = no
+    /// split. Shards wiki rows (Client×Origin + workload), not individual arms, so TWP÷YARP and
+    /// Lite÷Reverse stay same-job. Applied after capability / QuicListener filtering.
+    /// </summary>
+    public (int Index, int Count)? ArmShard { get; init; }
     /// <summary>Default workload when an arm does not override (preserves tiny-GET matrix).</summary>
     public WorkloadOptions Workload { get; init; } = WorkloadOptions.TinyGet;
 }
 
 internal static class RampOrchestrator
 {
+    /// <summary>
+    /// Resolve runnable arm names for <paramref name="options"/> (capability filter + optional shard).
+    /// Used by <c>--print-arms</c> for local shard atomicity checks.
+    /// </summary>
+    public static IReadOnlyList<string> ListArmNames(RampOptions options)
+    {
+        var nginxExe = NginxHost.ResolveNginxExecutable(options.NginxPath);
+        var haproxyExe = HaproxyHost.ResolveHaproxyExecutable(options.HaproxyPath);
+        var envoyExe = EnvoyHost.ResolveEnvoyExecutable(options.EnvoyPath);
+        var nginxHttp3 = nginxExe != null && NginxHost.SupportsHttp3Module(NginxHost.ReadConfigureArguments(nginxExe));
+        var haproxyQuic = haproxyExe != null && HaproxyHost.SupportsQuic(haproxyExe);
+        var envoyHttp3 = envoyExe != null && EnvoyHost.SupportsHttp3(envoyExe);
+        var bombardierAvailable = BombardierLoadGenerator.IsAvailable();
+        var arms = ResolveArms(options.Mode, nginxExe != null, nginxHttp3, bombardierAvailable,
+            haproxyExe != null, haproxyQuic, envoyExe != null, envoyHttp3).ToList();
+        if (!System.Net.Quic.QuicListener.IsSupported)
+        {
+            arms = arms.Where(a =>
+                a.Mode is not (ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp3Cleartext
+                    or ProbeMode.YarpReverseHttp3Cleartext or ProbeMode.NginxReverseHttp3Cleartext
+                    or ProbeMode.NginxReverseHttp3ToHttpsHttp1
+                    or ProbeMode.HaproxyReverseHttp3Cleartext or ProbeMode.HaproxyReverseHttp3ToHttpsHttp1
+                    or ProbeMode.EnvoyReverseHttp3Cleartext or ProbeMode.EnvoyReverseHttp3ToHttpsHttp1
+                    or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.YarpReverseHttp1ToHttp3
+                    or ProbeMode.ReverseHttp1PlainToHttp3 or ProbeMode.YarpReverseHttp1PlainToHttp3
+                    or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
+                    or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.YarpReverseHttp3ToHttp2
+                    or ProbeMode.ReverseHttp3ToH2c or ProbeMode.YarpReverseHttp3ToH2c
+                    or ProbeMode.YarpReverseHttp3ToHttp3
+                    or ProbeMode.YarpReverseHttp3ToHttpsHttp1
+                    or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
+                    or ProbeMode.MitmHttp3ToHttp1)
+                && !PeerWire.IsHttp3ClientOrOrigin(a.Mode)).ToList();
+        }
+
+        if (options.ArmShard is { } shard)
+            arms = ApplyArmShard(arms, shard.Index, shard.Count);
+
+        return arms.Select(a => a.Name).ToList();
+    }
+
     public static async Task<int> RunAsync(RampOptions options, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(options.ResultsDir);
@@ -393,6 +446,14 @@ internal static class RampOrchestrator
                 ProbeLog.Info("QuicListener is not supported on this host — skipping HTTP/3 arms.");
         }
 
+        if (options.ArmShard is { } shard)
+        {
+            var before = arms.Count;
+            arms = ApplyArmShard(arms, shard.Index, shard.Count);
+            ProbeLog.Info(
+                $"arm-shard {shard.Index}/{shard.Count}: {arms.Count}/{before} arms after capability filter.");
+        }
+
         if (arms.Count == 0)
         {
             // CompareHaproxySmoke on Windows: HAProxy unavailable is the expected outcome (skip).
@@ -415,13 +476,14 @@ internal static class RampOrchestrator
         if ((options.Mode is ProbeMode.NginxReverseHttp1 or ProbeMode.NginxReverseHttp1Tls
                 or ProbeMode.NginxReverseHttp1ToHttps or ProbeMode.NginxReverseHttp1TlsToHttps
                 or ProbeMode.NginxReverseHttp2 or ProbeMode.NginxReverseHttp2ToHttpsHttp1
-                or ProbeMode.NginxReverseHttp3Cleartext or ProbeMode.NginxReverseHttp3ToHttpsHttp1
+                or ProbeMode.NginxReverseGrpc or ProbeMode.NginxReverseHttp3Cleartext
+                or ProbeMode.NginxReverseHttp3ToHttpsHttp1
                 or ProbeMode.Compare or ProbeMode.CompareHttp2
                 or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame
                 or ProbeMode.CompareBridges or ProbeMode.CompareHttp3Cleartext
                 or ProbeMode.CompareBodies or ProbeMode.ComparePost or ProbeMode.CompareLossy
                 or ProbeMode.CompareTlsCost or ProbeMode.CompareArch or ProbeMode.CompareSaturation
-                or ProbeMode.CompareNginxHttps
+                or ProbeMode.CompareNginxHttps or ProbeMode.CompareGrpc
             || PeerWire.IsProduct(options.Mode, PeerProduct.Nginx))
             && nginxExe == null)
         {
@@ -1210,7 +1272,7 @@ internal static class RampOrchestrator
                 ..BuildMitmArms(),
                 ..BuildMitmFullArms()
             ],
-            ProbeMode.CompareProductSmoke => BuildProductSmokeArms(),
+            ProbeMode.CompareProductSmoke => BuildProductSmokeArms(nginxAvailable, haproxyAvailable, envoyAvailable),
             ProbeMode.CompareSpot => BuildSpotArms(),
             ProbeMode.CompareCeiling => BuildCompareCeilingArms(nginxAvailable, haproxyAvailable, envoyAvailable),
             ProbeMode.CompareBodies =>
@@ -1230,8 +1292,12 @@ internal static class RampOrchestrator
             ProbeMode.CompareTlsCost => BuildTlsCostArms(nginxAvailable, haproxyAvailable, envoyAvailable),
             ProbeMode.CompareArch => BuildArchArms(nginxAvailable, nginxHttp3Available, haproxyAvailable,
                 haproxyQuicAvailable, envoyAvailable, envoyHttp3Available),
+            ProbeMode.CompareGrpc => BuildCompareGrpcArms(nginxAvailable, haproxyAvailable, envoyAvailable),
             ProbeMode.YarpReverseHttp2ToHttps =>
                 [new("yarp-reverse-http2-to-https", ProbeMode.YarpReverseHttp2ToHttps, null)],
+            ProbeMode.NginxReverseGrpc => nginxAvailable
+                ? [new("nginx-grpc-http2", ProbeMode.NginxReverseGrpc, null, WorkloadOptions.ForGrpc())]
+                : [],
             ProbeMode.ExplicitPoolSweep =>
             [
                 new("twp-explicit-http1-multi-c4", ProbeMode.ExplicitHttp1Multi, 4),
@@ -1240,6 +1306,27 @@ internal static class RampOrchestrator
             ],
             _ => throw new ArgumentOutOfRangeException(nameof(mode))
         };
+    }
+
+    /// <summary>
+    /// Unary gRPC Echo @ H2 TLS→H2 TLS: TWP + YARP + nginx grpc_pass + HAProxy + Envoy.
+    /// </summary>
+    private static IReadOnlyList<ArmSpec> BuildCompareGrpcArms(bool nginxAvailable, bool haproxyAvailable,
+        bool envoyAvailable)
+    {
+        var grpc = WorkloadOptions.ForGrpc();
+        var arms = new List<ArmSpec>
+        {
+            new("twp-grpc-http2", ProbeMode.ReverseHttp2, null, grpc),
+            new("yarp-grpc-http2", ProbeMode.YarpReverseHttp2ToHttps, null, grpc)
+        };
+        if (nginxAvailable)
+            arms.Add(new("nginx-grpc-http2", ProbeMode.NginxReverseGrpc, null, grpc));
+        if (haproxyAvailable)
+            arms.Add(new("haproxy-grpc-http2", ProbeMode.HaproxyReverseHttp2ToHttps, null, grpc));
+        if (envoyAvailable)
+            arms.Add(new("envoy-grpc-http2", ProbeMode.EnvoyReverseHttp2ToHttps, null, grpc));
+        return arms;
     }
 
     /// <summary>
@@ -1385,12 +1472,13 @@ internal static class RampOrchestrator
     /// Minimal arm set for <c>validate-compare-product-gates.ps1</c> (every Lite/Full/Reverse
     /// pair the script scores, plus YARP H3 reverse peers). Intended for Mac-only GHA smoke.
     /// </summary>
-    private static IReadOnlyList<ArmSpec> BuildProductSmokeArms()
+    private static IReadOnlyList<ArmSpec> BuildProductSmokeArms(bool nginxAvailable, bool haproxyAvailable,
+        bool envoyAvailable)
     {
         const bool intercept = true;
         const bool mutate = true;
-        return
-        [
+        var arms = new List<ArmSpec>
+        {
             // H3→H1 plain
             new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null),
             new("twp-mitm-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null,
@@ -1436,7 +1524,29 @@ internal static class RampOrchestrator
             new("twp-mitm-http2", ProbeMode.ReverseHttp2, null, EnableHttpInterception: intercept),
             new("twp-mitm-full-http2", ProbeMode.ReverseHttp2, null,
                 EnableHttpInterception: intercept, MutateHttpInterception: mutate)
-        ];
+        };
+
+        // Remainder canaries (1a1d78f2) — fail Phase-1 smoke on config typos before full product.
+        // TWP reverse twins keep each canary in a comparison group (not a singleton peer).
+        if (nginxAvailable)
+        {
+            arms.Add(new("twp-reverse-h2c-to-h1", ProbeMode.ReverseH2cToH1, null));
+            arms.Add(new("nginx-reverse-h2c-to-h1", ProbeMode.NginxReverseH2cToH1, null));
+        }
+
+        if (haproxyAvailable)
+        {
+            // twp-reverse-http2-to-h2c already in the gate set above.
+            arms.Add(new("haproxy-reverse-http2-to-h2c", ProbeMode.HaproxyReverseHttp2ToH2c, null));
+        }
+
+        if (envoyAvailable)
+        {
+            // twp-reverse-http2 already in the gate set above (H2 TLS→H2 TLS).
+            arms.Add(new("envoy-reverse-http2-to-https", ProbeMode.EnvoyReverseHttp2ToHttps, null));
+        }
+
+        return arms;
     }
 
     /// <summary>
@@ -2072,6 +2182,14 @@ internal static class RampOrchestrator
     private sealed record ArmPeakResult(double PeakRps, long? RssPeakBytes, double? CpuAvgPct);
 
     /// <summary>
+    /// Keep comparison groups (wiki rows) assigned to shard <paramref name="shardIndex"/> of
+    /// <paramref name="shardCount"/> (1-based). Groups are first-seen order; group k → shard
+    /// (k % n) + 1. Preserves original arm order inside the shard so peers stay back-to-back.
+    /// </summary>
+    private static List<ArmSpec> ApplyArmShard(List<ArmSpec> arms, int shardIndex, int shardCount) =>
+        ComparisonGroup.ApplyShard(arms, a => ComparisonGroup.Key(a.Mode, a.Name), shardIndex, shardCount);
+
+    /// <summary>
     /// Budget: child start + one full concurrency ramp (warmup+measure+overhead per step) + margin.
     /// Floor 8m so short local smokes still tolerate cold starts; cap 25m so GHA cannot stall for hours.
     /// </summary>
@@ -2185,13 +2303,16 @@ internal static class RampOrchestrator
             var discoveryRewritten = false;
 
             var useQuic = (stackUsesQuicGenerator || forceLossyQuicGenerator) && quicPort is > 0;
-            var useBombardier = string.Equals(arm.PreferredGenerator, BombardierLoadGenerator.GeneratorName,
+            var useGrpc = workload.IsGrpc;
+            var useBombardier = !useGrpc && string.Equals(arm.PreferredGenerator, BombardierLoadGenerator.GeneratorName,
                 StringComparison.OrdinalIgnoreCase);
             var generatorLabel = useQuic
                 ? "quic-http3"
-                : useBombardier
-                    ? BombardierLoadGenerator.GeneratorName
-                    : "dotnet-httpclient";
+                : useGrpc
+                    ? GrpcLoadGenerator.GeneratorName
+                    : useBombardier
+                        ? BombardierLoadGenerator.GeneratorName
+                        : "dotnet-httpclient";
             var loadOptions = new LoadRequestOptions
             {
                 Target = targetUri,
@@ -2249,6 +2370,11 @@ internal static class RampOrchestrator
                         await QuicHttp3LoadGenerator.WarmupAsync(ep, "localhost", authority,
                             concurrency, options.Warmup, cancellationToken, workload);
                     }
+                    else if (useGrpc)
+                    {
+                        await GrpcLoadGenerator.WarmupAsync(targetUri, concurrency, options.Warmup,
+                            cancellationToken);
+                    }
                     else if (useBombardier)
                     {
                         await BombardierLoadGenerator.WarmupAsync(targetUri, concurrency, options.Warmup, workload,
@@ -2267,6 +2393,11 @@ internal static class RampOrchestrator
                         var authority = ResolveQuicAuthority(arm.Mode, stack);
                         measureTask = QuicHttp3LoadGenerator.RunAsync(ep, "localhost", authority,
                             concurrency, options.StepDuration, cancellationToken, workload);
+                    }
+                    else if (useGrpc)
+                    {
+                        measureTask = GrpcLoadGenerator.RunAsync(targetUri, concurrency, options.StepDuration,
+                            cancellationToken);
                     }
                     else if (useBombardier)
                     {

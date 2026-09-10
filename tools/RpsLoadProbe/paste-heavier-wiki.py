@@ -2,10 +2,13 @@
 """Paste heavier + saturation tables into wiki/Performance.md from gha-dl CSVs."""
 from __future__ import annotations
 
+import argparse
 import csv
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
+
+RunIds = Union[int, List[int]]
 
 ROOT = Path("tools/RpsLoadProbe/results/gha-dl")
 WIKI = Path("wiki/Performance.md")
@@ -76,13 +79,36 @@ def arm_metrics(csv_path: Path, arm: str) -> Optional[dict]:
     }
 
 
-def load_os(run_id: int, os_folder: str) -> Dict[str, dict]:
-    d = ROOT / str(run_id) / f"rps-csv-{os_folder}"
-    files = list(d.glob("*.csv"))
-    if not files:
-        return {}
-    arms = {r["arm"] for r in csv.DictReader(files[0].open(newline=""))}
-    return {a: m for a in arms if (m := arm_metrics(files[0], a))}
+def _run_id_list(run_ids: RunIds) -> List[int]:
+    return [run_ids] if isinstance(run_ids, int) else list(run_ids)
+
+
+def load_os(run_ids: RunIds, os_folder: str) -> Dict[str, dict]:
+    """Union arm metrics across shard run ids; first non-empty wins per arm."""
+    merged: Dict[str, dict] = {}
+    for rid in _run_id_list(run_ids):
+        d = ROOT / str(rid) / f"rps-csv-{os_folder}"
+        files = list(d.glob("*.csv"))
+        if not files:
+            continue
+        arms = {r["arm"] for r in csv.DictReader(files[0].open(newline=""))}
+        for a in arms:
+            if a in merged:
+                continue
+            m = arm_metrics(files[0], a)
+            if m is not None:
+                merged[a] = m
+    return merged
+
+
+def primary_run_id(run_ids: RunIds) -> int:
+    return _run_id_list(run_ids)[0]
+
+
+def parse_run_ids(text: str) -> RunIds:
+    parts = [p.strip() for p in text.split(",") if p.strip()]
+    ids = [int(p) for p in parts]
+    return ids[0] if len(ids) == 1 else ids
 
 
 def fmt_cell(m: Optional[dict], medal: bool = False, peak: bool = False, impossible: Optional[str] = None) -> str:
@@ -186,12 +212,26 @@ def replace_table_at(text: str, start: int, new_table: str) -> str:
 
 
 def main() -> None:
-    win = {k: load_os(rid, "windows-latest") for k, rid in RUNS.items()}
-    lin = {k: load_os(rid, "ubuntu-latest") for k, rid in RUNS.items()}
+    ap = argparse.ArgumentParser(description=__doc__)
+    for mode in RUNS:
+        ap.add_argument(f"--{mode}", help="Run id or comma-separated shard ids")
+    args = ap.parse_args()
+
+    runs: Dict[str, RunIds] = dict(RUNS)
+    for mode in RUNS:
+        override = getattr(args, mode, None)
+        if override:
+            runs[mode] = parse_run_ids(override)
+
+    win = {k: load_os(rid, "windows-latest") for k, rid in runs.items()}
+    lin = {k: load_os(rid, "ubuntu-latest") for k, rid in runs.items()}
     text = WIKI.read_text(encoding="utf-8")
-    rid_b, rid_p, rid_l, rid_a, rid_t, rid_s = (
-        RUNS[k] for k in ("bodies", "post", "lossy", "arch", "tls", "saturation")
-    )
+    rid_b = primary_run_id(runs["bodies"])
+    rid_p = primary_run_id(runs["post"])
+    rid_l = primary_run_id(runs["lossy"])
+    rid_a = primary_run_id(runs["arch"])
+    rid_t = primary_run_id(runs["tls"])
+    rid_s = primary_run_id(runs["saturation"])
 
     body_spec = [
         ("64 KiB", "HTTP/1 · TLS", "HTTP/1 · plain", "twp-reverse-http1-tls-body64k", "nginx-reverse-http1-tls-body64k", "yarp-reverse-http1-tls-body64k"),

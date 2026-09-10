@@ -107,7 +107,8 @@ internal static class ServeProxyHost
             or ProbeMode.CompareBodies
             or ProbeMode.ComparePost or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost
             or ProbeMode.CompareArch or ProbeMode.CompareSaturation or ProbeMode.CompareEditions
-            or ProbeMode.CompareCrossVersion or ProbeMode.CompareSpot or ProbeMode.ExplicitPoolSweep)
+            or ProbeMode.CompareCrossVersion or ProbeMode.CompareSpot or ProbeMode.ExplicitPoolSweep
+            or ProbeMode.CompareGrpc)
         {
             ProbeLog.Error("--serve-proxy requires a single arm mode");
             return 2;
@@ -516,6 +517,17 @@ internal static class ServeProxyHost
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
                 var nginx = await NginxHost.TryStartHttp2Async(originHttpPort, nginxPath)
+                            ?? throw new InvalidOperationException(NginxHost.NginxMissingMessage());
+                proxy = nginx;
+                listenUrl = nginx.ListenUrl;
+                targetForClient = nginx.ListenUrl;
+                nginxVersion = nginx.Version;
+                break;
+            }
+            case ProbeMode.NginxReverseGrpc:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var nginx = await NginxHost.TryStartGrpcAsync(originHttpsPort, nginxPath)
                             ?? throw new InvalidOperationException(NginxHost.NginxMissingMessage());
                 proxy = nginx;
                 listenUrl = nginx.ListenUrl;
@@ -1047,7 +1059,7 @@ internal static class ServeProxyHost
         {
             ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp2Cleartext or ProbeMode.ReverseHttp2ToH2c
                 or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.NginxReverseHttp2
-                or ProbeMode.NginxReverseHttp2ToHttpsHttp1
+                or ProbeMode.NginxReverseHttp2ToHttpsHttp1 or ProbeMode.NginxReverseGrpc
                 or ProbeMode.HaproxyReverseHttp2 or ProbeMode.HaproxyReverseHttp2ToHttpsHttp1
                 or ProbeMode.EnvoyReverseHttp2 or ProbeMode.EnvoyReverseHttp2ToHttpsHttp1
                 or ProbeMode.YarpReverseHttp2 or ProbeMode.YarpReverseHttp2ToH2c
@@ -1161,6 +1173,7 @@ internal static class ServeProxyHost
         ProbeMode.EnvoyReverseHttp1TlsToHttps => "envoy-reverse-http1-tls-to-https",
         ProbeMode.YarpReverseH2cToH3 => "yarp-reverse-h2c-to-h3",
         ProbeMode.NginxReverseHttp2 => "nginx-reverse-http2",
+        ProbeMode.NginxReverseGrpc => "nginx-grpc-http2",
         ProbeMode.NginxReverseHttp2ToHttpsHttp1 => "nginx-reverse-http2-to-https-http1",
         ProbeMode.NginxReverseHttp3Cleartext => "nginx-reverse-http3-cleartext",
         ProbeMode.NginxReverseHttp3ToHttpsHttp1 => "nginx-reverse-http3-to-https-http1",
@@ -1282,6 +1295,7 @@ internal static class ServeHost
         if ((mode is ProbeMode.NginxReverseHttp1 or ProbeMode.NginxReverseHttp1Tls
                 or ProbeMode.NginxReverseHttp1ToHttps or ProbeMode.NginxReverseHttp1TlsToHttps
                 or ProbeMode.NginxReverseHttp2 or ProbeMode.NginxReverseHttp2ToHttpsHttp1
+                or ProbeMode.NginxReverseGrpc
                 or ProbeMode.NginxReverseHttp3Cleartext or ProbeMode.NginxReverseHttp3ToHttpsHttp1
             || PeerWire.IsProduct(mode, PeerProduct.Nginx))
             && NginxHost.ResolveNginxExecutable(nginxPath) == null)
@@ -1839,6 +1853,21 @@ internal static class ServeHost
                     var nginx = await NginxHost.TryStartHttp2Async(origin.HttpPort, nginxPath)
                                 ?? throw new InvalidOperationException("nginx not available.");
                     return new ServeStack(origin, nginx, null, origin.HttpUrl, null, [], nginx.ListenUrl,
+                        null, nginx.ListenUrl, [nginx.ListenUrl], nginx.Version, "2.0");
+                }
+                case ProbeMode.NginxReverseGrpc:
+                {
+                    var origin = await OriginServer.StartAsync(new OriginListenOptions
+                    {
+                        EnableHttp = false,
+                        EnableHttps = true,
+                        HttpsProtocols = HttpProtocols.Http2,
+                        EnableGrpc = true,
+                        ResponseBytes = responseBytes
+                    }, cancellationToken, workload ?? WorkloadOptions.ForGrpc());
+                    var nginx = await NginxHost.TryStartGrpcAsync(origin.HttpsPort, nginxPath)
+                                ?? throw new InvalidOperationException("nginx not available.");
+                    return new ServeStack(origin, nginx, null, origin.HttpUrl, origin.HttpsUrl, [], nginx.ListenUrl,
                         null, nginx.ListenUrl, [nginx.ListenUrl], nginx.Version, "2.0");
                 }
                 case ProbeMode.NginxReverseHttp2ToHttpsHttp1:

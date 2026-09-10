@@ -356,6 +356,13 @@ internal sealed class EnvoyHost : IDisposable
             W(col + 4, "request_timeout: 65s");
             W(col + 4, "common_http_protocol_options:");
             W(col + 6, "idle_timeout: 65s");
+            // WebSocket / CONNECT-style upgrades on TCP H1 and AUTO listeners (not HTTP/3).
+            if (!string.Equals(codecType, "HTTP3", StringComparison.Ordinal))
+            {
+                W(col + 4, "upgrade_configs:");
+                W(col + 4, "- upgrade_type: websocket");
+            }
+
             W(col + 4, "route_config:");
             W(col + 6, "name: local_route");
             W(col + 6, "virtual_hosts:");

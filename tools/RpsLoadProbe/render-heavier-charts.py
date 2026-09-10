@@ -27,8 +27,9 @@ _spec = importlib.util.spec_from_file_location("rps_practical_charts", _PRACTICA
 _mod = importlib.util.module_from_spec(_spec)
 assert _spec.loader is not None
 _spec.loader.exec_module(_mod)
-arm_sustain_c64 = _mod.arm_sustain_c64
-find_csv = _mod.find_csv
+arm_sustain_union = _mod.arm_sustain_union
+find_csvs = _mod.find_csvs
+parse_path_list = _mod.parse_path_list
 COLORS = _mod.COLORS
 PRODUCTS = _mod.PRODUCTS
 
@@ -302,19 +303,19 @@ ARCH_ARMS: List[Arm6] = [
 
 
 def collect_series(
-    csv_path: Path,
+    csv_paths: Sequence[Path],
     arms: Sequence[Arm6],
     include_haproxy_envoy: bool,
 ) -> Dict[str, List[Optional[float]]]:
     out: Dict[str, List[Optional[float]]] = {p: [] for p in PRODUCTS}
     for _label, twp, nginx, haproxy, envoy, yarp in arms:
-        out["Titanium"].append(arm_sustain_c64(csv_path, twp))
-        out["YARP"].append(arm_sustain_c64(csv_path, yarp))
+        out["Titanium"].append(arm_sustain_union(csv_paths, twp))
+        out["YARP"].append(arm_sustain_union(csv_paths, yarp))
         for product, arm in (("nginx", nginx), ("HAProxy", haproxy), ("Envoy", envoy)):
             if arm is None or (not include_haproxy_envoy and product in ("HAProxy", "Envoy")):
                 out[product].append(None)
             else:
-                out[product].append(arm_sustain_c64(csv_path, arm))
+                out[product].append(arm_sustain_union(csv_paths, arm))
     return out
 
 
@@ -385,11 +386,36 @@ CHART_SPECS = (
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--bodies-root", type=Path, help="gha-dl/<runId> for compare-bodies")
-    ap.add_argument("--post-root", type=Path, help="gha-dl/<runId> for compare-post")
-    ap.add_argument("--lossy-root", type=Path, help="gha-dl/<runId> for compare-lossy")
-    ap.add_argument("--tls-root", type=Path, help="gha-dl/<runId> for compare-tls-cost")
-    ap.add_argument("--arch-root", type=Path, help="gha-dl/<runId> for compare-arch")
+    ap.add_argument(
+        "--bodies-root",
+        action="append",
+        default=[],
+        help="gha-dl/<runId> for compare-bodies; comma-separated or repeat flag",
+    )
+    ap.add_argument(
+        "--post-root",
+        action="append",
+        default=[],
+        help="gha-dl/<runId> for compare-post; comma-separated or repeat flag",
+    )
+    ap.add_argument(
+        "--lossy-root",
+        action="append",
+        default=[],
+        help="gha-dl/<runId> for compare-lossy; comma-separated or repeat flag",
+    )
+    ap.add_argument(
+        "--tls-root",
+        action="append",
+        default=[],
+        help="gha-dl/<runId> for compare-tls-cost; comma-separated or repeat flag",
+    )
+    ap.add_argument(
+        "--arch-root",
+        action="append",
+        default=[],
+        help="gha-dl/<runId> for compare-arch; comma-separated or repeat flag",
+    )
     ap.add_argument("--out-dir", type=Path, default=Path("wiki/images"))
     ap.add_argument("--title-suffix", default="", help="e.g. '@ 024bd68d'")
     ap.add_argument(
@@ -401,11 +427,11 @@ def main() -> int:
     args = ap.parse_args()
 
     roots = {
-        "bodies": args.bodies_root,
-        "post": args.post_root,
-        "lossy": args.lossy_root,
-        "tls": args.tls_root,
-        "arch": args.arch_root,
+        "bodies": parse_path_list(args.bodies_root),
+        "post": parse_path_list(args.post_root),
+        "lossy": parse_path_list(args.lossy_root),
+        "tls": parse_path_list(args.tls_root),
+        "arch": parse_path_list(args.arch_root),
     }
     if not any(roots.values()):
         ap.error("Provide at least one of --bodies-root/--post-root/--lossy-root/--tls-root/--arch-root")
@@ -415,18 +441,19 @@ def main() -> int:
     written: List[Path] = []
 
     for mode_key, file_stem, arms, title_base in CHART_SPECS:
-        root = roots[mode_key]
-        if root is None:
+        mode_roots = roots[mode_key]
+        if not mode_roots:
             continue
         labels = [a[0] for a in arms]
         for os_key, os_title, folder_keys, include_he in OS_SPECS:
             if os_key not in wanted_os:
                 continue
-            csv_path = find_csv(root, folder_keys)
-            if csv_path is None:
-                print(f"{title_base} {os_title}: no CSV under {root}", file=__import__("sys").stderr)
+            csv_paths = find_csvs(mode_roots, folder_keys)
+            if not csv_paths:
+                roots_str = ", ".join(str(r) for r in mode_roots)
+                print(f"{title_base} {os_title}: no CSV under {roots_str}", file=__import__("sys").stderr)
                 continue
-            series = collect_series(csv_path, arms, include_he)
+            series = collect_series(csv_paths, arms, include_he)
             out = args.out_dir / f"rps-heavier-{file_stem}-{os_key}.png"
             chart_title = f"{title_base} — {os_title}"
             if suffix:
@@ -439,7 +466,8 @@ def main() -> int:
                 footer += " · Windows: no HAProxy/Envoy official port"
             render_chart(series, labels, chart_title, out, footer)
             written.append(out)
-            print(f"{chart_title} ← {csv_path}")
+            src = ", ".join(str(p) for p in csv_paths)
+            print(f"{chart_title} ← {src}")
             print(f"  wrote {out}")
 
     if not written:

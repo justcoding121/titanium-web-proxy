@@ -96,6 +96,7 @@ on:
           - compare-lossy
           - compare-tls-cost
           - compare-arch
+          - compare-grpc
           - compare-saturation
           - compare-spot
           - origin-direct
@@ -190,6 +191,10 @@ on:
           - ubuntu-latest
           - windows-latest
           - macos-15-intel
+      arm_shard:
+        description: 'Comparison-group partition (all = no split; i/n = exclusive 1-based shard of wiki rows / Client×Origin wires, not individual arms)'
+        required: true
+        default: all
 
 permissions:
   contents: read
@@ -205,6 +210,7 @@ jobs:
       RPS_WARMUP_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.warmup_sec || 2 }}
       RPS_DURATION_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.duration_sec || 8 }}
       RPS_REPEATS: ${{ github.event_name == 'workflow_dispatch' && inputs.repeats || 1 }}
+      RPS_ARM_SHARD: ${{ github.event_name == 'workflow_dispatch' && inputs.arm_shard || 'all' }}
     strategy:
       fail-fast: false
       matrix:
@@ -212,11 +218,10 @@ jobs:
         os: ${{ fromJSON(inputs.runner_os == 'macos-15-intel' && '["macos-15-intel"]' || inputs.runner_os == 'ubuntu-latest' && '["ubuntu-latest"]' || inputs.runner_os == 'windows-latest' && '["windows-latest"]' || '["ubuntu-latest","windows-latest","macos-15-intel"]') }}
     runs-on: ${{ matrix.os }}
     # Intentionally no jobs.*.container — saturation RPS on a container network measures the wrong thing.
-    # compare-product with MITM Lite+Full can exceed 3.5h per OS on hosted runners.
-    # compare-editions (expanded Plus/CLI stress arms) needs ~60m; other modes keep the long ceiling.
-    # compare-product-smoke is the minimal all-OS product-gate subset — run before full compare-product.
-    # Ramp has per-arm wall timeout (~8–25m) so a stuck MsQuic/bombardier/READY wait cannot burn 400m.
-    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || (github.event_name == 'push' && 90 || (inputs.mode == 'compare-editions' && 90 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 120 || 420))) }}
+    # GitHub-hosted runners hard-cap at 360 minutes — do not set timeout above that.
+    # Wiki-grade compare-product / bodies / arch use arm_shard i/n so each job stays under 345m ramp.
+    # compare-product-smoke / haproxy-smoke / envoy-smoke: 120m; compare-editions: 90m.
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || (github.event_name == 'push' && 90 || (inputs.mode == 'compare-editions' && 90 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 120 || 360))) }}
     steps:
       - uses: actions/checkout@v6
 
@@ -783,7 +788,7 @@ jobs:
       # Pass workflow_dispatch inputs via env (not ${{ }} in the script) to avoid
       # githubactions:S7630 script-injection findings on user-controlled values.
       - name: Run saturation ramp
-        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 110 || 400))) }}
+        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 110 || 345))) }}
         shell: pwsh
         env:
           RPS_MODE: ${{ env.RPS_MODE }}
@@ -791,6 +796,7 @@ jobs:
           RPS_WARMUP_SEC: ${{ env.RPS_WARMUP_SEC }}
           RPS_DURATION_SEC: ${{ env.RPS_DURATION_SEC }}
           RPS_REPEATS: ${{ env.RPS_REPEATS }}
+          RPS_ARM_SHARD: ${{ env.RPS_ARM_SHARD }}
         run: |
           pwsh tools/RpsLoadProbe/run-rps.ps1 `
             -Mode $env:RPS_MODE `
@@ -798,11 +804,20 @@ jobs:
             -WarmupSec ([int]$env:RPS_WARMUP_SEC) `
             -DurationSec ([int]$env:RPS_DURATION_SEC) `
             -Repeats ([int]$env:RPS_REPEATS) `
+            -ArmShard $env:RPS_ARM_SHARD `
             -ResultsDir tools/RpsLoadProbe/results `
             -BombardierCheck
 
+      - name: Sanitize artifact shard label
+        if: always()
+        shell: bash
+        run: |
+          raw="${RPS_ARM_SHARD:-all}"
+          echo "RPS_ARTIFACT_SHARD=${raw//'/'/-}" >> "$GITHUB_ENV"
+
       # Post-ramp gates: hard-fail on every event (including workflow_dispatch).
       # fail-fast: false keeps sibling OS jobs running; Upload CSV uses if: always().
+      # Sharded CSVs skip pairs whose arms are not in this artifact (union paste validates completeness).
       - name: Validate edition gates
         if: env.RPS_MODE == 'compare-editions'
         shell: pwsh
@@ -843,6 +858,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rps-csv-${{ matrix.os }}
+          # Include arm_shard so parallel shard dispatches do not collide (slash → dash via env sanitize).
+          name: rps-csv-${{ matrix.os }}-shard-${{ env.RPS_ARTIFACT_SHARD }}
           path: tools/RpsLoadProbe/results/rps-ramp-*.csv
           if-no-files-found: error

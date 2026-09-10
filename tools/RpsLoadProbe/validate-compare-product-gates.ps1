@@ -60,8 +60,13 @@ foreach ($p in $mitmPairs) {
         $num = $p.$kind
         $den = $p.Reverse
         $gate = if ($kind -eq 'Lite') { $MitmLiteGate } else { $MitmFullGate }
+        # Sharded CSVs only contain a subset of arms — skip pairs not present in this artifact.
+        if (-not $sustain.ContainsKey($num) -and -not $sustain.ContainsKey($den)) {
+            Write-Host "SKIP $($p.Label) $kind : not in this shard/CSV" -ForegroundColor DarkYellow
+            continue
+        }
         if (-not $sustain.ContainsKey($num) -or -not $sustain.ContainsKey($den)) {
-            Write-Host "FAIL $($p.Label) $kind : missing data" -ForegroundColor Red
+            Write-Host "FAIL $($p.Label) $kind : missing data (partial pair in CSV)" -ForegroundColor Red
             $failed = $true
             continue
         }
@@ -80,6 +85,10 @@ $revPairs = @(
     @{ Label = 'H3->H3'; Twp = 'twp-reverse-http3'; Yarp = 'yarp-reverse-http3-to-http3' }
 )
 foreach ($p in $revPairs) {
+    if (-not $sustain.ContainsKey($p.Twp) -and -not $sustain.ContainsKey($p.Yarp)) {
+        Write-Host "SKIP $($p.Label) : not in this shard/CSV" -ForegroundColor DarkYellow
+        continue
+    }
     if (-not $sustain.ContainsKey($p.Twp)) {
         Write-Host "FAIL $($p.Label) : missing TWP data" -ForegroundColor Red
         $failed = $true

@@ -11,7 +11,7 @@ param(
     [ValidateSet(
         'compare', 'compare-http2', 'compare-tls', 'compare-terminate', 'compare-same', 'compare-bridges',
         'compare-http3-cleartext', 'compare-nginx-https', 'compare-haproxy-smoke', 'compare-envoy-smoke', 'compare-mitm', 'compare-matrix', 'compare-product', 'compare-product-smoke', 'compare-spot', 'compare-ceiling',
-        'compare-bodies', 'compare-post', 'compare-lossy', 'compare-tls-cost', 'compare-arch', 'compare-saturation',
+        'compare-bodies', 'compare-post', 'compare-lossy', 'compare-tls-cost', 'compare-arch', 'compare-grpc', 'compare-saturation',
         'compare-editions', 'compare-cross-version',
         'origin-direct', 'explicit-pool-sweep',
         'reverse-http1', 'bare-reverse-http1', 'nginx-reverse-http1', 'haproxy-reverse-http1', 'envoy-reverse-http1', 'yarp-reverse-http1',
@@ -73,6 +73,7 @@ param(
     [int]    $WarmupSec = 5,
     [int]    $DurationSec = 20,
     [int]    $Repeats = 1,
+    [string] $ArmShard = 'all',
     [string] $ResultsDir,
     [ValidateSet('GET', 'POST')]
     [string] $Method = 'GET',
@@ -98,7 +99,7 @@ if (-not $ResultsDir) {
 
 Write-Host ''
 Write-Host 'RpsLoadProbe — close browsers / heavy apps before a publishable run.' -ForegroundColor Yellow
-Write-Host "Mode=$Mode  concurrency=$Concurrency  warmup=${WarmupSec}s  duration=${DurationSec}s  repeats=$Repeats" -ForegroundColor Cyan
+Write-Host "Mode=$Mode  concurrency=$Concurrency  warmup=${WarmupSec}s  duration=${DurationSec}s  repeats=$Repeats  arm-shard=$ArmShard" -ForegroundColor Cyan
 Write-Host ''
 
 if (-not $SkipBuild) {
@@ -154,6 +155,7 @@ $probeArgs = $probePrefix + @(
     '--warmup-sec', $WarmupSec,
     '--duration-sec', $DurationSec,
     '--repeats', $Repeats,
+    '--arm-shard', $ArmShard,
     '--results-dir', $ResultsDir,
     '--method', $Method,
     '--delay-ms', $DelayMs,

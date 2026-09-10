@@ -23,9 +23,11 @@ Protocol coverage details: [protocol support matrix](https://github.com/justcodi
 
 ## Performance
 
-![Practical reverse proxy throughput on Linux](wiki/images/rps-practical-linux.png)
+![Practical reverse proxy throughput on Linux (Chart A)](wiki/images/rps-practical-linux.png)
 
-**RPS** is requests per second — how many HTTP requests the reverse proxy completes under load. Same-harness comparisons vs **YARP** (gated), **nginx**, **HAProxy**, and **Envoy** on matched GitHub Actions runners — see [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
+![Industry workloads on Linux — Tiny GET / POST 64 KiB / WebSocket / gRPC (Chart B)](wiki/images/rps-industry-workloads-linux.png)
+
+**RPS** is requests per second (Chart B gRPC bars are **RPC/s**). Same-harness comparisons vs **YARP** (gated), **nginx**, **HAProxy**, and **Envoy** on matched GitHub Actions runners — see [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance). Chart A: industry reverse wires (including H2 TLS→h2c). Chart B: Tiny GET · POST 64 KiB · WebSocket · unary gRPC @ c=64.
 
 ## Choose an edition
 

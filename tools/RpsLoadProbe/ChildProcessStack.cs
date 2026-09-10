@@ -257,7 +257,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
             or ProbeMode.ReverseHttp11ToHttp2 or ProbeMode.YarpReverseHttp11ToHttp2
             or ProbeMode.ReverseHttp1PlainToHttp2 or ProbeMode.YarpReverseHttp1PlainToHttp2
             or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.YarpReverseHttp3ToHttp2
-            or ProbeMode.YarpReverseHttp2ToHttps => OriginRecipe.HttpsOnly,
+            or ProbeMode.YarpReverseHttp2ToHttps or ProbeMode.NginxReverseGrpc => OriginRecipe.HttpsOnly,
         ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.YarpReverseHttp1ToHttp3
             or ProbeMode.ReverseHttp1PlainToHttp3 or ProbeMode.YarpReverseHttp1PlainToHttp3
             or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
@@ -333,6 +333,8 @@ internal sealed class ChildProcessStack : IAsyncDisposable
             sb.Append(CultureInfo.InvariantCulture, $" --early-response-after {workload.EarlyResponseAfterBytes}");
         if (workload.IsWebSocket)
             sb.Append(" --websocket");
+        if (workload.IsGrpc)
+            sb.Append(" --grpc");
         // Lossy serve children need IsLossy so H2→H1 hosts can set MaxConcurrentStreams=8.
         if (workload.DelayMs > 0)
             sb.Append(CultureInfo.InvariantCulture, $" --delay-ms {workload.DelayMs}");

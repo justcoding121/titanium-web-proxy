@@ -48,7 +48,7 @@ internal static class BombardierLoadGenerator
             throw new NotSupportedException("bombardier arm requires keep-alive (saturation control is tiny-GET KA).");
         if (!string.Equals(workload.Method, "GET", StringComparison.OrdinalIgnoreCase))
             throw new NotSupportedException("bombardier arm supports GET only.");
-        if (workload.RequestBytes > 0 || workload.IsWebSocket || workload.IsEarlyResponse || workload.IsSlowConsumer)
+        if (workload.RequestBytes > 0 || workload.IsWebSocket || workload.IsGrpc || workload.IsEarlyResponse || workload.IsSlowConsumer)
             throw new NotSupportedException("bombardier arm supports tiny GET only.");
 
         var durationSec = Math.Max(1, (int)Math.Ceiling(duration.TotalSeconds));

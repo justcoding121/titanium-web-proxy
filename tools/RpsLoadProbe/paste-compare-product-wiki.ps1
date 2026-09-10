@@ -1,4 +1,6 @@
 # Emit wiki markdown for compare-product Reverse + MITM tables (median of 3 GHA runs).
+# Pass every product shard run id: -RunIds 111,222,333 (union by arm name; same SHA only).
+# Lite÷Reverse stays same-job because comparison-group shards co-locate peers on one VM.
 param(
     [Parameter(Mandatory)] [string[]] $RunIds,
     [string] $ResultsRoot = 'tools/RpsLoadProbe/results/gha-dl',

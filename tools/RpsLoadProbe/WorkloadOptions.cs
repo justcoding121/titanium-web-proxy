@@ -23,6 +23,8 @@ internal sealed class WorkloadOptions
     public int EarlyResponseAfterBytes { get; init; }
     public bool IsDuplexHttp { get; init; }
     public bool IsWebSocket { get; init; }
+    /// <summary>Unary gRPC Echo over H2 TLS (compare-grpc arms).</summary>
+    public bool IsGrpc { get; init; }
     /// <summary>Optional extra request headers (e.g. Authorization Bearer for JWT edition arm).</summary>
     public IReadOnlyDictionary<string, string>? ExtraHeaders { get; init; }
 
@@ -118,6 +120,13 @@ internal sealed class WorkloadOptions
         IsWebSocket = true
     };
 
+    public static WorkloadOptions ForGrpc() => new()
+    {
+        Method = "GET",
+        KeepAlive = true,
+        IsGrpc = true
+    };
+
     public WorkloadOptions WithCaptureTlsTiming(bool capture) => Copy(captureTlsTiming: capture);
 
     public WorkloadOptions WithExtraHeaders(IReadOnlyDictionary<string, string>? headers) =>
@@ -136,6 +145,7 @@ internal sealed class WorkloadOptions
         int? earlyResponseAfterBytes = null,
         bool? isDuplexHttp = null,
         bool? isWebSocket = null,
+        bool? isGrpc = null,
         IReadOnlyDictionary<string, string>? extraHeaders = null,
         bool replaceExtraHeaders = false) => new()
     {
@@ -151,6 +161,7 @@ internal sealed class WorkloadOptions
         EarlyResponseAfterBytes = earlyResponseAfterBytes ?? EarlyResponseAfterBytes,
         IsDuplexHttp = isDuplexHttp ?? IsDuplexHttp,
         IsWebSocket = isWebSocket ?? IsWebSocket,
+        IsGrpc = isGrpc ?? IsGrpc,
         ExtraHeaders = replaceExtraHeaders ? extraHeaders : (extraHeaders ?? ExtraHeaders)
     };
 
@@ -219,6 +230,8 @@ internal sealed class WorkloadOptions
                 suffix += "-duplex";
             if (IsWebSocket)
                 suffix += "-ws";
+            if (IsGrpc)
+                suffix += "-grpc";
             return suffix;
         }
     }

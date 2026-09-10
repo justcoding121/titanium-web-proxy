@@ -41,9 +41,12 @@ internal static class Cli
         var lossPercent = 0.0;
         var earlyResponseAfter = 0;
         var enableWebSocket = false;
+        var enableGrpc = false;
         var clientReadChunkBytes = 0;
         var clientReadSleepMs = 0;
         var stopOnSloFail = true;
+        (int Index, int Count)? armShard = null;
+        var printArms = false;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -132,6 +135,25 @@ internal static class Cli
                 case "--repeats":
                     repeats = int.Parse(RequireValue(args, ref i, "--repeats"), CultureInfo.InvariantCulture);
                     break;
+                case "--arm-shard":
+                {
+                    var shardText = RequireValue(args, ref i, "--arm-shard").Trim();
+                    if (!string.Equals(shardText, "all", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var parts = shardText.Split('/', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                        if (parts.Length != 2
+                            || !int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx)
+                            || !int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var count)
+                            || count < 1 || idx < 1 || idx > count)
+                        {
+                            return Fail("--arm-shard must be 'all' or i/n (1-based i, n >= 1)");
+                        }
+
+                        armShard = (idx, count);
+                    }
+
+                    break;
+                }
                 case "--method":
                     method = RequireValue(args, ref i, "--method").ToUpperInvariant();
                     if (method is not ("GET" or "POST"))
@@ -162,6 +184,9 @@ internal static class Cli
                 case "--websocket":
                     enableWebSocket = true;
                     break;
+                case "--grpc":
+                    enableGrpc = true;
+                    break;
                 case "--client-read-chunk":
                     clientReadChunkBytes = int.Parse(RequireValue(args, ref i, "--client-read-chunk"),
                         CultureInfo.InvariantCulture);
@@ -175,6 +200,11 @@ internal static class Cli
                     break;
                 case "--no-stop-on-slo-fail":
                     stopOnSloFail = false;
+                    break;
+                case "--print-arms":
+                    printArms = true;
+                    if (command == null)
+                        command = "ramp";
                     break;
                 default:
                     ProbeLog.Error($"Unknown argument: {args[i]}");
@@ -193,6 +223,7 @@ internal static class Cli
             LossPercent = Math.Clamp(lossPercent, 0, 100),
             EarlyResponseAfterBytes = Math.Max(0, earlyResponseAfter),
             IsWebSocket = enableWebSocket,
+            IsGrpc = enableGrpc,
             ClientReadChunkBytes = Math.Max(0, clientReadChunkBytes),
             ClientReadSleepMs = Math.Max(0, clientReadSleepMs)
         };
@@ -221,7 +252,7 @@ internal static class Cli
                     originHttpsExtraPorts, nginxPath, haproxyPath, envoyPath, maxCachedConnections, cts.Token, workload),
                 "serve" => RunServe(modeText, nginxPath, haproxyPath, envoyPath, maxCachedConnections, cts.Token, workload),
                 "ramp" => RunRamp(modeText, nginxPath, haproxyPath, envoyPath, resultsDir, concurrency, warmupSec, durationSec,
-                    maxCachedConnections, repeats, workload, stopOnSloFail, cts.Token),
+                    maxCachedConnections, repeats, workload, stopOnSloFail, armShard, printArms, cts.Token),
                 _ => Fail("Required: --serve | --serve-origin | --serve-proxy | --ramp")
             };
         }
@@ -267,13 +298,15 @@ internal static class Cli
         or ProbeMode.CompareBodies
         or ProbeMode.ComparePost
         or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost or ProbeMode.CompareArch
+        or ProbeMode.CompareGrpc
         or ProbeMode.CompareSaturation
         or ProbeMode.CompareEditions or ProbeMode.CompareCrossVersion
         or ProbeMode.ExplicitPoolSweep;
 
     private static int RunRamp(string? modeText, string? nginxPath, string? haproxyPath, string? envoyPath,
         string? resultsDir, List<int> concurrency, int warmupSec, int durationSec, int? maxCachedConnections,
-        int repeats, WorkloadOptions workload, bool stopOnSloFail, CancellationToken ct)
+        int repeats, WorkloadOptions workload, bool stopOnSloFail, (int Index, int Count)? armShard,
+        bool printArms, CancellationToken ct)
     {
         if (modeText == null || !TryParseMode(modeText, out var mode))
             return Fail("Required: --ramp --mode <see --help>");
@@ -290,11 +323,19 @@ internal static class Cli
             MaxCachedConnections = maxCachedConnections,
             Repeats = Math.Max(1, repeats),
             StopOnSloFail = stopOnSloFail,
+            ArmShard = armShard,
             ConcurrencySteps = concurrency.Count > 0
                 ? concurrency.ToArray()
                 : [8, 16, 24, 32, 48, 64, 128, 256, 512],
             Workload = workload
         };
+        if (printArms)
+        {
+            foreach (var name in RampOrchestrator.ListArmNames(options))
+                Console.WriteLine(name);
+            return 0;
+        }
+
         return RampOrchestrator.RunAsync(options, ct).GetAwaiter().GetResult();
     }
 
@@ -415,6 +456,10 @@ internal static class Cli
                 return true;
             case "nginx-reverse-http2":
                 mode = ProbeMode.NginxReverseHttp2;
+                return true;
+            case "nginx-grpc-http2":
+            case "nginx-reverse-grpc":
+                mode = ProbeMode.NginxReverseGrpc;
                 return true;
             case "nginx-reverse-http2-to-https-http1":
                 mode = ProbeMode.NginxReverseHttp2ToHttpsHttp1;
@@ -613,6 +658,9 @@ internal static class Cli
                 return true;
             case "compare-arch":
                 mode = ProbeMode.CompareArch;
+                return true;
+            case "compare-grpc":
+                mode = ProbeMode.CompareGrpc;
                 return true;
             case "compare-saturation":
                 mode = ProbeMode.CompareSaturation;
@@ -814,6 +862,7 @@ internal static class Cli
               compare-lossy           64 KiB GET under userspace delay/loss vs control arms
               compare-tls-cost        H1 TLS terminate: keep-alive tiny / new-conn tiny / keep-alive 256 KiB
               compare-arch            Slow consumer, early response, H2 duplex, WebSocket echo vs control arms
+              compare-grpc            Unary gRPC RPC/s on H2 TLS→H2 TLS (TWP / YARP / nginx grpc_pass / HAProxy / Envoy)
               compare-saturation      Calibration: origin-direct (+ bombardier) + H1 plain peers;
                                       then H2 TLS→H1 and H3→H1 peers; CSV proxy_rss/cpu columns
                                       (proxy child + descendants; origin PID on origin-direct)
@@ -834,6 +883,7 @@ internal static class Cli
               --warmup-sec N
               --duration-sec N
               --repeats N             Full arm sequence N times; print median peaks (default 1)
+              --arm-shard i/n|all     Exclusive comparison-group (wiki-row) partition; all = no split
               --max-cached-connections N   Override ProxyServer.MaxCachedConnections for TWP arms
               --method GET|POST       Default GET (compare-post sets POST per arm)
               --response-bytes N      Origin response size (default ~64 B tiny JSON)
@@ -843,6 +893,8 @@ internal static class Cli
               --loss-percent P        TCP connection stall % or UDP datagram drop % (0 = off)
               --early-response-after N  Origin starts response after N request bytes (0 = drain-then-write)
               --websocket             Origin /ws echo; client uses ClientWebSocket
+              --grpc                  Origin MapGrpcService Echo; client uses Grpc.Net.Client unary
+              --print-arms            Resolve arm list (+ optional --arm-shard) and exit (no ramp)
             """);
     }
 }

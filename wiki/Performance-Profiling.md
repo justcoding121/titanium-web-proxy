@@ -45,7 +45,7 @@ On a laptop, thermal throttling dominates everything else: the *same* arm measur
 - **Prefer TWP÷peer ratios over absolutes.** The control arm soaks up the same throttling.
 - **For a targeted A/B question, run the two arms paired**: cooldown (~2 min idle), arm A, arm B immediately after — and alternate which goes first across repeats so heat bias cancels. This is how "MITM costs 0.65–0.75× of its reverse twin, and the delta is purely the extra origin TLS leg" was established: the two probe arms differ by exactly one flag (`ForwardCleartext`).
 - If an arm's ratio looks newly bad, **re-measure before profiling** — several "regressions" were heat.
-- **Gate before publishing:** optimize against cool paired ratios on the [local lab](Performance-Local-Lab). After a cool win, remeasure on matched Windows+Linux GHA (`workflow_dispatch` [RPS saturation](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/rps-saturation.yml)) and paste medians into [Performance](Performance). Windows GHA removes laptop thermal skew; it is **not** the same as a cool pair — shared-VM noise still applies, so prefer TWP÷peer ratios.
+- **Gate before publishing:** optimize against cool paired ratios on the [local lab](Performance-Local-Lab). After a cool win, remeasure on matched Windows+Linux GHA (`workflow_dispatch` [RPS saturation](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/rps-saturation.yml)). For wiki-grade `compare-product` / bodies / arch, dispatch **comparison-group** `arm_shard` partitions (`1/3`…`3/3`, etc.) on the **same SHA**, then paste with `-RunIds` / multi-run heavier union. Prefer TWP÷peer ratios; do not mix absolute RPS across shards.
 
 ## Laptop result tables
 

@@ -8,7 +8,7 @@ On matched **GitHub Actions 4 vCPU / 16 GiB** runners, compare **TWP÷YARP** (ga
 
 ## Practical reverse RPS (CI)
 
-Sustain RPS @ concurrency 64 for common reverse wires (tiny keep-alive GET). Grouped bars: Titanium / YARP / nginx / HAProxy / Envoy. Missing bars mean *Not possible* for that wire or OS (e.g. Windows HAProxy/Envoy, nginx without H2/H3 upstream). Regenerate with [`render-practical-charts.py`](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/render-practical-charts.py) after `compare-product`.
+Sustain RPS @ concurrency 64 for common reverse wires (tiny keep-alive GET). Grouped bars: Titanium / YARP / nginx / HAProxy / Envoy. Missing bars mean *Not possible* for that wire or OS (e.g. Windows HAProxy/Envoy, nginx without H2/H3 upstream). Regenerate with [`render-practical-charts.py`](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/render-practical-charts.py) after `compare-product` (union sharded CSV roots when `arm_shard` was used).
 
 ### Windows
 

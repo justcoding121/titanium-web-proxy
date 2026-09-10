@@ -77,6 +77,31 @@ internal sealed class NginxHost : IDisposable
     }
 
     /// <summary>
+    /// Client TLS+h2 → HTTPS/h2 gRPC origin via <c>grpc_pass</c> (compare-grpc).
+    /// </summary>
+    public static async Task<NginxHost?> TryStartGrpcAsync(int originHttpsPort, string? nginxPath)
+    {
+        var exe = ResolveNginxExecutable(nginxPath);
+        if (exe == null)
+            return null;
+
+        var version = ReadVersion(exe);
+        var useHttp2OnDirective = SupportsHttp2OnDirective(version);
+        var prefixProbe = Path.Combine(Path.GetTempPath(), "twp-rps-nginx-certs-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(prefixProbe);
+        try
+        {
+            var (certPem, keyPem) = await ExportLoopbackPemAsync(prefixProbe);
+            return await TryStartAsync(BuildGrpcConf(originHttpsPort, certPem, keyPem, useHttp2OnDirective),
+                listenScheme: "https", nginxPath);
+        }
+        finally
+        {
+            TryDeleteDir(prefixProbe);
+        }
+    }
+
+    /// <summary>
     /// Client QUIC/h3 (plus TCP TLS for readiness) → cleartext HTTP/1 origin.
     /// Returns <see langword="null"/> when nginx is missing or was not built with <c>http_v3_module</c>
     /// (Ubuntu 24.04 distro nginx 1.24; nginx/Windows). Official nginx.org mainline packages include it.
@@ -484,6 +509,53 @@ internal sealed class NginxHost : IDisposable
                             proxy_buffering off;
                             proxy_request_buffering off;
                             proxy_pass http://origin;
+                        }
+                    }
+                }
+                """;
+        };
+
+    private static Func<string, int, string> BuildGrpcConf(int originHttpsPort, string certPem, string keyPem,
+        bool useHttp2OnDirective) =>
+        (prefixDir, port) =>
+        {
+            var certDest = Path.Combine(prefixDir, "certs", "server.crt");
+            var keyDest = Path.Combine(prefixDir, "certs", "server.key");
+            File.Copy(certPem, certDest, overwrite: true);
+            File.Copy(keyPem, keyDest, overwrite: true);
+            certDest = certDest.Replace('\\', '/');
+            keyDest = keyDest.Replace('\\', '/');
+            var listenAndHttp2 = useHttp2OnDirective
+                ? $"listen 127.0.0.1:{port} ssl;\n                        http2 on;"
+                : $"listen 127.0.0.1:{port} ssl http2;";
+            return $$"""
+                worker_processes auto;
+                daemon off;
+                error_log logs/error.log error;
+                pid nginx.pid;
+                events {
+                    worker_connections 4096;
+                }
+                http {
+                    access_log off;
+                    sendfile on;
+                    keepalive_timeout 65;
+                    client_max_body_size 10m;
+                    client_body_temp_path temp/client_body;
+                    proxy_temp_path temp/proxy;
+                    fastcgi_temp_path temp/fastcgi;
+                    uwsgi_temp_path temp/uwsgi;
+                    scgi_temp_path temp/scgi;
+                    server {
+                        {{listenAndHttp2}}
+                        ssl_certificate {{certDest}};
+                        ssl_certificate_key {{keyDest}};
+                        ssl_protocols TLSv1.2 TLSv1.3;
+                        location / {
+                            grpc_pass grpcs://127.0.0.1:{{originHttpsPort}};
+                            grpc_ssl_verify off;
+                            grpc_read_timeout 60s;
+                            grpc_send_timeout 60s;
                         }
                     }
                 }

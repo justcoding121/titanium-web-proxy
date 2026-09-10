@@ -9,7 +9,7 @@ plots interception arms.
 
 CSV mode (same sustain @ c=64 rule as paste-compare-product-wiki.ps1):
   python3 tools/RpsLoadProbe/render-product-matrix-charts.py \\
-    --results-root tools/RpsLoadProbe/results/gha-dl/<runId> \\
+    --results-root tools/RpsLoadProbe/results/gha-dl/<runId1>,<runId2> \\
     --out-dir wiki/images --title-suffix '@ <sha>'
 
 Wiki fallback (current Performance.md reverse tables, no CSV required):
@@ -30,8 +30,9 @@ _spec = importlib.util.spec_from_file_location("rps_practical_charts", _PRACTICA
 _mod = importlib.util.module_from_spec(_spec)
 assert _spec.loader is not None
 _spec.loader.exec_module(_mod)
-arm_sustain_c64 = _mod.arm_sustain_c64
-find_csv = _mod.find_csv
+arm_sustain_union = _mod.arm_sustain_union
+find_csvs = _mod.find_csvs
+parse_path_list = _mod.parse_path_list
 COLORS = _mod.COLORS
 PRODUCTS = _mod.PRODUCTS
 
@@ -105,9 +106,8 @@ def arm_name(prefix: str, client: str, origin: str) -> str:
         ("http2", "https-http1"): f"{prefix}-reverse-http2-to-https-http1",
         ("http3", "http1"): f"{prefix}-reverse-http3-cleartext",
         ("http3", "https-http1"): f"{prefix}-reverse-http3-to-https-http1",
-        # Product-possible / harness-absent (product-arm-matrix.py). nginx H2/H3
-        # origin is still omitted by wiki *Not possible*; these names are for
-        # HAProxy/Envoy CSV lookup once the arms exist.
+        # nginx H2/H3 origin omitted (*Not possible*); HAProxy/Envoy H2/H3 origin
+        # arms are wired — missing CSV rows are omitted, not zero bars.
         ("http1", "http2-cleartext"): f"{prefix}-reverse-http1-plain-to-h2c",
         ("http1", "https-http2"): f"{prefix}-reverse-http1-plain-to-http2",
         ("http1", "http3"): f"{prefix}-reverse-http1-plain-to-http3",
@@ -311,22 +311,27 @@ def render_os(
     plt.close(fig)
 
 
-def rows_from_csv(csv_path: Path) -> List[Row]:
+def rows_from_csv(csv_paths: Sequence[Path]) -> List[Row]:
     rows = []
     for client in CLIENTS:
         for origin in ORIGINS:
-            twp = arm_sustain_c64(csv_path, arm_name("twp", client, origin))
-            yarp = arm_sustain_c64(csv_path, arm_name("yarp", client, origin))
-            nginx = arm_sustain_c64(csv_path, arm_name("nginx", client, origin))
-            haproxy = arm_sustain_c64(csv_path, arm_name("haproxy", client, origin))
-            envoy = arm_sustain_c64(csv_path, arm_name("envoy", client, origin))
+            twp = arm_sustain_union(csv_paths, arm_name("twp", client, origin))
+            yarp = arm_sustain_union(csv_paths, arm_name("yarp", client, origin))
+            nginx = arm_sustain_union(csv_paths, arm_name("nginx", client, origin))
+            haproxy = arm_sustain_union(csv_paths, arm_name("haproxy", client, origin))
+            envoy = arm_sustain_union(csv_paths, arm_name("envoy", client, origin))
             rows.append((client, origin, twp, nginx, haproxy, envoy, yarp))
     return rows
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--results-root", type=Path)
+    ap.add_argument(
+        "--results-root",
+        action="append",
+        default=[],
+        help="gha-dl/<runId> folder(s); comma-separated or repeat flag (union CSVs, first wins)",
+    )
     ap.add_argument("--from-wiki", type=Path)
     ap.add_argument("--out-dir", type=Path, default=Path("wiki/images"))
     ap.add_argument("--title-suffix", default="")
@@ -336,14 +341,15 @@ def main() -> int:
     if args.from_wiki:
         wiki_rows = parse_wiki_reverse_tables(args.from_wiki.read_text(encoding="utf-8"))
 
+    results_roots = parse_path_list(args.results_root)
     written = []
     for key, title, folder_keys, _heading in OS_SPECS:
         rows = None
-        if args.results_root:
-            csv_path = find_csv(args.results_root, folder_keys)
-            if csv_path:
-                rows = rows_from_csv(csv_path)
-                print(f"{title} ← {csv_path}")
+        if results_roots:
+            csv_paths = find_csvs(results_roots, folder_keys)
+            if csv_paths:
+                rows = rows_from_csv(csv_paths)
+                print(f"{title} ← {', '.join(str(p) for p in csv_paths)}")
         if rows is None and wiki_rows is not None:
             rows = wiki_rows.get(key) or []
             if rows:
