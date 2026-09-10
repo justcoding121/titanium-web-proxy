@@ -69,7 +69,13 @@ def arm_name(prefix: str, client: str, origin: str) -> str:
             ("http1-tls", "https-http1"): "twp-reverse-http1-mitm",
             ("http2", "http1"): "twp-reverse-http2-cleartext",
             ("http2", "https-http1"): "twp-reverse-http2-to-https-http1",
+            ("http2", "http2-cleartext"): "twp-reverse-http2-to-h2c",
             ("http2", "https-http2"): "twp-reverse-http2",
+            ("http2-cleartext", "http1"): "twp-reverse-h2c-to-h1",
+            ("http2-cleartext", "https-http1"): "twp-reverse-h2c-to-https",
+            ("http2-cleartext", "http2-cleartext"): "twp-reverse-h2c-to-h2c",
+            ("http2-cleartext", "https-http2"): "twp-reverse-h2c",
+            ("http2-cleartext", "http3"): "twp-reverse-h2c-to-h3",
             ("http3", "http3"): "twp-reverse-http3",
         }
         return special.get((c, o), f"twp-reverse-{c}-to-{o}")
@@ -78,7 +84,15 @@ def arm_name(prefix: str, client: str, origin: str) -> str:
             ("http1", "http1"): "yarp-reverse-http1",
             ("http1-tls", "http1"): "yarp-reverse-http1-tls",
             ("http1-tls", "https-http1"): "yarp-reverse-http1-tls-to-https",
+            ("http2", "http1"): "yarp-reverse-http2",
+            ("http2", "https-http1"): "yarp-reverse-http2-to-https-http1",
+            ("http2", "http2-cleartext"): "yarp-reverse-http2-to-h2c",
             ("http2", "https-http2"): "yarp-reverse-http2-to-https",
+            ("http2-cleartext", "http1"): "yarp-reverse-h2c-to-h1",
+            ("http2-cleartext", "https-http1"): "yarp-reverse-h2c-to-https",
+            ("http2-cleartext", "http2-cleartext"): "yarp-reverse-h2c-to-h2c",
+            ("http2-cleartext", "https-http2"): "yarp-reverse-h2c",
+            ("http2-cleartext", "http3"): "yarp-reverse-h2c-to-h3",
         }
         return special.get((c, o), f"yarp-reverse-{c}-to-{o}")
     peer_special = {
