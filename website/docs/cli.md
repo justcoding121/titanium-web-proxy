@@ -146,7 +146,7 @@ titanium update
 titanium service start
 ```
 
-Channels: `stable` (default) or `beta` via `--channel` or `TITANIUM_UPDATE_CHANNEL` (other values are rejected). Messages always label the channel and print local → remote versions. `titanium update` upgrades when the feed is newer; same-semver beta switches are allowed; it does not reinstall when already current. `titanium update` does **not** use winget (so beta and non-Windows stay consistent); use winget only for the initial install on Windows stable.
+Channels: `stable` (default) or `beta` via `--channel` or `TITANIUM_UPDATE_CHANNEL` (other values are rejected). Messages always label the channel and print local → remote versions. `titanium update` upgrades when the feed is newer; same-semver beta switches are allowed; it does not reinstall when already current. `titanium update` uses the product download feed on every OS (not OS package managers).
 
 ### `http3-deps`
 

@@ -83,7 +83,7 @@ titanium http3-deps status
 titanium http3-deps install
 ```
 
-Detects apt (Microsoft repo), dnf/zypper, `apk add libmsquic`, or `brew install libmsquic`. Opt-in; needs network and sudo/admin. Not automatic in MSI/winget.
+Detects apt (Microsoft repo), dnf/zypper, `apk add libmsquic`, or `brew install libmsquic`. Opt-in; needs network and sudo/admin. Not automatic in MSI / AppImage / zip installs.
 
 ## Quick start — reverse dual-listen (HttpClient / browsers)
 

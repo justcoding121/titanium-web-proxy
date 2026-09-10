@@ -15,8 +15,8 @@ Download **Inspector** (desktop debugger) or the **CLI** (reverse proxy) for you
 Pick **Stable** for production or **Beta** for the newest builds. Then choose Inspector or CLI below.
 
 ::: tip Quick picks
-- **Windows:** MSI (Inspector) or zip (CLI); or `winget` / Chocolatey under [Optional Windows package managers](#optional-windows-package-managers).
-- **macOS:** DMG when published, otherwise zip; CLI also via Homebrew when the tap is live.
+- **Windows:** MSI (Inspector) or zip (CLI).
+- **macOS:** DMG when published, otherwise zip; CLI also via [Homebrew](#homebrew-macos-cli) when you prefer a tap.
 - **Linux:** AppImage / `.deb` / `.rpm` for normal desktops; Alpine containers need the **musl** zip — see [Advanced](#advanced).
 :::
 
@@ -172,27 +172,7 @@ Pick **Stable** for production or **Beta** for the newest builds. Then choose In
   </div>
 </div>
 
-## Optional Windows package managers
-
-Use **one** of winget or Chocolatey if you already have it — not both. Otherwise use the buttons above.
-
-### winget (stable only)
-
-```shell
-winget install justcoding121.TitaniumCli
-winget install justcoding121.TitaniumInspector
-```
-
-### Chocolatey
-
-```shell
-choco install titanium-cli
-choco install titanium-inspector
-```
-
-Beta: `choco install titanium-cli --pre` or `choco install titanium-inspector --pre`.
-
-### Homebrew (macOS CLI)
+## Homebrew (macOS CLI)
 
 ```shell
 brew tap justcoding121/titanium

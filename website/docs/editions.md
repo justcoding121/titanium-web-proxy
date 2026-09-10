@@ -4,8 +4,8 @@
 
 | Product | Role | How you get it |
 |---------|------|----------------|
-| **CLI** (`titanium` / `twp`) | Standalone reverse / edge proxy for any stack | [Download](/download) zips, winget, Chocolatey |
-| **Inspector** | Desktop man-in-the-middle (MITM) debugger — decrypt and inspect HTTPS traffic | [Download](/download) (Windows / macOS / Linux), winget, Chocolatey |
+| **CLI** (`titanium` / `twp`) | Standalone reverse / edge proxy for any stack | [Download](/download) (all OS); optional Homebrew on macOS |
+| **Inspector** | Desktop man-in-the-middle (MITM) debugger — decrypt and inspect HTTPS traffic | [Download](/download) (Windows / macOS / Linux) |
 | **Plus** | Control plane, ops, observability, dashboard, gRPC-JSON transcoding | After installing CLI: `titanium update --plus` |
 | **Library** | Embed the same engine in a .NET app | NuGet (`Titanium.Web.Proxy`) |
 

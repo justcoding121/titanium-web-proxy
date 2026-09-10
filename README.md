@@ -33,43 +33,9 @@ Protocol coverage: [protocol support matrix](https://github.com/justcoding121/ti
 
 ## Installation
 
-### Titanium Inspector
+**Inspector and CLI** (Windows, Linux, macOS): use [Download](https://titaniumproxy.com/download) — MSI / DMG / AppImage / `.deb` / `.rpm` / zip. Short walkthrough: [Install](https://titaniumproxy.com/docs/install).
 
-Prefer [Download](https://titaniumproxy.com/download) if you do not already use a Windows package manager. If you do, pick **one**:
-
-**winget** (built into Windows 10/11; stable only):
-
-```shell
-winget install justcoding121.TitaniumInspector
-```
-
-**Chocolatey** (if you already have it):
-
-```shell
-choco install titanium-inspector
-```
-
-For **beta**, use `choco install titanium-inspector --pre`. Start interception from the Capture menu, install the root certificate authority (CA), then toggle system proxy.
-
-<img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
-
-### CLI (`titanium` / `twp`)
-
-On Windows, package managers are optional — use **one** you already have, not both. If you have neither, [download a zip](https://titaniumproxy.com/download).
-
-**winget** (built into Windows 10/11; stable only):
-
-```shell
-winget install justcoding121.TitaniumCli
-```
-
-**Chocolatey** (if you already have it):
-
-```shell
-choco install titanium-cli
-```
-
-For **beta**, use `choco install titanium-cli --pre`, or download a self-contained zip from [Download](https://titaniumproxy.com/download) / [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) (stable is `v7.0.5`; use the newest beta tag when published). Extract and run:
+After the CLI is on your PATH (or in the current folder):
 
 ```shell
 titanium run -c twp.yaml
@@ -78,11 +44,11 @@ titanium version --check
 titanium update
 ```
 
-`titanium run` is foreground (stops when you Ctrl+C). To start at boot and keep running through OS restarts: `titanium service install -c twp.yaml`. Details: [CLI — service](https://titaniumproxy.com/docs/cli#service).
+`titanium run` is foreground (Ctrl+C to stop). Boot persistence: `titanium service install -c twp.yaml` — [CLI — service](https://titaniumproxy.com/docs/cli#service). Each CLI zip also includes a `twp` alias.
 
-Each CLI zip also includes a `twp` alias binary.
+**Optional Plus:** `titanium update --plus`, then `plus.enabled: true` — [Plus](https://titaniumproxy.com/docs/plus).
 
-**Optional Plus:** `titanium update --plus`, then set `plus.enabled: true` with a control-plane shared secret. Turn features off with `plus.enabled: false`; remove the DLL with `titanium update --remove-plus`. Details: [Plus](https://titaniumproxy.com/docs/plus).
+<img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
 
 ### Library (.NET)
 

@@ -19,7 +19,7 @@ Optional **Plus** adds a dashboard and ops features on top of the CLI. Everythin
 
 ## Reverse proxy in a minute (CLI)
 
-1. [Download](/download) the CLI for your OS and extract it (or use winget / Homebrew — see [Install](/docs/install)).
+1. [Download](/download) the CLI for your OS and extract it (or Homebrew on macOS — see [Install](/docs/install)).
 2. Create `twp.yaml` that forwards to your backend (example: local port 8080):
 
 ```yaml

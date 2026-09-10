@@ -8,38 +8,15 @@ Prefer the [Download](/download) page for buttons. This page is a short install 
 2. Install or extract, then launch **Titanium Inspector**.
 3. Follow [Inspector](/docs/inspector) to capture and decrypt traffic.
 
-**Optional Windows package managers** (use **one** you already have):
-
-```shell
-winget install justcoding121.TitaniumInspector
-# or
-choco install titanium-inspector
-```
-
-Beta: `choco install titanium-inspector --pre`, or the beta section on Download.
-
 ## CLI (reverse proxy)
 
-1. [Download](/download) the CLI for your OS (or use a package manager below).
+1. [Download](/download) the CLI for your OS.
 2. Extract if needed so `titanium` (and `twp`) are on your PATH or in the current folder.
 3. Create a config and run — see [Getting started](/docs/getting-started).
 
-**Windows** (use **one** manager if you already have it):
+**macOS optional:** if you use Homebrew, `brew tap justcoding121/titanium && brew install titanium`.
 
-```shell
-winget install justcoding121.TitaniumCli
-# or
-choco install titanium-cli
-```
-
-**macOS** (Homebrew tap, when published):
-
-```shell
-brew tap justcoding121/titanium
-brew install titanium
-```
-
-Stable builds are on [Download](/download). For beta: `choco install titanium-cli --pre`, the Download beta section, or [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases).
+Stable and beta builds are on [Download](/download) / [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases).
 
 **Start at boot:** `titanium service install -c <config>` (Administrator / sudo). Details: [CLI — service](/docs/cli#service).
 
