@@ -1,14 +1,18 @@
 # Performance
 
-Titanium targets low-overhead man-in-the-middle (MITM) and reverse proxying: connection pooling, HTTP/2 multiplexing, and buffer reuse.
+Titanium targets low-overhead reverse proxying and HTTPS interception: connection pooling, HTTP/2 multiplexing, and buffer reuse.
 
-## Summary (from publishable CI tables)
+## How we measure
 
-On matched **GitHub Actions 4 vCPU / 16 GiB** runners, compare **TWP÷YARP** (gated ≥ **0.70** reverse) and peer ratios vs **nginx**, **HAProxy**, and **Envoy** on the same loopback harness. MITM is Titanium-only among those peers (they cannot MITM). Absolute requests per second (RPS) varies by OS, TLS, and MsQuic packaging — compare **within a table**, not across Windows vs Linux.
+Charts below come from the same load harness on matched **GitHub Actions** runners (**4 vCPU / ~16 GiB** class) for Windows, Linux, and macOS. Each reverse-proxy arm runs as three processes (load generator, origin, and proxy). We compare **Titanium**, **YARP**, **nginx**, **HAProxy**, and **Envoy** under identical warmup, duration, and concurrency (sustain at concurrency **64**).
 
-## Practical reverse RPS (CI)
+That keeps the comparison fair: same client, same origin, same runner class, and the same protocol wire for every product in a group. Missing bars mean that peer cannot run that wire on that OS (for example HAProxy/Envoy on Windows, or nginx without an HTTP/2 or HTTP/3 upstream). Absolute requests per second (RPS) still move a bit with runner noise — read **within** a chart, not Windows vs Linux as one number.
 
-Sustain RPS @ concurrency 64 — **10 clusters** per OS: seven industry reverse wires (tiny keep-alive GET) plus POST 64 KiB / WebSocket / unary gRPC (RPC/s). Wires: H1 TLS→H1c · H1 TLS→H1 TLS · H2 TLS→H1c · H2 TLS→H1 TLS · H2 TLS→h2c · H2 TLS→H2 TLS · H3→H1c. Grouped bars: Titanium / YARP / nginx / HAProxy / Envoy. Missing bars mean *Not possible* / n/a for that wire or OS (e.g. Windows HAProxy/Envoy, nginx without H2/H3 upstream). Do not compare absolute RPS across clusters (shards). Regenerate with [`render-practical-charts.py`](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/render-practical-charts.py) after `compare-product` plus `--post-root` / `--arch-root` / `--grpc-root` (union sharded CSV roots when `arm_shard` was used).
+**RPS** is requests per second. gRPC bars are **RPC/s** (unary calls).
+
+## Practical reverse RPS
+
+Common industry reverse wires (tiny keep-alive GET) plus POST 64 KiB, WebSocket, and unary gRPC — one chart per OS.
 
 ### Windows
 
@@ -24,7 +28,7 @@ Sustain RPS @ concurrency 64 — **10 clusters** per OS: seven industry reverse 
 
 ## Heavier reverse workloads
 
-Real-world shapes from independent GHA dispatches (`compare-bodies`, `compare-post`, `compare-lossy`, `compare-tls-cost`, `compare-arch`). Linux charts below; Windows tables and charts on the [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#heavier-reverse-workloads).
+Larger bodies, POST, lossy links, TLS termination cost, and architecture-sensitive shapes (slow consumers, duplex, WebSocket). Linux charts below; Windows tables and charts are on the [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#heavier-reverse-workloads).
 
 ![Heavier bodies (Linux)](../../wiki/images/rps-heavier-bodies-linux.png)
 
@@ -36,22 +40,9 @@ Real-world shapes from independent GHA dispatches (`compare-bodies`, `compare-po
 
 ![Architecture-sensitive (Linux)](../../wiki/images/rps-heavier-arch-linux.png)
 
-Regenerate with [`render-heavier-charts.py`](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/render-heavier-charts.py).
-
 ## Full measurements
 
-Detailed tables, harness knobs, and methodology live in the project wiki:
+Detailed tables and methodology live in the project wiki:
 
 - [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance)
 - [Performance profiling](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance-Profiling)
-- Local cool A/B lab (not publishable): [Performance Local Lab](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance-Local-Lab)
-
-Harness: [`tools/RpsLoadProbe`](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe) and [PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/PERF-GATES.md).
-
-### Feature cost notes
-
-- **gRPC-JSON transcoding** (Plus): when unset, Core pays only a null check. When enabled, the process uses the session interception path and buffers matched unary bodies — do not enable it on default RPS edition arms. Details: [gRPC-JSON transcoding](/docs/grpc-json-transcoding).
-
-```powershell
-pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
-```

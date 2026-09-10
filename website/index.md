@@ -26,7 +26,7 @@ features:
   - title: HTTP/1 · HTTP/2 · HTTP/3
     details: HTTP/2 on by default. HTTP/3 (QUIC) opt-in. Bridges when the client and origin speak different protocol versions.
   - title: Measured performance
-    details: Same-harness RPS vs YARP (gated), nginx, HAProxy, and Envoy on matched CI runners. Linux chart below; Windows and macOS in the performance guide.
+    details: Same-harness RPS vs YARP, nginx, HAProxy, and Envoy on matched CI runners. Linux chart below; Windows and macOS in the performance guide.
 ---
 
 ## Editions
@@ -56,7 +56,7 @@ features:
 
 ## Performance
 
-Same-harness reverse RPS vs **YARP** (gated), **nginx**, **HAProxy**, and **Envoy** on matched GitHub Actions runners — industry wires plus POST / WebSocket / gRPC @ c=64. One Linux chart here; Windows, macOS, and heavier workloads live on the [performance](/docs/performance) page.
+Same-harness reverse RPS vs **YARP**, **nginx**, **HAProxy**, and **Envoy** on matched GitHub Actions runners — industry wires plus POST / WebSocket / gRPC. One Linux chart here; Windows, macOS, and heavier workloads live on the [performance](/docs/performance) page.
 
 <div class="rps-preview">
 
