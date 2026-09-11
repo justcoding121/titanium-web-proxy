@@ -977,7 +977,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        var (saved, kind, _) = await AwaitCancellableAsync(ExcludeHostDialog.ShowAsync(owner, _settings, selected.Host));
+        var (saved, _) = await AwaitCancellableAsync(ExcludeHostDialog.ShowAsync(owner, _settings, selected.Host));
         if (!saved)
         {
             StatusText = "Exclude host cancelled";
@@ -985,15 +985,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
 
         ApplyExclusionSettingsFromSettings();
-        if (kind == ExcludeHostKind.BypassProxy && SystemProxy)
-        {
-            _interception.ReapplySystemProxyIfEnabled();
-        }
-
         UpdateExclusionSummary();
-        StatusText = kind == ExcludeHostKind.BypassProxy
-            ? $"Added {selected.Host} to OS bypass exclusions (new connections)"
-            : $"Added {selected.Host} to tunnel-only exclusions (new connections)";
+        StatusText = $"Excluded {selected.Host} — still listed, HTTPS not read";
     }
 
     private async Task ResetSettingsAsync()
@@ -1461,13 +1454,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
             if (SystemProxy && !_interception.ReapplySystemProxyIfEnabled())
             {
-                StatusText = "Proxy localhost saved; re-toggle System proxy to apply";
+                StatusText = "Capture local traffic saved; re-toggle System proxy to apply";
                 return;
             }
 
             StatusText = value
-                ? "Proxy localhost on — loopback uses the system proxy"
-                : "Proxy localhost off — loopback skips the system proxy";
+                ? "Capture local traffic on — localhost uses the system proxy"
+                : "Capture local traffic off — localhost skips the system proxy";
         }
     }
 

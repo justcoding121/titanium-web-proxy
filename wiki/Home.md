@@ -158,7 +158,7 @@ socksEndPoint.BeforeSslAuthenticate += (sender, e) =>
 proxyServer.AddEndPoint(socksEndPoint);
 ```
 
-See also website docs **library** → *Decrypt failure bypass (learned tunnel)* (`ProxyServer.EnableDecryptFailureBypass`) and Inspector **Excluded hosts → Auto-tunnel on decrypt failure**.
+See also website docs **library** → *Decrypt failure bypass (learned tunnel)* (`ProxyServer.EnableDecryptFailureBypass`) and Inspector **Excluded hosts → Automatically not decrypt on decrypt failure**.
 
 ## Decrypting HTTPS
 
