@@ -126,16 +126,19 @@ INDUSTRY_WORKLOADS: List[Tuple[str, Dict[str, Optional[str]]]] = [
     (
         "gRPC unary",
         {
-            "Titanium": "twp-reverse-http2-grpc-unary",
-            "YARP": "yarp-reverse-http2-grpc-unary",
-            "nginx": "nginx-reverse-http2-grpc-unary",
-            "HAProxy": "haproxy-reverse-http2-grpc-unary",
-            "Envoy": "envoy-reverse-http2-grpc-unary",
+            "Titanium": "twp-grpc-http2",
+            "YARP": "yarp-grpc-http2",
+            "nginx": "nginx-grpc-http2",
+            "HAProxy": "haproxy-grpc-http2",
+            "Envoy": "envoy-grpc-http2",
         },
     ),
 ]
 
 # Heavier practical chart: 64 KB GET/POST on typical reverse wires (+ 256 KB H1).
+# X-axis: H1 64 KB GET/POST, H2 terminate (left of legend), short 256 KB H1 under the
+# legend, then H2 origin and H3. The 256 KB / H2 terminate swap keeps the tall cluster
+# from covering the product legend.
 # label, twp, yarp, nginx, haproxy, envoy (None = product-impossible).
 PRACTICAL_HEAVIER_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], Optional[str]]] = [
     (
@@ -147,6 +150,14 @@ PRACTICAL_HEAVIER_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], 
         "envoy-reverse-http1-tls-body64k",
     ),
     (
+        "POST 64 KB · H1 TLS→H1c",
+        "twp-reverse-http1-tls-post64k",
+        "yarp-reverse-http1-tls-post64k",
+        "nginx-reverse-http1-tls-post64k",
+        "haproxy-reverse-http1-tls-post64k",
+        "envoy-reverse-http1-tls-post64k",
+    ),
+    (
         "GET 64 KB · H2 TLS→H1c",
         "twp-reverse-http2-cleartext-body64k",
         "yarp-reverse-http2-body64k",
@@ -155,12 +166,12 @@ PRACTICAL_HEAVIER_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], 
         "envoy-reverse-http2-body64k",
     ),
     (
-        "GET 64 KB · H3→H1c",
-        "twp-reverse-http3-cleartext-body64k",
-        "yarp-reverse-http3-cleartext-body64k",
-        "nginx-reverse-http3-cleartext-body64k",
-        "haproxy-reverse-http3-cleartext-body64k",
-        "envoy-reverse-http3-cleartext-body64k",
+        "GET 256 KB · H1 TLS→H1c",
+        "twp-reverse-http1-tls-body256k",
+        "yarp-reverse-http1-tls-body256k",
+        "nginx-reverse-http1-tls-body256k",
+        "haproxy-reverse-http1-tls-body256k",
+        "envoy-reverse-http1-tls-body256k",
     ),
     (
         "GET 64 KB · H2 TLS→H2 TLS",
@@ -171,20 +182,12 @@ PRACTICAL_HEAVIER_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], 
         "envoy-reverse-http2-to-https-body64k",
     ),
     (
-        "POST 64 KB · H1 TLS→H1c",
-        "twp-reverse-http1-tls-post64k",
-        "yarp-reverse-http1-tls-post64k",
-        "nginx-reverse-http1-tls-post64k",
-        "haproxy-reverse-http1-tls-post64k",
-        "envoy-reverse-http1-tls-post64k",
-    ),
-    (
-        "GET 256 KB · H1 TLS→H1c",
-        "twp-reverse-http1-tls-body256k",
-        "yarp-reverse-http1-tls-body256k",
-        "nginx-reverse-http1-tls-body256k",
-        "haproxy-reverse-http1-tls-body256k",
-        "envoy-reverse-http1-tls-body256k",
+        "GET 64 KB · H3→H1c",
+        "twp-reverse-http3-cleartext-body64k",
+        "yarp-reverse-http3-cleartext-body64k",
+        "nginx-reverse-http3-cleartext-body64k",
+        "haproxy-reverse-http3-cleartext-body64k",
+        "envoy-reverse-http3-cleartext-body64k",
     ),
 ]
 
@@ -192,20 +195,34 @@ WIRE_COUNT = len(PRACTICAL_ARMS)
 HEAVIER_COUNT = len(PRACTICAL_HEAVIER_ARMS)
 
 OS_SPECS = (
-    ("linux", "Linux", ("ubuntu-latest",)),
-    ("windows", "Windows", ("windows-latest",)),
-    ("macos", "macOS", ("macos-15-intel", "macos-latest")),
+    ("linux", "Linux", ("ubuntu-latest",), "4-core / 16 GiB"),
+    ("windows", "Windows", ("windows-latest",), "4-core / 16 GiB"),
+    ("macos", "macOS", ("macos-15-intel", "macos-latest"), "4-core / 14 GB"),
 )
 
-TINY_FOOTER = (
-    "Wires: tiny keep-alive GET (~56 B) · Workloads: WebSocket / gRPC (RPC/s) · "
-    "GitHub Actions 4-core / 16 GiB (macOS 14 GiB)"
+TINY_FOOTER_PREFIX = (
+    "Wires: tiny keep-alive GET (~56 B) · Workloads: WebSocket / gRPC (RPC/s)"
 )
 
-HEAVIER_FOOTER = (
+HEAVIER_FOOTER_PREFIX = (
     "64 KB GET/POST on typical reverse wires (H1/H2/H3 terminate, H2 origin, "
-    "256 KB H1) · GitHub Actions 4-core / 16 GiB (macOS 14 GiB)"
+    "256 KB H1)"
 )
+
+
+def os_runner_spec(os_key: str) -> str:
+    for key, _title, _folder_keys, spec in OS_SPECS:
+        if key == os_key:
+            return spec
+    return "4-core / 16 GiB"
+
+
+def tiny_footer(os_key: str) -> str:
+    return f"{TINY_FOOTER_PREFIX} · GitHub Actions {os_runner_spec(os_key)}"
+
+
+def heavier_footer(os_key: str) -> str:
+    return f"{HEAVIER_FOOTER_PREFIX} · GitHub Actions {os_runner_spec(os_key)}"
 
 # Practical wire label → (client, origin) cells in wiki Performance.md reverse tables.
 WIKI_WIRE_CELLS: Dict[str, Tuple[str, str]] = {
@@ -222,11 +239,11 @@ WIKI_WIRE_CELLS: Dict[str, Tuple[str, str]] = {
 # Heavier chart wiki cells: (body_or_None_for_post, client, origin) → cluster index.
 WIKI_HEAVIER_CELLS: Dict[Tuple[Optional[str], str, str], int] = {
     ("64 KiB", "HTTP/1 · TLS", "HTTP/1 · plain"): 0,
-    ("64 KiB", "HTTP/2 · TLS", "HTTP/1 · plain"): 1,
-    ("64 KiB", "HTTP/3 · QUIC", "HTTP/1 · plain"): 2,
-    ("64 KiB", "HTTP/2 · TLS", "HTTP/2 · TLS"): 3,
-    (None, "HTTP/1 · TLS", "HTTP/1 · plain"): 4,  # POST table (no Body col)
-    ("256 KiB", "HTTP/1 · TLS", "HTTP/1 · plain"): 5,
+    (None, "HTTP/1 · TLS", "HTTP/1 · plain"): 1,  # POST table (no Body col)
+    ("64 KiB", "HTTP/2 · TLS", "HTTP/1 · plain"): 2,
+    ("256 KiB", "HTTP/1 · TLS", "HTTP/1 · plain"): 3,
+    ("64 KiB", "HTTP/2 · TLS", "HTTP/2 · TLS"): 4,
+    ("64 KiB", "HTTP/3 · QUIC", "HTTP/1 · plain"): 5,
 }
 
 HEADING_TO_OS = {
@@ -239,6 +256,11 @@ HEADING_TO_OS = {
 }
 
 CELL_RE = re.compile(r"\*{0,2}(\d[\d,]*)")
+
+
+def is_md_sep(line: str) -> bool:
+    s = line.strip()
+    return s.startswith("|") and bool(re.match(r"^\|[\s\-:|]+\|$", s))
 
 
 def parse_rps_cell(cell: str) -> Optional[float]:
@@ -254,16 +276,46 @@ def parse_rps_cell(cell: str) -> Optional[float]:
     return v
 
 
+def _product_row_from_header(header: Sequence[str], cols: Sequence[str]) -> Dict[str, Optional[float]]:
+    """Map peer RPS columns by header name (merged sustain/peak cells; HAProxy/Envoy may be omitted)."""
+    idx = {h: i for i, h in enumerate(header)}
+    mapping = {
+        "Titanium": ("TWP", "TWP sustain", "Titanium"),
+        "nginx": ("nginx", "nginx sustain"),
+        "HAProxy": ("HAProxy", "HAProxy sustain"),
+        "Envoy": ("Envoy", "Envoy sustain"),
+        "YARP": ("YARP", "YARP sustain"),
+    }
+    out: Dict[str, Optional[float]] = {}
+    for product, names in mapping.items():
+        i = None
+        for name in names:
+            if name in idx:
+                i = idx[name]
+                break
+        out[product] = parse_rps_cell(cols[i]) if i is not None and i < len(cols) else None
+    return out
+
+
 def _product_row_from_cols(cols: Sequence[str], *, offset: int = 0) -> Dict[str, Optional[float]]:
-    """Parse TWP/nginx/HAProxy/Envoy/YARP sustain columns (offset skips Scenario)."""
-    # cols: [Client, Origin, TWP, TWP peak, nginx, nginx peak, HAProxy, ..., YARP, YARP peak]
+    """Legacy fixed-offset parse when header is unavailable (merged peer columns)."""
     i = offset
+    # Merged: [labels..., TWP, nginx, HAProxy?, Envoy?, YARP]
+    # With HAProxy/Envoy: need i+6; without: i+4
+    if len(cols) >= i + 7:
+        return {
+            "Titanium": parse_rps_cell(cols[i + 2]),
+            "nginx": parse_rps_cell(cols[i + 3]),
+            "HAProxy": parse_rps_cell(cols[i + 4]),
+            "Envoy": parse_rps_cell(cols[i + 5]),
+            "YARP": parse_rps_cell(cols[i + 6]),
+        }
     return {
-        "Titanium": parse_rps_cell(cols[i + 2]),
-        "nginx": parse_rps_cell(cols[i + 4]),
-        "HAProxy": parse_rps_cell(cols[i + 6]),
-        "Envoy": parse_rps_cell(cols[i + 8]),
-        "YARP": parse_rps_cell(cols[i + 10]),
+        "Titanium": parse_rps_cell(cols[i + 2]) if len(cols) > i + 2 else None,
+        "nginx": parse_rps_cell(cols[i + 3]) if len(cols) > i + 3 else None,
+        "HAProxy": None,
+        "Envoy": None,
+        "YARP": parse_rps_cell(cols[i + 4]) if len(cols) > i + 4 else None,
     }
 
 
@@ -284,36 +336,45 @@ def parse_wiki_practical(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]
     current_os: Optional[str] = None
     in_reverse = False
     in_table = False
+    table_header: List[str] = []
     for line in md.splitlines():
         if line.startswith("## "):
             title = line[3:].strip()
             current_os = HEADING_TO_OS.get(title)
             in_reverse = False
             in_table = False
+            table_header = []
             continue
         if current_os is None:
             continue
         if line.startswith("### Reverse"):
             in_reverse = True
             in_table = False
+            table_header = []
             continue
         if line.startswith("### ") and not line.startswith("### Reverse"):
             in_reverse = False
             in_table = False
+            table_header = []
             continue
         if not in_reverse:
             continue
         if line.startswith("| Client | Origin |"):
             in_table = True
+            table_header = [c.strip() for c in line.strip().strip("|").split("|")]
             continue
-        if in_table and line.startswith("|---"):
+        if in_table and is_md_sep(line):
             continue
         if in_table and line.startswith("|"):
             cols = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cols) < 12:
+            if len(cols) < 4:
                 continue
             client, origin = cols[0], cols[1]
-            vals = _product_row_from_cols(cols)
+            vals = (
+                _product_row_from_header(table_header, cols)
+                if table_header
+                else _product_row_from_cols(cols)
+            )
             for label, cell in WIKI_WIRE_CELLS.items():
                 if (client, origin) != cell:
                     continue
@@ -322,73 +383,89 @@ def parse_wiki_practical(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]
                     out[current_os][product][idx] = vals[product]
         elif in_table and not line.startswith("|"):
             in_table = False
+            table_header = []
 
     # --- WebSocket from architecture-sensitive ---
     arch_os: Optional[str] = None
     in_arch_table = False
+    arch_header: List[str] = []
     for line in md.splitlines():
         if line.startswith("#### Windows"):
             arch_os = "windows"
             in_arch_table = False
+            arch_header = []
             continue
         if line.startswith("#### Linux"):
             arch_os = "linux"
             in_arch_table = False
+            arch_header = []
             continue
         if line.startswith("#### ") and arch_os is not None:
             arch_os = None
             in_arch_table = False
+            arch_header = []
             continue
         if arch_os is None:
             continue
         if line.startswith("| Scenario | Client | Origin |"):
             in_arch_table = True
+            arch_header = [c.strip() for c in line.strip().strip("|").split("|")]
             continue
-        if in_arch_table and line.startswith("|---"):
+        if in_arch_table and is_md_sep(line):
             continue
         if in_arch_table and line.startswith("|"):
             cols = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cols) < 13:
+            if len(cols) < 5:
                 continue
             if "WebSocket" in cols[0]:
-                vals = _product_row_from_cols(cols, offset=1)
+                vals = (
+                    _product_row_from_header(arch_header, cols)
+                    if arch_header
+                    else _product_row_from_cols(cols, offset=1)
+                )
                 for product in PRODUCTS:
                     out[arch_os][product][ws_idx] = vals[product]
         elif in_arch_table and not line.startswith("|"):
             in_arch_table = False
+            arch_header = []
 
-    # --- Unary gRPC ---
+    # --- Unary gRPC (H2 TLS only; ignore H2 TLS → h2c and later stubs) ---
     in_grpc = False
     in_grpc_table = False
+    grpc_header: List[str] = []
     grpc_os_map = {"Windows": "windows", "Linux": "linux", "macOS": "macos"}
     for line in md.splitlines():
-        if line.startswith("## Unary gRPC"):
+        if line.startswith("## Unary gRPC (H2 TLS)") and "h2c" not in line:
             in_grpc = True
             in_grpc_table = False
+            grpc_header = []
             continue
-        if in_grpc and line.startswith("## ") and not line.startswith("## Unary gRPC"):
+        if in_grpc and line.startswith("## "):
             break
         if not in_grpc:
             continue
         if line.startswith("| OS |"):
             in_grpc_table = True
+            grpc_header = [c.strip() for c in line.strip().strip("|").split("|")]
             continue
-        if in_grpc_table and line.startswith("|---"):
+        if in_grpc_table and is_md_sep(line):
             continue
         if in_grpc_table and line.startswith("|"):
             cols = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cols) < 6:
+            if len(cols) < 3:
                 continue
             key = grpc_os_map.get(cols[0])
             if not key:
                 continue
-            out[key]["Titanium"][grpc_idx] = parse_rps_cell(cols[1])
-            out[key]["YARP"][grpc_idx] = parse_rps_cell(cols[2])
-            out[key]["nginx"][grpc_idx] = parse_rps_cell(cols[3])
-            out[key]["HAProxy"][grpc_idx] = parse_rps_cell(cols[4])
-            out[key]["Envoy"][grpc_idx] = parse_rps_cell(cols[5])
+            by_name = {h: cols[i] if i < len(cols) else "" for i, h in enumerate(grpc_header)}
+            out[key]["Titanium"][grpc_idx] = parse_rps_cell(by_name.get("Titanium", cols[1] if len(cols) > 1 else ""))
+            out[key]["YARP"][grpc_idx] = parse_rps_cell(by_name.get("YARP", cols[2] if len(cols) > 2 else ""))
+            out[key]["nginx"][grpc_idx] = parse_rps_cell(by_name.get("nginx", ""))
+            out[key]["HAProxy"][grpc_idx] = parse_rps_cell(by_name.get("HAProxy", ""))
+            out[key]["Envoy"][grpc_idx] = parse_rps_cell(by_name.get("Envoy", ""))
         elif in_grpc_table and not line.startswith("|"):
             in_grpc_table = False
+            grpc_header = []
 
     return out
 
@@ -405,76 +482,96 @@ def parse_wiki_heavier(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]:
     # --- heavier reverse GET ---
     body_os: Optional[str] = None
     in_body_table = False
+    body_header: List[str] = []
     for line in md.splitlines():
         if line.startswith("### Windows — heavier reverse GET"):
             body_os = "windows"
             in_body_table = False
+            body_header = []
             continue
         if line.startswith("### Linux — heavier reverse GET"):
             body_os = "linux"
             in_body_table = False
+            body_header = []
             continue
         if line.startswith("### ") and body_os is not None and "heavier reverse GET" not in line:
             body_os = None
             in_body_table = False
+            body_header = []
             continue
         if body_os is None:
             continue
         if line.startswith("| Body | Client | Origin |") or line.startswith("| Size | Client | Origin |"):
             in_body_table = True
+            body_header = [c.strip() for c in line.strip().strip("|").split("|")]
             continue
-        if in_body_table and line.startswith("|---"):
+        if in_body_table and is_md_sep(line):
             continue
         if in_body_table and line.startswith("|"):
             cols = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cols) < 13:
+            if len(cols) < 5:
                 continue
             key = (cols[0], cols[1], cols[2])
             idx = WIKI_HEAVIER_CELLS.get(key)
             if idx is None:
                 continue
-            vals = _product_row_from_cols(cols, offset=1)
+            vals = (
+                _product_row_from_header(body_header, cols)
+                if body_header
+                else _product_row_from_cols(cols, offset=1)
+            )
             for product in PRODUCTS:
                 out[body_os][product][idx] = vals[product]
         elif in_body_table and not line.startswith("|"):
             in_body_table = False
+            body_header = []
 
     # --- POST 64 KiB (H1 TLS→H1c only for practical heavier chart) ---
     post_os: Optional[str] = None
     in_post_table = False
+    post_header: List[str] = []
     for line in md.splitlines():
         if line.startswith("### Windows — POST"):
             post_os = "windows"
             in_post_table = False
+            post_header = []
             continue
         if line.startswith("### Linux — POST"):
             post_os = "linux"
             in_post_table = False
+            post_header = []
             continue
         if line.startswith("### ") and post_os is not None and "POST" not in line:
             post_os = None
             in_post_table = False
+            post_header = []
             continue
         if post_os is None:
             continue
         if line.startswith("| Client | Origin |"):
             in_post_table = True
+            post_header = [c.strip() for c in line.strip().strip("|").split("|")]
             continue
-        if in_post_table and line.startswith("|---"):
+        if in_post_table and is_md_sep(line):
             continue
         if in_post_table and line.startswith("|"):
             cols = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cols) < 12:
+            if len(cols) < 4:
                 continue
             key = (None, cols[0], cols[1])
             idx = WIKI_HEAVIER_CELLS.get(key)
             if idx is None:
                 continue
-            vals = _product_row_from_cols(cols)
+            vals = (
+                _product_row_from_header(post_header, cols)
+                if post_header
+                else _product_row_from_cols(cols)
+            )
             for product in PRODUCTS:
                 out[post_os][product][idx] = vals[product]
         elif in_post_table and not line.startswith("|"):
             in_post_table = False
+            post_header = []
 
     return out
 
@@ -654,8 +751,8 @@ def arm_sustain_union(csv_paths: Sequence[Path], arm: Optional[str]) -> Optional
 
 
 def grpc_arm_union(csv_paths: Sequence[Path], prefix: str, fallback: Optional[str]) -> Optional[str]:
-    """Resolve a *-grpc-* arm; prefer <prefix>-reverse-http2-grpc-unary when present."""
-    preferred = fallback or f"{prefix}-reverse-http2-grpc-unary"
+    """Resolve a *-grpc-* arm; prefer <prefix>-grpc-http2 when present."""
+    preferred = fallback or f"{prefix}-grpc-http2"
     for path in csv_paths:
         arms = {r.get("arm") for r in csv.DictReader(path.open(newline="")) if r.get("arm")}
         if preferred in arms:
@@ -751,8 +848,8 @@ def render_chart(
     labels = list(labels) if labels is not None else [a[0] for a in PRACTICAL_ARMS]
     x = np.arange(len(labels), dtype=float)
 
-    fig_w = 16.0 if len(labels) >= 10 else 14.5
-    fig, ax = plt.subplots(figsize=(fig_w, 5.8), dpi=140)
+    # Same width for tiny and heavier so README / website scale the legend the same.
+    fig, ax = plt.subplots(figsize=(14.5, 5.8), dpi=140)
     ymax = plot_packed_product_bars(ax, series, x)
 
     if workload_start is not None and 0 < workload_start < len(labels):
@@ -792,7 +889,7 @@ def render_chart(
     fig.text(
         0.01,
         0.01,
-        footer or TINY_FOOTER,
+        footer or tiny_footer("linux"),
         fontsize=12,
         color="#444444",
     )
@@ -875,7 +972,7 @@ def main() -> int:
         by_os = parse_wiki_practical(md)
         by_os_heavier = parse_wiki_heavier(md)
         wanted = set(args.os) if args.os else {"linux", "windows", "macos"}
-        for key, title, _folder_keys in OS_SPECS:
+        for key, title, _folder_keys, _spec in OS_SPECS:
             if key not in wanted:
                 continue
             series = by_os[key]
@@ -886,7 +983,7 @@ def main() -> int:
                 out,
                 suffix,
                 labels=tiny_labels,
-                footer=TINY_FOOTER,
+                footer=tiny_footer(key),
                 workload_start=WIRE_COUNT,
             )
             written.append(out)
@@ -905,7 +1002,7 @@ def main() -> int:
                 out_h,
                 suffix,
                 labels=heavier_labels,
-                footer=HEAVIER_FOOTER,
+                footer=heavier_footer(key),
                 title_template=heavier_title,
             )
             written.append(out_h)
@@ -926,7 +1023,7 @@ def main() -> int:
     if args.csv_macos:
         csv_lists_by_os["macos"] = [args.csv_macos]
     if results_roots:
-        for key, _title, folder_keys in OS_SPECS:
+        for key, _title, folder_keys, _spec in OS_SPECS:
             if key in csv_lists_by_os:
                 continue
             found = find_csvs(results_roots, folder_keys)
@@ -946,7 +1043,7 @@ def main() -> int:
 
     wanted = set(args.os) if args.os else set(csv_lists_by_os)
 
-    for key, title, folder_keys in OS_SPECS:
+    for key, title, folder_keys, _spec in OS_SPECS:
         if key not in wanted or key not in csv_lists_by_os:
             continue
         paths = csv_lists_by_os[key]
@@ -964,7 +1061,7 @@ def main() -> int:
             out,
             suffix,
             labels=tiny_labels,
-            footer=TINY_FOOTER,
+            footer=tiny_footer(key),
             workload_start=WIRE_COUNT,
         )
         written.append(out)
@@ -985,7 +1082,7 @@ def main() -> int:
             out_h,
             suffix,
             labels=heavier_labels,
-            footer=HEAVIER_FOOTER,
+            footer=heavier_footer(key),
             title_template=heavier_title,
         )
         written.append(out_h)

@@ -29,11 +29,13 @@ public static class ExclusionsScenario
                     throw new InvalidOperationException("ExcludedHostsWindow not found");
 
                 var robot = new ProbeUiRobot(win);
-                robot.SetCheck("ExcludedProxyLoopback", true);
+                robot.SetCheck("ExcludedLearningEnabled", true);
+                if (!robot.TryFind<Avalonia.Controls.Control>("ExcludedLearnedList", out _))
+                    throw new InvalidOperationException("ExcludedLearnedList missing");
                 robot.Click("ExcludedHostsSave");
             }).ConfigureAwait(true);
 
-            log.Step("exclusions", true, "Proxy localhost toggled and saved");
+            log.Step("exclusions", true, "Learning toggle saved");
             return 0;
         }
         catch (Exception ex)

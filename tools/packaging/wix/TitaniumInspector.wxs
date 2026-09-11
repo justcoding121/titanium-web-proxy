@@ -27,16 +27,13 @@
                            RebootPrompt="no"
                            Timeout="10" />
 
-    <!-- Resolve install path at runtime (Property Value cannot nest [INSTALLFOLDER] at build time). -->
-    <SetProperty Id="WixShellExecTarget"
-                 Value="[INSTALLFOLDER]TitaniumInspector.exe"
-                 Sequence="ui"
-                 After="CostFinalize" />
-
+    <!-- Launch the installed apphost (type 18). WixShellExec can reopen this MSI when the
+         formatted path is empty or resolves to the source folder. -->
     <CustomAction Id="LaunchApplication"
-                  BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
-                  DllEntry="WixShellExec"
-                  Impersonate="yes" />
+                  FileRef="InspectorExe"
+                  ExeCommand=""
+                  Impersonate="yes"
+                  Return="asyncNoWait" />
 
     <Feature Id="Main" Title="Titanium Inspector" Level="1">
       <ComponentGroupRef Id="AppFiles" />
@@ -46,13 +43,13 @@
 
     <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
     <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
-
     <UI>
       <Publish Dialog="ExitDialog"
                Control="Finish"
                Event="DoAction"
                Value="LaunchApplication"
-               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT REMOVE" />
+               Order="2"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
     </UI>
 
     <StandardDirectory Id="ProgramFiles64Folder">
@@ -66,17 +63,23 @@
 
   <Fragment>
     <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
-      <Files Include="!(bindpath.PayloadDir)\**" />
+      <Files Include="!(bindpath.PayloadDir)\**">
+        <Exclude Files="!(bindpath.PayloadDir)\TitaniumInspector.exe" />
+      </Files>
+      <Component Id="InspectorExecutable">
+        <File Id="InspectorExe" Source="!(bindpath.PayloadDir)\TitaniumInspector.exe" KeyPath="yes" />
+      </Component>
     </ComponentGroup>
     <Component Id="StartMenuShortcut" Directory="INSTALLFOLDER" Guid="B1D4E82A-5C3E-4B9F-8A2D-7E6F9A1B3C4D">
       <Shortcut Id="AppShortcut"
                 Directory="AppMenuFolder"
                 Name="Titanium Inspector"
-                Target="[INSTALLFOLDER]TitaniumInspector.exe"
+                Target="[#InspectorExe]"
                 WorkingDirectory="INSTALLFOLDER"
                 Icon="AppIcon" />
       <RemoveFolder Id="RemoveAppMenuFolder" Directory="AppMenuFolder" On="uninstall" />
-      <RegistryValue Root="HKCU"
+      <!-- Per-machine package: HKLM keypath. HKCU keypaths can start a second UI session. -->
+      <RegistryValue Root="HKLM"
                      Key="Software\justcoding121\TitaniumInspector"
                      Name="installed"
                      Type="integer"
@@ -87,10 +90,10 @@
       <Shortcut Id="DesktopAppShortcut"
                 Directory="DesktopFolder"
                 Name="Titanium Inspector"
-                Target="[INSTALLFOLDER]TitaniumInspector.exe"
+                Target="[#InspectorExe]"
                 WorkingDirectory="INSTALLFOLDER"
                 Icon="AppIcon" />
-      <RegistryValue Root="HKCU"
+      <RegistryValue Root="HKLM"
                      Key="Software\justcoding121\TitaniumInspector"
                      Name="desktop"
                      Type="integer"

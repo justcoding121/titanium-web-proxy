@@ -94,15 +94,15 @@ public static class OsTrustUxCopy
         return "OS bypass needs Capture → System proxy. Tunnel-only rules apply to every client that hits Inspector. Factory defaults are seeded into the lists below — edit freely or reset.";
     }
 
-    public static string ExcludedHostsLoopbackHint()
+    public static string ProxyLocalhostTip()
     {
         if (OperatingSystem.IsMacOS())
-            return "When off, localhost is omitted from the macOS proxy bypass list so loopback can use the system proxy.";
+            return "When System proxy is on, send localhost through Inspector. Off adds localhost to the macOS proxy bypass list.";
         if (OperatingSystem.IsLinux())
-            return "When off, localhost is omitted from NO_PROXY so loopback can use the system proxy.";
+            return "When System proxy is on, send localhost through Inspector. Off adds localhost to NO_PROXY.";
         if (OperatingSystem.IsWindows())
-            return "When off, adds the Windows <-loopback> bypass rule so loopback skips the system proxy.";
-        return "Controls whether localhost traffic uses the system proxy.";
+            return "When System proxy is on, send localhost through Inspector (WinINET <-loopback>). Off lets loopback skip the proxy.";
+        return "When System proxy is on, send localhost through Inspector.";
     }
 
     public static string FormatStatus(CertificateOsTrustResult? result)

@@ -13,12 +13,14 @@ namespace Titanium.Web.Proxy.Http2;
 internal sealed class Http2NegotiationResult
 {
     internal Http2NegotiationResult(bool originSupportsHttp2, Task<TcpServerConnection?>? retainedConnectionTask,
-        bool requiresHttp11Bridge = false, bool requiresH2OriginBridge = false)
+        bool requiresHttp11Bridge = false, bool requiresH2OriginBridge = false,
+        bool learnableOriginTlsFailure = false)
     {
         OriginSupportsHttp2 = originSupportsHttp2;
         RetainedConnectionTask = retainedConnectionTask;
         RequiresHttp11Bridge = requiresHttp11Bridge;
         RequiresH2OriginBridge = requiresH2OriginBridge;
+        LearnableOriginTlsFailure = learnableOriginTlsFailure;
     }
 
     /// <summary>
@@ -26,6 +28,12 @@ internal sealed class Http2NegotiationResult
     ///     during this call - to support HTTP/2 for the effective route being negotiated.
     /// </summary>
     internal bool OriginSupportsHttp2 { get; }
+
+    /// <summary>
+    ///     True when a cold awaited H2 capability probe failed with a learnable origin TLS error
+    ///     (non-ALPN authentication failure). Callers may same-CONNECT opaque-fallback without MITM.
+    /// </summary>
+    internal bool LearnableOriginTlsFailure { get; }
 
     /// <summary>
     ///     A not-yet-consumed origin connection opened while negotiating, if any. Its application-protocol

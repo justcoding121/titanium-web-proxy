@@ -1,8 +1,8 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
   <metadata>
     <id>titanium-cli</id>
-    <version>7.0.6</version>
+    <version>7.0.7</version>
     <title>Titanium CLI</title>
     <authors>justcoding121</authors>
     <owners>justcoding121</owners>
@@ -18,7 +18,7 @@
     <tags>titanium proxy cli http https mitm</tags>
     <summary>Titanium Web Proxy command-line daemon (titanium / twp).</summary>
     <description>Titanium Web Proxy CLI. Self-contained win-x64 zip from GitHub Releases (titanium / twp).</description>
-    <releaseNotes>https://github.com/justcoding121/titanium-web-proxy/releases/tag/v7.0.6</releaseNotes>
+    <releaseNotes>https://github.com/justcoding121/titanium-web-proxy/releases/tag/v7.0.7</releaseNotes>
   </metadata>
   <files>
     <file src="tools\**" target="tools" />

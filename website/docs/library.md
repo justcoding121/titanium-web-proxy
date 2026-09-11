@@ -94,3 +94,32 @@ MitmExclusionDefaults.ApplyDecryptExclusions(endPoint, () => true,
 ```
 
 CLI: when `server.decryptSkipHosts` and/or `server.decryptOnlyHosts` are present in `twp.yaml`, exclusions apply with **Replace**. Omit both to leave Merge defaults. Optional `server.systemProxyBypassHosts` / `server.proxyLoopback` build OS-bypass settings the same way (present ⇒ Replace; omit ⇒ Merge). Removing identity hosts from OS bypass can break Microsoft SSO while System proxy is enabled.
+
+### Decrypt failure bypass (learned tunnel)
+
+Optional heuristic for hosts that reject the proxy’s TLS fingerprint under MITM (bot / WAF style). **Default off** on `ProxyServer` (library and RPS baselines unchanged). Titanium Inspector enables it by default.
+
+```csharp
+proxyServer.EnableDecryptFailureBypass = true;
+proxyServer.DecryptFailureBypassThreshold = 2;      // strikes before later CONNECTs skip decrypt
+proxyServer.DecryptFailureBypassTtl = TimeSpan.FromMinutes(30);
+proxyServer.DecryptFailureBypassMaxEntries = 256;   // approximate LRU
+
+// Snapshot / manage
+foreach (var e in proxyServer.GetDecryptFailureBypassEntries())
+    Console.WriteLine($"{e.Host} active={e.BypassActive}");
+proxyServer.RemoveDecryptFailureBypass("www.example.com");
+proxyServer.ClearDecryptFailureBypass();
+```
+
+Behavior:
+
+- Learns from **origin** TLS `AuthenticationException` failures (not ALPN-only “no h2”, not TCP/DNS).
+- Also learns from MITM HTTPS responses with status **403** or **429** (bot/WAF after TLS succeeds), excluding synthetic `Respond`/`Ok`/`GenericResponse`.
+  - **Document** navigations (`Sec-Fetch-Dest: document` or Accept prefers `text/html`): activate bypass **immediately** and answer with a one-shot **meta-refresh** (200) plus connection close so the browser opens a new CONNECT over an opaque tunnel—seamless recovery without a manual reload.
+  - **Non-document** (XHR/fetch): shared strike threshold (default **2**); no body rewrite.
+- Prefetch (MITM origin sockets) is not started for learned hosts. The current MITM CONNECT is never converted in place.
+- If a cold awaited HTTP/2 capability probe fails with a learnable error, the **same CONNECT** can fall back to opaque relay before browser MITM (ClientHello was only peeked); session prefetch is not started on that failure path.
+- Does **not** replace `MitmExclusionDefaults` pinning/SSO lists. Does not auto-learn browser-leg pinning aborts.
+- Not a `twp.yaml` key in v1 — set on `ProxyServer` (or use Inspector). Use `ShouldBypassDecryptForLearnedHost` for O(1) consults (avoid snapshotting the full list on hot paths).
+- Automation/CDP browsers may still see Akamai-style captchas **after** a successful tunnel (site bot score), which is outside MITM recovery.

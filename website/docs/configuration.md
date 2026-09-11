@@ -256,6 +256,7 @@ server:
     upStreamEndPointIPv6: null
   decryptSkipHosts: []      # present ⇒ Replace tunnel-only list (omit key to keep Merge factory defaults)
   decryptOnlyHosts: []      # when non-empty, only these hosts are decrypted (Replace with skip/only)
+  # Decrypt failure bypass (learned tunnel) is ProxyServer.EnableDecryptFailureBypass / Inspector only — not a twp.yaml key
   systemProxyBypassHosts: null  # present ⇒ Replace OS bypass (omit ⇒ Merge identity defaults); SSO risk if removed
   proxyLoopback: true       # localhost via proxy when building SystemProxySettings from config
   certificateManager:

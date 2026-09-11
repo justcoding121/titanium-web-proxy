@@ -86,7 +86,7 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
     /// Wait until <paramref name="condition"/> is true, pumping the Avalonia dispatcher each poll so
     /// async RelayCommand continuations (StatusText after file I/O) can run in headless.
     /// Condition is evaluated on the UI thread. Transient Headless <c>IFontManagerImpl</c> locator
-    /// races (seen on macOS CI during StatusText remeasure) are retried until timeout.
+    /// races (seen on macOS CI during StatusText re-measure) are retried until timeout.
     /// </summary>
     public async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout, int pollMs = 50)
     {
@@ -104,7 +104,7 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
             }
             catch (InvalidOperationException ex) when (IsTransientHeadlessFontRace(ex))
             {
-                // Keep polling; shared Headless session can briefly drop font services mid-remeasure.
+                // Keep polling; shared Headless session can briefly drop font services mid-re-measure.
             }
 
             await Task.Delay(pollMs);

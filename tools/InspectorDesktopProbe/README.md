@@ -40,7 +40,7 @@ dotnet run --project tools/InspectorDesktopProbe -- all
 | `cert` | Install/Remove CA menus; **Decrypt HTTPS auto-off** after remove |
 | `firefox` | Trust CA in Firefox + system-proxy capture |
 | `loopback` | Allow Store apps dialog (Win8+) |
-| `exclusions` | Excluded hosts + Proxy localhost |
+| `exclusions` | Excluded hosts dialog |
 | `pac` | PAC replace confirm cancel/accept when PAC is active |
 | `machine-trust` | Machine CA trust (`status` / `install` / `remove` / `run` / `curl-check` / `clean`); Core-only, no Avalonia. Aliases: `install-system`, `remove-system`. Flag: `run --no-system-proxy` |
 | `all` | **`chrome` first**, then applicable OS scenarios (**excludes** `machine-trust`) |

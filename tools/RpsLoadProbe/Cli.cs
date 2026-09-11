@@ -298,7 +298,7 @@ internal static class Cli
         or ProbeMode.CompareBodies
         or ProbeMode.ComparePost
         or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost or ProbeMode.CompareArch
-        or ProbeMode.CompareGrpc
+        or ProbeMode.CompareGrpc or ProbeMode.CompareWsH1Tls or ProbeMode.CompareWsH2
         or ProbeMode.CompareSaturation
         or ProbeMode.CompareEditions or ProbeMode.CompareCrossVersion
         or ProbeMode.ExplicitPoolSweep;
@@ -662,6 +662,12 @@ internal static class Cli
             case "compare-grpc":
                 mode = ProbeMode.CompareGrpc;
                 return true;
+            case "compare-ws-h1tls":
+                mode = ProbeMode.CompareWsH1Tls;
+                return true;
+            case "compare-ws-h2":
+                mode = ProbeMode.CompareWsH2;
+                return true;
             case "compare-saturation":
                 mode = ProbeMode.CompareSaturation;
                 return true;
@@ -861,8 +867,10 @@ internal static class Cli
               compare-post            POST 64 KiB request+response reverse vs control arms
               compare-lossy           64 KiB GET under userspace delay/loss vs control arms
               compare-tls-cost        H1 TLS terminate: keep-alive tiny / new-conn tiny / keep-alive 256 KiB
-              compare-arch            Slow consumer, early response, H2 duplex, WebSocket echo vs control arms
-              compare-grpc            Unary gRPC RPC/s on H2 TLS→H2 TLS (TWP / YARP / nginx grpc_pass / HAProxy / Envoy)
+              compare-arch            Slow consumer, early response, H2 duplex, WebSocket H1 Upgrade vs control arms
+              compare-grpc            Unary gRPC RPC/s: H2 TLS→H2 TLS + H2 TLS→h2c (TWP / YARP / nginx / HAProxy / Envoy)
+              compare-ws-h1tls        WebSocket echo on H1 TLS→H1 TLS (dual-TLS / proxy_ssl)
+              compare-ws-h2           WebSocket RFC 8441 extended CONNECT H2 TLS→H1 plain (TWP / YARP / HAProxy / Envoy)
               compare-saturation      Calibration: origin-direct (+ bombardier) + H1 plain peers;
                                       then H2 TLS→H1 and H3→H1 peers; CSV proxy_rss/cpu columns
                                       (proxy child + descendants; origin PID on origin-direct)

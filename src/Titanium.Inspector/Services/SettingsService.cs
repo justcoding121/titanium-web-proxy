@@ -132,6 +132,12 @@ public sealed class InspectorSettings
     public bool ProxyLoopback { get; set; } = true;
 
     /// <summary>
+    /// When true, Inspector auto-tunnels hosts whose origin TLS fails under decrypt (learned, session-only).
+    /// Default on.
+    /// </summary>
+    public bool EnableDecryptFailureBypass { get; set; } = true;
+
+    /// <summary>
     /// When true, <see cref="SystemProxyBypassHosts"/> and <see cref="DecryptSkipHosts"/> were seeded
     /// from factory defaults (or saved by the user). When false, load applies factory seed once.
     /// </summary>
@@ -194,7 +200,7 @@ public sealed class SettingsService
         return true;
     }
 
-    /// <summary>Restores factory OS-bypass and tunnel-only lists (and loopback).</summary>
+    /// <summary>Restores factory OS-bypass and tunnel-only lists.</summary>
     public void ResetExclusionsToFactoryDefaults()
     {
         ApplyFactoryExclusionDefaults(Current);
@@ -207,7 +213,6 @@ public sealed class SettingsService
     {
         settings.SystemProxyBypassHosts = MitmExclusionDefaults.SystemProxyBypassRules.ToList();
         settings.DecryptSkipHosts = MitmExclusionDefaults.TunnelOnlyPinningDomains.ToList();
-        settings.ProxyLoopback = true;
     }
 
     /// <summary>

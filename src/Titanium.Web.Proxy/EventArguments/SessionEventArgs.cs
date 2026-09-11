@@ -67,6 +67,7 @@ public class SessionEventArgs : SessionEventArgsBase
         Exception = null;
         IsClientResponseCommitted = false;
         IsFastPath = false;
+        CloseClientConnectionAfterResponse = false;
         IsPromise = false;
         Http3BufferedBodyReader = null;
         Http3RequestBodyPump = null;
@@ -101,6 +102,12 @@ public class SessionEventArgs : SessionEventArgsBase
     ///     injection because the interception gate/predicate selected the fast-forward path.
     /// </summary>
     internal bool IsFastPath { get; set; }
+
+    /// <summary>
+    ///     When true, tear down the client TCP after the response is committed (seamless decrypt-bypass
+    ///     meta-refresh must not keep an H2/MITM connection alive).
+    /// </summary>
+    internal bool CloseClientConnectionAfterResponse { get; set; }
 
     /// <summary>
     ///     Native HTTP/3 only: reads remaining client DATA frames into a bounded buffer (wire bytes).
@@ -375,6 +382,14 @@ public class SessionEventArgs : SessionEventArgsBase
         // If not already read (not cached yet)
         if (!response.IsBodyRead)
         {
+            // Synthetic Ok/Respond may already have Body bytes without going through the wire.
+            if (response.BodyAvailable)
+            {
+                response.IsBodyRead = true;
+                response.IsBodyReceived = true;
+                return;
+            }
+
             if (response.IsBodyReceived) throw new InvalidOperationException("Response body was already received.");
 
             if (response.HttpVersion == HttpHeader.Version20)
@@ -862,9 +877,14 @@ public class SessionEventArgs : SessionEventArgsBase
 
             response.SetOriginalHeaders(HttpClient.Response);
 
+            // Suppress origin DATA while synthetic emission is queued (H2 frame loop reads
+            // HttpClient.Response.Http2IgnoreBodyFrames on each DATA frame).
+            HttpClient.Response.Http2IgnoreBodyFrames = true;
+
             // response already received from server but not yet ready to sent to client.         
             HttpClient.Response = response;
             HttpClient.Response.Locked = true;
+            HttpClient.Response.Http2IgnoreBodyFrames = true;
         }
         // request not yet sent/not yet ready to be sent.
         else
@@ -875,6 +895,17 @@ public class SessionEventArgs : SessionEventArgsBase
             // set new response.
             HttpClient.Response = response;
             HttpClient.Response.Locked = true;
+        }
+
+        // Buffered synthetics already carry the body; mark read so H2 GetResponseBody does not
+        // wait on ReadHttp2BeforeHandlerTaskCompletionSource (null after replacement).
+        // Do not set IsBodyReceived when replacing an origin response — SyphonOutBodyAsync must
+        // still drain unread origin bytes so pooled H1 connections stay reusable.
+        if (HttpClient.Response.BodyAvailable)
+        {
+            HttpClient.Response.IsBodyRead = true;
+            if (HttpClient.Request.CancelRequest)
+                HttpClient.Response.IsBodyReceived = true;
         }
     }
 
@@ -933,6 +964,7 @@ public class SessionEventArgs : SessionEventArgsBase
     {
         if (response.HttpVersion == HttpHeader.VersionUnknown)
             response.HttpVersion = HttpClient.Request.HttpVersion;
+        response.IsSynthetic = true;
     }
 
     /// <summary>

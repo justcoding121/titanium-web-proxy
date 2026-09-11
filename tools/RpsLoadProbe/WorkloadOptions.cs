@@ -23,6 +23,10 @@ internal sealed class WorkloadOptions
     public int EarlyResponseAfterBytes { get; init; }
     public bool IsDuplexHttp { get; init; }
     public bool IsWebSocket { get; init; }
+    /// <summary>
+    /// RFC 8441 extended CONNECT WebSocket over HTTP/2 (compare-ws-h2). Implies <see cref="IsWebSocket"/>.
+    /// </summary>
+    public bool IsHttp2WebSocket { get; init; }
     /// <summary>Unary gRPC Echo over H2 TLS (compare-grpc arms).</summary>
     public bool IsGrpc { get; init; }
     /// <summary>Optional extra request headers (e.g. Authorization Bearer for JWT edition arm).</summary>
@@ -34,7 +38,7 @@ internal sealed class WorkloadOptions
     public bool IsSlowConsumer => ClientReadChunkBytes > 0 && ClientReadSleepMs > 0;
     public bool IsEarlyResponse => EarlyResponseAfterBytes > 0;
     public bool IsArchitectureSensitive =>
-        IsSlowConsumer || IsEarlyResponse || IsDuplexHttp || IsWebSocket;
+        IsSlowConsumer || IsEarlyResponse || IsDuplexHttp || IsWebSocket || IsHttp2WebSocket;
 
     public HttpMethod HttpMethod =>
         string.Equals(Method, "POST", StringComparison.OrdinalIgnoreCase)
@@ -120,6 +124,15 @@ internal sealed class WorkloadOptions
         IsWebSocket = true
     };
 
+    /// <summary>RFC 8441 extended CONNECT WebSocket over H2 TLS → H1 plain origin.</summary>
+    public static WorkloadOptions ForHttp2WebSocket() => new()
+    {
+        Method = "GET",
+        KeepAlive = true,
+        IsWebSocket = true,
+        IsHttp2WebSocket = true
+    };
+
     public static WorkloadOptions ForGrpc() => new()
     {
         Method = "GET",
@@ -145,6 +158,7 @@ internal sealed class WorkloadOptions
         int? earlyResponseAfterBytes = null,
         bool? isDuplexHttp = null,
         bool? isWebSocket = null,
+        bool? isHttp2WebSocket = null,
         bool? isGrpc = null,
         IReadOnlyDictionary<string, string>? extraHeaders = null,
         bool replaceExtraHeaders = false) => new()
@@ -161,6 +175,7 @@ internal sealed class WorkloadOptions
         EarlyResponseAfterBytes = earlyResponseAfterBytes ?? EarlyResponseAfterBytes,
         IsDuplexHttp = isDuplexHttp ?? IsDuplexHttp,
         IsWebSocket = isWebSocket ?? IsWebSocket,
+        IsHttp2WebSocket = isHttp2WebSocket ?? IsHttp2WebSocket,
         IsGrpc = isGrpc ?? IsGrpc,
         ExtraHeaders = replaceExtraHeaders ? extraHeaders : (extraHeaders ?? ExtraHeaders)
     };
@@ -228,7 +243,9 @@ internal sealed class WorkloadOptions
                 suffix += $"-early{EarlyResponseAfterBytes}";
             if (IsDuplexHttp)
                 suffix += "-duplex";
-            if (IsWebSocket)
+            if (IsHttp2WebSocket)
+                suffix += "-ws-h2";
+            else if (IsWebSocket)
                 suffix += "-ws";
             if (IsGrpc)
                 suffix += "-grpc";

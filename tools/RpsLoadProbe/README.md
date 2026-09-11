@@ -20,7 +20,9 @@ Manual CI: [RPS saturation](../../.github/workflows/rps-saturation.yml) (`workfl
 | Beta/stable publish | `compare-editions` + `compare-spot` (parallel GHA jobs) | ~60 min wall; peer gate catches Core÷YARP regressions editions miss |
 | Cross-version | `compare-cross-version` | 7.0 vs committed 6.0 baselines (Gate 2) |
 | Release / wiki | `compare-product` | median of 3; **3** comparison-group shards × OS (~2–2½h wall; hosted cap 360m) |
-| Unary gRPC | `compare-grpc` | H2 TLS Echo RPC/s @ c=64 (five products where OS allows) |
+| Unary gRPC | `compare-grpc` | H2 TLS Echo RPC/s @ c=64 — H2↔H2 + H2→h2c groups |
+| WebSocket dual-TLS | `compare-ws-h1tls` | H1 TLS→H1 TLS echo (`*-duplex-ws-h1tls`) |
+| WebSocket RFC 8441 | `compare-ws-h2` | H2 TLS extended CONNECT → H1 plain (`*-duplex-ws-h2`) |
 | Heavier tables | `compare-bodies` (**2** shards) / `post` / `lossy` / `arch` (**3** shards) / `tls-cost` | dispatch independently from the workflow |
 
 Harness defaults: warmup **2s** / measure **8s** / concurrency **8,16,32,64** / median of **3** for publishable GHA numbers (repeats **inside** a shard). `--arm-shard i/n` splits **wiki rows** (same-job TWP÷YARP and Lite÷Reverse); paste unions shard CSVs. Hosted job cap **360** minutes. `--stop-on-slo-fail` (default **on**) stops an arm after the first SLO fail plus one peak confirmation step. See [PERF-GATES.md](PERF-GATES.md).
@@ -188,6 +190,8 @@ On Windows both modes exit **0** with “skip OK” (peers not available). Linux
 ## Editions (`titanium run` daemon)
 
 Library arms (`twp-reverse-*`) embed Core with probe-tuned settings. Edition arms spawn the shipped CLI (`titanium run -c twp.yaml`) as an external process — same shape as nginx — for product-defaults comparison. Full matrix is ~60 min (expanded Plus/CLI stress arms).
+
+`validate-edition-gates.ps1` prefers SLO-passing c=64 medians; if an arm ran but missed p99 SLO at c=64 it still computes the ratio (annotated) so failures are **ratio misses**, not false “missing arm” errors. PR merge checks use `compare-spot`; full saturation / editions on develop is advisory — publish SHA still runs editions via `rps-publish-gate` (see [PERF-GATES.md](PERF-GATES.md)).
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-editions

@@ -554,6 +554,9 @@ internal sealed class NginxHost : IDisposable
                         location / {
                             grpc_pass grpcs://127.0.0.1:{{originHttpsPort}};
                             grpc_ssl_verify off;
+                            grpc_ssl_server_name on;
+                            grpc_ssl_name localhost;
+                            grpc_set_header Host localhost;
                             grpc_read_timeout 60s;
                             grpc_send_timeout 60s;
                         }

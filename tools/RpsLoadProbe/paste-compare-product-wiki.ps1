@@ -104,13 +104,22 @@ function Get-MedianMetrics([string]$OsFolder, [string]$Arm) {
     return $best
 }
 
-function Format-RpsCell($metrics, [switch]$Medal, [switch]$Peak) {
+function Format-RpsCell($metrics, [switch]$Medal) {
     if (-not $metrics) { return '*Not measured*' }
-    $r = [math]::Round($(if ($Peak) { $metrics.Peak } else { $metrics.Sustain }), 0)
-    $mb = [math]::Round($metrics.Rss / 1MB, 0)
+    $sustain = [int][math]::Round($metrics.Sustain, 0)
+    $peak = [int][math]::Round($metrics.Peak, 0)
+    $mb = [int][math]::Round($metrics.Rss / 1MB, 0)
     $cpu = [math]::Round($metrics.Cpu, 1)
     $prefix = if ($Medal) { "$goldMedal " } else { '' }
-    return ("{0}**{1}**<br><sub>({2} MiB / {3}% CPU)</sub>" -f $prefix, $r, $mb, $cpu)
+    $inv = [cultureinfo]::InvariantCulture
+    $sustainText = $sustain.ToString('N0', $inv)
+    if ($peak -gt $sustain) {
+        $peakText = $peak.ToString('N0', $inv)
+        $sub = "peak $peakText · $mb MiB / $cpu% CPU"
+    } else {
+        $sub = "$mb MiB / $cpu% CPU"
+    }
+    return ("{0}**{1}**<br><sub>({2})</sub>" -f $prefix, $sustainText, $sub)
 }
 
 function Format-Impossible([string]$Reason = 'Not possible') {
@@ -122,27 +131,27 @@ $wires = @(
     @{ C='HTTP/1 · plain'; O='HTTP/1 · TLS'; Rev='twp-reverse-http1-to-https'; Yarp='yarp-reverse-http1-to-https'; Nginx='nginx-reverse-http1-to-https'; Lite='twp-mitm-http1-to-https'; Full='twp-mitm-full-http1-to-https' },
     @{ C='HTTP/1 · plain'; O='HTTP/2 · plain'; Rev='twp-reverse-http1-plain-to-h2c'; Yarp='yarp-reverse-http1-plain-to-h2c'; Nginx=$null; Haproxy='haproxy-reverse-http1-plain-to-h2c'; Envoy='envoy-reverse-http1-plain-to-h2c'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-http1-plain-to-h2c'; Full='twp-mitm-full-http1-plain-to-h2c' },
     @{ C='HTTP/1 · plain'; O='HTTP/2 · TLS'; Rev='twp-reverse-http1-plain-to-http2'; Yarp='yarp-reverse-http1-plain-to-http2'; Nginx=$null; Haproxy='haproxy-reverse-http1-plain-to-http2'; Envoy='envoy-reverse-http1-plain-to-http2'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-http1-plain-to-http2'; Full='twp-mitm-full-http1-plain-to-http2' },
-    @{ C='HTTP/1 · plain'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http1-plain-to-http3'; Yarp='yarp-reverse-http1-plain-to-http3'; Nginx=$null; Haproxy='haproxy-reverse-http1-plain-to-http3'; Envoy='envoy-reverse-http1-plain-to-http3'; NginxImpossible='Not possible (no H3 upstream)'; Lite='twp-mitm-http1-plain-to-http3'; Full='twp-mitm-full-http1-plain-to-http3' },
+    @{ C='HTTP/1 · plain'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http1-plain-to-http3'; Yarp='yarp-reverse-http1-plain-to-http3'; Nginx=$null; Haproxy=$null; Envoy='envoy-reverse-http1-plain-to-http3'; NginxImpossible='Not possible (no H3 upstream)'; HaproxyImpossible='Not possible (no H3 upstream)'; Lite='twp-mitm-http1-plain-to-http3'; Full='twp-mitm-full-http1-plain-to-http3' },
     @{ C='HTTP/1 · TLS'; O='HTTP/1 · plain'; Rev='twp-reverse-http1-tls'; Yarp='yarp-reverse-http1-tls'; Nginx='nginx-reverse-http1-tls'; Lite='twp-mitm-http1-tls'; Full='twp-mitm-full-http1-tls' },
     @{ C='HTTP/1 · TLS'; O='HTTP/1 · TLS'; Rev='twp-reverse-http1-mitm'; Yarp='yarp-reverse-http1-tls-to-https'; Nginx='nginx-reverse-http1-tls-to-https'; Lite='twp-mitm-http1-tls-to-https'; Full='twp-mitm-full-http1-tls-to-https' },
     @{ C='HTTP/1 · TLS'; O='HTTP/2 · plain'; Rev='twp-reverse-http1-to-h2c'; Yarp='yarp-reverse-http1-to-h2c'; Nginx=$null; Haproxy='haproxy-reverse-http1-to-h2c'; Envoy='envoy-reverse-http1-to-h2c'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-http1-to-h2c'; Full='twp-mitm-full-http1-to-h2c' },
     @{ C='HTTP/1 · TLS'; O='HTTP/2 · TLS'; Rev='twp-reverse-http11-to-http2'; Yarp='yarp-reverse-http11-to-http2'; Nginx=$null; Haproxy='haproxy-reverse-http11-to-http2'; Envoy='envoy-reverse-http11-to-http2'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-http11-to-http2'; Full='twp-mitm-full-http11-to-http2' },
-    @{ C='HTTP/1 · TLS'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http1-to-http3'; Yarp='yarp-reverse-http1-to-http3'; Nginx=$null; Haproxy='haproxy-reverse-http1-to-http3'; Envoy='envoy-reverse-http1-to-http3'; NginxImpossible='Not possible (no H3 upstream)'; Lite='twp-mitm-http1-to-http3'; Full='twp-mitm-full-http1-to-http3' },
+    @{ C='HTTP/1 · TLS'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http1-to-http3'; Yarp='yarp-reverse-http1-to-http3'; Nginx=$null; Haproxy=$null; Envoy='envoy-reverse-http1-to-http3'; NginxImpossible='Not possible (no H3 upstream)'; HaproxyImpossible='Not possible (no H3 upstream)'; Lite='twp-mitm-http1-to-http3'; Full='twp-mitm-full-http1-to-http3' },
     @{ C='HTTP/2 · plain'; O='HTTP/1 · plain'; Rev='twp-reverse-h2c-to-h1'; Yarp='yarp-reverse-h2c-to-h1'; Nginx='nginx-reverse-h2c-to-h1'; Lite='twp-mitm-h2c-to-h1'; Full='twp-mitm-full-h2c-to-h1' },
     @{ C='HTTP/2 · plain'; O='HTTP/1 · TLS'; Rev='twp-reverse-h2c-to-https'; Yarp='yarp-reverse-h2c-to-https'; Nginx='nginx-reverse-h2c-to-https'; Lite='twp-mitm-h2c-to-https'; Full='twp-mitm-full-h2c-to-https' },
     @{ C='HTTP/2 · plain'; O='HTTP/2 · plain'; Rev='twp-reverse-h2c-to-h2c'; Yarp='yarp-reverse-h2c-to-h2c'; Nginx=$null; Haproxy='haproxy-reverse-h2c-to-h2c'; Envoy='envoy-reverse-h2c-to-h2c'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-h2c-to-h2c'; Full='twp-mitm-full-h2c-to-h2c' },
     @{ C='HTTP/2 · plain'; O='HTTP/2 · TLS'; Rev='twp-reverse-h2c'; Yarp='yarp-reverse-h2c'; Nginx=$null; Haproxy='haproxy-reverse-h2c'; Envoy='envoy-reverse-h2c'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-h2c'; Full='twp-mitm-full-h2c' },
-    @{ C='HTTP/2 · plain'; O='HTTP/3 · QUIC'; Rev='twp-reverse-h2c-to-h3'; Yarp='yarp-reverse-h2c-to-h3'; Nginx=$null; Haproxy='haproxy-reverse-h2c-to-h3'; Envoy='envoy-reverse-h2c-to-h3'; NginxImpossible='Not possible (no H3 upstream)'; Lite='twp-mitm-h2c-to-h3'; Full='twp-mitm-full-h2c-to-h3' },
+    @{ C='HTTP/2 · plain'; O='HTTP/3 · QUIC'; Rev='twp-reverse-h2c-to-h3'; Yarp='yarp-reverse-h2c-to-h3'; Nginx=$null; Haproxy=$null; Envoy='envoy-reverse-h2c-to-h3'; NginxImpossible='Not possible (no H3 upstream)'; HaproxyImpossible='Not possible (no H3 upstream)'; Lite='twp-mitm-h2c-to-h3'; Full='twp-mitm-full-h2c-to-h3' },
     @{ C='HTTP/2 · TLS'; O='HTTP/1 · plain'; Rev='twp-reverse-http2-cleartext'; Yarp='yarp-reverse-http2'; Nginx='nginx-reverse-http2'; Lite='twp-mitm-http2-cleartext'; Full='twp-mitm-full-http2-cleartext' },
     @{ C='HTTP/2 · TLS'; O='HTTP/1 · TLS'; Rev='twp-reverse-http2-to-https-http1'; Yarp='yarp-reverse-http2-to-https-http1'; Nginx='nginx-reverse-http2-to-https-http1'; Lite='twp-mitm-http2-to-http1'; Full='twp-mitm-full-http2-to-http1' },
     @{ C='HTTP/2 · TLS'; O='HTTP/2 · plain'; Rev='twp-reverse-http2-to-h2c'; Yarp='yarp-reverse-http2-to-h2c'; Nginx=$null; Haproxy='haproxy-reverse-http2-to-h2c'; Envoy='envoy-reverse-http2-to-h2c'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-http2-to-h2c'; Full='twp-mitm-full-http2-to-h2c' },
     @{ C='HTTP/2 · TLS'; O='HTTP/2 · TLS'; Rev='twp-reverse-http2'; Yarp='yarp-reverse-http2-to-https'; Nginx=$null; Haproxy='haproxy-reverse-http2-to-https'; Envoy='envoy-reverse-http2-to-https'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-http2'; Full='twp-mitm-full-http2' },
-    @{ C='HTTP/2 · TLS'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http2-to-http3'; Yarp='yarp-reverse-http2-to-http3'; Nginx=$null; Haproxy='haproxy-reverse-http2-to-http3'; Envoy='envoy-reverse-http2-to-http3'; NginxImpossible='Not possible (no H3 upstream)'; Lite='twp-mitm-http2-to-http3'; Full='twp-mitm-full-http2-to-http3' },
+    @{ C='HTTP/2 · TLS'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http2-to-http3'; Yarp='yarp-reverse-http2-to-http3'; Nginx=$null; Haproxy=$null; Envoy='envoy-reverse-http2-to-http3'; NginxImpossible='Not possible (no H3 upstream)'; HaproxyImpossible='Not possible (no H3 upstream)'; Lite='twp-mitm-http2-to-http3'; Full='twp-mitm-full-http2-to-http3' },
     @{ C='HTTP/3 · QUIC'; O='HTTP/1 · plain'; Rev='twp-reverse-http3-cleartext'; Yarp='yarp-reverse-http3-cleartext'; Nginx='nginx-reverse-http3-cleartext'; Lite='twp-mitm-http3-cleartext'; Full='twp-mitm-full-http3-cleartext' },
     @{ C='HTTP/3 · QUIC'; O='HTTP/1 · TLS'; Rev='twp-reverse-http3-to-https-http1'; Yarp='yarp-reverse-http3-to-https-http1'; Nginx='nginx-reverse-http3-to-https-http1'; Lite='twp-mitm-http3-to-http1'; Full='twp-mitm-full-http3-to-http1' },
     @{ C='HTTP/3 · QUIC'; O='HTTP/2 · plain'; Rev='twp-reverse-http3-to-h2c'; Yarp='yarp-reverse-http3-to-h2c'; Nginx=$null; Haproxy='haproxy-reverse-http3-to-h2c'; Envoy='envoy-reverse-http3-to-h2c'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-http3-to-h2c'; Full='twp-mitm-full-http3-to-h2c' },
     @{ C='HTTP/3 · QUIC'; O='HTTP/2 · TLS'; Rev='twp-reverse-http3-to-http2'; Yarp='yarp-reverse-http3-to-http2'; Nginx=$null; Haproxy='haproxy-reverse-http3-to-http2'; Envoy='envoy-reverse-http3-to-http2'; NginxImpossible='Not possible (no H2 upstream)'; Lite='twp-mitm-http3-to-http2'; Full='twp-mitm-full-http3-to-http2' },
-    @{ C='HTTP/3 · QUIC'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http3'; Yarp='yarp-reverse-http3-to-http3'; Nginx=$null; Haproxy='haproxy-reverse-http3-to-http3'; Envoy='envoy-reverse-http3-to-http3'; NginxImpossible='Not possible (no H3 upstream)'; Lite='twp-mitm-http3'; Full='twp-mitm-full-http3' }
+    @{ C='HTTP/3 · QUIC'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http3'; Yarp='yarp-reverse-http3-to-http3'; Nginx=$null; Haproxy=$null; Envoy='envoy-reverse-http3-to-http3'; NginxImpossible='Not possible (no H3 upstream)'; HaproxyImpossible='Not possible (no H3 upstream)'; Lite='twp-mitm-http3'; Full='twp-mitm-full-http3' }
 )
 
 foreach ($w in $wires) {
@@ -150,8 +159,11 @@ foreach ($w in $wires) {
     # Product-possible / harness-absent cells set Haproxy/Envoy explicitly (see
     # product-arm-matrix.py). Do not copy nginx=$null onto those two — that used
     # to label H3→H2 as *Not possible (no H3 to H2)* for HAProxy/Envoy.
+    # HAProxy 3.2 has no QUIC backend — H3-origin wires keep Haproxy=$null + HaproxyImpossible.
     if ($w.Nginx) {
-        if (-not $w.Haproxy) { $w.Haproxy = $w.Nginx -replace '^nginx-', 'haproxy-' }
+        if (-not $w.HaproxyImpossible -and -not $w.Haproxy) {
+            $w.Haproxy = $w.Nginx -replace '^nginx-', 'haproxy-'
+        }
         if (-not $w.Envoy) { $w.Envoy = $w.Nginx -replace '^nginx-', 'envoy-' }
     }
 }
@@ -159,6 +171,7 @@ foreach ($w in $wires) {
 function Get-PeerImpossibleReason([hashtable]$w, [string]$PeerKey, [string]$Arm) {
     if ($Arm) { return $null }
     if ($PeerKey -eq 'Nginx' -and $w.NginxImpossible) { return $w.NginxImpossible }
+    if ($PeerKey -eq 'Haproxy' -and $w.HaproxyImpossible) { return $w.HaproxyImpossible }
     if ($w.O -match 'QUIC') { return 'Not possible (no H3 upstream)' }
     if ($w.O -match 'HTTP/2') { return 'Not possible (no H2 upstream)' }
     return 'Not possible'
@@ -169,43 +182,60 @@ function Format-TerminatePeerCell(
     [hashtable]$w,
     [string]$PeerKey,
     $metrics,
-    [switch]$Medal,
-    [switch]$Peak
+    [switch]$Medal
 ) {
     if ($PeerKey -in @('Haproxy', 'Envoy') -and $OsFolder -eq 'windows-latest') {
         return Format-Impossible 'Not possible'
     }
+    # Windows nginx has no http_v3_module / QUIC — H3 inbound is OS-impossible.
+    if ($PeerKey -eq 'Nginx' -and $OsFolder -eq 'windows-latest' -and $w.Nginx -and ($w.Nginx -match 'http3')) {
+        return Format-Impossible 'Not possible (no QUIC)'
+    }
     $arm = $w[$PeerKey]
     if ($arm) {
-        return Format-RpsCell $metrics -Medal:$Medal -Peak:$Peak
+        return Format-RpsCell $metrics -Medal:$Medal
     }
     $reason = Get-PeerImpossibleReason $w $PeerKey $arm
     return Format-Impossible $reason
 }
 
 function Emit-ReverseTable([string]$OsFolder) {
-    Write-Output '| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | HAProxy sustain | HAProxy peak | Envoy sustain | Envoy peak | YARP sustain | YARP peak |'
-    Write-Output '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|'
+    $omitNative = ($OsFolder -eq 'windows-latest')
+    if ($omitNative) {
+        Write-Output '| Client | Origin | TWP | nginx | YARP |'
+        Write-Output '|---|---|---:|---:|---:|'
+    } else {
+        Write-Output '| Client | Origin | TWP | nginx | HAProxy | Envoy | YARP |'
+        Write-Output '|---|---|---:|---:|---:|---:|---:|'
+    }
     foreach ($w in $wires) {
         $twp = Get-MedianMetrics $OsFolder $w.Rev
         $yarp = Get-MedianMetrics $OsFolder $w.Yarp
         $nginx = if ($w.Nginx) { Get-MedianMetrics $OsFolder $w.Nginx } else { $null }
-        $haproxy = if ($w.Haproxy) { Get-MedianMetrics $OsFolder $w.Haproxy } else { $null }
-        $envoy = if ($w.Envoy) { Get-MedianMetrics $OsFolder $w.Envoy } else { $null }
+        $haproxy = if (-not $omitNative -and $w.Haproxy) { Get-MedianMetrics $OsFolder $w.Haproxy } else { $null }
+        $envoy = if (-not $omitNative -and $w.Envoy) { Get-MedianMetrics $OsFolder $w.Envoy } else { $null }
         $candidates = @(@{ M = $twp; K = 'twp' }, @{ M = $yarp; K = 'yarp' })
-        foreach ($pair in @(@{ M = $nginx; K = 'nginx' }, @{ M = $haproxy; K = 'haproxy' }, @{ M = $envoy; K = 'envoy' })) {
+        $peerPairs = @(@{ M = $nginx; K = 'nginx' })
+        if (-not $omitNative) {
+            $peerPairs += @(@{ M = $haproxy; K = 'haproxy' }, @{ M = $envoy; K = 'envoy' })
+        }
+        foreach ($pair in $peerPairs) {
             if ($pair.M -and $pair.M.Sustain -gt 0) { $candidates += $pair }
         }
         $best = ($candidates | Where-Object { $_.M } | Sort-Object { $_.M.Sustain } -Descending | Select-Object -First 1).K
-        Write-Output ("| {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} | {8} | {9} | {10} | {11} |" -f $w.C, $w.O,
-            (Format-RpsCell $twp -Medal:($best -eq 'twp')), (Format-RpsCell $twp -Medal:($best -eq 'twp') -Peak),
-            (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx')),
-            (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx') -Peak),
-            (Format-TerminatePeerCell $OsFolder $w 'Haproxy' $haproxy -Medal:($best -eq 'haproxy')),
-            (Format-TerminatePeerCell $OsFolder $w 'Haproxy' $haproxy -Medal:($best -eq 'haproxy') -Peak),
-            (Format-TerminatePeerCell $OsFolder $w 'Envoy' $envoy -Medal:($best -eq 'envoy')),
-            (Format-TerminatePeerCell $OsFolder $w 'Envoy' $envoy -Medal:($best -eq 'envoy') -Peak),
-            (Format-RpsCell $yarp -Medal:($best -eq 'yarp')), (Format-RpsCell $yarp -Medal:($best -eq 'yarp') -Peak))
+        if ($omitNative) {
+            Write-Output ("| {0} | {1} | {2} | {3} | {4} |" -f $w.C, $w.O,
+                (Format-RpsCell $twp -Medal:($best -eq 'twp')),
+                (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx')),
+                (Format-RpsCell $yarp -Medal:($best -eq 'yarp')))
+        } else {
+            Write-Output ("| {0} | {1} | {2} | {3} | {4} | {5} | {6} |" -f $w.C, $w.O,
+                (Format-RpsCell $twp -Medal:($best -eq 'twp')),
+                (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx')),
+                (Format-TerminatePeerCell $OsFolder $w 'Haproxy' $haproxy -Medal:($best -eq 'haproxy')),
+                (Format-TerminatePeerCell $OsFolder $w 'Envoy' $envoy -Medal:($best -eq 'envoy')),
+                (Format-RpsCell $yarp -Medal:($best -eq 'yarp')))
+        }
     }
 }
 

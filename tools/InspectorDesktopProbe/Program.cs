@@ -182,7 +182,7 @@ internal static class Program
               cert           Install/Remove CA via menus; assert Decrypt HTTPS auto-off after remove
               firefox        Trust CA in Firefox + system-proxy HTTPS capture
               loopback       Windows: Allow Store apps dialog
-              exclusions     Excluded hosts + Proxy localhost
+              exclusions     Excluded hosts dialog
               pac            PAC replace confirm cancel/accept (when PAC active)
               map-local      AutoResponder Map Local file body via harness proxy
               map-remote     Map Remote URL rewrite via harness proxy

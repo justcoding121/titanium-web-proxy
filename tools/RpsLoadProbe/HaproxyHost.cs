@@ -144,6 +144,9 @@ internal sealed class HaproxyHost : IDisposable
             return null;
         if ((inbound == PeerInboundProto.H3 || origin == PeerOriginProto.H3) && !SupportsQuic(exe))
             return null;
+        // HAProxy 3.2: QUIC is frontend-only — backend quic4@ is rejected at config check.
+        if (origin == PeerOriginProto.H3)
+            return null;
 
         var needsCerts = inbound is PeerInboundProto.H1Tls or PeerInboundProto.H2Tls or PeerInboundProto.H3;
         var listenScheme = inbound is PeerInboundProto.H1c or PeerInboundProto.H2c ? "http" : "https";
@@ -512,11 +515,20 @@ backend be
     private static readonly Regex QuicConfigureFlag =
         new(@"\bUSE_QUIC\b", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    /// <summary>True when <c>haproxy -vv</c> lists <c>USE_QUIC</c> as a configure flag.</summary>
+    private static readonly Regex QuicOpensslCompatFlag =
+        new(@"\bUSE_QUIC_OPENSSL_COMPAT\b", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// True when <c>haproxy -vv</c> lists a real QUIC stack (<c>USE_QUIC</c> without
+    /// <c>USE_QUIC_OPENSSL_COMPAT</c>). Compat builds reject <c>bind quic4@</c> unless
+    /// limited-quic is enabled; GHA installs QuicTLS instead.
+    /// </summary>
     internal static bool SupportsQuic(string exe)
     {
         var text = ReadHaproxyOutput(exe, "-vv");
-        return QuicConfigureFlag.IsMatch(text);
+        if (!QuicConfigureFlag.IsMatch(text))
+            return false;
+        return !QuicOpensslCompatFlag.IsMatch(text);
     }
 
     private static async Task<string> ExportLoopbackCombinedPemAsync(string dir)

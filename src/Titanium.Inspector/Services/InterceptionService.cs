@@ -59,6 +59,12 @@ public sealed class InterceptionService : IDisposable
     /// </summary>
     public bool DecryptHttps { get; set; }
 
+    /// <summary>
+    /// When true, origin TLS handshake failures under MITM train an in-memory host bypass.
+    /// Default on for Inspector; wired to <see cref="ProxyServer.EnableDecryptFailureBypass"/>.
+    /// </summary>
+    public bool EnableDecryptFailureBypass { get; set; } = true;
+
     /// <summary>Extra host patterns that skip HTTPS decryption (in addition to built-in bypasses).</summary>
     public List<string> DecryptSkipHosts { get; set; } = [];
 
@@ -154,6 +160,34 @@ public sealed class InterceptionService : IDisposable
 
     public event EventHandler<SessionSnapshot>? SessionCaptured;
     public event EventHandler<SessionSnapshot>? SessionUpdated;
+    public event EventHandler<DecryptFailureBypassEntry>? DecryptFailureBypassLearned;
+
+    /// <summary>Applies the learning toggle to a running proxy (no-op when not started).</summary>
+    public void ApplyDecryptFailureBypassSetting()
+    {
+        if (_proxy is null)
+            return;
+        _proxy.EnableDecryptFailureBypass = EnableDecryptFailureBypass;
+    }
+
+    public IReadOnlyList<DecryptFailureBypassEntry> GetDecryptFailureBypassEntries() =>
+        _proxy?.GetDecryptFailureBypassEntries() ?? Array.Empty<DecryptFailureBypassEntry>();
+
+    public bool RemoveDecryptFailureBypass(string host) =>
+        _proxy?.RemoveDecryptFailureBypass(host) ?? false;
+
+    public void ClearDecryptFailureBypass() => _proxy?.ClearDecryptFailureBypass();
+
+    private bool IsLearnedDecryptBypass(string? host)
+    {
+        if (!EnableDecryptFailureBypass || _proxy is null || string.IsNullOrWhiteSpace(host))
+            return false;
+        // O(1) cache consult — do not Snapshot the full list on every CONNECT.
+        return _proxy.ShouldBypassDecryptForLearnedHost(host);
+    }
+
+    private void OnDecryptFailureBypassChanged(object? sender, DecryptFailureBypassEntry e) =>
+        DecryptFailureBypassLearned?.Invoke(this, e);
 
     public async Task StartAsync(IPAddress address, int port, CancellationToken cancellationToken = default)
     {
@@ -171,6 +205,8 @@ public sealed class InterceptionService : IDisposable
         ApplyLoggingOptions(_loggingSettings);
         _proxy.EnableHttpInterception = true;
         _proxy.EnableRequestTimingCapture = true;
+        _proxy.EnableDecryptFailureBypass = EnableDecryptFailureBypass;
+        _proxy.DecryptFailureBypassChanged += OnDecryptFailureBypassChanged;
         ApplyViaHeaderOption();
         // Inspector eagerly buffers bodies for the session grid; 4 MiB trips too often on
         // normal browsing (images, JS bundles) and RST'd the H2 stream. 32 MiB still bounds
@@ -390,6 +426,7 @@ public sealed class InterceptionService : IDisposable
         _proxy.OnRequestBodyWrite -= OnRequestBodyWriteThrottle;
         _proxy.OnResponseBodyWrite -= OnResponseBodyWriteThrottle;
         _proxy.ServerCertificateValidationCallback -= OnServerCertValidation;
+        _proxy.DecryptFailureBypassChanged -= OnDecryptFailureBypassChanged;
         if (_endPoint is not null)
         {
             _endPoint.BeforeTunnelConnectRequest -= OnBeforeTunnelConnect;
@@ -954,10 +991,13 @@ public sealed class InterceptionService : IDisposable
             host,
             DecryptSkipHosts,
             userOnlyHosts: null);
-        e.DecryptSsl = DecryptHttps && !disableDecrypt;
-        var opaqueReason = disableDecrypt || !DecryptHttps
-            ? MitmBypass.ResolveOpaqueReason(host, DecryptHttps, DecryptSkipHosts, userOnlyHosts: null)
-            : OpaqueTunnelReason.None;
+        var learnedBypass = !disableDecrypt && DecryptHttps && IsLearnedDecryptBypass(host);
+        e.DecryptSsl = DecryptHttps && !disableDecrypt && !learnedBypass;
+        var opaqueReason = learnedBypass
+            ? OpaqueTunnelReason.LearnedFailure
+            : disableDecrypt || !DecryptHttps
+                ? MitmBypass.ResolveOpaqueReason(host, DecryptHttps, DecryptSkipHosts, userOnlyHosts: null)
+                : OpaqueTunnelReason.None;
 
         if (!Capturing)
         {

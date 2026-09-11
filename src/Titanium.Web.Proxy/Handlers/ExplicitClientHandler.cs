@@ -93,6 +93,13 @@ public partial class ProxyServer
 
                 // filter out excluded host names
                 var decryptSsl = endPoint.DecryptSsl && connectArgs.DecryptSsl;
+                var (bypassCheckHost, _) = ParseHostAndPort(requestLine.RequestUri.GetString(), 443);
+                if (decryptSsl && ShouldBypassDecryptForLearnedHost(bypassCheckHost))
+                {
+                    decryptSsl = false;
+                    connectArgs.DecryptSsl = false;
+                }
+
                 var sendRawData = !decryptSsl;
 
                 if (connectArgs.DenyConnect)
@@ -256,6 +263,25 @@ public partial class ProxyServer
                         http2Supported = (negotiation.OriginSupportsHttp2 && !requiresH2OriginBridge)
                                          || requiresHttp11Bridge;
                         prefetchConnectionTask = negotiation.RetainedConnectionTask;
+
+                        // Same-CONNECT opaque fallback: awaited cold probe failed with learnable origin TLS
+                        // (e.g. fingerprint). Client is still waiting for ServerHello — do not MITM.
+                        if (EnableDecryptFailureBypass && negotiation.LearnableOriginTlsFailure)
+                        {
+                            TryRecordDecryptFailure(connectHost, error: null, forceBypass: true);
+                            // Prefetch is not started on learnable probe failure; drain any race without
+                            // blocking ClientHello relay on a doomed MITM handshake.
+                            var doomedPrefetch = prefetchConnectionTask;
+                            prefetchConnectionTask = null;
+                            if (doomedPrefetch != null)
+                                _ = TcpConnectionFactory.Release(doomedPrefetch, true);
+                            sendRawData = true;
+                            connectArgs.DecryptSsl = false;
+                            // Learned-at-start opaque path never sets IsHttps; clear so GetServerConnection
+                            // opens raw TCP and splices the peeked ClientHello (not a third origin TLS).
+                            if (connectArgs.HttpClient.ConnectRequest != null)
+                                connectArgs.HttpClient.ConnectRequest.IsHttps = false;
+                        }
                     }
 
                     // Skip the generic single-connection prefetch entirely when the session will be routed
@@ -265,7 +291,7 @@ public partial class ProxyServer
                     // worse, using http2Supported (true in the bridge case, so the client can be offered
                     // "h2") to pick the prefetch's ALPN offer would incorrectly probe the origin - which this
                     // policy pins to HTTP/1.1 - with "h2" too.
-                    if (prefetchConnectionTask == null && EnableTcpServerConnectionPrefetch
+                    if (!sendRawData && prefetchConnectionTask == null && EnableTcpServerConnectionPrefetch
                         && !requiresHttp11Bridge && !requiresH3Bridge)
                         // don't pass cancellation token here
                         // it could cause floating server connections when client exits.
@@ -280,6 +306,8 @@ public partial class ProxyServer
                     // connectHostname and certGenerationTask were prepared above before the
                     // DNS/H2 probes so cert generation could run in parallel with those probes.
 
+                    if (!sendRawData)
+                    {
                     X509Certificate2? certificate = null;
                     SslStream? sslStream = null;
                     try
@@ -296,12 +324,11 @@ public partial class ProxyServer
                         // Offer h2 whenever capability negotiation / H3 bridging decided the client
                         // should see it — including EnableHttp2=false + H3 bridge, which still speaks
                         // h2 on the browser leg.
-                        if (http2Supported)
-                        {
-                            options.ApplicationProtocols = clientHelloInfo.GetAlpn();
-                            if (options.ApplicationProtocols == null || options.ApplicationProtocols.Count == 0)
-                                options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
-                        }
+                        // Offer a fixed safe ALPN set rather than mirroring a possibly truncated
+                        // ClientHello peek (large PQ hellos). Always include http/1.1 when offering h2.
+                        options.ApplicationProtocols = http2Supported
+                            ? SslExtensions.Http2AndHttp11ProtocolAsList
+                            : SslExtensions.Http11ProtocolAsList;
 
                         options.ServerCertificateContext = CertificateManager.CreateSslCertificateContext(certificate);
                         options.ClientCertificateRequired = false;
@@ -358,6 +385,7 @@ public partial class ProxyServer
                         await TcpConnectionFactory.Release(prefetchConnectionTask, true);
                         prefetchConnectionTask = null;
                     }
+                    } // !sendRawData (MITM)
                 }
                 else if (clientHelloInfo == null)
                 {

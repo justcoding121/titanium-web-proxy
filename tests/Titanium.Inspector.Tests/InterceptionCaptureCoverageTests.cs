@@ -437,7 +437,6 @@ public class InterceptionCaptureCoverageTests
         };
         StringAssert.Contains(ExclusionPreview.ExclusionSummary(settings), "Exclusions");
         Assert.AreEqual("", ExclusionPreview.ExclusionSummary(new InspectorSettings()));
-        _ = ExclusionPreview.FormatForCurrentOs(settings);
         _ = ExclusionPreview.DescribeOpaqueReason(OpaqueTunnelReason.DecryptOff);
         _ = ExclusionPreview.DescribeOpaqueReason(OpaqueTunnelReason.BuiltInIdentity);
         _ = ExclusionPreview.DescribeOpaqueReason(OpaqueTunnelReason.BuiltInPinning);

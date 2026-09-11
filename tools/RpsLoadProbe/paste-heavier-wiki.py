@@ -14,13 +14,13 @@ ROOT = Path("tools/RpsLoadProbe/results/gha-dl")
 WIKI = Path("wiki/Performance.md")
 HEAD = "9a2b3a1e"
 RUNS = {
-    # Win+Linux (and shards) from the 2026-09-10 wiki-grade GHA batch.
+    # Linux H3 HAProxy/Envoy peers remasured @ a495a9ae (2026-09-11); Windows still 9a2b3a1e wiki-grade batch.
     "saturation": [34441539402, 34441541578],
-    "bodies": [34441570199, 34441572485, 34441574457, 34441576323],
-    "post": [34441591377, 34441593359],
-    "lossy": [34441595456, 34441597540],
+    "bodies": [34557778171, 34557780393, 34441570199, 34441572485, 34441574457, 34441576323],
+    "post": [34557782264, 34441591377, 34441593359],
+    "lossy": [34557784262, 34441595456, 34441597540],
     "tls": [34441599658, 34441602032],
-    "arch": [34441578556, 34441580725, 34441583238, 34441585221, 34441587413, 34441589415],
+    "arch": [34557786074, 34557788179, 34557790004, 34441578556, 34441580725, 34441583238, 34441585221, 34441587413, 34441589415],
 }
 MEDAL = "\U0001F947"
 STEPS = 4
@@ -122,16 +122,21 @@ def parse_run_ids(text: str) -> RunIds:
     return ids[0] if len(ids) == 1 else ids
 
 
-def fmt_cell(m: Optional[dict], medal: bool = False, peak: bool = False, impossible: Optional[str] = None) -> str:
+def fmt_cell(m: Optional[dict], medal: bool = False, impossible: Optional[str] = None) -> str:
     if impossible:
         return f"*{impossible}*"
     if not m:
         return "*Not measured*"
-    r = round(m["Peak"] if peak else m["Sustain"])
+    sustain = round(m["Sustain"])
+    peak = round(m["Peak"])
     mb = round(m["Rss"] / (1024 * 1024))
     cpu = round(m["Cpu"], 1)
     prefix = f"{MEDAL} " if medal else ""
-    return f"{prefix}**{r:,}**<br><sub>({mb} MiB / {cpu}% CPU)</sub>"
+    if peak > sustain:
+        sub = f"peak {peak:,} · {mb} MiB / {cpu}% CPU"
+    else:
+        sub = f"{mb} MiB / {cpu}% CPU"
+    return f"{prefix}**{sustain:,}**<br><sub>({sub})</sub>"
 
 
 def pick_medal(cands: List[Tuple[str, Optional[dict]]]) -> Optional[str]:
@@ -141,11 +146,19 @@ def pick_medal(cands: List[Tuple[str, Optional[dict]]]) -> Optional[str]:
     return min(valid, key=lambda km: (-km[1]["Sustain"], km[1]["Rss"], km[1]["Cpu"]))[0]
 
 
-PEER_COLS = (
-    "TWP sustain | TWP peak | nginx sustain | nginx peak | "
-    "HAProxy sustain | HAProxy peak | Envoy sustain | Envoy peak | YARP sustain | YARP peak"
+WIN_NO_HAPROXY_ENVOY_NOTE = (
+    "*Not possible:* **HAProxy** and **Envoy** columns are omitted (no official Windows port).\n"
 )
-PEER_RULE = "---:|---:|---:|---:|---:|---:|---:|---:|---:|---:"
+
+
+def peer_cols(include_haproxy_envoy: bool) -> str:
+    mid = "HAProxy | Envoy | " if include_haproxy_envoy else ""
+    return f"TWP | nginx | {mid}YARP"
+
+
+def peer_rule(include_haproxy_envoy: bool) -> str:
+    n = 5 if include_haproxy_envoy else 3
+    return "|".join(["---:"] * n)
 
 
 def _peer_impossible(arm: Optional[str], nginx_a: Optional[str], win_no_quic: bool) -> Optional[str]:
@@ -177,28 +190,30 @@ def peer_row(
     envoy = data.get(envoy_a) if envoy_a else None
     yarp = data.get(yarp_a) if yarp_a else None
     nginx_imp = _peer_impossible(nginx_a, nginx_a, win_no_quic)
-    haproxy_imp = "Not possible" if win_no_haproxy_envoy else _peer_impossible(haproxy_a, nginx_a, win_no_quic)
-    envoy_imp = "Not possible" if win_no_haproxy_envoy else _peer_impossible(envoy_a, nginx_a, win_no_quic)
+    haproxy_imp = _peer_impossible(haproxy_a, nginx_a, win_no_quic)
+    envoy_imp = _peer_impossible(envoy_a, nginx_a, win_no_quic)
     if win_no_quic and nginx_a and "http3" in nginx_a:
         nginx = None
         nginx_imp = "Not possible (no QUIC)"
     if win_no_haproxy_envoy:
+        # Omit HAProxy/Envoy columns entirely on Windows (no official ports).
         haproxy = None
         envoy = None
-    medal = pick_medal(
-        [("twp", twp), ("nginx", nginx), ("haproxy", haproxy), ("envoy", envoy), ("yarp", yarp)]
-    )
+        medal_peers = [("twp", twp), ("nginx", nginx), ("yarp", yarp)]
+    else:
+        medal_peers = [("twp", twp), ("nginx", nginx), ("haproxy", haproxy), ("envoy", envoy), ("yarp", yarp)]
+    medal = pick_medal(medal_peers)
     cells = prefix + [
         fmt_cell(twp, medal=(medal == "twp")),
-        fmt_cell(twp, peak=True),
         fmt_cell(nginx, medal=(medal == "nginx"), impossible=nginx_imp),
-        fmt_cell(nginx, peak=True, impossible=nginx_imp),
-        fmt_cell(haproxy, medal=(medal == "haproxy"), impossible=haproxy_imp),
-        fmt_cell(haproxy, peak=True, impossible=haproxy_imp),
-        fmt_cell(envoy, medal=(medal == "envoy"), impossible=envoy_imp),
-        fmt_cell(envoy, peak=True, impossible=envoy_imp),
+    ]
+    if not win_no_haproxy_envoy:
+        cells += [
+            fmt_cell(haproxy, medal=(medal == "haproxy"), impossible=haproxy_imp),
+            fmt_cell(envoy, medal=(medal == "envoy"), impossible=envoy_imp),
+        ]
+    cells += [
         fmt_cell(yarp, medal=(medal == "yarp")),
-        fmt_cell(yarp, peak=True),
     ]
     return "| " + " | ".join(cells) + " |"
 
@@ -264,9 +279,10 @@ def main() -> None:
     ]
 
     def bodies_table(data: dict, is_win: bool) -> str:
+        include_he = not is_win
         rows = [
-            f"| Body | Client | Origin | {PEER_COLS} |",
-            f"|---|---|---|{PEER_RULE}|",
+            f"| Body | Client | Origin | {peer_cols(include_he)} |",
+            f"|---|---|---|{peer_rule(include_he)}|",
         ]
         for body, c, o, t, n, y in body_spec:
             extra = {}
@@ -290,9 +306,10 @@ def main() -> None:
     ]
 
     def post_table(data: dict, is_win: bool) -> str:
+        include_he = not is_win
         rows = [
-            f"| Client | Origin | {PEER_COLS} |",
-            f"|---|---|{PEER_RULE}|",
+            f"| Client | Origin | {peer_cols(include_he)} |",
+            f"|---|---|{peer_rule(include_he)}|",
         ]
         for c, o, t, n, y in post_spec:
             extra = {}
@@ -316,9 +333,10 @@ def main() -> None:
     ]
 
     def lossy_table(data: dict, is_win: bool) -> str:
+        include_he = not is_win
         rows = [
-            f"| Client | Origin | {PEER_COLS} |",
-            f"|---|---|{PEER_RULE}|",
+            f"| Client | Origin | {peer_cols(include_he)} |",
+            f"|---|---|{peer_rule(include_he)}|",
         ]
         for c, o, t, n, y in lossy_spec:
             extra = {}
@@ -341,13 +359,14 @@ def main() -> None:
         ("Slow consumer (256 KiB GET, throttled client read)", "HTTP/2 · TLS", "HTTP/2 · TLS", "twp-reverse-http2-to-https-slow256k", None, "yarp-reverse-http2-to-https-slow256k"),
         ("Early response (origin writes after first request chunk)", "HTTP/2 · TLS", "HTTP/2 · TLS", "twp-reverse-http2-to-https-early64k", None, "yarp-reverse-http2-to-https-early64k"),
         ("Duplex (both directions live)", "HTTP/2 · TLS", "HTTP/2 · TLS", "twp-reverse-http2-duplex-h2", None, "yarp-reverse-http2-to-https-duplex-h2"),
-        ("Duplex (WebSocket / extended CONNECT)", "HTTP/1 · TLS", "HTTP/1 · plain", "twp-reverse-http1-tls-duplex-ws", "nginx-reverse-http1-tls-duplex-ws", "yarp-reverse-http1-tls-duplex-ws"),
+        ("Duplex (WebSocket / H1 Upgrade)", "HTTP/1 · TLS", "HTTP/1 · plain", "twp-reverse-http1-tls-duplex-ws", "nginx-reverse-http1-tls-duplex-ws", "yarp-reverse-http1-tls-duplex-ws"),
     ]
 
     def arch_table(data: dict, is_win: bool) -> str:
+        include_he = not is_win
         rows = [
-            f"| Scenario | Client | Origin | {PEER_COLS} |",
-            f"|---|---|---|{PEER_RULE}|",
+            f"| Scenario | Client | Origin | {peer_cols(include_he)} |",
+            f"|---|---|---|{peer_rule(include_he)}|",
         ]
         for sc, c, o, t, n, y in arch_spec:
             extra = {}
@@ -378,9 +397,10 @@ def main() -> None:
     ]
 
     def tls_table(data: dict, is_win: bool) -> str:
+        include_he = not is_win
         rows = [
-            f"| Workload | {PEER_COLS} |",
-            f"|---|{PEER_RULE}|",
+            f"| Workload | {peer_cols(include_he)} |",
+            f"|---|{peer_rule(include_he)}|",
         ]
         for label, t, n, y in tls_spec:
             rows.append(peer_row([label], t, n, y, data, win_no_haproxy_envoy=is_win))
@@ -400,8 +420,8 @@ def main() -> None:
             ("twp-reverse-http1", "dotnet-httpclient", True),
         ]
         rows = [
-            "| Arm | Generator | Sustain | Peak | % of origin-HttpClient |",
-            "|---|---|---:|---:|---:|",
+            "| Arm | Generator | RPS | % of origin-HttpClient |",
+            "|---|---|---:|---:|",
         ]
         for arm, gen, is_peer in arms:
             m = data.get(arm)
@@ -410,7 +430,7 @@ def main() -> None:
             if m and op and op > 0:
                 pct = f"**{m['Peak'] / op * 100:.1f}%**"
             rows.append(
-                f"| {arm} | {gen} | {fmt_cell(m, medal=med)} | {fmt_cell(m, peak=True)} | {pct} |"
+                f"| {arm} | {gen} | {fmt_cell(m, medal=med)} | {pct} |"
             )
         return "\n".join(rows)
 
@@ -426,8 +446,8 @@ def main() -> None:
             return f"**{num['Peak'] / den['Peak']:.2f}×**"
 
         rows = [
-            "| Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx |",
-            "|---|---|---:|---:|---:|---:|",
+            "| Arm | Generator | RPS | ÷YARP | ÷nginx |",
+            "|---|---|---:|---:|---:|",
         ]
         for arm, m, imp, key in [
             (nginx_a, nginx, "Not possible (no QUIC)" if win_no_nginx else None, "nginx"),
@@ -435,10 +455,10 @@ def main() -> None:
             (twp_a, twp, None, "twp"),
         ]:
             if imp:
-                rows.append(f"| {arm} | dotnet-httpclient | *{imp}* | *{imp}* | — | — |")
+                rows.append(f"| {arm} | dotnet-httpclient | *{imp}* | — | — |")
                 continue
             rows.append(
-                f"| {arm} | dotnet-httpclient | {fmt_cell(m, medal=(medal == key))} | {fmt_cell(m, peak=True)} | "
+                f"| {arm} | dotnet-httpclient | {fmt_cell(m, medal=(medal == key))} | "
                 f"{rdiv(m, yarp)} | {rdiv(m, nginx)} |"
             )
         return "\n".join(rows)
@@ -541,7 +561,7 @@ def main() -> None:
 
     patch_heavier(
         "### Windows — heavier reverse GET (64 KiB / 256 KiB)",
-        f"Median of **3** repeats on `windows-latest` @ `{HEAD}`. Source: Actions [{rid_b}]({run_url(rid_b)}) (`compare-bodies`). Warmup 2s / measure 8s. **RPS cells** include `(MiB / CPU%)` footprints.\n",
+        f"Median of **3** repeats on `windows-latest` @ `{HEAD}`. Source: Actions [{rid_b}]({run_url(rid_b)}) (`compare-bodies`). Warmup 2s / measure 8s. **RPS cells** include `(MiB / CPU%)` footprints.\n\n{WIN_NO_HAPROXY_ENVOY_NOTE}",
         bodies_table(win["bodies"], True),
     )
     patch_heavier(
@@ -551,7 +571,7 @@ def main() -> None:
     )
     patch_heavier(
         "### Windows — POST 64 KiB request + 64 KiB response",
-        f"Median of **3** repeats on `windows-latest` @ `{HEAD}`. Source: Actions [{rid_p}]({run_url(rid_p)}) (`compare-post`).\n",
+        f"Median of **3** repeats on `windows-latest` @ `{HEAD}`. Source: Actions [{rid_p}]({run_url(rid_p)}) (`compare-post`).\n\n{WIN_NO_HAPROXY_ENVOY_NOTE}",
         post_table(win["post"], True),
     )
     patch_heavier(
@@ -561,7 +581,7 @@ def main() -> None:
     )
     patch_heavier(
         "### Windows — lossy / high-RTT (H2 HOL / H3 loss)",
-        f"Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2) or UDP datagram drop (H3); **64 KiB** GET. Median of **3** repeats on `windows-latest` @ `{HEAD}` — [{rid_l}]({run_url(rid_l)}) (`compare-lossy`).\n",
+        f"Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2) or UDP datagram drop (H3); **64 KiB** GET. Median of **3** repeats on `windows-latest` @ `{HEAD}` — [{rid_l}]({run_url(rid_l)}) (`compare-lossy`).\n\n{WIN_NO_HAPROXY_ENVOY_NOTE}",
         lossy_table(win["lossy"], True),
     )
     patch_heavier(

@@ -13,7 +13,7 @@ Desktop debugger for HTTP and HTTPS traffic. Decrypt HTTPS (man-in-the-middle / 
 
 HTTPS stays encrypted (opaque tunnels) until **Decrypt HTTPS** is on.
 
-Capture menu options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs) show a check when on. Preferences such as **Session retention…**, **Excluded hosts…**, **Ignore insecure server certificates**, and **Logging…** live under **Options**.
+Capture menu options (**Capturing**, **Decrypt HTTPS**, **System proxy**, **Proxy localhost**, auto-start prefs) show a check when on. **Allow Store apps…** (Windows) sits with System proxy. Preferences such as **Session retention…**, **Excluded hosts…**, **Ignore insecure server certificates**, and **Logging…** live under **Options**.
 
 ## Install
 
@@ -114,14 +114,17 @@ Applies to every captured request/response. On request, `abort` or `set-status` 
 
 ### Excluded hosts
 
-**Options → Excluded hosts…** edits two lists:
+**Options → Excluded hosts…** edits OS bypass, tunnel-only, and auto-tunnel learning. **Capture → Proxy localhost** controls whether loopback uses the system proxy (not a host list).
 
 | Layer | Effect |
 |-------|--------|
 | **OS bypass** | Traffic never reaches Inspector (when **System proxy** is on) |
 | **Tunnel only** | Session stays visible but HTTPS stays opaque |
+| **Auto-tunnel on decrypt failure** | Session-only list of hosts learned after origin TLS fails under decrypt, or after MITM HTTPS **403/429**. Document navigations auto-retry via meta-refresh onto an opaque CONNECT. **On by default.** Cap + TTL; cleared on restart unless you **Promote to tunnel-only**. Prefetch is skipped for learned hosts. |
 
-Factory seeds keep common identity / SSO hosts on OS bypass so sign-in keeps working. Right-click a session → **Exclude host…**. Search: `is:opaque`. **Chrome QUIC** may bypass the proxy entirely — not fixable via host lists.
+Factory seeds keep common identity / SSO hosts on OS bypass so sign-in keeps working. Right-click a session → **Exclude host…**. Opaque sessions show why they stayed encrypted (including **auto-tunneled after decrypt failure**). Search: `is:opaque`, `opaque-reason:learned`. **Chrome QUIC** may bypass the proxy entirely — not fixable via host lists.
+
+Hostile hosts that return 403/429 under MITM on a **document** navigation are recovered automatically (brief meta-refresh; no manual reload). Non-document 403/429 need repeated strikes before later CONNECTs tunnel. Certificate-pinning apps still belong on **Tunnel only**. Automation browsers may still see site captchas after tunneling.
 
 ### Root certificate (Decrypt HTTPS)
 
@@ -157,7 +160,7 @@ Notes:
 - **Copy as curl / fetch:** with one session selected, generate a shell `curl` command or a JavaScript `fetch(...)` call from the request URL, method, headers, and body (CONNECT tunnels are skipped). The snippet is copied to the clipboard.
 - **Session Diff:** with exactly two sessions selected, compare method/URL/status/headers/bodies offline. The result opens on the Inspect **Diff** tab and is copied to the clipboard.
 - HAR / archive: Export all writes every captured session; Export selected writes the grid multi-selection. Import appends sessions from the file. Replay selected session.
-- System proxy and root CA install / untrust / export; Device CA setup dialog for external devices; **Allow Store apps…** on Windows
+- System proxy, **Proxy localhost**, and root CA install / untrust / export; Device CA setup dialog for external devices; **Allow Store apps…** on Windows
 - Search (`method:GET status:2xx host:example process:chrome is:ws hide:tunnel`); quick filters: Hide CONNECT, Hide images, Errors only
 - Optional Plus panels when `Titanium.Plus.dll` is present
 

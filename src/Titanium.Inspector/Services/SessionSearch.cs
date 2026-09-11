@@ -387,6 +387,7 @@ public static class SessionSearch
             "skip" or "skiplist" => s.OpaqueReason == OpaqueTunnelReason.UserSkipList,
             "only" or "onlylist" => s.OpaqueReason == OpaqueTunnelReason.UserOnlyList,
             "decrypt-off" or "decryptoff" => s.OpaqueReason == OpaqueTunnelReason.DecryptOff,
+            "learned" or "auto" => s.OpaqueReason == OpaqueTunnelReason.LearnedFailure,
             _ => s.OpaqueReason.ToString().Equals(reasonToken, StringComparison.OrdinalIgnoreCase),
         };
     }

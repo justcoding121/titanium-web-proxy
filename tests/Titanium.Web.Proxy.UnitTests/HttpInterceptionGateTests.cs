@@ -50,6 +50,16 @@ public class HttpInterceptionGateTests
     }
 
     [TestMethod]
+    public void NeedsHttpInterception_True_WhenEnableDecryptFailureBypass()
+    {
+        using var proxy = new ProxyServer(false, false, false)
+        {
+            EnableDecryptFailureBypass = true
+        };
+        Assert.IsTrue(proxy.NeedsHttpInterception());
+    }
+
+    [TestMethod]
     public void NeedsHttpInterception_True_WhenEndpointOverrideSet()
     {
         using var proxy = new ProxyServer(false, false, false);

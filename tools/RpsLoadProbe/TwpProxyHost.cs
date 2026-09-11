@@ -810,6 +810,10 @@ internal sealed class TwpProxyHost : IDisposable
         proxy.EnableConnectionPool = true;
         proxy.EnableHttp2 = enableHttp2;
         proxy.EnableHttp3 = enableHttp3;
+        // Opt-in RFC 8441 for compare-ws-h2 (child sets TWP_RPS_ENABLE_RFC8441=1).
+        if (enableHttp2 && string.Equals(Environment.GetEnvironmentVariable("TWP_RPS_ENABLE_RFC8441"), "1",
+                StringComparison.Ordinal))
+            proxy.EnableRfc8441 = true;
         proxy.EnableHttpsSvcbDnsDiscovery = false;
         // Saturation probe: raise floor so 4-vCPU Linux hosts are not stuck at OS defaults.
         proxy.ThreadPoolWorkerThread = Math.Max(Environment.ProcessorCount * 8, 64);

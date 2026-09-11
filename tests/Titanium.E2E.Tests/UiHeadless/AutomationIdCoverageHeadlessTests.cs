@@ -34,13 +34,14 @@ public class AutomationIdCoverageHeadlessTests
         "AutoSystemProxyCheck",
         "MenuDecryptHttps",
         "MenuToggleSystemProxy",
+        "MenuProxyLocalhost",
+        "MenuLoopbackExempt",
         "MenuInstallCa",
         "MenuRemoveCa",
         "MenuRotateCa",
         "MenuExportCa",
         "MenuTrustFirefoxCa",
         "MenuDeviceCa",
-        "MenuLoopbackExempt",
         "MenuTools",
         "MenuToolsComposer",
         "MenuToolsBreakpoints",
@@ -203,11 +204,17 @@ public class AutomationIdCoverageHeadlessTests
         await fx.StartAsync();
         await fx.DispatchAsync(() =>
         {
-            // Avoid mutating BindPort/Address here — TextBox remeasure can race Headless teardown fonts.
+            // Avoid mutating BindPort/Address here — TextBox re-measure can race Headless teardown fonts.
             fx.Robot.SetCheck("AutoStartCaptureCheck", false);
             fx.Robot.SetCheck("AutoSystemProxyCheck", false);
             Assert.IsFalse(fx.ViewModel.AutoStartCapture);
             Assert.IsFalse(fx.ViewModel.AutoSystemProxyOnStart);
+
+            var loopbackWasOn = fx.ViewModel.ProxyLoopback;
+            fx.Robot.SetCheck("MenuProxyLocalhost", !loopbackWasOn);
+            Assert.AreEqual(!loopbackWasOn, fx.ViewModel.ProxyLoopback);
+            fx.Robot.SetCheck("MenuProxyLocalhost", loopbackWasOn);
+            Assert.AreEqual(loopbackWasOn, fx.ViewModel.ProxyLoopback);
 
             fx.Robot.SetCheck("CapturingCheck", false);
             Assert.IsFalse(fx.ViewModel.Capturing);
@@ -463,13 +470,12 @@ public class AutomationIdCoverageHeadlessTests
             AssertHasAutomationId(exclusions, "ExcludedHostsWindow");
             AssertHasAutomationId(exclusions, "ExcludedBypassHosts");
             AssertHasAutomationId(exclusions, "ExcludedSkipHosts");
-            AssertHasAutomationId(exclusions, "ExcludedProxyLoopback");
-            AssertHasAutomationId(exclusions, "ExcludedOsPreview");
             AssertHasAutomationId(exclusions, "ExcludedHostsResetDefaults");
             AssertHasAutomationId(exclusions, "ExcludedHostsSave");
             Assert.IsFalse(exclusions.GetLogicalDescendants().OfType<Control>().Any(c =>
                 string.Equals(AutomationProperties.GetAutomationId(c), "ExcludedOnlyHosts", StringComparison.Ordinal)
-                || string.Equals(AutomationProperties.GetAutomationId(c), "ExcludedBuiltInList", StringComparison.Ordinal)));
+                || string.Equals(AutomationProperties.GetAutomationId(c), "ExcludedBuiltInList", StringComparison.Ordinal)
+                || string.Equals(AutomationProperties.GetAutomationId(c), "ExcludedProxyLoopback", StringComparison.Ordinal)));
         });
     }
 

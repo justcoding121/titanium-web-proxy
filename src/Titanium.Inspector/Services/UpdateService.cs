@@ -522,21 +522,32 @@ public sealed class UpdateService
                 return true;
             }
 
-            try
+            if (HasInspectorInstallMarker(Registry.CurrentUser)
+                || HasInspectorInstallMarker(Registry.LocalMachine))
             {
-                using var key = Registry.CurrentUser.OpenSubKey(@"Software\justcoding121\TitaniumInspector");
-                if (key?.GetValue("installed") is not null)
-                {
-                    return true;
-                }
-            }
-            catch
-            {
-                // ignore registry access issues
+                return true;
             }
         }
 
         return false;
+    }
+
+    private static bool HasInspectorInstallMarker(RegistryKey hive)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        try
+        {
+            using var key = hive.OpenSubKey(@"Software\justcoding121\TitaniumInspector");
+            return key?.GetValue("installed") is not null;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public static string SuggestRid()

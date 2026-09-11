@@ -1,0 +1,10 @@
+---
+description: Use hyphenated re-measure; never remasure or remeasure
+alwaysApply: true
+---
+
+# Wording: re-measure
+
+When writing about measuring again (RPS, memory, UI layout), use the hyphenated form **re-measure** (and **re-measurement**).
+
+Never write `remasure` or `remeasure` in code, comments, docs, wiki, the website, commit messages, or plans.
