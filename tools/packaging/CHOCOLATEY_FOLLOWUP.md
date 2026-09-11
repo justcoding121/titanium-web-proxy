@@ -53,4 +53,8 @@ choco install titanium-inspector --pre
 
 ## 2026-09-10: push 403 on 7.0.6 / 7.0.6-beta
 
-choco push returned **403 Forbidden** for both packages after 7.0.6-beta / 7.0.6 GitHub Releases succeeded (packs built OK). Re-run via [chocolatey-publish.yml](../../.github/workflows/chocolatey-publish.yml) also 403'd. Likely API key / account permission — rotate CHOCOLATEY_API_KEY on chocolatey.org and gh secret set CHOCOLATEY_API_KEY, then re-dispatch publish for 7.0.6-beta and 7.0.6.
+choco push returned **403 Forbidden** for both packages after 7.0.6-beta / 7.0.6 GitHub Releases succeeded (packs built OK). Re-run via [chocolatey-publish.yml](../../.github/workflows/chocolatey-publish.yml) also 403'd. Likely API key / account permission — rotate CHOCOLATEY_API_KEY on chocolatey.org and gh secret set CHOCOLATEY_API_KEY, then re-dispatch publish for 7.0.6-beta and 7.0.6.
+
+## 2026-09-11: hold Chocolatey for 7.0.7-beta
+
+`v7.0.7-beta` GitHub/NuGet cut intentionally **did not** push Chocolatey. Repo secret `CHOCOLATEY_API_KEY` was removed so `release.yml` `publish-chocolatey` skips. Do not dispatch `chocolatey-publish.yml` until earlier packages clear chocolatey.org moderator review; then restore the secret and push withheld versions in order (7.0.6* before 7.0.7-beta).
