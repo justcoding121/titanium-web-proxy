@@ -660,6 +660,9 @@ public sealed class InterceptionService : IDisposable
         _proxy?.CertificateManager.IsRootInLoginKeychain() == true;
 
     /// <summary>Re-verifies macOS/Linux user SSL trust and updates <see cref="IsRootTrusted"/>.</summary>
+    /// <remarks>
+    /// Does not write Firefox prefs — that is Install / Trust Firefox only (verify-only must stay cheap).
+    /// </remarks>
     public bool VerifyOsUserSslTrust()
     {
         if (_proxy is null) return false;
@@ -670,8 +673,6 @@ public sealed class InterceptionService : IDisposable
             ? IsRootPresentInStore(false)
             : _proxy.CertificateManager.VerifyOsUserSslTrust();
         IsRootTrusted = ok;
-        if (ok)
-            TryEnableFirefoxEnterpriseRootsBestEffort();
         return ok;
     }
 

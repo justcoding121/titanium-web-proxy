@@ -55,6 +55,7 @@ public class TrustCommandCoverageTests
             StringAssert.Contains(vm.StatusText, "Start the proxy");
 
             await ExecuteAsync(vm.StartCaptureCommand);
+            await WaitUntil(() => interception.IsRunning, 8000);
             Assert.IsTrue(interception.IsRunning, vm.StatusText);
 
             await ExecuteAsync(vm.InstallCaCommand);
@@ -235,6 +236,7 @@ public class TrustCommandCoverageTests
                 .Invoke(vm, [null])!;
 
             await ExecuteAsync(vm.StartCaptureCommand);
+            await WaitUntil(() => interception.IsRunning, 8000);
             await ExecuteAsync(vm.TrustFirefoxCaCommand);
             StringAssert.Contains(vm.StatusText, "cancelled");
             await ExecuteAsync(vm.UntrustCaCommand);
@@ -277,7 +279,7 @@ public class TrustCommandCoverageTests
     private static async Task ExecuteAsync(System.Windows.Input.ICommand command)
     {
         command.Execute(null);
-        await Task.Delay(200);
+        await Task.Delay(500);
     }
 
     private static async Task WaitUntil(Func<bool> predicate, int timeoutMs)
@@ -405,13 +407,14 @@ public class TrustCommandCoverageTests
             _ = await (Task<bool?>)recoverCertutil.Invoke(vm, [TrustRecoveryChoice.Primary])!;
 
             await ExecuteAsync(vm.StartCaptureCommand);
+            await WaitUntil(() => interception.IsRunning, 8000);
             Assert.IsTrue(interception.IsRunning, vm.StatusText);
             Assert.IsTrue(interception.InstallRootCertificate(false));
             Assert.IsTrue(interception.IsRootTrusted);
 
             // Proxy + root already trusted → decrypt enable should succeed without OS dialogs.
             await (Task)typeof(MainWindowViewModel).GetMethod("EnableDecryptHttpsAsync", flags)!
-                .Invoke(vm, null)!;
+                .Invoke(vm, [0])!;
             Assert.IsTrue(vm.DecryptHttps, vm.StatusText);
 
             dialogs.DecryptTrustFailedResult = TrustRecoveryChoice.Cancel;
@@ -465,6 +468,7 @@ public class TrustCommandCoverageTests
             };
 
             await ExecuteAsync(vm.StartCaptureCommand);
+            await WaitUntil(() => interception.IsRunning, 8000);
             Assert.IsTrue(interception.IsRunning);
             Assert.IsFalse(interception.IsRootTrusted);
 
@@ -475,6 +479,56 @@ public class TrustCommandCoverageTests
 
             Assert.IsTrue(await (Task<bool>)typeof(MainWindowViewModel)
                 .GetMethod("TryStartProxyForDecryptAsync", flags)!.Invoke(vm, null)!);
+
+            await ExecuteAsync(vm.StopCaptureCommand);
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public async Task DecryptHttps_WhenRunningAndTrusted_EnablesImmediatelyWithoutInstallPrompt()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-decrypt-opt-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var dialogs = new ScriptedInspectorDialogs { InstallRootCaResult = false };
+            var settings = new SettingsService(Path.Combine(dir, "settings.json"));
+            settings.Current.AutoStartCapture = false;
+            settings.Save();
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                dialogs)
+            {
+                BindPort = 0,
+                BindAddress = "127.0.0.1",
+            };
+
+            await ExecuteAsync(vm.StartCaptureCommand);
+            await WaitUntil(() => interception.IsRunning, 8000);
+            Assert.IsTrue(interception.IsRunning, vm.StatusText);
+            Assert.IsTrue(interception.InstallRootCertificate(false));
+            Assert.IsTrue(interception.IsRootTrusted);
+
+            vm.DecryptHttps = true;
+            Assert.IsTrue(vm.DecryptHttps, "Trusted+running should check immediately (optimistic)");
+            Assert.IsTrue(interception.DecryptHttps);
+            Assert.AreEqual(0, dialogs.InstallRootCaCalls);
+
+            vm.DecryptHttps = false;
+            Assert.IsFalse(vm.DecryptHttps);
 
             await ExecuteAsync(vm.StopCaptureCommand);
         }

@@ -103,6 +103,7 @@ public class InspectorFiddlerFlowE2ETests
         await _vm.TryAutoStartAsync();
 
         Assert.IsTrue(_interception.IsRunning, _vm.StatusText);
+        await WaitUntil(() => _recorder.SetCount >= 1);
         Assert.AreEqual(1, _recorder.SetCount);
         Assert.IsTrue(_vm.SystemProxy);
         Assert.IsFalse(_vm.DecryptHttps);

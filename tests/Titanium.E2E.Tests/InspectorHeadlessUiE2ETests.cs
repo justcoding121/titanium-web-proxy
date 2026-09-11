@@ -54,7 +54,12 @@ public class InspectorHeadlessUiE2ETests
         await Task.Delay(100);
 
         vm.ToggleSystemProxyCommand.Execute(null);
-        await Task.Delay(100);
+        var deadlineProxy = DateTime.UtcNow.AddSeconds(10);
+        while (recorder.SetCount < 1 && DateTime.UtcNow < deadlineProxy)
+        {
+            await Task.Delay(50);
+        }
+
         Assert.AreEqual(1, recorder.SetCount, "System proxy should go through controller seam");
         Assert.IsTrue(vm.SystemProxy);
         Assert.IsTrue(

@@ -211,7 +211,12 @@ public class InspectorUiActionsE2ETests
 
         var before = _recorder.SetCount;
         _vm.ToggleSystemProxyCommand.Execute(null);
-        await Task.Delay(100);
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (_recorder.SetCount <= before && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(50);
+        }
+
         Assert.IsTrue(_recorder.SetCount > before);
 
         _vm.InstallCaCommand.Execute(null);

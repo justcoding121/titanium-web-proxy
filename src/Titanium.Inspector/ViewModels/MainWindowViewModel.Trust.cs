@@ -26,6 +26,13 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
+        // Already trusted: do not re-open the Root store or rewrite Firefox prefs.
+        if (_interception.IsRootTrusted)
+        {
+            SetOsTrustSuccessStatus();
+            return;
+        }
+
         SetBusyTrustingRootCa();
         var ok = await EnsureRootCaTrustedAsync(promptIfNeeded: true);
         if (ok)
@@ -113,7 +120,9 @@ public sealed partial class MainWindowViewModel
     {
         for (var attempt = 0; attempt < 3; attempt++)
         {
-            var result = _interception.TrustFirefox();
+            var result = await RunOffUiAsync(
+                () => _interception.TrustFirefox(),
+                StatusCancelToken).ConfigureAwait(false);
             if (result.Succeeded)
                 return result;
 
@@ -148,7 +157,9 @@ public sealed partial class MainWindowViewModel
             (OperatingSystem.IsLinux() || result.BrewAvailable))
         {
             SetStatus("Installing browser certificate tools…", StatusSeverity.Busy);
-            _ = _interception.InstallNssToolsAndRetryTrust();
+            _ = await RunOffUiAsync(
+                () => _interception.InstallNssToolsAndRetryTrust(),
+                StatusCancelToken).ConfigureAwait(false);
             return true;
         }
 
@@ -187,7 +198,10 @@ public sealed partial class MainWindowViewModel
     private async Task<bool> EnsureRootCaTrustedAsync(bool promptIfNeeded) // NOSONAR S3776 -- Adaptive OS-trust recovery loop shares dialog/state; splitting would hide the retry contract.
     {
         var owner = TryGetMainWindow();
-        var ok = _interception.InstallRootCertificate(machineStore: false);
+        // Store Find + CryptUI off the dispatcher so Busy can paint; CryptUI still shows its own dialog.
+        var ok = await RunOffUiAsync(
+            () => _interception.InstallRootCertificate(machineStore: false),
+            StatusCancelToken).ConfigureAwait(false);
         var result = _interception.LastOsTrustResult;
 
         if (ok && result?.Kind != CertificateOsTrustKind.MacNeedsManualTrustConfirm)
@@ -262,7 +276,9 @@ public sealed partial class MainWindowViewModel
         if (choice == TrustRecoveryChoice.Primary)
         {
             SetStatus("Trusting root CA (administrator)…", StatusSeverity.Busy);
-            var ok = _interception.InstallRootCertificateAsAdmin(machineStore: false);
+            var ok = await RunOffUiAsync(
+                () => _interception.InstallRootCertificateAsAdmin(machineStore: false),
+                StatusCancelToken).ConfigureAwait(false);
             if (ok && _interception.LastOsTrustResult?.Kind !=
                 CertificateOsTrustKind.MacNeedsManualTrustConfirm)
                 return true;
@@ -279,7 +295,9 @@ public sealed partial class MainWindowViewModel
         if (choice == TrustRecoveryChoice.Primary)
         {
             SetStatus("Installing browser certificate tools…", StatusSeverity.Busy);
-            var install = _interception.InstallNssToolsAndRetryTrust();
+            var install = await RunOffUiAsync(
+                () => _interception.InstallNssToolsAndRetryTrust(),
+                StatusCancelToken).ConfigureAwait(false);
             if (install.Succeeded)
                 return true;
             if (install.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
@@ -364,7 +382,11 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        _interception.UntrustRootCertificate(machineStore: false);
+        SetStatus("Removing root CA…", StatusSeverity.Busy);
+        // CryptUI Remove can show a dialog; post-check store Find stays with the same call.
+        await RunOffUiAsync(
+            () => _interception.UntrustRootCertificate(machineStore: false),
+            StatusCancelToken).ConfigureAwait(false);
         if (DecryptHttps)
         {
             SetDecryptHttpsCore(false);
@@ -398,8 +420,11 @@ public sealed partial class MainWindowViewModel
         if (DecryptHttps)
             SetDecryptHttpsCore(false);
 
+        SetStatus("Clearing and recreating root CA…", StatusSeverity.Busy);
         var oldThumb = _interception.RootCertificate?.Thumbprint;
-        var ok = _interception.RotateRootCertificate(machineStore: false);
+        var ok = await RunOffUiAsync(
+            () => _interception.RotateRootCertificate(machineStore: false),
+            StatusCancelToken).ConfigureAwait(false);
         if (!ok)
         {
             SetOutcomeStatus("Clear and reinstall root CA failed — see logs", StatusSeverity.Error, toastImportant: true);
@@ -481,16 +506,22 @@ public sealed partial class MainWindowViewModel
             await ExportCaAsync();
         }
     }
-    private async Task EnableDecryptHttpsAsync()
+    private async Task EnableDecryptHttpsAsync(int enableGeneration)
     {
         _decryptHttpsBusy = true;
         try
         {
             if (!await TryStartProxyForDecryptAsync())
                 return;
+            if (enableGeneration != Volatile.Read(ref _decryptEnableGeneration))
+                return;
             if (!await TryTrustRootForDecryptAsync())
                 return;
+            if (enableGeneration != Volatile.Read(ref _decryptEnableGeneration))
+                return;
             if (!await TryCompleteMacSslTrustForDecryptAsync())
+                return;
+            if (enableGeneration != Volatile.Read(ref _decryptEnableGeneration))
                 return;
 
             SetDecryptHttpsCore(true);
@@ -498,9 +529,45 @@ public sealed partial class MainWindowViewModel
         }
         finally
         {
-            _decryptHttpsBusy = false;
+            if (enableGeneration == Volatile.Read(ref _decryptEnableGeneration))
+                _decryptHttpsBusy = false;
         }
     }
+
+    /// <summary>
+    /// After optimistic decrypt-on, re-check Root-store trust off the UI thread.
+    /// Reverts decrypt + toast if the CA was removed while capturing.
+    /// </summary>
+    private async Task ReverifyDecryptTrustInBackgroundAsync()
+    {
+        var generation = Interlocked.Increment(ref _decryptTrustVerifyGeneration);
+        try
+        {
+            var trusted = await RunOffUiAsync(
+                () => _interception.RefreshTrustState(),
+                StatusCancelToken).ConfigureAwait(false);
+            if (generation != Volatile.Read(ref _decryptTrustVerifyGeneration))
+                return;
+            if (trusted || !_decryptHttps)
+                return;
+
+            await MarshalToUiAsync(() =>
+            {
+                if (generation != Volatile.Read(ref _decryptTrustVerifyGeneration) || !_decryptHttps)
+                    return;
+                SetDecryptHttpsCore(false);
+                SetOutcomeStatus(
+                    "Decrypt HTTPS off — root CA not trusted",
+                    StatusSeverity.Error,
+                    toastImportant: true);
+            }, StatusCancelToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // status revert / shutdown
+        }
+    }
+
     private void NotifyDecryptHttpsUnchanged() =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
     private async Task<bool> TryStartProxyForDecryptAsync()
@@ -529,8 +596,15 @@ public sealed partial class MainWindowViewModel
     }
     private async Task<bool> TryTrustRootForDecryptAsync()
     {
-        _interception.RefreshTrustState();
+        // Prefer cached trust from Start / Install — avoids Root-store Find on the UI thread.
         if (_interception.IsRootTrusted)
+            return true;
+
+        SetStatus("Checking certificate trust…", StatusSeverity.Busy);
+        var trusted = await RunOffUiAsync(
+            () => _interception.RefreshTrustState(),
+            StatusCancelToken).ConfigureAwait(false);
+        if (trusted)
             return true;
 
         var owner = TryGetMainWindow();
@@ -567,15 +641,27 @@ public sealed partial class MainWindowViewModel
     }
     private async Task<bool> TryCompleteMacSslTrustForDecryptAsync()
     {
-        if (_interception.VerifyOsUserSslTrust() || OperatingSystem.IsWindows())
+        // Windows Root-store presence is trust — do not call VerifyOsUserSslTrust (second Find + Firefox prefs).
+        if (OperatingSystem.IsWindows())
+            return true;
+
+        var trusted = await RunOffUiAsync(
+            () => _interception.VerifyOsUserSslTrust(),
+            StatusCancelToken).ConfigureAwait(false);
+        if (trusted)
             return true;
 
         var incomplete = CertificateOsTrustResult.Fail(
             CertificateOsTrustKind.MacNeedsManualTrustConfirm,
             "Root CA needs Always Trust in Keychain Access before Decrypt HTTPS");
-        if (await ResolveTerminalTrustFailureAsync(incomplete) &&
-            (_interception.VerifyOsUserSslTrust() || OperatingSystem.IsWindows()))
-            return true;
+        if (await ResolveTerminalTrustFailureAsync(incomplete))
+        {
+            trusted = await RunOffUiAsync(
+                () => _interception.VerifyOsUserSslTrust(),
+                StatusCancelToken).ConfigureAwait(false);
+            if (trusted)
+                return true;
+        }
 
         SetOutcomeStatus(
             OsTrustUxCopy.FormatStatus(incomplete),
@@ -617,7 +703,9 @@ public sealed partial class MainWindowViewModel
                 return false;
         }
 
-        return _interception.IsRootTrusted || _interception.VerifyOsUserSslTrust();
+        return _interception.IsRootTrusted ||
+               await RunOffUiAsync(() => _interception.VerifyOsUserSslTrust(), StatusCancelToken)
+                   .ConfigureAwait(false);
     }
 
     private async Task<bool?> TryHandleTerminalTrustChoiceAsync(

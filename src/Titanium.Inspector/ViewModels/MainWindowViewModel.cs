@@ -81,6 +81,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private bool _launchAutoSystemProxyOnStart = true;
     private bool _decryptHttps;
     private bool _decryptHttpsBusy;
+    private int _decryptEnableGeneration;
     private string _autoResponderMatch = "*";
     private string _autoResponderBody = "OK";
     private string _autoResponderContentType = "text/plain";
@@ -98,6 +99,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     /// <summary>Sticky intent: re-enable system proxy on the next Start after a Stop that had it on.</summary>
     private bool _reenableSystemProxyOnStart;
     private bool _stopBusy;
+    private bool _startBusy;
+    private int _systemProxyApplyGeneration;
+    private int _decryptTrustVerifyGeneration;
     private bool _breakpointOnResponse;
     private string _breakpointEditBody = "";
     private string? _scriptOnRequest;
@@ -731,6 +735,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         throw last!;
     }
 
+    /// <summary>
+    /// Run blocking OS I/O (Root store, WinINET, listener start/stop) off the Avalonia dispatcher
+    /// so checkboxes and Busy status can paint. Same rationale as <see cref="StopCaptureCoreAsync"/>.
+    /// </summary>
+    private static Task RunOffUiAsync(Action work, CancellationToken cancellationToken = default) =>
+        Task.Run(work, cancellationToken);
+
+    private static Task<T> RunOffUiAsync<T>(Func<T> work, CancellationToken cancellationToken = default) =>
+        Task.Run(work, cancellationToken);
+
     private void LoadPlusPanels()
     {
         var panels = PlusInspectorLoader.TryLoadPanels(out var plusWarning);
@@ -777,7 +791,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            await Task.Run(() => _interception.Stop(), _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+            await RunOffUiAsync(() => _interception.Stop(), _statusRevertCts?.Token ?? CancellationToken.None)
+                .ConfigureAwait(false);
 
             await MarshalToUiAsync(() =>
             {
@@ -818,17 +833,24 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
 
         var s = _settings.Current;
-        if (!s.WarnedAboutPacReplace && SystemProxyPacHelper.HasActivePacScript())
+        if (!s.WarnedAboutPacReplace)
         {
-            var owner = TryGetMainWindow();
-            if (!await AwaitCancellableAsync(_dialogs.ConfirmPacReplaceAsync(owner)))
+            // macOS scutil can block up to 3s — keep it off the dispatcher.
+            var hasPac = await RunOffUiAsync(
+                SystemProxyPacHelper.HasActivePacScript,
+                StatusCancelToken).ConfigureAwait(false);
+            if (hasPac)
             {
-                StatusText = "System proxy not enabled (PAC replace cancelled)";
-                return;
-            }
+                var owner = TryGetMainWindow();
+                if (!await AwaitCancellableAsync(_dialogs.ConfirmPacReplaceAsync(owner)))
+                {
+                    StatusText = "System proxy not enabled (PAC replace cancelled)";
+                    return;
+                }
 
-            s.WarnedAboutPacReplace = true;
-            _settings.Save();
+                s.WarnedAboutPacReplace = true;
+                _settings.Save();
+            }
         }
 
         SystemProxy = true;
@@ -944,9 +966,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             _interception));
         if (saved)
         {
-            if (SystemProxy && !_interception.ReapplySystemProxyIfEnabled())
+            if (SystemProxy)
             {
-                StatusText = "Exclusions saved; re-toggle System proxy to apply OS bypass changes";
+                var ok = await RunOffUiAsync(
+                    () => _interception.ReapplySystemProxyIfEnabled(),
+                    StatusCancelToken).ConfigureAwait(false);
+                StatusText = ok
+                    ? "Excluded hosts saved (applies to new connections)"
+                    : "Exclusions saved; re-toggle System proxy to apply OS bypass changes";
             }
             else
             {
@@ -1387,41 +1414,22 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                     return;
                 }
 
-                if (!_interception.SetSystemProxy(true, _settings.Current))
-                {
-                    var detail = _interception.LastSystemProxyError;
-                    var text = string.IsNullOrWhiteSpace(detail)
-                        ? "Failed to enable system proxy (permissions, cancelled admin prompt, or unsupported desktop environment)"
-                        : "Failed to enable system proxy: " + Truncate(detail, 180);
-                    SetOutcomeStatus(text, StatusSeverity.Error, toastImportant: true);
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
-                    return;
-                }
-
+                // Optimistic check; WinINET runs off the UI thread (same hang risk as Stop).
                 SetSystemProxyCore(true);
-                SetOutcomeStatus(
-                    SystemProxyEnabledStatusMessage(),
-                    StatusSeverity.Success,
-                    toastImportant: OperatingSystem.IsWindows());
-                return;
-            }
-
-            if (_interception.IsRunning && _interception.SystemProxyEnabled &&
-                !_interception.SetSystemProxy(false))
-            {
-                var detail = _interception.LastSystemProxyError;
-                var text = string.IsNullOrWhiteSpace(detail)
-                    ? "Failed to restore system proxy settings"
-                    : "Failed to restore system proxy: " + Truncate(detail, 180);
-                SetOutcomeStatus(text, StatusSeverity.Error, toastImportant: true);
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
+                SetStatus("Enabling system proxy…", StatusSeverity.Busy);
+                _ = ApplySystemProxyAsync(enable: true);
                 return;
             }
 
             SetSystemProxyCore(false);
-            SetOutcomeStatus(
-                SystemProxyRestoredStatus,
-                StatusSeverity.Success);
+            if (_interception.IsRunning && _interception.SystemProxyEnabled)
+            {
+                SetStatus("Restoring system proxy…", StatusSeverity.Busy);
+                _ = ApplySystemProxyAsync(enable: false);
+                return;
+            }
+
+            SetOutcomeStatus(SystemProxyRestoredStatus, StatusSeverity.Success);
         }
     }
 
@@ -1434,6 +1442,69 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         _systemProxy = enabled;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
+    }
+
+    /// <summary>
+    /// Applies or restores WinINET / OS system proxy off the UI thread. Reverts the checkbox on failure.
+    /// Last-write-wins via generation counter when the user toggles quickly.
+    /// </summary>
+    private async Task ApplySystemProxyAsync(bool enable)
+    {
+        var generation = Interlocked.Increment(ref _systemProxyApplyGeneration);
+        try
+        {
+            var ok = await RunOffUiAsync(
+                () => enable
+                    ? _interception.SetSystemProxy(true, _settings.Current)
+                    : _interception.SetSystemProxy(false),
+                StatusCancelToken).ConfigureAwait(false);
+
+            if (generation != Volatile.Read(ref _systemProxyApplyGeneration))
+            {
+                return;
+            }
+
+            await MarshalToUiAsync(() =>
+            {
+                if (generation != Volatile.Read(ref _systemProxyApplyGeneration))
+                {
+                    return;
+                }
+
+                if (ok)
+                {
+                    if (enable)
+                    {
+                        SetOutcomeStatus(
+                            SystemProxyEnabledStatusMessage(),
+                            StatusSeverity.Success,
+                            toastImportant: OperatingSystem.IsWindows());
+                    }
+                    else
+                    {
+                        SetOutcomeStatus(SystemProxyRestoredStatus, StatusSeverity.Success);
+                    }
+
+                    return;
+                }
+
+                // Revert optimistic checkbox to match OS state.
+                SetSystemProxyCore(!enable);
+                var detail = _interception.LastSystemProxyError;
+                var text = enable
+                    ? (string.IsNullOrWhiteSpace(detail)
+                        ? "Failed to enable system proxy (permissions, cancelled admin prompt, or unsupported desktop environment)"
+                        : "Failed to enable system proxy: " + Truncate(detail, 180))
+                    : (string.IsNullOrWhiteSpace(detail)
+                        ? "Failed to restore system proxy settings"
+                        : "Failed to restore system proxy: " + Truncate(detail, 180));
+                SetOutcomeStatus(text, StatusSeverity.Error, toastImportant: true);
+            }, StatusCancelToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // status revert / shutdown
+        }
     }
 
     /// <summary>When true, localhost uses the system proxy (WinINET &lt;-loopback&gt; / Unix NO_PROXY parity).</summary>
@@ -1452,15 +1523,46 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             _interception.SystemProxySettings = _settings.Current;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ProxyLoopback)));
 
-            if (SystemProxy && !_interception.ReapplySystemProxyIfEnabled())
+            if (!SystemProxy)
             {
-                StatusText = "Capture local traffic saved; re-toggle System proxy to apply";
+                StatusText = value
+                    ? "Capture local traffic on — localhost uses the system proxy"
+                    : "Capture local traffic off — localhost skips the system proxy";
                 return;
             }
 
+            // Optimistic UI; re-apply WinINET off the dispatcher.
             StatusText = value
-                ? "Capture local traffic on — localhost uses the system proxy"
-                : "Capture local traffic off — localhost skips the system proxy";
+                ? "Capture local traffic on — applying…"
+                : "Capture local traffic off — applying…";
+            _ = ReapplySystemProxyAfterLoopbackChangeAsync(value);
+        }
+    }
+
+    private async Task ReapplySystemProxyAfterLoopbackChangeAsync(bool loopbackDesired)
+    {
+        try
+        {
+            var ok = await RunOffUiAsync(
+                () => _interception.ReapplySystemProxyIfEnabled(),
+                StatusCancelToken).ConfigureAwait(false);
+
+            await MarshalToUiAsync(() =>
+            {
+                if (!ok)
+                {
+                    StatusText = "Capture local traffic saved; re-toggle System proxy to apply";
+                    return;
+                }
+
+                StatusText = loopbackDesired
+                    ? "Capture local traffic on — localhost uses the system proxy"
+                    : "Capture local traffic off — localhost skips the system proxy";
+            }, StatusCancelToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // status revert / shutdown
         }
     }
 
@@ -1555,20 +1657,38 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         get => _decryptHttps;
         set // NOSONAR S4275 -- true path updates _decryptHttps via SetDecryptHttpsCore after async trust flow
         {
-            if (_decryptHttpsBusy || _decryptHttps == value)
+            if (_decryptHttps == value)
             {
                 return;
             }
 
-            if (value)
+            if (!value)
             {
-                _ = EnableDecryptHttpsAsync();
-            }
-            else
-            {
+                // Last-write-wins: invalidate in-flight enable / background re-verify.
+                Interlocked.Increment(ref _decryptEnableGeneration);
+                Interlocked.Increment(ref _decryptTrustVerifyGeneration);
+                _decryptHttpsBusy = false;
                 SetDecryptHttpsCore(false);
                 StatusText = "Decrypt HTTPS off — HTTPS shown as encrypted tunnels (not decrypted)";
+                return;
             }
+
+            if (_decryptHttpsBusy)
+            {
+                return;
+            }
+
+            // Already capturing + trusted: optimistic check + MITM (no store Find on UI thread).
+            if (_interception.IsRunning && _interception.IsRootTrusted)
+            {
+                SetDecryptHttpsCore(true);
+                SetOutcomeStatus("Decrypting HTTPS", StatusSeverity.Success, toastImportant: true);
+                _ = ReverifyDecryptTrustInBackgroundAsync();
+                return;
+            }
+
+            var enableGeneration = Interlocked.Increment(ref _decryptEnableGeneration);
+            _ = EnableDecryptHttpsAsync(enableGeneration);
         }
     }
 
@@ -2273,6 +2393,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private async Task StartCaptureAsync()
     {
+        if (_startBusy || _interception.IsRunning)
+        {
+            return;
+        }
+
+        _startBusy = true;
         var address = ParseBindAddress(BindAddress);
         PersistSettings();
         _interception.BreakpointOnResponse = BreakpointOnResponse;
@@ -2283,41 +2409,58 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _interception.DecryptHttps = _decryptHttps;
         _interception.ConfigureLogging(_settings.Current);
         SetStatus("Starting proxy…", StatusSeverity.Busy);
-        await _interception.StartAsync(address, BindPort, _statusRevertCts?.Token ?? CancellationToken.None);
-        if (_interception.BoundPort > 0)
+        var token = StatusCancelToken;
+        var port = BindPort;
+        try
         {
-            BindPort = _interception.BoundPort;
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindPort)));
+            // Listener start + first Root-store trust refresh can stall Crypt32 — keep off UI.
+            await RunOffUiAsync(
+                () => _interception.StartAsync(address, port, token).GetAwaiter().GetResult(),
+                token).ConfigureAwait(false);
+
+            await MarshalToUiAsync(() =>
+            {
+                if (_interception.BoundPort > 0)
+                {
+                    BindPort = _interception.BoundPort;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindPort)));
+                }
+
+                Capturing = true;
+                RefreshEndpointAndBindUi();
+            }, token).ConfigureAwait(false);
+
+            var wantSystemProxy = _reenableSystemProxyOnStart || AutoSystemProxyOnStart;
+            _reenableSystemProxyOnStart = false;
+            var showedSystemProxyGuidance = false;
+            if (wantSystemProxy && !SystemProxy)
+            {
+                // Optimistic SystemProxy path — WinINET applies off UI.
+                SystemProxy = true;
+                showedSystemProxyGuidance = SystemProxy;
+            }
+
+            // Trust was refreshed during StartAsync — do not open the Root store again on the UI thread.
+            if (_decryptHttps && !_interception.IsRootTrusted)
+            {
+                SetDecryptHttpsCore(false);
+                SetStatus(
+                    SystemProxy
+                        ? $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS."
+                        : $"Proxy running on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.",
+                    StatusSeverity.Warning);
+                return;
+            }
+
+            // Keep the system-proxy restart guidance visible; do not replace it with Ready.
+            if (!showedSystemProxyGuidance)
+            {
+                SetSteadyStatus(StatusReady);
+            }
         }
-
-        Capturing = true;
-        RefreshEndpointAndBindUi();
-
-        var wantSystemProxy = _reenableSystemProxyOnStart || AutoSystemProxyOnStart;
-        _reenableSystemProxyOnStart = false;
-        var showedSystemProxyGuidance = false;
-        if (wantSystemProxy && !SystemProxy)
+        finally
         {
-            SystemProxy = true;
-            showedSystemProxyGuidance = SystemProxy;
-        }
-
-        // If settings asked for decrypt but CA is gone, fall back to CONNECT (no silent re-trust).
-        if (_decryptHttps && !_interception.RefreshTrustState())
-        {
-            SetDecryptHttpsCore(false);
-            SetStatus(
-                SystemProxy
-                    ? $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS."
-                    : $"Proxy running on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.",
-                StatusSeverity.Warning);
-            return;
-        }
-
-        // Keep the system-proxy restart guidance visible; do not replace it with Ready.
-        if (!showedSystemProxyGuidance)
-        {
-            SetSteadyStatus(StatusReady);
+            _startBusy = false;
         }
     }
 
