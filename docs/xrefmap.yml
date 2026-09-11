@@ -5294,6 +5294,96 @@ references:
   commentId: N:Titanium.Web.Proxy.Models
   fullName: Titanium.Web.Proxy.Models
   nameWithType: Titanium.Web.Proxy.Models
+- uid: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry
+  name: DecryptFailureBypassEntry
+  href: api/Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.html
+  commentId: T:Titanium.Web.Proxy.Models.DecryptFailureBypassEntry
+  fullName: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry
+  nameWithType: DecryptFailureBypassEntry
+- uid: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.#ctor(System.String,System.Int32,System.DateTime,System.DateTime,System.Boolean)
+  name: DecryptFailureBypassEntry(string, int, DateTime, DateTime, bool)
+  href: api/Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.html#Titanium_Web_Proxy_Models_DecryptFailureBypassEntry__ctor_System_String_System_Int32_System_DateTime_System_DateTime_System_Boolean_
+  commentId: M:Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.#ctor(System.String,System.Int32,System.DateTime,System.DateTime,System.Boolean)
+  name.vb: New(String, Integer, Date, Date, Boolean)
+  fullName: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.DecryptFailureBypassEntry(string, int, System.DateTime, System.DateTime, bool)
+  fullName.vb: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.New(String, Integer, Date, Date, Boolean)
+  nameWithType: DecryptFailureBypassEntry.DecryptFailureBypassEntry(string, int, DateTime, DateTime, bool)
+  nameWithType.vb: DecryptFailureBypassEntry.New(String, Integer, Date, Date, Boolean)
+- uid: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.#ctor*
+  name: DecryptFailureBypassEntry
+  href: api/Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.html#Titanium_Web_Proxy_Models_DecryptFailureBypassEntry__ctor_
+  commentId: Overload:Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.#ctor
+  isSpec: "True"
+  name.vb: New
+  fullName: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.DecryptFailureBypassEntry
+  fullName.vb: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.New
+  nameWithType: DecryptFailureBypassEntry.DecryptFailureBypassEntry
+  nameWithType.vb: DecryptFailureBypassEntry.New
+- uid: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.BypassActive
+  name: BypassActive
+  href: api/Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.html#Titanium_Web_Proxy_Models_DecryptFailureBypassEntry_BypassActive
+  commentId: P:Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.BypassActive
+  fullName: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.BypassActive
+  nameWithType: DecryptFailureBypassEntry.BypassActive
+- uid: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.BypassActive*
+  name: BypassActive
+  href: api/Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.html#Titanium_Web_Proxy_Models_DecryptFailureBypassEntry_BypassActive_
+  commentId: Overload:Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.BypassActive
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.BypassActive
+  nameWithType: DecryptFailureBypassEntry.BypassActive
+- uid: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.ExpiresAtUtc
+  name: ExpiresAtUtc
+  href: api/Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.html#Titanium_Web_Proxy_Models_DecryptFailureBypassEntry_ExpiresAtUtc
+  commentId: P:Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.ExpiresAtUtc
+  fullName: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.ExpiresAtUtc
+  nameWithType: DecryptFailureBypassEntry.ExpiresAtUtc
+- uid: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.ExpiresAtUtc*
+  name: ExpiresAtUtc
+  href: api/Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.html#Titanium_Web_Proxy_Models_DecryptFailureBypassEntry_ExpiresAtUtc_
+  commentId: Overload:Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.ExpiresAtUtc
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.ExpiresAtUtc
+  nameWithType: DecryptFailureBypassEntry.ExpiresAtUtc
+- uid: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.Host
+  name: Host
+  href: api/Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.html#Titanium_Web_Proxy_Models_DecryptFailureBypassEntry_Host
+  commentId: P:Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.Host
+  fullName: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.Host
+  nameWithType: DecryptFailureBypassEntry.Host
+- uid: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.Host*
+  name: Host
+  href: api/Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.html#Titanium_Web_Proxy_Models_DecryptFailureBypassEntry_Host_
+  commentId: Overload:Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.Host
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.Host
+  nameWithType: DecryptFailureBypassEntry.Host
+- uid: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.LearnedAtUtc
+  name: LearnedAtUtc
+  href: api/Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.html#Titanium_Web_Proxy_Models_DecryptFailureBypassEntry_LearnedAtUtc
+  commentId: P:Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.LearnedAtUtc
+  fullName: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.LearnedAtUtc
+  nameWithType: DecryptFailureBypassEntry.LearnedAtUtc
+- uid: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.LearnedAtUtc*
+  name: LearnedAtUtc
+  href: api/Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.html#Titanium_Web_Proxy_Models_DecryptFailureBypassEntry_LearnedAtUtc_
+  commentId: Overload:Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.LearnedAtUtc
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.LearnedAtUtc
+  nameWithType: DecryptFailureBypassEntry.LearnedAtUtc
+- uid: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.Strikes
+  name: Strikes
+  href: api/Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.html#Titanium_Web_Proxy_Models_DecryptFailureBypassEntry_Strikes
+  commentId: P:Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.Strikes
+  fullName: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.Strikes
+  nameWithType: DecryptFailureBypassEntry.Strikes
+- uid: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.Strikes*
+  name: Strikes
+  href: api/Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.html#Titanium_Web_Proxy_Models_DecryptFailureBypassEntry_Strikes_
+  commentId: Overload:Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.Strikes
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.Strikes
+  nameWithType: DecryptFailureBypassEntry.Strikes
 - uid: Titanium.Web.Proxy.Models.ExplicitProxyEndPoint
   name: ExplicitProxyEndPoint
   href: api/Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.html
@@ -8819,6 +8909,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.CheckCertificateRevocation
   nameWithType: ProxyServer.CheckCertificateRevocation
+- uid: Titanium.Web.Proxy.ProxyServer.ClearDecryptFailureBypass
+  name: ClearDecryptFailureBypass()
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ClearDecryptFailureBypass
+  commentId: M:Titanium.Web.Proxy.ProxyServer.ClearDecryptFailureBypass
+  fullName: Titanium.Web.Proxy.ProxyServer.ClearDecryptFailureBypass()
+  nameWithType: ProxyServer.ClearDecryptFailureBypass()
+- uid: Titanium.Web.Proxy.ProxyServer.ClearDecryptFailureBypass*
+  name: ClearDecryptFailureBypass
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ClearDecryptFailureBypass_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.ClearDecryptFailureBypass
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.ClearDecryptFailureBypass
+  nameWithType: ProxyServer.ClearDecryptFailureBypass
 - uid: Titanium.Web.Proxy.ProxyServer.ClientCertificateSelectionCallback
   name: ClientCertificateSelectionCallback
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ClientCertificateSelectionCallback
@@ -8909,6 +9012,51 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.CustomUpStreamProxyFailureFunc
   nameWithType: ProxyServer.CustomUpStreamProxyFailureFunc
+- uid: Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassChanged
+  name: DecryptFailureBypassChanged
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_DecryptFailureBypassChanged
+  commentId: E:Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassChanged
+  fullName: Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassChanged
+  nameWithType: ProxyServer.DecryptFailureBypassChanged
+- uid: Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassMaxEntries
+  name: DecryptFailureBypassMaxEntries
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_DecryptFailureBypassMaxEntries
+  commentId: P:Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassMaxEntries
+  fullName: Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassMaxEntries
+  nameWithType: ProxyServer.DecryptFailureBypassMaxEntries
+- uid: Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassMaxEntries*
+  name: DecryptFailureBypassMaxEntries
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_DecryptFailureBypassMaxEntries_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassMaxEntries
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassMaxEntries
+  nameWithType: ProxyServer.DecryptFailureBypassMaxEntries
+- uid: Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassThreshold
+  name: DecryptFailureBypassThreshold
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_DecryptFailureBypassThreshold
+  commentId: P:Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassThreshold
+  fullName: Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassThreshold
+  nameWithType: ProxyServer.DecryptFailureBypassThreshold
+- uid: Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassThreshold*
+  name: DecryptFailureBypassThreshold
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_DecryptFailureBypassThreshold_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassThreshold
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassThreshold
+  nameWithType: ProxyServer.DecryptFailureBypassThreshold
+- uid: Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassTtl
+  name: DecryptFailureBypassTtl
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_DecryptFailureBypassTtl
+  commentId: P:Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassTtl
+  fullName: Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassTtl
+  nameWithType: ProxyServer.DecryptFailureBypassTtl
+- uid: Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassTtl*
+  name: DecryptFailureBypassTtl
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_DecryptFailureBypassTtl_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassTtl
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassTtl
+  nameWithType: ProxyServer.DecryptFailureBypassTtl
 - uid: Titanium.Web.Proxy.ProxyServer.DefaultViaHeaderPseudonym
   name: DefaultViaHeaderPseudonym
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_DefaultViaHeaderPseudonym
@@ -9028,6 +9176,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.EnableConnectionPool
   nameWithType: ProxyServer.EnableConnectionPool
+- uid: Titanium.Web.Proxy.ProxyServer.EnableDecryptFailureBypass
+  name: EnableDecryptFailureBypass
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableDecryptFailureBypass
+  commentId: P:Titanium.Web.Proxy.ProxyServer.EnableDecryptFailureBypass
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableDecryptFailureBypass
+  nameWithType: ProxyServer.EnableDecryptFailureBypass
+- uid: Titanium.Web.Proxy.ProxyServer.EnableDecryptFailureBypass*
+  name: EnableDecryptFailureBypass
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableDecryptFailureBypass_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.EnableDecryptFailureBypass
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableDecryptFailureBypass
+  nameWithType: ProxyServer.EnableDecryptFailureBypass
 - uid: Titanium.Web.Proxy.ProxyServer.EnableHttp2
   name: EnableHttp2
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableHttp2
@@ -9210,6 +9371,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.GetCustomUpStreamProxyFunc
   nameWithType: ProxyServer.GetCustomUpStreamProxyFunc
+- uid: Titanium.Web.Proxy.ProxyServer.GetDecryptFailureBypassEntries
+  name: GetDecryptFailureBypassEntries()
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_GetDecryptFailureBypassEntries
+  commentId: M:Titanium.Web.Proxy.ProxyServer.GetDecryptFailureBypassEntries
+  fullName: Titanium.Web.Proxy.ProxyServer.GetDecryptFailureBypassEntries()
+  nameWithType: ProxyServer.GetDecryptFailureBypassEntries()
+- uid: Titanium.Web.Proxy.ProxyServer.GetDecryptFailureBypassEntries*
+  name: GetDecryptFailureBypassEntries
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_GetDecryptFailureBypassEntries_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.GetDecryptFailureBypassEntries
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.GetDecryptFailureBypassEntries
+  nameWithType: ProxyServer.GetDecryptFailureBypassEntries
 - uid: Titanium.Web.Proxy.ProxyServer.GlobalAdmissionRejectionCount
   name: GlobalAdmissionRejectionCount
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_GlobalAdmissionRejectionCount
@@ -9584,6 +9758,22 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.ProxySchemeAuthenticateFunc
   nameWithType: ProxyServer.ProxySchemeAuthenticateFunc
+- uid: Titanium.Web.Proxy.ProxyServer.RemoveDecryptFailureBypass(System.String)
+  name: RemoveDecryptFailureBypass(string)
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_RemoveDecryptFailureBypass_System_String_
+  commentId: M:Titanium.Web.Proxy.ProxyServer.RemoveDecryptFailureBypass(System.String)
+  name.vb: RemoveDecryptFailureBypass(String)
+  fullName: Titanium.Web.Proxy.ProxyServer.RemoveDecryptFailureBypass(string)
+  fullName.vb: Titanium.Web.Proxy.ProxyServer.RemoveDecryptFailureBypass(String)
+  nameWithType: ProxyServer.RemoveDecryptFailureBypass(string)
+  nameWithType.vb: ProxyServer.RemoveDecryptFailureBypass(String)
+- uid: Titanium.Web.Proxy.ProxyServer.RemoveDecryptFailureBypass*
+  name: RemoveDecryptFailureBypass
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_RemoveDecryptFailureBypass_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.RemoveDecryptFailureBypass
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.RemoveDecryptFailureBypass
+  nameWithType: ProxyServer.RemoveDecryptFailureBypass
 - uid: Titanium.Web.Proxy.ProxyServer.RemoveEndPoint(Titanium.Web.Proxy.Models.ProxyEndPoint)
   name: RemoveEndPoint(ProxyEndPoint)
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_RemoveEndPoint_Titanium_Web_Proxy_Models_ProxyEndPoint_
@@ -9776,6 +9966,22 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.SetHttp3Enabled
   nameWithType: ProxyServer.SetHttp3Enabled
+- uid: Titanium.Web.Proxy.ProxyServer.ShouldBypassDecryptForLearnedHost(System.String)
+  name: ShouldBypassDecryptForLearnedHost(string?)
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ShouldBypassDecryptForLearnedHost_System_String_
+  commentId: M:Titanium.Web.Proxy.ProxyServer.ShouldBypassDecryptForLearnedHost(System.String)
+  name.vb: ShouldBypassDecryptForLearnedHost(String)
+  fullName: Titanium.Web.Proxy.ProxyServer.ShouldBypassDecryptForLearnedHost(string?)
+  fullName.vb: Titanium.Web.Proxy.ProxyServer.ShouldBypassDecryptForLearnedHost(String)
+  nameWithType: ProxyServer.ShouldBypassDecryptForLearnedHost(string?)
+  nameWithType.vb: ProxyServer.ShouldBypassDecryptForLearnedHost(String)
+- uid: Titanium.Web.Proxy.ProxyServer.ShouldBypassDecryptForLearnedHost*
+  name: ShouldBypassDecryptForLearnedHost
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ShouldBypassDecryptForLearnedHost_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.ShouldBypassDecryptForLearnedHost
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.ShouldBypassDecryptForLearnedHost
+  nameWithType: ProxyServer.ShouldBypassDecryptForLearnedHost
 - uid: Titanium.Web.Proxy.ProxyServer.ShouldInterceptHttp
   name: ShouldInterceptHttp
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ShouldInterceptHttp
