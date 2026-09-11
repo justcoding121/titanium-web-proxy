@@ -193,20 +193,34 @@ WIRE_COUNT = len(PRACTICAL_ARMS)
 HEAVIER_COUNT = len(PRACTICAL_HEAVIER_ARMS)
 
 OS_SPECS = (
-    ("linux", "Linux", ("ubuntu-latest",)),
-    ("windows", "Windows", ("windows-latest",)),
-    ("macos", "macOS", ("macos-15-intel", "macos-latest")),
+    ("linux", "Linux", ("ubuntu-latest",), "4-core / 16 GiB"),
+    ("windows", "Windows", ("windows-latest",), "4-core / 16 GiB"),
+    ("macos", "macOS", ("macos-15-intel", "macos-latest"), "4-core / 14 GB"),
 )
 
-TINY_FOOTER = (
-    "Wires: tiny keep-alive GET (~56 B) · Workloads: WebSocket / gRPC (RPC/s) · "
-    "GitHub Actions 4-core / 16 GiB (macOS 14 GiB)"
+TINY_FOOTER_PREFIX = (
+    "Wires: tiny keep-alive GET (~56 B) · Workloads: WebSocket / gRPC (RPC/s)"
 )
 
-HEAVIER_FOOTER = (
+HEAVIER_FOOTER_PREFIX = (
     "64 KB GET/POST on typical reverse wires (H1/H2/H3 terminate, H2 origin, "
-    "256 KB H1) · GitHub Actions 4-core / 16 GiB (macOS 14 GiB)"
+    "256 KB H1)"
 )
+
+
+def os_runner_spec(os_key: str) -> str:
+    for key, _title, _folder_keys, spec in OS_SPECS:
+        if key == os_key:
+            return spec
+    return "4-core / 16 GiB"
+
+
+def tiny_footer(os_key: str) -> str:
+    return f"{TINY_FOOTER_PREFIX} · GitHub Actions {os_runner_spec(os_key)}"
+
+
+def heavier_footer(os_key: str) -> str:
+    return f"{HEAVIER_FOOTER_PREFIX} · GitHub Actions {os_runner_spec(os_key)}"
 
 # Practical wire label → (client, origin) cells in wiki Performance.md reverse tables.
 WIKI_WIRE_CELLS: Dict[str, Tuple[str, str]] = {
@@ -793,7 +807,7 @@ def render_chart(
     fig.text(
         0.01,
         0.01,
-        footer or TINY_FOOTER,
+        footer or tiny_footer("linux"),
         fontsize=12,
         color="#444444",
     )
@@ -876,7 +890,7 @@ def main() -> int:
         by_os = parse_wiki_practical(md)
         by_os_heavier = parse_wiki_heavier(md)
         wanted = set(args.os) if args.os else {"linux", "windows", "macos"}
-        for key, title, _folder_keys in OS_SPECS:
+        for key, title, _folder_keys, _spec in OS_SPECS:
             if key not in wanted:
                 continue
             series = by_os[key]
@@ -887,7 +901,7 @@ def main() -> int:
                 out,
                 suffix,
                 labels=tiny_labels,
-                footer=TINY_FOOTER,
+                footer=tiny_footer(key),
                 workload_start=WIRE_COUNT,
             )
             written.append(out)
@@ -906,7 +920,7 @@ def main() -> int:
                 out_h,
                 suffix,
                 labels=heavier_labels,
-                footer=HEAVIER_FOOTER,
+                footer=heavier_footer(key),
                 title_template=heavier_title,
             )
             written.append(out_h)
@@ -927,7 +941,7 @@ def main() -> int:
     if args.csv_macos:
         csv_lists_by_os["macos"] = [args.csv_macos]
     if results_roots:
-        for key, _title, folder_keys in OS_SPECS:
+        for key, _title, folder_keys, _spec in OS_SPECS:
             if key in csv_lists_by_os:
                 continue
             found = find_csvs(results_roots, folder_keys)
@@ -947,7 +961,7 @@ def main() -> int:
 
     wanted = set(args.os) if args.os else set(csv_lists_by_os)
 
-    for key, title, folder_keys in OS_SPECS:
+    for key, title, folder_keys, _spec in OS_SPECS:
         if key not in wanted or key not in csv_lists_by_os:
             continue
         paths = csv_lists_by_os[key]
@@ -965,7 +979,7 @@ def main() -> int:
             out,
             suffix,
             labels=tiny_labels,
-            footer=TINY_FOOTER,
+            footer=tiny_footer(key),
             workload_start=WIRE_COUNT,
         )
         written.append(out)
@@ -986,7 +1000,7 @@ def main() -> int:
             out_h,
             suffix,
             labels=heavier_labels,
-            footer=HEAVIER_FOOTER,
+            footer=heavier_footer(key),
             title_template=heavier_title,
         )
         written.append(out_h)
