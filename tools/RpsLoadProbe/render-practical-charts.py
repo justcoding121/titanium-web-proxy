@@ -136,7 +136,9 @@ INDUSTRY_WORKLOADS: List[Tuple[str, Dict[str, Optional[str]]]] = [
 ]
 
 # Heavier practical chart: 64 KB GET/POST on typical reverse wires (+ 256 KB H1).
-# X-axis order: H1 family → H2 → H3 (client protocol).
+# X-axis: H1 64 KB GET/POST, H2 terminate (left of legend), short 256 KB H1 under the
+# legend, then H2 origin and H3. The 256 KB / H2 terminate swap keeps the tall cluster
+# from covering the product legend.
 # label, twp, yarp, nginx, haproxy, envoy (None = product-impossible).
 PRACTICAL_HEAVIER_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], Optional[str]]] = [
     (
@@ -156,20 +158,20 @@ PRACTICAL_HEAVIER_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], 
         "envoy-reverse-http1-tls-post64k",
     ),
     (
-        "GET 256 KB · H1 TLS→H1c",
-        "twp-reverse-http1-tls-body256k",
-        "yarp-reverse-http1-tls-body256k",
-        "nginx-reverse-http1-tls-body256k",
-        "haproxy-reverse-http1-tls-body256k",
-        "envoy-reverse-http1-tls-body256k",
-    ),
-    (
         "GET 64 KB · H2 TLS→H1c",
         "twp-reverse-http2-cleartext-body64k",
         "yarp-reverse-http2-body64k",
         "nginx-reverse-http2-body64k",
         "haproxy-reverse-http2-body64k",
         "envoy-reverse-http2-body64k",
+    ),
+    (
+        "GET 256 KB · H1 TLS→H1c",
+        "twp-reverse-http1-tls-body256k",
+        "yarp-reverse-http1-tls-body256k",
+        "nginx-reverse-http1-tls-body256k",
+        "haproxy-reverse-http1-tls-body256k",
+        "envoy-reverse-http1-tls-body256k",
     ),
     (
         "GET 64 KB · H2 TLS→H2 TLS",
@@ -238,8 +240,8 @@ WIKI_WIRE_CELLS: Dict[str, Tuple[str, str]] = {
 WIKI_HEAVIER_CELLS: Dict[Tuple[Optional[str], str, str], int] = {
     ("64 KiB", "HTTP/1 · TLS", "HTTP/1 · plain"): 0,
     (None, "HTTP/1 · TLS", "HTTP/1 · plain"): 1,  # POST table (no Body col)
-    ("256 KiB", "HTTP/1 · TLS", "HTTP/1 · plain"): 2,
-    ("64 KiB", "HTTP/2 · TLS", "HTTP/1 · plain"): 3,
+    ("64 KiB", "HTTP/2 · TLS", "HTTP/1 · plain"): 2,
+    ("256 KiB", "HTTP/1 · TLS", "HTTP/1 · plain"): 3,
     ("64 KiB", "HTTP/2 · TLS", "HTTP/2 · TLS"): 4,
     ("64 KiB", "HTTP/3 · QUIC", "HTTP/1 · plain"): 5,
 }
@@ -372,16 +374,16 @@ def parse_wiki_practical(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]
         elif in_arch_table and not line.startswith("|"):
             in_arch_table = False
 
-    # --- Unary gRPC ---
+    # --- Unary gRPC (H2 TLS only; ignore H2 TLS → h2c and later stubs) ---
     in_grpc = False
     in_grpc_table = False
     grpc_os_map = {"Windows": "windows", "Linux": "linux", "macOS": "macos"}
     for line in md.splitlines():
-        if line.startswith("## Unary gRPC"):
+        if line.startswith("## Unary gRPC (H2 TLS)") and "h2c" not in line:
             in_grpc = True
             in_grpc_table = False
             continue
-        if in_grpc and line.startswith("## ") and not line.startswith("## Unary gRPC"):
+        if in_grpc and line.startswith("## "):
             break
         if not in_grpc:
             continue
@@ -766,8 +768,8 @@ def render_chart(
     labels = list(labels) if labels is not None else [a[0] for a in PRACTICAL_ARMS]
     x = np.arange(len(labels), dtype=float)
 
-    fig_w = 16.0 if len(labels) >= 10 else 14.5
-    fig, ax = plt.subplots(figsize=(fig_w, 5.8), dpi=140)
+    # Same width for tiny and heavier so README / website scale the legend the same.
+    fig, ax = plt.subplots(figsize=(14.5, 5.8), dpi=140)
     ymax = plot_packed_product_bars(ax, series, x)
 
     if workload_start is not None and 0 < workload_start < len(labels):
