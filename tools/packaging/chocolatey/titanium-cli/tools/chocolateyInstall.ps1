@@ -5,7 +5,7 @@ $toolsDir = "$(Split-Path -Parent $MyInvocation.MyCommand.Definition)"
 $packageArgs = @{
   packageName    = $env:ChocolateyPackageName
   unzipLocation  = $toolsDir
-  url64bit       = 'https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.7/Titanium.Cli-win-x64.zip'
+  url64bit       = 'https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.8/Titanium.Cli-win-x64.zip'
   checksum64     = 'EF79522355392ABB805C27F98426DB22DDB73BFE759500FFF4B41320F9B48DAB'
   checksumType64 = 'sha256'
 }

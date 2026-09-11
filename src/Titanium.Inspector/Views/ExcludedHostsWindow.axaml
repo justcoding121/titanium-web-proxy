@@ -28,7 +28,7 @@
                  FontFamily="Consolas,Courier New,monospace"
                  AutomationProperties.AutomationId="ExcludedBypassHosts" />
 
-        <TextBlock FontWeight="SemiBold" Text="Tunnel only (no decrypt)" />
+        <TextBlock FontWeight="SemiBold" Text="Not decrypted hosts" />
         <TextBlock Opacity="0.75" TextWrapping="Wrap"
                    Text="CONNECT stays visible; TLS stays opaque when Decrypt HTTPS is on. Seeded with certificate-pinning hosts (Dropbox, Webex)." />
         <TextBox x:Name="SkipHostsBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="72"
@@ -36,18 +36,18 @@
                  FontFamily="Consolas,Courier New,monospace"
                  AutomationProperties.AutomationId="ExcludedSkipHosts" />
 
-        <TextBlock FontWeight="SemiBold" Text="Auto-tunnel on decrypt failure" />
-        <CheckBox x:Name="LearningEnabledCheck" Content="Learn hosts that fail origin TLS under decrypt (session only)"
+        <TextBlock FontWeight="SemiBold" Text="Automatically not decrypt on decrypt failure" />
+        <CheckBox x:Name="LearningEnabledCheck" Content="Learn hosts that fail origin TLS under decrypt"
                   AutomationProperties.AutomationId="ExcludedLearningEnabled" />
         <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                   Text="When origin TLS fails repeatedly under decrypt, or MITM HTTPS returns 403/429 (document pages auto-retry onto a tunnel; APIs need repeated blocks), Inspector stops decrypting that host for later connections in this session. Prefetch is skipped once a host is learned. List is capped and forgotten on restart unless you promote. Certificate-pinning apps still belong on Tunnel only." />
+                   Text="When origin TLS fails repeatedly under decrypt, or the origin server returns 403/429, Inspector stops decrypting that host for later connections in this session. List is capped and forgotten on restart unless you promote." />
         <TextBlock x:Name="LearningPausedBanner" IsVisible="False" Opacity="0.85" TextWrapping="Wrap"
                    Text="Learning paused — existing entries kept until forgotten." />
         <ListBox x:Name="LearnedList" MinHeight="96" MaxHeight="180"
                  AutomationProperties.AutomationId="ExcludedLearnedList" />
         <TextBlock x:Name="LearnedEmptyText" Opacity="0.6" Text="No hosts learned yet." />
         <StackPanel Orientation="Horizontal" Spacing="8">
-          <Button x:Name="PromoteLearnedButton" Content="Promote to tunnel-only" MinWidth="140"
+          <Button x:Name="PromoteLearnedButton" Content="Add to not decrypted hosts" MinWidth="160"
                   AutomationProperties.AutomationId="ExcludedLearnedPromote" />
           <Button x:Name="ForgetLearnedButton" Content="Forget" MinWidth="88"
                   AutomationProperties.AutomationId="ExcludedLearnedForget" />

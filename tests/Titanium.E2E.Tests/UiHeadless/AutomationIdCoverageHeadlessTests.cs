@@ -476,6 +476,14 @@ public class AutomationIdCoverageHeadlessTests
                 string.Equals(AutomationProperties.GetAutomationId(c), "ExcludedOnlyHosts", StringComparison.Ordinal)
                 || string.Equals(AutomationProperties.GetAutomationId(c), "ExcludedBuiltInList", StringComparison.Ordinal)
                 || string.Equals(AutomationProperties.GetAutomationId(c), "ExcludedProxyLoopback", StringComparison.Ordinal)));
+
+            var excludeHost = new ExcludeHostDialog(settings, "api.example.com");
+            AssertHasAutomationId(excludeHost, "ExcludeHostDialog");
+            AssertHasAutomationId(excludeHost, "ExcludeHostAdd");
+            AssertHasAutomationId(excludeHost, "ExcludeHostWildcardParent");
+            Assert.IsFalse(excludeHost.GetLogicalDescendants().OfType<Control>().Any(c =>
+                string.Equals(AutomationProperties.GetAutomationId(c), "ExcludeHostTunnelOnly", StringComparison.Ordinal)
+                || string.Equals(AutomationProperties.GetAutomationId(c), "ExcludeHostBypassProxy", StringComparison.Ordinal)));
         });
     }
 

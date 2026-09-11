@@ -596,7 +596,6 @@ public static class ChromeScenario
                     {
                         if (!ProbeUiRobot.HasOtherWindows(harness.Window))
                             return true;
-                        ProbeUiRobot.TryClickInOtherWindows(harness.Window, "ExcludeHostTunnelOnly");
                         ProbeUiRobot.TryClickInOtherWindows(harness.Window, "ExcludeHostAdd");
                         return !ProbeUiRobot.HasOtherWindows(harness.Window);
                     },
