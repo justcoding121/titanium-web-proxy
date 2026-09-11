@@ -272,16 +272,9 @@ public partial class ProxyServer
                             CertificateRevocationCheckMode = X509RevocationMode.NoCheck
                         };
 
-                        if (http2Supported)
-                        {
-                            options.ApplicationProtocols = clientHelloInfo.GetAlpn();
-                            if (options.ApplicationProtocols == null || options.ApplicationProtocols.Count == 0)
-                                options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
-                        }
-                        else
-                        {
-                            options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
-                        }
+                        options.ApplicationProtocols = http2Supported
+                            ? SslExtensions.Http2AndHttp11ProtocolAsList
+                            : SslExtensions.Http11ProtocolAsList;
 
                         // Successfully managed to authenticate the client using the certificate
                         await sslStream.AuthenticateAsServerAsync(options, cancellationToken);

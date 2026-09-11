@@ -72,38 +72,88 @@ public partial class ProxyServer
         var capabilityCacheKey = TcpConnectionFactory.GetConnectionCacheKey(remoteHostName, remotePort, true,
             null, upStreamEndPoint, externalProxy, connectHost, connectPort);
 
-        if (Http2OriginCapabilityCache.TryGet(capabilityCacheKey, out var cachedSupport))
+        if (!Http2OriginCapabilityCache.TryGet(capabilityCacheKey, out var cachedSupport))
+        {
+            Diagnostics.ProxyMetrics.Http2CapabilityLookup(cacheHit: false);
+            // Coalesce concurrent cold probes: browsers open many CONNECTs to the same host at once.
+            // Each used to block AuthenticateAsServer on its own origin TLS probe; Chrome then aborted
+            // waiting tunnels (EOF / "Couldn't authenticate host"). One in-flight probe feeds them all.
+            cachedSupport = await CoalesceHttp2CapabilityProbeAsync(capabilityCacheKey, sessionArgs,
+                remoteHostName, remotePort, connectHost, connectPort, upStreamEndPoint, externalProxy,
+                cancellationToken);
+        }
+        else
         {
             Diagnostics.ProxyMetrics.Http2CapabilityLookup(cacheHit: true);
             ProxyLog.Http2ProbeResult(logger, capabilityCacheKey, true, cachedSupport, null);
-
-            Task<TcpServerConnection?>? retained = null;
-            if (enablePrefetch)
-                // Correctly keyed up front, so a cache hit never needs a separate discovery connection:
-                // once validated by the caller, this single connection becomes the session connection
-                // instead of being opened, checked, and then wastefully discarded.
-                // Don't pass cancellationToken here - it could leave a floating server connection if the
-                // client disconnects before this completes.
-                retained = TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
-                    HttpHeader.Version20, true, cachedSupport ? SslExtensions.Http2ProtocolAsList : null, true,
-                    sessionArgs, upStreamEndPoint, externalProxy, false, true, CancellationToken.None,
-                    connectHost, connectPort);
-
-            return new Http2NegotiationResult(cachedSupport, retained);
         }
 
-        Diagnostics.ProxyMetrics.Http2CapabilityLookup(cacheHit: false);
+        Task<TcpServerConnection?>? retained = null;
+        if (enablePrefetch)
+            // Correctly keyed up front, so this connection becomes the session connection instead of
+            // being opened, checked, and then wastefully discarded.
+            // Don't pass cancellationToken here - it could leave a floating server connection if the
+            // client disconnects before this completes.
+            retained = TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
+                HttpHeader.Version20, true, cachedSupport ? SslExtensions.Http2ProtocolAsList : null, true,
+                sessionArgs, upStreamEndPoint, externalProxy, false, true, CancellationToken.None,
+                connectHost, connectPort);
 
-        // Cold cache: client ALPN advertisement depends on origin capability, so this single discovery
-        // connection must be awaited before the client is authenticated. It doubles as the capability
-        // probe and, on success, the retained connection reused for the session that follows - replacing
-        // what used to be up to three separate origin connections (probe, prefetch, session) with one.
-        var probeStarted = System.Diagnostics.Stopwatch.StartNew();
+        return new Http2NegotiationResult(cachedSupport, retained);
+    }
+
+    /// <summary>
+    ///     Runs at most one cold HTTP/2 ALPN probe per capability-cache key; concurrent callers await the
+    ///     same task. Definitive ALPN rejection (<c>SEC_E_NO_APPLICATION_PROTOCOL</c>) is cached as
+    ///     unsupported; transient network/cert failures are not cached.
+    /// </summary>
+    private async Task<bool> CoalesceHttp2CapabilityProbeAsync(string capabilityCacheKey,
+        SessionEventArgsBase sessionArgs, string remoteHostName, int remotePort, string? connectHost,
+        int? connectPort, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
+        CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            if (Http2OriginCapabilityCache.TryGet(capabilityCacheKey, out var racedCache))
+                return racedCache;
+
+            var probeTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var probeTask = pendingHttp2CapabilityProbes.GetOrAdd(capabilityCacheKey, probeTcs.Task);
+            if (!ReferenceEquals(probeTask, probeTcs.Task))
+                return await probeTask.ConfigureAwait(false);
+
+            var probeStarted = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                var supported = await ProbeHttp2CapabilityOnceAsync(capabilityCacheKey, sessionArgs,
+                    remoteHostName, remotePort, connectHost, connectPort, upStreamEndPoint, externalProxy,
+                    cancellationToken, probeStarted).ConfigureAwait(false);
+                probeTcs.TrySetResult(supported);
+                return supported;
+            }
+            catch (Exception ex)
+            {
+                probeTcs.TrySetException(ex);
+                throw;
+            }
+            finally
+            {
+                pendingHttp2CapabilityProbes.TryRemove(capabilityCacheKey, out _);
+            }
+        }
+    }
+
+    private async Task<bool> ProbeHttp2CapabilityOnceAsync(string capabilityCacheKey,
+        SessionEventArgsBase sessionArgs, string remoteHostName, int remotePort, string? connectHost,
+        int? connectPort, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
+        CancellationToken cancellationToken, System.Diagnostics.Stopwatch probeStarted)
+    {
+        TcpServerConnection? connection = null;
         try
         {
-            var connection = await TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
+            connection = await TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
                 HttpHeader.Version20, true, SslExtensions.Http2ProtocolAsList, true, sessionArgs, upStreamEndPoint,
-                externalProxy, true, true, cancellationToken, connectHost, connectPort);
+                externalProxy, true, true, cancellationToken, connectHost, connectPort).ConfigureAwait(false);
 
             var supported = connection != null &&
                              connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2;
@@ -111,17 +161,26 @@ public partial class ProxyServer
             Http2OriginCapabilityCache.Set(capabilityCacheKey, supported);
             Diagnostics.ProxyMetrics.Http2ProbeCompleted(probeStarted.Elapsed.TotalMilliseconds);
             ProxyLog.Http2ProbeResult(logger, capabilityCacheKey, false, supported, null);
-
-            return new Http2NegotiationResult(supported, Task.FromResult(connection));
+            return supported;
         }
         catch (Exception ex)
         {
-            // Do not cache a failed probe: it may be a transient network/cert issue rather than a genuine
-            // lack of HTTP/2 support, and caching "false" here would pin every subsequent tunnel to this
-            // host to HTTP/1.1 for the full TTL.
+            // ALPN rejection is definitive for this offer (h2); cache false so parallel CONNECT
+            // tunnels do not each re-probe and delay browser AuthenticateAsServer. Transient
+            // network/cert failures must not be cached — they would pin the host to HTTP/1.1.
+            if (AlpnNegotiation.IsAlpnNegotiationFailure(ex))
+                Http2OriginCapabilityCache.Set(capabilityCacheKey, false);
+
             Diagnostics.ProxyMetrics.Http2ProbeCompleted(probeStarted.Elapsed.TotalMilliseconds);
             ProxyLog.Http2ProbeResult(logger, capabilityCacheKey, false, false, ex);
-            return new Http2NegotiationResult(false, null);
+            return false;
+        }
+        finally
+        {
+            // Capability-only probe: release so coalesced waiters do not share a half-used socket.
+            // Session traffic uses the enablePrefetch connection opened after the result is known.
+            if (connection != null)
+                await TcpConnectionFactory.Release(connection, true).ConfigureAwait(false);
         }
     }
 

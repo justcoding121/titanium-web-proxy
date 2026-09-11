@@ -229,6 +229,13 @@ public partial class ProxyServer : IDisposable
         new(TimeSpan.FromMinutes(30));
 
     /// <summary>
+    ///     In-flight HTTP/2 capability probes keyed like <see cref="Http2OriginCapabilityCache" />.
+    ///     Browsers open many parallel CONNECTs to the same host; without coalescing, each cold tunnel
+    ///     blocked browser <c>AuthenticateAsServer</c> on its own origin probe and Chrome aborted with EOF.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, Task<bool>> pendingHttp2CapabilityProbes = new();
+
+    /// <summary>
     ///     Caches, per upstream host:port, whether the real origin supports HTTP/3 (QUIC), as discovered via
     ///     <c>Alt-Svc</c> response headers or HTTPS/SVCB DNS records. See <see cref="Http3.Http3OriginCapabilityCache" />.
     /// </summary>

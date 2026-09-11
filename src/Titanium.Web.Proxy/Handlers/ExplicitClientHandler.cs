@@ -296,12 +296,11 @@ public partial class ProxyServer
                         // Offer h2 whenever capability negotiation / H3 bridging decided the client
                         // should see it — including EnableHttp2=false + H3 bridge, which still speaks
                         // h2 on the browser leg.
-                        if (http2Supported)
-                        {
-                            options.ApplicationProtocols = clientHelloInfo.GetAlpn();
-                            if (options.ApplicationProtocols == null || options.ApplicationProtocols.Count == 0)
-                                options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
-                        }
+                        // Offer a fixed safe ALPN set rather than mirroring a possibly truncated
+                        // ClientHello peek (large PQ hellos). Always include http/1.1 when offering h2.
+                        options.ApplicationProtocols = http2Supported
+                            ? SslExtensions.Http2AndHttp11ProtocolAsList
+                            : SslExtensions.Http11ProtocolAsList;
 
                         options.ServerCertificateContext = CertificateManager.CreateSslCertificateContext(certificate);
                         options.ClientCertificateRequired = false;
