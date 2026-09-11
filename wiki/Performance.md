@@ -539,7 +539,7 @@ Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2) or UDP da
 | HTTP/3 · QUIC | HTTP/2 · TLS | **0**<br><sub>(70 MiB / 0.1% CPU)</sub> | **0**<br><sub>(70 MiB / 0.1% CPU)</sub> | *Not possible* | *Not possible* | *Not possible* | *Not possible* | *Not possible* | *Not possible* | **0**<br><sub>(80 MiB / 0.0% CPU)</sub> | **0**<br><sub>(80 MiB / 0.0% CPU)</sub> |
 | HTTP/3 · QUIC | HTTP/1 · TLS | **0**<br><sub>(69 MiB / 0.0% CPU)</sub> | **0**<br><sub>(69 MiB / 0.0% CPU)</sub> | *Not possible (no QUIC)* | *Not possible (no QUIC)* | *Not possible* | *Not possible* | *Not possible* | *Not possible* | **0**<br><sub>(78 MiB / 0.0% CPU)</sub> | **0**<br><sub>(78 MiB / 0.0% CPU)</sub> |
 
-TWP H2 HOL leads (~**3.31×** YARP). H3 is the protocol-shape win vs H2 HOL on the same lossy session; Win H3 GHA remains 0 (laptop remeasure kept above).
+TWP H2 HOL leads (~**3.31×** YARP). H3 is the protocol-shape win vs H2 HOL on the same lossy session; Win H3 GHA remains 0 (laptop re-measure kept above).
 
 ### Linux — lossy / high-RTT (H2 HOL / H3 loss)
 

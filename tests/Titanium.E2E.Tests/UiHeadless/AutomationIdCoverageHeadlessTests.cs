@@ -203,7 +203,7 @@ public class AutomationIdCoverageHeadlessTests
         await fx.StartAsync();
         await fx.DispatchAsync(() =>
         {
-            // Avoid mutating BindPort/Address here — TextBox remeasure can race Headless teardown fonts.
+            // Avoid mutating BindPort/Address here — TextBox re-measure can race Headless teardown fonts.
             fx.Robot.SetCheck("AutoStartCaptureCheck", false);
             fx.Robot.SetCheck("AutoSystemProxyCheck", false);
             Assert.IsFalse(fx.ViewModel.AutoStartCapture);
