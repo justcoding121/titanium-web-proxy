@@ -126,16 +126,17 @@ INDUSTRY_WORKLOADS: List[Tuple[str, Dict[str, Optional[str]]]] = [
     (
         "gRPC unary",
         {
-            "Titanium": "twp-reverse-http2-grpc-unary",
-            "YARP": "yarp-reverse-http2-grpc-unary",
-            "nginx": "nginx-reverse-http2-grpc-unary",
-            "HAProxy": "haproxy-reverse-http2-grpc-unary",
-            "Envoy": "envoy-reverse-http2-grpc-unary",
+            "Titanium": "twp-grpc-http2",
+            "YARP": "yarp-grpc-http2",
+            "nginx": "nginx-grpc-http2",
+            "HAProxy": "haproxy-grpc-http2",
+            "Envoy": "envoy-grpc-http2",
         },
     ),
 ]
 
 # Heavier practical chart: 64 KB GET/POST on typical reverse wires (+ 256 KB H1).
+# X-axis order: H1 family → H2 → H3 (client protocol).
 # label, twp, yarp, nginx, haproxy, envoy (None = product-impossible).
 PRACTICAL_HEAVIER_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], Optional[str]]] = [
     (
@@ -145,30 +146,6 @@ PRACTICAL_HEAVIER_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], 
         "nginx-reverse-http1-tls-body64k",
         "haproxy-reverse-http1-tls-body64k",
         "envoy-reverse-http1-tls-body64k",
-    ),
-    (
-        "GET 64 KB · H2 TLS→H1c",
-        "twp-reverse-http2-cleartext-body64k",
-        "yarp-reverse-http2-body64k",
-        "nginx-reverse-http2-body64k",
-        "haproxy-reverse-http2-body64k",
-        "envoy-reverse-http2-body64k",
-    ),
-    (
-        "GET 64 KB · H3→H1c",
-        "twp-reverse-http3-cleartext-body64k",
-        "yarp-reverse-http3-cleartext-body64k",
-        "nginx-reverse-http3-cleartext-body64k",
-        "haproxy-reverse-http3-cleartext-body64k",
-        "envoy-reverse-http3-cleartext-body64k",
-    ),
-    (
-        "GET 64 KB · H2 TLS→H2 TLS",
-        "twp-reverse-http2-to-https-body64k",
-        "yarp-reverse-http2-to-https-body64k",
-        None,
-        "haproxy-reverse-http2-to-https-body64k",
-        "envoy-reverse-http2-to-https-body64k",
     ),
     (
         "POST 64 KB · H1 TLS→H1c",
@@ -185,6 +162,30 @@ PRACTICAL_HEAVIER_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], 
         "nginx-reverse-http1-tls-body256k",
         "haproxy-reverse-http1-tls-body256k",
         "envoy-reverse-http1-tls-body256k",
+    ),
+    (
+        "GET 64 KB · H2 TLS→H1c",
+        "twp-reverse-http2-cleartext-body64k",
+        "yarp-reverse-http2-body64k",
+        "nginx-reverse-http2-body64k",
+        "haproxy-reverse-http2-body64k",
+        "envoy-reverse-http2-body64k",
+    ),
+    (
+        "GET 64 KB · H2 TLS→H2 TLS",
+        "twp-reverse-http2-to-https-body64k",
+        "yarp-reverse-http2-to-https-body64k",
+        None,
+        "haproxy-reverse-http2-to-https-body64k",
+        "envoy-reverse-http2-to-https-body64k",
+    ),
+    (
+        "GET 64 KB · H3→H1c",
+        "twp-reverse-http3-cleartext-body64k",
+        "yarp-reverse-http3-cleartext-body64k",
+        "nginx-reverse-http3-cleartext-body64k",
+        "haproxy-reverse-http3-cleartext-body64k",
+        "envoy-reverse-http3-cleartext-body64k",
     ),
 ]
 
@@ -222,11 +223,11 @@ WIKI_WIRE_CELLS: Dict[str, Tuple[str, str]] = {
 # Heavier chart wiki cells: (body_or_None_for_post, client, origin) → cluster index.
 WIKI_HEAVIER_CELLS: Dict[Tuple[Optional[str], str, str], int] = {
     ("64 KiB", "HTTP/1 · TLS", "HTTP/1 · plain"): 0,
-    ("64 KiB", "HTTP/2 · TLS", "HTTP/1 · plain"): 1,
-    ("64 KiB", "HTTP/3 · QUIC", "HTTP/1 · plain"): 2,
-    ("64 KiB", "HTTP/2 · TLS", "HTTP/2 · TLS"): 3,
-    (None, "HTTP/1 · TLS", "HTTP/1 · plain"): 4,  # POST table (no Body col)
-    ("256 KiB", "HTTP/1 · TLS", "HTTP/1 · plain"): 5,
+    (None, "HTTP/1 · TLS", "HTTP/1 · plain"): 1,  # POST table (no Body col)
+    ("256 KiB", "HTTP/1 · TLS", "HTTP/1 · plain"): 2,
+    ("64 KiB", "HTTP/2 · TLS", "HTTP/1 · plain"): 3,
+    ("64 KiB", "HTTP/2 · TLS", "HTTP/2 · TLS"): 4,
+    ("64 KiB", "HTTP/3 · QUIC", "HTTP/1 · plain"): 5,
 }
 
 HEADING_TO_OS = {
@@ -654,8 +655,8 @@ def arm_sustain_union(csv_paths: Sequence[Path], arm: Optional[str]) -> Optional
 
 
 def grpc_arm_union(csv_paths: Sequence[Path], prefix: str, fallback: Optional[str]) -> Optional[str]:
-    """Resolve a *-grpc-* arm; prefer <prefix>-reverse-http2-grpc-unary when present."""
-    preferred = fallback or f"{prefix}-reverse-http2-grpc-unary"
+    """Resolve a *-grpc-* arm; prefer <prefix>-grpc-http2 when present."""
+    preferred = fallback or f"{prefix}-grpc-http2"
     for path in csv_paths:
         arms = {r.get("arm") for r in csv.DictReader(path.open(newline="")) if r.get("arm")}
         if preferred in arms:

@@ -948,8 +948,11 @@ internal static class RampOrchestrator
         bool haproxyQuicAvailable, bool envoyAvailable, bool envoyHttp3Available) =>
         wire.Product switch
         {
+            // HAProxy 3.2 USE_QUIC is frontend-only; QUIC backends are rejected at config check.
             PeerProduct.Nginx => nginxAvailable,
-            PeerProduct.Haproxy => haproxyAvailable && (!PeerWire.NeedsQuicBuild(wire) || haproxyQuicAvailable),
+            PeerProduct.Haproxy => haproxyAvailable
+                && wire.Origin != PeerOriginProto.H3
+                && (!PeerWire.NeedsQuicBuild(wire) || haproxyQuicAvailable),
             PeerProduct.Envoy => envoyAvailable && (!PeerWire.NeedsQuicBuild(wire) || envoyHttp3Available),
             _ => false
         };
@@ -1707,8 +1710,8 @@ internal static class RampOrchestrator
             haproxyAvailable, envoyAvailable, null,
             "haproxy-reverse-http1-plain-to-http2", "envoy-reverse-http1-plain-to-http2");
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp1PlainToHttp3, nginxAvailable: false,
-            haproxyHttp3Available, envoyHttp3Available, null,
-            "haproxy-reverse-http1-plain-to-http3", "envoy-reverse-http1-plain-to-http3");
+            haproxyAvailable: false, envoyHttp3Available, null,
+            null, "envoy-reverse-http1-plain-to-http3");
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp1ToH2c, nginxAvailable: false,
             haproxyAvailable, envoyAvailable, null,
             "haproxy-reverse-http1-to-h2c", "envoy-reverse-http1-to-h2c");
@@ -1716,8 +1719,8 @@ internal static class RampOrchestrator
             haproxyAvailable, envoyAvailable, null,
             "haproxy-reverse-http11-to-http2", "envoy-reverse-http11-to-http2");
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp1ToHttp3, nginxAvailable: false,
-            haproxyHttp3Available, envoyHttp3Available, null,
-            "haproxy-reverse-http1-to-http3", "envoy-reverse-http1-to-http3");
+            haproxyAvailable: false, envoyHttp3Available, null,
+            null, "envoy-reverse-http1-to-http3");
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseH2cToH1, nginxAvailable,
             haproxyAvailable, envoyAvailable,
             "nginx-reverse-h2c-to-h1", "haproxy-reverse-h2c-to-h1", "envoy-reverse-h2c-to-h1");
@@ -1731,8 +1734,8 @@ internal static class RampOrchestrator
             haproxyAvailable, envoyAvailable, null,
             "haproxy-reverse-h2c", "envoy-reverse-h2c");
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseH2cToH3, nginxAvailable: false,
-            haproxyHttp3Available, envoyHttp3Available, null,
-            "haproxy-reverse-h2c-to-h3", "envoy-reverse-h2c-to-h3");
+            haproxyAvailable: false, envoyHttp3Available, null,
+            null, "envoy-reverse-h2c-to-h3");
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp2ToH2c, nginxAvailable: false,
             haproxyAvailable, envoyAvailable, null,
             "haproxy-reverse-http2-to-h2c", "envoy-reverse-http2-to-h2c");
@@ -1740,17 +1743,18 @@ internal static class RampOrchestrator
             haproxyAvailable, envoyAvailable, null,
             "haproxy-reverse-http2-to-https", "envoy-reverse-http2-to-https");
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp2ToHttp3, nginxAvailable: false,
-            haproxyHttp3Available, envoyHttp3Available, null,
-            "haproxy-reverse-http2-to-http3", "envoy-reverse-http2-to-http3");
+            haproxyAvailable: false, envoyHttp3Available, null,
+            null, "envoy-reverse-http2-to-http3");
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp3ToH2c, nginxAvailable: false,
             haproxyHttp3Available, envoyHttp3Available, null,
             "haproxy-reverse-http3-to-h2c", "envoy-reverse-http3-to-h2c");
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp3ToHttp2, nginxAvailable: false,
             haproxyHttp3Available, envoyHttp3Available, null,
             "haproxy-reverse-http3-to-http2", "envoy-reverse-http3-to-http2");
+        // HAProxy has no QUIC backend — H3↔H3 is Envoy-only among terminate peers.
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp3ToHttp3, nginxAvailable: false,
-            haproxyHttp3Available, envoyHttp3Available, null,
-            "haproxy-reverse-http3-to-http3", "envoy-reverse-http3-to-http3");
+            haproxyAvailable: false, envoyHttp3Available, null,
+            null, "envoy-reverse-http3-to-http3");
 
         return arms;
     }
