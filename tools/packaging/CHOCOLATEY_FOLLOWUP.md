@@ -58,3 +58,7 @@ choco push returned **403 Forbidden** for both packages after 7.0.6-beta / 7.0.6
 ## 2026-09-11: hold Chocolatey for 7.0.7-beta
 
 `v7.0.7-beta` GitHub/NuGet cut intentionally **did not** push Chocolatey. Repo secret `CHOCOLATEY_API_KEY` was removed so `release.yml` `publish-chocolatey` skips. Do not dispatch `chocolatey-publish.yml` until earlier packages clear chocolatey.org moderator review; then restore the secret and push withheld versions in order (7.0.6* before 7.0.7-beta).
+
+## 2026-09-11: hold Chocolatey for 7.0.8-beta
+
+Same hold as 7.0.7-beta: `CHOCOLATEY_API_KEY` remains unset; `v7.0.8-beta` GitHub/NuGet cut intentionally **does not** push Chocolatey. Do not dispatch `chocolatey-publish.yml` until earlier packages clear moderator review.
