@@ -899,10 +899,13 @@ public class SessionEventArgs : SessionEventArgsBase
 
         // Buffered synthetics already carry the body; mark read so H2 GetResponseBody does not
         // wait on ReadHttp2BeforeHandlerTaskCompletionSource (null after replacement).
+        // Do not set IsBodyReceived when replacing an origin response — SyphonOutBodyAsync must
+        // still drain unread origin bytes so pooled H1 connections stay reusable.
         if (HttpClient.Response.BodyAvailable)
         {
             HttpClient.Response.IsBodyRead = true;
-            HttpClient.Response.IsBodyReceived = true;
+            if (HttpClient.Request.CancelRequest)
+                HttpClient.Response.IsBodyReceived = true;
         }
     }
 
