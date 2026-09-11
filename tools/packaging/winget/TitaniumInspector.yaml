@@ -15,10 +15,10 @@ Installers:
   - Architecture: x64
     InstallerType: wix
     InstallerUrl: https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.6/TitaniumInspector-win-x64.msi
-    InstallerSha256: 15179C71A50B7724F55F421025086E0DA798B6A18EC9004FE64F22E04002124E
+    InstallerSha256: 71A1A4CE095540EC5AF2765D6663EFC8540AC04A9B02B98F25CF3775FE18B5B7
   - Architecture: x64
     InstallerType: portable
     InstallerUrl: https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.6/TitaniumInspector-win-x64.zip
-    InstallerSha256: 2A5F29234E2DFA4B29552CFB42E0D84E0CBC556C4787072196FD6EB0756AC15B
+    InstallerSha256: 8E2FBDF669A9E9F98C494B629D0E23F5B7FB508311FAB57D5B658C4E70224B10
 ManifestType: singleton
 ManifestVersion: 1.6.0

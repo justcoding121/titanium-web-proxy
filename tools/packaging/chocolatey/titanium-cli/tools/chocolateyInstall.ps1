@@ -6,7 +6,7 @@ $packageArgs = @{
   packageName    = $env:ChocolateyPackageName
   unzipLocation  = $toolsDir
   url64bit       = 'https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.6/Titanium.Cli-win-x64.zip'
-  checksum64     = '8C6D09C7293C9A3D205C64FB00D946A10AFA3379F072FA83A87EEFC4FE9425E2'
+  checksum64     = 'EF79522355392ABB805C27F98426DB22DDB73BFE759500FFF4B41320F9B48DAB'
   checksumType64 = 'sha256'
 }
 
