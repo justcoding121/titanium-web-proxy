@@ -49,8 +49,16 @@ internal static class ProcessResourceSampler
     }
 
     /// <summary>
+    /// How often to re-walk the Darwin process tree via <c>pgrep</c>. Forking <c>pgrep</c> every
+    /// poll (200ms) during the measure window inflates p99 on 4-core macos-15-intel and made
+    /// compare-editions Plus arms look like "missing" SLO rows at c=64.
+    /// </summary>
+    private static readonly TimeSpan MacTreeRefreshInterval = TimeSpan.FromSeconds(2);
+
+    /// <summary>
     /// Darwin: <see cref="Process.WorkingSet64"/> + <see cref="Process.TotalProcessorTime"/> over the
     /// descendant tree (serve-proxy → nginx master → workers). Same shape as the Windows sampler.
+    /// Tree discovery is throttled — see <see cref="MacTreeRefreshInterval"/>.
     /// </summary>
     private static async Task<ProcessResourceSample?> SampleMacAsync(int rootPid, TimeSpan duration,
         CancellationToken cancellationToken)
@@ -58,7 +66,7 @@ internal static class ProcessResourceSampler
         var handles = new Dictionary<int, Process>();
         try
         {
-            AttachMacPids(handles, rootPid);
+            AttachMacPids(handles, rootPid, forceTreeRefresh: true);
             if (handles.Count == 0)
                 return null;
 
@@ -68,11 +76,19 @@ internal static class ProcessResourceSampler
             long? prevWall = null;
             var deadline = Stopwatch.GetTimestamp() + (long)(duration.TotalSeconds * Stopwatch.Frequency);
             var processors = Math.Max(1, Environment.ProcessorCount);
+            var nextTreeRefresh = Stopwatch.GetTimestamp() +
+                                  (long)(MacTreeRefreshInterval.TotalSeconds * Stopwatch.Frequency);
 
             while (Stopwatch.GetTimestamp() < deadline)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                AttachMacPids(handles, rootPid);
+                var refreshTree = Stopwatch.GetTimestamp() >= nextTreeRefresh;
+                AttachMacPids(handles, rootPid, forceTreeRefresh: refreshTree);
+                if (refreshTree)
+                {
+                    nextTreeRefresh = Stopwatch.GetTimestamp() +
+                                      (long)(MacTreeRefreshInterval.TotalSeconds * Stopwatch.Frequency);
+                }
 
                 long rssSum = 0;
                 double cpuDeltaSec = 0;
@@ -154,9 +170,14 @@ internal static class ProcessResourceSampler
         }
     }
 
-    private static void AttachMacPids(Dictionary<int, Process> handles, int rootPid)
+    private static void AttachMacPids(Dictionary<int, Process> handles, int rootPid, bool forceTreeRefresh)
     {
-        foreach (var pid in GetMacTreePids(rootPid))
+        // Between tree refreshes, only ensure the root handle stays attached — avoid pgrep storms.
+        IEnumerable<int> pids = forceTreeRefresh || handles.Count == 0
+            ? GetMacTreePids(rootPid)
+            : handles.Keys.Append(rootPid).Distinct();
+
+        foreach (var pid in pids)
         {
             if (handles.ContainsKey(pid))
                 continue;

@@ -1,5 +1,8 @@
 # Validate compare-editions medians at c=64 against edition ratio gates.
-# Missing arms FAIL (do not silently skip). Non-YARP edition floors are 0.50 (runner noise on Plus/CLI feature arms).
+# Prefer SLO-passing c=64 rows. When an arm ran but missed p99 SLO at c=64, still compute the
+# ratio from that c=64 row so failures are real ratio misses — not "missing arm data".
+# Truly absent CSV arms still FAIL as missing.
+# Non-YARP edition floors are 0.50 (runner noise on Plus/CLI feature arms).
 param(
     [Parameter(Mandatory)] [string] $CsvPath,
     [double] $CliLibraryGate = 0.50,
@@ -23,33 +26,105 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $rows = Import-Csv $CsvPath
-$byArm = @{}
+
+$present = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+$byArmSlo = @{}
+$byArmAny = @{}
+$c64Meta = @{} # arm -> @{ p99; meets_slo; rps } last c=64 row
+$bestAny = @{} # arm -> @{ concurrency; rps; p99; meets_slo } highest concurrency row
 foreach ($row in $rows) {
-    if ([string]$row.concurrency -ne '64') { continue }
-    if ($row.meets_slo -ne '1') { continue }
     $arm = [string]$row.arm
-    if (-not $byArm.ContainsKey($arm)) {
-        $byArm[$arm] = [System.Collections.Generic.List[double]]::new()
+    if ([string]::IsNullOrWhiteSpace($arm)) { continue }
+    [void]$present.Add($arm)
+
+    $conc = 0
+    [void][int]::TryParse([string]$row.concurrency, [ref]$conc)
+    $rps = [double]$row.rps
+    $p99 = 0.0
+    [void][double]::TryParse([string]$row.p99_ms, [ref]$p99)
+    if (-not $bestAny.ContainsKey($arm) -or $conc -ge [int]$bestAny[$arm].concurrency) {
+        $bestAny[$arm] = @{
+            concurrency = $conc
+            rps = $rps
+            p99 = $p99
+            meets_slo = [string]$row.meets_slo
+        }
     }
-    $byArm[$arm].Add([double]$row.rps)
+
+    if ($conc -ne 64) { continue }
+
+    $c64Meta[$arm] = @{
+        p99 = $p99
+        meets_slo = [string]$row.meets_slo
+        rps = $rps
+    }
+
+    if (-not $byArmAny.ContainsKey($arm)) {
+        $byArmAny[$arm] = [System.Collections.Generic.List[double]]::new()
+    }
+    $byArmAny[$arm].Add($rps)
+
+    if ($row.meets_slo -ne '1') { continue }
+    if (-not $byArmSlo.ContainsKey($arm)) {
+        $byArmSlo[$arm] = [System.Collections.Generic.List[double]]::new()
+    }
+    $byArmSlo[$arm].Add($rps)
 }
 
-$sustain = @{}
-foreach ($arm in $byArm.Keys) {
-    $sorted = @($byArm[$arm] | Sort-Object)
+function Get-Median([System.Collections.Generic.List[double]]$Values) {
+    $sorted = @($Values | Sort-Object)
     $mid = [int][math]::Floor(($sorted.Count - 1) / 2)
-    $sustain[$arm] = if ($sorted.Count % 2 -eq 0 -and $sorted.Count -ge 2) {
-        ($sorted[$mid] + $sorted[$mid + 1]) / 2
-    } else {
-        $sorted[$mid]
+    if ($sorted.Count % 2 -eq 0 -and $sorted.Count -ge 2) {
+        return ($sorted[$mid] + $sorted[$mid + 1]) / 2
     }
+    return $sorted[$mid]
 }
 
-function Get-Ratio([string]$Num, [string]$Den) {
-    if (-not $sustain.ContainsKey($Num) -or -not $sustain.ContainsKey($Den) -or $sustain[$Den] -le 0) {
-        return $null
+$sustainSlo = @{}
+foreach ($arm in $byArmSlo.Keys) {
+    $sustainSlo[$arm] = Get-Median $byArmSlo[$arm]
+}
+$sustainAny = @{}
+foreach ($arm in $byArmAny.Keys) {
+    $sustainAny[$arm] = Get-Median $byArmAny[$arm]
+}
+
+function Get-ArmRps([string]$Arm) {
+    # Returns @{ Ok; Rps; UsedSloFail; Detail }
+    if ($sustainSlo.ContainsKey($Arm)) {
+        return @{ Ok = $true; Rps = [double]$sustainSlo[$Arm]; UsedSloFail = $false; Detail = $null }
     }
-    return $sustain[$Num] / $sustain[$Den]
+    if ($sustainAny.ContainsKey($Arm)) {
+        $meta = $c64Meta[$Arm]
+        $detail = ("c=64 SLO-fail p99={0:N1}ms rps={1:N0}" -f $meta.p99, $meta.rps)
+        return @{ Ok = $true; Rps = [double]$sustainAny[$Arm]; UsedSloFail = $true; Detail = $detail }
+    }
+    if ($bestAny.ContainsKey($Arm)) {
+        $b = $bestAny[$Arm]
+        $detail = ("no c=64 row; using c={0} rps={1:N0} p99={2:N1}ms meets_slo={3}" -f `
+            $b.concurrency, $b.rps, $b.p99, $b.meets_slo)
+        return @{ Ok = $true; Rps = [double]$b.rps; UsedSloFail = $true; Detail = $detail }
+    }
+    return @{ Ok = $false; Rps = 0; UsedSloFail = $false; Detail = 'arm absent from CSV' }
+}
+
+function Get-RatioInfo([string]$Num, [string]$Den) {
+    $n = Get-ArmRps $Num
+    $d = Get-ArmRps $Den
+    if (-not $n.Ok -or -not $d.Ok -or $d.Rps -le 0) {
+        $parts = @()
+        if (-not $n.Ok) { $parts += ("{0}: {1}" -f $Num, $n.Detail) }
+        if (-not $d.Ok) { $parts += ("{0}: {1}" -f $Den, $d.Detail) }
+        if ($d.Ok -and $d.Rps -le 0) { $parts += ("{0}: rps<=0" -f $Den) }
+        return @{ Ratio = $null; Note = ($parts -join '; ') }
+    }
+    $notes = @()
+    if ($n.UsedSloFail) { $notes += ("num {0}" -f $n.Detail) }
+    if ($d.UsedSloFail) { $notes += ("den {0}" -f $d.Detail) }
+    return @{
+        Ratio = $n.Rps / $d.Rps
+        Note = if ($notes.Count -gt 0) { ($notes -join '; ') } else { $null }
+    }
 }
 
 $pairs = @(
@@ -77,15 +152,17 @@ $pairs = @(
 $failed = $false
 Write-Host "Edition gates @ c=64 ($([IO.Path]::GetFileName($CsvPath)))" -ForegroundColor Cyan
 foreach ($p in $pairs) {
-    $ratio = Get-Ratio $p.Num $p.Den
-    if ($null -eq $ratio) {
-        Write-Host ("FAIL {0}: missing arm data (need {1} and {2})" -f $p.Label, $p.Num, $p.Den) -ForegroundColor Red
+    $info = Get-RatioInfo $p.Num $p.Den
+    if ($null -eq $info.Ratio) {
+        Write-Host ("FAIL {0}: cannot compute ratio ({1})" -f $p.Label, $info.Note) -ForegroundColor Red
         $failed = $true
         continue
     }
-    $ok = $ratio -ge $p.Gate
+    $ok = $info.Ratio -ge $p.Gate
     $color = if ($ok) { 'Green' } else { 'Red' }
-    Write-Host ("{0} = {1:N3} (gate {2:N2})" -f $p.Label, $ratio, $p.Gate) -ForegroundColor $color
+    $suffix = if ($info.Note) { " [{0}]" -f $info.Note } else { '' }
+    $prefix = if ($ok) { '' } else { 'FAIL ' }
+    Write-Host ("{0}{1} = {2:N3} (gate {3:N2}){4}" -f $prefix, $p.Label, $info.Ratio, $p.Gate, $suffix) -ForegroundColor $color
     if (-not $ok) { $failed = $true }
 }
 

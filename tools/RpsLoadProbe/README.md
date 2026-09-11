@@ -191,6 +191,8 @@ On Windows both modes exit **0** with “skip OK” (peers not available). Linux
 
 Library arms (`twp-reverse-*`) embed Core with probe-tuned settings. Edition arms spawn the shipped CLI (`titanium run -c twp.yaml`) as an external process — same shape as nginx — for product-defaults comparison. Full matrix is ~60 min (expanded Plus/CLI stress arms).
 
+`validate-edition-gates.ps1` prefers SLO-passing c=64 medians; if an arm ran but missed p99 SLO at c=64 it still computes the ratio (annotated) so failures are **ratio misses**, not false “missing arm” errors. PR merge checks use `compare-spot`; full saturation / editions on develop is advisory — publish SHA still runs editions via `rps-publish-gate` (see [PERF-GATES.md](PERF-GATES.md)).
+
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-editions
 pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath tools/RpsLoadProbe/results/rps-ramp-*.csv
