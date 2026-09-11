@@ -192,28 +192,46 @@ function Format-TerminatePeerCell(
 }
 
 function Emit-ReverseTable([string]$OsFolder) {
-    Write-Output '| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | HAProxy sustain | HAProxy peak | Envoy sustain | Envoy peak | YARP sustain | YARP peak |'
-    Write-Output '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|'
+    $omitNative = ($OsFolder -eq 'windows-latest')
+    if ($omitNative) {
+        Write-Output '| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |'
+        Write-Output '|---|---|---:|---:|---:|---:|---:|---:|'
+    } else {
+        Write-Output '| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | HAProxy sustain | HAProxy peak | Envoy sustain | Envoy peak | YARP sustain | YARP peak |'
+        Write-Output '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|'
+    }
     foreach ($w in $wires) {
         $twp = Get-MedianMetrics $OsFolder $w.Rev
         $yarp = Get-MedianMetrics $OsFolder $w.Yarp
         $nginx = if ($w.Nginx) { Get-MedianMetrics $OsFolder $w.Nginx } else { $null }
-        $haproxy = if ($w.Haproxy) { Get-MedianMetrics $OsFolder $w.Haproxy } else { $null }
-        $envoy = if ($w.Envoy) { Get-MedianMetrics $OsFolder $w.Envoy } else { $null }
+        $haproxy = if (-not $omitNative -and $w.Haproxy) { Get-MedianMetrics $OsFolder $w.Haproxy } else { $null }
+        $envoy = if (-not $omitNative -and $w.Envoy) { Get-MedianMetrics $OsFolder $w.Envoy } else { $null }
         $candidates = @(@{ M = $twp; K = 'twp' }, @{ M = $yarp; K = 'yarp' })
-        foreach ($pair in @(@{ M = $nginx; K = 'nginx' }, @{ M = $haproxy; K = 'haproxy' }, @{ M = $envoy; K = 'envoy' })) {
+        $peerPairs = @(@{ M = $nginx; K = 'nginx' })
+        if (-not $omitNative) {
+            $peerPairs += @(@{ M = $haproxy; K = 'haproxy' }, @{ M = $envoy; K = 'envoy' })
+        }
+        foreach ($pair in $peerPairs) {
             if ($pair.M -and $pair.M.Sustain -gt 0) { $candidates += $pair }
         }
         $best = ($candidates | Where-Object { $_.M } | Sort-Object { $_.M.Sustain } -Descending | Select-Object -First 1).K
-        Write-Output ("| {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} | {8} | {9} | {10} | {11} |" -f $w.C, $w.O,
-            (Format-RpsCell $twp -Medal:($best -eq 'twp')), (Format-RpsCell $twp -Medal:($best -eq 'twp') -Peak),
-            (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx')),
-            (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx') -Peak),
-            (Format-TerminatePeerCell $OsFolder $w 'Haproxy' $haproxy -Medal:($best -eq 'haproxy')),
-            (Format-TerminatePeerCell $OsFolder $w 'Haproxy' $haproxy -Medal:($best -eq 'haproxy') -Peak),
-            (Format-TerminatePeerCell $OsFolder $w 'Envoy' $envoy -Medal:($best -eq 'envoy')),
-            (Format-TerminatePeerCell $OsFolder $w 'Envoy' $envoy -Medal:($best -eq 'envoy') -Peak),
-            (Format-RpsCell $yarp -Medal:($best -eq 'yarp')), (Format-RpsCell $yarp -Medal:($best -eq 'yarp') -Peak))
+        if ($omitNative) {
+            Write-Output ("| {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} |" -f $w.C, $w.O,
+                (Format-RpsCell $twp -Medal:($best -eq 'twp')), (Format-RpsCell $twp -Medal:($best -eq 'twp') -Peak),
+                (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx')),
+                (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx') -Peak),
+                (Format-RpsCell $yarp -Medal:($best -eq 'yarp')), (Format-RpsCell $yarp -Medal:($best -eq 'yarp') -Peak))
+        } else {
+            Write-Output ("| {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} | {8} | {9} | {10} | {11} |" -f $w.C, $w.O,
+                (Format-RpsCell $twp -Medal:($best -eq 'twp')), (Format-RpsCell $twp -Medal:($best -eq 'twp') -Peak),
+                (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx')),
+                (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx') -Peak),
+                (Format-TerminatePeerCell $OsFolder $w 'Haproxy' $haproxy -Medal:($best -eq 'haproxy')),
+                (Format-TerminatePeerCell $OsFolder $w 'Haproxy' $haproxy -Medal:($best -eq 'haproxy') -Peak),
+                (Format-TerminatePeerCell $OsFolder $w 'Envoy' $envoy -Medal:($best -eq 'envoy')),
+                (Format-TerminatePeerCell $OsFolder $w 'Envoy' $envoy -Medal:($best -eq 'envoy') -Peak),
+                (Format-RpsCell $yarp -Medal:($best -eq 'yarp')), (Format-RpsCell $yarp -Medal:($best -eq 'yarp') -Peak))
+        }
     }
 }
 

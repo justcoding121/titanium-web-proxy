@@ -271,10 +271,36 @@ def parse_rps_cell(cell: str) -> Optional[float]:
     return v
 
 
+def _product_row_from_header(header: Sequence[str], cols: Sequence[str]) -> Dict[str, Optional[float]]:
+    """Map sustain columns by header name (HAProxy/Envoy may be omitted on Windows)."""
+    idx = {h: i for i, h in enumerate(header)}
+    mapping = {
+        "Titanium": "TWP sustain",
+        "nginx": "nginx sustain",
+        "HAProxy": "HAProxy sustain",
+        "Envoy": "Envoy sustain",
+        "YARP": "YARP sustain",
+    }
+    out: Dict[str, Optional[float]] = {}
+    for product, name in mapping.items():
+        i = idx.get(name)
+        out[product] = parse_rps_cell(cols[i]) if i is not None and i < len(cols) else None
+    return out
+
+
 def _product_row_from_cols(cols: Sequence[str], *, offset: int = 0) -> Dict[str, Optional[float]]:
-    """Parse TWP/nginx/HAProxy/Envoy/YARP sustain columns (offset skips Scenario)."""
-    # cols: [Client, Origin, TWP, TWP peak, nginx, nginx peak, HAProxy, ..., YARP, YARP peak]
+    """Legacy fixed-offset parse when header is unavailable."""
     i = offset
+    need = i + 11
+    if len(cols) <= need:
+        # Windows tables omit HAProxy/Envoy (6 sustain/peak peer cols after Client/Origin).
+        return {
+            "Titanium": parse_rps_cell(cols[i + 2]) if len(cols) > i + 2 else None,
+            "nginx": parse_rps_cell(cols[i + 4]) if len(cols) > i + 4 else None,
+            "HAProxy": None,
+            "Envoy": None,
+            "YARP": parse_rps_cell(cols[i + 6]) if len(cols) > i + 6 else None,
+        }
     return {
         "Titanium": parse_rps_cell(cols[i + 2]),
         "nginx": parse_rps_cell(cols[i + 4]),
@@ -301,36 +327,45 @@ def parse_wiki_practical(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]
     current_os: Optional[str] = None
     in_reverse = False
     in_table = False
+    table_header: List[str] = []
     for line in md.splitlines():
         if line.startswith("## "):
             title = line[3:].strip()
             current_os = HEADING_TO_OS.get(title)
             in_reverse = False
             in_table = False
+            table_header = []
             continue
         if current_os is None:
             continue
         if line.startswith("### Reverse"):
             in_reverse = True
             in_table = False
+            table_header = []
             continue
         if line.startswith("### ") and not line.startswith("### Reverse"):
             in_reverse = False
             in_table = False
+            table_header = []
             continue
         if not in_reverse:
             continue
         if line.startswith("| Client | Origin |"):
             in_table = True
+            table_header = [c.strip() for c in line.strip().strip("|").split("|")]
             continue
         if in_table and line.startswith("|---"):
             continue
         if in_table and line.startswith("|"):
             cols = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cols) < 12:
+            if len(cols) < 6:
                 continue
             client, origin = cols[0], cols[1]
-            vals = _product_row_from_cols(cols)
+            vals = (
+                _product_row_from_header(table_header, cols)
+                if table_header
+                else _product_row_from_cols(cols)
+            )
             for label, cell in WIKI_WIRE_CELLS.items():
                 if (client, origin) != cell:
                     continue
@@ -339,49 +374,62 @@ def parse_wiki_practical(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]
                     out[current_os][product][idx] = vals[product]
         elif in_table and not line.startswith("|"):
             in_table = False
+            table_header = []
 
     # --- WebSocket from architecture-sensitive ---
     arch_os: Optional[str] = None
     in_arch_table = False
+    arch_header: List[str] = []
     for line in md.splitlines():
         if line.startswith("#### Windows"):
             arch_os = "windows"
             in_arch_table = False
+            arch_header = []
             continue
         if line.startswith("#### Linux"):
             arch_os = "linux"
             in_arch_table = False
+            arch_header = []
             continue
         if line.startswith("#### ") and arch_os is not None:
             arch_os = None
             in_arch_table = False
+            arch_header = []
             continue
         if arch_os is None:
             continue
         if line.startswith("| Scenario | Client | Origin |"):
             in_arch_table = True
+            arch_header = [c.strip() for c in line.strip().strip("|").split("|")]
             continue
         if in_arch_table and line.startswith("|---"):
             continue
         if in_arch_table and line.startswith("|"):
             cols = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cols) < 13:
+            if len(cols) < 7:
                 continue
             if "WebSocket" in cols[0]:
-                vals = _product_row_from_cols(cols, offset=1)
+                vals = (
+                    _product_row_from_header(arch_header, cols)
+                    if arch_header
+                    else _product_row_from_cols(cols, offset=1)
+                )
                 for product in PRODUCTS:
                     out[arch_os][product][ws_idx] = vals[product]
         elif in_arch_table and not line.startswith("|"):
             in_arch_table = False
+            arch_header = []
 
     # --- Unary gRPC (H2 TLS only; ignore H2 TLS → h2c and later stubs) ---
     in_grpc = False
     in_grpc_table = False
+    grpc_header: List[str] = []
     grpc_os_map = {"Windows": "windows", "Linux": "linux", "macOS": "macos"}
     for line in md.splitlines():
         if line.startswith("## Unary gRPC (H2 TLS)") and "h2c" not in line:
             in_grpc = True
             in_grpc_table = False
+            grpc_header = []
             continue
         if in_grpc and line.startswith("## "):
             break
@@ -389,23 +437,26 @@ def parse_wiki_practical(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]
             continue
         if line.startswith("| OS |"):
             in_grpc_table = True
+            grpc_header = [c.strip() for c in line.strip().strip("|").split("|")]
             continue
         if in_grpc_table and line.startswith("|---"):
             continue
         if in_grpc_table and line.startswith("|"):
             cols = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cols) < 6:
+            if len(cols) < 3:
                 continue
             key = grpc_os_map.get(cols[0])
             if not key:
                 continue
-            out[key]["Titanium"][grpc_idx] = parse_rps_cell(cols[1])
-            out[key]["YARP"][grpc_idx] = parse_rps_cell(cols[2])
-            out[key]["nginx"][grpc_idx] = parse_rps_cell(cols[3])
-            out[key]["HAProxy"][grpc_idx] = parse_rps_cell(cols[4])
-            out[key]["Envoy"][grpc_idx] = parse_rps_cell(cols[5])
+            by_name = {h: cols[i] if i < len(cols) else "" for i, h in enumerate(grpc_header)}
+            out[key]["Titanium"][grpc_idx] = parse_rps_cell(by_name.get("Titanium", cols[1] if len(cols) > 1 else ""))
+            out[key]["YARP"][grpc_idx] = parse_rps_cell(by_name.get("YARP", cols[2] if len(cols) > 2 else ""))
+            out[key]["nginx"][grpc_idx] = parse_rps_cell(by_name.get("nginx", ""))
+            out[key]["HAProxy"][grpc_idx] = parse_rps_cell(by_name.get("HAProxy", ""))
+            out[key]["Envoy"][grpc_idx] = parse_rps_cell(by_name.get("Envoy", ""))
         elif in_grpc_table and not line.startswith("|"):
             in_grpc_table = False
+            grpc_header = []
 
     return out
 
@@ -422,76 +473,96 @@ def parse_wiki_heavier(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]:
     # --- heavier reverse GET ---
     body_os: Optional[str] = None
     in_body_table = False
+    body_header: List[str] = []
     for line in md.splitlines():
         if line.startswith("### Windows — heavier reverse GET"):
             body_os = "windows"
             in_body_table = False
+            body_header = []
             continue
         if line.startswith("### Linux — heavier reverse GET"):
             body_os = "linux"
             in_body_table = False
+            body_header = []
             continue
         if line.startswith("### ") and body_os is not None and "heavier reverse GET" not in line:
             body_os = None
             in_body_table = False
+            body_header = []
             continue
         if body_os is None:
             continue
         if line.startswith("| Body | Client | Origin |") or line.startswith("| Size | Client | Origin |"):
             in_body_table = True
+            body_header = [c.strip() for c in line.strip().strip("|").split("|")]
             continue
         if in_body_table and line.startswith("|---"):
             continue
         if in_body_table and line.startswith("|"):
             cols = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cols) < 13:
+            if len(cols) < 7:
                 continue
             key = (cols[0], cols[1], cols[2])
             idx = WIKI_HEAVIER_CELLS.get(key)
             if idx is None:
                 continue
-            vals = _product_row_from_cols(cols, offset=1)
+            vals = (
+                _product_row_from_header(body_header, cols)
+                if body_header
+                else _product_row_from_cols(cols, offset=1)
+            )
             for product in PRODUCTS:
                 out[body_os][product][idx] = vals[product]
         elif in_body_table and not line.startswith("|"):
             in_body_table = False
+            body_header = []
 
     # --- POST 64 KiB (H1 TLS→H1c only for practical heavier chart) ---
     post_os: Optional[str] = None
     in_post_table = False
+    post_header: List[str] = []
     for line in md.splitlines():
         if line.startswith("### Windows — POST"):
             post_os = "windows"
             in_post_table = False
+            post_header = []
             continue
         if line.startswith("### Linux — POST"):
             post_os = "linux"
             in_post_table = False
+            post_header = []
             continue
         if line.startswith("### ") and post_os is not None and "POST" not in line:
             post_os = None
             in_post_table = False
+            post_header = []
             continue
         if post_os is None:
             continue
         if line.startswith("| Client | Origin |"):
             in_post_table = True
+            post_header = [c.strip() for c in line.strip().strip("|").split("|")]
             continue
         if in_post_table and line.startswith("|---"):
             continue
         if in_post_table and line.startswith("|"):
             cols = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cols) < 12:
+            if len(cols) < 6:
                 continue
             key = (None, cols[0], cols[1])
             idx = WIKI_HEAVIER_CELLS.get(key)
             if idx is None:
                 continue
-            vals = _product_row_from_cols(cols)
+            vals = (
+                _product_row_from_header(post_header, cols)
+                if post_header
+                else _product_row_from_cols(cols)
+            )
             for product in PRODUCTS:
                 out[post_os][product][idx] = vals[product]
         elif in_post_table and not line.startswith("|"):
             in_post_table = False
+            post_header = []
 
     return out
 

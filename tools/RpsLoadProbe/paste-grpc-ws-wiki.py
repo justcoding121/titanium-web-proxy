@@ -117,20 +117,26 @@ def cell(stats: Optional[dict[str, float]], impossible: Optional[str] = None) ->
 
 def render_table(title: str, arms: dict[str, Optional[str]], by_os: dict[str, dict[str, dict[str, float]]],
                  win_no_haproxy_envoy: bool = True, nginx_impossible: Optional[str] = None) -> str:
-    lines = [
-        f"### {title}",
-        "",
-        "| OS | Titanium | YARP | nginx | HAProxy | Envoy |",
-        "|---|---:|---:|---:|---:|---:|",
-    ]
+    # Drop nginx when it is impossible on every OS (h2c / RFC 8441).
+    products = ["Titanium", "YARP", "nginx", "HAProxy", "Envoy"]
+    note_lines: list[str] = []
+    if nginx_impossible:
+        products = [p for p in products if p != "nginx"]
+        note_lines.append(f"*Not possible:* **nginx** column omitted ({nginx_impossible.removeprefix('Not possible').strip(' ()') or 'not supported on this path'}).")
+    header = "| OS | " + " | ".join(products) + " |"
+    rule = "|---|" + "|".join(["---:"] * len(products)) + "|"
+    lines = [f"### {title}", ""]
+    lines.extend(note_lines)
+    if note_lines:
+        lines.append("")
+    lines.extend([header, rule])
     for os_label, os_key in (("Windows", "windows"), ("Linux", "linux"), ("macOS", "macos")):
         data = by_os.get(os_key, {})
         cells = []
-        for product in ("Titanium", "YARP", "nginx", "HAProxy", "Envoy"):
+        for product in products:
             arm = arms.get(product)
             if arm is None:
-                reason = nginx_impossible or "Not possible"
-                cells.append(cell(None, reason))
+                cells.append(cell(None, nginx_impossible or "Not possible"))
             elif win_no_haproxy_envoy and os_key == "windows" and product in ("HAProxy", "Envoy"):
                 cells.append(cell(None, "Not possible"))
             else:
