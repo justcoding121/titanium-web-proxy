@@ -122,16 +122,21 @@ def parse_run_ids(text: str) -> RunIds:
     return ids[0] if len(ids) == 1 else ids
 
 
-def fmt_cell(m: Optional[dict], medal: bool = False, peak: bool = False, impossible: Optional[str] = None) -> str:
+def fmt_cell(m: Optional[dict], medal: bool = False, impossible: Optional[str] = None) -> str:
     if impossible:
         return f"*{impossible}*"
     if not m:
         return "*Not measured*"
-    r = round(m["Peak"] if peak else m["Sustain"])
+    sustain = round(m["Sustain"])
+    peak = round(m["Peak"])
     mb = round(m["Rss"] / (1024 * 1024))
     cpu = round(m["Cpu"], 1)
     prefix = f"{MEDAL} " if medal else ""
-    return f"{prefix}**{r:,}**<br><sub>({mb} MiB / {cpu}% CPU)</sub>"
+    if peak > sustain:
+        sub = f"peak {peak:,} · {mb} MiB / {cpu}% CPU"
+    else:
+        sub = f"{mb} MiB / {cpu}% CPU"
+    return f"{prefix}**{sustain:,}**<br><sub>({sub})</sub>"
 
 
 def pick_medal(cands: List[Tuple[str, Optional[dict]]]) -> Optional[str]:
@@ -147,19 +152,12 @@ WIN_NO_HAPROXY_ENVOY_NOTE = (
 
 
 def peer_cols(include_haproxy_envoy: bool) -> str:
-    mid = (
-        "HAProxy sustain | HAProxy peak | Envoy sustain | Envoy peak | "
-        if include_haproxy_envoy
-        else ""
-    )
-    return (
-        "TWP sustain | TWP peak | nginx sustain | nginx peak | "
-        f"{mid}YARP sustain | YARP peak"
-    )
+    mid = "HAProxy | Envoy | " if include_haproxy_envoy else ""
+    return f"TWP | nginx | {mid}YARP"
 
 
 def peer_rule(include_haproxy_envoy: bool) -> str:
-    n = 10 if include_haproxy_envoy else 6
+    n = 5 if include_haproxy_envoy else 3
     return "|".join(["---:"] * n)
 
 
@@ -207,20 +205,15 @@ def peer_row(
     medal = pick_medal(medal_peers)
     cells = prefix + [
         fmt_cell(twp, medal=(medal == "twp")),
-        fmt_cell(twp, peak=True),
         fmt_cell(nginx, medal=(medal == "nginx"), impossible=nginx_imp),
-        fmt_cell(nginx, peak=True, impossible=nginx_imp),
     ]
     if not win_no_haproxy_envoy:
         cells += [
             fmt_cell(haproxy, medal=(medal == "haproxy"), impossible=haproxy_imp),
-            fmt_cell(haproxy, peak=True, impossible=haproxy_imp),
             fmt_cell(envoy, medal=(medal == "envoy"), impossible=envoy_imp),
-            fmt_cell(envoy, peak=True, impossible=envoy_imp),
         ]
     cells += [
         fmt_cell(yarp, medal=(medal == "yarp")),
-        fmt_cell(yarp, peak=True),
     ]
     return "| " + " | ".join(cells) + " |"
 
@@ -427,8 +420,8 @@ def main() -> None:
             ("twp-reverse-http1", "dotnet-httpclient", True),
         ]
         rows = [
-            "| Arm | Generator | Sustain | Peak | % of origin-HttpClient |",
-            "|---|---|---:|---:|---:|",
+            "| Arm | Generator | RPS | % of origin-HttpClient |",
+            "|---|---|---:|---:|",
         ]
         for arm, gen, is_peer in arms:
             m = data.get(arm)
@@ -437,7 +430,7 @@ def main() -> None:
             if m and op and op > 0:
                 pct = f"**{m['Peak'] / op * 100:.1f}%**"
             rows.append(
-                f"| {arm} | {gen} | {fmt_cell(m, medal=med)} | {fmt_cell(m, peak=True)} | {pct} |"
+                f"| {arm} | {gen} | {fmt_cell(m, medal=med)} | {pct} |"
             )
         return "\n".join(rows)
 
@@ -453,8 +446,8 @@ def main() -> None:
             return f"**{num['Peak'] / den['Peak']:.2f}×**"
 
         rows = [
-            "| Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx |",
-            "|---|---|---:|---:|---:|---:|",
+            "| Arm | Generator | RPS | ÷YARP | ÷nginx |",
+            "|---|---|---:|---:|---:|",
         ]
         for arm, m, imp, key in [
             (nginx_a, nginx, "Not possible (no QUIC)" if win_no_nginx else None, "nginx"),
@@ -462,10 +455,10 @@ def main() -> None:
             (twp_a, twp, None, "twp"),
         ]:
             if imp:
-                rows.append(f"| {arm} | dotnet-httpclient | *{imp}* | *{imp}* | — | — |")
+                rows.append(f"| {arm} | dotnet-httpclient | *{imp}* | — | — |")
                 continue
             rows.append(
-                f"| {arm} | dotnet-httpclient | {fmt_cell(m, medal=(medal == key))} | {fmt_cell(m, peak=True)} | "
+                f"| {arm} | dotnet-httpclient | {fmt_cell(m, medal=(medal == key))} | "
                 f"{rdiv(m, yarp)} | {rdiv(m, nginx)} |"
             )
         return "\n".join(rows)

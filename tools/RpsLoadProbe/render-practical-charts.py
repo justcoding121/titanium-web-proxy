@@ -258,6 +258,11 @@ HEADING_TO_OS = {
 CELL_RE = re.compile(r"\*{0,2}(\d[\d,]*)")
 
 
+def is_md_sep(line: str) -> bool:
+    s = line.strip()
+    return s.startswith("|") and bool(re.match(r"^\|[\s\-:|]+\|$", s))
+
+
 def parse_rps_cell(cell: str) -> Optional[float]:
     t = cell.strip()
     if "Not possible" in t or "Not measured" in t or t in ("", "—", "-"):
@@ -272,41 +277,45 @@ def parse_rps_cell(cell: str) -> Optional[float]:
 
 
 def _product_row_from_header(header: Sequence[str], cols: Sequence[str]) -> Dict[str, Optional[float]]:
-    """Map sustain columns by header name (HAProxy/Envoy may be omitted on Windows)."""
+    """Map peer RPS columns by header name (merged sustain/peak cells; HAProxy/Envoy may be omitted)."""
     idx = {h: i for i, h in enumerate(header)}
     mapping = {
-        "Titanium": "TWP sustain",
-        "nginx": "nginx sustain",
-        "HAProxy": "HAProxy sustain",
-        "Envoy": "Envoy sustain",
-        "YARP": "YARP sustain",
+        "Titanium": ("TWP", "TWP sustain", "Titanium"),
+        "nginx": ("nginx", "nginx sustain"),
+        "HAProxy": ("HAProxy", "HAProxy sustain"),
+        "Envoy": ("Envoy", "Envoy sustain"),
+        "YARP": ("YARP", "YARP sustain"),
     }
     out: Dict[str, Optional[float]] = {}
-    for product, name in mapping.items():
-        i = idx.get(name)
+    for product, names in mapping.items():
+        i = None
+        for name in names:
+            if name in idx:
+                i = idx[name]
+                break
         out[product] = parse_rps_cell(cols[i]) if i is not None and i < len(cols) else None
     return out
 
 
 def _product_row_from_cols(cols: Sequence[str], *, offset: int = 0) -> Dict[str, Optional[float]]:
-    """Legacy fixed-offset parse when header is unavailable."""
+    """Legacy fixed-offset parse when header is unavailable (merged peer columns)."""
     i = offset
-    need = i + 11
-    if len(cols) <= need:
-        # Windows tables omit HAProxy/Envoy (6 sustain/peak peer cols after Client/Origin).
+    # Merged: [labels..., TWP, nginx, HAProxy?, Envoy?, YARP]
+    # With HAProxy/Envoy: need i+6; without: i+4
+    if len(cols) >= i + 7:
         return {
-            "Titanium": parse_rps_cell(cols[i + 2]) if len(cols) > i + 2 else None,
-            "nginx": parse_rps_cell(cols[i + 4]) if len(cols) > i + 4 else None,
-            "HAProxy": None,
-            "Envoy": None,
-            "YARP": parse_rps_cell(cols[i + 6]) if len(cols) > i + 6 else None,
+            "Titanium": parse_rps_cell(cols[i + 2]),
+            "nginx": parse_rps_cell(cols[i + 3]),
+            "HAProxy": parse_rps_cell(cols[i + 4]),
+            "Envoy": parse_rps_cell(cols[i + 5]),
+            "YARP": parse_rps_cell(cols[i + 6]),
         }
     return {
-        "Titanium": parse_rps_cell(cols[i + 2]),
-        "nginx": parse_rps_cell(cols[i + 4]),
-        "HAProxy": parse_rps_cell(cols[i + 6]),
-        "Envoy": parse_rps_cell(cols[i + 8]),
-        "YARP": parse_rps_cell(cols[i + 10]),
+        "Titanium": parse_rps_cell(cols[i + 2]) if len(cols) > i + 2 else None,
+        "nginx": parse_rps_cell(cols[i + 3]) if len(cols) > i + 3 else None,
+        "HAProxy": None,
+        "Envoy": None,
+        "YARP": parse_rps_cell(cols[i + 4]) if len(cols) > i + 4 else None,
     }
 
 
@@ -354,11 +363,11 @@ def parse_wiki_practical(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]
             in_table = True
             table_header = [c.strip() for c in line.strip().strip("|").split("|")]
             continue
-        if in_table and line.startswith("|---"):
+        if in_table and is_md_sep(line):
             continue
         if in_table and line.startswith("|"):
             cols = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cols) < 6:
+            if len(cols) < 4:
                 continue
             client, origin = cols[0], cols[1]
             vals = (
@@ -402,11 +411,11 @@ def parse_wiki_practical(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]
             in_arch_table = True
             arch_header = [c.strip() for c in line.strip().strip("|").split("|")]
             continue
-        if in_arch_table and line.startswith("|---"):
+        if in_arch_table and is_md_sep(line):
             continue
         if in_arch_table and line.startswith("|"):
             cols = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cols) < 7:
+            if len(cols) < 5:
                 continue
             if "WebSocket" in cols[0]:
                 vals = (
@@ -439,7 +448,7 @@ def parse_wiki_practical(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]
             in_grpc_table = True
             grpc_header = [c.strip() for c in line.strip().strip("|").split("|")]
             continue
-        if in_grpc_table and line.startswith("|---"):
+        if in_grpc_table and is_md_sep(line):
             continue
         if in_grpc_table and line.startswith("|"):
             cols = [c.strip() for c in line.strip().strip("|").split("|")]
@@ -496,11 +505,11 @@ def parse_wiki_heavier(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]:
             in_body_table = True
             body_header = [c.strip() for c in line.strip().strip("|").split("|")]
             continue
-        if in_body_table and line.startswith("|---"):
+        if in_body_table and is_md_sep(line):
             continue
         if in_body_table and line.startswith("|"):
             cols = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cols) < 7:
+            if len(cols) < 5:
                 continue
             key = (cols[0], cols[1], cols[2])
             idx = WIKI_HEAVIER_CELLS.get(key)
@@ -543,11 +552,11 @@ def parse_wiki_heavier(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]:
             in_post_table = True
             post_header = [c.strip() for c in line.strip().strip("|").split("|")]
             continue
-        if in_post_table and line.startswith("|---"):
+        if in_post_table and is_md_sep(line):
             continue
         if in_post_table and line.startswith("|"):
             cols = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cols) < 6:
+            if len(cols) < 4:
                 continue
             key = (None, cols[0], cols[1])
             idx = WIKI_HEAVIER_CELLS.get(key)

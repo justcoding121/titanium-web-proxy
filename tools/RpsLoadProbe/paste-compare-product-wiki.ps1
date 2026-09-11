@@ -104,13 +104,22 @@ function Get-MedianMetrics([string]$OsFolder, [string]$Arm) {
     return $best
 }
 
-function Format-RpsCell($metrics, [switch]$Medal, [switch]$Peak) {
+function Format-RpsCell($metrics, [switch]$Medal) {
     if (-not $metrics) { return '*Not measured*' }
-    $r = [math]::Round($(if ($Peak) { $metrics.Peak } else { $metrics.Sustain }), 0)
-    $mb = [math]::Round($metrics.Rss / 1MB, 0)
+    $sustain = [int][math]::Round($metrics.Sustain, 0)
+    $peak = [int][math]::Round($metrics.Peak, 0)
+    $mb = [int][math]::Round($metrics.Rss / 1MB, 0)
     $cpu = [math]::Round($metrics.Cpu, 1)
     $prefix = if ($Medal) { "$goldMedal " } else { '' }
-    return ("{0}**{1}**<br><sub>({2} MiB / {3}% CPU)</sub>" -f $prefix, $r, $mb, $cpu)
+    $inv = [cultureinfo]::InvariantCulture
+    $sustainText = $sustain.ToString('N0', $inv)
+    if ($peak -gt $sustain) {
+        $peakText = $peak.ToString('N0', $inv)
+        $sub = "peak $peakText · $mb MiB / $cpu% CPU"
+    } else {
+        $sub = "$mb MiB / $cpu% CPU"
+    }
+    return ("{0}**{1}**<br><sub>({2})</sub>" -f $prefix, $sustainText, $sub)
 }
 
 function Format-Impossible([string]$Reason = 'Not possible') {
@@ -173,8 +182,7 @@ function Format-TerminatePeerCell(
     [hashtable]$w,
     [string]$PeerKey,
     $metrics,
-    [switch]$Medal,
-    [switch]$Peak
+    [switch]$Medal
 ) {
     if ($PeerKey -in @('Haproxy', 'Envoy') -and $OsFolder -eq 'windows-latest') {
         return Format-Impossible 'Not possible'
@@ -185,7 +193,7 @@ function Format-TerminatePeerCell(
     }
     $arm = $w[$PeerKey]
     if ($arm) {
-        return Format-RpsCell $metrics -Medal:$Medal -Peak:$Peak
+        return Format-RpsCell $metrics -Medal:$Medal
     }
     $reason = Get-PeerImpossibleReason $w $PeerKey $arm
     return Format-Impossible $reason
@@ -194,11 +202,11 @@ function Format-TerminatePeerCell(
 function Emit-ReverseTable([string]$OsFolder) {
     $omitNative = ($OsFolder -eq 'windows-latest')
     if ($omitNative) {
-        Write-Output '| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |'
-        Write-Output '|---|---|---:|---:|---:|---:|---:|---:|'
+        Write-Output '| Client | Origin | TWP | nginx | YARP |'
+        Write-Output '|---|---|---:|---:|---:|'
     } else {
-        Write-Output '| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | HAProxy sustain | HAProxy peak | Envoy sustain | Envoy peak | YARP sustain | YARP peak |'
-        Write-Output '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|'
+        Write-Output '| Client | Origin | TWP | nginx | HAProxy | Envoy | YARP |'
+        Write-Output '|---|---|---:|---:|---:|---:|---:|'
     }
     foreach ($w in $wires) {
         $twp = Get-MedianMetrics $OsFolder $w.Rev
@@ -216,21 +224,17 @@ function Emit-ReverseTable([string]$OsFolder) {
         }
         $best = ($candidates | Where-Object { $_.M } | Sort-Object { $_.M.Sustain } -Descending | Select-Object -First 1).K
         if ($omitNative) {
-            Write-Output ("| {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} |" -f $w.C, $w.O,
-                (Format-RpsCell $twp -Medal:($best -eq 'twp')), (Format-RpsCell $twp -Medal:($best -eq 'twp') -Peak),
+            Write-Output ("| {0} | {1} | {2} | {3} | {4} |" -f $w.C, $w.O,
+                (Format-RpsCell $twp -Medal:($best -eq 'twp')),
                 (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx')),
-                (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx') -Peak),
-                (Format-RpsCell $yarp -Medal:($best -eq 'yarp')), (Format-RpsCell $yarp -Medal:($best -eq 'yarp') -Peak))
+                (Format-RpsCell $yarp -Medal:($best -eq 'yarp')))
         } else {
-            Write-Output ("| {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} | {8} | {9} | {10} | {11} |" -f $w.C, $w.O,
-                (Format-RpsCell $twp -Medal:($best -eq 'twp')), (Format-RpsCell $twp -Medal:($best -eq 'twp') -Peak),
+            Write-Output ("| {0} | {1} | {2} | {3} | {4} | {5} | {6} |" -f $w.C, $w.O,
+                (Format-RpsCell $twp -Medal:($best -eq 'twp')),
                 (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx')),
-                (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx') -Peak),
                 (Format-TerminatePeerCell $OsFolder $w 'Haproxy' $haproxy -Medal:($best -eq 'haproxy')),
-                (Format-TerminatePeerCell $OsFolder $w 'Haproxy' $haproxy -Medal:($best -eq 'haproxy') -Peak),
                 (Format-TerminatePeerCell $OsFolder $w 'Envoy' $envoy -Medal:($best -eq 'envoy')),
-                (Format-TerminatePeerCell $OsFolder $w 'Envoy' $envoy -Medal:($best -eq 'envoy') -Peak),
-                (Format-RpsCell $yarp -Medal:($best -eq 'yarp')), (Format-RpsCell $yarp -Medal:($best -eq 'yarp') -Peak))
+                (Format-RpsCell $yarp -Medal:($best -eq 'yarp')))
         }
     }
 }
