@@ -57,10 +57,18 @@ public class TrustCommandCoverageTests
             await ExecuteAsync(vm.StartCaptureCommand);
             await WaitUntil(() => interception.IsRunning, 8000);
             Assert.IsTrue(interception.IsRunning, vm.StatusText);
+            // Let StartCaptureAsync finish Ready / endpoint status (IsRunning flips first).
+            await WaitUntil(
+                () => !vm.IsStatusBusy &&
+                      vm.EndpointStatusText.StartsWith("Proxy running", StringComparison.Ordinal),
+                8000);
 
-            await ExecuteAsync(vm.InstallCaCommand);
+            await ExecuteUntilAsync(
+                vm.InstallCaCommand,
+                () => interception.IsRootTrusted &&
+                      vm.StatusText.Contains("Root CA trusted", StringComparison.Ordinal));
             Assert.IsTrue(interception.IsRootTrusted, vm.StatusText);
-            StringAssert.Contains(vm.StatusText, "trusted");
+            StringAssert.Contains(vm.StatusText, "Root CA trusted");
 
             await ExecuteAsync(vm.TrustFirefoxCaCommand);
 
@@ -236,7 +244,11 @@ public class TrustCommandCoverageTests
                 .Invoke(vm, [null])!;
 
             await ExecuteAsync(vm.StartCaptureCommand);
-            await WaitUntil(() => interception.IsRunning, 8000);
+            await WaitUntil(
+                () => interception.IsRunning &&
+                      !vm.IsStatusBusy &&
+                      vm.EndpointStatusText.StartsWith("Proxy running", StringComparison.Ordinal),
+                8000);
             await ExecuteAsync(vm.TrustFirefoxCaCommand);
             StringAssert.Contains(vm.StatusText, "cancelled");
             await ExecuteAsync(vm.UntrustCaCommand);
@@ -279,7 +291,16 @@ public class TrustCommandCoverageTests
     private static async Task ExecuteAsync(System.Windows.Input.ICommand command)
     {
         command.Execute(null);
-        await Task.Delay(500);
+        await Task.Delay(50);
+    }
+
+    private static async Task ExecuteUntilAsync(
+        System.Windows.Input.ICommand command,
+        Func<bool> done,
+        int timeoutMs = 15000)
+    {
+        command.Execute(null);
+        await WaitUntil(done, timeoutMs);
     }
 
     private static async Task WaitUntil(Func<bool> predicate, int timeoutMs)

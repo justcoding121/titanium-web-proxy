@@ -198,10 +198,11 @@ public sealed partial class MainWindowViewModel
     private async Task<bool> EnsureRootCaTrustedAsync(bool promptIfNeeded) // NOSONAR S3776 -- Adaptive OS-trust recovery loop shares dialog/state; splitting would hide the retry contract.
     {
         var owner = TryGetMainWindow();
-        // Store Find + CryptUI off the dispatcher so Busy can paint; CryptUI still shows its own dialog.
-        var ok = await RunOffUiAsync(
-            () => _interception.InstallRootCertificate(machineStore: false),
-            StatusCancelToken).ConfigureAwait(false);
+        // Yield so Busy can paint. CryptUI / Keychain MUST stay on this thread (message pump) —
+        // Task.Run has no pump, so the Yes/No dialog never appears and callers hang forever
+        // (unit tests without UseInMemoryTrustState will wedge and balloon memory).
+        await Task.Yield();
+        var ok = _interception.InstallRootCertificate(machineStore: false);
         var result = _interception.LastOsTrustResult;
 
         if (ok && result?.Kind != CertificateOsTrustKind.MacNeedsManualTrustConfirm)
@@ -276,9 +277,9 @@ public sealed partial class MainWindowViewModel
         if (choice == TrustRecoveryChoice.Primary)
         {
             SetStatus("Trusting root CA (administrator)…", StatusSeverity.Busy);
-            var ok = await RunOffUiAsync(
-                () => _interception.InstallRootCertificateAsAdmin(machineStore: false),
-                StatusCancelToken).ConfigureAwait(false);
+            // UAC/CryptUI need a message pump — do not Task.Run.
+            await Task.Yield();
+            var ok = _interception.InstallRootCertificateAsAdmin(machineStore: false);
             if (ok && _interception.LastOsTrustResult?.Kind !=
                 CertificateOsTrustKind.MacNeedsManualTrustConfirm)
                 return true;
@@ -332,6 +333,10 @@ public sealed partial class MainWindowViewModel
     }
     private void SetOsTrustSuccessStatus()
     {
+        // Mac Keychain / verify paths no longer write Firefox prefs inside VerifyOsUserSslTrust
+        // (that ran on every 1.5s poll). Write once when trust is actually established.
+        _ = RunOffUiAsync(InterceptionService.TryEnableFirefoxEnterpriseRootsBestEffort);
+
         var msg = "Root CA trusted — ready to decrypt HTTPS";
         if (!_firefoxTrustHintShown && InterceptionService.IsFirefoxProfilePresent)
         {
@@ -383,10 +388,9 @@ public sealed partial class MainWindowViewModel
         }
 
         SetStatus("Removing root CA…", StatusSeverity.Busy);
-        // CryptUI Remove can show a dialog; post-check store Find stays with the same call.
-        await RunOffUiAsync(
-            () => _interception.UntrustRootCertificate(machineStore: false),
-            StatusCancelToken).ConfigureAwait(false);
+        // CryptUI Remove needs a message pump — do not Task.Run (hangs headless / balloons memory).
+        await Task.Yield();
+        _interception.UntrustRootCertificate(machineStore: false);
         if (DecryptHttps)
         {
             SetDecryptHttpsCore(false);
@@ -421,10 +425,10 @@ public sealed partial class MainWindowViewModel
             SetDecryptHttpsCore(false);
 
         SetStatus("Clearing and recreating root CA…", StatusSeverity.Busy);
+        // Rotate removes Root-store entries (CryptUI) then mints a new PFX — keep on this thread.
+        await Task.Yield();
         var oldThumb = _interception.RootCertificate?.Thumbprint;
-        var ok = await RunOffUiAsync(
-            () => _interception.RotateRootCertificate(machineStore: false),
-            StatusCancelToken).ConfigureAwait(false);
+        var ok = _interception.RotateRootCertificate(machineStore: false);
         if (!ok)
         {
             SetOutcomeStatus("Clear and reinstall root CA failed — see logs", StatusSeverity.Error, toastImportant: true);
@@ -649,7 +653,10 @@ public sealed partial class MainWindowViewModel
             () => _interception.VerifyOsUserSslTrust(),
             StatusCancelToken).ConfigureAwait(false);
         if (trusted)
+        {
+            _ = RunOffUiAsync(InterceptionService.TryEnableFirefoxEnterpriseRootsBestEffort);
             return true;
+        }
 
         var incomplete = CertificateOsTrustResult.Fail(
             CertificateOsTrustKind.MacNeedsManualTrustConfirm,
@@ -660,7 +667,10 @@ public sealed partial class MainWindowViewModel
                 () => _interception.VerifyOsUserSslTrust(),
                 StatusCancelToken).ConfigureAwait(false);
             if (trusted)
+            {
+                _ = RunOffUiAsync(InterceptionService.TryEnableFirefoxEnterpriseRootsBestEffort);
                 return true;
+            }
         }
 
         SetOutcomeStatus(

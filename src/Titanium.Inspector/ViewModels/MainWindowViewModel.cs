@@ -101,6 +101,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private bool _stopBusy;
     private bool _startBusy;
     private int _systemProxyApplyGeneration;
+    private int _proxyLoopbackApplyGeneration;
     private int _decryptTrustVerifyGeneration;
     private bool _breakpointOnResponse;
     private string _breakpointEditBody = "";
@@ -564,6 +565,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         _interception.EnsureShutdown();
         CancelStatusRevert();
+        Interlocked.Increment(ref _systemProxyApplyGeneration);
         SetSystemProxyCore(false);
         RefreshEndpointAndBindUi();
         _registry.Dispose();
@@ -585,6 +587,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
 
         // UI flag only — do not call SetSystemProxy on the UI thread (WinINET deadlock risk).
+        Interlocked.Increment(ref _systemProxyApplyGeneration);
         SetSystemProxyCore(false);
         _interception.BeginBackgroundShutdown();
         CancelStatusRevert();
@@ -787,6 +790,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         _stopBusy = true;
         _reenableSystemProxyOnStart = SystemProxy;
+        // Invalidate in-flight optimistic System proxy applies before WinINET restore in Stop().
+        Interlocked.Increment(ref _systemProxyApplyGeneration);
+        SetSystemProxyCore(false);
         SetStatus("Stopping…", StatusSeverity.Busy);
 
         try
@@ -794,13 +800,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             await RunOffUiAsync(() => _interception.Stop(), _statusRevertCts?.Token ?? CancellationToken.None)
                 .ConfigureAwait(false);
 
-            await MarshalToUiAsync(() =>
-            {
-                SetSystemProxyCore(false);
-                PersistSettings();
-                RefreshEndpointAndBindUi();
-                SetSteadyStatus(statusAfterStop);
-            }, StatusCancelToken).ConfigureAwait(false);
+            // Same as Start: avoid MarshalToUiAsync when no dispatcher pump (unit tests).
+            SetSystemProxyCore(false);
+            PersistSettings();
+            RefreshEndpointAndBindUi();
+            SetSteadyStatus(statusAfterStop);
         }
         finally
         {
@@ -1422,7 +1426,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             }
 
             SetSystemProxyCore(false);
-            if (_interception.IsRunning && _interception.SystemProxyEnabled)
+            // Always schedule restore when the proxy is up — SystemProxyEnabled may still be false
+            // while an optimistic enable is in flight; generation + lock cancel the enable safely.
+            if (_interception.IsRunning)
             {
                 SetStatus("Restoring system proxy…", StatusSeverity.Busy);
                 _ = ApplySystemProxyAsync(enable: false);
@@ -1446,7 +1452,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     /// <summary>
     /// Applies or restores WinINET / OS system proxy off the UI thread. Reverts the checkbox on failure.
-    /// Last-write-wins via generation counter when the user toggles quickly.
+    /// Last-write-wins via generation counter when the user toggles quickly or Stop invalidates applies.
     /// </summary>
     private async Task ApplySystemProxyAsync(bool enable)
     {
@@ -1454,9 +1460,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         try
         {
             var ok = await RunOffUiAsync(
-                () => enable
-                    ? _interception.SetSystemProxy(true, _settings.Current)
-                    : _interception.SetSystemProxy(false),
+                () => _interception.SetSystemProxy(
+                    enable,
+                    enable ? _settings.Current : null,
+                    stillWanted: () => generation == Volatile.Read(ref _systemProxyApplyGeneration)),
                 StatusCancelToken).ConfigureAwait(false);
 
             if (generation != Volatile.Read(ref _systemProxyApplyGeneration))
@@ -1473,6 +1480,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
                 if (ok)
                 {
+                    // Stop / uncheck may have cleared the UI intent while WinINET still reported success.
+                    if (enable && (!_systemProxy || !_interception.IsRunning))
+                    {
+                        return;
+                    }
+
                     if (enable)
                     {
                         SetOutcomeStatus(
@@ -1485,6 +1498,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                         SetOutcomeStatus(SystemProxyRestoredStatus, StatusSeverity.Success);
                     }
 
+                    return;
+                }
+
+                // Cancelled by stillWanted (superseded) — do not treat as user-visible failure.
+                if (string.IsNullOrEmpty(_interception.LastSystemProxyError))
+                {
                     return;
                 }
 
@@ -1535,11 +1554,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             StatusText = value
                 ? "Capture local traffic on — applying…"
                 : "Capture local traffic off — applying…";
-            _ = ReapplySystemProxyAfterLoopbackChangeAsync(value);
+            var generation = Interlocked.Increment(ref _proxyLoopbackApplyGeneration);
+            _ = ReapplySystemProxyAfterLoopbackChangeAsync(value, generation);
         }
     }
 
-    private async Task ReapplySystemProxyAfterLoopbackChangeAsync(bool loopbackDesired)
+    private async Task ReapplySystemProxyAfterLoopbackChangeAsync(bool loopbackDesired, int generation)
     {
         try
         {
@@ -1547,8 +1567,18 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 () => _interception.ReapplySystemProxyIfEnabled(),
                 StatusCancelToken).ConfigureAwait(false);
 
+            if (generation != Volatile.Read(ref _proxyLoopbackApplyGeneration))
+            {
+                return;
+            }
+
             await MarshalToUiAsync(() =>
             {
+                if (generation != Volatile.Read(ref _proxyLoopbackApplyGeneration))
+                {
+                    return;
+                }
+
                 if (!ok)
                 {
                     StatusText = "Capture local traffic saved; re-toggle System proxy to apply";
@@ -2414,21 +2444,21 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         try
         {
             // Listener start + first Root-store trust refresh can stall Crypt32 — keep off UI.
-            await RunOffUiAsync(
-                () => _interception.StartAsync(address, port, token).GetAwaiter().GetResult(),
+            // Use async Task.Run (not GetResult) to avoid sync-over-async deadlocks on a sync context.
+            await Task.Run(
+                async () => await _interception.StartAsync(address, port, token).ConfigureAwait(false),
                 token).ConfigureAwait(false);
 
-            await MarshalToUiAsync(() =>
+            // Apply ViewModel fields on this async path. Do not MarshalToUiAsync here: unit tests can
+            // have Application.Current set without a pumping dispatcher, which would hang forever on Post.
+            if (_interception.BoundPort > 0)
             {
-                if (_interception.BoundPort > 0)
-                {
-                    BindPort = _interception.BoundPort;
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindPort)));
-                }
+                BindPort = _interception.BoundPort;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindPort)));
+            }
 
-                Capturing = true;
-                RefreshEndpointAndBindUi();
-            }, token).ConfigureAwait(false);
+            Capturing = true;
+            RefreshEndpointAndBindUi();
 
             var wantSystemProxy = _reenableSystemProxyOnStart || AutoSystemProxyOnStart;
             _reenableSystemProxyOnStart = false;
@@ -2453,7 +2483,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             }
 
             // Keep the system-proxy restart guidance visible; do not replace it with Ready.
-            if (!showedSystemProxyGuidance)
+            // Also do not clobber a newer status if the user already acted during start
+            // (Install CA / Decrypt can finish while StartCaptureAsync is still awaiting UI marshal).
+            if (!showedSystemProxyGuidance &&
+                (IsStatusBusy || StatusText.StartsWith("Starting proxy", StringComparison.Ordinal)))
             {
                 SetSteadyStatus(StatusReady);
             }

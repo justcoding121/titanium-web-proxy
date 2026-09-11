@@ -85,8 +85,20 @@ public sealed class InterceptionService : IDisposable
     /// <summary>
     /// When set (tests), skip the Windows certificate store and track trust in-memory.
     /// Avoids modal "Root Certificate Store" UI that hangs headless / CI runs.
+    /// Also suppresses CertificateManager Root-store CryptUI when the proxy is started.
     /// </summary>
-    public bool UseInMemoryTrustState { get; set; }
+    public bool UseInMemoryTrustState
+    {
+        get => _useInMemoryTrustState;
+        set
+        {
+            _useInMemoryTrustState = value;
+            if (value)
+                CertificateManager.SuppressInteractiveRootStoreMutations = true;
+        }
+    }
+
+    private bool _useInMemoryTrustState;
 
     /// <summary>Test seam: next <see cref="InstallRootCertificate"/> returns false once (forces elevate path).</summary>
     public bool FailNextUserTrustInstall { get; set; }
@@ -445,62 +457,90 @@ public sealed class InterceptionService : IDisposable
         Http3Enabled = false;
     }
 
+    private readonly object _systemProxyGate = new();
+
     /// <summary>
     /// Enable or disable system proxy. Returns false if the proxy is not running or the underlying call failed.
     /// </summary>
-    public bool SetSystemProxy(bool enable, InspectorSettings? settings = null)
+    /// <param name="stillWanted">
+    /// Optional gate evaluated under the system-proxy lock before mutating OS settings.
+    /// Used to cancel a superseded optimistic enable/disable (e.g. Stop while enable is in flight).
+    /// </param>
+    public bool SetSystemProxy(bool enable, InspectorSettings? settings = null, Func<bool>? stillWanted = null)
     {
         LastSystemProxyError = null;
-        if (_proxy is null || _endPoint is null || !_proxy.ProxyRunning)
+        lock (_systemProxyGate)
         {
-            LastSystemProxyError = "Proxy is not running";
-            return false;
-        }
+            if (stillWanted is not null && !stillWanted())
+            {
+                return false;
+            }
 
-        try
-        {
             if (enable)
             {
-                var effective = settings ?? SystemProxySettings ?? new InspectorSettings();
-                SystemProxySettings = effective;
-                var result = _systemProxy.SetAsSystemProxy(_proxy, _endPoint, effective);
-                if (!result.Succeeded)
+                if (_proxy is null || _endPoint is null || !_proxy.ProxyRunning)
                 {
-                    LastSystemProxyError = result.Message;
-                    _proxy.Logger.LogWarning("System proxy enable failed: {Message}", result.Message);
+                    LastSystemProxyError = "Proxy is not running";
                     return false;
                 }
-
-                _systemProxyEnabled = true;
             }
-            else
+            else if (!_systemProxyEnabled)
             {
-                var result = _systemProxy.RestoreOriginalProxySettings(_proxy);
-                if (!result.Succeeded)
-                {
-                    LastSystemProxyError = result.Message;
-                    _proxy.Logger.LogWarning("System proxy disable failed: {Message}", result.Message);
-                    return false;
-                }
-
-                _systemProxyEnabled = false;
+                // Already restored — common when Stop raced an optimistic enable that never landed.
+                return true;
             }
 
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LastSystemProxyError = ex.Message;
+            if (_proxy is null)
+            {
+                LastSystemProxyError = "Proxy is not running";
+                return false;
+            }
+
             try
             {
-                _proxy.Logger.LogWarning(ex, "System proxy {Action} failed", enable ? "enable" : "disable");
-            }
-            catch
-            {
-                // logging must not hide the original failure
-            }
+                if (enable)
+                {
+                    var effective = settings ?? SystemProxySettings ?? new InspectorSettings();
+                    SystemProxySettings = effective;
+                    var result = _systemProxy.SetAsSystemProxy(_proxy, _endPoint!, effective);
+                    if (!result.Succeeded)
+                    {
+                        LastSystemProxyError = result.Message;
+                        _proxy.Logger.LogWarning("System proxy enable failed: {Message}", result.Message);
+                        return false;
+                    }
 
-            return false;
+                    _systemProxyEnabled = true;
+                }
+                else
+                {
+                    var result = _systemProxy.RestoreOriginalProxySettings(_proxy);
+                    if (!result.Succeeded)
+                    {
+                        LastSystemProxyError = result.Message;
+                        _proxy.Logger.LogWarning("System proxy disable failed: {Message}", result.Message);
+                        return false;
+                    }
+
+                    _systemProxyEnabled = false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LastSystemProxyError = ex.Message;
+                try
+                {
+                    _proxy.Logger.LogWarning(ex, "System proxy {Action} failed", enable ? "enable" : "disable");
+                }
+                catch
+                {
+                    // logging must not hide the original failure
+                }
+
+                return false;
+            }
         }
     }
 
@@ -682,6 +722,11 @@ public sealed class InterceptionService : IDisposable
     /// </summary>
     public CertificateOsTrustResult TrustFirefox()
     {
+        if (UseInMemoryTrustState)
+        {
+            return CertificateOsTrustResult.Ok("Firefox trust recorded (in-memory)");
+        }
+
         if (_proxy is null)
         {
             return CertificateOsTrustResult.Fail(
@@ -720,6 +765,12 @@ public sealed class InterceptionService : IDisposable
     {
         try
         {
+            // Unit tests set TITANIUM_SKIP_ROOT_STORE_UI=1 — never touch live Firefox profiles
+            // (prefs.js locks hang / balloon memory when Firefox is open).
+            if (string.Equals(Environment.GetEnvironmentVariable("TITANIUM_SKIP_ROOT_STORE_UI"), "1",
+                    StringComparison.Ordinal))
+                return;
+
             if (!FirefoxCertificateTrust.IsFirefoxProfilePresent())
                 return;
             FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref();
