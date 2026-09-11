@@ -662,9 +662,9 @@ WebSocket echo over **RFC 8441** extended CONNECT (H2 TLS client → H1 plain or
 
 | OS | Titanium | YARP | nginx | HAProxy | Envoy |
 |---|---:|---:|---:|---:|---:|
-| Windows | *Not measured* | *Not measured* | *Not possible* | *Not possible* | *Not possible* |
-| Linux | *Not measured* | *Not measured* | *Not possible* | *Not measured* | *Not measured* |
-| macOS | *Not measured* | *Not measured* | *Not possible* | *Not measured* | *Not measured* |
+| Windows | *Not measured* | *Not measured* | *Not possible (no RFC 8441)* | *Not possible* | *Not possible* |
+| Linux | *Not measured* | *Not measured* | *Not possible (no RFC 8441)* | *Not measured* | *Not measured* |
+| macOS | *Not measured* | *Not measured* | *Not possible (no RFC 8441)* | *Not measured* | *Not measured* |
 
 ## Other measurements
 
@@ -736,7 +736,9 @@ CI cadence, shards, paste scripts, and gate floors for people refreshing these t
 | Cross-version (Gate 2) | `compare-cross-version` | ~1–2h vs committed 6.0 baselines |
 | Pre-wiki smoke | `compare-product-smoke` (Linux 2 shards, `repeats=1`) | ~30–60 min; required before full product |
 | Release / wiki | `compare-product` (**3** comparison-group shards × Win/Linux/mac) | ~2–2½h wall (Free account queues beyond 20 jobs) |
-| Unary gRPC | `compare-grpc` | Win/Linux/mac; RPC/s @ c=64 |
+| Unary gRPC | `compare-grpc` | Win/Linux/mac; H2↔H2 + H2→h2c (`arm_shard` 1/2, 2/2) |
+| WebSocket dual-TLS | `compare-ws-h1tls` | Win/Linux/mac; H1 TLS→H1 TLS echo |
+| WebSocket RFC 8441 | `compare-ws-h2` | Win/Linux/mac; H2 TLS→H1 plain (nginx N/A) |
 | Heavier tables | `compare-bodies` (**2** shards) / `post` / `lossy` / `arch` (**3** shards) / `tls-cost` | dispatch independently |
 
 See [PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/PERF-GATES.md).
