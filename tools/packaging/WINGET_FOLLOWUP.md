@@ -1,19 +1,21 @@
 # Winget follow-up
 
-## Submitted winget PRs (v7.0.6)
+## Submitted winget PRs (v7.0.6) — first listing
 
 - CLI: https://github.com/microsoft/winget-pkgs/pull/432942
 - Inspector (Authenticode MSI): https://github.com/microsoft/winget-pkgs/pull/432943
 
-## Still open (v7.0.5 — leave alone)
+## Closed (v7.0.5 — superseded before first moderator merge)
 
 - CLI: https://github.com/microsoft/winget-pkgs/pull/428410
 - Inspector: https://github.com/microsoft/winget-pkgs/pull/428421
 
+Closed in favor of 7.0.6 as the initial New-Package listing (neither version had been approved yet).
+
 ## Do not
 
 - Resubmit beta tags to `microsoft/winget-pkgs`.
-- Open duplicate PRs while the above are still open for the same version.
+- Open duplicate New-Package PRs for older versions while the first listing is still under review.
 
 ## After merge
 
