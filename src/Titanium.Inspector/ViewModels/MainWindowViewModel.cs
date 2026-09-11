@@ -655,6 +655,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                     RefreshSelectedInspectors();
                 }
             });
+        _interception.DecryptFailureBypassLearned += (_, entry) =>
+            MarshalToUi(() =>
+            {
+                StatusText =
+                    $"Auto-tunneled {entry.Host} (origin TLS). Manage in Excluded hosts.";
+                UpdateExclusionSummary();
+            });
     }
 
     /// <summary>
@@ -928,7 +935,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             owner,
             _settings,
             readOnly: false,
-            ApplyExclusionSettingsFromSettings));
+            ApplyExclusionSettingsFromSettings,
+            _interception));
         if (saved)
         {
             if (SystemProxy && !_interception.ReapplySystemProxyIfEnabled())
@@ -1006,13 +1014,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _interception.DecryptOnlyHosts = s.DecryptOnlyHosts?.ToList() ?? [];
         _interception.SystemProxyBypassHosts = s.SystemProxyBypassHosts?.ToList() ?? [];
         _interception.ProxyLoopback = s.ProxyLoopback;
+        _interception.EnableDecryptFailureBypass = s.EnableDecryptFailureBypass;
+        _interception.ApplyDecryptFailureBypassSetting();
         _interception.SystemProxySettings = s;
         UpdateExclusionSummary();
     }
 
     private void UpdateExclusionSummary()
     {
-        ExclusionSummaryText = ExclusionPreview.ExclusionSummary(_settings.Current);
+        var learned = _interception.GetDecryptFailureBypassEntries().Count(e => e.BypassActive);
+        ExclusionSummaryText = ExclusionPreview.ExclusionSummary(_settings.Current, learned);
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ExclusionSummaryText)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasExclusionSummary)));
     }

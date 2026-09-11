@@ -38,16 +38,21 @@ public static class ExclusionPreview
         return ("Bypass list", winInet);
     }
 
-    public static string ExclusionSummary(InspectorSettings settings)
+    public static string ExclusionSummary(InspectorSettings settings, int learnedCount = 0)
     {
         var bypass = settings.SystemProxyBypassHosts?.Count(h => !string.IsNullOrWhiteSpace(h)) ?? 0;
         var tunnel = settings.DecryptSkipHosts?.Count(h => !string.IsNullOrWhiteSpace(h)) ?? 0;
-        if (bypass == 0 && tunnel == 0)
+        if (bypass == 0 && tunnel == 0 && learnedCount == 0)
         {
             return "";
         }
 
-        return $"Exclusions: {bypass} OS bypass, {tunnel} tunnel-only";
+        var parts = new List<string>();
+        if (bypass > 0 || tunnel > 0)
+            parts.Add($"Exclusions: {bypass} OS bypass, {tunnel} tunnel-only");
+        if (learnedCount > 0)
+            parts.Add($"Learned: {learnedCount}");
+        return string.Join(" · ", parts);
     }
 
     public static string DescribeOpaqueReason(OpaqueTunnelReason reason) => reason switch
@@ -57,6 +62,7 @@ public static class ExclusionPreview
         OpaqueTunnelReason.BuiltInPinning => "Encrypted: pinning host (tunnel only)",
         OpaqueTunnelReason.UserSkipList => "Encrypted: tunnel-only exclusion list",
         OpaqueTunnelReason.UserOnlyList => "Encrypted: not on decrypt-only allowlist",
+        OpaqueTunnelReason.LearnedFailure => "Encrypted: auto-tunneled after decrypt failure",
         _ => "",
     };
 }

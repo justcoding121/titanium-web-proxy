@@ -3,7 +3,7 @@
         x:Class="Titanium.Inspector.Views.ExcludedHostsWindow"
         AutomationProperties.AutomationId="ExcludedHostsWindow"
         Title="Excluded hosts"
-        Width="640" Height="680"
+        Width="640" Height="780"
         WindowStartupLocation="CenterOwner">
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
@@ -35,6 +35,25 @@
                  Watermark="dropbox.com&#x0a;webex.com"
                  FontFamily="Consolas,Courier New,monospace"
                  AutomationProperties.AutomationId="ExcludedSkipHosts" />
+
+        <TextBlock FontWeight="SemiBold" Text="Auto-tunnel on decrypt failure" />
+        <CheckBox x:Name="LearningEnabledCheck" Content="Learn hosts that fail origin TLS under decrypt (session only)"
+                  AutomationProperties.AutomationId="ExcludedLearningEnabled" />
+        <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                   Text="When origin TLS fails repeatedly under decrypt (e.g. bot detection), Inspector stops decrypting that host for this session so the site can load. First visits may still fail. List is capped and forgotten on restart unless you promote. Certificate-pinning apps still belong on Tunnel only." />
+        <TextBlock x:Name="LearningPausedBanner" IsVisible="False" Opacity="0.85" TextWrapping="Wrap"
+                   Text="Learning paused — existing entries kept until forgotten." />
+        <ListBox x:Name="LearnedList" MinHeight="96" MaxHeight="180"
+                 AutomationProperties.AutomationId="ExcludedLearnedList" />
+        <TextBlock x:Name="LearnedEmptyText" Opacity="0.6" Text="No hosts learned yet." />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button x:Name="PromoteLearnedButton" Content="Promote to tunnel-only" MinWidth="140"
+                  AutomationProperties.AutomationId="ExcludedLearnedPromote" />
+          <Button x:Name="ForgetLearnedButton" Content="Forget" MinWidth="88"
+                  AutomationProperties.AutomationId="ExcludedLearnedForget" />
+          <Button x:Name="ClearLearnedButton" Content="Clear all learned" MinWidth="120"
+                  AutomationProperties.AutomationId="ExcludedLearnedClear" />
+        </StackPanel>
 
         <CheckBox x:Name="ProxyLoopbackCheck" Content="Proxy localhost (advanced)"
                   AutomationProperties.AutomationId="ExcludedProxyLoopback" />

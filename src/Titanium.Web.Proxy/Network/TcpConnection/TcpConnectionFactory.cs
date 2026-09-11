@@ -1172,6 +1172,10 @@ internal class TcpConnectionFactory : IDisposable
             if (stream != null) await stream.DisposeAsync();
             tcpServerSocket?.Close();
             ProxyLog.OriginConnectionFailed(proxyServer.Logger, remoteHostName, remotePort, ex);
+            // Post-MITM (or other) origin TLS failure: learn for subsequent CONNECTs when enabled.
+            // Do not learn ALPN (handled above) or TCP-only failures (IsLearnable filters those).
+            if (isHttps)
+                proxyServer.TryRecordDecryptFailure(remoteHostName, ex);
             throw;
         }
 

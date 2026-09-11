@@ -114,14 +114,17 @@ Applies to every captured request/response. On request, `abort` or `set-status` 
 
 ### Excluded hosts
 
-**Options → Excluded hosts…** edits two lists:
+**Options → Excluded hosts…** edits OS bypass, tunnel-only, and auto-tunnel learning:
 
 | Layer | Effect |
 |-------|--------|
 | **OS bypass** | Traffic never reaches Inspector (when **System proxy** is on) |
 | **Tunnel only** | Session stays visible but HTTPS stays opaque |
+| **Auto-tunnel on decrypt failure** | Session-only list of hosts learned after origin TLS fails under decrypt (e.g. bot detection). **On by default.** Cap + TTL; cleared on restart unless you **Promote to tunnel-only** |
 
-Factory seeds keep common identity / SSO hosts on OS bypass so sign-in keeps working. Right-click a session → **Exclude host…**. Search: `is:opaque`. **Chrome QUIC** may bypass the proxy entirely — not fixable via host lists.
+Factory seeds keep common identity / SSO hosts on OS bypass so sign-in keeps working. Right-click a session → **Exclude host…**. Opaque sessions show why they stayed encrypted (including **auto-tunneled after decrypt failure**). Search: `is:opaque`, `opaque-reason:learned`. **Chrome QUIC** may bypass the proxy entirely — not fixable via host lists.
+
+First visits to a hostile host may still fail until learning kicks in (or until a cold H2 probe fails and the same CONNECT falls back to tunnel). Certificate-pinning apps still belong on **Tunnel only**.
 
 ### Root certificate (Decrypt HTTPS)
 

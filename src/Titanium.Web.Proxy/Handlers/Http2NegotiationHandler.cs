@@ -72,15 +72,16 @@ public partial class ProxyServer
         var capabilityCacheKey = TcpConnectionFactory.GetConnectionCacheKey(remoteHostName, remotePort, true,
             null, upStreamEndPoint, externalProxy, connectHost, connectPort);
 
+        var learnableOriginTlsFailure = false;
         if (!Http2OriginCapabilityCache.TryGet(capabilityCacheKey, out var cachedSupport))
         {
             Diagnostics.ProxyMetrics.Http2CapabilityLookup(cacheHit: false);
             // Coalesce concurrent cold probes: browsers open many CONNECTs to the same host at once.
             // Each used to block AuthenticateAsServer on its own origin TLS probe; Chrome then aborted
             // waiting tunnels (EOF / "Couldn't authenticate host"). One in-flight probe feeds them all.
-            cachedSupport = await CoalesceHttp2CapabilityProbeAsync(capabilityCacheKey, sessionArgs,
-                remoteHostName, remotePort, connectHost, connectPort, upStreamEndPoint, externalProxy,
-                cancellationToken);
+            (cachedSupport, learnableOriginTlsFailure) = await CoalesceHttp2CapabilityProbeAsync(
+                capabilityCacheKey, sessionArgs, remoteHostName, remotePort, connectHost, connectPort,
+                upStreamEndPoint, externalProxy, cancellationToken);
         }
         else
         {
@@ -99,7 +100,8 @@ public partial class ProxyServer
                 sessionArgs, upStreamEndPoint, externalProxy, false, true, CancellationToken.None,
                 connectHost, connectPort);
 
-        return new Http2NegotiationResult(cachedSupport, retained);
+        return new Http2NegotiationResult(cachedSupport, retained,
+            learnableOriginTlsFailure: learnableOriginTlsFailure);
     }
 
     /// <summary>
@@ -107,17 +109,18 @@ public partial class ProxyServer
     ///     same task. Definitive ALPN rejection (<c>SEC_E_NO_APPLICATION_PROTOCOL</c>) is cached as
     ///     unsupported; transient network/cert failures are not cached.
     /// </summary>
-    private async Task<bool> CoalesceHttp2CapabilityProbeAsync(string capabilityCacheKey,
-        SessionEventArgsBase sessionArgs, string remoteHostName, int remotePort, string? connectHost,
-        int? connectPort, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
+    private async Task<(bool Supported, bool LearnableFailure)> CoalesceHttp2CapabilityProbeAsync(
+        string capabilityCacheKey, SessionEventArgsBase sessionArgs, string remoteHostName, int remotePort,
+        string? connectHost, int? connectPort, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
         CancellationToken cancellationToken)
     {
         while (true)
         {
             if (Http2OriginCapabilityCache.TryGet(capabilityCacheKey, out var racedCache))
-                return racedCache;
+                return (racedCache, false);
 
-            var probeTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var probeTcs = new TaskCompletionSource<(bool Supported, bool LearnableFailure)>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
             var probeTask = pendingHttp2CapabilityProbes.GetOrAdd(capabilityCacheKey, probeTcs.Task);
             if (!ReferenceEquals(probeTask, probeTcs.Task))
                 return await probeTask.ConfigureAwait(false);
@@ -125,11 +128,11 @@ public partial class ProxyServer
             var probeStarted = System.Diagnostics.Stopwatch.StartNew();
             try
             {
-                var supported = await ProbeHttp2CapabilityOnceAsync(capabilityCacheKey, sessionArgs,
+                var outcome = await ProbeHttp2CapabilityOnceAsync(capabilityCacheKey, sessionArgs,
                     remoteHostName, remotePort, connectHost, connectPort, upStreamEndPoint, externalProxy,
                     cancellationToken, probeStarted).ConfigureAwait(false);
-                probeTcs.TrySetResult(supported);
-                return supported;
+                probeTcs.TrySetResult(outcome);
+                return outcome;
             }
             catch (Exception ex)
             {
@@ -143,9 +146,9 @@ public partial class ProxyServer
         }
     }
 
-    private async Task<bool> ProbeHttp2CapabilityOnceAsync(string capabilityCacheKey,
-        SessionEventArgsBase sessionArgs, string remoteHostName, int remotePort, string? connectHost,
-        int? connectPort, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
+    private async Task<(bool Supported, bool LearnableFailure)> ProbeHttp2CapabilityOnceAsync(
+        string capabilityCacheKey, SessionEventArgsBase sessionArgs, string remoteHostName, int remotePort,
+        string? connectHost, int? connectPort, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
         CancellationToken cancellationToken, System.Diagnostics.Stopwatch probeStarted)
     {
         TcpServerConnection? connection = null;
@@ -161,7 +164,7 @@ public partial class ProxyServer
             Http2OriginCapabilityCache.Set(capabilityCacheKey, supported);
             Diagnostics.ProxyMetrics.Http2ProbeCompleted(probeStarted.Elapsed.TotalMilliseconds);
             ProxyLog.Http2ProbeResult(logger, capabilityCacheKey, false, supported, null);
-            return supported;
+            return (supported, false);
         }
         catch (Exception ex)
         {
@@ -173,7 +176,7 @@ public partial class ProxyServer
 
             Diagnostics.ProxyMetrics.Http2ProbeCompleted(probeStarted.Elapsed.TotalMilliseconds);
             ProxyLog.Http2ProbeResult(logger, capabilityCacheKey, false, false, ex);
-            return false;
+            return (false, DecryptFailureLearning.IsLearnableOriginTlsFailure(ex));
         }
         finally
         {

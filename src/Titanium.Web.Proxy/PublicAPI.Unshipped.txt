@@ -236,3 +236,22 @@ Titanium.Web.Proxy.ProxyServer.TryDisableSystemProxy(Titanium.Web.Proxy.Models.P
 Titanium.Web.Proxy.ProxyServer.TryRestoreOriginalProxySettings() -> Titanium.Web.Proxy.SystemProxyChangeResult
 Titanium.Web.Proxy.ProxyServer.TrySetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint! endPoint, Titanium.Web.Proxy.Models.ProxyProtocolType protocolType, Titanium.Web.Proxy.SystemProxySettings? settings = null) -> Titanium.Web.Proxy.SystemProxyChangeResult
 const Titanium.Web.Proxy.ProxyServer.DefaultViaHeaderPseudonym = "titanium-web-proxy" -> string!
+Titanium.Web.Proxy.Models.DecryptFailureBypassEntry
+Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.BypassActive.get -> bool
+Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.DecryptFailureBypassEntry(string! host, int strikes, System.DateTime learnedAtUtc, System.DateTime expiresAtUtc, bool bypassActive) -> void
+Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.ExpiresAtUtc.get -> System.DateTime
+Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.Host.get -> string!
+Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.LearnedAtUtc.get -> System.DateTime
+Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.Strikes.get -> int
+Titanium.Web.Proxy.ProxyServer.ClearDecryptFailureBypass() -> void
+Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassChanged -> System.EventHandler<Titanium.Web.Proxy.Models.DecryptFailureBypassEntry!>?
+Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassMaxEntries.get -> int
+Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassMaxEntries.set -> void
+Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassThreshold.get -> int
+Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassThreshold.set -> void
+Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassTtl.get -> System.TimeSpan
+Titanium.Web.Proxy.ProxyServer.DecryptFailureBypassTtl.set -> void
+Titanium.Web.Proxy.ProxyServer.EnableDecryptFailureBypass.get -> bool
+Titanium.Web.Proxy.ProxyServer.EnableDecryptFailureBypass.set -> void
+Titanium.Web.Proxy.ProxyServer.GetDecryptFailureBypassEntries() -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Models.DecryptFailureBypassEntry!>!
+Titanium.Web.Proxy.ProxyServer.RemoveDecryptFailureBypass(string! host) -> bool

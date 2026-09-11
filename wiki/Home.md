@@ -158,6 +158,8 @@ socksEndPoint.BeforeSslAuthenticate += (sender, e) =>
 proxyServer.AddEndPoint(socksEndPoint);
 ```
 
+See also website docs **library** → *Decrypt failure bypass (learned tunnel)* (`ProxyServer.EnableDecryptFailureBypass`) and Inspector **Excluded hosts → Auto-tunnel on decrypt failure**.
+
 ## Decrypting HTTPS
 
 To inspect HTTPS traffic the proxy generates per-host certificates signed by its own root certificate, which the client must trust.

@@ -74,6 +74,15 @@ shared, multi-tenant build/CI user), protect the key with OS-level mechanisms ou
 control — a hardware-backed key store, a dedicated service account, or equivalent — rather than
 expecting the file relocation alone to isolate it.
 
+## Decrypt failure bypass is a heuristic, not fingerprint matching
+
+`ProxyServer.EnableDecryptFailureBypass` (off by default in the library; on by default in Inspector) tunnels
+later CONNECTs without decrypt after repeated **origin** TLS handshake failures under MITM. It does **not**
+detect JA3/Akamai by name — failures look like ordinary `AuthenticationException`. False positives are
+possible; use a TTL/LRU-bounded session list and **Promote** known-bad hosts into permanent tunnel-only
+exclusions. Once a host is learned, the proxy no longer sees HTTP for that host (opaque relay). Embedded
+proxies should leave the flag off unless they need this behavior.
+
 ## See also
 
 - [Migration guide: 4.x → 5.0](Migration-4.x-to-5.0) — the full list of behavior changes this release

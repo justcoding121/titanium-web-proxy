@@ -94,3 +94,28 @@ MitmExclusionDefaults.ApplyDecryptExclusions(endPoint, () => true,
 ```
 
 CLI: when `server.decryptSkipHosts` and/or `server.decryptOnlyHosts` are present in `twp.yaml`, exclusions apply with **Replace**. Omit both to leave Merge defaults. Optional `server.systemProxyBypassHosts` / `server.proxyLoopback` build OS-bypass settings the same way (present ⇒ Replace; omit ⇒ Merge). Removing identity hosts from OS bypass can break Microsoft SSO while System proxy is enabled.
+
+### Decrypt failure bypass (learned tunnel)
+
+Optional heuristic for hosts that reject the proxy’s TLS fingerprint under MITM (bot / WAF style). **Default off** on `ProxyServer` (library and RPS baselines unchanged). Titanium Inspector enables it by default.
+
+```csharp
+proxyServer.EnableDecryptFailureBypass = true;
+proxyServer.DecryptFailureBypassThreshold = 2;      // strikes before later CONNECTs skip decrypt
+proxyServer.DecryptFailureBypassTtl = TimeSpan.FromMinutes(30);
+proxyServer.DecryptFailureBypassMaxEntries = 256;   // approximate LRU
+
+// Snapshot / manage
+foreach (var e in proxyServer.GetDecryptFailureBypassEntries())
+    Console.WriteLine($"{e.Host} active={e.BypassActive}");
+proxyServer.RemoveDecryptFailureBypass("www.example.com");
+proxyServer.ClearDecryptFailureBypass();
+```
+
+Behavior:
+
+- Learns from **origin** TLS `AuthenticationException` failures (not ALPN-only “no h2”, not TCP/DNS).
+- After the threshold, subsequent CONNECTs tunnel without decrypt (`DecryptSsl` cleared).
+- If a cold awaited HTTP/2 capability probe fails with a learnable error, the **same CONNECT** can fall back to opaque relay before browser MITM (ClientHello was only peeked).
+- Does **not** replace `MitmExclusionDefaults` pinning/SSO lists. Does not auto-learn browser-leg pinning aborts.
+- Not a `twp.yaml` key in v1 — set on `ProxyServer` (or use Inspector).

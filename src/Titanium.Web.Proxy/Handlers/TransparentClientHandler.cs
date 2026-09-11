@@ -81,6 +81,8 @@ public partial class ProxyServer
                     await endPoint.InvokeBeforeSslAuthenticate(this, args, logger);
                     hookUpstreamProtocol = args.UpstreamHttpProtocol;
                     decryptSsl = args.DecryptSsl;
+                    if (decryptSsl && ShouldBypassDecryptForLearnedHost(httpsHostName))
+                        decryptSsl = false;
                 }
 
                 transparentUpstreamProtocol = hookUpstreamProtocol;
@@ -174,6 +176,10 @@ public partial class ProxyServer
                 if (cancellationTokenSource.IsCancellationRequested)
                     return;
 
+                if (endPoint.DecryptSsl && args.DecryptSsl &&
+                    ShouldBypassDecryptForLearnedHost(httpsHostName))
+                    args.DecryptSsl = false;
+
                 if (endPoint.DecryptSsl && args.DecryptSsl)
                 {
                     var sslProtocol = clientHelloInfo.SslProtocol & SupportedSslProtocols;
@@ -196,6 +202,7 @@ public partial class ProxyServer
                     var requiresH3Bridge = false;
                     string? http2ConnectHost = null;
                     int? http2ConnectPort = null;
+                    var fallThroughOpaque = false;
 
                     http2ConnectHost = string.Equals(args.ForwardHttpsHostName, httpsHostName,
                         StringComparison.OrdinalIgnoreCase)
@@ -242,8 +249,18 @@ public partial class ProxyServer
                         // discarded here. Always null when requiresHttp11Bridge (nothing to adopt/flow down -
                         // the bridge opens its own per-h2-stream HTTP/1.1 connections instead).
                         prefetchConnectionTask = negotiation.RetainedConnectionTask;
+
+                        if (EnableDecryptFailureBypass && negotiation.LearnableOriginTlsFailure)
+                        {
+                            TryRecordDecryptFailure(httpsHostName, error: null, forceBypass: true);
+                            await TcpConnectionFactory.Release(prefetchConnectionTask, true);
+                            prefetchConnectionTask = null;
+                            fallThroughOpaque = true;
+                        }
                     }
 
+                    if (!fallThroughOpaque)
+                    {
                     // do client authentication using certificate
                     X509Certificate2? certificate = null;
                     SslStream? sslStream = null;
@@ -465,6 +482,7 @@ public partial class ProxyServer
                             // handling of the same (never expected from a compliant client) edge case.
                         }
                     }
+                    } // !fallThroughOpaque — MITM completed (or continued below for HTTP/1)
                 }
                 else
                 {
