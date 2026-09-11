@@ -90,7 +90,10 @@ public partial class ProxyServer
         }
 
         Task<TcpServerConnection?>? retained = null;
-        if (enablePrefetch)
+        // Do not start a MITM session prefetch when the cold probe already showed a learnable TLS
+        // failure — same-CONNECT opaque fallback will discard it; awaiting that handshake only
+        // delays ClientHello relay.
+        if (enablePrefetch && !learnableOriginTlsFailure)
             // Correctly keyed up front, so this connection becomes the session connection instead of
             // being opened, checked, and then wastefully discarded.
             // Don't pass cancellationToken here - it could leave a floating server connection if the

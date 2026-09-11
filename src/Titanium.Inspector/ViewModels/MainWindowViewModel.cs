@@ -664,7 +664,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             MarshalToUi(() =>
             {
                 StatusText =
-                    $"Auto-tunneled {entry.Host} (origin TLS). Manage in Excluded hosts.";
+                    $"Auto-tunneled {entry.Host} (decrypt failure). Later connections skip MITM.";
                 UpdateExclusionSummary();
             });
     }

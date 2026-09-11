@@ -97,7 +97,7 @@ public partial class ExcludedHostsWindow : Window
                       ?? Array.Empty<DecryptFailureBypassEntry>();
         var active = entries.Where(e => e.BypassActive).ToList();
         LearnedList.ItemsSource = active
-            .Select(e => $"{e.Host}  ·  Origin TLS  ·  {e.LearnedAtUtc:u}")
+            .Select(e => $"{e.Host}  ·  Decrypt failure  ·  {e.LearnedAtUtc:u}")
             .ToList();
         LearnedList.Tag = active;
         LearnedEmptyText.IsVisible = active.Count == 0;

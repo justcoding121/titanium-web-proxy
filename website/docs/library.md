@@ -115,7 +115,8 @@ proxyServer.ClearDecryptFailureBypass();
 Behavior:
 
 - Learns from **origin** TLS `AuthenticationException` failures (not ALPN-only “no h2”, not TCP/DNS).
-- After the threshold, subsequent CONNECTs tunnel without decrypt (`DecryptSsl` cleared).
-- If a cold awaited HTTP/2 capability probe fails with a learnable error, the **same CONNECT** can fall back to opaque relay before browser MITM (ClientHello was only peeked).
+- Also learns from MITM HTTPS responses with status **403** or **429** (bot/WAF after TLS succeeds), excluding synthetic `Respond`/`Ok`/`GenericResponse`. Both use the shared strike threshold (default **2**).
+- After the threshold, **subsequent** CONNECTs tunnel without decrypt (`DecryptSsl` cleared). Prefetch (MITM origin sockets) is not started for learned hosts. The current MITM CONNECT is **not** converted — HTTP learn is cache-only.
+- If a cold awaited HTTP/2 capability probe fails with a learnable error, the **same CONNECT** can fall back to opaque relay before browser MITM (ClientHello was only peeked); session prefetch is not started on that failure path.
 - Does **not** replace `MitmExclusionDefaults` pinning/SSO lists. Does not auto-learn browser-leg pinning aborts.
-- Not a `twp.yaml` key in v1 — set on `ProxyServer` (or use Inspector).
+- Not a `twp.yaml` key in v1 — set on `ProxyServer` (or use Inspector). Use `ShouldBypassDecryptForLearnedHost` for O(1) consults (avoid snapshotting the full list on hot paths).

@@ -405,7 +405,7 @@ public partial class ProxyServer : IDisposable
     ///     When <see cref="EnableDecryptFailureBypass" /> is on and <paramref name="host" /> is actively
     ///     bypassed, returns <see langword="true" /> (decrypt should be skipped).
     /// </summary>
-    internal bool ShouldBypassDecryptForLearnedHost(string? host) =>
+    public bool ShouldBypassDecryptForLearnedHost(string? host) =>
         EnableDecryptFailureBypass && DecryptFailureBypassCache.ShouldBypass(host);
 
     /// <summary>
@@ -419,27 +419,51 @@ public partial class ProxyServer : IDisposable
         if (!forceBypass && !Network.Tcp.DecryptFailureLearning.IsLearnableOriginTlsFailure(error))
             return false;
 
-        bool becameActive;
+        var wasActive = DecryptFailureBypassCache.IsBypassActive(host);
+        bool isActive;
         if (forceBypass)
         {
             DecryptFailureBypassCache.MarkBypassed(host);
-            becameActive = true;
+            isActive = true;
         }
         else
         {
-            becameActive = DecryptFailureBypassCache.RecordFailure(host);
+            isActive = DecryptFailureBypassCache.RecordFailure(host);
         }
 
-        if (becameActive)
-        {
-            var snap = DecryptFailureBypassCache.Snapshot()
-                .FirstOrDefault(e => string.Equals(e.Host, Network.DecryptBypassCache.Normalize(host),
-                    StringComparison.OrdinalIgnoreCase));
-            if (snap != null)
-                DecryptFailureBypassChanged?.Invoke(this, snap);
-        }
+        if (isActive && !wasActive)
+            RaiseDecryptFailureBypassChanged(host);
 
-        return becameActive;
+        return isActive;
+    }
+
+    /// <summary>
+    ///     Learns from MITM HTTPS 403/429 (bot/WAF after TLS succeeds). Uses the shared strike threshold.
+    ///     Does not convert the current MITM CONNECT — later CONNECTs tunnel.
+    /// </summary>
+    internal bool TryRecordDecryptFailureFromHttpStatus(string? host, int statusCode, bool isSynthetic = false)
+    {
+        if (!EnableDecryptFailureBypass || string.IsNullOrWhiteSpace(host) || isSynthetic)
+            return false;
+
+        if (statusCode is not (403 or 429))
+            return false;
+
+        var wasActive = DecryptFailureBypassCache.IsBypassActive(host);
+        var isActive = DecryptFailureBypassCache.RecordFailure(host);
+        if (isActive && !wasActive)
+            RaiseDecryptFailureBypassChanged(host);
+
+        return isActive;
+    }
+
+    private void RaiseDecryptFailureBypassChanged(string host)
+    {
+        var snap = DecryptFailureBypassCache.Snapshot()
+            .FirstOrDefault(e => string.Equals(e.Host, Network.DecryptBypassCache.Normalize(host),
+                StringComparison.OrdinalIgnoreCase));
+        if (snap != null)
+            DecryptFailureBypassChanged?.Invoke(this, snap);
     }
 
     /// <summary>

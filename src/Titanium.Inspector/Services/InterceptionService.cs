@@ -182,9 +182,8 @@ public sealed class InterceptionService : IDisposable
     {
         if (!EnableDecryptFailureBypass || _proxy is null || string.IsNullOrWhiteSpace(host))
             return false;
-        return _proxy.GetDecryptFailureBypassEntries()
-            .Any(e => e.BypassActive &&
-                      string.Equals(e.Host, host, StringComparison.OrdinalIgnoreCase));
+        // O(1) cache consult — do not Snapshot the full list on every CONNECT.
+        return _proxy.ShouldBypassDecryptForLearnedHost(host);
     }
 
     private void OnDecryptFailureBypassChanged(object? sender, DecryptFailureBypassEntry e) =>

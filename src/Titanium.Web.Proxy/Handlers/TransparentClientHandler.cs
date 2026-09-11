@@ -253,9 +253,12 @@ public partial class ProxyServer
                         if (EnableDecryptFailureBypass && negotiation.LearnableOriginTlsFailure)
                         {
                             TryRecordDecryptFailure(httpsHostName, error: null, forceBypass: true);
-                            await TcpConnectionFactory.Release(prefetchConnectionTask, true);
+                            var doomedPrefetch = prefetchConnectionTask;
                             prefetchConnectionTask = null;
+                            if (doomedPrefetch != null)
+                                _ = TcpConnectionFactory.Release(doomedPrefetch, true);
                             fallThroughOpaque = true;
+                            args.DecryptSsl = false;
                         }
                     }
 

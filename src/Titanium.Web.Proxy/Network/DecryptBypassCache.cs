@@ -44,6 +44,20 @@ internal sealed class DecryptBypassCache
     /// </summary>
     internal bool ShouldBypass(string? host)
     {
+        if (!IsBypassActive(host))
+            return false;
+
+        var key = Normalize(host!);
+        if (cache.TryGetValue(key, out var entry))
+            entry.LastAccessUtc = DateTime.UtcNow;
+        return true;
+    }
+
+    /// <summary>
+    ///     Whether bypass is active without mutating last-access (for newly-active event gating).
+    /// </summary>
+    internal bool IsBypassActive(string? host)
+    {
         if (string.IsNullOrWhiteSpace(host))
             return false;
 
@@ -51,12 +65,7 @@ internal sealed class DecryptBypassCache
         if (!cache.TryGetValue(key, out var entry))
             return false;
 
-        var now = DateTime.UtcNow;
-        if (entry.ExpiresAtUtc <= now || !entry.BypassActive)
-            return false;
-
-        entry.LastAccessUtc = now;
-        return true;
+        return entry.ExpiresAtUtc > DateTime.UtcNow && entry.BypassActive;
     }
 
     /// <summary>

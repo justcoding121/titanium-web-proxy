@@ -1127,6 +1127,8 @@ internal class TcpConnectionFactory : IDisposable
             {
                 ProxyDiagnostics.ReportCaught(proxyServer.Logger,
                     "TcpConnectionFactory TLS downgrade exhausted after IOException; rethrowing", ex);
+                if (isHttps)
+                    proxyServer.TryRecordDecryptFailure(remoteHostName, ex);
                 throw;
             }
 
@@ -1149,6 +1151,8 @@ internal class TcpConnectionFactory : IDisposable
             {
                 ProxyDiagnostics.ReportCaught(proxyServer.Logger,
                     "TcpConnectionFactory TLS downgrade exhausted after AuthenticationException; rethrowing", ex);
+                if (isHttps)
+                    proxyServer.TryRecordDecryptFailure(remoteHostName, ex);
                 throw;
             }
 

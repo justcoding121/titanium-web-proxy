@@ -269,10 +269,18 @@ public partial class ProxyServer
                         if (EnableDecryptFailureBypass && negotiation.LearnableOriginTlsFailure)
                         {
                             TryRecordDecryptFailure(connectHost, error: null, forceBypass: true);
-                            await TcpConnectionFactory.Release(prefetchConnectionTask, true);
+                            // Prefetch is not started on learnable probe failure; drain any race without
+                            // blocking ClientHello relay on a doomed MITM handshake.
+                            var doomedPrefetch = prefetchConnectionTask;
                             prefetchConnectionTask = null;
+                            if (doomedPrefetch != null)
+                                _ = TcpConnectionFactory.Release(doomedPrefetch, true);
                             sendRawData = true;
                             connectArgs.DecryptSsl = false;
+                            // Learned-at-start opaque path never sets IsHttps; clear so GetServerConnection
+                            // opens raw TCP and splices the peeked ClientHello (not a third origin TLS).
+                            if (connectArgs.HttpClient.ConnectRequest != null)
+                                connectArgs.HttpClient.ConnectRequest.IsHttps = false;
                         }
                     }
 

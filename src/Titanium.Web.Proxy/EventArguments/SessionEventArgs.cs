@@ -933,6 +933,7 @@ public class SessionEventArgs : SessionEventArgsBase
     {
         if (response.HttpVersion == HttpHeader.VersionUnknown)
             response.HttpVersion = HttpClient.Request.HttpVersion;
+        response.IsSynthetic = true;
     }
 
     /// <summary>

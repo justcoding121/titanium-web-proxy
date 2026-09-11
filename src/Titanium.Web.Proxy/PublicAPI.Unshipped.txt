@@ -255,3 +255,4 @@ Titanium.Web.Proxy.ProxyServer.EnableDecryptFailureBypass.get -> bool
 Titanium.Web.Proxy.ProxyServer.EnableDecryptFailureBypass.set -> void
 Titanium.Web.Proxy.ProxyServer.GetDecryptFailureBypassEntries() -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Models.DecryptFailureBypassEntry!>!
 Titanium.Web.Proxy.ProxyServer.RemoveDecryptFailureBypass(string! host) -> bool
+Titanium.Web.Proxy.ProxyServer.ShouldBypassDecryptForLearnedHost(string? host) -> bool

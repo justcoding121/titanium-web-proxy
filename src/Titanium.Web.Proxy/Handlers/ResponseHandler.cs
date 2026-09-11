@@ -352,6 +352,15 @@ public partial class ProxyServer
     /// <returns></returns>
     private Task OnAfterResponse(SessionEventArgs args)
     {
+        // Post-MITM HTTP 403/429: cache-only learn for later CONNECTs (cannot convert this MITM session).
+        if (EnableDecryptFailureBypass && Network.Tcp.DecryptFailureLearning.IsLearnableHttpBlock(args))
+        {
+            TryRecordDecryptFailureFromHttpStatus(
+                Network.Tcp.DecryptFailureLearning.ResolveSessionHost(args),
+                args.HttpClient.Response.StatusCode,
+                args.HttpClient.Response.IsSynthetic);
+        }
+
         var success = args.Exception is null &&
                       args.HttpClient.Response.StatusCode is >= 200 and < 500;
         ReverseProxySessionDispatch.ReportUpstreamResult(this, args, success);

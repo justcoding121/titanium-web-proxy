@@ -2,6 +2,7 @@ using System;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
 
@@ -64,6 +65,16 @@ public class DecryptBypassCacheTests
     }
 
     [TestMethod]
+    public void IsBypassActive_DoesNotRequireShouldBypassHit()
+    {
+        var cache = new DecryptBypassCache { StrikeThreshold = 1 };
+        Assert.IsFalse(cache.IsBypassActive("x.example.com"));
+        cache.RecordFailure("x.example.com");
+        Assert.IsTrue(cache.IsBypassActive("x.example.com"));
+        Assert.IsTrue(cache.ShouldBypass("x.example.com"));
+    }
+
+    [TestMethod]
     public void DecryptFailureLearning_IgnoresAlpnAndSocket()
     {
         var alpn = new AuthenticationException("No common application protocol exists");
@@ -120,11 +131,69 @@ public class DecryptFailureBypassProxyApiTests
     }
 
     [TestMethod]
-    public void AlpnFailure_NotLearned()
+    public void HttpStatus_RequiresTwoStrikes_IgnoresSyntheticAndNonBlock()
     {
-        using var proxy = new ProxyServer(false, false, false) { EnableDecryptFailureBypass = true };
-        var alpn = new AuthenticationException("No common application protocol exists");
-        Assert.IsFalse(proxy.TryRecordDecryptFailure("h1only.example.com", alpn));
-        Assert.IsFalse(proxy.ShouldBypassDecryptForLearnedHost("h1only.example.com"));
+        using var proxy = new ProxyServer(false, false, false)
+        {
+            EnableDecryptFailureBypass = true,
+            DecryptFailureBypassThreshold = 2
+        };
+
+        Assert.IsFalse(proxy.TryRecordDecryptFailureFromHttpStatus("www.expedia.com", 403));
+        Assert.IsFalse(proxy.ShouldBypassDecryptForLearnedHost("www.expedia.com"));
+        Assert.IsTrue(proxy.TryRecordDecryptFailureFromHttpStatus("www.expedia.com", 429));
+        Assert.IsTrue(proxy.ShouldBypassDecryptForLearnedHost("www.expedia.com"));
+
+        Assert.IsFalse(proxy.TryRecordDecryptFailureFromHttpStatus("ok.example.com", 200));
+        Assert.IsFalse(proxy.TryRecordDecryptFailureFromHttpStatus("synth.example.com", 403, isSynthetic: true));
+        Assert.IsFalse(proxy.ShouldBypassDecryptForLearnedHost("synth.example.com"));
+    }
+
+    [TestMethod]
+    public void HttpStatus_DoesNotReRaiseAfterAlreadyActive()
+    {
+        using var proxy = new ProxyServer(false, false, false)
+        {
+            EnableDecryptFailureBypass = true,
+            DecryptFailureBypassThreshold = 1
+        };
+
+        var raises = 0;
+        proxy.DecryptFailureBypassChanged += (_, _) => raises++;
+
+        Assert.IsTrue(proxy.TryRecordDecryptFailureFromHttpStatus("once.example.com", 403));
+        Assert.AreEqual(1, raises);
+        Assert.IsTrue(proxy.TryRecordDecryptFailureFromHttpStatus("once.example.com", 429));
+        Assert.AreEqual(1, raises);
+    }
+
+    [TestMethod]
+    public void ForceBypass_DoesNotReRaiseWhenAlreadyActive()
+    {
+        using var proxy = new ProxyServer(false, false, false)
+        {
+            EnableDecryptFailureBypass = true,
+            DecryptFailureBypassThreshold = 10
+        };
+
+        var raises = 0;
+        proxy.DecryptFailureBypassChanged += (_, _) => raises++;
+
+        Assert.IsTrue(proxy.TryRecordDecryptFailure("probe.example.com", null, forceBypass: true));
+        Assert.AreEqual(1, raises);
+        Assert.IsTrue(proxy.TryRecordDecryptFailure("probe.example.com", null, forceBypass: true));
+        Assert.AreEqual(1, raises);
+    }
+
+    [TestMethod]
+    public void Http2NegotiationResult_LearnableFailure_AllowsNullRetainedPrefetch()
+    {
+        // Contract: NegotiateHttp2Async skips session prefetch when LearnableOriginTlsFailure is set.
+        var result = new Titanium.Web.Proxy.Http2.Http2NegotiationResult(
+            originSupportsHttp2: false,
+            retainedConnectionTask: null,
+            learnableOriginTlsFailure: true);
+        Assert.IsTrue(result.LearnableOriginTlsFailure);
+        Assert.IsNull(result.RetainedConnectionTask);
     }
 }
