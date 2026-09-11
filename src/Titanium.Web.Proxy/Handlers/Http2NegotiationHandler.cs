@@ -73,15 +73,19 @@ public partial class ProxyServer
             null, upStreamEndPoint, externalProxy, connectHost, connectPort);
 
         var learnableOriginTlsFailure = false;
+        TcpServerConnection? adoptedColdProbe = null;
         if (!Http2OriginCapabilityCache.TryGet(capabilityCacheKey, out var cachedSupport))
         {
             Diagnostics.ProxyMetrics.Http2CapabilityLookup(cacheHit: false);
             // Coalesce concurrent cold probes: browsers open many CONNECTs to the same host at once.
             // Each used to block AuthenticateAsServer on its own origin TLS probe; Chrome then aborted
             // waiting tunnels (EOF / "Couldn't authenticate host"). One in-flight probe feeds them all.
-            (cachedSupport, learnableOriginTlsFailure) = await CoalesceHttp2CapabilityProbeAsync(
-                capabilityCacheKey, sessionArgs, remoteHostName, remotePort, connectHost, connectPort,
-                upStreamEndPoint, externalProxy, cancellationToken);
+            // Only the probe leader adopts the discovery socket as the session connection; waiters
+            // receive the cached bool and open their own connection when needed.
+            (cachedSupport, learnableOriginTlsFailure, adoptedColdProbe) =
+                await CoalesceHttp2CapabilityProbeAsync(capabilityCacheKey, sessionArgs, remoteHostName,
+                    remotePort, connectHost, connectPort, upStreamEndPoint, externalProxy,
+                    cancellationToken);
         }
         else
         {
@@ -93,15 +97,22 @@ public partial class ProxyServer
         // Do not start a MITM session prefetch when the cold probe already showed a learnable TLS
         // failure — same-CONNECT opaque fallback will discard it; awaiting that handshake only
         // delays ClientHello relay.
-        if (enablePrefetch && !learnableOriginTlsFailure)
-            // Correctly keyed up front, so this connection becomes the session connection instead of
-            // being opened, checked, and then wastefully discarded.
+        if (adoptedColdProbe != null && !learnableOriginTlsFailure)
+            // Cold-cache leader: the ALPN discovery connection is already correctly keyed — reuse it
+            // as the session connection (same as pre-coalesce behavior) so we do not open a second
+            // origin socket for this tunnel.
+            retained = Task.FromResult<TcpServerConnection?>(adoptedColdProbe);
+        else if (enablePrefetch && !learnableOriginTlsFailure)
+            // Cache hit or coalesce waiter: correctly keyed prefetch started while the client TLS
+            // handshake is still in progress becomes the session connection.
             // Don't pass cancellationToken here - it could leave a floating server connection if the
             // client disconnects before this completes.
             retained = TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
                 HttpHeader.Version20, true, cachedSupport ? SslExtensions.Http2ProtocolAsList : null, true,
                 sessionArgs, upStreamEndPoint, externalProxy, false, true, CancellationToken.None,
                 connectHost, connectPort);
+        else if (adoptedColdProbe != null)
+            await TcpConnectionFactory.Release(adoptedColdProbe, true).ConfigureAwait(false);
 
         return new Http2NegotiationResult(cachedSupport, retained,
             learnableOriginTlsFailure: learnableOriginTlsFailure);
@@ -109,10 +120,13 @@ public partial class ProxyServer
 
     /// <summary>
     ///     Runs at most one cold HTTP/2 ALPN probe per capability-cache key; concurrent callers await the
-    ///     same task. Definitive ALPN rejection (<c>SEC_E_NO_APPLICATION_PROTOCOL</c>) is cached as
-    ///     unsupported; transient network/cert failures are not cached.
+    ///     same capability result. Definitive ALPN rejection (<c>SEC_E_NO_APPLICATION_PROTOCOL</c>) is
+    ///     cached as unsupported; transient network/cert failures are not cached. Only the probe leader
+    ///     receives the discovery connection for session adoption; waiters get
+    ///     <see langword="null" /> and must open their own connection.
     /// </summary>
-    private async Task<(bool Supported, bool LearnableFailure)> CoalesceHttp2CapabilityProbeAsync(
+    private async Task<(bool Supported, bool LearnableFailure, TcpServerConnection? AdoptedProbe)>
+        CoalesceHttp2CapabilityProbeAsync(
         string capabilityCacheKey, SessionEventArgsBase sessionArgs, string remoteHostName, int remotePort,
         string? connectHost, int? connectPort, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
         CancellationToken cancellationToken)
@@ -120,22 +134,25 @@ public partial class ProxyServer
         while (true)
         {
             if (Http2OriginCapabilityCache.TryGet(capabilityCacheKey, out var racedCache))
-                return (racedCache, false);
+                return (racedCache, false, null);
 
             var probeTcs = new TaskCompletionSource<(bool Supported, bool LearnableFailure)>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
             var probeTask = pendingHttp2CapabilityProbes.GetOrAdd(capabilityCacheKey, probeTcs.Task);
             if (!ReferenceEquals(probeTask, probeTcs.Task))
-                return await probeTask.ConfigureAwait(false);
+            {
+                var (supported, learnable) = await probeTask.ConfigureAwait(false);
+                return (supported, learnable, null);
+            }
 
             var probeStarted = System.Diagnostics.Stopwatch.StartNew();
             try
             {
-                var outcome = await ProbeHttp2CapabilityOnceAsync(capabilityCacheKey, sessionArgs,
-                    remoteHostName, remotePort, connectHost, connectPort, upStreamEndPoint, externalProxy,
-                    cancellationToken, probeStarted).ConfigureAwait(false);
-                probeTcs.TrySetResult(outcome);
-                return outcome;
+                var (supported, learnable, adopted) = await ProbeHttp2CapabilityOnceAsync(
+                    capabilityCacheKey, sessionArgs, remoteHostName, remotePort, connectHost, connectPort,
+                    upStreamEndPoint, externalProxy, cancellationToken, probeStarted).ConfigureAwait(false);
+                probeTcs.TrySetResult((supported, learnable));
+                return (supported, learnable, adopted);
             }
             catch (Exception ex)
             {
@@ -149,7 +166,8 @@ public partial class ProxyServer
         }
     }
 
-    private async Task<(bool Supported, bool LearnableFailure)> ProbeHttp2CapabilityOnceAsync(
+    private async Task<(bool Supported, bool LearnableFailure, TcpServerConnection? AdoptedProbe)>
+        ProbeHttp2CapabilityOnceAsync(
         string capabilityCacheKey, SessionEventArgsBase sessionArgs, string remoteHostName, int remotePort,
         string? connectHost, int? connectPort, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
         CancellationToken cancellationToken, System.Diagnostics.Stopwatch probeStarted)
@@ -167,7 +185,10 @@ public partial class ProxyServer
             Http2OriginCapabilityCache.Set(capabilityCacheKey, supported);
             Diagnostics.ProxyMetrics.Http2ProbeCompleted(probeStarted.Elapsed.TotalMilliseconds);
             ProxyLog.Http2ProbeResult(logger, capabilityCacheKey, false, supported, null);
-            return (supported, false);
+            // Transfer ownership to the leader; do not Release here.
+            var adopted = connection;
+            connection = null;
+            return (supported, false, adopted);
         }
         catch (Exception ex)
         {
@@ -179,12 +200,10 @@ public partial class ProxyServer
 
             Diagnostics.ProxyMetrics.Http2ProbeCompleted(probeStarted.Elapsed.TotalMilliseconds);
             ProxyLog.Http2ProbeResult(logger, capabilityCacheKey, false, false, ex);
-            return (false, DecryptFailureLearning.IsLearnableOriginTlsFailure(ex));
+            return (false, DecryptFailureLearning.IsLearnableOriginTlsFailure(ex), null);
         }
         finally
         {
-            // Capability-only probe: release so coalesced waiters do not share a half-used socket.
-            // Session traffic uses the enablePrefetch connection opened after the result is known.
             if (connection != null)
                 await TcpConnectionFactory.Release(connection, true).ConfigureAwait(false);
         }
