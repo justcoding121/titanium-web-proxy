@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import csv
 import statistics
+from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
@@ -63,39 +64,36 @@ def find_csvs(root: Path) -> dict[str, list[Path]]:
 
 
 def load_arm_medians(csvs: list[Path]) -> dict[str, dict[str, float]]:
-    """arm -> {PeakRps, SustainRps, RssMiB, CpuPct} medians across repeats/files."""
-    buckets: dict[str, dict[str, list[float]]] = {}
+    """arm -> {Peak, Sustain, Rss, Cpu} using ramp CSV rows (c=64 SLO for sustain)."""
+    by_arm_rows: dict[str, list[dict[str, str]]] = defaultdict(list)
     for path in csvs:
         with path.open(newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                arm = (row.get("arm") or row.get("Arm") or "").strip()
-                if not arm:
-                    continue
-                b = buckets.setdefault(arm, {"Peak": [], "Sustain": [], "Rss": [], "Cpu": []})
-                for key, dest in (
-                    ("peak_rps", "Peak"),
-                    ("PeakRps", "Peak"),
-                    ("sustain_rps", "Sustain"),
-                    ("SustainRps", "Sustain"),
-                    ("proxy_rss_peak_bytes", "Rss"),
-                    ("ProxyRssPeakBytes", "Rss"),
-                    ("proxy_cpu_avg_pct", "Cpu"),
-                    ("ProxyCpuAvgPct", "Cpu"),
-                ):
-                    if key in row and row[key] not in (None, ""):
-                        try:
-                            val = float(row[key])
-                        except ValueError:
-                            continue
-                        if dest == "Rss":
-                            val = val / (1024 * 1024)
-                        b[dest].append(val)
+            for row in csv.DictReader(f):
+                arm = (row.get("arm") or "").strip()
+                if arm:
+                    by_arm_rows[arm].append(row)
+
     out: dict[str, dict[str, float]] = {}
-    for arm, series in buckets.items():
+    for arm, rows in by_arm_rows.items():
+        by_rep: dict[str, list[dict[str, str]]] = defaultdict(list)
+        for r in rows:
+            by_rep[r.get("repeat", "0")].append(r)
+        sustains: list[float] = []
+        peaks: list[float] = []
+        rss: list[float] = []
+        cpu: list[float] = []
+        for chunk in by_rep.values():
+            best = max(chunk, key=lambda r: float(r["rps"]))
+            peaks.append(float(best["rps"]))
+            rss.append(float(best["proxy_rss_peak_bytes"]) / (1024 * 1024))
+            cpu.append(float(best["proxy_cpu_avg_pct"]))
+            ok = [r for r in chunk if r.get("concurrency") == "64" and r.get("meets_slo") == "1"]
+            sustains.append(float(ok[-1]["rps"]) if ok else 0.0)
         out[arm] = {
-            k: statistics.median(v) if v else float("nan")
-            for k, v in series.items()
+            "Sustain": statistics.median(sustains) if sustains else float("nan"),
+            "Peak": statistics.median(peaks) if peaks else float("nan"),
+            "Rss": statistics.median(rss) if rss else float("nan"),
+            "Cpu": statistics.median(cpu) if cpu else float("nan"),
         }
     return out
 

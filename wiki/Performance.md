@@ -278,10 +278,10 @@ Median of **3 repeats** on `ubuntu-latest` (4 vCPU / 16 GiB). Bare reverse 5×5 
 | HTTP/2 · TLS | HTTP/2 · TLS | 🥇 **63379**<br><sub>(99 MiB / 36% CPU)</sub> | 🥇 **63379**<br><sub>(99 MiB / 36% CPU)</sub> | *Not possible (no H2 upstream)* | *Not possible (no H2 upstream)* | **22388**<br><sub>(84 MiB / 24.4% CPU)</sub> | **22388**<br><sub>(84 MiB / 24.4% CPU)</sub> | **21510**<br><sub>(125 MiB / 20.6% CPU)</sub> | **21510**<br><sub>(125 MiB / 20.6% CPU)</sub> | **38643**<br><sub>(128 MiB / 45.3% CPU)</sub> | **38643**<br><sub>(128 MiB / 45.3% CPU)</sub> |
 | HTTP/2 · TLS | HTTP/3 · QUIC | 🥇 **28423**<br><sub>(151 MiB / 50.5% CPU)</sub> | 🥇 **28423**<br><sub>(151 MiB / 50.5% CPU)</sub> | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | **5476**<br><sub>(129 MiB / 24.6% CPU)</sub> | **5476**<br><sub>(129 MiB / 24.6% CPU)</sub> | **25085**<br><sub>(163 MiB / 45.8% CPU)</sub> | **25085**<br><sub>(163 MiB / 45.8% CPU)</sub> |
 | HTTP/3 · QUIC | HTTP/1 · plain | **23715**<br><sub>(149 MiB / 52.2% CPU)</sub> | **23715**<br><sub>(149 MiB / 52.2% CPU)</sub> | **0**<br><sub>(107 MiB / 21.6% CPU)</sub> | **19206**<br><sub>(107 MiB / 21.6% CPU)</sub> | 🥇 **30835**<br><sub>(86 MiB / 25.2% CPU)</sub> | 🥇 **30835**<br><sub>(86 MiB / 25.2% CPU)</sub> | **3**<br><sub>(130 MiB / 0.1% CPU)</sub> | **3**<br><sub>(130 MiB / 0.1% CPU)</sub> | **21546**<br><sub>(186 MiB / 49% CPU)</sub> | **21546**<br><sub>(186 MiB / 49% CPU)</sub> |
-| HTTP/3 · QUIC | HTTP/1 · TLS | 🥇 **19505**<br><sub>(160 MiB / 49.3% CPU)</sub> | 🥇 **19505**<br><sub>(160 MiB / 49.3% CPU)</sub> | **0**<br><sub>(117 MiB / 22.7% CPU)</sub> | **14850**<br><sub>(117 MiB / 22.7% CPU)</sub> | *Not measured* | *Not measured* | *Not measured* | *Not measured* | **18423**<br><sub>(197 MiB / 49.9% CPU)</sub> | **18423**<br><sub>(197 MiB / 49.9% CPU)</sub> |
-| HTTP/3 · QUIC | HTTP/2 · plain | 🥇 **31386**<br><sub>(160 MiB / 56.2% CPU)</sub> | 🥇 **31386**<br><sub>(160 MiB / 56.2% CPU)</sub> | *Not possible (no H2 upstream)* | *Not possible (no H2 upstream)* | **29864**<br><sub>(86 MiB / 25.4% CPU)</sub> | **29864**<br><sub>(86 MiB / 25.4% CPU)</sub> | *Not measured* | *Not measured* | **26924**<br><sub>(197 MiB / 48% CPU)</sub> | **26924**<br><sub>(197 MiB / 48% CPU)</sub> |
-| HTTP/3 · QUIC | HTTP/2 · TLS | 🥇 **27669**<br><sub>(154 MiB / 52.3% CPU)</sub> | 🥇 **27669**<br><sub>(154 MiB / 52.3% CPU)</sub> | *Not possible (no H2 upstream)* | *Not possible (no H2 upstream)* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | **24488**<br><sub>(199 MiB / 47.6% CPU)</sub> | **24488**<br><sub>(199 MiB / 47.6% CPU)</sub> |
-| HTTP/3 · QUIC | HTTP/3 · QUIC | 🥇 **21858**<br><sub>(164 MiB / 47.9% CPU)</sub> | 🥇 **21858**<br><sub>(164 MiB / 47.9% CPU)</sub> | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | *Not measured* | *Not measured* | **17840**<br><sub>(209 MiB / 47% CPU)</sub> | **17840**<br><sub>(209 MiB / 47% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/1 · TLS | 🥇 **19505**<br><sub>(160 MiB / 49.3% CPU)</sub> | 🥇 **19505**<br><sub>(160 MiB / 49.3% CPU)</sub> | **0**<br><sub>(117 MiB / 22.7% CPU)</sub> | **14850**<br><sub>(117 MiB / 22.7% CPU)</sub> | **18067**<br><sub>(94 MiB / 29.8% CPU)</sub> | **18067**<br><sub>(94 MiB / 29.8% CPU)</sub> | **4**<br><sub>(131 MiB / 23.1% CPU)</sub> | **3743**<br><sub>(131 MiB / 23.1% CPU)</sub> | **18423**<br><sub>(197 MiB / 49.9% CPU)</sub> | **18423**<br><sub>(197 MiB / 49.9% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/2 · plain | 🥇 **31386**<br><sub>(160 MiB / 56.2% CPU)</sub> | 🥇 **31386**<br><sub>(160 MiB / 56.2% CPU)</sub> | *Not possible (no H2 upstream)* | *Not possible (no H2 upstream)* | **29864**<br><sub>(86 MiB / 25.4% CPU)</sub> | **29864**<br><sub>(86 MiB / 25.4% CPU)</sub> | **18**<br><sub>(138 MiB / 24.5% CPU)</sub> | **4898**<br><sub>(138 MiB / 24.5% CPU)</sub> | **26924**<br><sub>(197 MiB / 48% CPU)</sub> | **26924**<br><sub>(197 MiB / 48% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/2 · TLS | 🥇 **27669**<br><sub>(154 MiB / 52.3% CPU)</sub> | 🥇 **27669**<br><sub>(154 MiB / 52.3% CPU)</sub> | *Not possible (no H2 upstream)* | *Not possible (no H2 upstream)* | **32742**<br><sub>(92 MiB / 25.9% CPU)</sub> | **32880**<br><sub>(92 MiB / 25.9% CPU)</sub> | **5**<br><sub>(139 MiB / 25.0% CPU)</sub> | **4411**<br><sub>(139 MiB / 25.0% CPU)</sub> | **24488**<br><sub>(199 MiB / 47.6% CPU)</sub> | **24488**<br><sub>(199 MiB / 47.6% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/3 · QUIC | 🥇 **21858**<br><sub>(164 MiB / 47.9% CPU)</sub> | 🥇 **21858**<br><sub>(164 MiB / 47.9% CPU)</sub> | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | **2964**<br><sub>(134 MiB / 24.8% CPU)</sub> | **3679**<br><sub>(134 MiB / 24.8% CPU)</sub> | **17840**<br><sub>(209 MiB / 47% CPU)</sub> | **17840**<br><sub>(209 MiB / 47% CPU)</sub> |
 
 ### MITM (TWP only)
 
@@ -562,7 +562,7 @@ TWP H2 HOL ≫ YARP (~**7.7×**). H3 TWP÷YARP ≈ **1×**.
 
 These runs isolate slow app readers, origin-early response, HTTP/2 duplex, and WebSocket echo. See [TWP vs YARP IO model](Performance-Profiling#twp-vs-yarp-io-model). Laptop 1-rep numbers are on [Performance Local Lab](Performance-Local-Lab#architecture-sensitive).
 
-Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `9a2b3a1e` ([34441578556](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34441578556)). Slow consumer = 256 KiB GET, 16 KiB read + 8 ms sleep. Early response = 64 KiB POST, origin writes after 8 KiB. Duplex HTTP/2 = overlapping 64 KiB POST on H2 TLS↔H2 TLS. WebSocket = echo round-trips/sec.
+Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `9a2b3a1e` ([34441578556](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34441578556)). Slow consumer = 256 KiB GET, 16 KiB read + 8 ms sleep. Early response = 64 KiB POST, origin writes after 8 KiB. Duplex HTTP/2 = overlapping 64 KiB POST on H2 TLS↔H2 TLS. WebSocket row = H1 Upgrade echo round-trips/sec (not RFC 8441; see WebSocket RFC 8441 table below).
 
 Lossy-link runs (slow **network**) are already published above; they are not a slow **app** reader.
 
@@ -642,8 +642,8 @@ Unary Echo **RPC/s** @ c=64 over **H2 TLS → h2c** (edge TLS, cleartext H2 orig
 
 | OS | Titanium | YARP | nginx | HAProxy | Envoy |
 |---|---:|---:|---:|---:|---:|
-| Windows | *Not measured* | *Not measured* | *Not possible (no H2 upstream)* | *Not possible* | *Not possible* |
-| Linux | *Not measured* | *Not measured* | *Not possible (no H2 upstream)* | *Not measured* | *Not measured* |
+| Windows | **60,942**<br><sub>(93 MiB / 22.8% CPU)</sub> | **33,648**<br><sub>(111 MiB / 49.7% CPU)</sub> | *Not possible (no H2 upstream)* | *Not possible* | *Not possible* |
+| Linux | **44,967**<br><sub>(121 MiB / 29.2% CPU)</sub> | **24,678**<br><sub>(150 MiB / 44.1% CPU)</sub> | *Not possible (no H2 upstream)* | **7,735**<br><sub>(82 MiB / 24.6% CPU)</sub> | **12,516**<br><sub>(128 MiB / 22.6% CPU)</sub> |
 | macOS | *Not measured* | *Not measured* | *Not possible (no H2 upstream)* | *Not measured* | *Not measured* |
 
 ## WebSocket (H1 TLS → H1 TLS)
@@ -652,8 +652,8 @@ WebSocket echo round-trips/sec over **dual-TLS** H1 (`proxy_ssl` style). Mode: `
 
 | OS | Titanium | YARP | nginx | HAProxy | Envoy |
 |---|---:|---:|---:|---:|---:|
-| Windows | *Not measured* | *Not measured* | *Not measured* | *Not possible* | *Not possible* |
-| Linux | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
+| Windows | **27,472**<br><sub>(101 MiB / 44.3% CPU)</sub> | **26,068**<br><sub>(92 MiB / 44.1% CPU)</sub> | **13,043**<br><sub>(142 MiB / 24.7% CPU)</sub> | *Not possible* | *Not possible* |
+| Linux | **25,489**<br><sub>(138 MiB / 43.2% CPU)</sub> | **22,409**<br><sub>(134 MiB / 44.1% CPU)</sub> | **27,071**<br><sub>(103 MiB / 36.8% CPU)</sub> | **26,782**<br><sub>(85 MiB / 38.9% CPU)</sub> | **27,011**<br><sub>(127 MiB / 38.1% CPU)</sub> |
 | macOS | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
 
 ## WebSocket (H2 TLS 8441 → H1)
@@ -663,7 +663,7 @@ WebSocket echo over **RFC 8441** extended CONNECT (H2 TLS client → H1 plain or
 | OS | Titanium | YARP | nginx | HAProxy | Envoy |
 |---|---:|---:|---:|---:|---:|
 | Windows | *Not measured* | *Not measured* | *Not possible (no RFC 8441)* | *Not possible* | *Not possible* |
-| Linux | *Not measured* | *Not measured* | *Not possible (no RFC 8441)* | *Not measured* | *Not measured* |
+| Linux | **1,531**<br><sub>(147 MiB / 16.0% CPU)</sub> | **0**<br><sub>(161 MiB / 25.4% CPU)</sub> | *Not possible (no RFC 8441)* | **1,534**<br><sub>(82 MiB / 5.3% CPU)</sub> | **0**<br><sub>(124 MiB / 0.3% CPU)</sub> |
 | macOS | *Not measured* | *Not measured* | *Not possible (no RFC 8441)* | *Not measured* | *Not measured* |
 
 ## Other measurements
