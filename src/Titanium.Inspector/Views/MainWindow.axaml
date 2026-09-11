@@ -47,6 +47,15 @@
                   IsChecked="{Binding SystemProxy, Mode=OneWay}"
                   Command="{Binding ToggleSystemProxyCommand}"
                   AutomationProperties.AutomationId="MenuToggleSystemProxy" />
+        <MenuItem Header="Proxy localhost" ToggleType="CheckBox"
+                  IsChecked="{Binding ProxyLoopback, Mode=OneWay}"
+                  Command="{Binding ToggleProxyLocalhostCommand}"
+                  ToolTip.Tip="{Binding ProxyLocalhostTip}"
+                  AutomationProperties.AutomationId="MenuProxyLocalhost" />
+        <MenuItem Header="Allow Store apps…" Command="{Binding OpenLoopbackExemptCommand}"
+                  IsVisible="{Binding ShowLoopbackExemptMenu}"
+                  AutomationProperties.AutomationId="MenuLoopbackExempt" />
+        <Separator />
         <MenuItem Header="Install root CA (current user)" Command="{Binding InstallCaCommand}" AutomationProperties.AutomationId="MenuInstallCa" />
         <MenuItem Header="Remove root CA (current user)" Command="{Binding UntrustCaCommand}" AutomationProperties.AutomationId="MenuRemoveCa" />
         <MenuItem Header="Clear and reinstall root CA…" Command="{Binding RotateCaCommand}" AutomationProperties.AutomationId="MenuRotateCa" />
@@ -54,9 +63,6 @@
         <MenuItem Header="Trust CA in Firefox…" Command="{Binding TrustFirefoxCaCommand}"
                   AutomationProperties.AutomationId="MenuTrustFirefoxCa" />
         <MenuItem Header="Device CA setup…" Command="{Binding DeviceCaSetupCommand}" AutomationProperties.AutomationId="MenuDeviceCa" />
-        <MenuItem Header="Allow Store apps…" Command="{Binding OpenLoopbackExemptCommand}"
-                  IsVisible="{Binding ShowLoopbackExemptMenu}"
-                  AutomationProperties.AutomationId="MenuLoopbackExempt" />
       </MenuItem>
       <MenuItem Header="_Tools" AutomationProperties.AutomationId="MenuTools">
         <MenuItem Header="Composer…" Command="{Binding OpenToolsComposerCommand}" AutomationProperties.AutomationId="MenuToolsComposer" />

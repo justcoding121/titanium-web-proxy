@@ -29,7 +29,6 @@ public partial class ExcludedHostsWindow : Window
         _interception = interception;
         InitializeComponent();
         IntroText.Text = OsTrustUxCopy.ExcludedHostsIntro();
-        LoopbackHintText.Text = OsTrustUxCopy.ExcludedHostsLoopbackHint();
         Title = readOnly ? "Excluded hosts (view)" : "Excluded hosts";
         _settings.EnsureExclusionsSeeded();
         LoadFromSettings();
@@ -38,7 +37,6 @@ public partial class ExcludedHostsWindow : Window
         {
             BypassHostsBox.IsReadOnly = true;
             SkipHostsBox.IsReadOnly = true;
-            ProxyLoopbackCheck.IsEnabled = false;
             LearningEnabledCheck.IsEnabled = false;
             PromoteLearnedButton.IsEnabled = false;
             ForgetLearnedButton.IsEnabled = false;
@@ -51,9 +49,6 @@ public partial class ExcludedHostsWindow : Window
         {
             SaveButton.Click += OnSave;
             ResetDefaultsButton.Click += OnResetDefaults;
-            BypassHostsBox.TextChanged += (_, _) => RefreshPreview();
-            SkipHostsBox.TextChanged += (_, _) => RefreshPreview();
-            ProxyLoopbackCheck.IsCheckedChanged += (_, _) => RefreshPreview();
             LearningEnabledCheck.IsCheckedChanged += (_, _) => UpdateLearningPausedUi();
             PromoteLearnedButton.Click += OnPromoteLearned;
             ForgetLearnedButton.Click += OnForgetLearned;
@@ -61,7 +56,6 @@ public partial class ExcludedHostsWindow : Window
         }
 
         CancelButton.Click += (_, _) => Close();
-        RefreshPreview();
         UpdateLearningPausedUi();
     }
 
@@ -84,32 +78,10 @@ public partial class ExcludedHostsWindow : Window
         var s = _settings.Current;
         BypassHostsBox.Text = HostListFormat.Join(s.SystemProxyBypassHosts);
         SkipHostsBox.Text = HostListFormat.Join(s.DecryptSkipHosts);
-        ProxyLoopbackCheck.IsChecked = s.ProxyLoopback;
         LearningEnabledCheck.IsChecked = s.EnableDecryptFailureBypass;
         ScopeBanner.Text = _readOnly
             ? "Read-only view of saved exclusion rules (including factory seeds)."
             : "Changes to OS bypass apply when System proxy is on (re-applied on save if active).";
-    }
-
-    private InspectorSettings DraftSettings()
-    {
-        return new InspectorSettings
-        {
-            ProxyLoopback = ProxyLoopbackCheck.IsChecked == true,
-            SystemProxyBypassHosts = HostListFormat.Parse(BypassHostsBox.Text),
-            DecryptSkipHosts = HostListFormat.Parse(SkipHostsBox.Text),
-            EnableDecryptFailureBypass = LearningEnabledCheck.IsChecked == true,
-            ExclusionsInitialized = true,
-            WarnedAboutPacReplace = _settings.Current.WarnedAboutPacReplace,
-        };
-    }
-
-    private void RefreshPreview()
-    {
-        var draft = DraftSettings();
-        var (label, value) = ExclusionPreview.FormatForCurrentOs(draft);
-        PreviewLabel.Text = label;
-        PreviewBlock.Text = value;
     }
 
     private void UpdateLearningPausedUi()
@@ -154,7 +126,6 @@ public partial class ExcludedHostsWindow : Window
         SkipHostsBox.Text = HostListFormat.Join(hosts);
         _interception?.RemoveDecryptFailureBypass(entry.Host);
         RefreshLearnedList();
-        RefreshPreview();
     }
 
     private void OnForgetLearned(object? sender, RoutedEventArgs e)
@@ -177,9 +148,7 @@ public partial class ExcludedHostsWindow : Window
         SettingsService.ApplyFactoryExclusionDefaults(_settings.Current);
         BypassHostsBox.Text = HostListFormat.Join(_settings.Current.SystemProxyBypassHosts);
         SkipHostsBox.Text = HostListFormat.Join(_settings.Current.DecryptSkipHosts);
-        ProxyLoopbackCheck.IsChecked = true;
         LearningEnabledCheck.IsChecked = true;
-        RefreshPreview();
         UpdateLearningPausedUi();
     }
 
@@ -188,7 +157,6 @@ public partial class ExcludedHostsWindow : Window
         var s = _settings.Current;
         s.SystemProxyBypassHosts = HostListFormat.Parse(BypassHostsBox.Text);
         s.DecryptSkipHosts = HostListFormat.Parse(SkipHostsBox.Text);
-        s.ProxyLoopback = ProxyLoopbackCheck.IsChecked == true;
         s.EnableDecryptFailureBypass = LearningEnabledCheck.IsChecked == true;
         s.ExclusionsInitialized = true;
         _settings.Save();

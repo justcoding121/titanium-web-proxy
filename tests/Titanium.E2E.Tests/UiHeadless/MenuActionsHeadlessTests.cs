@@ -109,6 +109,12 @@ public class MenuActionsHeadlessTests
                 Assert.AreEqual(!autoProxy, fx.ViewModel.AutoSystemProxyOnStart);
                 fx.Robot.Click("AutoSystemProxyCheck");
                 Assert.AreEqual(autoProxy, fx.ViewModel.AutoSystemProxyOnStart);
+
+                var loopback = fx.ViewModel.ProxyLoopback;
+                fx.Robot.Click("MenuProxyLocalhost");
+                Assert.AreEqual(!loopback, fx.ViewModel.ProxyLoopback);
+                fx.Robot.Click("MenuProxyLocalhost");
+                Assert.AreEqual(loopback, fx.ViewModel.ProxyLoopback);
             });
 
             await fx.DispatchAsync(() => fx.Robot.Click("MenuInstallCa"));

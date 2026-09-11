@@ -181,6 +181,12 @@ public static class ChromeScenario
                 if (harness.ViewModel.AutoSystemProxyOnStart == autoProxy)
                     throw new InvalidOperationException("AutoSystemProxyCheck did not flip");
                 harness.Robot.Click("AutoSystemProxyCheck"); // restore off
+
+                var loopback = harness.ViewModel.ProxyLoopback;
+                harness.Robot.Click("MenuProxyLocalhost");
+                if (harness.ViewModel.ProxyLoopback == loopback)
+                    throw new InvalidOperationException("MenuProxyLocalhost did not flip");
+                harness.Robot.Click("MenuProxyLocalhost"); // restore
             }).ConfigureAwait(true);
 
             // CA menus: suppress CryptUI and cancel trust-recovery Primary (would elevate/UAC and hang).
@@ -441,7 +447,6 @@ public static class ChromeScenario
                 var robot = new ProbeUiRobot(win);
                 _ = robot.Find<TextBox>("ExcludedBypassHosts").Text;
                 robot.SetText("ExcludedSkipHosts", "probe.example.test");
-                robot.SetCheck("ExcludedProxyLoopback", true);
                 robot.Click("ExcludedHostsResetDefaults");
                 robot.Click("ExcludedHostsCancel");
             }).ConfigureAwait(true);

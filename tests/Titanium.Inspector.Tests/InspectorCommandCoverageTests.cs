@@ -107,6 +107,7 @@ public class InspectorCommandCoverageTests
             await ExecuteAsync(vm.ToggleAutoSystemProxyOnStartCommand);
             await ExecuteAsync(vm.ToggleIgnoreServerCertificateErrorsCommand);
             await ExecuteAsync(vm.ToggleAddViaHeaderCommand);
+            await ExecuteAsync(vm.ToggleProxyLocalhostCommand);
             await ExecuteAsync(vm.ToggleDebugLoggingCommand);
             await ExecuteAsync(vm.ToggleCheckForUpdatesOnStartupCommand);
             await ExecuteAsync(vm.SetThemeLightCommand);
@@ -292,7 +293,7 @@ public class InspectorCommandCoverageTests
             _ = OsTrustUxCopy.ConfirmElevateRootCaBody();
             _ = OsTrustUxCopy.TrustRecoveryAdminBody("msg");
             _ = OsTrustUxCopy.ExcludedHostsIntro();
-            _ = OsTrustUxCopy.ExcludedHostsLoopbackHint();
+            _ = OsTrustUxCopy.ProxyLocalhostTip();
             _ = OsTrustUxCopy.FormatDecryptTrustFailed(
                 CertificateOsTrustResult.Fail(CertificateOsTrustKind.HomebrewMissing, ""));
             _ = OsTrustUxCopy.FormatDecryptTrustFailed(

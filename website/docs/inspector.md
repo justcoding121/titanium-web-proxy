@@ -13,7 +13,7 @@ Desktop debugger for HTTP and HTTPS traffic. Decrypt HTTPS (man-in-the-middle / 
 
 HTTPS stays encrypted (opaque tunnels) until **Decrypt HTTPS** is on.
 
-Capture menu options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs) show a check when on. Preferences such as **Session retention…**, **Excluded hosts…**, **Ignore insecure server certificates**, and **Logging…** live under **Options**.
+Capture menu options (**Capturing**, **Decrypt HTTPS**, **System proxy**, **Proxy localhost**, auto-start prefs) show a check when on. **Allow Store apps…** (Windows) sits with System proxy. Preferences such as **Session retention…**, **Excluded hosts…**, **Ignore insecure server certificates**, and **Logging…** live under **Options**.
 
 ## Install
 
@@ -114,7 +114,7 @@ Applies to every captured request/response. On request, `abort` or `set-status` 
 
 ### Excluded hosts
 
-**Options → Excluded hosts…** edits OS bypass, tunnel-only, and auto-tunnel learning:
+**Options → Excluded hosts…** edits OS bypass, tunnel-only, and auto-tunnel learning. **Capture → Proxy localhost** controls whether loopback uses the system proxy (not a host list).
 
 | Layer | Effect |
 |-------|--------|
@@ -160,7 +160,7 @@ Notes:
 - **Copy as curl / fetch:** with one session selected, generate a shell `curl` command or a JavaScript `fetch(...)` call from the request URL, method, headers, and body (CONNECT tunnels are skipped). The snippet is copied to the clipboard.
 - **Session Diff:** with exactly two sessions selected, compare method/URL/status/headers/bodies offline. The result opens on the Inspect **Diff** tab and is copied to the clipboard.
 - HAR / archive: Export all writes every captured session; Export selected writes the grid multi-selection. Import appends sessions from the file. Replay selected session.
-- System proxy and root CA install / untrust / export; Device CA setup dialog for external devices; **Allow Store apps…** on Windows
+- System proxy, **Proxy localhost**, and root CA install / untrust / export; Device CA setup dialog for external devices; **Allow Store apps…** on Windows
 - Search (`method:GET status:2xx host:example process:chrome is:ws hide:tunnel`); quick filters: Hide CONNECT, Hide images, Errors only
 - Optional Plus panels when `Titanium.Plus.dll` is present
 

@@ -225,6 +225,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             AddViaHeader = !AddViaHeader;
             return Task.CompletedTask;
         });
+        ToggleProxyLocalhostCommand = Cmd(() =>
+        {
+            ProxyLoopback = !ProxyLoopback;
+            return Task.CompletedTask;
+        });
         _clearSessionsCommand = Cmd(ClearSessionsAsync, () => HasSessions);
         ClearSessionsCommand = _clearSessionsCommand;
         _removeSelectedSessionsCommand = Cmd(RemoveSelectedSessionsAsync, () => HasSelectedSessions);
@@ -1148,6 +1153,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public ICommand ToggleDecryptHttpsCommand { get; }
     public ICommand ToggleIgnoreServerCertificateErrorsCommand { get; }
     public ICommand ToggleAddViaHeaderCommand { get; }
+    public ICommand ToggleProxyLocalhostCommand { get; }
     public ICommand ClearSessionsCommand { get; }
     public ICommand RemoveSelectedSessionsCommand { get; }
     public ICommand ToggleSystemProxyCommand { get; }
@@ -1436,6 +1442,36 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _systemProxy = enabled;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
     }
+
+    /// <summary>When true, localhost uses the system proxy (WinINET &lt;-loopback&gt; / Unix NO_PROXY parity).</summary>
+    public bool ProxyLoopback
+    {
+        get => _interception.ProxyLoopback;
+        set
+        {
+            if (_interception.ProxyLoopback == value)
+            {
+                return;
+            }
+
+            _interception.ProxyLoopback = value;
+            PersistSettings();
+            _interception.SystemProxySettings = _settings.Current;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ProxyLoopback)));
+
+            if (SystemProxy && !_interception.ReapplySystemProxyIfEnabled())
+            {
+                StatusText = "Proxy localhost saved; re-toggle System proxy to apply";
+                return;
+            }
+
+            StatusText = value
+                ? "Proxy localhost on — loopback uses the system proxy"
+                : "Proxy localhost off — loopback skips the system proxy";
+        }
+    }
+
+    public string ProxyLocalhostTip => OsTrustUxCopy.ProxyLocalhostTip();
 
     public bool AutoStartCapture
     {
@@ -1900,6 +1936,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AutoStartCapture)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AutoSystemProxyOnStart)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ProxyLoopback)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IgnoreServerCertificateErrors)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AddViaHeader)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BreakpointOnResponse)));
@@ -1965,6 +2002,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         s.AutoStartCapture = AutoStartCapture;
         s.AutoSystemProxyOnStart = AutoSystemProxyOnStart;
         s.DecryptHttps = DecryptHttps;
+        s.ProxyLoopback = _interception.ProxyLoopback;
         s.IgnoreServerCertificateErrors = _interception.IgnoreServerCertificateErrors;
         s.AddViaHeader = _interception.AddViaHeader;
         s.AutoResponderEnabled = AutoResponder.Enabled;

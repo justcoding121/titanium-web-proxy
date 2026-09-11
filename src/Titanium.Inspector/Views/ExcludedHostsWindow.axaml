@@ -3,7 +3,7 @@
         x:Class="Titanium.Inspector.Views.ExcludedHostsWindow"
         AutomationProperties.AutomationId="ExcludedHostsWindow"
         Title="Excluded hosts"
-        Width="640" Height="780"
+        Width="640" Height="600"
         WindowStartupLocation="CenterOwner">
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
@@ -54,20 +54,6 @@
           <Button x:Name="ClearLearnedButton" Content="Clear all learned" MinWidth="120"
                   AutomationProperties.AutomationId="ExcludedLearnedClear" />
         </StackPanel>
-
-        <CheckBox x:Name="ProxyLoopbackCheck" Content="Proxy localhost (advanced)"
-                  AutomationProperties.AutomationId="ExcludedProxyLoopback" />
-        <TextBlock x:Name="LoopbackHintText" Opacity="0.75" TextWrapping="Wrap" Margin="24,0,0,0" />
-
-        <TextBlock FontWeight="SemiBold" Text="Effective OS bypass (when System proxy on)" />
-        <TextBlock x:Name="PreviewLabel" Opacity="0.75" />
-        <TextBlock x:Name="PreviewBlock" TextWrapping="Wrap"
-                   FontFamily="Consolas,Courier New,monospace"
-                   AutomationProperties.AutomationId="ExcludedOsPreview" />
-
-        <TextBlock FontWeight="SemiBold" Text="Client setup" />
-        <TextBlock TextWrapping="Wrap" Opacity="0.85"
-                   Text="• Firefox: use Capture → Trust CA in Firefox… (OS bypass does not apply unless Firefox uses system proxy)&#x0a;• Windows Store apps: Capture → Allow Store apps…&#x0a;• Chrome QUIC may bypass the proxy — disable QUIC or use HTTP/2&#x0a;• Manual proxy: point browser to 127.0.0.1:&lt;port&gt; (tunnel rules still apply)" />
       </StackPanel>
     </ScrollViewer>
   </DockPanel>
