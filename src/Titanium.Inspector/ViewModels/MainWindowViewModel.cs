@@ -664,7 +664,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             MarshalToUi(() =>
             {
                 StatusText =
-                    $"Auto-tunneled {entry.Host} (decrypt failure). Later connections skip MITM.";
+                    $"Auto-tunneled {entry.Host} (decrypt failure). New connections skip MITM.";
                 UpdateExclusionSummary();
             });
     }

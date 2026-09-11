@@ -78,12 +78,13 @@ expecting the file relocation alone to isolate it.
 
 `ProxyServer.EnableDecryptFailureBypass` (off by default in the library; on by default in Inspector) tunnels
 later CONNECTs without decrypt after repeated **origin** TLS handshake failures under MITM, or after
-repeated MITM HTTPS **403/429** (shared strike threshold; synthetic inspector/script responses are
+MITM HTTPS **403/429** (document navigations activate immediately and meta-refresh onto a new opaque
+CONNECT; other requests use the shared strike threshold; synthetic inspector/script responses are
 ignored). It does **not** detect JA3/Akamai by name — TLS failures look like ordinary
 `AuthenticationException`. False positives are possible; use a TTL/LRU-bounded session list and
-**Promote** known-bad hosts into permanent tunnel-only exclusions. Post-MITM HTTP learn is cache-only:
-the current forged-cert session is not converted. Learned hosts skip MITM prefetch. Embedded proxies
-should leave the flag off unless they need this behavior.
+**Promote** known-bad hosts into permanent tunnel-only exclusions. Post-MITM conversion of the forged-cert
+session is impossible; seamless recovery relies on a new CONNECT. Learned hosts skip MITM prefetch.
+Embedded proxies should leave the flag off unless they need this behavior.
 
 ## See also
 

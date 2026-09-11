@@ -120,11 +120,11 @@ Applies to every captured request/response. On request, `abort` or `set-status` 
 |-------|--------|
 | **OS bypass** | Traffic never reaches Inspector (when **System proxy** is on) |
 | **Tunnel only** | Session stays visible but HTTPS stays opaque |
-| **Auto-tunnel on decrypt failure** | Session-only list of hosts learned after origin TLS fails under decrypt, or after repeated MITM HTTPS **403/429**. **On by default.** Cap + TTL; cleared on restart unless you **Promote to tunnel-only**. Prefetch is skipped for learned hosts. |
+| **Auto-tunnel on decrypt failure** | Session-only list of hosts learned after origin TLS fails under decrypt, or after MITM HTTPS **403/429**. Document navigations auto-retry via meta-refresh onto an opaque CONNECT. **On by default.** Cap + TTL; cleared on restart unless you **Promote to tunnel-only**. Prefetch is skipped for learned hosts. |
 
 Factory seeds keep common identity / SSO hosts on OS bypass so sign-in keeps working. Right-click a session → **Exclude host…**. Opaque sessions show why they stayed encrypted (including **auto-tunneled after decrypt failure**). Search: `is:opaque`, `opaque-reason:learned`. **Chrome QUIC** may bypass the proxy entirely — not fixable via host lists.
 
-First visits to a hostile host may still fail on the current MITM connection — learning applies to **later** CONNECTs only (or a cold H2 probe can fall back on the same CONNECT before MITM). Certificate-pinning apps still belong on **Tunnel only**.
+Hostile hosts that return 403/429 under MITM on a **document** navigation are recovered automatically (brief meta-refresh; no manual reload). Non-document 403/429 need repeated strikes before later CONNECTs tunnel. Certificate-pinning apps still belong on **Tunnel only**. Automation browsers may still see site captchas after tunneling.
 
 ### Root certificate (Decrypt HTTPS)
 

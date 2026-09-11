@@ -314,31 +314,93 @@ public partial class ProxyServer
     /// </summary>
     /// <param name="args"></param>
     /// <returns></returns>
-    private Task OnBeforeResponse(SessionEventArgs args)
+    private async Task OnBeforeResponse(SessionEventArgs args)
     {
         if (args.IsFastPath)
-            return Task.CompletedTask;
+            return;
 
         // Staged ResponseHeaderSet/Remove from route transforms (null when unused).
         ReverseProxySessionDispatch.ApplyResponseTransforms(args);
 
         // Rewrite gRPC → JSON before user handlers when the request was transcoded.
         if (ReverseProxy?.GrpcJsonTranscoder is { } transcoder)
-            return OnBeforeResponseWithTranscoderAsync(args, transcoder);
+            await transcoder.TryRewriteResponseAsync(args, args.CancellationToken).ConfigureAwait(false);
 
-        if (BeforeResponse != null)
-            return BeforeResponse.InvokeAsync(this, args, logger);
+        // Before user handlers: native H2 GetResponseBody (Inspector capture) signals
+        // ReadHttp2BeforeHandlerTaskCompletionSource and locks the origin response before
+        // BeforeResponse returns, which would block Respond()/Ok() for the meta-refresh.
+        TrySeamlessDecryptBypassRetry(args);
 
-        return Task.CompletedTask;
-    }
-
-    private async Task OnBeforeResponseWithTranscoderAsync(
-        SessionEventArgs args,
-        Abstractions.Plugins.IGrpcJsonTranscoder transcoder)
-    {
-        await transcoder.TryRewriteResponseAsync(args, args.CancellationToken).ConfigureAwait(false);
         if (BeforeResponse != null)
             await BeforeResponse.InvokeAsync(this, args, logger).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Records learnable MITM HTTP blocks. For document navigations, activates bypass immediately and
+    ///     replaces the response with a meta-refresh so the browser opens a new CONNECT (opaque tunnel).
+    /// </summary>
+    /// <returns>True when a seamless retry interstitial was installed.</returns>
+    internal bool TrySeamlessDecryptBypassRetry(SessionEventArgs args)
+    {
+        if (!EnableDecryptFailureBypass || !Network.Tcp.DecryptFailureLearning.IsLearnableHttpBlock(args))
+            return false;
+
+        // User (or earlier handler) already replaced the response.
+        if (args.HttpClient.Response.Locked)
+            return false;
+
+        var host = Network.Tcp.DecryptFailureLearning.ResolveSessionHost(args);
+        var request = args.HttpClient.Request;
+        var isDocument = Network.Tcp.DecryptFailureLearning.IsDocumentNavigation(request);
+        var status = args.HttpClient.Response.StatusCode;
+
+        var isActive = TryRecordDecryptFailureFromHttpStatus(host, status, isSynthetic: false,
+            forceImmediate: isDocument);
+
+        if (!isDocument || !isActive)
+            return false;
+
+        var url = request.Url;
+        if (!Network.Tcp.DecryptFailureLearning.IsSafeMetaRefreshUrl(url))
+            return false;
+
+        var html = Network.Tcp.DecryptFailureLearning.BuildMetaRefreshHtml(url!);
+        // Connection: close is H1-only; H2 strips hop-by-hop headers and we cancel/dispose the client
+        // connection after the response so the forged MITM multiplex is not reused.
+        HttpHeader[] headers = request.HttpVersion >= HttpHeader.Version20
+            ?
+            [
+                new HttpHeader("Cache-Control", "no-store")
+            ]
+            :
+            [
+                new HttpHeader("Cache-Control", "no-store"),
+                new HttpHeader(KnownHeaders.Connection, KnownHeaders.ConnectionClose)
+            ];
+        args.Ok(html, headers, closeServerConnection: true);
+        args.CloseClientConnectionAfterResponse = true;
+        return true;
+    }
+
+    private async Task MaybeCloseClientAfterSeamlessRetryAsync(SessionEventArgs args)
+    {
+        if (!args.CloseClientConnectionAfterResponse)
+            return;
+
+        // Do not CancelAsync first — that races the just-completed synthetic body write and
+        // can surface as net::ERR_CONNECTION_RESET before the browser applies meta-refresh.
+        // Graceful FIN (not linger-0 RST) tears down the forged MITM multiplex so the refresh
+        // opens a new CONNECT that hits the learned opaque bypass.
+        try
+        {
+            await Task.Yield();
+            args.ClientConnection.CloseGracefully();
+        }
+        catch (Exception ex)
+        {
+            ProxyDiagnostics.ReportBenign(logger,
+                "Seamless decrypt-bypass: closing client connection after meta-refresh", ex);
+        }
     }
 
     /// <summary>
@@ -352,13 +414,14 @@ public partial class ProxyServer
     /// <returns></returns>
     private Task OnAfterResponse(SessionEventArgs args)
     {
-        // Post-MITM HTTP 403/429: cache-only learn for later CONNECTs (cannot convert this MITM session).
-        if (EnableDecryptFailureBypass && Network.Tcp.DecryptFailureLearning.IsLearnableHttpBlock(args))
+        // Fast-path skips OnBeforeResponse; still learn HTTP blocks (no meta-refresh rewrite).
+        if (args.IsFastPath && EnableDecryptFailureBypass &&
+            Network.Tcp.DecryptFailureLearning.IsLearnableHttpBlock(args))
         {
-            TryRecordDecryptFailureFromHttpStatus(
-                Network.Tcp.DecryptFailureLearning.ResolveSessionHost(args),
-                args.HttpClient.Response.StatusCode,
-                args.HttpClient.Response.IsSynthetic);
+            var host = Network.Tcp.DecryptFailureLearning.ResolveSessionHost(args);
+            var isDocument = Network.Tcp.DecryptFailureLearning.IsDocumentNavigation(args.HttpClient.Request);
+            TryRecordDecryptFailureFromHttpStatus(host, args.HttpClient.Response.StatusCode,
+                args.HttpClient.Response.IsSynthetic, forceImmediate: isDocument);
         }
 
         var success = args.Exception is null &&
@@ -366,11 +429,17 @@ public partial class ProxyServer
         ReverseProxySessionDispatch.ReportUpstreamResult(this, args, success);
 
         if (!args.IsFastPath && AfterResponse != null)
-            return OnAfterResponseWithHandlerAsync(args);
+            return OnAfterResponseWithHandlerAndClientCloseAsync(args);
 
         TryUpdateHttp3CapabilityFromResponse(args);
         args.Timing?.MarkComplete();
-        return Task.CompletedTask;
+        return MaybeCloseClientAfterSeamlessRetryAsync(args);
+    }
+
+    private async Task OnAfterResponseWithHandlerAndClientCloseAsync(SessionEventArgs args)
+    {
+        await OnAfterResponseWithHandlerAsync(args).ConfigureAwait(false);
+        await MaybeCloseClientAfterSeamlessRetryAsync(args).ConfigureAwait(false);
     }
 
     private async Task OnAfterResponseWithHandlerAsync(SessionEventArgs args)

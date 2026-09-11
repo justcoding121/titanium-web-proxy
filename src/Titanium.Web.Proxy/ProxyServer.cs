@@ -438,10 +438,14 @@ public partial class ProxyServer : IDisposable
     }
 
     /// <summary>
-    ///     Learns from MITM HTTPS 403/429 (bot/WAF after TLS succeeds). Uses the shared strike threshold.
-    ///     Does not convert the current MITM CONNECT — later CONNECTs tunnel.
+    ///     Learns from MITM HTTPS 403/429 (bot/WAF after TLS succeeds).
+    ///     Document navigations activate bypass immediately; other requests use the shared strike threshold.
+    ///     Does not convert the current MITM CONNECT — a seamless meta-refresh (documents) or a later
+    ///     CONNECT tunnels with the browser fingerprint.
     /// </summary>
-    internal bool TryRecordDecryptFailureFromHttpStatus(string? host, int statusCode, bool isSynthetic = false)
+    /// <returns>Whether bypass is active after this call.</returns>
+    internal bool TryRecordDecryptFailureFromHttpStatus(string? host, int statusCode,
+        bool isSynthetic = false, bool forceImmediate = false)
     {
         if (!EnableDecryptFailureBypass || string.IsNullOrWhiteSpace(host) || isSynthetic)
             return false;
@@ -450,7 +454,17 @@ public partial class ProxyServer : IDisposable
             return false;
 
         var wasActive = DecryptFailureBypassCache.IsBypassActive(host);
-        var isActive = DecryptFailureBypassCache.RecordFailure(host);
+        bool isActive;
+        if (forceImmediate)
+        {
+            DecryptFailureBypassCache.MarkBypassed(host);
+            isActive = true;
+        }
+        else
+        {
+            isActive = DecryptFailureBypassCache.RecordFailure(host);
+        }
+
         if (isActive && !wasActive)
             RaiseDecryptFailureBypassChanged(host);
 
@@ -1454,8 +1468,9 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     /// Returns <see langword="true"/> when the global interception gate is active for the given
     /// endpoint: any session event handler is subscribed, <see cref="EnableHttpInterception"/> is
-    /// set on the server, or the endpoint's own <see cref="ProxyEndPoint.EnableHttpInterception"/>
-    /// override is set.
+    /// set on the server, the endpoint's own <see cref="ProxyEndPoint.EnableHttpInterception"/>
+    /// override is set, or <see cref="EnableDecryptFailureBypass"/> is on (seamless document
+    /// meta-refresh requires <see cref="OnBeforeResponse"/>).
     /// </summary>
     internal bool NeedsHttpInterception(ProxyEndPoint? endPoint = null) =>
         (endPoint?.EnableHttpInterception ?? EnableHttpInterception)
@@ -1463,7 +1478,8 @@ public partial class ProxyServer : IDisposable
         || BeforeResponse != null
         || AfterResponse != null
         || OnRequestBodyWrite != null
-        || OnResponseBodyWrite != null;
+        || OnResponseBodyWrite != null
+        || EnableDecryptFailureBypass;
 
     /// <summary>
     /// Returns <see langword="true"/> when this specific request/stream should go through the

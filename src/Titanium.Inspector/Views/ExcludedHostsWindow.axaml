@@ -40,7 +40,7 @@
         <CheckBox x:Name="LearningEnabledCheck" Content="Learn hosts that fail origin TLS under decrypt (session only)"
                   AutomationProperties.AutomationId="ExcludedLearningEnabled" />
         <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                   Text="When origin TLS fails repeatedly under decrypt, or MITM HTTPS returns 403/429 repeatedly (bot/WAF), Inspector stops decrypting that host for later connections in this session. The current MITM connection is not converted. Prefetch is skipped once a host is learned. List is capped and forgotten on restart unless you promote. Certificate-pinning apps still belong on Tunnel only." />
+                   Text="When origin TLS fails repeatedly under decrypt, or MITM HTTPS returns 403/429 (document pages auto-retry onto a tunnel; APIs need repeated blocks), Inspector stops decrypting that host for later connections in this session. Prefetch is skipped once a host is learned. List is capped and forgotten on restart unless you promote. Certificate-pinning apps still belong on Tunnel only." />
         <TextBlock x:Name="LearningPausedBanner" IsVisible="False" Opacity="0.85" TextWrapping="Wrap"
                    Text="Learning paused — existing entries kept until forgotten." />
         <ListBox x:Name="LearnedList" MinHeight="96" MaxHeight="180"
