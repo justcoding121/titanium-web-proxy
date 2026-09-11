@@ -97,6 +97,8 @@ on:
           - compare-tls-cost
           - compare-arch
           - compare-grpc
+          - compare-ws-h1tls
+          - compare-ws-h2
           - compare-saturation
           - compare-spot
           - origin-direct

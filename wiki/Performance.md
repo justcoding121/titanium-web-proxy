@@ -40,6 +40,9 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 - [Cross-version (7.0 vs 6.0)](#cross-version-70-vs-60)
 - [Heavier reverse workloads](#heavier-reverse-workloads)
 - [Unary gRPC (H2 TLS)](#unary-grpc-h2-tls)
+- [Unary gRPC (H2 TLS → h2c)](#unary-grpc-h2-tls--h2c)
+- [WebSocket (H1 TLS → H1 TLS)](#websocket-h1-tls--h1-tls)
+- [WebSocket (H2 TLS 8441 → H1)](#websocket-h2-tls-8441--h1)
 - [Other measurements](#other-measurements)
 - [Raising limits on large hosts](#raising-limits-on-large-hosts)
 - [Maintainer notes](#maintainer-notes)
@@ -577,7 +580,7 @@ Lossy-link runs (slow **network**) are already published above; they are not a s
 | Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/2 · TLS | **0**<br><sub>(70 MiB / 1.0% CPU)</sub> | **8**<br><sub>(70 MiB / 1.0% CPU)</sub> | *Not possible* | *Not possible* | *Not possible* | *Not possible* | *Not possible* | *Not possible* | 🥇 **256**<br><sub>(136 MiB / 9.3% CPU)</sub> | **256**<br><sub>(136 MiB / 9.3% CPU)</sub> |
 | Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/2 · TLS | **0**<br><sub>(92 MiB / 0.1% CPU)</sub> | **0**<br><sub>(92 MiB / 0.1% CPU)</sub> | *Not possible* | *Not possible* | *Not possible* | *Not possible* | *Not possible* | *Not possible* | **0**<br><sub>(110 MiB / 0.1% CPU)</sub> | **0**<br><sub>(110 MiB / 0.1% CPU)</sub> |
 | Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | **0**<br><sub>(91 MiB / 0.1% CPU)</sub> | **0**<br><sub>(91 MiB / 0.1% CPU)</sub> | *Not possible* | *Not possible* | *Not possible* | *Not possible* | *Not possible* | *Not possible* | **0**<br><sub>(111 MiB / 0.1% CPU)</sub> | **0**<br><sub>(111 MiB / 0.1% CPU)</sub> |
-| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | 🥇 **24,498**<br><sub>(97 MiB / 43.0% CPU)</sub> | **24,498**<br><sub>(97 MiB / 43.0% CPU)</sub> | **12,337**<br><sub>(143 MiB / 24.6% CPU)</sub> | **12,337**<br><sub>(143 MiB / 24.6% CPU)</sub> | *Not possible* | *Not possible* | *Not possible* | *Not possible* | **23,100**<br><sub>(89 MiB / 44.6% CPU)</sub> | **23,100**<br><sub>(89 MiB / 44.6% CPU)</sub> |
+| Duplex (WebSocket / H1 Upgrade) | HTTP/1 · TLS | HTTP/1 · plain | 🥇 **24,498**<br><sub>(97 MiB / 43.0% CPU)</sub> | **24,498**<br><sub>(97 MiB / 43.0% CPU)</sub> | **12,337**<br><sub>(143 MiB / 24.6% CPU)</sub> | **12,337**<br><sub>(143 MiB / 24.6% CPU)</sub> | *Not possible* | *Not possible* | *Not possible* | *Not possible* | **23,100**<br><sub>(89 MiB / 44.6% CPU)</sub> | **23,100**<br><sub>(89 MiB / 44.6% CPU)</sub> |
 
 #### Linux
 
@@ -593,7 +596,7 @@ Lossy-link runs (slow **network**) are already published above; they are not a s
 | Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/2 · TLS | **8**<br><sub>(97 MiB / 2.5% CPU)</sub> | **8**<br><sub>(97 MiB / 2.5% CPU)</sub> | *Not possible* | *Not possible* | **455**<br><sub>(89 MiB / 22.6% CPU)</sub> | **455**<br><sub>(89 MiB / 22.6% CPU)</sub> | **466**<br><sub>(152 MiB / 12.9% CPU)</sub> | **466**<br><sub>(152 MiB / 12.9% CPU)</sub> | 🥇 **466**<br><sub>(168 MiB / 31.1% CPU)</sub> | **466**<br><sub>(168 MiB / 31.1% CPU)</sub> |
 | Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/2 · TLS | **0**<br><sub>(112 MiB / 0.1% CPU)</sub> | **0**<br><sub>(112 MiB / 0.1% CPU)</sub> | *Not possible* | *Not possible* | *Not measured* | *Not measured* | **0**<br><sub>(156 MiB / 19.5% CPU)</sub> | **3,680**<br><sub>(156 MiB / 19.5% CPU)</sub> | **0**<br><sub>(146 MiB / 0.2% CPU)</sub> | **0**<br><sub>(146 MiB / 0.2% CPU)</sub> |
 | Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | **0**<br><sub>(112 MiB / 0.1% CPU)</sub> | **0**<br><sub>(112 MiB / 0.1% CPU)</sub> | *Not possible* | *Not possible* | **0**<br><sub>(91 MiB / 0.1% CPU)</sub> | **0**<br><sub>(91 MiB / 0.1% CPU)</sub> | **0**<br><sub>(151 MiB / 19.4% CPU)</sub> | **3,724**<br><sub>(151 MiB / 19.4% CPU)</sub> | **0**<br><sub>(151 MiB / 0.1% CPU)</sub> | **0**<br><sub>(151 MiB / 0.1% CPU)</sub> |
-| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | **28,567**<br><sub>(125 MiB / 44.0% CPU)</sub> | **28,567**<br><sub>(125 MiB / 44.0% CPU)</sub> | 🥇 **33,775**<br><sub>(100 MiB / 35.5% CPU)</sub> | **33,775**<br><sub>(100 MiB / 35.5% CPU)</sub> | **31,870**<br><sub>(84 MiB / 39.3% CPU)</sub> | **31,870**<br><sub>(84 MiB / 39.3% CPU)</sub> | **31,525**<br><sub>(127 MiB / 39.4% CPU)</sub> | **31,525**<br><sub>(127 MiB / 39.4% CPU)</sub> | **27,109**<br><sub>(125 MiB / 44.1% CPU)</sub> | **27,109**<br><sub>(125 MiB / 44.1% CPU)</sub> |
+| Duplex (WebSocket / H1 Upgrade) | HTTP/1 · TLS | HTTP/1 · plain | **28,567**<br><sub>(125 MiB / 44.0% CPU)</sub> | **28,567**<br><sub>(125 MiB / 44.0% CPU)</sub> | 🥇 **33,775**<br><sub>(100 MiB / 35.5% CPU)</sub> | **33,775**<br><sub>(100 MiB / 35.5% CPU)</sub> | **31,870**<br><sub>(84 MiB / 39.3% CPU)</sub> | **31,870**<br><sub>(84 MiB / 39.3% CPU)</sub> | **31,525**<br><sub>(127 MiB / 39.4% CPU)</sub> | **31,525**<br><sub>(127 MiB / 39.4% CPU)</sub> | **27,109**<br><sub>(125 MiB / 44.1% CPU)</sub> | **27,109**<br><sub>(125 MiB / 44.1% CPU)</sub> |
 
 Slow consumer is sleep-bound; H1/H2/H3 sit in the same band. Early-response H1/H2/H3: TWP leads (H1 early ≈ **2.00×** / **1.47×** YARP Win/Linux). **Duplex H2**: YARP leads by design — Win ≈ **0.59×** (1,270 / 2,135), Linux ≈ **0.15×** (282 / 1,882); irreducible concurrent-copier cell (see [IO model](Performance-Profiling#twp-vs-yarp-io-model)). WebSocket: TWP÷YARP Windows ≈ **1.06×**; Linux nginx leads.
 
@@ -632,6 +635,36 @@ Unary Echo **RPC/s** @ c=64 over H2 TLS→H2 TLS for Titanium, YARP, nginx (`grp
 | Windows | **53,762**<br><sub>(88 MiB / 23.6% CPU)</sub> | **30,754**<br><sub>(123 MiB / 46.9% CPU)</sub> | **0**<br><sub>(153 MiB / 24.8% CPU)</sub> | *Not possible* | *Not possible* |
 | Linux | **42,675**<br><sub>(120 MiB / 30.3% CPU)</sub> | **24,232**<br><sub>(159 MiB / 41.6% CPU)</sub> | **0**<br><sub>(120 MiB / 24.9% CPU)</sub> | **8,683**<br><sub>(84 MiB / 24.6% CPU)</sub> | **16,110**<br><sub>(128 MiB / 20.6% CPU)</sub> |
 | macOS | **14,924**<br><sub>(94 MiB / 20.1% CPU)</sub> | **8,581**<br><sub>(128 MiB / 28.4% CPU)</sub> | **0**<br><sub>(97 MiB / 2.5% CPU)</sub> | **0**<br><sub>(68 MiB / 5.1% CPU)</sub> | **0**<br><sub>(84 MiB / 19.0% CPU)</sub> |
+
+## Unary gRPC (H2 TLS → h2c)
+
+Unary Echo **RPC/s** @ c=64 over **H2 TLS → h2c** (edge TLS, cleartext H2 origin). Peers: Titanium, YARP, HAProxy, Envoy. nginx: *Not possible (no H2 upstream)*. Mode: `compare-grpc` (`*-grpc-h2c`). Numbers land after targeted GHA paste.
+
+| OS | Titanium | YARP | nginx | HAProxy | Envoy |
+|---|---:|---:|---:|---:|---:|
+| Windows | *Not measured* | *Not measured* | *Not possible (no H2 upstream)* | *Not possible* | *Not possible* |
+| Linux | *Not measured* | *Not measured* | *Not possible (no H2 upstream)* | *Not measured* | *Not measured* |
+| macOS | *Not measured* | *Not measured* | *Not possible (no H2 upstream)* | *Not measured* | *Not measured* |
+
+## WebSocket (H1 TLS → H1 TLS)
+
+WebSocket echo round-trips/sec over **dual-TLS** H1 (`proxy_ssl` style). Mode: `compare-ws-h1tls` (`*-duplex-ws-h1tls`).
+
+| OS | Titanium | YARP | nginx | HAProxy | Envoy |
+|---|---:|---:|---:|---:|---:|
+| Windows | *Not measured* | *Not measured* | *Not measured* | *Not possible* | *Not possible* |
+| Linux | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
+| macOS | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
+
+## WebSocket (H2 TLS 8441 → H1)
+
+WebSocket echo over **RFC 8441** extended CONNECT (H2 TLS client → H1 plain origin). Mode: `compare-ws-h2` (`*-duplex-ws-h2`). nginx: *Not possible* (no extended CONNECT reverse).
+
+| OS | Titanium | YARP | nginx | HAProxy | Envoy |
+|---|---:|---:|---:|---:|---:|
+| Windows | *Not measured* | *Not measured* | *Not possible* | *Not possible* | *Not possible* |
+| Linux | *Not measured* | *Not measured* | *Not possible* | *Not measured* | *Not measured* |
+| macOS | *Not measured* | *Not measured* | *Not possible* | *Not measured* | *Not measured* |
 
 ## Other measurements
 

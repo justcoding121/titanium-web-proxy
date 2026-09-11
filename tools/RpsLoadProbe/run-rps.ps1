@@ -11,7 +11,8 @@ param(
     [ValidateSet(
         'compare', 'compare-http2', 'compare-tls', 'compare-terminate', 'compare-same', 'compare-bridges',
         'compare-http3-cleartext', 'compare-nginx-https', 'compare-haproxy-smoke', 'compare-envoy-smoke', 'compare-mitm', 'compare-matrix', 'compare-product', 'compare-product-smoke', 'compare-spot', 'compare-ceiling',
-        'compare-bodies', 'compare-post', 'compare-lossy', 'compare-tls-cost', 'compare-arch', 'compare-grpc', 'compare-saturation',
+        'compare-bodies', 'compare-post', 'compare-lossy', 'compare-tls-cost', 'compare-arch', 'compare-grpc',
+        'compare-ws-h1tls', 'compare-ws-h2', 'compare-saturation',
         'compare-editions', 'compare-cross-version',
         'origin-direct', 'explicit-pool-sweep',
         'reverse-http1', 'bare-reverse-http1', 'nginx-reverse-http1', 'haproxy-reverse-http1', 'envoy-reverse-http1', 'yarp-reverse-http1',

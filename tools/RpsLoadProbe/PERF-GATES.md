@@ -36,7 +36,8 @@ Do **not** run full `compare-product` on every develop PR. Thresholds change onl
 | Pre-wiki smoke (required) | after Core / harness changes | **`compare-product-smoke`** Linux **2** comparison-group shards (`repeats=1`) before full product | ~30–60 min |
 | Cross-version (Gate 2) | before `v7.0.0` tag | `compare-cross-version` + [`validate-cross-version.ps1`](validate-cross-version.ps1) | ~1–2h |
 | Release / wiki refresh | release SHA | `compare-product` (median of 3) on Win/Linux/mac with **`arm_shard` 1/3,2/3,3/3** (comparison groups); paste `-RunIds` union | ~2–2½h wall (360m hard cap) |
-| Unary gRPC | as needed | `compare-grpc` (TWP/YARP/nginx `grpc_pass`/HAProxy/Envoy) | ~20–40 min |
+| Unary gRPC | as needed | `compare-grpc` (H2↔H2 + H2→h2c; shard 1/2 + 2/2) | ~20–50 min |
+| WebSocket dual-TLS / RFC 8441 | as needed | `compare-ws-h1tls` / `compare-ws-h2` | ~15–40 min each |
 | Heavier wiki tables | as needed | `compare-bodies` (**2** shards) / `post` / `lossy` / `arch` (**3** shards) / `tls-cost` | 30–90 min each |
 
 Do **not** run full `compare-product` as a daily smoke. Prefer TWP÷YARP / TWP÷nginx / edition ratios over absolute RPS. Shards keep one Client×Origin row on one VM — do not compare absolute RPS across shards. Early-stop (`--stop-on-slo-fail`, default on) aborts an arm after the first SLO fail plus one peak confirmation step. Local shard check: [`validate-arm-shards.ps1`](validate-arm-shards.ps1).

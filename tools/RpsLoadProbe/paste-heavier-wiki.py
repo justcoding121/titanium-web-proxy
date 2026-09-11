@@ -341,7 +341,7 @@ def main() -> None:
         ("Slow consumer (256 KiB GET, throttled client read)", "HTTP/2 · TLS", "HTTP/2 · TLS", "twp-reverse-http2-to-https-slow256k", None, "yarp-reverse-http2-to-https-slow256k"),
         ("Early response (origin writes after first request chunk)", "HTTP/2 · TLS", "HTTP/2 · TLS", "twp-reverse-http2-to-https-early64k", None, "yarp-reverse-http2-to-https-early64k"),
         ("Duplex (both directions live)", "HTTP/2 · TLS", "HTTP/2 · TLS", "twp-reverse-http2-duplex-h2", None, "yarp-reverse-http2-to-https-duplex-h2"),
-        ("Duplex (WebSocket / extended CONNECT)", "HTTP/1 · TLS", "HTTP/1 · plain", "twp-reverse-http1-tls-duplex-ws", "nginx-reverse-http1-tls-duplex-ws", "yarp-reverse-http1-tls-duplex-ws"),
+        ("Duplex (WebSocket / H1 Upgrade)", "HTTP/1 · TLS", "HTTP/1 · plain", "twp-reverse-http1-tls-duplex-ws", "nginx-reverse-http1-tls-duplex-ws", "yarp-reverse-http1-tls-duplex-ws"),
     ]
 
     def arch_table(data: dict, is_win: bool) -> str:

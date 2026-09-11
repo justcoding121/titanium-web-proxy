@@ -74,16 +74,30 @@ try {
     }
     Write-Host "OK: smoke $($smokeAll.Count) arms -> $($sm1.Count)/$($sm2.Count)" -ForegroundColor Green
 
-    Write-Host 'Validating compare-grpc single group...' -ForegroundColor Cyan
+    Write-Host 'Validating compare-grpc groups (H2 TLS + h2c)...' -ForegroundColor Cyan
     $grpc = @(Get-Arms 'compare-grpc')
-    if ($grpc.Count -lt 2) { throw "Expected grpc arms; got $($grpc.Count)" }
+    if ($grpc.Count -lt 4) { throw "Expected grpc arms (http2+h2c); got $($grpc.Count)" }
     $g1 = @(Get-Arms 'compare-grpc' '1/2')
     $g2 = @(Get-Arms 'compare-grpc' '2/2')
-    # One comparison group → all arms on shard 1, none on shard 2
-    if ($g1.Count -ne $grpc.Count -or $g2.Count -ne 0) {
-        throw "gRPC should be one group (shard1=$($g1.Count) shard2=$($g2.Count) all=$($grpc.Count))"
+    if (($g1.Count + $g2.Count) -ne $grpc.Count) {
+        throw "gRPC shard union incomplete (shard1=$($g1.Count) shard2=$($g2.Count) all=$($grpc.Count))"
     }
-    Write-Host "OK: grpc $($grpc.Count) arms stay on one shard" -ForegroundColor Green
+    if ($g1.Count -eq 0 -or $g2.Count -eq 0) {
+        throw "gRPC should split into two groups (shard1=$($g1.Count) shard2=$($g2.Count))"
+    }
+    Write-Host "OK: grpc $($grpc.Count) arms -> $($g1.Count)/$($g2.Count)" -ForegroundColor Green
+
+    Write-Host 'Validating compare-ws-h1tls / compare-ws-h2 single groups...' -ForegroundColor Cyan
+    foreach ($mode in @('compare-ws-h1tls', 'compare-ws-h2')) {
+        $ws = @(Get-Arms $mode)
+        if ($ws.Count -lt 2) { throw "Expected $mode arms; got $($ws.Count)" }
+        $w1 = @(Get-Arms $mode '1/2')
+        $w2 = @(Get-Arms $mode '2/2')
+        if ($w1.Count -ne $ws.Count -or $w2.Count -ne 0) {
+            throw "$mode should be one group (shard1=$($w1.Count) shard2=$($w2.Count) all=$($ws.Count))"
+        }
+        Write-Host "OK: $mode $($ws.Count) arms stay on one shard" -ForegroundColor Green
+    }
 }
 finally {
     Pop-Location

@@ -353,6 +353,12 @@ internal sealed class EnvoyHost : IDisposable
             W(col + 4, $"codec_type: {codecType}");
             if (string.Equals(codecType, "HTTP3", StringComparison.Ordinal))
                 W(col + 4, "http3_protocol_options: {}");
+            else if (string.Equals(codecType, "HTTP2", StringComparison.Ordinal))
+            {
+                // RFC 8441 extended CONNECT (compare-ws-h2); harmless for ordinary H2 reverse.
+                W(col + 4, "http2_protocol_options:");
+                W(col + 6, "allow_connect: true");
+            }
             // Kestrel rejects :scheme that does not match the upstream transport (https on h2c,
             // http on HTTPS). Align :scheme with the cluster socket, not the downstream TLS.
             W(col + 4, "scheme_header_transformation:");
