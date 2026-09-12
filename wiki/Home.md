@@ -2,12 +2,25 @@
 
 A lightweight, high-performance HTTP(S) proxy for Windows, Linux, and macOS — reverse / edge CLI, desktop Inspector, optional Plus, and an embeddable .NET library.
 
-**[Website](https://titaniumproxy.com)** · [Download](https://titaniumproxy.com/download) · [Install](https://titaniumproxy.com/docs/install) · [Getting started](https://titaniumproxy.com/docs/getting-started) · [Releases](https://titaniumproxy.com/releases) · [API reference](https://titaniumproxy.com/api/Titanium.Web.Proxy.ProxyServer.html)
+**[Website](https://titaniumproxy.com)** · [Download](https://titaniumproxy.com/download) · [Install](https://titaniumproxy.com/docs/install) · [Getting started](https://titaniumproxy.com/docs/getting-started) · [Features](https://titaniumproxy.com/docs/features) · [Releases](https://titaniumproxy.com/releases) · [API reference](https://titaniumproxy.com/api/Titanium.Web.Proxy.ProxyServer.html)
+
+## Product highlights
+
+Product guides (Inspector, CLI, Plus) live on the **[website](https://titaniumproxy.com/docs/features)**. This wiki focuses on the library API, protocol matrix, and performance tables.
+
+- Native HTTPS **Inspector** on Windows, macOS, and Linux — decrypt, AutoResponder / Map Local / Map Remote, breakpoints, Composer, HAR
+- **Login-safe decrypt** — SSO bypass and auto-tunnel when sites reject MITM
+- **HTTP/2** by default, optional **HTTP/3**, WebSocket / SSE / gRPC / GraphQL in the session grid
+- Same engine as a **reverse / edge CLI** (YAML, load balancing, ACME) with measured RPS vs peers
+- Embed via the **.NET library** (MIT); Inspector free for personal / education use (PolyForm Noncommercial)
+
+Short catalog: [Features](Features) · full tables: [website Features](https://titaniumproxy.com/docs/features).
 
 ## Contents
 
 ### Using Titanium
 
+- [Features](Features) — product highlights (points at the website)
 - [Getting started](#getting-started)
 - [Screenshots](#screenshots)
 - [Performance](Performance) — measured throughput vs peers

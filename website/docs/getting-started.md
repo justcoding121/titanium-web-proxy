@@ -8,6 +8,10 @@ Titanium Web Proxy helps you do three things:
 
 Optional **Plus** adds a dashboard and ops features on top of the CLI. Everything runs on **Windows, Linux, and macOS**.
 
+## Highlights
+
+Native HTTPS Inspector with AutoResponder, Map Local/Remote, breakpoints, Composer, and HAR; login-safe decrypt (SSO bypass + auto-tunnel); HTTP/2 / HTTP/3 with WebSocket, gRPC, and GraphQL in the grid; the same engine as a reverse/edge CLI; embed via NuGet. Full catalog: [Features](/docs/features).
+
 ## Choose a path
 
 | I want to… | Start here |
@@ -70,6 +74,7 @@ Minimal sample and trust notes: [Library](/docs/library). Full API: [ProxyServer
 
 ## Next
 
+- [Features](/docs/features)
 - [Install](/docs/install)
 - [Editions & licenses](/docs/editions)
 - [Performance](/docs/performance)

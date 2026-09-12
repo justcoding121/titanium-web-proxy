@@ -19,11 +19,13 @@ Requires .NET 10 or later for the library. CLI and Inspector downloads are self-
 
 ## What you can do
 
-- Run a reverse / edge proxy in front of any backend, or inspect and modify HTTP(S) traffic in the desktop Inspector
-- Explicit, transparent, and SOCKS4/5 endpoints; decrypt HTTPS when you trust a local root certificate
-- Stream bodies across HTTP/1.x, HTTP/2, and HTTP/3; upstream proxies, auth, and mutual TLS
+- Decrypt and inspect HTTPS in a native desktop Inspector on Windows, macOS, and Linux — AutoResponder, Map Local/Remote, breakpoints, Composer, HAR, curl/fetch
+- Keep sign-in working: SSO hosts stay on OS bypass; hosts that reject MITM auto-tunnel
+- Speak modern HTTP — HTTP/2 by default, optional HTTP/3, WebSocket, gRPC, SSE, GraphQL rules in the same grid
+- Run the same engine as a reverse / edge proxy from the CLI (YAML, load balancing, ACME) with measured RPS vs YARP, nginx, HAProxy, and Envoy
+- Embed in .NET via NuGet (MIT); Inspector is free for personal and education use
 
-Protocol coverage: [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support). HTTP/3 packaging: [HTTP/3 wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3).
+Full catalog: [Features](https://titaniumproxy.com/docs/features). Protocol coverage: [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support). HTTP/3 packaging: [HTTP/3 wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3).
 
 ## Performance
 
@@ -108,8 +110,8 @@ Point your client at `127.0.0.1:8000` as its HTTP and HTTPS proxy. Trusting a ge
 
 ## Examples and documentation
 
-- **[Website](https://titaniumproxy.com)** — product docs, [download](https://titaniumproxy.com/download), [getting started](https://titaniumproxy.com/docs/getting-started), [release notes](https://titaniumproxy.com/releases)
-- **[Wiki](https://github.com/justcoding121/titanium-web-proxy/wiki)** — deeper guides (performance, streaming bodies, HTTP/3, protocol support)
+- **[Website](https://titaniumproxy.com)** — product docs, [download](https://titaniumproxy.com/download), [getting started](https://titaniumproxy.com/docs/getting-started), [features](https://titaniumproxy.com/docs/features), [release notes](https://titaniumproxy.com/releases)
+- **[Wiki](https://github.com/justcoding121/titanium-web-proxy/wiki)** — deeper guides (performance, streaming bodies, HTTP/3, protocol support) and a short [Features](https://github.com/justcoding121/titanium-web-proxy/wiki/Features) pointer
 - [Basic console proxy](examples/Titanium.Web.Proxy.Examples.Basic)
 - [WPF desktop example](examples/Titanium.Web.Proxy.Examples.Wpf)
 - [Windows service example](examples/Titanium.Web.Proxy.Examples.WindowsService)

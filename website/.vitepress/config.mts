@@ -44,6 +44,7 @@ export default defineConfig({
           text: 'Start here',
           items: [
             { text: 'Getting started', link: '/docs/getting-started' },
+            { text: 'Features', link: '/docs/features' },
             { text: 'Install', link: '/docs/install' },
             { text: 'Editions & licenses', link: '/docs/editions' },
           ],
@@ -65,6 +66,7 @@ export default defineConfig({
             { text: 'Protocol support', link: '/docs/protocol-support' },
             { text: 'HTTP/3', link: '/docs/http3' },
             { text: 'Streaming bodies', link: '/docs/streaming-bodies' },
+            { text: 'gRPC-JSON transcoding', link: '/docs/grpc-json-transcoding' },
             { text: 'Security', link: '/docs/security' },
           ],
         },

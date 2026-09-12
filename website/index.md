@@ -20,11 +20,15 @@ hero:
       link: https://github.com/justcoding121/titanium-web-proxy
 features:
   - title: Debug HTTPS traffic
-    details: Decrypt and inspect requests in the desktop Inspector — sessions, headers, bodies, AutoResponder, and breakpoints. Only on machines you control.
+    details: Native desktop Inspector on Windows, macOS, and Linux — decrypt HTTPS, turn on system proxy, and inspect sessions, headers, and bodies. Only on machines you control.
+  - title: Rewrite and replay
+    details: AutoResponder, Map Local, Map Remote, breakpoints, and Composer. Export or import HAR; copy sessions as curl or fetch.
+  - title: Login-safe decrypt
+    details: SSO hosts stay on OS bypass by default. When a site rejects MITM, Inspector auto-tunnels so sign-in and hostile pages keep working.
+  - title: HTTP/1 · HTTP/2 · HTTP/3
+    details: HTTP/2 is on by default; HTTP/3 (QUIC) is optional. Bridge when client and backend differ. Inspect WebSocket, gRPC, SSE, and GraphQL in the same grid.
   - title: Reverse proxy from the CLI
     details: Download the CLI, write a short YAML file, and run `titanium`. Routes, load balancing, TLS, and optional automatic certificates (ACME).
-  - title: HTTP/1 · HTTP/2 · HTTP/3
-    details: HTTP/2 is on by default. HTTP/3 (QUIC) is optional. Titanium can bridge when the client and backend speak different versions.
   - title: Measured performance
     details: Compared on the same test harness against YARP, nginx, HAProxy, and Envoy. See the charts below and the performance guide.
 ---
@@ -35,7 +39,7 @@ features:
   <div class="edition-card">
     <h3>Inspect traffic</h3>
     <p class="license">Inspector · Windows / macOS / Linux</p>
-    <p>Desktop debugger for HTTP and HTTPS. <a href="/download#inspector">Download</a> → <a href="/docs/inspector">Inspector guide</a>.</p>
+    <p>Desktop debugger for HTTP and HTTPS. Free for personal and education use (<a href="/docs/editions">PolyForm Noncommercial</a>); commercial use needs a separate license. <a href="/download#inspector">Download</a> → <a href="/docs/inspector">Inspector guide</a>.</p>
   </div>
   <div class="edition-card">
     <h3>Run a reverse proxy</h3>
@@ -110,6 +114,7 @@ proxyServer.Start();
 
 - [Download CLI & Inspector](/download)
 - [Getting started](/docs/getting-started)
+- [Features](/docs/features)
 - [Performance](/docs/performance)
 - [Configuration](/docs/configuration)
 - [Release notes](/releases)
