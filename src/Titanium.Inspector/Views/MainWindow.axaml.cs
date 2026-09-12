@@ -34,6 +34,7 @@ public partial class MainWindow : Window
     private ScrollBar? _sessionsVScroll;
     private MainWindowViewModel? _sessionsVm;
     private MainWindowViewModel? _statusVm;
+    private MainWindowViewModel? _toggleSyncVm;
     private WindowNotificationManager? _notificationManager;
     private CancellationTokenSource? _attentionCts;
     private EventHandler? _themeVariantChangedHandler;
@@ -54,6 +55,7 @@ public partial class MainWindow : Window
             RoutingStrategies.Tunnel);
         HookSessionsCollection(DataContext as MainWindowViewModel);
         HookStatusAttention(DataContext as MainWindowViewModel);
+        HookOneWayToggleVisualSync(DataContext as MainWindowViewModel);
         HookThemeVariantChanged();
     }
 
@@ -193,6 +195,7 @@ public partial class MainWindow : Window
         CaptureAndPersistSessionGridLayout();
         HookSessionsCollection(null);
         HookStatusAttention(null);
+        HookOneWayToggleVisualSync(null);
         HookThemeVariantChanged(unhook: true);
         _attentionCts?.Cancel();
         _attentionCts?.Dispose();
@@ -214,6 +217,7 @@ public partial class MainWindow : Window
     {
         HookSessionsCollection(DataContext as MainWindowViewModel);
         HookStatusAttention(DataContext as MainWindowViewModel);
+        HookOneWayToggleVisualSync(DataContext as MainWindowViewModel);
         if (_notificationManager is not null && DataContext is MainWindowViewModel vm)
         {
             vm.AttachStatusNotifier(new AvaloniaStatusNotifier(() => _notificationManager));
@@ -222,6 +226,34 @@ public partial class MainWindow : Window
         ApplyProcessColumnVisibility();
         ApplySessionGridLayoutIfNeeded();
         HookThemeVariantChanged();
+    }
+
+    /// <summary>
+    /// Avalonia 11.2: CheckBox/MenuItem toggle severs OneWay IsChecked bindings (SetValue).
+    /// Push visuals with SetCurrentValue whenever Decrypt/SystemProxy change.
+    /// </summary>
+    private void HookOneWayToggleVisualSync(MainWindowViewModel? vm)
+    {
+        if (_toggleSyncVm is not null)
+            _toggleSyncVm.SyncToggleVisual = null;
+
+        _toggleSyncVm = vm;
+        if (vm is null)
+            return;
+
+        vm.SyncToggleVisual = (propertyName, isChecked) =>
+        {
+            if (propertyName == nameof(MainWindowViewModel.DecryptHttps))
+            {
+                OneWayToggleVisualSync.Apply(DecryptHttpsCheck, isChecked);
+                OneWayToggleVisualSync.Apply(MenuDecryptHttps, isChecked);
+            }
+            else if (propertyName == nameof(MainWindowViewModel.SystemProxy))
+            {
+                OneWayToggleVisualSync.Apply(SystemProxyCheck, isChecked);
+                OneWayToggleVisualSync.Apply(MenuToggleSystemProxy, isChecked);
+            }
+        };
     }
 
     private void HookThemeVariantChanged(bool unhook = false)

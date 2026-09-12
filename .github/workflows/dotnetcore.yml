@@ -135,7 +135,7 @@ jobs:
       run: .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
 
     # DocFX output races other develop pushes (incl. concurrent "Update documentation").
-    # Sync to origin/develop, regenerate, commit docs-only, retry push — never fail the
+    # Sync to origin/develop, regenerate, commit docs-only, retry push â€” never fail the
     # job on stash/rebase conflicts from EndBug/add-and-commit autostash.
     - name: Publish Documentation
       if: github.ref == 'refs/heads/develop'
@@ -172,7 +172,7 @@ jobs:
         throw "Failed to publish documentation after retries"
 
   # Cross-OS Inspector + Plus dashboard UI gates (Headless / Visual / Playwright).
-  # Inspector unit suite stays on Windows `build` only except Inspector-Stress (below).
+  # Inspector unit suite stays on Windows `build` only except Inspector-Stress / Inspector-Trust-Decision (below).
   ui-portable:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
@@ -215,7 +215,7 @@ jobs:
       shell: pwsh
       run: |
         $ErrorActionPreference = 'Stop'
-        # Intel macOS bottles are sparse; do not force-upgrade openssl (no bottle → job fail).
+        # Intel macOS bottles are sparse; do not force-upgrade openssl (no bottle â†’ job fail).
         $env:HOMEBREW_NO_AUTO_UPDATE = '1'
         $env:HOMEBREW_NO_INSTALL_UPGRADE = '1'
         brew install openssl@3 libmsquic
@@ -240,7 +240,7 @@ jobs:
         }
 
         if (-not (Test-QuicSupported)) {
-          Write-Host 'QuicListener.IsSupported still false after brew; trying Microsoft libmsquic drop…'
+          Write-Host 'QuicListener.IsSupported still false after brew; trying Microsoft libmsquic dropâ€¦'
           $arch = (& uname -m).Trim()
           $rid = if ($arch -eq 'arm64') { 'osx-arm64' } else { 'osx-x64' }
           $dest = Join-Path $env:RUNNER_TEMP 'msquic-osx'
@@ -259,7 +259,7 @@ jobs:
             Select-Object -First 1
           if ($found) {
             $extra = $found.Directory.FullName
-            # ${extra} — bare $extra: is parsed as a PowerShell drive-qualified variable.
+            # ${extra} â€” bare $extra: is parsed as a PowerShell drive-qualified variable.
             $dyld2 = "${extra}:${dyld}"
             Add-Content -Path $env:GITHUB_ENV -Value "DYLD_LIBRARY_PATH=$dyld2"
             Add-Content -Path $env:GITHUB_ENV -Value "DYLD_FALLBACK_LIBRARY_PATH=$dyld2"
@@ -300,7 +300,7 @@ jobs:
         dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI-Headless|TestCategory=E2E-UI-Visual|TestCategory=E2E-UI-Plus-Dashboard"
     - name: Inspector retention stress (spill + H3)
       run: |
-        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-restore --filter "TestCategory=Inspector-Stress"
+        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-restore --filter "TestCategory=Inspector-Stress|TestCategory=Inspector-Trust-Decision"
     - name: OS proxy-backend filters
       run: |
         dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "FullyQualifiedName~UnixProxyBypassMapperTests|FullyQualifiedName~MacOsSystemProxyBackendTests|FullyQualifiedName~LinuxSystemProxyBackendTests|FullyQualifiedName~ElevationPromptCancelTests|FullyQualifiedName~SystemProxyBackendFactoryPlatformTests"
@@ -327,8 +327,8 @@ jobs:
           **/playwright-report/**
         if-no-files-found: ignore
 
-  # Tiered RPS gates for beta/stable publish (parallel — wall clock ~max of the two).
-  # Editions: CLI/Plus tax vs Core. Peer: Core reverse vs YARP (+ MITM÷Reverse) so a
+  # Tiered RPS gates for beta/stable publish (parallel â€” wall clock ~max of the two).
+  # Editions: CLI/Plus tax vs Core. Peer: Core reverse vs YARP (+ MITMÃ·Reverse) so a
   # uniform Core slowdown cannot hide behind green edition ratios.
   rps-publish-gate:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
@@ -388,7 +388,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libmsquic
         pwsh -NoProfile -Command 'if (-not [System.Net.Quic.QuicListener]::IsSupported) { throw "QuicListener.IsSupported is false after libmsquic install" }; Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"'
-    - name: compare-spot (Core÷YARP + MITM÷Reverse)
+    - name: compare-spot (CoreÃ·YARP + MITMÃ·Reverse)
       shell: pwsh
       run: |
         pwsh tools/RpsLoadProbe/run-spot-matrix.ps1
@@ -447,7 +447,7 @@ jobs:
   # Product zips stay on release.yml (v* tags). After beta/stable merge, create/move the
   # version tag and dispatch release.yml (GITHUB_TOKEN tag pushes do not re-trigger workflows).
   # release.yml also packs/pushes Chocolatey (titanium-cli / titanium-inspector) after the
-  # GitHub Release exists — no separate chocolatey step here.
+  # GitHub Release exists â€” no separate chocolatey step here.
   cut-product-tag:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
     needs: [build, ui-portable, rps-publish-gate, rps-peer-gate]

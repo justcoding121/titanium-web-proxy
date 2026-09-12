@@ -170,7 +170,19 @@ public class AutomationIdCoverageHeadlessTests
         "StatusText",
         "StatusBusyProgress",
         "StatusBarPanel",
-        "SessionCountText"
+        "SessionCountText",
+        "AutoResponderGraphQlOperation",
+        "BreakpointGraphQlOperation",
+        "ExclusionSummaryLink",
+        "MapRemoteDelete",
+        "MapRemoteGraphQlOperation",
+        "MapRemoteRules",
+        "MapRemoteUpdate",
+        "TabInspectHost",
+        "ToolbarCaptureToggles",
+        "ToolbarEndpoint",
+        "ToolbarPanel",
+        "ToolbarSearchFilters"
     ];
 
     [TestMethod]

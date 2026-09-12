@@ -27,7 +27,7 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
     public RecordingSystemProxyController Proxy { get; } = new();
     public InterceptionService Interception { get; private set; } = null!;
 
-    public async Task StartAsync(bool visualSkia = false)
+    public async Task StartAsync(bool visualSkia = false, bool useAvaloniaDialogs = false)
     {
         // visualSkia retained for call-site clarity; session always uses Skia.
         _ = visualSkia;
@@ -47,9 +47,10 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
             var buffer = new SessionStreamBuffer(registry);
             var updates = new UpdateService(settings);
             Interception = new InterceptionService(Proxy) { UseInMemoryTrustState = true };
+            IInspectorDialogs dialogs = useAvaloniaDialogs ? new AvaloniaInspectorDialogs() : Dialogs;
             (ViewModel, Window) = InspectorAppFactory.CreateMainWindow(
                 new InspectorViewModelServices(
-                    buffer, registry, updates, settings, Interception, Dialogs, PathPicker));
+                    buffer, registry, updates, settings, Interception, dialogs, PathPicker));
             ViewModel.BindPort = 0;
             ViewModel.BindAddress = "127.0.0.1";
             ViewModel.AutoStartCapture = false;

@@ -383,25 +383,29 @@ public sealed partial class MainWindowViewModel
     private async Task AwaitPriorFirefoxTrustBackgroundAsync()
     {
         using var scope = InspectorUxTrace.Scope("AwaitTrustBg");
+        // Drop queued Clear/Enable left by the previous Install — a wedged running Clear used to
+        // burn the full 8s budget before every Remove / Clear+Install.
+        _interception.DropPendingFirefoxTrustBackgroundWork();
         try
         {
-            // Bound wait — never block Clear+Install forever if prefs I/O wedges.
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(StatusCancelToken);
-            cts.CancelAfter(TimeSpan.FromSeconds(8));
+            cts.CancelAfter(TimeSpan.FromSeconds(2));
             await _interception.WaitForFirefoxTrustBackgroundIdleAsync(cts.Token)
                 .ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
             InspectorUxTrace.Event("AwaitTrustBg.TimeoutOrCancel");
-            // Proceed; serial queue still prevents overlapping prefs/prune work.
+            // Proceed; serial queue + job timeout still bound prefs/prune work.
         }
     }
 
     private async Task<bool> TryCompleteMacManualTrustAsync(Window? owner)
     {
         var wait = await WaitForMacSslTrustAsync(owner);
-        if (wait == MacSslTrustWaitResult.Trusted || _interception.VerifyOsUserSslTrust())
+        var trusted = wait == MacSslTrustWaitResult.Trusted ||
+                      await RunOffUiAsync(() => _interception.VerifyOsUserSslTrust(), StatusCancelToken);
+        if (trusted)
         {
             ScheduleFirefoxEnterpriseRootsBestEffort();
             return true;
@@ -520,6 +524,28 @@ public sealed partial class MainWindowViewModel
         SetStatus(
             OperatingSystem.IsWindows() ? TrustingRootCaWindowsStatus : TrustingRootCaStatus,
             StatusSeverity.Busy);
+    
+    private static string FormatRemoveRootPromptStatus(int total, int index)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return total == 1
+                ? "Windows may ask to DELETE the root CA - choose Yes"
+                : $"Windows may ask to DELETE root CA ({index}/{total}) - choose Yes";
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            return total == 1
+                ? "macOS may ask for your password to remove the root CA from Keychain"
+                : $"macOS may ask for your password to remove root CA ({index}/{total})";
+        }
+
+        return total == 1
+            ? "Removing root CA from the user certificate store..."
+            : $"Removing root CA ({index}/{total}) from the user certificate store...";
+    }
+
     private static string FormatUntrustStillPresentStatus()
     {
         if (OperatingSystem.IsMacOS())
@@ -557,7 +583,11 @@ public sealed partial class MainWindowViewModel
             var owner = TryGetMainWindow();
             if (!await AwaitCancellableAsync(_dialogs.ConfirmRemoveRootCaAsync(owner)))
             {
-                SetTransientStatus("Remove root CA cancelled", StatusSeverity.Neutral, revertMs: GuardStatusRevertMs);
+                SetTransientStatus(
+                    "Remove root CA cancelled",
+                    StatusSeverity.Neutral,
+                    toastImportant: true,
+                    revertMs: GuardStatusRevertMs);
                 return;
             }
 
@@ -566,10 +596,9 @@ public sealed partial class MainWindowViewModel
 
             SetStatus("Removing root CA…", StatusSeverity.Busy);
             await RemoveOsRootInteractiveAsync(machineStore: false);
-            if (DecryptHttps)
-            {
-                SetDecryptHttpsCore(false);
-            }
+            // Decrypt cannot continue without a trusted CA (and we turn it off even if CryptUI
+            // delete was declined — user asked to remove).
+            await ForceDecryptHttpsOffAsync();
 
             var stillPresent = _interception.IsRootTrusted;
             string message = stillPresent
@@ -625,9 +654,7 @@ public sealed partial class MainWindowViewModel
         for (var i = 0; i < thumbs.Count; i++)
         {
             SetStatus(
-                thumbs.Count == 1
-                    ? "Windows may ask to DELETE the root CA — choose Yes"
-                    : $"Windows may ask to DELETE root CA ({i + 1}/{thumbs.Count}) — choose Yes",
+                FormatRemoveRootPromptStatus(thumbs.Count, i + 1),
                 StatusSeverity.Busy);
             await Task.Yield();
             using (InspectorUxTrace.Scope("RemoveRootThumbprint.CryptUI", $"i={i + 1}/{thumbs.Count}"))
@@ -668,14 +695,22 @@ public sealed partial class MainWindowViewModel
             var owner = TryGetMainWindow();
             if (!await AwaitCancellableAsync(_dialogs.ConfirmRotateRootCaAsync(owner)))
             {
-                SetTransientStatus("Clear and reinstall root CA cancelled", StatusSeverity.Neutral, revertMs: GuardStatusRevertMs);
+                InspectorUxTrace.Event("RotateCa.ConfirmRotate", "accepted=false");
+                SetTransientStatus(
+                    "Clear and reinstall root CA cancelled",
+                    StatusSeverity.Neutral,
+                    toastImportant: true,
+                    revertMs: GuardStatusRevertMs);
                 return;
             }
 
-            if (DecryptHttps)
-                SetDecryptHttpsCore(false);
+            InspectorUxTrace.Event("RotateCa.ConfirmRotate", "accepted=true");
 
-            // Second Clear+Install often collided with the prior run's fire-and-forget Firefox enable.
+            // New root is untrusted until Install — MITM must not stay on across rotate.
+            // Fire-and-forget snap so nested dispatcher bounce cannot delay CryptUI.
+            _ = ForceDecryptHttpsOffAsync();
+
+            // Await TrustBg only before Remove — never between Mint and CryptUI.
             SetStatus("Preparing clear and reinstall…", StatusSeverity.Busy);
             await AwaitPriorFirefoxTrustBackgroundAsync();
 
@@ -702,23 +737,20 @@ public sealed partial class MainWindowViewModel
             var changed = !string.IsNullOrEmpty(newThumb) &&
                           !string.Equals(oldThumb, newThumb, StringComparison.OrdinalIgnoreCase);
 
-            if (await AwaitCancellableAsync(_dialogs.ConfirmInstallRootCaAsync(owner)))
-            {
-                SetBusyTrustingRootCa();
-                // Skip initial Root Find — we just minted; opening Crypt32 before CryptUI stalls.
-                var trusted = await EnsureRootCaTrustedAsync(promptIfNeeded: true, skipInitialRefresh: true);
-                InspectorUxTrace.Event("RotateCa.InstallResult", $"trusted={trusted} changed={changed}");
-                var message = trusted
-                    ? FormatRotateCaTrustedStatus(changed)
-                    : FormatOsTrustFailureStatus(_interception.LastOsTrustResult);
-                if (trusted)
-                    SetOsTrustSuccessStatus();
-                else
-                    SetOutcomeStatus(message, StatusSeverity.Error, toastImportant: true);
-                return;
-            }
-
-            SetOutcomeStatus(FormatRotateCaDeferredTrustStatus(changed), StatusSeverity.Warning, toastImportant: true);
+            // User already confirmed Clear+Install — skip a second ConfirmInstall and go
+            // straight to OS CryptUI/Keychain (avoids “two install dialogs then stuck”).
+            InspectorUxTrace.Event("RotateCa.ConfirmInstall", "accepted=true skippedDuplicate=true");
+            SetBusyTrustingRootCa();
+            // Skip initial Root Find — we just minted; opening Crypt32 before CryptUI stalls.
+            var trusted = await EnsureRootCaTrustedAsync(promptIfNeeded: true, skipInitialRefresh: true);
+            InspectorUxTrace.Event("RotateCa.InstallResult", $"trusted={trusted} changed={changed}");
+            var message = trusted
+                ? FormatRotateCaTrustedStatus(changed)
+                : FormatOsTrustFailureStatus(_interception.LastOsTrustResult);
+            if (trusted)
+                SetOsTrustSuccessStatus();
+            else
+                SetOutcomeStatus(message, StatusSeverity.Error, toastImportant: true);
         }
         finally
         {
@@ -782,6 +814,12 @@ public sealed partial class MainWindowViewModel
     }
     private async Task EnableDecryptHttpsAsync(int enableGeneration)
     {
+        if (!TryBeginTrustCommand())
+        {
+            await RejectDecryptHttpsEnableAsync();
+            return;
+        }
+
         _decryptHttpsBusy = true;
         using var scope = InspectorUxTrace.Scope("EnableDecryptHttps", $"gen={enableGeneration}");
         try
@@ -810,7 +848,7 @@ public sealed partial class MainWindowViewModel
             if (enableGeneration == Volatile.Read(ref _decryptEnableGeneration))
             {
                 SetGuardStatus("Decrypt HTTPS cancelled");
-                NotifyDecryptHttpsUnchanged();
+                await RejectDecryptHttpsEnableAsync();
             }
         }
         catch (Exception ex)
@@ -821,13 +859,14 @@ public sealed partial class MainWindowViewModel
                     "Decrypt HTTPS failed: " + Truncate(ex.Message, 160),
                     StatusSeverity.Error,
                     toastImportant: true);
-                NotifyDecryptHttpsUnchanged();
+                await RejectDecryptHttpsEnableAsync();
             }
         }
         finally
         {
             if (enableGeneration == Volatile.Read(ref _decryptEnableGeneration))
                 _decryptHttpsBusy = false;
+            EndTrustCommand();
         }
     }
 
@@ -848,16 +887,21 @@ public sealed partial class MainWindowViewModel
             if (trusted || !_decryptHttps)
                 return;
 
-            await MarshalToUiAsync(() =>
+            async Task DisableIfStillWantedAsync()
             {
                 if (generation != Volatile.Read(ref _decryptTrustVerifyGeneration) || !_decryptHttps)
                     return;
-                SetDecryptHttpsCore(false);
+                await ForceDecryptHttpsOffAsync();
                 SetOutcomeStatus(
                     "Decrypt HTTPS off — root CA not trusted",
                     StatusSeverity.Error,
                     toastImportant: true);
-            }, StatusCancelToken).ConfigureAwait(false);
+            }
+
+            if (Application.Current is null || Dispatcher.UIThread.CheckAccess())
+                await DisableIfStillWantedAsync().ConfigureAwait(true);
+            else
+                await Dispatcher.UIThread.InvokeAsync(DisableIfStillWantedAsync);
         }
         catch (OperationCanceledException)
         {
@@ -865,8 +909,33 @@ public sealed partial class MainWindowViewModel
         }
     }
 
+    /// <summary>
+    /// Turn Decrypt HTTPS off in the model and snap Avalonia OneWay CheckBox/Menu targets.
+    /// Use whenever decrypt is no longer possible (remove/rotate CA, trust lost, start without trust).
+    /// </summary>
+    /// <param name="cancelInFlightEnable">
+    /// When true, invalidate an in-flight <see cref="EnableDecryptHttpsAsync"/> (Untrust / Rotate / Start).
+    /// When false (enable cancel/reject), leave the generation alone so the enable finally-block can finish.
+    /// </param>
+    private async Task ForceDecryptHttpsOffAsync(bool cancelInFlightEnable = true)
+    {
+        if (cancelInFlightEnable)
+            Interlocked.Increment(ref _decryptEnableGeneration);
+        Interlocked.Increment(ref _decryptTrustVerifyGeneration);
+        _decryptHttpsBusy = false;
+        if (_decryptHttps)
+            SetDecryptHttpsCore(false);
+        await SnapDecryptHttpsUiAsync();
+    }
+
+    /// <summary>
+    /// Enable was rejected — model never became true; bounce clears a locally flipped CheckBox.
+    /// </summary>
+    private Task RejectDecryptHttpsEnableAsync() => ForceDecryptHttpsOffAsync(cancelInFlightEnable: false);
+
     private void NotifyDecryptHttpsUnchanged() =>
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+        _ = ForceDecryptHttpsOffAsync(cancelInFlightEnable: false);
+
     private async Task<bool> TryStartProxyForDecryptAsync()
     {
         if (_interception.IsRunning)
@@ -876,7 +945,7 @@ public sealed partial class MainWindowViewModel
         if (!await AwaitCancellableAsync(_dialogs.ConfirmStartProxyForDecryptAsync(owner)))
         {
             SetGuardStatus("Decrypt HTTPS cancelled — start the proxy first");
-            NotifyDecryptHttpsUnchanged();
+            await RejectDecryptHttpsEnableAsync();
             return false;
         }
 
@@ -888,7 +957,7 @@ public sealed partial class MainWindowViewModel
             "Could not start the proxy — Decrypt HTTPS stays off",
             StatusSeverity.Error,
             toastImportant: true);
-        NotifyDecryptHttpsUnchanged();
+        await RejectDecryptHttpsEnableAsync();
         return false;
     }
     private async Task<bool> TryTrustRootForDecryptAsync()
@@ -910,7 +979,7 @@ public sealed partial class MainWindowViewModel
         if (!await AwaitCancellableAsync(_dialogs.ConfirmInstallRootCaAsync(owner)))
         {
             SetGuardStatus("Decrypt HTTPS cancelled — root CA not installed");
-            NotifyDecryptHttpsUnchanged();
+            await RejectDecryptHttpsEnableAsync();
             return false;
         }
 
@@ -921,7 +990,7 @@ public sealed partial class MainWindowViewModel
         if (_interception.LastOsTrustResult?.Kind == CertificateOsTrustKind.Cancelled)
         {
             SetGuardStatus("Decrypt HTTPS cancelled — root CA not trusted");
-            NotifyDecryptHttpsUnchanged();
+            await RejectDecryptHttpsEnableAsync();
             return false;
         }
 
@@ -935,16 +1004,16 @@ public sealed partial class MainWindowViewModel
                 OsTrustUxCopy.FormatStatus(_interception.LastOsTrustResult),
                 StatusSeverity.Error,
                 toastImportant: true);
-        NotifyDecryptHttpsUnchanged();
+        await RejectDecryptHttpsEnableAsync();
         return false;
     }
     private async Task<bool> TryCompleteMacSslTrustForDecryptAsync()
     {
-        // Windows Root-store presence is trust — do not call VerifyOsUserSslTrust (second Find + Firefox prefs).
+        // Windows Root-store presence is trust - do not call VerifyOsUserSslTrust (second Find + Firefox prefs).
         if (OperatingSystem.IsWindows())
             return true;
 
-        // Stay on UI sync context — ResolveTerminalTrustFailureAsync shows dialogs.
+        // Stay on UI sync context - ResolveTerminalTrustFailureAsync shows dialogs.
         var trusted = await RunOffUiAsync(
             () => _interception.VerifyOsUserSslTrust(),
             StatusCancelToken);
@@ -952,6 +1021,43 @@ public sealed partial class MainWindowViewModel
         {
             _interception.ScheduleFirefoxEnterpriseRootsBestEffort();
             return true;
+        }
+
+        // Linux: never fabricate Mac Keychain Always Trust - use NSS/certutil recovery instead.
+        if (OperatingSystem.IsLinux())
+        {
+            var linuxIncomplete = _interception.LastOsTrustResult
+                ?? CertificateOsTrustResult.Fail(
+                    CertificateOsTrustKind.CertutilMissing,
+                    "Root CA is not trusted yet. Install NSS certutil tools, or Export CA and trust it for your browser.");
+            if (linuxIncomplete.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+            {
+                linuxIncomplete = CertificateOsTrustResult.Fail(
+                    CertificateOsTrustKind.CertutilMissing,
+                    string.IsNullOrWhiteSpace(linuxIncomplete.Message)
+                        ? "Root CA is not trusted yet. Install NSS certutil tools, or Export CA and trust it for your browser."
+                        : linuxIncomplete.Message);
+            }
+
+            InspectorUxTrace.Event("Decrypt.LinuxTrustIncomplete", $"kind={linuxIncomplete.Kind}");
+            if (await ResolveTerminalTrustFailureAsync(linuxIncomplete))
+            {
+                trusted = await RunOffUiAsync(
+                    () => _interception.VerifyOsUserSslTrust(),
+                    StatusCancelToken);
+                if (trusted)
+                {
+                    _interception.ScheduleFirefoxEnterpriseRootsBestEffort();
+                    return true;
+                }
+            }
+
+            SetOutcomeStatus(
+                OsTrustUxCopy.FormatStatus(linuxIncomplete),
+                StatusSeverity.Error,
+                toastImportant: true);
+            await RejectDecryptHttpsEnableAsync();
+            return false;
         }
 
         var incomplete = CertificateOsTrustResult.Fail(
@@ -973,7 +1079,7 @@ public sealed partial class MainWindowViewModel
             OsTrustUxCopy.FormatStatus(incomplete),
             StatusSeverity.Error,
             toastImportant: true);
-        NotifyDecryptHttpsUnchanged();
+        await RejectDecryptHttpsEnableAsync();
         return false;
     }
     /// <summary>
@@ -1049,5 +1155,6 @@ public sealed partial class MainWindowViewModel
         _interception.DecryptHttps = enabled;
         PersistSettings();
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+        SyncToggleVisual?.Invoke(nameof(DecryptHttps), enabled);
     }
 }

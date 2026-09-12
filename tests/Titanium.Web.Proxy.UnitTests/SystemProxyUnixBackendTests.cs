@@ -753,8 +753,10 @@ internal sealed class FakeProcessRunner : IProcessRunner
     }
 
     public ProcessRunResult? Run(string fileName, string arguments,
-        IDictionary<string, string?>? environment = null, string? workingDirectory = null)
+        IDictionary<string, string?>? environment = null, string? workingDirectory = null,
+        TimeSpan? timeout = null)
     {
+        _ = timeout;
         var cmd = fileName + " " + arguments;
         Commands.Add(cmd);
 

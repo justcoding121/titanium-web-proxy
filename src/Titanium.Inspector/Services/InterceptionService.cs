@@ -220,7 +220,7 @@ public sealed class InterceptionService : IDisposable
     {
         if (!EnableDecryptFailureBypass || _proxy is null || string.IsNullOrWhiteSpace(host))
             return false;
-        // O(1) cache consult — do not Snapshot the full list on every CONNECT.
+        // O(1) cache consult - do not Snapshot the full list on every CONNECT.
         return _proxy.ShouldBypassDecryptForLearnedHost(host);
     }
 
@@ -350,7 +350,7 @@ public sealed class InterceptionService : IDisposable
     /// <summary>
     /// Idempotent shutdown: restore system proxy (even if already stopped) and dispose the proxy.
     /// Matches WPF example <c>EnsureProxyShutdown</c> semantics.
-    /// Must not run on the Avalonia UI thread — WinINET <c>InternetSetOption</c> broadcasts
+    /// Must not run on the Avalonia UI thread - WinINET <c>InternetSetOption</c> broadcasts
     /// back to the closing window and deadlocks (title-bar Close hangs; taskbar Close often
     /// terminates the process instead).
     /// </summary>
@@ -517,7 +517,7 @@ public sealed class InterceptionService : IDisposable
             }
             else if (!_systemProxyEnabled)
             {
-                // Already restored — common when Stop raced an optimistic enable that never landed.
+                // Already restored - common when Stop raced an optimistic enable that never landed.
                 return true;
             }
 
@@ -641,7 +641,7 @@ public sealed class InterceptionService : IDisposable
                 LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
         }
 
-        // Full trust (stores + orphan prune + Unix) — non-UI callers only.
+        // Full trust (stores + orphan prune + Unix) - non-UI callers only.
         _proxy.CertificateManager.TrustRootCertificate(machineStore);
         LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
 
@@ -658,7 +658,7 @@ public sealed class InterceptionService : IDisposable
             LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
     }
 
-    /// <summary>CryptUI Root Add only — must run on a pumping UI thread.</summary>
+    /// <summary>CryptUI Root Add only - must run on a pumping UI thread.</summary>
     /// <returns>True when the Root entry was newly added.</returns>
     public bool InstallRootStoresOnly(bool machineStore)
     {
@@ -686,14 +686,18 @@ public sealed class InterceptionService : IDisposable
         return added;
     }
 
-    /// <summary>macOS/Linux Keychain/NSS trust — may show auth UI; pumping thread required.</summary>
+    /// <summary>macOS/Linux Keychain/NSS trust - may show auth UI; pumping thread required.</summary>
     public void ApplyUnixSslTrustOnUi(bool machineStore)
     {
+        using var scope = InspectorUxTrace.Scope("ApplyUnixSslTrustOnUi", $"machine={machineStore}");
         if (_proxy is null || UseInMemoryTrustState || OperatingSystem.IsWindows())
             return;
 
         _proxy.CertificateManager.ApplyUnixSslTrustAfterStoreInstall(machineStore);
         LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
+        InspectorUxTrace.Event(
+            "ApplyUnixSslTrustOnUi.Result",
+            $"kind={LastOsTrustResult?.Kind} trusted={IsRootTrusted}");
     }
 
     /// <summary>
@@ -702,7 +706,7 @@ public sealed class InterceptionService : IDisposable
     /// </summary>
     /// <param name="machineStore">CurrentUser vs LocalMachine.</param>
     /// <param name="rootStoreAdded">
-    ///     When <see langword="true"/>, CryptUI just added the Root entry — skip an immediate
+    ///     When <see langword="true"/>, CryptUI just added the Root entry - skip an immediate
     ///     Root-store Find (Crypt32 is hot after Yes and routinely stalls ~10–15s, especially on a
     ///     second Clear+Install). Trust is assumed; My prune runs best-effort afterward.
     /// </param>
@@ -727,7 +731,7 @@ public sealed class InterceptionService : IDisposable
                 LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted in current-user store");
 
             InspectorUxTrace.Event("FinalizeTrust.SkipRootFind", "assumeInstalled=true");
-            // Prune on the serial trust background lane — never Task.Run beside Firefox prefs work.
+            // Prune on the serial trust background lane - never Task.Run beside Firefox prefs work.
             SchedulePruneOrphanedPersonalCertificates(machineStore);
             return CompleteRootTrustInstall(true);
         }
@@ -767,7 +771,7 @@ public sealed class InterceptionService : IDisposable
 
     private bool CompleteRootTrustInstall(bool installed)
     {
-        // Do not write Firefox prefs/policies here — schedule via RunOffUiAsync after success.
+        // Do not write Firefox prefs/policies here - schedule via RunOffUiAsync after success.
         return installed;
     }
 
@@ -871,13 +875,14 @@ public sealed class InterceptionService : IDisposable
 
     /// <summary>Re-verifies macOS/Linux user SSL trust and updates <see cref="IsRootTrusted"/>.</summary>
     /// <remarks>
-    /// Does not write Firefox prefs — that is Install / Trust Firefox only (verify-only must stay cheap).
+    /// Does not write Firefox prefs - that is Install / Trust Firefox only (verify-only must stay cheap).
     /// </remarks>
     public bool VerifyOsUserSslTrust()
     {
+        using var scope = InspectorUxTrace.Scope("VerifyOsUserSslTrust");
         if (_proxy is null) return false;
         if (UseInMemoryTrustState) return IsRootTrusted;
-        // Windows: Root store presence is trust. Unix: require real SSL trust verification —
+        // Windows: Root store presence is trust. Unix: require real SSL trust verification -
         // Keychain/NSS can hold the CA without trusting it for SSL (Chrome MITM fails).
         var ok = OperatingSystem.IsWindows()
             ? IsRootPresentInStore(false)
@@ -913,18 +918,63 @@ public sealed class InterceptionService : IDisposable
         if (OperatingSystem.IsWindows())
         {
             var policy = FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots();
+            InspectorUxTrace.Event(
+                "TrustFirefox.WindowsEnterpriseRoots",
+                $"ok={policy.Succeeded} kind={policy.Kind} step={FirefoxCertificateTrust.LastEnterpriseRootsStep} msg={TruncateTrustMsg(policy.Message)}");
+            LogTrustFirefoxOutcome(policy);
             if (policy.Succeeded)
                 return policy;
-            // Fall through to profile NSS import.
-        }
-        else
-        {
-            var pref = FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref();
-            if (pref.Succeeded)
-                return pref;
+
+            // Windows does not ship NSS certutil on PATH (Microsoft certutil.exe is ignored).
+            // Never fall through to TrustDefaultProfile - that surfaces CertutilMissing / apt-style copy.
+            var failed = CertificateOsTrustResult.Fail(
+                policy.Kind == CertificateOsTrustKind.Cancelled
+                    ? CertificateOsTrustKind.Cancelled
+                    : CertificateOsTrustKind.Failed,
+                string.IsNullOrWhiteSpace(policy.Message)
+                    ? "Could not enable Firefox OS-root trust. Quit Firefox and retry, or Export CA and import it under Firefox Authorities."
+                    : policy.Message + " - or Export CA and import it under Firefox Authorities.");
+            LogTrustFirefoxOutcome(failed);
+            return failed;
         }
 
-        return FirefoxCertificateTrust.TrustDefaultProfile(cert, RootCertificateName);
+        var pref = FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref();
+        InspectorUxTrace.Event(
+            "TrustFirefox.EnterpriseRootsUserPref",
+            $"ok={pref.Succeeded} kind={pref.Kind} step={FirefoxCertificateTrust.LastEnterpriseRootsStep}");
+        if (pref.Succeeded)
+        {
+            LogTrustFirefoxOutcome(pref);
+            return pref;
+        }
+
+        var nss = FirefoxCertificateTrust.TrustDefaultProfile(cert, RootCertificateName);
+        LogTrustFirefoxOutcome(nss);
+        return nss;
+    }
+
+    private void LogTrustFirefoxOutcome(CertificateOsTrustResult result)
+    {
+        try
+        {
+            if (_proxy?.Logger is null)
+                return;
+            if (result.Succeeded)
+                _proxy.Logger.LogInformation("TrustFirefox: {Message}", result.Message);
+            else
+                _proxy.Logger.LogWarning("TrustFirefox failed ({Kind}): {Message}", result.Kind, result.Message);
+        }
+        catch
+        {
+            // never break trust UX for logging
+        }
+    }
+
+    private static string TruncateTrustMsg(string? message)
+    {
+        if (string.IsNullOrEmpty(message))
+            return "";
+        return message.Length <= 120 ? message : message[..120] + "...";
     }
 
     /// <summary>
@@ -935,7 +985,7 @@ public sealed class InterceptionService : IDisposable
     {
         try
         {
-            // Unit tests set TITANIUM_SKIP_ROOT_STORE_UI=1 — never touch live Firefox profiles
+            // Unit tests set TITANIUM_SKIP_ROOT_STORE_UI=1 - never touch live Firefox profiles
             // (prefs.js locks hang / balloon memory when Firefox is open).
             if (string.Equals(Environment.GetEnvironmentVariable("TITANIUM_SKIP_ROOT_STORE_UI"), "1",
                     StringComparison.Ordinal))
@@ -945,7 +995,7 @@ public sealed class InterceptionService : IDisposable
                 return;
 
             // Windows: HKCU ImportEnterpriseRoots first (cheap). user.js/prefs.js only as fallback
-            // inside TryEnableWindowsEnterpriseRoots — never prefs-first on the install path.
+            // inside TryEnableWindowsEnterpriseRoots - never prefs-first on the install path.
             if (OperatingSystem.IsWindows())
                 FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots();
             else
@@ -1009,6 +1059,28 @@ public sealed class InterceptionService : IDisposable
         return idle.WaitAsync(cancellationToken);
     }
 
+    /// <summary>
+    ///     Drop queued (not yet started) Clear/Enable/Prune work. A job already running finishes;
+    ///     callers still use a short WaitForFirefoxTrustBackgroundIdleAsync.
+    /// </summary>
+    public void DropPendingFirefoxTrustBackgroundWork()
+    {
+        lock (_firefoxTrustBgGate)
+        {
+            var dropped = _firefoxTrustBgQueue.Count;
+            if (dropped == 0)
+                return;
+
+            _firefoxTrustBgQueue.Clear();
+            InspectorUxTrace.Event(
+                "TrustBg.DropPending",
+                $"dropped={dropped} running={_firefoxTrustBgRunning}");
+
+            if (!_firefoxTrustBgRunning)
+                _firefoxTrustBgIdle.TrySetResult();
+        }
+    }
+
     private void EnqueueFirefoxTrustBackground(FirefoxTrustBgKind kind, Action work)
     {
         lock (_firefoxTrustBgGate)
@@ -1065,11 +1137,22 @@ public sealed class InterceptionService : IDisposable
                 {
                     try
                     {
-                        next.Work();
+                        // Clear/Enable historically stalled 30–40s on locked Firefox prefs.
+                        // Cap the lane so Remove / Clear+Install never wait on a wedged job.
+                        if (next.Kind is FirefoxTrustBgKind.Clear or FirefoxTrustBgKind.Enable)
+                        {
+                            var work = Task.Run(next.Work);
+                            if (!work.Wait(TimeSpan.FromSeconds(3)))
+                                InspectorUxTrace.Event("TrustBg.Job.Timeout", $"kind={next.Kind}");
+                        }
+                        else
+                        {
+                            next.Work();
+                        }
                     }
                     catch
                     {
-                        // best-effort lane — never fail the proxy / UI on prefs I/O
+                        // best-effort lane - never fail the proxy / UI on prefs I/O
                     }
                 }
             }
@@ -1118,7 +1201,7 @@ public sealed class InterceptionService : IDisposable
     /// <summary>
     ///     Mint a new root CA: untrust same-CN store entries, delete Inspector PFX + local leaf cache,
     ///     recreate root. Always best-effort prunes the legacy shared <c>Titanium.Web.Proxy/crts</c> folder.
-    ///     Does not install trust — caller should prompt Install CA.
+    ///     Does not install trust - caller should prompt Install CA.
     /// </summary>
     /// <remarks>
     ///     CryptUI Remove must run on a pumping UI thread; Firefox clear + PFX recreate should run
@@ -1196,7 +1279,7 @@ public sealed class InterceptionService : IDisposable
         var location = machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser;
         try
         {
-            // Thumbprint remove only — avoid another subject scan of a large Personal store.
+            // Thumbprint remove only - avoid another subject scan of a large Personal store.
             var thumb = RootCertificate?.Thumbprint;
             if (!string.IsNullOrEmpty(thumb))
                 _proxy.CertificateManager.RemoveCertificateByThumbprint(StoreName.My, location, thumb);
@@ -1212,9 +1295,10 @@ public sealed class InterceptionService : IDisposable
         RefreshTrustAfterRootRemove(machineStore);
     }
 
-    /// <summary>macOS/Linux Keychain/NSS untrust — may prompt; pumping UI thread.</summary>
+    /// <summary>macOS/Linux Keychain/NSS untrust - may prompt; pumping UI thread.</summary>
     public void ApplyUnixUntrustOnUi()
     {
+        using var scope = InspectorUxTrace.Scope("ApplyUnixUntrustOnUi");
         if (_proxy is null || UseInMemoryTrustState || OperatingSystem.IsWindows())
             return;
         if (CertificateManager.AreInteractiveRootStoreMutationsSuppressed)
@@ -1225,9 +1309,11 @@ public sealed class InterceptionService : IDisposable
         try
         {
             _proxy.CertificateManager.ApplyUnixSslUntrust();
+            InspectorUxTrace.Event("ApplyUnixUntrustOnUi.Done");
         }
         catch
         {
+            InspectorUxTrace.Event("ApplyUnixUntrustOnUi.Fault");
             // best-effort
         }
     }
@@ -1287,7 +1373,7 @@ public sealed class InterceptionService : IDisposable
         bool ok;
         using (InspectorUxTrace.Scope("MintNewRoot.CreateRootCertificate"))
             ok = mgr.CreateRootCertificate(persistToFile: true);
-        // Brand-new thumbprint cannot be in the Root store yet — do not open Crypt32 here
+        // Brand-new thumbprint cannot be in the Root store yet - do not open Crypt32 here
         // (after Remove the store is hot; a useless Find routinely stalls Clear+Install).
         IsRootTrusted = UseInMemoryTrustState && _inMemoryTrusted;
 
@@ -1358,7 +1444,7 @@ public sealed class InterceptionService : IDisposable
             return IsRootTrusted;
         }
 
-        // Windows Root store presence == trust. On macOS/Linux, presence is not enough —
+        // Windows Root store presence == trust. On macOS/Linux, presence is not enough -
         // VerifyOsUserSslTrust checks Keychain/NSS SSL trust (security verify-cert / certutil).
         if (OperatingSystem.IsWindows())
         {
@@ -1484,7 +1570,7 @@ public sealed class InterceptionService : IDisposable
 
         try
         {
-            // Opaque HTTPS (DecryptHttps=false) never hits BeforeRequest — publish CONNECT here
+            // Opaque HTTPS (DecryptHttps=false) never hits BeforeRequest - publish CONNECT here
             // so the session list matches Fiddler when decryption is off.
             var snap = CreateTunnelSnapshot(e, opaqueReason);
             AttachTunnelByteCounters(e, snap);
@@ -2299,7 +2385,7 @@ public sealed class InterceptionService : IDisposable
 
     /// <summary>
     ///     Whole-body buffering for the session grid must not run when Content-Length already
-    ///     exceeds <see cref="ProxyServer.MaxBufferedBodyBytes" /> — that path RSTs HTTP/2 streams
+    ///     exceeds <see cref="ProxyServer.MaxBufferedBodyBytes" /> - that path RSTs HTTP/2 streams
     ///     with ENHANCE_YOUR_CALM and breaks the browser download. SSE and WebSocket upgrades are
     ///     never buffered (relay + optional 2 MiB tee). Finite unknown-length (chunked) bodies still
     ///     buffer up to the limit so gzip JSON can be inspected.

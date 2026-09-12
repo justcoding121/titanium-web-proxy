@@ -219,11 +219,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             AutoSystemProxyOnStart = !AutoSystemProxyOnStart;
             return Task.CompletedTask;
         });
-        ToggleDecryptHttpsCommand = Cmd(() =>
-        {
-            DecryptHttps = !DecryptHttps;
-            return Task.CompletedTask;
-        });
+        ToggleDecryptHttpsCommand = Cmd(ToggleDecryptHttpsAsync);
         ToggleIgnoreServerCertificateErrorsCommand = Cmd(() =>
         {
             IgnoreServerCertificateErrors = !IgnoreServerCertificateErrors;
@@ -332,6 +328,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     /// <summary>Attach window toast host after the main window template is ready.</summary>
     public void AttachStatusNotifier(IStatusNotifier notifier) =>
         _statusNotifier = notifier ?? NullStatusNotifier.Instance;
+
+    /// <summary>
+    /// MainWindow pushes CheckBox/MenuItem IsChecked via SetCurrentValue (Avalonia 11.2 OneWay
+    /// bindings break after ToggleButton click). Null in unit tests.
+    /// </summary>
+    internal Action<string, bool>? SyncToggleVisual { get; set; }
 
     /// <summary>Exposed for E2E / headless tests — seeds the in-memory capture list.</summary>
     public void SeedSession(SessionSnapshot snapshot)
@@ -846,6 +848,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         if (!_interception.IsRunning)
         {
             SetGuardStatus("Start the proxy before enabling system proxy");
+            await SnapSystemProxyUiAsync();
             return;
         }
 
@@ -863,6 +866,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 if (!await AwaitCancellableAsync(_dialogs.ConfirmPacReplaceAsync(owner)))
                 {
                     StatusText = "System proxy not enabled (PAC replace cancelled)";
+                    await SnapSystemProxyUiAsync();
                     return;
                 }
 
@@ -1046,6 +1050,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _settings.ResetToFactoryDefaults();
         LoadFromSettings();
         NotifySettingsUiChanged();
+        // Defaults turn Decrypt off — bounce in case Avalonia left a OneWay CheckBox ticked.
+        _ = SnapDecryptHttpsUiAsync();
         StatusText =
             "Settings restored to defaults — restart Inspector so retention limits fully apply. Root CA and sessions were not changed.";
     }
@@ -1462,7 +1468,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 if (!_interception.IsRunning)
                 {
                     SetGuardStatus("Start the proxy before enabling system proxy");
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
+                    _ = SnapSystemProxyUiAsync();
                     return;
                 }
 
@@ -1484,6 +1490,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             }
 
             SetOutcomeStatus(SystemProxyRestoredStatus, StatusSeverity.Success);
+            _ = SnapSystemProxyUiAsync();
         }
     }
 
@@ -1491,11 +1498,88 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     {
         if (_systemProxy == enabled)
         {
+            SyncToggleVisual?.Invoke(nameof(SystemProxy), enabled);
             return;
         }
 
         _systemProxy = enabled;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
+        SyncToggleVisual?.Invoke(nameof(SystemProxy), enabled);
+    }
+
+    /// <summary>
+    /// Avalonia 11.2 OneWay + ToggleButton: after a local click toggle, PropertyChanged with the
+    /// same value is ignored. Bounce the backing field so the binding re-publishes.
+    /// </summary>
+    private Task SnapProxyLoopbackUiAsync() =>
+        BounceBoolBindingAsync(
+            get: () => _interception.ProxyLoopback,
+            set: v => _interception.ProxyLoopback = v,
+            propertyName: nameof(ProxyLoopback));
+
+    private Task SnapSystemProxyUiAsync() =>
+        BounceBoolBindingAsync(
+            get: () => _systemProxy,
+            set: v => _systemProxy = v,
+            propertyName: nameof(SystemProxy));
+
+    private Task SnapDecryptHttpsUiAsync() =>
+        BounceBoolBindingAsync(
+            get: () => _decryptHttps,
+            set: v => _decryptHttps = v,
+            propertyName: nameof(DecryptHttps));
+
+    private async Task BounceBoolBindingAsync(Func<bool> get, Action<bool> set, string propertyName)
+    {
+        void Bounce()
+        {
+            var actual = get();
+            set(!actual);
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            set(actual);
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            // SetCurrentValue path — required after ToggleButton SetValue severs OneWay binding.
+            SyncToggleVisual?.Invoke(propertyName, actual);
+        }
+
+        // Unit tests / no Avalonia app — bounce inline.
+        if (Application.Current is null)
+        {
+            Bounce();
+            return;
+        }
+
+        try
+        {
+            // Defer past ToggleButton.OnClick. Never hang if the dispatcher is not pumping
+            // (headless tests, or a stuck UI thread during CryptUI).
+            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    Bounce();
+                    tcs.TrySetResult();
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            }, DispatcherPriority.Background);
+
+            var finished = await Task.WhenAny(tcs.Task, Task.Delay(250)).ConfigureAwait(true);
+            if (finished != tcs.Task)
+            {
+                Bounce();
+                return;
+            }
+
+            await tcs.Task.ConfigureAwait(true);
+        }
+        catch
+        {
+            Bounce();
+        }
     }
 
     /// <summary>
@@ -1558,6 +1642,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
                 // Revert optimistic checkbox to match OS state.
                 SetSystemProxyCore(!enable);
+                _ = SnapSystemProxyUiAsync();
                 var detail = _interception.LastSystemProxyError;
                 var text = enable
                     ? (string.IsNullOrWhiteSpace(detail)
@@ -1630,7 +1715,15 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
                 if (!ok)
                 {
-                    StatusText = "Capture local traffic saved; re-toggle System proxy to apply";
+                    // Revert optimistic checkbox + model so OneWay targets match reality.
+                    _interception.ProxyLoopback = !loopbackDesired;
+                    PersistSettings();
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ProxyLoopback)));
+                    _ = SnapProxyLoopbackUiAsync();
+                    SetOutcomeStatus(
+                        "Capture local traffic apply failed - checkbox restored",
+                        StatusSeverity.Error,
+                        toastImportant: true);
                     return;
                 }
 
@@ -1752,8 +1845,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 return;
             }
 
-            if (_decryptHttpsBusy)
+                        if (_trustCommandBusy || _decryptHttpsBusy)
             {
+                // ToggleButton already flipped the CheckBox locally - snap back.
+                _ = SnapDecryptHttpsUiAsync();
+                if (_trustCommandBusy)
+                    SetGuardStatus("Another certificate action is already in progress");
                 return;
             }
 
@@ -1767,10 +1864,17 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             }
 
             var enableGeneration = Interlocked.Increment(ref _decryptEnableGeneration);
-            // TwoWay CheckBox already flipped visually — snap back until trust succeeds.
-            NotifyDecryptHttpsUnchanged();
+            // CheckBox/Menu ToggleButton flips IsChecked locally; Avalonia 11.2 OneWay will not
+            // accept a same-value PropertyChanged until we bounce (see SnapDecryptHttpsUiAsync).
+            _ = SnapDecryptHttpsUiAsync();
             _ = EnableDecryptHttpsAsync(enableGeneration);
         }
+    }
+
+    private Task ToggleDecryptHttpsAsync()
+    {
+        DecryptHttps = !DecryptHttps;
+        return Task.CompletedTask;
     }
 
     /// <summary>When true, accept upstream TLS certs that would otherwise fail validation.</summary>
@@ -2695,7 +2799,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             // Trust was refreshed during StartAsync — do not open the Root store again on the UI thread.
             if (_decryptHttps && !_interception.IsRootTrusted)
             {
-                SetDecryptHttpsCore(false);
+                await ForceDecryptHttpsOffAsync();
                 SetStatus(
                     SystemProxy
                         ? $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS."

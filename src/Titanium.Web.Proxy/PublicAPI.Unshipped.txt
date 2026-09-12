@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 Titanium.Web.Proxy.ClientProcessId
 static Titanium.Web.Proxy.ClientProcessId.IsSupported.get -> bool
 Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming
@@ -264,3 +264,4 @@ Titanium.Web.Proxy.ProxyServer.EnableDecryptFailureBypass.set -> void
 Titanium.Web.Proxy.ProxyServer.GetDecryptFailureBypassEntries() -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Models.DecryptFailureBypassEntry!>!
 Titanium.Web.Proxy.ProxyServer.RemoveDecryptFailureBypass(string! host) -> bool
 Titanium.Web.Proxy.ProxyServer.ShouldBypassDecryptForLearnedHost(string? host) -> bool
+static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.LastEnterpriseRootsStep.get -> string?

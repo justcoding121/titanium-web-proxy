@@ -30,6 +30,13 @@ public static class FirefoxCertificateTrust
     private const string LibraryDirName = "Library";
     private const string ApplicationSupportDirName = "Application Support";
     private const string FirefoxDirName = "Firefox";
+
+    /// <summary>
+    ///     Last step tag from <see cref="TryEnableWindowsEnterpriseRoots"/> /
+    ///     <see cref="TryEnableEnterpriseRootsUserPref"/> for Inspector ux-trace
+    ///     (e.g. HkcuOk, UserJsSkippedFirefoxRunning, UserJsOk, Failed).
+    /// </summary>
+    public static string? LastEnterpriseRootsStep { get; private set; }
     private static readonly Regex EnterpriseRootsUserPrefLine = new(
         @"^\s*user_pref\s*\(\s*""" + Regex.Escape(EnterpriseRootsPrefName) + @"""\s*,\s*(true|false)\s*\)\s*;\s*$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled,
@@ -54,8 +61,9 @@ public static class FirefoxCertificateTrust
         if (!OperatingSystem.IsWindows())
         {
             // Cross-platform policies.json is best-effort; user.js remains authoritative off Windows.
-            if (TryWriteOrMergeFirefoxPoliciesJson(importEnterpriseRoots: true))
+            if (TryWriteOrMergeFirefoxPoliciesJson(importEnterpriseRoots: true, userWritableOnly: true))
             {
+                LastEnterpriseRootsStep = "PoliciesJsonOk";
                 return CertificateOsTrustResult.Ok(
                     "Firefox policies.json updated (" + ImportEnterpriseRootsValue + "); restart Firefox to apply");
             }
@@ -71,12 +79,14 @@ public static class FirefoxCertificateTrust
         if (TryWriteWindowsImportEnterpriseRootsPolicy())
         {
             _ = TryWriteOrMergeFirefoxPoliciesJson(importEnterpriseRoots: true, userWritableOnly: true);
+            LastEnterpriseRootsStep = "HkcuOk";
             return CertificateOsTrustResult.Ok(
                 "Firefox will trust the Windows root CA after you restart Firefox");
         }
 
         if (!TryResolveDefaultProfileDirectory(out var profileDir, out var resolveError))
         {
+            LastEnterpriseRootsStep = "Failed";
             return CertificateOsTrustResult.Fail(
                 CertificateOsTrustKind.Failed,
                 "Could not set Firefox " + ImportEnterpriseRootsValue + " policy and " +
@@ -86,15 +96,18 @@ public static class FirefoxCertificateTrust
         // Avoid prefs.js / locked profile I/O while Firefox is running (multi-minute hangs).
         if (IsFirefoxProcessRunning())
         {
+            LastEnterpriseRootsStep = "UserJsSkippedFirefoxRunning";
             return CertificateOsTrustResult.Fail(
                 CertificateOsTrustKind.Failed,
                 "Could not set HKCU ImportEnterpriseRoots and Firefox is running — " +
                 "quit Firefox or set the policy manually, then retry");
         }
 
-        return TryWriteEnterpriseRootsUserPref(
+        var userJs = TryWriteEnterpriseRootsUserPref(
             profileDir,
             "Firefox will trust the Windows root CA after you restart Firefox (profile preference)");
+        LastEnterpriseRootsStep = userJs.Succeeded ? "UserJsOk" : "Failed";
+        return userJs;
     }
 
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
@@ -165,11 +178,21 @@ public static class FirefoxCertificateTrust
                 // ignore
             }
 
+            // While Firefox is running, skip all profile/policies file I/O — WriteAllText /
+            // ReadAllText under a locked profile routinely stalls 30–40s and blocked
+            // Clear+Install (AwaitTrustBg timed out; TrustBg.Job Clear logged SLOW ~44s).
+            // HKCU above is what Enable sets first and is enough to undo policy trust.
+            if (IsFirefoxProcessRunning())
+                return cleared;
+
             // User-writable policies only — never Program Files (AV / ACL stalls).
             cleared = TryClearFirefoxPoliciesJsonImportEnterpriseRoots(userWritableOnly: true) || cleared;
         }
         else
         {
+            if (IsFirefoxProcessRunning())
+                return cleared;
+
             cleared = TryClearFirefoxPoliciesJsonImportEnterpriseRoots(userWritableOnly: false);
         }
 
@@ -196,31 +219,52 @@ public static class FirefoxCertificateTrust
     /// </summary>
     public static CertificateOsTrustResult TryEnableEnterpriseRootsUserPref()
     {
+        // Prefer user-writable policies.json — never block on /usr or app-bundle writes.
+        if (TryWriteOrMergeFirefoxPoliciesJson(importEnterpriseRoots: true, userWritableOnly: true))
+        {
+            LastEnterpriseRootsStep = "PoliciesJsonOk";
+            return CertificateOsTrustResult.Ok(
+                "Firefox policies.json updated (" + ImportEnterpriseRootsValue + "); restart Firefox to apply");
+        }
+
         if (!TryResolveDefaultProfileDirectory(out var profileDir, out var resolveError))
         {
+            LastEnterpriseRootsStep = "Failed";
             return CertificateOsTrustResult.Fail(
                 CertificateOsTrustKind.Failed,
                 resolveError ?? "Firefox profile not found");
         }
 
+        // Never rewrite user.js / prefs.js while Firefox is running (multi-minute hangs / locks).
+        if (IsFirefoxProcessRunning())
+        {
+            LastEnterpriseRootsStep = "UserJsSkippedFirefoxRunning";
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed,
+                "Firefox is running — quit Firefox, then retry Trust CA in Firefox " +
+                "(or Export CA and import it under Firefox Authorities)");
+        }
+
         try
         {
             EnsureEnterpriseRootsUserPref(profileDir);
-            if (!IsFirefoxProcessRunning())
-                EnsureEnterpriseRootsPrefFile(Path.Combine(profileDir, "prefs.js"));
+            EnsureEnterpriseRootsPrefFile(Path.Combine(profileDir, "prefs.js"));
 
             if (!VerifyEnterpriseRootsUserPref(profileDir))
             {
+                LastEnterpriseRootsStep = "Failed";
                 return CertificateOsTrustResult.Fail(
                     CertificateOsTrustKind.Failed,
                     "Wrote Firefox user.js but security.enterprise_roots.enabled did not validate");
             }
 
+            LastEnterpriseRootsStep = "UserJsOk";
             return CertificateOsTrustResult.Ok(
                 "Firefox will trust the OS root CA after you restart Firefox (profile preference)");
         }
         catch (Exception ex)
         {
+            LastEnterpriseRootsStep = "Failed";
             return CertificateOsTrustResult.Fail(
                 CertificateOsTrustKind.Failed,
                 "Failed to enable Firefox OS-root trust: " + ex.Message);
@@ -511,10 +555,25 @@ public static class FirefoxCertificateTrust
     private static bool ClearEnterpriseRootsPrefFile(string prefFile)
     {
         if (!File.Exists(prefFile)) return false;
-        var lines = File.ReadAllLines(prefFile)
-            .Where(l => !EnterpriseRootsUserPrefLine.IsMatch(l))
-            .ToArray();
-        File.WriteAllLines(prefFile, lines);
+
+        // Cap rewrite size — huge prefs under AV + lock can stall Clear for tens of seconds.
+        var len = new FileInfo(prefFile).Length;
+        if (len > 2 * 1024 * 1024)
+            return false;
+
+        string text;
+        using (var fs = new FileStream(prefFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        using (var reader = new StreamReader(fs))
+            text = reader.ReadToEnd();
+
+        var lines = text.Split(['\r', '\n'], StringSplitOptions.None);
+        var filtered = lines.Where(l => !EnterpriseRootsUserPrefLine.IsMatch(l)).ToArray();
+        if (filtered.Length == lines.Length)
+            return false;
+
+        var temp = prefFile + ".tmp";
+        File.WriteAllText(temp, string.Join(Environment.NewLine, filtered));
+        File.Move(temp, prefFile, overwrite: true);
         return true;
     }
 

@@ -161,6 +161,60 @@ public class MenuActionsHeadlessTests
             await fx.WaitUntilAsync(() => fx.Dialogs.RemoveRootCaCalls >= 1, TimeSpan.FromSeconds(10));
             await fx.DispatchAsync(() => Assert.IsFalse(fx.ViewModel.DecryptHttps));
 
+
+            // Tools: Map Remote pane + filters + Via header + inspect/composer leaves
+            await fx.DispatchAsync(() =>
+            {
+                fx.Robot.Click("MenuToolsMapRemote");
+                Assert.AreEqual(4, fx.ViewModel.SelectedToolsTabIndex);
+
+                var hideTunnels = fx.ViewModel.HideTunnelsFilter;
+                fx.Robot.Click("HideTunnelsFilterCheck");
+                Assert.AreEqual(!hideTunnels, fx.ViewModel.HideTunnelsFilter);
+                fx.Robot.Click("HideTunnelsFilterCheck");
+
+                var hideImages = fx.ViewModel.HideImagesFilter;
+                fx.Robot.Click("HideImagesFilterCheck");
+                Assert.AreEqual(!hideImages, fx.ViewModel.HideImagesFilter);
+                fx.Robot.Click("HideImagesFilterCheck");
+
+                var errorsOnly = fx.ViewModel.ErrorsOnlyFilter;
+                fx.Robot.Click("ErrorsOnlyFilterCheck");
+                Assert.AreEqual(!errorsOnly, fx.ViewModel.ErrorsOnlyFilter);
+                fx.Robot.Click("ErrorsOnlyFilterCheck");
+                fx.Robot.Click("ClearFiltersButton");
+
+                var via = fx.ViewModel.AddViaHeader;
+                fx.Robot.Click("MenuAddViaHeader");
+                Assert.AreEqual(!via, fx.ViewModel.AddViaHeader);
+                fx.Robot.Click("MenuAddViaHeader");
+            });
+
+            await ClickMenuAndDismissDialogAsync(fx, "MenuSessionRetention", "RetentionSave");
+            await ClickMenuAndDismissDialogAsync(fx, "MenuHttpsDecryptHosts", "ExcludedHostsSave");
+            await ClickMenuAndDismissDialogAsync(fx, "MenuLogging", "LoggingSave");
+
+            await fx.DispatchAsync(() =>
+            {
+                fx.Robot.Click("MenuToolsComposer");
+                fx.Robot.Click("ComposerLoad");
+                fx.Robot.Click("MenuToolsAutoResponder");
+                fx.Robot.Click("AutoResponderAdd");
+                fx.Robot.Click("MenuToolsMapRemote");
+                fx.Robot.Click("MapRemoteAdd");
+            });
+
+            await fx.DispatchAsync(() =>
+            {
+                if (fx.ViewModel.Sessions.Count > 0)
+                    fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
+                fx.PathPicker.SavePath = Path.Combine(Path.GetTempPath(), "twp-body-" + Guid.NewGuid().ToString("N") + ".bin");
+                fx.Robot.Click("CtxSaveRequestBody");
+                fx.Robot.Click("CtxSaveResponseBody");
+                fx.Robot.Click("CtxDiffSessions");
+                fx.Robot.Click("BodyPretty");
+                fx.Robot.Click("CopyHeaders");
+            });
             // Tools
             await fx.DispatchAsync(() =>
             {

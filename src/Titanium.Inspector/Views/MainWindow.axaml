@@ -38,12 +38,12 @@
                   IsChecked="{Binding AutoSystemProxyOnStart, Mode=OneWay}"
                   Command="{Binding ToggleAutoSystemProxyOnStartCommand}"
                   AutomationProperties.AutomationId="AutoSystemProxyCheck" />
-        <MenuItem Header="Decrypt HTTPS" ToggleType="CheckBox"
+        <MenuItem x:Name="MenuDecryptHttps" Header="Decrypt HTTPS" ToggleType="CheckBox"
                   IsChecked="{Binding DecryptHttps, Mode=OneWay}"
                   Command="{Binding ToggleDecryptHttpsCommand}"
                   AutomationProperties.AutomationId="MenuDecryptHttps" />
         <Separator />
-        <MenuItem Header="System proxy" ToggleType="CheckBox"
+        <MenuItem x:Name="MenuToggleSystemProxy" Header="System proxy" ToggleType="CheckBox"
                   IsChecked="{Binding SystemProxy, Mode=OneWay}"
                   Command="{Binding ToggleSystemProxyCommand}"
                   AutomationProperties.AutomationId="MenuToggleSystemProxy" />
@@ -165,12 +165,12 @@
                     VerticalAlignment="Center" Margin="0,0,12,6"
                     AutomationProperties.AutomationId="CapturingCheck" />
           <!-- OneWay + Command: TwoWay leaves the box ticked when CryptUI/install is rejected. -->
-          <CheckBox Content="Decrypt HTTPS"
+          <CheckBox x:Name="DecryptHttpsCheck" Content="Decrypt HTTPS"
                     IsChecked="{Binding DecryptHttps, Mode=OneWay}"
                     Command="{Binding ToggleDecryptHttpsCommand}"
                     VerticalAlignment="Center" Margin="0,0,12,6"
                     AutomationProperties.AutomationId="DecryptHttpsCheck" />
-          <CheckBox Content="System proxy"
+          <CheckBox x:Name="SystemProxyCheck" Content="System proxy"
                     IsChecked="{Binding SystemProxy, Mode=OneWay}"
                     Command="{Binding ToggleSystemProxyCommand}"
                     VerticalAlignment="Center" Margin="0,0,12,6"
