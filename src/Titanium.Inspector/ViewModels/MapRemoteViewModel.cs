@@ -231,7 +231,7 @@ public sealed class MapRemoteRule : INotifyPropertyChanged
     {
         get
         {
-            var gql = string.IsNullOrWhiteSpace(GraphQlOperationName) ? string.Empty : $" gql:{GraphQlOperationName}";
+            var gql = string.IsNullOrWhiteSpace(GraphQlOperationName) ? string.Empty : $" GraphQL:{GraphQlOperationName}";
             return $"{(Enabled ? "✓" : "✗")} {MatchUrl}{gql} → {TargetUrl}";
         }
     }

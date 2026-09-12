@@ -271,6 +271,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         DeleteAutoResponderRuleCommand = Cmd(DeleteAutoResponderRuleAsync);
         UpdateAutoResponderRuleCommand = Cmd(UpdateAutoResponderRuleAsync);
         BrowseAutoResponderLocalFileCommand = Cmd(BrowseAutoResponderLocalFileAsync);
+        FillGraphQlFromSelectedCommand = Cmd(FillGraphQlFromSelectedAsync);
         AddMapRemoteRuleCommand = Cmd(AddMapRemoteRuleAsync);
         DeleteMapRemoteRuleCommand = Cmd(DeleteMapRemoteRuleAsync);
         UpdateMapRemoteRuleCommand = Cmd(UpdateMapRemoteRuleAsync);
@@ -1328,6 +1329,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public ICommand DeleteAutoResponderRuleCommand { get; }
     public ICommand UpdateAutoResponderRuleCommand { get; }
     public ICommand BrowseAutoResponderLocalFileCommand { get; }
+    public ICommand FillGraphQlFromSelectedCommand { get; }
     public ICommand AddMapRemoteRuleCommand { get; }
     public ICommand DeleteMapRemoteRuleCommand { get; }
     public ICommand UpdateMapRemoteRuleCommand { get; }

@@ -31,5 +31,6 @@ public class GraphQlOperationMatcherTests
         Assert.IsFalse(vm.TryMatch("http://x/graphql", """{"operationName":"Other"}""", out _));
         Assert.IsTrue(vm.TryMatch("http://x/graphql", """{"operationName":"GetUser"}""", out var rule));
         Assert.AreEqual("user-op", rule!.Body);
+        StringAssert.Contains(rule.Display, "GraphQL:GetUser");
     }
 }

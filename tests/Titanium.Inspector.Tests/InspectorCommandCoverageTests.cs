@@ -74,6 +74,27 @@ public class InspectorCommandCoverageTests
             await ExecuteAsync(vm.LoadFromSelectedCommand);
             StringAssert.Contains(vm.StatusText, "Composer");
 
+            await ExecuteAsync(vm.FillGraphQlFromSelectedCommand);
+            StringAssert.Contains(vm.StatusText, "no GraphQL operation name");
+
+            var gql = new SessionSnapshot
+            {
+                Id = 3, Method = "POST", Url = "https://gql.test/graphql", Host = "gql.test",
+                RequestBodyText = """{"operationName":"GetUser","query":"query GetUser { id }"}""",
+            };
+            vm.SeedSession(gql);
+            vm.SelectedSession = gql;
+            await ExecuteAsync(vm.OpenToolsAutoResponderCommand);
+            await ExecuteAsync(vm.FillGraphQlFromSelectedCommand);
+            Assert.AreEqual("GetUser", vm.AutoResponderGraphQlOperation);
+            StringAssert.Contains(vm.StatusText, "GetUser");
+            await ExecuteAsync(vm.OpenToolsBreakpointsCommand);
+            await ExecuteAsync(vm.FillGraphQlFromSelectedCommand);
+            Assert.AreEqual("GetUser", vm.Breakpoints.GraphQlOperationName);
+            await ExecuteAsync(vm.OpenToolsMapRemoteCommand);
+            await ExecuteAsync(vm.FillGraphQlFromSelectedCommand);
+            Assert.AreEqual("GetUser", vm.MapRemoteGraphQlOperation);
+
             vm.SetSelectedSessions([a, b]);
             await ExecuteAsync(vm.DiffSessionsCommand);
             Assert.IsTrue(vm.ShowSessionDetails);

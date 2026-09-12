@@ -113,6 +113,48 @@ public sealed partial class MainWindowViewModel
                 : "Composer loaded from selected session";
         }, _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
     }
+
+    private async Task FillGraphQlFromSelectedAsync()
+    {
+        var selected = SelectedSession;
+        if (selected is null)
+        {
+            SetGuardStatus("Select a session to copy its GraphQL operation");
+            return;
+        }
+
+        await _store.EnsureBodiesLoadedAsync(selected, _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+        await MarshalToUiAsync(() =>
+        {
+            if (!GraphQlOperationMatcher.TryGetOperationName(selected.RequestBodyText, out var name) ||
+                string.IsNullOrWhiteSpace(name))
+            {
+                SetGuardStatus("Selected session has no GraphQL operation name in the request body");
+                return;
+            }
+
+            if (ShowBreakpointsPane)
+            {
+                Breakpoints.GraphQlOperationName = name;
+            }
+            else if (ShowAutoResponderPane)
+            {
+                AutoResponderGraphQlOperation = name;
+            }
+            else if (ShowMapRemotePane)
+            {
+                MapRemoteGraphQlOperation = name;
+            }
+            else
+            {
+                SetGuardStatus("Open Breakpoints, AutoResponder, or Map Remote to set the GraphQL filter");
+                return;
+            }
+
+            StatusText = $"GraphQL filter set to {name}";
+        }, _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+    }
+
     private async Task LoadIntoComposerAsync()
     {
         var selected = SelectedSession;

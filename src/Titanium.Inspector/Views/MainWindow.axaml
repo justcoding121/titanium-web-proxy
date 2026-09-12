@@ -464,7 +464,7 @@
                           AutomationProperties.AutomationId="TabBreakpoints">
             <StackPanel Margin="8" Spacing="8">
               <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                         Text="Pause matching traffic to edit the body, continue, or abort. One pause at a time; auto-continues after 120s." />
+                         Text="Pause matching client requests to edit the body, continue, or abort. One pause at a time; auto-continues after 120s." />
               <Border IsVisible="{Binding HasActiveBreakpoint}" Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
                       CornerRadius="4" Padding="8,6" AutomationProperties.AutomationId="BreakpointHitBanner">
                 <TextBlock Text="{Binding BreakpointHitBanner}" TextWrapping="Wrap" FontWeight="SemiBold" />
@@ -473,10 +473,20 @@
                         AutomationProperties.AutomationId="BreakpointEnabled" />
               <CheckBox Content="Break on response" IsChecked="{Binding BreakpointOnResponse}"
                         AutomationProperties.AutomationId="BreakpointOnResponse" />
+              <TextBlock Text="Match" />
               <TextBox Watermark="URL filter (* = all, e.g. *api*/users*)" Text="{Binding Breakpoints.UrlFilter}"
                        AutomationProperties.AutomationId="BreakpointUrlFilter" />
-              <TextBox Watermark="GraphQL operationName (optional)" Text="{Binding Breakpoints.GraphQlOperationName}"
+              <TextBox Watermark="Only this GraphQL operation (optional)"
+                       Text="{Binding Breakpoints.GraphQlOperationName}"
+                       ToolTip.Tip="Extra filter on the client request body. Matches JSON operationName or a named query. Leave blank to match every operation on the URL."
                        AutomationProperties.AutomationId="BreakpointGraphQlOperation" />
+              <Button Content="From selected session"
+                      HorizontalAlignment="Left"
+                      Command="{Binding FillGraphQlFromSelectedCommand}"
+                      ToolTip.Tip="Copy the GraphQL operation name from the selected session's request."
+                      AutomationProperties.AutomationId="BreakpointGraphQlFromSelected" />
+              <TextBlock Opacity="0.75" FontSize="12" TextWrapping="Wrap"
+                         Text="Leave the GraphQL box empty to match every operation. Fill it (e.g. GetUser) to pause only that client request on the URL above. Break on response still uses the URL filter." />
               <TextBox Watermark="Edit body (Apply edit body, then Continue)" Text="{Binding BreakpointEditBody}"
                        AcceptsReturn="True" Height="80" FontFamily="Consolas,Courier New,monospace"
                        AutomationProperties.AutomationId="BreakpointEditBody" />
@@ -496,7 +506,7 @@
                         AutomationProperties.AutomationId="TabAutoResponder">
             <StackPanel Margin="8" Spacing="8">
               <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                         Text="Return a fake response for matching URLs before the real server (and before breakpoints). Map Local loads the body from a file when a path is set." />
+                         Text="Return a fake response before the real server. Match decides which client requests a rule applies to; the fields below that are what you send back." />
               <CheckBox Content="Enabled (before breakpoints)" IsChecked="{Binding AutoResponder.Enabled}"
                         AutomationProperties.AutomationId="AutoResponderEnabled" />
               <ListBox ItemsSource="{Binding AutoResponder.Rules}"
@@ -510,8 +520,21 @@
                   </DataTemplate>
                 </ListBox.ItemTemplate>
               </ListBox>
+              <TextBlock Text="Match" />
               <TextBox Watermark="Match URL (* wildcards)" Text="{Binding AutoResponderMatch}"
                        AutomationProperties.AutomationId="AutoResponderMatch" />
+              <TextBox Watermark="Only this GraphQL operation (optional)"
+                       Text="{Binding AutoResponderGraphQlOperation}"
+                       ToolTip.Tip="Extra filter on the client request body. Matches JSON operationName or a named query. Leave blank to match every operation on the URL."
+                       AutomationProperties.AutomationId="AutoResponderGraphQlOperation" />
+              <Button Content="From selected session"
+                      HorizontalAlignment="Left"
+                      Command="{Binding FillGraphQlFromSelectedCommand}"
+                      ToolTip.Tip="Copy the GraphQL operation name from the selected session's request."
+                      AutomationProperties.AutomationId="AutoResponderGraphQlFromSelected" />
+              <TextBlock Opacity="0.75" FontSize="12" TextWrapping="Wrap"
+                         Text="Same URL, different GraphQL operations can use different rules. Leave blank to match every operation." />
+              <TextBlock Text="Respond with" />
               <WrapPanel>
                 <TextBox Watermark="Status" Text="{Binding AutoResponderStatus}" Width="80" Margin="0,0,8,8"
                          AutomationProperties.AutomationId="AutoResponderStatus" />
@@ -525,8 +548,6 @@
                 <Button Grid.Column="1" Content="Browse…" Command="{Binding BrowseAutoResponderLocalFileCommand}"
                         AutomationProperties.AutomationId="AutoResponderBrowseLocal" />
               </Grid>
-              <TextBox Watermark="GraphQL operationName (optional)" Text="{Binding AutoResponderGraphQlOperation}"
-                       AutomationProperties.AutomationId="AutoResponderGraphQlOperation" />
               <TextBox Watermark="Response body (used when Map Local is empty)" Text="{Binding AutoResponderBody}" AcceptsReturn="True" Height="80"
                        AutomationProperties.AutomationId="AutoResponderBody" />
               <WrapPanel>
@@ -546,16 +567,44 @@
                         AutomationProperties.AutomationId="TabScripts">
             <StackPanel Margin="8" Spacing="8">
               <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                         Text="Not JavaScript or C# — one directive per line. Applies to all traffic. Request abort/set-status skips AutoResponder and the origin." />
+                         Text="One command per line, on every captured session. This is not JavaScript or C# — type only the commands below." />
+              <Border Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
+                      CornerRadius="4" Padding="8,6"
+                      AutomationProperties.AutomationId="ScriptSyntaxHelp">
+                <StackPanel Spacing="6">
+                  <TextBlock FontWeight="SemiBold" Text="What you can type" />
+                  <StackPanel Spacing="2">
+                    <TextBlock FontFamily="Consolas,Courier New,monospace" Text="set-header Name: Value" />
+                    <TextBlock Opacity="0.8" FontSize="12" TextWrapping="Wrap"
+                               Text="Add or replace a header. Traffic still continues to the server." />
+                  </StackPanel>
+                  <StackPanel Spacing="2">
+                    <TextBlock FontFamily="Consolas,Courier New,monospace" Text="set-status 404" />
+                    <TextBlock Opacity="0.8" FontSize="12" TextWrapping="Wrap"
+                               Text="On request: answer now and skip the server. On response: change the status the client sees." />
+                  </StackPanel>
+                  <StackPanel Spacing="2">
+                    <TextBlock FontFamily="Consolas,Courier New,monospace" Text="abort" />
+                    <TextBlock Opacity="0.8" FontSize="12" TextWrapping="Wrap"
+                               Text="Block with 403 Forbidden. Add a set-status line to choose a different code." />
+                  </StackPanel>
+                  <TextBlock Opacity="0.75" FontSize="12" TextWrapping="Wrap"
+                             Text="Start a line with # or // for a comment. You can combine commands; put each on its own line." />
+                </StackPanel>
+              </Border>
               <TextBlock Text="On request" />
               <TextBox Text="{Binding ScriptOnRequest}" AcceptsReturn="True" Height="100"
                        FontFamily="Consolas,Courier New,monospace"
-                       Watermark="set-header Name: Value  |  set-status 404  |  abort"
+                       Watermark="Example: set-header X-Debug: 1"
+                       ToolTip.Tip="One command per line. Example:&#x0a;set-header X-Debug: 1&#x0a;set-status 404&#x0a;abort"
                        AutomationProperties.AutomationId="ScriptOnRequest" />
+              <TextBlock Opacity="0.75" FontSize="12" TextWrapping="Wrap"
+                         Text="abort or set-status here skips AutoResponder, breakpoints, and the origin." />
               <TextBlock Text="On response" />
               <TextBox Text="{Binding ScriptOnResponse}" AcceptsReturn="True" Height="100"
                        FontFamily="Consolas,Courier New,monospace"
-                       Watermark="set-header Name: Value  |  set-status 404  |  abort"
+                       Watermark="Example: set-header Cache-Control: no-store"
+                       ToolTip.Tip="One command per line. Example:&#x0a;set-header Cache-Control: no-store&#x0a;set-status 418"
                        AutomationProperties.AutomationId="ScriptOnResponse" />
             </StackPanel>
           </ScrollViewer>
@@ -565,7 +614,7 @@
                         AutomationProperties.AutomationId="TabMapRemote">
             <StackPanel Margin="8" Spacing="8">
               <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                         Text="Rewrite matching request URLs to another origin before the real server. Use a single * in match and target to preserve a path/query suffix. Runs after AutoResponder / Map Local." />
+                         Text="Rewrite matching client requests to another origin before the real server. Use a single * in match and target to preserve a path/query suffix. Runs after AutoResponder / Map Local." />
               <CheckBox Content="Enabled" IsChecked="{Binding MapRemote.Enabled}"
                         AutomationProperties.AutomationId="MapRemoteEnabled" />
               <ListBox ItemsSource="{Binding MapRemote.Rules}"
@@ -579,12 +628,23 @@
                   </DataTemplate>
                 </ListBox.ItemTemplate>
               </ListBox>
+              <TextBlock Text="Match" />
               <TextBox Watermark="Match URL (* wildcards)" Text="{Binding MapRemoteMatch}"
                        AutomationProperties.AutomationId="MapRemoteMatch" />
+              <TextBox Watermark="Only this GraphQL operation (optional)"
+                       Text="{Binding MapRemoteGraphQlOperation}"
+                       ToolTip.Tip="Extra filter on the client request body. Matches JSON operationName or a named query. Leave blank to match every operation on the URL."
+                       AutomationProperties.AutomationId="MapRemoteGraphQlOperation" />
+              <Button Content="From selected session"
+                      HorizontalAlignment="Left"
+                      Command="{Binding FillGraphQlFromSelectedCommand}"
+                      ToolTip.Tip="Copy the GraphQL operation name from the selected session's request."
+                      AutomationProperties.AutomationId="MapRemoteGraphQlFromSelected" />
+              <TextBlock Opacity="0.75" FontSize="12" TextWrapping="Wrap"
+                         Text="Leave blank to rewrite every operation on the URL. Fill it to rewrite only that GraphQL operation." />
+              <TextBlock Text="Rewrite to" />
               <TextBox Watermark="Target URL (absolute, optional *)" Text="{Binding MapRemoteTarget}"
                        AutomationProperties.AutomationId="MapRemoteTarget" />
-              <TextBox Watermark="GraphQL operationName (optional)" Text="{Binding MapRemoteGraphQlOperation}"
-                       AutomationProperties.AutomationId="MapRemoteGraphQlOperation" />
               <WrapPanel>
                 <Button Content="Add rule" Command="{Binding AddMapRemoteRuleCommand}" Margin="0,0,8,8"
                         AutomationProperties.AutomationId="MapRemoteAdd" />

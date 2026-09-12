@@ -165,6 +165,7 @@ public class AutomationIdCoverageHeadlessTests
         "AutoResponderUpdate",
         "AutoResponderDelete",
         "TabScripts",
+        "ScriptSyntaxHelp",
         "ScriptOnRequest",
         "ScriptOnResponse",
         "StatusText",
@@ -172,10 +173,13 @@ public class AutomationIdCoverageHeadlessTests
         "StatusBarPanel",
         "SessionCountText",
         "AutoResponderGraphQlOperation",
+        "AutoResponderGraphQlFromSelected",
         "BreakpointGraphQlOperation",
+        "BreakpointGraphQlFromSelected",
         "ExclusionSummaryLink",
         "MapRemoteDelete",
         "MapRemoteGraphQlOperation",
+        "MapRemoteGraphQlFromSelected",
         "MapRemoteRules",
         "MapRemoteUpdate",
         "TabInspectHost",
@@ -296,6 +300,7 @@ public class AutomationIdCoverageHeadlessTests
             Assert.AreEqual(1, fx.ViewModel.SelectedToolsTabIndex);
 
             fx.Robot.Click("MenuToolsScripts");
+            Assert.IsTrue(fx.Robot.TryFind<Avalonia.Controls.Control>("ScriptSyntaxHelp", out _));
             fx.Robot.SetText("ScriptOnRequest", "abort");
             fx.Robot.SetText("ScriptOnResponse", "set-status 418");
             Assert.AreEqual(3, fx.ViewModel.SelectedToolsTabIndex);

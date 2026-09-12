@@ -85,29 +85,37 @@ Build and send a request through the proxy. **Load from selected** copies method
 
 Pause matching requests (URL glob; `*` = all) so you can edit the body, **Continue**, or **Abort** (403). At most one pause at a time; unmatched overflow auto-continues; pauses time out after **120 seconds**. Optional **Break on response**. Editing a streaming (SSE) body is refused.
 
+Match **URL** and optional **GraphQL operation** together: leave GraphQL blank to pause every operation; set it (for example `GetUser`) to pause only that client request. **From selected session** copies the operation name from the session selected in the grid.
+
 #### AutoResponder
 
 If **Enabled**, the first matching rule returns a fake status/body **before** the real server (and before breakpoints). Match URLs with `*` wildcards. Inline body Add/Update is capped at 256 KiB — use Map Local for larger stubs.
 
 **Map Local:** set an optional file path on the rule (or use **Browse…**). When the path is set, the response body is **streamed from that file** (with `Content-Length`) instead of the inline body field. Inline body is used when Map Local is empty. Missing or oversized files cause the rule to be skipped (request continues to breakpoints/origin).
 
-Optional **GraphQL operationName** on AutoResponder, Map Remote, and Breakpoints: when set, the rule only matches requests whose JSON body has that `operationName` (or a matching named operation in the `query` string). Same URL, different operations can take different rules. GraphQL matching does **not** force buffering of huge request bodies (that would reset HTTP/2).
+**Match** (URL + optional GraphQL) decides which client requests a rule applies to. **Respond with** is the fake status/body. Same `/graphql` URL can have one rule per operation.
 
 #### Map Remote
 
-If **Enabled**, the first matching rule rewrites the request URL to another absolute origin **before** breakpoints and the real server. Match with `*` wildcards. A single `*` in both match and target preserves the captured path/query suffix (for example match `https://prod.example/*` → target `http://127.0.0.1:5000/*`). Map Remote does not run when AutoResponder / Map Local already answered the request.
+If **Enabled**, the first matching rule rewrites the request URL to another absolute origin **before** breakpoints and the real server. Match with `*` wildcards. A single `*` in both match and target preserves the captured path/query suffix (for example match `https://prod.example/*` → target `http://127.0.0.1:5000/*`). Map Remote does not run when AutoResponder / Map Local already answered the request. Optional GraphQL operation on **Match** rewrites only that operation.
+
+GraphQL matching reads the client JSON `operationName` (or a named `query`/`mutation`). It does **not** force buffering of huge request bodies (that would reset HTTP/2).
 
 #### Scripts
 
-**Not JavaScript or C#.** One directive per line (comments with `#` or `//`):
+One command per line (not JavaScript or C#). Comments start with `#` or `//`. Applies to every captured request/response.
+
+| Command | Meaning |
+|---------|---------|
+| `set-header Name: Value` | Add or replace a header. Traffic still continues. |
+| `set-status 404` | On request: answer immediately and skip AutoResponder, breakpoints, and the origin. On response: rewrite the status the client sees. |
+| `abort` | Block with 403. Combine with `set-status` to pick a different code. |
 
 ```text
 set-header X-Debug: 1
 set-status 404
 abort
 ```
-
-Applies to every captured request/response. On request, `abort` or `set-status` short-circuits AutoResponder, breakpoints, and the origin.
 
 ## Advanced
 

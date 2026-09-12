@@ -261,7 +261,7 @@ public sealed class AutoResponderRule : INotifyPropertyChanged
         set => SetField(ref _localFilePath, value ?? string.Empty);
     }
 
-    /// <summary>Optional GraphQL operationName filter for same-URL APIs.</summary>
+    /// <summary>Optional GraphQL operation filter; when set, the rule matches only that client request.</summary>
     public string GraphQlOperationName
     {
         get => _graphQlOperationName;
@@ -279,7 +279,7 @@ public sealed class AutoResponderRule : INotifyPropertyChanged
         get
         {
             var map = string.IsNullOrWhiteSpace(LocalFilePath) ? string.Empty : " [Map Local]";
-            var gql = string.IsNullOrWhiteSpace(GraphQlOperationName) ? string.Empty : $" gql:{GraphQlOperationName}";
+            var gql = string.IsNullOrWhiteSpace(GraphQlOperationName) ? string.Empty : $" GraphQL:{GraphQlOperationName}";
             return $"{(Enabled ? "✓" : "✗")} {StatusCode}{map}{gql} {MatchUrl}";
         }
     }

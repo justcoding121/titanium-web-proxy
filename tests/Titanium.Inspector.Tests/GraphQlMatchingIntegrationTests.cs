@@ -23,6 +23,7 @@ public class GraphQlMatchingIntegrationTests
         Assert.IsFalse(vm.TryRewrite("http://x/graphql", """{"operationName":"Other"}""", out _, out _));
         Assert.IsTrue(vm.TryRewrite("http://x/graphql", """{"operationName":"GetUser"}""", out var rewritten, out _));
         Assert.AreEqual("http://127.0.0.1:9/ok", rewritten);
+        StringAssert.Contains(vm.Rules[0].Display, "GraphQL:GetUser");
     }
 
     [TestMethod]
