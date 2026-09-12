@@ -127,7 +127,7 @@ Hostile hosts that return 403/429 under MITM on a **document** navigation are re
 
 ### Root certificate (Decrypt HTTPS)
 
-**Install root CA (current user)** trusts the decrypt certificate on this PC (OS may show a Yes/No trust dialog). Use **Export root CA…** / **Device CA setup…** for phones or other devices. **Remove root CA** / **Clear and reinstall…** / **Trust CA in Firefox…** are on the Capture menu when you need cleanup or Firefox-specific trust. Prefer those menu actions over editing certificate stores by hand.
+**Install root CA (current user)** trusts the decrypt certificate on this PC (OS may show a Yes/No trust dialog). Use **Export root CA…** / **Setup external device CA** for phones or other devices. **Remove root CA** / **Clear and reinstall…** / **Trust CA in Firefox…** are on the Capture menu when you need cleanup or Firefox-specific trust. Prefer those menu actions over editing certificate stores by hand.
 
 ### Platform matrix (system proxy and root CA)
 
@@ -159,7 +159,7 @@ Notes:
 - **Copy as curl / fetch:** with one session selected, generate a shell `curl` command or a JavaScript `fetch(...)` call from the request URL, method, headers, and body (CONNECT tunnels are skipped). The snippet is copied to the clipboard.
 - **Session Diff:** with exactly two sessions selected, compare method/URL/status/headers/bodies offline. The result opens on the Inspect **Diff** tab and is copied to the clipboard.
 - HAR / archive: Export all writes every captured session; Export selected writes the grid multi-selection. Import appends sessions from the file. Replay selected session.
-- System proxy, **Capture local traffic**, and root CA install / untrust / export; Device CA setup dialog for external devices; **Allow Store apps…** on Windows
+- System proxy, **Capture local traffic**, and root CA install / untrust / export; **Setup external device CA** dialog for external devices; **Allow Store apps…** on Windows
 - Search (`method:GET status:2xx host:example process:chrome is:ws hide:tunnel`); quick filters: Hide CONNECT, Hide images, Errors only
 - Optional Plus panels when `Titanium.Plus.dll` is present
 

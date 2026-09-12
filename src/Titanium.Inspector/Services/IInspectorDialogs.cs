@@ -207,7 +207,7 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
     public Task<bool> ShowDeviceCaSetupAsync(Window? owner, string message) =>
         SimpleConfirmDialog.ShowAsync(
             owner,
-            "Device CA setup",
+            "Setup external device CA",
             message,
             accept: ExportCaLabel,
             cancel: "Close",

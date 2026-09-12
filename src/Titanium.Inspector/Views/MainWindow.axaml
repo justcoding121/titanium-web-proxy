@@ -62,7 +62,7 @@
         <MenuItem Header="Export root CA…" Command="{Binding ExportCaCommand}" AutomationProperties.AutomationId="MenuExportCa" />
         <MenuItem Header="Trust CA in Firefox…" Command="{Binding TrustFirefoxCaCommand}"
                   AutomationProperties.AutomationId="MenuTrustFirefoxCa" />
-        <MenuItem Header="Device CA setup…" Command="{Binding DeviceCaSetupCommand}" AutomationProperties.AutomationId="MenuDeviceCa" />
+        <MenuItem Header="Setup external device CA" Command="{Binding DeviceCaSetupCommand}" AutomationProperties.AutomationId="MenuDeviceCa" />
       </MenuItem>
       <MenuItem Header="_Tools" AutomationProperties.AutomationId="MenuTools">
         <MenuItem Header="Composer…" Command="{Binding OpenToolsComposerCommand}" AutomationProperties.AutomationId="MenuToolsComposer" />
