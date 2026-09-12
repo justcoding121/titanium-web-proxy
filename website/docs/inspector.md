@@ -48,25 +48,24 @@ chmod +x install-app.sh uninstall-app.sh TitaniumInspector
 
 **Help → Update channel** — Stable (default) or Beta. **Help → Check for updates…** offers install only when there is a real change (newer build or channel switch). Accept downloads the package, closes Inspector, replaces the install, and relaunches.
 
-## Right pane: Inspect vs Tools
+## Right pane: Inspect and tools
 
-The right pane has two outer tabs:
+A far-right **icon rail** (Inspect, Composer, Breakpoints, AutoResponder, Scripts, Map Remote) is always visible. Clicking an icon opens that tool’s content to the **left of the rail** and **pushes** the session grid; the grid scrolls horizontally when columns no longer fit. Click the same icon again (or ✕) to close the content pane; the rail stays. Tooltips show full names.
 
-| Outer tab | Purpose | Needs a selected session? |
-|-----------|---------|---------------------------|
-| **Inspect** | Look at one captured session | Yes (otherwise shows a hint) |
-| **Tools** | Change how **all** traffic is handled | No — open via **Tools** menu |
+Inspect keeps Headers / Body / Hex (and Diff / WS / SSE / Protobuf when relevant) as tabs inside the Inspect content. Selecting a session while a tool is open does **not** switch away from that tool. Tools change how **all** traffic is handled and do not require a selected session.
 
-Use **Tools → Composer / Breakpoints / AutoResponder / Scripts…** to open the pane on that tool without picking a row first. Selecting a session opens the pane on **Inspect**.
+Use **Tools → Composer / Breakpoints / AutoResponder / Scripts…** to open the matching icon. Opening content when it was closed from a session click lands on **Inspect**.
 
 ### Inspect (this session)
 
-- **Headers** — request/response headers, cookies, query (labeled sections)
-- **Body** — request and response bodies as `=== Request ===` / `=== Response ===` (decoded / JSON when possible; `(empty)` if missing)
-- **Hex** — same labeled sections for raw bytes
+- **Headers** — request/response headers, cookies, query (labeled sections). **Copy headers** copies the dump.
+- **Body** — request and response as `=== Request ===` / `=== Response ===`. **Pretty** / **Raw** toggles JSON, XML, and HTML source indent (Pretty runs when the Body tab is selected). Images show a bitmap preview instead of mojibake. Banners explain truncated, not-captured, or streaming bodies. **Save request…** / **Save response…** write the **captured** bytes (incomplete when truncated).
+- **Hex** — labeled hex dump (first 4 KB of the captured preview).
 - **WS Frames** — shown for WebSocket sessions; live frames when available (direction, opcode, payload preview)
-- **SSE** — shown for `text/event-stream` (or `Accept: text/event-stream`) responses; parses `event` / `id` / `data` blocks into a readable event list
+- **SSE** — shown for `text/event-stream` responses; Inspector does **not** buffer SSE in `BeforeResponse` (events stream to the client; a 2 MiB preview may fill while open)
 - **Protobuf** — wire-format field dump for gRPC and gRPC-JSON-transcoded upstream frames (field number, wire type, value). MVP does **not** require a `.protoset` / descriptor set; the optional settings field `ProtobufDescriptorSetPath` is stored for a future typed decode. Until then, the Protobuf tab always shows the JSON wire dump.
+
+**Body capture limits:** finite bodies with known `Content-Length` up to 32 MiB are buffered then previewed at 2 MiB (text view capped at 256 KiB). Larger known-length bodies are **not captured** so downloads are not stalled. Chunked/finite unknown-length bodies still buffer (capped). Size column shows the original length when known.
 
 Search for WebSocket traffic with `is:ws`. Search for gRPC with `is:grpc`, and for gRPC-JSON transcoded sessions with `is:transcoded` (client REST/JSON vs upstream gRPC faces appear in the Headers/Body inspect panes). Quick filters on the toolbar toggle `hide:tunnel`, `hide:image`, and `is:error` into the same search box. Status classes (`status:2xx` … `status:5xx`), `process:`, and `content-type:` are also supported. The status strip shows **Sessions: N** with no filter, and **visible / total** when a search or quick filter is active.
 
@@ -80,19 +79,19 @@ Pipeline order on each request:
 
 #### Composer
 
-Build and send a request through the proxy. **Load from selected** copies method/URL/headers/body from the current session.
+Build and send a request through the proxy. **Load from selected** copies method/URL/headers/body from the current session. **Load body from file…** loads small files into the editor, or streams large files on **Send** without stuffing them into the text box. Responses are preview-capped (no hang on endless streams).
 
 #### Breakpoints
 
-Pause matching requests (URL glob; `*` = all) so you can edit the body, **Continue**, or **Abort** (403). At most one pause at a time; unmatched overflow auto-continues; pauses time out after **120 seconds**. Optional **Break on response**.
+Pause matching requests (URL glob; `*` = all) so you can edit the body, **Continue**, or **Abort** (403). At most one pause at a time; unmatched overflow auto-continues; pauses time out after **120 seconds**. Optional **Break on response**. Editing a streaming (SSE) body is refused.
 
 #### AutoResponder
 
-If **Enabled**, the first matching rule returns a fake status/body **before** the real server (and before breakpoints). Match URLs with `*` wildcards.
+If **Enabled**, the first matching rule returns a fake status/body **before** the real server (and before breakpoints). Match URLs with `*` wildcards. Inline body Add/Update is capped at 256 KiB — use Map Local for larger stubs.
 
-**Map Local:** set an optional file path on the rule (or use **Browse…**). When the path is set, the response body is read from that file instead of the inline body field. Inline body is used when Map Local is empty. Missing files cause the rule to be skipped (request continues to breakpoints/origin).
+**Map Local:** set an optional file path on the rule (or use **Browse…**). When the path is set, the response body is **streamed from that file** (with `Content-Length`) instead of the inline body field. Inline body is used when Map Local is empty. Missing or oversized files cause the rule to be skipped (request continues to breakpoints/origin).
 
-Optional **GraphQL operationName** on AutoResponder, Map Remote, and Breakpoints: when set, the rule only matches requests whose JSON body has that `operationName` (or a matching named operation in the `query` string). Same URL, different operations can take different rules.
+Optional **GraphQL operationName** on AutoResponder, Map Remote, and Breakpoints: when set, the rule only matches requests whose JSON body has that `operationName` (or a matching named operation in the `query` string). Same URL, different operations can take different rules. GraphQL matching does **not** force buffering of huge request bodies (that would reset HTTP/2).
 
 #### Map Remote
 

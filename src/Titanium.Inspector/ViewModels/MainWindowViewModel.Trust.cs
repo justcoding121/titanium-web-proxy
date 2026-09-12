@@ -120,9 +120,10 @@ public sealed partial class MainWindowViewModel
     {
         for (var attempt = 0; attempt < 3; attempt++)
         {
+            // Stay on UI sync context — recovery dialogs need the dispatcher.
             var result = await RunOffUiAsync(
                 () => _interception.TrustFirefox(),
-                StatusCancelToken).ConfigureAwait(false);
+                StatusCancelToken);
             if (result.Succeeded)
                 return result;
 
@@ -159,7 +160,7 @@ public sealed partial class MainWindowViewModel
             SetStatus("Installing browser certificate tools…", StatusSeverity.Busy);
             _ = await RunOffUiAsync(
                 () => _interception.InstallNssToolsAndRetryTrust(),
-                StatusCancelToken).ConfigureAwait(false);
+                StatusCancelToken);
             return true;
         }
 
@@ -515,6 +516,9 @@ public sealed partial class MainWindowViewModel
         _decryptHttpsBusy = true;
         try
         {
+            // Stay on the Avalonia UI sync context after awaits. ConfigureAwait(false) here
+            // resumes on a thread-pool thread, then ShowDialog / CryptUI hang forever with
+            // status stuck on "Checking certificate trust…" (no message pump / wrong thread).
             if (!await TryStartProxyForDecryptAsync())
                 return;
             if (enableGeneration != Volatile.Read(ref _decryptEnableGeneration))
@@ -530,6 +534,25 @@ public sealed partial class MainWindowViewModel
 
             SetDecryptHttpsCore(true);
             SetOutcomeStatus("Decrypting HTTPS", StatusSeverity.Success, toastImportant: true);
+        }
+        catch (OperationCanceledException)
+        {
+            if (enableGeneration == Volatile.Read(ref _decryptEnableGeneration))
+            {
+                SetGuardStatus("Decrypt HTTPS cancelled");
+                NotifyDecryptHttpsUnchanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            if (enableGeneration == Volatile.Read(ref _decryptEnableGeneration))
+            {
+                SetOutcomeStatus(
+                    "Decrypt HTTPS failed: " + Truncate(ex.Message, 160),
+                    StatusSeverity.Error,
+                    toastImportant: true);
+                NotifyDecryptHttpsUnchanged();
+            }
         }
         finally
         {
@@ -605,13 +628,15 @@ public sealed partial class MainWindowViewModel
             return true;
 
         SetStatus("Checking certificate trust…", StatusSeverity.Busy);
+        // No ConfigureAwait(false): dialogs and CryptUI below require the UI thread.
         var trusted = await RunOffUiAsync(
             () => _interception.RefreshTrustState(),
-            StatusCancelToken).ConfigureAwait(false);
+            StatusCancelToken);
         if (trusted)
             return true;
 
         var owner = TryGetMainWindow();
+        SetStatus("Root CA not trusted — confirm install…", StatusSeverity.Busy);
         if (!await AwaitCancellableAsync(_dialogs.ConfirmInstallRootCaAsync(owner)))
         {
             SetGuardStatus("Decrypt HTTPS cancelled — root CA not installed");
@@ -649,9 +674,10 @@ public sealed partial class MainWindowViewModel
         if (OperatingSystem.IsWindows())
             return true;
 
+        // Stay on UI sync context — ResolveTerminalTrustFailureAsync shows dialogs.
         var trusted = await RunOffUiAsync(
             () => _interception.VerifyOsUserSslTrust(),
-            StatusCancelToken).ConfigureAwait(false);
+            StatusCancelToken);
         if (trusted)
         {
             _ = RunOffUiAsync(InterceptionService.TryEnableFirefoxEnterpriseRootsBestEffort);
@@ -665,7 +691,7 @@ public sealed partial class MainWindowViewModel
         {
             trusted = await RunOffUiAsync(
                 () => _interception.VerifyOsUserSslTrust(),
-                StatusCancelToken).ConfigureAwait(false);
+                StatusCancelToken);
             if (trusted)
             {
                 _ = RunOffUiAsync(InterceptionService.TryEnableFirefoxEnterpriseRootsBestEffort);
@@ -714,8 +740,7 @@ public sealed partial class MainWindowViewModel
         }
 
         return _interception.IsRootTrusted ||
-               await RunOffUiAsync(() => _interception.VerifyOsUserSslTrust(), StatusCancelToken)
-                   .ConfigureAwait(false);
+               await RunOffUiAsync(() => _interception.VerifyOsUserSslTrust(), StatusCancelToken);
     }
 
     private async Task<bool?> TryHandleTerminalTrustChoiceAsync(

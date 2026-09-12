@@ -341,14 +341,23 @@ public class InterceptionCaptureCoverageTests
         Assert.IsNotNull(previewSnap.WebSocketFrames);
 
         var shouldBuffer = typeof(InterceptionService).GetMethod("ShouldBufferBody", flags)!;
+        // Clear WebSocket upgrade so buffering checks are not skipped as endless streams.
+        session.HttpClient.Request.Headers.RemoveHeader("Upgrade");
         session.MaxBufferedBodyBytes = 10;
         session.HttpClient.Request.ContentLength = 100;
-        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session])!);
+        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
         session.MaxBufferedBodyBytes = 0;
-        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session])!);
+        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
         session.MaxBufferedBodyBytes = 1024;
         session.HttpClient.Request.ContentLength = -1;
-        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session])!);
+        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
+
+        // SSE responses must not buffer; finite chunked JSON still does.
+        session.HttpClient.Response.ContentType = "text/event-stream";
+        session.HttpClient.Response.ContentLength = -1;
+        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
+        session.HttpClient.Response.ContentType = "application/json";
+        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
 
         var throttleReq = typeof(InterceptionService).GetMethod("OnRequestBodyWriteThrottle", flags)!;
         var throttleResp = typeof(InterceptionService).GetMethod("OnResponseBodyWriteThrottle", flags)!;

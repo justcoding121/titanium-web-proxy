@@ -102,7 +102,10 @@ public sealed partial class MainWindowViewModel
             ComposerUrl = selected.Url;
             ComposerHeaders = selected.RequestHeadersText ?? "";
             ComposerBody = selected.RequestBodyText ?? "";
-            StatusText = "Composer loaded from selected session";
+            ComposerBodyFilePath = null;
+            StatusText = selected.RequestBodyCapture is BodyCaptureState.Truncated or BodyCaptureState.NotCaptured
+                ? "Composer loaded (request body was truncated or not fully captured)"
+                : "Composer loaded from selected session";
         }, _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
     }
     private async Task LoadIntoComposerAsync()
@@ -121,7 +124,10 @@ public sealed partial class MainWindowViewModel
             ComposerUrl = selected.Url;
             ComposerHeaders = selected.RequestHeadersText ?? "";
             ComposerBody = selected.RequestBodyText ?? "";
-            StatusText = "Composer loaded from selected session";
+            ComposerBodyFilePath = null;
+            StatusText = selected.RequestBodyCapture is BodyCaptureState.Truncated or BodyCaptureState.NotCaptured
+                ? "Composer loaded (request body was truncated or not fully captured)"
+                : "Composer loaded from selected session";
         }, StatusCancelToken).ConfigureAwait(false);
         await OpenToolsTabAsync(0).ConfigureAwait(false);
     }
@@ -381,6 +387,13 @@ public sealed partial class MainWindowViewModel
             .ToList();
     private Task AddAutoResponderRuleAsync()
     {
+        if (string.IsNullOrWhiteSpace(AutoResponderLocalFilePath)
+            && AutoResponderBody.Length > InspectorBodyLimits.MaxInlineToolBodyChars)
+        {
+            SetGuardStatus("Inline AutoResponder body is too large — use Map Local for larger bodies");
+            return Task.CompletedTask;
+        }
+
         AutoResponder.Rules.Add(new AutoResponderRule
         {
             MatchUrl = AutoResponderMatch,
@@ -414,6 +427,13 @@ public sealed partial class MainWindowViewModel
         if (AutoResponder.SelectedRule is null)
         {
             StatusText = "Select an AutoResponder rule to update";
+            return Task.CompletedTask;
+        }
+
+        if (string.IsNullOrWhiteSpace(AutoResponderLocalFilePath)
+            && AutoResponderBody.Length > InspectorBodyLimits.MaxInlineToolBodyChars)
+        {
+            SetGuardStatus("Inline AutoResponder body is too large — use Map Local for larger bodies");
             return Task.CompletedTask;
         }
 

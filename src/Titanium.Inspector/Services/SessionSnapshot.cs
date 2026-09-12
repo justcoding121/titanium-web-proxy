@@ -23,6 +23,11 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     private string? _processName;
     private double? _durationMs;
     private double? _ttfbMs;
+    private BodyCaptureState _requestBodyCapture;
+    private BodyCaptureState _responseBodyCapture;
+    private long? _requestBodyOriginalSize;
+    private long? _responseBodyOriginalSize;
+    private bool _responseBodyStreamOpen;
 
     public long Id { get; set; }
     public string Method { get; set; } = "GET";
@@ -144,6 +149,50 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
 
     /// <summary>Grid display for <see cref="BodySize"/> (B / KB / MB).</summary>
     public string BodySizeDisplay => SessionDisplayFormat.FormatByteSize(BodySize);
+
+    /// <summary>How the request body was retained for Inspect.</summary>
+    public BodyCaptureState RequestBodyCapture
+    {
+        get => _requestBodyCapture;
+        set => SetField(ref _requestBodyCapture, value);
+    }
+
+    /// <summary>How the response body was retained for Inspect.</summary>
+    public BodyCaptureState ResponseBodyCapture
+    {
+        get => _responseBodyCapture;
+        set => SetField(ref _responseBodyCapture, value);
+    }
+
+    /// <summary>Original request body size when known (Content-Length or pre-truncate length).</summary>
+    public long? RequestBodyOriginalSize
+    {
+        get => _requestBodyOriginalSize;
+        set => SetField(ref _requestBodyOriginalSize, value);
+    }
+
+    /// <summary>Original response body size when known (Content-Length or pre-truncate / bytes-seen).</summary>
+    public long? ResponseBodyOriginalSize
+    {
+        get => _responseBodyOriginalSize;
+        set => SetField(ref _responseBodyOriginalSize, value);
+    }
+
+    /// <summary>True while an SSE-style response stream is still open.</summary>
+    public bool ResponseBodyStreamOpen
+    {
+        get => _responseBodyStreamOpen;
+        set => SetField(ref _responseBodyStreamOpen, value);
+    }
+
+    /// <summary>In-flight SSE tee buffer (not spilled; cleared when finalized).</summary>
+    internal MemoryStream? ResponseTeeStream { get; set; }
+
+    /// <summary>Bytes seen on the response wire while teeing (may exceed preview).</summary>
+    internal long ResponseBytesSeen { get; set; }
+
+    /// <summary>UTC ticks of last coalesced SessionUpdated from the tee.</summary>
+    internal long LastTeeUiUtcTicks { get; set; }
 
     public int ProcessId
     {

@@ -121,11 +121,19 @@ public sealed class AutoResponderViewModel : INotifyPropertyChanged
         => TryMatch(session.Url, session.RequestBodyText, out matched);
 
     /// <summary>
-    /// Resolves the response body for a matched rule. Map Local (<see cref="AutoResponderRule.LocalFilePath"/>)
-    /// wins when the path is non-empty; otherwise uses the inline <see cref="AutoResponderRule.Body"/>.
+    /// Resolves how to answer a matched rule. Map Local streams from disk (with size cap);
+    /// otherwise returns inline body bytes.
     /// </summary>
-    public static bool TryResolveBody(AutoResponderRule rule, out byte[] body, out string? error)
+    public static bool TryResolveResponse(
+        AutoResponderRule rule,
+        out byte[]? inlineBody,
+        out string? mapLocalPath,
+        out long mapLocalLength,
+        out string? error)
     {
+        inlineBody = null;
+        mapLocalPath = null;
+        mapLocalLength = 0;
         error = null;
         if (!string.IsNullOrWhiteSpace(rule.LocalFilePath))
         {
@@ -135,10 +143,56 @@ public sealed class AutoResponderViewModel : INotifyPropertyChanged
                 if (!File.Exists(path))
                 {
                     error = $"Map Local file not found: {path}";
-                    body = Array.Empty<byte>();
                     return false;
                 }
 
+                var length = new FileInfo(path).Length;
+                if (length > InspectorBodyLimits.MaxMapLocalFileBytes)
+                {
+                    error =
+                        $"Map Local file exceeds {SessionDisplayFormat.FormatByteSize(InspectorBodyLimits.MaxMapLocalFileBytes)}";
+                    return false;
+                }
+
+                mapLocalPath = path;
+                mapLocalLength = length;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = $"Map Local read failed: {ex.Message}";
+                return false;
+            }
+        }
+
+        inlineBody = Encoding.UTF8.GetBytes(rule.Body ?? string.Empty);
+        return true;
+    }
+
+    /// <summary>
+    /// Resolves the response body for a matched rule. Map Local (<see cref="AutoResponderRule.LocalFilePath"/>)
+    /// wins when the path is non-empty; otherwise uses the inline <see cref="AutoResponderRule.Body"/>.
+    /// Prefer <see cref="TryResolveResponse"/> for streaming Map Local.
+    /// </summary>
+    public static bool TryResolveBody(AutoResponderRule rule, out byte[] body, out string? error)
+    {
+        if (!TryResolveResponse(rule, out var inline, out var path, out var length, out error))
+        {
+            body = Array.Empty<byte>();
+            return false;
+        }
+
+        if (path is not null)
+        {
+            if (length > InspectorBodyLimits.MaxMapLocalFileBytes)
+            {
+                body = Array.Empty<byte>();
+                error = $"Map Local file exceeds limit";
+                return false;
+            }
+
+            try
+            {
                 body = File.ReadAllBytes(path);
                 return true;
             }
@@ -150,7 +204,7 @@ public sealed class AutoResponderViewModel : INotifyPropertyChanged
             }
         }
 
-        body = Encoding.UTF8.GetBytes(rule.Body ?? string.Empty);
+        body = inline ?? Array.Empty<byte>();
         return true;
     }
 

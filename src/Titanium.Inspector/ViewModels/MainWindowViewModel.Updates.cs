@@ -120,24 +120,43 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
+        if (string.IsNullOrWhiteSpace(ComposerBodyFilePath)
+            && !string.IsNullOrEmpty(ComposerBody)
+            && ComposerBody.Length > InspectorBodyLimits.MaxBodyBytes)
+        {
+            SetOutcomeStatus(
+                $"Composer body is {SessionDisplayFormat.FormatByteSize(ComposerBody.Length)} — consider Load body from file",
+                StatusSeverity.Warning);
+        }
+
         SetStatus("Composer sending…", StatusSeverity.Busy);
         var template = new SessionSnapshot
         {
             Method = string.IsNullOrWhiteSpace(ComposerMethod) ? "GET" : ComposerMethod,
             Url = ComposerUrl,
             RequestHeadersText = ComposerHeaders,
-            RequestBodyText = ComposerBody,
+            RequestBodyText = HasComposerBodyFile ? null : ComposerBody,
             ContentType = GuessContentType(ComposerHeaders),
         };
 
-        var result = await ReplayService.ReplayAsync(
-            template,
-            editedUrl: ComposerUrl,
-            editedMethod: ComposerMethod,
-            editedBody: ComposerBody,
-            editedHeaders: ComposerHeaders,
-            ignoreServerCertificateErrors: _interception.IgnoreServerCertificateErrors,
-            cancellationToken: _statusRevertCts?.Token ?? CancellationToken.None);
+        ReplayResult result;
+        try
+        {
+            result = await ReplayService.ReplayAsync(
+                template,
+                editedUrl: ComposerUrl,
+                editedMethod: ComposerMethod,
+                editedBody: HasComposerBodyFile ? null : ComposerBody,
+                editedHeaders: ComposerHeaders,
+                bodyFilePath: ComposerBodyFilePath,
+                ignoreServerCertificateErrors: _interception.IgnoreServerCertificateErrors,
+                cancellationToken: _statusRevertCts?.Token ?? CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            SetOutcomeStatus("Composer failed: " + Truncate(ex.Message, 160), StatusSeverity.Error, toastImportant: true);
+            return;
+        }
 
         if (!result.Ok)
         {
@@ -145,6 +164,9 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
+        var requestPreview = HasComposerBodyFile
+            ? $"(file: {Path.GetFileName(ComposerBodyFilePath)})"
+            : InspectorBodyLimits.TruncateText(ComposerBody ?? "");
         var snap = new SessionSnapshot
         {
             Id = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
@@ -153,12 +175,15 @@ public sealed partial class MainWindowViewModel
             Host = TryHost(ComposerUrl),
             StartedUtc = DateTimeOffset.UtcNow,
             RequestHeadersText = ComposerHeaders,
-            RequestBodyText = ComposerBody,
+            RequestBodyText = requestPreview,
             StatusCode = result.StatusCode,
             ResponseHeadersText = result.ResponseHeaders,
             ResponseBodyText = result.ResponseBody,
+            ResponseBodyBytes = result.ResponseBodyBytes,
+            ResponseBodyOriginalSize = result.ResponseBodyOriginalSize,
+            ResponseBodyCapture = result.ResponseBodyCapture,
             ContentType = template.ContentType,
-            BodySize = result.ResponseBody?.Length,
+            BodySize = result.ResponseBodyOriginalSize ?? result.ResponseBody?.Length,
             Protocol = "Composer",
         };
 

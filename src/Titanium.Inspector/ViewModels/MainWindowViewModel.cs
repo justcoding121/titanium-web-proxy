@@ -110,7 +110,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private int _selectedOuterPaneIndex;
     private int _selectedInspectTabIndex;
     private int _selectedToolsTabIndex;
+    private int _selectedPaneNavIndex;
     private bool _showSessionDetails;
+    private double _sessionDetailsWidth = 520;
     /// <summary>
     /// When true, assigning <see cref="SelectedSession"/> must not force the details pane open
     /// (filter restore / bulk removal — DataGrid may briefly re-select a neighbor row).
@@ -287,6 +289,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         ApplyEditBodyCommand = Cmd(ApplyEditBodyAsync);
         ToggleDebugLoggingCommand = Cmd(ToggleDebugLoggingAsync);
         CloseSessionDetailsCommand = Cmd(CloseSessionDetailsAsync);
+        TogglePaneNavInspectCommand = Cmd(() => TogglePaneNavAsync(0));
+        TogglePaneNavComposerCommand = Cmd(() => TogglePaneNavAsync(1));
+        TogglePaneNavBreakpointsCommand = Cmd(() => TogglePaneNavAsync(2));
+        TogglePaneNavAutoResponderCommand = Cmd(() => TogglePaneNavAsync(3));
+        TogglePaneNavScriptsCommand = Cmd(() => TogglePaneNavAsync(4));
+        TogglePaneNavMapRemoteCommand = Cmd(() => TogglePaneNavAsync(5));
         OpenToolsComposerCommand = Cmd(() => OpenToolsTabAsync(0));
         OpenToolsBreakpointsCommand = Cmd(() => OpenToolsTabAsync(1));
         OpenToolsAutoResponderCommand = Cmd(() => OpenToolsTabAsync(2));
@@ -297,6 +305,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             SearchQuery = SessionSearch.ClearFilters(SearchQuery);
             return Task.CompletedTask;
         });
+        WireBodyInspectCommands();
 
         WireEventHandlers();
         LoadPlusPanels();
@@ -1145,6 +1154,22 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private Task ApplyEditBodyAsync()
     {
+        if (_selected?.ResponseBodyCapture == BodyCaptureState.Streaming
+            || _selected?.ResponseBodyStreamOpen == true
+            || _selected?.IsServerSentEvents == true)
+        {
+            SetGuardStatus("Cannot edit a streaming body");
+            return Task.CompletedTask;
+        }
+
+        if (!string.IsNullOrEmpty(BreakpointEditBody)
+            && BreakpointEditBody.Length > InspectorBodyLimits.MaxInlineToolBodyChars)
+        {
+            SetOutcomeStatus(
+                $"Breakpoint body is large ({SessionDisplayFormat.FormatByteSize(BreakpointEditBody.Length)}); applying anyway",
+                StatusSeverity.Warning);
+        }
+
         Breakpoints.EditBody(BreakpointEditBody);
         StatusText = "Breakpoint body edit applied (Continue to send)";
         return Task.CompletedTask;
@@ -1217,6 +1242,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public ICommand ApplyEditBodyCommand { get; }
     public ICommand ToggleDebugLoggingCommand { get; }
     public ICommand CloseSessionDetailsCommand { get; }
+    public ICommand TogglePaneNavInspectCommand { get; }
+    public ICommand TogglePaneNavComposerCommand { get; }
+    public ICommand TogglePaneNavBreakpointsCommand { get; }
+    public ICommand TogglePaneNavAutoResponderCommand { get; }
+    public ICommand TogglePaneNavScriptsCommand { get; }
+    public ICommand TogglePaneNavMapRemoteCommand { get; }
     public ICommand OpenToolsComposerCommand { get; }
     public ICommand OpenToolsBreakpointsCommand { get; }
     public ICommand OpenToolsAutoResponderCommand { get; }
@@ -1283,6 +1314,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             if (SetField(ref _scriptOnRequest, value))
             {
                 _interception.ScriptOnRequest = value;
+                if (value is { Length: > InspectorBodyLimits.MaxScriptChars })
+                {
+                    SetOutcomeStatus(
+                        $"On-request script is large ({SessionDisplayFormat.FormatByteSize(value.Length)})",
+                        StatusSeverity.Warning);
+                }
             }
         }
     }
@@ -1295,6 +1332,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             if (SetField(ref _scriptOnResponse, value))
             {
                 _interception.ScriptOnResponse = value;
+                if (value is { Length: > InspectorBodyLimits.MaxScriptChars })
+                {
+                    SetOutcomeStatus(
+                        $"On-response script is large ({SessionDisplayFormat.FormatByteSize(value.Length)})",
+                        StatusSeverity.Warning);
+                }
             }
         }
     }
@@ -1718,6 +1761,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             }
 
             var enableGeneration = Interlocked.Increment(ref _decryptEnableGeneration);
+            // TwoWay CheckBox already flipped visually — snap back until trust succeeds.
+            NotifyDecryptHttpsUnchanged();
             _ = EnableDecryptHttpsAsync(enableGeneration);
         }
     }
@@ -1767,7 +1812,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     /// <summary>True when this OS can resolve local client process ids for the Process column.</summary>
     public bool ShowProcessColumn { get; }
 
-    /// <summary>Right pane visibility (Inspect + Tools). Kept name for tests.</summary>
+    /// <summary>Right content pane visibility (Inspect / tools). Icon rail stays visible.</summary>
     public bool ShowSessionDetails
     {
         get => _showSessionDetails;
@@ -1776,12 +1821,35 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             if (SetField(ref _showSessionDetails, value))
             {
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SessionDetailsPaneWidth)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SessionDetailsPaneMinWidth)));
+                NotifyPaneNavChrome();
             }
         }
     }
 
     public GridLength SessionDetailsPaneWidth =>
-        _showSessionDetails ? new GridLength(420) : new GridLength(0);
+        _showSessionDetails ? new GridLength(_sessionDetailsWidth) : new GridLength(0);
+
+    /// <summary>Min width for the content column when open; 0 when closed so only the rail remains.</summary>
+    public double SessionDetailsPaneMinWidth => _showSessionDetails ? 280 : 0;
+
+    public string PaneContentTitle => SelectedPaneNavIndex switch
+    {
+        0 => "Inspect",
+        1 => "Composer",
+        2 => "Breakpoints",
+        3 => "AutoResponder",
+        4 => "Scripts",
+        5 => "Map Remote",
+        _ => "Inspect",
+    };
+
+    public bool IsInspectRailPressed => _showSessionDetails && SelectedPaneNavIndex == 0;
+    public bool IsComposerRailPressed => _showSessionDetails && SelectedPaneNavIndex == 1;
+    public bool IsBreakpointsRailPressed => _showSessionDetails && SelectedPaneNavIndex == 2;
+    public bool IsAutoResponderRailPressed => _showSessionDetails && SelectedPaneNavIndex == 3;
+    public bool IsScriptsRailPressed => _showSessionDetails && SelectedPaneNavIndex == 4;
+    public bool IsMapRemoteRailPressed => _showSessionDetails && SelectedPaneNavIndex == 5;
 
     public bool HasSelectedSession => _selected is not null;
 
@@ -1918,8 +1986,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
             if (value is not null && !_suppressOpenSessionDetails)
             {
+                var openingPane = !ShowSessionDetails;
                 ShowSessionDetails = true;
-                SelectedOuterPaneIndex = 0;
+                // Opening the pane from a closed state lands on Inspect. While a tool is
+                // showing (Composer, etc.), selecting a session must not steal focus.
+                if (openingPane)
+                {
+                    SelectedPaneNavIndex = 0;
+                }
             }
 
             UpdateWsFramesVisibility();
@@ -1939,14 +2013,78 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public string SelectedHex { get => _selectedHex; set => SetField(ref _selectedHex, value); }
     public string SelectedFrames { get => _selectedFrames; set => SetField(ref _selectedFrames, value); }
 
-    /// <summary>0 = Inspect, 1 = Tools.</summary>
+    /// <summary>Vertical pane nav: 0 Inspect, 1 Composer, 2 Breakpoints, 3 AutoResponder, 4 Scripts, 5 Map Remote.</summary>
+    public int SelectedPaneNavIndex
+    {
+        get => _selectedPaneNavIndex;
+        set
+        {
+            var clamped = Math.Clamp(value, 0, 5);
+            if (!SetField(ref _selectedPaneNavIndex, clamped))
+            {
+                return;
+            }
+
+            if (clamped == 0)
+            {
+                _selectedOuterPaneIndex = 0;
+            }
+            else
+            {
+                _selectedOuterPaneIndex = 1;
+                _selectedToolsTabIndex = clamped - 1;
+            }
+
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedOuterPaneIndex)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedToolsTabIndex)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowInspectPane)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowComposerPane)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowBreakpointsPane)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowAutoResponderPane)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowScriptsPane)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowMapRemotePane)));
+            NotifyPaneNavChrome();
+        }
+    }
+
+    public bool ShowInspectPane => SelectedPaneNavIndex == 0;
+    public bool ShowComposerPane => SelectedPaneNavIndex == 1;
+    public bool ShowBreakpointsPane => SelectedPaneNavIndex == 2;
+    public bool ShowAutoResponderPane => SelectedPaneNavIndex == 3;
+    public bool ShowScriptsPane => SelectedPaneNavIndex == 4;
+    public bool ShowMapRemotePane => SelectedPaneNavIndex == 5;
+
+    private void NotifyPaneNavChrome()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PaneContentTitle)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsInspectRailPressed)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsComposerRailPressed)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsBreakpointsRailPressed)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsAutoResponderRailPressed)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsScriptsRailPressed)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsMapRemoteRailPressed)));
+    }
+
+    /// <summary>0 = Inspect, 1 = Tools (compatibility).</summary>
     public int SelectedOuterPaneIndex
     {
         get => _selectedOuterPaneIndex;
         set
         {
-            if (SetField(ref _selectedOuterPaneIndex, value))
+            var clamped = value <= 0 ? 0 : 1;
+            if (clamped == 0)
             {
+                SelectedPaneNavIndex = 0;
+            }
+            else if (SelectedPaneNavIndex == 0)
+            {
+                SelectedPaneNavIndex = 1 + Math.Clamp(_selectedToolsTabIndex, 0, 4);
+            }
+            else
+            {
+                _selectedOuterPaneIndex = 1;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedOuterPaneIndex)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
             }
         }
@@ -1961,6 +2099,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             if (SetField(ref _selectedInspectTabIndex, value))
             {
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
+                if (value == 1)
+                {
+                    RefreshSelectedInspectors();
+                }
             }
         }
     }
@@ -1971,32 +2113,45 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         get => _selectedToolsTabIndex;
         set
         {
-            if (SetField(ref _selectedToolsTabIndex, value))
+            var clamped = Math.Clamp(value, 0, 4);
+            if (SelectedPaneNavIndex == 0)
             {
+                SelectedPaneNavIndex = 1 + clamped;
+                return;
+            }
+
+            if (SetField(ref _selectedToolsTabIndex, clamped))
+            {
+                _selectedPaneNavIndex = 1 + clamped;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedPaneNavIndex)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowComposerPane)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowBreakpointsPane)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowAutoResponderPane)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowScriptsPane)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowMapRemotePane)));
             }
         }
     }
 
     /// <summary>
-    /// Compatibility index for tests: 0–3 Inspect, 4–8 Tools (Composer…Map Remote).
+    /// Compatibility index for tests: 0–6 Inspect, 4–8 Tools (Composer…Map Remote) when on tools.
     /// </summary>
     public int SelectedDetailTabIndex
     {
-        get => SelectedOuterPaneIndex == 0
+        get => SelectedPaneNavIndex == 0
             ? SelectedInspectTabIndex
-            : 4 + SelectedToolsTabIndex;
+            : 4 + (SelectedPaneNavIndex - 1);
         set
         {
             if (value < 4)
             {
-                SelectedOuterPaneIndex = 0;
+                SelectedPaneNavIndex = 0;
                 SelectedInspectTabIndex = Math.Clamp(value, 0, 6);
             }
             else
             {
-                SelectedOuterPaneIndex = 1;
-                SelectedToolsTabIndex = Math.Clamp(value - 4, 0, 4);
+                SelectedPaneNavIndex = 1 + Math.Clamp(value - 4, 0, 4);
             }
 
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
@@ -2173,12 +2328,28 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Icon-rail toggle: same icon while open closes content; otherwise select + open.
+    /// Does not rely on SelectedIndex re-selection (SetField would no-op).
+    /// </summary>
+    private Task TogglePaneNavAsync(int paneNavIndex)
+    {
+        var clamped = Math.Clamp(paneNavIndex, 0, 5);
+        if (ShowSessionDetails && SelectedPaneNavIndex == clamped)
+        {
+            ShowSessionDetails = false;
+            return Task.CompletedTask;
+        }
+
+        SelectedPaneNavIndex = clamped;
+        ShowSessionDetails = true;
+        return Task.CompletedTask;
+    }
+
     private Task OpenToolsTabAsync(int toolsTabIndex)
     {
+        SelectedPaneNavIndex = 1 + Math.Clamp(toolsTabIndex, 0, 4);
         ShowSessionDetails = true;
-        SelectedOuterPaneIndex = 1;
-        SelectedToolsTabIndex = Math.Clamp(toolsTabIndex, 0, 4);
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
         return Task.CompletedTask;
     }
 
@@ -2246,14 +2417,20 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         if (_selected is null)
         {
             SelectedHeaders = SelectedBody = SelectedHex = SelectedFrames = "";
+            BodyCaptureHint = "";
+            HexCaptureHint = "";
+            BodyPreviewBitmap = null;
+            _cachedPrettyBody = null;
+            _cachedPrettySessionId = null;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedOpaqueHint)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowSelectedOpaqueHint)));
+            NotifySaveBodyCanExecute();
             return;
         }
 
         SelectedHeaders = BuildSelectedHeadersText(_selected);
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedOpaqueHint)));
-        SelectedBody = BuildSelectedBodyText(_selected);
+        RefreshBodyInspector();
         SelectedHex = SessionInspectors.FormatLabeledHex(
             _selected.RequestHeadersText,
             _selected.ResponseHeadersText,
@@ -2311,15 +2488,52 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             sb.Append(pair.Key).Append('=').AppendLine(pair.Value);
     }
 
-    private static string BuildSelectedBodyText(SessionSnapshot selected)
+    private string BuildSelectedBodyText(SessionSnapshot selected)
     {
-        var body = SessionInspectors.FormatLabeledBody(
-            selected.RequestHeadersText,
-            selected.ResponseHeadersText,
-            selected.RequestBodyText,
-            selected.ResponseBodyText,
-            selected.RequestBodyBytes,
-            selected.ResponseBodyBytes);
+        if (_bodyPrettyMode
+            && _cachedPrettySessionId == selected.Id
+            && _cachedPrettyBody is not null
+            && SelectedInspectTabIndex == 1)
+        {
+            return AppendTranscodePrefix(selected, _cachedPrettyBody);
+        }
+
+        var body = BuildSelectedBodyTextCore(selected, _bodyPrettyMode && SelectedInspectTabIndex == 1);
+        if (_bodyPrettyMode && SelectedInspectTabIndex == 1)
+        {
+            var reqCt = SessionInspectors.ParseHeaderBlock(selected.RequestHeadersText)
+                .TryGetValue("Content-Type", out var rct) ? rct : null;
+            var respCt = selected.ContentType
+                         ?? (SessionInspectors.ParseHeaderBlock(selected.ResponseHeadersText)
+                             .TryGetValue("Content-Type", out var sct) ? sct : null);
+            if ((InspectorBodyLimits.IsPrettyPrintableContentType(reqCt)
+                 || InspectorBodyLimits.IsPrettyPrintableContentType(respCt))
+                && InspectorBodyLimits.TryPrettyPrint(selected.RequestBodyText, reqCt) is null
+                && InspectorBodyLimits.TryPrettyPrint(selected.ResponseBodyText, respCt) is null
+                && (selected.RequestBodyCapture is BodyCaptureState.Truncated
+                    || selected.ResponseBodyCapture is BodyCaptureState.Truncated
+                    || !string.IsNullOrWhiteSpace(selected.RequestBodyText)
+                    || !string.IsNullOrWhiteSpace(selected.ResponseBodyText)))
+            {
+                if (string.IsNullOrEmpty(BodyCaptureHint))
+                {
+                    BodyCaptureHint = "Cannot pretty-print (body truncated or invalid)";
+                }
+                else if (!BodyCaptureHint.Contains("pretty-print", StringComparison.OrdinalIgnoreCase))
+                {
+                    BodyCaptureHint += " · Cannot pretty-print (body truncated or invalid)";
+                }
+            }
+
+            _cachedPrettySessionId = selected.Id;
+            _cachedPrettyBody = body;
+        }
+
+        return AppendTranscodePrefix(selected, body);
+    }
+
+    private static string AppendTranscodePrefix(SessionSnapshot selected, string body)
+    {
         if (!selected.IsTranscoded)
             return body;
 
