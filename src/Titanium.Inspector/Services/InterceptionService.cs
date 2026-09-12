@@ -216,6 +216,10 @@ public sealed class InterceptionService : IDisposable
 
     public void ClearDecryptFailureBypass() => _proxy?.ClearDecryptFailureBypass();
 
+    /// <summary>Test / tooling hook: mark <paramref name="host"/> as actively bypassed and raise learned.</summary>
+    internal bool ForceLearnDecryptBypass(string host) =>
+        _proxy?.ForceDecryptFailureBypass(host) ?? false;
+
     private bool IsLearnedDecryptBypass(string? host)
     {
         if (!EnableDecryptFailureBypass || _proxy is null || string.IsNullOrWhiteSpace(host))

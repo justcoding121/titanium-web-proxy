@@ -192,25 +192,23 @@ public class CliRunDialectsE2ETests
 
     [TestMethod]
     [TestCategory("E2E")]
-    public async Task Run_SIGHUP_ReloadFail_KeepsProcessUp()
+    public async Task Run_ReloadFail_KeepsProcessUp()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.Inconclusive("SIGHUP config reload is Unix-only.");
-        }
-
         using var origin = new EchoOrigin();
         var listen = CliProcessHarness.GetFreePort();
         var cfg = ConfigFixtures.WriteTransforms(_tempDir, listen, origin.Port, pathPrefix: "/v1");
         using var harness = new CliProcessHarness();
         harness.EnsurePlusDllBesideCli(copy: false);
         await harness.StartRunAsync(cfg);
-        await harness.WaitForOutputAsync("sighup-handler-registered", TimeSpan.FromSeconds(15));
+        var reloadReady = OperatingSystem.IsWindows()
+            ? "windows-reload-handler-registered"
+            : "sighup-handler-registered";
+        await harness.WaitForOutputAsync(reloadReady, TimeSpan.FromSeconds(15));
         try
         {
-            // Corrupt the config then SIGHUP — process should stay up with a failure message.
+            // Corrupt the config then reload — process should stay up with a failure message.
             await File.WriteAllTextAsync(cfg, "{ not-json");
-            harness.SendSighup();
+            harness.SendReload(cfg);
             await harness.WaitForOutputAsync("Config reload failed", TimeSpan.FromSeconds(15));
 
             using var handler = new HttpClientHandler
@@ -227,6 +225,18 @@ public class CliRunDialectsE2ETests
         {
             harness.Dispose();
         }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Run_SIGHUP_ReloadFail_KeepsProcessUp()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("SIGHUP config reload is Unix-only; see Run_ReloadFail_KeepsProcessUp.");
+        }
+
+        await Run_ReloadFail_KeepsProcessUp();
     }
 
     private static (string CertPath, string KeyPath) CreateSelfSignedPem(string dir)

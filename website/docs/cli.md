@@ -179,9 +179,27 @@ Enable in config (`plus.enabled: true` + control-plane shared secret); disable w
 
 Download the `linux-musl-*` zip (not `linux-x64`) for Alpine or musl-based Kubernetes images. See [HTTP/3](/docs/http3).
 
-### Reload without restart (Unix)
+### Reload without restart
 
-On Linux/macOS, **SIGHUP** reloads routes/clusters from the same config path without dropping the process or in-flight connections (listeners stay bound).
+Change routes, clusters, and `server:` knobs without dropping listeners or in-flight connections:
+
+```shell
+titanium reload -c twp.yaml
+```
+
+| Trigger | OS | Notes |
+|---------|-----|--------|
+| `titanium reload -c …` | All | Preferred operator command |
+| SIGHUP | Linux / macOS | Same path as `reload`; systemd units include `ExecReload` |
+| `systemctl reload titanium` | Linux (service) | Uses `ExecReload=/bin/kill -HUP $MAINPID` |
+| `titanium run --watch` | All | Debounced file watch on the `-c` path (off by default) |
+| Plus `PUT /v1/snapshot` | All | Programmatic clusters/routes; no Plus required for file reload |
+
+**Reloads live:** routes (match + transforms), clusters (destinations, load-balance, affinity), `server:` engine knobs.
+
+**Needs a process restart:** listeners (bind/port), certificates / ACME, enabling or disabling Plus plugins, static files root, access-log path.
+
+Unlike a typical YARP process recycle, Titanium keeps the process and in-flight sessions on the previous cluster snapshot until they finish.
 
 ## See also
 

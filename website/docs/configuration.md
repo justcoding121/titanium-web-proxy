@@ -294,7 +294,29 @@ Each line includes `ts`, `method`, `url`, `host`, `status`, `durationMs`, and `c
 
 ### Graceful reload
 
-On Unix, send **SIGHUP** to a running `titanium run` process to reload routes and clusters from the same config file without stopping listeners or aborting in-flight requests. Windows service hosts should use a process restart or the Plus control-plane snapshot API instead.
+Change routes and backends without dropping connections:
+
+```shell
+titanium reload -c twp.yaml
+```
+
+| What | Live reload? |
+|------|----------------|
+| Routes, transforms, clusters / destinations, LB algorithm | Yes |
+| `server:` timeouts, pooling, protocol flags, decrypt skip hosts | Yes |
+| Listeners (bind / port / type) | No — restart |
+| Certificates / ACME | No — restart |
+| Plus plugins (WAF, JWT, gRPC-JSON, discovery options) | No — restart |
+| Static files, access log path | No — restart |
+
+| How | Notes |
+|-----|--------|
+| `titanium reload -c <config>` | All OS (Windows named event; Unix SIGHUP) |
+| Unix **SIGHUP** / systemd `systemctl reload` | Unit includes `ExecReload=/bin/kill -HUP $MAINPID` |
+| `titanium run --watch` | Debounced file watch (optional) |
+| Plus `PUT /v1/snapshot` | Programmatic route/cluster swap without editing the file |
+
+Invalid reloads keep the previous routes and clusters; the process stays up. Unlike a typical YARP process recycle, Titanium keeps listeners bound and in-flight sessions on the old cluster snapshot until they finish.
 
 ### Code-only callbacks
 

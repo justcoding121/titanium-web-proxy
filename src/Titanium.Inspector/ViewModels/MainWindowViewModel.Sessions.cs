@@ -515,6 +515,35 @@ public sealed partial class MainWindowViewModel
 
         RefreshSessionCountText();
     }
+
+    /// <summary>
+    /// Re-evaluate filter membership when status/content-type/etc. arrive after the row was added.
+    /// Avoids a full <see cref="ApplyFilter"/> rebuild on every SSE tee chunk.
+    /// </summary>
+    private void OnSessionUpdatedForFilter(SessionSnapshot snapshot)
+    {
+        var matches = SessionSearch.Matches(snapshot, SearchQuery);
+        var index = Sessions.IndexOf(snapshot);
+        if (matches)
+        {
+            if (index < 0)
+            {
+                Sessions.Add(snapshot);
+                RefreshSessionCountText();
+            }
+        }
+        else if (index >= 0)
+        {
+            if (ReferenceEquals(SelectedSession, snapshot))
+            {
+                SelectedSession = null;
+            }
+
+            Sessions.RemoveAt(index);
+            RefreshSessionCountText();
+        }
+    }
+
     private void OnSessionsRemoved(IReadOnlyList<SessionSnapshot> removed)
     {
         if (removed.Count == 0)

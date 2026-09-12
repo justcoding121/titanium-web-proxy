@@ -206,6 +206,11 @@
           <TextBlock Text="{Binding EndpointStatusText}" VerticalAlignment="Center" Opacity="0.85"
                      TextWrapping="Wrap" MaxWidth="420" Margin="0,0,12,6"
                      AutomationProperties.AutomationId="EndpointStatusText" />
+          <TextBlock Text="{Binding DecryptTrustHealthText}" VerticalAlignment="Center"
+                     IsVisible="{Binding ShowDecryptTrustHealth}"
+                     Opacity="0.85" Margin="0,0,12,6" FontSize="11"
+                     ToolTip.Tip="Root CA trust state for Decrypt HTTPS. Install or trust the CA if this says not trusted."
+                     AutomationProperties.AutomationId="DecryptTrustHealthText" />
         </WrapPanel>
       </StackPanel>
       <DataGrid Grid.Row="1" Grid.Column="0" Margin="8,8,4,8"
@@ -460,6 +465,10 @@
             <StackPanel Margin="8" Spacing="8">
               <TextBlock Opacity="0.75" TextWrapping="Wrap"
                          Text="Pause matching traffic to edit the body, continue, or abort. One pause at a time; auto-continues after 120s." />
+              <Border IsVisible="{Binding HasActiveBreakpoint}" Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
+                      CornerRadius="4" Padding="8,6" AutomationProperties.AutomationId="BreakpointHitBanner">
+                <TextBlock Text="{Binding BreakpointHitBanner}" TextWrapping="Wrap" FontWeight="SemiBold" />
+              </Border>
               <CheckBox Content="Enabled" IsChecked="{Binding Breakpoints.Enabled}"
                         AutomationProperties.AutomationId="BreakpointEnabled" />
               <CheckBox Content="Break on response" IsChecked="{Binding BreakpointOnResponse}"

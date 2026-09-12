@@ -40,6 +40,7 @@ public class ServiceUnitFactoryTests
             "/etc/titanium",
             user: false);
         StringAssert.Contains(unit, "ExecStart=/opt/titanium/titanium run -c /etc/titanium/twp.yaml --service");
+        StringAssert.Contains(unit, "ExecReload=/bin/kill -HUP $MAINPID");
         StringAssert.Contains(unit, "WorkingDirectory=/etc/titanium");
         StringAssert.Contains(unit, "Restart=on-failure");
         StringAssert.Contains(unit, "WantedBy=multi-user.target");

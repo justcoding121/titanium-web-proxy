@@ -28,7 +28,7 @@ features:
   - title: HTTP/1 · HTTP/2 · HTTP/3
     details: HTTP/2 is on by default; HTTP/3 (QUIC) is optional. Bridge when client and backend differ. Inspect WebSocket, gRPC, SSE, and GraphQL in the same grid.
   - title: Reverse proxy from the CLI
-    details: Download the CLI, write a short YAML file, and run `titanium`. Routes, load balancing, TLS, and optional automatic certificates (ACME).
+    details: Download the CLI, write a short YAML file, and run `titanium`. Routes, load balancing, TLS, and optional automatic certificates (ACME). Change routes and backends with `titanium reload` without dropping connections — an edge vs typical YARP process recycle.
   - title: Measured performance
     details: Compared on the same test harness against YARP, nginx, HAProxy, and Envoy. See the charts below and the performance guide.
 ---

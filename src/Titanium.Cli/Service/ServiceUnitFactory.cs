@@ -47,6 +47,7 @@ internal static class ServiceUnitFactory
         sb.AppendLine("[Service]");
         sb.AppendLine("Type=simple");
         sb.AppendLine($"ExecStart={exec} run -c {EscapeSystemdArg(configPath)} --service");
+        sb.AppendLine("ExecReload=/bin/kill -HUP $MAINPID");
         sb.AppendLine($"WorkingDirectory={EscapeSystemdArg(workingDirectory)}");
         sb.AppendLine("Restart=on-failure");
         sb.AppendLine("RestartSec=5");

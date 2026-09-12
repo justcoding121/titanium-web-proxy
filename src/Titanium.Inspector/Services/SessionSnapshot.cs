@@ -28,6 +28,8 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     private long? _requestBodyOriginalSize;
     private long? _responseBodyOriginalSize;
     private bool _responseBodyStreamOpen;
+    private bool _isWebSocket;
+    private OpaqueTunnelReason _opaqueReason;
 
     public long Id { get; set; }
     public string Method { get; set; } = "GET";
@@ -39,11 +41,24 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     /// and must be reloaded via <see cref="SessionStore.EnsureBodiesLoadedAsync"/>.
     /// </summary>
     public bool BodiesOnDisk { get; set; }
-    public bool IsWebSocket { get; set; }
+    public bool IsWebSocket
+    {
+        get => _isWebSocket;
+        set => SetField(ref _isWebSocket, value);
+    }
     public bool IsGrpc { get; set; }
     public bool IsTranscoded { get; set; }
     public bool IsTunnel { get; set; }
-    public OpaqueTunnelReason OpaqueReason { get; set; }
+    public OpaqueTunnelReason OpaqueReason
+    {
+        get => _opaqueReason;
+        set
+        {
+            if (!SetField(ref _opaqueReason, value))
+                return;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(OpaqueReasonDisplay)));
+        }
+    }
 
     /// <summary>Client-facing HTTP method before gRPC-JSON rewrite (when <see cref="IsTranscoded"/>).</summary>
     public string? ClientMethod { get; set; }
@@ -245,11 +260,12 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    private void SetField<T>(ref T field, T value, [CallerMemberName] string? name = null)
+    /// <returns>True when the value changed.</returns>
+    private bool SetField<T>(ref T field, T value, [CallerMemberName] string? name = null)
     {
         if (Equals(field, value))
         {
-            return;
+            return false;
         }
 
         field = value;
@@ -263,6 +279,8 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BodySizeDisplay)));
         }
+
+        return true;
     }
 }
 

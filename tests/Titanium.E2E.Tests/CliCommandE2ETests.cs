@@ -257,20 +257,18 @@ public class CliCommandE2ETests
 
     [TestMethod]
     [TestCategory("E2E")]
-    public async Task Run_SIGHUP_ReloadsRouteTransforms()
+    public async Task Run_Reload_ReloadsRouteTransforms()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.Inconclusive("SIGHUP config reload is Unix-only.");
-        }
-
         using var origin = new EchoOrigin();
         var listen = CliProcessHarness.GetFreePort();
         var cfg = ConfigFixtures.WriteTransforms(_tempDir, listen, origin.Port, pathPrefix: "/v1");
         using var harness = new CliProcessHarness();
         harness.EnsurePlusDllBesideCli(copy: false);
             await harness.StartRunAsync(cfg);
-            await harness.WaitForOutputAsync("sighup-handler-registered", TimeSpan.FromSeconds(15));
+            var reloadReady = OperatingSystem.IsWindows()
+                ? "windows-reload-handler-registered"
+                : "sighup-handler-registered";
+            await harness.WaitForOutputAsync(reloadReady, TimeSpan.FromSeconds(15));
             try
             {
                 Assert.IsTrue(harness.ProcessId is > 0);
@@ -286,7 +284,7 @@ public class CliCommandE2ETests
                 StringAssert.Contains(await before.Content.ReadAsStringAsync(), "/v1/api");
 
                 ConfigFixtures.WriteTransforms(_tempDir, listen, origin.Port, pathPrefix: "/v2");
-                harness.SendSighup();
+                harness.SendReload(cfg);
                 await harness.WaitForOutputAsync("Config reloaded.", TimeSpan.FromSeconds(15));
 
                 var after = await http.GetAsync($"http://127.0.0.1:{origin.Port}/api");
@@ -297,6 +295,19 @@ public class CliCommandE2ETests
             {
                 harness.Dispose();
             }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Run_SIGHUP_ReloadsRouteTransforms()
+    {
+        // Kept for Unix CI discoverability; Windows uses Run_Reload_ReloadsRouteTransforms.
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("SIGHUP config reload is Unix-only; see Run_Reload_ReloadsRouteTransforms.");
+        }
+
+        await Run_Reload_ReloadsRouteTransforms();
     }
 
     [TestMethod]

@@ -18,8 +18,8 @@ public sealed class SessionBodyDiskCache : IDisposable
     private static readonly byte[] Magic = "TSIB"u8.ToArray();
 
     private readonly string _directory;
-    private readonly long _maxBytes;
-    private readonly TimeSpan _maxAge;
+    private long _maxBytes;
+    private TimeSpan _maxAge;
     private readonly object _gate = new();
     private long _trackedBytes;
     private bool _disposed;
@@ -31,6 +31,19 @@ public sealed class SessionBodyDiskCache : IDisposable
         _maxAge = maxAge;
         Directory.CreateDirectory(_directory);
         PruneOnStartup();
+    }
+
+    /// <summary>Updates disk budget / age; next write or prune enforces the new limits.</summary>
+    public void UpdateLimits(long maxBytes, TimeSpan maxAge)
+    {
+        lock (_gate)
+        {
+            _maxBytes = maxBytes > 0 ? maxBytes : _maxBytes;
+            _maxAge = maxAge > TimeSpan.Zero ? maxAge : _maxAge;
+        }
+
+        PruneExpiredFiles();
+        EnforceDiskBudget();
     }
 
     /// <summary>

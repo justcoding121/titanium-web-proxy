@@ -371,6 +371,31 @@ public sealed partial class CliProcessHarness : IDisposable
         }
     }
 
+    /// <summary>
+    /// Signals config reload: Windows named event via <c>titanium reload</c> gate;
+    /// Unix SIGHUP.
+    /// </summary>
+    public void SendReload(string configPath)
+    {
+        if (_process is null || _process.HasExited)
+        {
+            throw new InvalidOperationException("CLI process is not running.");
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            if (!Titanium.Cli.Config.ConfigReloadGate.TrySignalWindowsReload(configPath))
+            {
+                throw new InvalidOperationException(
+                    "Windows reload event not open — is the CLI awaiting reload?");
+            }
+
+            return;
+        }
+
+        SendSighup();
+    }
+
     /// <summary>Sends SIGTERM to the running CLI (Unix) or kills the tree (Windows).</summary>
     public void SendSigterm()
     {

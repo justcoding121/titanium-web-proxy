@@ -517,9 +517,12 @@ public sealed partial class MainWindowViewModel
         }
 
         SetOutcomeStatus(msg, StatusSeverity.Success, toastImportant: true);
+        NotifyDecryptTrustHealth();
     }
+
     private static string FormatOsTrustFailureStatus(CertificateOsTrustResult? result) =>
         OsTrustUxCopy.FormatStatus(result);
+
     private void SetBusyTrustingRootCa() =>
         SetStatus(
             OperatingSystem.IsWindows() ? TrustingRootCaWindowsStatus : TrustingRootCaStatus,
@@ -884,6 +887,7 @@ public sealed partial class MainWindowViewModel
                 StatusCancelToken).ConfigureAwait(false);
             if (generation != Volatile.Read(ref _decryptTrustVerifyGeneration))
                 return;
+            await MarshalToUiAsync(NotifyDecryptTrustHealth, StatusCancelToken).ConfigureAwait(false);
             if (trusted || !_decryptHttps)
                 return;
 
@@ -1155,6 +1159,14 @@ public sealed partial class MainWindowViewModel
         _interception.DecryptHttps = enabled;
         PersistSettings();
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+        NotifyDecryptTrustHealth();
         SyncToggleVisual?.Invoke(nameof(DecryptHttps), enabled);
+    }
+
+    private void NotifyDecryptTrustHealth()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptTrustHealthText)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowDecryptTrustHealth)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsDecryptTrustHealthy)));
     }
 }

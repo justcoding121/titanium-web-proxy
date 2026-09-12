@@ -342,6 +342,18 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         OnSessionAddedToFilter(snapshot);
     }
 
+    /// <summary>Test hook: same UI path as <see cref="InterceptionService.SessionUpdated"/>.</summary>
+    internal void ApplySessionUpdated(SessionSnapshot snapshot)
+    {
+        _store.NotifyUpdated(snapshot);
+        OnSessionUpdatedForFilter(snapshot);
+        if (ReferenceEquals(SelectedSession, snapshot))
+        {
+            UpdateWsFramesVisibility();
+            RefreshSelectedInspectors();
+        }
+    }
+
     /// <summary>Called from the session grid when Extended multi-select changes.</summary>
     public void SetSelectedSessions(IReadOnlyList<SessionSnapshot> selected)
     {
@@ -660,7 +672,42 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             {
                 PersistSettings();
             }
+
+            if (e.PropertyName is nameof(BreakpointViewModel.LastOverflowMessage)
+                && !string.IsNullOrEmpty(Breakpoints.LastOverflowMessage))
+            {
+                MarshalToUi(() => SetOutcomeStatus(Breakpoints.LastOverflowMessage, StatusSeverity.Warning));
+            }
         };
+        Breakpoints.ActiveHitChanged += (_, _) => MarshalToUi(OnBreakpointActiveHitChanged);
+    }
+
+    private void OnBreakpointActiveHitChanged()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasActiveBreakpoint)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BreakpointHitBanner)));
+
+        if (Breakpoints.Active is { } hit)
+        {
+            var body = hit.Session.RequestBodyText
+                       ?? (hit.Session.RequestBodyBytes is { Length: > 0 } bytes
+                           ? Encoding.UTF8.GetString(bytes)
+                           : "");
+            BreakpointEditBody = body;
+            StatusText = Breakpoints.ActiveSummary;
+            StatusSeverity = StatusSeverity.Warning;
+            // Prefer switching to Breakpoints so Continue/Abort are visible while traffic is frozen.
+            ShowSessionDetails = true;
+            SelectedPaneNavIndex = 2;
+        }
+        else if (!string.IsNullOrEmpty(Breakpoints.LastOverflowMessage))
+        {
+            SetOutcomeStatus(Breakpoints.LastOverflowMessage, StatusSeverity.Warning);
+        }
+        else
+        {
+            SetTransientStatus("Breakpoint cleared", StatusSeverity.Neutral);
+        }
     }
 
     private void WireSessionPipelineHandlers()
@@ -676,8 +723,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             MarshalToUi(() =>
             {
                 _store.NotifyUpdated(snap);
+                OnSessionUpdatedForFilter(snap);
                 if (ReferenceEquals(SelectedSession, snap))
                 {
+                    UpdateWsFramesVisibility();
                     RefreshSelectedInspectors();
                 }
             });
@@ -935,9 +984,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
 
         var saved = await AwaitCancellableAsync(SessionRetentionWindow.ShowAsync(owner, _settings));
-        StatusText = saved
-            ? "Session retention saved — restart Inspector to apply"
-            : "Session retention cancelled";
+        if (!saved)
+        {
+            StatusText = "Session retention cancelled";
+            return;
+        }
+
+        _store.ApplyOptions(SessionStoreOptions.FromSettings(_settings.Current));
+        StatusText = "Session retention applied";
     }
 
 
@@ -1107,6 +1161,31 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     }
 
     public bool HasExclusionSummary => !string.IsNullOrEmpty(_exclusionSummaryText);
+
+    /// <summary>True while a request is paused on a breakpoint.</summary>
+    public bool HasActiveBreakpoint => Breakpoints.HasActiveHit;
+
+    /// <summary>Compact banner for the Breakpoints pane while a hit is active.</summary>
+    public string BreakpointHitBanner => Breakpoints.HasActiveHit
+        ? Breakpoints.ActiveSummary
+        : "";
+
+    /// <summary>Toolbar CA trust / decrypt health pip (empty when decrypt is off).</summary>
+    public string DecryptTrustHealthText
+    {
+        get
+        {
+            if (!_decryptHttps)
+                return "";
+            return _interception.IsRootTrusted
+                ? "CA trusted"
+                : "CA not trusted";
+        }
+    }
+
+    public bool ShowDecryptTrustHealth => _decryptHttps;
+
+    public bool IsDecryptTrustHealthy => _decryptHttps && _interception.IsRootTrusted;
 
     public string SelectedOpaqueHint =>
         _selected is { IsTunnel: true } && _selected.OpaqueReason != OpaqueTunnelReason.None

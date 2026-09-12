@@ -21,6 +21,8 @@ Optional ops plugin for the CLI (and Inspector panels). For operators who want a
 | Cache | In-memory HTTP response cache (`cache.enable`) |
 | gRPC-JSON transcoding | REST/JSON ↔ gRPC (unary + multi-frame streaming; optional gzip) via FileDescriptorSet + `google.api.http` ([guide](/docs/grpc-json-transcoding)) |
 
+File-based route/cluster reload (`titanium reload` / SIGHUP / `run --watch`) does **not** require Plus — use the control plane when you want programmatic snapshot updates or discovery watches.
+
 ## Install
 
 Plus is distributed as a sidecar next to the CLI. There is **no** public Plus download button on this site.

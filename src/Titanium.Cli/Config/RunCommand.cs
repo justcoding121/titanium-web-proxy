@@ -41,6 +41,7 @@ internal static class RunCommand
         var configPath = ParseConfigPath(args);
         var verbose = ParseVerbose(args);
         var serviceMode = ParseServiceMode(args);
+        var watch = ParseWatch(args);
         var serviceName = ParseServiceName(args) ?? Service.ServiceDefaults.DefaultServiceName;
 
         if (serviceMode && OperatingSystem.IsWindows())
@@ -49,7 +50,7 @@ internal static class RunCommand
                 .ConfigureAwait(false);
         }
 
-        return await ExecuteCoreAsync(configPath, verbose, serviceMode, CancellationToken.None)
+        return await ExecuteCoreAsync(configPath, verbose, serviceMode, CancellationToken.None, watch)
             .ConfigureAwait(false);
     }
 
@@ -58,7 +59,8 @@ internal static class RunCommand
         string configPath,
         bool verbose,
         bool serviceMode,
-        CancellationToken stoppingToken)
+        CancellationToken stoppingToken,
+        bool watch = false)
     {
         var loaded = ConfigLoader.Load(configPath);
         var errors = TwpConfigValidator.Validate(loaded.Config);
@@ -184,33 +186,44 @@ internal static class RunCommand
             await AsyncConsole.FlushAsync().ConfigureAwait(false);
             Console.WriteLine("awaiting-shutdown-or-reload");
             await Console.Out.FlushAsync(stoppingToken).ConfigureAwait(false);
-            await WaitForShutdownOrReloadAsync(
-                stoppingToken,
-                onReload: async () =>
-                {
-                    try
+            ConfigReloadGate.WritePidFile(configPath, Environment.ProcessId);
+            try
+            {
+                await WaitForShutdownOrReloadAsync(
+                    stoppingToken,
+                    configPath,
+                    watch,
+                    onReload: async () =>
                     {
-                        await ReloadConfigAsync(
-                            configPath,
-                            proxy,
-                            clusterManager,
-                            routes,
-                            middleware,
-                            loadBalancer,
-                            responseCache,
-                            plusOptions,
-                            () => grpcJsonTranscoder,
-                            t => grpcJsonTranscoder = t,
-                            RefreshReverseProxy,
-                            stoppingToken).ConfigureAwait(false);
-                        AsyncConsole.WriteLine("Config reloaded.");
-                        await AsyncConsole.FlushAsync().ConfigureAwait(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        AsyncConsole.WriteError("Config reload failed: " + ex.Message);
-                    }
-                }).ConfigureAwait(false);
+                        try
+                        {
+                            await ReloadConfigAsync(
+                                configPath,
+                                proxy,
+                                clusterManager,
+                                routes,
+                                middleware,
+                                loadBalancer,
+                                responseCache,
+                                plusOptions,
+                                () => grpcJsonTranscoder,
+                                t => grpcJsonTranscoder = t,
+                                RefreshReverseProxy,
+                                stoppingToken).ConfigureAwait(false);
+                            AsyncConsole.WriteLine("Config reloaded.");
+                            await AsyncConsole.FlushAsync().ConfigureAwait(false);
+                        }
+                        catch (Exception ex)
+                        {
+                            AsyncConsole.WriteError("Config reload failed: " + ex.Message);
+                        }
+                    }).ConfigureAwait(false);
+            }
+            finally
+            {
+                ConfigReloadGate.TryDeletePidFile(configPath);
+            }
+
             await proxy.StopAsync().ConfigureAwait(false);
             return 0;
         }
@@ -314,16 +327,17 @@ internal static class RunCommand
     internal static int PrintHelp()
     {
         AsyncConsole.WriteLine("""
-            titanium run -c <config> [-v|--verbose] [--service] [--name <service-name>]
+            titanium run -c <config> [-v|--verbose] [--service] [--name <service-name>] [--watch]
 
               -c, --config   Path to twp.yaml / .json / .twp / .conf (required).
               -v, --verbose  Enable debug console logging.
               --service      Run as an OS service worker (used by `titanium service install`).
               --name         Windows SCM service name when --service is set (default: titanium).
+              --watch        Debounced reload when the config file changes (off by default).
 
             Starts the proxy and blocks until Ctrl+C, SIGTERM, or the service manager stops it.
-            On Unix, SIGHUP reloads routes/clusters from the config file without dropping the
-            process or in-flight connections (listeners stay bound).
+            Reload routes/clusters without restart: `titanium reload -c <config>` (all OS),
+            Unix SIGHUP, or systemd `systemctl reload` when installed as a service.
             """);
         CliHelp.WriteDocsFooter();
         return 0;
@@ -360,6 +374,19 @@ internal static class RunCommand
         for (var i = 1; i < args.Length; i++)
         {
             if (args[i] is "--service")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    internal static bool ParseWatch(string[] args)
+    {
+        for (var i = 1; i < args.Length; i++)
+        {
+            if (args[i] is "--watch")
             {
                 return true;
             }
@@ -427,7 +454,11 @@ internal static class RunCommand
     }
 
 #pragma warning disable CA1068 // Token stays first so POSIX signal registration can observe the run CTS.
-    private static async Task WaitForShutdownOrReloadAsync(CancellationToken stoppingToken, Func<Task>? onReload) // NOSONAR CA1068 -- Token stays first so POSIX signal registration can observe the run CTS.
+    private static async Task WaitForShutdownOrReloadAsync( // NOSONAR CA1068 -- Token stays first so POSIX signal registration can observe the run CTS.
+        CancellationToken stoppingToken,
+        string configPath,
+        bool watch,
+        Func<Task>? onReload)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -447,6 +478,10 @@ internal static class RunCommand
         PosixSignalRegistration? sigTerm = null;
         PosixSignalRegistration? sigInt = null;
         PosixSignalRegistration? sigHup = null;
+        EventWaitHandle? winReload = null;
+        RegisteredWaitHandle? winReloadWait = null;
+        FileSystemWatcher? watcher = null;
+        CancellationTokenSource? watchDebounce = null;
         try
         {
             if (!OperatingSystem.IsWindows())
@@ -483,6 +518,72 @@ internal static class RunCommand
                     await Console.Out.FlushAsync(stoppingToken).ConfigureAwait(false);
                 }
             }
+            else if (onReload is not null)
+            {
+                winReload = ConfigReloadGate.CreateWindowsReloadEvent(configPath, out _);
+                winReloadWait = ThreadPool.RegisterWaitForSingleObject(
+                    winReload,
+                    (_, _) =>
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await onReload().ConfigureAwait(false);
+                            }
+                            catch
+                            {
+                                // Reload errors are logged by caller.
+                            }
+                        }, stoppingToken);
+                    },
+                    state: null,
+                    millisecondsTimeOutInterval: -1,
+                    executeOnlyOnce: false);
+                Console.WriteLine("windows-reload-handler-registered");
+                await Console.Out.FlushAsync(stoppingToken).ConfigureAwait(false);
+            }
+
+            if (watch && onReload is not null)
+            {
+                var full = Path.GetFullPath(configPath);
+                var dir = Path.GetDirectoryName(full) ?? ".";
+                var file = Path.GetFileName(full);
+                watcher = new FileSystemWatcher(dir, file)
+                {
+                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
+                    EnableRaisingEvents = true,
+                };
+                void OnWatch(object sender, FileSystemEventArgs e)
+                {
+                    watchDebounce?.Cancel();
+                    watchDebounce?.Dispose();
+                    watchDebounce = new CancellationTokenSource();
+                    var token = watchDebounce.Token;
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await Task.Delay(250, token).ConfigureAwait(false);
+                            await onReload().ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            // Debounced.
+                        }
+                        catch
+                        {
+                            // Reload errors are logged by caller.
+                        }
+                    }, CancellationToken.None);
+                }
+
+                watcher.Changed += OnWatch;
+                watcher.Created += OnWatch;
+                watcher.Renamed += OnWatch;
+                Console.WriteLine("config-watch-enabled");
+                await Console.Out.FlushAsync(stoppingToken).ConfigureAwait(false);
+            }
 
             await tcs.Task.ConfigureAwait(false);
         }
@@ -492,6 +593,11 @@ internal static class RunCommand
             sigTerm?.Dispose();
             sigInt?.Dispose();
             sigHup?.Dispose();
+            winReloadWait?.Unregister(null);
+            winReload?.Dispose();
+            watcher?.Dispose();
+            watchDebounce?.Cancel();
+            watchDebounce?.Dispose();
         }
     }
 #pragma warning restore CA1068

@@ -402,6 +402,13 @@ public partial class ProxyServer : IDisposable
     public bool RemoveDecryptFailureBypass(string host) => DecryptFailureBypassCache.Remove(host);
 
     /// <summary>
+    ///     Marks <paramref name="host"/> as actively bypassed (same as a forced learn after origin TLS failure).
+    ///     Raises <see cref="DecryptFailureBypassChanged"/> when bypass newly becomes active.
+    /// </summary>
+    public bool ForceDecryptFailureBypass(string host) =>
+        TryRecordDecryptFailure(host, error: null, forceBypass: true);
+
+    /// <summary>
     ///     When <see cref="EnableDecryptFailureBypass" /> is on and <paramref name="host" /> is actively
     ///     bypassed, returns <see langword="true" /> (decrypt should be skipped).
     /// </summary>
