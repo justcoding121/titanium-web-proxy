@@ -17,9 +17,9 @@ public enum UpstreamHttpProtocol
     ///     the origin has also been confirmed (via a fresh probe or a cached prior result) to support HTTP/2,
     ///     and the origin connection then uses whatever protocol the client ends up negotiating. When
     ///     <see cref="ProxyServer.EnableHttp3" /> is <see langword="true" />, a cached Alt-Svc / HTTPS/SVCB
-    ///     result in <see cref="Http3.Http3OriginCapabilityCache" /> only arms background QUIC warm-up;
-    ///     outbound HTTP/3 is used once that origin is warm, otherwise the request stays on HTTP/2 or
-    ///     HTTP/1.1. This is the default.
+    ///     result in <see cref="Http3.Http3OriginCapabilityCache" /> selects outbound HTTP/3 on the next
+    ///     CONNECT or new HTTP/1.1 request (background QUIC warm-up starts when the cache is filled).
+    ///     An already-open H2↔H2 MITM session is not upgraded mid-connection. This is the default.
     /// </summary>
     Auto,
 
@@ -56,7 +56,7 @@ public enum UpstreamHttpProtocol
     ///     <para>
     ///         Honored from connection-level events and from
     ///         <see cref="EventArguments.SessionEventArgs.UpstreamHttpProtocol" /> in <c>BeforeRequest</c>.
-    ///         Forced <see cref="Http3" /> skips Auto-mode warm-up gating and fails closed with no TCP fallback.
+    ///         Forced <see cref="Http3" /> does not require an Alt-Svc / SVCB cache entry and fails closed with no TCP fallback.
     ///     </para>
     /// </summary>
     Http3

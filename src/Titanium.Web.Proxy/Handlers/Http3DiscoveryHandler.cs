@@ -78,8 +78,24 @@ public partial class ProxyServer
             var ttl = TimeSpan.FromSeconds(Math.Min(entry.MaxAgeSeconds, Http3OriginCapabilityCache.DefaultTtl.TotalSeconds * 2));
             // Alt-Svc does not carry a TargetName — always null here.
             Http3OriginCapabilityCache.Set(hostAndPort, altPort, ttl, targetName: null);
+            var quicPort = altPort == int.MinValue ? port : altPort;
+            TryBeginHttp3OriginWarmup(host, quicPort, connectHost: host);
             break; // Take the first valid h3 entry.
         }
+    }
+
+    /// <summary>
+    ///     Starts a background QUIC handshake so a later Auto-mode CONNECT that already selected
+    ///     HTTP/3 from the capability cache can reuse it instead of paying for the handshake on that
+    ///     request. No-ops when the proxy is not running, a static HTTPS upstream proxy is set (QUIC
+    ///     cannot be tunnelled), or a connection to this origin is already live / warming.
+    /// </summary>
+    internal void TryBeginHttp3OriginWarmup(string sniHost, int quicPort, string? connectHost)
+    {
+        if (string.IsNullOrEmpty(sniHost) || UpStreamHttpsProxy != null || !ProxyRunning)
+            return;
+
+        QuicConnectionPool.BeginWarmup(connectHost ?? sniHost, quicPort, sniHost, UpStreamEndPoint);
     }
 
     /// <summary>
@@ -138,24 +154,14 @@ public partial class ProxyServer
         {
             var quicPort = cachedAltPort == int.MinValue ? port : cachedAltPort;
 
-            // Knowing the origin speaks HTTP/3 is not a reason to route this request over it. The
-            // capability cache is warmed by Alt-Svc on a response, which means a healthy TCP
-            // connection to the origin already exists — switching now would abandon it and put a
-            // full QUIC handshake on this request's critical path, so the request that triggers the
-            // switch pays for it and saves nothing. Establish QUIC in the background instead and
-            // keep serving over TCP until it is ready, which is what browsers do with Alt-Svc.
+            // New CONNECT / new H1 request: a cache hit is enough to take origin H3. Do not wait
+            // for Http3WarmOrigins — that gate left the second browser visit on H2 forever because
+            // warmup only started here and idle-swept before the next CONNECT. Mid-connection H2↔H2
+            // streams still stay on TCP via the coldH3Bridge guard in BridgeOnBeforeRequestForH3.
+            // Kick warmup if this entry was cached without going through Alt-Svc/SVCB helpers
+            // (tests, or a race with the first response); GetOrCreateAsync coalesces with it.
             if (!Http3WarmOrigins.IsWarm(host, quicPort))
-            {
-                // QUIC cannot be tunnelled through a static upstream HTTPS proxy
-                // (see QuicConnectionFactory). GetCustomUpStreamProxyFunc - including the one
-                // ForwardToUpstreamGateway installs - often returns null/"direct" per destination,
-                // so its mere presence must not suppress warming: real requests that do get an
-                // upstream proxy fail QUIC in Http3OriginBridge and stay on TCP.
-                if (UpStreamHttpsProxy == null)
-                    QuicConnectionPool.BeginWarmup(cachedTarget ?? host, quicPort, host, UpStreamEndPoint);
-
-                return Http3OriginRoute.None;
-            }
+                TryBeginHttp3OriginWarmup(host, quicPort, cachedTarget ?? host);
 
             return new Http3OriginRoute
             {
@@ -167,8 +173,8 @@ public partial class ProxyServer
         }
 
         // Auto + discovery: queue background SVCB and return immediately. Never await DNS on the
-        // CONNECT / request critical path — the first connection uses H2/H1; subsequent ones may
-        // upgrade once the capability cache is warm (or Alt-Svc arrives on the first response).
+        // CONNECT / request critical path — the first connection uses H2/H1; subsequent ones use
+        // HTTP/3 once the capability cache is populated (or Alt-Svc arrives on the first response).
         if (allowDnsProbe && EnableHttpsSvcbDnsDiscovery)
             SvcbDiscoveryCoordinator.QueueDiscovery(host, port);
 

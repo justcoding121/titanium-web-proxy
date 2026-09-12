@@ -215,8 +215,9 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     Origins that currently have an established QUIC connection, maintained by
-    ///     <see cref="QuicConnectionPool" /> and consulted by HTTP/3 route resolution so that no
-    ///     request is switched to HTTP/3 only to pay for the handshake itself.
+    ///     <see cref="QuicConnectionPool" />. Used to skip redundant warm-up and to retire idle
+    ///     sockets. Auto HTTP/3 routing uses <see cref="Http3OriginCapabilityCache" /> so a new
+    ///     CONNECT after Alt-Svc still selects origin HTTP/3.
     /// </summary>
     internal Http3.Http3WarmOriginRegistry Http3WarmOrigins { get; }
 
@@ -532,10 +533,10 @@ public partial class ProxyServer : IDisposable
     ///       <item>
     ///         <description>
     ///           With <see cref="UpstreamHttpProtocol.Auto" /> (default), a cached Alt-Svc / HTTPS/SVCB
-    ///           capability only arms background QUIC warm-up. Outbound HTTP/3 is used once that origin
-    ///           is warm; until then the request stays on HTTP/2 or HTTP/1.1. Forced
-    ///           <see cref="UpstreamHttpProtocol.Http3" /> skips warm-up gating and fails closed with no
-    ///           TCP fallback.
+    ///           capability selects outbound HTTP/3 on the next CONNECT or new HTTP/1.1 request.
+    ///           Background QUIC warm-up starts when the cache is filled so that handshake is often
+    ///           already done. An already-open H2↔H2 MITM session is not upgraded mid-connection.
+    ///           Forced <see cref="UpstreamHttpProtocol.Http3" /> fails closed with no TCP fallback.
     ///         </description>
     ///       </item>
     ///     </list>

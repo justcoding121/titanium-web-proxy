@@ -984,9 +984,10 @@ See the protocol support matrix on the wiki for exact, up-to-date HTTP/1.x/HTTP/
       the same IP:port (TCP H1/H2 + UDP H3) and injects client-facing <code>Alt-Svc</code>.
     </li><li>
       With <a class="xref" href="Titanium.Web.Proxy.Models.UpstreamHttpProtocol.html#Titanium_Web_Proxy_Models_UpstreamHttpProtocol_Auto">Auto</a> (default), a cached Alt-Svc / HTTPS/SVCB
-      capability only arms background QUIC warm-up. Outbound HTTP/3 is used once that origin
-      is warm; until then the request stays on HTTP/2 or HTTP/1.1. Forced
-      <a class="xref" href="Titanium.Web.Proxy.Models.UpstreamHttpProtocol.html#Titanium_Web_Proxy_Models_UpstreamHttpProtocol_Http3">Http3</a> skips warm-up gating and fails closed with no
+      capability selects outbound HTTP/3 on the next CONNECT or new HTTP/1.1 request.
+      Background QUIC warm-up starts when the cache is filled so that handshake is often
+      already done. An already-open H2↔H2 MITM session is not upgraded mid-connection.
+      Forced <a class="xref" href="Titanium.Web.Proxy.Models.UpstreamHttpProtocol.html#Titanium_Web_Proxy_Models_UpstreamHttpProtocol_Http3">Http3</a> fails closed with no
       TCP fallback.
     </li></ul>
 <p>Requires MsQuic native library and a supported operating-system version

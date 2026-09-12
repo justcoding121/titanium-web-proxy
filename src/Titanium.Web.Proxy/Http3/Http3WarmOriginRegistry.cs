@@ -7,9 +7,9 @@ namespace Titanium.Web.Proxy.Http3;
 ///     <para>
 ///         This is deliberately separate from <see cref="Http3OriginCapabilityCache" />, which answers
 ///         a different question. The capability cache says an origin <em>supports</em> HTTP/3; this
-///         registry says a connection to it <em>exists right now</em>. Route resolution needs both:
-///         switching a request to HTTP/3 on capability alone puts a QUIC handshake on that request's
-///         critical path, which costs more than the switch saves.
+///         registry says a connection to it <em>exists right now</em>. The pool uses it to skip
+///         redundant warm-up and to drop idle sockets; Auto route selection uses the capability
+///         cache alone so a new CONNECT after Alt-Svc still takes HTTP/3.
 ///     </para>
 /// </summary>
 internal sealed class Http3WarmOriginRegistry

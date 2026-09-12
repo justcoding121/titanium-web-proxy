@@ -184,10 +184,11 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     }
 
     /// <summary>
-    ///     Starts establishing a connection to an origin in the background, so that a later request
-    ///     can be routed to HTTP/3 without paying the handshake itself. Returns immediately; at most
-    ///     one warm-up per origin runs at a time, and failures are silent because the origin simply
-    ///     keeps being served over TCP.
+    ///     Starts establishing a connection to an origin in the background, so a later Auto-mode
+    ///     CONNECT that already selected HTTP/3 from the capability cache can reuse it instead of
+    ///     paying for the handshake on that request. Returns immediately; at most one warm-up per
+    ///     origin runs at a time. Failures are silent — the next CONNECT still takes HTTP/3 and
+    ///     handshakes on demand (or stays on TCP if QUIC cannot be established).
     /// </summary>
     internal void BeginWarmup(string connectHost, int port, string sniHost, IPEndPoint? upStreamEndPoint)
     {
