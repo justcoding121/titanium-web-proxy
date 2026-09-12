@@ -696,9 +696,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             BreakpointEditBody = body;
             StatusText = Breakpoints.ActiveSummary;
             StatusSeverity = StatusSeverity.Warning;
-            // Prefer switching to Breakpoints so Continue/Abort are visible while traffic is frozen.
-            ShowSessionDetails = true;
-            SelectedPaneNavIndex = 2;
+            // If the tools pane is already open, switch to Breakpoints so Continue/Abort are
+            // visible — never force-open a closed pane (status/banner still notify).
+            if (ShowSessionDetails)
+            {
+                SelectedPaneNavIndex = 2;
+            }
         }
         else if (!string.IsNullOrEmpty(Breakpoints.LastOverflowMessage))
         {
@@ -2516,6 +2519,46 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     {
         ShowSessionDetails = false;
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Assign <see cref="SelectedSession"/> without opening the details pane
+    /// (Composer Send, context-menu prep, filter restore).
+    /// </summary>
+    public void SelectSessionWithoutOpeningDetails(SessionSnapshot? snap)
+    {
+        using (SuppressOpenSessionDetails())
+        {
+            SelectedSession = snap;
+        }
+    }
+
+    /// <summary>
+    /// Suppress open-on-select for the duration of a DataGrid selection write
+    /// (e.g. right-click selecting a row for a context menu).
+    /// </summary>
+    public IDisposable SuppressOpenSessionDetails()
+    {
+        _suppressOpenSessionDetails = true;
+        return new OpenSessionDetailsSuppressor(this);
+    }
+
+    private sealed class OpenSessionDetailsSuppressor : IDisposable
+    {
+        private MainWindowViewModel? _owner;
+
+        public OpenSessionDetailsSuppressor(MainWindowViewModel owner) => _owner = owner;
+
+        public void Dispose()
+        {
+            if (_owner is null)
+            {
+                return;
+            }
+
+            _owner._suppressOpenSessionDetails = false;
+            _owner = null;
+        }
     }
 
     /// <summary>

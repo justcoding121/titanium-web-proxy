@@ -337,6 +337,171 @@ public class SessionPipelineTests
     }
 
     [TestMethod]
+    public void ClearSessions_WhileDetailsOpen_ClosesPane()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-inspector-clear-open-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+
+            var snap = new SessionSnapshot { Id = 1, Method = "GET", Url = "https://a.test/", Host = "a.test" };
+            vm.SeedSession(snap);
+            vm.SelectedSession = snap;
+            Assert.IsTrue(vm.ShowSessionDetails);
+
+            Assert.IsTrue(vm.ClearSessionsCommand.CanExecute(null));
+            vm.ClearSessionsCommand.Execute(null);
+
+            Assert.AreEqual(0, vm.Sessions.Count);
+            Assert.IsNull(vm.SelectedSession);
+            Assert.IsFalse(vm.ShowSessionDetails);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
+    public void RemoveSelected_ClearsInspected_ClosesPane()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-inspector-remove-pane-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+
+            var a = new SessionSnapshot { Id = 1, Method = "GET", Url = "https://a.test/", Host = "a.test" };
+            var b = new SessionSnapshot { Id = 2, Method = "GET", Url = "https://b.test/", Host = "b.test" };
+            vm.SeedSession(a);
+            vm.SeedSession(b);
+            vm.SelectedSession = a;
+            vm.SetSelectedSessions([a]);
+            Assert.IsTrue(vm.ShowSessionDetails);
+
+            Assert.IsTrue(vm.RemoveSelectedSessionsCommand.CanExecute(null));
+            vm.RemoveSelectedSessionsCommand.Execute(null);
+
+            Assert.AreEqual(1, vm.Sessions.Count);
+            Assert.IsNull(vm.SelectedSession);
+            Assert.IsFalse(vm.ShowSessionDetails);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
+    public void BreakpointHit_DoesNotOpenClosedPane_SwitchesWhenOpen()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-inspector-bp-pane-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+
+            Assert.IsFalse(vm.ShowSessionDetails);
+            vm.Breakpoints.Enabled = true;
+            vm.Breakpoints.UrlFilter = "*";
+            Assert.IsTrue(vm.Breakpoints.TryEnter(
+                new SessionSnapshot { Method = "GET", Url = "https://paused.test/" },
+                out _));
+            Assert.IsFalse(vm.ShowSessionDetails);
+
+            vm.Breakpoints.Continue();
+            vm.OpenToolsComposerCommand.Execute(null);
+            Assert.IsTrue(vm.ShowSessionDetails);
+            Assert.AreEqual(1, vm.SelectedPaneNavIndex);
+
+            Assert.IsTrue(vm.Breakpoints.TryEnter(
+                new SessionSnapshot { Method = "POST", Url = "https://paused2.test/" },
+                out _));
+            Assert.IsTrue(vm.ShowSessionDetails);
+            Assert.AreEqual(2, vm.SelectedPaneNavIndex);
+            vm.Breakpoints.Continue();
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
+    public void SelectSessionWithoutOpeningDetails_DoesNotOpenPane()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-inspector-select-suppress-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+
+            var snap = new SessionSnapshot { Id = 9, Method = "GET", Url = "https://suppress.test/", Host = "suppress.test" };
+            vm.SeedSession(snap);
+            Assert.IsFalse(vm.ShowSessionDetails);
+
+            vm.SelectSessionWithoutOpeningDetails(snap);
+            Assert.AreSame(snap, vm.SelectedSession);
+            Assert.IsFalse(vm.ShowSessionDetails);
+
+            using (vm.SuppressOpenSessionDetails())
+            {
+                vm.SelectedSession = new SessionSnapshot
+                {
+                    Id = 10,
+                    Method = "GET",
+                    Url = "https://suppress2.test/",
+                    Host = "suppress2.test",
+                };
+            }
+
+            Assert.IsFalse(vm.ShowSessionDetails);
+            Assert.AreEqual(10, vm.SelectedSession!.Id);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
     public void ApplyFilter_AfterClosingDetails_DoesNotReopenPane()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-inspector-filter-details-" + Guid.NewGuid().ToString("N") + ".json");

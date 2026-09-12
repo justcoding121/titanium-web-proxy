@@ -126,10 +126,16 @@ public partial class MainWindow : Window
             return;
         }
 
-        SessionsGrid.SelectedItems.Clear();
-        SessionsGrid.SelectedItem = snap;
-        if (DataContext is MainWindowViewModel vm)
+        if (DataContext is not MainWindowViewModel vm)
         {
+            return;
+        }
+
+        // Right-click only prepares selection for the context menu — do not open Inspect.
+        using (vm.SuppressOpenSessionDetails())
+        {
+            SessionsGrid.SelectedItems.Clear();
+            SessionsGrid.SelectedItem = snap;
             vm.SelectedSession = snap;
             vm.SetSelectedSessions([snap]);
         }

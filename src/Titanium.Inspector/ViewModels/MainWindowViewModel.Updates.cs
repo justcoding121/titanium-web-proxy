@@ -190,7 +190,8 @@ public sealed partial class MainWindowViewModel
         _store.Add(snap);
         ApplyFilter();
         RefreshSessionCountText();
-        SelectedSession = snap;
+        // Select the synthetic row without forcing Inspect open (Composer may already be showing).
+        SelectSessionWithoutOpeningDetails(snap);
         SetOutcomeStatus($"Composer → HTTP {result.StatusCode} (session #{snap.Id})", StatusSeverity.Success);
     }
     private static string? GuessContentType(string headers)

@@ -24,18 +24,21 @@ public sealed partial class MainWindowViewModel
         // a neighbor row (SelectedSession setter would reopen a closed details pane).
         _selectedSessions.Clear();
         SelectedSession = null;
+        ShowSessionDetails = false;
 
         _userRemovalDepth++;
+        _suppressOpenSessionDetails = true;
         try
         {
             _store.Clear();
+            Sessions.Clear();
         }
         finally
         {
+            _suppressOpenSessionDetails = false;
             _userRemovalDepth--;
         }
 
-        Sessions.Clear();
         _retentionEvictedTotal = 0;
         _interception.ResetSessionIdSequence();
         RefreshSessionCountText();
@@ -58,24 +61,26 @@ public sealed partial class MainWindowViewModel
         if (SelectedSession is not null && ids.Contains(SelectedSession.Id))
         {
             SelectedSession = null;
+            ShowSessionDetails = false;
         }
 
         _userRemovalDepth++;
+        _suppressOpenSessionDetails = true;
         try
         {
             _store.Remove(ids);
+            for (var i = Sessions.Count - 1; i >= 0; i--)
+            {
+                if (ids.Contains(Sessions[i].Id))
+                {
+                    Sessions.RemoveAt(i);
+                }
+            }
         }
         finally
         {
+            _suppressOpenSessionDetails = false;
             _userRemovalDepth--;
-        }
-
-        for (var i = Sessions.Count - 1; i >= 0; i--)
-        {
-            if (ids.Contains(Sessions[i].Id))
-            {
-                Sessions.RemoveAt(i);
-            }
         }
 
         RefreshSessionCountText();
@@ -558,14 +563,23 @@ public sealed partial class MainWindowViewModel
         if (SelectedSession is not null && ids.Contains(SelectedSession.Id))
         {
             SelectedSession = null;
+            ShowSessionDetails = false;
         }
 
-        for (var i = Sessions.Count - 1; i >= 0; i--)
+        _suppressOpenSessionDetails = true;
+        try
         {
-            if (ids.Contains(Sessions[i].Id))
+            for (var i = Sessions.Count - 1; i >= 0; i--)
             {
-                Sessions.RemoveAt(i);
+                if (ids.Contains(Sessions[i].Id))
+                {
+                    Sessions.RemoveAt(i);
+                }
             }
+        }
+        finally
+        {
+            _suppressOpenSessionDetails = false;
         }
 
         if (_userRemovalDepth > 0)
