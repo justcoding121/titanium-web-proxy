@@ -39,6 +39,7 @@ Standalone reverse / edge proxy. MIT. [CLI guide](/docs/cli) · [Configuration](
 | Listeners | Explicit, transparent, SOCKS, QUIC |
 | OS service | Windows SCM / systemd / launchd via `titanium service` |
 | Config dialects | `.yaml` / `.json`, compact `.twp`, nginx-like `.conf` |
+| Live reload | `titanium reload` / SIGHUP / `run --watch` — routes and clusters without dropping listeners |
 | Self-update | `titanium update` with SHA256 verification |
 | Access logs | Opt-in NDJSON (`server.accessLog`) |
 
@@ -80,7 +81,7 @@ Deeper API notes: [GitHub wiki](https://github.com/justcoding121/titanium-web-pr
 
 ## Also see
 
-- [Performance](/docs/performance) — measured RPS vs YARP, nginx, HAProxy, Envoy
+- [Performance](/docs/performance) — throughput charts and methodology
 - [Protocol support](/docs/protocol-support) — HTTP/1 · HTTP/2 · HTTP/3 matrix
 - [HTTP/3](/docs/http3) — enabling QUIC and packaging
 - [Security](/docs/security) — MITM and secret handling

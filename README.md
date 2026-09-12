@@ -22,7 +22,7 @@ Requires .NET 10 or later for the library. CLI and Inspector downloads are self-
 - Decrypt and inspect HTTPS in a native desktop Inspector on Windows, macOS, and Linux — AutoResponder, Map Local/Remote, breakpoints, Composer, HAR, curl/fetch
 - Keep sign-in working: SSO hosts stay on OS bypass; hosts that reject MITM auto-tunnel
 - Speak modern HTTP — HTTP/2 by default, optional HTTP/3, WebSocket, gRPC, SSE, GraphQL rules in the same grid
-- Run the same engine as a reverse / edge proxy from the CLI (YAML, load balancing, ACME) with measured RPS vs YARP, nginx, HAProxy, and Envoy
+- Run the same engine as a reverse / edge proxy from the CLI (YAML, load balancing, ACME, live reload)
 - Embed in .NET via NuGet (MIT); Inspector is free for personal and education use
 
 Full catalog: [Features](https://titaniumproxy.com/docs/features). Protocol coverage: [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support). HTTP/3 packaging: [HTTP/3 wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3).

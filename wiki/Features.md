@@ -7,8 +7,7 @@ Short catalog of what Titanium offers. Product how-tos live on the **[website Fe
 - **Inspector** — native HTTPS debugger on Windows, macOS, and Linux: decrypt, system proxy, AutoResponder / Map Local / Map Remote, breakpoints, Composer, HAR, curl/fetch
 - **Login-safe decrypt** — SSO hosts stay on OS bypass; auto-tunnel when MITM fails so sign-in keeps working
 - **Modern protocols** — HTTP/2 by default, optional HTTP/3, WebSocket, SSE, gRPC/Protobuf, GraphQL `operationName` rules
-- **CLI reverse / edge proxy** — YAML routes, load balancing, ACME, OS service ([CLI](https://titaniumproxy.com/docs/cli))
-- **Measured performance** — same harness vs YARP, nginx, HAProxy, Envoy ([Performance](Performance))
+- **CLI reverse / edge proxy** — YAML routes, load balancing, ACME, live reload, OS service ([CLI](https://titaniumproxy.com/docs/cli))
 - **Library** — embed the same engine in .NET ([Library](https://titaniumproxy.com/docs/library)); wiki Home below covers the API in depth
 - **Plus** — optional dashboard, metrics, auth, thin WAF, gRPC-JSON ([Plus](https://titaniumproxy.com/docs/plus))
 

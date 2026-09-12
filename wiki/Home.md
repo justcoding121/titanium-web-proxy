@@ -11,7 +11,7 @@ Product guides (Inspector, CLI, Plus) live on the **[website](https://titaniumpr
 - Native HTTPS **Inspector** on Windows, macOS, and Linux — decrypt, AutoResponder / Map Local / Map Remote, breakpoints, Composer, HAR
 - **Login-safe decrypt** — SSO bypass and auto-tunnel when sites reject MITM
 - **HTTP/2** by default, optional **HTTP/3**, WebSocket / SSE / gRPC / GraphQL in the session grid
-- Same engine as a **reverse / edge CLI** (YAML, load balancing, ACME) with measured RPS vs peers
+- Same engine as a **reverse / edge CLI** (YAML, load balancing, ACME, live reload)
 - Embed via the **.NET library** (MIT); Inspector free for personal / education use (PolyForm Noncommercial)
 
 Short catalog: [Features](Features) · full tables: [website Features](https://titaniumproxy.com/docs/features).
