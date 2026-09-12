@@ -863,7 +863,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             if (hasPac)
             {
                 var owner = TryGetMainWindow();
-                if (!await AwaitCancellableAsync(_dialogs.ConfirmPacReplaceAsync(owner)))
+                if (!await AwaitDialogAsync(_dialogs.ConfirmPacReplaceAsync(owner)))
                 {
                     StatusText = "System proxy not enabled (PAC replace cancelled)";
                     await SnapSystemProxyUiAsync();
@@ -879,15 +879,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     }
 
     private Task AwaitCancellableAsync(Task task) => task.WaitAsync(StatusCancelToken);
-
-
-
-
-
-
-
-
     private Task<T> AwaitCancellableAsync<T>(Task<T> task) => task.WaitAsync(StatusCancelToken);
+
+    /// <summary>
+    /// Modal consent dialogs must not share <see cref="StatusCancelToken"/>.
+    /// A prior outcome's status-bar revert cancels that token (~5s) and would abort
+    /// ShowDialog as a silent OperationCanceledException (no toast, no Confirm* ux-trace)
+    /// — the "Nth Clear+Install did nothing" failure mode.
+    /// </summary>
+    private static Task AwaitDialogAsync(Task task) => task;
+    private static Task<T> AwaitDialogAsync<T>(Task<T> task) => task;
 
 
 
@@ -1041,7 +1042,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private async Task ResetSettingsAsync()
     {
         var owner = TryGetMainWindow();
-        if (!await AwaitCancellableAsync(_dialogs.ConfirmResetSettingsAsync(owner)))
+        if (!await AwaitDialogAsync(_dialogs.ConfirmResetSettingsAsync(owner)))
         {
             StatusText = "Reset settings cancelled";
             return;

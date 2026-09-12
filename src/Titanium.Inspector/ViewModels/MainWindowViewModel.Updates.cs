@@ -63,7 +63,7 @@ public sealed partial class MainWindowViewModel
 
         var owner = TryGetMainWindow();
         var version = result.RemoteVersion ?? "";
-        if (!await AwaitCancellableAsync(_dialogs.ConfirmInstallUpdateAsync(owner, version, result.ChannelDisplay, result.OfferKind)))
+        if (!await AwaitDialogAsync(_dialogs.ConfirmInstallUpdateAsync(owner, version, result.ChannelDisplay, result.OfferKind)))
         {
             SetOutcomeStatus(result.Message, StatusSeverity.Success);
             return;

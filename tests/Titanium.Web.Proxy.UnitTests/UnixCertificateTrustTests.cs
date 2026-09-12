@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Helpers;
@@ -559,6 +560,67 @@ public class FirefoxCertificateTrustTests
             var prefs = File.ReadAllText(Path.Combine(dir, "prefs.js"));
             StringAssert.Contains(prefs, "security.enterprise_roots.enabled");
             StringAssert.Contains(prefs, "true");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public void SplitPrefFileLines_Crlf_DoesNotInsertPhantomBlankLines()
+    {
+        var lines = FirefoxCertificateTrust.SplitPrefFileLines(
+            "user_pref(\"a\", true);\r\nuser_pref(\"b\", false);\r\n");
+        Assert.AreEqual(3, lines.Length); // trailing empty from final newline only
+        Assert.AreEqual("user_pref(\"a\", true);", lines[0]);
+        Assert.AreEqual("user_pref(\"b\", false);", lines[1]);
+        Assert.AreEqual("", lines[2]);
+
+        // Legacy bug: Split(['\r','\n']) produced ["a", "", "b", ""] (phantom blank between).
+        var legacy = "user_pref(\"a\", true);\r\nuser_pref(\"b\", false);\r\n"
+            .Split(['\r', '\n'], StringSplitOptions.None);
+        Assert.IsTrue(legacy.Length > lines.Length, "document the CRLF split pitfall we fixed");
+    }
+
+    [TestMethod]
+    public void EnsureAndClearEnterpriseRootsPrefFile_CrlfRewriteLoop_DoesNotGrow()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-ff-crlf-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var userJs = Path.Combine(dir, "user.js");
+        try
+        {
+            // Seed a realistic Windows CRLF user.js with an existing enterprise pref + neighbor.
+            File.WriteAllText(
+                userJs,
+                "user_pref(\"browser.startup.homepage\", \"about:blank\");\r\n" +
+                "user_pref(\"security.enterprise_roots.enabled\", false);\r\n",
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+            var baseline = new FileInfo(userJs).Length;
+            for (var i = 0; i < 40; i++)
+            {
+                FirefoxCertificateTrust.EnsureEnterpriseRootsPrefFile(userJs);
+                // Clear via reflection — private ClearEnterpriseRootsPrefFile
+                var clear = typeof(FirefoxCertificateTrust).GetMethod(
+                    "ClearEnterpriseRootsPrefFile",
+                    BindingFlags.Static | BindingFlags.NonPublic);
+                Assert.IsNotNull(clear);
+                clear!.Invoke(null, [userJs]);
+                FirefoxCertificateTrust.EnsureEnterpriseRootsPrefFile(userJs);
+            }
+
+            var after = new FileInfo(userJs).Length;
+            Assert.IsTrue(
+                after < baseline * 3,
+                $"user.js ballooned under CRLF rewrite loop: baseline={baseline} after={after}");
+            Assert.IsTrue(after < 8 * 1024, $"user.js unexpectedly large: {after} bytes");
+            var text = File.ReadAllText(userJs);
+            StringAssert.Contains(text, "security.enterprise_roots.enabled");
+            StringAssert.Contains(text, "browser.startup.homepage");
+            var nonEmpty = text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Length;
+            Assert.IsTrue(nonEmpty >= 2 && nonEmpty < 80, $"unexpected non-empty line count: {nonEmpty}");
         }
         finally
         {

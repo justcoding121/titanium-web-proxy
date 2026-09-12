@@ -148,7 +148,7 @@ public sealed partial class MainWindowViewModel
         if (_interception.IsRootTrusted)
             return true;
 
-        if (!await AwaitCancellableAsync(_dialogs.ConfirmInstallRootCaBeforeFirefoxAsync(owner)))
+        if (!await AwaitDialogAsync(_dialogs.ConfirmInstallRootCaBeforeFirefoxAsync(owner)))
         {
             SetGuardStatus("Trust CA in Firefox cancelled — install root CA first");
             return false;
@@ -208,7 +208,7 @@ public sealed partial class MainWindowViewModel
 
     private async Task<bool> TryRecoverFirefoxCertutilAsync(Window? owner, CertificateOsTrustResult result)
     {
-        var choice = await AwaitCancellableAsync(_dialogs.ShowTrustRecoveryAsync(owner, result));
+        var choice = await AwaitDialogAsync(_dialogs.ShowTrustRecoveryAsync(owner, result));
         if (choice == TrustRecoveryChoice.Primary &&
             result.Kind == CertificateOsTrustKind.CertutilMissing &&
             (OperatingSystem.IsLinux() || result.BrewAvailable))
@@ -235,7 +235,7 @@ public sealed partial class MainWindowViewModel
 
     private async Task<CertificateOsTrustResult?> TryQuitFirefoxForTrustAsync(Window? owner)
     {
-        if (!await AwaitCancellableAsync(_dialogs.ConfirmQuitFirefoxForTrustAsync(owner)))
+        if (!await AwaitDialogAsync(_dialogs.ConfirmQuitFirefoxForTrustAsync(owner)))
             return CertificateOsTrustResult.Fail(CertificateOsTrustKind.Cancelled, "Firefox trust cancelled");
 
         SetStatus("Quitting Firefox…", StatusSeverity.Busy);
@@ -419,7 +419,7 @@ public sealed partial class MainWindowViewModel
 
     private async Task<bool?> TryRecoverFailedOsTrustAsync(Window? owner, CertificateOsTrustResult? result)
     {
-        var choice = await AwaitCancellableAsync(_dialogs.ShowTrustRecoveryAsync(owner, result));
+        var choice = await AwaitDialogAsync(_dialogs.ShowTrustRecoveryAsync(owner, result));
         if (choice == TrustRecoveryChoice.Cancel)
         {
             _interception.SetLastOsTrustCancelled();
@@ -496,7 +496,7 @@ public sealed partial class MainWindowViewModel
                     : StatusReady);
         }
 
-        return AwaitCancellableAsync(_dialogs.ShowMacSslTrustWaitAsync(
+        return AwaitDialogAsync(_dialogs.ShowMacSslTrustWaitAsync(
             owner,
             () => _interception.VerifyOsUserSslTrust(),
             () => _interception.OpenMacKeychainGuidance(),
@@ -581,7 +581,7 @@ public sealed partial class MainWindowViewModel
         try
         {
             var owner = TryGetMainWindow();
-            if (!await AwaitCancellableAsync(_dialogs.ConfirmRemoveRootCaAsync(owner)))
+            if (!await AwaitDialogAsync(_dialogs.ConfirmRemoveRootCaAsync(owner)))
             {
                 SetTransientStatus(
                     "Remove root CA cancelled",
@@ -693,7 +693,7 @@ public sealed partial class MainWindowViewModel
         try
         {
             var owner = TryGetMainWindow();
-            if (!await AwaitCancellableAsync(_dialogs.ConfirmRotateRootCaAsync(owner)))
+            if (!await AwaitDialogAsync(_dialogs.ConfirmRotateRootCaAsync(owner)))
             {
                 InspectorUxTrace.Event("RotateCa.ConfirmRotate", "accepted=false");
                 SetTransientStatus(
@@ -807,7 +807,7 @@ public sealed partial class MainWindowViewModel
             "Use Bind address 0.0.0.0 so other devices can reach the proxy.";
 
         var owner = TryGetMainWindow();
-        if (await AwaitCancellableAsync(_dialogs.ShowDeviceCaSetupAsync(owner, message)))
+        if (await AwaitDialogAsync(_dialogs.ShowDeviceCaSetupAsync(owner, message)))
         {
             await ExportCaAsync();
         }
@@ -942,7 +942,7 @@ public sealed partial class MainWindowViewModel
             return true;
 
         var owner = TryGetMainWindow();
-        if (!await AwaitCancellableAsync(_dialogs.ConfirmStartProxyForDecryptAsync(owner)))
+        if (!await AwaitDialogAsync(_dialogs.ConfirmStartProxyForDecryptAsync(owner)))
         {
             SetGuardStatus("Decrypt HTTPS cancelled — start the proxy first");
             await RejectDecryptHttpsEnableAsync();
@@ -976,7 +976,7 @@ public sealed partial class MainWindowViewModel
 
         var owner = TryGetMainWindow();
         SetStatus("Root CA not trusted — confirm install…", StatusSeverity.Busy);
-        if (!await AwaitCancellableAsync(_dialogs.ConfirmInstallRootCaAsync(owner)))
+        if (!await AwaitDialogAsync(_dialogs.ConfirmInstallRootCaAsync(owner)))
         {
             SetGuardStatus("Decrypt HTTPS cancelled — root CA not installed");
             await RejectDecryptHttpsEnableAsync();
@@ -1093,7 +1093,7 @@ public sealed partial class MainWindowViewModel
         var owner = TryGetMainWindow();
         for (var i = 0; i < 4; i++)
         {
-            var choice = await AwaitCancellableAsync(_dialogs.ShowDecryptTrustFailedAsync(owner, result));
+            var choice = await AwaitDialogAsync(_dialogs.ShowDecryptTrustFailedAsync(owner, result));
             if (choice == TrustRecoveryChoice.Cancel)
             {
                 _interception.SetLastOsTrustCancelled();

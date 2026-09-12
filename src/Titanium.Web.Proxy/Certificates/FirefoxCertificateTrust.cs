@@ -495,6 +495,22 @@ public static class FirefoxCertificateTrust
     internal static void EnsureEnterpriseRootsUserPref(string profileDirectory) =>
         EnsureEnterpriseRootsPrefFile(Path.Combine(profileDirectory, "user.js"));
 
+    /// <summary>
+    ///     Split pref-file text into logical lines without the CRLF pitfall:
+    ///     <c>Split(['\r','\n'])</c> treats CR and LF as separate separators and inserts a
+    ///     phantom empty line between every real line. Re-joining with
+    ///     <see cref="Environment.NewLine"/> then doubles blank lines on every rewrite —
+    ///     TrustBg Clear/Enable loops grew a profile <c>user.js</c> to hundreds of MB.
+    /// </summary>
+    internal static string[] SplitPrefFileLines(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return [""];
+
+        text = text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+        return text.Split('\n');
+    }
+
     internal static void EnsureEnterpriseRootsPrefFile(string prefFile)
     {
         const string prefLine = "user_pref(\"" + EnterpriseRootsPrefName + "\", true);";
@@ -506,7 +522,7 @@ public static class FirefoxCertificateTrust
                 throw new IOException($"Firefox pref file too large to rewrite safely ({len} bytes)");
 
             var text = File.ReadAllText(prefFile);
-            var lines = text.Split(['\r', '\n'], StringSplitOptions.None);
+            var lines = SplitPrefFileLines(text);
             var found = false;
             for (var i = 0; i < lines.Length; i++)
             {
@@ -566,7 +582,7 @@ public static class FirefoxCertificateTrust
         using (var reader = new StreamReader(fs))
             text = reader.ReadToEnd();
 
-        var lines = text.Split(['\r', '\n'], StringSplitOptions.None);
+        var lines = SplitPrefFileLines(text);
         var filtered = lines.Where(l => !EnterpriseRootsUserPrefLine.IsMatch(l)).ToArray();
         if (filtered.Length == lines.Length)
             return false;
