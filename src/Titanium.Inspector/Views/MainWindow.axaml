@@ -164,10 +164,15 @@
           <CheckBox Content="Capturing" IsChecked="{Binding Capturing}"
                     VerticalAlignment="Center" Margin="0,0,12,6"
                     AutomationProperties.AutomationId="CapturingCheck" />
-          <CheckBox Content="Decrypt HTTPS" IsChecked="{Binding DecryptHttps}"
+          <!-- OneWay + Command: TwoWay leaves the box ticked when CryptUI/install is rejected. -->
+          <CheckBox Content="Decrypt HTTPS"
+                    IsChecked="{Binding DecryptHttps, Mode=OneWay}"
+                    Command="{Binding ToggleDecryptHttpsCommand}"
                     VerticalAlignment="Center" Margin="0,0,12,6"
                     AutomationProperties.AutomationId="DecryptHttpsCheck" />
-          <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}"
+          <CheckBox Content="System proxy"
+                    IsChecked="{Binding SystemProxy, Mode=OneWay}"
+                    Command="{Binding ToggleSystemProxyCommand}"
                     VerticalAlignment="Center" Margin="0,0,12,6"
                     AutomationProperties.AutomationId="SystemProxyCheck" />
           <TextBlock Text="Throttle" VerticalAlignment="Center" Margin="0,0,6,6" Opacity="0.85" />

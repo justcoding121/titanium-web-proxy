@@ -38,6 +38,32 @@ public sealed class InterceptionService : IDisposable
     private Channel<ProcessResolveWork>? _processResolveChannel;
     private CancellationTokenSource? _processResolveCts;
 
+    /// <summary>
+    ///     Serializes fire-and-forget trust cleanup: Firefox prefs/HKCU/policies and Personal-store
+    ///     prune. Rapid Clear+Install / Install / Untrust must not interleave ClearRootTrust,
+    ///     EnableEnterpriseRoots, and My-store prune (prefs locks + Crypt32 contention).
+    /// </summary>
+    private readonly object _firefoxTrustBgGate = new();
+    private readonly Queue<FirefoxTrustBgQueued> _firefoxTrustBgQueue = new();
+    private bool _firefoxTrustBgRunning;
+    private TaskCompletionSource _firefoxTrustBgIdle = CreateCompletedFirefoxTrustIdle();
+
+    private enum FirefoxTrustBgKind
+    {
+        Clear,
+        Enable,
+        Prune,
+    }
+
+    private readonly record struct FirefoxTrustBgQueued(FirefoxTrustBgKind Kind, Action Work);
+
+    private static TaskCompletionSource CreateCompletedFirefoxTrustIdle()
+    {
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        tcs.SetResult();
+        return tcs;
+    }
+
     private readonly record struct ProcessResolveWork(SessionSnapshot Snap, Lazy<int> ProcessId);
 
     public InterceptionService(ISystemProxyController? systemProxy = null)
@@ -203,6 +229,7 @@ public sealed class InterceptionService : IDisposable
 
     public async Task StartAsync(IPAddress address, int port, CancellationToken cancellationToken = default)
     {
+        using var scope = InspectorUxTrace.Scope("Interception.StartAsync", $"{address}:{port}");
         cancellationToken.ThrowIfCancellationRequested();
         if (_proxy is not null)
         {
@@ -250,14 +277,18 @@ public sealed class InterceptionService : IDisposable
         _endPoint.BeforeTunnelConnectRequest += OnBeforeTunnelConnect;
         _endPoint.BeforeTunnelConnectResponse += OnBeforeTunnelConnectResponse;
         _proxy.AddEndPoint(_endPoint);
-        _proxy.Start();
+        using (InspectorUxTrace.Scope("Interception.ProxyServer.Start"))
+            _proxy.Start();
         BoundPort = _endPoint.Port;
         StartProcessResolveWorker();
 
         // Do not treat Unix store/Keychain presence as SSL trust (see RefreshTrustState).
-        IsRootTrusted = UseInMemoryTrustState
-            ? _inMemoryTrusted
-            : RefreshTrustState(machineStore: false);
+        using (InspectorUxTrace.Scope("Interception.RefreshTrustState.OnStart"))
+        {
+            IsRootTrusted = UseInMemoryTrustState
+                ? _inMemoryTrusted
+                : RefreshTrustState(machineStore: false);
+        }
 
         TryPruneLegacySharedCrtsOnce();
 
@@ -557,6 +588,11 @@ public sealed class InterceptionService : IDisposable
 
     /// <summary>Install root CA and refresh <see cref="IsRootTrusted"/> from the store.</summary>
     /// <returns>True when the cert is present in the target Root store after install (or Unix SSL trust succeeded / needs Keychain confirm).</returns>
+    /// <remarks>
+    ///     Combined API for tests/E2E. Inspector UI uses <see cref="InstallRootStoresOnly"/> +
+    ///     <see cref="FinalizeTrustAfterStoreMutation"/> so CryptUI Yes is not followed by store
+    ///     sweeps on the Avalonia dispatcher.
+    /// </remarks>
     public bool InstallRootCertificate(bool machineStore)
     {
         if (_proxy is null)
@@ -580,9 +616,6 @@ public sealed class InterceptionService : IDisposable
             return true;
         }
 
-        // Already in the .NET Root store: on Windows that is SSL trust. On macOS/Linux the
-        // cert can sit in Keychain/NSS without "Always Trust" / SSL trust — do not treat
-        // presence alone as trusted (Chrome then gets NET::ERR_CERT_AUTHORITY_INVALID).
         if (IsRootPresentInStore(machineStore))
         {
             if (OperatingSystem.IsWindows())
@@ -599,18 +632,16 @@ public sealed class InterceptionService : IDisposable
                 return CompleteRootTrustInstall(true);
             }
 
-            // .NET/Keychain has the cert but SSL trust is incomplete — push OS trust again.
             _proxy.CertificateManager.TrustRootCertificate(machineStore);
             LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
             IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
                             _proxy.CertificateManager.VerifyOsUserSslTrust();
-            // MacNeedsManualTrustConfirm: cert was added; UI should guide Always Trust then re-verify.
-            // Return true so the recovery loop runs, but keep IsRootTrusted false until verified.
             return CompleteRootTrustInstall(
                 IsRootTrusted ||
                 LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
         }
 
+        // Full trust (stores + orphan prune + Unix) — non-UI callers only.
         _proxy.CertificateManager.TrustRootCertificate(machineStore);
         LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
 
@@ -622,7 +653,113 @@ public sealed class InterceptionService : IDisposable
 
         IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
                         _proxy.CertificateManager.VerifyOsUserSslTrust();
-        // MacNeedsManualTrustConfirm: cert was added; UI should guide Always Trust then re-verify.
+        return CompleteRootTrustInstall(
+            IsRootTrusted ||
+            LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
+    }
+
+    /// <summary>CryptUI Root Add only — must run on a pumping UI thread.</summary>
+    /// <returns>True when the Root entry was newly added.</returns>
+    public bool InstallRootStoresOnly(bool machineStore)
+    {
+        if (_proxy is null)
+            return false;
+
+        if (FailNextUserTrustInstall)
+        {
+            FailNextUserTrustInstall = false;
+            LastOsTrustResult = CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed, "Forced user-trust failure (test)");
+            return false;
+        }
+
+        if (UseInMemoryTrustState)
+        {
+            _inMemoryTrusted = true;
+            IsRootTrusted = true;
+            LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted (in-memory)");
+            return true;
+        }
+
+        var added = _proxy.CertificateManager.InstallRootIntoCertificateStores(machineStore);
+        LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
+        return added;
+    }
+
+    /// <summary>macOS/Linux Keychain/NSS trust — may show auth UI; pumping thread required.</summary>
+    public void ApplyUnixSslTrustOnUi(bool machineStore)
+    {
+        if (_proxy is null || UseInMemoryTrustState || OperatingSystem.IsWindows())
+            return;
+
+        _proxy.CertificateManager.ApplyUnixSslTrustAfterStoreInstall(machineStore);
+        LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
+    }
+
+    /// <summary>
+    ///     After CryptUI Add / Unix trust: verify trust + My-store prune. Safe off the UI thread.
+    ///     Skips Root orphan CryptUI sweeps (those freeze Avalonia after Yes).
+    /// </summary>
+    /// <param name="machineStore">CurrentUser vs LocalMachine.</param>
+    /// <param name="rootStoreAdded">
+    ///     When <see langword="true"/>, CryptUI just added the Root entry — skip an immediate
+    ///     Root-store Find (Crypt32 is hot after Yes and routinely stalls ~10–15s, especially on a
+    ///     second Clear+Install). Trust is assumed; My prune runs best-effort afterward.
+    /// </param>
+    public bool FinalizeTrustAfterStoreMutation(bool machineStore, bool? rootStoreAdded = null)
+    {
+        using var scope = InspectorUxTrace.Scope(
+            "FinalizeTrustAfterStoreMutation",
+            $"machine={machineStore} added={rootStoreAdded}");
+        if (_proxy is null)
+            return false;
+
+        if (UseInMemoryTrustState)
+        {
+            IsRootTrusted = _inMemoryTrusted;
+            return IsRootTrusted;
+        }
+
+        if (rootStoreAdded == true && OperatingSystem.IsWindows())
+        {
+            IsRootTrusted = true;
+            if (LastOsTrustResult is null)
+                LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted in current-user store");
+
+            InspectorUxTrace.Event("FinalizeTrust.SkipRootFind", "assumeInstalled=true");
+            // Prune on the serial trust background lane — never Task.Run beside Firefox prefs work.
+            SchedulePruneOrphanedPersonalCertificates(machineStore);
+            return CompleteRootTrustInstall(true);
+        }
+
+        try
+        {
+            using (InspectorUxTrace.Scope("FinalizeTrust.PrunePersonal"))
+            {
+                _proxy.CertificateManager.PruneOrphanedPersonalCertificates(
+                    machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser,
+                    keepCurrentThumbprint: true);
+            }
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            using (InspectorUxTrace.Scope("FinalizeTrust.IsRootPresentInStore"))
+                IsRootTrusted = IsRootPresentInStore(machineStore);
+            if (IsRootTrusted && LastOsTrustResult is null)
+                LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted in current-user store");
+            return CompleteRootTrustInstall(IsRootTrusted);
+        }
+
+        using (InspectorUxTrace.Scope("FinalizeTrust.VerifyOsUserSslTrust"))
+        {
+            IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
+                            _proxy.CertificateManager.VerifyOsUserSslTrust();
+        }
         return CompleteRootTrustInstall(
             IsRootTrusted ||
             LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
@@ -630,8 +767,7 @@ public sealed class InterceptionService : IDisposable
 
     private bool CompleteRootTrustInstall(bool installed)
     {
-        if (IsRootTrusted)
-            TryEnableFirefoxEnterpriseRootsBestEffort();
+        // Do not write Firefox prefs/policies here — schedule via RunOffUiAsync after success.
         return installed;
     }
 
@@ -663,6 +799,40 @@ public sealed class InterceptionService : IDisposable
 
         IsRootTrusted = ok && (EvaluateUnixTrustSuccess(LastOsTrustResult) ||
                                _proxy.CertificateManager.VerifyOsUserSslTrust());
+        return CompleteRootTrustInstall(
+            IsRootTrusted ||
+            LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
+    }
+
+    /// <summary>
+    ///     After UAC/admin install: re-verify off the UI thread (store Find can stall Crypt32).
+    /// </summary>
+    public bool FinalizeTrustAfterAdminInstall(bool machineStore)
+    {
+        if (_proxy is null)
+            return false;
+        if (UseInMemoryTrustState)
+            return IsRootTrusted;
+
+        try
+        {
+            _proxy.CertificateManager.PruneOrphanedPersonalCertificates(
+                machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser,
+                keepCurrentThumbprint: true);
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            IsRootTrusted = IsRootPresentInStore(machineStore);
+            return CompleteRootTrustInstall(IsRootTrusted);
+        }
+
+        IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
+                        _proxy.CertificateManager.VerifyOsUserSslTrust();
         return CompleteRootTrustInstall(
             IsRootTrusted ||
             LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
@@ -773,11 +943,145 @@ public sealed class InterceptionService : IDisposable
 
             if (!FirefoxCertificateTrust.IsFirefoxProfilePresent())
                 return;
-            FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref();
+
+            // Windows: HKCU ImportEnterpriseRoots first (cheap). user.js/prefs.js only as fallback
+            // inside TryEnableWindowsEnterpriseRoots — never prefs-first on the install path.
+            if (OperatingSystem.IsWindows())
+                FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots();
+            else
+                FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref();
         }
         catch
         {
             // install path must not fail because Firefox prefs were locked
+        }
+    }
+
+    /// <summary>
+    ///     Queue Firefox enable work on the serial background lane (coalesces consecutive enables).
+    /// </summary>
+    public void ScheduleFirefoxEnterpriseRootsBestEffort() =>
+        EnqueueFirefoxTrustBackground(FirefoxTrustBgKind.Enable, TryEnableFirefoxEnterpriseRootsBestEffort);
+
+    /// <summary>
+    ///     Queue Firefox clear work on the serial background lane (coalesces consecutive clears).
+    /// </summary>
+    public void ScheduleClearPendingFirefoxRootTrust() =>
+        EnqueueFirefoxTrustBackground(FirefoxTrustBgKind.Clear, ClearPendingFirefoxRootTrust);
+
+    /// <summary>
+    ///     Queue Personal (My) store same-CN prune on the serial trust background lane.
+    ///     Used after CryptUI Root Add so install returns immediately while Crypt32 settles.
+    /// </summary>
+    public void SchedulePruneOrphanedPersonalCertificates(bool machineStore)
+    {
+        if (_proxy is null || UseInMemoryTrustState)
+            return;
+
+        var location = machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser;
+        var mgr = _proxy.CertificateManager;
+        EnqueueFirefoxTrustBackground(FirefoxTrustBgKind.Prune, () =>
+        {
+            try
+            {
+                mgr.PruneOrphanedPersonalCertificates(location, keepCurrentThumbprint: true);
+            }
+            catch
+            {
+                // best-effort
+            }
+        });
+    }
+
+    /// <summary>
+    ///     Await idle trust background lane (Firefox prefs + My prune) so the next trust mutation
+    ///     does not collide with prior fire-and-forget work.
+    /// </summary>
+    public Task WaitForFirefoxTrustBackgroundIdleAsync(CancellationToken cancellationToken = default)
+    {
+        Task idle;
+        lock (_firefoxTrustBgGate)
+            idle = _firefoxTrustBgIdle.Task;
+
+        if (idle.IsCompleted)
+            return Task.CompletedTask;
+
+        return idle.WaitAsync(cancellationToken);
+    }
+
+    private void EnqueueFirefoxTrustBackground(FirefoxTrustBgKind kind, Action work)
+    {
+        lock (_firefoxTrustBgGate)
+        {
+            // Coalesce consecutive same-kind ops (double Enable from Ensure+SetOsTrustSuccess,
+            // double Clear, double Prune after rapid Install).
+            if (_firefoxTrustBgQueue.Count > 0)
+            {
+                var items = _firefoxTrustBgQueue.ToArray();
+                if (items[^1].Kind == kind)
+                {
+                    _firefoxTrustBgQueue.Clear();
+                    for (var i = 0; i < items.Length - 1; i++)
+                        _firefoxTrustBgQueue.Enqueue(items[i]);
+                }
+            }
+
+            _firefoxTrustBgQueue.Enqueue(new FirefoxTrustBgQueued(kind, work));
+            InspectorUxTrace.Event(
+                "TrustBg.Enqueue",
+                $"kind={kind} depth={_firefoxTrustBgQueue.Count} running={_firefoxTrustBgRunning}");
+
+            if (_firefoxTrustBgRunning)
+                return;
+
+            _firefoxTrustBgRunning = true;
+            _firefoxTrustBgIdle = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            _ = Task.Run(DrainFirefoxTrustBackground);
+        }
+    }
+
+    private void DrainFirefoxTrustBackground()
+    {
+        InspectorUxTrace.Event("TrustBg.Drain.Start");
+        try
+        {
+            while (true)
+            {
+                FirefoxTrustBgQueued next;
+                lock (_firefoxTrustBgGate)
+                {
+                    if (_firefoxTrustBgQueue.Count == 0)
+                    {
+                        _firefoxTrustBgRunning = false;
+                        _firefoxTrustBgIdle.TrySetResult();
+                        InspectorUxTrace.Event("TrustBg.Drain.Idle");
+                        return;
+                    }
+
+                    next = _firefoxTrustBgQueue.Dequeue();
+                }
+
+                using (InspectorUxTrace.Scope("TrustBg.Job", $"kind={next.Kind}"))
+                {
+                    try
+                    {
+                        next.Work();
+                    }
+                    catch
+                    {
+                        // best-effort lane — never fail the proxy / UI on prefs I/O
+                    }
+                }
+            }
+        }
+        catch
+        {
+            lock (_firefoxTrustBgGate)
+            {
+                _firefoxTrustBgRunning = false;
+                _firefoxTrustBgIdle.TrySetResult();
+            }
+            InspectorUxTrace.Event("TrustBg.Drain.Fault");
         }
     }
 
@@ -794,10 +1098,93 @@ public sealed class InterceptionService : IDisposable
 
     public void UntrustRootCertificate(bool machineStore)
     {
+        // Combined API for E2E / non-UI callers. Inspector ViewModel uses RemoveOsRootStoreOnly
+        // + ClearPendingFirefoxRootTrust off-UI so CryptUI does not freeze on Firefox prefs.
+        RemoveOsRootStoreOnly(machineStore);
+        ClearPendingFirefoxRootTrust();
+    }
+
+    /// <summary>Nickname to clear from Firefox after OS untrust; consumed by <see cref="ClearPendingFirefoxRootTrust"/>.</summary>
+    internal string? PendingFirefoxRootClearName { get; private set; }
+
+    /// <summary>Best-effort Firefox cleanup after OS Root remove (call off the UI thread).</summary>
+    public void ClearPendingFirefoxRootTrust()
+    {
+        var name = PendingFirefoxRootClearName;
+        PendingFirefoxRootClearName = null;
+        FirefoxCertificateTrust.ClearRootTrustBestEffort(name);
+    }
+
+    /// <summary>
+    ///     Mint a new root CA: untrust same-CN store entries, delete Inspector PFX + local leaf cache,
+    ///     recreate root. Always best-effort prunes the legacy shared <c>Titanium.Web.Proxy/crts</c> folder.
+    ///     Does not install trust — caller should prompt Install CA.
+    /// </summary>
+    /// <remarks>
+    ///     CryptUI Remove must run on a pumping UI thread; Firefox clear + PFX recreate should run
+    ///     off-UI via <see cref="RemoveOsRootStoreOnly"/> + <see cref="MintNewRootCertificateCore"/>.
+    ///     This combined method remains for tests / non-UI callers.
+    /// </remarks>
+    public bool RotateRootCertificate(bool machineStore)
+    {
+        RemoveOsRootStoreOnly(machineStore);
+        return MintNewRootCertificateCore();
+    }
+
+    /// <summary>
+    ///     CryptUI Root Removes for every same-CN thumbprint, then My/Unix finalize off-UI via
+    ///     <see cref="FinalizeAfterRootRemove"/>. Inspector ViewModel lists thumbs off-UI first.
+    /// </summary>
+    public void RemoveOsRootStoreOnly(bool machineStore)
+    {
         if (_proxy is null)
+            return;
+
+        if (UseInMemoryTrustState)
         {
+            _inMemoryTrusted = false;
+            IsRootTrusted = false;
+            PendingFirefoxRootClearName = null;
             return;
         }
+
+        PendingFirefoxRootClearName = RootCertificateName;
+        var location = machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser;
+        // Combined path for tests: full CN sweep (may CryptUI). UI callers use List + RemoveByThumb.
+        _proxy.CertificateManager.PruneOrphanedSameCommonNameCertificates(
+            machineStore, keepCurrentThumbprint: false);
+        RefreshTrustAfterRootRemove(machineStore);
+    }
+
+    /// <summary>Read-only list of same-CN Root thumbprints to delete. Safe off the UI thread.</summary>
+    public IReadOnlyList<string> ListRootThumbprintsToRemove(bool machineStore)
+    {
+        if (_proxy is null || UseInMemoryTrustState)
+            return Array.Empty<string>();
+
+        PendingFirefoxRootClearName = RootCertificateName;
+        var location = machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser;
+        return _proxy.CertificateManager.ListSameCommonNameRootThumbprints(location, keepThumbprint: null);
+    }
+
+    /// <summary>One Root Remove by thumbprint (CryptUI). Must run on a pumping UI thread.</summary>
+    public void RemoveRootThumbprintOnUi(bool machineStore, string thumbprint)
+    {
+        if (_proxy is null || UseInMemoryTrustState)
+            return;
+
+        var location = machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser;
+        _proxy.CertificateManager.RemoveCertificateByThumbprint(StoreName.Root, location, thumbprint);
+    }
+
+    /// <summary>
+    ///     After CryptUI Root Removes: drop matching Personal-store entries + refresh IsRootTrusted.
+    ///     Safe off the UI thread (no Root CryptUI). Does not touch Firefox.
+    /// </summary>
+    public void FinalizeAfterRootRemove(bool machineStore)
+    {
+        if (_proxy is null)
+            return;
 
         if (UseInMemoryTrustState)
         {
@@ -806,40 +1193,74 @@ public sealed class InterceptionService : IDisposable
             return;
         }
 
-        _proxy.CertificateManager.RemoveTrustedRootCertificate(machineStore);
-        // Windows: Root store presence is trust. macOS: Chrome still trusts System.keychain
-        // copies after the .NET user store is cleared. Linux: Chrome reads NSS (~/.pki/nssdb),
-        // not the .NET store — leftover nicknames must keep IsRootTrusted true.
+        var location = machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser;
+        try
+        {
+            // Thumbprint remove only — avoid another subject scan of a large Personal store.
+            var thumb = RootCertificate?.Thumbprint;
+            if (!string.IsNullOrEmpty(thumb))
+                _proxy.CertificateManager.RemoveCertificateByThumbprint(StoreName.My, location, thumb);
+            else
+                _proxy.CertificateManager.PruneOrphanedPersonalCertificates(
+                    location, keepCurrentThumbprint: false);
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        RefreshTrustAfterRootRemove(machineStore);
+    }
+
+    /// <summary>macOS/Linux Keychain/NSS untrust — may prompt; pumping UI thread.</summary>
+    public void ApplyUnixUntrustOnUi()
+    {
+        if (_proxy is null || UseInMemoryTrustState || OperatingSystem.IsWindows())
+            return;
+        if (CertificateManager.AreInteractiveRootStoreMutationsSuppressed)
+            return;
+        if (RootCertificate is null)
+            return;
+
+        try
+        {
+            _proxy.CertificateManager.ApplyUnixSslUntrust();
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
+    private void RefreshTrustAfterRootRemove(bool machineStore)
+    {
         if (OperatingSystem.IsWindows())
             IsRootTrusted = IsRootPresentInStore(machineStore);
         else if (OperatingSystem.IsMacOS())
-            IsRootTrusted = _proxy.CertificateManager.IsOsRootStillPresent();
+            IsRootTrusted = _proxy!.CertificateManager.IsOsRootStillPresent();
         else
-            IsRootTrusted = _proxy.CertificateManager.VerifyOsUserSslTrust();
+            IsRootTrusted = _proxy!.CertificateManager.VerifyOsUserSslTrust();
     }
 
     /// <summary>
-    ///     Mint a new root CA: untrust same-CN store entries, delete Inspector PFX + local leaf cache,
-    ///     recreate root. Always best-effort prunes the legacy shared <c>Titanium.Web.Proxy/crts</c> folder.
-    ///     Does not install trust — caller should prompt Install CA.
+    ///     After OS Root remove: optionally clear Firefox prefs, delete PFX/leaf cache, mint new root.
+    ///     Safe off the UI thread (no CryptUI).
     /// </summary>
-    public bool RotateRootCertificate(bool machineStore)
+    public bool MintNewRootCertificateCore(bool clearFirefox = true)
     {
+        using var scope = InspectorUxTrace.Scope("MintNewRoot", $"clearFirefox={clearFirefox}");
         if (_proxy is null)
             return false;
 
+        if (clearFirefox)
+            ClearPendingFirefoxRootTrust();
+        else
+            PendingFirefoxRootClearName = null;
+
         EnsureRootPfxPath();
         var mgr = _proxy.CertificateManager;
-
-        if (!UseInMemoryTrustState)
-            mgr.RemoveTrustedRootCertificate(machineStore);
-        else
-        {
-            _inMemoryTrusted = false;
-            IsRootTrusted = false;
-        }
-
-        mgr.ClearRootCertificate();
+        using (InspectorUxTrace.Scope("MintNewRoot.ClearRootCertificate"))
+            mgr.ClearRootCertificate();
 
         try
         {
@@ -863,10 +1284,15 @@ public sealed class InterceptionService : IDisposable
         }
 
         mgr.PfxFilePath = _rootPfxPath!;
-        var ok = mgr.CreateRootCertificate(persistToFile: true);
-        IsRootTrusted = !UseInMemoryTrustState && IsRootPresentInStore(machineStore);
+        bool ok;
+        using (InspectorUxTrace.Scope("MintNewRoot.CreateRootCertificate"))
+            ok = mgr.CreateRootCertificate(persistToFile: true);
+        // Brand-new thumbprint cannot be in the Root store yet — do not open Crypt32 here
+        // (after Remove the store is hot; a useless Find routinely stalls Clear+Install).
+        IsRootTrusted = UseInMemoryTrustState && _inMemoryTrusted;
 
-        PruneLegacySharedCrts(force: true);
+        using (InspectorUxTrace.Scope("MintNewRoot.PruneLegacySharedCrts"))
+            PruneLegacySharedCrts(force: true);
         return ok && mgr.RootCertificate != null;
     }
 

@@ -400,6 +400,16 @@ public class FirefoxCertificateTrustTests
             return;
         }
 
+        // Live Firefox prefs / AV can fail the user.js fallback without meaning the API is broken.
+        if (!result.Succeeded &&
+            (result.Message.Contains("too large", StringComparison.OrdinalIgnoreCase) ||
+             result.Message.Contains("Insufficient memory", StringComparison.OrdinalIgnoreCase) ||
+             result.Message.Contains("Firefox is running", StringComparison.OrdinalIgnoreCase)))
+        {
+            Assert.Inconclusive(result.Message);
+            return;
+        }
+
         Assert.IsTrue(result.Succeeded, result.Message);
         FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots();
     }

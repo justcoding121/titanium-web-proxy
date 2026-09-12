@@ -77,7 +77,11 @@ public class RotateRootCaTests
                 interception,
                 dialogs);
 
-            await ExecuteAsync(vm.RotateCaCommand);
+            await ExecuteUntilAsync(
+                vm.RotateCaCommand,
+                () => interception.RootCertificate is not null
+                      && !string.Equals(before, interception.RootCertificate.Thumbprint, StringComparison.OrdinalIgnoreCase)
+                      && File.Exists(Path.Combine(dir, "rootCert.pfx")));
             Assert.AreNotEqual(before, interception.RootCertificate!.Thumbprint);
             Assert.IsFalse(Directory.Exists(Path.Combine(dir, "crts")));
             Assert.IsTrue(File.Exists(Path.Combine(dir, "rootCert.pfx")));
@@ -172,6 +176,18 @@ public class RotateRootCaTests
         command.Execute(null);
         await Task.Delay(150);
     }
+
+    private static async Task ExecuteUntilAsync(ICommand command, Func<bool> done, int timeoutMs = 15000)
+    {
+        command.Execute(null);
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (!done())
+        {
+            if (Environment.TickCount64 >= deadline)
+                Assert.Fail("Timed out waiting for Rotate CA to finish.");
+            await Task.Delay(25);
+        }
+    }
     [TestMethod]
     public async Task RotateCa_WhenProxyStopped_SetsStartFirstStatus()
     {
@@ -231,10 +247,15 @@ public class RotateRootCaTests
                 dialogs);
             vm.DecryptHttps = true;
 
-            await ExecuteAsync(vm.RotateCaCommand);
+            await ExecuteUntilAsync(
+                vm.RotateCaCommand,
+                () => dialogs.InstallRootCaCalls >= 1 &&
+                      interception.IsRootTrusted &&
+                      !vm.IsStatusBusy &&
+                      vm.StatusText.Contains("trusted", StringComparison.OrdinalIgnoreCase));
             Assert.IsFalse(vm.DecryptHttps);
             Assert.IsTrue(dialogs.InstallRootCaCalls >= 1);
-            StringAssert.Contains(vm.StatusText, "trusted");
+            StringAssert.Contains(vm.StatusText, "trusted", StringComparison.OrdinalIgnoreCase);
             interception.EnsureShutdown();
         }
         finally
@@ -273,7 +294,10 @@ public class RotateRootCaTests
                 interception,
                 dialogs);
 
-            await ExecuteAsync(vm.RotateCaCommand);
+            await ExecuteUntilAsync(
+                vm.RotateCaCommand,
+                () => dialogs.TrustRecoveryCalls >= 1
+                      && vm.StatusText.Contains("trusted", StringComparison.OrdinalIgnoreCase));
             Assert.AreEqual(1, dialogs.TrustRecoveryCalls);
             StringAssert.Contains(vm.StatusText, "trusted");
             interception.EnsureShutdown();

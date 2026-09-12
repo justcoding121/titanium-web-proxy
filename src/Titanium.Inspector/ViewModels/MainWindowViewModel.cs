@@ -82,6 +82,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private bool _decryptHttps;
     private bool _decryptHttpsBusy;
     private int _decryptEnableGeneration;
+    /// <summary>Exclusive gate for Install / Remove / Rotate / Trust Firefox (CryptUI + store).</summary>
+    private bool _trustCommandBusy;
     private string _autoResponderMatch = "*";
     private string _autoResponderBody = "OK";
     private string _autoResponderContentType = "text/plain";
@@ -504,6 +506,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     /// </summary>
     public async Task TryAutoStartAsync()
     {
+        InspectorUxTrace.Event("Session.Open", $"uxTrace={InspectorUxTrace.LogFilePath}");
         // MenuItem CheckBox TwoWay bindings can write false during init and PersistSettings.
         // Prefer the disk snapshot from LoadFromSettings for this first-start decision.
         RestoreLaunchPreferencesIfClobbered();
@@ -797,6 +800,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
+        using var scope = InspectorUxTrace.Scope("StopCapture");
         _stopBusy = true;
         _reenableSystemProxyOnStart = SystemProxy;
         // Invalidate in-flight optimistic System proxy applies before WinINET restore in Stop().
@@ -806,10 +810,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            await RunOffUiAsync(() => _interception.Stop(), _statusRevertCts?.Token ?? CancellationToken.None)
-                .ConfigureAwait(false);
+            await RunOffUiAsync(() => _interception.Stop(), _statusRevertCts?.Token ?? CancellationToken.None);
 
-            // Same as Start: avoid MarshalToUiAsync when no dispatcher pump (unit tests).
+            // Stay on UI sync context when Avalonia has one (StatusText / checkbox). Unit tests
+            // without a sync context continue inline on the thread-pool — fine without bindings.
             SetSystemProxyCore(false);
             PersistSettings();
             RefreshEndpointAndBindUi();
@@ -849,9 +853,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         if (!s.WarnedAboutPacReplace)
         {
             // macOS scutil can block up to 3s — keep it off the dispatcher.
+            // Stay on the UI sync context afterward: ConfirmPacReplaceAsync uses ShowDialog.
             var hasPac = await RunOffUiAsync(
                 SystemProxyPacHelper.HasActivePacScript,
-                StatusCancelToken).ConfigureAwait(false);
+                StatusCancelToken);
             if (hasPac)
             {
                 var owner = TryGetMainWindow();
@@ -983,7 +988,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             {
                 var ok = await RunOffUiAsync(
                     () => _interception.ReapplySystemProxyIfEnabled(),
-                    StatusCancelToken).ConfigureAwait(false);
+                    StatusCancelToken);
                 StatusText = ok
                     ? "Excluded hosts saved (applies to new connections)"
                     : "Exclusions saved; re-toggle System proxy to apply OS bypass changes";
@@ -1500,6 +1505,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private async Task ApplySystemProxyAsync(bool enable)
     {
         var generation = Interlocked.Increment(ref _systemProxyApplyGeneration);
+        using var scope = InspectorUxTrace.Scope("ApplySystemProxy", $"enable={enable} gen={generation}");
         try
         {
             var ok = await RunOffUiAsync(
@@ -2642,6 +2648,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
+        using var scope = InspectorUxTrace.Scope("StartCapture", $"{BindAddress}:{BindPort}");
+        InspectorUxTrace.Event("UxTrace.Path", InspectorUxTrace.LogFilePath);
         _startBusy = true;
         var address = ParseBindAddress(BindAddress);
         PersistSettings();
@@ -2661,10 +2669,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             // Use async Task.Run (not GetResult) to avoid sync-over-async deadlocks on a sync context.
             await Task.Run(
                 async () => await _interception.StartAsync(address, port, token).ConfigureAwait(false),
-                token).ConfigureAwait(false);
+                token);
 
-            // Apply ViewModel fields on this async path. Do not MarshalToUiAsync here: unit tests can
-            // have Application.Current set without a pumping dispatcher, which would hang forever on Post.
+            // Stay on UI sync context when present so StatusText / Capturing bind correctly.
+            // (ConfigureAwait(false) here left StatusText stuck on Busy in production.)
             if (_interception.BoundPort > 0)
             {
                 BindPort = _interception.BoundPort;

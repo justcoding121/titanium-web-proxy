@@ -468,7 +468,8 @@ public class InterceptionCaptureCoverageTests
         Assert.AreEqual(CertificateOsTrustKind.Failed, nss.Kind);
         StringAssert.Contains(nss.Message, "Start the proxy first");
         var ff = interception.TrustFirefox();
-        Assert.AreEqual(CertificateOsTrustKind.Failed, ff.Kind);
+        Assert.IsTrue(ff.Succeeded, "UseInMemoryTrustState short-circuits before proxy start");
+        StringAssert.Contains(ff.Message, "in-memory");
         Assert.IsNull(interception.OpenMacKeychainGuidance());
         Assert.IsFalse(interception.IsRootInLoginKeychain());
         Assert.IsFalse(interception.VerifyOsUserSslTrust());
@@ -776,7 +777,7 @@ public class InterceptionCaptureCoverageTests
             {
                 Assert.IsTrue(interception.InstallRootCertificate(false));
                 Assert.IsTrue(interception.IsRootTrusted);
-                // Trusted path also best-effort enables Firefox enterprise roots.
+                // CompleteRootTrustInstall is a passthrough; Firefox prefs are scheduled by the VM off-UI.
                 Assert.IsTrue((bool)complete.Invoke(interception, [true])!);
             }
             finally

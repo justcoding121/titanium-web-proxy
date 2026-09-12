@@ -186,10 +186,18 @@ Titanium.Web.Proxy.Network.CertificateManager.OpenMacKeychainGuidance() -> strin
 Titanium.Web.Proxy.Network.CertificateManager.VerifyOsUserSslTrust() -> bool
 Titanium.Web.Proxy.Network.CertificateManager.IsRootInLoginKeychain() -> bool
 Titanium.Web.Proxy.Network.CertificateManager.IsOsRootStillPresent() -> bool
+Titanium.Web.Proxy.Network.CertificateManager.InstallRootIntoCertificateStores(bool machineTrusted = false) -> bool
+Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedSameCommonNameCertificates(bool machineTrusted, bool keepCurrentThumbprint) -> void
+Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslTrustAfterStoreInstall(bool machineTrusted = false) -> void
+Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslUntrust() -> void
+Titanium.Web.Proxy.Network.CertificateManager.ListSameCommonNameRootThumbprints(System.Security.Cryptography.X509Certificates.StoreLocation storeLocation, string? keepThumbprint = null) -> System.Collections.Generic.IReadOnlyList<string!>!
+Titanium.Web.Proxy.Network.CertificateManager.RemoveCertificateByThumbprint(System.Security.Cryptography.X509Certificates.StoreName storeName, System.Security.Cryptography.X509Certificates.StoreLocation storeLocation, string! thumbprint) -> bool
+Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedPersonalCertificates(System.Security.Cryptography.X509Certificates.StoreLocation storeLocation, bool keepCurrentThumbprint) -> void
 Titanium.Web.Proxy.Network.FirefoxCertificateTrust
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProcessRunning() -> bool
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProfilePresent() -> bool
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots() -> bool
+static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.ClearRootTrustBestEffort(string? friendlyName) -> void
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref() -> Titanium.Web.Proxy.Network.CertificateOsTrustResult!
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots() -> Titanium.Web.Proxy.Network.CertificateOsTrustResult!
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryRequestFirefoxQuit(System.TimeSpan? waitForExit = null) -> bool

@@ -18,6 +18,29 @@ namespace Titanium.Inspector.ViewModels;
 
 public sealed partial class MainWindowViewModel
 {
+    private const string TrustActionInProgressStatus =
+        "Another certificate action is already in progress";
+
+    private bool TryBeginTrustCommand()
+    {
+        if (_trustCommandBusy)
+        {
+            InspectorUxTrace.Event("TrustCommand.Rejected", "busy=true");
+            SetGuardStatus(TrustActionInProgressStatus);
+            return false;
+        }
+
+        _trustCommandBusy = true;
+        InspectorUxTrace.Event("TrustCommand.Begin");
+        return true;
+    }
+
+    private void EndTrustCommand()
+    {
+        _trustCommandBusy = false;
+        InspectorUxTrace.Event("TrustCommand.End");
+    }
+
     private async Task InstallCaAsync()
     {
         if (!_interception.IsRunning)
@@ -26,38 +49,56 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        // Already trusted: do not re-open the Root store or rewrite Firefox prefs.
-        if (_interception.IsRootTrusted)
-        {
-            SetOsTrustSuccessStatus();
+        if (!TryBeginTrustCommand())
             return;
-        }
 
-        SetBusyTrustingRootCa();
-        var ok = await EnsureRootCaTrustedAsync(promptIfNeeded: true);
-        if (ok)
+        using var scope = InspectorUxTrace.Scope(
+            "InstallCa",
+            $"trusted={_interception.IsRootTrusted}");
+        try
         {
-            SetOsTrustSuccessStatus();
-            return;
-        }
+            // Already trusted: do not re-open the Root store or rewrite Firefox prefs.
+            if (_interception.IsRootTrusted)
+            {
+                SetOsTrustSuccessStatus();
+                return;
+            }
 
-        if (_interception.LastOsTrustResult?.Kind == CertificateOsTrustKind.Cancelled ||
-            string.IsNullOrEmpty(_interception.LastOsTrustResult?.Message))
+            SetStatus("Preparing install…", StatusSeverity.Busy);
+            await AwaitPriorFirefoxTrustBackgroundAsync();
+
+            SetBusyTrustingRootCa();
+            var ok = await EnsureRootCaTrustedAsync(promptIfNeeded: true);
+            InspectorUxTrace.Event("InstallCa.Result", $"ok={ok}");
+            if (ok)
+            {
+                SetOsTrustSuccessStatus();
+                return;
+            }
+
+            if (_interception.LastOsTrustResult?.Kind == CertificateOsTrustKind.Cancelled ||
+                string.IsNullOrEmpty(_interception.LastOsTrustResult?.Message))
+            {
+                SetGuardStatus("Root CA install cancelled");
+                return;
+            }
+
+            if (await ResolveTerminalTrustFailureAsync(_interception.LastOsTrustResult))
+                SetOsTrustSuccessStatus();
+            else if (_interception.LastOsTrustResult?.Kind == CertificateOsTrustKind.Cancelled)
+                SetGuardStatus("Root CA install cancelled");
+            else
+                SetOutcomeStatus(
+                    OsTrustUxCopy.FormatStatus(_interception.LastOsTrustResult),
+                    StatusSeverity.Error,
+                    toastImportant: true);
+        }
+        finally
         {
-            SetGuardStatus("Root CA install cancelled");
-            return;
+            EndTrustCommand();
         }
-
-        if (await ResolveTerminalTrustFailureAsync(_interception.LastOsTrustResult))
-            SetOsTrustSuccessStatus();
-        else if (_interception.LastOsTrustResult?.Kind == CertificateOsTrustKind.Cancelled)
-            SetGuardStatus("Root CA install cancelled");
-        else
-            SetOutcomeStatus(
-                OsTrustUxCopy.FormatStatus(_interception.LastOsTrustResult),
-                StatusSeverity.Error,
-                toastImportant: true);
     }
+
     private async Task TrustFirefoxCaAsync()
     {
         if (!_interception.IsRunning)
@@ -66,26 +107,41 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        var owner = TryGetMainWindow();
-        if (!await TryEnsureRootBeforeFirefoxAsync(owner))
+        if (!TryBeginTrustCommand())
             return;
 
-        if (!FirefoxCertificateTrust.IsFirefoxProfilePresent())
+        using var scope = InspectorUxTrace.Scope("TrustFirefox");
+        try
         {
-            SetOutcomeStatus(
-                "Firefox profile not found — open Firefox once to create a profile " +
-                "(classic, Snap, or Flatpak), or use Export CA → Firefox Authorities",
-                StatusSeverity.Warning,
-                toastImportant: true);
-            return;
-        }
+            var owner = TryGetMainWindow();
+            if (!await TryEnsureRootBeforeFirefoxAsync(owner))
+                return;
 
-        SetStatus("Updating Firefox trust…", StatusSeverity.Busy);
-        var result = await TrustFirefoxWithRecoveryAsync(owner);
-        SetOutcomeStatus(
-            FormatFirefoxTrustOutcome(result),
-            result.Succeeded ? StatusSeverity.Success : StatusSeverity.Error,
-            toastImportant: true);
+            if (!FirefoxCertificateTrust.IsFirefoxProfilePresent())
+            {
+                SetOutcomeStatus(
+                    "Firefox profile not found — open Firefox once to create a profile " +
+                    "(classic, Snap, or Flatpak), or use Export CA → Firefox Authorities",
+                    StatusSeverity.Warning,
+                    toastImportant: true);
+                return;
+            }
+
+            SetStatus("Preparing Firefox trust…", StatusSeverity.Busy);
+            await AwaitPriorFirefoxTrustBackgroundAsync();
+
+            SetStatus("Updating Firefox trust…", StatusSeverity.Busy);
+            var result = await TrustFirefoxWithRecoveryAsync(owner);
+            InspectorUxTrace.Event("TrustFirefox.Result", $"ok={result.Succeeded} kind={result.Kind}");
+            SetOutcomeStatus(
+                FormatFirefoxTrustOutcome(result),
+                result.Succeeded ? StatusSeverity.Success : StatusSeverity.Error,
+                toastImportant: true);
+        }
+        finally
+        {
+            EndTrustCommand();
+        }
     }
     private async Task<bool> TryEnsureRootBeforeFirefoxAsync(Window? owner)
     {
@@ -183,7 +239,10 @@ public sealed partial class MainWindowViewModel
             return CertificateOsTrustResult.Fail(CertificateOsTrustKind.Cancelled, "Firefox trust cancelled");
 
         SetStatus("Quitting Firefox…", StatusSeverity.Busy);
-        if (!FirefoxCertificateTrust.TryRequestFirefoxQuit())
+        var quitOk = await RunOffUiAsync(
+            () => FirefoxCertificateTrust.TryRequestFirefoxQuit(),
+            StatusCancelToken);
+        if (!quitOk)
         {
             return CertificateOsTrustResult.Fail(
                 CertificateOsTrustKind.Failed,
@@ -196,21 +255,61 @@ public sealed partial class MainWindowViewModel
     /// <summary>
     /// Attempts user OS trust and adaptive recovery (certutil install / Keychain / elevate).
     /// </summary>
-    private async Task<bool> EnsureRootCaTrustedAsync(bool promptIfNeeded) // NOSONAR S3776 -- Adaptive OS-trust recovery loop shares dialog/state; splitting would hide the retry contract.
+    /// <param name="promptIfNeeded">When true, show recovery dialogs on failure.</param>
+    /// <param name="skipInitialRefresh">
+    ///     When true (Clear+Install after mint), skip the pre-install Root-store Find — the new
+    ///     thumbprint cannot be present yet and Crypt32 is often still hot from Remove.
+    /// </param>
+    private async Task<bool> EnsureRootCaTrustedAsync(bool promptIfNeeded, bool skipInitialRefresh = false) // NOSONAR S3776 -- Adaptive OS-trust recovery loop shares dialog/state; splitting would hide the retry contract.
     {
         var owner = TryGetMainWindow();
-        // Yield so Busy can paint. CryptUI / Keychain MUST stay on this thread (message pump) —
-        // Task.Run has no pump, so the Yes/No dialog never appears and callers hang forever
-        // (unit tests without UseInMemoryTrustState will wedge and balloon memory).
+        // Yield so Busy can paint. CryptUI / Keychain MUST stay on this thread (message pump).
         await Task.Yield();
-        var ok = _interception.InstallRootCertificate(machineStore: false);
-        var result = _interception.LastOsTrustResult;
 
-        if (ok && result?.Kind != CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+        bool ok;
+        CertificateOsTrustResult? result;
+
+        if (_interception.UseInMemoryTrustState)
+        {
+            // In-memory still honors FailNextUserTrustInstall so recovery loops are testable.
+            ok = _interception.InstallRootCertificate(machineStore: false);
+            result = _interception.LastOsTrustResult;
+            if (ok && result?.Kind != CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+            {
+                ScheduleFirefoxEnterpriseRootsBestEffort();
+                return true;
+            }
+
+            if (!promptIfNeeded)
+                return ok;
+        }
+        else if (!skipInitialRefresh &&
+                 await RunOffUiAsync(() =>
+                 {
+                     using var refreshScope = InspectorUxTrace.Scope("EnsureRoot.RefreshTrustState");
+                     return _interception.RefreshTrustState(false);
+                 }, StatusCancelToken))
+        {
+            ScheduleFirefoxEnterpriseRootsBestEffort();
             return true;
+        }
+        else
+        {
+            ok = await InstallRootInteractiveAsync();
+            result = _interception.LastOsTrustResult;
+            if (ok && result?.Kind != CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+            {
+                ScheduleFirefoxEnterpriseRootsBestEffort();
+                return true;
+            }
 
-        if (!promptIfNeeded)
-            return ok;
+            // CryptUI No — do not open the trust-recovery dialog.
+            if (result?.Kind == CertificateOsTrustKind.Cancelled)
+                return false;
+
+            if (!promptIfNeeded)
+                return ok;
+        }
 
         // Adaptive recovery loop (certutil / Keychain / elevate).
         for (var i = 0; i < 4; i++)
@@ -218,7 +317,10 @@ public sealed partial class MainWindowViewModel
             result = _interception.LastOsTrustResult;
             if (_interception.IsRootTrusted &&
                 result?.Kind != CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+            {
+                ScheduleFirefoxEnterpriseRootsBestEffort();
                 return true;
+            }
 
             if (result?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
                 return await TryCompleteMacManualTrustAsync(owner);
@@ -227,7 +329,10 @@ public sealed partial class MainWindowViewModel
             {
                 var recovered = await TryRecoverFailedOsTrustAsync(owner, result);
                 if (recovered == true)
+                {
+                    ScheduleFirefoxEnterpriseRootsBestEffort();
                     return true;
+                }
                 if (recovered == false)
                     return false;
                 ok = _interception.IsRootTrusted ||
@@ -238,14 +343,69 @@ public sealed partial class MainWindowViewModel
             break;
         }
 
+        if (_interception.IsRootTrusted)
+            ScheduleFirefoxEnterpriseRootsBestEffort();
         return _interception.IsRootTrusted;
+    }
+
+    /// <summary>
+    /// CryptUI/Keychain on UI; store verify + My prune off UI after Yes (avoids Not Responding).
+    /// </summary>
+    private async Task<bool> InstallRootInteractiveAsync()
+    {
+        using var scope = InspectorUxTrace.Scope("InstallRootInteractive");
+        await Task.Yield();
+        bool added;
+        using (InspectorUxTrace.Scope("InstallRootStoresOnly.CryptUI"))
+            added = _interception.InstallRootStoresOnly(machineStore: false);
+        InspectorUxTrace.Event("InstallRootStoresOnly.Result", $"added={added}");
+
+        if (!OperatingSystem.IsWindows())
+        {
+            await Task.Yield();
+            using (InspectorUxTrace.Scope("ApplyUnixSslTrustOnUi"))
+                _interception.ApplyUnixSslTrustOnUi(machineStore: false);
+        }
+
+        using (InspectorUxTrace.Scope("FinalizeTrustAfterStoreMutation", $"added={added}"))
+        {
+            return await RunOffUiAsync(
+                () => _interception.FinalizeTrustAfterStoreMutation(
+                    machineStore: false,
+                    rootStoreAdded: added),
+                StatusCancelToken);
+        }
+    }
+
+    private void ScheduleFirefoxEnterpriseRootsBestEffort() =>
+        _interception.ScheduleFirefoxEnterpriseRootsBestEffort();
+
+    private async Task AwaitPriorFirefoxTrustBackgroundAsync()
+    {
+        using var scope = InspectorUxTrace.Scope("AwaitTrustBg");
+        try
+        {
+            // Bound wait — never block Clear+Install forever if prefs I/O wedges.
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(StatusCancelToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(8));
+            await _interception.WaitForFirefoxTrustBackgroundIdleAsync(cts.Token)
+                .ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            InspectorUxTrace.Event("AwaitTrustBg.TimeoutOrCancel");
+            // Proceed; serial queue still prevents overlapping prefs/prune work.
+        }
     }
 
     private async Task<bool> TryCompleteMacManualTrustAsync(Window? owner)
     {
         var wait = await WaitForMacSslTrustAsync(owner);
         if (wait == MacSslTrustWaitResult.Trusted || _interception.VerifyOsUserSslTrust())
+        {
+            ScheduleFirefoxEnterpriseRootsBestEffort();
             return true;
+        }
 
         _interception.SetLastOsTrustCancelled();
         if (wait == MacSslTrustWaitResult.NotSavedYet || _interception.IsRootInLoginKeychain())
@@ -281,6 +441,11 @@ public sealed partial class MainWindowViewModel
             // UAC/CryptUI need a message pump — do not Task.Run.
             await Task.Yield();
             var ok = _interception.InstallRootCertificateAsAdmin(machineStore: false);
+            // Store Find after UAC — off UI.
+            if (ok)
+                ok = await RunOffUiAsync(
+                    () => _interception.FinalizeTrustAfterAdminInstall(machineStore: false),
+                    StatusCancelToken);
             if (ok && _interception.LastOsTrustResult?.Kind !=
                 CertificateOsTrustKind.MacNeedsManualTrustConfirm)
                 return true;
@@ -297,9 +462,10 @@ public sealed partial class MainWindowViewModel
         if (choice == TrustRecoveryChoice.Primary)
         {
             SetStatus("Installing browser certificate tools…", StatusSeverity.Busy);
+            // Stay on UI sync context — caller may show more dialogs / update StatusText.
             var install = await RunOffUiAsync(
                 () => _interception.InstallNssToolsAndRetryTrust(),
-                StatusCancelToken).ConfigureAwait(false);
+                StatusCancelToken);
             if (install.Succeeded)
                 return true;
             if (install.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
@@ -334,9 +500,10 @@ public sealed partial class MainWindowViewModel
     }
     private void SetOsTrustSuccessStatus()
     {
-        // Mac Keychain / verify paths no longer write Firefox prefs inside VerifyOsUserSslTrust
-        // (that ran on every 1.5s poll). Write once when trust is actually established.
-        _ = RunOffUiAsync(InterceptionService.TryEnableFirefoxEnterpriseRootsBestEffort);
+        // Firefox prefs/policies already scheduled from EnsureRootCaTrustedAsync when trust
+        // succeeded; schedule again here for paths that only call SetOsTrustSuccessStatus
+        // (idempotent / best-effort).
+        ScheduleFirefoxEnterpriseRootsBestEffort();
 
         var msg = "Root CA trusted — ready to decrypt HTTPS";
         if (!_firefoxTrustHintShown && InterceptionService.IsFirefoxProfilePresent)
@@ -381,31 +548,108 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        var owner = TryGetMainWindow();
-        if (!await AwaitCancellableAsync(_dialogs.ConfirmRemoveRootCaAsync(owner)))
+        if (!TryBeginTrustCommand())
+            return;
+
+        using var scope = InspectorUxTrace.Scope("UntrustCa");
+        try
         {
-            SetTransientStatus("Remove root CA cancelled", StatusSeverity.Neutral, revertMs: GuardStatusRevertMs);
+            var owner = TryGetMainWindow();
+            if (!await AwaitCancellableAsync(_dialogs.ConfirmRemoveRootCaAsync(owner)))
+            {
+                SetTransientStatus("Remove root CA cancelled", StatusSeverity.Neutral, revertMs: GuardStatusRevertMs);
+                return;
+            }
+
+            SetStatus("Preparing remove…", StatusSeverity.Busy);
+            await AwaitPriorFirefoxTrustBackgroundAsync();
+
+            SetStatus("Removing root CA…", StatusSeverity.Busy);
+            await RemoveOsRootInteractiveAsync(machineStore: false);
+            if (DecryptHttps)
+            {
+                SetDecryptHttpsCore(false);
+            }
+
+            var stillPresent = _interception.IsRootTrusted;
+            string message = stillPresent
+                ? FormatUntrustStillPresentStatus()
+                : FormatUntrustRemovedStatus();
+
+            SetOutcomeStatus(
+                message,
+                stillPresent ? StatusSeverity.Warning : StatusSeverity.Success,
+                toastImportant: true);
+            InspectorUxTrace.Event("UntrustCa.Result", $"stillPresent={stillPresent}");
+        }
+        finally
+        {
+            EndTrustCommand();
+        }
+    }
+
+    /// <summary>
+    /// List Root thumbs off UI → CryptUI Remove each on UI → My/Firefox finalize off UI.
+    /// </summary>
+    private async Task RemoveOsRootInteractiveAsync(bool machineStore)
+    {
+        using var scope = InspectorUxTrace.Scope("RemoveOsRootInteractive");
+        await Task.Yield();
+        if (_interception.UseInMemoryTrustState)
+        {
+            _interception.RemoveOsRootStoreOnly(machineStore);
             return;
         }
 
-        SetStatus("Removing root CA…", StatusSeverity.Busy);
-        // CryptUI Remove needs a message pump — do not Task.Run (hangs headless / balloons memory).
-        await Task.Yield();
-        _interception.UntrustRootCertificate(machineStore: false);
-        if (DecryptHttps)
+        SetStatus("Finding Titanium root CA in the Windows store…", StatusSeverity.Busy);
+        IReadOnlyList<string> thumbs;
+        using (InspectorUxTrace.Scope("ListRootThumbprintsToRemove"))
         {
-            SetDecryptHttpsCore(false);
+            thumbs = await RunOffUiAsync(
+                () => _interception.ListRootThumbprintsToRemove(machineStore),
+                StatusCancelToken);
         }
 
-        var stillPresent = _interception.IsRootTrusted;
-        string message = stillPresent
-            ? FormatUntrustStillPresentStatus()
-            : FormatUntrustRemovedStatus();
+        // Prefer known current thumb first so we do not depend solely on subject Find.
+        var current = _interception.RootCertificate?.Thumbprint;
+        if (!string.IsNullOrEmpty(current) &&
+            !thumbs.Contains(current, StringComparer.OrdinalIgnoreCase))
+        {
+            thumbs = thumbs.Prepend(current).ToList();
+        }
 
-        SetOutcomeStatus(
-            message,
-            stillPresent ? StatusSeverity.Warning : StatusSeverity.Success,
-            toastImportant: true);
+        if (thumbs.Count == 0 && !string.IsNullOrEmpty(current))
+            thumbs = new[] { current };
+
+        InspectorUxTrace.Event("RemoveOsRoot.Thumbs", $"count={thumbs.Count}");
+        for (var i = 0; i < thumbs.Count; i++)
+        {
+            SetStatus(
+                thumbs.Count == 1
+                    ? "Windows may ask to DELETE the root CA — choose Yes"
+                    : $"Windows may ask to DELETE root CA ({i + 1}/{thumbs.Count}) — choose Yes",
+                StatusSeverity.Busy);
+            await Task.Yield();
+            using (InspectorUxTrace.Scope("RemoveRootThumbprint.CryptUI", $"i={i + 1}/{thumbs.Count}"))
+                _interception.RemoveRootThumbprintOnUi(machineStore, thumbs[i]);
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            await Task.Yield();
+            using (InspectorUxTrace.Scope("ApplyUnixUntrustOnUi"))
+                _interception.ApplyUnixUntrustOnUi();
+        }
+
+        SetStatus("Finishing root CA removal…", StatusSeverity.Busy);
+        using (InspectorUxTrace.Scope("FinalizeAfterRootRemove"))
+        {
+            await RunOffUiAsync(
+                () => _interception.FinalizeAfterRootRemove(machineStore),
+                StatusCancelToken);
+        }
+        // Firefox prefs/HKCU only — serial background lane (never await certutil).
+        _interception.ScheduleClearPendingFirefoxRootTrust();
     }
     private async Task RotateCaAsync()
     {
@@ -415,46 +659,71 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        var owner = TryGetMainWindow();
-        if (!await AwaitCancellableAsync(_dialogs.ConfirmRotateRootCaAsync(owner)))
-        {
-            SetTransientStatus("Clear and reinstall root CA cancelled", StatusSeverity.Neutral, revertMs: GuardStatusRevertMs);
+        if (!TryBeginTrustCommand())
             return;
-        }
 
-        if (DecryptHttps)
-            SetDecryptHttpsCore(false);
-
-        SetStatus("Clearing and recreating root CA…", StatusSeverity.Busy);
-        // Rotate removes Root-store entries (CryptUI) then mints a new PFX — keep on this thread.
-        await Task.Yield();
-        var oldThumb = _interception.RootCertificate?.Thumbprint;
-        var ok = _interception.RotateRootCertificate(machineStore: false);
-        if (!ok)
+        using var scope = InspectorUxTrace.Scope("RotateCa");
+        try
         {
-            SetOutcomeStatus("Clear and reinstall root CA failed — see logs", StatusSeverity.Error, toastImportant: true);
-            return;
+            var owner = TryGetMainWindow();
+            if (!await AwaitCancellableAsync(_dialogs.ConfirmRotateRootCaAsync(owner)))
+            {
+                SetTransientStatus("Clear and reinstall root CA cancelled", StatusSeverity.Neutral, revertMs: GuardStatusRevertMs);
+                return;
+            }
+
+            if (DecryptHttps)
+                SetDecryptHttpsCore(false);
+
+            // Second Clear+Install often collided with the prior run's fire-and-forget Firefox enable.
+            SetStatus("Preparing clear and reinstall…", StatusSeverity.Busy);
+            await AwaitPriorFirefoxTrustBackgroundAsync();
+
+            SetStatus("Clearing root CA…", StatusSeverity.Busy);
+            await Task.Yield();
+            var oldThumb = _interception.RootCertificate?.Thumbprint;
+            await RemoveOsRootInteractiveAsync(machineStore: false);
+
+            SetStatus("Recreating root CA…", StatusSeverity.Busy);
+            bool ok;
+            using (InspectorUxTrace.Scope("MintNewRootCertificateCore"))
+            {
+                ok = await RunOffUiAsync(
+                    () => _interception.MintNewRootCertificateCore(clearFirefox: false),
+                    StatusCancelToken);
+            }
+            if (!ok)
+            {
+                SetOutcomeStatus("Clear and reinstall root CA failed — see logs", StatusSeverity.Error, toastImportant: true);
+                return;
+            }
+
+            var newThumb = _interception.RootCertificate?.Thumbprint;
+            var changed = !string.IsNullOrEmpty(newThumb) &&
+                          !string.Equals(oldThumb, newThumb, StringComparison.OrdinalIgnoreCase);
+
+            if (await AwaitCancellableAsync(_dialogs.ConfirmInstallRootCaAsync(owner)))
+            {
+                SetBusyTrustingRootCa();
+                // Skip initial Root Find — we just minted; opening Crypt32 before CryptUI stalls.
+                var trusted = await EnsureRootCaTrustedAsync(promptIfNeeded: true, skipInitialRefresh: true);
+                InspectorUxTrace.Event("RotateCa.InstallResult", $"trusted={trusted} changed={changed}");
+                var message = trusted
+                    ? FormatRotateCaTrustedStatus(changed)
+                    : FormatOsTrustFailureStatus(_interception.LastOsTrustResult);
+                if (trusted)
+                    SetOsTrustSuccessStatus();
+                else
+                    SetOutcomeStatus(message, StatusSeverity.Error, toastImportant: true);
+                return;
+            }
+
+            SetOutcomeStatus(FormatRotateCaDeferredTrustStatus(changed), StatusSeverity.Warning, toastImportant: true);
         }
-
-        var newThumb = _interception.RootCertificate?.Thumbprint;
-        var changed = !string.IsNullOrEmpty(newThumb) &&
-                      !string.Equals(oldThumb, newThumb, StringComparison.OrdinalIgnoreCase);
-
-        if (await AwaitCancellableAsync(_dialogs.ConfirmInstallRootCaAsync(owner)))
+        finally
         {
-            SetBusyTrustingRootCa();
-            var trusted = await EnsureRootCaTrustedAsync(promptIfNeeded: true);
-            var message = trusted
-                ? FormatRotateCaTrustedStatus(changed)
-                : FormatOsTrustFailureStatus(_interception.LastOsTrustResult);
-            if (trusted)
-                SetOsTrustSuccessStatus();
-            else
-                SetOutcomeStatus(message, StatusSeverity.Error, toastImportant: true);
-            return;
+            EndTrustCommand();
         }
-
-        SetOutcomeStatus(FormatRotateCaDeferredTrustStatus(changed), StatusSeverity.Warning, toastImportant: true);
     }
     private static string FormatRotateCaDeferredTrustStatus(bool changed) =>
         changed ? "Root CA cleared — Install root CA (or enable Decrypt HTTPS) to trust the new certificate" : "Root CA recreate completed — Install root CA to trust";
@@ -514,6 +783,7 @@ public sealed partial class MainWindowViewModel
     private async Task EnableDecryptHttpsAsync(int enableGeneration)
     {
         _decryptHttpsBusy = true;
+        using var scope = InspectorUxTrace.Scope("EnableDecryptHttps", $"gen={enableGeneration}");
         try
         {
             // Stay on the Avalonia UI sync context after awaits. ConfigureAwait(false) here
@@ -680,7 +950,7 @@ public sealed partial class MainWindowViewModel
             StatusCancelToken);
         if (trusted)
         {
-            _ = RunOffUiAsync(InterceptionService.TryEnableFirefoxEnterpriseRootsBestEffort);
+            _interception.ScheduleFirefoxEnterpriseRootsBestEffort();
             return true;
         }
 
@@ -694,7 +964,7 @@ public sealed partial class MainWindowViewModel
                 StatusCancelToken);
             if (trusted)
             {
-                _ = RunOffUiAsync(InterceptionService.TryEnableFirefoxEnterpriseRootsBestEffort);
+                _interception.ScheduleFirefoxEnterpriseRootsBestEffort();
                 return true;
             }
         }

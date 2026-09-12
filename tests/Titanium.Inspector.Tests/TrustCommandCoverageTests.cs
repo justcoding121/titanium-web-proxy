@@ -99,7 +99,7 @@ public class TrustCommandCoverageTests
 
             interception.FailNextUserTrustInstall = true;
             dialogs.TrustRecoveryResult = TrustRecoveryChoice.Primary;
-            await ExecuteAsync(vm.InstallCaCommand);
+            await ExecuteUntilAsync(vm.InstallCaCommand, () => interception.IsRootTrusted);
             Assert.IsTrue(interception.IsRootTrusted, "admin recovery should trust in-memory");
 
             interception.FailNextUserTrustInstall = true;
