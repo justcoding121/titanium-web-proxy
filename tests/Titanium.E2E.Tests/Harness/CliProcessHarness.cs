@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Security.Principal;
 using System.Text;
 
 namespace Titanium.E2E.Tests.Harness;
@@ -13,9 +14,24 @@ public sealed partial class CliProcessHarness : IDisposable
     private readonly StringBuilder _stdout = new();
     private readonly StringBuilder _stderr = new();
     private readonly object _gate = new();
+    private readonly bool _ownsIsolatedDirectory;
+    private string? _isolatedDirectory;
 
-    public string CliDirectory { get; }
-    public string CliDllPath { get; }
+    /// <summary>How the CLI process is launched.</summary>
+    public enum SpawnMode
+    {
+        /// <summary><c>dotnet titanium.dll</c> — fine for run/test/help; not for service install binPath.</summary>
+        DotnetDll,
+
+        /// <summary>Apphost <c>titanium</c>/<c>titanium.exe</c> — required for OS service install.</summary>
+        Apphost,
+    }
+
+    public string CliDirectory { get; private set; }
+    public string CliDllPath { get; private set; }
+    public string CliExePath { get; private set; }
+    public SpawnMode Mode { get; }
+
     public string StdOut
     {
         get { lock (_gate) return _stdout.ToString(); }
@@ -31,8 +47,9 @@ public sealed partial class CliProcessHarness : IDisposable
     /// <summary>PID of a long-running <c>run</c> process started via <see cref="StartRunAsync"/>.</summary>
     public int? ProcessId => _process is { HasExited: false } p ? p.Id : _process?.Id;
 
-    public CliProcessHarness()
+    public CliProcessHarness(SpawnMode mode = SpawnMode.DotnetDll)
     {
+        Mode = mode;
         CliDirectory = LocateCliDirectory();
         CliDllPath = Path.Combine(CliDirectory, "titanium.dll");
         if (!File.Exists(CliDllPath))
@@ -40,6 +57,91 @@ public sealed partial class CliProcessHarness : IDisposable
             throw new FileNotFoundException(
                 "titanium.dll not found. Build Titanium.Cli (Release/Debug) before E2E tests.",
                 CliDllPath);
+        }
+
+        CliExePath = Path.Combine(
+            CliDirectory,
+            OperatingSystem.IsWindows() ? "titanium.exe" : "titanium");
+        if (mode == SpawnMode.Apphost && !File.Exists(CliExePath))
+        {
+            throw new FileNotFoundException(
+                "CLI apphost not found. Build Titanium.Cli so service install records titanium (not dotnet).",
+                CliExePath);
+        }
+
+        _ownsIsolatedDirectory = false;
+    }
+
+    private CliProcessHarness(string isolatedDir, SpawnMode mode)
+    {
+        Mode = mode;
+        _ownsIsolatedDirectory = true;
+        _isolatedDirectory = isolatedDir;
+        CliDirectory = isolatedDir;
+        CliDllPath = Path.Combine(isolatedDir, "titanium.dll");
+        CliExePath = Path.Combine(
+            isolatedDir,
+            OperatingSystem.IsWindows() ? "titanium.exe" : "titanium");
+        if (!File.Exists(CliDllPath))
+        {
+            throw new FileNotFoundException("Isolated CLI copy missing titanium.dll.", CliDllPath);
+        }
+
+        if (mode == SpawnMode.Apphost && !File.Exists(CliExePath))
+        {
+            throw new FileNotFoundException("Isolated CLI copy missing apphost.", CliExePath);
+        }
+    }
+
+    /// <summary>
+    /// Copy the CLI build output into a temp directory so <c>update</c> apply scripts
+    /// cannot overwrite the solution build tree.
+    /// </summary>
+    public static CliProcessHarness CreateIsolatedCopy(
+        SpawnMode mode = SpawnMode.Apphost,
+        bool copyPlus = false)
+    {
+        var source = LocateCliDirectory();
+        var dest = Path.Combine(Path.GetTempPath(), "twp-cli-iso-" + Guid.NewGuid().ToString("N"));
+        CopyDirectory(source, dest);
+        if (!OperatingSystem.IsWindows())
+        {
+            TryChmodExecutable(Path.Combine(dest, "titanium"));
+            TryChmodExecutable(Path.Combine(dest, "twp"));
+        }
+
+        var harness = new CliProcessHarness(dest, mode);
+        if (copyPlus)
+        {
+            harness.EnsurePlusDllBesideCli(copy: true);
+        }
+        else
+        {
+            harness.EnsurePlusDllBesideCli(copy: false);
+        }
+
+        return harness;
+    }
+
+    public static string NewServiceName() =>
+        "titanium-e2e-" + Guid.NewGuid().ToString("N")[..12];
+
+    public static bool IsElevated()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            using var identity = WindowsIdentity.GetCurrent();
+            var principal = new WindowsPrincipal(identity);
+            return principal.IsInRole(WindowsBuiltInRole.Administrator);
+        }
+
+        try
+        {
+            return NativeGetEuid() == 0;
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -122,25 +224,83 @@ public sealed partial class CliProcessHarness : IDisposable
         TimeSpan? timeout = null,
         IDictionary<string, string?>? env = null)
     {
-        using var process = StartProcess(args, env);
-        using var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(60));
-        try
+        using var process = StartProcess(ResolveFileName(), BuildArgList(args), env);
+        return await WaitProcessAsync(process, timeout).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Machine service commands: run via <c>sudo -n</c> when the process is not already root (Unix).
+    /// On Windows, runs as the current user (CI runners are typically already admin).
+    /// </summary>
+    public async Task<(int ExitCode, string StdOut, string StdErr)> RunOnceSystemAsync(
+        string[] args,
+        TimeSpan? timeout = null,
+        IDictionary<string, string?>? env = null)
+    {
+        if (OperatingSystem.IsWindows() || IsElevated())
         {
-            await process.WaitForExitAsync(cts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            TryKill(process);
-            throw new TimeoutException($"CLI timed out. stdout={StdOut} stderr={StdErr}");
+            return await RunOnceAsync(args, timeout, env).ConfigureAwait(false);
         }
 
-        return (process.ExitCode, StdOut, StdErr);
+        if (!File.Exists("/usr/bin/sudo"))
+        {
+            return (1, "", "sudo not found");
+        }
+
+        EnsureApphost();
+        var sudoArgs = new List<string> { "-n", "--", CliExePath };
+        sudoArgs.AddRange(args);
+        using var process = StartProcess("/usr/bin/sudo", sudoArgs.ToArray(), env);
+        return await WaitProcessAsync(process, timeout).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <c>systemd --user</c> / LaunchAgent commands as the login user.
+    /// </summary>
+    public async Task<(int ExitCode, string StdOut, string StdErr)> RunOnceLoginUserAsync(
+        string[] args,
+        TimeSpan? timeout = null)
+    {
+        var userEnv = TryBuildLoginUserEnv();
+        if (userEnv is null)
+        {
+            return (1, "",
+                "No login user for --user services (run as a normal user, or sudo so SUDO_USER is set).");
+        }
+
+        var user = userEnv["USER"];
+        if (!IsElevated())
+        {
+            return await RunOnceAsync(args, timeout, userEnv).ConfigureAwait(false);
+        }
+
+        if (!File.Exists("/usr/bin/sudo") || string.IsNullOrEmpty(user))
+        {
+            return (1, "", "sudo not found or no login user");
+        }
+
+        EnsureApphost();
+        var sudoArgs = new List<string> { "-n", "-u", user!, "--", "env" };
+        foreach (var (k, v) in userEnv)
+        {
+            if (v is not null)
+            {
+                sudoArgs.Add($"{k}={v}");
+            }
+        }
+
+        sudoArgs.Add(CliExePath);
+        sudoArgs.AddRange(args);
+        using var process = StartProcess("/usr/bin/sudo", sudoArgs.ToArray(), env: null);
+        return await WaitProcessAsync(process, timeout).ConfigureAwait(false);
     }
 
     public async Task StartRunAsync(
         string configPath,
         IDictionary<string, string?>? env = null,
-        bool verbose = false)
+        bool verbose = false,
+        bool serviceMode = false,
+        string? serviceName = null)
     {
         if (_process is not null)
         {
@@ -153,7 +313,17 @@ public sealed partial class CliProcessHarness : IDisposable
             args.Add("-v");
         }
 
-        _process = StartProcess(args.ToArray(), env);
+        if (serviceMode)
+        {
+            args.Add("--service");
+            if (!string.IsNullOrEmpty(serviceName))
+            {
+                args.Add("--name");
+                args.Add(serviceName);
+            }
+        }
+
+        _process = StartProcess(ResolveFileName(), BuildArgList(args.ToArray()), env);
         await WaitForOutputAsync("running", TimeSpan.FromSeconds(45));
     }
 
@@ -201,22 +371,109 @@ public sealed partial class CliProcessHarness : IDisposable
         }
     }
 
-    [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
-    private static partial int NativeKill(int pid, int sig);
-
-    public void Dispose()
+    /// <summary>Sends SIGTERM to the running CLI (Unix) or kills the tree (Windows).</summary>
+    public void SendSigterm()
     {
-        if (_process is null)
+        if (_process is null || _process.HasExited)
         {
+            throw new InvalidOperationException("CLI process is not running.");
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            TryKill(_process);
             return;
         }
 
-        TryKill(_process);
-        _process.Dispose();
-        _process = null;
+        // SIGTERM = 15
+        if (NativeKill(_process.Id, 15) != 0)
+        {
+            TryKill(_process);
+        }
     }
 
-    private Process StartProcess(string[] args, IDictionary<string, string?>? env)
+    [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
+    private static partial int NativeKill(int pid, int sig);
+
+    [LibraryImport("libc", EntryPoint = "geteuid", SetLastError = true)]
+    private static partial uint NativeGetEuid();
+
+    public void Dispose()
+    {
+        if (_process is not null)
+        {
+            TryKill(_process);
+            _process.Dispose();
+            _process = null;
+        }
+
+        if (_ownsIsolatedDirectory && _isolatedDirectory is not null)
+        {
+            try
+            {
+                if (Directory.Exists(_isolatedDirectory))
+                {
+                    Directory.Delete(_isolatedDirectory, recursive: true);
+                }
+            }
+            catch
+            {
+                // ignore locked files after update apply
+            }
+
+            _isolatedDirectory = null;
+        }
+    }
+
+    private void EnsureApphost()
+    {
+        if (Mode != SpawnMode.Apphost)
+        {
+            throw new InvalidOperationException(
+                "Apphost spawn mode is required for system/service elevation helpers.");
+        }
+
+        if (!File.Exists(CliExePath))
+        {
+            throw new FileNotFoundException("CLI apphost missing.", CliExePath);
+        }
+    }
+
+    private string ResolveFileName() =>
+        Mode == SpawnMode.Apphost ? CliExePath : "dotnet";
+
+    private string[] BuildArgList(string[] args)
+    {
+        if (Mode == SpawnMode.Apphost)
+        {
+            return args;
+        }
+
+        var list = new string[args.Length + 1];
+        list[0] = CliDllPath;
+        Array.Copy(args, 0, list, 1, args.Length);
+        return list;
+    }
+
+    private async Task<(int ExitCode, string StdOut, string StdErr)> WaitProcessAsync(
+        Process process,
+        TimeSpan? timeout)
+    {
+        using var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(60));
+        try
+        {
+            await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKill(process);
+            throw new TimeoutException($"CLI timed out. stdout={StdOut} stderr={StdErr}");
+        }
+
+        return (process.ExitCode, StdOut, StdErr);
+    }
+
+    private Process StartProcess(string fileName, string[] args, IDictionary<string, string?>? env)
     {
         lock (_gate)
         {
@@ -226,7 +483,7 @@ public sealed partial class CliProcessHarness : IDisposable
 
         var psi = new ProcessStartInfo
         {
-            FileName = "dotnet",
+            FileName = fileName,
             WorkingDirectory = CliDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -234,7 +491,6 @@ public sealed partial class CliProcessHarness : IDisposable
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        psi.ArgumentList.Add(CliDllPath);
         foreach (var a in args)
         {
             psi.ArgumentList.Add(a);
@@ -287,6 +543,164 @@ public sealed partial class CliProcessHarness : IDisposable
         }
     }
 
+    private static void CopyDirectory(string source, string dest)
+    {
+        Directory.CreateDirectory(dest);
+        foreach (var file in Directory.EnumerateFiles(source))
+        {
+            File.Copy(file, Path.Combine(dest, Path.GetFileName(file)), overwrite: true);
+        }
+
+        foreach (var dir in Directory.EnumerateDirectories(source))
+        {
+            var name = Path.GetFileName(dir);
+            // Skip huge/irrelevant folders if present
+            if (name is "ref" or "refs")
+            {
+                continue;
+            }
+
+            CopyDirectory(dir, Path.Combine(dest, name));
+        }
+    }
+
+    private static void TryChmodExecutable(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        try
+        {
+            using var p = Process.Start(new ProcessStartInfo
+            {
+                FileName = "chmod",
+                ArgumentList = { "+x", path },
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+            p?.WaitForExit(5000);
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    private static Dictionary<string, string?>? TryBuildLoginUserEnv()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
+        var user = TryResolveLoginUser();
+        if (user is null)
+        {
+            return null;
+        }
+
+        var uid = TryResolveLoginUid(user);
+        var home = TryResolveLoginHome(user);
+        if (uid is null || home is null)
+        {
+            return null;
+        }
+
+        var runtime = $"/run/user/{uid.Value}";
+        return new Dictionary<string, string?>
+        {
+            ["HOME"] = home,
+            ["USER"] = user,
+            ["LOGNAME"] = user,
+            ["XDG_RUNTIME_DIR"] = runtime,
+            ["DBUS_SESSION_BUS_ADDRESS"] = $"unix:path={runtime}/bus",
+            ["TITANIUM_NO_ELEVATE"] = "1",
+        };
+    }
+
+    private static string? TryResolveLoginUser()
+    {
+        var sudoUser = Environment.GetEnvironmentVariable("SUDO_USER");
+        if (!string.IsNullOrWhiteSpace(sudoUser) &&
+            !sudoUser.Equals("root", StringComparison.Ordinal))
+        {
+            return sudoUser;
+        }
+
+        if (!IsElevated())
+        {
+            var name = Environment.UserName;
+            return string.IsNullOrWhiteSpace(name) || name.Equals("root", StringComparison.Ordinal)
+                ? null
+                : name;
+        }
+
+        return null;
+    }
+
+    private static uint? TryResolveLoginUid(string user)
+    {
+        var sudoUid = Environment.GetEnvironmentVariable("SUDO_UID");
+        if (!string.IsNullOrEmpty(sudoUid) &&
+            string.Equals(Environment.GetEnvironmentVariable("SUDO_USER"), user, StringComparison.Ordinal) &&
+            uint.TryParse(sudoUid, out var parsed))
+        {
+            return parsed;
+        }
+
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "id",
+                Arguments = "-u " + user,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+            using var p = Process.Start(psi);
+            if (p is null)
+            {
+                return null;
+            }
+
+            var text = p.StandardOutput.ReadToEnd().Trim();
+            p.WaitForExit(5000);
+            return uint.TryParse(text, out var uid) ? uid : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? TryResolveLoginHome(string user)
+    {
+        var sudoHome = Environment.GetEnvironmentVariable("SUDO_HOME");
+        if (!string.IsNullOrEmpty(sudoHome) &&
+            string.Equals(Environment.GetEnvironmentVariable("SUDO_USER"), user, StringComparison.Ordinal) &&
+            Directory.Exists(sudoHome))
+        {
+            return sudoHome;
+        }
+
+        foreach (var candidate in new[]
+                 {
+                     Path.Combine("/home", user),
+                     Path.Combine("/Users", user),
+                 })
+        {
+            if (Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
     private static string LocateCliDirectory()
     {
         var configs = new[] { "Release", "Debug" };
@@ -312,7 +726,7 @@ public sealed partial class CliProcessHarness : IDisposable
         throw new DirectoryNotFoundException("Could not locate Titanium.Cli output directory.");
     }
 
-    private static string LocatePlusDll()
+    internal static string LocatePlusDll()
     {
         var repo = FindRepoRoot();
         foreach (var cfg in new[] { "Release", "Debug" })

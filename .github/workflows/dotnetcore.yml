@@ -108,7 +108,8 @@ jobs:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/cli
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E|TestCategory=E2E-UI" --collect:"Code Coverage" --results-directory coverage/e2e
+        # CLI process E2E (TestCategory=E2E) runs on the cli-e2e OS matrix — avoid doubling Windows.
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI" --collect:"Code Coverage" --results-directory coverage/e2e
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
         # The integration suite spins up real listening sockets and TLS handshakes, which
@@ -327,7 +328,69 @@ jobs:
           **/playwright-report/**
         if-no-files-found: ignore
 
-  # Tiered RPS gates for beta/stable publish (parallel â€” wall clock ~max of the two).
+  # Full CLI + CLI Plus process E2E on all three OS (command tree, services, control plane).
+  # Does not pre-install libmsquic so http3-deps install can exercise the real leaf when Quic is false.
+  cli-e2e:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+    - uses: actions/checkout@v6
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: |
+          10.0.x
+    - name: Linux Playwright OS deps
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y fonts-liberation libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 libasound2t64 || sudo apt-get install -y fonts-liberation libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 libasound2
+    - name: Restore
+      run: dotnet restore src/Titanium.Web.Proxy.sln
+    - name: Build CLI + Plus + E2E
+      run: |
+        dotnet build src/Titanium.Cli/Titanium.Cli.csproj --configuration Release --no-restore
+        dotnet build src/Titanium.Plus/Titanium.Plus.csproj --configuration Release --no-restore
+        dotnet build tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-restore
+    - name: Install Playwright Chromium
+      shell: pwsh
+      run: |
+        $pw = Join-Path (Resolve-Path "tests/Titanium.E2E.Tests/bin/Release/net10.0") "playwright.ps1"
+        if (-not (Test-Path $pw)) {
+          throw "playwright.ps1 missing at $pw"
+        }
+        & $pw install chromium
+    - name: CLI process E2E (all leaves)
+      shell: pwsh
+      run: |
+        if ($IsLinux -or $IsMacOS) {
+          sudo -n true 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "sudo -n not available; machine service lifecycle may Inconclusive"
+          }
+        }
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj `
+          --configuration Release --no-build --no-restore `
+          --filter "TestCategory=E2E" `
+          --logger "trx;LogFileName=cli-e2e.trx" `
+          --results-directory "artifacts/cli-e2e-${{ matrix.os }}"
+    - name: Upload CLI E2E artifacts
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: cli-e2e-${{ matrix.os }}
+        path: |
+          artifacts/cli-e2e-${{ matrix.os }}/**
+          tests/Titanium.E2E.Tests/TestResults/**
+        if-no-files-found: ignore
+
+  # Tiered RPS gates for beta/stable publish (parallel) â€” wall clock ~max of the two).
   # Editions: CLI/Plus tax vs Core. Peer: Core reverse vs YARP (+ MITMÃ·Reverse) so a
   # uniform Core slowdown cannot hide behind green edition ratios.
   rps-publish-gate:

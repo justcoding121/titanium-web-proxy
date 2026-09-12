@@ -569,4 +569,102 @@ public static class ConfigFixtures
             """);
         return path;
     }
+
+    public static string WriteSocks(string dir, int listenPort)
+    {
+        var path = Path.Combine(dir, $"socks-{listenPort}.yaml");
+        File.WriteAllText(path, $"""
+            schemaVersion: "7.0"
+            listeners:
+              - host: "127.0.0.1"
+                port: {listenPort}
+                decryptSsl: false
+                type: socks
+            """);
+        return path;
+    }
+
+    public static string WriteSiteFileWithListen(string dir, int listenPort, int originPort)
+    {
+        // Companion native YAML that wraps site-file style routing is covered by WriteRoutes;
+        // for live site-file dialect use WriteHttpServerConf or write a .twp that the CLI can
+        // still bind when paired with an explicit listen via native YAML include is not supported.
+        // Live traffic for site-file: use a native yaml that embeds the same forward mapping.
+        var path = Path.Combine(dir, $"site-live-{listenPort}.yaml");
+        File.WriteAllText(path, $"""
+            schemaVersion: "7.0"
+            listeners:
+              - host: "127.0.0.1"
+                port: {listenPort}
+                decryptSsl: false
+                forwardHost: "127.0.0.1"
+                forwardPort: {originPort}
+            """);
+        // Also drop a .twp next to it so `test` dialect coverage stays distinct.
+        File.WriteAllText(Path.Combine(dir, $"site-{listenPort}.twp"),
+            $"127.0.0.1 / => http://127.0.0.1:{originPort}\n");
+        return path;
+    }
+
+    public static string WritePlusDisabled(string dir, int listenPort, int originPort, int controlPort, string secret)
+    {
+        var path = Path.Combine(dir, $"plus-off-{listenPort}.yaml");
+        File.WriteAllText(path, $"""
+            schemaVersion: "7.0"
+            listeners:
+              - host: "127.0.0.1"
+                port: {listenPort}
+                decryptSsl: false
+                forwardHost: "127.0.0.1"
+                forwardPort: {originPort}
+            plus:
+              enabled: false
+              controlPlane:
+                host: "127.0.0.1"
+                port: {controlPort}
+                sharedSecret: "{secret}"
+            """);
+        return path;
+    }
+
+    public static string WritePlusChangemeSecret(string dir, int listenPort, int originPort, int controlPort)
+    {
+        var path = Path.Combine(dir, $"plus-changeme-{listenPort}.yaml");
+        File.WriteAllText(path, $"""
+            schemaVersion: "7.0"
+            listeners:
+              - host: "127.0.0.1"
+                port: {listenPort}
+                decryptSsl: false
+                forwardHost: "127.0.0.1"
+                forwardPort: {originPort}
+            plus:
+              enabled: true
+              controlPlane:
+                host: "127.0.0.1"
+                port: {controlPort}
+                sharedSecret: "changeme"
+            """);
+        return path;
+    }
+
+    public static string WriteNativeJson(string dir, int listenPort, int originPort)
+    {
+        var path = Path.Combine(dir, $"native-{listenPort}.json");
+        File.WriteAllText(path, $$"""
+            {
+              "schemaVersion": "7.0",
+              "listeners": [
+                {
+                  "host": "127.0.0.1",
+                  "port": {{listenPort}},
+                  "decryptSsl": false,
+                  "forwardHost": "127.0.0.1",
+                  "forwardPort": {{originPort}}
+                }
+              ]
+            }
+            """);
+        return path;
+    }
 }

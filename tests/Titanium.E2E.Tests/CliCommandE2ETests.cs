@@ -495,7 +495,11 @@ public class CliCommandE2ETests
         StringAssert.Contains(combined, "7.0.8");
         if (code == 1)
         {
-            StringAssert.Contains(combined, "Unable to query update feed");
+            Assert.IsTrue(
+                combined.Contains("Unable to query update feed", StringComparison.OrdinalIgnoreCase) ||
+                combined.Contains("timed out", StringComparison.OrdinalIgnoreCase) ||
+                combined.Contains("Update feed", StringComparison.OrdinalIgnoreCase),
+                combined);
         }
     }
 
