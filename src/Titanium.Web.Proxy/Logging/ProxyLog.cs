@@ -162,6 +162,21 @@ internal static class ProxyLog
                 connectTarget, Describe(failure));
     }
 
+    internal static void Http2ProbeDeferredForClientAlpn(ILogger logger, string connectTarget, int budgetMs)
+    {
+        if (!logger.IsEnabled(LogLevel.Debug)) return;
+        logger.LogDebug(
+            "[http2 probe] '{Target}': cold probe exceeded {BudgetMs}ms; speculating client h2 ALPN so ServerHello is not blocked",
+            connectTarget, budgetMs);
+    }
+
+    internal static void Http2ProbeDeferredFailed(ILogger logger, string connectTarget, Exception failure)
+    {
+        if (!logger.IsEnabled(LogLevel.Debug)) return;
+        logger.LogDebug(failure,
+            "[http2 probe] '{Target}': deferred origin probe failed after client ALPN", connectTarget);
+    }
+
     internal static void SvcbDnsUnavailable(ILogger logger, string detail)
     {
         if (!logger.IsEnabled(LogLevel.Warning)) return;

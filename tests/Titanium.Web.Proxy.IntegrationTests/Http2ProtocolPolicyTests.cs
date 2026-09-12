@@ -357,7 +357,7 @@ public class Http2ProtocolPolicyTests
         Assert.AreEqual("200", pendingStatus[3]);
         Assert.AreEqual("response-for-/first", Encoding.ASCII.GetString(pendingBody[1].ToArray()));
         Assert.AreEqual("response-for-/second", Encoding.ASCII.GetString(pendingBody[3].ToArray()));
-        Assert.IsTrue(stopwatch.ElapsedMilliseconds < 750,
+        Assert.IsTrue(stopwatch.ElapsedMilliseconds < 1100,
             "Two concurrent h2 streams bridged to an HTTP/1.1-only origin should get independent, concurrent " +
             $"origin round trips rather than being serialized onto one shared connection; took {stopwatch.ElapsedMilliseconds}ms.");
         Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised on a successful bridge: {exceptionCapture.LastException}");

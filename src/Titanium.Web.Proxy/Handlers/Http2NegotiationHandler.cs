@@ -41,8 +41,9 @@ public partial class ProxyServer
     /// <param name="connectPort">The actual TCP connect destination port, paired with <paramref name="connectHost" />.</param>
     /// <param name="enablePrefetch">
     ///     Whether a cache hit should speculatively open the correctly-keyed connection ahead of the
-    ///     client TLS handshake completing. A cold cache always opens (and awaits) exactly one discovery
-    ///     connection regardless of this flag, because client ALPN advertisement depends on its result.
+    ///     client TLS handshake completing. A cold cache always opens exactly one discovery connection
+    ///     regardless of this flag. Callers wait only <see cref="Http2ServerHelloProbeBudget" /> before
+    ///     client ALPN so a slow origin does not stall ServerHello.
     /// </param>
     /// <param name="cancellationToken">
     ///     Cancellation for the mandatory cold-cache discovery connection only; the optional cache-hit
@@ -493,5 +494,146 @@ public partial class ProxyServer
     private static (string Host, int Port) ParseHostAndPort(string authority, int defaultPort)
     {
         return AuthorityParser.Parse(authority, defaultPort);
+    }
+
+    /// <summary>
+    ///     How long a cold HTTP/2 origin probe may block browser ServerHello. Chrome/Edge abort MITM
+    ///     TLS (EOF) and show <c>net::ERR_HTTP2_PROTOCOL_ERROR</c> when ServerHello is delayed by origin
+    ///     I/O, then recover on reload once <see cref="Http2OriginCapabilityCache" /> is warm. Cache hits
+    ///     complete without origin I/O and still win this wait. Learnable TLS failures that finish inside
+    ///     the budget keep same-CONNECT opaque fallback.
+    /// </summary>
+    internal static readonly TimeSpan Http2ServerHelloProbeBudget = TimeSpan.FromMilliseconds(200);
+
+    /// <summary>
+    ///     Returns the negotiation result when it finishes inside <see cref="Http2ServerHelloProbeBudget" />;
+    ///     otherwise <see langword="null"/> so the caller can offer <c>h2</c> speculatively and apply the
+    ///     probe after <c>AuthenticateAsServer</c>.
+    /// </summary>
+    internal static async Task<Http2NegotiationResult?> TryCompleteHttp2NegotiationBeforeClientAlpnAsync(
+        Task<Http2NegotiationResult> negotiationTask, CancellationToken cancellationToken)
+    {
+        if (negotiationTask.IsCompleted)
+            return await negotiationTask.ConfigureAwait(false);
+
+        try
+        {
+            return await negotiationTask.WaitAsync(Http2ServerHelloProbeBudget, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (TimeoutException) when (!negotiationTask.IsCompleted)
+        {
+            // Budget elapsed; the probe is still running. A TimeoutException from the probe itself
+            // completes the task and must propagate — it is not a ServerHello-budget miss.
+            return null;
+        }
+    }
+
+    private static void ApplyHttp2NegotiationBeforeClientAlpn(
+        Http2NegotiationResult negotiation,
+        out bool http2Supported,
+        out bool requiresHttp11Bridge,
+        out bool requiresH2OriginBridge,
+        out Task<TcpServerConnection?>? retained)
+    {
+        requiresHttp11Bridge = negotiation.RequiresHttp11Bridge;
+        requiresH2OriginBridge = negotiation.RequiresH2OriginBridge;
+        retained = negotiation.RetainedConnectionTask;
+        http2Supported = (negotiation.OriginSupportsHttp2 && !requiresH2OriginBridge)
+                         || requiresHttp11Bridge;
+    }
+
+    internal static void ApplyDeferredHttp2Negotiation(
+        Http2NegotiationResult negotiation,
+        bool clientHttp2AlreadyOffered,
+        bool allowHttpProtocolTranslation,
+        ref bool requiresHttp11Bridge,
+        ref bool requiresH2OriginBridge,
+        ref Task<TcpServerConnection?>? prefetchConnectionTask)
+    {
+        requiresHttp11Bridge = negotiation.RequiresHttp11Bridge;
+        requiresH2OriginBridge = negotiation.RequiresH2OriginBridge;
+        if (negotiation.RetainedConnectionTask != null)
+            prefetchConnectionTask = negotiation.RetainedConnectionTask;
+
+        // Speculative client h2 cannot be undone. Bridge onto HTTP/1.1 only when translation is
+        // allowed and origin TLS itself is not a learnable MITM failure (that path records bypass
+        // for the next CONNECT instead of opening a doomed H1 origin handshake).
+        if (clientHttp2AlreadyOffered && !negotiation.OriginSupportsHttp2 && !requiresH2OriginBridge
+            && allowHttpProtocolTranslation && !negotiation.LearnableOriginTlsFailure)
+            requiresHttp11Bridge = true;
+    }
+
+    private async Task<(bool RequiresHttp11Bridge, bool RequiresH2OriginBridge, Task<TcpServerConnection?>? Prefetch)>
+        AwaitAndApplyDeferredHttp2NegotiationAsync(
+            Task<Http2NegotiationResult> deferred,
+            string hostForBypass,
+            bool clientHttp2AlreadyOffered,
+            bool allowHttpProtocolTranslation,
+            Task<TcpServerConnection?>? existingPrefetch,
+            CancellationToken cancellationToken)
+    {
+        Http2NegotiationResult negotiation;
+        try
+        {
+            negotiation = await deferred.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (ProxyConnectException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            ProxyLog.Http2ProbeDeferredFailed(logger, hostForBypass, ex);
+            return (clientHttp2AlreadyOffered && allowHttpProtocolTranslation, false, existingPrefetch);
+        }
+
+        if (EnableDecryptFailureBypass && negotiation.LearnableOriginTlsFailure)
+            TryRecordDecryptFailure(hostForBypass, error: null, forceBypass: true);
+
+        var requiresHttp11Bridge = negotiation.RequiresHttp11Bridge;
+        var requiresH2OriginBridge = negotiation.RequiresH2OriginBridge;
+        var prefetch = existingPrefetch;
+
+        // Client ALPN is already http/1.1 and this is not an H1→H2 origin bridge: do not
+        // adopt an h2 discovery socket on the HTTP/1.1 pipeline.
+        if (!clientHttp2AlreadyOffered && negotiation.OriginSupportsHttp2 &&
+            !negotiation.RequiresH2OriginBridge && negotiation.RetainedConnectionTask != null)
+        {
+            _ = TcpConnectionFactory.Release(negotiation.RetainedConnectionTask, true);
+            ApplyDeferredHttp2Negotiation(
+                new Http2NegotiationResult(negotiation.OriginSupportsHttp2, null,
+                    negotiation.RequiresHttp11Bridge, negotiation.RequiresH2OriginBridge,
+                    negotiation.LearnableOriginTlsFailure),
+                clientHttp2AlreadyOffered, allowHttpProtocolTranslation,
+                ref requiresHttp11Bridge, ref requiresH2OriginBridge, ref prefetch);
+            return (requiresHttp11Bridge, requiresH2OriginBridge, prefetch);
+        }
+
+        ApplyDeferredHttp2Negotiation(negotiation, clientHttp2AlreadyOffered, allowHttpProtocolTranslation,
+            ref requiresHttp11Bridge, ref requiresH2OriginBridge, ref prefetch);
+        return (requiresHttp11Bridge, requiresH2OriginBridge, prefetch);
+    }
+
+    private void AbandonDeferredHttp2Negotiation(Task<Http2NegotiationResult>? deferred)
+    {
+        if (deferred == null)
+            return;
+
+        _ = ReleaseAbandonedHttp2NegotiationAsync(deferred);
+    }
+
+    private async Task ReleaseAbandonedHttp2NegotiationAsync(Task<Http2NegotiationResult> deferred)
+    {
+        try
+        {
+            var result = await deferred.ConfigureAwait(false);
+            if (result.RetainedConnectionTask != null)
+                await TcpConnectionFactory.Release(result.RetainedConnectionTask, true).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Probe failed independently of the aborted client handshake.
+        }
     }
 }
