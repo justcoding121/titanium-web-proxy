@@ -135,7 +135,8 @@ internal static partial class Http3OriginBridge
             {
                 headerBuilder.WriteRequestLine(request.Method, request.RequestUriString8,
                     HttpHeader.Version11);
-                headerBuilder.WriteHeaders(request.Headers, sendProxyAuthorization: false);
+                headerBuilder.WriteHeaders(request.Headers, sendProxyAuthorization: false,
+                    hostHeaderOverride: request.UpstreamCleartextHostOverride);
                 await connection.Stream.WriteHeadersAsync(headerBuilder, cancellationToken);
             }
             finally

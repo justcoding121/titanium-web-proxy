@@ -118,7 +118,8 @@ internal class HeaderBuilder
     }
 
     public void WriteHeaders(HeaderCollection headers, bool sendProxyAuthorization = true,
-        string? upstreamProxyUserName = null, string? upstreamProxyPassword = null)
+        string? upstreamProxyUserName = null, string? upstreamProxyPassword = null,
+        string? hostHeaderOverride = null)
     {
         if (upstreamProxyUserName != null && upstreamProxyPassword != null)
         {
@@ -129,7 +130,7 @@ internal class HeaderBuilder
         if (sendProxyAuthorization)
         {
             foreach (var header in headers)
-                WriteHeader(header);
+                WriteHeaderMaybeHostOverride(header, hostHeaderOverride);
         }
         else
         {
@@ -137,11 +138,25 @@ internal class HeaderBuilder
             {
                 if (KnownHeaders.ProxyAuthorization.Equals(header.Name))
                     continue;
-                WriteHeader(header);
+                WriteHeaderMaybeHostOverride(header, hostHeaderOverride);
             }
         }
 
         WriteLine();
+    }
+
+    private void WriteHeaderMaybeHostOverride(HttpHeader header, string? hostHeaderOverride)
+    {
+        if (hostHeaderOverride != null && KnownHeaders.Host.Equals(header.Name))
+        {
+            Write(header.NameData);
+            WriteAscii(": ");
+            WriteAscii(hostHeaderOverride);
+            WriteLine();
+            return;
+        }
+
+        WriteHeader(header);
     }
 
     public void WriteHeader(HttpHeader header)

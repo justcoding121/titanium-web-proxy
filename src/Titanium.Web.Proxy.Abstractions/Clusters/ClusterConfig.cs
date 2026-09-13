@@ -26,6 +26,13 @@ public sealed class DestinationConfig
     public int Port { get; init; } = 80;
     public bool UseHttps { get; init; }
     public int Weight { get; init; } = 1;
+
+    /// <summary>
+    ///     When true, cleartext upstream writes send <c>Host</c> as this destination's bind identity
+    ///     (address:port) while keeping the client's virtual Host for cache/middleware keys.
+    ///     Opt-in for IP-prefix / HttpListener-style origins; leave false for vhost backends.
+    /// </summary>
+    public bool UseDestinationHost { get; init; }
 }
 
 /// <summary>Cluster of destinations with LB settings.</summary>

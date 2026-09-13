@@ -44,6 +44,7 @@ public static class JsonReverseProxyDocument
                         Port = d.Port ?? 80,
                         UseHttps = d.UseHttps ?? false,
                         Weight = d.Weight ?? 1,
+                        UseDestinationHost = d.UseDestinationHost ?? false,
                     }).ToList(),
                 });
             }
@@ -198,6 +199,7 @@ public static class JsonReverseProxyDocument
         public int? Port { get; set; }
         public bool? UseHttps { get; set; }
         public int? Weight { get; set; }
+        public bool? UseDestinationHost { get; set; }
     }
 #pragma warning restore S1144, S3459
 }

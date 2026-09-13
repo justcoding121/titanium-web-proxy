@@ -206,7 +206,7 @@ public static class ConfigFixtures
                   "id": "c1",
                   "algorithm": "RoundRobin",
                   "destinations": [
-                    { "id": "d1", "address": "127.0.0.1", "port": {{originPort}} }
+                    { "id": "d1", "address": "127.0.0.1", "port": {{originPort}}, "useDestinationHost": true }
                   ]
                 }
               ]
@@ -264,7 +264,7 @@ public static class ConfigFixtures
                   "id": "c1",
                   "algorithm": "RoundRobin",
                   "destinations": [
-                    { "id": "d1", "address": "127.0.0.1", "port": {{originPort}} }
+                    { "id": "d1", "address": "127.0.0.1", "port": {{originPort}}, "useDestinationHost": true }
                   ]
                 }
               ]
@@ -485,7 +485,7 @@ public static class ConfigFixtures
                   "id": "c1",
                   "algorithm": "RoundRobin",
                   "destinations": [
-                    { "id": "d1", "address": "127.0.0.1", "port": {{originPort}} }
+                    { "id": "d1", "address": "127.0.0.1", "port": {{originPort}}, "useDestinationHost": true }
                   ]
                 }
               ],
@@ -534,7 +534,7 @@ public static class ConfigFixtures
                   "id": "c1",
                   "algorithm": "RoundRobin",
                   "destinations": [
-                    { "id": "d1", "address": "127.0.0.1", "port": {{originPort}} }
+                    { "id": "d1", "address": "127.0.0.1", "port": {{originPort}}, "useDestinationHost": true }
                   ]
                 }
               ],

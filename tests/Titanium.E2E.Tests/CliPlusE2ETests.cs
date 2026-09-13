@@ -194,7 +194,7 @@ public class CliPlusE2ETests
                   "clusters": [
                     {
                       "id": "c1",
-                      "destinations": [ { "id": "dB", "address": "127.0.0.1", "port": {{originB.Port}} } ],
+                      "destinations": [ { "id": "dB", "address": "127.0.0.1", "port": {{originB.Port}}, "useDestinationHost": true } ],
                       "algorithm": "RoundRobin"
                     }
                   ],

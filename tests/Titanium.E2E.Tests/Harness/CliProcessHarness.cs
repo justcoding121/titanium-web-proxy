@@ -248,10 +248,51 @@ public sealed partial class CliProcessHarness : IDisposable
         }
 
         EnsureApphost();
-        var sudoArgs = new List<string> { "-n", "--", CliExePath };
+        // sudo resets the environment by default; the framework-dependent apphost needs DOTNET_ROOT
+        // (GHA installs SDK under ~/.dotnet). Pass env via `sudo env` like the login-user path.
+        var sudoArgs = new List<string> { "-n", "--", "env" };
+        var merged = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        if (env is not null)
+        {
+            foreach (var (k, v) in env)
+                merged[k] = v;
+        }
+
+        EnsureDotnetRootForApphost(merged);
+        foreach (var (k, v) in merged)
+        {
+            if (v is not null)
+                sudoArgs.Add($"{k}={v}");
+        }
+
+        sudoArgs.Add(CliExePath);
         sudoArgs.AddRange(args);
-        using var process = StartProcess("/usr/bin/sudo", sudoArgs.ToArray(), env);
+        using var process = StartProcess("/usr/bin/sudo", sudoArgs.ToArray(), env: null);
         return await WaitProcessAsync(process, timeout).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Ensure <c>DOTNET_ROOT</c> is set so a framework-dependent apphost can start under sudo.
+    /// </summary>
+    private static void EnsureDotnetRootForApphost(IDictionary<string, string?> env)
+    {
+        if (env.TryGetValue("DOTNET_ROOT", out var existing) && !string.IsNullOrWhiteSpace(existing))
+            return;
+
+        var fromProcess = Environment.GetEnvironmentVariable("DOTNET_ROOT");
+        if (!string.IsNullOrWhiteSpace(fromProcess))
+        {
+            env["DOTNET_ROOT"] = fromProcess;
+            return;
+        }
+
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrEmpty(home))
+            return;
+
+        var candidate = Path.Combine(home, ".dotnet");
+        if (Directory.Exists(candidate))
+            env["DOTNET_ROOT"] = candidate;
     }
 
     /// <summary>
@@ -728,17 +769,26 @@ public sealed partial class CliProcessHarness : IDisposable
 
     private static string LocateCliDirectory()
     {
-        var configs = new[] { "Release", "Debug" };
         var tfm = "net10.0";
         var repo = FindRepoRoot();
-        foreach (var cfg in configs)
+        string? best = null;
+        var bestWrite = DateTime.MinValue;
+        foreach (var cfg in new[] { "Release", "Debug" })
         {
             var dir = Path.Combine(repo, "src", "Titanium.Cli", "bin", cfg, tfm);
-            if (File.Exists(Path.Combine(dir, "titanium.dll")))
+            var dll = Path.Combine(dir, "titanium.dll");
+            if (!File.Exists(dll))
+                continue;
+            var write = File.GetLastWriteTimeUtc(dll);
+            if (write >= bestWrite)
             {
-                return dir;
+                bestWrite = write;
+                best = dir;
             }
         }
+
+        if (best is not null)
+            return best;
 
         // Fallback: adjacent to test assembly (project reference copies deps, not the exe layout)
         var testDir = AppContext.BaseDirectory;
@@ -754,14 +804,23 @@ public sealed partial class CliProcessHarness : IDisposable
     internal static string LocatePlusDll()
     {
         var repo = FindRepoRoot();
+        string? best = null;
+        var bestWrite = DateTime.MinValue;
         foreach (var cfg in new[] { "Release", "Debug" })
         {
             var path = Path.Combine(repo, "src", "Titanium.Plus", "bin", cfg, "net10.0", "Titanium.Plus.dll");
-            if (File.Exists(path))
+            if (!File.Exists(path))
+                continue;
+            var write = File.GetLastWriteTimeUtc(path);
+            if (write >= bestWrite)
             {
-                return path;
+                bestWrite = write;
+                best = path;
             }
         }
+
+        if (best is not null)
+            return best;
 
         throw new FileNotFoundException("Titanium.Plus.dll not found. Build Titanium.Plus first.");
     }

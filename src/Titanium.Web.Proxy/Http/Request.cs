@@ -1,6 +1,7 @@
 ﻿using System;
 using System.ComponentModel;
 using System.Text;
+using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
@@ -173,7 +174,24 @@ public class Request : RequestResponseBase
             return;
 
         var port = transparent.ForwardPort ?? 80;
-        Host = port == 80 ? forwardHost : $"{forwardHost}:{port}";
+        Host = Helpers.HttpHostHeader.Format(forwardHost, port);
+    }
+
+    /// <summary>
+    ///     Wire-only Host for cleartext reverse destinations that opt into destination Host
+    ///     (<c>UseDestinationHost</c> / <c>RequestHostUseDestination</c>). Applied only when
+    ///     serializing origin request headers — <see cref="Host"/> is never mutated.
+    /// </summary>
+    internal string? UpstreamCleartextHostOverride { get; private set; }
+
+    /// <summary>
+    ///     Stash a wire-only Host override for a cleartext destination bind identity.
+    ///     Does not inspect client scheme — callers gate on origin cleartext (<c>!UseHttps</c>).
+    /// </summary>
+    internal void SetUpstreamCleartextHostOverride(string host, int port)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(host);
+        UpstreamCleartextHostOverride = Helpers.HttpHostHeader.Format(host, port);
     }
 
     /// <summary>
@@ -289,6 +307,7 @@ public class Request : RequestResponseBase
         ExtendedConnectProtocol = null;
         ExpectationSucceeded = false;
         ExpectationFailed = false;
+        UpstreamCleartextHostOverride = null;
     }
 
     /// <summary>

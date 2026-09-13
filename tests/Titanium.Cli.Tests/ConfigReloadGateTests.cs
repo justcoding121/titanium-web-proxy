@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Cli.Config;
 
@@ -59,11 +60,13 @@ public class ConfigReloadGateTests
     }
 
     [TestMethod]
+    [SupportedOSPlatform("windows")]
     public void WindowsReloadEvent_SignalReachesWaiter()
     {
         if (!OperatingSystem.IsWindows())
         {
             Assert.Inconclusive("Named EventWaitHandle path is Windows-only.");
+            return;
         }
 
         using var handle = ConfigReloadGate.CreateWindowsReloadEvent(_configPath, out _);

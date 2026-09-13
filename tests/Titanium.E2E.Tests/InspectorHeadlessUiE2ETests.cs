@@ -129,12 +129,13 @@ public class InspectorHeadlessUiE2ETests
         vm.StartCaptureCommand.Execute(null);
 
         var deadline = DateTime.UtcNow.AddSeconds(15);
-        while (!interception.IsRunning && DateTime.UtcNow < deadline)
+        while (interception.BoundPort <= 0 && DateTime.UtcNow < deadline)
         {
             await Task.Delay(50);
         }
 
         Assert.IsTrue(interception.IsRunning, vm.StatusText);
+        Assert.IsTrue(interception.BoundPort > 0, "StartCapture must publish BoundPort before traffic");
         Assert.IsTrue(interception.IgnoreServerCertificateErrors, "StartCapture must keep ignore-errors from settings");
         interception.UseInMemoryTrustState = true;
         interception.DecryptHttps = true;
@@ -143,7 +144,7 @@ public class InspectorHeadlessUiE2ETests
         using var origin = new HttpsEchoOrigin();
         using var handler = new HttpClientHandler
         {
-            Proxy = new WebProxy($"http://127.0.0.1:{vm.BindPort}"),
+            Proxy = new WebProxy($"http://127.0.0.1:{interception.BoundPort}"),
             UseProxy = true,
             ServerCertificateCustomValidationCallback = (_, cert, _, _) => cert is not null,
         };
