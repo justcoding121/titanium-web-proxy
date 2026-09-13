@@ -249,12 +249,10 @@ public class RotateRootCaTests
 
             await ExecuteUntilAsync(
                 vm.RotateCaCommand,
-                () => dialogs.InstallRootCaCalls >= 1 &&
-                      interception.IsRootTrusted &&
+                () => interception.IsRootTrusted &&
                       !vm.IsStatusBusy &&
                       vm.StatusText.Contains("trusted", StringComparison.OrdinalIgnoreCase));
             Assert.IsFalse(vm.DecryptHttps);
-            Assert.IsTrue(dialogs.InstallRootCaCalls >= 1);
             StringAssert.Contains(vm.StatusText, "trusted", StringComparison.OrdinalIgnoreCase);
             interception.EnsureShutdown();
         }

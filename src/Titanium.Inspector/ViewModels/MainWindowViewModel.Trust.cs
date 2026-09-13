@@ -710,8 +710,13 @@ public sealed partial class MainWindowViewModel
             InspectorUxTrace.Event("RotateCa.ConfirmRotate", "accepted=true");
 
             // New root is untrusted until Install — MITM must not stay on across rotate.
-            // Fire-and-forget snap so nested dispatcher bounce cannot delay CryptUI.
-            _ = ForceDecryptHttpsOffAsync();
+            // Avoid ForceDecryptHttpsOffAsync/Snap here: BounceBoolBinding can PropertyChanged(true)
+            // after EndTrustCommand and the optimistic DecryptHttps setter turns MITM back on.
+            Interlocked.Increment(ref _decryptEnableGeneration);
+            Interlocked.Increment(ref _decryptTrustVerifyGeneration);
+            _decryptHttpsBusy = false;
+            if (_decryptHttps)
+                SetDecryptHttpsCore(false);
 
             // Await TrustBg only before Remove — never between Mint and CryptUI.
             SetStatus("Preparing clear and reinstall…", StatusSeverity.Busy);
@@ -757,6 +762,8 @@ public sealed partial class MainWindowViewModel
         }
         finally
         {
+            // Rotate always leaves MITM off (even if a stale UI snap or settings reload raced).
+            SetDecryptHttpsCore(false);
             EndTrustCommand();
         }
     }

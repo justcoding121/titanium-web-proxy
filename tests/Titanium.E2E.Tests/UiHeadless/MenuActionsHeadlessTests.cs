@@ -155,11 +155,24 @@ public class MenuActionsHeadlessTests
             fx.Dialogs.RotateRootCaResult = true;
             fx.Dialogs.InstallRootCaResult = true;
             await fx.DispatchAsync(() => fx.Robot.Click("MenuRotateCa"));
-            await fx.WaitUntilAsync(() => fx.Dialogs.RotateRootCaCalls >= 1, TimeSpan.FromSeconds(10));
+            await fx.WaitUntilAsync(
+                () => fx.Dialogs.RotateRootCaCalls >= 1 && fx.ViewModel.IsStatusBusy,
+                TimeSpan.FromSeconds(10));
+            await fx.WaitUntilAsync(
+                () => !fx.ViewModel.IsStatusBusy
+                      && !fx.ViewModel.DecryptHttps
+                      && fx.Interception.IsRootTrusted,
+                TimeSpan.FromSeconds(20));
 
             await fx.DispatchAsync(() => fx.Robot.Click("MenuRemoveCa"));
-            await fx.WaitUntilAsync(() => fx.Dialogs.RemoveRootCaCalls >= 1, TimeSpan.FromSeconds(10));
-            await fx.DispatchAsync(() => Assert.IsFalse(fx.ViewModel.DecryptHttps));
+            await fx.WaitUntilAsync(
+                () => fx.Dialogs.RemoveRootCaCalls >= 1 && fx.ViewModel.IsStatusBusy,
+                TimeSpan.FromSeconds(10));
+            await fx.WaitUntilAsync(
+                () => !fx.ViewModel.IsStatusBusy
+                      && !fx.ViewModel.DecryptHttps
+                      && !fx.Interception.IsRootTrusted,
+                TimeSpan.FromSeconds(20));
 
 
             // Tools: Map Remote pane + filters + Via header + inspect/composer leaves
@@ -169,19 +182,19 @@ public class MenuActionsHeadlessTests
                 Assert.AreEqual(4, fx.ViewModel.SelectedToolsTabIndex);
 
                 var hideTunnels = fx.ViewModel.HideTunnelsFilter;
-                fx.Robot.Click("HideTunnelsFilterCheck");
+                fx.Robot.SetCheck("HideTunnelsFilterCheck", !hideTunnels);
                 Assert.AreEqual(!hideTunnels, fx.ViewModel.HideTunnelsFilter);
-                fx.Robot.Click("HideTunnelsFilterCheck");
+                fx.Robot.SetCheck("HideTunnelsFilterCheck", hideTunnels);
 
                 var hideImages = fx.ViewModel.HideImagesFilter;
-                fx.Robot.Click("HideImagesFilterCheck");
+                fx.Robot.SetCheck("HideImagesFilterCheck", !hideImages);
                 Assert.AreEqual(!hideImages, fx.ViewModel.HideImagesFilter);
-                fx.Robot.Click("HideImagesFilterCheck");
+                fx.Robot.SetCheck("HideImagesFilterCheck", hideImages);
 
                 var errorsOnly = fx.ViewModel.ErrorsOnlyFilter;
-                fx.Robot.Click("ErrorsOnlyFilterCheck");
+                fx.Robot.SetCheck("ErrorsOnlyFilterCheck", !errorsOnly);
                 Assert.AreEqual(!errorsOnly, fx.ViewModel.ErrorsOnlyFilter);
-                fx.Robot.Click("ErrorsOnlyFilterCheck");
+                fx.Robot.SetCheck("ErrorsOnlyFilterCheck", errorsOnly);
                 fx.Robot.Click("ClearFiltersButton");
 
                 var via = fx.ViewModel.AddViaHeader;
@@ -206,12 +219,31 @@ public class MenuActionsHeadlessTests
 
             await fx.DispatchAsync(() =>
             {
-                if (fx.ViewModel.Sessions.Count > 0)
-                    fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
+                fx.ViewModel.SeedSession(new SessionSnapshot
+                {
+                    Id = 99,
+                    Method = "POST",
+                    StatusCode = 200,
+                    Host = "menu.test",
+                    Url = "http://menu.test/body",
+                    Protocol = "HTTP/1.1",
+                    RequestBodyText = "request-body",
+                    ResponseBodyText = "response-body",
+                    RequestBodyCapture = BodyCaptureState.Complete,
+                    ResponseBodyCapture = BodyCaptureState.Complete,
+                });
+                fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[^1];
+                OpenSessionsContextMenu(fx);
                 fx.PathPicker.SavePath = Path.Combine(Path.GetTempPath(), "twp-body-" + Guid.NewGuid().ToString("N") + ".bin");
                 fx.Robot.Click("CtxSaveRequestBody");
+                OpenSessionsContextMenu(fx);
                 fx.Robot.Click("CtxSaveResponseBody");
-                fx.Robot.Click("CtxDiffSessions");
+                if (fx.ViewModel.Sessions.Count >= 2)
+                {
+                    fx.ViewModel.SetSelectedSessions([fx.ViewModel.Sessions[0], fx.ViewModel.Sessions[1]]);
+                    OpenSessionsContextMenu(fx);
+                    fx.Robot.Click("CtxDiffSessions");
+                }
                 fx.Robot.Click("BodyPretty");
                 fx.Robot.Click("CopyHeaders");
             });

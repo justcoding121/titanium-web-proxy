@@ -1619,11 +1619,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         void Bounce()
         {
             var actual = get();
-            set(!actual);
+            // OneWay ToggleButton: SetCurrentValue on the control only — never flip to !actual
+            // (MenuItem Command can fire and toggle DecryptHttps back on).
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-            set(actual);
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-            // SetCurrentValue path — required after ToggleButton SetValue severs OneWay binding.
             SyncToggleVisual?.Invoke(propertyName, actual);
         }
 

@@ -68,7 +68,8 @@ public sealed class InspectorUiRobot(Control root)
     {
         if (TryFind<CheckBox>(automationId, out var check) && check is not null)
         {
-            check.IsChecked = value;
+            // SetCurrentValue updates TwoWay bindings reliably in headless (plain IsChecked can no-op).
+            check.SetCurrentValue(Avalonia.Controls.Primitives.ToggleButton.IsCheckedProperty, value);
             return;
         }
 

@@ -453,18 +453,6 @@ public class InspectorCommandCoverageTests
         append.Invoke(null, [sb, "=== Pair ===", new Dictionary<string, string> { ["k"] = "v" }]);
         StringAssert.Contains(sb.ToString(), "k=v");
 
-        var body = (string)vmType.GetMethod("BuildSelectedBodyText", flags)!
-            .Invoke(null, [new SessionSnapshot
-            {
-                IsTranscoded = true,
-                RequestBodyText = "{\"a\":1}",
-                ResponseBodyText = "{\"ok\":true}",
-                UpstreamRequestBodyBytes = [1, 2],
-                GrpcFrames = [new GrpcFrameSnapshot { Compressed = false, Length = 2, HexPreview = "0102" }],
-            }])!;
-        StringAssert.Contains(body, "Client (JSON/REST)");
-        StringAssert.Contains(body, "Upstream gRPC frames");
-
         Assert.AreEqual("(no frames parsed)",
             (string)vmType.GetMethod("BuildSelectedFramesText", flags)!
                 .Invoke(null, [new SessionSnapshot { IsWebSocket = true }])!);
@@ -535,6 +523,18 @@ public class InspectorCommandCoverageTests
             vm.BindAddress = "127.0.0.1";
             Assert.AreEqual("127.0.0.1",
                 (string)vmType.GetMethod("FormatBindDisplay", flags)!.Invoke(vm, null)!);
+
+            var body = (string)vmType.GetMethod("BuildSelectedBodyText", flags)!
+                .Invoke(vm, [new SessionSnapshot
+                {
+                    IsTranscoded = true,
+                    RequestBodyText = "{\"a\":1}",
+                    ResponseBodyText = "{\"ok\":true}",
+                    UpstreamRequestBodyBytes = [1, 2],
+                    GrpcFrames = [new GrpcFrameSnapshot { Compressed = false, Length = 2, HexPreview = "0102" }],
+                }])!;
+            StringAssert.Contains(body, "Client (JSON/REST)");
+            StringAssert.Contains(body, "Upstream gRPC frames");
         }
         finally
         {

@@ -24,10 +24,15 @@ public class TrustConfirmHeadlessTests
             await InspectorUiRobot.WaitForAsync(() => fx.Interception.IsRunning, TimeSpan.FromSeconds(15));
         });
 
-        var before = fx.Interception.RootCertificate?.Thumbprint;
+        // Root may still be minting after IsRunning; capture after the first stable thumbprint.
+        await fx.WaitUntilAsync(
+            () => fx.Interception.RootCertificate?.Thumbprint is { Length: > 0 },
+            TimeSpan.FromSeconds(15));
+        var before = fx.Interception.RootCertificate!.Thumbprint;
         await ClickMenuAndDismissDialogAsync(fx, "MenuRotateCa", "ConfirmCancel");
         await fx.WaitUntilAsync(
-            () => fx.ViewModel.StatusText.Contains("cancelled", StringComparison.OrdinalIgnoreCase),
+            () => fx.ViewModel.StatusText.Contains("cancelled", StringComparison.OrdinalIgnoreCase)
+                  && !fx.ViewModel.IsStatusBusy,
             TimeSpan.FromSeconds(10));
         Assert.AreEqual(before, fx.Interception.RootCertificate?.Thumbprint);
     }
