@@ -69,13 +69,20 @@ public class TrustUxStressTests
                 var rotateCalls = dialogs.RotateRootCaCalls;
                 await ExecuteUntilAsync(
                     vm.RotateCaCommand,
-                    () => dialogs.RotateRootCaCalls > rotateCalls && !vm.IsStatusBusy,
+                    () => dialogs.RotateRootCaCalls > rotateCalls
+                          && !vm.IsStatusBusy
+                          && interception.IsRootTrusted
+                          && (vm.StatusText.Contains("trusted", StringComparison.OrdinalIgnoreCase)
+                              || vm.StatusText.Contains("failed", StringComparison.OrdinalIgnoreCase)),
                     25000);
 
                 var removeCalls = dialogs.RemoveRootCaCalls;
                 await ExecuteUntilAsync(
                     vm.UntrustCaCommand,
-                    () => dialogs.RemoveRootCaCalls > removeCalls && !vm.DecryptHttps && !vm.IsStatusBusy,
+                    () => dialogs.RemoveRootCaCalls > removeCalls
+                          && !vm.DecryptHttps
+                          && !vm.IsStatusBusy
+                          && !interception.IsRootTrusted,
                     20000);
             }
 

@@ -594,6 +594,7 @@ public sealed partial class MainWindowViewModel
                 return;
             }
 
+            // Busy before TrustBg / remove so dialog-call waiters cannot observe a non-busy window.
             SetStatus("Preparing remove…", StatusSeverity.Busy);
             await AwaitPriorFirefoxTrustBackgroundAsync();
 
@@ -709,6 +710,11 @@ public sealed partial class MainWindowViewModel
 
             InspectorUxTrace.Event("RotateCa.ConfirmRotate", "accepted=true");
 
+            // Mark Busy before any PersistSettings / decrypt-off work so waiters that key on
+            // RotateRootCaCalls (incremented at confirm) cannot observe a non-busy window while
+            // _trustCommandBusy is still true (macOS stress: Untrust then Rejected → timeout).
+            SetStatus("Preparing clear and reinstall…", StatusSeverity.Busy);
+
             // New root is untrusted until Install — MITM must not stay on across rotate.
             // Avoid ForceDecryptHttpsOffAsync/Snap here: BounceBoolBinding can PropertyChanged(true)
             // after EndTrustCommand and the optimistic DecryptHttps setter turns MITM back on.
@@ -719,7 +725,6 @@ public sealed partial class MainWindowViewModel
                 SetDecryptHttpsCore(false);
 
             // Await TrustBg only before Remove — never between Mint and CryptUI.
-            SetStatus("Preparing clear and reinstall…", StatusSeverity.Busy);
             await AwaitPriorFirefoxTrustBackgroundAsync();
 
             SetStatus("Clearing root CA…", StatusSeverity.Busy);
