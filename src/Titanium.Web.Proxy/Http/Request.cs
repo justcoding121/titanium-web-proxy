@@ -110,10 +110,10 @@ public class Request : RequestResponseBase
             if (contentLength > 0) return true;
             if (IsChunked) return true;
 
-            // HTTP/2 and HTTP/3 may omit Content-Length; body length is framed by DATA/END_STREAM
-            // (or QUIC stream fin). Match Response.HasBody so BeforeRequest transforms that strip
-            // Content-Length (recompress) do not flip HasBody false and poison H2 framing.
-            if (contentLength == -1 && HttpVersion.Major >= 2) return true;
+            // BeforeRequest gzip recompress may strip Content-Length. OriginalHasBody is snapshotted
+            // from wire framing (H1 SetOriginalHeaders, H2 HEADERS END_STREAM) so a bodied stream
+            // stays HasBody without treating omitted-CL GET/HEAD as a body (that hung H2→H1).
+            if (OriginalHasBody || BodyAvailable) return true;
 
             // has body if POST and when version is http/1.0
             if (Method == "POST" && HttpVersion == HttpHeader.Version10) return true;

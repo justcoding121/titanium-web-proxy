@@ -251,6 +251,10 @@ internal static class Http3RequestStream
                 var capturedRequestMethod = request.Method;
                 var capturedRequestPath = request.RequestUriString8;
                 var capturedRequestAuthority = request.Authority;
+                // Snapshot before handlers strip Content-Length (gzip recompress). GET/HEAD omit CL
+                // and stay bodiless — do not treat omitted CL as a body (H2/H3 GET hang).
+                if (!bodilessFastPath && request.ContentLength > 0)
+                    request.OriginalHasBody = true;
                 sessionArgs.Timing?.MarkRequestHeadersReceived();
                 try
                 {

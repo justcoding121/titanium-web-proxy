@@ -259,13 +259,22 @@ namespace Titanium.Web.Proxy.UnitTests
             request.HttpVersion = HttpHeader.Version10;
             Assert.IsTrue(request.HasBody);
 
-            // H2/H3: omitted Content-Length still means a framed body may follow (DATA/END_STREAM).
-            request.Method = "POST";
+            // H2 GET/HEAD omit Content-Length; END_STREAM on HEADERS means no body.
+            request.Method = "GET";
             request.HttpVersion = HttpHeader.Version20;
             request.ContentLength = -1;
             request.IsChunked = false;
-            Assert.IsTrue(request.HasBody);
+            request.OriginalHasBody = false;
+            Assert.IsFalse(request.HasBody,
+                "HTTP/2 GET without Content-Length or an OriginalHasBody snapshot has no body.");
 
+            // H2 POST whose HEADERS lacked END_STREAM (DATA follows), then BeforeRequest stripped CL.
+            request.Method = "POST";
+            request.OriginalHasBody = true;
+            Assert.IsTrue(request.HasBody,
+                "OriginalHasBody keeps HasBody after Content-Length is stripped on a bodied H2 stream.");
+
+            request.OriginalHasBody = false;
             request.HttpVersion = HttpHeader.Version11;
             request.ContentLength = -1;
             request.IsChunked = false;

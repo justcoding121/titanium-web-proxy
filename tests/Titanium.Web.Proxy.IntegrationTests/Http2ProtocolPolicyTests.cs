@@ -155,7 +155,14 @@ public class Http2ProtocolPolicyTests
 
         Version? afterResponseRequestVersion = null;
         Version? afterResponseResponseVersion = null;
+        var getHadBody = false;
         var afterResponseSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        proxy.BeforeRequest += (_, e) =>
+        {
+            if (e.HttpClient.Request.Method == "GET")
+                getHadBody = e.HttpClient.Request.HasBody;
+            return Task.CompletedTask;
+        };
         proxy.AfterResponse += (_, e) =>
         {
             afterResponseRequestVersion = e.HttpClient.Request.HttpVersion;
@@ -200,6 +207,8 @@ public class Http2ProtocolPolicyTests
         }
 
         Assert.AreEqual("h2-to-h11-bridge-ok", Encoding.ASCII.GetString(body.ToArray()));
+        Assert.IsFalse(getHadBody,
+            "HTTP/2 GET without Content-Length must not report HasBody; H2→H1 would hang on a body channel that never completes.");
         Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised on a successful bridge: {exceptionCapture.LastException}");
 
         try
