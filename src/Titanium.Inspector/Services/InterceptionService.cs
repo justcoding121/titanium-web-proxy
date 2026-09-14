@@ -457,6 +457,10 @@ public sealed class InterceptionService : IDisposable
 
     public void Stop()
     {
+        // Release a paused breakpoint so Stop does not wait out the 120s hit timeout
+        // and the client is not left hanging after the listener is gone.
+        Breakpoints?.ContinueIfPaused("Proxy stopped — paused request continued");
+
         if (_proxy is null)
         {
             return;
@@ -1505,6 +1509,11 @@ public sealed class InterceptionService : IDisposable
         var path = destinationPath ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
             "TitaniumInspector-RootCA.cer");
+        if (Directory.Exists(path))
+        {
+            throw new IOException("Export path is a directory: " + path);
+        }
+
         var der = cert.Export(X509ContentType.Cert);
         if (IsPemExportPath(path))
         {

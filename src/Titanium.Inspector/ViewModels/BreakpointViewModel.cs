@@ -21,8 +21,20 @@ public sealed class BreakpointViewModel : System.ComponentModel.INotifyPropertyC
         get => _enabled;
         set
         {
+            if (_enabled == value)
+            {
+                return;
+            }
+
             _enabled = value;
             PropertyChanged?.Invoke(this, new(nameof(Enabled)));
+            // Disabling while paused should release the client: Continue (let the
+            // request through), not Abort (403). Same idea as turning off a debugger
+            // breakpoint — don't leave the page hanging, and don't fail it.
+            if (!value)
+            {
+                ContinueIfPaused("Breakpoints disabled — paused request continued");
+            }
         }
     }
 
@@ -131,6 +143,31 @@ public sealed class BreakpointViewModel : System.ComponentModel.INotifyPropertyC
     public void Abort()
     {
         ClearActive(BreakpointAction.Abort, raiseHitChanged: true);
+    }
+
+    /// <summary>
+    /// Continue a paused hit (if any) so the client is not left waiting until timeout.
+    /// Used when breakpoints are turned off or the proxy stops.
+    /// </summary>
+    public bool ContinueIfPaused(string? message = null)
+    {
+        lock (Gate)
+        {
+            if (_active is null)
+            {
+                return false;
+            }
+
+            _active.Complete(BreakpointAction.Continue);
+            Active = null;
+            if (!string.IsNullOrEmpty(message))
+            {
+                LastOverflowMessage = message;
+            }
+        }
+
+        ActiveHitChanged?.Invoke(this, EventArgs.Empty);
+        return true;
     }
 
     public void EditBody(string newBody)

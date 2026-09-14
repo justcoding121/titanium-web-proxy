@@ -464,7 +464,7 @@
                           AutomationProperties.AutomationId="TabBreakpoints">
             <StackPanel Margin="8" Spacing="8">
               <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                         Text="Pause matching client requests to edit the body, continue, or abort. One pause at a time; auto-continues after 120s." />
+                         Text="Pause matching client requests to edit the body, continue, or abort. One pause at a time; auto-continues after 120s. Unchecking Enabled continues a paused request." />
               <Border IsVisible="{Binding HasActiveBreakpoint}" Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
                       CornerRadius="4" Padding="8,6" AutomationProperties.AutomationId="BreakpointHitBanner">
                 <TextBlock Text="{Binding BreakpointHitBanner}" TextWrapping="Wrap" FontWeight="SemiBold" />

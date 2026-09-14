@@ -46,6 +46,53 @@ public class InspectorPathPickerAndFactoryTests
     }
 
     [TestMethod]
+    public void NormalizePickedPath_RejectsEmptyAndDirectories()
+    {
+        Assert.IsNull(InspectorPathPickerHelpers.NormalizePickedPath(null));
+        Assert.IsNull(InspectorPathPickerHelpers.NormalizePickedPath(""));
+        Assert.IsNull(InspectorPathPickerHelpers.NormalizePickedPath("   "));
+
+        var dir = Path.Combine(Path.GetTempPath(), "twp-picker-dir-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            Assert.IsNull(InspectorPathPickerHelpers.NormalizePickedPath(dir));
+            var file = Path.Combine(dir, "ca.cer");
+            Assert.AreEqual(file, InspectorPathPickerHelpers.NormalizePickedPath(file));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public void ResolveSaveAfterDialog_CancelDoesNotFallBackToDesktop()
+    {
+        var cancelled = new StoragePickAttempt(DialogShown: true, Path: null);
+        Assert.IsNull(cancelled.Path);
+        Assert.IsTrue(cancelled.DialogShown);
+
+        var folder = Path.Combine(Path.GetTempPath(), "twp-picker-open-dir-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            Assert.IsNull(InspectorPathPickerHelpers.NormalizePickedPath(folder));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+
+        var fallback = InspectorPathPickerHelpers.FallbackDesktopSavePath("TitaniumInspector-RootCA.cer");
+        StringAssert.Contains(fallback, "TitaniumInspector-RootCA");
+        StringAssert.EndsWith(fallback, ".cer");
+        Assert.AreEqual(
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+            Path.GetDirectoryName(fallback));
+    }
+
+    [TestMethod]
     public async Task AvaloniaPathPicker_WithoutUi_FallsBackToDesktopSavePath()
     {
         var picker = new AvaloniaInspectorPathPicker();

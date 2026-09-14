@@ -47,6 +47,58 @@ public class BreakpointViewModelTests
     }
 
     [TestMethod]
+    public async Task DisableWhilePaused_ContinuesActiveHit()
+    {
+        var vm = new BreakpointViewModel { Enabled = true, UrlFilter = "*" };
+        Assert.IsTrue(vm.TryEnter(new SessionSnapshot { Url = "https://paused/" }, out var hit));
+        var wait = hit.WaitAsync();
+
+        vm.Enabled = false;
+        Assert.IsFalse(vm.Enabled);
+        Assert.IsNull(vm.Active);
+        Assert.IsFalse(vm.HasActiveHit);
+        Assert.AreEqual(BreakpointAction.Continue, await wait.WaitAsync(TimeSpan.FromSeconds(2)));
+        StringAssert.Contains(vm.LastOverflowMessage, "Breakpoints disabled");
+    }
+
+    [TestMethod]
+    public void DisableWhileIdle_DoesNotRaiseHitChanged()
+    {
+        var vm = new BreakpointViewModel { Enabled = true };
+        var hits = 0;
+        vm.ActiveHitChanged += (_, _) => hits++;
+        vm.Enabled = false;
+        Assert.AreEqual(0, hits);
+        Assert.IsFalse(vm.ContinueIfPaused());
+    }
+
+    [TestMethod]
+    public async Task Stop_ContinuesPausedBreakpoint()
+    {
+        using var interception = new InterceptionService { UseInMemoryTrustState = true };
+        var vm = new BreakpointViewModel { Enabled = true };
+        interception.Breakpoints = vm;
+        Assert.IsTrue(vm.TryEnter(new SessionSnapshot { Url = "https://stop-proxy/" }, out var hit));
+        var wait = hit.WaitAsync();
+
+        interception.Stop();
+        Assert.IsNull(vm.Active);
+        Assert.AreEqual(BreakpointAction.Continue, await wait.WaitAsync(TimeSpan.FromSeconds(2)));
+        StringAssert.Contains(vm.LastOverflowMessage, "Proxy stopped");
+    }
+
+    [TestMethod]
+    public async Task ContinueIfPaused_ReleasesWaiter()
+    {
+        var vm = new BreakpointViewModel { Enabled = true };
+        Assert.IsTrue(vm.TryEnter(new SessionSnapshot { Url = "https://stop/" }, out var hit));
+        var wait = hit.WaitAsync();
+        Assert.IsTrue(vm.ContinueIfPaused("Proxy stopped — paused request continued"));
+        Assert.AreEqual(BreakpointAction.Continue, await wait.WaitAsync(TimeSpan.FromSeconds(2)));
+        StringAssert.Contains(vm.LastOverflowMessage, "Proxy stopped");
+    }
+
+    [TestMethod]
     public void TryEnter_OverflowAutoContinuesSecond()
     {
         var vm = new BreakpointViewModel { Enabled = true, UrlFilter = "*" };

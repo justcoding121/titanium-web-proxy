@@ -68,7 +68,7 @@ public partial class LoggingSettingsWindow : Window
                 new FilePickerFileType("All") { Patterns = ["*.*"] },
             ],
         });
-        if (file?.TryGetLocalPath() is { } path)
+        if (InspectorPathPickerHelpers.NormalizePickedPath(file?.TryGetLocalPath()) is { } path)
         {
             PathBox.Text = path;
         }
