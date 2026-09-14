@@ -258,6 +258,20 @@ namespace Titanium.Web.Proxy.UnitTests
             request.Method = "POST";
             request.HttpVersion = HttpHeader.Version10;
             Assert.IsTrue(request.HasBody);
+
+            // H2/H3: omitted Content-Length still means a framed body may follow (DATA/END_STREAM).
+            request.Method = "POST";
+            request.HttpVersion = HttpHeader.Version20;
+            request.ContentLength = -1;
+            request.IsChunked = false;
+            Assert.IsTrue(request.HasBody);
+
+            request.HttpVersion = HttpHeader.Version11;
+            request.ContentLength = -1;
+            request.IsChunked = false;
+            request.Method = "POST";
+            Assert.IsFalse(request.HasBody,
+                "HTTP/1.1 POST without Content-Length or chunked framing has no body.");
         }
 
         [TestMethod]

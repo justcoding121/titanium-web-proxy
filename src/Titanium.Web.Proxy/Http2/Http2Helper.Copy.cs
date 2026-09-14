@@ -246,6 +246,26 @@ namespace Titanium.Web.Proxy.Http2
             {
                 if (connectionBytes <= 0 && streamBytes <= 0) return;
 
+                // Client→proxy DATA can flush receive credit (WINDOW_UPDATE on the client socket) before
+                // the origin→client relay has forwarded the origin SETTINGS. .NET HttpClient treats any
+                // non-SETTINGS first frame as PROTOCOL_ERROR (RFC 7540 §3.5). Await SETTINGS relay first,
+                // and do it before taking ClientWriteLock so the receive relay can still write SETTINGS.
+                if (isClient)
+                {
+                    var settingsTask = connectionState.ServerSettingsRelayed.Task;
+                    if (!settingsTask.IsCompletedSuccessfully)
+                    {
+                        try
+                        {
+                            await settingsTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            return;
+                        }
+                    }
+                }
+
                 await ownLegWriteLock.WaitAsync(cancellationToken);
                 try
                 {
@@ -267,6 +287,11 @@ namespace Titanium.Web.Proxy.Http2
             async ValueTask FlushAllPendingReceiveCreditAsync()
             {
                 if (pendingConnectionReceiveCredit <= 0 && pendingStreamReceiveCredit.Count == 0)
+                    return;
+
+                // Teardown flush: never emit client WINDOW_UPDATE if SETTINGS never made it (would still
+                // be PROTOCOL_ERROR for HttpClient). Drop the credit; the connection is going away.
+                if (isClient && !connectionState.ServerSettingsRelayed.Task.IsCompletedSuccessfully)
                     return;
 
                 await ownLegWriteLock.WaitAsync(CancellationToken.None);
@@ -1293,13 +1318,21 @@ namespace Titanium.Web.Proxy.Http2
 
                             var outBytes = bodyWriteArgs.BodyBytes ?? Array.Empty<byte>();
 
-                            // Queue on the same FIFO as QueueSendHeader. A direct SendData write can
-                            // overtake MITM-re-encoded HEADERS still sitting on ClientFrameWriter /
-                            // ServerFrameWriter (Inspector always subscribes OnResponseBodyWrite),
-                            // which Chrome treats as DATA on an idle stream (PROTOCOL_ERROR).
-                            await QueueSendData(connectionState, towardServer: isClient, outputWriteLock,
-                                streamId, outBytes, endStreamFlag, remoteSettings.MaxFrameSize, outboundFlow,
-                                output, cancellationToken);
+                            // Buffer-until-IsLastChunk hooks return empty pieces for every frame but
+                            // the last. Emitting empty non-terminal DATA still reserves send windows
+                            // and can overtake/interleave with MITM HEADERS under load (HttpClient
+                            // PROTOCOL_ERROR on the next H2 session in CI). Suppress them; only
+                            // empty+END_STREAM must still be framed (trailers / bodiless end).
+                            if (outBytes.Length > 0 || endStreamFlag)
+                            {
+                                // Queue on the same FIFO as QueueSendHeader. A direct SendData write can
+                                // overtake MITM-re-encoded HEADERS still sitting on ClientFrameWriter /
+                                // ServerFrameWriter (Inspector always subscribes OnResponseBodyWrite),
+                                // which Chrome treats as DATA on an idle stream (PROTOCOL_ERROR).
+                                await QueueSendData(connectionState, towardServer: isClient, outputWriteLock,
+                                    streamId, outBytes, endStreamFlag, remoteSettings.MaxFrameSize, outboundFlow,
+                                    output, cancellationToken);
+                            }
 
                             // we have emitted our own (possibly re-sized) DATA frame(s); suppress the default relay
                             sendPacket = false;

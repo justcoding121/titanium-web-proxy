@@ -34,20 +34,6 @@ public class StreamingContentEncodingTests
     private const string Needle = "http://example.invalid/path";
     private const string Replacement = "https://example.invalid/path";
 
-    private static TestServer sharedServer = null!;
-
-    [ClassInitialize]
-    public static void ClassSetup(TestContext _)
-    {
-        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
-    }
-
-    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
-    public static void ClassCleanup()
-    {
-        sharedServer?.Dispose();
-    }
-
     private static void RequireQuic()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
@@ -154,7 +140,9 @@ public class StreamingContentEncodingTests
 
     private static async Task RunHttp11OrHttp2ResponseGzipTransformAsync(bool http2)
     {
-        using var testSuite = new TestSuite(sharedServer);
+        // Own a TestServer per case: a class-shared Kestrel host left PROTOCOL_ERROR on the
+        // subsequent H2 request gzip transform after H2 response + H1 request (CI + local).
+        using var testSuite = new TestSuite();
 
         var plain = BuildPlainPayload();
         var gzipped = GzipCompress(plain);
@@ -199,7 +187,7 @@ public class StreamingContentEncodingTests
 
     private static async Task RunHttp11OrHttp2RequestGzipTransformAsync(bool http2)
     {
-        using var testSuite = new TestSuite(sharedServer);
+        using var testSuite = new TestSuite();
 
         var plain = BuildPlainPayload();
         var gzipped = GzipCompress(plain);

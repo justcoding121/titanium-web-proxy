@@ -110,6 +110,11 @@ public class Request : RequestResponseBase
             if (contentLength > 0) return true;
             if (IsChunked) return true;
 
+            // HTTP/2 and HTTP/3 may omit Content-Length; body length is framed by DATA/END_STREAM
+            // (or QUIC stream fin). Match Response.HasBody so BeforeRequest transforms that strip
+            // Content-Length (recompress) do not flip HasBody false and poison H2 framing.
+            if (contentLength == -1 && HttpVersion.Major >= 2) return true;
+
             // has body if POST and when version is http/1.0
             if (Method == "POST" && HttpVersion == HttpHeader.Version10) return true;
 
