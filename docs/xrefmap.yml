@@ -6766,6 +6766,35 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.ApplyFastColdStartLeafSettings
   nameWithType: CertificateManager.ApplyFastColdStartLeafSettings
+- uid: Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslTrustAfterStoreInstall(System.Boolean)
+  name: ApplyUnixSslTrustAfterStoreInstall(bool)
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_ApplyUnixSslTrustAfterStoreInstall_System_Boolean_
+  commentId: M:Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslTrustAfterStoreInstall(System.Boolean)
+  name.vb: ApplyUnixSslTrustAfterStoreInstall(Boolean)
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslTrustAfterStoreInstall(bool)
+  fullName.vb: Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslTrustAfterStoreInstall(Boolean)
+  nameWithType: CertificateManager.ApplyUnixSslTrustAfterStoreInstall(bool)
+  nameWithType.vb: CertificateManager.ApplyUnixSslTrustAfterStoreInstall(Boolean)
+- uid: Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslTrustAfterStoreInstall*
+  name: ApplyUnixSslTrustAfterStoreInstall
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_ApplyUnixSslTrustAfterStoreInstall_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslTrustAfterStoreInstall
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslTrustAfterStoreInstall
+  nameWithType: CertificateManager.ApplyUnixSslTrustAfterStoreInstall
+- uid: Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslUntrust
+  name: ApplyUnixSslUntrust()
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_ApplyUnixSslUntrust
+  commentId: M:Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslUntrust
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslUntrust()
+  nameWithType: CertificateManager.ApplyUnixSslUntrust()
+- uid: Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslUntrust*
+  name: ApplyUnixSslUntrust
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_ApplyUnixSslUntrust_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslUntrust
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslUntrust
+  nameWithType: CertificateManager.ApplyUnixSslUntrust
 - uid: Titanium.Web.Proxy.Network.CertificateManager.AreInteractiveRootStoreMutationsSuppressed
   name: AreInteractiveRootStoreMutationsSuppressed
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_AreInteractiveRootStoreMutationsSuppressed
@@ -6950,6 +6979,22 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.InstallNssCertutilAndRetryUserTrust
   nameWithType: CertificateManager.InstallNssCertutilAndRetryUserTrust
+- uid: Titanium.Web.Proxy.Network.CertificateManager.InstallRootIntoCertificateStores(System.Boolean)
+  name: InstallRootIntoCertificateStores(bool)
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_InstallRootIntoCertificateStores_System_Boolean_
+  commentId: M:Titanium.Web.Proxy.Network.CertificateManager.InstallRootIntoCertificateStores(System.Boolean)
+  name.vb: InstallRootIntoCertificateStores(Boolean)
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.InstallRootIntoCertificateStores(bool)
+  fullName.vb: Titanium.Web.Proxy.Network.CertificateManager.InstallRootIntoCertificateStores(Boolean)
+  nameWithType: CertificateManager.InstallRootIntoCertificateStores(bool)
+  nameWithType.vb: CertificateManager.InstallRootIntoCertificateStores(Boolean)
+- uid: Titanium.Web.Proxy.Network.CertificateManager.InstallRootIntoCertificateStores*
+  name: InstallRootIntoCertificateStores
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_InstallRootIntoCertificateStores_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.InstallRootIntoCertificateStores
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.InstallRootIntoCertificateStores
+  nameWithType: CertificateManager.InstallRootIntoCertificateStores
 - uid: Titanium.Web.Proxy.Network.CertificateManager.IntermediateCertificates
   name: IntermediateCertificates
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_IntermediateCertificates
@@ -7054,6 +7099,22 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.LeafRsaKeyPairBufferSize
   nameWithType: CertificateManager.LeafRsaKeyPairBufferSize
+- uid: Titanium.Web.Proxy.Network.CertificateManager.ListSameCommonNameRootThumbprints(System.Security.Cryptography.X509Certificates.StoreLocation,System.String)
+  name: ListSameCommonNameRootThumbprints(StoreLocation, string?)
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_ListSameCommonNameRootThumbprints_System_Security_Cryptography_X509Certificates_StoreLocation_System_String_
+  commentId: M:Titanium.Web.Proxy.Network.CertificateManager.ListSameCommonNameRootThumbprints(System.Security.Cryptography.X509Certificates.StoreLocation,System.String)
+  name.vb: ListSameCommonNameRootThumbprints(StoreLocation, String)
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.ListSameCommonNameRootThumbprints(System.Security.Cryptography.X509Certificates.StoreLocation, string?)
+  fullName.vb: Titanium.Web.Proxy.Network.CertificateManager.ListSameCommonNameRootThumbprints(System.Security.Cryptography.X509Certificates.StoreLocation, String)
+  nameWithType: CertificateManager.ListSameCommonNameRootThumbprints(StoreLocation, string?)
+  nameWithType.vb: CertificateManager.ListSameCommonNameRootThumbprints(StoreLocation, String)
+- uid: Titanium.Web.Proxy.Network.CertificateManager.ListSameCommonNameRootThumbprints*
+  name: ListSameCommonNameRootThumbprints
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_ListSameCommonNameRootThumbprints_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.ListSameCommonNameRootThumbprints
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.ListSameCommonNameRootThumbprints
+  nameWithType: CertificateManager.ListSameCommonNameRootThumbprints
 - uid: Titanium.Web.Proxy.Network.CertificateManager.LoadRootCertificate
   name: LoadRootCertificate()
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_LoadRootCertificate
@@ -7128,6 +7189,54 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.PfxPassword
   nameWithType: CertificateManager.PfxPassword
+- uid: Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedPersonalCertificates(System.Security.Cryptography.X509Certificates.StoreLocation,System.Boolean)
+  name: PruneOrphanedPersonalCertificates(StoreLocation, bool)
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_PruneOrphanedPersonalCertificates_System_Security_Cryptography_X509Certificates_StoreLocation_System_Boolean_
+  commentId: M:Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedPersonalCertificates(System.Security.Cryptography.X509Certificates.StoreLocation,System.Boolean)
+  name.vb: PruneOrphanedPersonalCertificates(StoreLocation, Boolean)
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedPersonalCertificates(System.Security.Cryptography.X509Certificates.StoreLocation, bool)
+  fullName.vb: Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedPersonalCertificates(System.Security.Cryptography.X509Certificates.StoreLocation, Boolean)
+  nameWithType: CertificateManager.PruneOrphanedPersonalCertificates(StoreLocation, bool)
+  nameWithType.vb: CertificateManager.PruneOrphanedPersonalCertificates(StoreLocation, Boolean)
+- uid: Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedPersonalCertificates*
+  name: PruneOrphanedPersonalCertificates
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_PruneOrphanedPersonalCertificates_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedPersonalCertificates
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedPersonalCertificates
+  nameWithType: CertificateManager.PruneOrphanedPersonalCertificates
+- uid: Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedSameCommonNameCertificates(System.Boolean,System.Boolean)
+  name: PruneOrphanedSameCommonNameCertificates(bool, bool)
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_PruneOrphanedSameCommonNameCertificates_System_Boolean_System_Boolean_
+  commentId: M:Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedSameCommonNameCertificates(System.Boolean,System.Boolean)
+  name.vb: PruneOrphanedSameCommonNameCertificates(Boolean, Boolean)
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedSameCommonNameCertificates(bool, bool)
+  fullName.vb: Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedSameCommonNameCertificates(Boolean, Boolean)
+  nameWithType: CertificateManager.PruneOrphanedSameCommonNameCertificates(bool, bool)
+  nameWithType.vb: CertificateManager.PruneOrphanedSameCommonNameCertificates(Boolean, Boolean)
+- uid: Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedSameCommonNameCertificates*
+  name: PruneOrphanedSameCommonNameCertificates
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_PruneOrphanedSameCommonNameCertificates_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedSameCommonNameCertificates
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedSameCommonNameCertificates
+  nameWithType: CertificateManager.PruneOrphanedSameCommonNameCertificates
+- uid: Titanium.Web.Proxy.Network.CertificateManager.RemoveCertificateByThumbprint(System.Security.Cryptography.X509Certificates.StoreName,System.Security.Cryptography.X509Certificates.StoreLocation,System.String)
+  name: RemoveCertificateByThumbprint(StoreName, StoreLocation, string)
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_RemoveCertificateByThumbprint_System_Security_Cryptography_X509Certificates_StoreName_System_Security_Cryptography_X509Certificates_StoreLocation_System_String_
+  commentId: M:Titanium.Web.Proxy.Network.CertificateManager.RemoveCertificateByThumbprint(System.Security.Cryptography.X509Certificates.StoreName,System.Security.Cryptography.X509Certificates.StoreLocation,System.String)
+  name.vb: RemoveCertificateByThumbprint(StoreName, StoreLocation, String)
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.RemoveCertificateByThumbprint(System.Security.Cryptography.X509Certificates.StoreName, System.Security.Cryptography.X509Certificates.StoreLocation, string)
+  fullName.vb: Titanium.Web.Proxy.Network.CertificateManager.RemoveCertificateByThumbprint(System.Security.Cryptography.X509Certificates.StoreName, System.Security.Cryptography.X509Certificates.StoreLocation, String)
+  nameWithType: CertificateManager.RemoveCertificateByThumbprint(StoreName, StoreLocation, string)
+  nameWithType.vb: CertificateManager.RemoveCertificateByThumbprint(StoreName, StoreLocation, String)
+- uid: Titanium.Web.Proxy.Network.CertificateManager.RemoveCertificateByThumbprint*
+  name: RemoveCertificateByThumbprint
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_RemoveCertificateByThumbprint_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.RemoveCertificateByThumbprint
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.RemoveCertificateByThumbprint
+  nameWithType: CertificateManager.RemoveCertificateByThumbprint
 - uid: Titanium.Web.Proxy.Network.CertificateManager.RemoveTrustedRootCertificate(System.Boolean)
   name: RemoveTrustedRootCertificate(bool)
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_RemoveTrustedRootCertificate_System_Boolean_
@@ -7583,6 +7692,22 @@ references:
   commentId: T:Titanium.Web.Proxy.Network.FirefoxCertificateTrust
   fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust
   nameWithType: FirefoxCertificateTrust
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.ClearRootTrustBestEffort(System.String)
+  name: ClearRootTrustBestEffort(string?)
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_ClearRootTrustBestEffort_System_String_
+  commentId: M:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.ClearRootTrustBestEffort(System.String)
+  name.vb: ClearRootTrustBestEffort(String)
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.ClearRootTrustBestEffort(string?)
+  fullName.vb: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.ClearRootTrustBestEffort(String)
+  nameWithType: FirefoxCertificateTrust.ClearRootTrustBestEffort(string?)
+  nameWithType.vb: FirefoxCertificateTrust.ClearRootTrustBestEffort(String)
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.ClearRootTrustBestEffort*
+  name: ClearRootTrustBestEffort
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_ClearRootTrustBestEffort_
+  commentId: Overload:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.ClearRootTrustBestEffort
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.ClearRootTrustBestEffort
+  nameWithType: FirefoxCertificateTrust.ClearRootTrustBestEffort
 - uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProcessRunning
   name: IsFirefoxProcessRunning()
   href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_IsFirefoxProcessRunning
@@ -7609,6 +7734,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.IsFirefoxProfilePresent
   nameWithType: FirefoxCertificateTrust.IsFirefoxProfilePresent
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.LastEnterpriseRootsStep
+  name: LastEnterpriseRootsStep
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_LastEnterpriseRootsStep
+  commentId: P:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.LastEnterpriseRootsStep
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.LastEnterpriseRootsStep
+  nameWithType: FirefoxCertificateTrust.LastEnterpriseRootsStep
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.LastEnterpriseRootsStep*
+  name: LastEnterpriseRootsStep
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_LastEnterpriseRootsStep_
+  commentId: Overload:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.LastEnterpriseRootsStep
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.LastEnterpriseRootsStep
+  nameWithType: FirefoxCertificateTrust.LastEnterpriseRootsStep
 - uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustDefaultProfile(System.Security.Cryptography.X509Certificates.X509Certificate2,System.String)
   name: TrustDefaultProfile(X509Certificate2, string)
   href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TrustDefaultProfile_System_Security_Cryptography_X509Certificates_X509Certificate2_System_String_
@@ -9345,6 +9483,22 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.EndpointAdmissionRejectionCount
   nameWithType: ProxyServer.EndpointAdmissionRejectionCount
+- uid: Titanium.Web.Proxy.ProxyServer.ForceDecryptFailureBypass(System.String)
+  name: ForceDecryptFailureBypass(string)
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ForceDecryptFailureBypass_System_String_
+  commentId: M:Titanium.Web.Proxy.ProxyServer.ForceDecryptFailureBypass(System.String)
+  name.vb: ForceDecryptFailureBypass(String)
+  fullName: Titanium.Web.Proxy.ProxyServer.ForceDecryptFailureBypass(string)
+  fullName.vb: Titanium.Web.Proxy.ProxyServer.ForceDecryptFailureBypass(String)
+  nameWithType: ProxyServer.ForceDecryptFailureBypass(string)
+  nameWithType.vb: ProxyServer.ForceDecryptFailureBypass(String)
+- uid: Titanium.Web.Proxy.ProxyServer.ForceDecryptFailureBypass*
+  name: ForceDecryptFailureBypass
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ForceDecryptFailureBypass_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.ForceDecryptFailureBypass
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.ForceDecryptFailureBypass
+  nameWithType: ProxyServer.ForceDecryptFailureBypass
 - uid: Titanium.Web.Proxy.ProxyServer.ForwardToUpstreamGateway
   name: ForwardToUpstreamGateway
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ForwardToUpstreamGateway
