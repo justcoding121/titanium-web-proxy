@@ -1593,34 +1593,30 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Avalonia 11.2 OneWay + ToggleButton: after a local click toggle, PropertyChanged with the
-    /// same value is ignored. Bounce the backing field so the binding re-publishes.
+    /// Avalonia 11.2 OneWay + ToggleButton: after a local click, same-value PropertyChanged is
+    /// ignored. Snap via SetCurrentValue — never flip the backing field (MenuItem Command can
+    /// fire and toggle DecryptHttps back on).
     /// </summary>
     private Task SnapProxyLoopbackUiAsync() =>
         BounceBoolBindingAsync(
             get: () => _interception.ProxyLoopback,
-            set: v => _interception.ProxyLoopback = v,
             propertyName: nameof(ProxyLoopback));
 
     private Task SnapSystemProxyUiAsync() =>
         BounceBoolBindingAsync(
             get: () => _systemProxy,
-            set: v => _systemProxy = v,
             propertyName: nameof(SystemProxy));
 
     private Task SnapDecryptHttpsUiAsync() =>
         BounceBoolBindingAsync(
             get: () => _decryptHttps,
-            set: v => _decryptHttps = v,
             propertyName: nameof(DecryptHttps));
 
-    private async Task BounceBoolBindingAsync(Func<bool> get, Action<bool> set, string propertyName)
+    private async Task BounceBoolBindingAsync(Func<bool> get, string propertyName)
     {
         void Bounce()
         {
             var actual = get();
-            // OneWay ToggleButton: SetCurrentValue on the control only — never flip to !actual
-            // (MenuItem Command can fire and toggle DecryptHttps back on).
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
             SyncToggleVisual?.Invoke(propertyName, actual);
         }

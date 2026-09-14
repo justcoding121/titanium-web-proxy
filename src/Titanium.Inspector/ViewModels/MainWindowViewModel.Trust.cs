@@ -694,6 +694,7 @@ public sealed partial class MainWindowViewModel
             return;
 
         using var scope = InspectorUxTrace.Scope("RotateCa");
+        var rotateConfirmed = false;
         try
         {
             var owner = TryGetMainWindow();
@@ -708,6 +709,7 @@ public sealed partial class MainWindowViewModel
                 return;
             }
 
+            rotateConfirmed = true;
             InspectorUxTrace.Event("RotateCa.ConfirmRotate", "accepted=true");
 
             // Mark Busy before any PersistSettings / decrypt-off work so waiters that key on
@@ -716,8 +718,8 @@ public sealed partial class MainWindowViewModel
             SetStatus("Preparing clear and reinstall…", StatusSeverity.Busy);
 
             // New root is untrusted until Install — MITM must not stay on across rotate.
-            // Avoid ForceDecryptHttpsOffAsync/Snap here: BounceBoolBinding can PropertyChanged(true)
-            // after EndTrustCommand and the optimistic DecryptHttps setter turns MITM back on.
+            // Skip ForceDecryptHttpsOffAsync/Snap (dispatcher bounce during CryptUI). Core +
+            // finally SetDecryptHttpsCore keep the glyph in sync without flipping the field.
             Interlocked.Increment(ref _decryptEnableGeneration);
             Interlocked.Increment(ref _decryptTrustVerifyGeneration);
             _decryptHttpsBusy = false;
@@ -767,8 +769,10 @@ public sealed partial class MainWindowViewModel
         }
         finally
         {
-            // Rotate always leaves MITM off (even if a stale UI snap or settings reload raced).
-            SetDecryptHttpsCore(false);
+            // After confirm, MITM stays off even if a stale UI snap or settings reload raced.
+            // Do not force-off on cancel — that would disable Decrypt HTTPS without rotating.
+            if (rotateConfirmed)
+                SetDecryptHttpsCore(false);
             EndTrustCommand();
         }
     }

@@ -49,6 +49,49 @@ public class RotateRootCaTests
     }
 
     [TestMethod]
+    public async Task RotateCa_Cancel_LeavesDecryptHttpsOn()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-rot-cancel-mitm-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            using var interception = new InterceptionService { UseInMemoryTrustState = true };
+            OverrideRootPfx(interception, Path.Combine(dir, "rootCert.pfx"));
+            await interception.StartAsync(IPAddress.Loopback, 0);
+
+            var dialogs = new ScriptedInspectorDialogs
+            {
+                RotateRootCaResult = false,
+                InstallRootCaResult = true,
+            };
+            var settings = new SettingsService(Path.Combine(dir, "settings.json"));
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                dialogs);
+
+            await ExecuteUntilAsync(vm.InstallCaCommand, () => interception.IsRootTrusted && !vm.IsStatusBusy);
+            vm.DecryptHttps = true;
+            Assert.IsTrue(vm.DecryptHttps);
+
+            await ExecuteAsync(vm.RotateCaCommand);
+            Assert.AreEqual(1, dialogs.RotateRootCaCalls);
+            Assert.IsTrue(vm.DecryptHttps, "Cancel must not disable Decrypt HTTPS");
+            Assert.IsTrue(interception.DecryptHttps);
+            StringAssert.Contains(vm.StatusText, "cancelled");
+            interception.EnsureShutdown();
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { /* best-effort */ }
+        }
+    }
+
+    [TestMethod]
     public async Task RotateCa_Accept_ChangesThumbprintAndClearsLocalCrts()
     {
         var dir = Path.Combine(Path.GetTempPath(), "ti-rot2-" + Guid.NewGuid().ToString("N"));

@@ -155,21 +155,18 @@ public class MenuActionsHeadlessTests
             fx.Dialogs.RotateRootCaResult = true;
             fx.Dialogs.InstallRootCaResult = true;
             await fx.DispatchAsync(() => fx.Robot.Click("MenuRotateCa"));
+            // Do not wait for a Busy pulse — in-memory rotate can finish before the waiter starts.
             await fx.WaitUntilAsync(
-                () => fx.Dialogs.RotateRootCaCalls >= 1 && fx.ViewModel.IsStatusBusy,
-                TimeSpan.FromSeconds(10));
-            await fx.WaitUntilAsync(
-                () => !fx.ViewModel.IsStatusBusy
+                () => fx.Dialogs.RotateRootCaCalls >= 1
+                      && !fx.ViewModel.IsStatusBusy
                       && !fx.ViewModel.DecryptHttps
                       && fx.Interception.IsRootTrusted,
                 TimeSpan.FromSeconds(20));
 
             await fx.DispatchAsync(() => fx.Robot.Click("MenuRemoveCa"));
             await fx.WaitUntilAsync(
-                () => fx.Dialogs.RemoveRootCaCalls >= 1 && fx.ViewModel.IsStatusBusy,
-                TimeSpan.FromSeconds(10));
-            await fx.WaitUntilAsync(
-                () => !fx.ViewModel.IsStatusBusy
+                () => fx.Dialogs.RemoveRootCaCalls >= 1
+                      && !fx.ViewModel.IsStatusBusy
                       && !fx.ViewModel.DecryptHttps
                       && !fx.Interception.IsRootTrusted,
                 TimeSpan.FromSeconds(20));
@@ -238,12 +235,10 @@ public class MenuActionsHeadlessTests
                 fx.Robot.Click("CtxSaveRequestBody");
                 OpenSessionsContextMenu(fx);
                 fx.Robot.Click("CtxSaveResponseBody");
-                if (fx.ViewModel.Sessions.Count >= 2)
-                {
-                    fx.ViewModel.SetSelectedSessions([fx.ViewModel.Sessions[0], fx.ViewModel.Sessions[1]]);
-                    OpenSessionsContextMenu(fx);
-                    fx.Robot.Click("CtxDiffSessions");
-                }
+                Assert.IsTrue(fx.ViewModel.Sessions.Count >= 2, "Diff needs two seeded sessions");
+                fx.ViewModel.SetSelectedSessions([fx.ViewModel.Sessions[0], fx.ViewModel.Sessions[1]]);
+                OpenSessionsContextMenu(fx);
+                fx.Robot.Click("CtxDiffSessions");
                 fx.Robot.Click("BodyPretty");
                 fx.Robot.Click("CopyHeaders");
             });

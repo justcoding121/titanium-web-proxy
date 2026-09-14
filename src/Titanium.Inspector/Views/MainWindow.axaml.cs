@@ -236,7 +236,7 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Avalonia 11.2: CheckBox/MenuItem toggle severs OneWay IsChecked bindings (SetValue).
-    /// Push visuals with SetCurrentValue whenever Decrypt/SystemProxy change.
+    /// Push visuals with SetCurrentValue whenever Decrypt/SystemProxy/ProxyLoopback change.
     /// </summary>
     private void HookOneWayToggleVisualSync(MainWindowViewModel? vm)
     {
@@ -258,6 +258,10 @@ public partial class MainWindow : Window
             {
                 OneWayToggleVisualSync.Apply(SystemProxyCheck, isChecked);
                 OneWayToggleVisualSync.Apply(MenuToggleSystemProxy, isChecked);
+            }
+            else if (propertyName == nameof(MainWindowViewModel.ProxyLoopback))
+            {
+                OneWayToggleVisualSync.Apply(MenuProxyLocalhost, isChecked);
             }
         };
     }

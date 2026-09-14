@@ -47,7 +47,7 @@
                   IsChecked="{Binding SystemProxy, Mode=OneWay}"
                   Command="{Binding ToggleSystemProxyCommand}"
                   AutomationProperties.AutomationId="MenuToggleSystemProxy" />
-        <MenuItem Header="Capture local traffic" ToggleType="CheckBox"
+        <MenuItem x:Name="MenuProxyLocalhost" Header="Capture local traffic" ToggleType="CheckBox"
                   IsChecked="{Binding ProxyLoopback, Mode=OneWay}"
                   Command="{Binding ToggleProxyLocalhostCommand}"
                   ToolTip.Tip="{Binding ProxyLocalhostTip}"
