@@ -10,7 +10,7 @@ Optional **Plus** adds a dashboard and ops features on top of the CLI. Everythin
 
 ## Highlights
 
-Native HTTPS Inspector with AutoResponder, Map Local/Remote, breakpoints, Composer, and HAR; login-safe decrypt (SSO bypass + auto-tunnel); HTTP/2 / HTTP/3 with WebSocket, gRPC, and GraphQL in the grid; the same engine as a reverse/edge CLI; embed via NuGet. Full catalog: [Features](/docs/features).
+Native HTTPS Inspector with AutoResponder, Map Local/Remote, breakpoints, Composer, and HAR; when a server blocks the proxy we detect it and tunnel automatically; HTTP/2 / HTTP/3 with WebSocket, gRPC, and GraphQL in the grid; the same engine as a reverse/edge CLI; embed via NuGet. Full catalog: [Features](/docs/features).
 
 ## Choose a path
 

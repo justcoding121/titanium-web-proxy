@@ -20,7 +20,7 @@ Requires .NET 10 or later for the library. CLI and Inspector downloads are self-
 ## What you can do
 
 - Decrypt and inspect HTTPS in a native desktop Inspector on Windows, macOS, and Linux — AutoResponder, Map Local/Remote, breakpoints, Composer, HAR, curl/fetch
-- Keep sign-in working: SSO hosts stay on OS bypass; hosts that reject MITM auto-tunnel
+- When a server blocks the proxy (TLS fingerprinting or other reasons), we detect it and automatically tunnel that traffic
 - Speak modern HTTP — HTTP/2 by default, optional HTTP/3, WebSocket, gRPC, SSE, GraphQL rules in the same grid
 - Run the same engine as a reverse / edge proxy from the CLI (YAML, load balancing, ACME, live reload)
 - Embed in .NET via NuGet (MIT); Inspector is free for personal and education use

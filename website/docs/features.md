@@ -13,7 +13,7 @@ Desktop HTTP(S) debugger on Windows, macOS, and Linux. [Inspector guide](/docs/i
 | Decrypt HTTPS | MITM decrypt on machines you control; install a local root CA |
 | System proxy | One toggle for OS proxy on Windows, macOS, and Linux |
 | Trust that works | Firefox / NSS, Linux Chromium Snap/Flatpak, Windows Store apps; export CA for phones |
-| Login-safe decrypt | SSO hosts stay on OS bypass; auto-tunnel when MITM fails or the origin returns 403/429 |
+| Automatic tunnel | When a server blocks the proxy (TLS fingerprinting or other reasons), we detect it and automatically tunnel that traffic |
 | Session grid | Method, status, host, URL, protocol, duration, TTFB, size, process |
 | Inspect panes | Headers, Pretty/Raw body, Hex, WebSocket frames, SSE, Protobuf wire dump |
 | Rewrite toolkit | AutoResponder, Map Local, Map Remote, breakpoints, Composer |
