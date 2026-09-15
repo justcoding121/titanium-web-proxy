@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -15,6 +16,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Http3;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
@@ -521,5 +523,65 @@ public class SonarGateCoverageBumpTests
         Assert.IsFalse((bool)upper.Invoke(null, ["abc".GetByteString()])!);
         Assert.IsFalse((bool)upper.Invoke(null, [ByteString.Empty])!);
         Assert.IsTrue((bool)upper.Invoke(null, ["aBc".GetByteString()])!);
+    }
+
+    [TestMethod]
+    public void HeaderBuilder_HostOverride_RewritesHostHeaderValue()
+    {
+        var builder = HeaderBuilder.Rent();
+        try
+        {
+            var headers = new HeaderCollection();
+            headers.AddHeader(KnownHeaders.Host, "orig.example");
+            headers.AddHeader("X-Keep", "1");
+            builder.WriteHeaders(headers, sendProxyAuthorization: true, hostHeaderOverride: "override.example");
+            builder.WriteHeaders(headers, sendProxyAuthorization: false, hostHeaderOverride: "override2.example");
+            var text = builder.GetString(Encoding.ASCII);
+            StringAssert.Contains(text, "Host: override.example");
+            StringAssert.Contains(text, "Host: override2.example");
+            StringAssert.Contains(text, "X-Keep: 1");
+            Assert.IsFalse(text.Contains("Host: orig.example", StringComparison.Ordinal));
+        }
+        finally
+        {
+            HeaderBuilder.Return(builder);
+        }
+    }
+
+    [TestMethod]
+    public void ProxyLog_Http2ProbeDeferred_LogsWhenDebugEnabled()
+    {
+        var logger = new DebugCapturingLogger();
+        ProxyLog.Http2ProbeDeferredForClientAlpn(logger, "origin.test:443", 50);
+        ProxyLog.Http2ProbeDeferredFailed(logger, "origin.test:443", new InvalidOperationException("boom"));
+        Assert.IsTrue(logger.Messages.Count >= 2);
+        StringAssert.Contains(logger.Messages[0], "cold probe");
+        StringAssert.Contains(logger.Messages[1], "deferred origin probe failed");
+    }
+
+    private sealed class DebugCapturingLogger : Microsoft.Extensions.Logging.ILogger
+    {
+        public List<string> Messages { get; } = new();
+
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
+
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) =>
+            logLevel == Microsoft.Extensions.Logging.LogLevel.Debug;
+
+        public void Log<TState>(
+            Microsoft.Extensions.Logging.LogLevel logLevel,
+            Microsoft.Extensions.Logging.EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Messages.Add(formatter(state, exception));
+        }
+
+        private sealed class NullScope : IDisposable
+        {
+            public static readonly NullScope Instance = new();
+            public void Dispose() { }
+        }
     }
 }
