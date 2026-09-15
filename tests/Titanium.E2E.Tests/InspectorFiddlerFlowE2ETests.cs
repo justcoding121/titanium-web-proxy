@@ -252,15 +252,18 @@ public class InspectorFiddlerFlowE2ETests
 
         _dialogs.RemoveRootCaResult = true;
         _vm.UntrustCaCommand.Execute(null);
-        await WaitUntil(() => !_vm.DecryptHttps || _dialogs.RemoveRootCaCalls > 0);
-        await Task.Delay(50);
+        await WaitUntil(() =>
+            _dialogs.RemoveRootCaCalls > 0
+            && !_vm.DecryptHttps
+            && !_interception.IsRootTrusted
+            && !_vm.IsStatusBusy);
 
         Assert.AreEqual(1, _dialogs.RemoveRootCaCalls);
         Assert.IsFalse(_vm.DecryptHttps);
         Assert.IsFalse(_interception.IsRootTrusted);
 
         _vm.InstallCaCommand.Execute(null);
-        await Task.Delay(50);
+        await WaitUntil(() => _interception.IsRootTrusted && !_vm.IsStatusBusy);
         Assert.IsTrue(_interception.IsRootTrusted, _vm.StatusText);
     }
 
