@@ -31,10 +31,14 @@ Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Id.get -> string!
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Id.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Port.get -> int
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Port.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.UseDestinationHost.get -> bool
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.UseDestinationHost.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.UseHttps.get -> bool
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.UseHttps.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Weight.get -> int
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Weight.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.UseDestinationHost.get -> bool
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.UseDestinationHost.set -> void
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationState
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationState.Draining = 2 -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationState
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationState.Healthy = 0 -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationState

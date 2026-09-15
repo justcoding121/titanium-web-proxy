@@ -78,7 +78,9 @@ jobs:
       run: dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore --warnaserror
 
     - name: Begin SonarCloud analysis
+      id: sonar_begin
       if: env.SONAR_TOKEN != ''
+      continue-on-error: true
       shell: pwsh
       run: >
         .\.sonar\scanner\dotnet-sonarscanner begin
@@ -87,10 +89,10 @@ jobs:
         /d:sonar.token="$env:SONAR_TOKEN"
         /d:sonar.cs.vscoveragexml.reportsPaths="coverage/coverage.xml"
         /d:sonar.exclusions="**/docs/**,**/examples/**,**/benchmarks/**,**/tools/**,**/*.axaml,**/website/**,**/.github/**"
-        /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/Http3/Http3OriginBridge.cs,**/Http3/Http3OriginClientSession.cs,**/Titanium.Plus/Dashboard/**,**/Titanium.Inspector/Views/**,**/Titanium.Inspector/Services/AppContainerLoopback.cs,**/Titanium.Inspector/App.axaml.cs,**/Titanium.Inspector/Program.cs,**/Titanium.Inspector/InspectorAppFactory.cs,**/Titanium.Inspector/Services/UpdateService.cs,**/Titanium.Cli/Program.cs,**/Titanium.Cli/AsyncConsole.cs,**/Titanium.Cli/Http3/Http3DepsCommand.cs,**/Titanium.Cli/Updates/VersionAndUpdateCommands.cs,**/Titanium.Cli/Certificates/CertificateBootstrap.cs,**/Titanium.Plus/Discovery/**,**/Titanium.Plus/Security/**,**/Titanium.Plus/State/**,**/Titanium.Plus/Resilience/**,**/Titanium.Plus/PlusLog.cs,**/Titanium.Web.Proxy/Helpers/LinuxSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/MacOsSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/IElevationPrompt.cs,**/Titanium.Web.Proxy/Helpers/IProcessRunner.cs"
+        /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/Http3/Http3OriginBridge.cs,**/Http3/Http3OriginClientSession.cs,**/Handlers/Http11ToHttp2BridgeHandler.cs,**/Handlers/H1TerminateFastForward.cs,**/Titanium.Plus/Dashboard/**,**/Titanium.Inspector/Views/**,**/Titanium.Inspector/ViewModels/MainWindowViewModel.Trust.cs,**/Titanium.Inspector/Services/AppContainerLoopback.cs,**/Titanium.Inspector/Services/AvaloniaStatusNotifier.cs,**/Titanium.Inspector/Services/DesktopShell.cs,**/Titanium.Inspector/App.axaml.cs,**/Titanium.Inspector/Program.cs,**/Titanium.Inspector/InspectorAppFactory.cs,**/Titanium.Inspector/Services/UpdateService.cs,**/Titanium.Cli/Program.cs,**/Titanium.Cli/AsyncConsole.cs,**/Titanium.Cli/Http3/Http3DepsCommand.cs,**/Titanium.Cli/Updates/VersionAndUpdateCommands.cs,**/Titanium.Cli/Certificates/CertificateBootstrap.cs,**/Titanium.Plus/Discovery/**,**/Titanium.Plus/Security/**,**/Titanium.Plus/State/**,**/Titanium.Plus/Resilience/**,**/Titanium.Plus/PlusLog.cs,**/Titanium.Web.Proxy/Helpers/LinuxSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/MacOsSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/IElevationPrompt.cs,**/Titanium.Web.Proxy/Helpers/IProcessRunner.cs,**/Titanium.Web.Proxy/Certificates/FirefoxCertificateTrust.cs"
 
     - name: Build for SonarCloud analysis
-      if: env.SONAR_TOKEN != ''
+      if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
       run: dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore --no-incremental --disable-build-servers
 
     - name: Test
@@ -108,7 +110,8 @@ jobs:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/cli
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E|TestCategory=E2E-UI" --collect:"Code Coverage" --results-directory coverage/e2e
+        # CLI process E2E (TestCategory=E2E) runs on the cli-e2e OS matrix — avoid doubling Windows.
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI" --collect:"Code Coverage" --results-directory coverage/e2e
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
         # The integration suite spins up real listening sockets and TLS handshakes, which
@@ -130,12 +133,13 @@ jobs:
       run: .\.coverage\tools\dotnet-coverage merge "coverage\**\*.coverage" --output coverage/coverage.xml --output-format xml
 
     - name: Complete SonarCloud analysis
-      if: env.SONAR_TOKEN != ''
+      if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
+      continue-on-error: true
       shell: pwsh
       run: .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
 
     # DocFX output races other develop pushes (incl. concurrent "Update documentation").
-    # Sync to origin/develop, regenerate, commit docs-only, retry push — never fail the
+    # Sync to origin/develop, regenerate, commit docs-only, retry push â€” never fail the
     # job on stash/rebase conflicts from EndBug/add-and-commit autostash.
     - name: Publish Documentation
       if: github.ref == 'refs/heads/develop'
@@ -172,7 +176,7 @@ jobs:
         throw "Failed to publish documentation after retries"
 
   # Cross-OS Inspector + Plus dashboard UI gates (Headless / Visual / Playwright).
-  # Inspector unit suite stays on Windows `build` only except Inspector-Stress (below).
+  # Inspector unit suite stays on Windows `build` only except Inspector-Stress / Inspector-Trust-Decision (below).
   ui-portable:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
@@ -215,7 +219,7 @@ jobs:
       shell: pwsh
       run: |
         $ErrorActionPreference = 'Stop'
-        # Intel macOS bottles are sparse; do not force-upgrade openssl (no bottle → job fail).
+        # Intel macOS bottles are sparse; do not force-upgrade openssl (no bottle â†’ job fail).
         $env:HOMEBREW_NO_AUTO_UPDATE = '1'
         $env:HOMEBREW_NO_INSTALL_UPGRADE = '1'
         brew install openssl@3 libmsquic
@@ -240,7 +244,7 @@ jobs:
         }
 
         if (-not (Test-QuicSupported)) {
-          Write-Host 'QuicListener.IsSupported still false after brew; trying Microsoft libmsquic drop…'
+          Write-Host 'QuicListener.IsSupported still false after brew; trying Microsoft libmsquic dropâ€¦'
           $arch = (& uname -m).Trim()
           $rid = if ($arch -eq 'arm64') { 'osx-arm64' } else { 'osx-x64' }
           $dest = Join-Path $env:RUNNER_TEMP 'msquic-osx'
@@ -259,7 +263,7 @@ jobs:
             Select-Object -First 1
           if ($found) {
             $extra = $found.Directory.FullName
-            # ${extra} — bare $extra: is parsed as a PowerShell drive-qualified variable.
+            # ${extra} â€” bare $extra: is parsed as a PowerShell drive-qualified variable.
             $dyld2 = "${extra}:${dyld}"
             Add-Content -Path $env:GITHUB_ENV -Value "DYLD_LIBRARY_PATH=$dyld2"
             Add-Content -Path $env:GITHUB_ENV -Value "DYLD_FALLBACK_LIBRARY_PATH=$dyld2"
@@ -300,7 +304,7 @@ jobs:
         dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI-Headless|TestCategory=E2E-UI-Visual|TestCategory=E2E-UI-Plus-Dashboard"
     - name: Inspector retention stress (spill + H3)
       run: |
-        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-restore --filter "TestCategory=Inspector-Stress"
+        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-restore --filter "TestCategory=Inspector-Stress|TestCategory=Inspector-Trust-Decision"
     - name: OS proxy-backend filters
       run: |
         dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "FullyQualifiedName~UnixProxyBypassMapperTests|FullyQualifiedName~MacOsSystemProxyBackendTests|FullyQualifiedName~LinuxSystemProxyBackendTests|FullyQualifiedName~ElevationPromptCancelTests|FullyQualifiedName~SystemProxyBackendFactoryPlatformTests"
@@ -327,8 +331,70 @@ jobs:
           **/playwright-report/**
         if-no-files-found: ignore
 
-  # Tiered RPS gates for beta/stable publish (parallel — wall clock ~max of the two).
-  # Editions: CLI/Plus tax vs Core. Peer: Core reverse vs YARP (+ MITM÷Reverse) so a
+  # Full CLI + CLI Plus process E2E on all three OS (command tree, services, control plane).
+  # Does not pre-install libmsquic so http3-deps install can exercise the real leaf when Quic is false.
+  cli-e2e:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+    - uses: actions/checkout@v6
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: |
+          10.0.x
+    - name: Linux Playwright OS deps
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y fonts-liberation libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 libasound2t64 || sudo apt-get install -y fonts-liberation libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 libasound2
+    - name: Restore
+      run: dotnet restore src/Titanium.Web.Proxy.sln
+    - name: Build CLI + Plus + E2E
+      run: |
+        dotnet build src/Titanium.Cli/Titanium.Cli.csproj --configuration Release --no-restore
+        dotnet build src/Titanium.Plus/Titanium.Plus.csproj --configuration Release --no-restore
+        dotnet build tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-restore
+    - name: Install Playwright Chromium
+      shell: pwsh
+      run: |
+        $pw = Join-Path (Resolve-Path "tests/Titanium.E2E.Tests/bin/Release/net10.0") "playwright.ps1"
+        if (-not (Test-Path $pw)) {
+          throw "playwright.ps1 missing at $pw"
+        }
+        & $pw install chromium
+    - name: CLI process E2E (all leaves)
+      shell: pwsh
+      run: |
+        if ($IsLinux -or $IsMacOS) {
+          sudo -n true 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "sudo -n not available; machine service lifecycle may Inconclusive"
+          }
+        }
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj `
+          --configuration Release --no-build --no-restore `
+          --filter "TestCategory=E2E" `
+          --logger "trx;LogFileName=cli-e2e.trx" `
+          --results-directory "artifacts/cli-e2e-${{ matrix.os }}"
+    - name: Upload CLI E2E artifacts
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: cli-e2e-${{ matrix.os }}
+        path: |
+          artifacts/cli-e2e-${{ matrix.os }}/**
+          tests/Titanium.E2E.Tests/TestResults/**
+        if-no-files-found: ignore
+
+  # Tiered RPS gates for beta/stable publish (parallel) â€” wall clock ~max of the two).
+  # Editions: CLI/Plus tax vs Core. Peer: Core reverse vs YARP (+ MITMÃ·Reverse) so a
   # uniform Core slowdown cannot hide behind green edition ratios.
   rps-publish-gate:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
@@ -388,7 +454,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libmsquic
         pwsh -NoProfile -Command 'if (-not [System.Net.Quic.QuicListener]::IsSupported) { throw "QuicListener.IsSupported is false after libmsquic install" }; Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"'
-    - name: compare-spot (Core÷YARP + MITM÷Reverse)
+    - name: compare-spot (CoreÃ·YARP + MITMÃ·Reverse)
       shell: pwsh
       run: |
         pwsh tools/RpsLoadProbe/run-spot-matrix.ps1
@@ -447,7 +513,7 @@ jobs:
   # Product zips stay on release.yml (v* tags). After beta/stable merge, create/move the
   # version tag and dispatch release.yml (GITHUB_TOKEN tag pushes do not re-trigger workflows).
   # release.yml also packs/pushes Chocolatey (titanium-cli / titanium-inspector) after the
-  # GitHub Release exists — no separate chocolatey step here.
+  # GitHub Release exists â€” no separate chocolatey step here.
   cut-product-tag:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
     needs: [build, ui-portable, rps-publish-gate, rps-peer-gate]

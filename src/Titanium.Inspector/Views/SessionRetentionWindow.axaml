@@ -8,7 +8,7 @@
         CanResize="False">
   <DockPanel Margin="16">
     <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,14" Opacity="0.85"
-               Text="Keep Inspector from running out of memory during long captures. Oldest sessions are removed first when limits are hit. Restart Inspector to apply changes." />
+               Text="Keep Inspector from running out of memory during long captures. Oldest sessions are removed first when limits are hit. Changes apply immediately on Save." />
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
       <Button x:Name="SaveButton" Content="Save" MinWidth="88" AutomationProperties.AutomationId="RetentionSave" />
       <Button x:Name="CancelButton" Content="Cancel" MinWidth="88" IsCancel="True" AutomationProperties.AutomationId="RetentionCancel" />

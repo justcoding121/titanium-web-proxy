@@ -6,17 +6,20 @@ namespace Titanium.Inspector.Services;
 /// Binary spill of session body fields under a cache directory.
 /// Format: magic "TSIB" + version int32 + four length-prefixed blobs
 /// (request bytes, response bytes, request text UTF-8, response text UTF-8).
+/// Version 2 appends: requestOriginalSize int64, responseOriginalSize int64,
+/// requestCapture byte, responseCapture byte.
 /// Length -1 means null; 0 means empty.
 /// </summary>
 public sealed class SessionBodyDiskCache : IDisposable
 {
     private const string BodyFileSearchPattern = "*.bin";
-    private const int Version = 1;
+    private const int Version = 2;
+    private const int VersionV1 = 1;
     private static readonly byte[] Magic = "TSIB"u8.ToArray();
 
     private readonly string _directory;
-    private readonly long _maxBytes;
-    private readonly TimeSpan _maxAge;
+    private long _maxBytes;
+    private TimeSpan _maxAge;
     private readonly object _gate = new();
     private long _trackedBytes;
     private bool _disposed;
@@ -28,6 +31,19 @@ public sealed class SessionBodyDiskCache : IDisposable
         _maxAge = maxAge;
         Directory.CreateDirectory(_directory);
         PruneOnStartup();
+    }
+
+    /// <summary>Updates disk budget / age; next write or prune enforces the new limits.</summary>
+    public void UpdateLimits(long maxBytes, TimeSpan maxAge)
+    {
+        lock (_gate)
+        {
+            _maxBytes = maxBytes > 0 ? maxBytes : _maxBytes;
+            _maxAge = maxAge > TimeSpan.Zero ? maxAge : _maxAge;
+        }
+
+        PruneExpiredFiles();
+        EnforceDiskBudget();
     }
 
     /// <summary>
@@ -58,6 +74,10 @@ public sealed class SessionBodyDiskCache : IDisposable
             WriteBytes(bw, snapshot.ResponseBodyBytes);
             WriteString(bw, snapshot.RequestBodyText);
             WriteString(bw, snapshot.ResponseBodyText);
+            bw.Write(snapshot.RequestBodyOriginalSize ?? -1L);
+            bw.Write(snapshot.ResponseBodyOriginalSize ?? -1L);
+            bw.Write((byte)snapshot.RequestBodyCapture);
+            bw.Write((byte)snapshot.ResponseBodyCapture);
         }
 
         if (File.Exists(path))
@@ -91,7 +111,7 @@ public sealed class SessionBodyDiskCache : IDisposable
         }
 
         var version = br.ReadInt32();
-        if (version != Version)
+        if (version is not Version and not VersionV1)
         {
             return false;
         }
@@ -100,6 +120,26 @@ public sealed class SessionBodyDiskCache : IDisposable
         snapshot.ResponseBodyBytes = ReadBytes(br);
         snapshot.RequestBodyText = ReadString(br);
         snapshot.ResponseBodyText = ReadString(br);
+
+        if (version >= Version)
+        {
+            var reqOrig = br.ReadInt64();
+            var respOrig = br.ReadInt64();
+            snapshot.RequestBodyOriginalSize = reqOrig < 0 ? null : reqOrig;
+            snapshot.ResponseBodyOriginalSize = respOrig < 0 ? null : respOrig;
+            snapshot.RequestBodyCapture = (BodyCaptureState)br.ReadByte();
+            snapshot.ResponseBodyCapture = (BodyCaptureState)br.ReadByte();
+        }
+        else
+        {
+            snapshot.RequestBodyCapture = InspectorBodyLimits.InferFromBytes(
+                snapshot.RequestBodyBytes, snapshot.RequestBodyBytes?.LongLength);
+            snapshot.ResponseBodyCapture = InspectorBodyLimits.InferFromBytes(
+                snapshot.ResponseBodyBytes, snapshot.ResponseBodyBytes?.LongLength);
+            snapshot.RequestBodyOriginalSize = snapshot.RequestBodyBytes?.LongLength;
+            snapshot.ResponseBodyOriginalSize = snapshot.ResponseBodyBytes?.LongLength;
+        }
+
         return true;
     }
 

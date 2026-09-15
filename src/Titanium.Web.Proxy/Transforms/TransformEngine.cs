@@ -59,6 +59,9 @@ public sealed class TransformEngine : ITransformEngine
                                           t.Parameters.TryGetValue("value", out var qValue):
                     context.Path = SetQueryValue(context.Path, qName, qValue);
                     break;
+                case "RequestHostUseDestination":
+                    context.UseDestinationHost = true;
+                    break;
                 case "ResponseHeaderSet" when t.Parameters is not null &&
                                               t.Parameters.TryGetValue("name", out var rhName) &&
                                               t.Parameters.TryGetValue("value", out var rhValue):

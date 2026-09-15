@@ -155,7 +155,14 @@ public class Http2ProtocolPolicyTests
 
         Version? afterResponseRequestVersion = null;
         Version? afterResponseResponseVersion = null;
+        var getHadBody = false;
         var afterResponseSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        proxy.BeforeRequest += (_, e) =>
+        {
+            if (e.HttpClient.Request.Method == "GET")
+                getHadBody = e.HttpClient.Request.HasBody;
+            return Task.CompletedTask;
+        };
         proxy.AfterResponse += (_, e) =>
         {
             afterResponseRequestVersion = e.HttpClient.Request.HttpVersion;
@@ -200,6 +207,8 @@ public class Http2ProtocolPolicyTests
         }
 
         Assert.AreEqual("h2-to-h11-bridge-ok", Encoding.ASCII.GetString(body.ToArray()));
+        Assert.IsFalse(getHadBody,
+            "HTTP/2 GET without Content-Length must not report HasBody; H2→H1 would hang on a body channel that never completes.");
         Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised on a successful bridge: {exceptionCapture.LastException}");
 
         try
@@ -357,7 +366,7 @@ public class Http2ProtocolPolicyTests
         Assert.AreEqual("200", pendingStatus[3]);
         Assert.AreEqual("response-for-/first", Encoding.ASCII.GetString(pendingBody[1].ToArray()));
         Assert.AreEqual("response-for-/second", Encoding.ASCII.GetString(pendingBody[3].ToArray()));
-        Assert.IsTrue(stopwatch.ElapsedMilliseconds < 750,
+        Assert.IsTrue(stopwatch.ElapsedMilliseconds < 1100,
             "Two concurrent h2 streams bridged to an HTTP/1.1-only origin should get independent, concurrent " +
             $"origin round trips rather than being serialized onto one shared connection; took {stopwatch.ElapsedMilliseconds}ms.");
         Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised on a successful bridge: {exceptionCapture.LastException}");

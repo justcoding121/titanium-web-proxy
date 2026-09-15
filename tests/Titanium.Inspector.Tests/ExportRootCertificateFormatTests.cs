@@ -60,6 +60,11 @@ public class ExportRootCertificateFormatTests
             StringAssert.StartsWith(pemText, "-----BEGIN CERTIFICATE-----");
             using var fromPem = X509Certificate2.CreateFromPem(pemText);
             Assert.AreEqual(interception.RootCertificate.Thumbprint, fromPem.Thumbprint);
+
+            var asDir = Path.Combine(dir, "as-folder");
+            Directory.CreateDirectory(asDir);
+            var thrown = Assert.ThrowsExactly<IOException>(() => interception.ExportRootCertificate(asDir));
+            StringAssert.Contains(thrown.Message, "directory");
         }
         finally
         {
@@ -98,9 +103,15 @@ public class ExportRootCertificateFormatTests
             await ExecuteAsync(vm.StartCaptureCommand);
             Assert.IsTrue(interception.IsRunning, vm.StatusText);
 
+            picker.SavePath = null;
+            await ExecuteAsync(vm.ExportCaCommand);
+            StringAssert.Contains(vm.StatusText, "cancelled");
+            Assert.IsFalse(File.Exists(pemPath));
+
+            picker.SavePath = pemPath;
             await ExecuteAsync(vm.ExportCaCommand);
             StringAssert.Contains(vm.StatusText, "Exported CA");
-            Assert.AreEqual(1, picker.SaveCalls);
+            Assert.AreEqual(2, picker.SaveCalls);
             Assert.IsNotNull(picker.LastSaveFileTypes);
             Assert.AreEqual(2, picker.LastSaveFileTypes!.Count);
             Assert.AreEqual("Certificate", picker.LastSaveFileTypes[0].Name);

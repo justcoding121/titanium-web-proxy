@@ -177,6 +177,109 @@ public class ConfigReloadTests
         Assert.AreEqual(18080, cluster.Destinations[0].Port);
     }
 
+    [TestMethod]
+    public async Task ReloadConfigAsync_EmptyClusters_AppliesEmptyList()
+    {
+        var path = Path.Combine(_tempDir, "empty-clusters.json");
+        File.WriteAllText(path, """
+            {
+              "schemaVersion": "7.0",
+              "listeners": [
+                { "host": "127.0.0.1", "port": 1, "decryptSsl": false }
+              ],
+              "routes": [],
+              "clusters": []
+            }
+            """);
+
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        var clusterManager = new ClusterManager();
+        await clusterManager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c1",
+                Destinations = [new DestinationConfig { Id = "d1", Address = "127.0.0.1", Port = 1 }],
+            },
+        ]);
+        var routes = new List<RouteConfig>
+        {
+            new()
+            {
+                Id = "old",
+                ClusterId = "c1",
+                Match = new RouteMatch { Path = "/old", PathKind = PathMatchKind.Prefix },
+            },
+        };
+
+        await RunCommand.ReloadConfigAsync(
+            path,
+            proxy,
+            clusterManager,
+            routes,
+            middleware: [],
+            loadBalancer: new LoadBalancer(),
+            responseCache: new MemoryHttpResponseCache(),
+            plusOptions: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+            getGrpc: static () => null,
+            setGrpc: static _ => { },
+            refreshReverseProxy: static () => { });
+
+        Assert.AreEqual(0, routes.Count);
+        Assert.AreEqual(0, clusterManager.Snapshot.Clusters.Count);
+    }
+
+    [TestMethod]
+    public async Task WaitForShutdownOrReloadAsync_CancelledToken_RegistersWindowsHandlers()
+    {
+        var path = Path.Combine(_tempDir, "wait-reload.json");
+        File.WriteAllText(path, "{ \"schemaVersion\": \"7.0\", \"listeners\": [], \"routes\": [], \"clusters\": [] }");
+        var method = typeof(RunCommand).GetMethod(
+            "WaitForShutdownOrReloadAsync",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        using var cts = new CancellationTokenSource();
+        var reloads = 0;
+        Func<Task> onReload = () =>
+        {
+            Interlocked.Increment(ref reloads);
+            return Task.CompletedTask;
+        };
+        var waitTask = (Task)method.Invoke(null, [cts.Token, path, true, onReload])!;
+        await Task.Delay(300);
+        cts.Cancel();
+        await waitTask;
+        Assert.AreEqual(0, reloads);
+    }
+
+    [TestMethod]
+    public void TryStartAccessLog_CoversNullSampleAndHappyPath()
+    {
+        var method = typeof(RunCommand).GetMethod(
+            "TryStartAccessLog",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+
+        Assert.IsNull(method.Invoke(null, [proxy, null]));
+        Assert.IsNull(method.Invoke(null, [proxy, new ServerConfig()]));
+        Assert.IsNull(method.Invoke(null, [proxy, new ServerConfig
+        {
+            AccessLog = new AccessLogConfig { Path = "", SampleRate = 1 },
+        }]));
+        Assert.IsNull(method.Invoke(null, [proxy, new ServerConfig
+        {
+            AccessLog = new AccessLogConfig { Path = Path.Combine(_tempDir, "a.jsonl"), SampleRate = 0 },
+        }]));
+
+        var logPath = Path.Combine(_tempDir, "access.jsonl");
+        var writer = method.Invoke(null, [proxy, new ServerConfig
+        {
+            AccessLog = new AccessLogConfig { Path = logPath, SampleRate = 1 },
+        }]);
+        Assert.IsNotNull(writer);
+        (writer as IDisposable)?.Dispose();
+        Assert.IsTrue(proxy.EnableHttpInterception);
+    }
+
     private string WriteRoutesConfig(string routeId, string matchPath, int originPort, string pathPrefix)
     {
         var path = Path.Combine(_tempDir, "reload.json");

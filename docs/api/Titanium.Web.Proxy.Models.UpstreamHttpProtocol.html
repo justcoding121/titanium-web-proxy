@@ -114,9 +114,9 @@ of which HTTP version the client used to talk to the proxy. Set a connection-lev
 the origin has also been confirmed (via a fresh probe or a cached prior result) to support HTTP/2,
 and the origin connection then uses whatever protocol the client ends up negotiating. When
 <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableHttp3">EnableHttp3</a> is <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a>, a cached Alt-Svc / HTTPS/SVCB
-result in <span class="xref">Titanium.Web.Proxy.Http3.Http3OriginCapabilityCache</span> only arms background QUIC warm-up;
-outbound HTTP/3 is used once that origin is warm, otherwise the request stays on HTTP/2 or
-HTTP/1.1. This is the default.</p>
+result in <span class="xref">Titanium.Web.Proxy.Http3.Http3OriginCapabilityCache</span> selects outbound HTTP/3 on the next
+CONNECT or new HTTP/1.1 request (background QUIC warm-up starts when the cache is filled).
+An already-open H2↔H2 MITM session is not upgraded mid-connection. This is the default.</p>
 </td>
       </tr>
       <tr>
@@ -153,7 +153,7 @@ inbound client connection may still be bridged onto the H3 origin stream.</p>
 <p>
     Honored from connection-level events and from
     <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_UpstreamHttpProtocol">UpstreamHttpProtocol</a> in <code>BeforeRequest</code>.
-    Forced <a class="xref" href="Titanium.Web.Proxy.Models.UpstreamHttpProtocol.html#Titanium_Web_Proxy_Models_UpstreamHttpProtocol_Http3">Http3</a> skips Auto-mode warm-up gating and fails closed with no TCP fallback.
+    Forced <a class="xref" href="Titanium.Web.Proxy.Models.UpstreamHttpProtocol.html#Titanium_Web_Proxy_Models_UpstreamHttpProtocol_Http3">Http3</a> does not require an Alt-Svc / SVCB cache entry and fails closed with no TCP fallback.
 </p>
 </td>
       </tr>

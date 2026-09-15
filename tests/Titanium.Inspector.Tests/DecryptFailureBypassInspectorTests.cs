@@ -1,5 +1,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
+using Titanium.Inspector.Views;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Inspector.Tests;
 
@@ -60,5 +62,36 @@ public class DecryptFailureBypassInspectorTests
     {
         using var svc = new InterceptionService(new RecordingSystemProxyController());
         Assert.IsTrue(svc.EnableDecryptFailureBypass);
+    }
+
+    [TestMethod]
+    public void FormatLearnedDisplay_IncludesHostAndReason()
+    {
+        var entry = new DecryptFailureBypassEntry(
+            "pin.example.com",
+            strikes: 2,
+            learnedAtUtc: new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc),
+            expiresAtUtc: DateTime.UtcNow.AddMinutes(30),
+            bypassActive: true);
+        var display = ExcludedHostsWindow.FormatLearnedDisplay(entry);
+        StringAssert.Contains(display, "pin.example.com");
+        StringAssert.Contains(display, "Decrypt failure");
+        StringAssert.Contains(display, "2026-01-02");
+    }
+
+    [TestMethod]
+    public async Task ForceLearnDecryptBypass_RaisesLearnedAndListsHost()
+    {
+        using var svc = new InterceptionService(new RecordingSystemProxyController());
+        await svc.StartAsync(System.Net.IPAddress.Loopback, port: 0);
+        DecryptFailureBypassEntry? learned = null;
+        svc.DecryptFailureBypassLearned += (_, e) => learned = e;
+
+        Assert.IsTrue(svc.ForceLearnDecryptBypass("live-learn.example"));
+        Assert.IsNotNull(learned);
+        Assert.AreEqual("live-learn.example", learned!.Host);
+        Assert.IsTrue(svc.GetDecryptFailureBypassEntries().Any(e =>
+            e.BypassActive &&
+            string.Equals(e.Host, "live-learn.example", StringComparison.OrdinalIgnoreCase)));
     }
 }

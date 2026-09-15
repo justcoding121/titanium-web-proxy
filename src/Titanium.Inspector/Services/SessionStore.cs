@@ -50,6 +50,43 @@ public sealed class SessionStore : IDisposable
 
     public SessionStoreOptions Options => _options;
 
+    /// <summary>
+    /// Applies retention knobs in-process and enforces limits immediately (no Inspector restart).
+    /// Disk spill enable/disable that requires a different spill loop is best-effort: toggling
+    /// spill off leaves existing spilled bodies loadable until restart when a disk cache was never started.
+    /// </summary>
+    public void ApplyOptions(SessionStoreOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        List<SessionSnapshot>? removed = null;
+        lock (_gate)
+        {
+            _options.MaxSessionsInMemory = options.MaxSessionsInMemory > 0 ? options.MaxSessionsInMemory : 10_000;
+            _options.MaxCaptureBytesInMemory = options.MaxCaptureBytesInMemory > 0
+                ? options.MaxCaptureBytesInMemory
+                : 512L * 1024 * 1024;
+            _options.HotBodySessions = options.HotBodySessions > 0 ? options.HotBodySessions : 2_000;
+            _options.DiskCacheMaxBytes = options.DiskCacheMaxBytes > 0
+                ? options.DiskCacheMaxBytes
+                : 2L * 1024 * 1024 * 1024;
+            _options.DiskCacheMaxAgeDays = options.DiskCacheMaxAgeDays > 0 ? options.DiskCacheMaxAgeDays : 7;
+            // SpillBodiesToDisk cannot be turned on mid-flight without constructing a disk cache;
+            // turning it off stops new spills while leaving the existing cache readable.
+            if (_disk is not null)
+            {
+                _options.SpillBodiesToDisk = options.SpillBodiesToDisk;
+                _disk.UpdateLimits(_options.DiskCacheMaxBytes, TimeSpan.FromDays(_options.DiskCacheMaxAgeDays));
+            }
+
+            EnforceLimitsLocked(ref removed);
+        }
+
+        if (removed is { Count: > 0 })
+        {
+            SessionsRemoved?.Invoke(removed);
+        }
+    }
+
     public int Count
     {
         get

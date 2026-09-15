@@ -42,6 +42,7 @@ public partial class ProxyServer
         RegisterSessionCancellation(cancellationTokenSource);
         var isHttps = false;
         Task<TcpServerConnection?>? prefetchConnectionTask = null;
+        Task<Http2NegotiationResult>? deferredHttp2Negotiation = null;
         HttpClientStream? clientStream = null;
         UpstreamHttpProtocol? transparentUpstreamProtocol = null;
 
@@ -230,35 +231,35 @@ public partial class ProxyServer
                     {
                         var negotiationSession =
                             new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
-                        var negotiation = await ResolveHttp2ForClientAsync(negotiationSession, clientOffersHttp2,
+                        var negotiationTask = ResolveHttp2ForClientAsync(negotiationSession, clientOffersHttp2,
                             httpsHostName, args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort,
                             args.UpstreamHttpProtocol, args.AllowHttpProtocolTranslation,
                             EnableTcpServerConnectionPrefetch, cancellationToken,
                             originIsHttps: !endPoint.ForwardCleartext);
-                        requiresHttp11Bridge = negotiation.RequiresHttp11Bridge;
-                        requiresH2OriginBridge = negotiation.RequiresH2OriginBridge;
-                        // The client is offered "h2" both when the origin itself speaks it (and no
-                        // client-facing bridge is needed) and when a translation bridge will stand in for an
-                        // HTTP/1.1-only origin. RequiresH2OriginBridge is the mirror image - the origin
-                        // speaks h2 but the client itself does not, so "h2" must never be offered to it.
-                        http2Supported = (negotiation.OriginSupportsHttp2 && !requiresH2OriginBridge)
-                                         || requiresHttp11Bridge;
-                        // Retained regardless of whether it turns out to be h2- or h1.1-keyed: if this
-                        // connection is not adopted by the h2 relay below, it still flows down to the
-                        // HTTP/1.1 pipeline's own prefetch-adoption/validation logic rather than being
-                        // discarded here. Always null when requiresHttp11Bridge (nothing to adopt/flow down -
-                        // the bridge opens its own per-h2-stream HTTP/1.1 connections instead).
-                        prefetchConnectionTask = negotiation.RetainedConnectionTask;
-
-                        if (EnableDecryptFailureBypass && negotiation.LearnableOriginTlsFailure)
+                        var negotiation = await TryCompleteHttp2NegotiationBeforeClientAlpnAsync(
+                            negotiationTask, cancellationToken);
+                        if (negotiation != null)
                         {
-                            TryRecordDecryptFailure(httpsHostName, error: null, forceBypass: true);
-                            var doomedPrefetch = prefetchConnectionTask;
-                            prefetchConnectionTask = null;
-                            if (doomedPrefetch != null)
-                                _ = TcpConnectionFactory.Release(doomedPrefetch, true);
-                            fallThroughOpaque = true;
-                            args.DecryptSsl = false;
+                            ApplyHttp2NegotiationBeforeClientAlpn(negotiation, out http2Supported,
+                                out requiresHttp11Bridge, out requiresH2OriginBridge, out prefetchConnectionTask);
+
+                            if (EnableDecryptFailureBypass && negotiation.LearnableOriginTlsFailure)
+                            {
+                                TryRecordDecryptFailure(httpsHostName, error: null, forceBypass: true);
+                                var doomedPrefetch = prefetchConnectionTask;
+                                prefetchConnectionTask = null;
+                                if (doomedPrefetch != null)
+                                    _ = TcpConnectionFactory.Release(doomedPrefetch, true);
+                                fallThroughOpaque = true;
+                                args.DecryptSsl = false;
+                            }
+                        }
+                        else
+                        {
+                            ProxyLog.Http2ProbeDeferredForClientAlpn(logger, httpsHostName,
+                                (int)Http2ServerHelloProbeBudget.TotalMilliseconds);
+                            http2Supported = clientOffersHttp2;
+                            deferredHttp2Negotiation = negotiationTask;
                         }
                     }
 
@@ -280,10 +281,9 @@ public partial class ProxyServer
                                 $"Could not create a server certificate for '{certName}'.");
 
                         // Use SslServerAuthenticationOptions so that SupportedSslProtocols is
-                        // respected rather than being hardcoded to TLS 1.2. h2 is only offered to the
-                        // client when the negotiation above confirmed the actual origin supports it -
-                        // ALPN cannot be changed after this handshake completes, so the origin's
-                        // capability must already be known.
+                        // respected rather than being hardcoded to TLS 1.2. h2 is offered when the
+                        // origin probe confirmed it, when a translation bridge will stand in, or when
+                        // a cold probe was deferred past Http2ServerHelloProbeBudget.
                         var options = new SslServerAuthenticationOptions
                         {
                             ServerCertificateContext = CertificateManager.CreateSslCertificateContext(certificate),
@@ -313,11 +313,25 @@ public partial class ProxyServer
                         if (sslStream != null) await sslStream.DisposeAsync();
                         await TcpConnectionFactory.Release(prefetchConnectionTask, true);
                         prefetchConnectionTask = null;
+                        AbandonDeferredHttp2Negotiation(deferredHttp2Negotiation);
+                        deferredHttp2Negotiation = null;
 
                         var certName = certificate?.GetNameInfo(X509NameType.SimpleName, false);
                         var session = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
                         throw new ProxyConnectException(
                             $"Couldn't authenticate host '{httpsHostName}' with certificate '{certName}'.", e, session);
+                    }
+
+                    if (deferredHttp2Negotiation != null)
+                    {
+                        var applied = await AwaitAndApplyDeferredHttp2NegotiationAsync(
+                            deferredHttp2Negotiation, httpsHostName, http2Supported,
+                            args.AllowHttpProtocolTranslation,
+                            prefetchConnectionTask, cancellationToken);
+                        requiresHttp11Bridge = applied.RequiresHttp11Bridge;
+                        requiresH2OriginBridge = applied.RequiresH2OriginBridge;
+                        prefetchConnectionTask = applied.Prefetch;
+                        deferredHttp2Negotiation = null;
                     }
 
                     if (requiresH2OriginBridge)
@@ -682,6 +696,7 @@ public partial class ProxyServer
         {
             if (!cancellationTokenSource.IsCancellationRequested) await cancellationTokenSource.CancelAsync();
             ReturnSessionCancellation(cancellationTokenSource);
+            AbandonDeferredHttp2Negotiation(deferredHttp2Negotiation);
             await TcpConnectionFactory.Release(prefetchConnectionTask, true);
             if (clientStream != null)
                 await clientStream.DisposeAsync();

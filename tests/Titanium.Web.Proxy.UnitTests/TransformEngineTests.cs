@@ -32,6 +32,18 @@ public class TransformEngineTests
     }
 
     [TestMethod]
+    public void RequestHostUseDestination_SetsContextFlag()
+    {
+        var engine = new TransformEngine();
+        var ctx = new TransformRequestContext { Path = "/" };
+        engine.ApplyRequestTransforms(
+        [
+            new TransformConfig { Kind = "RequestHostUseDestination" },
+        ], ctx);
+        Assert.IsTrue(ctx.UseDestinationHost);
+    }
+
+    [TestMethod]
     public void EmptyTransforms_NoOp()
     {
         var engine = new TransformEngine();
@@ -39,6 +51,7 @@ public class TransformEngineTests
         engine.ApplyRequestTransforms(null, ctx);
         engine.ApplyRequestTransforms([], ctx);
         Assert.AreEqual("/x", ctx.Path);
+        Assert.IsFalse(ctx.UseDestinationHost);
     }
 
     [TestMethod]

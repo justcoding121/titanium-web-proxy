@@ -24,18 +24,21 @@ public sealed partial class MainWindowViewModel
         // a neighbor row (SelectedSession setter would reopen a closed details pane).
         _selectedSessions.Clear();
         SelectedSession = null;
+        ShowSessionDetails = false;
 
         _userRemovalDepth++;
+        _suppressOpenSessionDetails = true;
         try
         {
             _store.Clear();
+            Sessions.Clear();
         }
         finally
         {
+            _suppressOpenSessionDetails = false;
             _userRemovalDepth--;
         }
 
-        Sessions.Clear();
         _retentionEvictedTotal = 0;
         _interception.ResetSessionIdSequence();
         RefreshSessionCountText();
@@ -58,24 +61,26 @@ public sealed partial class MainWindowViewModel
         if (SelectedSession is not null && ids.Contains(SelectedSession.Id))
         {
             SelectedSession = null;
+            ShowSessionDetails = false;
         }
 
         _userRemovalDepth++;
+        _suppressOpenSessionDetails = true;
         try
         {
             _store.Remove(ids);
+            for (var i = Sessions.Count - 1; i >= 0; i--)
+            {
+                if (ids.Contains(Sessions[i].Id))
+                {
+                    Sessions.RemoveAt(i);
+                }
+            }
         }
         finally
         {
+            _suppressOpenSessionDetails = false;
             _userRemovalDepth--;
-        }
-
-        for (var i = Sessions.Count - 1; i >= 0; i--)
-        {
-            if (ids.Contains(Sessions[i].Id))
-            {
-                Sessions.RemoveAt(i);
-            }
         }
 
         RefreshSessionCountText();
@@ -102,9 +107,54 @@ public sealed partial class MainWindowViewModel
             ComposerUrl = selected.Url;
             ComposerHeaders = selected.RequestHeadersText ?? "";
             ComposerBody = selected.RequestBodyText ?? "";
-            StatusText = "Composer loaded from selected session";
+            ComposerBodyFilePath = null;
+            StatusText = selected.RequestBodyCapture is BodyCaptureState.Truncated or BodyCaptureState.NotCaptured
+                ? "Composer loaded (request body was truncated or not fully captured)"
+                : "Composer loaded from selected session";
         }, _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
     }
+
+    private async Task FillGraphQlFromSelectedAsync()
+    {
+        var selected = SelectedSession;
+        if (selected is null)
+        {
+            SetGuardStatus("Select a session to copy its GraphQL operation");
+            return;
+        }
+
+        await _store.EnsureBodiesLoadedAsync(selected, _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+        await MarshalToUiAsync(() =>
+        {
+            if (!GraphQlOperationMatcher.TryGetOperationName(selected.RequestBodyText, out var name) ||
+                string.IsNullOrWhiteSpace(name))
+            {
+                SetGuardStatus("Selected session has no GraphQL operation name in the request body");
+                return;
+            }
+
+            if (ShowBreakpointsPane)
+            {
+                Breakpoints.GraphQlOperationName = name;
+            }
+            else if (ShowAutoResponderPane)
+            {
+                AutoResponderGraphQlOperation = name;
+            }
+            else if (ShowMapRemotePane)
+            {
+                MapRemoteGraphQlOperation = name;
+            }
+            else
+            {
+                SetGuardStatus("Open Breakpoints, AutoResponder, or Map Remote to set the GraphQL filter");
+                return;
+            }
+
+            StatusText = $"GraphQL filter set to {name}";
+        }, _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+    }
+
     private async Task LoadIntoComposerAsync()
     {
         var selected = SelectedSession;
@@ -121,7 +171,10 @@ public sealed partial class MainWindowViewModel
             ComposerUrl = selected.Url;
             ComposerHeaders = selected.RequestHeadersText ?? "";
             ComposerBody = selected.RequestBodyText ?? "";
-            StatusText = "Composer loaded from selected session";
+            ComposerBodyFilePath = null;
+            StatusText = selected.RequestBodyCapture is BodyCaptureState.Truncated or BodyCaptureState.NotCaptured
+                ? "Composer loaded (request body was truncated or not fully captured)"
+                : "Composer loaded from selected session";
         }, StatusCancelToken).ConfigureAwait(false);
         await OpenToolsTabAsync(0).ConfigureAwait(false);
     }
@@ -381,6 +434,13 @@ public sealed partial class MainWindowViewModel
             .ToList();
     private Task AddAutoResponderRuleAsync()
     {
+        if (string.IsNullOrWhiteSpace(AutoResponderLocalFilePath)
+            && AutoResponderBody.Length > InspectorBodyLimits.MaxInlineToolBodyChars)
+        {
+            SetGuardStatus("Inline AutoResponder body is too large — use Map Local for larger bodies");
+            return Task.CompletedTask;
+        }
+
         AutoResponder.Rules.Add(new AutoResponderRule
         {
             MatchUrl = AutoResponderMatch,
@@ -414,6 +474,13 @@ public sealed partial class MainWindowViewModel
         if (AutoResponder.SelectedRule is null)
         {
             StatusText = "Select an AutoResponder rule to update";
+            return Task.CompletedTask;
+        }
+
+        if (string.IsNullOrWhiteSpace(AutoResponderLocalFilePath)
+            && AutoResponderBody.Length > InspectorBodyLimits.MaxInlineToolBodyChars)
+        {
+            SetGuardStatus("Inline AutoResponder body is too large — use Map Local for larger bodies");
             return Task.CompletedTask;
         }
 
@@ -495,6 +562,35 @@ public sealed partial class MainWindowViewModel
 
         RefreshSessionCountText();
     }
+
+    /// <summary>
+    /// Re-evaluate filter membership when status/content-type/etc. arrive after the row was added.
+    /// Avoids a full <see cref="ApplyFilter"/> rebuild on every SSE tee chunk.
+    /// </summary>
+    private void OnSessionUpdatedForFilter(SessionSnapshot snapshot)
+    {
+        var matches = SessionSearch.Matches(snapshot, SearchQuery);
+        var index = Sessions.IndexOf(snapshot);
+        if (matches)
+        {
+            if (index < 0)
+            {
+                Sessions.Add(snapshot);
+                RefreshSessionCountText();
+            }
+        }
+        else if (index >= 0)
+        {
+            if (ReferenceEquals(SelectedSession, snapshot))
+            {
+                SelectedSession = null;
+            }
+
+            Sessions.RemoveAt(index);
+            RefreshSessionCountText();
+        }
+    }
+
     private void OnSessionsRemoved(IReadOnlyList<SessionSnapshot> removed)
     {
         if (removed.Count == 0)
@@ -509,14 +605,23 @@ public sealed partial class MainWindowViewModel
         if (SelectedSession is not null && ids.Contains(SelectedSession.Id))
         {
             SelectedSession = null;
+            ShowSessionDetails = false;
         }
 
-        for (var i = Sessions.Count - 1; i >= 0; i--)
+        _suppressOpenSessionDetails = true;
+        try
         {
-            if (ids.Contains(Sessions[i].Id))
+            for (var i = Sessions.Count - 1; i >= 0; i--)
             {
-                Sessions.RemoveAt(i);
+                if (ids.Contains(Sessions[i].Id))
+                {
+                    Sessions.RemoveAt(i);
+                }
             }
+        }
+        finally
+        {
+            _suppressOpenSessionDetails = false;
         }
 
         if (_userRemovalDepth > 0)

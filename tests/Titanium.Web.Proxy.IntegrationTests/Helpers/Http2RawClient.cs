@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Http2;
@@ -54,7 +55,7 @@ internal sealed class Http2RawClient : IDisposable
         int? headerTableSize)
     {
         var tcpClient = new TcpClient();
-        await tcpClient.ConnectAsync("localhost", proxyPort);
+        await tcpClient.ConnectAsync("127.0.0.1", proxyPort);
 
         var networkStream = tcpClient.GetStream();
         var connectRequest = $"CONNECT {targetHost}:{targetPort} HTTP/1.1\r\nHost: {targetHost}:{targetPort}\r\n\r\n";
@@ -75,7 +76,7 @@ internal sealed class Http2RawClient : IDisposable
     public static async Task<Http2RawClient> ConnectDirectAsync(int proxyPort, string sniHost)
     {
         var tcpClient = new TcpClient();
-        await tcpClient.ConnectAsync("localhost", proxyPort);
+        await tcpClient.ConnectAsync("127.0.0.1", proxyPort);
 
         return await FromTcpAndTlsAsync(tcpClient, tcpClient.GetStream(), sniHost, null);
     }
@@ -87,7 +88,7 @@ internal sealed class Http2RawClient : IDisposable
     public static async Task<Http2RawClient> ConnectCleartextDirectAsync(int proxyPort)
     {
         var tcpClient = new TcpClient();
-        await tcpClient.ConnectAsync("localhost", proxyPort);
+        await tcpClient.ConnectAsync("127.0.0.1", proxyPort);
 
         var stream = tcpClient.GetStream();
         await stream.WriteAsync(Http2Helper.ConnectionPreface);
@@ -107,7 +108,8 @@ internal sealed class Http2RawClient : IDisposable
             TargetHost = targetHost,
             ApplicationProtocols = new System.Collections.Generic.List<SslApplicationProtocol>
                 { SslApplicationProtocol.Http2 },
-            EnabledSslProtocols = System.Security.Authentication.SslProtocols.None
+            EnabledSslProtocols = System.Security.Authentication.SslProtocols.None,
+            CertificateRevocationCheckMode = X509RevocationMode.NoCheck
         });
 
         await sslStream.WriteAsync(Http2Helper.ConnectionPreface);
@@ -139,7 +141,7 @@ internal sealed class Http2RawClient : IDisposable
         int targetPort, System.Collections.Generic.List<SslApplicationProtocol>? alpnOffer)
     {
         var tcpClient = new TcpClient();
-        await tcpClient.ConnectAsync("localhost", proxyPort);
+        await tcpClient.ConnectAsync("127.0.0.1", proxyPort);
 
         var networkStream = tcpClient.GetStream();
         var connectRequest = $"CONNECT {targetHost}:{targetPort} HTTP/1.1\r\nHost: {targetHost}:{targetPort}\r\n\r\n";
@@ -154,7 +156,8 @@ internal sealed class Http2RawClient : IDisposable
         {
             TargetHost = targetHost,
             ApplicationProtocols = alpnOffer,
-            EnabledSslProtocols = System.Security.Authentication.SslProtocols.None
+            EnabledSslProtocols = System.Security.Authentication.SslProtocols.None,
+            CertificateRevocationCheckMode = X509RevocationMode.NoCheck
         });
 
         return new TunnelTlsConnection(tcpClient, sslStream);

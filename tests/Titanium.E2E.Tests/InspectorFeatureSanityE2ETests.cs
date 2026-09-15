@@ -104,7 +104,12 @@ public class InspectorFeatureSanityE2ETests
 
             dialogs.RemoveRootCaResult = true;
             vm.UntrustCaCommand.Execute(null);
-            await WaitAsync(() => dialogs.RemoveRootCaCalls > 0);
+            await WaitAsync(
+                () => dialogs.RemoveRootCaCalls > 0 && !vm.DecryptHttps && !interception.IsRootTrusted,
+                () => "Untrust CA did not finish. DecryptHttps=" + vm.DecryptHttps
+                      + " trusted=" + interception.IsRootTrusted
+                      + " status=" + vm.StatusText
+                      + " removeCalls=" + dialogs.RemoveRootCaCalls);
             Assert.IsFalse(vm.DecryptHttps);
             Assert.IsFalse(interception.IsRootTrusted);
 
@@ -191,7 +196,12 @@ public class InspectorFeatureSanityE2ETests
             await WaitAsync(() => interception.IsRunning);
 
             vm.InstallCaCommand.Execute(null);
-            await WaitAsync(() => dialogs.TrustRecoveryCalls >= 1);
+            await WaitAsync(
+                () => dialogs.TrustRecoveryCalls >= 1
+                      && vm.StatusText.Contains("cancel", StringComparison.OrdinalIgnoreCase),
+                () => "Install CA cancel did not settle. Status=" + vm.StatusText
+                      + " recoveryCalls=" + dialogs.TrustRecoveryCalls
+                      + " trusted=" + interception.IsRootTrusted);
 
             Assert.AreEqual(1, dialogs.TrustRecoveryCalls);
             Assert.IsFalse(interception.IsRootTrusted);

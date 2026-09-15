@@ -130,4 +130,41 @@ public class RequestOriginHostPortTests
         request.ApplyTransparentForwardCleartextHost(endPoint);
         Assert.AreEqual("127.0.0.1:8443", request.Host);
     }
+
+    [TestMethod]
+    public void SetUpstreamCleartextHostOverride_WireOnly_DoesNotMutateLogicalHost()
+    {
+        var request = new Request { Method = "GET", RequestUriString = "/cache" };
+        request.Host = "example.invalid";
+
+        request.SetUpstreamCleartextHostOverride("127.0.0.1", 18080);
+
+        Assert.AreEqual("example.invalid", request.Host);
+        Assert.AreEqual("127.0.0.1:18080", request.UpstreamCleartextHostOverride);
+    }
+
+    [TestMethod]
+    public void SetUpstreamCleartextHostOverride_BracketsIpv6()
+    {
+        var request = new Request { Method = "GET", RequestUriString = "/" };
+        request.Host = "example.invalid";
+        request.SetUpstreamCleartextHostOverride("::1", 18080);
+        Assert.AreEqual("example.invalid", request.Host);
+        Assert.AreEqual("[::1]:18080", request.UpstreamCleartextHostOverride);
+    }
+
+    [TestMethod]
+    public void ApplyTransparentForwardCleartextHost_BracketsIpv6ForwardHost()
+    {
+        var request = new Request { Method = "GET", RequestUriString = "/tls" };
+        request.Host = "public.example:8443";
+        var endPoint = new TransparentProxyEndPoint(System.Net.IPAddress.IPv6Loopback, 8443, true)
+        {
+            ForwardHost = "::1",
+            ForwardPort = 18080,
+            ForwardCleartext = true,
+        };
+        request.ApplyTransparentForwardCleartextHost(endPoint);
+        Assert.AreEqual("[::1]:18080", request.Host);
+    }
 }

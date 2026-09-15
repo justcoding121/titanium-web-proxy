@@ -36,7 +36,8 @@ public class BindEndpointUxTests
             Assert.AreEqual("Start proxy", vm.InterceptToggleText);
 
             vm.StartCaptureCommand.Execute(null);
-            await WaitUntil(() => interception.IsRunning && !vm.BindFieldsEnabled);
+            await WaitUntil(() => interception.IsRunning &&
+                vm.EndpointStatusText.StartsWith("Proxy running", StringComparison.Ordinal));
 
             Assert.IsFalse(vm.BindFieldsEnabled);
             Assert.IsTrue(vm.IsIntercepting);
@@ -130,6 +131,7 @@ public class BindEndpointUxTests
 
             vm.SystemProxy = true;
             Assert.IsTrue(vm.SystemProxy, vm.StatusText);
+            await WaitUntil(() => recorder.SetCount >= 1);
             Assert.AreEqual(1, recorder.SetCount);
 
             vm.StopCaptureCommand.Execute(null);
@@ -179,6 +181,8 @@ public class BindEndpointUxTests
 
             vm.StartCaptureCommand.Execute(null);
             await WaitUntil(() => interception.IsRunning && vm.SystemProxy);
+            await WaitUntil(() => recorder.SetCount >= 1 &&
+                vm.StatusText.Contains("System proxy enabled", StringComparison.Ordinal));
 
             Assert.IsTrue(vm.SystemProxy, vm.StatusText);
             Assert.AreEqual(1, recorder.SetCount);

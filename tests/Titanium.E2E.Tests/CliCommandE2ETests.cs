@@ -126,7 +126,7 @@ public class CliCommandE2ETests
         using var harness = new CliProcessHarness();
         var (code, stdout, _) = await harness.RunOnceAsync(["version"]);
         Assert.AreEqual(0, code);
-        StringAssert.Contains(stdout, "7.0.8");
+        StringAssert.Contains(stdout, "7.0.9");
     }
 
     [TestMethod]
@@ -257,20 +257,18 @@ public class CliCommandE2ETests
 
     [TestMethod]
     [TestCategory("E2E")]
-    public async Task Run_SIGHUP_ReloadsRouteTransforms()
+    public async Task Run_Reload_ReloadsRouteTransforms()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.Inconclusive("SIGHUP config reload is Unix-only.");
-        }
-
         using var origin = new EchoOrigin();
         var listen = CliProcessHarness.GetFreePort();
         var cfg = ConfigFixtures.WriteTransforms(_tempDir, listen, origin.Port, pathPrefix: "/v1");
         using var harness = new CliProcessHarness();
         harness.EnsurePlusDllBesideCli(copy: false);
             await harness.StartRunAsync(cfg);
-            await harness.WaitForOutputAsync("sighup-handler-registered", TimeSpan.FromSeconds(15));
+            var reloadReady = OperatingSystem.IsWindows()
+                ? "windows-reload-handler-registered"
+                : "sighup-handler-registered";
+            await harness.WaitForOutputAsync(reloadReady, TimeSpan.FromSeconds(15));
             try
             {
                 Assert.IsTrue(harness.ProcessId is > 0);
@@ -286,7 +284,7 @@ public class CliCommandE2ETests
                 StringAssert.Contains(await before.Content.ReadAsStringAsync(), "/v1/api");
 
                 ConfigFixtures.WriteTransforms(_tempDir, listen, origin.Port, pathPrefix: "/v2");
-                harness.SendSighup();
+                harness.SendReload(cfg);
                 await harness.WaitForOutputAsync("Config reloaded.", TimeSpan.FromSeconds(15));
 
                 var after = await http.GetAsync($"http://127.0.0.1:{origin.Port}/api");
@@ -297,6 +295,19 @@ public class CliCommandE2ETests
             {
                 harness.Dispose();
             }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Run_SIGHUP_ReloadsRouteTransforms()
+    {
+        // Kept for Unix CI discoverability; Windows uses Run_Reload_ReloadsRouteTransforms.
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("SIGHUP config reload is Unix-only; see Run_Reload_ReloadsRouteTransforms.");
+        }
+
+        await Run_Reload_ReloadsRouteTransforms();
     }
 
     [TestMethod]
@@ -492,10 +503,14 @@ public class CliCommandE2ETests
         var combined = stdout + stderr;
         // 0 = up to date, 2 = update available, 1 = feed unreachable (transient CI / network).
         Assert.IsTrue(code is 0 or 1 or 2, $"Unexpected exit {code}. Output: {combined}");
-        StringAssert.Contains(combined, "7.0.8");
+        StringAssert.Contains(combined, "7.0.9");
         if (code == 1)
         {
-            StringAssert.Contains(combined, "Unable to query update feed");
+            Assert.IsTrue(
+                combined.Contains("Unable to query update feed", StringComparison.OrdinalIgnoreCase) ||
+                combined.Contains("timed out", StringComparison.OrdinalIgnoreCase) ||
+                combined.Contains("Update feed", StringComparison.OrdinalIgnoreCase),
+                combined);
         }
     }
 

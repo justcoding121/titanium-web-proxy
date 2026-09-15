@@ -200,7 +200,7 @@ public static class SessionInspectors
     {
         if (!string.IsNullOrEmpty(bodyText))
         {
-            return TryFormatJson(bodyText);
+            return bodyText;
         }
 
         var headers = ParseHeaderBlock(headersText);
@@ -208,7 +208,7 @@ public static class SessionInspectors
         var bytes = TryDecompress(bodyBytes, encoding);
         if (bytes is { Length: > 0 })
         {
-            return TryFormatJson(Encoding.UTF8.GetString(bytes));
+            return Encoding.UTF8.GetString(bytes);
         }
 
         return "(empty)";

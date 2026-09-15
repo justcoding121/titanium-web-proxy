@@ -83,8 +83,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 
-          Write-Host "=== E2E / E2E-UI ==="
-          dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj -c Release --no-build --no-restore --nologo --filter "TestCategory=E2E|TestCategory=E2E-UI"
+          Write-Host "=== E2E-UI (CLI process E2E is cli-e2e matrix) ==="
+          dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj -c Release --no-build --no-restore --nologo --filter "TestCategory=E2E-UI"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $maxAttempts = 2
@@ -106,8 +106,43 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 
+  cli-e2e:
+    needs: resolve-version
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Linux Playwright OS deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-liberation libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 libasound2t64 || sudo apt-get install -y fonts-liberation libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 libasound2
+      - name: Restore and build
+        run: |
+          dotnet restore src/Titanium.Web.Proxy.sln
+          dotnet build src/Titanium.Cli/Titanium.Cli.csproj -c Release --no-restore
+          dotnet build src/Titanium.Plus/Titanium.Plus.csproj -c Release --no-restore
+          dotnet build tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj -c Release --no-restore
+      - name: Install Playwright Chromium
+        shell: pwsh
+        run: |
+          $pw = Join-Path (Resolve-Path "tests/Titanium.E2E.Tests/bin/Release/net10.0") "playwright.ps1"
+          & $pw install chromium
+      - name: CLI process E2E
+        run: |
+          dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj -c Release --no-build --no-restore --nologo --filter "TestCategory=E2E"
+
   build-cli:
-    needs: [resolve-version, test]
+    needs: [resolve-version, test, cli-e2e]
     runs-on: ${{ matrix.os }}
     # win-x64 uses environment "signing" for Azure OIDC (federated cred).
     environment: ${{ matrix.rid == 'win-x64' && 'signing' || '' }}

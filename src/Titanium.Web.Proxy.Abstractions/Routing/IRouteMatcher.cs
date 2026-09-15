@@ -76,4 +76,10 @@ public sealed class TransformRequestContext
     public HashSet<string> HeadersToRemove { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> ResponseHeadersToSet { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> ResponseHeadersToRemove { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    ///     When set by <c>RequestHostUseDestination</c>, cleartext upstream Host should be the
+    ///     destination bind identity (wire-only; logical Host unchanged).
+    /// </summary>
+    public bool UseDestinationHost { get; set; }
 }

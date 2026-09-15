@@ -103,6 +103,7 @@ public class InspectorFiddlerFlowE2ETests
         await _vm.TryAutoStartAsync();
 
         Assert.IsTrue(_interception.IsRunning, _vm.StatusText);
+        await WaitUntil(() => _recorder.SetCount >= 1);
         Assert.AreEqual(1, _recorder.SetCount);
         Assert.IsTrue(_vm.SystemProxy);
         Assert.IsFalse(_vm.DecryptHttps);
@@ -251,15 +252,18 @@ public class InspectorFiddlerFlowE2ETests
 
         _dialogs.RemoveRootCaResult = true;
         _vm.UntrustCaCommand.Execute(null);
-        await WaitUntil(() => !_vm.DecryptHttps || _dialogs.RemoveRootCaCalls > 0);
-        await Task.Delay(50);
+        await WaitUntil(() =>
+            _dialogs.RemoveRootCaCalls > 0
+            && !_vm.DecryptHttps
+            && !_interception.IsRootTrusted
+            && !_vm.IsStatusBusy);
 
         Assert.AreEqual(1, _dialogs.RemoveRootCaCalls);
         Assert.IsFalse(_vm.DecryptHttps);
         Assert.IsFalse(_interception.IsRootTrusted);
 
         _vm.InstallCaCommand.Execute(null);
-        await Task.Delay(50);
+        await WaitUntil(() => _interception.IsRootTrusted && !_vm.IsStatusBusy);
         Assert.IsTrue(_interception.IsRootTrusted, _vm.StatusText);
     }
 
@@ -370,12 +374,14 @@ public class InspectorFiddlerFlowE2ETests
     {
         _vm.StartCaptureCommand.Execute(null);
         var deadline = DateTime.UtcNow.AddSeconds(15);
-        while (!_interception.IsRunning && DateTime.UtcNow < deadline)
+        // IsRunning can precede VM BindPort publish after ephemeral bind (port 0).
+        while ((!_interception.IsRunning || _vm.BindPort <= 0) && DateTime.UtcNow < deadline)
         {
             await Task.Delay(50);
         }
 
         Assert.IsTrue(_interception.IsRunning, _vm.StatusText);
+        Assert.IsTrue(_vm.BindPort > 0, $"BindPort not published; BoundPort={_interception.BoundPort}");
     }
 
     private static async Task WaitUntil(Func<bool> predicate, int timeoutMs = 5000)

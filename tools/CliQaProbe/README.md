@@ -1,8 +1,8 @@
 # CliQaProbe
 
-> **For maintainers / contributors** — per-machine Titanium CLI checklist (not in CI).
+> **For maintainers / contributors** — per-machine Titanium CLI checklist (optional; CI `cli-e2e` is the source of truth).
 
-Per-machine Titanium CLI checklist (not in the solution, not CI). Spawns the built `titanium` / `titanium.exe` apphost (not `dotnet titanium.dll`) and exercises nested help, config dialects, live `run` traffic, and optional OS service lifecycle. The apphost is required so `service install` records a real SCM / systemd / launchd binPath.
+Per-machine Titanium CLI checklist (not in the solution). Spawns the built `titanium` / `titanium.exe` apphost. **PR CI now runs the full command-tree + Plus process E2E on Windows/Linux/macOS** (`TestCategory=E2E` in the `cli-e2e` job). Use this probe for ad-hoc local checks or when debugging elevation UX.
 
 ## Prerequisites
 

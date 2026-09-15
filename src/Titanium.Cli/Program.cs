@@ -30,6 +30,7 @@ internal static class Program
                 return command switch
                 {
                     "run" => await RunCommand.ExecuteAsync(args),
+                    "reload" => await ReloadCommand.ExecuteAsync(args),
                     "test" => await TestCommand.ExecuteAsync(args),
                     "version" => await VersionCommand.ExecuteAsync(args),
                     "update" => await UpdateCommand.ExecuteAsync(args),
@@ -57,7 +58,8 @@ internal static class Program
             Titanium Web Proxy CLI
 
             Usage:
-              titanium run -c <config> [-v|--verbose] [--service]
+              titanium run -c <config> [-v|--verbose] [--service] [--watch]
+              titanium reload -c <config>
               titanium test -c <config>
               titanium version [--check] [--plus] [--channel beta]
               titanium update [--plus] [--remove-plus] [--channel beta]

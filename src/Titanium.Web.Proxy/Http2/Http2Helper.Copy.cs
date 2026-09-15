@@ -206,34 +206,53 @@ namespace Titanium.Web.Proxy.Http2
             // removal and when the threshold is crossed.
             int pendingConnectionReceiveCredit = 0;
             var pendingStreamReceiveCredit = new Dictionary<int, int>();
+            var settingsFlushArmed = 0;
+            // SETTINGS-completion flush runs on a continuation thread; gate pending mutations.
+            var receiveCreditGate = new object();
 
             ValueTask GrantReceiveCreditAsync(int streamId, int bytes, bool forceFlush = false)
             {
                 if (bytes <= 0 && !forceFlush) return default;
 
-                if (bytes > 0)
+                int connectionBytes;
+                int streamBytes;
+                lock (receiveCreditGate)
                 {
-                    pendingConnectionReceiveCredit += bytes;
-                    if (pendingStreamReceiveCredit.TryGetValue(streamId, out var streamPending))
-                        pendingStreamReceiveCredit[streamId] = streamPending + bytes;
-                    else
-                        pendingStreamReceiveCredit[streamId] = bytes;
+                    if (bytes > 0)
+                    {
+                        pendingConnectionReceiveCredit += bytes;
+                        if (pendingStreamReceiveCredit.TryGetValue(streamId, out var streamPending))
+                            pendingStreamReceiveCredit[streamId] = streamPending + bytes;
+                        else
+                            pendingStreamReceiveCredit[streamId] = bytes;
+                    }
+
+                    // Client→proxy DATA can try to flush WINDOW_UPDATE toward the client before the
+                    // origin→client relay has written SETTINGS. .NET HttpClient treats any non-SETTINGS
+                    // first frame as PROTOCOL_ERROR (RFC 7540 §3.5). Defer (do not await SETTINGS here —
+                    // awaiting deadlocks H2→H1 NullOrigin when this loop must keep scheduling the peer
+                    // relay that produces SETTINGS). Arm a one-shot flush when SETTINGS completes.
+                    if (isClient && !connectionState.ServerSettingsRelayed.Task.IsCompletedSuccessfully)
+                    {
+                        ArmSettingsReceiveCreditFlush();
+                        return default;
+                    }
+
+                    var flushConnection = forceFlush || pendingConnectionReceiveCredit >= ReceiveCreditBatchThreshold;
+                    var flushStream = forceFlush
+                        || (pendingStreamReceiveCredit.TryGetValue(streamId, out var streamCredit)
+                            && streamCredit >= ReceiveCreditBatchThreshold);
+
+                    if (!flushConnection && !flushStream)
+                        return default;
+
+                    connectionBytes = flushConnection ? pendingConnectionReceiveCredit : 0;
+                    streamBytes = 0;
+                    if (flushStream && pendingStreamReceiveCredit.TryGetValue(streamId, out streamBytes))
+                        pendingStreamReceiveCredit.Remove(streamId);
+                    if (flushConnection)
+                        pendingConnectionReceiveCredit = 0;
                 }
-
-                var flushConnection = forceFlush || pendingConnectionReceiveCredit >= ReceiveCreditBatchThreshold;
-                var flushStream = forceFlush
-                    || (pendingStreamReceiveCredit.TryGetValue(streamId, out var streamCredit)
-                        && streamCredit >= ReceiveCreditBatchThreshold);
-
-                if (!flushConnection && !flushStream)
-                    return default;
-
-                var connectionBytes = flushConnection ? pendingConnectionReceiveCredit : 0;
-                var streamBytes = 0;
-                if (flushStream && pendingStreamReceiveCredit.TryGetValue(streamId, out streamBytes))
-                    pendingStreamReceiveCredit.Remove(streamId);
-                if (flushConnection)
-                    pendingConnectionReceiveCredit = 0;
 
                 var streamStillTracked = streamBytes > 0 && connectionState.Streams.ContainsKey(streamId);
                 return GrantReceiveCreditLockedAsync(
@@ -242,9 +261,48 @@ namespace Titanium.Web.Proxy.Http2
                     streamStillTracked ? streamBytes : 0);
             }
 
+            void ArmSettingsReceiveCreditFlush()
+            {
+                if (Interlocked.CompareExchange(ref settingsFlushArmed, 1, 0) != 0)
+                    return;
+
+                _ = connectionState.ServerSettingsRelayed.Task.ContinueWith(
+                    static async (t, state) =>
+                    {
+                        if (!t.IsCompletedSuccessfully)
+                            return;
+                        var flush = (Func<ValueTask>)state!;
+                        try { await flush().ConfigureAwait(false); }
+                        catch { /* connection tearing down */ }
+                    },
+                    (Func<ValueTask>)FlushAllPendingReceiveCreditAsync,
+                    CancellationToken.None,
+                    TaskContinuationOptions.RunContinuationsAsynchronously,
+                    TaskScheduler.Default);
+            }
+
             async ValueTask GrantReceiveCreditLockedAsync(int streamId, int connectionBytes, int streamBytes)
             {
                 if (connectionBytes <= 0 && streamBytes <= 0) return;
+
+                // Re-check: SETTINGS may still be in flight between the defer gate and this write.
+                if (isClient && !connectionState.ServerSettingsRelayed.Task.IsCompletedSuccessfully)
+                {
+                    lock (receiveCreditGate)
+                    {
+                        pendingConnectionReceiveCredit += connectionBytes;
+                        if (streamBytes > 0 && streamId != 0)
+                        {
+                            if (pendingStreamReceiveCredit.TryGetValue(streamId, out var s))
+                                pendingStreamReceiveCredit[streamId] = s + streamBytes;
+                            else
+                                pendingStreamReceiveCredit[streamId] = streamBytes;
+                        }
+                    }
+
+                    ArmSettingsReceiveCreditFlush();
+                    return;
+                }
 
                 await ownLegWriteLock.WaitAsync(cancellationToken);
                 try
@@ -266,29 +324,39 @@ namespace Titanium.Web.Proxy.Http2
 
             async ValueTask FlushAllPendingReceiveCreditAsync()
             {
-                if (pendingConnectionReceiveCredit <= 0 && pendingStreamReceiveCredit.Count == 0)
+                // Teardown flush: never emit client WINDOW_UPDATE if SETTINGS never made it (would still
+                // be PROTOCOL_ERROR for HttpClient). Drop the credit; the connection is going away.
+                if (isClient && !connectionState.ServerSettingsRelayed.Task.IsCompletedSuccessfully)
                     return;
+
+                int connectionBytes;
+                List<KeyValuePair<int, int>> streamCredits;
+                lock (receiveCreditGate)
+                {
+                    if (pendingConnectionReceiveCredit <= 0 && pendingStreamReceiveCredit.Count == 0)
+                        return;
+
+                    connectionBytes = pendingConnectionReceiveCredit;
+                    pendingConnectionReceiveCredit = 0;
+                    streamCredits = pendingStreamReceiveCredit.ToList();
+                    pendingStreamReceiveCredit.Clear();
+                }
 
                 await ownLegWriteLock.WaitAsync(CancellationToken.None);
                 try
                 {
                     var controlFrameHeader = new Http2FrameHeader();
                     var controlFrameHeaderBuffer = new byte[9];
-                    if (pendingConnectionReceiveCredit > 0)
-                    {
+                    if (connectionBytes > 0)
                         await SendWindowUpdateAsync(controlFrameHeader, controlFrameHeaderBuffer, 0,
-                            pendingConnectionReceiveCredit, input);
-                        pendingConnectionReceiveCredit = 0;
-                    }
+                            connectionBytes, input);
 
-                    foreach (var kvp in pendingStreamReceiveCredit)
+                    foreach (var kvp in streamCredits)
                     {
                         if (kvp.Value > 0 && connectionState.Streams.ContainsKey(kvp.Key))
                             await SendWindowUpdateAsync(controlFrameHeader, controlFrameHeaderBuffer, kvp.Key,
                                 kvp.Value, input);
                     }
-
-                    pendingStreamReceiveCredit.Clear();
                 }
                 finally
                 {
@@ -303,9 +371,17 @@ namespace Titanium.Web.Proxy.Http2
             void RemoveAndFinalizeStream(int removeStreamId)
             {
                 // Flush any batched receive credit for this stream before removing it.
-                if (pendingStreamReceiveCredit.TryGetValue(removeStreamId, out var leftover) && leftover > 0)
+                int leftover = 0;
+                lock (receiveCreditGate)
                 {
-                    pendingStreamReceiveCredit.Remove(removeStreamId);
+                    if (pendingStreamReceiveCredit.TryGetValue(removeStreamId, out leftover) && leftover > 0)
+                        pendingStreamReceiveCredit.Remove(removeStreamId);
+                    else
+                        leftover = 0;
+                }
+
+                if (leftover > 0)
+                {
                     // Fire-and-forget under the loop; connection credit stays batched.
                     _ = GrantReceiveCreditLockedAsync(removeStreamId, 0, leftover).AsTask();
                 }
@@ -493,15 +569,21 @@ namespace Titanium.Web.Proxy.Http2
                             // Tiny-GET hot path: END_STREAM closes the stream — skip stream WINDOW_UPDATE
                             // and do not force-flush connection credit (was one WINDOW_UPDATE pair per
                             // ~56 B response; profiled ~6% in GrantReceiveCredit).
-                            if (length > 0)
-                                pendingConnectionReceiveCredit += length;
-                            pendingStreamReceiveCredit.Remove(creditStreamId);
-                            if (pendingConnectionReceiveCredit >= ReceiveCreditBatchThreshold)
+                            int connBytes = 0;
+                            lock (receiveCreditGate)
                             {
-                                var connBytes = pendingConnectionReceiveCredit;
-                                pendingConnectionReceiveCredit = 0;
-                                await GrantReceiveCreditLockedAsync(0, connBytes, 0);
+                                if (length > 0)
+                                    pendingConnectionReceiveCredit += length;
+                                pendingStreamReceiveCredit.Remove(creditStreamId);
+                                if (pendingConnectionReceiveCredit >= ReceiveCreditBatchThreshold)
+                                {
+                                    connBytes = pendingConnectionReceiveCredit;
+                                    pendingConnectionReceiveCredit = 0;
+                                }
                             }
+
+                            if (connBytes > 0)
+                                await GrantReceiveCreditLockedAsync(0, connBytes, 0);
                         }
                         else
                         {
@@ -1293,13 +1375,21 @@ namespace Titanium.Web.Proxy.Http2
 
                             var outBytes = bodyWriteArgs.BodyBytes ?? Array.Empty<byte>();
 
-                            // Queue on the same FIFO as QueueSendHeader. A direct SendData write can
-                            // overtake MITM-re-encoded HEADERS still sitting on ClientFrameWriter /
-                            // ServerFrameWriter (Inspector always subscribes OnResponseBodyWrite),
-                            // which Chrome treats as DATA on an idle stream (PROTOCOL_ERROR).
-                            await QueueSendData(connectionState, towardServer: isClient, outputWriteLock,
-                                streamId, outBytes, endStreamFlag, remoteSettings.MaxFrameSize, outboundFlow,
-                                output, cancellationToken);
+                            // Buffer-until-IsLastChunk hooks return empty pieces for every frame but
+                            // the last. Emitting empty non-terminal DATA still reserves send windows
+                            // and can overtake/interleave with MITM HEADERS under load (HttpClient
+                            // PROTOCOL_ERROR on the next H2 session in CI). Suppress them; only
+                            // empty+END_STREAM must still be framed (trailers / bodiless end).
+                            if (outBytes.Length > 0 || endStreamFlag)
+                            {
+                                // Queue on the same FIFO as QueueSendHeader. A direct SendData write can
+                                // overtake MITM-re-encoded HEADERS still sitting on ClientFrameWriter /
+                                // ServerFrameWriter (Inspector always subscribes OnResponseBodyWrite),
+                                // which Chrome treats as DATA on an idle stream (PROTOCOL_ERROR).
+                                await QueueSendData(connectionState, towardServer: isClient, outputWriteLock,
+                                    streamId, outBytes, endStreamFlag, remoteSettings.MaxFrameSize, outboundFlow,
+                                    output, cancellationToken);
+                            }
 
                             // we have emitted our own (possibly re-sized) DATA frame(s); suppress the default relay
                             sendPacket = false;
