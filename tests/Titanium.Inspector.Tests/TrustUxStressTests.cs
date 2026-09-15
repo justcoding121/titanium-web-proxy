@@ -9,7 +9,7 @@ using Titanium.Inspector.ViewModels;
 namespace Titanium.Inspector.Tests;
 
 [TestClass]
-public class TrustUxStressTests
+public partial class TrustUxStressTests
 {
     [TestMethod]
     [TestCategory("Inspector-Stress")]
@@ -133,7 +133,7 @@ public class TrustUxStressTests
                 fs.Seek(uxBefore, SeekOrigin.Begin);
             using var reader = new StreamReader(fs);
             var tail = reader.ReadToEnd();
-            foreach (Match m in Regex.Matches(tail, @"SLOW\s+#\d+\s+(\S+)\s+ms=(\d+)"))
+            foreach (Match m in SlowUxTraceRegex().Matches(tail))
             {
                 var name = m.Groups[1].Value;
                 var ms = int.Parse(m.Groups[2].Value);
@@ -154,6 +154,9 @@ public class TrustUxStressTests
             // tracing optional
         }
     }
+
+    [GeneratedRegex(@"SLOW\s+#\d+\s+(\S+)\s+ms=(\d+)")]
+    private static partial Regex SlowUxTraceRegex();
 
     private static void OverrideRootPfx(InterceptionService interception, string path)
     {

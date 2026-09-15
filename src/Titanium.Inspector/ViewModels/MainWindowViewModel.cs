@@ -940,7 +940,6 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     /// ShowDialog as a silent OperationCanceledException (no toast, no Confirm* ux-trace)
     /// — the "Nth Clear+Install did nothing" failure mode.
     /// </summary>
-    private static Task AwaitDialogAsync(Task task) => task;
     private static Task<T> AwaitDialogAsync<T>(Task<T> task) => task;
 
 
@@ -1683,60 +1682,73 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 return;
             }
 
-            await MarshalToUiAsync(() =>
-            {
-                if (generation != Volatile.Read(ref _systemProxyApplyGeneration))
-                {
-                    return;
-                }
-
-                if (ok)
-                {
-                    // Stop / uncheck may have cleared the UI intent while WinINET still reported success.
-                    if (enable && (!_systemProxy || !_interception.IsRunning))
-                    {
-                        return;
-                    }
-
-                    if (enable)
-                    {
-                        SetOutcomeStatus(
-                            SystemProxyEnabledStatusMessage(),
-                            StatusSeverity.Success,
-                            toastImportant: OperatingSystem.IsWindows());
-                    }
-                    else
-                    {
-                        SetOutcomeStatus(SystemProxyRestoredStatus, StatusSeverity.Success);
-                    }
-
-                    return;
-                }
-
-                // Cancelled by stillWanted (superseded) — do not treat as user-visible failure.
-                if (string.IsNullOrEmpty(_interception.LastSystemProxyError))
-                {
-                    return;
-                }
-
-                // Revert optimistic checkbox to match OS state.
-                SetSystemProxyCore(!enable);
-                _ = SnapSystemProxyUiAsync();
-                var detail = _interception.LastSystemProxyError;
-                var text = enable
-                    ? (string.IsNullOrWhiteSpace(detail)
-                        ? "Failed to enable system proxy (permissions, cancelled admin prompt, or unsupported desktop environment)"
-                        : "Failed to enable system proxy: " + Truncate(detail, 180))
-                    : (string.IsNullOrWhiteSpace(detail)
-                        ? "Failed to restore system proxy settings"
-                        : "Failed to restore system proxy: " + Truncate(detail, 180));
-                SetOutcomeStatus(text, StatusSeverity.Error, toastImportant: true);
-            }, StatusCancelToken).ConfigureAwait(false);
+            await MarshalToUiAsync(
+                () => ApplySystemProxyUiResult(enable, ok, generation),
+                StatusCancelToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
             // status revert / shutdown
         }
+    }
+
+    private void ApplySystemProxyUiResult(bool enable, bool ok, int generation)
+    {
+        if (generation != Volatile.Read(ref _systemProxyApplyGeneration))
+        {
+            return;
+        }
+
+        if (ok)
+        {
+            // Stop / uncheck may have cleared the UI intent while WinINET still reported success.
+            if (enable && (!_systemProxy || !_interception.IsRunning))
+            {
+                return;
+            }
+
+            if (enable)
+            {
+                SetOutcomeStatus(
+                    SystemProxyEnabledStatusMessage(),
+                    StatusSeverity.Success,
+                    toastImportant: OperatingSystem.IsWindows());
+            }
+            else
+            {
+                SetOutcomeStatus(SystemProxyRestoredStatus, StatusSeverity.Success);
+            }
+
+            return;
+        }
+
+        // Cancelled by stillWanted (superseded) — do not treat as user-visible failure.
+        if (string.IsNullOrEmpty(_interception.LastSystemProxyError))
+        {
+            return;
+        }
+
+        // Revert optimistic checkbox to match OS state.
+        SetSystemProxyCore(!enable);
+        _ = SnapSystemProxyUiAsync();
+        SetOutcomeStatus(
+            FormatSystemProxyFailureStatus(enable, _interception.LastSystemProxyError),
+            StatusSeverity.Error,
+            toastImportant: true);
+    }
+
+    private static string FormatSystemProxyFailureStatus(bool enable, string? detail)
+    {
+        if (enable)
+        {
+            return string.IsNullOrWhiteSpace(detail)
+                ? "Failed to enable system proxy (permissions, cancelled admin prompt, or unsupported desktop environment)"
+                : "Failed to enable system proxy: " + Truncate(detail, 180);
+        }
+
+        return string.IsNullOrWhiteSpace(detail)
+            ? "Failed to restore system proxy settings"
+            : "Failed to restore system proxy: " + Truncate(detail, 180);
     }
 
     /// <summary>When true, localhost uses the system proxy (WinINET &lt;-loopback&gt; / Unix NO_PROXY parity).</summary>
@@ -1817,7 +1829,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    public string ProxyLocalhostTip => OsTrustUxCopy.ProxyLocalhostTip();
+    public static string ProxyLocalhostTip => OsTrustUxCopy.ProxyLocalhostTip();
 
     public bool AutoStartCapture
     {
@@ -2727,38 +2739,45 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             return AppendTranscodePrefix(selected, _cachedPrettyBody);
         }
 
-        var body = BuildSelectedBodyTextCore(selected, _bodyPrettyMode && SelectedInspectTabIndex == 1);
-        if (_bodyPrettyMode && SelectedInspectTabIndex == 1)
+        var prettyInspect = _bodyPrettyMode && SelectedInspectTabIndex == 1;
+        var body = BuildSelectedBodyTextCore(selected, prettyInspect);
+        if (prettyInspect)
         {
-            var reqCt = SessionInspectors.ParseHeaderBlock(selected.RequestHeadersText)
-                .TryGetValue("Content-Type", out var rct) ? rct : null;
-            var respCt = selected.ContentType
-                         ?? (SessionInspectors.ParseHeaderBlock(selected.ResponseHeadersText)
-                             .TryGetValue("Content-Type", out var sct) ? sct : null);
-            if ((InspectorBodyLimits.IsPrettyPrintableContentType(reqCt)
-                 || InspectorBodyLimits.IsPrettyPrintableContentType(respCt))
-                && InspectorBodyLimits.TryPrettyPrint(selected.RequestBodyText, reqCt) is null
-                && InspectorBodyLimits.TryPrettyPrint(selected.ResponseBodyText, respCt) is null
-                && (selected.RequestBodyCapture is BodyCaptureState.Truncated
-                    || selected.ResponseBodyCapture is BodyCaptureState.Truncated
-                    || !string.IsNullOrWhiteSpace(selected.RequestBodyText)
-                    || !string.IsNullOrWhiteSpace(selected.ResponseBodyText)))
-            {
-                if (string.IsNullOrEmpty(BodyCaptureHint))
-                {
-                    BodyCaptureHint = "Cannot pretty-print (body truncated or invalid)";
-                }
-                else if (!BodyCaptureHint.Contains("pretty-print", StringComparison.OrdinalIgnoreCase))
-                {
-                    BodyCaptureHint += " · Cannot pretty-print (body truncated or invalid)";
-                }
-            }
-
+            MaybeSetPrettyPrintFailureHint(selected);
             _cachedPrettySessionId = selected.Id;
             _cachedPrettyBody = body;
         }
 
         return AppendTranscodePrefix(selected, body);
+    }
+
+    private void MaybeSetPrettyPrintFailureHint(SessionSnapshot selected)
+    {
+        var reqCt = SessionInspectors.ParseHeaderBlock(selected.RequestHeadersText)
+            .TryGetValue("Content-Type", out var rct) ? rct : null;
+        var respCt = selected.ContentType
+                     ?? (SessionInspectors.ParseHeaderBlock(selected.ResponseHeadersText)
+                         .TryGetValue("Content-Type", out var sct) ? sct : null);
+        if (!(InspectorBodyLimits.IsPrettyPrintableContentType(reqCt)
+              || InspectorBodyLimits.IsPrettyPrintableContentType(respCt))
+            || InspectorBodyLimits.TryPrettyPrint(selected.RequestBodyText, reqCt) is not null
+            || InspectorBodyLimits.TryPrettyPrint(selected.ResponseBodyText, respCt) is not null
+            || !(selected.RequestBodyCapture is BodyCaptureState.Truncated
+                 || selected.ResponseBodyCapture is BodyCaptureState.Truncated
+                 || !string.IsNullOrWhiteSpace(selected.RequestBodyText)
+                 || !string.IsNullOrWhiteSpace(selected.ResponseBodyText)))
+        {
+            return;
+        }
+
+        if (string.IsNullOrEmpty(BodyCaptureHint))
+        {
+            BodyCaptureHint = "Cannot pretty-print (body truncated or invalid)";
+        }
+        else if (!BodyCaptureHint.Contains("pretty-print", StringComparison.OrdinalIgnoreCase))
+        {
+            BodyCaptureHint += " · Cannot pretty-print (body truncated or invalid)";
+        }
     }
 
     private static string AppendTranscodePrefix(SessionSnapshot selected, string body)

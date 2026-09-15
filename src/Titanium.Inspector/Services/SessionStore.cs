@@ -70,8 +70,8 @@ public sealed class SessionStore : IDisposable
                 ? options.DiskCacheMaxBytes
                 : 2L * 1024 * 1024 * 1024;
             _options.DiskCacheMaxAgeDays = options.DiskCacheMaxAgeDays > 0 ? options.DiskCacheMaxAgeDays : 7;
-            // SpillBodiesToDisk cannot be turned on mid-flight without constructing a disk cache;
-            // turning it off stops new spills while leaving the existing cache readable.
+            // SpillBodiesToDisk cannot flip on mid-flight without a disk cache.
+            // Turning it off stops new spills while the existing cache stays readable.
             if (_disk is not null)
             {
                 _options.SpillBodiesToDisk = options.SpillBodiesToDisk;

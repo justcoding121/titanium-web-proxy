@@ -1,5 +1,6 @@
 using System.Net;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Windows.Input;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
@@ -8,7 +9,7 @@ using Titanium.Inspector.ViewModels;
 namespace Titanium.Inspector.Tests;
 
 [TestClass]
-public class TrustDecisionTableTests
+public partial class TrustDecisionTableTests
 {
     [TestMethod]
     [TestCategory("Inspector-Trust-Decision")]
@@ -186,10 +187,11 @@ public class TrustDecisionTableTests
 
         StringAssert.DoesNotMatch(
             harness.Vm.StatusText,
-            new System.Text.RegularExpressions.Regex(
-                "certutil not found on PATH",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase));
+            CertutilNotFoundOnPathRegex());
     }
+
+    [GeneratedRegex("certutil not found on PATH", RegexOptions.IgnoreCase)]
+    private static partial Regex CertutilNotFoundOnPathRegex();
 
     [TestMethod]
     [TestCategory("Inspector-Trust-Decision")]

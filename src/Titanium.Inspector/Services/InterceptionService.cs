@@ -537,34 +537,9 @@ public sealed class InterceptionService : IDisposable
 
             try
             {
-                if (enable)
-                {
-                    var effective = settings ?? SystemProxySettings ?? new InspectorSettings();
-                    SystemProxySettings = effective;
-                    var result = _systemProxy.SetAsSystemProxy(_proxy, _endPoint!, effective);
-                    if (!result.Succeeded)
-                    {
-                        LastSystemProxyError = result.Message;
-                        _proxy.Logger.LogWarning("System proxy enable failed: {Message}", result.Message);
-                        return false;
-                    }
-
-                    _systemProxyEnabled = true;
-                }
-                else
-                {
-                    var result = _systemProxy.RestoreOriginalProxySettings(_proxy);
-                    if (!result.Succeeded)
-                    {
-                        LastSystemProxyError = result.Message;
-                        _proxy.Logger.LogWarning("System proxy disable failed: {Message}", result.Message);
-                        return false;
-                    }
-
-                    _systemProxyEnabled = false;
-                }
-
-                return true;
+                return enable
+                    ? TryEnableSystemProxyLocked(settings)
+                    : TryDisableSystemProxyLocked();
             }
             catch (Exception ex)
             {
@@ -581,6 +556,36 @@ public sealed class InterceptionService : IDisposable
                 return false;
             }
         }
+    }
+
+    private bool TryEnableSystemProxyLocked(InspectorSettings? settings)
+    {
+        var effective = settings ?? SystemProxySettings ?? new InspectorSettings();
+        SystemProxySettings = effective;
+        var result = _systemProxy.SetAsSystemProxy(_proxy!, _endPoint!, effective);
+        if (!result.Succeeded)
+        {
+            LastSystemProxyError = result.Message;
+            _proxy!.Logger.LogWarning("System proxy enable failed: {Message}", result.Message);
+            return false;
+        }
+
+        _systemProxyEnabled = true;
+        return true;
+    }
+
+    private bool TryDisableSystemProxyLocked()
+    {
+        var result = _systemProxy.RestoreOriginalProxySettings(_proxy!);
+        if (!result.Succeeded)
+        {
+            LastSystemProxyError = result.Message;
+            _proxy!.Logger.LogWarning("System proxy disable failed: {Message}", result.Message);
+            return false;
+        }
+
+        _systemProxyEnabled = false;
+        return true;
     }
 
     /// <summary>Re-applies system proxy bypass rules when already enabled (after settings change).</summary>
@@ -777,7 +782,7 @@ public sealed class InterceptionService : IDisposable
             LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
     }
 
-    private bool CompleteRootTrustInstall(bool installed)
+    private static bool CompleteRootTrustInstall(bool installed)
     {
         // Do not write Firefox prefs/policies here - schedule via RunOffUiAsync after success.
         return installed;
@@ -968,7 +973,10 @@ public sealed class InterceptionService : IDisposable
             if (_proxy?.Logger is null)
                 return;
             if (result.Succeeded)
-                _proxy.Logger.LogInformation("TrustFirefox: {Message}", result.Message);
+            {
+                if (_proxy.Logger.IsEnabled(LogLevel.Information))
+                    _proxy.Logger.LogInformation("TrustFirefox: {Message}", result.Message);
+            }
             else
                 _proxy.Logger.LogWarning("TrustFirefox failed ({Kind}): {Message}", result.Kind, result.Message);
         }
@@ -1242,7 +1250,6 @@ public sealed class InterceptionService : IDisposable
         }
 
         PendingFirefoxRootClearName = RootCertificateName;
-        var location = machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser;
         // Combined path for tests: full CN sweep (may CryptUI). UI callers use List + RemoveByThumb.
         _proxy.CertificateManager.PruneOrphanedSameCommonNameCertificates(
             machineStore, keepCurrentThumbprint: false);
@@ -1572,11 +1579,11 @@ public sealed class InterceptionService : IDisposable
             userOnlyHosts: null);
         var learnedBypass = !disableDecrypt && DecryptHttps && IsLearnedDecryptBypass(host);
         e.DecryptSsl = DecryptHttps && !disableDecrypt && !learnedBypass;
-        var opaqueReason = learnedBypass
-            ? OpaqueTunnelReason.LearnedFailure
-            : disableDecrypt || !DecryptHttps
-                ? MitmBypass.ResolveOpaqueReason(host, DecryptHttps, DecryptSkipHosts, userOnlyHosts: null)
-                : OpaqueTunnelReason.None;
+        var opaqueReason = OpaqueTunnelReason.None;
+        if (learnedBypass)
+            opaqueReason = OpaqueTunnelReason.LearnedFailure;
+        else if (disableDecrypt || !DecryptHttps)
+            opaqueReason = MitmBypass.ResolveOpaqueReason(host, DecryptHttps, DecryptSkipHosts, userOnlyHosts: null);
 
         if (!Capturing)
         {
@@ -2280,12 +2287,7 @@ public sealed class InterceptionService : IDisposable
 
         if (originalBody is not null && resp.IsBodyRead)
         {
-            snap.ResponseBodyOriginalSize = originalBody.LongLength;
-            snap.ResponseBodyCapture = originalBody.Length > MaxBodyBytes
-                ? BodyCaptureState.Truncated
-                : BodyCaptureState.Complete;
-            snap.BodySize = originalBody.LongLength;
-            snap.ResponseBodyStreamOpen = false;
+            ApplyBufferedResponseBody(snap, originalBody);
             return;
         }
 
@@ -2298,9 +2300,7 @@ public sealed class InterceptionService : IDisposable
 
         if (isSse)
         {
-            snap.ResponseBodyCapture = BodyCaptureState.Streaming;
-            snap.ResponseBodyStreamOpen = true;
-            snap.BodySize = snap.ResponseBytesSeen > 0 ? snap.ResponseBytesSeen : null;
+            ApplyStreamingResponseBody(snap);
             return;
         }
 
@@ -2323,6 +2323,23 @@ public sealed class InterceptionService : IDisposable
 
         snap.ResponseBodyCapture = BodyCaptureState.None;
         snap.BodySize ??= resp.ContentLength >= 0 ? resp.ContentLength : null;
+    }
+
+    private static void ApplyBufferedResponseBody(SessionSnapshot snap, byte[] originalBody)
+    {
+        snap.ResponseBodyOriginalSize = originalBody.LongLength;
+        snap.ResponseBodyCapture = originalBody.Length > MaxBodyBytes
+            ? BodyCaptureState.Truncated
+            : BodyCaptureState.Complete;
+        snap.BodySize = originalBody.LongLength;
+        snap.ResponseBodyStreamOpen = false;
+    }
+
+    private static void ApplyStreamingResponseBody(SessionSnapshot snap)
+    {
+        snap.ResponseBodyCapture = BodyCaptureState.Streaming;
+        snap.ResponseBodyStreamOpen = true;
+        snap.BodySize = snap.ResponseBytesSeen > 0 ? snap.ResponseBytesSeen : null;
     }
 
     private static string? TryHost(Request req)
@@ -2436,10 +2453,6 @@ public sealed class InterceptionService : IDisposable
 
         return false;
     }
-
-    private static byte[]? TruncateBytes(byte[]? body) => InspectorBodyLimits.TruncateBytes(body);
-
-    private static string TruncateText(string text) => InspectorBodyLimits.TruncateText(text);
 
     public void Dispose() => EnsureShutdown();
 }

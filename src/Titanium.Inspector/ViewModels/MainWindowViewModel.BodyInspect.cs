@@ -8,6 +8,9 @@ namespace Titanium.Inspector.ViewModels;
 
 public sealed partial class MainWindowViewModel
 {
+    private const string ContentTypeHeaderName = "Content-Type";
+    private const string EmptyBodyPlaceholder = "(empty)";
+
     private bool _bodyPrettyMode = true;
     private string _bodyCaptureHint = "";
     private string _hexCaptureHint = "";
@@ -167,22 +170,16 @@ public sealed partial class MainWindowViewModel
         }
 
         await _store.EnsureBodiesLoadedAsync(_selected, StatusCancelToken).ConfigureAwait(false);
-        var bytes = isRequest ? _selected.RequestBodyBytes : _selected.ResponseBodyBytes;
-        var text = isRequest ? _selected.RequestBodyText : _selected.ResponseBodyText;
-        var capture = isRequest ? _selected.RequestBodyCapture : _selected.ResponseBodyCapture;
-        var original = isRequest ? _selected.RequestBodyOriginalSize : _selected.ResponseBodyOriginalSize;
-
-        if (capture == BodyCaptureState.NotCaptured || (bytes is null or { Length: 0 } && string.IsNullOrEmpty(text)))
+        if (!TryGetSaveableBody(_selected, isRequest, out var bytes, out var capture, out var original))
         {
             SetGuardStatus("Body not captured — nothing to save");
             return;
         }
 
-        bytes ??= Encoding.UTF8.GetBytes(text ?? "");
         var headers = SessionInspectors.ParseHeaderBlock(
             isRequest ? _selected.RequestHeadersText : _selected.ResponseHeadersText);
         headers.TryGetValue("Content-Disposition", out var disposition);
-        headers.TryGetValue("Content-Type", out var contentType);
+        headers.TryGetValue(ContentTypeHeaderName, out var contentType);
         var suggested = InspectorBodyLimits.SuggestBodyFileName(
             _selected.Url, disposition, contentType ?? _selected.ContentType, isRequest);
 
@@ -197,9 +194,37 @@ public sealed partial class MainWindowViewModel
         }
 
         await File.WriteAllBytesAsync(path, bytes, StatusCancelToken).ConfigureAwait(false);
+        await ReportBodySavedAsync(bytes, capture, original).ConfigureAwait(false);
+    }
+
+    private static bool TryGetSaveableBody(
+        SessionSnapshot selected,
+        bool isRequest,
+        out byte[] bytes,
+        out BodyCaptureState capture,
+        out long? original)
+    {
+        var rawBytes = isRequest ? selected.RequestBodyBytes : selected.ResponseBodyBytes;
+        var text = isRequest ? selected.RequestBodyText : selected.ResponseBodyText;
+        capture = isRequest ? selected.RequestBodyCapture : selected.ResponseBodyCapture;
+        original = isRequest ? selected.RequestBodyOriginalSize : selected.ResponseBodyOriginalSize;
+
+        if (capture == BodyCaptureState.NotCaptured
+            || (rawBytes is null or { Length: 0 } && string.IsNullOrEmpty(text)))
+        {
+            bytes = [];
+            return false;
+        }
+
+        bytes = rawBytes ?? Encoding.UTF8.GetBytes(text ?? "");
+        return true;
+    }
+
+    private Task ReportBodySavedAsync(byte[] bytes, BodyCaptureState capture, long? original)
+    {
         var incomplete = capture is BodyCaptureState.Truncated or BodyCaptureState.Streaming
                          || (original is long o && o > bytes.Length);
-        await MarshalToUiAsync(() =>
+        return MarshalToUiAsync(() =>
         {
             SetOutcomeStatus(
                 incomplete
@@ -207,7 +232,7 @@ public sealed partial class MainWindowViewModel
                     : $"Saved body ({SessionDisplayFormat.FormatByteSize(bytes.Length)})",
                 incomplete ? StatusSeverity.Warning : StatusSeverity.Success,
                 toastImportant: incomplete);
-        }, StatusCancelToken).ConfigureAwait(false);
+        }, StatusCancelToken);
     }
 
     private async Task LoadComposerBodyFileAsync()
@@ -337,31 +362,8 @@ public sealed partial class MainWindowViewModel
 
     private void UpdateBodyPreviewImage(SessionSnapshot selected)
     {
-        byte[]? bytes = null;
-        string? contentType = null;
-        if (InspectorBodyLimits.IsImageContentType(selected.ContentType)
-            || LooksLikeImageHeaders(selected.ResponseHeadersText))
-        {
-            bytes = selected.ResponseBodyBytes;
-            contentType = selected.ContentType;
-            if (SessionInspectors.ParseHeaderBlock(selected.ResponseHeadersText)
-                .TryGetValue("Content-Type", out var responseType))
-            {
-                contentType = responseType;
-            }
-        }
-
-        if (bytes is null or { Length: 0 }
-            && LooksLikeImageHeaders(selected.RequestHeadersText))
-        {
-            bytes = selected.RequestBodyBytes;
-            contentType = SessionInspectors.ParseHeaderBlock(selected.RequestHeadersText)
-                .TryGetValue("Content-Type", out var requestType)
-                ? requestType
-                : contentType;
-        }
-
-        if (bytes is null or { Length: 0 } || !InspectorBodyLimits.IsImageContentType(contentType))
+        if (!TryResolvePreviewImage(selected, out var bytes, out var contentType)
+            || !InspectorBodyLimits.IsImageContentType(contentType))
         {
             BodyPreviewBitmap = null;
             return;
@@ -393,10 +395,46 @@ public sealed partial class MainWindowViewModel
         }
     }
 
+    private static bool TryResolvePreviewImage(
+        SessionSnapshot selected, out byte[] bytes, out string? contentType)
+    {
+        bytes = [];
+        contentType = null;
+        if (InspectorBodyLimits.IsImageContentType(selected.ContentType)
+            || LooksLikeImageHeaders(selected.ResponseHeadersText))
+        {
+            if (selected.ResponseBodyBytes is { Length: > 0 } responseBytes)
+            {
+                bytes = responseBytes;
+                contentType = selected.ContentType;
+                if (SessionInspectors.ParseHeaderBlock(selected.ResponseHeadersText)
+                    .TryGetValue(ContentTypeHeaderName, out var responseType))
+                {
+                    contentType = responseType;
+                }
+
+                return true;
+            }
+        }
+
+        if (LooksLikeImageHeaders(selected.RequestHeadersText)
+            && selected.RequestBodyBytes is { Length: > 0 } requestBytes)
+        {
+            bytes = requestBytes;
+            contentType = SessionInspectors.ParseHeaderBlock(selected.RequestHeadersText)
+                .TryGetValue(ContentTypeHeaderName, out var requestType)
+                ? requestType
+                : contentType;
+            return true;
+        }
+
+        return false;
+    }
+
     private static bool LooksLikeImageHeaders(string? headersText)
     {
         var headers = SessionInspectors.ParseHeaderBlock(headersText);
-        return headers.TryGetValue("Content-Type", out var ct)
+        return headers.TryGetValue(ContentTypeHeaderName, out var ct)
                && InspectorBodyLimits.IsImageContentType(ct);
     }
 
@@ -406,17 +444,7 @@ public sealed partial class MainWindowViewModel
             || LooksLikeImageHeaders(selected.ResponseHeadersText)
             || LooksLikeImageHeaders(selected.RequestHeadersText))
         {
-            var sb = new StringBuilder();
-            sb.AppendLine("=== Request ===");
-            sb.AppendLine(selected.RequestBodyBytes is { Length: > 0 }
-                ? $"(image · {SessionDisplayFormat.FormatByteSize(selected.RequestBodyBytes.Length)})"
-                : "(empty)");
-            sb.AppendLine();
-            sb.AppendLine("=== Response ===");
-            sb.Append(selected.ResponseBodyBytes is { Length: > 0 }
-                ? $"(image · {SessionDisplayFormat.FormatByteSize(selected.ResponseBodyBytes.Length)} — see preview above)"
-                : "(empty)");
-            return sb.ToString();
+            return FormatImageBodyInspectText(selected);
         }
 
         var raw = SessionInspectors.FormatLabeledBody(
@@ -432,16 +460,36 @@ public sealed partial class MainWindowViewModel
             return raw;
         }
 
+        return TryFormatPrettyBodyText(selected, raw);
+    }
+
+    private static string FormatImageBodyInspectText(SessionSnapshot selected)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("=== Request ===");
+        sb.AppendLine(selected.RequestBodyBytes is { Length: > 0 }
+            ? $"(image · {SessionDisplayFormat.FormatByteSize(selected.RequestBodyBytes.Length)})"
+            : EmptyBodyPlaceholder);
+        sb.AppendLine();
+        sb.AppendLine("=== Response ===");
+        sb.Append(selected.ResponseBodyBytes is { Length: > 0 }
+            ? $"(image · {SessionDisplayFormat.FormatByteSize(selected.ResponseBodyBytes.Length)} — see preview above)"
+            : EmptyBodyPlaceholder);
+        return sb.ToString();
+    }
+
+    private static string TryFormatPrettyBodyText(SessionSnapshot selected, string raw)
+    {
         var reqCt = selected.ContentType;
         if (SessionInspectors.ParseHeaderBlock(selected.RequestHeadersText)
-            .TryGetValue("Content-Type", out var requestCt))
+            .TryGetValue(ContentTypeHeaderName, out var requestCt))
         {
             reqCt = requestCt;
         }
 
         string? respCt = selected.ContentType;
         if (SessionInspectors.ParseHeaderBlock(selected.ResponseHeadersText)
-            .TryGetValue("Content-Type", out var responseCt))
+            .TryGetValue(ContentTypeHeaderName, out var responseCt))
         {
             respCt = responseCt;
         }
@@ -450,23 +498,15 @@ public sealed partial class MainWindowViewModel
         var respPretty = InspectorBodyLimits.TryPrettyPrint(selected.ResponseBodyText, respCt);
         if (reqPretty is null && respPretty is null)
         {
-            if ((selected.RequestBodyCapture is BodyCaptureState.Truncated
-                 || selected.ResponseBodyCapture is BodyCaptureState.Truncated)
-                && (InspectorBodyLimits.IsPrettyPrintableContentType(reqCt)
-                    || InspectorBodyLimits.IsPrettyPrintableContentType(respCt)))
-            {
-                return raw; // caller may set banner for pretty failure
-            }
-
             return raw;
         }
 
         var prettySb = new StringBuilder();
         prettySb.AppendLine("=== Request ===");
-        prettySb.AppendLine(reqPretty ?? selected.RequestBodyText ?? "(empty)");
+        prettySb.AppendLine(reqPretty ?? selected.RequestBodyText ?? EmptyBodyPlaceholder);
         prettySb.AppendLine();
         prettySb.AppendLine("=== Response ===");
-        prettySb.Append(respPretty ?? selected.ResponseBodyText ?? "(empty)");
+        prettySb.Append(respPretty ?? selected.ResponseBodyText ?? EmptyBodyPlaceholder);
         return prettySb.ToString();
     }
 }

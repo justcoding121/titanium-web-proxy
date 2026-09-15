@@ -377,56 +377,57 @@ public class SessionEventArgs : SessionEventArgsBase
                 "The stream is an established WebSocket tunnel; subscribe to OnDataReceived instead.");
 
         var response = HttpClient.Response;
-        if (!response.HasBody) return;
+        if (!response.HasBody || response.IsBodyRead)
+            return;
 
-        // If not already read (not cached yet)
-        if (!response.IsBodyRead)
+        // Synthetic Ok/Respond may already have Body bytes without going through the wire.
+        if (response.BodyAvailable)
         {
-            // Synthetic Ok/Respond may already have Body bytes without going through the wire.
-            if (response.BodyAvailable)
-            {
-                response.IsBodyRead = true;
-                response.IsBodyReceived = true;
-                return;
-            }
-
-            if (response.IsBodyReceived) throw new InvalidOperationException("Response body was already received.");
-
-            if (response.HttpVersion == HttpHeader.Version20)
-            {
-                // do not send to the remote endpoint
-                response.Http2IgnoreBodyFrames = true;
-
-                response.Http2BodyData = new MemoryStream();
-
-                var tcs = new TaskCompletionSource<bool>();
-                response.ReadHttp2BodyTaskCompletionSource = tcs;
-
-                // signal to HTTP/2 copy frame method to continue
-                response.ReadHttp2BeforeHandlerTaskCompletionSource!.SetResult(true);
-
-                await tcs.Task;
-
-                // Now set the flag to true
-                // So that next time we can deliver body from cache
-                response.IsBodyRead = true;
-                response.IsBodyReceived = true;
-            }
-            else
-            {
-                var body = await ReadBodyAsync(false, cancellationToken);
-                if (!response.BodyAvailable)
-                {
-                    response.Body = body;
-                    response.BodyIsWireEncoded = false; // Uncompress transformation
-                }
-
-                // Now set the flag to true
-                // So that next time we can deliver body from cache
-                response.IsBodyRead = true;
-                response.IsBodyReceived = true;
-            }
+            MarkResponseBodyRead(response);
+            return;
         }
+
+        if (response.IsBodyReceived) throw new InvalidOperationException("Response body was already received.");
+
+        if (response.HttpVersion == HttpHeader.Version20)
+            await ReadHttp2ResponseBodyAsync(response).ConfigureAwait(false);
+        else
+            await ReadHttp1ResponseBodyAsync(response, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static void MarkResponseBodyRead(Response response)
+    {
+        response.IsBodyRead = true;
+        response.IsBodyReceived = true;
+    }
+
+    private static async Task ReadHttp2ResponseBodyAsync(Response response)
+    {
+        // do not send to the remote endpoint
+        response.Http2IgnoreBodyFrames = true;
+
+        response.Http2BodyData = new MemoryStream();
+
+        var tcs = new TaskCompletionSource<bool>();
+        response.ReadHttp2BodyTaskCompletionSource = tcs;
+
+        // signal to HTTP/2 copy frame method to continue
+        response.ReadHttp2BeforeHandlerTaskCompletionSource!.SetResult(true);
+
+        await tcs.Task.ConfigureAwait(false);
+        MarkResponseBodyRead(response);
+    }
+
+    private async Task ReadHttp1ResponseBodyAsync(Response response, CancellationToken cancellationToken)
+    {
+        var body = await ReadBodyAsync(false, cancellationToken).ConfigureAwait(false);
+        if (!response.BodyAvailable)
+        {
+            response.Body = body;
+            response.BodyIsWireEncoded = false; // Uncompress transformation
+        }
+
+        MarkResponseBodyRead(response);
     }
 
     private async Task<byte[]> ReadBodyAsync(bool isRequest, CancellationToken cancellationToken)

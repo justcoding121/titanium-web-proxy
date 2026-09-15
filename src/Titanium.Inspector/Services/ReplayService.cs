@@ -3,20 +3,29 @@ using System.Text;
 
 namespace Titanium.Inspector.Services;
 
+/// <summary>Optional edits applied when replaying a captured session.</summary>
+public readonly record struct ReplayRequestOptions(
+    string? EditedUrl = null,
+    string? EditedMethod = null,
+    string? EditedBody = null,
+    string? EditedHeaders = null,
+    string? BodyFilePath = null,
+    bool IgnoreServerCertificateErrors = false);
+
 /// <summary>Replays a captured session with optional header/body edits.</summary>
 public static class ReplayService
 {
+    public static Task<ReplayResult> ReplayAsync(
+        SessionSnapshot session,
+        CancellationToken cancellationToken = default) =>
+        ReplayAsync(session, default, cancellationToken);
+
     public static async Task<ReplayResult> ReplayAsync(
         SessionSnapshot session,
-        string? editedUrl = null,
-        string? editedMethod = null,
-        string? editedBody = null,
-        string? editedHeaders = null,
-        string? bodyFilePath = null,
-        bool ignoreServerCertificateErrors = false,
+        ReplayRequestOptions options,
         CancellationToken cancellationToken = default)
     {
-        var url = editedUrl ?? session.Url;
+        var url = options.EditedUrl ?? session.Url;
         if (string.IsNullOrWhiteSpace(url) || session.IsTunnel)
         {
             return new ReplayResult(false, 0, "Cannot replay CONNECT/tunnel or empty URL.");
@@ -26,7 +35,7 @@ public static class ReplayService
         {
             AllowAutoRedirect = false,
         };
-        if (ignoreServerCertificateErrors)
+        if (options.IgnoreServerCertificateErrors)
         {
             // Opt-in only when Inspector setting "ignore server certificate errors" is enabled (MITM lab hosts).
 #pragma warning disable S4830
@@ -34,14 +43,14 @@ public static class ReplayService
 #pragma warning restore S4830
         }
 
-        var timeout = string.IsNullOrWhiteSpace(bodyFilePath)
+        var timeout = string.IsNullOrWhiteSpace(options.BodyFilePath)
             ? TimeSpan.FromSeconds(60)
             : TimeSpan.FromMinutes(10);
         using var http = new HttpClient(handler) { Timeout = timeout };
-        using var request = new HttpRequestMessage(new HttpMethod(editedMethod ?? session.Method), url);
+        using var request = new HttpRequestMessage(new HttpMethod(options.EditedMethod ?? session.Method), url);
 
-        ApplyEditedHeaders(request, editedHeaders ?? session.RequestHeadersText ?? "");
-        await using var fileStream = await AttachBodyAsync(request, session, editedBody, bodyFilePath, cancellationToken)
+        ApplyEditedHeaders(request, options.EditedHeaders ?? session.RequestHeadersText ?? "");
+        await using var fileStream = await AttachBodyAsync(request, session, options.EditedBody, options.BodyFilePath)
             .ConfigureAwait(false);
 
         using var response = await http.SendAsync(
@@ -108,8 +117,7 @@ public static class ReplayService
         HttpRequestMessage request,
         SessionSnapshot session,
         string? editedBody,
-        string? bodyFilePath,
-        CancellationToken cancellationToken)
+        string? bodyFilePath)
     {
         if (!string.IsNullOrWhiteSpace(bodyFilePath))
         {
@@ -170,7 +178,7 @@ public static class ReplayService
             if (ms.Length < InspectorBodyLimits.MaxBodyBytes)
             {
                 var toWrite = (int)Math.Min(read, InspectorBodyLimits.MaxBodyBytes - ms.Length);
-                ms.Write(buffer, 0, toWrite);
+                await ms.WriteAsync(buffer.AsMemory(0, toWrite), cancellationToken).ConfigureAwait(false);
             }
         }
 
