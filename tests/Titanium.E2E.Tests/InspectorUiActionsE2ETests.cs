@@ -37,12 +37,15 @@ public class InspectorUiActionsE2ETests
         _vm.BindAddress = "127.0.0.1";
         _vm.StartCaptureCommand.Execute(null);
         var deadline = DateTime.UtcNow.AddSeconds(15);
-        while (!_interception.IsRunning && DateTime.UtcNow < deadline)
+        // StartCapture is async-void: IsRunning can become true before the VM copies BoundPort
+        // onto BindPort. Using BindPort==0 yields http://127.0.0.1:0 → macOS EADDRNOTAVAIL.
+        while ((!_interception.IsRunning || _vm.BindPort <= 0) && DateTime.UtcNow < deadline)
         {
             await Task.Delay(50);
         }
 
         Assert.IsTrue(_interception.IsRunning, _vm.StatusText);
+        Assert.IsTrue(_vm.BindPort > 0, $"BindPort not published after start; BoundPort={_interception.BoundPort} status={_vm.StatusText}");
     }
 
     [TestCleanup]

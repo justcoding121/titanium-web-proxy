@@ -374,12 +374,14 @@ public class InspectorFiddlerFlowE2ETests
     {
         _vm.StartCaptureCommand.Execute(null);
         var deadline = DateTime.UtcNow.AddSeconds(15);
-        while (!_interception.IsRunning && DateTime.UtcNow < deadline)
+        // IsRunning can precede VM BindPort publish after ephemeral bind (port 0).
+        while ((!_interception.IsRunning || _vm.BindPort <= 0) && DateTime.UtcNow < deadline)
         {
             await Task.Delay(50);
         }
 
         Assert.IsTrue(_interception.IsRunning, _vm.StatusText);
+        Assert.IsTrue(_vm.BindPort > 0, $"BindPort not published; BoundPort={_interception.BoundPort}");
     }
 
     private static async Task WaitUntil(Func<bool> predicate, int timeoutMs = 5000)
