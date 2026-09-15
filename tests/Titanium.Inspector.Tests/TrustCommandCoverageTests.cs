@@ -397,7 +397,6 @@ public class TrustCommandCoverageTests
             };
 
             var flags = BindingFlags.NonPublic | BindingFlags.Instance;
-            typeof(MainWindowViewModel).GetMethod("NotifyDecryptHttpsUnchanged", flags)!.Invoke(vm, null);
             typeof(MainWindowViewModel).GetMethod("SetDecryptHttpsCore", flags)!.Invoke(vm, [false]);
             Assert.IsFalse(vm.DecryptHttps);
             typeof(MainWindowViewModel).GetMethod("SetDecryptHttpsCore", flags)!.Invoke(vm, [true]);

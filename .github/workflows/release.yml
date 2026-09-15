@@ -10,6 +10,11 @@ on:
         description: 'stable or beta'
         required: true
         default: 'stable'
+      skip_catalog_publish:
+        description: 'Skip Chocolatey (and any future catalog) publish'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -294,7 +299,7 @@ jobs:
           path: staged-cli-${{ matrix.rid }}/
           if-no-files-found: error
   build-plus:
-    needs: [resolve-version, test]
+    needs: [resolve-version, test, cli-e2e]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -551,9 +556,66 @@ jobs:
             grep -qi 'IsSupported' /cli/smoke-out.txt
             test -e /cli/libmsquic.so -o -e /cli/libmsquic.so.2 -o -e /cli/libmsquic.so.2.5.7
 
+  # Stable-only Linux product RPS smoke (not wiki-grade 3-OS median-of-3).
+  # Beta channel skips this; spot + editions already ran on the merge SHA.
+  rps-product-smoke:
+    needs: [resolve-version]
+    if: needs.resolve-version.outputs.channel == 'stable'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Install libmsquic (HTTP/3)
+        run: |
+          set -euo pipefail
+          . /etc/os-release
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            "https://packages.microsoft.com/config/${ID}/${VERSION_ID}/packages-microsoft-prod.deb" \
+            -o packages-microsoft-prod.deb
+          sudo dpkg -i packages-microsoft-prod.deb
+          rm -f packages-microsoft-prod.deb
+          sudo apt-get update
+          sudo apt-get install -y libmsquic
+          pwsh -NoProfile -Command 'if (-not [System.Net.Quic.QuicListener]::IsSupported) { throw "QuicListener.IsSupported is false after libmsquic install" }; Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"'
+      - name: compare-product-smoke (Linux)
+        shell: pwsh
+        run: |
+          pwsh tools/RpsLoadProbe/run-rps.ps1 `
+            -Mode compare-product-smoke `
+            -Concurrency '8,16,32,64' `
+            -WarmupSec 2 `
+            -DurationSec 8 `
+            -Repeats 1 `
+            -ResultsDir tools/RpsLoadProbe/results `
+            -BombardierCheck
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for compare-product-smoke gate validation' }
+          pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName
+      - name: Upload smoke CSV
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rps-product-smoke-csv
+          path: tools/RpsLoadProbe/results/rps-ramp-*.csv
+          if-no-files-found: ignore
+
   publish-release:
-    needs: [resolve-version, build-cli, build-plus, build-inspector, smoke-http3]
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    needs: [resolve-version, build-cli, build-plus, build-inspector, smoke-http3, rps-product-smoke]
+    if: |
+      always() &&
+      (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') &&
+      needs.resolve-version.result == 'success' &&
+      needs.build-cli.result == 'success' &&
+      needs.build-plus.result == 'success' &&
+      needs.build-inspector.result == 'success' &&
+      needs.smoke-http3.result == 'success' &&
+      (needs.rps-product-smoke.result == 'success' || needs.rps-product-smoke.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -565,6 +627,15 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+      - name: Attach MIT NuGet SBOM when present
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/sbom
+          # Optional artifact from .NET / publish (same SHA cut); ignore if missing.
+          if [[ -d artifacts/mit-nuget-sbom ]]; then
+            cp -a artifacts/mit-nuget-sbom/. artifacts/sbom/ || true
+          fi
       - name: Build release-manifest and create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -583,7 +654,12 @@ jobs:
           find artifacts -type f \( \
             -name '*.zip' -o -name '*.dll' -o -name '*.msi' \
             -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.dmg' \
+            -o -name '*.cdx.json' \
           \) -exec cp {} dist/ \;
+          # Prefer explicit SBOM folder copied by the prior step when present.
+          if [[ -d artifacts/sbom ]]; then
+            cp -a artifacts/sbom/. dist/ || true
+          fi
           python3 - <<'PY'
           import hashlib, json, os, pathlib, datetime
           tag = os.environ["RELEASE_TAG"]
@@ -710,7 +786,10 @@ jobs:
 
   publish-chocolatey:
     needs: [resolve-version, publish-release]
-    if: needs.publish-release.result == 'success'
+    if: |
+      needs.publish-release.result == 'success' &&
+      vars.SKIP_CATALOG_PUBLISH != 'true' &&
+      (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_catalog_publish != 'true')
     runs-on: windows-latest
     permissions:
       contents: read

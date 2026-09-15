@@ -364,7 +364,7 @@ public partial class ProxyServer
         if (!Network.Tcp.DecryptFailureLearning.IsSafeMetaRefreshUrl(url))
             return false;
 
-        var html = Network.Tcp.DecryptFailureLearning.BuildMetaRefreshHtml(url!);
+        var html = Network.Tcp.DecryptFailureLearning.BuildMetaRefreshHtml(url);
         // Connection: close is H1-only; H2 strips hop-by-hop headers and we cancel/dispose the client
         // connection after the response so the forged MITM multiplex is not reused.
         HttpHeader[] headers = request.HttpVersion >= HttpHeader.Version20

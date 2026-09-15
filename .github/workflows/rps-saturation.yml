@@ -15,8 +15,8 @@ name: RPS saturation
 on:
   pull_request:
     branches: [beta, stable]
-  push:
-    branches: [beta, stable]
+  # Push editions are gated by .NET / rps-publish-gate (Ubuntu only). Do not duplicate
+  # 3-OS compare-editions on every beta/stable merge.
   workflow_dispatch:
     inputs:
       mode:
@@ -203,11 +203,11 @@ permissions:
 
 jobs:
   rps:
-    # PR → beta/stable: compare-spot; push → beta/stable: compare-editions; dispatch: inputs.mode
+    # PR → beta/stable: compare-spot; dispatch: inputs.mode
     permissions:
       contents: read
     env:
-      RPS_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || (github.event_name == 'pull_request' && 'compare-spot' || 'compare-editions') }}
+      RPS_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'compare-spot' }}
       RPS_CONCURRENCY: ${{ github.event_name == 'workflow_dispatch' && inputs.concurrency || '8,16,32,64' }}
       RPS_WARMUP_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.warmup_sec || 2 }}
       RPS_DURATION_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.duration_sec || 8 }}

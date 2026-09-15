@@ -100,7 +100,8 @@ public sealed partial class MainWindowViewModel
         await _store.EnsureBodiesLoadedAsync(SelectedSession, _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
         var result = await ReplayService.ReplayAsync(
             SelectedSession,
-            ignoreServerCertificateErrors: _interception.IgnoreServerCertificateErrors,
+            new ReplayRequestOptions(
+                IgnoreServerCertificateErrors: _interception.IgnoreServerCertificateErrors),
             cancellationToken: _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
         await MarshalToUiAsync(() =>
         {
@@ -144,12 +145,13 @@ public sealed partial class MainWindowViewModel
         {
             result = await ReplayService.ReplayAsync(
                 template,
-                editedUrl: ComposerUrl,
-                editedMethod: ComposerMethod,
-                editedBody: HasComposerBodyFile ? null : ComposerBody,
-                editedHeaders: ComposerHeaders,
-                bodyFilePath: ComposerBodyFilePath,
-                ignoreServerCertificateErrors: _interception.IgnoreServerCertificateErrors,
+                new ReplayRequestOptions(
+                    EditedUrl: ComposerUrl,
+                    EditedMethod: ComposerMethod,
+                    EditedBody: HasComposerBodyFile ? null : ComposerBody,
+                    EditedHeaders: ComposerHeaders,
+                    BodyFilePath: ComposerBodyFilePath,
+                    IgnoreServerCertificateErrors: _interception.IgnoreServerCertificateErrors),
                 cancellationToken: _statusRevertCts?.Token ?? CancellationToken.None);
         }
         catch (Exception ex)

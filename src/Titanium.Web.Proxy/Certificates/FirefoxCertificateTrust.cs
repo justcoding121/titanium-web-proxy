@@ -27,6 +27,8 @@ public static class FirefoxCertificateTrust
     private const string MozillaDirName = ".mozilla";
     private const string DistributionDirName = "distribution";
     private const string PoliciesJsonFileName = "policies.json";
+    private const string UserJsFileName = "user.js";
+    private const string FailedStepTag = "Failed";
     private const string LibraryDirName = "Library";
     private const string ApplicationSupportDirName = "Application Support";
     private const string FirefoxDirName = "Firefox";
@@ -86,7 +88,7 @@ public static class FirefoxCertificateTrust
 
         if (!TryResolveDefaultProfileDirectory(out var profileDir, out var resolveError))
         {
-            LastEnterpriseRootsStep = "Failed";
+            LastEnterpriseRootsStep = FailedStepTag;
             return CertificateOsTrustResult.Fail(
                 CertificateOsTrustKind.Failed,
                 "Could not set Firefox " + ImportEnterpriseRootsValue + " policy and " +
@@ -106,7 +108,7 @@ public static class FirefoxCertificateTrust
         var userJs = TryWriteEnterpriseRootsUserPref(
             profileDir,
             "Firefox will trust the Windows root CA after you restart Firefox (profile preference)");
-        LastEnterpriseRootsStep = userJs.Succeeded ? "UserJsOk" : "Failed";
+        LastEnterpriseRootsStep = userJs.Succeeded ? "UserJsOk" : FailedStepTag;
         return userJs;
     }
 
@@ -201,7 +203,7 @@ public static class FirefoxCertificateTrust
             try
             {
                 // user.js only — never prefs.js (Firefox file lock hangs writers for tens of seconds).
-                cleared = ClearEnterpriseRootsPrefFile(Path.Combine(profileDir, "user.js")) || cleared;
+                cleared = ClearEnterpriseRootsPrefFile(Path.Combine(profileDir, UserJsFileName)) || cleared;
             }
             catch
             {
@@ -229,7 +231,7 @@ public static class FirefoxCertificateTrust
 
         if (!TryResolveDefaultProfileDirectory(out var profileDir, out var resolveError))
         {
-            LastEnterpriseRootsStep = "Failed";
+            LastEnterpriseRootsStep = FailedStepTag;
             return CertificateOsTrustResult.Fail(
                 CertificateOsTrustKind.Failed,
                 resolveError ?? "Firefox profile not found");
@@ -252,7 +254,7 @@ public static class FirefoxCertificateTrust
 
             if (!VerifyEnterpriseRootsUserPref(profileDir))
             {
-                LastEnterpriseRootsStep = "Failed";
+                LastEnterpriseRootsStep = FailedStepTag;
                 return CertificateOsTrustResult.Fail(
                     CertificateOsTrustKind.Failed,
                     "Wrote Firefox user.js but security.enterprise_roots.enabled did not validate");
@@ -264,7 +266,7 @@ public static class FirefoxCertificateTrust
         }
         catch (Exception ex)
         {
-            LastEnterpriseRootsStep = "Failed";
+            LastEnterpriseRootsStep = FailedStepTag;
             return CertificateOsTrustResult.Fail(
                 CertificateOsTrustKind.Failed,
                 "Failed to enable Firefox OS-root trust: " + ex.Message);
@@ -493,7 +495,7 @@ public static class FirefoxCertificateTrust
     }
 
     internal static void EnsureEnterpriseRootsUserPref(string profileDirectory) =>
-        EnsureEnterpriseRootsPrefFile(Path.Combine(profileDirectory, "user.js"));
+        EnsureEnterpriseRootsPrefFile(Path.Combine(profileDirectory, UserJsFileName));
 
     /// <summary>
     ///     Split pref-file text into logical lines without the CRLF pitfall:
@@ -548,7 +550,7 @@ public static class FirefoxCertificateTrust
 
     internal static bool VerifyEnterpriseRootsUserPref(string profileDirectory)
     {
-        var userJs = Path.Combine(profileDirectory, "user.js");
+        var userJs = Path.Combine(profileDirectory, UserJsFileName);
         if (!File.Exists(userJs)) return false;
         foreach (var line in File.ReadLines(userJs))
         {
@@ -560,9 +562,14 @@ public static class FirefoxCertificateTrust
         return false;
     }
 
+    // Invoked via reflection from unit tests (BootstrapAndFirefoxHelperCoverageTests).
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Major Code Smell",
+        "S1144:Unused private types or members should be removed",
+        Justification = "Called via reflection from BootstrapAndFirefoxHelperCoverageTests.")]
     private static bool ClearEnterpriseRootsUserPref(string profileDirectory)
     {
-        var cleared = ClearEnterpriseRootsPrefFile(Path.Combine(profileDirectory, "user.js"));
+        var cleared = ClearEnterpriseRootsPrefFile(Path.Combine(profileDirectory, UserJsFileName));
         if (!IsFirefoxProcessRunning())
             cleared = ClearEnterpriseRootsPrefFile(Path.Combine(profileDirectory, "prefs.js")) || cleared;
         return cleared;

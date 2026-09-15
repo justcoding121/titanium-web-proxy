@@ -12,16 +12,18 @@ Product version is **`7.0.0.0`**; gates block beta/stable tags, not feature comm
 |-------|------|
 | `.NET / build` | Unit + E2E + Windows Headless/Visual/Plus Playwright |
 | `.NET / ui-portable` (Win/Linux/macOS) | Portable E2E-UI + Headless + Visual + Plus Playwright |
+| `.NET / cli-e2e` (Win/Linux/macOS) | CLI + Plus process E2E |
 | `RPS saturation / rps` | **`compare-spot`** on PRs into beta/stable |
 
 **Publish / release SHA gates** (after merge):
 
 | Event | RPS mode | Blocks |
 |-------|----------|--------|
-| Push to `beta` / `stable` (NuGet `publish`) | `compare-editions` via `.NET / rps-publish-gate` **and** `compare-spot` via `.NET / rps-peer-gate` (parallel; Core÷YARP + MITM÷Reverse @ c=64) | NuGet publish |
-| Tag `v*` product release | `compare-product` (manual / release workflow) | GitHub Release product assets |
+| Push to `beta` / `stable` (NuGet `publish`) | `compare-editions` via `.NET / rps-publish-gate` **and** `compare-spot` via `.NET / rps-peer-gate` (parallel; Core÷YARP + MITM÷Reverse @ c=64); also requires `cli-e2e` | NuGet publish + product tag |
+| Tag / `release.yml` **stable** channel | Linux **`compare-product-smoke`** via `release.yml` `rps-product-smoke` | GitHub Release product assets |
+| Wiki-grade product matrix | Full `compare-product` (manual `workflow_dispatch` on `rps-saturation.yml`) | Does not block release |
 
-**Advisory vs merge-blocking:** PR required checks use **`compare-spot`** (Core÷YARP + MITM÷Reverse). Full **`RPS saturation / rps`** on develop / dispatch is **advisory** (does not block merges by itself). On push to `beta`/`stable`, edition + peer jobs still gate **NuGet publish** via `rps-publish-gate` / `rps-peer-gate` — treat Mac edition ratio noise as a publish signal to investigate, not a substitute for the spot peer floor.
+**Advisory vs merge-blocking:** PR required checks use **`compare-spot`**. On push to `beta`/`stable`, edition + peer jobs gate **NuGet publish** via `rps-publish-gate` / `rps-peer-gate` — treat Mac edition ratio noise as a publish signal to investigate, not a substitute for the spot peer floor. Push no longer runs 3-OS `rps-saturation` editions (that duplicated Ubuntu publish-gate).
 
 `rps-peer-gate` re-checks Core vs YARP on the merge SHA so a uniform Core slowdown cannot hide behind green edition ratios. It runs in parallel with editions, so publish wall clock stays ~max(editions ≈60m, spot ≈10–20m).
 

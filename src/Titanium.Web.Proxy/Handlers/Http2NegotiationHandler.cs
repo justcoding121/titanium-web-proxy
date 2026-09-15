@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -126,6 +127,9 @@ public partial class ProxyServer
     ///     receives the discovery connection for session adoption; waiters get
     ///     <see langword="null" /> and must open their own connection.
     /// </summary>
+    // Parameter count mirrors GetServerConnection; packing into a heap type would allocate per probe.
+    [SuppressMessage("Major Code Smell", "S107:Methods should not have too many parameters",
+        Justification = "Hot-path probe: keep stack args; do not allocate a parameter object per CONNECT.")]
     private async Task<(bool Supported, bool LearnableFailure, TcpServerConnection? AdoptedProbe)>
         CoalesceHttp2CapabilityProbeAsync(
         string capabilityCacheKey, SessionEventArgsBase sessionArgs, string remoteHostName, int remotePort,
@@ -167,6 +171,8 @@ public partial class ProxyServer
         }
     }
 
+    [SuppressMessage("Major Code Smell", "S107:Methods should not have too many parameters",
+        Justification = "Hot-path probe: keep stack args; do not allocate a parameter object per CONNECT.")]
     private async Task<(bool Supported, bool LearnableFailure, TcpServerConnection? AdoptedProbe)>
         ProbeHttp2CapabilityOnceAsync(
         string capabilityCacheKey, SessionEventArgsBase sessionArgs, string remoteHostName, int remotePort,

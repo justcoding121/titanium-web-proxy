@@ -13,8 +13,10 @@ Configure in GitHub **Settings → Rules → Rulesets** (or classic branch prote
 | Require approvals | recommended (≥1 maintainer) |
 | Require conversation resolution | recommended |
 | Require status checks to pass | **yes** |
-| Required checks | `.NET / build`, `.NET / ui-portable` (all matrix legs), `RPS saturation / rps` |
+| Required checks | `.NET / build`, `.NET / ui-portable` (all 3 OS), `.NET / cli-e2e` (all 3 OS), `RPS saturation / rps` (all 3 OS on PR `compare-spot`) |
 | Allow bypass | admins only for emergencies |
+
+Exact check names must match the Actions job names as shown on a PR (including matrix suffixes). The checked-in template is [`.github/branch-ruleset-beta-stable.json`](branch-ruleset-beta-stable.json) — after the first green PR, confirm the matrix suffixes in the Actions UI and adjust the JSON if GitHub renamed a leg.
 
 ## `develop`
 
@@ -27,4 +29,6 @@ Keep lighter rules for velocity (direct push OK if that is current practice). Do
 gh api repos/{owner}/{repo}/rulesets --input .github/branch-ruleset-beta-stable.json
 ```
 
-Exact check names must match the Actions job names as shown on a PR (including matrix suffixes for `ui-portable`).
+## Stable release RPS
+
+After merge to `stable`, [`release.yml`](workflows/release.yml) runs Linux **`compare-product-smoke`** before the GA GitHub Release. Full 3-OS wiki-grade `compare-product` stays a maintainer `workflow_dispatch` on [`rps-saturation.yml`](workflows/rps-saturation.yml).
