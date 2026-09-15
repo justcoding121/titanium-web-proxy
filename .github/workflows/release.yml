@@ -526,7 +526,7 @@ jobs:
           - rid: linux-musl-x64
             container: alpine:3.24
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: cli-${{ matrix.rid }}
           path: dist
@@ -624,7 +624,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
       - name: Attach MIT NuGet SBOM when present
