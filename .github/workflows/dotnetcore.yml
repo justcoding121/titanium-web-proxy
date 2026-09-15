@@ -73,8 +73,8 @@ jobs:
 
     - name: Restore
       run: |
-        # Fail on high/critical vulnerable transitive packages (dotnet NuGet audit).
-        dotnet restore src/Titanium.Web.Proxy.sln --warnaserror --audit --audit-level high
+        # Fail restore on high/critical vulnerable packages (NuGet audit via MSBuild).
+        dotnet restore src/Titanium.Web.Proxy.sln --warnaserror -p:NuGetAudit=true -p:NuGetAuditLevel=high
 
     - name: Build
       run: dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore --warnaserror
@@ -481,7 +481,7 @@ jobs:
           10.0.x
 
     - name: NuGet audit before pack
-      run: dotnet restore src/Titanium.Web.Proxy.sln --audit --audit-level high
+      run: dotnet restore src/Titanium.Web.Proxy.sln -p:NuGetAudit=true -p:NuGetAuditLevel=high
 
     - name: Pack Beta
       if: github.ref == 'refs/heads/beta'
