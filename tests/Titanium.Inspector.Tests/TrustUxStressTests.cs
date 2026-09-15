@@ -51,30 +51,36 @@ public class TrustUxStressTests
             const int loops = 6;
             for (var i = 0; i < loops; i++)
             {
-                await WaitUntil(() => !vm.IsStatusBusy, 15000);
+                string Detail() =>
+                    $"loop={i} busy={vm.IsStatusBusy} trusted={interception.IsRootTrusted} decrypt={vm.DecryptHttps} " +
+                    $"status=[{vm.StatusText}] rotateCalls={dialogs.RotateRootCaCalls} removeCalls={dialogs.RemoveRootCaCalls}";
+
+                await WaitUntil(() => !vm.IsStatusBusy, 15000, Detail);
                 if (!interception.IsRootTrusted)
                 {
-                    await ExecuteUntilAsync(vm.InstallCaCommand, () => interception.IsRootTrusted, 20000);
-                    await WaitUntil(() => !vm.IsStatusBusy, 10000);
+                    await ExecuteUntilAsync(vm.InstallCaCommand, () => interception.IsRootTrusted, 20000, Detail);
+                    await WaitUntil(() => !vm.IsStatusBusy, 10000, Detail);
                 }
 
                 if (interception.IsRootTrusted)
                 {
                     vm.DecryptHttps = true;
-                    await WaitUntil(() => vm.DecryptHttps || vm.StatusText.Contains("Decrypt", StringComparison.OrdinalIgnoreCase), 10000);
+                    await WaitUntil(() => vm.DecryptHttps || vm.StatusText.Contains("Decrypt", StringComparison.OrdinalIgnoreCase), 10000, Detail);
                     vm.DecryptHttps = false;
-                    await WaitUntil(() => !vm.DecryptHttps, 5000);
+                    await WaitUntil(() => !vm.DecryptHttps, 5000, Detail);
                 }
 
+                // Do not require StatusText to still say "trusted": SetOutcomeStatus reverts to
+                // baseline ("Ready") after OutcomeSuccessRevertMs while rotate has already
+                // completed (calls++, trusted, !busy). Coupling to the transient string races.
                 var rotateCalls = dialogs.RotateRootCaCalls;
                 await ExecuteUntilAsync(
                     vm.RotateCaCommand,
                     () => dialogs.RotateRootCaCalls > rotateCalls
                           && !vm.IsStatusBusy
-                          && interception.IsRootTrusted
-                          && (vm.StatusText.Contains("trusted", StringComparison.OrdinalIgnoreCase)
-                              || vm.StatusText.Contains("failed", StringComparison.OrdinalIgnoreCase)),
-                    25000);
+                          && interception.IsRootTrusted,
+                    25000,
+                    Detail);
 
                 var removeCalls = dialogs.RemoveRootCaCalls;
                 await ExecuteUntilAsync(
@@ -83,7 +89,8 @@ public class TrustUxStressTests
                           && !vm.DecryptHttps
                           && !vm.IsStatusBusy
                           && !interception.IsRootTrusted,
-                    20000);
+                    20000,
+                    Detail);
             }
 
             dialogs.RotateRootCaResult = true;
@@ -156,19 +163,19 @@ public class TrustUxStressTests
         field!.SetValue(interception, path);
     }
 
-    private static async Task ExecuteUntilAsync(ICommand command, Func<bool> done, int timeoutMs)
+    private static async Task ExecuteUntilAsync(ICommand command, Func<bool> done, int timeoutMs, Func<string>? detail = null)
     {
         command.Execute(null);
-        await WaitUntil(done, timeoutMs);
+        await WaitUntil(done, timeoutMs, detail);
     }
 
-    private static async Task WaitUntil(Func<bool> done, int timeoutMs)
+    private static async Task WaitUntil(Func<bool> done, int timeoutMs, Func<string>? detail = null)
     {
         var deadline = Environment.TickCount64 + timeoutMs;
         while (!done())
         {
             if (Environment.TickCount64 >= deadline)
-                Assert.Fail("Timed out in trust stress loop.");
+                Assert.Fail("Timed out in trust stress loop." + (detail is null ? "" : " " + detail()));
             await Task.Delay(25);
         }
     }
