@@ -38,7 +38,7 @@ public class InspectorHeadlessUiE2ETests
         // Execute commands like the Avalonia bindings do (RelayCommand is async void).
         vm.StartCaptureCommand.Execute(null);
         var deadline = DateTime.UtcNow.AddSeconds(15);
-        while (!interception.IsRunning && DateTime.UtcNow < deadline)
+        while ((!interception.IsRunning || vm.StatusText != "Ready") && DateTime.UtcNow < deadline)
         {
             await Task.Delay(50);
         }
