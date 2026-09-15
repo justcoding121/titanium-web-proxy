@@ -107,17 +107,17 @@ public class SonarPrCoverageGapTests
             using var request = new HttpRequestMessage(HttpMethod.Post, "https://example.test/");
             var session = new SessionSnapshot { ContentType = "application/octet-stream" };
             await using var fs = await (Task<FileStream?>)attach.Invoke(
-                null, [request, session, null, bodyPath, CancellationToken.None])!;
+                null, [request, session, null, bodyPath])!;
             Assert.IsNotNull(fs);
             Assert.IsNotNull(request.Content);
             Assert.AreEqual(4, request.Content!.Headers.ContentLength);
 
-            await Assert.ThrowsExceptionAsync<FileNotFoundException>(async () =>
+            await Assert.ThrowsExactlyAsync<FileNotFoundException>(async () =>
             {
                 using var missingReq = new HttpRequestMessage(HttpMethod.Post, "https://example.test/");
                 _ = await (Task<FileStream?>)attach.Invoke(
                     null,
-                    [missingReq, session, null, Path.Combine(dir, "missing.bin"), CancellationToken.None])!;
+                    [missingReq, session, null, Path.Combine(dir, "missing.bin")])!;
             });
         }
         finally

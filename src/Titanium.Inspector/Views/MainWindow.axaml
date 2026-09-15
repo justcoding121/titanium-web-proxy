@@ -50,7 +50,7 @@
         <MenuItem x:Name="MenuProxyLocalhost" Header="Capture local traffic" ToggleType="CheckBox"
                   IsChecked="{Binding ProxyLoopback, Mode=OneWay}"
                   Command="{Binding ToggleProxyLocalhostCommand}"
-                  ToolTip.Tip="{Binding ProxyLocalhostTip}"
+                  ToolTip.Tip="{x:Static vm:MainWindowViewModel.ProxyLocalhostTip}"
                   AutomationProperties.AutomationId="MenuProxyLocalhost" />
         <MenuItem Header="Allow Store apps…" Command="{Binding OpenLoopbackExemptCommand}"
                   IsVisible="{Binding ShowLoopbackExemptMenu}"

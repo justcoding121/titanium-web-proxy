@@ -196,9 +196,14 @@ public class ConfigReloadGateTests
     {
         var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
         var parse = typeof(ReloadCommand).GetMethod("TryParsePid", flags)!;
-        Assert.IsNull(parse.Invoke(null, [new[] { "reload", "--pid", "0" }]));
-        Assert.IsNull(parse.Invoke(null, [new[] { "reload", "--pid" }]));
-        Assert.IsNull(parse.Invoke(null, [new[] { "reload", "--pid", "abc" }]));
-        Assert.AreEqual(42, (int)parse.Invoke(null, [new[] { "reload", "--pid", "42" }])!);
+        Assert.IsNull(parse.Invoke(null, [PidArgZero]));
+        Assert.IsNull(parse.Invoke(null, [PidArgMissingValue]));
+        Assert.IsNull(parse.Invoke(null, [PidArgNonNumeric]));
+        Assert.AreEqual(42, (int)parse.Invoke(null, [PidArgValid])!);
     }
+
+    private static readonly string[] PidArgZero = ["reload", "--pid", "0"];
+    private static readonly string[] PidArgMissingValue = ["reload", "--pid"];
+    private static readonly string[] PidArgNonNumeric = ["reload", "--pid", "abc"];
+    private static readonly string[] PidArgValid = ["reload", "--pid", "42"];
 }

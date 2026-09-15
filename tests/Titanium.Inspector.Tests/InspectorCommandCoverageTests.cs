@@ -208,10 +208,6 @@ public class InspectorCommandCoverageTests
             _ = trustType.GetMethod("FormatOsTrustFailureStatus", flags)!.Invoke(null, [null]);
             _ = trustType.GetMethod("FormatUntrustStillPresentStatus", flags)!.Invoke(null, null);
             _ = trustType.GetMethod("FormatUntrustRemovedStatus", flags)!.Invoke(null, null);
-            _ = trustType.GetMethod("FormatRotateCaTrustedStatus", flags)!.Invoke(null, [true]);
-            _ = trustType.GetMethod("FormatRotateCaTrustedStatus", flags)!.Invoke(null, [false]);
-            _ = trustType.GetMethod("FormatRotateCaDeferredTrustStatus", flags)!.Invoke(null, [true]);
-            _ = trustType.GetMethod("FormatRotateCaDeferredTrustStatus", flags)!.Invoke(null, [false]);
             _ = trustType.GetMethod("FormatFirefoxTrustOutcome", flags)!.Invoke(null,
                 [CertificateOsTrustResult.Ok("trusted")]);
             _ = trustType.GetMethod("FormatFirefoxTrustOutcome", flags)!.Invoke(null,

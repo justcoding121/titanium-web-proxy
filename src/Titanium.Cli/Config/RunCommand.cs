@@ -558,7 +558,12 @@ internal static class RunCommand
                 watchDebounce = new CancellationTokenSource();
                 void OnWatch(object sender, FileSystemEventArgs e)
                 {
-                    var prev = watchDebounce!;
+                    var prev = watchDebounce;
+                    if (prev is null)
+                    {
+                        return;
+                    }
+
                     prev.Cancel();
                     prev.Dispose();
                     var next = new CancellationTokenSource();
@@ -600,8 +605,11 @@ internal static class RunCommand
             winReloadWait?.Unregister(null);
             winReload?.Dispose();
             watcher?.Dispose();
-            watchDebounce?.Cancel();
-            watchDebounce?.Dispose();
+            if (watchDebounce is not null)
+            {
+                await watchDebounce.CancelAsync().ConfigureAwait(false);
+                watchDebounce.Dispose();
+            }
         }
     }
 #pragma warning restore CA1068

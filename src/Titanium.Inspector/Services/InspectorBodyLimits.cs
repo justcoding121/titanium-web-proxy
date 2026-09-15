@@ -26,6 +26,11 @@ public enum BodyCaptureState
 /// <summary>Shared Inspector body/preview limits (capture UI, Composer, AutoResponder).</summary>
 public static class InspectorBodyLimits
 {
+    private static readonly System.Text.Json.JsonSerializerOptions PrettyJsonOptions = new()
+    {
+        WriteIndented = true,
+    };
+
     public const int MaxBodyBytes = 2 * 1024 * 1024;
     public const int MaxBodyTextChars = 256 * 1024;
     public const int MaxHexBytes = 4096;
@@ -159,7 +164,7 @@ public static class InspectorBodyLimits
                 using var doc = System.Text.Json.JsonDocument.Parse(text);
                 var pretty = System.Text.Json.JsonSerializer.Serialize(
                     doc.RootElement,
-                    new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                    PrettyJsonOptions);
                 return TruncateText(pretty);
             }
 
@@ -217,62 +222,72 @@ public static class InspectorBodyLimits
         {
             if (text[i] == '<')
             {
-                var end = text.IndexOf('>', i);
-                if (end < 0)
-                {
-                    sb.Append(text.AsSpan(i));
-                    break;
-                }
-
-                var tag = text.AsSpan(i, end - i + 1);
-                var isClosing = tag.Length > 1 && tag[1] == '/';
-                var isSelfClosing = tag.EndsWith("/>", StringComparison.Ordinal)
-                                    || tag.StartsWith("<!", StringComparison.Ordinal)
-                                    || tag.StartsWith("<?", StringComparison.Ordinal);
-                if (isClosing)
-                {
-                    depth = Math.Max(0, depth - 1);
-                }
-
-                if (sb.Length > 0 && sb[^1] != '\n')
-                {
-                    sb.AppendLine();
-                }
-
-                sb.Append(' ', depth * 2);
-                sb.Append(tag);
-                if (!isClosing && !isSelfClosing)
-                {
-                    depth++;
-                }
-
-                i = end + 1;
+                i = AppendMarkupTag(sb, text, i, ref depth);
                 continue;
             }
 
-            var next = text.IndexOf('<', i);
-            if (next < 0)
-            {
-                sb.Append(text.AsSpan(i).Trim());
-                break;
-            }
-
-            var slice = text.AsSpan(i, next - i).Trim();
-            if (slice.Length > 0)
-            {
-                if (sb.Length > 0 && sb[^1] != '\n')
-                {
-                    sb.AppendLine();
-                }
-
-                sb.Append(' ', depth * 2);
-                sb.Append(slice);
-            }
-
-            i = next;
+            i = AppendMarkupText(sb, text, i, depth);
         }
 
         return sb.ToString();
+    }
+
+    private static int AppendMarkupTag(StringBuilder sb, string text, int i, ref int depth)
+    {
+        var end = text.IndexOf('>', i);
+        if (end < 0)
+        {
+            sb.Append(text.AsSpan(i));
+            return text.Length;
+        }
+
+        var tag = text.AsSpan(i, end - i + 1);
+        var isClosing = tag.Length > 1 && tag[1] == '/';
+        var isSelfClosing = tag.EndsWith("/>", StringComparison.Ordinal)
+                            || tag.StartsWith("<!", StringComparison.Ordinal)
+                            || tag.StartsWith("<?", StringComparison.Ordinal);
+        if (isClosing)
+        {
+            depth = Math.Max(0, depth - 1);
+        }
+
+        if (sb.Length > 0 && sb[^1] != '\n')
+        {
+            sb.AppendLine();
+        }
+
+        sb.Append(' ', depth * 2);
+        sb.Append(tag);
+        if (!isClosing && !isSelfClosing)
+        {
+            depth++;
+        }
+
+        return end + 1;
+    }
+
+    private static int AppendMarkupText(StringBuilder sb, string text, int i, int depth)
+    {
+        var next = text.IndexOf('<', i);
+        if (next < 0)
+        {
+            sb.Append(text.AsSpan(i).Trim());
+            return text.Length;
+        }
+
+        var slice = text.AsSpan(i, next - i).Trim();
+        if (slice.Length > 0)
+        {
+            if (sb.Length > 0 && sb[^1] != '\n')
+            {
+                sb.AppendLine();
+            }
+
+            sb.Append(' ', depth * 2);
+            sb.Append(slice);
+        }
+
+        return next;
     }
 
     public static string SuggestBodyFileName(string? url, string? contentDisposition, string? contentType, bool isRequest)

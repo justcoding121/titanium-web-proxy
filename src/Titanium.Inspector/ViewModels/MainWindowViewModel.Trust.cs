@@ -577,10 +577,6 @@ public sealed partial class MainWindowViewModel
             return "Root CA removed from the user certificate store; Decrypt HTTPS is off until you install the CA again";
         return "Root CA removed from current user store; Decrypt HTTPS is off until you install the CA again";
     }
-    private static string FormatRotateCaTrustedStatus(bool changed) =>
-        changed
-            ? "Root CA cleared and trusted — ready to enable Decrypt HTTPS"
-            : "Root CA trusted — ready to enable Decrypt HTTPS";
     private async Task UntrustCaAsync()
     {
         if (!_interception.IsRunning)
@@ -733,59 +729,7 @@ public sealed partial class MainWindowViewModel
             {
                 rotateConfirmed = true;
                 InspectorUxTrace.Event("RotateCa.ConfirmRotate", "accepted=true");
-
-                // Mark Busy before any PersistSettings / decrypt-off work so waiters that key on
-                // RotateRootCaCalls (incremented at confirm) cannot observe a non-busy window while
-                // _trustCommandBusy is still true (macOS stress: Untrust then Rejected → timeout).
-                SetStatus("Preparing clear and reinstall…", StatusSeverity.Busy);
-
-                // New root is untrusted until Install — MITM must not stay on across rotate.
-                // Skip ForceDecryptHttpsOffAsync/Snap (dispatcher bounce during CryptUI). Core +
-                // finally SetDecryptHttpsCore keep the glyph in sync without flipping the field.
-                Interlocked.Increment(ref _decryptEnableGeneration);
-                Interlocked.Increment(ref _decryptTrustVerifyGeneration);
-                _decryptHttpsBusy = false;
-                if (_decryptHttps)
-                    SetDecryptHttpsCore(false);
-
-                // Await TrustBg only before Remove — never between Mint and CryptUI.
-                await AwaitPriorFirefoxTrustBackgroundAsync();
-
-                SetStatus("Clearing root CA…", StatusSeverity.Busy);
-                await Task.Yield();
-                var oldThumb = _interception.RootCertificate?.Thumbprint;
-                await RemoveOsRootInteractiveAsync(machineStore: false);
-
-                SetStatus("Recreating root CA…", StatusSeverity.Busy);
-                bool ok;
-                using (InspectorUxTrace.Scope("MintNewRootCertificateCore"))
-                {
-                    ok = await RunOffUiAsync(
-                        () => _interception.MintNewRootCertificateCore(clearFirefox: false),
-                        StatusCancelToken);
-                }
-
-                if (!ok)
-                {
-                    rotateFailure = "Clear and reinstall root CA failed — see logs";
-                }
-                else
-                {
-                    var newThumb = _interception.RootCertificate?.Thumbprint;
-                    var changed = !string.IsNullOrEmpty(newThumb) &&
-                                  !string.Equals(oldThumb, newThumb, StringComparison.OrdinalIgnoreCase);
-
-                    // User already confirmed Clear+Install — skip a second ConfirmInstall and go
-                    // straight to OS CryptUI/Keychain (avoids “two install dialogs then stuck”).
-                    InspectorUxTrace.Event("RotateCa.ConfirmInstall", "accepted=true skippedDuplicate=true");
-                    SetBusyTrustingRootCa();
-                    // Skip initial Root Find — we just minted; opening Crypt32 before CryptUI stalls.
-                    var trusted = await EnsureRootCaTrustedAsync(promptIfNeeded: true, skipInitialRefresh: true);
-                    InspectorUxTrace.Event("RotateCa.InstallResult", $"trusted={trusted} changed={changed}");
-                    rotateTrusted = trusted;
-                    if (!trusted)
-                        rotateFailure = FormatOsTrustFailureStatus(_interception.LastOsTrustResult);
-                }
+                (rotateTrusted, rotateFailure) = await ExecuteRotateCaConfirmedAsync();
             }
         }
         finally
@@ -816,8 +760,60 @@ public sealed partial class MainWindowViewModel
             SetOutcomeStatus(rotateFailure, StatusSeverity.Error, toastImportant: true);
         }
     }
-    private static string FormatRotateCaDeferredTrustStatus(bool changed) =>
-        changed ? "Root CA cleared — Install root CA (or enable Decrypt HTTPS) to trust the new certificate" : "Root CA recreate completed — Install root CA to trust";
+
+    private async Task<(bool? Trusted, string? Failure)> ExecuteRotateCaConfirmedAsync()
+    {
+        // Mark Busy before any PersistSettings / decrypt-off work so waiters that key on
+        // RotateRootCaCalls (incremented at confirm) cannot observe a non-busy window while
+        // _trustCommandBusy is still true (macOS stress: Untrust then Rejected → timeout).
+        SetStatus("Preparing clear and reinstall…", StatusSeverity.Busy);
+
+        // New root is untrusted until Install — MITM must not stay on across rotate.
+        // Skip ForceDecryptHttpsOffAsync/Snap (dispatcher bounce during CryptUI). Core +
+        // finally SetDecryptHttpsCore keep the glyph in sync without flipping the field.
+        Interlocked.Increment(ref _decryptEnableGeneration);
+        Interlocked.Increment(ref _decryptTrustVerifyGeneration);
+        _decryptHttpsBusy = false;
+        if (_decryptHttps)
+            SetDecryptHttpsCore(false);
+
+        // Await TrustBg only before Remove — never between Mint and CryptUI.
+        await AwaitPriorFirefoxTrustBackgroundAsync();
+
+        SetStatus("Clearing root CA…", StatusSeverity.Busy);
+        await Task.Yield();
+        var oldThumb = _interception.RootCertificate?.Thumbprint;
+        await RemoveOsRootInteractiveAsync(machineStore: false);
+
+        SetStatus("Recreating root CA…", StatusSeverity.Busy);
+        bool ok;
+        using (InspectorUxTrace.Scope("MintNewRootCertificateCore"))
+        {
+            ok = await RunOffUiAsync(
+                () => _interception.MintNewRootCertificateCore(clearFirefox: false),
+                StatusCancelToken);
+        }
+
+        if (!ok)
+            return (null, "Clear and reinstall root CA failed — see logs");
+
+        var newThumb = _interception.RootCertificate?.Thumbprint;
+        var changed = !string.IsNullOrEmpty(newThumb) &&
+                      !string.Equals(oldThumb, newThumb, StringComparison.OrdinalIgnoreCase);
+
+        // User already confirmed Clear+Install — skip a second ConfirmInstall and go
+        // straight to OS CryptUI/Keychain (avoids “two install dialogs then stuck”).
+        InspectorUxTrace.Event("RotateCa.ConfirmInstall", "accepted=true skippedDuplicate=true");
+        SetBusyTrustingRootCa();
+        // Skip initial Root Find — we just minted; opening Crypt32 before CryptUI stalls.
+        var trusted = await EnsureRootCaTrustedAsync(promptIfNeeded: true, skipInitialRefresh: true);
+        InspectorUxTrace.Event("RotateCa.InstallResult", $"trusted={trusted} changed={changed}");
+        if (!trusted)
+            return (false, FormatOsTrustFailureStatus(_interception.LastOsTrustResult));
+
+        return (true, null);
+    }
+
     private async Task ExportCaAsync()
     {
         if (_interception.RootCertificate is null)
@@ -993,9 +989,6 @@ public sealed partial class MainWindowViewModel
     /// </summary>
     private Task RejectDecryptHttpsEnableAsync() => ForceDecryptHttpsOffAsync(cancelInFlightEnable: false);
 
-    private void NotifyDecryptHttpsUnchanged() =>
-        _ = ForceDecryptHttpsOffAsync(cancelInFlightEnable: false);
-
     private async Task<bool> TryStartProxyForDecryptAsync()
     {
         if (_interception.IsRunning)
@@ -1085,54 +1078,50 @@ public sealed partial class MainWindowViewModel
 
         // Linux: never fabricate Mac Keychain Always Trust - use NSS/certutil recovery instead.
         if (OperatingSystem.IsLinux())
+            return await TryCompleteLinuxSslTrustForDecryptAsync();
+
+        return await TryCompleteMacKeychainTrustForDecryptAsync();
+    }
+
+    private async Task<bool> TryCompleteLinuxSslTrustForDecryptAsync()
+    {
+        var linuxIncomplete = _interception.LastOsTrustResult
+            ?? CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.CertutilMissing,
+                "Root CA is not trusted yet. Install NSS certutil tools, or Export CA and trust it for your browser.");
+        if (linuxIncomplete.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
         {
-            var linuxIncomplete = _interception.LastOsTrustResult
-                ?? CertificateOsTrustResult.Fail(
-                    CertificateOsTrustKind.CertutilMissing,
-                    "Root CA is not trusted yet. Install NSS certutil tools, or Export CA and trust it for your browser.");
-            if (linuxIncomplete.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
-            {
-                linuxIncomplete = CertificateOsTrustResult.Fail(
-                    CertificateOsTrustKind.CertutilMissing,
-                    string.IsNullOrWhiteSpace(linuxIncomplete.Message)
-                        ? "Root CA is not trusted yet. Install NSS certutil tools, or Export CA and trust it for your browser."
-                        : linuxIncomplete.Message);
-            }
-
-            InspectorUxTrace.Event("Decrypt.LinuxTrustIncomplete", $"kind={linuxIncomplete.Kind}");
-            if (await ResolveTerminalTrustFailureAsync(linuxIncomplete))
-            {
-                trusted = await RunOffUiAsync(
-                    () => _interception.VerifyOsUserSslTrust(),
-                    StatusCancelToken);
-                if (trusted)
-                {
-                    _interception.ScheduleFirefoxEnterpriseRootsBestEffort();
-                    return true;
-                }
-            }
-
-            SetOutcomeStatus(
-                OsTrustUxCopy.FormatStatus(linuxIncomplete),
-                StatusSeverity.Error,
-                toastImportant: true);
-            await RejectDecryptHttpsEnableAsync();
-            return false;
+            linuxIncomplete = CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.CertutilMissing,
+                string.IsNullOrWhiteSpace(linuxIncomplete.Message)
+                    ? "Root CA is not trusted yet. Install NSS certutil tools, or Export CA and trust it for your browser."
+                    : linuxIncomplete.Message);
         }
 
+        InspectorUxTrace.Event("Decrypt.LinuxTrustIncomplete", $"kind={linuxIncomplete.Kind}");
+        if (await ResolveTerminalTrustFailureAsync(linuxIncomplete)
+            && await VerifyOsUserSslTrustAndScheduleFirefoxAsync())
+        {
+            return true;
+        }
+
+        SetOutcomeStatus(
+            OsTrustUxCopy.FormatStatus(linuxIncomplete),
+            StatusSeverity.Error,
+            toastImportant: true);
+        await RejectDecryptHttpsEnableAsync();
+        return false;
+    }
+
+    private async Task<bool> TryCompleteMacKeychainTrustForDecryptAsync()
+    {
         var incomplete = CertificateOsTrustResult.Fail(
             CertificateOsTrustKind.MacNeedsManualTrustConfirm,
             "Root CA needs Always Trust in Keychain Access before Decrypt HTTPS");
-        if (await ResolveTerminalTrustFailureAsync(incomplete))
+        if (await ResolveTerminalTrustFailureAsync(incomplete)
+            && await VerifyOsUserSslTrustAndScheduleFirefoxAsync())
         {
-            trusted = await RunOffUiAsync(
-                () => _interception.VerifyOsUserSslTrust(),
-                StatusCancelToken);
-            if (trusted)
-            {
-                _interception.ScheduleFirefoxEnterpriseRootsBestEffort();
-                return true;
-            }
+            return true;
         }
 
         SetOutcomeStatus(
@@ -1142,6 +1131,19 @@ public sealed partial class MainWindowViewModel
         await RejectDecryptHttpsEnableAsync();
         return false;
     }
+
+    private async Task<bool> VerifyOsUserSslTrustAndScheduleFirefoxAsync()
+    {
+        var trusted = await RunOffUiAsync(
+            () => _interception.VerifyOsUserSslTrust(),
+            StatusCancelToken);
+        if (!trusted)
+            return false;
+
+        _interception.ScheduleFirefoxEnterpriseRootsBestEffort();
+        return true;
+    }
+
     /// <summary>
     /// Terminal trust-failure modal: retry / Keychain / Export. Returns true when trust is established.
     /// </summary>

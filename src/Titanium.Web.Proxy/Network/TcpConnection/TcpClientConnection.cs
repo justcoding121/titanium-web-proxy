@@ -183,12 +183,16 @@ internal class TcpClientConnection : IDisposable
 
             tcpClientSocket.Close();
         }
+#pragma warning disable S108 // Empty catches: dispose races / peer reset while closing client socket
         catch (ObjectDisposedException)
         {
+            // Socket already disposed by NetworkStream(ownsSocket:true) or concurrent close.
         }
         catch (SocketException)
         {
+            // Peer reset / already half-closed during Close().
         }
+#pragma warning restore S108
         catch (Exception ex)
         {
             Logging.ProxyDiagnostics.ReportBenign(ProxyServer.Logger,

@@ -274,7 +274,7 @@ public sealed partial class CliProcessHarness : IDisposable
     /// <summary>
     /// Ensure <c>DOTNET_ROOT</c> is set so a framework-dependent apphost can start under sudo.
     /// </summary>
-    private static void EnsureDotnetRootForApphost(IDictionary<string, string?> env)
+    private static void EnsureDotnetRootForApphost(Dictionary<string, string?> env)
     {
         if (env.TryGetValue("DOTNET_ROOT", out var existing) && !string.IsNullOrWhiteSpace(existing))
             return;

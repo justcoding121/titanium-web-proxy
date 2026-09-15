@@ -77,7 +77,7 @@ public class Http2ServerHelloProbeBudgetTests
     {
         var probe = Task.FromException<Http2NegotiationResult>(new TimeoutException("origin TLS timed out"));
 
-        var thrown = await Assert.ThrowsExceptionAsync<TimeoutException>(() =>
+        var thrown = await Assert.ThrowsExactlyAsync<TimeoutException>(() =>
             ProxyServer.TryCompleteHttp2NegotiationBeforeClientAlpnAsync(probe, CancellationToken.None));
 
         Assert.AreEqual("origin TLS timed out", thrown.Message);

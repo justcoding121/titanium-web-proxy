@@ -195,7 +195,8 @@ public class InterceptionBodyCaptureAndTrustBgCoverageTests
         enqueue.Invoke(interception, [clearKind, (Action)(() =>
         {
             started.Set();
-            Thread.Sleep(4000); // exceeds 3s Clear/Enable timeout
+            using var hold = new ManualResetEventSlim(false);
+            hold.Wait(TimeSpan.FromMilliseconds(4000)); // exceeds 3s Clear/Enable timeout
         })]);
         Assert.IsTrue(started.Wait(TimeSpan.FromSeconds(2)));
         enqueue.Invoke(interception, [enableKind, (Action)(() => { })]);
