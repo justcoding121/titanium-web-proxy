@@ -244,7 +244,8 @@ public partial class TrustDecisionTableTests
         await using var harness = await TrustHarness.CreateAsync();
         harness.Dialogs.RotateRootCaResult = true;
         harness.Vm.RotateCaCommand.Execute(null);
-        await Task.Delay(30);
+        // Wait until rotate holds the trust gate — a fixed Delay can miss busy on fast Mac runners.
+        await WaitUntil(() => harness.Vm.IsStatusBusy, 5000);
 
         // EnableDecryptHttpsAsync → TryBeginTrustCommand fails → RejectDecryptHttpsEnableAsync.
         var gen = 1;

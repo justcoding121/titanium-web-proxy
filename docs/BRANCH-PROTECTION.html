@@ -112,7 +112,7 @@
 </tr>
 <tr>
 <td>Required checks</td>
-<td><code>.NET / build</code>, <code>.NET / ui-portable</code> (all matrix legs), <code>RPS saturation / rps</code></td>
+<td><code>.NET / build</code>, <code>.NET / ui-portable</code> (all 3 OS), <code>.NET / cli-e2e</code> (all 3 OS), <code>RPS saturation / rps</code> (all 3 OS on PR <code>compare-spot</code>)</td>
 </tr>
 <tr>
 <td>Allow bypass</td>
@@ -120,13 +120,15 @@
 </tr>
 </tbody>
 </table>
+<p>Exact check names must match the Actions job names as shown on a PR (including matrix suffixes). The checked-in template is <a href="branch-ruleset-beta-stable.json"><code>.github/branch-ruleset-beta-stable.json</code></a> — after the first green PR, confirm the matrix suffixes in the Actions UI and adjust the JSON if GitHub renamed a leg.</p>
 <h2 id="develop"><code>develop</code></h2>
 <p>Keep lighter rules for velocity (direct push OK if that is current practice). Do <strong>not</strong> require full <code>compare-product</code> on every feature PR.</p>
 <h2 id="applying-via-gh-optional">Applying via <code>gh</code> (optional)</h2>
 <pre><code class="lang-bash"># Example — adjust org/repo and exact check names from Actions UI after first green run
 gh api repos/{owner}/{repo}/rulesets --input .github/branch-ruleset-beta-stable.json
 </code></pre>
-<p>Exact check names must match the Actions job names as shown on a PR (including matrix suffixes for <code>ui-portable</code>).</p>
+<h2 id="stable-release-rps">Stable release RPS</h2>
+<p>After merge to <code>stable</code>, <a href="workflows/release.yml"><code>release.yml</code></a> runs Linux <strong><code>compare-product-smoke</code></strong> before the GA GitHub Release. Full 3-OS wiki-grade <code>compare-product</code> stays a maintainer <code>workflow_dispatch</code> on <a href="workflows/rps-saturation.yml"><code>rps-saturation.yml</code></a>.</p>
 
 </article>
           </div>
