@@ -187,7 +187,7 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: tools/packaging/.cache/http3-natives
           key: http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json') }}-${{ matrix.rid }}
@@ -367,7 +367,7 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: tools/packaging/.cache/http3-natives
           key: http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json') }}-${{ matrix.rid }}
