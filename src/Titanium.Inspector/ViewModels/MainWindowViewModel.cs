@@ -1646,7 +1646,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 }
             }, DispatcherPriority.Background);
 
-            var finished = await Task.WhenAny(tcs.Task, Task.Delay(250)).ConfigureAwait(true);
+            var finished = await Task.WhenAny(tcs.Task, Task.Delay(250, CancellationToken.None)).ConfigureAwait(true);
             if (finished != tcs.Task)
             {
                 Bounce();

@@ -420,6 +420,35 @@ public class SonarGateCoverageBumpTests
     }
 
     [TestMethod]
+    public void CertificateManager_SuppressArms_RootThumbprintAndUnixUntrust()
+    {
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle,
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+        Assert.IsTrue(CertificateManager.ShouldSuppressInteractiveRootStoreMutations
+                      || string.Equals(Environment.GetEnvironmentVariable("TITANIUM_SKIP_ROOT_STORE_UI"), "1",
+                          StringComparison.Ordinal));
+
+        Assert.IsFalse(mgr.RemoveCertificateByThumbprint(
+            System.Security.Cryptography.X509Certificates.StoreName.Root,
+            System.Security.Cryptography.X509Certificates.StoreLocation.CurrentUser,
+            mgr.RootCertificate!.Thumbprint!));
+        Assert.IsFalse(mgr.RemoveCertificateByThumbprint(
+            System.Security.Cryptography.X509Certificates.StoreName.Root,
+            System.Security.Cryptography.X509Certificates.StoreLocation.CurrentUser,
+            " "));
+
+        mgr.ApplyUnixSslUntrust();
+        mgr.ApplyUnixSslTrustAfterStoreInstall(false);
+        Assert.IsNotNull(mgr.LastOsTrustResult);
+
+        FirefoxCertificateTrust.ClearRootTrustBestEffort("TWP-Unit");
+        FirefoxCertificateTrust.ClearRootTrustBestEffort(null);
+    }
+
+    [TestMethod]
     public void Http2Helper_HasUpperCaseAscii_EmptyAndMixed()
     {
         var upper = typeof(Http2Helper).GetMethod("HasUpperCaseAscii",

@@ -596,8 +596,12 @@ internal static class RunCommand
             winReloadWait?.Unregister(null);
             winReload?.Dispose();
             watcher?.Dispose();
-            watchDebounce?.Cancel();
-            watchDebounce?.Dispose();
+            var debounce = watchDebounce;
+            if (debounce is not null)
+            {
+                debounce.Cancel();
+                debounce.Dispose();
+            }
         }
     }
 #pragma warning restore CA1068

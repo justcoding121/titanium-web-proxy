@@ -101,4 +101,104 @@ public class ConfigReloadGateTests
         var code = await ReloadCommand.ExecuteAsync(["reload", "--help"]);
         Assert.AreEqual(0, code);
     }
+
+    [TestMethod]
+    public void ConfigKey_IsCaseInsensitiveOnWindows()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("Case-normalize path is Windows-only.");
+            return;
+        }
+
+        var upper = Path.Combine(_tempDir, "Foo.YAML");
+        var lower = Path.Combine(_tempDir, "foo.yaml");
+        Assert.AreEqual(ConfigReloadGate.ConfigKey(upper), ConfigReloadGate.ConfigKey(lower));
+    }
+
+    [TestMethod]
+    public void TryReadPid_MalformedAndMissing_ReturnNull()
+    {
+        Assert.IsNull(ConfigReloadGate.TryReadPid(Path.Combine(_tempDir, "no-such.yaml")));
+        ConfigReloadGate.WritePidFile(_configPath, 1);
+        File.WriteAllText(ConfigReloadGate.PidFilePath(_configPath), "not-a-number");
+        Assert.IsNull(ConfigReloadGate.TryReadPid(_configPath));
+        ConfigReloadGate.TryDeletePidFile(_configPath);
+        ConfigReloadGate.TryDeletePidFile(_configPath); // second delete is best-effort
+    }
+
+    [TestMethod]
+    public void IsProcessAlive_AndTrySendSighup_CoverBranches()
+    {
+        Assert.IsTrue(ConfigReloadGate.IsProcessAlive(Environment.ProcessId));
+        Assert.IsFalse(ConfigReloadGate.IsProcessAlive(int.MaxValue - 7));
+        if (OperatingSystem.IsWindows())
+            Assert.IsFalse(ConfigReloadGate.TrySendSighup(Environment.ProcessId));
+    }
+
+    [TestMethod]
+    public void TrySignalWindowsReload_WithoutWaiter_ReturnsFalse()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("Named EventWaitHandle path is Windows-only.");
+            return;
+        }
+
+        Assert.IsFalse(ConfigReloadGate.TrySignalWindowsReload(
+            Path.Combine(_tempDir, "no-waiter-" + Guid.NewGuid().ToString("N") + ".yaml")));
+    }
+
+    [TestMethod]
+    public async Task ReloadCommand_Windows_NoWaiter_Returns1()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("Windows reload event path.");
+            return;
+        }
+
+        var code = await ReloadCommand.ExecuteAsync(["reload", "-c", _configPath]);
+        Assert.AreEqual(1, code);
+    }
+
+    [TestMethod]
+    public async Task ReloadCommand_Windows_WithWaiter_Returns0()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("Windows reload event path.");
+            return;
+        }
+
+        using var handle = ConfigReloadGate.CreateWindowsReloadEvent(_configPath, out _);
+        ConfigReloadGate.WritePidFile(_configPath, Environment.ProcessId);
+        var code = await ReloadCommand.ExecuteAsync(["reload", "-c", _configPath]);
+        Assert.AreEqual(0, code);
+        Assert.IsTrue(handle.WaitOne(0));
+    }
+
+    [TestMethod]
+    public async Task ReloadCommand_Windows_PidWithoutConfig_Returns1()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("Windows requires -c.");
+            return;
+        }
+
+        var code = await ReloadCommand.ExecuteAsync(["reload", "--pid", "1"]);
+        Assert.AreEqual(1, code);
+    }
+
+    [TestMethod]
+    public void TryParsePid_RejectsInvalidValues()
+    {
+        var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+        var parse = typeof(ReloadCommand).GetMethod("TryParsePid", flags)!;
+        Assert.IsNull(parse.Invoke(null, [new[] { "reload", "--pid", "0" }]));
+        Assert.IsNull(parse.Invoke(null, [new[] { "reload", "--pid" }]));
+        Assert.IsNull(parse.Invoke(null, [new[] { "reload", "--pid", "abc" }]));
+        Assert.AreEqual(42, (int)parse.Invoke(null, [new[] { "reload", "--pid", "42" }])!);
+    }
 }

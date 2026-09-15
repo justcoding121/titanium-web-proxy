@@ -1116,7 +1116,8 @@ public sealed class InterceptionService : IDisposable
 
             _firefoxTrustBgRunning = true;
             _firefoxTrustBgIdle = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            _ = Task.Run(DrainFirefoxTrustBackground);
+            // Background drain is independent of process-resolve CTS; opt out explicitly (S8949).
+            _ = Task.Run(DrainFirefoxTrustBackground, CancellationToken.None);
         }
     }
 
@@ -1149,8 +1150,9 @@ public sealed class InterceptionService : IDisposable
                         // Cap the lane so Remove / Clear+Install never wait on a wedged job.
                         if (next.Kind is FirefoxTrustBgKind.Clear or FirefoxTrustBgKind.Enable)
                         {
-                            var work = Task.Run(next.Work);
-                            if (!work.Wait(TimeSpan.FromSeconds(3)))
+                            // Prefs I/O is best-effort and time-capped; do not tie to process-resolve CTS.
+                            var work = Task.Run(next.Work, CancellationToken.None);
+                            if (!work.Wait(TimeSpan.FromSeconds(3), CancellationToken.None))
                                 InspectorUxTrace.Event("TrustBg.Job.Timeout", $"kind={next.Kind}");
                         }
                         else
@@ -2236,7 +2238,7 @@ public sealed class InterceptionService : IDisposable
 
     private static void ApplyRequestBodyCapture(SessionSnapshot snap, Request req, byte[]? originalBody)
     {
-        if (originalBody is { Length: >= 0 } && req.IsBodyRead)
+        if (originalBody is not null && req.IsBodyRead)
         {
             snap.RequestBodyOriginalSize = originalBody.LongLength;
             snap.RequestBodyCapture = originalBody.Length > MaxBodyBytes

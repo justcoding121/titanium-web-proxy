@@ -43,14 +43,21 @@ internal static class ReloadCommand
             }
 
             // Unix: SIGHUP via pid file or --pid.
-            var pidUnix = pidOverride ?? (configPath is null ? null : ConfigReloadGate.TryReadPid(configPath));
+            int? pidUnix = pidOverride;
             if (pidUnix is null)
             {
-                throw new InvalidOperationException(
-                    configPath is null
-                        ? "Could not resolve a process id."
-                        : $"No running titanium process found for config '{configPath}'. " +
-                          "Start with `titanium run -c …` first, or pass --pid.");
+                if (configPath is null)
+                {
+                    throw new InvalidOperationException("Could not resolve a process id.");
+                }
+
+                pidUnix = ConfigReloadGate.TryReadPid(configPath);
+                if (pidUnix is null)
+                {
+                    throw new InvalidOperationException(
+                        $"No running titanium process found for config '{configPath}'. " +
+                        "Start with `titanium run -c …` first, or pass --pid.");
+                }
             }
 
             if (!ConfigReloadGate.IsProcessAlive(pidUnix.Value))
