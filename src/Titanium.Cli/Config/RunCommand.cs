@@ -554,12 +554,16 @@ internal static class RunCommand
                     NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
                     EnableRaisingEvents = true,
                 };
+                // Assigned on the main flow so finally can dispose; replaced on each FS event.
+                watchDebounce = new CancellationTokenSource();
                 void OnWatch(object sender, FileSystemEventArgs e)
                 {
-                    watchDebounce?.Cancel();
-                    watchDebounce?.Dispose();
-                    watchDebounce = new CancellationTokenSource();
-                    var token = watchDebounce.Token;
+                    var prev = watchDebounce!;
+                    prev.Cancel();
+                    prev.Dispose();
+                    var next = new CancellationTokenSource();
+                    watchDebounce = next;
+                    var token = next.Token;
                     _ = Task.Run(async () =>
                     {
                         try
@@ -596,12 +600,8 @@ internal static class RunCommand
             winReloadWait?.Unregister(null);
             winReload?.Dispose();
             watcher?.Dispose();
-            var debounce = watchDebounce;
-            if (debounce is not null)
-            {
-                debounce.Cancel();
-                debounce.Dispose();
-            }
+            watchDebounce?.Cancel();
+            watchDebounce?.Dispose();
         }
     }
 #pragma warning restore CA1068

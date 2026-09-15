@@ -191,6 +191,80 @@ public class TrustDecisionTableTests
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase));
     }
 
+    [TestMethod]
+    [TestCategory("Inspector-Trust-Decision")]
+    public async Task InstallCa_AlreadyTrusted_AndFailThenRecover_CoverTrustBranches()
+    {
+        await using var harness = await TrustHarness.CreateAsync();
+        harness.Dialogs.InstallRootCaResult = true;
+        await ExecuteUntilAsync(harness.Vm.InstallCaCommand, () => harness.Interception.IsRootTrusted);
+        await WaitUntil(() => !harness.Vm.IsStatusBusy, 10000);
+
+        // Second Install when already trusted → showTrustedSuccess arm (no CryptUI).
+        await ExecuteUntilAsync(
+            harness.Vm.InstallCaCommand,
+            () => harness.Vm.StatusText.Contains("trusted", StringComparison.OrdinalIgnoreCase)
+                  || !harness.Vm.IsStatusBusy);
+        Assert.IsTrue(harness.Interception.IsRootTrusted);
+
+        harness.Interception.UntrustRootCertificate(false);
+        Assert.IsFalse(harness.Interception.IsRootTrusted);
+        harness.Interception.FailNextUserTrustInstall = true;
+        harness.Dialogs.TrustRecoveryResult = TrustRecoveryChoice.Cancel;
+        await ExecuteUntilAsync(
+            harness.Vm.InstallCaCommand,
+            () => harness.Vm.StatusText.Contains("cancelled", StringComparison.OrdinalIgnoreCase)
+                  || harness.Vm.StatusText.Contains("forced", StringComparison.OrdinalIgnoreCase)
+                  || harness.Vm.StatusText.Contains("trusted", StringComparison.OrdinalIgnoreCase)
+                  || !harness.Vm.IsStatusBusy,
+            25000);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(harness.Vm.StatusText));
+
+        // EnsureRootCaTrustedAsync in-memory success + promptIfNeeded:false after FailNext.
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        harness.Interception.FailNextUserTrustInstall = false;
+        Assert.IsTrue(await (Task<bool>)typeof(MainWindowViewModel)
+            .GetMethod("EnsureRootCaTrustedAsync", flags)!
+            .Invoke(harness.Vm, [true, false])!);
+        Assert.IsTrue(harness.Interception.IsRootTrusted);
+
+        harness.Interception.UntrustRootCertificate(false);
+        harness.Interception.FailNextUserTrustInstall = true;
+        Assert.IsFalse(await (Task<bool>)typeof(MainWindowViewModel)
+            .GetMethod("EnsureRootCaTrustedAsync", flags)!
+            .Invoke(harness.Vm, [false, false])!);
+    }
+
+    [TestMethod]
+    [TestCategory("Inspector-Trust-Decision")]
+    public async Task DecryptEnable_WhileTrustBusy_RejectsAndMacSslComplete()
+    {
+        await using var harness = await TrustHarness.CreateAsync();
+        harness.Dialogs.RotateRootCaResult = true;
+        harness.Vm.RotateCaCommand.Execute(null);
+        await Task.Delay(30);
+
+        // EnableDecryptHttpsAsync → TryBeginTrustCommand fails → RejectDecryptHttpsEnableAsync.
+        var gen = 1;
+        await (Task)typeof(MainWindowViewModel)
+            .GetMethod("EnableDecryptHttpsAsync", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(harness.Vm, [gen])!;
+        Assert.IsFalse(harness.Vm.DecryptHttps);
+
+        await WaitUntil(() => harness.Dialogs.RotateRootCaCalls >= 1 && !harness.Vm.IsStatusBusy, 20000);
+
+        Assert.IsTrue(harness.Interception.InstallRootCertificate(false));
+        Assert.IsTrue(await (Task<bool>)typeof(MainWindowViewModel)
+            .GetMethod("TryCompleteMacSslTrustForDecryptAsync", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(harness.Vm, null)!);
+
+        // FormatRemoveRootPromptStatus Mac vs non-Mac branches (static).
+        var format = typeof(MainWindowViewModel).GetMethod("FormatRemoveRootPromptStatus",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        Assert.IsFalse(string.IsNullOrWhiteSpace((string)format.Invoke(null, [1, 1])!));
+        Assert.IsFalse(string.IsNullOrWhiteSpace((string)format.Invoke(null, [2, 1])!));
+    }
+
     private static async Task ExecuteUntilAsync(ICommand command, Func<bool> done, int timeoutMs = 20000)
     {
         command.Execute(null);

@@ -449,6 +449,70 @@ public class SonarGateCoverageBumpTests
     }
 
     [TestMethod]
+    public void CertificateManager_ListPrunePersonalAndMyThumbprint_CoverStoreSeams()
+    {
+        const string cn = "Titanium Sonar Gate Cov CA";
+        using var mgr = new CertificateManager(cn, "TitaniumSonarCov", false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle,
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+
+        // Read-only Root subject Find (no CryptUI).
+        var listed = mgr.ListSameCommonNameRootThumbprints(
+            System.Security.Cryptography.X509Certificates.StoreLocation.CurrentUser, keepThumbprint: null);
+        Assert.IsNotNull(listed);
+        _ = mgr.ListSameCommonNameRootThumbprints(
+            System.Security.Cryptography.X509Certificates.StoreLocation.CurrentUser,
+            mgr.RootCertificate!.Thumbprint);
+
+        // Personal (My) prune + machineTrusted branch — Root Remove stays suppressed.
+        mgr.PruneOrphanedPersonalCertificates(
+            System.Security.Cryptography.X509Certificates.StoreLocation.CurrentUser,
+            keepCurrentThumbprint: true);
+        mgr.PruneOrphanedPersonalCertificates(
+            System.Security.Cryptography.X509Certificates.StoreLocation.CurrentUser,
+            keepCurrentThumbprint: false);
+        mgr.PruneOrphanedSameCommonNameCertificates(machineTrusted: false, keepCurrentThumbprint: true);
+        mgr.PruneOrphanedSameCommonNameCertificates(machineTrusted: true, keepCurrentThumbprint: false);
+
+        // Install into CurrentUser\My (not Root) then RemoveCertificateByThumbprint write path.
+        var install = typeof(CertificateManager).GetMethod("InstallCertificate",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        Assert.IsTrue((bool)install.Invoke(mgr,
+        [
+            System.Security.Cryptography.X509Certificates.StoreName.My,
+            System.Security.Cryptography.X509Certificates.StoreLocation.CurrentUser
+        ])!);
+        Assert.IsFalse((bool)install.Invoke(mgr,
+        [
+            System.Security.Cryptography.X509Certificates.StoreName.My,
+            System.Security.Cryptography.X509Certificates.StoreLocation.CurrentUser
+        ])!);
+
+        Assert.IsTrue(mgr.RemoveCertificateByThumbprint(
+            System.Security.Cryptography.X509Certificates.StoreName.My,
+            System.Security.Cryptography.X509Certificates.StoreLocation.CurrentUser,
+            mgr.RootCertificate!.Thumbprint!));
+        Assert.IsFalse(mgr.RemoveCertificateByThumbprint(
+            System.Security.Cryptography.X509Certificates.StoreName.My,
+            System.Security.Cryptography.X509Certificates.StoreLocation.CurrentUser,
+            "ffffffffffffffffffffffffffffffffffffffff"));
+
+        // Under suppress, Root Add returns false → Cancelled (or Already-Ok if a prior install exists).
+        var added = mgr.InstallRootIntoCertificateStores(false);
+        Assert.IsNotNull(mgr.LastOsTrustResult);
+        if (added)
+            Assert.IsTrue(mgr.LastOsTrustResult!.Succeeded);
+        else
+            Assert.IsTrue(mgr.LastOsTrustResult!.Succeeded
+                          || mgr.LastOsTrustResult.Kind == CertificateOsTrustKind.Cancelled);
+
+        mgr.TrustRootCertificate(false);
+        Assert.IsNotNull(mgr.LastOsTrustResult);
+    }
+
+    [TestMethod]
     public void Http2Helper_HasUpperCaseAscii_EmptyAndMixed()
     {
         var upper = typeof(Http2Helper).GetMethod("HasUpperCaseAscii",

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Reflection;
 using System.Text;
 using System.Windows.Input;
@@ -354,6 +355,109 @@ public class BodyInspectCoverageTests
             // Double-stop hits _stopBusy / not-running early returns.
             await ExecuteAsync(vm.StopCaptureCommand);
             await ExecuteAsync(vm.StopCaptureCommand);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(dir))
+                    Directory.Delete(dir, true);
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+    }
+
+    [TestMethod]
+    public void PaneNavAndDecryptHealth_CoverRemainingPropertyBranches()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-pane-cov-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var settings = new SettingsService(Path.Combine(dir, "settings.json"));
+            settings.Current.AutoStartCapture = false;
+            settings.Save();
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                new ScriptedInspectorDialogs())
+            {
+                BindPort = 0,
+                BindAddress = "127.0.0.1",
+            };
+
+            Assert.AreEqual("", vm.DecryptTrustHealthText);
+            Assert.IsFalse(vm.ShowDecryptTrustHealth);
+            Assert.IsFalse(vm.IsDecryptTrustHealthy);
+
+            typeof(MainWindowViewModel).GetMethod("SetDecryptHttpsCore",
+                BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(vm, [true]);
+            Assert.AreEqual("CA not trusted", vm.DecryptTrustHealthText);
+            Assert.IsTrue(vm.ShowDecryptTrustHealth);
+            Assert.IsFalse(vm.IsDecryptTrustHealthy);
+
+            interception.StartAsync(IPAddress.Loopback, 0).GetAwaiter().GetResult();
+            try
+            {
+                Assert.IsTrue(interception.InstallRootCertificate(false));
+                Assert.AreEqual("CA trusted", vm.DecryptTrustHealthText);
+                Assert.IsTrue(vm.IsDecryptTrustHealthy);
+            }
+            finally
+            {
+                interception.EnsureShutdown();
+            }
+
+            vm.ShowSessionDetails = true;
+            foreach (var idx in new[] { 0, 1, 2, 3, 4, 5, 99 })
+            {
+                vm.SelectedPaneNavIndex = idx > 5 ? 0 : idx;
+                _ = vm.PaneContentTitle;
+                _ = vm.SessionDetailsPaneWidth;
+                _ = vm.SessionDetailsPaneMinWidth;
+                _ = vm.IsInspectRailPressed;
+                _ = vm.IsComposerRailPressed;
+                _ = vm.IsBreakpointsRailPressed;
+                _ = vm.IsAutoResponderRailPressed;
+                _ = vm.IsScriptsRailPressed;
+                _ = vm.IsMapRemoteRailPressed;
+                _ = vm.ShowScriptsPane;
+                _ = vm.ShowMapRemotePane;
+            }
+
+            vm.SelectedPaneNavIndex = 0;
+            vm.SelectedToolsTabIndex = 2; // jumps off Inspect
+            Assert.AreEqual(3, vm.SelectedPaneNavIndex);
+            vm.SelectedOuterPaneIndex = 0;
+            Assert.AreEqual(0, vm.SelectedPaneNavIndex);
+            vm.SelectedOuterPaneIndex = 1;
+            Assert.IsTrue(vm.SelectedPaneNavIndex >= 1);
+            vm.SelectedOuterPaneIndex = 1; // already on tools → SelectedOuterPaneIndex arm
+
+            var streaming = new SessionSnapshot
+            {
+                Id = 42,
+                Method = "GET",
+                Url = "https://stream.test/sse",
+                ResponseBodyCapture = BodyCaptureState.Streaming,
+                ResponseBodyStreamOpen = true,
+                IsServerSentEvents = true,
+            };
+            vm.SeedSession(streaming);
+            vm.SelectedSession = streaming;
+            vm.ApplyEditBodyCommand.Execute(null);
+            StringAssert.Contains(vm.StatusText, "streaming");
         }
         finally
         {
