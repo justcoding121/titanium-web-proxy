@@ -1,4 +1,4 @@
-﻿# Manual saturation RPS lab on GitHub-hosted VMs (not a job container).
+# Manual saturation RPS lab on GitHub-hosted VMs (not a job container).
 # Maintainers run this, then paste median numbers into wiki/Performance.md.
 # Not a per-PR gate; not comparable to dedicated-server blog posts.
 #
@@ -380,7 +380,7 @@ jobs:
       # macOS uses Homebrew (typically native USE_QUIC) with a 3.2 osx source fallback.
       - name: Cache HAProxy QUIC prefix
         if: runner.os == 'Linux'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ${{ runner.temp }}/haproxy-quic
@@ -470,7 +470,7 @@ jobs:
 
       - name: Cache HAProxy QUIC prefix (macOS)
         if: runner.os == 'macOS'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/haproxy-quic
           key: haproxy-3.2.23-quic-osx-x64
