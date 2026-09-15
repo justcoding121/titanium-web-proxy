@@ -72,7 +72,9 @@ jobs:
         Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.dotnet\tools"
 
     - name: Restore
-      run: dotnet restore src/Titanium.Web.Proxy.sln --warnaserror
+      run: |
+        # Fail on high/critical vulnerable transitive packages (dotnet NuGet audit).
+        dotnet restore src/Titanium.Web.Proxy.sln --warnaserror --audit --audit-level high
 
     - name: Build
       run: dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore --warnaserror
@@ -412,7 +414,7 @@ jobs:
     - name: compare-editions (publish gate)
       shell: pwsh
       run: |
-        # Stable tags additionally require compare-product PASS via release.yml on that SHA.
+        # Stable GitHub Release additionally requires Linux compare-product-smoke via release.yml.
         pwsh tools/RpsLoadProbe/run-rps.ps1 `
           -Mode compare-editions `
           -Concurrency '8,16,32,64' `
@@ -461,7 +463,7 @@ jobs:
 
   publish:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
-    needs: [build, ui-portable, rps-publish-gate, rps-peer-gate]
+    needs: [build, ui-portable, cli-e2e, rps-publish-gate, rps-peer-gate]
     runs-on: windows-latest
     environment: nuget-publish
     permissions:
@@ -478,6 +480,9 @@ jobs:
         dotnet-version: |
           10.0.x
 
+    - name: NuGet audit before pack
+      run: dotnet restore src/Titanium.Web.Proxy.sln --audit --audit-level high
+
     - name: Pack Beta
       if: github.ref == 'refs/heads/beta'
       run: |
@@ -491,6 +496,27 @@ jobs:
         dotnet pack src/Titanium.Web.Proxy.Abstractions/Titanium.Web.Proxy.Abstractions.csproj --configuration Release
         dotnet pack src/Titanium.Web.Proxy.Configuration/Titanium.Web.Proxy.Configuration.csproj --configuration Release
         dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release
+
+    - name: Generate CycloneDX SBOM for MIT packages
+      shell: pwsh
+      run: |
+        dotnet tool install --global CycloneDX --version 6.2.0
+        New-Item -ItemType Directory -Force -Path sbom | Out-Null
+        foreach ($proj in @(
+          'src/Titanium.Web.Proxy.Abstractions/Titanium.Web.Proxy.Abstractions.csproj',
+          'src/Titanium.Web.Proxy.Configuration/Titanium.Web.Proxy.Configuration.csproj',
+          'src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj'
+        )) {
+          $name = [IO.Path]::GetFileNameWithoutExtension($proj)
+          dotnet CycloneDX $proj -o "sbom" -F Json -fn "$name.cdx.json" -t --disable-package-restore
+        }
+
+    - name: Upload MIT package SBOM
+      uses: actions/upload-artifact@v4
+      with:
+        name: mit-nuget-sbom
+        path: sbom/*.cdx.json
+        if-no-files-found: warn
 
     - name: Log in to NuGet
       uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
@@ -513,10 +539,10 @@ jobs:
   # Product zips stay on release.yml (v* tags). After beta/stable merge, create/move the
   # version tag and dispatch release.yml (GITHUB_TOKEN tag pushes do not re-trigger workflows).
   # release.yml also packs/pushes Chocolatey (titanium-cli / titanium-inspector) after the
-  # GitHub Release exists â€” no separate chocolatey step here.
+  # GitHub Release exists — skipped while vars.SKIP_CATALOG_PUBLISH=true.
   cut-product-tag:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
-    needs: [build, ui-portable, rps-publish-gate, rps-peer-gate]
+    needs: [build, ui-portable, cli-e2e, rps-publish-gate, rps-peer-gate]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -528,6 +554,7 @@ jobs:
     - name: Create/move product tag and dispatch release
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SKIP_CATALOG_PUBLISH: ${{ vars.SKIP_CATALOG_PUBLISH }}
       run: |
         set -euo pipefail
         PREFIX=$(grep -oP '(?<=<VersionPrefix>)[^<]+' src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj | head -n1)
@@ -544,5 +571,7 @@ jobs:
         git tag -f -a "$TAG" -m "$TAG" "$GITHUB_SHA"
         git push origin "refs/tags/$TAG" --force
         echo "Dispatching product release for $TAG (channel=$CHANNEL) at $GITHUB_SHA"
-        gh workflow run release.yml --ref "$GITHUB_REF_NAME" -f channel="$CHANNEL"
+        SKIP_FLAG=false
+        if [[ "${SKIP_CATALOG_PUBLISH:-}" == "true" ]]; then SKIP_FLAG=true; fi
+        gh workflow run release.yml --ref "$GITHUB_REF_NAME" -f channel="$CHANNEL" -f skip_catalog_publish="$SKIP_FLAG"
 
