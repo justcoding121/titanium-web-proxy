@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Reflection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Helpers;
@@ -17,7 +18,14 @@ public class Http2OriginStripFramingAndSystemProxyTests
             binder: null,
             types: [typeof(byte[]), typeof(Http2FrameFlag)],
             modifiers: null)!;
-        return (byte[])method.Invoke(null, [payload, flags])!;
+        try
+        {
+            return (byte[])method.Invoke(null, [payload, flags])!;
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is not null)
+        {
+            throw ex.InnerException;
+        }
     }
 
     [TestMethod]
@@ -53,24 +61,21 @@ public class Http2OriginStripFramingAndSystemProxyTests
     }
 
     [TestMethod]
-    public void StripHeadersFraming_EmptyOrEntirelyPadding_ReturnsEmpty()
+    public void StripHeadersFraming_EmptyOrEntirelyPadding_ThrowsProtocolError()
     {
-        CollectionAssert.AreEqual(Array.Empty<byte>(),
+        Assert.ThrowsExactly<IOException>(() =>
             InvokeStrip("StripHeadersFraming", Array.Empty<byte>(),
                 Http2FrameFlag.Padded | Http2FrameFlag.Priority));
-        CollectionAssert.AreEqual(Array.Empty<byte>(),
+        Assert.ThrowsExactly<IOException>(() =>
             InvokeStrip("StripHeadersFraming", new byte[] { 10, 1, 2 }, Http2FrameFlag.Padded));
     }
 
     [TestMethod]
-    public void StripHeadersFraming_InsufficientPriorityPrefix_KeepsAvailablePayload()
+    public void StripHeadersFraming_InsufficientPriorityPrefix_ThrowsProtocolError()
     {
         var payload = new byte[] { 0xAA, 0xBB, 0xCC };
-
-        var stripped = InvokeStrip("StripHeadersFraming", payload, Http2FrameFlag.Priority);
-
-        CollectionAssert.AreEqual(payload, stripped);
-        Assert.AreNotSame(payload, stripped, "HEADERS framing returns an isolated header block.");
+        Assert.ThrowsExactly<IOException>(() =>
+            InvokeStrip("StripHeadersFraming", payload, Http2FrameFlag.Priority));
     }
 
     [TestMethod]
@@ -81,9 +86,9 @@ public class Http2OriginStripFramingAndSystemProxyTests
     }
 
     [TestMethod]
-    public void StripDataFraming_PaddingLargerThanPayload_ReturnsEmpty()
+    public void StripDataFraming_PaddingLargerThanPayload_ThrowsProtocolError()
     {
-        CollectionAssert.AreEqual(Array.Empty<byte>(),
+        Assert.ThrowsExactly<IOException>(() =>
             InvokeStrip("StripDataFraming", new byte[] { 20, 1, 2 }, Http2FrameFlag.Padded));
     }
 
