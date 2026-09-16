@@ -204,6 +204,8 @@ public sealed class PolicyModesConfig
 
     public string? Http2AbuseBudget { get; set; }
 
+    public string? Http2RelayValidation { get; set; }
+
     public bool? AllowAmbiguousFraming { get; set; }
 }
 

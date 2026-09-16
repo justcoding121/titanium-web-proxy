@@ -343,7 +343,8 @@ internal static class ServerConfigApplier
             ParsePolicyMode(policy.DecompressionRatio, current[PolicyFamily.DecompressionRatio]),
             ParsePolicyMode(policy.HeaderLimits, current[PolicyFamily.HeaderLimits]),
             ParsePolicyMode(policy.AdmissionControl, current[PolicyFamily.AdmissionControl]),
-            ParsePolicyMode(policy.Http2AbuseBudget, current[PolicyFamily.Http2AbuseBudget]));
+            ParsePolicyMode(policy.Http2AbuseBudget, current[PolicyFamily.Http2AbuseBudget]),
+            ParsePolicyMode(policy.Http2RelayValidation, current[PolicyFamily.Http2RelayValidation]));
 
         if (policy.AllowAmbiguousFraming == true)
         {

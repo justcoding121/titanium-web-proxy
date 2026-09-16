@@ -42,6 +42,7 @@ public class ProxyProfileSettingsTests
         Assert.IsNull(settings.MaxConcurrentClientConnections);
         Assert.AreEqual(PolicyMode.Enforce, settings.PolicyModes[PolicyFamily.BodyBudget]);
         Assert.AreEqual(PolicyMode.Enforce, settings.PolicyModes[PolicyFamily.AdmissionControl]);
+        Assert.AreEqual(PolicyMode.Disabled, settings.PolicyModes[PolicyFamily.Http2RelayValidation]);
         Assert.IsFalse(settings.PolicyModes.AllowAmbiguousFraming);
     }
 
@@ -55,6 +56,7 @@ public class ProxyProfileSettingsTests
         Assert.AreEqual(PolicyMode.Observe, settings.PolicyModes[PolicyFamily.HeaderLimits]);
         Assert.AreEqual(PolicyMode.Observe, settings.PolicyModes[PolicyFamily.AdmissionControl]);
         Assert.AreEqual(PolicyMode.Observe, settings.PolicyModes[PolicyFamily.Http2AbuseBudget]);
+        Assert.AreEqual(PolicyMode.Disabled, settings.PolicyModes[PolicyFamily.Http2RelayValidation]);
     }
 
     [TestMethod]
@@ -80,6 +82,7 @@ public class ProxyProfileSettingsTests
         Assert.AreEqual(10_000, settings.MaxConcurrentClientConnections);
         Assert.AreEqual(PolicyMode.Enforce, settings.PolicyModes[PolicyFamily.BodyBudget]);
         Assert.AreEqual(PolicyMode.Enforce, settings.PolicyModes[PolicyFamily.AdmissionControl]);
+        Assert.AreEqual(PolicyMode.Enforce, settings.PolicyModes[PolicyFamily.Http2RelayValidation]);
         Assert.IsTrue(settings.ClientHeaderTimeoutSeconds > 0);
         Assert.IsTrue(settings.ResponseHeaderTimeoutSeconds > 0);
         Assert.IsTrue(settings.IdleReadTimeoutSeconds > 0);

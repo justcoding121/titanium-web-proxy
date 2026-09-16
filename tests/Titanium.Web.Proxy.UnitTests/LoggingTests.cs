@@ -439,7 +439,8 @@ public partial class LoggingTests
             PolicyMode.Observe,
             PolicyMode.Disabled,
             PolicyMode.Enforce,
-            PolicyMode.Observe);
+            PolicyMode.Observe,
+            PolicyMode.Disabled);
 
         ProxyLog.EffectiveProfileAtStartup(capturing, ProxyProfile.PublicFacing, modes);
 

@@ -47,7 +47,8 @@ public sealed class ProxyPolicyModes
         decompressionRatio: PolicyMode.Enforce,
         headerLimits: PolicyMode.Enforce,
         admissionControl: PolicyMode.Enforce,
-        http2AbuseBudget: PolicyMode.Enforce);
+        http2AbuseBudget: PolicyMode.Enforce,
+        http2RelayValidation: PolicyMode.Enforce);
 
     /// <summary>Returns the mode selected for <paramref name="family" />.</summary>
     public PolicyMode this[PolicyFamily family] => modes[family];
@@ -58,7 +59,8 @@ public sealed class ProxyPolicyModes
         PolicyMode decompressionRatio,
         PolicyMode headerLimits,
         PolicyMode admissionControl,
-        PolicyMode http2AbuseBudget)
+        PolicyMode http2AbuseBudget,
+        PolicyMode http2RelayValidation = PolicyMode.Disabled)
     {
         var dict = new Dictionary<PolicyFamily, PolicyMode>
         {
@@ -66,7 +68,8 @@ public sealed class ProxyPolicyModes
             [PolicyFamily.DecompressionRatio] = decompressionRatio,
             [PolicyFamily.HeaderLimits] = headerLimits,
             [PolicyFamily.AdmissionControl] = admissionControl,
-            [PolicyFamily.Http2AbuseBudget] = http2AbuseBudget
+            [PolicyFamily.Http2AbuseBudget] = http2AbuseBudget,
+            [PolicyFamily.Http2RelayValidation] = http2RelayValidation
         };
         return new ProxyPolicyModes(dict, false);
     }

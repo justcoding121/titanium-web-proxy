@@ -16,6 +16,7 @@ public class ProxyPolicyModesTests
         Assert.AreEqual(PolicyMode.Enforce, modes[PolicyFamily.HeaderLimits]);
         Assert.AreEqual(PolicyMode.Enforce, modes[PolicyFamily.AdmissionControl]);
         Assert.AreEqual(PolicyMode.Enforce, modes[PolicyFamily.Http2AbuseBudget]);
+        Assert.AreEqual(PolicyMode.Enforce, modes[PolicyFamily.Http2RelayValidation]);
         Assert.IsFalse(modes.AllowAmbiguousFraming);
     }
 
@@ -27,13 +28,15 @@ public class ProxyPolicyModesTests
             decompressionRatio: PolicyMode.Observe,
             headerLimits: PolicyMode.Disabled,
             admissionControl: PolicyMode.Observe,
-            http2AbuseBudget: PolicyMode.Enforce);
+            http2AbuseBudget: PolicyMode.Enforce,
+            http2RelayValidation: PolicyMode.Observe);
 
         Assert.AreEqual(PolicyMode.Enforce, modes[PolicyFamily.BodyBudget]);
         Assert.AreEqual(PolicyMode.Observe, modes[PolicyFamily.DecompressionRatio]);
         Assert.AreEqual(PolicyMode.Disabled, modes[PolicyFamily.HeaderLimits]);
         Assert.AreEqual(PolicyMode.Observe, modes[PolicyFamily.AdmissionControl]);
         Assert.AreEqual(PolicyMode.Enforce, modes[PolicyFamily.Http2AbuseBudget]);
+        Assert.AreEqual(PolicyMode.Observe, modes[PolicyFamily.Http2RelayValidation]);
     }
 
     [TestMethod]
@@ -57,7 +60,8 @@ public class ProxyPolicyModesTests
             decompressionRatio: PolicyMode.Enforce,
             headerLimits: PolicyMode.Disabled,
             admissionControl: PolicyMode.Observe,
-            http2AbuseBudget: PolicyMode.Enforce);
+            http2AbuseBudget: PolicyMode.Enforce,
+            http2RelayValidation: PolicyMode.Disabled);
 
         var observed = original.WithAllObservedExceptDisabled();
 
@@ -66,6 +70,7 @@ public class ProxyPolicyModesTests
         Assert.AreEqual(PolicyMode.Disabled, observed[PolicyFamily.HeaderLimits]);
         Assert.AreEqual(PolicyMode.Observe, observed[PolicyFamily.AdmissionControl]);
         Assert.AreEqual(PolicyMode.Observe, observed[PolicyFamily.Http2AbuseBudget]);
+        Assert.AreEqual(PolicyMode.Disabled, observed[PolicyFamily.Http2RelayValidation]);
     }
 
     [TestMethod]
@@ -87,7 +92,7 @@ public class ProxyPolicyModesTests
         // snapshot returned by it always starts with AllowAmbiguousFraming == false.
         var modes = ProxyPolicyModes.Create(
             PolicyMode.Disabled, PolicyMode.Disabled, PolicyMode.Disabled, PolicyMode.Disabled,
-            PolicyMode.Disabled);
+            PolicyMode.Disabled, PolicyMode.Disabled);
 
         Assert.IsFalse(modes.AllowAmbiguousFraming);
     }
