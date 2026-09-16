@@ -228,6 +228,17 @@ namespace Titanium.Web.Proxy.Http2
             var connectionState = new Http2ConnectionState(connectionId, cancellationTokenSource,
                 resourceLimits.MaxConcurrentStreamsPerConnection);
 
+            try
+            {
+                using var policyProbe = sessionFactory();
+                connectionState.Http2RelayValidation =
+                    policyProbe.Server.PolicyModes[PolicyFamily.Http2RelayValidation];
+            }
+            catch
+            {
+                connectionState.Http2RelayValidation = PolicyMode.Disabled;
+            }
+
             // Dedicated writers (share the direction locks so control-frame paths cannot interleave).
             connectionState.ClientFrameWriter =
                 new Http2FrameWriter(clientStream, connectionState.ClientWriteLock);
@@ -249,6 +260,7 @@ namespace Titanium.Web.Proxy.Http2
             // Tip A/B (MITM MaxOrigin=2 + pool): Lite err%~29 / RSS blow-up — keep disabled.
             var useMultiOrigin = canCompressedRelayTopology
                 && !httpInterceptionEnabled
+                && connectionState.Http2RelayValidation == PolicyMode.Disabled
                 && openOriginConnectionAsync != null
                 && resourceLimits.MaxOriginHttp2ConnectionsPerAuthority > 1;
 
