@@ -1748,7 +1748,13 @@ namespace Titanium.Web.Proxy.Http2
                         else if (identifier == (int)Http2SettingsId.EnablePush)
                         {
                             sawEnablePush = true;
-                            if (isClient)
+                            // RFC 9113 §6.5.2: SETTINGS_ENABLE_PUSH MUST be 0 or 1.
+                            if (value > 1)
+                            {
+                                invalidSettings = true;
+                                invalidSettingsError = Http2ErrorCode.ProtocolError;
+                            }
+                            else if (isClient)
                             {
                                 // This relay never implements server push translation, so the proxy must
                                 // never let the server believe push is welcome on this connection -
