@@ -279,7 +279,16 @@ internal static partial class Http3OriginBridge
                     try
                     {
                         if (frame.Type == Http3FrameType.Headers)
-                            break; // trailers
+                        {
+                            // Decode trailers (grpc-status, grpc-message, checksums).
+                            foreach (var (n, v) in QpackDecoder.Decode(frame.Payload.Span))
+                            {
+                                if (!n.StartsWith(':'))
+                                    response.TrailingHeaders.AddHeader(new HttpHeader(n, v));
+                            }
+
+                            break;
+                        }
                         if (frame.Type != Http3FrameType.Data || frame.Payload.Length == 0)
                             continue;
                         var toCopy = Math.Min(frame.Payload.Length, bodyBytes.Length - offset);
@@ -338,7 +347,15 @@ internal static partial class Http3OriginBridge
                             try
                             {
                                 if (frame.Type == Http3FrameType.Headers)
-                                    break; // trailers — ignored for now
+                                {
+                                    foreach (var (n, v) in QpackDecoder.Decode(frame.Payload.Span))
+                                    {
+                                        if (!n.StartsWith(':'))
+                                            response.TrailingHeaders.AddHeader(new HttpHeader(n, v));
+                                    }
+
+                                    break;
+                                }
                                 if (frame.Type != Http3FrameType.Data || frame.Payload.Length == 0)
                                     continue;
 
@@ -375,6 +392,14 @@ internal static partial class Http3OriginBridge
                                         streamToClient.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.RequestCancelled);
                                         toRelease.ReturnPayload();
                                         break;
+                                    }
+                                }
+                                else if (current.Type == Http3FrameType.Headers)
+                                {
+                                    foreach (var (n, v) in QpackDecoder.Decode(current.Payload.Span))
+                                    {
+                                        if (!n.StartsWith(':'))
+                                            response.TrailingHeaders.AddHeader(new HttpHeader(n, v));
                                     }
                                 }
                             }
