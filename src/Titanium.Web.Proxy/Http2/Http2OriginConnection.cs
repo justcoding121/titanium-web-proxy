@@ -1378,16 +1378,26 @@ internal sealed class Http2OriginConnection : IDisposable
         var offset = 0;
         var end = payload.Length;
 
-        if ((flags & Http2FrameFlag.Padded) != 0 && payload.Length > 0)
+        if ((flags & Http2FrameFlag.Padded) != 0)
         {
+            if (payload.Length == 0 || payload[0] >= payload.Length)
+                throw new IOException("HTTP/2 protocol error: HEADERS padding length is the payload length or longer.");
             var padLength = payload[0];
             offset = 1;
-            end = Math.Max(offset, payload.Length - padLength);
+            end = payload.Length - padLength;
         }
 
-        if ((flags & Http2FrameFlag.Priority) != 0 && end - offset >= 5) offset += 5;
+        if ((flags & Http2FrameFlag.Priority) != 0)
+        {
+            if (end - offset < 5)
+                throw new IOException("HTTP/2 protocol error: HEADERS PRIORITY flag with truncated payload.");
+            offset += 5;
+        }
 
-        if (offset >= end) return ReadOnlySpan<byte>.Empty;
+        if (offset > end)
+            throw new IOException("HTTP/2 protocol error: HEADERS padding length is the payload length or longer.");
+
+        if (offset == end) return ReadOnlySpan<byte>.Empty;
 
         return payload.Slice(offset, end - offset);
     }
@@ -1403,8 +1413,9 @@ internal sealed class Http2OriginConnection : IDisposable
             return payload;
 
         var padLength = payload[0];
-        var end = Math.Max(1, payload.Length - padLength);
-        return payload.Slice(1, end - 1);
+        if (1 + padLength > payload.Length)
+            throw new IOException("HTTP/2 protocol error: DATA padding length is the payload length or longer.");
+        return payload.Slice(1, payload.Length - 1 - padLength);
     }
 
     /// <summary>Strips DATA PADDED framing into a new array (tunnel channel ownership).</summary>
@@ -1414,8 +1425,9 @@ internal sealed class Http2OriginConnection : IDisposable
             return payload.ToArray();
 
         var padLength = payload[0];
-        var end = Math.Max(1, payload.Length - padLength);
-        return payload.Slice(1, end - 1).ToArray();
+        if (1 + padLength > payload.Length)
+            throw new IOException("HTTP/2 protocol error: DATA padding length is the payload length or longer.");
+        return payload.Slice(1, payload.Length - 1 - padLength).ToArray();
     }
 
     /// <summary>
@@ -1427,8 +1439,9 @@ internal sealed class Http2OriginConnection : IDisposable
         if ((flags & Http2FrameFlag.Padded) == 0 || payload.Length == 0) return payload;
 
         var padLength = payload[0];
-        var end = Math.Max(1, payload.Length - padLength);
-        return payload.AsSpan(1, end - 1).ToArray();
+        if (1 + padLength > payload.Length)
+            throw new IOException("HTTP/2 protocol error: DATA padding length is the payload length or longer.");
+        return payload.AsSpan(1, payload.Length - 1 - padLength).ToArray();
     }
 
     /// <summary>Strips DATA padding while retaining ownership of a pooled payload buffer.</summary>
@@ -1439,8 +1452,9 @@ internal sealed class Http2OriginConnection : IDisposable
             return payload.AsMemory(0, payloadLength);
 
         var padLength = payload[0];
-        var end = Math.Max(1, payloadLength - padLength);
-        return payload.AsMemory(1, end - 1);
+        if (1 + padLength > payloadLength)
+            throw new IOException("HTTP/2 protocol error: DATA padding length is the payload length or longer.");
+        return payload.AsMemory(1, payloadLength - 1 - padLength);
     }
 
     private void ProcessHeaderBlock(int streamId, ReadOnlySpan<byte> compressed, bool endStream) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.

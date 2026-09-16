@@ -848,10 +848,17 @@ namespace Titanium.Web.Proxy.Http2
                         if (priority)
                             offset += 5;
 
-                        int fragmentLength = length - offset - padLength;
-                        if (fragmentLength < 0)
-                            fragmentLength = 0;
+                        if (padded && offset + padLength > length)
+                        {
+                            ReportException(logger, new ProxyHttpException(
+                                "HTTP/2 protocol error: HEADERS padding length is the payload length or longer.",
+                                null, null));
+                            await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                                connectionState.LastClientStreamId, Http2ErrorCode.ProtocolError, input));
+                            return;
+                        }
 
+                        int fragmentLength = length - offset - padLength;
                         if (pendingHeaderBlock != null)
                         {
                             ReportException(logger, new ProxyHttpException(
@@ -912,11 +919,17 @@ namespace Titanium.Web.Proxy.Http2
                         rr.Priority = priorityData;
                     }
 
-                    int fragmentLength = length - offset - padLength;
-                    if (fragmentLength < 0)
+                    if (padded && offset + padLength > length)
                     {
-                        fragmentLength = 0;
+                        ReportException(logger, new ProxyHttpException(
+                            "HTTP/2 protocol error: HEADERS padding length is the payload length or longer.",
+                            null, args));
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                            connectionState.LastClientStreamId, Http2ErrorCode.ProtocolError, input));
+                        return;
                     }
+
+                    int fragmentLength = length - offset - padLength;
 
                     if (pendingHeaderBlock != null)
                     {
@@ -1311,9 +1324,20 @@ namespace Titanium.Web.Proxy.Http2
                             int offset = 0;
                             if (padded)
                             {
+                                var padLength = buffer[0];
+                                if (padLength >= length)
+                                {
+                                    ReportException(logger, new ProxyHttpException(
+                                        "HTTP/2 protocol error: DATA padding length is the payload length or longer.",
+                                        null, args));
+                                    await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                                        connectionState.LastClientStreamId, Http2ErrorCode.ProtocolError, input));
+                                    return;
+                                }
+
                                 offset++;
                                 length--;
-                                length -= buffer[0];
+                                length -= padLength;
                             }
 
                             if (data == null)
@@ -1380,9 +1404,18 @@ namespace Titanium.Web.Proxy.Http2
                             if (padded)
                             {
                                 var padLength = buffer[0];
+                                if (padLength >= length)
+                                {
+                                    ReportException(logger, new ProxyHttpException(
+                                        "HTTP/2 protocol error: DATA padding length is the payload length or longer.",
+                                        null, args));
+                                    await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                                        connectionState.LastClientStreamId, Http2ErrorCode.ProtocolError, input));
+                                    return;
+                                }
+
                                 dataOffset = 1;
                                 dataLength = length - 1 - padLength;
-                                if (dataLength < 0) dataLength = 0;
                             }
 
                             var dataBytes = new byte[dataLength];
