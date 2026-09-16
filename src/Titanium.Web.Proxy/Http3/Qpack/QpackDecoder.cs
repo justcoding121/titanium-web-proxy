@@ -96,16 +96,39 @@ internal static class QpackDecoder
             throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed, "Invalid Required Insert Count.");
         data = data[consumed..];
 
-        // Parse S bit and Delta Base
+        // Parse S bit and Delta Base.
+        // The wire format encodes: Base = RequiredInsertCount − (S ? DeltaBase+1 : DeltaBase).
+        // Dynamic indexed references use *relative* wire indexes: absoluteIndex = Base−1−wireIndex.
+        // Post-base references use: absoluteIndex = Base + wireIndex.
+        // TODO (backlog B2-a): correctly decode S + DeltaBase and compute Base so relative and
+        // post-base dynamic table lookups resolve the right absolute index per RFC 9204 §4.5.
         if (data.IsEmpty)
             throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed, "Missing Base field.");
-        if (!TryReadPrefixedInt(data, 7, out _, out consumed))
+        var sAndDeltaByte = data[0];
+        var sBit = (sAndDeltaByte & 0x80) != 0;
+        if (!TryReadPrefixedInt(data, 7, out var deltaBase, out consumed))
             throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed, "Invalid Delta Base.");
         data = data[consumed..];
 
         if (requiredInsertCount != 0 && context == null)
             throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed,
                 $"Dynamic QPACK table not supported: Required Insert Count = {requiredInsertCount}.");
+
+        // Guard: dynamic table is enabled but Base decoding is not yet implemented correctly.
+        // A peer that fills its dynamic table will send requiredInsertCount > 0 and wire indexes
+        // that are relative to Base, not absolute. Until the TODO above is resolved, any such
+        // block would silently look up the wrong table entry and corrupt headers.
+        // Fail-fast with a clear error rather than returning wrong header values.
+        if (requiredInsertCount != 0 && context != null)
+        {
+            // Compute the nominal Base so future implementers have the value available.
+            // base = requiredInsertCount - (sBit ? deltaBase + 1 : deltaBase)
+            _ = sBit; _ = deltaBase; // suppress unused-variable warnings until TODO is resolved
+            throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed,
+                $"Dynamic QPACK table references (Required Insert Count = {requiredInsertCount}) are not yet " +
+                "fully supported. Set ProxyServer.EnableQpackDynamicTable = false (the default) to prevent " +
+                "this connection error, or fix the Base-relative index decoding in QpackDecoder.DecodeCore.");
+        }
 
         var headers = new List<(string, string)>();
 
