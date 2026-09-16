@@ -1155,22 +1155,7 @@ internal static class Http3RequestStream
 
         if (response.StreamBodyWriter != null && !response.IsBodySent)
         {
-            await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
-            // Http3OriginBridge streams the origin body; drain it as DATA frames (same contract as
-            // H1 BodyStreamWriter / H2 EmitSyntheticResponseAsync).
-            // Http3DataBodyWriter never FINs (completeWrites stays false) so trailers can follow.
-            var bodyWriter = new Http3DataBodyWriter(stream);
-            await response.StreamBodyWriter(bodyWriter, ct);
-            response.IsBodySent = true;
-            if (hasTrailers)
-            {
-                var trailerBlock = QpackEncoder.Encode(
-                    response.TrailingHeaders.Select(h => (h.Name, h.Value)), qpackContext);
-                await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, trailerBlock, ct, completeWrites: true);
-            }
-
-            // Always Flush — Darwin MsQuic requires an explicit Flush before FIN is observed.
-            await stream.FlushAsync(ct);
+            await SendStreamedResponseAsync(stream, response, qpackHeaders, qpackContext, hasTrailers, ct);
             return;
         }
 
@@ -1218,6 +1203,31 @@ internal static class Http3RequestStream
             await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, trailerBlock, ct, completeWrites: true);
         }
 
+        await stream.FlushAsync(ct);
+    }
+
+    /// <summary>
+    ///     HEADERS + streamed DATA (+ optional trailer HEADERS) for origin-bridged H3 bodies.
+    /// </summary>
+    private static async Task SendStreamedResponseAsync(
+        QuicStream stream, Response response, ReadOnlyMemory<byte> qpackHeaders,
+        QpackContext? qpackContext, bool hasTrailers, CancellationToken ct)
+    {
+        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
+        // Http3OriginBridge streams the origin body; drain it as DATA frames (same contract as
+        // H1 BodyStreamWriter / H2 EmitSyntheticResponseAsync).
+        // Http3DataBodyWriter never FINs (completeWrites stays false) so trailers can follow.
+        var bodyWriter = new Http3DataBodyWriter(stream);
+        await response.StreamBodyWriter!(bodyWriter, ct);
+        response.IsBodySent = true;
+        if (hasTrailers)
+        {
+            var trailerBlock = QpackEncoder.Encode(
+                response.TrailingHeaders.Select(h => (h.Name, h.Value)), qpackContext);
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, trailerBlock, ct, completeWrites: true);
+        }
+
+        // Always Flush — Darwin MsQuic requires an explicit Flush before FIN is observed.
         await stream.FlushAsync(ct);
     }
 

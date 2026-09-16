@@ -51,6 +51,9 @@ internal sealed class Http2OriginConnection : IDisposable
     /// <summary>Every HTTP/2 endpoint must accept frames up to this size (RFC 7540 §4.2), so it is always safe to send.</summary>
     private const int SafeMaxFrameSize = 16384;
 
+    private const string DataPaddingProtocolError =
+        "HTTP/2 protocol error: DATA padding length is the payload length or longer.";
+
     /// <summary>Maximum total header block (HEADERS + CONTINUATION fragments) we accept from origin before treating it as a protocol violation.</summary>
     private const int MaxHeaderBlockBytes = 256 * 1024;
 
@@ -1413,8 +1416,7 @@ internal sealed class Http2OriginConnection : IDisposable
             return payload;
 
         var padLength = payload[0];
-        if (1 + padLength > payload.Length)
-            throw new IOException("HTTP/2 protocol error: DATA padding length is the payload length or longer.");
+        ThrowIfDataPaddingTooLong(padLength, payload.Length);
         return payload.Slice(1, payload.Length - 1 - padLength);
     }
 
@@ -1425,8 +1427,7 @@ internal sealed class Http2OriginConnection : IDisposable
             return payload.ToArray();
 
         var padLength = payload[0];
-        if (1 + padLength > payload.Length)
-            throw new IOException("HTTP/2 protocol error: DATA padding length is the payload length or longer.");
+        ThrowIfDataPaddingTooLong(padLength, payload.Length);
         return payload.Slice(1, payload.Length - 1 - padLength).ToArray();
     }
 
@@ -1439,8 +1440,7 @@ internal sealed class Http2OriginConnection : IDisposable
         if ((flags & Http2FrameFlag.Padded) == 0 || payload.Length == 0) return payload;
 
         var padLength = payload[0];
-        if (1 + padLength > payload.Length)
-            throw new IOException("HTTP/2 protocol error: DATA padding length is the payload length or longer.");
+        ThrowIfDataPaddingTooLong(padLength, payload.Length);
         return payload.AsSpan(1, payload.Length - 1 - padLength).ToArray();
     }
 
@@ -1452,9 +1452,14 @@ internal sealed class Http2OriginConnection : IDisposable
             return payload.AsMemory(0, payloadLength);
 
         var padLength = payload[0];
-        if (1 + padLength > payloadLength)
-            throw new IOException("HTTP/2 protocol error: DATA padding length is the payload length or longer.");
+        ThrowIfDataPaddingTooLong(padLength, payloadLength);
         return payload.AsMemory(1, payloadLength - 1 - padLength);
+    }
+
+    private static void ThrowIfDataPaddingTooLong(int padLength, int payloadLength)
+    {
+        if (1 + padLength > payloadLength)
+            throw new IOException(DataPaddingProtocolError);
     }
 
     private void ProcessHeaderBlock(int streamId, ReadOnlySpan<byte> compressed, bool endStream) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
