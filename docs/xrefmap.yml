@@ -8000,6 +8000,12 @@ references:
   commentId: F:Titanium.Web.Proxy.Options.PolicyFamily.Http2AbuseBudget
   fullName: Titanium.Web.Proxy.Options.PolicyFamily.Http2AbuseBudget
   nameWithType: PolicyFamily.Http2AbuseBudget
+- uid: Titanium.Web.Proxy.Options.PolicyFamily.Http2RelayValidation
+  name: Http2RelayValidation
+  href: api/Titanium.Web.Proxy.Options.PolicyFamily.html#Titanium_Web_Proxy_Options_PolicyFamily_Http2RelayValidation
+  commentId: F:Titanium.Web.Proxy.Options.PolicyFamily.Http2RelayValidation
+  fullName: Titanium.Web.Proxy.Options.PolicyFamily.Http2RelayValidation
+  nameWithType: PolicyFamily.Http2RelayValidation
 - uid: Titanium.Web.Proxy.Options.PolicyMode
   name: PolicyMode
   href: api/Titanium.Web.Proxy.Options.PolicyMode.html
@@ -8056,12 +8062,12 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Options.ProxyPolicyModes.AllowAmbiguousFraming
   nameWithType: ProxyPolicyModes.AllowAmbiguousFraming
-- uid: Titanium.Web.Proxy.Options.ProxyPolicyModes.Create(Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode)
-  name: Create(PolicyMode, PolicyMode, PolicyMode, PolicyMode, PolicyMode)
-  href: api/Titanium.Web.Proxy.Options.ProxyPolicyModes.html#Titanium_Web_Proxy_Options_ProxyPolicyModes_Create_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_
-  commentId: M:Titanium.Web.Proxy.Options.ProxyPolicyModes.Create(Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode)
-  fullName: Titanium.Web.Proxy.Options.ProxyPolicyModes.Create(Titanium.Web.Proxy.Options.PolicyMode, Titanium.Web.Proxy.Options.PolicyMode, Titanium.Web.Proxy.Options.PolicyMode, Titanium.Web.Proxy.Options.PolicyMode, Titanium.Web.Proxy.Options.PolicyMode)
-  nameWithType: ProxyPolicyModes.Create(PolicyMode, PolicyMode, PolicyMode, PolicyMode, PolicyMode)
+- uid: Titanium.Web.Proxy.Options.ProxyPolicyModes.Create(Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode)
+  name: Create(PolicyMode, PolicyMode, PolicyMode, PolicyMode, PolicyMode, PolicyMode)
+  href: api/Titanium.Web.Proxy.Options.ProxyPolicyModes.html#Titanium_Web_Proxy_Options_ProxyPolicyModes_Create_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_
+  commentId: M:Titanium.Web.Proxy.Options.ProxyPolicyModes.Create(Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode)
+  fullName: Titanium.Web.Proxy.Options.ProxyPolicyModes.Create(Titanium.Web.Proxy.Options.PolicyMode, Titanium.Web.Proxy.Options.PolicyMode, Titanium.Web.Proxy.Options.PolicyMode, Titanium.Web.Proxy.Options.PolicyMode, Titanium.Web.Proxy.Options.PolicyMode, Titanium.Web.Proxy.Options.PolicyMode)
+  nameWithType: ProxyPolicyModes.Create(PolicyMode, PolicyMode, PolicyMode, PolicyMode, PolicyMode, PolicyMode)
 - uid: Titanium.Web.Proxy.Options.ProxyPolicyModes.Create*
   name: Create
   href: api/Titanium.Web.Proxy.Options.ProxyPolicyModes.html#Titanium_Web_Proxy_Options_ProxyPolicyModes_Create_
