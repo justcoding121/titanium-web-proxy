@@ -42,6 +42,13 @@ Additional real-world tables (wiki only, not plotted here): [Unary gRPC H2→h2c
 
 Product 5×5 reverse/MITM matrices, saturation calibration, heavier reverse (bodies/POST/lossy/TLS/arch), unary gRPC (H2↔H2 and H2→h2c), and WebSocket (H1 Upgrade, dual-TLS H1, RFC 8441 H2) tables live on the [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance). Profiling notes: [Performance profiling](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance-Profiling).
 
+## Relay validation and throughput
+
+The default `ProxyProfile.Balanced` keeps `PolicyFamily.Http2RelayValidation = Disabled`, so
+H2↔H2 compressed relay forwards HPACK blocks without a semantic decode pass. Switching to
+`PublicFacing` (or setting `Enforce` yourself) adds a full HPACK decode on that path — re-measure
+with your RPS load probe after enabling if relay throughput matters for your workload.
+
 ---
 
 *How we measure:* matched GitHub Actions runners (~4 vCPU / 16 GiB) on Windows, Linux, and macOS; Titanium vs YARP, nginx, HAProxy, and Envoy; same client, origin, warmup, duration, and concurrency (sustain at 64). Absolute RPS varies slightly with runner noise.
