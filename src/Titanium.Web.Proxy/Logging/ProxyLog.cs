@@ -162,12 +162,12 @@ internal static class ProxyLog
                 connectTarget, Describe(failure));
     }
 
-    internal static void Http2ProbeDeferredForClientAlpn(ILogger logger, string connectTarget, int budgetMs)
+    internal static void Http2ProbeDeferredForClientAlpn(ILogger logger, string connectTarget)
     {
         if (!logger.IsEnabled(LogLevel.Debug)) return;
         logger.LogDebug(
-            "[http2 probe] '{Target}': cold probe exceeded {BudgetMs}ms; speculating client h2 ALPN so ServerHello is not blocked",
-            connectTarget, budgetMs);
+            "[http2 probe] '{Target}': origin probe still in flight; speculating client h2 ALPN so ServerHello is not blocked",
+            connectTarget);
     }
 
     internal static void Http2ProbeDeferredFailed(ILogger logger, string connectTarget, Exception failure)

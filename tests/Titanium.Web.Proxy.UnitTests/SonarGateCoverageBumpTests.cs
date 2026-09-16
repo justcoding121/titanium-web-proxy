@@ -552,10 +552,10 @@ public class SonarGateCoverageBumpTests
     public void ProxyLog_Http2ProbeDeferred_LogsWhenDebugEnabled()
     {
         var logger = new DebugCapturingLogger();
-        ProxyLog.Http2ProbeDeferredForClientAlpn(logger, "origin.test:443", 50);
+        ProxyLog.Http2ProbeDeferredForClientAlpn(logger, "origin.test:443");
         ProxyLog.Http2ProbeDeferredFailed(logger, "origin.test:443", new InvalidOperationException("boom"));
         Assert.IsTrue(logger.Messages.Count >= 2);
-        StringAssert.Contains(logger.Messages[0], "cold probe");
+        StringAssert.Contains(logger.Messages[0], "origin probe still in flight");
         StringAssert.Contains(logger.Messages[1], "deferred origin probe failed");
     }
 

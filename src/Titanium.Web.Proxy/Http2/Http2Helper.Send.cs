@@ -463,7 +463,19 @@ namespace Titanium.Web.Proxy.Http2
             return WriteTwoAsync(output, frameHeaderBuffer.AsMemory(0, 9), payload.AsMemory(0, 4));
         }
 
-        /// <summary>Writes a GOAWAY frame (RFC 7540 ?6.8) announcing connection-level shutdown with the given error code.</summary>
+        /// <summary>
+        ///     Writes a GOAWAY frame (RFC 9113 §6.8) announcing connection-level shutdown with the given error code.
+        /// </summary>
+        /// <remarks>
+        ///     <para>
+        ///         RFC 9113 §6.8: <c>Last-Stream-ID</c> is the highest stream ID the sender has <em>processed</em>,
+        ///         not merely received. Callers should pass <c>connectionState.LastClientStreamId</c> (or the
+        ///         equivalent highest-processed value for that leg) rather than the ID of the offending frame.
+        ///         Using the offending-frame ID is too low when other streams were processed first, causing the
+        ///         peer to unnecessarily retry already-processed streams. Browsers are tolerant of this, but it
+        ///         is technically incorrect.
+        ///     </para>
+        /// </remarks>
         internal static async ValueTask SendGoAwayAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
             int lastStreamId, Http2ErrorCode errorCode, Stream output)
         {

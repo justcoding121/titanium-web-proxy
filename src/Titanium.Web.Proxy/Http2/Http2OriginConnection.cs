@@ -858,7 +858,7 @@ internal sealed class Http2OriginConnection : IDisposable
     }
 
     /// <summary>
-    ///     Re-grants flow-control credit for DATA frame on-wire payload (RFC 7540 §6.9). Batched at
+    ///     Re-grants flow-control credit for DATA frame on-wire payload (RFC 9113 §6.9). Batched at
     ///     <see cref="Http2Helper.ReceiveCreditBatchThreshold" /> (half of the 768 KiB stream window),
     ///     matching <see cref="Http2Helper" /> so credit is not drip-fed under the write lock per frame.
     /// </summary>
@@ -1025,9 +1025,15 @@ internal sealed class Http2OriginConnection : IDisposable
                             intake.Advance(length);
                             if (increment == 0)
                             {
-                                // RFC 7540 §6.9.1: a zero-increment WINDOW_UPDATE is a connection error PROTOCOL_ERROR.
-                                Fail(new IOException("HTTP/2 protocol error: WINDOW_UPDATE increment must not be zero."));
-                                return;
+                                // RFC 9113 §6.9.1: zero-increment WINDOW_UPDATE is a connection error when
+                                // streamId == 0, and a stream-level RST_STREAM(PROTOCOL_ERROR) otherwise.
+                                if (streamId == 0)
+                                {
+                                    Fail(new IOException("HTTP/2 protocol error: WINDOW_UPDATE increment must not be zero (connection-level)."));
+                                    return;
+                                }
+                                Http2Helper.EnqueueRstStream(Writer, streamId, Http2ErrorCode.ProtocolError);
+                                continue;
                             }
 
                             sendFlow.OnWindowUpdate(streamId, increment);

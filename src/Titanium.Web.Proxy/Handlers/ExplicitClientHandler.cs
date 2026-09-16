@@ -162,6 +162,54 @@ public partial class ProxyServer
                     if (!decryptSsl) connectRequest.IsHttps = restoredHttps;
                 }
 
+                // Hostname is known at CONNECT. Start leaf cert generation and (Auto-mode) origin HTTP/2
+                // probing before CONNECT 200 / ClientHello so they overlap the browser RTT instead of
+                // stalling ServerHello. Chrome/Edge abort MITM TLS with net::ERR_HTTP2_PROTOCOL_ERROR
+                // when ServerHello is delayed, then succeed on reload once the capability cache is warm.
+                var (connectHostname, connectHostnamePort) =
+                    ParseHostAndPort(requestLine.RequestUri.GetString(), 443);
+                var connectHost = connectHostname;
+                var connectPort = connectHostnamePort;
+
+                var connectTiming = EnableRequestTimingCapture
+                    ? new Diagnostics.TunnelConnectTiming(DateTime.UtcNow)
+                    : null;
+                connectArgs.ConnectTiming = connectTiming;
+
+                Task<X509Certificate2?>? certGenerationTask = null;
+                var h3RouteAtConnect = Http3.Http3OriginRoute.None;
+
+                if (decryptSsl)
+                {
+                    certGenerationTask = endPoint.GenericCertificate != null
+                        ? Task.FromResult<X509Certificate2?>(endPoint.GenericCertificate)
+                        : CertificateManager.CreateServerCertificate(
+                            HttpHelper.GetWildCardDomainName(connectHostname,
+                                CertificateManager.DisableWildCardCertificates));
+
+                    connectTiming?.MarkOriginCapabilityStarted("resolve");
+                    h3RouteAtConnect = ResolveHttp3Origin(
+                        connectHost, connectPort,
+                        connectArgs.UpstreamHttpProtocol,
+                        allowDnsProbe: true);
+                    string routeOutcome;
+                    if (h3RouteAtConnect.UseH3)
+                        routeOutcome = h3RouteAtConnect.Source == Http3.Http3RouteSource.Forced ? "forced" : "cache";
+                    else
+                        routeOutcome = EnableHttpsSvcbDnsDiscovery ? "background" : "none";
+                    connectTiming?.MarkOriginCapabilityCompleted(routeOutcome);
+
+                    // Auto-mode origin ALPN does not need ClientHello. Forced Http11/Http2 still wait
+                    // for the client's offer so policy (H1↔H2 bridges) is applied correctly.
+                    if (!h3RouteAtConnect.UseH3 && EnableHttp2
+                        && connectArgs.UpstreamHttpProtocol == UpstreamHttpProtocol.Auto)
+                    {
+                        connectTiming?.MarkHttp2ProbeStarted(cacheHit: false);
+                        deferredHttp2Negotiation = NegotiateHttp2Async(connectArgs, connectHost, connectPort,
+                            null, null, EnableTcpServerConnectionPrefetch, cancellationToken);
+                    }
+                }
+
                 // write back successful CONNECT response
                 // Successful CONNECT 2xx responses must not carry Content-Length or Transfer-Encoding
                 // (RFC 9110 §9.3.6 / RFC 9112): tunnel bytes follow the header terminator immediately.
@@ -196,72 +244,69 @@ public partial class ProxyServer
 
                     clientStream.Connection.SslProtocol = sslProtocol;
 
-                    // The cert name depends only on the hostname, which is known at CONNECT time.
-                    // Extract it now so we can start certificate generation in parallel with origin
-                    // capability work. Auto-mode SVCB discovery no longer blocks CONNECT; the remaining
-                    // cold-path cost is primarily the H2 capability probe on a cache miss.
-                    var (connectHostname, connectHostnamePort) =
-                        ParseHostAndPort(requestLine.RequestUri.GetString(), 443);
-
-                    var connectTiming = EnableRequestTimingCapture
-                        ? new Diagnostics.TunnelConnectTiming(DateTime.UtcNow)
-                        : null;
-                    connectArgs.ConnectTiming = connectTiming;
-
-                    // CertificateManager deduplicates concurrent calls for the same name internally.
-                    var certGenerationTask = endPoint.GenericCertificate != null
-                        ? Task.FromResult<X509Certificate2?>(endPoint.GenericCertificate)
-                        : CertificateManager.CreateServerCertificate(
-                            HttpHelper.GetWildCardDomainName(connectHostname,
-                                CertificateManager.DisableWildCardCertificates));
-
                     var http2Supported = false;
                     var clientOffersHttp2 = clientHelloInfo.GetAlpn()?.Contains(SslApplicationProtocol.Http2)
                                              == true;
-                    var (connectHost, connectPort) = (connectHostname, connectHostnamePort);
-
-                    // H3 route selection is independent of EnableHttp2 so EnableHttp2=false does not
-                    // accidentally suppress forced-H3 / cached-H3 CONNECT routing.
-                    connectTiming?.MarkOriginCapabilityStarted("resolve");
-                    var h3RouteAtConnect = ResolveHttp3Origin(
-                        connectHost, connectPort,
-                        connectArgs.UpstreamHttpProtocol,
-                        allowDnsProbe: true);
-                    string routeOutcome;
-                    if (h3RouteAtConnect.UseH3)
-                        routeOutcome = h3RouteAtConnect.Source == Http3.Http3RouteSource.Forced ? "forced" : "cache";
-                    else
-                        routeOutcome = EnableHttpsSvcbDnsDiscovery ? "background" : "none";
-                    connectTiming?.MarkOriginCapabilityCompleted(routeOutcome);
 
                     if (h3RouteAtConnect.UseH3)
                     {
                         // Offer h2 to the client (the bridge translates h2 streams onto QUIC).
                         http2Supported = clientOffersHttp2;
                         requiresH3Bridge = true;
+                        AbandonDeferredHttp2Negotiation(deferredHttp2Negotiation);
+                        deferredHttp2Negotiation = null;
                     }
                     else if (EnableHttp2)
                     {
-                        // Negotiate/resolve origin HTTP/2 per the connection-scoped UpstreamHttpProtocol
-                        // policy. Cache hits finish inside Http2ServerHelloProbeBudget. A slow cold probe
-                        // must not delay AuthenticateAsServerAsync: Chrome/Edge abort MITM TLS (EOF) and
-                        // show net::ERR_HTTP2_PROTOCOL_ERROR, then succeed on reload once the capability
-                        // cache is warm. Speculate client h2 ALPN and apply the probe after ServerHello.
-                        connectTiming?.MarkHttp2ProbeStarted(cacheHit: false);
-                        var negotiationTask = ResolveHttp2ForClientAsync(connectArgs, clientOffersHttp2,
-                            connectHost, connectPort, null, null, connectArgs.UpstreamHttpProtocol,
-                            connectArgs.AllowHttpProtocolTranslation, EnableTcpServerConnectionPrefetch,
-                            cancellationToken);
+                        // Keep the origin probe running through certificate generation (started at
+                        // CONNECT for Auto). Do not WaitAsync on it — ServerHello starts as soon as
+                        // the leaf cert is ready. TryComplete after the cert await below.
+                        if (deferredHttp2Negotiation != null)
+                        {
+                            if (!clientOffersHttp2)
+                            {
+                                AbandonDeferredHttp2Negotiation(deferredHttp2Negotiation);
+                                deferredHttp2Negotiation = null;
+                            }
+                        }
+                        else
+                        {
+                            connectTiming?.MarkHttp2ProbeStarted(cacheHit: false);
+                            deferredHttp2Negotiation = ResolveHttp2ForClientAsync(connectArgs, clientOffersHttp2,
+                                connectHost, connectPort, null, null, connectArgs.UpstreamHttpProtocol,
+                                connectArgs.AllowHttpProtocolTranslation, EnableTcpServerConnectionPrefetch,
+                                cancellationToken);
+                        }
+                    }
+                    else
+                    {
+                        AbandonDeferredHttp2Negotiation(deferredHttp2Negotiation);
+                        deferredHttp2Negotiation = null;
+                    }
+
+                    if (!sendRawData)
+                    {
+                    X509Certificate2? certificate = null;
+                    SslStream? sslStream = null;
+
+                    certificate = await (certGenerationTask
+                                      ?? throw new InvalidOperationException(
+                                          $"Certificate generation was not started for '{connectHostname}'."))
+                                  ?? throw new InvalidOperationException(
+                                      $"CertificateManager returned null for '{connectHostname}'.");
+                    connectTiming?.MarkCertificateReady();
+
+                    if (deferredHttp2Negotiation != null)
+                    {
                         var negotiation = await TryCompleteHttp2NegotiationBeforeClientAlpnAsync(
-                            negotiationTask, cancellationToken);
+                            deferredHttp2Negotiation, cancellationToken);
                         if (negotiation != null)
                         {
                             connectTiming?.MarkHttp2ProbeCompleted();
                             ApplyHttp2NegotiationBeforeClientAlpn(negotiation, out http2Supported,
                                 out requiresHttp11Bridge, out requiresH2OriginBridge, out prefetchConnectionTask);
+                            deferredHttp2Negotiation = null;
 
-                            // Same-CONNECT opaque fallback: probe finished before ServerHello with a
-                            // learnable origin TLS failure (e.g. fingerprint). Do not MITM.
                             if (EnableDecryptFailureBypass && negotiation.LearnableOriginTlsFailure)
                             {
                                 TryRecordDecryptFailure(connectHost, error: null, forceBypass: true);
@@ -277,54 +322,39 @@ public partial class ProxyServer
                         }
                         else
                         {
-                            ProxyLog.Http2ProbeDeferredForClientAlpn(logger, connectHostname,
-                                (int)Http2ServerHelloProbeBudget.TotalMilliseconds);
-                            // Client offered h2: ServerHello must include h2 or h2-only clients fail ALPN.
+                            ProxyLog.Http2ProbeDeferredForClientAlpn(logger, connectHostname);
+                            // Cold start: origin capability is still unknown. Speculatively offer h2 to
+                            // the client if the client offered it — the ALPN cannot be revised after
+                            // ServerHello. ApplyDeferredHttp2Negotiation (called after TLS completes)
+                            // will bridge to HTTP/1.1 if the origin turns out to be h1-only, which keeps
+                            // the client connection alive. AllowHttpProtocolTranslation=false is honoured
+                            // when the probe finishes *before* AuthenticateAsServerAsync (the common warm
+                            // path) — there the capability is known and h2 is not offered to the client
+                            // unless the origin actually supports it.
                             http2Supported = clientOffersHttp2;
-                            deferredHttp2Negotiation = negotiationTask;
                         }
                     }
 
-                    // Skip the generic single-connection prefetch entirely when the session will be routed
-                    // through the h2-to-HTTP/1.1 bridge: the bridge never adopts this shared
-                    // prefetchConnectionTask at all (it opens/pools its own connection independently per h2
-                    // stream, see SendHttp2ToHttp11Bridge), so prefetching one here would be pure waste - and
-                    // worse, using http2Supported (true in the bridge case, so the client can be offered
-                    // "h2") to pick the prefetch's ALPN offer would incorrectly probe the origin - which this
-                    // policy pins to HTTP/1.1 - with "h2" too.
-                    if (!sendRawData && prefetchConnectionTask == null && EnableTcpServerConnectionPrefetch
-                        && !requiresHttp11Bridge && !requiresH3Bridge && deferredHttp2Negotiation == null)
-                        // don't pass cancellation token here
-                        // it could cause floating server connections when client exits.
-                        // Pass the ALPN that the actual request will use so the prefetched connection
-                        // lands in the same pool bucket and can be reused. Passing null when h2 is
-                        // expected would result in an h1.1-keyed connection that the h2 request
-                        // cannot pick up, wasting the prefetch entirely.
-                        prefetchConnectionTask = TcpConnectionFactory.GetServerConnection(this, connectArgs,
-                            true, http2Supported ? SslExtensions.Http2ProtocolAsList : null, false, true,
-                            CancellationToken.None);
-
-                    // connectHostname and certGenerationTask were prepared above before the
-                    // DNS/H2 probes so cert generation could run in parallel with those probes.
-
-                    if (!sendRawData)
+                    if (sendRawData)
                     {
-                    X509Certificate2? certificate = null;
-                    SslStream? sslStream = null;
+                        // Learnable origin TLS failure: skip MITM and fall through to opaque relay.
+                    }
+                    else
+                    {
                     try
                     {
                         sslStream = new SslStream(clientStream, false);
 
-                        certificate = await certGenerationTask
-                                      ?? throw new InvalidOperationException(
-                                          $"CertificateManager returned null for '{connectHostname}'.");
-                        connectTiming?.MarkCertificateReady();
+                        if (prefetchConnectionTask == null && EnableTcpServerConnectionPrefetch
+                            && !requiresHttp11Bridge && !requiresH3Bridge && deferredHttp2Negotiation == null)
+                            prefetchConnectionTask = TcpConnectionFactory.GetServerConnection(this, connectArgs,
+                                true, http2Supported ? SslExtensions.Http2ProtocolAsList : null, false, true,
+                                CancellationToken.None);
 
-                        // Successfully managed to authenticate the client using the fake certificate
                         var options = new SslServerAuthenticationOptions();
                         // Offer h2 whenever capability negotiation / H3 bridging decided the client
                         // should see it — including EnableHttp2=false + H3 bridge, and a speculative
-                        // h2 offer while a cold origin probe continues past Http2ServerHelloProbeBudget.
+                        // h2 offer while a cold origin probe continues past certificate generation.
                         // Offer a fixed safe ALPN set rather than mirroring a possibly truncated
                         // ClientHello peek (large PQ hellos). Always include http/1.1 when offering h2.
                         options.ApplicationProtocols = http2Supported
@@ -354,6 +384,9 @@ public partial class ProxyServer
 
                         clientStream.Connection.NegotiatedApplicationProtocol =
                             sslStream.NegotiatedApplicationProtocol;
+                        // Update SslProtocol to the actually negotiated version (was tentatively set to
+                        // the ClientHello bitmask before AuthenticateAsServerAsync).
+                        clientStream.Connection.SslProtocol = sslStream.SslProtocol;
 
                         // HTTPS server created - we can now decrypt the client's traffic
                         clientStream = new HttpClientStream(this, clientStream.Connection, sslStream, BufferPool,
@@ -380,6 +413,8 @@ public partial class ProxyServer
                             connectArgs);
                     }
 
+                    if (!sendRawData)
+                    {
                     if (deferredHttp2Negotiation != null)
                     {
                         var applied = await AwaitAndApplyDeferredHttp2NegotiationAsync(
@@ -402,6 +437,8 @@ public partial class ProxyServer
                         await TcpConnectionFactory.Release(prefetchConnectionTask, true);
                         prefetchConnectionTask = null;
                     }
+                    }
+                    } // else: MITM TLS completed
                     } // !sendRawData (MITM)
                 }
                 else if (clientHelloInfo == null)
@@ -418,6 +455,9 @@ public partial class ProxyServer
                 // Hostname is excluded or it is not an HTTPS connect
                 if (sendRawData)
                 {
+                    AbandonDeferredHttp2Negotiation(deferredHttp2Negotiation);
+                    deferredHttp2Negotiation = null;
+
                     // create new connection to server.
                     // If we detected that client tunnel CONNECTs without SSL by checking for empty client hello then 
                     // this connection should not be HTTPS.
@@ -444,11 +484,16 @@ public partial class ProxyServer
 
                                 try
                                 {
-                                    // clientStream.Available should be at most BufferSize because it is using the same buffer size
-                                    var read = await clientStream.ReadAsync(data.AsMemory(0, available), cancellationToken);
-                                    if (read != available) throw new InvalidOperationException("Internal error.");
-
-                                    await connection.Stream.WriteAsync(data, 0, available, true, cancellationToken);
+                                    // Drain all buffered ClientHello bytes in a loop: ReadAsync may
+                                    // return fewer bytes than Available in one call (partial reads).
+                                    var remaining = available;
+                                    while (remaining > 0)
+                                    {
+                                        var bytesRead = await clientStream.ReadAsync(data.AsMemory(0, remaining), cancellationToken);
+                                        if (bytesRead == 0) break;
+                                        remaining -= bytesRead;
+                                        await connection.Stream.WriteAsync(data, 0, bytesRead, true, cancellationToken);
+                                    }
                                 }
                                 finally
                                 {
