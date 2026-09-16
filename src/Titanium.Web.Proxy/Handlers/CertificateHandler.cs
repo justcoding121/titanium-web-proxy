@@ -1,6 +1,7 @@
 using System;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
@@ -33,7 +34,7 @@ public partial class ProxyServer
             // a captured SynchronizationContext cannot deadlock the handshake thread.
             var pending = ServerCertificateValidationCallback.InvokeAsync(this, args, logger);
             if (!pending.IsCompletedSuccessfully)
-                Task.Run(() => pending).GetAwaiter().GetResult();
+                Task.Run(() => pending, sessionArgs.CancellationToken).GetAwaiter().GetResult();
             return args.IsValid;
         }
 
