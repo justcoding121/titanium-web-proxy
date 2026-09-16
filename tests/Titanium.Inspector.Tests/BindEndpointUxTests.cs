@@ -156,6 +156,84 @@ public class BindEndpointUxTests
     }
 
     [TestMethod]
+    public async Task InvalidBindAddress_ClearsStartBusy_SoNextStartSucceeds()
+    {
+        var path = TempSettingsPath();
+        try
+        {
+            var settings = new SettingsService(path);
+            settings.Current.AutoStartCapture = false;
+            settings.Current.AutoSystemProxyOnStart = false;
+            settings.Save();
+
+            var recorder = new RecordingSystemProxyController();
+            using var interception = new InterceptionService(recorder) { UseInMemoryTrustState = true };
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception);
+
+            vm.BindPort = 0;
+            vm.BindAddress = "::::";
+            vm.StartCaptureCommand.Execute(null);
+            await WaitUntil(() => vm.StatusText.Contains("Invalid bind address", StringComparison.Ordinal));
+            Assert.IsFalse(interception.IsRunning);
+            StringAssert.Contains(vm.StatusText, MainWindowViewModel.InvalidBindAddressMessage("::::"));
+
+            vm.BindAddress = "*";
+            vm.StartCaptureCommand.Execute(null);
+            await WaitUntil(() => interception.IsRunning &&
+                vm.EndpointStatusText.StartsWith("Proxy running", StringComparison.Ordinal));
+            Assert.AreEqual($"Proxy running on 0.0.0.0:{vm.BindPort}", vm.EndpointStatusText);
+
+            vm.EnsureShutdown();
+        }
+        finally
+        {
+            TryDelete(path);
+        }
+    }
+
+    [TestMethod]
+    public async Task LocalhostAlias_StartsLoopbackListener()
+    {
+        var path = TempSettingsPath();
+        try
+        {
+            var settings = new SettingsService(path);
+            settings.Current.AutoStartCapture = false;
+            settings.Current.AutoSystemProxyOnStart = false;
+            settings.Save();
+
+            var recorder = new RecordingSystemProxyController();
+            using var interception = new InterceptionService(recorder) { UseInMemoryTrustState = true };
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception);
+
+            vm.BindPort = 0;
+            vm.BindAddress = "localhost";
+            vm.StartCaptureCommand.Execute(null);
+            await WaitUntil(() => interception.IsRunning &&
+                vm.EndpointStatusText.StartsWith("Proxy running", StringComparison.Ordinal));
+            Assert.AreEqual($"Proxy running on localhost:{vm.BindPort}", vm.EndpointStatusText);
+
+            vm.EnsureShutdown();
+        }
+        finally
+        {
+            TryDelete(path);
+        }
+    }
+
+    [TestMethod]
     public async Task ManualStart_WithAutoSystemProxyOnStart_EnablesSystemProxy()
     {
         var path = TempSettingsPath();

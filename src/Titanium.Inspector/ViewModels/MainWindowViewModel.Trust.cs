@@ -859,7 +859,7 @@ public sealed partial class MainWindowViewModel
             "2. Install the exported .cer (or .pem) on the device as a trusted CA.\n" +
             $"3. Set the device HTTP proxy to this PC's LAN IP on port {BindPort} " +
             $"(current bind is {BindAddress}:{BindPort}).\n\n" +
-            "Use Bind address 0.0.0.0 so other devices can reach the proxy.";
+            "Use Bind address 0.0.0.0 or * so other devices can reach the proxy.";
 
         var owner = TryGetMainWindow();
         if (await AwaitDialogAsync(_dialogs.ShowDeviceCaSetupAsync(owner, message)))

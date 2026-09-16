@@ -43,7 +43,7 @@ Engine knobs live under `server:` ([reference](#server-reference)). Plus feature
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `host` | string | Default `0.0.0.0` |
+| `host` | string | Bind address. Default `0.0.0.0` (all IPv4 interfaces). `*` is the same as `0.0.0.0`. Use `127.0.0.1` for localhost only. |
 | `port` | int | Default `8000` |
 | `decryptSsl` | bool | Terminate TLS / decrypt HTTPS (man-in-the-middle when used for MITM) |
 | `type` | string? | `explicit`, `transparent`, `socks`, or `quic` (null uses ForwardHost heuristics) |
