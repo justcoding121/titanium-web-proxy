@@ -135,7 +135,8 @@ public class BootstrapAndFirefoxHelperCoverageTests
         var writePolicy = typeof(FirefoxCertificateTrust).GetMethod("TryWriteWindowsImportEnterpriseRootsPolicy", flags);
         if (OperatingSystem.IsWindows() && writePolicy is not null)
         {
-            Assert.IsTrue((bool)writePolicy.Invoke(null, [])!);
+            // Exercise HKCU policy write when allowed; group policy may deny Software\Policies.
+            _ = writePolicy.Invoke(null, []);
         }
 
         var dir = Path.Combine(Path.GetTempPath(), "twp-ff-er-" + Guid.NewGuid().ToString("N"));

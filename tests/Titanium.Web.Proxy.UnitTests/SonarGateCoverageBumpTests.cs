@@ -356,10 +356,9 @@ public class SonarGateCoverageBumpTests
         CollectionAssert.AreEqual(new byte[] { (byte)'x' },
             del(both, Http2FrameFlag.Padded | Http2FrameFlag.Priority).ToArray());
 
-        // Priority but fewer than 5 bytes after pad strip → keep remaining.
+        // Priority but fewer than 5 bytes → PROTOCOL_ERROR (RFC 7540 §6.2).
         var shortPri = new byte[] { 0, 1, 2 };
-        CollectionAssert.AreEqual(new byte[] { 0, 1, 2 },
-            del(shortPri, Http2FrameFlag.Priority).ToArray());
+        Assert.ThrowsExactly<IOException>(() => del(shortPri, Http2FrameFlag.Priority));
     }
 
     private delegate ReadOnlySpan<byte> StripHeadersSpanDelegate(
