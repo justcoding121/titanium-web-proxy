@@ -98,7 +98,7 @@ Manifest stubs live in `tools/packaging/winget/`. Resubmit to `microsoft/winget-
 
 ### Chocolatey (Windows)
 
-Package ids: `titanium-cli` (zip), `titanium-inspector` (MSI). Stubs in [`chocolatey/`](chocolatey/). **Automatic:** merge to `beta` / `stable` → `cut-product-tag` → [`release.yml`](../../.github/workflows/release.yml) `publish-chocolatey` (bump SHA256s + `choco push` for stable and `-beta`). Re-push an existing tag with [`chocolatey-publish.yml`](../../.github/workflows/chocolatey-publish.yml). Secret name only: `CHOCOLATEY_API_KEY` — see [`CHOCOLATEY_FOLLOWUP.md`](CHOCOLATEY_FOLLOWUP.md).
+Package ids: `titanium-cli` (zip), `titanium-inspector` (MSI). Stubs in [`chocolatey/`](chocolatey/). **Automatic:** merge to `beta` / `stable` → `cut-product-tag` → [`release.yml`](../../.github/workflows/release.yml) `publish-chocolatey` (bump SHA256s + `choco push` for stable and `-beta`). Re-push an existing tag with [`chocolatey-publish.yml`](../../.github/workflows/chocolatey-publish.yml). Secret name only: `CHOCOLATEY_API_KEY` (set via `gh secret set`; never commit the key).
 
 ```shell
 choco install titanium-cli
