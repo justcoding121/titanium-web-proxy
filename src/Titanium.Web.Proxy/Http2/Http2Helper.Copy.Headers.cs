@@ -206,8 +206,8 @@ namespace Titanium.Web.Proxy.Http2
                 bool isConnect = method.Length > 0 &&
                     method.Span.SequenceEqual(ConnectMethodBytes);
                 bool isExtendedConnect = isConnect && headerListener.Protocol.Length > 0;
-                bool isMainHeaders = (method.Length > 0 && path.Length > 0) ||
-                    (isConnect && headerListener.Authority.Length > 0);
+                // Treat any :method-bearing block as request headers — never silently reclassify as trailers.
+                bool isMainHeaders = method.Length > 0 || (isConnect && headerListener.Authority.Length > 0);
 
                 // RFC 8441 §5: :protocol is only valid on CONNECT requests.
                 if (!isConnect && headerListener.Protocol.Length > 0)
@@ -272,6 +272,20 @@ namespace Titanium.Web.Proxy.Http2
                         if (EnforceHttp2RelayHeaderSemantics(connectionState, httpInterceptionEnabled, logger, schemeErr))
                         {
                             ReportException(logger, new ProxyHttpException(schemeErr, null, sessionArgs));
+                            removeAndFinalizeStream(hbStreamId);
+                            await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                                hbStreamId, Http2ErrorCode.ProtocolError, input));
+                            return false;
+                        }
+                    }
+
+                    if (!isConnect && path.Length == 0)
+                    {
+                        var pathErr =
+                            "HTTP/2 protocol error: request HEADERS missing required :path pseudo-header.";
+                        if (EnforceHttp2RelayHeaderSemantics(connectionState, httpInterceptionEnabled, logger, pathErr))
+                        {
+                            ReportException(logger, new ProxyHttpException(pathErr, null, sessionArgs));
                             removeAndFinalizeStream(hbStreamId);
                             await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
                                 hbStreamId, Http2ErrorCode.ProtocolError, input));
