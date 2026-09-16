@@ -554,6 +554,12 @@ def main() -> None:
         tbl = i + m.start() + 1
         # Replace Median / Userspace header line(s) between heading and table
         chunk = text[i:tbl]
+        # Drop stale peer-omission notes; new_hdr may re-add a single copy.
+        chunk = re.sub(
+            r"(?:\*Not possible:\* \*\*HAProxy\*\* and \*\*Envoy\*\* columns are omitted[^\n]*\n)+",
+            "",
+            chunk,
+        )
         chunk2 = re.sub(
             r"(Median of \*\*3\*\*[^\n]*\n|Userspace[^\n]*\n(?:[^\n]*\n)?)",
             new_hdr if new_hdr.endswith("\n") else new_hdr + "\n",
