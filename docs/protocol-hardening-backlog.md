@@ -141,11 +141,20 @@ These are real correctness gaps. None causes data loss or protocol errors in cur
 
 These require a team/architectural call before coding. They cannot be safely fixed with a local patch.
 
-#### B3-a  QPACK dynamic table: Base and post-base indexes ignored (finding #3)
-**Location:** `QpackDecoder.cs` ~lines 99–104; `QpackEncoder.cs` ~lines 364–387  
-**Issue:** Delta Base is parsed and discarded. Dynamic and post-base indexes are treated as absolute table indexes. RFC 9204 uses *relative* indexes from Base.  
-**Impact:** Only affects sessions with `QPACK_MAX_TABLE_CAPACITY > 0` (dynamic table enabled). Static-only mode (the current effective default) is correct. Enabling the dynamic table will produce `QPACK_DECOMPRESSION_FAILED` at the peer.  
-**Decision needed:** (a) Complete the dynamic table implementation per RFC 9204, or (b) gate `EnableQpackDynamicTable = false` permanently until (a) is done and add a startup assertion that this cannot be enabled. Currently the guard already throws for `requiredInsertCount != 0` when `context == null`; document this explicitly.
+#### B3-a  QPACK dynamic table: Base and post-base indexes ignored  *(partially hardened — see below)*
+**Location:** `QpackDecoder.cs` ~lines 99–118; `QpackEncoder.cs` ~lines 364–387  
+**Issue:** Delta Base is parsed but discarded (`out _`). Dynamic indexed fields use `TryGetByAbsoluteIndex(wireIndex)` directly — but RFC 9204 §4.5.2 requires `absoluteIndex = Base − 1 − wireIndex` (relative), and §4.5.5 post-base fields require `absoluteIndex = Base + wireIndex`. Both conversions are missing, so any session where a peer actually inserts rows into the dynamic table and uses relative/post-base wire references would get the wrong header value silently.  
+**How it was silently dangerous:** The existing guard only fires when `context == null` (dynamic table disabled). When `EnableQpackDynamicTable = true` (context != null) and a peer sends `requiredInsertCount > 0`, the decoder proceeded with incorrect absolute-index lookups — potentially returning a completely different header name/value or throwing a misleading not-found exception.  
+**Partially fixed (2026-09-15):** Added a fail-fast guard in `QpackDecoder.DecodeCore` that throws `Http3ConnectionException(QpackDecompressionFailed)` with a clear message whenever `requiredInsertCount != 0 && context != null`. This prevents silent header corruption at the cost of a visible connection error for anyone who enables the dynamic table and hits a peer that fills it. This is strictly safer than the previous silent mis-decode.  
+**Remaining work:** Full RFC 9204 §4.5 Base-relative decoding:
+1. Parse S-bit + DeltaBase (already parsed, currently discarded via `_ = sBit; _ = deltaBase`).
+2. Compute `Base = ric − (sBit ? deltaBase+1 : deltaBase)`.
+3. Resolve relative dynamic refs: `abs = Base − 1 − wireIndex`.
+4. Resolve post-base dynamic refs: `abs = Base + wireIndex`.
+5. Fix `QpackEncoder` to compute and write the correct Required Insert Count + S/DeltaBase preamble when encoding with a non-empty dynamic table.
+6. Add unit tests with real relative/post-base encoded blocks.  
+**Decision still needed:** (a) Complete the above implementation per RFC 9204, or (b) throw a `NotSupportedException` at startup when `EnableQpackDynamicTable = true` to document the incompleteness publicly until (a) is done.  
+**Priority upgrade:** Moved to B2 (future hardening) — the silent corruption is fixed; the feature is functionally incomplete and must be properly implemented before `EnableQpackDynamicTable = true` is safe to use in production.
 
 #### B3-b  Compressed relay skips header-block validation (finding #24)
 **Location:** `Http2Helper.Copy.cs` ~lines 780–848  
@@ -203,7 +212,7 @@ Priority 3 (next quarter — correctness, high complexity or RFC edge cases):
   B2-i  QUIC auth CTS lifecycle
 
 Priority 4 (needs architectural decision before starting):
-  B3-a  QPACK dynamic table
+  B3-a  QPACK dynamic table full implementation  ← fail-fast guard added; need RFC 9204 Base decoding
   B3-b  Compressed relay validation
   B3-c  H1 header parser limits
   B3-d  Async cert validation
@@ -218,4 +227,4 @@ Intentional design (no change unless requirements change):
 
 ---
 
-*Last updated: 2026-09-15 — principal architect review, commit `d11d03d9`*
+*Last updated: 2026-09-15 — principal architect review, commit `d11d03d9`; QPACK dynamic-table fail-fast guard added (QpackDecoder.cs)*
