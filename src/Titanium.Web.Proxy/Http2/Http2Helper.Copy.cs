@@ -507,7 +507,7 @@ namespace Titanium.Web.Proxy.Http2
                         ReportException(logger, new ProxyHttpException(
                             $"HTTP/2 protocol error: expected a SETTINGS frame immediately after the connection preface, got {type}.",
                             null, null));
-                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], 0,
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], connectionState.LastClientStreamId,
                             Http2ErrorCode.ProtocolError, input));
                         return;
                     }
@@ -521,7 +521,7 @@ namespace Titanium.Web.Proxy.Http2
                     ReportException(logger, new ProxyHttpException(
                         $"HTTP/2 protocol error: frame of type {type} exceeded the maximum accepted frame size.",
                         null, null));
-                    await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                    await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], connectionState.LastClientStreamId,
                         Http2ErrorCode.FrameSizeError, input));
                     // Unlike every other rejection path here, this one fires before the frame's payload is
                     // ever read (see the ForceRead call right below this block) - drain it now so the GOAWAY
@@ -538,7 +538,7 @@ namespace Titanium.Web.Proxy.Http2
                     // stream-specific; stream id 0 on any of them is a connection-level PROTOCOL_ERROR.
                     ReportException(logger, new ProxyHttpException(
                         $"HTTP/2 protocol error: frame of type {type} received with stream id 0.", null, null));
-                    await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], 0,
+                    await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], connectionState.LastClientStreamId,
                         Http2ErrorCode.ProtocolError, input));
                     return;
                 }
@@ -709,7 +709,7 @@ namespace Titanium.Web.Proxy.Http2
                     ReportException(logger, new ProxyHttpException(
                         $"HTTP/2 protocol error: unexpected PUSH_PROMISE frame from the {(isClient ? "client" : "server")}.",
                         null, null));
-                    await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                    await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], connectionState.LastClientStreamId,
                         Http2ErrorCode.ProtocolError, input));
                     return;
                 }
@@ -846,7 +846,7 @@ namespace Titanium.Web.Proxy.Http2
                                 "HTTP/2 protocol error: HEADERS frame received while a previous header block on this connection was still open.",
                                 null, null));
                             await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
-                                pendingHeaderStreamId, Http2ErrorCode.ProtocolError, input));
+                                connectionState.LastClientStreamId, Http2ErrorCode.ProtocolError, input));
                             return;
                         }
 
@@ -915,7 +915,7 @@ namespace Titanium.Web.Proxy.Http2
                             "HTTP/2 protocol error: HEADERS frame received while a previous header block on this connection was still open.",
                             null, args));
                         await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
-                            pendingHeaderStreamId, Http2ErrorCode.ProtocolError, input));
+                            connectionState.LastClientStreamId, Http2ErrorCode.ProtocolError, input));
                         return;
                     }
 
@@ -970,7 +970,7 @@ namespace Titanium.Web.Proxy.Http2
                     {
                         ReportException(logger, new ProxyHttpException(
                             "HTTP/2 protocol error: unexpected CONTINUATION frame.", null, args));
-                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], connectionState.LastClientStreamId,
                             Http2ErrorCode.ProtocolError, input));
                         return;
                     }
@@ -980,7 +980,7 @@ namespace Titanium.Web.Proxy.Http2
                         ReportException(logger, new ProxyHttpException(
                             "HTTP/2 header block exceeded the maximum allowed compressed size.", null,
                             pendingHeaderArgs));
-                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], connectionState.LastClientStreamId,
                             Http2ErrorCode.EnhanceYourCalm, input));
                         return;
                     }
@@ -1010,7 +1010,7 @@ namespace Titanium.Web.Proxy.Http2
                                 "HTTP/2 header block exceeded the maximum allowed CONTINUATION frame count or " +
                                 "stayed open too long - possible CONTINUATION flood.", null, pendingHeaderArgs));
                             await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
-                                streamId, Http2ErrorCode.EnhanceYourCalm, input));
+                                connectionState.LastClientStreamId, Http2ErrorCode.EnhanceYourCalm, input));
                             return;
                         }
                     }
@@ -1413,7 +1413,7 @@ namespace Titanium.Web.Proxy.Http2
                     {
                         ReportException(logger, new ProxyHttpException(
                             "HTTP/2 protocol error: WINDOW_UPDATE frame with invalid length.", null, args));
-                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], connectionState.LastClientStreamId,
                             Http2ErrorCode.FrameSizeError, input));
                         return;
                     }
@@ -1425,7 +1425,7 @@ namespace Titanium.Web.Proxy.Http2
                         // stream id 0) of type PROTOCOL_ERROR.
                         if (streamId == 0)
                         {
-                            await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], 0,
+                            await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], connectionState.LastClientStreamId,
                                 Http2ErrorCode.ProtocolError, input));
                             return;
                         }
@@ -1455,7 +1455,7 @@ namespace Titanium.Web.Proxy.Http2
                                 null, args));
                             if (flowStreamId == 0)
                             {
-                                await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], 0,
+                                await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], connectionState.LastClientStreamId,
                                     Http2ErrorCode.FlowControlError, input));
                                 return;
                             }
@@ -1473,7 +1473,7 @@ namespace Titanium.Web.Proxy.Http2
                     {
                         ReportException(logger, new ProxyHttpException(
                             "HTTP/2 protocol error: PING frame with invalid length.", null, args));
-                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], connectionState.LastClientStreamId,
                             Http2ErrorCode.FrameSizeError, input));
                         return;
                     }
@@ -1553,7 +1553,7 @@ namespace Titanium.Web.Proxy.Http2
                         // 6.5. SETTINGS
                         // A SETTINGS frame with a length other than a multiple of 6 octets MUST be treated as a connection error (Section 5.4.1) of type FRAME_SIZE_ERROR
                         ReportException(logger, new ProxyHttpException("Invalid settings length", null, null));
-                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], connectionState.LastClientStreamId,
                             Http2ErrorCode.FrameSizeError, input));
                         return;
                     }
@@ -1565,7 +1565,7 @@ namespace Titanium.Web.Proxy.Http2
                         // FRAME_SIZE_ERROR."
                         ReportException(logger, new ProxyHttpException(
                             "HTTP/2 protocol error: SETTINGS ACK frame with non-zero length.", null, null));
-                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], connectionState.LastClientStreamId,
                             Http2ErrorCode.FrameSizeError, input));
                         return;
                     }
@@ -1764,7 +1764,7 @@ namespace Titanium.Web.Proxy.Http2
                     {
                         ReportException(logger, new ProxyHttpException(
                             "HTTP/2 protocol error: SETTINGS frame contained an out-of-range value.", null, null));
-                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], connectionState.LastClientStreamId,
                             invalidSettingsError, input));
                         return;
                     }
@@ -1863,7 +1863,7 @@ namespace Titanium.Web.Proxy.Http2
                     {
                         ReportException(logger, new ProxyHttpException(
                             "HTTP/2 protocol error: RST_STREAM frame with invalid length.", null, args));
-                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], connectionState.LastClientStreamId,
                             Http2ErrorCode.FrameSizeError, input));
                         return;
                     }
