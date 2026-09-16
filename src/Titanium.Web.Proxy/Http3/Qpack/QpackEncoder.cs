@@ -332,9 +332,14 @@ internal static class QpackEncoder
         }
         else
         {
+            // Encode RIC on the wire. Pair with S=1, DeltaBase = RIC−1 so Base = 0.
+            // WriteDynamicIndexed / WriteLiteralWithDynamicNameRef emit post-base instructions
+            // whose wire index is the absolute dynamic-table index; with Base=0 those resolve
+            // as abs = Base + wireIndex = absoluteIndex (RFC 9204 §4.5.3 / §4.5.5).
             var encodedRic = EncodeRequiredInsertCount(maxRequiredInsertCount, context!.MaxTableCapacityFromPeer);
             ricByte = (byte)(encodedRic & 0xFF);
-            sByte = 0x00;
+            var deltaBase = maxRequiredInsertCount - 1;
+            sByte = (byte)(0x80 | (deltaBase & 0x7F));
         }
 
         var result = new byte[2 + body.Length];

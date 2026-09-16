@@ -1,6 +1,7 @@
 #pragma warning disable CA1416
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.IO;
 using System.Net.Quic;
 using System.Threading;
@@ -1150,7 +1151,7 @@ internal static class Http3RequestStream
             response.Headers.RemoveHeader("transfer-encoding");
 
         var qpackHeaders = QpackEncoder.EncodeResponse(response, qpackContext);
-        var hasTrailers = response.TrailingHeaders.Count > 0;
+        var hasTrailers = response.HasTrailingHeaders;
 
         if (response.StreamBodyWriter != null && !response.IsBodySent)
         {
