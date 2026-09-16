@@ -1,6 +1,7 @@
 using System;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 
@@ -28,9 +29,11 @@ public partial class ProxyServer
 
             // Prefer completing synchronously when handlers return completed tasks — .Wait() on the
             // handshake path parked a worker even for Task.CompletedTask (probe loopback CA).
+            // When not already completed, run on the ThreadPool so a user callback that posts back to
+            // a captured SynchronizationContext cannot deadlock the handshake thread.
             var pending = ServerCertificateValidationCallback.InvokeAsync(this, args, logger);
             if (!pending.IsCompletedSuccessfully)
-                pending.GetAwaiter().GetResult();
+                Task.Run(() => pending.AsTask()).GetAwaiter().GetResult();
             return args.IsValid;
         }
 
