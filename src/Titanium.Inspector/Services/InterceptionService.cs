@@ -1576,7 +1576,7 @@ public sealed class InterceptionService : IDisposable
         var disableDecrypt = MitmBypass.ShouldDisableSslDecrypt(
             host,
             DecryptSkipHosts,
-            userOnlyHosts: null);
+            userOnlyHosts: DecryptOnlyHosts);
         var learnedBypass = !disableDecrypt && DecryptHttps && IsLearnedDecryptBypass(host);
         e.DecryptSsl = DecryptHttps && !disableDecrypt && !learnedBypass;
         e.AllowHttpProtocolTranslation = true;
@@ -1584,7 +1584,7 @@ public sealed class InterceptionService : IDisposable
         if (learnedBypass)
             opaqueReason = OpaqueTunnelReason.LearnedFailure;
         else if (disableDecrypt || !DecryptHttps)
-            opaqueReason = MitmBypass.ResolveOpaqueReason(host, DecryptHttps, DecryptSkipHosts, userOnlyHosts: null);
+            opaqueReason = MitmBypass.ResolveOpaqueReason(host, DecryptHttps, DecryptSkipHosts, userOnlyHosts: DecryptOnlyHosts);
 
         if (!Capturing)
         {
@@ -2377,14 +2377,15 @@ public sealed class InterceptionService : IDisposable
     {
         if (sent != 0)
         {
-            snap.SentBytes += sent;
+            snap.AddSentBytes(sent);
         }
 
         if (received != 0)
         {
-            snap.ReceivedBytes += received;
+            snap.AddReceivedBytes(received);
         }
 
+        // BodySize is UI-only best-effort; concurrent writers both compute a valid total.
         snap.BodySize = snap.SentBytes + snap.ReceivedBytes;
     }
 
