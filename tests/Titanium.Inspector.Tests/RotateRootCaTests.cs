@@ -338,9 +338,11 @@ public class RotateRootCaTests
             await ExecuteUntilAsync(
                 vm.RotateCaCommand,
                 () => dialogs.TrustRecoveryCalls >= 1
+                      && !vm.IsStatusBusy
+                      && interception.IsRootTrusted
                       && vm.StatusText.Contains("trusted", StringComparison.OrdinalIgnoreCase));
             Assert.AreEqual(1, dialogs.TrustRecoveryCalls);
-            StringAssert.Contains(vm.StatusText, "trusted");
+            StringAssert.Contains(vm.StatusText, "trusted", StringComparison.OrdinalIgnoreCase);
             interception.EnsureShutdown();
         }
         finally
