@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.ViewModels;
@@ -224,6 +226,114 @@ public class BindEndpointUxTests
             await WaitUntil(() => interception.IsRunning &&
                 vm.EndpointStatusText.StartsWith("Proxy running", StringComparison.Ordinal));
             Assert.AreEqual($"Proxy running on localhost:{vm.BindPort}", vm.EndpointStatusText);
+
+            vm.EnsureShutdown();
+        }
+        finally
+        {
+            TryDelete(path);
+        }
+    }
+
+    [TestMethod]
+    public void BindPortText_ParsesStarEmptyAndRejectsJunk()
+    {
+        Assert.IsTrue(MainWindowViewModel.TryParseBindPort("", out var empty));
+        Assert.AreEqual(0, empty);
+        Assert.IsTrue(MainWindowViewModel.TryParseBindPort("  *  ", out var star));
+        Assert.AreEqual(0, star);
+        Assert.IsTrue(MainWindowViewModel.TryParseBindPort("0", out var zero));
+        Assert.AreEqual(0, zero);
+        Assert.IsTrue(MainWindowViewModel.TryParseBindPort("65535", out var max));
+        Assert.AreEqual(65535, max);
+        Assert.IsFalse(MainWindowViewModel.TryParseBindPort("abc", out _));
+        Assert.IsFalse(MainWindowViewModel.TryParseBindPort("99999", out _));
+        Assert.AreEqual("*", MainWindowViewModel.FormatBindPortText(0));
+        Assert.AreEqual("8866", MainWindowViewModel.FormatBindPortText(8866));
+    }
+
+    [TestMethod]
+    public void BindPortText_EmptyHasNoError_InvalidCharsAreFriendly()
+    {
+        var path = TempSettingsPath();
+        try
+        {
+            var settings = new SettingsService(path);
+            settings.Current.AutoStartCapture = false;
+            settings.Current.AutoSystemProxyOnStart = false;
+            settings.Save();
+
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception);
+            var errors = (INotifyDataErrorInfo)vm;
+
+            vm.BindPortText = "";
+            Assert.IsFalse(vm.HasErrors);
+            Assert.AreEqual(0, vm.BindPort);
+            Assert.AreEqual(0, errors.GetErrors(nameof(MainWindowViewModel.BindPortText)).Cast<object>().Count());
+
+            vm.BindPortText = "abc";
+            Assert.IsTrue(vm.HasErrors);
+            var messages = errors.GetErrors(nameof(MainWindowViewModel.BindPortText)).Cast<string>().ToList();
+            Assert.AreEqual(1, messages.Count);
+            Assert.AreEqual(MainWindowViewModel.InvalidBindPortMessage("abc"), messages[0]);
+
+            vm.BindPort = 0;
+            Assert.AreEqual("*", vm.BindPortText);
+            Assert.IsFalse(vm.HasErrors);
+
+            vm.EnsureShutdown();
+        }
+        finally
+        {
+            TryDelete(path);
+        }
+    }
+
+    [TestMethod]
+    public async Task InvalidBindPort_ClearsStartBusy_StarStartsEphemeral()
+    {
+        var path = TempSettingsPath();
+        try
+        {
+            var settings = new SettingsService(path);
+            settings.Current.AutoStartCapture = false;
+            settings.Current.AutoSystemProxyOnStart = false;
+            settings.Save();
+
+            var recorder = new RecordingSystemProxyController();
+            using var interception = new InterceptionService(recorder) { UseInMemoryTrustState = true };
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception);
+
+            vm.BindAddress = "127.0.0.1";
+            vm.BindPortText = "nope";
+            vm.StartCaptureCommand.Execute(null);
+            await WaitUntil(() => vm.StatusText.Contains("Invalid port", StringComparison.Ordinal));
+            Assert.IsFalse(interception.IsRunning);
+            StringAssert.Contains(vm.StatusText, MainWindowViewModel.InvalidBindPortMessage("nope"));
+
+            vm.BindPortText = "*";
+            vm.StartCaptureCommand.Execute(null);
+            await WaitUntil(() => interception.IsRunning &&
+                vm.EndpointStatusText.StartsWith("Proxy running", StringComparison.Ordinal) &&
+                vm.BindPort > 0);
+            Assert.AreEqual($"Proxy running on 127.0.0.1:{vm.BindPort}", vm.EndpointStatusText);
+            Assert.AreEqual(vm.BindPort.ToString(), vm.BindPortText);
 
             vm.EnsureShutdown();
         }

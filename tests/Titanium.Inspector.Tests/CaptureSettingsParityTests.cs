@@ -21,6 +21,12 @@ public class CaptureSettingsParityTests
         Assert.AreEqual(10000, n);
         Assert.IsFalse(SessionRetentionWindow.TryParsePositiveInt("0", out _));
         Assert.IsFalse(SessionRetentionWindow.TryParsePositiveLong("-1", out _));
+        Assert.AreEqual(
+            "Maximum sessions: enter a whole number greater than 0.",
+            SessionRetentionWindow.FormatPositiveNumberError("Maximum sessions", "  "));
+        Assert.AreEqual(
+            "Maximum sessions: 'abc' is not a whole number greater than 0.",
+            SessionRetentionWindow.FormatPositiveNumberError("Maximum sessions", "abc"));
     }
 
     [TestMethod]

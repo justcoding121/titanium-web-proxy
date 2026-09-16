@@ -26,6 +26,18 @@ Toolbar **Bind address** is an IP (or alias), not a hostname except `localhost`.
 
 `*` matches the CLI listener `host` alias for all IPv4 interfaces. Binding on all adapters means other machines on the network can reach the proxy — use that only on a network you trust. For a phone or other device, bind `0.0.0.0` or `*` and point the device at this PC's LAN IP (see **Capture → device CA setup**).
 
+### Bind port
+
+Toolbar **Port** is a number or `*`. Edit it only while the proxy is stopped.
+
+| Value | Listens on |
+| --- | --- |
+| `8866` (default) or any `1`–`65535` | That TCP port |
+| `*` or empty | An OS-chosen port (ephemeral). After Start, the box shows the port that was assigned. |
+| `0` | Same as `*` |
+
+Invalid characters (for example `abc`) show a short message under the box — not a conversion exception. Empty is not an error. CLI `twp.yaml` uses a numeric `port` (`0` for ephemeral); Inspector `*` is the same idea.
+
 Capture menu options (**Capturing**, **Decrypt HTTPS**, **System proxy**, **Capture local traffic**, auto-start prefs) show a check when on. **Allow Store apps…** (Windows) sits with System proxy. Preferences such as **Session retention…**, **Excluded hosts…**, **Ignore insecure server certificates**, and **Logging…** live under **Options**.
 
 ## Install
@@ -106,7 +118,7 @@ If **Enabled**, the first matching rule returns a fake status/body **before** th
 
 **Map Local:** set an optional file path on the rule (or use **Browse…**). When the path is set, the response body is **streamed from that file** (with `Content-Length`) instead of the inline body field. Inline body is used when Map Local is empty. Missing or oversized files cause the rule to be skipped (request continues to breakpoints/origin).
 
-**Match** (URL + optional GraphQL) decides which client requests a rule applies to. **Respond with** is the fake status/body. Same `/graphql` URL can have one rule per operation.
+**Match** (URL + optional GraphQL) decides which client requests a rule applies to. **Respond with** is the fake status/body. Status is `100`–`599`; empty means `200`. Invalid characters show a short message under the box (not a conversion exception). Same `/graphql` URL can have one rule per operation.
 
 #### Map Remote
 
