@@ -86,6 +86,35 @@ ignored). It does **not** detect JA3/Akamai by name — TLS failures look like o
 session is impossible; seamless recovery relies on a new CONNECT. Learned hosts skip MITM prefetch.
 Embedded proxies should leave the flag off unless they need this behavior.
 
+## HTTP/2 relay-path header validation (`Http2RelayValidation`)
+
+When interception is off and both legs are HTTP/2, Titanium relays compressed HPACK blocks
+verbatim for throughput (`PolicyFamily.Http2RelayValidation = Disabled`, the `Balanced` default).
+Semantic checks from RFC 9113 §8.3 (malformed pseudo-headers, connection-specific fields, and so on)
+are skipped on that path by design.
+
+- **`Observe`** — decode and log violations without rejecting; does not mutate headers.
+- **`Enforce`** — decode and tear down with `GOAWAY(PROTOCOL_ERROR)` on violations.
+  `ProxyProfile.PublicFacing` / `ProxyPolicyModes.AllEnforce` select this automatically.
+
+Trust the upstream peer when leaving the default `Disabled`; switch to `Observe` then `Enforce`
+when clients are untrusted.
+
+## `IgnoreServerCertificateErrors` accepts all certificate errors
+
+Setting `ProxyServer.IgnoreServerCertificateErrors = true` accepts **every** `SslPolicyErrors`
+value — name mismatch, expired certificates, and untrusted CAs included. Prefer
+`ServerCertificateValidationCallback` for scoped trust. A future major version will mark the
+boolean property `[Obsolete]`.
+
+## Async `ServerCertificateValidationCallback` and sync-context deadlocks
+
+`SslStream.RemoteCertificateValidationCallback` is synchronous. If your async callback posts work
+back onto the calling thread (typical on WPF/WinForms), a naive `.GetAwaiter().GetResult()` can
+deadlock. Titanium keeps the `IsCompletedSuccessfully` fast path for already-completed callbacks
+and otherwise runs the incomplete task via `Task.Run` so it does not capture the handshake
+thread's `SynchronizationContext`.
+
 ## See also
 
 - [Migration guide: 4.x → 5.0](Migration-4.x-to-5.0) — the full list of behavior changes this release
