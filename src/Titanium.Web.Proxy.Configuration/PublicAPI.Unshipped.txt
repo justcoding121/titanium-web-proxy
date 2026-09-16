@@ -200,6 +200,8 @@ Titanium.Web.Proxy.Configuration.Models.PolicyModesConfig.HeaderLimits.get -> st
 Titanium.Web.Proxy.Configuration.Models.PolicyModesConfig.HeaderLimits.set -> void
 Titanium.Web.Proxy.Configuration.Models.PolicyModesConfig.Http2AbuseBudget.get -> string?
 Titanium.Web.Proxy.Configuration.Models.PolicyModesConfig.Http2AbuseBudget.set -> void
+Titanium.Web.Proxy.Configuration.Models.PolicyModesConfig.Http2RelayValidation.get -> string?
+Titanium.Web.Proxy.Configuration.Models.PolicyModesConfig.Http2RelayValidation.set -> void
 Titanium.Web.Proxy.Configuration.Models.PolicyModesConfig.PolicyModesConfig() -> void
 Titanium.Web.Proxy.Configuration.Models.PoolingConfig
 Titanium.Web.Proxy.Configuration.Models.PoolingConfig.EnableConnectionPool.get -> bool?

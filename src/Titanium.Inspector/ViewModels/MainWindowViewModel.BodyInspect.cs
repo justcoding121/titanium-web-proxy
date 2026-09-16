@@ -400,21 +400,19 @@ public sealed partial class MainWindowViewModel
     {
         bytes = [];
         contentType = null;
-        if (InspectorBodyLimits.IsImageContentType(selected.ContentType)
-            || LooksLikeImageHeaders(selected.ResponseHeadersText))
+        if ((InspectorBodyLimits.IsImageContentType(selected.ContentType)
+                || LooksLikeImageHeaders(selected.ResponseHeadersText))
+            && selected.ResponseBodyBytes is { Length: > 0 } responseBytes)
         {
-            if (selected.ResponseBodyBytes is { Length: > 0 } responseBytes)
+            bytes = responseBytes;
+            contentType = selected.ContentType;
+            if (SessionInspectors.ParseHeaderBlock(selected.ResponseHeadersText)
+                .TryGetValue(ContentTypeHeaderName, out var responseType))
             {
-                bytes = responseBytes;
-                contentType = selected.ContentType;
-                if (SessionInspectors.ParseHeaderBlock(selected.ResponseHeadersText)
-                    .TryGetValue(ContentTypeHeaderName, out var responseType))
-                {
-                    contentType = responseType;
-                }
-
-                return true;
+                contentType = responseType;
             }
+
+            return true;
         }
 
         if (LooksLikeImageHeaders(selected.RequestHeadersText)

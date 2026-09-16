@@ -280,10 +280,10 @@ public class AutoResponderAndSelectionGuardTests
                 new UpdateService(settings),
                 settings,
                 interception);
-            var errors = (INotifyDataErrorInfo)vm;
+            var errors = vm;
 
             vm.AutoResponderStatusText = "";
-            Assert.IsFalse(((INotifyDataErrorInfo)vm).GetErrors(nameof(MainWindowViewModel.AutoResponderStatusText)).Cast<object>().Any());
+            Assert.IsFalse(vm.GetErrors(nameof(MainWindowViewModel.AutoResponderStatusText)).Cast<object>().Any());
             Assert.AreEqual(200, vm.AutoResponderStatus);
 
             vm.AutoResponderStatusText = "abc";
