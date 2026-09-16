@@ -434,6 +434,11 @@ public sealed partial class MainWindowViewModel
             .ToList();
     private Task AddAutoResponderRuleAsync()
     {
+        if (!TryGetAutoResponderStatus(out var status))
+        {
+            return Task.CompletedTask;
+        }
+
         if (string.IsNullOrWhiteSpace(AutoResponderLocalFilePath)
             && AutoResponderBody.Length > InspectorBodyLimits.MaxInlineToolBodyChars)
         {
@@ -444,7 +449,7 @@ public sealed partial class MainWindowViewModel
         AutoResponder.Rules.Add(new AutoResponderRule
         {
             MatchUrl = AutoResponderMatch,
-            StatusCode = AutoResponderStatus,
+            StatusCode = status,
             Body = AutoResponderBody,
             ContentType = AutoResponderContentType,
             LocalFilePath = AutoResponderLocalFilePath,
@@ -477,6 +482,11 @@ public sealed partial class MainWindowViewModel
             return Task.CompletedTask;
         }
 
+        if (!TryGetAutoResponderStatus(out var status))
+        {
+            return Task.CompletedTask;
+        }
+
         if (string.IsNullOrWhiteSpace(AutoResponderLocalFilePath)
             && AutoResponderBody.Length > InspectorBodyLimits.MaxInlineToolBodyChars)
         {
@@ -486,7 +496,7 @@ public sealed partial class MainWindowViewModel
 
         var rule = AutoResponder.SelectedRule;
         rule.MatchUrl = AutoResponderMatch;
-        rule.StatusCode = AutoResponderStatus;
+        rule.StatusCode = status;
         rule.Body = AutoResponderBody;
         rule.ContentType = AutoResponderContentType;
         rule.LocalFilePath = AutoResponderLocalFilePath;
@@ -494,6 +504,19 @@ public sealed partial class MainWindowViewModel
         PersistAutoResponder();
         StatusText = "AutoResponder rule updated";
         return Task.CompletedTask;
+    }
+
+    private bool TryGetAutoResponderStatus(out int status)
+    {
+        if (TryParseHttpStatus(AutoResponderStatusText, out status))
+        {
+            AutoResponderStatus = status;
+            return true;
+        }
+
+        SetOutcomeStatus(InvalidHttpStatusMessage(AutoResponderStatusText), StatusSeverity.Error, toastImportant: true);
+        status = 0;
+        return false;
     }
     private async Task BrowseAutoResponderLocalFileAsync()
     {

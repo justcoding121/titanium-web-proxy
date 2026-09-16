@@ -1,5 +1,7 @@
+using System.Collections;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -16,7 +18,7 @@ using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Inspector.ViewModels;
 
-public sealed partial class MainWindowViewModel : INotifyPropertyChanged
+public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotifyDataErrorInfo
 {
     private const string ZipFileFilter = "*.zip";
 
@@ -89,6 +91,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private string _autoResponderContentType = "text/plain";
     private string _autoResponderLocalFilePath = string.Empty;
     private int _autoResponderStatus = 200;
+    private string _autoResponderStatusText = "200";
     private string _mapRemoteMatch = "*";
     private string _mapRemoteTarget = "http://127.0.0.1/";
     private string _mapRemoteGraphQlOperation = string.Empty;
@@ -96,6 +99,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private string _plusPanelsSummary = "";
     private string _bindAddress = "127.0.0.1";
     private int _bindPort = 8866;
+    private string _bindPortText = "8866";
     private string _endpointStatusText = "Proxy stopped";
     private string _interceptToggleText = "Start proxy";
     /// <summary>Sticky intent: re-enable system proxy on the next Start after a Stop that had it on.</summary>
@@ -1359,8 +1363,94 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public int BindPort
     {
         get => _bindPort;
-        set => SetField(ref _bindPort, value);
+        set
+        {
+            SetField(ref _bindPort, value);
+            if (!TryParseBindPort(_bindPortText, out var represented) || represented != value)
+            {
+                _bindPortText = FormatBindPortText(value);
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindPortText)));
+                NotifyBindPortErrors();
+            }
+        }
     }
+
+    /// <summary>Toolbar port box. Empty or <c>*</c> is an OS-chosen port; keep this a string so typing is not an int conversion error.</summary>
+    public string BindPortText
+    {
+        get => _bindPortText;
+        set
+        {
+            var text = value ?? string.Empty;
+            if (!SetField(ref _bindPortText, text))
+            {
+                return;
+            }
+
+            if (TryParseBindPort(text, out var port))
+            {
+                _bindPort = port;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindPort)));
+            }
+
+            NotifyBindPortErrors();
+        }
+    }
+
+    public bool HasErrors =>
+        !TryParseBindPort(_bindPortText, out _) ||
+        !TryParseHttpStatus(_autoResponderStatusText, out _);
+
+    public event EventHandler<DataErrorsChangedEventArgs>? ErrorsChanged;
+
+    public IEnumerable GetErrors(string? propertyName)
+    {
+        if (string.IsNullOrEmpty(propertyName))
+        {
+            return ConcatErrors(BindPortErrors(), AutoResponderStatusErrors());
+        }
+
+        if (propertyName == nameof(BindPortText))
+        {
+            return BindPortErrors();
+        }
+
+        if (propertyName == nameof(AutoResponderStatusText))
+        {
+            return AutoResponderStatusErrors();
+        }
+
+        return Array.Empty<object>();
+    }
+
+    private IEnumerable BindPortErrors() =>
+        TryParseBindPort(_bindPortText, out _)
+            ? Array.Empty<object>()
+            : new object[] { InvalidBindPortMessage(_bindPortText) };
+
+    private IEnumerable AutoResponderStatusErrors() =>
+        TryParseHttpStatus(_autoResponderStatusText, out _)
+            ? Array.Empty<object>()
+            : new object[] { InvalidHttpStatusMessage(_autoResponderStatusText) };
+
+    private static IEnumerable ConcatErrors(IEnumerable first, IEnumerable second)
+    {
+        foreach (var item in first)
+        {
+            yield return item;
+        }
+
+        foreach (var item in second)
+        {
+            yield return item;
+        }
+    }
+
+    private void NotifyBindPortErrors() =>
+        ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(nameof(BindPortText)));
+
+    private void NotifyAutoResponderStatusErrors() =>
+        ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(nameof(AutoResponderStatusText)));
 
     /// <summary>Bind address/port are start-time config; editable only while the proxy is stopped.</summary>
     public bool BindFieldsEnabled => !_interception.IsRunning;
@@ -1513,7 +1603,38 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public int AutoResponderStatus
     {
         get => _autoResponderStatus;
-        set => SetField(ref _autoResponderStatus, value);
+        set
+        {
+            SetField(ref _autoResponderStatus, value);
+            if (!TryParseHttpStatus(_autoResponderStatusText, out var represented) || represented != value)
+            {
+                _autoResponderStatusText = FormatHttpStatusText(value);
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AutoResponderStatusText)));
+                NotifyAutoResponderStatusErrors();
+            }
+        }
+    }
+
+    /// <summary>AutoResponder status box. Empty means 200; keep this a string so typing is not an int conversion error.</summary>
+    public string AutoResponderStatusText
+    {
+        get => _autoResponderStatusText;
+        set
+        {
+            var text = value ?? string.Empty;
+            if (!SetField(ref _autoResponderStatusText, text))
+            {
+                return;
+            }
+
+            if (TryParseHttpStatus(text, out var status))
+            {
+                _autoResponderStatus = status;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AutoResponderStatus)));
+            }
+
+            NotifyAutoResponderStatusErrors();
+        }
     }
 
     public string PlusPanelsSummary
@@ -2396,7 +2517,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     {
         var s = _settings.Current;
         BindAddress = s.BindAddress;
-        BindPort = s.BindPort is > 0 and < 65536 ? s.BindPort : 8866;
+        BindPort = s.BindPort is >= 0 and <= 65535 ? s.BindPort : 8866;
         _launchAutoStartCapture = _autoStartCapture = s.AutoStartCapture;
         _launchAutoSystemProxyOnStart = _autoSystemProxyOnStart = s.AutoSystemProxyOnStart;
         _decryptHttps = s.DecryptHttps;
@@ -2432,6 +2553,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindAddress)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindPort)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindPortText)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AutoStartCapture)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AutoSystemProxyOnStart)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
@@ -2890,7 +3012,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        using var scope = InspectorUxTrace.Scope("StartCapture", $"{BindAddress}:{BindPort}");
+        using var scope = InspectorUxTrace.Scope("StartCapture", $"{BindAddress}:{BindPortText}");
         InspectorUxTrace.Event("UxTrace.Path", InspectorUxTrace.LogFilePath);
         _startBusy = true;
         try
@@ -2906,6 +3028,18 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 return;
             }
 
+            int port;
+            try
+            {
+                port = ParseBindPort(BindPortText);
+            }
+            catch (FormatException)
+            {
+                SetOutcomeStatus(InvalidBindPortMessage(BindPortText), StatusSeverity.Error, toastImportant: true);
+                return;
+            }
+
+            BindPort = port;
             PersistSettings();
             _interception.BreakpointOnResponse = BreakpointOnResponse;
             _interception.ScriptOnRequest = ScriptOnRequest;
@@ -2916,7 +3050,6 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             _interception.ConfigureLogging(_settings.Current);
             SetStatus("Starting proxy…", StatusSeverity.Busy);
             var token = StatusCancelToken;
-            var port = BindPort;
             // Listener start + first Root-store trust refresh can stall Crypt32 — keep off UI.
             // Use async Task.Run (not GetResult) to avoid sync-over-async deadlocks on a sync context.
             await Task.Run(
@@ -2999,6 +3132,68 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     internal static string InvalidBindAddressMessage(string bindAddress) =>
         $"Invalid bind address '{bindAddress}'. Use 127.0.0.1 or localhost for this PC only, or 0.0.0.0 or * for all network adapters.";
+
+    internal static bool TryParseBindPort(string? text, out int port)
+    {
+        var raw = (text ?? string.Empty).Trim();
+        if (raw.Length == 0 || raw == "*")
+        {
+            port = 0;
+            return true;
+        }
+
+        if (int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
+            && parsed is >= 0 and <= 65535)
+        {
+            port = parsed;
+            return true;
+        }
+
+        port = 0;
+        return false;
+    }
+
+    internal static int ParseBindPort(string text)
+    {
+        if (TryParseBindPort(text, out var port))
+        {
+            return port;
+        }
+
+        throw new FormatException(InvalidBindPortMessage(text));
+    }
+
+    internal static string FormatBindPortText(int port) =>
+        port == 0 ? "*" : port.ToString(CultureInfo.InvariantCulture);
+
+    internal static string InvalidBindPortMessage(string text) =>
+        $"Invalid port '{text}'. Use 1–65535, or * (or empty) for an OS-chosen port.";
+
+    internal static bool TryParseHttpStatus(string? text, out int status)
+    {
+        var raw = (text ?? string.Empty).Trim();
+        if (raw.Length == 0)
+        {
+            status = 200;
+            return true;
+        }
+
+        if (int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
+            && parsed is >= 100 and <= 599)
+        {
+            status = parsed;
+            return true;
+        }
+
+        status = 0;
+        return false;
+    }
+
+    internal static string FormatHttpStatusText(int status) =>
+        status.ToString(CultureInfo.InvariantCulture);
+
+    internal static string InvalidHttpStatusMessage(string text) =>
+        $"Invalid status '{text}'. Use an HTTP status 100–599, or leave empty for 200.";
 
 
 

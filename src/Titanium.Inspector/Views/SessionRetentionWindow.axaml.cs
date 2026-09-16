@@ -65,13 +65,33 @@ public partial class SessionRetentionWindow : Window
 
     private void OnSave(object? sender, RoutedEventArgs e)
     {
-        if (!TryParsePositiveInt(MaxSessionsBox.Text, out var maxSessions) ||
-            !TryParsePositiveInt(HotBodySessionsBox.Text, out var hotBodies) ||
-            !TryParsePositiveInt(DiskCacheMaxAgeDaysBox.Text, out var maxAgeDays) ||
-            !TryParsePositiveLong(DiskCacheMaxMbBox.Text, out var diskMb) ||
-            !TryParsePositiveLong(MaxBodyRamMbBox.Text, out var ramMb))
+        if (!TryParsePositiveInt(MaxSessionsBox.Text, out var maxSessions))
         {
-            StatusText.Text = "Enter positive numbers for all fields.";
+            StatusText.Text = FormatPositiveNumberError("Maximum sessions", MaxSessionsBox.Text);
+            return;
+        }
+
+        if (!TryParsePositiveInt(HotBodySessionsBox.Text, out var hotBodies))
+        {
+            StatusText.Text = FormatPositiveNumberError("Keep full bodies in memory", HotBodySessionsBox.Text);
+            return;
+        }
+
+        if (!TryParsePositiveInt(DiskCacheMaxAgeDaysBox.Text, out var maxAgeDays))
+        {
+            StatusText.Text = FormatPositiveNumberError("Delete cached bodies older than (days)", DiskCacheMaxAgeDaysBox.Text);
+            return;
+        }
+
+        if (!TryParsePositiveLong(DiskCacheMaxMbBox.Text, out var diskMb))
+        {
+            StatusText.Text = FormatPositiveNumberError("Disk cache size limit (MB)", DiskCacheMaxMbBox.Text);
+            return;
+        }
+
+        if (!TryParsePositiveLong(MaxBodyRamMbBox.Text, out var ramMb))
+        {
+            StatusText.Text = FormatPositiveNumberError("Memory for request/response bodies (MB)", MaxBodyRamMbBox.Text);
             return;
         }
 
@@ -102,4 +122,9 @@ public partial class SessionRetentionWindow : Window
         value = 0;
         return long.TryParse(text?.Trim(), out value) && value > 0;
     }
+
+    public static string FormatPositiveNumberError(string field, string? text) =>
+        string.IsNullOrWhiteSpace(text)
+            ? $"{field}: enter a whole number greater than 0."
+            : $"{field}: '{text.Trim()}' is not a whole number greater than 0.";
 }
