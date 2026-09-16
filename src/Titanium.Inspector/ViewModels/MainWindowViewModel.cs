@@ -2893,20 +2893,30 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         using var scope = InspectorUxTrace.Scope("StartCapture", $"{BindAddress}:{BindPort}");
         InspectorUxTrace.Event("UxTrace.Path", InspectorUxTrace.LogFilePath);
         _startBusy = true;
-        var address = ParseBindAddress(BindAddress);
-        PersistSettings();
-        _interception.BreakpointOnResponse = BreakpointOnResponse;
-        _interception.ScriptOnRequest = ScriptOnRequest;
-        _interception.ScriptOnResponse = ScriptOnResponse;
-        _interception.IgnoreServerCertificateErrors = _settings.Current.IgnoreServerCertificateErrors;
-        _interception.AddViaHeader = _settings.Current.AddViaHeader;
-        _interception.DecryptHttps = _decryptHttps;
-        _interception.ConfigureLogging(_settings.Current);
-        SetStatus("Starting proxy…", StatusSeverity.Busy);
-        var token = StatusCancelToken;
-        var port = BindPort;
         try
         {
+            IPAddress address;
+            try
+            {
+                address = ParseBindAddress(BindAddress);
+            }
+            catch (Exception ex) when (ex is FormatException or ArgumentException)
+            {
+                SetOutcomeStatus(InvalidBindAddressMessage(BindAddress), StatusSeverity.Error, toastImportant: true);
+                return;
+            }
+
+            PersistSettings();
+            _interception.BreakpointOnResponse = BreakpointOnResponse;
+            _interception.ScriptOnRequest = ScriptOnRequest;
+            _interception.ScriptOnResponse = ScriptOnResponse;
+            _interception.IgnoreServerCertificateErrors = _settings.Current.IgnoreServerCertificateErrors;
+            _interception.AddViaHeader = _settings.Current.AddViaHeader;
+            _interception.DecryptHttps = _decryptHttps;
+            _interception.ConfigureLogging(_settings.Current);
+            SetStatus("Starting proxy…", StatusSeverity.Busy);
+            var token = StatusCancelToken;
+            var port = BindPort;
             // Listener start + first Root-store trust refresh can stall Crypt32 — keep off UI.
             // Use async Task.Run (not GetResult) to avoid sync-over-async deadlocks on a sync context.
             await Task.Run(
@@ -2973,18 +2983,22 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private static IPAddress ParseBindAddress(string bindAddress)
     {
-        if (string.IsNullOrWhiteSpace(bindAddress) || bindAddress == "0.0.0.0")
+        var host = (bindAddress ?? string.Empty).Trim();
+        if (host.Length == 0 || host is "0.0.0.0" or "*")
         {
             return IPAddress.Any;
         }
 
-        if (bindAddress == "127.0.0.1")
+        if (host == "127.0.0.1" || host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
         {
             return IPAddress.Loopback;
         }
 
-        return IPAddress.Parse(bindAddress);
+        return IPAddress.Parse(host);
     }
+
+    internal static string InvalidBindAddressMessage(string bindAddress) =>
+        $"Invalid bind address '{bindAddress}'. Use 127.0.0.1 or localhost for this PC only, or 0.0.0.0 or * for all network adapters.";
 
 
 

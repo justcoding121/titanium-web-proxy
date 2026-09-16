@@ -238,9 +238,15 @@ public class InspectorCommandCoverageTests
             Assert.AreEqual(IPAddress.Any,
                 (IPAddress)typeof(MainWindowViewModel).GetMethod("ParseBindAddress", flagsVm)!.Invoke(null, ["0.0.0.0"])!);
             Assert.AreEqual(IPAddress.Any,
+                (IPAddress)typeof(MainWindowViewModel).GetMethod("ParseBindAddress", flagsVm)!.Invoke(null, ["*"])!);
+            Assert.AreEqual(IPAddress.Any,
                 (IPAddress)typeof(MainWindowViewModel).GetMethod("ParseBindAddress", flagsVm)!.Invoke(null, ["  "])!);
             Assert.AreEqual(IPAddress.Loopback,
                 (IPAddress)typeof(MainWindowViewModel).GetMethod("ParseBindAddress", flagsVm)!.Invoke(null, ["127.0.0.1"])!);
+            Assert.AreEqual(IPAddress.Loopback,
+                (IPAddress)typeof(MainWindowViewModel).GetMethod("ParseBindAddress", flagsVm)!.Invoke(null, ["localhost"])!);
+            Assert.AreEqual(IPAddress.Loopback,
+                (IPAddress)typeof(MainWindowViewModel).GetMethod("ParseBindAddress", flagsVm)!.Invoke(null, ["LocalHost"])!);
             Assert.AreEqual("h.test",
                 (string?)typeof(MainWindowViewModel).GetMethod("TryHost", flagsVm)!.Invoke(null, ["https://h.test/x"]));
             Assert.IsNull(typeof(MainWindowViewModel).GetMethod("TryHost", flagsVm)!.Invoke(null, ["not-a-url"]));
@@ -514,6 +520,9 @@ public class InspectorCommandCoverageTests
                 BindPort = 8888,
                 BindAddress = "0.0.0.0",
             };
+            Assert.AreEqual("0.0.0.0",
+                (string)vmType.GetMethod("FormatBindDisplay", flags)!.Invoke(vm, null)!);
+            vm.BindAddress = "*";
             Assert.AreEqual("0.0.0.0",
                 (string)vmType.GetMethod("FormatBindDisplay", flags)!.Invoke(vm, null)!);
             vm.BindAddress = "127.0.0.1";

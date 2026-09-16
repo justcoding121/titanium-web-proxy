@@ -13,6 +13,19 @@ Desktop debugger for HTTP and HTTPS traffic. Decrypt HTTPS (man-in-the-middle / 
 
 HTTPS stays encrypted (opaque tunnels) until **Decrypt HTTPS** is on.
 
+### Bind address
+
+Toolbar **Bind address** is an IP (or alias), not a hostname except `localhost`. Edit it only while the proxy is stopped.
+
+| Value | Listens on |
+| --- | --- |
+| `127.0.0.1` or `localhost` | This PC only |
+| `0.0.0.0` or `*` | All IPv4 adapters, including localhost |
+| A NIC IP (for example `192.168.1.10`) | That interface only |
+| `::` | All IPv6 adapters |
+
+`*` matches the CLI listener `host` alias for all IPv4 interfaces. Binding on all adapters means other machines on the network can reach the proxy — use that only on a network you trust. For a phone or other device, bind `0.0.0.0` or `*` and point the device at this PC's LAN IP (see **Capture → device CA setup**).
+
 Capture menu options (**Capturing**, **Decrypt HTTPS**, **System proxy**, **Capture local traffic**, auto-start prefs) show a check when on. **Allow Store apps…** (Windows) sits with System proxy. Preferences such as **Session retention…**, **Excluded hosts…**, **Ignore insecure server certificates**, and **Logging…** live under **Options**.
 
 ## Install
