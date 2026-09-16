@@ -39,11 +39,15 @@ namespace Titanium.Web.Proxy.Http2
         };
 
         /// <summary>
-        ///     Header fields that RFC 7540 §8.1.2.2 / RFC 9110 §6.5.1 forbid in HTTP/2 trailer sections.
+        ///     Header fields that RFC 9113 §8.1 / RFC 9110 §6.5.1 forbid in HTTP/2 trailer sections.
+        ///     Connection-specific headers (listed in the <c>Connection</c> header) are also forbidden
+        ///     but are dynamic; this set covers the statically known always-forbidden trailer fields.
         /// </summary>
         private static readonly HashSet<string> ForbiddenTrailerHeaders = new(StringComparer.OrdinalIgnoreCase)
         {
-            "transfer-encoding", "content-length", "host", "trailer"
+            "transfer-encoding", "content-length", "host", "trailer",
+            // RFC 9110 §6.5.1: TE is not allowed in trailers (only valid on the initial header block).
+            "te"
         };
 
         private static async Task CopyHttp2FrameAsync(Stream input, Stream output, // NOSONAR S3776, CA1068 -- Protocol flow and established token position are retained.
@@ -105,9 +109,11 @@ namespace Titanium.Web.Proxy.Http2
                     : ProxyServer.UriSchemeHttp8;
             }
 
-            // "Settings describing the peer this task reads from" - used both to size the HPACK decoder for
-            // header blocks read from that peer, and (SETTINGS handling below) updated directly from that
-            // peer's own SETTINGS frames, since both describe properties *of that same peer*.
+            // "Settings describing the peer this task reads from" - used to size outbound HEADERS framing
+            // sent *back* to that peer (SETTINGS_MAX_FRAME_SIZE, MAX_HEADER_LIST_SIZE) and updated directly
+            // from that peer's SETTINGS frames. Note: the HPACK *decoder* for blocks received from this peer
+            // is sized from remoteSettings.HeaderTableSize (the sender's advertised table limit), not from
+            // localSettings — see ProcessCompleteHeaderBlockAsync for the full explanation.
             var localSettings = isClient ? connectionState.ClientSettings : connectionState.ServerSettings;
 
             // "Settings describing the peer this task writes to" - used to size outbound HEADERS/
@@ -506,7 +512,7 @@ namespace Titanium.Web.Proxy.Http2
 
                 if (length > MaxAcceptableFrameSize)
                 {
-                    // RFC 7540 ?4.2: a frame larger than what we (implicitly, by never advertising anything
+                    // RFC 9113 §4.2: a frame larger than what we (implicitly, by never advertising anything
                     // else) declared we would accept is a connection-level FRAME_SIZE_ERROR. Reject before
                     // attempting to buffer/read the (potentially huge, up to 2^24-1 byte) payload.
                     ReportException(logger, new ProxyHttpException(
@@ -1526,8 +1532,11 @@ namespace Titanium.Web.Proxy.Http2
                                 // that the peer has already said it will not send.
                                 kvp.Value.InboundTunnelChannel?.Writer.TryComplete(
                                     new IOException("Connection received GOAWAY."));
+                                // Cancel but do NOT Dispose here: the stream is still in Streams and
+                                // a concurrent DATA/HEADERS frame on this stream could access the CTS
+                                // after it was disposed (ObjectDisposedException). Disposal happens in
+                                // RemoveAndFinalizeStream once the stream leaves the dictionary.
                                 await kvp.Value.Cancellation.CancelAsync();
-                                kvp.Value.Cancellation.Dispose();
                             }
                         }
                         }
@@ -1789,20 +1798,15 @@ namespace Titanium.Web.Proxy.Http2
                         frameHeader.Length = length;
                     }
 
-                    if (!isClient && !suppressConnectionFrameRelay && enableRfc8441 && !sawEnableConnectProtocol &&
-                        (flags & Http2FrameFlag.Ack) == 0 && length + 6 <= buffer.Length)
+                    if (!isClient && !suppressConnectionFrameRelay && enableRfc8441 && sawEnableConnectProtocol &&
+                        (flags & Http2FrameFlag.Ack) == 0)
                     {
-                        // The server's SETTINGS frame did not include ENABLE_CONNECT_PROTOCOL but the proxy
-                        // is configured to accept RFC 8441 extended CONNECT from clients - inject
-                        // SETTINGS_ENABLE_CONNECT_PROTOCOL=1 so the client knows extended CONNECT is available.
-                        buffer[length] = (byte)(((int)Http2SettingsId.EnableConnectProtocol >> 8) & 0xff);
-                        buffer[length + 1] = (byte)((int)Http2SettingsId.EnableConnectProtocol & 0xff);
-                        buffer[length + 2] = 0;
-                        buffer[length + 3] = 0;
-                        buffer[length + 4] = 0;
-                        buffer[length + 5] = 1;
-                        length += 6;
-                        frameHeader.Length = length;
+                        // Origin included ENABLE_CONNECT_PROTOCOL=1 — already relayed above.
+                        // Record that we advertised it downstream so the HEADERS decoder knows the client
+                        // can legitimately send extended CONNECT (RFC 8441) on this connection.
+                        // NOTE: we do NOT inject ENABLE_CONNECT_PROTOCOL=1 when origin omitted it: doing
+                        // so would advertise a capability that always RSTs when the client tries to use it
+                        // (because the relay path gates on connectionState.ServerSettings.EnableConnectProtocol).
                         connectionState.DownstreamAdvertisedEnableConnect = true;
                     }
 

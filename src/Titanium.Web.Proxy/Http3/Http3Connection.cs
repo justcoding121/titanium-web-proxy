@@ -430,8 +430,14 @@ internal sealed class Http3Connection
                             _qpackContext.MaxTableCapacityFromPeer = _clientSettings.QpackMaxTableCapacity;
                         break;
                     case Http3FrameType.GoAway:
-                        // Client is initiating graceful shutdown — stop processing new requests.
-                        return;
+                        // Client is requesting graceful shutdown. RFC 9114 §5.2: we should send our
+                        // own GOAWAY and drain in-flight requests. We do NOT return here — doing so
+                        // would cause the `await using (stream)` in HandleUnidirectionalStreamAsync
+                        // to close the control stream, which is H3_CLOSED_CRITICAL_STREAM (RFC 9114 §6.2.1).
+                        // Instead, send server GOAWAY and continue draining control stream frames
+                        // (mostly unknown/ignored) until the connection CancellationToken fires.
+                        _ = SendGoAwayAsync();
+                        break;
                     case Http3FrameType.CancelPush:
                     case Http3FrameType.MaxPushId:
                         // Accepted but we don't implement push — ignore.
@@ -455,7 +461,13 @@ internal sealed class Http3Connection
     private async Task HandleRequestStreamAsync(QuicStream stream, CancellationToken ct)
     {
         var streamId = stream.Id;
-        Interlocked.Exchange(ref _highestStreamIdSeen, Math.Max(_highestStreamIdSeen, streamId));
+        // Atomically track the highest stream ID seen (used for GOAWAY payload).
+        // Simple Interlocked.Exchange on Math.Max is not atomic: another thread could update the
+        // field between the Math.Max read and the Exchange write, causing a lower ID to overwrite a
+        // higher one. Use a CompareExchange loop for a true atomic max.
+        long prev;
+        do { prev = Interlocked.Read(ref _highestStreamIdSeen); }
+        while (streamId > prev && Interlocked.CompareExchange(ref _highestStreamIdSeen, streamId, prev) != prev);
 
         Http3StreamState? streamState = null;
 
@@ -533,8 +545,10 @@ internal sealed class Http3Connection
         if (controlStream is null) return;
         try
         {
-            // GOAWAY payload: the stream ID of the last stream we are willing to process.
-            // Use the highest stream ID seen + 4 to leave room for in-flight retries.
+            // GOAWAY payload: the stream ID of the highest request stream we processed.
+            // RFC 9114 §5.2: the client MUST NOT retry requests on streams whose ID is ≤ this value.
+            // Using the highest ID seen (not +4) is conservative; streams we have not yet accepted
+            // will be retried by the client on a new connection.
             var lastStreamId = Math.Max(0, _highestStreamIdSeen);
             var payload = new byte[8];
             var len = Http3VarInt.Write(payload, (ulong)lastStreamId);

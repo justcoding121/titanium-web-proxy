@@ -4,15 +4,19 @@ using System.Collections.Concurrent;
 namespace Titanium.Web.Proxy.Http2;
 
 /// <summary>
-///     Caches, per upstream host:port, whether the real origin server negotiates HTTP/2 via TLS ALPN.
+///     Caches, per upstream connection route, whether the real origin server negotiates HTTP/2 via TLS ALPN.
 ///     <para>
-///         Titanium currently cannot transparently switch the protocol used for a decrypted connection once it
-///         is open, so before it can decide which ALPN protocols to offer the client for a given CONNECT tunnel
-///         it has to know in advance whether the real origin actually supports HTTP/2. Discovering that
-///         requires a dedicated probe TLS handshake to the origin. Browsers commonly open many short-lived
-///         tunnels to the very same host (connection racing/sharding), so without caching, every single one of
-///         those tunnels pays for its own redundant probe handshake to the same host. This cache lets repeat
-///         tunnels to the same host within <see cref="Ttl" /> reuse the most recent probe result instead.
+///         The cache key is the full connection-pool key (host, port, HTTPS flag, local upstream endpoint,
+///         effective external proxy — the same dimensions used by the TCP connection pool). This ensures two
+///         routes to the same origin host through different upstream proxies or local endpoints never share
+///         a capability result, while routes that really are identical reuse it correctly.
+///     </para>
+///     <para>
+///         Titanium cannot transparently switch the protocol used for a decrypted connection once it is open,
+///         so before offering ALPN protocols to the client for a given CONNECT tunnel it must know in advance
+///         whether the real origin actually supports HTTP/2. Browsers commonly open many short-lived tunnels
+///         to the same host, so without caching every tunnel pays for its own redundant probe handshake.
+///         This cache lets repeat tunnels within <see cref="Ttl" /> reuse the most recent probe result.
 ///     </para>
 /// </summary>
 internal sealed class Http2OriginCapabilityCache

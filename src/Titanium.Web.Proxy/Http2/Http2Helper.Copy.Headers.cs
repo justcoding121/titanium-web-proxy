@@ -416,14 +416,10 @@ namespace Titanium.Web.Proxy.Http2
                 if (httpInterceptionEnabled && shouldInterceptHttp != null && isMainHeaders) // NOSONAR S2589 -- Predicate is optional; interception-on still allows a null passthrough callback.
                 {
                     var authority = headerListener.Authority.GetString();
-                    var host = authority;
-                    var port = request.IsHttps ? 443 : 80;
-                    var colon = authority.LastIndexOf(':');
-                    if (colon > 0 && int.TryParse(authority.AsSpan(colon + 1), out var parsedPort))
-                    {
-                        host = authority[..colon];
-                        port = parsedPort;
-                    }
+                    var defaultPort = request.IsHttps ? 443 : 80;
+                    // AuthorityParser handles IPv6 brackets correctly (e.g. [::1]:8080).
+                    // LastIndexOf(':') would misparse bare IPv6 addresses without brackets.
+                    var (host, port) = AuthorityParser.Parse(authority, defaultPort);
 
                     var interceptionCtx = new HttpInterceptionContext
                     {

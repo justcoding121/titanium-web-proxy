@@ -1579,6 +1579,7 @@ public sealed class InterceptionService : IDisposable
             userOnlyHosts: null);
         var learnedBypass = !disableDecrypt && DecryptHttps && IsLearnedDecryptBypass(host);
         e.DecryptSsl = DecryptHttps && !disableDecrypt && !learnedBypass;
+        e.AllowHttpProtocolTranslation = true;
         var opaqueReason = OpaqueTunnelReason.None;
         if (learnedBypass)
             opaqueReason = OpaqueTunnelReason.LearnedFailure;

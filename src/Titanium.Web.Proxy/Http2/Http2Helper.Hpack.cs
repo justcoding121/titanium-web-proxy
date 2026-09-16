@@ -227,12 +227,23 @@ namespace Titanium.Web.Proxy.Http2
                 var authorityValue = request.Authority.Length > 0
                     ? request.Authority
                     : (request.Host ?? string.Empty).GetByteString();
-                encoder.EncodeHeader(writer, StaticTable.KnownHeaderAuhtority, authorityValue);
-                encoder.EncodeHeader(writer, StaticTable.KnownHeaderScheme,
-                    request.IsHttps ? SchemeHttps : SchemeHttp);
-                // Index :path (static "/" / repeated paths). IndexType.None forced a literal on every
-                // stream and lengthened writeLock under Mac dual-TLS H1→H2 / H3→H2 multiplex.
-                encoder.EncodeHeader(writer, StaticTable.KnownHeaderPath, request.RequestUriString8);
+                // RFC 9113 §8.3.1: :authority MUST NOT be empty. Fall back to Host if Authority is
+                // not set; if both are empty the Host header carries it in the regular header section.
+                if (authorityValue.Length > 0)
+                    encoder.EncodeHeader(writer, StaticTable.KnownHeaderAuhtority, authorityValue);
+
+                var isPlainConnect = request.Method == "CONNECT"
+                                     && request.ExtendedConnectProtocol == null;
+                if (!isPlainConnect)
+                {
+                    // RFC 9113 §8.3.1: plain CONNECT MUST omit :scheme and :path.
+                    // Extended CONNECT (RFC 8441) and all other methods include them.
+                    encoder.EncodeHeader(writer, StaticTable.KnownHeaderScheme,
+                        request.IsHttps ? SchemeHttps : SchemeHttp);
+                    // Index :path (static "/" / repeated paths). IndexType.None forced a literal on every
+                    // stream and lengthened writeLock under Mac dual-TLS H1→H2 / H3→H2 multiplex.
+                    encoder.EncodeHeader(writer, StaticTable.KnownHeaderPath, request.RequestUriString8);
+                }
                 // RFC 8441 §5: :protocol must appear after the other pseudo-headers.
                 if (request.ExtendedConnectProtocol != null)
                     encoder.EncodeHeader(writer, StaticTable.KnownHeaderProtocol,
