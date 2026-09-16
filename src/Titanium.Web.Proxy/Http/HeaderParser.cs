@@ -100,6 +100,11 @@ internal static class HeaderParser
 
     private static void AddHeaderLine(HeaderCollection headerCollection, string tmpLine)
     {
+        // RFC 9112 §5.2: obs-fold (field-value continuation with leading SP or HTAB) is forbidden.
+        // Treated as framing — always enforced, no PolicyMode.
+        if (tmpLine.Length > 0 && (tmpLine[0] == ' ' || tmpLine[0] == '\t'))
+            throw new FormatException("HTTP/1.x obs-fold continuation is not permitted (RFC 9112 §5.2).");
+
         var colonIndex = tmpLine.IndexOf(':');
         if (colonIndex == -1) throw new FormatException("Header line should contain a colon character.");
 
@@ -120,6 +125,11 @@ internal static class HeaderParser
 
     private static void AddHeaderLine(HeaderCollection headerCollection, ReadOnlySpan<byte> tmpLine)
     {
+        // RFC 9112 §5.2: obs-fold (field-value continuation with leading SP or HTAB) is forbidden.
+        // Treated as framing — always enforced, no PolicyMode.
+        if (tmpLine.Length > 0 && (tmpLine[0] == (byte)' ' || tmpLine[0] == (byte)'\t'))
+            throw new FormatException("HTTP/1.x obs-fold continuation is not permitted (RFC 9112 §5.2).");
+
         var colonIndex = tmpLine.IndexOf((byte)':');
         if (colonIndex == -1) throw new FormatException("Header line should contain a colon character.");
 
