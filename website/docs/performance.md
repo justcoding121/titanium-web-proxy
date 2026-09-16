@@ -22,7 +22,7 @@ Common reverse wires with **tiny keep-alive GET (~56 B)**, plus WebSocket and un
 
 ## Practical reverse RPS (64 KB)
 
-Typical reverse wires with **64 KB GET/POST** (plus 256 KB H1 terminate) — body work separate from the tiny-GET chart above. Windows and Linux below; macOS heavier bodies are not published yet.
+Typical reverse wires with **64 KB GET/POST** (plus 256 KB H1 terminate) — body work separate from the tiny-GET chart above.
 
 ### Windows
 
@@ -31,6 +31,10 @@ Typical reverse wires with **64 KB GET/POST** (plus 256 KB H1 terminate) — bod
 ### Linux
 
 ![Practical reverse RPS on Linux (64 KB)](../../wiki/images/rps-practical-heavier-linux.png)
+
+### macOS
+
+![Practical reverse RPS on macOS (64 KB)](../../wiki/images/rps-practical-heavier-macos.png)
 
 ## Heavier reverse workloads
 
