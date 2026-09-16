@@ -78,7 +78,10 @@ namespace Titanium.Web.Proxy.Http2
             bool canCompressedRelayTopology = !enableRfc8441
                 && output is not NullOriginStream
                 && input is not NullOriginStream;
-            bool useCompressedRelay = canCompressedRelayTopology && !httpInterceptionEnabled;
+            var relayValidation = connectionState.Http2RelayValidation;
+            bool useCompressedRelay = canCompressedRelayTopology
+                && !httpInterceptionEnabled
+                && relayValidation == PolicyMode.Disabled;
             bool forceStaticHpackTable = useCompressedRelay
                 || (canCompressedRelayTopology && httpInterceptionEnabled
                     && forceStaticHpackForMitmUnchangedRelay);
