@@ -3,19 +3,29 @@ using System.Text;
 
 namespace Titanium.Inspector.Services;
 
+/// <summary>Optional edits applied when replaying a captured session.</summary>
+public readonly record struct ReplayRequestOptions(
+    string? EditedUrl = null,
+    string? EditedMethod = null,
+    string? EditedBody = null,
+    string? EditedHeaders = null,
+    string? BodyFilePath = null,
+    bool IgnoreServerCertificateErrors = false);
+
 /// <summary>Replays a captured session with optional header/body edits.</summary>
 public static class ReplayService
 {
+    public static Task<ReplayResult> ReplayAsync(
+        SessionSnapshot session,
+        CancellationToken cancellationToken = default) =>
+        ReplayAsync(session, default, cancellationToken);
+
     public static async Task<ReplayResult> ReplayAsync(
         SessionSnapshot session,
-        string? editedUrl = null,
-        string? editedMethod = null,
-        string? editedBody = null,
-        string? editedHeaders = null,
-        bool ignoreServerCertificateErrors = false,
+        ReplayRequestOptions options,
         CancellationToken cancellationToken = default)
     {
-        var url = editedUrl ?? session.Url;
+        var url = options.EditedUrl ?? session.Url;
         if (string.IsNullOrWhiteSpace(url) || session.IsTunnel)
         {
             return new ReplayResult(false, 0, "Cannot replay CONNECT/tunnel or empty URL.");
@@ -25,7 +35,7 @@ public static class ReplayService
         {
             AllowAutoRedirect = false,
         };
-        if (ignoreServerCertificateErrors)
+        if (options.IgnoreServerCertificateErrors)
         {
             // Opt-in only when Inspector setting "ignore server certificate errors" is enabled (MITM lab hosts).
 #pragma warning disable S4830
@@ -33,14 +43,21 @@ public static class ReplayService
 #pragma warning restore S4830
         }
 
-        using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(60) };
-        using var request = new HttpRequestMessage(new HttpMethod(editedMethod ?? session.Method), url);
+        var timeout = string.IsNullOrWhiteSpace(options.BodyFilePath)
+            ? TimeSpan.FromSeconds(60)
+            : TimeSpan.FromMinutes(10);
+        using var http = new HttpClient(handler) { Timeout = timeout };
+        using var request = new HttpRequestMessage(new HttpMethod(options.EditedMethod ?? session.Method), url);
 
-        ApplyEditedHeaders(request, editedHeaders ?? session.RequestHeadersText ?? "");
-        AttachBody(request, session, editedBody);
+        ApplyEditedHeaders(request, options.EditedHeaders ?? session.RequestHeadersText ?? "");
+        await using var fileStream = await AttachBodyAsync(request, session, options.EditedBody, options.BodyFilePath)
+            .ConfigureAwait(false);
 
-        using var response = await http.SendAsync(request, cancellationToken);
-        var respBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        using var response = await http.SendAsync(
+            request,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken).ConfigureAwait(false);
+
         var respHeaders = new StringBuilder();
         foreach (var h in response.Headers)
         {
@@ -52,12 +69,21 @@ public static class ReplayService
             respHeaders.Append(h.Key).Append(": ").Append(string.Join(", ", h.Value)).AppendLine();
         }
 
+        await using var respStream = await response.Content.ReadAsStreamAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var (respBytes, respSeen, truncated) = await ReadPreviewAsync(respStream, cancellationToken)
+            .ConfigureAwait(false);
+        var respBody = Encoding.UTF8.GetString(respBytes);
+
         return new ReplayResult(
             true,
             (int)response.StatusCode,
             Truncate(respBody, 64 * 1024),
             respHeaders.ToString(),
-            Truncate(respBody, InterceptionService.MaxBodyTextChars));
+            InspectorBodyLimits.TruncateText(respBody),
+            respBytes,
+            respSeen,
+            truncated ? BodyCaptureState.Truncated : BodyCaptureState.Complete);
     }
 
     private static void ApplyEditedHeaders(HttpRequestMessage request, string headerBlock)
@@ -87,8 +113,32 @@ public static class ReplayService
         }
     }
 
-    private static void AttachBody(HttpRequestMessage request, SessionSnapshot session, string? editedBody)
+    private static async Task<FileStream?> AttachBodyAsync(
+        HttpRequestMessage request,
+        SessionSnapshot session,
+        string? editedBody,
+        string? bodyFilePath)
     {
+        if (!string.IsNullOrWhiteSpace(bodyFilePath))
+        {
+            var path = bodyFilePath.Trim();
+            if (!File.Exists(path))
+            {
+                throw new FileNotFoundException("Composer body file not found.", path);
+            }
+
+            var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.Asynchronous);
+            var content = new StreamContent(fs);
+            content.Headers.ContentLength = fs.Length;
+            if (!string.IsNullOrEmpty(session.ContentType))
+            {
+                content.Headers.ContentType = MediaTypeHeaderValue.Parse(session.ContentType);
+            }
+
+            request.Content = content;
+            return fs;
+        }
+
         var bodyText = editedBody ?? session.RequestBodyText;
         if (!string.IsNullOrEmpty(bodyText))
         {
@@ -103,6 +153,36 @@ public static class ReplayService
         {
             request.Content = new ByteArrayContent(session.RequestBodyBytes);
         }
+
+        await Task.CompletedTask.ConfigureAwait(false);
+        return null;
+    }
+
+    private static async Task<(byte[] Bytes, long Seen, bool Truncated)> ReadPreviewAsync(
+        Stream stream,
+        CancellationToken cancellationToken)
+    {
+        using var ms = new MemoryStream();
+        var buffer = new byte[8192];
+        long seen = 0;
+        while (true)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken)
+                .ConfigureAwait(false);
+            if (read <= 0)
+            {
+                break;
+            }
+
+            seen += read;
+            if (ms.Length < InspectorBodyLimits.MaxBodyBytes)
+            {
+                var toWrite = (int)Math.Min(read, InspectorBodyLimits.MaxBodyBytes - ms.Length);
+                await ms.WriteAsync(buffer.AsMemory(0, toWrite), cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        return (ms.ToArray(), seen, seen > ms.Length);
     }
 
     private static string Truncate(string text, int max)
@@ -114,4 +194,7 @@ public readonly record struct ReplayResult(
     int StatusCode,
     string Message,
     string? ResponseHeaders = null,
-    string? ResponseBody = null);
+    string? ResponseBody = null,
+    byte[]? ResponseBodyBytes = null,
+    long? ResponseBodyOriginalSize = null,
+    BodyCaptureState ResponseBodyCapture = BodyCaptureState.None);

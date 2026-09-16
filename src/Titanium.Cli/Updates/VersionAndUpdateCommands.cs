@@ -529,26 +529,7 @@ internal static class UpdateCommand
         if (!VersionCommand.ShouldInstallCliRelease(
                 local, remoteText, channelDisplay, installedTag, installedChannel, localInfo))
         {
-            if (ReleaseVersion.CompareReleaseTags(localLabel, remoteText) > 0
-                && !ReleaseVersion.IsPrereleaseTag(remoteText))
-            {
-                AsyncConsole.WriteLine(
-                    $"Local Cli {localDisplay} is newer than {channelDisplay} {remoteText}. No changes.");
-            }
-            else if (channelDisplay.Equals("beta", StringComparison.OrdinalIgnoreCase)
-                     && ReleaseVersion.IsPrereleaseTag(remoteText)
-                     && !ReleaseVersion.IsPrereleaseTag(localLabel)
-                     && ReleaseVersion.ParseComparable(localLabel)
-                     == ReleaseVersion.ParseComparable(remoteText))
-            {
-                AsyncConsole.WriteLine(
-                    $"No newer Beta than your current build ({localLabel}). Latest Beta is {remoteText}.");
-            }
-            else
-            {
-                AsyncConsole.WriteLine($"Titanium CLI is up to date ({remoteText}, {channelDisplay}).");
-            }
-
+            WriteCliAlreadyCurrentMessage(localDisplay, localLabel, remoteText, channelDisplay);
             return 0;
         }
 
@@ -572,38 +553,13 @@ internal static class UpdateCommand
         Directory.CreateDirectory(workDir);
         var destZip = Path.Combine(workDir, $"Titanium.Cli-{rid}-{remoteText}.zip");
 
-        try
-        {
-            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("Titanium.Cli/7.0");
-            var bytes = await http.GetByteArrayAsync(asset.Url);
-            AsyncConsole.WriteLine("Verifying SHA256…");
-            if (!string.IsNullOrEmpty(asset.Sha256))
-            {
-                var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-                if (!hash.Equals(asset.Sha256, StringComparison.OrdinalIgnoreCase))
-                {
-                    AsyncConsole.WriteError("SHA256 mismatch — aborting update.");
-                    return 1;
-                }
-            }
-
-            await File.WriteAllBytesAsync(destZip, bytes);
-        }
-        catch (Exception ex)
-        {
-            AsyncConsole.WriteError($"Download failed: {ex.Message}");
-            return 1;
-        }
+        var downloadRc = await DownloadVerifiedAssetAsync(asset, destZip, "SHA256 mismatch — aborting update.");
+        if (downloadRc != 0)
+            return downloadRc;
 
         var installDir = AppContext.BaseDirectory.TrimEnd(
             Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var exeName = OperatingSystem.IsWindows() ? "titanium.exe" : "titanium";
-        var relaunch = Path.Combine(installDir, exeName);
-        if (!File.Exists(relaunch))
-        {
-            relaunch = Path.Combine(installDir, OperatingSystem.IsWindows() ? "twp.exe" : "twp");
-        }
+        var relaunch = ResolveCliRelaunchPath(installDir);
 
         AsyncConsole.WriteLine("Restarting updater…");
         CliUpdateApplyHelper.StartDetached(
@@ -618,6 +574,72 @@ internal static class UpdateCommand
         AsyncConsole.WriteLine(
             $"Installing {remoteText} ({channelDisplay}) in the background. When finished, run: titanium version");
         return 0;
+    }
+
+    private static void WriteCliAlreadyCurrentMessage(
+        string localDisplay, string localLabel, string remoteText, string channelDisplay)
+    {
+        if (ReleaseVersion.CompareReleaseTags(localLabel, remoteText) > 0
+            && !ReleaseVersion.IsPrereleaseTag(remoteText))
+        {
+            AsyncConsole.WriteLine(
+                $"Local Cli {localDisplay} is newer than {channelDisplay} {remoteText}. No changes.");
+            return;
+        }
+
+        if (channelDisplay.Equals("beta", StringComparison.OrdinalIgnoreCase)
+            && ReleaseVersion.IsPrereleaseTag(remoteText)
+            && !ReleaseVersion.IsPrereleaseTag(localLabel)
+            && ReleaseVersion.ParseComparable(localLabel)
+            == ReleaseVersion.ParseComparable(remoteText))
+        {
+            AsyncConsole.WriteLine(
+                $"No newer Beta than your current build ({localLabel}). Latest Beta is {remoteText}.");
+            return;
+        }
+
+        AsyncConsole.WriteLine($"Titanium CLI is up to date ({remoteText}, {channelDisplay}).");
+    }
+
+    private static string ResolveCliRelaunchPath(string installDir)
+    {
+        var exeName = OperatingSystem.IsWindows() ? "titanium.exe" : "titanium";
+        var relaunch = Path.Combine(installDir, exeName);
+        if (!File.Exists(relaunch))
+        {
+            relaunch = Path.Combine(installDir, OperatingSystem.IsWindows() ? "twp.exe" : "twp");
+        }
+
+        return relaunch;
+    }
+
+    private static async Task<int> DownloadVerifiedAssetAsync(
+        AssetBlock asset, string destPath, string shaMismatchMessage)
+    {
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("Titanium.Cli/7.0");
+            var bytes = await http.GetByteArrayAsync(asset.Url);
+            AsyncConsole.WriteLine("Verifying SHA256…");
+            if (!string.IsNullOrEmpty(asset.Sha256))
+            {
+                var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+                if (!hash.Equals(asset.Sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    AsyncConsole.WriteError(shaMismatchMessage);
+                    return 1;
+                }
+            }
+
+            await File.WriteAllBytesAsync(destPath, bytes);
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            AsyncConsole.WriteError($"Download failed: {ex.Message}");
+            return 1;
+        }
     }
 
     private static async Task<int> UpdatePlusAsync(ReleaseManifest manifest, string channelDisplay)
@@ -637,38 +659,10 @@ internal static class UpdateCommand
         var plusInfo = VersionCommand.TryGetLocalPlusInformationalVersion();
         var installing = plusLocal is null;
 
-        if (plusLocal is not null)
+        if (plusLocal is not null
+            && TryWritePlusAlreadyCurrent(asset, dest, plusLocal, remoteLabel, channelDisplay, plusInfo))
         {
-            if (!string.IsNullOrEmpty(asset.Sha256) && File.Exists(dest) && FileSha256Matches(dest, asset.Sha256))
-            {
-                AsyncConsole.WriteLine(
-                    $"Plus is already at {remoteLabel} ({channelDisplay}).");
-                return 0;
-            }
-
-            if (!VersionCommand.ShouldInstallPlusRelease(plusLocal, remoteLabel, plusInfo))
-            {
-                var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(plusLocal, plusInfo, null);
-                if (ReleaseVersion.CompareReleaseTags(localLabel, remoteLabel) > 0)
-                {
-                    AsyncConsole.WriteLine(
-                        $"Local Plus {localLabel} is newer than {channelDisplay} {remoteLabel}. No changes.");
-                }
-                else if (channelDisplay.Equals("beta", StringComparison.OrdinalIgnoreCase)
-                         && ReleaseVersion.IsPrereleaseTag(remoteLabel)
-                         && !ReleaseVersion.IsPrereleaseTag(localLabel))
-                {
-                    AsyncConsole.WriteLine(
-                        $"No newer Beta Plus than your current build ({localLabel}). Latest Beta is {remoteLabel}.");
-                }
-                else
-                {
-                    AsyncConsole.WriteLine(
-                        $"Plus is already at {remoteLabel} ({channelDisplay}).");
-                }
-
-                return 0;
-            }
+            return 0;
         }
 
         AsyncConsole.WriteLine(installing
@@ -719,6 +713,46 @@ internal static class UpdateCommand
             AsyncConsole.WriteError($"Plus update failed: {ex.Message}");
             return 1;
         }
+    }
+
+    private static bool TryWritePlusAlreadyCurrent(
+        AssetBlock asset,
+        string dest,
+        Version plusLocal,
+        string remoteLabel,
+        string channelDisplay,
+        string? plusInfo)
+    {
+        if (!string.IsNullOrEmpty(asset.Sha256) && File.Exists(dest) && FileSha256Matches(dest, asset.Sha256))
+        {
+            AsyncConsole.WriteLine(
+                $"Plus is already at {remoteLabel} ({channelDisplay}).");
+            return true;
+        }
+
+        if (VersionCommand.ShouldInstallPlusRelease(plusLocal, remoteLabel, plusInfo))
+            return false;
+
+        var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(plusLocal, plusInfo, null);
+        if (ReleaseVersion.CompareReleaseTags(localLabel, remoteLabel) > 0)
+        {
+            AsyncConsole.WriteLine(
+                $"Local Plus {localLabel} is newer than {channelDisplay} {remoteLabel}. No changes.");
+        }
+        else if (channelDisplay.Equals("beta", StringComparison.OrdinalIgnoreCase)
+                 && ReleaseVersion.IsPrereleaseTag(remoteLabel)
+                 && !ReleaseVersion.IsPrereleaseTag(localLabel))
+        {
+            AsyncConsole.WriteLine(
+                $"No newer Beta Plus than your current build ({localLabel}). Latest Beta is {remoteLabel}.");
+        }
+        else
+        {
+            AsyncConsole.WriteLine(
+                $"Plus is already at {remoteLabel} ({channelDisplay}).");
+        }
+
+        return true;
     }
 
     private static bool FileSha256Matches(string path, string expectedHex)

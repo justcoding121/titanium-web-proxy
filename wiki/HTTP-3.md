@@ -176,11 +176,11 @@ When `UpstreamHttpProtocol.Auto` (the default) is in effect, the proxy selects t
 as follows (evaluated at CONNECT / new TCP request setup — not by flipping streams on an already-open
 H2↔H2 MITM session):
 
-1. **HTTP/3** — if `EnableHttp3 == true`, the origin is already in `Http3OriginCapabilityCache` (from a
-   prior `Alt-Svc` response and/or a completed background HTTPS/SVCB lookup), **and** that origin has
-   completed QUIC warm-up (`Http3WarmOrigins`). A cache hit alone only arms background warm-up; the
-   current connection stays on TCP until the origin is warm. SVCB discovery never blocks the first
-   connection.
+1. **HTTP/3** — if `EnableHttp3 == true` and the origin is already in `Http3OriginCapabilityCache`
+   (from a prior `Alt-Svc` response and/or a completed background HTTPS/SVCB lookup). Background QUIC
+   warm-up starts when the cache is filled so the handshake is often already done; a cache hit on a
+   **new** CONNECT or HTTP/1.1 request still selects HTTP/3 even if that origin is not yet warm.
+   SVCB discovery never blocks the first connection.
 2. **HTTP/2** — if the origin has been probed and supports HTTP/2 (via ALPN).
 3. **HTTP/1.1** — fallback.
 
@@ -196,9 +196,10 @@ automatically caches the capability:
 Alt-Svc: h3=":443"; ma=86400
 ```
 
-Once the origin is warm, **new** Auto-mode connections to the same host:port use HTTP/3 transparently
-(when `EnableHttp3 == true`) — for example a later CONNECT that selects the cold H2→H3 bridge, or an
-HTTP/1.1 request that routes through `Http3OriginBridge`. An already-open H2↔H2 MITM session does
+**New** Auto-mode connections to the same host:port then use HTTP/3 transparently (when
+`EnableHttp3 == true`) — for example a later CONNECT that selects the cold H2→H3 bridge, or an
+HTTP/1.1 request that routes through `Http3OriginBridge`. Background QUIC warm-up starts when the
+cache is filled so that handshake is often already done. An already-open H2↔H2 MITM session does
 **not** upgrade individual multiplexed streams to H3 mid-connection (that mix has been observed to
 trigger client `ERR_HTTP2_PROTOCOL_ERROR`); those streams stay on the attached H2 origin until the
 tunnel ends. The cache entry expires after the advertised `ma` (max-age) duration and is trimmed

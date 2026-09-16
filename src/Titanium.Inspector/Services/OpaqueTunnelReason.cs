@@ -9,4 +9,5 @@ public enum OpaqueTunnelReason
   BuiltInPinning,
   UserSkipList,
   UserOnlyList,
+  LearnedFailure,
 }

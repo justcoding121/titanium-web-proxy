@@ -42,6 +42,7 @@ try {
     & dotnet wix extension add "WixToolset.Util.wixext/5.0.2"
 
     & dotnet wix build $wxs `
+        -arch x64 `
         -ext WixToolset.UI.wixext `
         -ext WixToolset.Util.wixext `
         -b "PayloadDir=$PayloadDir" `

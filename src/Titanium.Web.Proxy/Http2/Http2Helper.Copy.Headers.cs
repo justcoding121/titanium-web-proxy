@@ -396,6 +396,11 @@ namespace Titanium.Web.Proxy.Http2
                 request.RequestUriString8 = path;
                 request.Headers.TakeContentsFrom(collected);
 
+                // RFC 9113: END_STREAM on HEADERS means no DATA follows. One bool store (not a
+                // SetOriginalHeaders header walk) so BeforeRequest can strip Content-Length without
+                // flipping HasBody, while GET/HEAD with omitted Content-Length stay bodiless.
+                request.OriginalHasBody = !endStreamFlag;
+
                 // Capture compressed block for intercept unchanged → relay (static-HPACK MITM only).
                 if (httpInterceptionEnabled && forceStaticHpackTable
                     && connectionState.Streams.TryGetValue(hbStreamId, out var captureState))

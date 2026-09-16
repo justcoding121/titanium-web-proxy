@@ -34,24 +34,35 @@ internal sealed class Http2RawOriginServer : IDisposable
     private readonly TcpListener listener;
     private readonly X509Certificate2? certificate;
     private readonly bool cleartext;
+    private readonly TimeSpan handshakeDelay;
     private Func<Http2RawFrame.Connection, Task> handler = null!;
     private bool disposed;
 
     public Http2RawOriginServer(X509Certificate2 certificate)
-        : this(certificate, cleartext: false)
+        : this(certificate, cleartext: false, handshakeDelay: default)
+    {
+    }
+
+    /// <summary>
+    ///     Same as <see cref="Http2RawOriginServer(X509Certificate2)" /> but delays each origin TLS
+    ///     handshake so tests can assert MITM ServerHello is not blocked on a cold HTTP/2 probe.
+    /// </summary>
+    public Http2RawOriginServer(X509Certificate2 certificate, TimeSpan handshakeDelay)
+        : this(certificate, cleartext: false, handshakeDelay)
     {
     }
 
     /// <summary>
     ///     Cleartext HTTP/2 prior-knowledge (h2c) origin — no TLS.
     /// </summary>
-    public static Http2RawOriginServer CreateCleartext() => new(null, cleartext: true);
+    public static Http2RawOriginServer CreateCleartext() => new(null, cleartext: true, handshakeDelay: default);
 
-    private Http2RawOriginServer(X509Certificate2? certificate, bool cleartext)
+    private Http2RawOriginServer(X509Certificate2? certificate, bool cleartext, TimeSpan handshakeDelay)
     {
         this.certificate = certificate;
         this.cleartext = cleartext;
-        listener = new TcpListener(IPAddress.Loopback, 0);
+        this.handshakeDelay = handshakeDelay;
+        listener = TcpListener.Create(0);
         listener.Start();
         _ = AcceptLoopAsync();
     }
@@ -108,6 +119,9 @@ internal sealed class Http2RawOriginServer : IDisposable
                     }
                     else
                     {
+                        if (handshakeDelay > TimeSpan.Zero)
+                            await Task.Delay(handshakeDelay);
+
                         var sslStream = new SslStream(client.GetStream(), false);
                         await sslStream.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
                         {

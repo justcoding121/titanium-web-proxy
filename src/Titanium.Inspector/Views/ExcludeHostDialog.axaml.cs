@@ -4,15 +4,10 @@ using Titanium.Inspector.Services;
 
 namespace Titanium.Inspector.Views;
 
-public enum ExcludeHostKind
-{
-    TunnelOnly,
-    BypassProxy,
-}
-
 public partial class ExcludeHostDialog : Window
 {
     private readonly SettingsService _settings;
+    private readonly string _hostname;
     private bool _saved;
 
     public ExcludeHostDialog() : this(SettingsService.Load(), "")
@@ -22,44 +17,47 @@ public partial class ExcludeHostDialog : Window
     public ExcludeHostDialog(SettingsService settings, string hostname)
     {
         _settings = settings;
+        _hostname = hostname.Trim();
         InitializeComponent();
-        HostLabel.Text = $"Exclude: {hostname}";
+        HostLabel.Text = _hostname;
+        var parent = ExtractParentDomain(_hostname);
+        if (string.IsNullOrEmpty(parent))
+        {
+            WildcardParentCheck.IsVisible = false;
+        }
+        else
+        {
+            WildcardParentCheck.Content = "Also exclude other hosts on " + parent;
+        }
+
         SaveButton.Click += OnSave;
         CancelButton.Click += (_, _) => Close();
-        BypassProxyRadio.IsCheckedChanged += (_, _) => UpdateWarning();
-        TunnelOnlyRadio.IsCheckedChanged += (_, _) => UpdateWarning();
     }
 
     public bool Saved => _saved;
-    public ExcludeHostKind SelectedKind =>
-        BypassProxyRadio.IsChecked == true ? ExcludeHostKind.BypassProxy : ExcludeHostKind.TunnelOnly;
 
-    public static async Task<(bool Saved, ExcludeHostKind Kind, bool WildcardParent)> ShowAsync(
+    public static async Task<(bool Saved, bool WildcardParent)> ShowAsync(
         Window owner,
         SettingsService settings,
         string hostname)
     {
         var w = new ExcludeHostDialog(settings, hostname);
         await w.ShowDialog(owner);
-        return (w.Saved, w.SelectedKind, w.WildcardParentCheck.IsChecked == true);
+        return (w.Saved, w.WildcardParentCheck.IsChecked == true);
     }
 
-    private void UpdateWarning() =>
-        BypassWarning.IsVisible = BypassProxyRadio.IsChecked == true;
-
-    private void OnSave(object? sender, RoutedEventArgs e) // NOSONAR S3776 -- Dialog save writes bypass and decrypt-skip lists together.
+    private void OnSave(object? sender, RoutedEventArgs e)
     {
-        var host = HostLabel.Text?["Exclude: ".Length..].Trim();
-        if (string.IsNullOrWhiteSpace(host))
+        if (string.IsNullOrWhiteSpace(_hostname))
         {
             Close();
             return;
         }
 
-        var patterns = new List<string> { host };
-        if (WildcardParentCheck.IsChecked == true)
+        var patterns = new List<string> { _hostname };
+        if (WildcardParentCheck.IsVisible && WildcardParentCheck.IsChecked == true)
         {
-            var parent = ExtractParentDomain(host);
+            var parent = ExtractParentDomain(_hostname);
             if (!string.IsNullOrEmpty(parent))
             {
                 patterns.Add("*." + parent);
@@ -67,19 +65,9 @@ public partial class ExcludeHostDialog : Window
         }
 
         var s = _settings.Current;
-        if (SelectedKind == ExcludeHostKind.BypassProxy)
+        foreach (var p in patterns.Where(p => !s.DecryptSkipHosts.Contains(p, StringComparer.OrdinalIgnoreCase)))
         {
-            foreach (var p in patterns.Where(p => !s.SystemProxyBypassHosts.Contains(p, StringComparer.OrdinalIgnoreCase)))
-            {
-                s.SystemProxyBypassHosts.Add(p);
-            }
-        }
-        else
-        {
-            foreach (var p in patterns.Where(p => !s.DecryptSkipHosts.Contains(p, StringComparer.OrdinalIgnoreCase)))
-            {
-                s.DecryptSkipHosts.Add(p);
-            }
+            s.DecryptSkipHosts.Add(p);
         }
 
         _settings.Save();

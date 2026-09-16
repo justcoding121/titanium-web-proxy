@@ -108,7 +108,7 @@ internal static class ServeProxyHost
             or ProbeMode.ComparePost or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost
             or ProbeMode.CompareArch or ProbeMode.CompareSaturation or ProbeMode.CompareEditions
             or ProbeMode.CompareCrossVersion or ProbeMode.CompareSpot or ProbeMode.ExplicitPoolSweep
-            or ProbeMode.CompareGrpc)
+            or ProbeMode.CompareGrpc or ProbeMode.CompareWsH1Tls or ProbeMode.CompareWsH2)
         {
             ProbeLog.Error("--serve-proxy requires a single arm mode");
             return 2;
@@ -1286,7 +1286,8 @@ internal static class ServeHost
             or ProbeMode.CompareProductSmoke or ProbeMode.CompareCeiling
             or ProbeMode.CompareBodies
             or ProbeMode.ComparePost or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost
-            or ProbeMode.CompareArch or ProbeMode.CompareSaturation or ProbeMode.ExplicitPoolSweep)
+            or ProbeMode.CompareArch or ProbeMode.CompareSaturation or ProbeMode.ExplicitPoolSweep
+            or ProbeMode.CompareGrpc or ProbeMode.CompareWsH1Tls or ProbeMode.CompareWsH2)
         {
             ProbeLog.Error("--serve requires a single mode");
             return 2;

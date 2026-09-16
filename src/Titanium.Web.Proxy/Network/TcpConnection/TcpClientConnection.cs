@@ -157,6 +157,49 @@ internal class TcpClientConnection : IDisposable
         }
     }
 
+    /// <summary>
+    ///     Closes with a TCP FIN (not linger-0 RST) so the peer can finish reading the last
+    ///     response — required for seamless decrypt-bypass meta-refresh before a new CONNECT.
+    /// </summary>
+    internal virtual void CloseGracefully()
+    {
+        if (Interlocked.Exchange(ref disposed, 1) != 0) return;
+
+        if (trackClientConnectionCount)
+            ProxyServer.UpdateClientConnectionCount(false);
+
+        if (tcpClientSocket == null) return;
+        try
+        {
+            tcpClientSocket.LingerState = new LingerOption(false, 0);
+            try
+            {
+                tcpClientSocket.Shutdown(SocketShutdown.Both);
+            }
+            catch (SocketException)
+            {
+                // Already half-closed / reset by peer.
+            }
+
+            tcpClientSocket.Close();
+        }
+#pragma warning disable S108 // Empty catches: dispose races / peer reset while closing client socket
+        catch (ObjectDisposedException)
+        {
+            // Socket already disposed by NetworkStream(ownsSocket:true) or concurrent close.
+        }
+        catch (SocketException)
+        {
+            // Peer reset / already half-closed during Close().
+        }
+#pragma warning restore S108
+        catch (Exception ex)
+        {
+            Logging.ProxyDiagnostics.ReportBenign(ProxyServer.Logger,
+                "Failed to gracefully close a client socket after seamless retry.", ex);
+        }
+    }
+
     public Stream GetStream()
     {
         if (tcpClientSocket == null)

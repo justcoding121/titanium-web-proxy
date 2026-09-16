@@ -22,8 +22,8 @@ namespace Titanium.Inspector.Services;
 /// </summary>
 public sealed class InterceptionService : IDisposable
 {
-    public const int MaxBodyBytes = 2 * 1024 * 1024;
-    public const int MaxBodyTextChars = 256 * 1024;
+    public const int MaxBodyBytes = InspectorBodyLimits.MaxBodyBytes;
+    public const int MaxBodyTextChars = InspectorBodyLimits.MaxBodyTextChars;
 
     private long _nextId;
     private readonly ConcurrentDictionary<object, SessionSnapshot> _live = new();
@@ -37,6 +37,32 @@ public sealed class InterceptionService : IDisposable
     private InspectorSettings? _loggingSettings;
     private Channel<ProcessResolveWork>? _processResolveChannel;
     private CancellationTokenSource? _processResolveCts;
+
+    /// <summary>
+    ///     Serializes fire-and-forget trust cleanup: Firefox prefs/HKCU/policies and Personal-store
+    ///     prune. Rapid Clear+Install / Install / Untrust must not interleave ClearRootTrust,
+    ///     EnableEnterpriseRoots, and My-store prune (prefs locks + Crypt32 contention).
+    /// </summary>
+    private readonly object _firefoxTrustBgGate = new();
+    private readonly Queue<FirefoxTrustBgQueued> _firefoxTrustBgQueue = new();
+    private bool _firefoxTrustBgRunning;
+    private TaskCompletionSource _firefoxTrustBgIdle = CreateCompletedFirefoxTrustIdle();
+
+    private enum FirefoxTrustBgKind
+    {
+        Clear,
+        Enable,
+        Prune,
+    }
+
+    private readonly record struct FirefoxTrustBgQueued(FirefoxTrustBgKind Kind, Action Work);
+
+    private static TaskCompletionSource CreateCompletedFirefoxTrustIdle()
+    {
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        tcs.SetResult();
+        return tcs;
+    }
 
     private readonly record struct ProcessResolveWork(SessionSnapshot Snap, Lazy<int> ProcessId);
 
@@ -59,6 +85,12 @@ public sealed class InterceptionService : IDisposable
     /// </summary>
     public bool DecryptHttps { get; set; }
 
+    /// <summary>
+    /// When true, origin TLS handshake failures under MITM train an in-memory host bypass.
+    /// Default on for Inspector; wired to <see cref="ProxyServer.EnableDecryptFailureBypass"/>.
+    /// </summary>
+    public bool EnableDecryptFailureBypass { get; set; } = true;
+
     /// <summary>Extra host patterns that skip HTTPS decryption (in addition to built-in bypasses).</summary>
     public List<string> DecryptSkipHosts { get; set; } = [];
 
@@ -79,8 +111,20 @@ public sealed class InterceptionService : IDisposable
     /// <summary>
     /// When set (tests), skip the Windows certificate store and track trust in-memory.
     /// Avoids modal "Root Certificate Store" UI that hangs headless / CI runs.
+    /// Also suppresses CertificateManager Root-store CryptUI when the proxy is started.
     /// </summary>
-    public bool UseInMemoryTrustState { get; set; }
+    public bool UseInMemoryTrustState
+    {
+        get => _useInMemoryTrustState;
+        set
+        {
+            _useInMemoryTrustState = value;
+            if (value)
+                CertificateManager.SuppressInteractiveRootStoreMutations = true;
+        }
+    }
+
+    private bool _useInMemoryTrustState;
 
     /// <summary>Test seam: next <see cref="InstallRootCertificate"/> returns false once (forces elevate path).</summary>
     public bool FailNextUserTrustInstall { get; set; }
@@ -154,9 +198,42 @@ public sealed class InterceptionService : IDisposable
 
     public event EventHandler<SessionSnapshot>? SessionCaptured;
     public event EventHandler<SessionSnapshot>? SessionUpdated;
+    public event EventHandler<DecryptFailureBypassEntry>? DecryptFailureBypassLearned;
+
+    /// <summary>Applies the learning toggle to a running proxy (no-op when not started).</summary>
+    public void ApplyDecryptFailureBypassSetting()
+    {
+        if (_proxy is null)
+            return;
+        _proxy.EnableDecryptFailureBypass = EnableDecryptFailureBypass;
+    }
+
+    public IReadOnlyList<DecryptFailureBypassEntry> GetDecryptFailureBypassEntries() =>
+        _proxy?.GetDecryptFailureBypassEntries() ?? Array.Empty<DecryptFailureBypassEntry>();
+
+    public bool RemoveDecryptFailureBypass(string host) =>
+        _proxy?.RemoveDecryptFailureBypass(host) ?? false;
+
+    public void ClearDecryptFailureBypass() => _proxy?.ClearDecryptFailureBypass();
+
+    /// <summary>Test / tooling hook: mark <paramref name="host"/> as actively bypassed and raise learned.</summary>
+    internal bool ForceLearnDecryptBypass(string host) =>
+        _proxy?.ForceDecryptFailureBypass(host) ?? false;
+
+    private bool IsLearnedDecryptBypass(string? host)
+    {
+        if (!EnableDecryptFailureBypass || _proxy is null || string.IsNullOrWhiteSpace(host))
+            return false;
+        // O(1) cache consult - do not Snapshot the full list on every CONNECT.
+        return _proxy.ShouldBypassDecryptForLearnedHost(host);
+    }
+
+    private void OnDecryptFailureBypassChanged(object? sender, DecryptFailureBypassEntry e) =>
+        DecryptFailureBypassLearned?.Invoke(this, e);
 
     public async Task StartAsync(IPAddress address, int port, CancellationToken cancellationToken = default)
     {
+        using var scope = InspectorUxTrace.Scope("Interception.StartAsync", $"{address}:{port}");
         cancellationToken.ThrowIfCancellationRequested();
         if (_proxy is not null)
         {
@@ -171,6 +248,8 @@ public sealed class InterceptionService : IDisposable
         ApplyLoggingOptions(_loggingSettings);
         _proxy.EnableHttpInterception = true;
         _proxy.EnableRequestTimingCapture = true;
+        _proxy.EnableDecryptFailureBypass = EnableDecryptFailureBypass;
+        _proxy.DecryptFailureBypassChanged += OnDecryptFailureBypassChanged;
         ApplyViaHeaderOption();
         // Inspector eagerly buffers bodies for the session grid; 4 MiB trips too often on
         // normal browsing (images, JS bundles) and RST'd the H2 stream. 32 MiB still bounds
@@ -202,14 +281,18 @@ public sealed class InterceptionService : IDisposable
         _endPoint.BeforeTunnelConnectRequest += OnBeforeTunnelConnect;
         _endPoint.BeforeTunnelConnectResponse += OnBeforeTunnelConnectResponse;
         _proxy.AddEndPoint(_endPoint);
-        _proxy.Start();
+        using (InspectorUxTrace.Scope("Interception.ProxyServer.Start"))
+            _proxy.Start();
         BoundPort = _endPoint.Port;
         StartProcessResolveWorker();
 
         // Do not treat Unix store/Keychain presence as SSL trust (see RefreshTrustState).
-        IsRootTrusted = UseInMemoryTrustState
-            ? _inMemoryTrusted
-            : RefreshTrustState(machineStore: false);
+        using (InspectorUxTrace.Scope("Interception.RefreshTrustState.OnStart"))
+        {
+            IsRootTrusted = UseInMemoryTrustState
+                ? _inMemoryTrusted
+                : RefreshTrustState(machineStore: false);
+        }
 
         TryPruneLegacySharedCrtsOnce();
 
@@ -271,7 +354,7 @@ public sealed class InterceptionService : IDisposable
     /// <summary>
     /// Idempotent shutdown: restore system proxy (even if already stopped) and dispose the proxy.
     /// Matches WPF example <c>EnsureProxyShutdown</c> semantics.
-    /// Must not run on the Avalonia UI thread — WinINET <c>InternetSetOption</c> broadcasts
+    /// Must not run on the Avalonia UI thread - WinINET <c>InternetSetOption</c> broadcasts
     /// back to the closing window and deadlocks (title-bar Close hangs; taskbar Close often
     /// terminates the process instead).
     /// </summary>
@@ -374,6 +457,10 @@ public sealed class InterceptionService : IDisposable
 
     public void Stop()
     {
+        // Release a paused breakpoint so Stop does not wait out the 120s hit timeout
+        // and the client is not left hanging after the listener is gone.
+        Breakpoints?.ContinueIfPaused("Proxy stopped — paused request continued");
+
         if (_proxy is null)
         {
             return;
@@ -390,6 +477,7 @@ public sealed class InterceptionService : IDisposable
         _proxy.OnRequestBodyWrite -= OnRequestBodyWriteThrottle;
         _proxy.OnResponseBodyWrite -= OnResponseBodyWriteThrottle;
         _proxy.ServerCertificateValidationCallback -= OnServerCertValidation;
+        _proxy.DecryptFailureBypassChanged -= OnDecryptFailureBypassChanged;
         if (_endPoint is not null)
         {
             _endPoint.BeforeTunnelConnectRequest -= OnBeforeTunnelConnect;
@@ -408,63 +496,96 @@ public sealed class InterceptionService : IDisposable
         Http3Enabled = false;
     }
 
+    private readonly object _systemProxyGate = new();
+
     /// <summary>
     /// Enable or disable system proxy. Returns false if the proxy is not running or the underlying call failed.
     /// </summary>
-    public bool SetSystemProxy(bool enable, InspectorSettings? settings = null)
+    /// <param name="stillWanted">
+    /// Optional gate evaluated under the system-proxy lock before mutating OS settings.
+    /// Used to cancel a superseded optimistic enable/disable (e.g. Stop while enable is in flight).
+    /// </param>
+    public bool SetSystemProxy(bool enable, InspectorSettings? settings = null, Func<bool>? stillWanted = null)
     {
         LastSystemProxyError = null;
-        if (_proxy is null || _endPoint is null || !_proxy.ProxyRunning)
+        lock (_systemProxyGate)
         {
-            LastSystemProxyError = "Proxy is not running";
-            return false;
-        }
+            if (stillWanted is not null && !stillWanted())
+            {
+                return false;
+            }
 
-        try
-        {
             if (enable)
             {
-                var effective = settings ?? SystemProxySettings ?? new InspectorSettings();
-                SystemProxySettings = effective;
-                var result = _systemProxy.SetAsSystemProxy(_proxy, _endPoint, effective);
-                if (!result.Succeeded)
+                if (_proxy is null || _endPoint is null || !_proxy.ProxyRunning)
                 {
-                    LastSystemProxyError = result.Message;
-                    _proxy.Logger.LogWarning("System proxy enable failed: {Message}", result.Message);
+                    LastSystemProxyError = "Proxy is not running";
                     return false;
                 }
-
-                _systemProxyEnabled = true;
             }
-            else
+            else if (!_systemProxyEnabled)
             {
-                var result = _systemProxy.RestoreOriginalProxySettings(_proxy);
-                if (!result.Succeeded)
-                {
-                    LastSystemProxyError = result.Message;
-                    _proxy.Logger.LogWarning("System proxy disable failed: {Message}", result.Message);
-                    return false;
-                }
-
-                _systemProxyEnabled = false;
+                // Already restored - common when Stop raced an optimistic enable that never landed.
+                return true;
             }
 
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LastSystemProxyError = ex.Message;
+            if (_proxy is null)
+            {
+                LastSystemProxyError = "Proxy is not running";
+                return false;
+            }
+
             try
             {
-                _proxy.Logger.LogWarning(ex, "System proxy {Action} failed", enable ? "enable" : "disable");
+                return enable
+                    ? TryEnableSystemProxyLocked(settings)
+                    : TryDisableSystemProxyLocked();
             }
-            catch
+            catch (Exception ex)
             {
-                // logging must not hide the original failure
-            }
+                LastSystemProxyError = ex.Message;
+                try
+                {
+                    _proxy.Logger.LogWarning(ex, "System proxy {Action} failed", enable ? "enable" : "disable");
+                }
+                catch
+                {
+                    // logging must not hide the original failure
+                }
 
+                return false;
+            }
+        }
+    }
+
+    private bool TryEnableSystemProxyLocked(InspectorSettings? settings)
+    {
+        var effective = settings ?? SystemProxySettings ?? new InspectorSettings();
+        SystemProxySettings = effective;
+        var result = _systemProxy.SetAsSystemProxy(_proxy!, _endPoint!, effective);
+        if (!result.Succeeded)
+        {
+            LastSystemProxyError = result.Message;
+            _proxy!.Logger.LogWarning("System proxy enable failed: {Message}", result.Message);
             return false;
         }
+
+        _systemProxyEnabled = true;
+        return true;
+    }
+
+    private bool TryDisableSystemProxyLocked()
+    {
+        var result = _systemProxy.RestoreOriginalProxySettings(_proxy!);
+        if (!result.Succeeded)
+        {
+            LastSystemProxyError = result.Message;
+            _proxy!.Logger.LogWarning("System proxy disable failed: {Message}", result.Message);
+            return false;
+        }
+
+        _systemProxyEnabled = false;
+        return true;
     }
 
     /// <summary>Re-applies system proxy bypass rules when already enabled (after settings change).</summary>
@@ -480,6 +601,11 @@ public sealed class InterceptionService : IDisposable
 
     /// <summary>Install root CA and refresh <see cref="IsRootTrusted"/> from the store.</summary>
     /// <returns>True when the cert is present in the target Root store after install (or Unix SSL trust succeeded / needs Keychain confirm).</returns>
+    /// <remarks>
+    ///     Combined API for tests/E2E. Inspector UI uses <see cref="InstallRootStoresOnly"/> +
+    ///     <see cref="FinalizeTrustAfterStoreMutation"/> so CryptUI Yes is not followed by store
+    ///     sweeps on the Avalonia dispatcher.
+    /// </remarks>
     public bool InstallRootCertificate(bool machineStore)
     {
         if (_proxy is null)
@@ -503,9 +629,6 @@ public sealed class InterceptionService : IDisposable
             return true;
         }
 
-        // Already in the .NET Root store: on Windows that is SSL trust. On macOS/Linux the
-        // cert can sit in Keychain/NSS without "Always Trust" / SSL trust — do not treat
-        // presence alone as trusted (Chrome then gets NET::ERR_CERT_AUTHORITY_INVALID).
         if (IsRootPresentInStore(machineStore))
         {
             if (OperatingSystem.IsWindows())
@@ -522,18 +645,16 @@ public sealed class InterceptionService : IDisposable
                 return CompleteRootTrustInstall(true);
             }
 
-            // .NET/Keychain has the cert but SSL trust is incomplete — push OS trust again.
             _proxy.CertificateManager.TrustRootCertificate(machineStore);
             LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
             IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
                             _proxy.CertificateManager.VerifyOsUserSslTrust();
-            // MacNeedsManualTrustConfirm: cert was added; UI should guide Always Trust then re-verify.
-            // Return true so the recovery loop runs, but keep IsRootTrusted false until verified.
             return CompleteRootTrustInstall(
                 IsRootTrusted ||
                 LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
         }
 
+        // Full trust (stores + orphan prune + Unix) - non-UI callers only.
         _proxy.CertificateManager.TrustRootCertificate(machineStore);
         LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
 
@@ -545,16 +666,125 @@ public sealed class InterceptionService : IDisposable
 
         IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
                         _proxy.CertificateManager.VerifyOsUserSslTrust();
-        // MacNeedsManualTrustConfirm: cert was added; UI should guide Always Trust then re-verify.
         return CompleteRootTrustInstall(
             IsRootTrusted ||
             LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
     }
 
-    private bool CompleteRootTrustInstall(bool installed)
+    /// <summary>CryptUI Root Add only - must run on a pumping UI thread.</summary>
+    /// <returns>True when the Root entry was newly added.</returns>
+    public bool InstallRootStoresOnly(bool machineStore)
     {
-        if (IsRootTrusted)
-            TryEnableFirefoxEnterpriseRootsBestEffort();
+        if (_proxy is null)
+            return false;
+
+        if (FailNextUserTrustInstall)
+        {
+            FailNextUserTrustInstall = false;
+            LastOsTrustResult = CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed, "Forced user-trust failure (test)");
+            return false;
+        }
+
+        if (UseInMemoryTrustState)
+        {
+            _inMemoryTrusted = true;
+            IsRootTrusted = true;
+            LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted (in-memory)");
+            return true;
+        }
+
+        var added = _proxy.CertificateManager.InstallRootIntoCertificateStores(machineStore);
+        LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
+        return added;
+    }
+
+    /// <summary>macOS/Linux Keychain/NSS trust - may show auth UI; pumping thread required.</summary>
+    public void ApplyUnixSslTrustOnUi(bool machineStore)
+    {
+        using var scope = InspectorUxTrace.Scope("ApplyUnixSslTrustOnUi", $"machine={machineStore}");
+        if (_proxy is null || UseInMemoryTrustState || OperatingSystem.IsWindows())
+            return;
+
+        _proxy.CertificateManager.ApplyUnixSslTrustAfterStoreInstall(machineStore);
+        LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
+        InspectorUxTrace.Event(
+            "ApplyUnixSslTrustOnUi.Result",
+            $"kind={LastOsTrustResult?.Kind} trusted={IsRootTrusted}");
+    }
+
+    /// <summary>
+    ///     After CryptUI Add / Unix trust: verify trust + My-store prune. Safe off the UI thread.
+    ///     Skips Root orphan CryptUI sweeps (those freeze Avalonia after Yes).
+    /// </summary>
+    /// <param name="machineStore">CurrentUser vs LocalMachine.</param>
+    /// <param name="rootStoreAdded">
+    ///     When <see langword="true"/>, CryptUI just added the Root entry - skip an immediate
+    ///     Root-store Find (Crypt32 is hot after Yes and routinely stalls ~10–15s, especially on a
+    ///     second Clear+Install). Trust is assumed; My prune runs best-effort afterward.
+    /// </param>
+    public bool FinalizeTrustAfterStoreMutation(bool machineStore, bool? rootStoreAdded = null)
+    {
+        using var scope = InspectorUxTrace.Scope(
+            "FinalizeTrustAfterStoreMutation",
+            $"machine={machineStore} added={rootStoreAdded}");
+        if (_proxy is null)
+            return false;
+
+        if (UseInMemoryTrustState)
+        {
+            IsRootTrusted = _inMemoryTrusted;
+            return IsRootTrusted;
+        }
+
+        if (rootStoreAdded == true && OperatingSystem.IsWindows())
+        {
+            IsRootTrusted = true;
+            if (LastOsTrustResult is null)
+                LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted in current-user store");
+
+            InspectorUxTrace.Event("FinalizeTrust.SkipRootFind", "assumeInstalled=true");
+            // Prune on the serial trust background lane - never Task.Run beside Firefox prefs work.
+            SchedulePruneOrphanedPersonalCertificates(machineStore);
+            return CompleteRootTrustInstall(true);
+        }
+
+        try
+        {
+            using (InspectorUxTrace.Scope("FinalizeTrust.PrunePersonal"))
+            {
+                _proxy.CertificateManager.PruneOrphanedPersonalCertificates(
+                    machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser,
+                    keepCurrentThumbprint: true);
+            }
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            using (InspectorUxTrace.Scope("FinalizeTrust.IsRootPresentInStore"))
+                IsRootTrusted = IsRootPresentInStore(machineStore);
+            if (IsRootTrusted && LastOsTrustResult is null)
+                LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted in current-user store");
+            return CompleteRootTrustInstall(IsRootTrusted);
+        }
+
+        using (InspectorUxTrace.Scope("FinalizeTrust.VerifyOsUserSslTrust"))
+        {
+            IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
+                            _proxy.CertificateManager.VerifyOsUserSslTrust();
+        }
+        return CompleteRootTrustInstall(
+            IsRootTrusted ||
+            LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
+    }
+
+    private static bool CompleteRootTrustInstall(bool installed)
+    {
+        // Do not write Firefox prefs/policies here - schedule via RunOffUiAsync after success.
         return installed;
     }
 
@@ -586,6 +816,40 @@ public sealed class InterceptionService : IDisposable
 
         IsRootTrusted = ok && (EvaluateUnixTrustSuccess(LastOsTrustResult) ||
                                _proxy.CertificateManager.VerifyOsUserSslTrust());
+        return CompleteRootTrustInstall(
+            IsRootTrusted ||
+            LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
+    }
+
+    /// <summary>
+    ///     After UAC/admin install: re-verify off the UI thread (store Find can stall Crypt32).
+    /// </summary>
+    public bool FinalizeTrustAfterAdminInstall(bool machineStore)
+    {
+        if (_proxy is null)
+            return false;
+        if (UseInMemoryTrustState)
+            return IsRootTrusted;
+
+        try
+        {
+            _proxy.CertificateManager.PruneOrphanedPersonalCertificates(
+                machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser,
+                keepCurrentThumbprint: true);
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            IsRootTrusted = IsRootPresentInStore(machineStore);
+            return CompleteRootTrustInstall(IsRootTrusted);
+        }
+
+        IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
+                        _proxy.CertificateManager.VerifyOsUserSslTrust();
         return CompleteRootTrustInstall(
             IsRootTrusted ||
             LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
@@ -623,18 +887,20 @@ public sealed class InterceptionService : IDisposable
         _proxy?.CertificateManager.IsRootInLoginKeychain() == true;
 
     /// <summary>Re-verifies macOS/Linux user SSL trust and updates <see cref="IsRootTrusted"/>.</summary>
+    /// <remarks>
+    /// Does not write Firefox prefs - that is Install / Trust Firefox only (verify-only must stay cheap).
+    /// </remarks>
     public bool VerifyOsUserSslTrust()
     {
+        using var scope = InspectorUxTrace.Scope("VerifyOsUserSslTrust");
         if (_proxy is null) return false;
         if (UseInMemoryTrustState) return IsRootTrusted;
-        // Windows: Root store presence is trust. Unix: require real SSL trust verification —
+        // Windows: Root store presence is trust. Unix: require real SSL trust verification -
         // Keychain/NSS can hold the CA without trusting it for SSL (Chrome MITM fails).
         var ok = OperatingSystem.IsWindows()
             ? IsRootPresentInStore(false)
             : _proxy.CertificateManager.VerifyOsUserSslTrust();
         IsRootTrusted = ok;
-        if (ok)
-            TryEnableFirefoxEnterpriseRootsBestEffort();
         return ok;
     }
 
@@ -644,6 +910,11 @@ public sealed class InterceptionService : IDisposable
     /// </summary>
     public CertificateOsTrustResult TrustFirefox()
     {
+        if (UseInMemoryTrustState)
+        {
+            return CertificateOsTrustResult.Ok("Firefox trust recorded (in-memory)");
+        }
+
         if (_proxy is null)
         {
             return CertificateOsTrustResult.Fail(
@@ -660,18 +931,66 @@ public sealed class InterceptionService : IDisposable
         if (OperatingSystem.IsWindows())
         {
             var policy = FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots();
+            InspectorUxTrace.Event(
+                "TrustFirefox.WindowsEnterpriseRoots",
+                $"ok={policy.Succeeded} kind={policy.Kind} step={FirefoxCertificateTrust.LastEnterpriseRootsStep} msg={TruncateTrustMsg(policy.Message)}");
+            LogTrustFirefoxOutcome(policy);
             if (policy.Succeeded)
                 return policy;
-            // Fall through to profile NSS import.
-        }
-        else
-        {
-            var pref = FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref();
-            if (pref.Succeeded)
-                return pref;
+
+            // Windows does not ship NSS certutil on PATH (Microsoft certutil.exe is ignored).
+            // Never fall through to TrustDefaultProfile - that surfaces CertutilMissing / apt-style copy.
+            var failed = CertificateOsTrustResult.Fail(
+                policy.Kind == CertificateOsTrustKind.Cancelled
+                    ? CertificateOsTrustKind.Cancelled
+                    : CertificateOsTrustKind.Failed,
+                string.IsNullOrWhiteSpace(policy.Message)
+                    ? "Could not enable Firefox OS-root trust. Quit Firefox and retry, or Export CA and import it under Firefox Authorities."
+                    : policy.Message + " - or Export CA and import it under Firefox Authorities.");
+            LogTrustFirefoxOutcome(failed);
+            return failed;
         }
 
-        return FirefoxCertificateTrust.TrustDefaultProfile(cert, RootCertificateName);
+        var pref = FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref();
+        InspectorUxTrace.Event(
+            "TrustFirefox.EnterpriseRootsUserPref",
+            $"ok={pref.Succeeded} kind={pref.Kind} step={FirefoxCertificateTrust.LastEnterpriseRootsStep}");
+        if (pref.Succeeded)
+        {
+            LogTrustFirefoxOutcome(pref);
+            return pref;
+        }
+
+        var nss = FirefoxCertificateTrust.TrustDefaultProfile(cert, RootCertificateName);
+        LogTrustFirefoxOutcome(nss);
+        return nss;
+    }
+
+    private void LogTrustFirefoxOutcome(CertificateOsTrustResult result)
+    {
+        try
+        {
+            if (_proxy?.Logger is null)
+                return;
+            if (result.Succeeded)
+            {
+                if (_proxy.Logger.IsEnabled(LogLevel.Information))
+                    _proxy.Logger.LogInformation("TrustFirefox: {Message}", result.Message);
+            }
+            else
+                _proxy.Logger.LogWarning("TrustFirefox failed ({Kind}): {Message}", result.Kind, result.Message);
+        }
+        catch
+        {
+            // never break trust UX for logging
+        }
+    }
+
+    private static string TruncateTrustMsg(string? message)
+    {
+        if (string.IsNullOrEmpty(message))
+            return "";
+        return message.Length <= 120 ? message : message[..120] + "...";
     }
 
     /// <summary>
@@ -682,13 +1001,188 @@ public sealed class InterceptionService : IDisposable
     {
         try
         {
+            // Unit tests set TITANIUM_SKIP_ROOT_STORE_UI=1 - never touch live Firefox profiles
+            // (prefs.js locks hang / balloon memory when Firefox is open).
+            if (string.Equals(Environment.GetEnvironmentVariable("TITANIUM_SKIP_ROOT_STORE_UI"), "1",
+                    StringComparison.Ordinal))
+                return;
+
             if (!FirefoxCertificateTrust.IsFirefoxProfilePresent())
                 return;
-            FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref();
+
+            // Windows: HKCU ImportEnterpriseRoots first (cheap). user.js/prefs.js only as fallback
+            // inside TryEnableWindowsEnterpriseRoots - never prefs-first on the install path.
+            if (OperatingSystem.IsWindows())
+                FirefoxCertificateTrust.TryEnableWindowsEnterpriseRoots();
+            else
+                FirefoxCertificateTrust.TryEnableEnterpriseRootsUserPref();
         }
         catch
         {
             // install path must not fail because Firefox prefs were locked
+        }
+    }
+
+    /// <summary>
+    ///     Queue Firefox enable work on the serial background lane (coalesces consecutive enables).
+    /// </summary>
+    public void ScheduleFirefoxEnterpriseRootsBestEffort() =>
+        EnqueueFirefoxTrustBackground(FirefoxTrustBgKind.Enable, TryEnableFirefoxEnterpriseRootsBestEffort);
+
+    /// <summary>
+    ///     Queue Firefox clear work on the serial background lane (coalesces consecutive clears).
+    /// </summary>
+    public void ScheduleClearPendingFirefoxRootTrust() =>
+        EnqueueFirefoxTrustBackground(FirefoxTrustBgKind.Clear, ClearPendingFirefoxRootTrust);
+
+    /// <summary>
+    ///     Queue Personal (My) store same-CN prune on the serial trust background lane.
+    ///     Used after CryptUI Root Add so install returns immediately while Crypt32 settles.
+    /// </summary>
+    public void SchedulePruneOrphanedPersonalCertificates(bool machineStore)
+    {
+        if (_proxy is null || UseInMemoryTrustState)
+            return;
+
+        var location = machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser;
+        var mgr = _proxy.CertificateManager;
+        EnqueueFirefoxTrustBackground(FirefoxTrustBgKind.Prune, () =>
+        {
+            try
+            {
+                mgr.PruneOrphanedPersonalCertificates(location, keepCurrentThumbprint: true);
+            }
+            catch
+            {
+                // best-effort
+            }
+        });
+    }
+
+    /// <summary>
+    ///     Await idle trust background lane (Firefox prefs + My prune) so the next trust mutation
+    ///     does not collide with prior fire-and-forget work.
+    /// </summary>
+    public Task WaitForFirefoxTrustBackgroundIdleAsync(CancellationToken cancellationToken = default)
+    {
+        Task idle;
+        lock (_firefoxTrustBgGate)
+            idle = _firefoxTrustBgIdle.Task;
+
+        if (idle.IsCompleted)
+            return Task.CompletedTask;
+
+        return idle.WaitAsync(cancellationToken);
+    }
+
+    /// <summary>
+    ///     Drop queued (not yet started) Clear/Enable/Prune work. A job already running finishes;
+    ///     callers still use a short WaitForFirefoxTrustBackgroundIdleAsync.
+    /// </summary>
+    public void DropPendingFirefoxTrustBackgroundWork()
+    {
+        lock (_firefoxTrustBgGate)
+        {
+            var dropped = _firefoxTrustBgQueue.Count;
+            if (dropped == 0)
+                return;
+
+            _firefoxTrustBgQueue.Clear();
+            InspectorUxTrace.Event(
+                "TrustBg.DropPending",
+                $"dropped={dropped} running={_firefoxTrustBgRunning}");
+
+            if (!_firefoxTrustBgRunning)
+                _firefoxTrustBgIdle.TrySetResult();
+        }
+    }
+
+    private void EnqueueFirefoxTrustBackground(FirefoxTrustBgKind kind, Action work)
+    {
+        lock (_firefoxTrustBgGate)
+        {
+            // Coalesce consecutive same-kind ops (double Enable from Ensure+SetOsTrustSuccess,
+            // double Clear, double Prune after rapid Install).
+            if (_firefoxTrustBgQueue.Count > 0)
+            {
+                var items = _firefoxTrustBgQueue.ToArray();
+                if (items[^1].Kind == kind)
+                {
+                    _firefoxTrustBgQueue.Clear();
+                    for (var i = 0; i < items.Length - 1; i++)
+                        _firefoxTrustBgQueue.Enqueue(items[i]);
+                }
+            }
+
+            _firefoxTrustBgQueue.Enqueue(new FirefoxTrustBgQueued(kind, work));
+            InspectorUxTrace.Event(
+                "TrustBg.Enqueue",
+                $"kind={kind} depth={_firefoxTrustBgQueue.Count} running={_firefoxTrustBgRunning}");
+
+            if (_firefoxTrustBgRunning)
+                return;
+
+            _firefoxTrustBgRunning = true;
+            _firefoxTrustBgIdle = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            // Background drain is independent of process-resolve CTS; opt out explicitly (S8949).
+            _ = Task.Run(DrainFirefoxTrustBackground, CancellationToken.None);
+        }
+    }
+
+    private void DrainFirefoxTrustBackground()
+    {
+        InspectorUxTrace.Event("TrustBg.Drain.Start");
+        try
+        {
+            while (true)
+            {
+                FirefoxTrustBgQueued next;
+                lock (_firefoxTrustBgGate)
+                {
+                    if (_firefoxTrustBgQueue.Count == 0)
+                    {
+                        _firefoxTrustBgRunning = false;
+                        _firefoxTrustBgIdle.TrySetResult();
+                        InspectorUxTrace.Event("TrustBg.Drain.Idle");
+                        return;
+                    }
+
+                    next = _firefoxTrustBgQueue.Dequeue();
+                }
+
+                using (InspectorUxTrace.Scope("TrustBg.Job", $"kind={next.Kind}"))
+                {
+                    try
+                    {
+                        // Clear/Enable historically stalled 30–40s on locked Firefox prefs.
+                        // Cap the lane so Remove / Clear+Install never wait on a wedged job.
+                        if (next.Kind is FirefoxTrustBgKind.Clear or FirefoxTrustBgKind.Enable)
+                        {
+                            // Prefs I/O is best-effort and time-capped; do not tie to process-resolve CTS.
+                            var work = Task.Run(next.Work, CancellationToken.None);
+                            if (!work.Wait(TimeSpan.FromSeconds(3), CancellationToken.None))
+                                InspectorUxTrace.Event("TrustBg.Job.Timeout", $"kind={next.Kind}");
+                        }
+                        else
+                        {
+                            next.Work();
+                        }
+                    }
+                    catch
+                    {
+                        // best-effort lane - never fail the proxy / UI on prefs I/O
+                    }
+                }
+            }
+        }
+        catch
+        {
+            lock (_firefoxTrustBgGate)
+            {
+                _firefoxTrustBgRunning = false;
+                _firefoxTrustBgIdle.TrySetResult();
+            }
+            InspectorUxTrace.Event("TrustBg.Drain.Fault");
         }
     }
 
@@ -705,10 +1199,92 @@ public sealed class InterceptionService : IDisposable
 
     public void UntrustRootCertificate(bool machineStore)
     {
+        // Combined API for E2E / non-UI callers. Inspector ViewModel uses RemoveOsRootStoreOnly
+        // + ClearPendingFirefoxRootTrust off-UI so CryptUI does not freeze on Firefox prefs.
+        RemoveOsRootStoreOnly(machineStore);
+        ClearPendingFirefoxRootTrust();
+    }
+
+    /// <summary>Nickname to clear from Firefox after OS untrust; consumed by <see cref="ClearPendingFirefoxRootTrust"/>.</summary>
+    internal string? PendingFirefoxRootClearName { get; private set; }
+
+    /// <summary>Best-effort Firefox cleanup after OS Root remove (call off the UI thread).</summary>
+    public void ClearPendingFirefoxRootTrust()
+    {
+        var name = PendingFirefoxRootClearName;
+        PendingFirefoxRootClearName = null;
+        FirefoxCertificateTrust.ClearRootTrustBestEffort(name);
+    }
+
+    /// <summary>
+    ///     Mint a new root CA: untrust same-CN store entries, delete Inspector PFX + local leaf cache,
+    ///     recreate root. Always best-effort prunes the legacy shared <c>Titanium.Web.Proxy/crts</c> folder.
+    ///     Does not install trust - caller should prompt Install CA.
+    /// </summary>
+    /// <remarks>
+    ///     CryptUI Remove must run on a pumping UI thread; Firefox clear + PFX recreate should run
+    ///     off-UI via <see cref="RemoveOsRootStoreOnly"/> + <see cref="MintNewRootCertificateCore"/>.
+    ///     This combined method remains for tests / non-UI callers.
+    /// </remarks>
+    public bool RotateRootCertificate(bool machineStore)
+    {
+        RemoveOsRootStoreOnly(machineStore);
+        return MintNewRootCertificateCore();
+    }
+
+    /// <summary>
+    ///     CryptUI Root Removes for every same-CN thumbprint, then My/Unix finalize off-UI via
+    ///     <see cref="FinalizeAfterRootRemove"/>. Inspector ViewModel lists thumbs off-UI first.
+    /// </summary>
+    public void RemoveOsRootStoreOnly(bool machineStore)
+    {
         if (_proxy is null)
+            return;
+
+        if (UseInMemoryTrustState)
         {
+            _inMemoryTrusted = false;
+            IsRootTrusted = false;
+            PendingFirefoxRootClearName = null;
             return;
         }
+
+        PendingFirefoxRootClearName = RootCertificateName;
+        // Combined path for tests: full CN sweep (may CryptUI). UI callers use List + RemoveByThumb.
+        _proxy.CertificateManager.PruneOrphanedSameCommonNameCertificates(
+            machineStore, keepCurrentThumbprint: false);
+        RefreshTrustAfterRootRemove(machineStore);
+    }
+
+    /// <summary>Read-only list of same-CN Root thumbprints to delete. Safe off the UI thread.</summary>
+    public IReadOnlyList<string> ListRootThumbprintsToRemove(bool machineStore)
+    {
+        if (_proxy is null || UseInMemoryTrustState)
+            return Array.Empty<string>();
+
+        PendingFirefoxRootClearName = RootCertificateName;
+        var location = machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser;
+        return _proxy.CertificateManager.ListSameCommonNameRootThumbprints(location, keepThumbprint: null);
+    }
+
+    /// <summary>One Root Remove by thumbprint (CryptUI). Must run on a pumping UI thread.</summary>
+    public void RemoveRootThumbprintOnUi(bool machineStore, string thumbprint)
+    {
+        if (_proxy is null || UseInMemoryTrustState)
+            return;
+
+        var location = machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser;
+        _proxy.CertificateManager.RemoveCertificateByThumbprint(StoreName.Root, location, thumbprint);
+    }
+
+    /// <summary>
+    ///     After CryptUI Root Removes: drop matching Personal-store entries + refresh IsRootTrusted.
+    ///     Safe off the UI thread (no Root CryptUI). Does not touch Firefox.
+    /// </summary>
+    public void FinalizeAfterRootRemove(bool machineStore)
+    {
+        if (_proxy is null)
+            return;
 
         if (UseInMemoryTrustState)
         {
@@ -717,40 +1293,77 @@ public sealed class InterceptionService : IDisposable
             return;
         }
 
-        _proxy.CertificateManager.RemoveTrustedRootCertificate(machineStore);
-        // Windows: Root store presence is trust. macOS: Chrome still trusts System.keychain
-        // copies after the .NET user store is cleared. Linux: Chrome reads NSS (~/.pki/nssdb),
-        // not the .NET store — leftover nicknames must keep IsRootTrusted true.
+        var location = machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser;
+        try
+        {
+            // Thumbprint remove only - avoid another subject scan of a large Personal store.
+            var thumb = RootCertificate?.Thumbprint;
+            if (!string.IsNullOrEmpty(thumb))
+                _proxy.CertificateManager.RemoveCertificateByThumbprint(StoreName.My, location, thumb);
+            else
+                _proxy.CertificateManager.PruneOrphanedPersonalCertificates(
+                    location, keepCurrentThumbprint: false);
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        RefreshTrustAfterRootRemove(machineStore);
+    }
+
+    /// <summary>macOS/Linux Keychain/NSS untrust - may prompt; pumping UI thread.</summary>
+    public void ApplyUnixUntrustOnUi()
+    {
+        using var scope = InspectorUxTrace.Scope("ApplyUnixUntrustOnUi");
+        if (_proxy is null || UseInMemoryTrustState || OperatingSystem.IsWindows())
+            return;
+        if (CertificateManager.AreInteractiveRootStoreMutationsSuppressed)
+            return;
+        if (RootCertificate is null)
+            return;
+
+        try
+        {
+            _proxy.CertificateManager.ApplyUnixSslUntrust();
+            InspectorUxTrace.Event("ApplyUnixUntrustOnUi.Done");
+        }
+        catch
+        {
+            InspectorUxTrace.Event("ApplyUnixUntrustOnUi.Fault");
+            // best-effort
+        }
+    }
+
+    private void RefreshTrustAfterRootRemove(bool machineStore)
+    {
         if (OperatingSystem.IsWindows())
             IsRootTrusted = IsRootPresentInStore(machineStore);
         else if (OperatingSystem.IsMacOS())
-            IsRootTrusted = _proxy.CertificateManager.IsOsRootStillPresent();
+            IsRootTrusted = _proxy!.CertificateManager.IsOsRootStillPresent();
         else
-            IsRootTrusted = _proxy.CertificateManager.VerifyOsUserSslTrust();
+            IsRootTrusted = _proxy!.CertificateManager.VerifyOsUserSslTrust();
     }
 
     /// <summary>
-    ///     Mint a new root CA: untrust same-CN store entries, delete Inspector PFX + local leaf cache,
-    ///     recreate root. Always best-effort prunes the legacy shared <c>Titanium.Web.Proxy/crts</c> folder.
-    ///     Does not install trust — caller should prompt Install CA.
+    ///     After OS Root remove: optionally clear Firefox prefs, delete PFX/leaf cache, mint new root.
+    ///     Safe off the UI thread (no CryptUI).
     /// </summary>
-    public bool RotateRootCertificate(bool machineStore)
+    public bool MintNewRootCertificateCore(bool clearFirefox = true)
     {
+        using var scope = InspectorUxTrace.Scope("MintNewRoot", $"clearFirefox={clearFirefox}");
         if (_proxy is null)
             return false;
 
+        if (clearFirefox)
+            ClearPendingFirefoxRootTrust();
+        else
+            PendingFirefoxRootClearName = null;
+
         EnsureRootPfxPath();
         var mgr = _proxy.CertificateManager;
-
-        if (!UseInMemoryTrustState)
-            mgr.RemoveTrustedRootCertificate(machineStore);
-        else
-        {
-            _inMemoryTrusted = false;
-            IsRootTrusted = false;
-        }
-
-        mgr.ClearRootCertificate();
+        using (InspectorUxTrace.Scope("MintNewRoot.ClearRootCertificate"))
+            mgr.ClearRootCertificate();
 
         try
         {
@@ -774,10 +1387,15 @@ public sealed class InterceptionService : IDisposable
         }
 
         mgr.PfxFilePath = _rootPfxPath!;
-        var ok = mgr.CreateRootCertificate(persistToFile: true);
-        IsRootTrusted = !UseInMemoryTrustState && IsRootPresentInStore(machineStore);
+        bool ok;
+        using (InspectorUxTrace.Scope("MintNewRoot.CreateRootCertificate"))
+            ok = mgr.CreateRootCertificate(persistToFile: true);
+        // Brand-new thumbprint cannot be in the Root store yet - do not open Crypt32 here
+        // (after Remove the store is hot; a useless Find routinely stalls Clear+Install).
+        IsRootTrusted = UseInMemoryTrustState && _inMemoryTrusted;
 
-        PruneLegacySharedCrts(force: true);
+        using (InspectorUxTrace.Scope("MintNewRoot.PruneLegacySharedCrts"))
+            PruneLegacySharedCrts(force: true);
         return ok && mgr.RootCertificate != null;
     }
 
@@ -843,7 +1461,7 @@ public sealed class InterceptionService : IDisposable
             return IsRootTrusted;
         }
 
-        // Windows Root store presence == trust. On macOS/Linux, presence is not enough —
+        // Windows Root store presence == trust. On macOS/Linux, presence is not enough -
         // VerifyOsUserSslTrust checks Keychain/NSS SSL trust (security verify-cert / certutil).
         if (OperatingSystem.IsWindows())
         {
@@ -900,6 +1518,11 @@ public sealed class InterceptionService : IDisposable
         var path = destinationPath ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
             "TitaniumInspector-RootCA.cer");
+        if (Directory.Exists(path))
+        {
+            throw new IOException("Export path is a directory: " + path);
+        }
+
         var der = cert.Export(X509ContentType.Cert);
         if (IsPemExportPath(path))
         {
@@ -954,10 +1577,13 @@ public sealed class InterceptionService : IDisposable
             host,
             DecryptSkipHosts,
             userOnlyHosts: null);
-        e.DecryptSsl = DecryptHttps && !disableDecrypt;
-        var opaqueReason = disableDecrypt || !DecryptHttps
-            ? MitmBypass.ResolveOpaqueReason(host, DecryptHttps, DecryptSkipHosts, userOnlyHosts: null)
-            : OpaqueTunnelReason.None;
+        var learnedBypass = !disableDecrypt && DecryptHttps && IsLearnedDecryptBypass(host);
+        e.DecryptSsl = DecryptHttps && !disableDecrypt && !learnedBypass;
+        var opaqueReason = OpaqueTunnelReason.None;
+        if (learnedBypass)
+            opaqueReason = OpaqueTunnelReason.LearnedFailure;
+        else if (disableDecrypt || !DecryptHttps)
+            opaqueReason = MitmBypass.ResolveOpaqueReason(host, DecryptHttps, DecryptSkipHosts, userOnlyHosts: null);
 
         if (!Capturing)
         {
@@ -966,7 +1592,7 @@ public sealed class InterceptionService : IDisposable
 
         try
         {
-            // Opaque HTTPS (DecryptHttps=false) never hits BeforeRequest — publish CONNECT here
+            // Opaque HTTPS (DecryptHttps=false) never hits BeforeRequest - publish CONNECT here
             // so the session list matches Fiddler when decryption is off.
             var snap = CreateTunnelSnapshot(e, opaqueReason);
             AttachTunnelByteCounters(e, snap);
@@ -1032,13 +1658,9 @@ public sealed class InterceptionService : IDisposable
     {
         try
         {
-            // Buffer body when tools need GraphQL operationName matching.
-            var needsBodyForTools =
-                (AutoResponder is { Enabled: true } && AutoResponder.Rules.Any(r => r.Enabled && !string.IsNullOrWhiteSpace(r.GraphQlOperationName))) ||
-                (MapRemote is { Enabled: true } && MapRemote.Rules.Any(r => r.Enabled && !string.IsNullOrWhiteSpace(r.GraphQlOperationName))) ||
-                (Breakpoints is { Enabled: true } && !string.IsNullOrWhiteSpace(Breakpoints.GraphQlOperationName));
-
-            if (e.HttpClient.Request.HasBody && (ShouldBufferBody(e.HttpClient.Request, e) || needsBodyForTools))
+            // Buffer when safe. GraphQL tools must NOT force GetRequestBody past the skip
+            // (huge POST would RST HTTP/2 with ENHANCE_YOUR_CALM).
+            if (e.HttpClient.Request.HasBody && ShouldBufferBody(e.HttpClient.Request, e, isRequest: true))
             {
                 e.HttpClient.Request.KeepBody = true;
                 await e.GetRequestBody(CancellationToken.None);
@@ -1050,6 +1672,10 @@ public sealed class InterceptionService : IDisposable
             }
 
             string? requestBody = null;
+            var needsBodyForTools =
+                (AutoResponder is { Enabled: true } && AutoResponder.Rules.Any(r => r.Enabled && !string.IsNullOrWhiteSpace(r.GraphQlOperationName))) ||
+                (MapRemote is { Enabled: true } && MapRemote.Rules.Any(r => r.Enabled && !string.IsNullOrWhiteSpace(r.GraphQlOperationName))) ||
+                (Breakpoints is { Enabled: true } && !string.IsNullOrWhiteSpace(Breakpoints.GraphQlOperationName));
             if (needsBodyForTools && e.HttpClient.Request.IsBodyRead)
             {
                 requestBody = await e.GetRequestBodyAsString(CancellationToken.None);
@@ -1062,13 +1688,23 @@ public sealed class InterceptionService : IDisposable
             if (AutoResponder is not null &&
                 AutoResponder.TryMatch(requestUrl, requestBody, out var rule) &&
                 rule is not null &&
-                AutoResponderViewModel.TryResolveBody(rule, out var bodyBytes, out _))
+                AutoResponderViewModel.TryResolveResponse(rule, out var inlineBody, out var mapLocalPath, out _, out _))
             {
-                var headers = new List<HttpHeader>
+                if (mapLocalPath is not null)
                 {
-                    new("Content-Type", rule.ContentType),
-                };
-                e.GenericResponse(bodyBytes, (HttpStatusCode)rule.StatusCode, headers);
+                    e.RespondStreaming(
+                        ProxyResults.File(mapLocalPath, rule.ContentType, (HttpStatusCode)rule.StatusCode),
+                        closeServerConnection: false);
+                }
+                else
+                {
+                    var headers = new List<HttpHeader>
+                    {
+                        new("Content-Type", rule.ContentType),
+                    };
+                    e.GenericResponse(inlineBody ?? Array.Empty<byte>(), (HttpStatusCode)rule.StatusCode, headers);
+                }
+
                 autoResponded = true;
             }
 
@@ -1119,7 +1755,7 @@ public sealed class InterceptionService : IDisposable
     {
         try
         {
-            if (e.HttpClient.Response.HasBody && ShouldBufferBody(e.HttpClient.Response, e))
+            if (e.HttpClient.Response.HasBody && ShouldBufferBody(e.HttpClient.Response, e, isRequest: false))
             {
                 e.HttpClient.Response.KeepBody = true;
                 await e.GetResponseBody(CancellationToken.None);
@@ -1170,6 +1806,7 @@ public sealed class InterceptionService : IDisposable
     {
         if (_live.TryGetValue(e.HttpClient, out var snap))
         {
+            FinalizeStreamingBody(snap);
             ApplyTiming(snap, e.Timing, snap.StartedUtc);
             SessionUpdated?.Invoke(this, snap);
         }
@@ -1190,8 +1827,9 @@ public sealed class InterceptionService : IDisposable
     private SessionSnapshot CreatePreviewSnapshot(SessionEventArgs e, bool assignId)
     {
         var req = e.HttpClient.Request;
-        var bodyBytes = req.IsBodyRead ? TruncateBytes(req.Body) : null;
-        var bodyText = bodyBytes is null ? null : TruncateText(Encoding.UTF8.GetString(bodyBytes));
+        var originalBody = req.IsBodyRead ? req.Body : null;
+        var bodyBytes = InspectorBodyLimits.TruncateBytes(originalBody);
+        var bodyText = bodyBytes is null ? null : InspectorBodyLimits.TruncateText(Encoding.UTF8.GetString(bodyBytes));
         GrpcJsonTranscodeSessionMark.TryGet(e.UserData, out var mark);
 
         var snap = new SessionSnapshot
@@ -1216,16 +1854,21 @@ public sealed class InterceptionService : IDisposable
                 (req.Headers.GetFirstHeader("Accept")?.Value?.Contains("text/event-stream", StringComparison.OrdinalIgnoreCase) == true),
         };
 
+        ApplyRequestBodyCapture(snap, req, originalBody);
         ApplyTranscodeMark(snap, mark);
         if (mark?.ClientRequestBody is { Length: > 0 } clientBody)
         {
-            snap.RequestBodyBytes = TruncateBytes(clientBody);
-            snap.RequestBodyText = TruncateText(Encoding.UTF8.GetString(clientBody));
+            snap.RequestBodyBytes = InspectorBodyLimits.TruncateBytes(clientBody);
+            snap.RequestBodyText = InspectorBodyLimits.TruncateText(Encoding.UTF8.GetString(clientBody));
+            snap.RequestBodyOriginalSize = clientBody.LongLength;
+            snap.RequestBodyCapture = clientBody.Length > MaxBodyBytes
+                ? BodyCaptureState.Truncated
+                : BodyCaptureState.Complete;
         }
 
         if (mark?.UpstreamRequestBody is { Length: > 0 } upstreamReq)
         {
-            snap.UpstreamRequestBodyBytes = TruncateBytes(upstreamReq);
+            snap.UpstreamRequestBodyBytes = InspectorBodyLimits.TruncateBytes(upstreamReq);
             snap.GrpcFrames = ProtocolFrameInspectors.ParseGrpcFrames(snap.UpstreamRequestBodyBytes);
             snap.ProtobufDecodedText = ProtobufMessageDecoder.DecodeWireFormat(snap.UpstreamRequestBodyBytes);
         }
@@ -1394,11 +2037,11 @@ public sealed class InterceptionService : IDisposable
         snap.ResponseHeadersText = FormatHeaders(resp.Headers);
         snap.Protocol = SessionDisplayFormat.FormatClientServer(
             e.HttpClient.Request.HttpVersion, resp.HttpVersion);
-        var bodyBytes = resp.IsBodyRead ? TruncateBytes(resp.Body) : null;
+        var originalBody = resp.IsBodyRead ? resp.Body : null;
+        var bodyBytes = InspectorBodyLimits.TruncateBytes(originalBody);
         snap.ResponseBodyBytes = bodyBytes;
-        snap.ResponseBodyText = bodyBytes is null ? null : TruncateText(Encoding.UTF8.GetString(bodyBytes));
-        snap.BodySize = bodyBytes?.LongLength
-                        ?? (resp.ContentLength >= 0 ? resp.ContentLength : null);
+        snap.ResponseBodyText = bodyBytes is null ? null : InspectorBodyLimits.TruncateText(Encoding.UTF8.GetString(bodyBytes));
+        ApplyResponseBodyCapture(snap, resp, e.HttpClient.Request, originalBody);
 
         ApplyTiming(snap, e.Timing, snap.StartedUtc);
 
@@ -1407,7 +2050,7 @@ public sealed class InterceptionService : IDisposable
             ApplyTranscodeMark(snap, mark);
             if (mark.UpstreamResponseBody is { Length: > 0 } upstreamResp)
             {
-                snap.UpstreamResponseBodyBytes = TruncateBytes(upstreamResp);
+                snap.UpstreamResponseBodyBytes = InspectorBodyLimits.TruncateBytes(upstreamResp);
                 snap.GrpcFrames = ProtocolFrameInspectors.ParseGrpcFrames(snap.UpstreamResponseBodyBytes);
             }
         }
@@ -1466,31 +2109,237 @@ public sealed class InterceptionService : IDisposable
     private async Task OnRequestBodyWriteThrottle(object sender, BeforeBodyWriteEventArgs e)
     {
         var profile = ThrottleProfile;
-        if (profile is not { IsEnabled: true })
+        if (profile is { IsEnabled: true })
         {
-            return;
-        }
-
-        var delay = NetworkThrottle.DelayFor(profile, e.BodyBytes?.Length ?? 0, applyLatency: !e.IsChunked || e.BodyBytes?.Length > 0);
-        if (delay > TimeSpan.Zero)
-        {
-            await Task.Delay(delay, _processResolveCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+            var delay = NetworkThrottle.DelayFor(profile, e.BodyBytes?.Length ?? 0, applyLatency: !e.IsChunked || e.BodyBytes?.Length > 0);
+            if (delay > TimeSpan.Zero)
+            {
+                await Task.Delay(delay, _processResolveCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+            }
         }
     }
 
     private async Task OnResponseBodyWriteThrottle(object sender, BeforeBodyWriteEventArgs e)
     {
         var profile = ThrottleProfile;
-        if (profile is not { IsEnabled: true })
+        if (profile is { IsEnabled: true })
+        {
+            var delay = NetworkThrottle.DelayFor(profile, e.BodyBytes?.Length ?? 0, applyLatency: true);
+            if (delay > TimeSpan.Zero)
+            {
+                await Task.Delay(delay, _processResolveCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+
+        // Preview tee only for streamed SSE (not buffered). Do not tee NotCaptured huge downloads.
+        if (e.Session.HttpClient.Response.IsBodyRead)
         {
             return;
         }
 
-        var delay = NetworkThrottle.DelayFor(profile, e.BodyBytes?.Length ?? 0, applyLatency: true);
-        if (delay > TimeSpan.Zero)
+        if (!_live.TryGetValue(e.Session.HttpClient, out var snap))
         {
-            await Task.Delay(delay, _processResolveCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+            return;
         }
+
+        if (snap.ResponseBodyCapture != BodyCaptureState.Streaming)
+        {
+            return;
+        }
+
+        TeeResponseChunk(snap, e);
+    }
+
+    private void TeeResponseChunk(SessionSnapshot snap, BeforeBodyWriteEventArgs e)
+    {
+        var chunk = e.BodyBytes;
+        var len = chunk?.Length ?? 0;
+        if (len > 0)
+        {
+            snap.ResponseBytesSeen += len;
+            snap.ResponseBodyOriginalSize = snap.ResponseBytesSeen;
+            snap.BodySize = snap.ResponseBytesSeen;
+
+            var tee = snap.ResponseTeeStream;
+            if (tee is null)
+            {
+                tee = new MemoryStream(Math.Min(MaxBodyBytes, Math.Max(len, 4096)));
+                snap.ResponseTeeStream = tee;
+            }
+
+            if (tee.Length < MaxBodyBytes)
+            {
+                var toWrite = (int)Math.Min(len, MaxBodyBytes - tee.Length);
+                tee.Write(chunk!, 0, toWrite);
+            }
+        }
+
+        if (e.IsLastChunk)
+        {
+            FinalizeStreamingBody(snap);
+            SessionUpdated?.Invoke(this, snap);
+            return;
+        }
+
+        var now = DateTime.UtcNow.Ticks;
+        var last = snap.LastTeeUiUtcTicks;
+        if (last != 0 && (now - last) < TimeSpan.FromMilliseconds(InspectorBodyLimits.TeeUiCoalesceMs).Ticks)
+        {
+            return;
+        }
+
+        snap.LastTeeUiUtcTicks = now;
+        PublishTeePreview(snap);
+        SessionUpdated?.Invoke(this, snap);
+    }
+
+    private static void PublishTeePreview(SessionSnapshot snap)
+    {
+        var tee = snap.ResponseTeeStream;
+        if (tee is null || tee.Length == 0)
+        {
+            return;
+        }
+
+        var bytes = tee.ToArray();
+        snap.ResponseBodyBytes = bytes;
+        snap.ResponseBodyText = InspectorBodyLimits.TruncateText(Encoding.UTF8.GetString(bytes));
+        if (snap.IsServerSentEvents)
+        {
+            snap.SseEvents = SseEventParser.Parse(snap.ResponseBodyText);
+        }
+    }
+
+    private static void FinalizeStreamingBody(SessionSnapshot snap)
+    {
+        if (snap.ResponseBodyCapture != BodyCaptureState.Streaming)
+        {
+            snap.ResponseTeeStream?.Dispose();
+            snap.ResponseTeeStream = null;
+            return;
+        }
+
+        PublishTeePreview(snap);
+        snap.ResponseBodyStreamOpen = false;
+        var captured = snap.ResponseBodyBytes?.LongLength ?? 0;
+        if (snap.ResponseBytesSeen > captured && captured >= MaxBodyBytes)
+        {
+            snap.ResponseBodyCapture = BodyCaptureState.Truncated;
+        }
+        else if (captured > 0 && snap.ResponseBytesSeen <= MaxBodyBytes)
+        {
+            snap.ResponseBodyCapture = BodyCaptureState.Complete;
+        }
+
+        snap.ResponseBodyOriginalSize = snap.ResponseBytesSeen > 0
+            ? snap.ResponseBytesSeen
+            : snap.ResponseBodyOriginalSize;
+        if (snap.ResponseBytesSeen > 0)
+        {
+            snap.BodySize = snap.ResponseBytesSeen;
+        }
+
+        snap.ResponseTeeStream?.Dispose();
+        snap.ResponseTeeStream = null;
+    }
+
+    private static void ApplyRequestBodyCapture(SessionSnapshot snap, Request req, byte[]? originalBody)
+    {
+        if (originalBody is not null && req.IsBodyRead)
+        {
+            snap.RequestBodyOriginalSize = originalBody.LongLength;
+            snap.RequestBodyCapture = originalBody.Length > MaxBodyBytes
+                ? BodyCaptureState.Truncated
+                : BodyCaptureState.Complete;
+            return;
+        }
+
+        if (!req.HasBody)
+        {
+            snap.RequestBodyCapture = BodyCaptureState.None;
+            return;
+        }
+
+        var limit = InspectorBodyLimits.MaxMapLocalFileBytes;
+        if (req.ContentLength > limit)
+        {
+            snap.RequestBodyCapture = BodyCaptureState.NotCaptured;
+            snap.RequestBodyOriginalSize = req.ContentLength;
+            return;
+        }
+
+        snap.RequestBodyCapture = BodyCaptureState.None;
+    }
+
+    private static void ApplyResponseBodyCapture(
+        SessionSnapshot snap,
+        Response resp,
+        Request req,
+        byte[]? originalBody)
+    {
+        var contentType = resp.ContentType ?? snap.ContentType ?? "";
+        var isSse = InspectorBodyLimits.LooksLikeSseContentType(contentType)
+                    || snap.IsServerSentEvents;
+        if (isSse)
+        {
+            snap.IsServerSentEvents = true;
+        }
+
+        if (originalBody is not null && resp.IsBodyRead)
+        {
+            ApplyBufferedResponseBody(snap, originalBody);
+            return;
+        }
+
+        if (req.UpgradeToWebSocket)
+        {
+            snap.ResponseBodyCapture = BodyCaptureState.None;
+            snap.BodySize ??= resp.ContentLength >= 0 ? resp.ContentLength : null;
+            return;
+        }
+
+        if (isSse)
+        {
+            ApplyStreamingResponseBody(snap);
+            return;
+        }
+
+        if (resp.HasBody && resp.ContentLength > InspectorBodyLimits.MaxMapLocalFileBytes)
+        {
+            snap.ResponseBodyCapture = BodyCaptureState.NotCaptured;
+            snap.ResponseBodyOriginalSize = resp.ContentLength;
+            snap.BodySize = resp.ContentLength;
+            return;
+        }
+
+        if (resp.HasBody && !resp.IsBodyRead)
+        {
+            // Should not happen for finite bodies we chose to buffer; treat as not captured.
+            snap.ResponseBodyCapture = BodyCaptureState.NotCaptured;
+            snap.ResponseBodyOriginalSize = resp.ContentLength >= 0 ? resp.ContentLength : null;
+            snap.BodySize = snap.ResponseBodyOriginalSize;
+            return;
+        }
+
+        snap.ResponseBodyCapture = BodyCaptureState.None;
+        snap.BodySize ??= resp.ContentLength >= 0 ? resp.ContentLength : null;
+    }
+
+    private static void ApplyBufferedResponseBody(SessionSnapshot snap, byte[] originalBody)
+    {
+        snap.ResponseBodyOriginalSize = originalBody.LongLength;
+        snap.ResponseBodyCapture = originalBody.Length > MaxBodyBytes
+            ? BodyCaptureState.Truncated
+            : BodyCaptureState.Complete;
+        snap.BodySize = originalBody.LongLength;
+        snap.ResponseBodyStreamOpen = false;
+    }
+
+    private static void ApplyStreamingResponseBody(SessionSnapshot snap)
+    {
+        snap.ResponseBodyCapture = BodyCaptureState.Streaming;
+        snap.ResponseBodyStreamOpen = true;
+        snap.BodySize = snap.ResponseBytesSeen > 0 ? snap.ResponseBytesSeen : null;
     }
 
     private static string? TryHost(Request req)
@@ -1568,12 +2417,18 @@ public sealed class InterceptionService : IDisposable
 
     /// <summary>
     ///     Whole-body buffering for the session grid must not run when Content-Length already
-    ///     exceeds <see cref="ProxyServer.MaxBufferedBodyBytes" /> — that path RSTs HTTP/2 streams
-    ///     with ENHANCE_YOUR_CALM and breaks the browser download. Unknown length still buffers
-    ///     up to the limit (UI truncation via <see cref="MaxBodyBytes" /> applies afterward).
+    ///     exceeds <see cref="ProxyServer.MaxBufferedBodyBytes" /> - that path RSTs HTTP/2 streams
+    ///     with ENHANCE_YOUR_CALM and breaks the browser download. SSE and WebSocket upgrades are
+    ///     never buffered (relay + optional 2 MiB tee). Finite unknown-length (chunked) bodies still
+    ///     buffer up to the limit so gzip JSON can be inspected.
     /// </summary>
-    private bool ShouldBufferBody(RequestResponseBase message, SessionEventArgs session)
+    private bool ShouldBufferBody(RequestResponseBase message, SessionEventArgs session, bool isRequest)
     {
+        if (LooksLikeEndlessStream(message, session, isRequest))
+        {
+            return false;
+        }
+
         var limit = session.MaxBufferedBodyBytes ?? _proxy?.MaxBufferedBodyBytes ?? (4 * 1024 * 1024);
         if (limit <= 0)
         {
@@ -1584,18 +2439,20 @@ public sealed class InterceptionService : IDisposable
         return contentLength < 0 || contentLength <= limit;
     }
 
-    private static byte[]? TruncateBytes(byte[]? body)
+    private static bool LooksLikeEndlessStream(RequestResponseBase message, SessionEventArgs session, bool isRequest)
     {
-        if (body is null || body.Length == 0)
+        if (session.HttpClient.Request.UpgradeToWebSocket)
         {
-            return body;
+            return true;
         }
 
-        return body.Length <= MaxBodyBytes ? body : body.AsSpan(0, MaxBodyBytes).ToArray();
-    }
+        if (!isRequest && InspectorBodyLimits.LooksLikeSseContentType(message.ContentType))
+        {
+            return true;
+        }
 
-    private static string TruncateText(string text)
-        => text.Length <= MaxBodyTextChars ? text : text[..MaxBodyTextChars] + "…";
+        return false;
+    }
 
     public void Dispose() => EnsureShutdown();
 }

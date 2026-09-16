@@ -1,0 +1,42 @@
+name: CodeQL
+
+# Default advanced CodeQL already analyzes PRs. This workflow is a weekly/manual
+# csharp scan with an explicit Restore+Build so release.yml can keep deleting the
+# hosted CodeQL cache for disk without losing a scheduled security signal.
+on:
+  schedule:
+    - cron: '17 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze (csharp)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+          build-mode: manual
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            10.0.x
+
+      - name: Build for CodeQL
+        run: |
+          dotnet restore src/Titanium.Web.Proxy.sln
+          dotnet build src/Titanium.Web.Proxy.sln -c Release --no-restore
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:csharp/manual-build"

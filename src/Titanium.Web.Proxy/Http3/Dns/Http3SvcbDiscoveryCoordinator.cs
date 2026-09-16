@@ -107,6 +107,7 @@ internal sealed class Http3SvcbDiscoveryCoordinator : IDisposable
                 var altPort = result.AltPort == port ? int.MinValue : result.AltPort;
                 server.Http3OriginCapabilityCache.Set(key, altPort, result.Ttl, result.TargetName);
                 missSuppressedUntil.TryRemove(key, out _);
+                server.TryBeginHttp3OriginWarmup(host, result.AltPort, result.TargetName ?? host);
             }
             else
             {

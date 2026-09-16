@@ -43,21 +43,16 @@ IMPLEMENTED_REMAINDER: Dict[Tuple[str, str, str], str] = {
     # HAProxy / Envoy: every cell that is not one of the eight terminate-to-H1 arms.
     ("haproxy", H1C, H2C): "haproxy-reverse-http1-plain-to-h2c",
     ("haproxy", H1C, H2T): "haproxy-reverse-http1-plain-to-http2",
-    ("haproxy", H1C, H3): "haproxy-reverse-http1-plain-to-http3",
     ("haproxy", H1T, H2C): "haproxy-reverse-http1-to-h2c",
     ("haproxy", H1T, H2T): "haproxy-reverse-http11-to-http2",
-    ("haproxy", H1T, H3): "haproxy-reverse-http1-to-http3",
     ("haproxy", H2C, H1C): "haproxy-reverse-h2c-to-h1",
     ("haproxy", H2C, H1T): "haproxy-reverse-h2c-to-https",
     ("haproxy", H2C, H2C): "haproxy-reverse-h2c-to-h2c",
     ("haproxy", H2C, H2T): "haproxy-reverse-h2c",
-    ("haproxy", H2C, H3): "haproxy-reverse-h2c-to-h3",
     ("haproxy", H2T, H2C): "haproxy-reverse-http2-to-h2c",
     ("haproxy", H2T, H2T): "haproxy-reverse-http2-to-https",
-    ("haproxy", H2T, H3): "haproxy-reverse-http2-to-http3",
     ("haproxy", H3, H2C): "haproxy-reverse-http3-to-h2c",
     ("haproxy", H3, H2T): "haproxy-reverse-http3-to-http2",
-    ("haproxy", H3, H3): "haproxy-reverse-http3-to-http3",
     ("envoy", H1C, H2C): "envoy-reverse-http1-plain-to-h2c",
     ("envoy", H1C, H2T): "envoy-reverse-http1-plain-to-http2",
     ("envoy", H1C, H3): "envoy-reverse-http1-plain-to-http3",
@@ -97,7 +92,7 @@ ABSENT_HOW: Dict[Tuple[str, str], str] = {
     ("nginx", H2C): "mainline 1.25.1+ `http2 on` without ssl (prior-knowledge h2c) → existing H1 origin",
     ("haproxy", H2C): "`bind ... proto h2` (h2c) or existing QUIC/TLS frontend",
     ("haproxy", H2T): "`server ... ssl verify none alpn h2 proto h2`",
-    ("haproxy", H3): "`server ... quic4@127.0.0.1:<port> ssl verify none alpn h3` (3.2 USE_QUIC)",
+    ("haproxy", H3): "`server ... quic4@` is rejected on 3.2 — no QUIC backend (frontend USE_QUIC only)",
     ("envoy", H2C): "TCP listener codec HTTP2, no TLS; cluster `http2_protocol_options` without TLS",
     ("envoy", H2T): "cluster `explicit_http_config.http2_protocol_options` + UpstreamTlsContext",
     ("envoy", H3): "cluster QuicUpstreamTransport + `http3_protocol_options` (upstream H3 is alpha)",
@@ -138,9 +133,11 @@ def arm_name(product: str, client: str, origin: str) -> Optional[str]:
 def impossible_reason(product: str, client: str, origin: str) -> Optional[str]:
     if status(product, client, origin) != "impossible":
         return None
+    kind = _origin_kind(origin)
+    if product == "haproxy" and kind == "h3":
+        return IMPOSSIBLE_REASON["h3-up"]
     if product != "nginx":
         return "Not possible"
-    kind = _origin_kind(origin)
     if kind == "h3":
         return IMPOSSIBLE_REASON["h3-up"]
     if kind == "h2":

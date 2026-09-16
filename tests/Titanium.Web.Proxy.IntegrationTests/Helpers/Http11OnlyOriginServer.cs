@@ -18,12 +18,14 @@ internal sealed class Http11OnlyOriginServer : IDisposable
 {
     private readonly TcpListener listener;
     private readonly X509Certificate2 certificate;
+    private readonly TimeSpan handshakeDelay;
     private bool disposed;
 
-    public Http11OnlyOriginServer(X509Certificate2 certificate)
+    public Http11OnlyOriginServer(X509Certificate2 certificate, TimeSpan handshakeDelay = default)
     {
         this.certificate = certificate;
-        listener = new TcpListener(IPAddress.Loopback, 0);
+        this.handshakeDelay = handshakeDelay;
+        listener = TcpListener.Create(0);
         listener.Start();
         _ = AcceptLoopAsync();
     }
@@ -48,6 +50,9 @@ internal sealed class Http11OnlyOriginServer : IDisposable
             {
                 try
                 {
+                    if (handshakeDelay > TimeSpan.Zero)
+                        await Task.Delay(handshakeDelay);
+
                     var sslStream = new SslStream(client.GetStream(), false);
                     await sslStream.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
                     {

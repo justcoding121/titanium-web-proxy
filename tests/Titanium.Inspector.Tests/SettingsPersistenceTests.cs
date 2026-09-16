@@ -345,6 +345,7 @@ public class SettingsPersistenceTests
             Assert.IsTrue(vm.AutoSystemProxyOnStart, "Launch snapshot should restore clobbered preference");
             Assert.IsTrue(interception.IsRunning, vm.StatusText);
             Assert.IsTrue(vm.SystemProxy, vm.StatusText);
+            await WaitUntil(() => recorder.SetCount >= 1);
             Assert.AreEqual(1, recorder.SetCount);
             Assert.IsTrue(new SettingsService(path).Current.AutoSystemProxyOnStart);
 

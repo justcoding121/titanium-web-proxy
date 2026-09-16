@@ -81,6 +81,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private bool _launchAutoSystemProxyOnStart = true;
     private bool _decryptHttps;
     private bool _decryptHttpsBusy;
+    private int _decryptEnableGeneration;
+    /// <summary>Exclusive gate for Install / Remove / Rotate / Trust Firefox (CryptUI + store).</summary>
+    private bool _trustCommandBusy;
     private string _autoResponderMatch = "*";
     private string _autoResponderBody = "OK";
     private string _autoResponderContentType = "text/plain";
@@ -98,6 +101,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     /// <summary>Sticky intent: re-enable system proxy on the next Start after a Stop that had it on.</summary>
     private bool _reenableSystemProxyOnStart;
     private bool _stopBusy;
+    private bool _startBusy;
+    private int _systemProxyApplyGeneration;
+    private int _proxyLoopbackApplyGeneration;
+    private int _decryptTrustVerifyGeneration;
     private bool _breakpointOnResponse;
     private string _breakpointEditBody = "";
     private string? _scriptOnRequest;
@@ -105,7 +112,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private int _selectedOuterPaneIndex;
     private int _selectedInspectTabIndex;
     private int _selectedToolsTabIndex;
+    private int _selectedPaneNavIndex;
     private bool _showSessionDetails;
+    private double _sessionDetailsWidth = 520;
     /// <summary>
     /// When true, assigning <see cref="SelectedSession"/> must not force the details pane open
     /// (filter restore / bulk removal — DataGrid may briefly re-select a neighbor row).
@@ -210,11 +219,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             AutoSystemProxyOnStart = !AutoSystemProxyOnStart;
             return Task.CompletedTask;
         });
-        ToggleDecryptHttpsCommand = Cmd(() =>
-        {
-            DecryptHttps = !DecryptHttps;
-            return Task.CompletedTask;
-        });
+        ToggleDecryptHttpsCommand = Cmd(ToggleDecryptHttpsAsync);
         ToggleIgnoreServerCertificateErrorsCommand = Cmd(() =>
         {
             IgnoreServerCertificateErrors = !IgnoreServerCertificateErrors;
@@ -223,6 +228,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         ToggleAddViaHeaderCommand = Cmd(() =>
         {
             AddViaHeader = !AddViaHeader;
+            return Task.CompletedTask;
+        });
+        ToggleProxyLocalhostCommand = Cmd(() =>
+        {
+            ProxyLoopback = !ProxyLoopback;
             return Task.CompletedTask;
         });
         _clearSessionsCommand = Cmd(ClearSessionsAsync, () => HasSessions);
@@ -261,6 +271,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         DeleteAutoResponderRuleCommand = Cmd(DeleteAutoResponderRuleAsync);
         UpdateAutoResponderRuleCommand = Cmd(UpdateAutoResponderRuleAsync);
         BrowseAutoResponderLocalFileCommand = Cmd(BrowseAutoResponderLocalFileAsync);
+        FillGraphQlFromSelectedCommand = Cmd(FillGraphQlFromSelectedAsync);
         AddMapRemoteRuleCommand = Cmd(AddMapRemoteRuleAsync);
         DeleteMapRemoteRuleCommand = Cmd(DeleteMapRemoteRuleAsync);
         UpdateMapRemoteRuleCommand = Cmd(UpdateMapRemoteRuleAsync);
@@ -277,6 +288,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         ApplyEditBodyCommand = Cmd(ApplyEditBodyAsync);
         ToggleDebugLoggingCommand = Cmd(ToggleDebugLoggingAsync);
         CloseSessionDetailsCommand = Cmd(CloseSessionDetailsAsync);
+        TogglePaneNavInspectCommand = Cmd(() => TogglePaneNavAsync(0));
+        TogglePaneNavComposerCommand = Cmd(() => TogglePaneNavAsync(1));
+        TogglePaneNavBreakpointsCommand = Cmd(() => TogglePaneNavAsync(2));
+        TogglePaneNavAutoResponderCommand = Cmd(() => TogglePaneNavAsync(3));
+        TogglePaneNavScriptsCommand = Cmd(() => TogglePaneNavAsync(4));
+        TogglePaneNavMapRemoteCommand = Cmd(() => TogglePaneNavAsync(5));
         OpenToolsComposerCommand = Cmd(() => OpenToolsTabAsync(0));
         OpenToolsBreakpointsCommand = Cmd(() => OpenToolsTabAsync(1));
         OpenToolsAutoResponderCommand = Cmd(() => OpenToolsTabAsync(2));
@@ -287,6 +304,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             SearchQuery = SessionSearch.ClearFilters(SearchQuery);
             return Task.CompletedTask;
         });
+        WireBodyInspectCommands();
 
         WireEventHandlers();
         LoadPlusPanels();
@@ -312,11 +330,29 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public void AttachStatusNotifier(IStatusNotifier notifier) =>
         _statusNotifier = notifier ?? NullStatusNotifier.Instance;
 
+    /// <summary>
+    /// MainWindow pushes CheckBox/MenuItem IsChecked via SetCurrentValue (Avalonia 11.2 OneWay
+    /// bindings break after ToggleButton click). Null in unit tests.
+    /// </summary>
+    internal Action<string, bool>? SyncToggleVisual { get; set; }
+
     /// <summary>Exposed for E2E / headless tests — seeds the in-memory capture list.</summary>
     public void SeedSession(SessionSnapshot snapshot)
     {
         _store.Add(snapshot);
         OnSessionAddedToFilter(snapshot);
+    }
+
+    /// <summary>Test hook: same UI path as <see cref="InterceptionService.SessionUpdated"/>.</summary>
+    internal void ApplySessionUpdated(SessionSnapshot snapshot)
+    {
+        _store.NotifyUpdated(snapshot);
+        OnSessionUpdatedForFilter(snapshot);
+        if (ReferenceEquals(SelectedSession, snapshot))
+        {
+            UpdateWsFramesVisibility();
+            RefreshSelectedInspectors();
+        }
     }
 
     /// <summary>Called from the session grid when Extended multi-select changes.</summary>
@@ -485,6 +521,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     /// </summary>
     public async Task TryAutoStartAsync()
     {
+        InspectorUxTrace.Event("Session.Open", $"uxTrace={InspectorUxTrace.LogFilePath}");
         // MenuItem CheckBox TwoWay bindings can write false during init and PersistSettings.
         // Prefer the disk snapshot from LoadFromSettings for this first-start decision.
         RestoreLaunchPreferencesIfClobbered();
@@ -555,6 +592,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         _interception.EnsureShutdown();
         CancelStatusRevert();
+        Interlocked.Increment(ref _systemProxyApplyGeneration);
         SetSystemProxyCore(false);
         RefreshEndpointAndBindUi();
         _registry.Dispose();
@@ -576,6 +614,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
 
         // UI flag only — do not call SetSystemProxy on the UI thread (WinINET deadlock risk).
+        Interlocked.Increment(ref _systemProxyApplyGeneration);
         SetSystemProxyCore(false);
         _interception.BeginBackgroundShutdown();
         CancelStatusRevert();
@@ -634,7 +673,45 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             {
                 PersistSettings();
             }
+
+            if (e.PropertyName is nameof(BreakpointViewModel.LastOverflowMessage)
+                && !string.IsNullOrEmpty(Breakpoints.LastOverflowMessage))
+            {
+                MarshalToUi(() => SetOutcomeStatus(Breakpoints.LastOverflowMessage, StatusSeverity.Warning));
+            }
         };
+        Breakpoints.ActiveHitChanged += (_, _) => MarshalToUi(OnBreakpointActiveHitChanged);
+    }
+
+    private void OnBreakpointActiveHitChanged()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasActiveBreakpoint)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BreakpointHitBanner)));
+
+        if (Breakpoints.Active is { } hit)
+        {
+            var body = hit.Session.RequestBodyText
+                       ?? (hit.Session.RequestBodyBytes is { Length: > 0 } bytes
+                           ? Encoding.UTF8.GetString(bytes)
+                           : "");
+            BreakpointEditBody = body;
+            StatusText = Breakpoints.ActiveSummary;
+            StatusSeverity = StatusSeverity.Warning;
+            // If the tools pane is already open, switch to Breakpoints so Continue/Abort are
+            // visible — never force-open a closed pane (status/banner still notify).
+            if (ShowSessionDetails)
+            {
+                SelectedPaneNavIndex = 2;
+            }
+        }
+        else if (!string.IsNullOrEmpty(Breakpoints.LastOverflowMessage))
+        {
+            SetOutcomeStatus(Breakpoints.LastOverflowMessage, StatusSeverity.Warning);
+        }
+        else
+        {
+            SetTransientStatus("Breakpoint cleared", StatusSeverity.Neutral);
+        }
     }
 
     private void WireSessionPipelineHandlers()
@@ -650,10 +727,19 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             MarshalToUi(() =>
             {
                 _store.NotifyUpdated(snap);
+                OnSessionUpdatedForFilter(snap);
                 if (ReferenceEquals(SelectedSession, snap))
                 {
+                    UpdateWsFramesVisibility();
                     RefreshSelectedInspectors();
                 }
+            });
+        _interception.DecryptFailureBypassLearned += (_, entry) =>
+            MarshalToUi(() =>
+            {
+                StatusText =
+                    $"Auto-tunneled {entry.Host} (decrypt failure). New connections skip MITM.";
+                UpdateExclusionSummary();
             });
     }
 
@@ -719,6 +805,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         throw last!;
     }
 
+    /// <summary>
+    /// Run blocking OS I/O (Root store, WinINET, listener start/stop) off the Avalonia dispatcher
+    /// so checkboxes and Busy status can paint. Same rationale as <see cref="StopCaptureCoreAsync"/>.
+    /// </summary>
+    private static Task RunOffUiAsync(Action work, CancellationToken cancellationToken = default) =>
+        Task.Run(work, cancellationToken);
+
+    private static Task<T> RunOffUiAsync<T>(Func<T> work, CancellationToken cancellationToken = default) =>
+        Task.Run(work, cancellationToken);
+
     private void LoadPlusPanels()
     {
         var panels = PlusInspectorLoader.TryLoadPanels(out var plusWarning);
@@ -759,21 +855,24 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
+        using var scope = InspectorUxTrace.Scope("StopCapture");
         _stopBusy = true;
         _reenableSystemProxyOnStart = SystemProxy;
+        // Invalidate in-flight optimistic System proxy applies before WinINET restore in Stop().
+        Interlocked.Increment(ref _systemProxyApplyGeneration);
+        SetSystemProxyCore(false);
         SetStatus("Stopping…", StatusSeverity.Busy);
 
         try
         {
-            await Task.Run(() => _interception.Stop(), _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+            await RunOffUiAsync(() => _interception.Stop(), _statusRevertCts?.Token ?? CancellationToken.None);
 
-            await MarshalToUiAsync(() =>
-            {
-                SetSystemProxyCore(false);
-                PersistSettings();
-                RefreshEndpointAndBindUi();
-                SetSteadyStatus(statusAfterStop);
-            }, StatusCancelToken).ConfigureAwait(false);
+            // Stay on UI sync context when Avalonia has one (StatusText / checkbox). Unit tests
+            // without a sync context continue inline on the thread-pool — fine without bindings.
+            SetSystemProxyCore(false);
+            PersistSettings();
+            RefreshEndpointAndBindUi();
+            SetSteadyStatus(statusAfterStop);
         }
         finally
         {
@@ -802,36 +901,46 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         if (!_interception.IsRunning)
         {
             SetGuardStatus("Start the proxy before enabling system proxy");
+            await SnapSystemProxyUiAsync();
             return;
         }
 
         var s = _settings.Current;
-        if (!s.WarnedAboutPacReplace && SystemProxyPacHelper.HasActivePacScript())
+        if (!s.WarnedAboutPacReplace)
         {
-            var owner = TryGetMainWindow();
-            if (!await AwaitCancellableAsync(_dialogs.ConfirmPacReplaceAsync(owner)))
+            // macOS scutil can block up to 3s — keep it off the dispatcher.
+            // Stay on the UI sync context afterward: ConfirmPacReplaceAsync uses ShowDialog.
+            var hasPac = await RunOffUiAsync(
+                SystemProxyPacHelper.HasActivePacScript,
+                StatusCancelToken);
+            if (hasPac)
             {
-                StatusText = "System proxy not enabled (PAC replace cancelled)";
-                return;
-            }
+                var owner = TryGetMainWindow();
+                if (!await AwaitDialogAsync(_dialogs.ConfirmPacReplaceAsync(owner)))
+                {
+                    StatusText = "System proxy not enabled (PAC replace cancelled)";
+                    await SnapSystemProxyUiAsync();
+                    return;
+                }
 
-            s.WarnedAboutPacReplace = true;
-            _settings.Save();
+                s.WarnedAboutPacReplace = true;
+                _settings.Save();
+            }
         }
 
         SystemProxy = true;
     }
 
     private Task AwaitCancellableAsync(Task task) => task.WaitAsync(StatusCancelToken);
-
-
-
-
-
-
-
-
     private Task<T> AwaitCancellableAsync<T>(Task<T> task) => task.WaitAsync(StatusCancelToken);
+
+    /// <summary>
+    /// Modal consent dialogs must not share <see cref="StatusCancelToken"/>.
+    /// A prior outcome's status-bar revert cancels that token (~5s) and would abort
+    /// ShowDialog as a silent OperationCanceledException (no toast, no Confirm* ux-trace)
+    /// — the "Nth Clear+Install did nothing" failure mode.
+    /// </summary>
+    private static Task<T> AwaitDialogAsync<T>(Task<T> task) => task;
 
 
 
@@ -878,9 +987,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
 
         var saved = await AwaitCancellableAsync(SessionRetentionWindow.ShowAsync(owner, _settings));
-        StatusText = saved
-            ? "Session retention saved — restart Inspector to apply"
-            : "Session retention cancelled";
+        if (!saved)
+        {
+            StatusText = "Session retention cancelled";
+            return;
+        }
+
+        _store.ApplyOptions(SessionStoreOptions.FromSettings(_settings.Current));
+        StatusText = "Session retention applied";
     }
 
 
@@ -928,12 +1042,18 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             owner,
             _settings,
             readOnly: false,
-            ApplyExclusionSettingsFromSettings));
+            ApplyExclusionSettingsFromSettings,
+            _interception));
         if (saved)
         {
-            if (SystemProxy && !_interception.ReapplySystemProxyIfEnabled())
+            if (SystemProxy)
             {
-                StatusText = "Exclusions saved; re-toggle System proxy to apply OS bypass changes";
+                var ok = await RunOffUiAsync(
+                    () => _interception.ReapplySystemProxyIfEnabled(),
+                    StatusCancelToken);
+                StatusText = ok
+                    ? "Excluded hosts saved (applies to new connections)"
+                    : "Exclusions saved; re-toggle System proxy to apply OS bypass changes";
             }
             else
             {
@@ -964,7 +1084,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        var (saved, kind, _) = await AwaitCancellableAsync(ExcludeHostDialog.ShowAsync(owner, _settings, selected.Host));
+        var (saved, _) = await AwaitCancellableAsync(ExcludeHostDialog.ShowAsync(owner, _settings, selected.Host));
         if (!saved)
         {
             StatusText = "Exclude host cancelled";
@@ -972,21 +1092,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
 
         ApplyExclusionSettingsFromSettings();
-        if (kind == ExcludeHostKind.BypassProxy && SystemProxy)
-        {
-            _interception.ReapplySystemProxyIfEnabled();
-        }
-
         UpdateExclusionSummary();
-        StatusText = kind == ExcludeHostKind.BypassProxy
-            ? $"Added {selected.Host} to OS bypass exclusions (new connections)"
-            : $"Added {selected.Host} to tunnel-only exclusions (new connections)";
+        StatusText = $"Excluded {selected.Host} — still listed, HTTPS not read";
     }
 
     private async Task ResetSettingsAsync()
     {
         var owner = TryGetMainWindow();
-        if (!await AwaitCancellableAsync(_dialogs.ConfirmResetSettingsAsync(owner)))
+        if (!await AwaitDialogAsync(_dialogs.ConfirmResetSettingsAsync(owner)))
         {
             StatusText = "Reset settings cancelled";
             return;
@@ -995,6 +1108,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _settings.ResetToFactoryDefaults();
         LoadFromSettings();
         NotifySettingsUiChanged();
+        // Defaults turn Decrypt off — bounce in case Avalonia left a OneWay CheckBox ticked.
+        _ = SnapDecryptHttpsUiAsync();
         StatusText =
             "Settings restored to defaults — restart Inspector so retention limits fully apply. Root CA and sessions were not changed.";
     }
@@ -1006,13 +1121,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _interception.DecryptOnlyHosts = s.DecryptOnlyHosts?.ToList() ?? [];
         _interception.SystemProxyBypassHosts = s.SystemProxyBypassHosts?.ToList() ?? [];
         _interception.ProxyLoopback = s.ProxyLoopback;
+        _interception.EnableDecryptFailureBypass = s.EnableDecryptFailureBypass;
+        _interception.ApplyDecryptFailureBypassSetting();
         _interception.SystemProxySettings = s;
         UpdateExclusionSummary();
     }
 
     private void UpdateExclusionSummary()
     {
-        ExclusionSummaryText = ExclusionPreview.ExclusionSummary(_settings.Current);
+        var learned = _interception.GetDecryptFailureBypassEntries().Count(e => e.BypassActive);
+        ExclusionSummaryText = ExclusionPreview.ExclusionSummary(_settings.Current, learned);
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ExclusionSummaryText)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasExclusionSummary)));
     }
@@ -1046,6 +1164,31 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     }
 
     public bool HasExclusionSummary => !string.IsNullOrEmpty(_exclusionSummaryText);
+
+    /// <summary>True while a request is paused on a breakpoint.</summary>
+    public bool HasActiveBreakpoint => Breakpoints.HasActiveHit;
+
+    /// <summary>Compact banner for the Breakpoints pane while a hit is active.</summary>
+    public string BreakpointHitBanner => Breakpoints.HasActiveHit
+        ? Breakpoints.ActiveSummary
+        : "";
+
+    /// <summary>Toolbar CA trust / decrypt health pip (empty when decrypt is off).</summary>
+    public string DecryptTrustHealthText
+    {
+        get
+        {
+            if (!_decryptHttps)
+                return "";
+            return _interception.IsRootTrusted
+                ? "CA trusted"
+                : "CA not trusted";
+        }
+    }
+
+    public bool ShowDecryptTrustHealth => _decryptHttps;
+
+    public bool IsDecryptTrustHealthy => _decryptHttps && _interception.IsRootTrusted;
 
     public string SelectedOpaqueHint =>
         _selected is { IsTunnel: true } && _selected.OpaqueReason != OpaqueTunnelReason.None
@@ -1105,6 +1248,22 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private Task ApplyEditBodyAsync()
     {
+        if (_selected?.ResponseBodyCapture == BodyCaptureState.Streaming
+            || _selected?.ResponseBodyStreamOpen == true
+            || _selected?.IsServerSentEvents == true)
+        {
+            SetGuardStatus("Cannot edit a streaming body");
+            return Task.CompletedTask;
+        }
+
+        if (!string.IsNullOrEmpty(BreakpointEditBody)
+            && BreakpointEditBody.Length > InspectorBodyLimits.MaxInlineToolBodyChars)
+        {
+            SetOutcomeStatus(
+                $"Breakpoint body is large ({SessionDisplayFormat.FormatByteSize(BreakpointEditBody.Length)}); applying anyway",
+                StatusSeverity.Warning);
+        }
+
         Breakpoints.EditBody(BreakpointEditBody);
         StatusText = "Breakpoint body edit applied (Continue to send)";
         return Task.CompletedTask;
@@ -1137,6 +1296,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public ICommand ToggleDecryptHttpsCommand { get; }
     public ICommand ToggleIgnoreServerCertificateErrorsCommand { get; }
     public ICommand ToggleAddViaHeaderCommand { get; }
+    public ICommand ToggleProxyLocalhostCommand { get; }
     public ICommand ClearSessionsCommand { get; }
     public ICommand RemoveSelectedSessionsCommand { get; }
     public ICommand ToggleSystemProxyCommand { get; }
@@ -1168,6 +1328,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public ICommand DeleteAutoResponderRuleCommand { get; }
     public ICommand UpdateAutoResponderRuleCommand { get; }
     public ICommand BrowseAutoResponderLocalFileCommand { get; }
+    public ICommand FillGraphQlFromSelectedCommand { get; }
     public ICommand AddMapRemoteRuleCommand { get; }
     public ICommand DeleteMapRemoteRuleCommand { get; }
     public ICommand UpdateMapRemoteRuleCommand { get; }
@@ -1176,6 +1337,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public ICommand ApplyEditBodyCommand { get; }
     public ICommand ToggleDebugLoggingCommand { get; }
     public ICommand CloseSessionDetailsCommand { get; }
+    public ICommand TogglePaneNavInspectCommand { get; }
+    public ICommand TogglePaneNavComposerCommand { get; }
+    public ICommand TogglePaneNavBreakpointsCommand { get; }
+    public ICommand TogglePaneNavAutoResponderCommand { get; }
+    public ICommand TogglePaneNavScriptsCommand { get; }
+    public ICommand TogglePaneNavMapRemoteCommand { get; }
     public ICommand OpenToolsComposerCommand { get; }
     public ICommand OpenToolsBreakpointsCommand { get; }
     public ICommand OpenToolsAutoResponderCommand { get; }
@@ -1242,6 +1409,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             if (SetField(ref _scriptOnRequest, value))
             {
                 _interception.ScriptOnRequest = value;
+                if (value is { Length: > InspectorBodyLimits.MaxScriptChars })
+                {
+                    SetOutcomeStatus(
+                        $"On-request script is large ({SessionDisplayFormat.FormatByteSize(value.Length)})",
+                        StatusSeverity.Warning);
+                }
             }
         }
     }
@@ -1254,6 +1427,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             if (SetField(ref _scriptOnResponse, value))
             {
                 _interception.ScriptOnResponse = value;
+                if (value is { Length: > InspectorBodyLimits.MaxScriptChars })
+                {
+                    SetOutcomeStatus(
+                        $"On-response script is large ({SessionDisplayFormat.FormatByteSize(value.Length)})",
+                        StatusSeverity.Warning);
+                }
             }
         }
     }
@@ -1373,45 +1552,29 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 if (!_interception.IsRunning)
                 {
                     SetGuardStatus("Start the proxy before enabling system proxy");
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
+                    _ = SnapSystemProxyUiAsync();
                     return;
                 }
 
-                if (!_interception.SetSystemProxy(true, _settings.Current))
-                {
-                    var detail = _interception.LastSystemProxyError;
-                    var text = string.IsNullOrWhiteSpace(detail)
-                        ? "Failed to enable system proxy (permissions, cancelled admin prompt, or unsupported desktop environment)"
-                        : "Failed to enable system proxy: " + Truncate(detail, 180);
-                    SetOutcomeStatus(text, StatusSeverity.Error, toastImportant: true);
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
-                    return;
-                }
-
+                // Optimistic check; WinINET runs off the UI thread (same hang risk as Stop).
                 SetSystemProxyCore(true);
-                SetOutcomeStatus(
-                    SystemProxyEnabledStatusMessage(),
-                    StatusSeverity.Success,
-                    toastImportant: OperatingSystem.IsWindows());
-                return;
-            }
-
-            if (_interception.IsRunning && _interception.SystemProxyEnabled &&
-                !_interception.SetSystemProxy(false))
-            {
-                var detail = _interception.LastSystemProxyError;
-                var text = string.IsNullOrWhiteSpace(detail)
-                    ? "Failed to restore system proxy settings"
-                    : "Failed to restore system proxy: " + Truncate(detail, 180);
-                SetOutcomeStatus(text, StatusSeverity.Error, toastImportant: true);
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
+                SetStatus("Enabling system proxy…", StatusSeverity.Busy);
+                _ = ApplySystemProxyAsync(enable: true);
                 return;
             }
 
             SetSystemProxyCore(false);
-            SetOutcomeStatus(
-                SystemProxyRestoredStatus,
-                StatusSeverity.Success);
+            // Always schedule restore when the proxy is up — SystemProxyEnabled may still be false
+            // while an optimistic enable is in flight; generation + lock cancel the enable safely.
+            if (_interception.IsRunning)
+            {
+                SetStatus("Restoring system proxy…", StatusSeverity.Busy);
+                _ = ApplySystemProxyAsync(enable: false);
+                return;
+            }
+
+            SetOutcomeStatus(SystemProxyRestoredStatus, StatusSeverity.Success);
+            _ = SnapSystemProxyUiAsync();
         }
     }
 
@@ -1419,12 +1582,254 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     {
         if (_systemProxy == enabled)
         {
+            SyncToggleVisual?.Invoke(nameof(SystemProxy), enabled);
             return;
         }
 
         _systemProxy = enabled;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
+        SyncToggleVisual?.Invoke(nameof(SystemProxy), enabled);
     }
+
+    /// <summary>
+    /// Avalonia 11.2 OneWay + ToggleButton: after a local click, same-value PropertyChanged is
+    /// ignored. Snap via SetCurrentValue — never flip the backing field (MenuItem Command can
+    /// fire and toggle DecryptHttps back on).
+    /// </summary>
+    private Task SnapProxyLoopbackUiAsync() =>
+        BounceBoolBindingAsync(
+            get: () => _interception.ProxyLoopback,
+            propertyName: nameof(ProxyLoopback));
+
+    private Task SnapSystemProxyUiAsync() =>
+        BounceBoolBindingAsync(
+            get: () => _systemProxy,
+            propertyName: nameof(SystemProxy));
+
+    private Task SnapDecryptHttpsUiAsync() =>
+        BounceBoolBindingAsync(
+            get: () => _decryptHttps,
+            propertyName: nameof(DecryptHttps));
+
+    private async Task BounceBoolBindingAsync(Func<bool> get, string propertyName)
+    {
+        void Bounce()
+        {
+            var actual = get();
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            SyncToggleVisual?.Invoke(propertyName, actual);
+        }
+
+        // Unit tests / no Avalonia app — bounce inline.
+        if (Application.Current is null)
+        {
+            Bounce();
+            return;
+        }
+
+        try
+        {
+            // Defer past ToggleButton.OnClick. Never hang if the dispatcher is not pumping
+            // (headless tests, or a stuck UI thread during CryptUI).
+            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    Bounce();
+                    tcs.TrySetResult();
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            }, DispatcherPriority.Background);
+
+            var finished = await Task.WhenAny(tcs.Task, Task.Delay(250, CancellationToken.None)).ConfigureAwait(true);
+            if (finished != tcs.Task)
+            {
+                Bounce();
+                return;
+            }
+
+            await tcs.Task.ConfigureAwait(true);
+        }
+        catch
+        {
+            Bounce();
+        }
+    }
+
+    /// <summary>
+    /// Applies or restores WinINET / OS system proxy off the UI thread. Reverts the checkbox on failure.
+    /// Last-write-wins via generation counter when the user toggles quickly or Stop invalidates applies.
+    /// </summary>
+    private async Task ApplySystemProxyAsync(bool enable)
+    {
+        var generation = Interlocked.Increment(ref _systemProxyApplyGeneration);
+        using var scope = InspectorUxTrace.Scope("ApplySystemProxy", $"enable={enable} gen={generation}");
+        try
+        {
+            var ok = await RunOffUiAsync(
+                () => _interception.SetSystemProxy(
+                    enable,
+                    enable ? _settings.Current : null,
+                    stillWanted: () => generation == Volatile.Read(ref _systemProxyApplyGeneration)),
+                StatusCancelToken).ConfigureAwait(false);
+
+            if (generation != Volatile.Read(ref _systemProxyApplyGeneration))
+            {
+                return;
+            }
+
+            await MarshalToUiAsync(
+                () => ApplySystemProxyUiResult(enable, ok, generation),
+                StatusCancelToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // status revert / shutdown
+        }
+    }
+
+    private void ApplySystemProxyUiResult(bool enable, bool ok, int generation)
+    {
+        if (generation != Volatile.Read(ref _systemProxyApplyGeneration))
+        {
+            return;
+        }
+
+        if (ok)
+        {
+            // Stop / uncheck may have cleared the UI intent while WinINET still reported success.
+            if (enable && (!_systemProxy || !_interception.IsRunning))
+            {
+                return;
+            }
+
+            if (enable)
+            {
+                SetOutcomeStatus(
+                    SystemProxyEnabledStatusMessage(),
+                    StatusSeverity.Success,
+                    toastImportant: OperatingSystem.IsWindows());
+            }
+            else
+            {
+                SetOutcomeStatus(SystemProxyRestoredStatus, StatusSeverity.Success);
+            }
+
+            return;
+        }
+
+        // Cancelled by stillWanted (superseded) — do not treat as user-visible failure.
+        if (string.IsNullOrEmpty(_interception.LastSystemProxyError))
+        {
+            return;
+        }
+
+        // Revert optimistic checkbox to match OS state.
+        SetSystemProxyCore(!enable);
+        _ = SnapSystemProxyUiAsync();
+        SetOutcomeStatus(
+            FormatSystemProxyFailureStatus(enable, _interception.LastSystemProxyError),
+            StatusSeverity.Error,
+            toastImportant: true);
+    }
+
+    private static string FormatSystemProxyFailureStatus(bool enable, string? detail)
+    {
+        if (enable)
+        {
+            return string.IsNullOrWhiteSpace(detail)
+                ? "Failed to enable system proxy (permissions, cancelled admin prompt, or unsupported desktop environment)"
+                : "Failed to enable system proxy: " + Truncate(detail, 180);
+        }
+
+        return string.IsNullOrWhiteSpace(detail)
+            ? "Failed to restore system proxy settings"
+            : "Failed to restore system proxy: " + Truncate(detail, 180);
+    }
+
+    /// <summary>When true, localhost uses the system proxy (WinINET &lt;-loopback&gt; / Unix NO_PROXY parity).</summary>
+    public bool ProxyLoopback
+    {
+        get => _interception.ProxyLoopback;
+        set
+        {
+            if (_interception.ProxyLoopback == value)
+            {
+                return;
+            }
+
+            _interception.ProxyLoopback = value;
+            PersistSettings();
+            _interception.SystemProxySettings = _settings.Current;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ProxyLoopback)));
+
+            if (!SystemProxy)
+            {
+                StatusText = value
+                    ? "Capture local traffic on — localhost uses the system proxy"
+                    : "Capture local traffic off — localhost skips the system proxy";
+                return;
+            }
+
+            // Optimistic UI; re-apply WinINET off the dispatcher.
+            StatusText = value
+                ? "Capture local traffic on — applying…"
+                : "Capture local traffic off — applying…";
+            var generation = Interlocked.Increment(ref _proxyLoopbackApplyGeneration);
+            _ = ReapplySystemProxyAfterLoopbackChangeAsync(value, generation);
+        }
+    }
+
+    private async Task ReapplySystemProxyAfterLoopbackChangeAsync(bool loopbackDesired, int generation)
+    {
+        try
+        {
+            var ok = await RunOffUiAsync(
+                () => _interception.ReapplySystemProxyIfEnabled(),
+                StatusCancelToken).ConfigureAwait(false);
+
+            if (generation != Volatile.Read(ref _proxyLoopbackApplyGeneration))
+            {
+                return;
+            }
+
+            await MarshalToUiAsync(() =>
+            {
+                if (generation != Volatile.Read(ref _proxyLoopbackApplyGeneration))
+                {
+                    return;
+                }
+
+                if (!ok)
+                {
+                    // Revert optimistic checkbox + model so OneWay targets match reality.
+                    _interception.ProxyLoopback = !loopbackDesired;
+                    PersistSettings();
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ProxyLoopback)));
+                    _ = SnapProxyLoopbackUiAsync();
+                    SetOutcomeStatus(
+                        "Capture local traffic apply failed - checkbox restored",
+                        StatusSeverity.Error,
+                        toastImportant: true);
+                    return;
+                }
+
+                StatusText = loopbackDesired
+                    ? "Capture local traffic on — localhost uses the system proxy"
+                    : "Capture local traffic off — localhost skips the system proxy";
+            }, StatusCancelToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // status revert / shutdown
+        }
+    }
+
+    public static string ProxyLocalhostTip => OsTrustUxCopy.ProxyLocalhostTip();
 
     public bool AutoStartCapture
     {
@@ -1515,21 +1920,52 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         get => _decryptHttps;
         set // NOSONAR S4275 -- true path updates _decryptHttps via SetDecryptHttpsCore after async trust flow
         {
-            if (_decryptHttpsBusy || _decryptHttps == value)
+            if (_decryptHttps == value)
             {
                 return;
             }
 
-            if (value)
+            if (!value)
             {
-                _ = EnableDecryptHttpsAsync();
-            }
-            else
-            {
+                // Last-write-wins: invalidate in-flight enable / background re-verify.
+                Interlocked.Increment(ref _decryptEnableGeneration);
+                Interlocked.Increment(ref _decryptTrustVerifyGeneration);
+                _decryptHttpsBusy = false;
                 SetDecryptHttpsCore(false);
                 StatusText = "Decrypt HTTPS off — HTTPS shown as encrypted tunnels (not decrypted)";
+                return;
             }
+
+                        if (_trustCommandBusy || _decryptHttpsBusy)
+            {
+                // ToggleButton already flipped the CheckBox locally - snap back.
+                _ = SnapDecryptHttpsUiAsync();
+                if (_trustCommandBusy)
+                    SetGuardStatus("Another certificate action is already in progress");
+                return;
+            }
+
+            // Already capturing + trusted: optimistic check + MITM (no store Find on UI thread).
+            if (_interception.IsRunning && _interception.IsRootTrusted)
+            {
+                SetDecryptHttpsCore(true);
+                SetOutcomeStatus("Decrypting HTTPS", StatusSeverity.Success, toastImportant: true);
+                _ = ReverifyDecryptTrustInBackgroundAsync();
+                return;
+            }
+
+            var enableGeneration = Interlocked.Increment(ref _decryptEnableGeneration);
+            // CheckBox/Menu ToggleButton flips IsChecked locally; Avalonia 11.2 OneWay will not
+            // accept a same-value PropertyChanged until we bounce (see SnapDecryptHttpsUiAsync).
+            _ = SnapDecryptHttpsUiAsync();
+            _ = EnableDecryptHttpsAsync(enableGeneration);
         }
+    }
+
+    private Task ToggleDecryptHttpsAsync()
+    {
+        DecryptHttps = !DecryptHttps;
+        return Task.CompletedTask;
     }
 
     /// <summary>When true, accept upstream TLS certs that would otherwise fail validation.</summary>
@@ -1577,7 +2013,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     /// <summary>True when this OS can resolve local client process ids for the Process column.</summary>
     public bool ShowProcessColumn { get; }
 
-    /// <summary>Right pane visibility (Inspect + Tools). Kept name for tests.</summary>
+    /// <summary>Right content pane visibility (Inspect / tools). Icon rail stays visible.</summary>
     public bool ShowSessionDetails
     {
         get => _showSessionDetails;
@@ -1586,12 +2022,35 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             if (SetField(ref _showSessionDetails, value))
             {
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SessionDetailsPaneWidth)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SessionDetailsPaneMinWidth)));
+                NotifyPaneNavChrome();
             }
         }
     }
 
     public GridLength SessionDetailsPaneWidth =>
-        _showSessionDetails ? new GridLength(420) : new GridLength(0);
+        _showSessionDetails ? new GridLength(_sessionDetailsWidth) : new GridLength(0);
+
+    /// <summary>Min width for the content column when open; 0 when closed so only the rail remains.</summary>
+    public double SessionDetailsPaneMinWidth => _showSessionDetails ? 280 : 0;
+
+    public string PaneContentTitle => SelectedPaneNavIndex switch
+    {
+        0 => "Inspect",
+        1 => "Composer",
+        2 => "Breakpoints",
+        3 => "AutoResponder",
+        4 => "Scripts",
+        5 => "Map Remote",
+        _ => "Inspect",
+    };
+
+    public bool IsInspectRailPressed => _showSessionDetails && SelectedPaneNavIndex == 0;
+    public bool IsComposerRailPressed => _showSessionDetails && SelectedPaneNavIndex == 1;
+    public bool IsBreakpointsRailPressed => _showSessionDetails && SelectedPaneNavIndex == 2;
+    public bool IsAutoResponderRailPressed => _showSessionDetails && SelectedPaneNavIndex == 3;
+    public bool IsScriptsRailPressed => _showSessionDetails && SelectedPaneNavIndex == 4;
+    public bool IsMapRemoteRailPressed => _showSessionDetails && SelectedPaneNavIndex == 5;
 
     public bool HasSelectedSession => _selected is not null;
 
@@ -1728,8 +2187,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
             if (value is not null && !_suppressOpenSessionDetails)
             {
+                var openingPane = !ShowSessionDetails;
                 ShowSessionDetails = true;
-                SelectedOuterPaneIndex = 0;
+                // Opening the pane from a closed state lands on Inspect. While a tool is
+                // showing (Composer, etc.), selecting a session must not steal focus.
+                if (openingPane)
+                {
+                    SelectedPaneNavIndex = 0;
+                }
             }
 
             UpdateWsFramesVisibility();
@@ -1749,14 +2214,78 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public string SelectedHex { get => _selectedHex; set => SetField(ref _selectedHex, value); }
     public string SelectedFrames { get => _selectedFrames; set => SetField(ref _selectedFrames, value); }
 
-    /// <summary>0 = Inspect, 1 = Tools.</summary>
+    /// <summary>Vertical pane nav: 0 Inspect, 1 Composer, 2 Breakpoints, 3 AutoResponder, 4 Scripts, 5 Map Remote.</summary>
+    public int SelectedPaneNavIndex
+    {
+        get => _selectedPaneNavIndex;
+        set
+        {
+            var clamped = Math.Clamp(value, 0, 5);
+            if (!SetField(ref _selectedPaneNavIndex, clamped))
+            {
+                return;
+            }
+
+            if (clamped == 0)
+            {
+                _selectedOuterPaneIndex = 0;
+            }
+            else
+            {
+                _selectedOuterPaneIndex = 1;
+                _selectedToolsTabIndex = clamped - 1;
+            }
+
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedOuterPaneIndex)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedToolsTabIndex)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowInspectPane)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowComposerPane)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowBreakpointsPane)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowAutoResponderPane)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowScriptsPane)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowMapRemotePane)));
+            NotifyPaneNavChrome();
+        }
+    }
+
+    public bool ShowInspectPane => SelectedPaneNavIndex == 0;
+    public bool ShowComposerPane => SelectedPaneNavIndex == 1;
+    public bool ShowBreakpointsPane => SelectedPaneNavIndex == 2;
+    public bool ShowAutoResponderPane => SelectedPaneNavIndex == 3;
+    public bool ShowScriptsPane => SelectedPaneNavIndex == 4;
+    public bool ShowMapRemotePane => SelectedPaneNavIndex == 5;
+
+    private void NotifyPaneNavChrome()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PaneContentTitle)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsInspectRailPressed)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsComposerRailPressed)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsBreakpointsRailPressed)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsAutoResponderRailPressed)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsScriptsRailPressed)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsMapRemoteRailPressed)));
+    }
+
+    /// <summary>0 = Inspect, 1 = Tools (compatibility).</summary>
     public int SelectedOuterPaneIndex
     {
         get => _selectedOuterPaneIndex;
         set
         {
-            if (SetField(ref _selectedOuterPaneIndex, value))
+            var clamped = value <= 0 ? 0 : 1;
+            if (clamped == 0)
             {
+                SelectedPaneNavIndex = 0;
+            }
+            else if (SelectedPaneNavIndex == 0)
+            {
+                SelectedPaneNavIndex = 1 + Math.Clamp(_selectedToolsTabIndex, 0, 4);
+            }
+            else
+            {
+                _selectedOuterPaneIndex = 1;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedOuterPaneIndex)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
             }
         }
@@ -1771,6 +2300,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             if (SetField(ref _selectedInspectTabIndex, value))
             {
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
+                if (value == 1)
+                {
+                    RefreshSelectedInspectors();
+                }
             }
         }
     }
@@ -1781,32 +2314,45 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         get => _selectedToolsTabIndex;
         set
         {
-            if (SetField(ref _selectedToolsTabIndex, value))
+            var clamped = Math.Clamp(value, 0, 4);
+            if (SelectedPaneNavIndex == 0)
             {
+                SelectedPaneNavIndex = 1 + clamped;
+                return;
+            }
+
+            if (SetField(ref _selectedToolsTabIndex, clamped))
+            {
+                _selectedPaneNavIndex = 1 + clamped;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedPaneNavIndex)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowComposerPane)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowBreakpointsPane)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowAutoResponderPane)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowScriptsPane)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowMapRemotePane)));
             }
         }
     }
 
     /// <summary>
-    /// Compatibility index for tests: 0–3 Inspect, 4–8 Tools (Composer…Map Remote).
+    /// Compatibility index for tests: 0–6 Inspect, 4–8 Tools (Composer…Map Remote) when on tools.
     /// </summary>
     public int SelectedDetailTabIndex
     {
-        get => SelectedOuterPaneIndex == 0
+        get => SelectedPaneNavIndex == 0
             ? SelectedInspectTabIndex
-            : 4 + SelectedToolsTabIndex;
+            : 4 + (SelectedPaneNavIndex - 1);
         set
         {
             if (value < 4)
             {
-                SelectedOuterPaneIndex = 0;
+                SelectedPaneNavIndex = 0;
                 SelectedInspectTabIndex = Math.Clamp(value, 0, 6);
             }
             else
             {
-                SelectedOuterPaneIndex = 1;
-                SelectedToolsTabIndex = Math.Clamp(value - 4, 0, 4);
+                SelectedPaneNavIndex = 1 + Math.Clamp(value - 4, 0, 4);
             }
 
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
@@ -1889,6 +2435,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AutoStartCapture)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AutoSystemProxyOnStart)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ProxyLoopback)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IgnoreServerCertificateErrors)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AddViaHeader)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BreakpointOnResponse)));
@@ -1954,6 +2501,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         s.AutoStartCapture = AutoStartCapture;
         s.AutoSystemProxyOnStart = AutoSystemProxyOnStart;
         s.DecryptHttps = DecryptHttps;
+        s.ProxyLoopback = _interception.ProxyLoopback;
         s.IgnoreServerCertificateErrors = _interception.IgnoreServerCertificateErrors;
         s.AddViaHeader = _interception.AddViaHeader;
         s.AutoResponderEnabled = AutoResponder.Enabled;
@@ -1981,12 +2529,68 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Assign <see cref="SelectedSession"/> without opening the details pane
+    /// (Composer Send, context-menu prep, filter restore).
+    /// </summary>
+    public void SelectSessionWithoutOpeningDetails(SessionSnapshot? snap)
+    {
+        using (SuppressOpenSessionDetails())
+        {
+            SelectedSession = snap;
+        }
+    }
+
+    /// <summary>
+    /// Suppress open-on-select for the duration of a DataGrid selection write
+    /// (e.g. right-click selecting a row for a context menu).
+    /// </summary>
+    public IDisposable SuppressOpenSessionDetails()
+    {
+        _suppressOpenSessionDetails = true;
+        return new OpenSessionDetailsSuppressor(this);
+    }
+
+    private sealed class OpenSessionDetailsSuppressor : IDisposable
+    {
+        private MainWindowViewModel? _owner;
+
+        public OpenSessionDetailsSuppressor(MainWindowViewModel owner) => _owner = owner;
+
+        public void Dispose()
+        {
+            if (_owner is null)
+            {
+                return;
+            }
+
+            _owner._suppressOpenSessionDetails = false;
+            _owner = null;
+        }
+    }
+
+    /// <summary>
+    /// Icon-rail toggle: same icon while open closes content; otherwise select + open.
+    /// Does not rely on SelectedIndex re-selection (SetField would no-op).
+    /// </summary>
+    private Task TogglePaneNavAsync(int paneNavIndex)
+    {
+        var clamped = Math.Clamp(paneNavIndex, 0, 5);
+        if (ShowSessionDetails && SelectedPaneNavIndex == clamped)
+        {
+            ShowSessionDetails = false;
+            return Task.CompletedTask;
+        }
+
+        SelectedPaneNavIndex = clamped;
+        ShowSessionDetails = true;
+        return Task.CompletedTask;
+    }
+
     private Task OpenToolsTabAsync(int toolsTabIndex)
     {
+        SelectedPaneNavIndex = 1 + Math.Clamp(toolsTabIndex, 0, 4);
         ShowSessionDetails = true;
-        SelectedOuterPaneIndex = 1;
-        SelectedToolsTabIndex = Math.Clamp(toolsTabIndex, 0, 4);
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
         return Task.CompletedTask;
     }
 
@@ -2054,14 +2658,20 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         if (_selected is null)
         {
             SelectedHeaders = SelectedBody = SelectedHex = SelectedFrames = "";
+            BodyCaptureHint = "";
+            HexCaptureHint = "";
+            BodyPreviewBitmap = null;
+            _cachedPrettyBody = null;
+            _cachedPrettySessionId = null;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedOpaqueHint)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowSelectedOpaqueHint)));
+            NotifySaveBodyCanExecute();
             return;
         }
 
         SelectedHeaders = BuildSelectedHeadersText(_selected);
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedOpaqueHint)));
-        SelectedBody = BuildSelectedBodyText(_selected);
+        RefreshBodyInspector();
         SelectedHex = SessionInspectors.FormatLabeledHex(
             _selected.RequestHeadersText,
             _selected.ResponseHeadersText,
@@ -2119,15 +2729,59 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             sb.Append(pair.Key).Append('=').AppendLine(pair.Value);
     }
 
-    private static string BuildSelectedBodyText(SessionSnapshot selected)
+    private string BuildSelectedBodyText(SessionSnapshot selected)
     {
-        var body = SessionInspectors.FormatLabeledBody(
-            selected.RequestHeadersText,
-            selected.ResponseHeadersText,
-            selected.RequestBodyText,
-            selected.ResponseBodyText,
-            selected.RequestBodyBytes,
-            selected.ResponseBodyBytes);
+        if (_bodyPrettyMode
+            && _cachedPrettySessionId == selected.Id
+            && _cachedPrettyBody is not null
+            && SelectedInspectTabIndex == 1)
+        {
+            return AppendTranscodePrefix(selected, _cachedPrettyBody);
+        }
+
+        var prettyInspect = _bodyPrettyMode && SelectedInspectTabIndex == 1;
+        var body = BuildSelectedBodyTextCore(selected, prettyInspect);
+        if (prettyInspect)
+        {
+            MaybeSetPrettyPrintFailureHint(selected);
+            _cachedPrettySessionId = selected.Id;
+            _cachedPrettyBody = body;
+        }
+
+        return AppendTranscodePrefix(selected, body);
+    }
+
+    private void MaybeSetPrettyPrintFailureHint(SessionSnapshot selected)
+    {
+        var reqCt = SessionInspectors.ParseHeaderBlock(selected.RequestHeadersText)
+            .TryGetValue("Content-Type", out var rct) ? rct : null;
+        var respCt = selected.ContentType
+                     ?? (SessionInspectors.ParseHeaderBlock(selected.ResponseHeadersText)
+                         .TryGetValue("Content-Type", out var sct) ? sct : null);
+        if (!(InspectorBodyLimits.IsPrettyPrintableContentType(reqCt)
+              || InspectorBodyLimits.IsPrettyPrintableContentType(respCt))
+            || InspectorBodyLimits.TryPrettyPrint(selected.RequestBodyText, reqCt) is not null
+            || InspectorBodyLimits.TryPrettyPrint(selected.ResponseBodyText, respCt) is not null
+            || !(selected.RequestBodyCapture is BodyCaptureState.Truncated
+                 || selected.ResponseBodyCapture is BodyCaptureState.Truncated
+                 || !string.IsNullOrWhiteSpace(selected.RequestBodyText)
+                 || !string.IsNullOrWhiteSpace(selected.ResponseBodyText)))
+        {
+            return;
+        }
+
+        if (string.IsNullOrEmpty(BodyCaptureHint))
+        {
+            BodyCaptureHint = "Cannot pretty-print (body truncated or invalid)";
+        }
+        else if (!BodyCaptureHint.Contains("pretty-print", StringComparison.OrdinalIgnoreCase))
+        {
+            BodyCaptureHint += " · Cannot pretty-print (body truncated or invalid)";
+        }
+    }
+
+    private static string AppendTranscodePrefix(SessionSnapshot selected, string body)
+    {
         if (!selected.IsTranscoded)
             return body;
 
@@ -2231,6 +2885,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private async Task StartCaptureAsync()
     {
+        if (_startBusy || _interception.IsRunning)
+        {
+            return;
+        }
+
+        using var scope = InspectorUxTrace.Scope("StartCapture", $"{BindAddress}:{BindPort}");
+        InspectorUxTrace.Event("UxTrace.Path", InspectorUxTrace.LogFilePath);
+        _startBusy = true;
         var address = ParseBindAddress(BindAddress);
         PersistSettings();
         _interception.BreakpointOnResponse = BreakpointOnResponse;
@@ -2241,41 +2903,61 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _interception.DecryptHttps = _decryptHttps;
         _interception.ConfigureLogging(_settings.Current);
         SetStatus("Starting proxy…", StatusSeverity.Busy);
-        await _interception.StartAsync(address, BindPort, _statusRevertCts?.Token ?? CancellationToken.None);
-        if (_interception.BoundPort > 0)
+        var token = StatusCancelToken;
+        var port = BindPort;
+        try
         {
-            BindPort = _interception.BoundPort;
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindPort)));
+            // Listener start + first Root-store trust refresh can stall Crypt32 — keep off UI.
+            // Use async Task.Run (not GetResult) to avoid sync-over-async deadlocks on a sync context.
+            await Task.Run(
+                async () => await _interception.StartAsync(address, port, token).ConfigureAwait(false),
+                token);
+
+            // Stay on UI sync context when present so StatusText / Capturing bind correctly.
+            // (ConfigureAwait(false) here left StatusText stuck on Busy in production.)
+            if (_interception.BoundPort > 0)
+            {
+                BindPort = _interception.BoundPort;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindPort)));
+            }
+
+            Capturing = true;
+            RefreshEndpointAndBindUi();
+
+            var wantSystemProxy = _reenableSystemProxyOnStart || AutoSystemProxyOnStart;
+            _reenableSystemProxyOnStart = false;
+            var showedSystemProxyGuidance = false;
+            if (wantSystemProxy && !SystemProxy)
+            {
+                // Optimistic SystemProxy path — WinINET applies off UI.
+                SystemProxy = true;
+                showedSystemProxyGuidance = SystemProxy;
+            }
+
+            // Trust was refreshed during StartAsync — do not open the Root store again on the UI thread.
+            if (_decryptHttps && !_interception.IsRootTrusted)
+            {
+                await ForceDecryptHttpsOffAsync();
+                SetStatus(
+                    SystemProxy
+                        ? $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS."
+                        : $"Proxy running on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.",
+                    StatusSeverity.Warning);
+                return;
+            }
+
+            // Keep the system-proxy restart guidance visible; do not replace it with Ready.
+            // Also do not clobber a newer status if the user already acted during start
+            // (Install CA / Decrypt can finish while StartCaptureAsync is still awaiting UI marshal).
+            if (!showedSystemProxyGuidance &&
+                (IsStatusBusy || StatusText.StartsWith("Starting proxy", StringComparison.Ordinal)))
+            {
+                SetSteadyStatus(StatusReady);
+            }
         }
-
-        Capturing = true;
-        RefreshEndpointAndBindUi();
-
-        var wantSystemProxy = _reenableSystemProxyOnStart || AutoSystemProxyOnStart;
-        _reenableSystemProxyOnStart = false;
-        var showedSystemProxyGuidance = false;
-        if (wantSystemProxy && !SystemProxy)
+        finally
         {
-            SystemProxy = true;
-            showedSystemProxyGuidance = SystemProxy;
-        }
-
-        // If settings asked for decrypt but CA is gone, fall back to CONNECT (no silent re-trust).
-        if (_decryptHttps && !_interception.RefreshTrustState())
-        {
-            SetDecryptHttpsCore(false);
-            SetStatus(
-                SystemProxy
-                    ? $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS."
-                    : $"Proxy running on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.",
-                StatusSeverity.Warning);
-            return;
-        }
-
-        // Keep the system-proxy restart guidance visible; do not replace it with Ready.
-        if (!showedSystemProxyGuidance)
-        {
-            SetSteadyStatus(StatusReady);
+            _startBusy = false;
         }
     }
 

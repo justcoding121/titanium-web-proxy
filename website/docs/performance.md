@@ -34,11 +34,13 @@ Typical reverse wires with **64 KB GET/POST** (plus 256 KB H1 terminate) — bod
 
 ## Heavier reverse workloads
 
-Larger bodies, POST, lossy links, TLS termination cost, and architecture-sensitive shapes (slow consumers, duplex, WebSocket). Full tables are on the [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#heavier-reverse-workloads).
+Larger bodies, POST, lossy links, TLS termination cost, and architecture-sensitive shapes (slow consumers, duplex, WebSocket H1 Upgrade). Full tables are on the [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#heavier-reverse-workloads).
+
+Additional real-world tables (wiki only, not plotted here): [Unary gRPC H2→h2c](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#unary-grpc-h2-tls--h2c), [WebSocket H1 TLS→H1 TLS](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#websocket-h1-tls--h1-tls), [WebSocket RFC 8441](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#websocket-h2-tls-8441--h1).
 
 ## Full measurements
 
-Detailed tables and methodology: [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance) · [Performance profiling](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance-Profiling)
+Product 5×5 reverse/MITM matrices, saturation calibration, heavier reverse (bodies/POST/lossy/TLS/arch), unary gRPC (H2↔H2 and H2→h2c), and WebSocket (H1 Upgrade, dual-TLS H1, RFC 8441 H2) tables live on the [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance). Profiling notes: [Performance profiling](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance-Profiling).
 
 ---
 

@@ -305,7 +305,8 @@ public class HttpWebClient
             // is left intact — 1.0 is non-persistent unless the origin sees that opt-in.
             if (isTransparent)
                 Request.StripHopByHopConnectionForTransparentOrigin();
-            headerBuilder.WriteHeaders(Request.Headers, !isTransparent, upstreamProxyUserName, upstreamProxyPassword);
+            headerBuilder.WriteHeaders(Request.Headers, !isTransparent, upstreamProxyUserName,
+                upstreamProxyPassword, Request.UpstreamCleartextHostOverride);
 
             // write request headers
             await serverStream.WriteHeadersAsync(headerBuilder, cancellationToken);

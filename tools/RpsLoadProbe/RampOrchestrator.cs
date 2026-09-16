@@ -231,8 +231,13 @@ internal enum ProbeMode
     CompareArch,
     /// <summary>
     /// Unary gRPC Echo over H2 TLS (TWP / YARP / nginx grpc_pass / HAProxy / Envoy) — RPC/s @ c=64.
+    /// Includes H2 TLS→H2 TLS and H2 TLS→h2c comparison groups.
     /// </summary>
     CompareGrpc,
+    /// <summary>WebSocket echo over H1 TLS→H1 TLS (dual-TLS / proxy_ssl style).</summary>
+    CompareWsH1Tls,
+    /// <summary>WebSocket echo over H2 TLS RFC 8441 extended CONNECT → H1 plain origin.</summary>
+    CompareWsH2,
     /// <summary>
     /// Saturation control: origin-direct (+ optional bombardier) and H1 plain reverse peers in one session.
     /// </summary>
@@ -484,6 +489,7 @@ internal static class RampOrchestrator
                 or ProbeMode.CompareBodies or ProbeMode.ComparePost or ProbeMode.CompareLossy
                 or ProbeMode.CompareTlsCost or ProbeMode.CompareArch or ProbeMode.CompareSaturation
                 or ProbeMode.CompareNginxHttps or ProbeMode.CompareGrpc
+                or ProbeMode.CompareWsH1Tls or ProbeMode.CompareWsH2
             || PeerWire.IsProduct(options.Mode, PeerProduct.Nginx))
             && nginxExe == null)
         {
@@ -501,6 +507,7 @@ internal static class RampOrchestrator
                 or ProbeMode.CompareBodies or ProbeMode.ComparePost or ProbeMode.CompareLossy
                 or ProbeMode.CompareTlsCost or ProbeMode.CompareArch or ProbeMode.CompareSaturation
                 or ProbeMode.CompareCeiling or ProbeMode.CompareHaproxySmoke
+                or ProbeMode.CompareGrpc or ProbeMode.CompareWsH1Tls or ProbeMode.CompareWsH2
             || PeerWire.IsProduct(options.Mode, PeerProduct.Haproxy))
             && haproxyExe == null)
         {
@@ -518,6 +525,7 @@ internal static class RampOrchestrator
                 or ProbeMode.CompareBodies or ProbeMode.ComparePost or ProbeMode.CompareLossy
                 or ProbeMode.CompareTlsCost or ProbeMode.CompareArch or ProbeMode.CompareSaturation
                 or ProbeMode.CompareCeiling or ProbeMode.CompareEnvoySmoke
+                or ProbeMode.CompareGrpc or ProbeMode.CompareWsH1Tls or ProbeMode.CompareWsH2
             || PeerWire.IsProduct(options.Mode, PeerProduct.Envoy))
             && envoyExe == null)
         {
@@ -948,8 +956,11 @@ internal static class RampOrchestrator
         bool haproxyQuicAvailable, bool envoyAvailable, bool envoyHttp3Available) =>
         wire.Product switch
         {
+            // HAProxy 3.2 USE_QUIC is frontend-only; QUIC backends are rejected at config check.
             PeerProduct.Nginx => nginxAvailable,
-            PeerProduct.Haproxy => haproxyAvailable && (!PeerWire.NeedsQuicBuild(wire) || haproxyQuicAvailable),
+            PeerProduct.Haproxy => haproxyAvailable
+                && wire.Origin != PeerOriginProto.H3
+                && (!PeerWire.NeedsQuicBuild(wire) || haproxyQuicAvailable),
             PeerProduct.Envoy => envoyAvailable && (!PeerWire.NeedsQuicBuild(wire) || envoyHttp3Available),
             _ => false
         };
@@ -1293,6 +1304,8 @@ internal static class RampOrchestrator
             ProbeMode.CompareArch => BuildArchArms(nginxAvailable, nginxHttp3Available, haproxyAvailable,
                 haproxyQuicAvailable, envoyAvailable, envoyHttp3Available),
             ProbeMode.CompareGrpc => BuildCompareGrpcArms(nginxAvailable, haproxyAvailable, envoyAvailable),
+            ProbeMode.CompareWsH1Tls => BuildCompareWsH1TlsArms(nginxAvailable, haproxyAvailable, envoyAvailable),
+            ProbeMode.CompareWsH2 => BuildCompareWsH2Arms(haproxyAvailable, envoyAvailable),
             ProbeMode.YarpReverseHttp2ToHttps =>
                 [new("yarp-reverse-http2-to-https", ProbeMode.YarpReverseHttp2ToHttps, null)],
             ProbeMode.NginxReverseGrpc => nginxAvailable
@@ -1309,7 +1322,8 @@ internal static class RampOrchestrator
     }
 
     /// <summary>
-    /// Unary gRPC Echo @ H2 TLS→H2 TLS: TWP + YARP + nginx grpc_pass + HAProxy + Envoy.
+    /// Unary gRPC Echo: H2 TLS→H2 TLS (all five products) and H2 TLS→h2c (TWP/YARP/HAProxy/Envoy;
+    /// nginx has no H2 upstream — omitted).
     /// </summary>
     private static IReadOnlyList<ArmSpec> BuildCompareGrpcArms(bool nginxAvailable, bool haproxyAvailable,
         bool envoyAvailable)
@@ -1326,6 +1340,53 @@ internal static class RampOrchestrator
             arms.Add(new("haproxy-grpc-http2", ProbeMode.HaproxyReverseHttp2ToHttps, null, grpc));
         if (envoyAvailable)
             arms.Add(new("envoy-grpc-http2", ProbeMode.EnvoyReverseHttp2ToHttps, null, grpc));
+
+        // H2 TLS → h2c mesh (edge TLS, cleartext H2 origin). nginx: no H2 upstream.
+        arms.Add(new("twp-grpc-h2c", ProbeMode.ReverseHttp2ToH2c, null, grpc));
+        arms.Add(new("yarp-grpc-h2c", ProbeMode.YarpReverseHttp2ToH2c, null, grpc));
+        if (haproxyAvailable)
+            arms.Add(new("haproxy-grpc-h2c", ProbeMode.HaproxyReverseHttp2ToH2c, null, grpc));
+        if (envoyAvailable)
+            arms.Add(new("envoy-grpc-h2c", ProbeMode.EnvoyReverseHttp2ToH2c, null, grpc));
+        return arms;
+    }
+
+    /// <summary>WebSocket echo @ H1 TLS→H1 TLS (dual-TLS / proxy_ssl style).</summary>
+    private static IReadOnlyList<ArmSpec> BuildCompareWsH1TlsArms(bool nginxAvailable, bool haproxyAvailable,
+        bool envoyAvailable)
+    {
+        var ws = WorkloadOptions.ForWebSocket();
+        var arms = new List<ArmSpec>
+        {
+            new("twp-reverse-http1-tls-duplex-ws-h1tls", ProbeMode.ReverseHttp1Mitm, null, ws),
+            new("yarp-reverse-http1-tls-duplex-ws-h1tls", ProbeMode.YarpReverseHttp1TlsToHttps, null, ws)
+        };
+        if (nginxAvailable)
+            arms.Add(new("nginx-reverse-http1-tls-duplex-ws-h1tls", ProbeMode.NginxReverseHttp1TlsToHttps, null, ws));
+        if (haproxyAvailable)
+            arms.Add(new("haproxy-reverse-http1-tls-duplex-ws-h1tls", ProbeMode.HaproxyReverseHttp1TlsToHttps, null,
+                ws));
+        if (envoyAvailable)
+            arms.Add(new("envoy-reverse-http1-tls-duplex-ws-h1tls", ProbeMode.EnvoyReverseHttp1TlsToHttps, null, ws));
+        return arms;
+    }
+
+    /// <summary>
+    /// WebSocket echo @ H2 TLS RFC 8441 extended CONNECT → H1 plain.
+    /// nginx: Not possible (no RFC 8441 extended CONNECT reverse). Peers best-effort.
+    /// </summary>
+    private static IReadOnlyList<ArmSpec> BuildCompareWsH2Arms(bool haproxyAvailable, bool envoyAvailable)
+    {
+        var ws = WorkloadOptions.ForHttp2WebSocket();
+        var arms = new List<ArmSpec>
+        {
+            new("twp-reverse-http2-duplex-ws-h2", ProbeMode.ReverseHttp2Cleartext, null, ws),
+            new("yarp-reverse-http2-duplex-ws-h2", ProbeMode.YarpReverseHttp2, null, ws)
+        };
+        if (haproxyAvailable)
+            arms.Add(new("haproxy-reverse-http2-duplex-ws-h2", ProbeMode.HaproxyReverseHttp2, null, ws));
+        if (envoyAvailable)
+            arms.Add(new("envoy-reverse-http2-duplex-ws-h2", ProbeMode.EnvoyReverseHttp2, null, ws));
         return arms;
     }
 
@@ -1707,8 +1768,8 @@ internal static class RampOrchestrator
             haproxyAvailable, envoyAvailable, null,
             "haproxy-reverse-http1-plain-to-http2", "envoy-reverse-http1-plain-to-http2");
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp1PlainToHttp3, nginxAvailable: false,
-            haproxyHttp3Available, envoyHttp3Available, null,
-            "haproxy-reverse-http1-plain-to-http3", "envoy-reverse-http1-plain-to-http3");
+            haproxyAvailable: false, envoyHttp3Available, null,
+            null, "envoy-reverse-http1-plain-to-http3");
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp1ToH2c, nginxAvailable: false,
             haproxyAvailable, envoyAvailable, null,
             "haproxy-reverse-http1-to-h2c", "envoy-reverse-http1-to-h2c");
@@ -1716,8 +1777,8 @@ internal static class RampOrchestrator
             haproxyAvailable, envoyAvailable, null,
             "haproxy-reverse-http11-to-http2", "envoy-reverse-http11-to-http2");
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp1ToHttp3, nginxAvailable: false,
-            haproxyHttp3Available, envoyHttp3Available, null,
-            "haproxy-reverse-http1-to-http3", "envoy-reverse-http1-to-http3");
+            haproxyAvailable: false, envoyHttp3Available, null,
+            null, "envoy-reverse-http1-to-http3");
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseH2cToH1, nginxAvailable,
             haproxyAvailable, envoyAvailable,
             "nginx-reverse-h2c-to-h1", "haproxy-reverse-h2c-to-h1", "envoy-reverse-h2c-to-h1");
@@ -1731,8 +1792,8 @@ internal static class RampOrchestrator
             haproxyAvailable, envoyAvailable, null,
             "haproxy-reverse-h2c", "envoy-reverse-h2c");
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseH2cToH3, nginxAvailable: false,
-            haproxyHttp3Available, envoyHttp3Available, null,
-            "haproxy-reverse-h2c-to-h3", "envoy-reverse-h2c-to-h3");
+            haproxyAvailable: false, envoyHttp3Available, null,
+            null, "envoy-reverse-h2c-to-h3");
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp2ToH2c, nginxAvailable: false,
             haproxyAvailable, envoyAvailable, null,
             "haproxy-reverse-http2-to-h2c", "envoy-reverse-http2-to-h2c");
@@ -1740,17 +1801,18 @@ internal static class RampOrchestrator
             haproxyAvailable, envoyAvailable, null,
             "haproxy-reverse-http2-to-https", "envoy-reverse-http2-to-https");
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp2ToHttp3, nginxAvailable: false,
-            haproxyHttp3Available, envoyHttp3Available, null,
-            "haproxy-reverse-http2-to-http3", "envoy-reverse-http2-to-http3");
+            haproxyAvailable: false, envoyHttp3Available, null,
+            null, "envoy-reverse-http2-to-http3");
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp3ToH2c, nginxAvailable: false,
             haproxyHttp3Available, envoyHttp3Available, null,
             "haproxy-reverse-http3-to-h2c", "envoy-reverse-http3-to-h2c");
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp3ToHttp2, nginxAvailable: false,
             haproxyHttp3Available, envoyHttp3Available, null,
             "haproxy-reverse-http3-to-http2", "envoy-reverse-http3-to-http2");
+        // HAProxy has no QUIC backend — H3↔H3 is Envoy-only among terminate peers.
         InsertNativeRemainderAfterYarp(arms, ProbeMode.YarpReverseHttp3ToHttp3, nginxAvailable: false,
-            haproxyHttp3Available, envoyHttp3Available, null,
-            "haproxy-reverse-http3-to-http3", "envoy-reverse-http3-to-http3");
+            haproxyAvailable: false, envoyHttp3Available, null,
+            null, "envoy-reverse-http3-to-http3");
 
         return arms;
     }

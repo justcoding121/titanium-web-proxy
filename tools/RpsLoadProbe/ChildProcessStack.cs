@@ -295,6 +295,8 @@ internal sealed class ChildProcessStack : IAsyncDisposable
             env["TWP_RPS_HTTP_INTERCEPTION_MUTATE"] = "1";
         if (workload.CaptureTlsTiming)
             env["TWP_RPS_CAPTURE_TLS"] = "1";
+        if (workload.IsHttp2WebSocket)
+            env["TWP_RPS_ENABLE_RFC8441"] = "1";
         if (mode is ProbeMode.TwpCliPlusCacheHitHttp1)
             env["TWP_RPS_ORIGIN_CACHE_CONTROL"] = "public, max-age=60";
         // Forward Mac parity pool-pick digs into the proxy child (ProcessStartInfo env is a copy;

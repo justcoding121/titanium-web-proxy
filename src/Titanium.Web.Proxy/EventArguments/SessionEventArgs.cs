@@ -67,6 +67,7 @@ public class SessionEventArgs : SessionEventArgsBase
         Exception = null;
         IsClientResponseCommitted = false;
         IsFastPath = false;
+        CloseClientConnectionAfterResponse = false;
         IsPromise = false;
         Http3BufferedBodyReader = null;
         Http3RequestBodyPump = null;
@@ -101,6 +102,12 @@ public class SessionEventArgs : SessionEventArgsBase
     ///     injection because the interception gate/predicate selected the fast-forward path.
     /// </summary>
     internal bool IsFastPath { get; set; }
+
+    /// <summary>
+    ///     When true, tear down the client TCP after the response is committed (seamless decrypt-bypass
+    ///     meta-refresh must not keep an H2/MITM connection alive).
+    /// </summary>
+    internal bool CloseClientConnectionAfterResponse { get; set; }
 
     /// <summary>
     ///     Native HTTP/3 only: reads remaining client DATA frames into a bounded buffer (wire bytes).
@@ -370,48 +377,57 @@ public class SessionEventArgs : SessionEventArgsBase
                 "The stream is an established WebSocket tunnel; subscribe to OnDataReceived instead.");
 
         var response = HttpClient.Response;
-        if (!response.HasBody) return;
+        if (!response.HasBody || response.IsBodyRead)
+            return;
 
-        // If not already read (not cached yet)
-        if (!response.IsBodyRead)
+        // Synthetic Ok/Respond may already have Body bytes without going through the wire.
+        if (response.BodyAvailable)
         {
-            if (response.IsBodyReceived) throw new InvalidOperationException("Response body was already received.");
-
-            if (response.HttpVersion == HttpHeader.Version20)
-            {
-                // do not send to the remote endpoint
-                response.Http2IgnoreBodyFrames = true;
-
-                response.Http2BodyData = new MemoryStream();
-
-                var tcs = new TaskCompletionSource<bool>();
-                response.ReadHttp2BodyTaskCompletionSource = tcs;
-
-                // signal to HTTP/2 copy frame method to continue
-                response.ReadHttp2BeforeHandlerTaskCompletionSource!.SetResult(true);
-
-                await tcs.Task;
-
-                // Now set the flag to true
-                // So that next time we can deliver body from cache
-                response.IsBodyRead = true;
-                response.IsBodyReceived = true;
-            }
-            else
-            {
-                var body = await ReadBodyAsync(false, cancellationToken);
-                if (!response.BodyAvailable)
-                {
-                    response.Body = body;
-                    response.BodyIsWireEncoded = false; // Uncompress transformation
-                }
-
-                // Now set the flag to true
-                // So that next time we can deliver body from cache
-                response.IsBodyRead = true;
-                response.IsBodyReceived = true;
-            }
+            MarkResponseBodyRead(response);
+            return;
         }
+
+        if (response.IsBodyReceived) throw new InvalidOperationException("Response body was already received.");
+
+        if (response.HttpVersion == HttpHeader.Version20)
+            await ReadHttp2ResponseBodyAsync(response).ConfigureAwait(false);
+        else
+            await ReadHttp1ResponseBodyAsync(response, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static void MarkResponseBodyRead(Response response)
+    {
+        response.IsBodyRead = true;
+        response.IsBodyReceived = true;
+    }
+
+    private static async Task ReadHttp2ResponseBodyAsync(Response response)
+    {
+        // do not send to the remote endpoint
+        response.Http2IgnoreBodyFrames = true;
+
+        response.Http2BodyData = new MemoryStream();
+
+        var tcs = new TaskCompletionSource<bool>();
+        response.ReadHttp2BodyTaskCompletionSource = tcs;
+
+        // signal to HTTP/2 copy frame method to continue
+        response.ReadHttp2BeforeHandlerTaskCompletionSource!.SetResult(true);
+
+        await tcs.Task.ConfigureAwait(false);
+        MarkResponseBodyRead(response);
+    }
+
+    private async Task ReadHttp1ResponseBodyAsync(Response response, CancellationToken cancellationToken)
+    {
+        var body = await ReadBodyAsync(false, cancellationToken).ConfigureAwait(false);
+        if (!response.BodyAvailable)
+        {
+            response.Body = body;
+            response.BodyIsWireEncoded = false; // Uncompress transformation
+        }
+
+        MarkResponseBodyRead(response);
     }
 
     private async Task<byte[]> ReadBodyAsync(bool isRequest, CancellationToken cancellationToken)
@@ -862,9 +878,14 @@ public class SessionEventArgs : SessionEventArgsBase
 
             response.SetOriginalHeaders(HttpClient.Response);
 
+            // Suppress origin DATA while synthetic emission is queued (H2 frame loop reads
+            // HttpClient.Response.Http2IgnoreBodyFrames on each DATA frame).
+            HttpClient.Response.Http2IgnoreBodyFrames = true;
+
             // response already received from server but not yet ready to sent to client.         
             HttpClient.Response = response;
             HttpClient.Response.Locked = true;
+            HttpClient.Response.Http2IgnoreBodyFrames = true;
         }
         // request not yet sent/not yet ready to be sent.
         else
@@ -875,6 +896,17 @@ public class SessionEventArgs : SessionEventArgsBase
             // set new response.
             HttpClient.Response = response;
             HttpClient.Response.Locked = true;
+        }
+
+        // Buffered synthetics already carry the body; mark read so H2 GetResponseBody does not
+        // wait on ReadHttp2BeforeHandlerTaskCompletionSource (null after replacement).
+        // Do not set IsBodyReceived when replacing an origin response — SyphonOutBodyAsync must
+        // still drain unread origin bytes so pooled H1 connections stay reusable.
+        if (HttpClient.Response.BodyAvailable)
+        {
+            HttpClient.Response.IsBodyRead = true;
+            if (HttpClient.Request.CancelRequest)
+                HttpClient.Response.IsBodyReceived = true;
         }
     }
 
@@ -933,6 +965,7 @@ public class SessionEventArgs : SessionEventArgsBase
     {
         if (response.HttpVersion == HttpHeader.VersionUnknown)
             response.HttpVersion = HttpClient.Request.HttpVersion;
+        response.IsSynthetic = true;
     }
 
     /// <summary>

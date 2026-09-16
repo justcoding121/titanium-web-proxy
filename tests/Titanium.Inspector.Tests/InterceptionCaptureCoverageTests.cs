@@ -157,20 +157,18 @@ public class InterceptionCaptureCoverageTests
     {
         using var interception = new InterceptionService(new RecordingSystemProxyController());
         var flags = BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
-        var truncateBytes = typeof(InterceptionService).GetMethod("TruncateBytes", flags)!;
-        var truncateText = typeof(InterceptionService).GetMethod("TruncateText", flags)!;
         var formatHeaders = typeof(InterceptionService).GetMethod("FormatHeaders", flags)!;
         var applyTiming = typeof(InterceptionService).GetMethod("ApplyTiming", flags)!;
         var addTunnel = typeof(InterceptionService).GetMethod("AddTunnelBytes", flags)!;
         var tryHost = typeof(InterceptionService).GetMethod("TryHost", flags)!;
 
-        Assert.IsNull(truncateBytes.Invoke(null, new object?[] { null }));
-        Assert.AreEqual(0, ((byte[])truncateBytes.Invoke(null, [Array.Empty<byte>()])!).Length);
+        Assert.IsNull(InspectorBodyLimits.TruncateBytes(null));
+        Assert.AreEqual(0, InspectorBodyLimits.TruncateBytes(Array.Empty<byte>())!.Length);
         var big = new byte[InterceptionService.MaxBodyBytes + 8];
-        Assert.AreEqual(InterceptionService.MaxBodyBytes, ((byte[])truncateBytes.Invoke(null, [big])!).Length);
-        Assert.AreEqual("hi", (string)truncateText.Invoke(null, ["hi"])!);
+        Assert.AreEqual(InterceptionService.MaxBodyBytes, InspectorBodyLimits.TruncateBytes(big)!.Length);
+        Assert.AreEqual("hi", InspectorBodyLimits.TruncateText("hi"));
         var longText = new string('x', InterceptionService.MaxBodyTextChars + 3);
-        StringAssert.EndsWith((string)truncateText.Invoke(null, [longText])!, "…");
+        StringAssert.EndsWith(InspectorBodyLimits.TruncateText(longText), "…");
 
         var headers = new HeaderCollection();
         headers.AddHeader("X-A", "1");
@@ -341,14 +339,23 @@ public class InterceptionCaptureCoverageTests
         Assert.IsNotNull(previewSnap.WebSocketFrames);
 
         var shouldBuffer = typeof(InterceptionService).GetMethod("ShouldBufferBody", flags)!;
+        // Clear WebSocket upgrade so buffering checks are not skipped as endless streams.
+        session.HttpClient.Request.Headers.RemoveHeader("Upgrade");
         session.MaxBufferedBodyBytes = 10;
         session.HttpClient.Request.ContentLength = 100;
-        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session])!);
+        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
         session.MaxBufferedBodyBytes = 0;
-        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session])!);
+        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
         session.MaxBufferedBodyBytes = 1024;
         session.HttpClient.Request.ContentLength = -1;
-        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session])!);
+        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
+
+        // SSE responses must not buffer; finite chunked JSON still does.
+        session.HttpClient.Response.ContentType = "text/event-stream";
+        session.HttpClient.Response.ContentLength = -1;
+        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
+        session.HttpClient.Response.ContentType = "application/json";
+        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
 
         var throttleReq = typeof(InterceptionService).GetMethod("OnRequestBodyWriteThrottle", flags)!;
         var throttleResp = typeof(InterceptionService).GetMethod("OnResponseBodyWriteThrottle", flags)!;
@@ -437,7 +444,6 @@ public class InterceptionCaptureCoverageTests
         };
         StringAssert.Contains(ExclusionPreview.ExclusionSummary(settings), "Exclusions");
         Assert.AreEqual("", ExclusionPreview.ExclusionSummary(new InspectorSettings()));
-        _ = ExclusionPreview.FormatForCurrentOs(settings);
         _ = ExclusionPreview.DescribeOpaqueReason(OpaqueTunnelReason.DecryptOff);
         _ = ExclusionPreview.DescribeOpaqueReason(OpaqueTunnelReason.BuiltInIdentity);
         _ = ExclusionPreview.DescribeOpaqueReason(OpaqueTunnelReason.BuiltInPinning);
@@ -460,7 +466,8 @@ public class InterceptionCaptureCoverageTests
         Assert.AreEqual(CertificateOsTrustKind.Failed, nss.Kind);
         StringAssert.Contains(nss.Message, "Start the proxy first");
         var ff = interception.TrustFirefox();
-        Assert.AreEqual(CertificateOsTrustKind.Failed, ff.Kind);
+        Assert.IsTrue(ff.Succeeded, "UseInMemoryTrustState short-circuits before proxy start");
+        StringAssert.Contains(ff.Message, "in-memory");
         Assert.IsNull(interception.OpenMacKeychainGuidance());
         Assert.IsFalse(interception.IsRootInLoginKeychain());
         Assert.IsFalse(interception.VerifyOsUserSslTrust());
@@ -759,17 +766,17 @@ public class InterceptionCaptureCoverageTests
             OverrideRootPfx(interception, Path.Combine(dir, "rootCert.pfx"));
 
             var complete = typeof(InterceptionService).GetMethod("CompleteRootTrustInstall",
-                BindingFlags.NonPublic | BindingFlags.Instance)!;
-            Assert.IsFalse((bool)complete.Invoke(interception, [false])!);
-            Assert.IsTrue((bool)complete.Invoke(interception, [true])!);
+                BindingFlags.NonPublic | BindingFlags.Static)!;
+            Assert.IsFalse((bool)complete.Invoke(null, [false])!);
+            Assert.IsTrue((bool)complete.Invoke(null, [true])!);
 
             await interception.StartAsync(IPAddress.Loopback, 0);
             try
             {
                 Assert.IsTrue(interception.InstallRootCertificate(false));
                 Assert.IsTrue(interception.IsRootTrusted);
-                // Trusted path also best-effort enables Firefox enterprise roots.
-                Assert.IsTrue((bool)complete.Invoke(interception, [true])!);
+                // CompleteRootTrustInstall is a passthrough; Firefox prefs are scheduled by the VM off-UI.
+                Assert.IsTrue((bool)complete.Invoke(null, [true])!);
             }
             finally
             {

@@ -284,6 +284,7 @@ internal sealed class TitaniumCliHost : IDisposable
     private async Task WaitForReadyAsync(TimeSpan timeout, CancellationToken cancellationToken)
     {
         var deadline = DateTime.UtcNow + timeout;
+        var sawRunning = false;
         while (DateTime.UtcNow < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -295,9 +296,19 @@ internal sealed class TitaniumCliHost : IDisposable
                 errText = stderr.ToString();
             }
 
-            if (outText.Contains("running", StringComparison.OrdinalIgnoreCase) ||
-                errText.Contains("running", StringComparison.OrdinalIgnoreCase))
+            if (!sawRunning &&
+                (outText.Contains("running", StringComparison.OrdinalIgnoreCase) ||
+                 errText.Contains("running", StringComparison.OrdinalIgnoreCase)))
+                sawRunning = true;
+
+            if (sawRunning && await TryListenProbeAsync(cancellationToken))
+            {
+                // Short settle so Plus/dashboard JIT is not billed to the first measure step
+                // (macos-15-intel editions were failing validate as "missing arm" when c=64 p99
+                // missed the 50ms SLO after a cold start).
+                await SettleListenAsync(cancellationToken);
                 return;
+            }
 
             if (process.HasExited)
             {
@@ -318,6 +329,64 @@ internal sealed class TitaniumCliHost : IDisposable
 
         throw new TimeoutException(
             $"Timed out waiting for titanium CLI ready. stdout={finalOut} stderr={finalErr}");
+    }
+
+    private async Task<bool> TryListenProbeAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(2));
+            using var handler = new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback =
+                    HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            };
+            using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(2) };
+            using var response = await client.GetAsync(ListenUrl, cts.Token);
+            return (int)response.StatusCode is >= 200 and < 500;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task SettleListenAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var handler = new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback =
+                    HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            };
+            using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(2) };
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(2);
+            while (DateTime.UtcNow < deadline)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    using var response = await client.GetAsync(ListenUrl, cancellationToken);
+                    _ = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+                }
+                catch
+                {
+                    // best-effort warm
+                }
+
+                await Task.Delay(50, cancellationToken);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            // settle is best-effort
+        }
     }
 
     internal static string BuildSiteFile(int listenPort, int originPort) =>

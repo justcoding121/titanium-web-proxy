@@ -402,7 +402,7 @@ after it.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_LastOsTrustResult.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.LastOsTrustResult%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1381">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1385">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_LastOsTrustResult_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.LastOsTrustResult*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_LastOsTrustResult" data-uid="Titanium.Web.Proxy.Network.CertificateManager.LastOsTrustResult">LastOsTrustResult</h4>
@@ -831,10 +831,60 @@ does not set those env vars.</p>
   </div>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_ApplyUnixSslTrustAfterStoreInstall_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslTrustAfterStoreInstall(System.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1461">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Network_CertificateManager_ApplyUnixSslTrustAfterStoreInstall_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslTrustAfterStoreInstall*"></a>
+  <h4 id="Titanium_Web_Proxy_Network_CertificateManager_ApplyUnixSslTrustAfterStoreInstall_System_Boolean_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslTrustAfterStoreInstall(System.Boolean)">ApplyUnixSslTrustAfterStoreInstall(bool)</h4>
+  <div class="markdown level1 summary"><p>macOS/Linux SSL trust (Keychain / NSS). May show auth UI — keep on a pumping thread.
+No-op on Windows (Root store presence is trust).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void ApplyUnixSslTrustAfterStoreInstall(bool machineTrusted = false)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td><span class="parametername">machineTrusted</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_ApplyUnixSslUntrust.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslUntrust%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1582">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Network_CertificateManager_ApplyUnixSslUntrust_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslUntrust*"></a>
+  <h4 id="Titanium_Web_Proxy_Network_CertificateManager_ApplyUnixSslUntrust" data-uid="Titanium.Web.Proxy.Network.CertificateManager.ApplyUnixSslUntrust">ApplyUnixSslUntrust()</h4>
+  <div class="markdown level1 summary"><p>macOS/Linux Keychain/NSS untrust. May show auth UI — keep on a pumping thread.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void ApplyUnixSslUntrust()</code></pre>
+  </div>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_ClearRootCertificate.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.ClearRootCertificate%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1797">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1933">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_ClearRootCertificate_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.ClearRootCertificate*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_ClearRootCertificate" data-uid="Titanium.Web.Proxy.Network.CertificateManager.ClearRootCertificate">ClearRootCertificate()</h4>
@@ -850,7 +900,7 @@ does not set those env vars.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_CreateRootCertificate_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.CreateRootCertificate(System.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1258">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1262">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_CreateRootCertificate_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.CreateRootCertificate*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_CreateRootCertificate_System_Boolean_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.CreateRootCertificate(System.Boolean)">CreateRootCertificate(bool)</h4>
@@ -900,7 +950,7 @@ does not set those env vars.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_CreateServerCertificate_System_String_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.CreateServerCertificate(System.String)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L959">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L963">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_CreateServerCertificate_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.CreateServerCertificate*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_CreateServerCertificate_System_String_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.CreateServerCertificate(System.String)">CreateServerCertificate(string)</h4>
@@ -964,7 +1014,7 @@ does not set those env vars.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_EnsureRootCertificate.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.EnsureRootCertificate%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1629">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1770">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_EnsureRootCertificate_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.EnsureRootCertificate*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_EnsureRootCertificate" data-uid="Titanium.Web.Proxy.Network.CertificateManager.EnsureRootCertificate">EnsureRootCertificate()</h4>
@@ -981,7 +1031,7 @@ Also makes root certificate trusted based on initial setup from proxy constructo
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_EnsureRootCertificate_System_Boolean_System_Boolean_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.EnsureRootCertificate(System.Boolean%2CSystem.Boolean%2CSystem.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1652">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1793">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_EnsureRootCertificate_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.EnsureRootCertificate*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_EnsureRootCertificate_System_Boolean_System_Boolean_System_Boolean_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.EnsureRootCertificate(System.Boolean,System.Boolean,System.Boolean)">EnsureRootCertificate(bool, bool, bool)</h4>
@@ -1029,7 +1079,7 @@ installing for a service / all users.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_InstallNssCertutilAndRetryUserTrust.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.InstallNssCertutilAndRetryUserTrust%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1453">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1595">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_InstallNssCertutilAndRetryUserTrust_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.InstallNssCertutilAndRetryUserTrust*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_InstallNssCertutilAndRetryUserTrust" data-uid="Titanium.Web.Proxy.Network.CertificateManager.InstallNssCertutilAndRetryUserTrust">InstallNssCertutilAndRetryUserTrust()</h4>
@@ -1057,10 +1107,61 @@ installing for a service / all users.</p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_InstallRootIntoCertificateStores_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.InstallRootIntoCertificateStores(System.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1414">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Network_CertificateManager_InstallRootIntoCertificateStores_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.InstallRootIntoCertificateStores*"></a>
+  <h4 id="Titanium_Web_Proxy_Network_CertificateManager_InstallRootIntoCertificateStores_System_Boolean_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.InstallRootIntoCertificateStores(System.Boolean)">InstallRootIntoCertificateStores(bool)</h4>
+  <div class="markdown level1 summary"><p>Installs the root into Personal + Trusted Root stores only (Windows CryptUI Yes/No on Root Add).
+Does not prune orphans or run Unix Keychain/NSS trust — UI callers should finish those
+off the dispatcher after CryptUI returns so Avalonia does not show Not Responding.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool InstallRootIntoCertificateStores(bool machineTrusted = false)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td><span class="parametername">machineTrusted</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td><p>True when the user Root store entry was newly added.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_IsOsRootStillPresent.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.IsOsRootStillPresent%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1501">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1643">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_IsOsRootStillPresent_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.IsOsRootStillPresent*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_IsOsRootStillPresent" data-uid="Titanium.Web.Proxy.Network.CertificateManager.IsOsRootStillPresent">IsOsRootStillPresent()</h4>
@@ -1091,7 +1192,7 @@ installing for a service / all users.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_IsRootCertificateMachineTrusted.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.IsRootCertificateMachineTrusted%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1673">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1814">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_IsRootCertificateMachineTrusted_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.IsRootCertificateMachineTrusted*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_IsRootCertificateMachineTrusted" data-uid="Titanium.Web.Proxy.Network.CertificateManager.IsRootCertificateMachineTrusted">IsRootCertificateMachineTrusted()</h4>
@@ -1122,7 +1223,7 @@ installing for a service / all users.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_IsRootCertificateUserTrusted.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.IsRootCertificateUserTrusted%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1665">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1806">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_IsRootCertificateUserTrusted_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.IsRootCertificateUserTrusted*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_IsRootCertificateUserTrusted" data-uid="Titanium.Web.Proxy.Network.CertificateManager.IsRootCertificateUserTrusted">IsRootCertificateUserTrusted()</h4>
@@ -1153,7 +1254,7 @@ installing for a service / all users.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_IsRootInLoginKeychain.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.IsRootInLoginKeychain%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1492">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1634">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_IsRootInLoginKeychain_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.IsRootInLoginKeychain*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_IsRootInLoginKeychain" data-uid="Titanium.Web.Proxy.Network.CertificateManager.IsRootInLoginKeychain">IsRootInLoginKeychain()</h4>
@@ -1182,10 +1283,65 @@ Does not imply SSL Always Trust — use <a class="xref" href="Titanium.Web.Proxy
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_ListSameCommonNameRootThumbprints_System_Security_Cryptography_X509Certificates_StoreLocation_System_String_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.ListSameCommonNameRootThumbprints(System.Security.Cryptography.X509Certificates.StoreLocation%2CSystem.String)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1500">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Network_CertificateManager_ListSameCommonNameRootThumbprints_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.ListSameCommonNameRootThumbprints*"></a>
+  <h4 id="Titanium_Web_Proxy_Network_CertificateManager_ListSameCommonNameRootThumbprints_System_Security_Cryptography_X509Certificates_StoreLocation_System_String_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.ListSameCommonNameRootThumbprints(System.Security.Cryptography.X509Certificates.StoreLocation,System.String)">ListSameCommonNameRootThumbprints(StoreLocation, string?)</h4>
+  <div class="markdown level1 summary"><p>Read-only: Root-store thumbprints matching <a class="xref" href="Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_RootCertificateName">RootCertificateName</a>.
+Uses FindBySubjectName (not a full store enumeration) so interactive Clear/reinstall
+does not sit on Busy for tens of seconds on large Windows Root stores.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public IReadOnlyList&lt;string&gt; ListSameCommonNameRootThumbprints(StoreLocation storeLocation, string? keepThumbprint = null)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.security.cryptography.x509certificates.storelocation">StoreLocation</a></td>
+        <td><span class="parametername">storeLocation</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td><span class="parametername">keepThumbprint</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.ireadonlylist-1">IReadOnlyList</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_LoadRootCertificate.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.LoadRootCertificate%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1328">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1332">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_LoadRootCertificate_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.LoadRootCertificate*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_LoadRootCertificate" data-uid="Titanium.Web.Proxy.Network.CertificateManager.LoadRootCertificate">LoadRootCertificate()</h4>
@@ -1217,7 +1373,7 @@ Titanium.Web.Proxy directory, file name from <a class="xref" href="Titanium.Web.
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_LoadRootCertificate_System_String_System_String_System_Boolean_System_Security_Cryptography_X509Certificates_X509KeyStorageFlags_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.LoadRootCertificate(System.String%2CSystem.String%2CSystem.Boolean%2CSystem.Security.Cryptography.X509Certificates.X509KeyStorageFlags)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1367">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1371">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_LoadRootCertificate_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.LoadRootCertificate*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_LoadRootCertificate_System_String_System_String_System_Boolean_System_Security_Cryptography_X509Certificates_X509KeyStorageFlags_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.LoadRootCertificate(System.String,System.String,System.Boolean,System.Security.Cryptography.X509Certificates.X509KeyStorageFlags)">LoadRootCertificate(string, string, bool, X509KeyStorageFlags)</h4>
@@ -1286,7 +1442,7 @@ RootCertificate==null.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_OpenMacKeychainGuidance.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.OpenMacKeychainGuidance%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1509">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1651">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_OpenMacKeychainGuidance_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.OpenMacKeychainGuidance*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_OpenMacKeychainGuidance" data-uid="Titanium.Web.Proxy.Network.CertificateManager.OpenMacKeychainGuidance">OpenMacKeychainGuidance()</h4>
@@ -1314,10 +1470,145 @@ RootCertificate==null.</p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_PruneOrphanedPersonalCertificates_System_Security_Cryptography_X509Certificates_StoreLocation_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedPersonalCertificates(System.Security.Cryptography.X509Certificates.StoreLocation%2CSystem.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1572">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Network_CertificateManager_PruneOrphanedPersonalCertificates_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedPersonalCertificates*"></a>
+  <h4 id="Titanium_Web_Proxy_Network_CertificateManager_PruneOrphanedPersonalCertificates_System_Security_Cryptography_X509Certificates_StoreLocation_System_Boolean_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedPersonalCertificates(System.Security.Cryptography.X509Certificates.StoreLocation,System.Boolean)">PruneOrphanedPersonalCertificates(StoreLocation, bool)</h4>
+  <div class="markdown level1 summary"><p>Personal (My) store same-CN cleanup only — typically no CryptUI. Safe off the UI thread.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void PruneOrphanedPersonalCertificates(StoreLocation storeLocation, bool keepCurrentThumbprint)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.security.cryptography.x509certificates.storelocation">StoreLocation</a></td>
+        <td><span class="parametername">storeLocation</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td><span class="parametername">keepCurrentThumbprint</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_PruneOrphanedSameCommonNameCertificates_System_Boolean_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedSameCommonNameCertificates(System.Boolean%2CSystem.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1450">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Network_CertificateManager_PruneOrphanedSameCommonNameCertificates_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedSameCommonNameCertificates*"></a>
+  <h4 id="Titanium_Web_Proxy_Network_CertificateManager_PruneOrphanedSameCommonNameCertificates_System_Boolean_System_Boolean_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.PruneOrphanedSameCommonNameCertificates(System.Boolean,System.Boolean)">PruneOrphanedSameCommonNameCertificates(bool, bool)</h4>
+  <div class="markdown level1 summary"><p>Removes same-CN Root/My entries (may show Windows Root Delete CryptUI). Prefer a pumping
+UI thread when interactive.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void PruneOrphanedSameCommonNameCertificates(bool machineTrusted, bool keepCurrentThumbprint)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td><span class="parametername">machineTrusted</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td><span class="parametername">keepCurrentThumbprint</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_RemoveCertificateByThumbprint_System_Security_Cryptography_X509Certificates_StoreName_System_Security_Cryptography_X509Certificates_StoreLocation_System_String_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.RemoveCertificateByThumbprint(System.Security.Cryptography.X509Certificates.StoreName%2CSystem.Security.Cryptography.X509Certificates.StoreLocation%2CSystem.String)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1536">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Network_CertificateManager_RemoveCertificateByThumbprint_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.RemoveCertificateByThumbprint*"></a>
+  <h4 id="Titanium_Web_Proxy_Network_CertificateManager_RemoveCertificateByThumbprint_System_Security_Cryptography_X509Certificates_StoreName_System_Security_Cryptography_X509Certificates_StoreLocation_System_String_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.RemoveCertificateByThumbprint(System.Security.Cryptography.X509Certificates.StoreName,System.Security.Cryptography.X509Certificates.StoreLocation,System.String)">RemoveCertificateByThumbprint(StoreName, StoreLocation, string)</h4>
+  <div class="markdown level1 summary"><p>Removes one certificate by thumbprint. Root Remove may show Windows CryptUI — UI thread.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool RemoveCertificateByThumbprint(StoreName storeName, StoreLocation storeLocation, string thumbprint)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.security.cryptography.x509certificates.storename">StoreName</a></td>
+        <td><span class="parametername">storeName</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.security.cryptography.x509certificates.storelocation">StoreLocation</a></td>
+        <td><span class="parametername">storeLocation</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td><span class="parametername">thumbprint</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_RemoveTrustedRootCertificate_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.RemoveTrustedRootCertificate(System.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1686">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1827">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_RemoveTrustedRootCertificate_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.RemoveTrustedRootCertificate*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_RemoveTrustedRootCertificate_System_Boolean_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.RemoveTrustedRootCertificate(System.Boolean)">RemoveTrustedRootCertificate(bool)</h4>
@@ -1353,7 +1644,7 @@ fails silently otherwise). Pass the same value used when trusting.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_RemoveTrustedRootCertificateAsAdmin_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.RemoveTrustedRootCertificateAsAdmin(System.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1708">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1848">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_RemoveTrustedRootCertificateAsAdmin_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.RemoveTrustedRootCertificateAsAdmin*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_RemoveTrustedRootCertificateAsAdmin_System_Boolean_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.RemoveTrustedRootCertificateAsAdmin(System.Boolean)">RemoveTrustedRootCertificateAsAdmin(bool)</h4>
@@ -1402,7 +1693,7 @@ fails silently otherwise). Pass the same value used when trusting.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_TrustRootCertificate_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.TrustRootCertificate(System.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1393">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1397">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_TrustRootCertificate_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.TrustRootCertificate*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_TrustRootCertificate_System_Boolean_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.TrustRootCertificate(System.Boolean)">TrustRootCertificate(bool)</h4>
@@ -1440,7 +1731,7 @@ System.keychain / system CA store on macOS/Linux, with an admin prompt). Default
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_TrustRootCertificateAsAdmin_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.TrustRootCertificateAsAdmin(System.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1525">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1667">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_TrustRootCertificateAsAdmin_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.TrustRootCertificateAsAdmin*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_TrustRootCertificateAsAdmin_System_Boolean_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.TrustRootCertificateAsAdmin(System.Boolean)">TrustRootCertificateAsAdmin(bool)</h4>
@@ -1492,7 +1783,7 @@ with UAC when elevation is required. Works only on Windows.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_CertificateManager_VerifyOsUserSslTrust.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.CertificateManager.VerifyOsUserSslTrust%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1482">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/CertificateManager.cs/#L1624">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Network_CertificateManager_VerifyOsUserSslTrust_" data-uid="Titanium.Web.Proxy.Network.CertificateManager.VerifyOsUserSslTrust*"></a>
   <h4 id="Titanium_Web_Proxy_Network_CertificateManager_VerifyOsUserSslTrust" data-uid="Titanium.Web.Proxy.Network.CertificateManager.VerifyOsUserSslTrust">VerifyOsUserSslTrust()</h4>

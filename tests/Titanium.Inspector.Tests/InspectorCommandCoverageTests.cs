@@ -74,6 +74,27 @@ public class InspectorCommandCoverageTests
             await ExecuteAsync(vm.LoadFromSelectedCommand);
             StringAssert.Contains(vm.StatusText, "Composer");
 
+            await ExecuteAsync(vm.FillGraphQlFromSelectedCommand);
+            StringAssert.Contains(vm.StatusText, "no GraphQL operation name");
+
+            var gql = new SessionSnapshot
+            {
+                Id = 3, Method = "POST", Url = "https://gql.test/graphql", Host = "gql.test",
+                RequestBodyText = """{"operationName":"GetUser","query":"query GetUser { id }"}""",
+            };
+            vm.SeedSession(gql);
+            vm.SelectedSession = gql;
+            await ExecuteAsync(vm.OpenToolsAutoResponderCommand);
+            await ExecuteAsync(vm.FillGraphQlFromSelectedCommand);
+            Assert.AreEqual("GetUser", vm.AutoResponderGraphQlOperation);
+            StringAssert.Contains(vm.StatusText, "GetUser");
+            await ExecuteAsync(vm.OpenToolsBreakpointsCommand);
+            await ExecuteAsync(vm.FillGraphQlFromSelectedCommand);
+            Assert.AreEqual("GetUser", vm.Breakpoints.GraphQlOperationName);
+            await ExecuteAsync(vm.OpenToolsMapRemoteCommand);
+            await ExecuteAsync(vm.FillGraphQlFromSelectedCommand);
+            Assert.AreEqual("GetUser", vm.MapRemoteGraphQlOperation);
+
             vm.SetSelectedSessions([a, b]);
             await ExecuteAsync(vm.DiffSessionsCommand);
             Assert.IsTrue(vm.ShowSessionDetails);
@@ -107,6 +128,7 @@ public class InspectorCommandCoverageTests
             await ExecuteAsync(vm.ToggleAutoSystemProxyOnStartCommand);
             await ExecuteAsync(vm.ToggleIgnoreServerCertificateErrorsCommand);
             await ExecuteAsync(vm.ToggleAddViaHeaderCommand);
+            await ExecuteAsync(vm.ToggleProxyLocalhostCommand);
             await ExecuteAsync(vm.ToggleDebugLoggingCommand);
             await ExecuteAsync(vm.ToggleCheckForUpdatesOnStartupCommand);
             await ExecuteAsync(vm.SetThemeLightCommand);
@@ -186,10 +208,6 @@ public class InspectorCommandCoverageTests
             _ = trustType.GetMethod("FormatOsTrustFailureStatus", flags)!.Invoke(null, [null]);
             _ = trustType.GetMethod("FormatUntrustStillPresentStatus", flags)!.Invoke(null, null);
             _ = trustType.GetMethod("FormatUntrustRemovedStatus", flags)!.Invoke(null, null);
-            _ = trustType.GetMethod("FormatRotateCaTrustedStatus", flags)!.Invoke(null, [true]);
-            _ = trustType.GetMethod("FormatRotateCaTrustedStatus", flags)!.Invoke(null, [false]);
-            _ = trustType.GetMethod("FormatRotateCaDeferredTrustStatus", flags)!.Invoke(null, [true]);
-            _ = trustType.GetMethod("FormatRotateCaDeferredTrustStatus", flags)!.Invoke(null, [false]);
             _ = trustType.GetMethod("FormatFirefoxTrustOutcome", flags)!.Invoke(null,
                 [CertificateOsTrustResult.Ok("trusted")]);
             _ = trustType.GetMethod("FormatFirefoxTrustOutcome", flags)!.Invoke(null,
@@ -292,7 +310,7 @@ public class InspectorCommandCoverageTests
             _ = OsTrustUxCopy.ConfirmElevateRootCaBody();
             _ = OsTrustUxCopy.TrustRecoveryAdminBody("msg");
             _ = OsTrustUxCopy.ExcludedHostsIntro();
-            _ = OsTrustUxCopy.ExcludedHostsLoopbackHint();
+            _ = OsTrustUxCopy.ProxyLocalhostTip();
             _ = OsTrustUxCopy.FormatDecryptTrustFailed(
                 CertificateOsTrustResult.Fail(CertificateOsTrustKind.HomebrewMissing, ""));
             _ = OsTrustUxCopy.FormatDecryptTrustFailed(
@@ -431,18 +449,6 @@ public class InspectorCommandCoverageTests
         append.Invoke(null, [sb, "=== Pair ===", new Dictionary<string, string> { ["k"] = "v" }]);
         StringAssert.Contains(sb.ToString(), "k=v");
 
-        var body = (string)vmType.GetMethod("BuildSelectedBodyText", flags)!
-            .Invoke(null, [new SessionSnapshot
-            {
-                IsTranscoded = true,
-                RequestBodyText = "{\"a\":1}",
-                ResponseBodyText = "{\"ok\":true}",
-                UpstreamRequestBodyBytes = [1, 2],
-                GrpcFrames = [new GrpcFrameSnapshot { Compressed = false, Length = 2, HexPreview = "0102" }],
-            }])!;
-        StringAssert.Contains(body, "Client (JSON/REST)");
-        StringAssert.Contains(body, "Upstream gRPC frames");
-
         Assert.AreEqual("(no frames parsed)",
             (string)vmType.GetMethod("BuildSelectedFramesText", flags)!
                 .Invoke(null, [new SessionSnapshot { IsWebSocket = true }])!);
@@ -513,6 +519,18 @@ public class InspectorCommandCoverageTests
             vm.BindAddress = "127.0.0.1";
             Assert.AreEqual("127.0.0.1",
                 (string)vmType.GetMethod("FormatBindDisplay", flags)!.Invoke(vm, null)!);
+
+            var body = (string)vmType.GetMethod("BuildSelectedBodyText", flags)!
+                .Invoke(vm, [new SessionSnapshot
+                {
+                    IsTranscoded = true,
+                    RequestBodyText = "{\"a\":1}",
+                    ResponseBodyText = "{\"ok\":true}",
+                    UpstreamRequestBodyBytes = [1, 2],
+                    GrpcFrames = [new GrpcFrameSnapshot { Compressed = false, Length = 2, HexPreview = "0102" }],
+                }])!;
+            StringAssert.Contains(body, "Client (JSON/REST)");
+            StringAssert.Contains(body, "Upstream gRPC frames");
         }
         finally
         {

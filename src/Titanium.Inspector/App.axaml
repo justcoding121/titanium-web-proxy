@@ -76,6 +76,38 @@
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
+    <Style Selector="Button.paneCloseBtn">
+      <Setter Property="MinWidth" Value="36" />
+      <Setter Property="MinHeight" Value="36" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="FontSize" Value="16" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <!-- Far-right icon rail: compact toggle buttons (pressed = content open on that tool). -->
+    <Style Selector="StackPanel.iconRail">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.iconRailBtn">
+      <Setter Property="Width" Value="48" />
+      <Setter Property="Height" Value="48" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="4,2" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="Button.iconRailBtn:pointerover">
+      <Setter Property="Background" Value="{DynamicResource SystemControlHighlightListLowBrush}" />
+    </Style>
+    <Style Selector="Button.iconRailBtn.railActive">
+      <Setter Property="Background" Value="{DynamicResource SystemControlHighlightListMediumBrush}" />
+    </Style>
+    <Style Selector="Button.iconRailBtn Path">
+      <Setter Property="Width" Value="20" />
+      <Setter Property="Height" Value="20" />
+      <Setter Property="Stretch" Value="Uniform" />
+      <Setter Property="Fill" Value="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+    </Style>
     <Style Selector="DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
       <Setter Property="Fill" Value="{DynamicResource SessionGridSelectionBrush}" />
     </Style>

@@ -12,16 +12,20 @@ Product version is **`7.0.0.0`**; gates block beta/stable tags, not feature comm
 |-------|------|
 | `.NET / build` | Unit + E2E + Windows Headless/Visual/Plus Playwright |
 | `.NET / ui-portable` (Win/Linux/macOS) | Portable E2E-UI + Headless + Visual + Plus Playwright |
+| `.NET / cli-e2e` (Win/Linux/macOS) | CLI + Plus process E2E |
 | `RPS saturation / rps` | **`compare-spot`** on PRs into beta/stable |
 
 **Publish / release SHA gates** (after merge):
 
 | Event | RPS mode | Blocks |
 |-------|----------|--------|
-| Push to `beta` / `stable` (NuGet `publish`) | `compare-editions` via `.NET / rps-publish-gate` **and** `compare-spot` via `.NET / rps-peer-gate` (parallel; CoreÃ·YARP + MITMÃ·Reverse @ c=64) | NuGet publish |
-| Tag `v*` product release | `compare-product` (manual / release workflow) | GitHub Release product assets |
+| Push to `beta` / `stable` (NuGet `publish`) | `compare-editions` via `.NET / rps-publish-gate` **and** `compare-spot` via `.NET / rps-peer-gate` (parallel; Core÷YARP + MITM÷Reverse @ c=64); also requires `cli-e2e` | NuGet publish + product tag |
+| Tag / `release.yml` **stable** channel | Linux **`compare-product-smoke`** via `release.yml` `rps-product-smoke` | GitHub Release product assets |
+| Wiki-grade product matrix | Full `compare-product` (manual `workflow_dispatch` on `rps-saturation.yml`) | Does not block release |
 
-`rps-peer-gate` re-checks Core vs YARP on the merge SHA so a uniform Core slowdown cannot hide behind green edition ratios. It runs in parallel with editions, so publish wall clock stays ~max(editions â60m, spot â10â20m).
+**Advisory vs merge-blocking:** PR required checks use **`compare-spot`**. On push to `beta`/`stable`, edition + peer jobs gate **NuGet publish** via `rps-publish-gate` / `rps-peer-gate` — treat Mac edition ratio noise as a publish signal to investigate, not a substitute for the spot peer floor. Push no longer runs 3-OS `rps-saturation` editions (that duplicated Ubuntu publish-gate).
+
+`rps-peer-gate` re-checks Core vs YARP on the merge SHA so a uniform Core slowdown cannot hide behind green edition ratios. It runs in parallel with editions, so publish wall clock stays ~max(editions ≈60m, spot ≈10–20m).
 
 Do **not** run full `compare-product` on every develop PR. Thresholds change only with written rationale here + commit â never loosen gates silently to go green.
 
@@ -36,7 +40,8 @@ Do **not** run full `compare-product` on every develop PR. Thresholds change onl
 | Pre-wiki smoke (required) | after Core / harness changes | **`compare-product-smoke`** Linux **2** comparison-group shards (`repeats=1`) before full product | ~30–60 min |
 | Cross-version (Gate 2) | before `v7.0.0` tag | `compare-cross-version` + [`validate-cross-version.ps1`](validate-cross-version.ps1) | ~1–2h |
 | Release / wiki refresh | release SHA | `compare-product` (median of 3) on Win/Linux/mac with **`arm_shard` 1/3,2/3,3/3** (comparison groups); paste `-RunIds` union | ~2–2½h wall (360m hard cap) |
-| Unary gRPC | as needed | `compare-grpc` (TWP/YARP/nginx `grpc_pass`/HAProxy/Envoy) | ~20–40 min |
+| Unary gRPC | as needed | `compare-grpc` (H2↔H2 + H2→h2c; shard 1/2 + 2/2) | ~20–50 min |
+| WebSocket dual-TLS / RFC 8441 | as needed | `compare-ws-h1tls` / `compare-ws-h2` | ~15–40 min each |
 | Heavier wiki tables | as needed | `compare-bodies` (**2** shards) / `post` / `lossy` / `arch` (**3** shards) / `tls-cost` | 30–90 min each |
 
 Do **not** run full `compare-product` as a daily smoke. Prefer TWP÷YARP / TWP÷nginx / edition ratios over absolute RPS. Shards keep one Client×Origin row on one VM — do not compare absolute RPS across shards. Early-stop (`--stop-on-slo-fail`, default on) aborts an arm after the first SLO fail plus one peak confirmation step. Local shard check: [`validate-arm-shards.ps1`](validate-arm-shards.ps1).
@@ -95,6 +100,7 @@ Do not retune the harness to pass a gate — fix Core / CLI / Plus instead. Neve
 
 **Lock notes:**
 - **Editions → 0.50× (2026-09-10):** Beta `compare-editions` [34515100766](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34515100766) failed Win ratelimit **0.599** / resilience **0.679** (and Mac missing-arm / low-ratio noise) against prior 0.70–0.90 floors. Core peer remains **TWP÷YARP ≥ 0.75**; all edition CLI/Plus/feature ratios floor at **0.50** so runner heat on middleware arms is advisory-hard without drowning the YARP signal.
+- **Mac editions “missing arm” (2026-09-10):** Stable [34542460330](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34542460330) / beta [34537927049](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34537927049) Mac `compare-editions` failed `validate-edition-gates.ps1` with “missing arm data” even though CSV rows existed — Plus/feature arms often missed `meets_slo` at c=64 (p99 > 50ms). Root cause: Darwin RSS sampler forked `pgrep` every 200ms during the measure window (inflating p99 on 4-core Intel runners). Fixed: throttle Mac tree refresh to 2s; CLI host HTTP-settles after ready; validator reports **ratio** (or clear absent-CSV) instead of conflating SLO-fail with missing arms.
 - **Historical (local Win + Docker Linux, 2026-08-29):** Route/dialect locked at 0.90; Plus JWT 0.70; CIDR/WAF/rate-limit 0.80; cache/intercept 0.70; Plus-base/cache-hit 0.90; resilience 0.85; discovery/metrics 0.80; lb-leasttime 0.85 — superseded by the 0.50 edition floor above.
 
 **Pre-beta note:** Gate 1/2 matrix, editions, cross-version, and product are green on `develop` as of 2026-08-29. Remaining before tag: feature freeze on the release SHA, then cut `v7.0.4-beta` (heavier wiki tables optional).

@@ -65,9 +65,18 @@ internal static class ReverseProxySessionDispatch
             session.DestinationRequestLease = lb.Health.TrackRequest(destination.Id);
         }
 
+        var useDestinationHost = destination.UseDestinationHost;
         if (route.Transforms is { Count: > 0 })
         {
-            ApplyTransforms(options, route.Transforms, request, session);
+            useDestinationHost |= ApplyTransforms(options, route.Transforms, request, session);
+        }
+
+        // Opt-in only: preserve client Host for vhost origins. Cleartext destinations that
+        // declare bind-prefix identity (UseDestinationHost / RequestHostUseDestination) get a
+        // wire-only Host override so Unix HttpListener-style origins accept the request.
+        if (useDestinationHost && !destination.UseHttps)
+        {
+            request.SetUpstreamCleartextHostOverride(destination.Address, port);
         }
 
         return true;
@@ -129,7 +138,7 @@ internal static class ReverseProxySessionDispatch
             transparent.ForwardPort ?? 80);
     }
 
-    private static void ApplyTransforms(
+    private static bool ApplyTransforms(
         Titanium.Web.Proxy.Abstractions.ReverseProxyOptions options,
         IReadOnlyList<TransformConfig> transforms,
         Request request,
@@ -167,6 +176,8 @@ internal static class ReverseProxySessionDispatch
             session.ResponseHeaderTransformPlan =
                 new TransformResponseHeaderPlan(ctx.ResponseHeadersToSet, ctx.ResponseHeadersToRemove);
         }
+
+        return ctx.UseDestinationHost;
     }
 
     /// <summary>Applies staged response header transforms when present.</summary>

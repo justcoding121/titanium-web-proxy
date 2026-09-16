@@ -226,6 +226,39 @@ public class CaptureSettingsParityTests
     }
 
     [TestMethod]
+    public void ProxyLoopback_PersistsViaViewModel_DefaultOn()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-loopback-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var vm = new ViewModels.MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+
+            Assert.IsTrue(vm.ProxyLoopback);
+            Assert.IsTrue(settings.Current.ProxyLoopback);
+
+            vm.ProxyLoopback = false;
+            Assert.IsFalse(settings.Current.ProxyLoopback);
+
+            var loaded = new SettingsService(path);
+            Assert.IsFalse(loaded.Current.ProxyLoopback);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
     public async Task ResetSettings_RestoresFactoryDefaults_WithoutClearingSessions()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-reset-settings-" + Guid.NewGuid().ToString("N") + ".json");
@@ -398,18 +431,5 @@ public class CaptureSettingsParityTests
         {
             try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch { }
         }
-    }
-[TestMethod]
-    public void FormatRotateCaStatusHelpers_CoverChangedAndTrustedBranches()
-    {
-        var trusted = typeof(ViewModels.MainWindowViewModel).GetMethod("FormatRotateCaTrustedStatus",
-            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
-        var deferred = typeof(ViewModels.MainWindowViewModel).GetMethod("FormatRotateCaDeferredTrustStatus",
-            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
-
-        Assert.IsTrue(((string)trusted.Invoke(null, [true])!).Contains("cleared and trusted"));
-        Assert.IsTrue(((string)trusted.Invoke(null, [false])!).Contains("Root CA trusted"));
-        Assert.IsTrue(((string)deferred.Invoke(null, [true])!).Contains("Install root CA"));
-        Assert.IsTrue(((string)deferred.Invoke(null, [false])!).Contains("recreate completed"));
     }
 }

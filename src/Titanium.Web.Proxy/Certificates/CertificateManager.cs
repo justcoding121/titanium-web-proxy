@@ -703,7 +703,11 @@ public sealed class CertificateManager : IDisposable
         {
             using var store = new X509Store(storeName, storeLocation);
             store.Open(OpenFlags.ReadWrite);
-            var toRemove = store.Certificates
+            // FindBySubjectName is indexed CryptoAPI — do NOT enumerate store.Certificates
+            // (that loads every Root CA and routinely stalls tens of seconds on enterprise machines).
+            var candidates = store.Certificates.Find(
+                X509FindType.FindBySubjectName, expectedCn, validOnly: false);
+            var toRemove = candidates
                 .Cast<X509Certificate2>()
                 .Where(cert => IsSameCommonNameStoreCandidate(cert, expectedCn, keepThumbprint))
                 .ToList();
@@ -1392,59 +1396,197 @@ public sealed class CertificateManager : IDisposable
     /// </param>
     public void TrustRootCertificate(bool machineTrusted = false)
     {
-        // currentUser\personal
-        InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
-        // currentUser\Root — Windows may show a Trusted Root yes/no security dialog on Add.
-        var rootAdded = InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
+        var rootAdded = InstallRootIntoCertificateStores(machineTrusted);
         // Orphan Remove also prompts; only prune when we just installed this thumbprint so
         // re-trust / Install CA when already present does not open Root ReadWrite for cleanup.
         if (rootAdded)
-            RemoveOrphanedSameCommonNameCertificates(StoreLocation.CurrentUser, keepCurrentThumbprint: true);
+            PruneOrphanedSameCommonNameCertificates(machineTrusted, keepCurrentThumbprint: true);
+
+        ApplyUnixSslTrustAfterStoreInstall(machineTrusted);
+    }
+
+    /// <summary>
+    ///     Installs the root into Personal + Trusted Root stores only (Windows CryptUI Yes/No on Root Add).
+    ///     Does not prune orphans or run Unix Keychain/NSS trust — UI callers should finish those
+    ///     off the dispatcher after CryptUI returns so Avalonia does not show Not Responding.
+    /// </summary>
+    /// <returns>True when the user Root store entry was newly added.</returns>
+    public bool InstallRootIntoCertificateStores(bool machineTrusted = false)
+    {
+        InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
+        var rootAdded = InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
 
         if (machineTrusted)
         {
-            // localMachine\personal
             InstallCertificate(StoreName.My, StoreLocation.LocalMachine);
-            // localMachine\Root
-            var machineRootAdded = InstallCertificate(StoreName.Root, StoreLocation.LocalMachine);
-            if (machineRootAdded)
-                RemoveOrphanedSameCommonNameCertificates(StoreLocation.LocalMachine, keepCurrentThumbprint: true);
+            InstallCertificate(StoreName.Root, StoreLocation.LocalMachine);
         }
 
-        // On macOS/Linux, also trust for SSL in Keychain / NSS so browsers accept MITM.
-        if (!RunTime.IsWindows && RootCertificate != null)
+        if (rootAdded)
         {
-            // Unit/CI: never open Keychain auth, polkit, or NSS package install dialogs.
-            if (ShouldSuppressInteractiveRootStoreMutations)
-            {
-                LastOsTrustResult = CertificateOsTrustResult.Fail(
-                    CertificateOsTrustKind.Cancelled,
-                    "OS SSL trust skipped (interactive root-store UI suppressed)");
-                return;
-            }
+            LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted in current-user store");
+            return true;
+        }
 
-            LastOsTrustResult = Helpers.UnixCertificateTrust.TrustUserSsl(RootCertificate, RootCertificateName);
-            if (!machineTrusted)
-                return;
+        // CryptUI No / failure vs already present: presence check without treating cancel as Ok
+        // (Decrypt HTTPS used to leave the checkbox ticked and open a recovery dialog).
+        if (RootCertificate is not null &&
+            FindCertificates(StoreName.Root, StoreLocation.CurrentUser, RootCertificate.Thumbprint).Count > 0)
+        {
+            LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA already trusted in current-user store");
+            return false;
+        }
 
-            // machineTrusted: elevate into System.keychain / system CA store (admin prompt).
-            var machineOk = Helpers.UnixCertificateTrust.TrustMachineSsl(RootCertificate, RootCertificateName);
-            if (!machineOk)
-            {
-                LastOsTrustResult = CertificateOsTrustResult.Fail(
-                    CertificateOsTrustKind.Failed,
-                    "Machine-wide CA trust failed (user trust may already be applied)");
-            }
-            else if (LastOsTrustResult.Succeeded ||
-                     LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
-            {
-                LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted machine-wide");
-            }
+        LastOsTrustResult = CertificateOsTrustResult.Fail(
+            CertificateOsTrustKind.Cancelled,
+            "Root CA install cancelled");
+        return false;
+    }
 
+    /// <summary>
+    ///     Removes same-CN Root/My entries (may show Windows Root Delete CryptUI). Prefer a pumping
+    ///     UI thread when interactive.
+    /// </summary>
+    public void PruneOrphanedSameCommonNameCertificates(bool machineTrusted, bool keepCurrentThumbprint)
+    {
+        RemoveOrphanedSameCommonNameCertificates(StoreLocation.CurrentUser, keepCurrentThumbprint);
+        if (machineTrusted)
+            RemoveOrphanedSameCommonNameCertificates(StoreLocation.LocalMachine, keepCurrentThumbprint);
+    }
+
+    /// <summary>
+    ///     macOS/Linux SSL trust (Keychain / NSS). May show auth UI — keep on a pumping thread.
+    ///     No-op on Windows (Root store presence is trust).
+    /// </summary>
+    public void ApplyUnixSslTrustAfterStoreInstall(bool machineTrusted = false)
+    {
+        if (RunTime.IsWindows || RootCertificate == null)
+        {
+            LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted in current-user store");
             return;
         }
 
-        LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted in current-user store");
+        if (ShouldSuppressInteractiveRootStoreMutations)
+        {
+            LastOsTrustResult = CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Cancelled,
+                "OS SSL trust skipped (interactive root-store UI suppressed)");
+            return;
+        }
+
+        LastOsTrustResult = Helpers.UnixCertificateTrust.TrustUserSsl(RootCertificate, RootCertificateName);
+        if (!machineTrusted)
+            return;
+
+        var machineOk = Helpers.UnixCertificateTrust.TrustMachineSsl(RootCertificate, RootCertificateName);
+        if (!machineOk)
+        {
+            LastOsTrustResult = CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed,
+                "Machine-wide CA trust failed (user trust may already be applied)");
+        }
+        else if (LastOsTrustResult.Succeeded ||
+                 LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+        {
+            LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted machine-wide");
+        }
+    }
+
+    /// <summary>
+    ///     Read-only: Root-store thumbprints matching <see cref="RootCertificateName"/>.
+    ///     Uses FindBySubjectName (not a full store enumeration) so interactive Clear/reinstall
+    ///     does not sit on Busy for tens of seconds on large Windows Root stores.
+    /// </summary>
+    public System.Collections.Generic.IReadOnlyList<string> ListSameCommonNameRootThumbprints(
+        StoreLocation storeLocation, string? keepThumbprint = null)
+    {
+        var expectedCn = RootCertificateName;
+        var list = new System.Collections.Generic.List<string>();
+        try
+        {
+            using var store = new X509Store(StoreName.Root, storeLocation);
+            store.Open(OpenFlags.ReadOnly);
+            var candidates = store.Certificates.Find(
+                X509FindType.FindBySubjectName, expectedCn, validOnly: false);
+            foreach (var cert in candidates.Cast<X509Certificate2>())
+            {
+                try
+                {
+                    if (IsSameCommonNameStoreCandidate(cert, expectedCn, keepThumbprint))
+                        list.Add(cert.Thumbprint);
+                }
+                finally
+                {
+                    cert.Dispose();
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            OnException(new Exception(
+                $"Failed to list same-CN roots in Root\\{storeLocation}.", e));
+        }
+
+        return list;
+    }
+
+    /// <summary>
+    ///     Removes one certificate by thumbprint. Root Remove may show Windows CryptUI — UI thread.
+    /// </summary>
+    public bool RemoveCertificateByThumbprint(
+        StoreName storeName, StoreLocation storeLocation, string thumbprint)
+    {
+        if (string.IsNullOrWhiteSpace(thumbprint))
+            return false;
+
+        if (storeName == StoreName.Root && ShouldSuppressInteractiveRootStoreMutations)
+            return false;
+
+        try
+        {
+            using var store = new X509Store(storeName, storeLocation);
+            store.Open(OpenFlags.ReadWrite);
+            var found = store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, validOnly: false);
+            if (found.Count == 0)
+                return false;
+
+            foreach (var cert in found)
+            {
+                try { store.Remove(cert); }
+                finally { cert.Dispose(); }
+            }
+
+            return true;
+        }
+        catch (Exception e)
+        {
+            OnException(new Exception(
+                $"Failed to remove thumbprint '{thumbprint}' from {storeName}\\{storeLocation}.", e));
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     Personal (My) store same-CN cleanup only — typically no CryptUI. Safe off the UI thread.
+    /// </summary>
+    public void PruneOrphanedPersonalCertificates(StoreLocation storeLocation, bool keepCurrentThumbprint)
+    {
+        var expectedCn = RootCertificateName;
+        var keepThumb = keepCurrentThumbprint ? RootCertificate?.Thumbprint : null;
+        RemoveMatchingCertificates(StoreName.My, storeLocation, expectedCn, keepThumb);
+    }
+
+    /// <summary>
+    ///     macOS/Linux Keychain/NSS untrust. May show auth UI — keep on a pumping thread.
+    /// </summary>
+    public void ApplyUnixSslUntrust()
+    {
+        if (RunTime.IsWindows || RootCertificate == null)
+            return;
+        if (ShouldSuppressInteractiveRootStoreMutations)
+            return;
+
+        Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
     }
 
     /// <summary>
@@ -1528,10 +1670,9 @@ public sealed class CertificateManager : IDisposable
         if (certificate == null) return false;
 
         // currentUser\Personal + currentUser\Root (machine elevation is only needed for LocalMachine).
-        InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
-        var rootAdded = InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
-        if (rootAdded)
-            RemoveOrphanedSameCommonNameCertificates(StoreLocation.CurrentUser, keepCurrentThumbprint: true);
+        // Do not prune orphans here — full-store sweeps after CryptUI freeze Avalonia; Inspector
+        // finalizes My-store prune off the UI via FinalizeTrustAfterAdminInstall.
+        _ = InstallRootIntoCertificateStores(machineTrusted: false);
 
         // UAC / Keychain auth / polkit — never in unit/CI (hangs unattended runs).
         if (ShouldSuppressInteractiveRootStoreMutations)
@@ -1695,10 +1836,9 @@ public sealed class CertificateManager : IDisposable
             !ShouldSuppressInteractiveRootStoreMutations)
             Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
 
-        // Best-effort Firefox cleanup (policy + default profile nickname).
-        FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots();
-        if (RootCertificate != null)
-            FirefoxCertificateTrust.UntrustDefaultProfile(RootCertificateName);
+        // Firefox prefs / certutil must not run on the CryptUI UI thread — prefs.js locks and
+        // certutil against a live profile hang Avalonia as "(Not Responding)". Callers schedule
+        // FirefoxCertificateTrust.ClearRootTrustBestEffort off the UI after store remove.
     }
 
     /// <summary>
@@ -1713,7 +1853,6 @@ public sealed class CertificateManager : IDisposable
         if (!RunTime.IsWindows)
         {
             if (RootCertificate == null) return false;
-            FirefoxCertificateTrust.UntrustDefaultProfile(RootCertificateName);
             if (ShouldSuppressInteractiveRootStoreMutations)
                 return true;
             Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
@@ -1722,9 +1861,6 @@ public sealed class CertificateManager : IDisposable
                 ? Helpers.UnixCertificateTrust.UntrustMachineSsl(RootCertificate, RootCertificateName)
                 : true; // NOSONAR S1125
         }
-
-        FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots();
-        FirefoxCertificateTrust.UntrustDefaultProfile(RootCertificateName);
 
         // Elevated certutil -delstore shows UAC; skip when Root UI is suppressed.
         if (ShouldSuppressInteractiveRootStoreMutations)

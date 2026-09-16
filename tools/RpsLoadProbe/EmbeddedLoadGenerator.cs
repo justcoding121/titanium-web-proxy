@@ -58,6 +58,9 @@ internal static class EmbeddedLoadGenerator
     private static Task<LoadResult> RunAsync(LoadRequestOptions options, int concurrency,
         TimeSpan duration, bool collectLatency, CancellationToken cancellationToken)
     {
+        if (options.Workload.IsHttp2WebSocket)
+            return Http2WebSocketLoadGenerator.RunAsync(options, concurrency, duration, collectLatency,
+                cancellationToken);
         if (options.Workload.IsWebSocket)
             return WebSocketLoadGenerator.RunAsync(options, concurrency, duration, collectLatency, cancellationToken);
         if (options.Workload.IsGrpc)

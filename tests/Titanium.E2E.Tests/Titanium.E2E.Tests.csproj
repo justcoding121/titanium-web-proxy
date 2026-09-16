@@ -6,10 +6,11 @@
     <IsPackable>false</IsPackable>
     <RootNamespace>Titanium.E2E.Tests</RootNamespace>
     <!-- Headless Avalonia needs a desktop-compatible TFM; Windows runners are fine. -->
-    <NoWarn>$(NoWarn);CA1416</NoWarn>
+    <NoWarn>$(NoWarn);CA1416;ASPDEPR004;ASPDEPR008</NoWarn>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="MSTest.TestAdapter" Version="3.9.3" />
     <PackageReference Include="MSTest.TestFramework" Version="3.9.3" />
@@ -22,6 +23,7 @@
     <PackageReference Include="Microsoft.Playwright" Version="1.49.0" />
     <PackageReference Include="Microsoft.Playwright.MSTest" Version="1.49.0" />
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.6.1" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Titanium.Cli\Titanium.Cli.csproj" />
@@ -31,6 +33,9 @@
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy.Abstractions\Titanium.Web.Proxy.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy.Configuration\Titanium.Web.Proxy.Configuration.csproj" />
     <ProjectReference Include="..\..\tools\InspectorDesktopProbe\Shared\Titanium.Inspector.DesktopProbe.Shared.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Fixtures\GrpcTranscode\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
 

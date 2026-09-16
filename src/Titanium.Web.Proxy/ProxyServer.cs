@@ -215,8 +215,9 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     Origins that currently have an established QUIC connection, maintained by
-    ///     <see cref="QuicConnectionPool" /> and consulted by HTTP/3 route resolution so that no
-    ///     request is switched to HTTP/3 only to pay for the handshake itself.
+    ///     <see cref="QuicConnectionPool" />. Used to skip redundant warm-up and to retire idle
+    ///     sockets. Auto HTTP/3 routing uses <see cref="Http3OriginCapabilityCache" /> so a new
+    ///     CONNECT after Alt-Svc still selects origin HTTP/3.
     /// </summary>
     internal Http3.Http3WarmOriginRegistry Http3WarmOrigins { get; }
 
@@ -227,6 +228,20 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     internal Http2OriginCapabilityCache Http2OriginCapabilityCache { get; } =
         new(TimeSpan.FromMinutes(30));
+
+    /// <summary>
+    ///     In-flight HTTP/2 capability probes keyed like <see cref="Http2OriginCapabilityCache" />.
+    ///     Browsers open many parallel CONNECTs to the same host; without coalescing, each cold tunnel
+    ///     blocked browser <c>AuthenticateAsServer</c> on its own origin probe and Chrome aborted with EOF.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, Task<(bool Supported, bool LearnableFailure)>>
+        pendingHttp2CapabilityProbes = new();
+
+    /// <summary>
+    ///     Hosts learned to skip MITM decrypt after origin TLS handshake failures.
+    ///     See <see cref="EnableDecryptFailureBypass" />.
+    /// </summary>
+    internal Network.DecryptBypassCache DecryptFailureBypassCache { get; } = new();
 
     /// <summary>
     ///     Caches, per upstream host:port, whether the real origin supports HTTP/3 (QUIC), as discovered via
@@ -244,6 +259,7 @@ public partial class ProxyServer : IDisposable
     {
         Http2OriginCapabilityCache.TrimExpired();
         Http3OriginCapabilityCache.TrimExpired();
+        DecryptFailureBypassCache.TrimExpired();
 
         // Read the backing fields directly (not the HttpsSvcbResolver/SvcbDiscoveryCoordinator
         // properties) so this periodic sweep never itself instantiates either one when SVCB
@@ -333,6 +349,146 @@ public partial class ProxyServer : IDisposable
     public bool EnableHttp2 { get; set; } = true;
 
     /// <summary>
+    ///     When <see langword="true" />, the proxy learns hosts whose origin TLS handshake fails under
+    ///     MITM (non-ALPN <see cref="System.Security.Authentication.AuthenticationException" />, typically
+    ///     bot / TLS-fingerprint rejection) and tunnels subsequent CONNECTs without decrypt.
+    ///     Default <see langword="false" /> so library and RPS baselines are unchanged. Inspector enables
+    ///     this by default. Success-path cost when on is one dictionary lookup per CONNECT.
+    /// </summary>
+    public bool EnableDecryptFailureBypass { get; set; }
+
+    /// <summary>
+    ///     How long a learned decrypt-bypass entry remains valid. Default 30 minutes.
+    /// </summary>
+    public TimeSpan DecryptFailureBypassTtl
+    {
+        get => DecryptFailureBypassCache.Ttl;
+        set => DecryptFailureBypassCache.Ttl = value;
+    }
+
+    /// <summary>
+    ///     Maximum learned hosts retained (approximate LRU eviction). Default 256.
+    /// </summary>
+    public int DecryptFailureBypassMaxEntries
+    {
+        get => DecryptFailureBypassCache.MaxEntries;
+        set => DecryptFailureBypassCache.MaxEntries = value;
+    }
+
+    /// <summary>
+    ///     Origin TLS failure strikes required before a host is bypassed on later CONNECTs.
+    ///     Same-CONNECT opaque fallback after an awaited H2 probe failure marks bypass immediately.
+    ///     Default 2.
+    /// </summary>
+    public int DecryptFailureBypassThreshold
+    {
+        get => DecryptFailureBypassCache.StrikeThreshold;
+        set => DecryptFailureBypassCache.StrikeThreshold = value;
+    }
+
+    /// <summary>
+    ///     Raised when a host becomes actively bypassed (threshold reached or same-CONNECT mark).
+    ///     Handlers must not block; Inspector marshals to the UI thread.
+    /// </summary>
+    public event EventHandler<DecryptFailureBypassEntry>? DecryptFailureBypassChanged;
+
+    /// <summary>Snapshot of current learned decrypt-bypass entries (may include non-active strikes).</summary>
+    public IReadOnlyList<DecryptFailureBypassEntry> GetDecryptFailureBypassEntries() =>
+        DecryptFailureBypassCache.Snapshot();
+
+    /// <summary>Clears all learned decrypt-bypass entries.</summary>
+    public void ClearDecryptFailureBypass() => DecryptFailureBypassCache.Clear();
+
+    /// <summary>Removes one host from the learned decrypt-bypass cache.</summary>
+    public bool RemoveDecryptFailureBypass(string host) => DecryptFailureBypassCache.Remove(host);
+
+    /// <summary>
+    ///     Marks <paramref name="host"/> as actively bypassed (same as a forced learn after origin TLS failure).
+    ///     Raises <see cref="DecryptFailureBypassChanged"/> when bypass newly becomes active.
+    /// </summary>
+    public bool ForceDecryptFailureBypass(string host) =>
+        TryRecordDecryptFailure(host, error: null, forceBypass: true);
+
+    /// <summary>
+    ///     When <see cref="EnableDecryptFailureBypass" /> is on and <paramref name="host" /> is actively
+    ///     bypassed, returns <see langword="true" /> (decrypt should be skipped).
+    /// </summary>
+    public bool ShouldBypassDecryptForLearnedHost(string? host) =>
+        EnableDecryptFailureBypass && DecryptFailureBypassCache.ShouldBypass(host);
+
+    /// <summary>
+    ///     Records a learnable origin TLS failure when the feature is enabled. Returns whether bypass is active.
+    /// </summary>
+    internal bool TryRecordDecryptFailure(string? host, Exception? error, bool forceBypass = false)
+    {
+        if (!EnableDecryptFailureBypass || string.IsNullOrWhiteSpace(host))
+            return false;
+
+        if (!forceBypass && !Network.Tcp.DecryptFailureLearning.IsLearnableOriginTlsFailure(error))
+            return false;
+
+        var wasActive = DecryptFailureBypassCache.IsBypassActive(host);
+        bool isActive;
+        if (forceBypass)
+        {
+            DecryptFailureBypassCache.MarkBypassed(host);
+            isActive = true;
+        }
+        else
+        {
+            isActive = DecryptFailureBypassCache.RecordFailure(host);
+        }
+
+        if (isActive && !wasActive)
+            RaiseDecryptFailureBypassChanged(host);
+
+        return isActive;
+    }
+
+    /// <summary>
+    ///     Learns from MITM HTTPS 403/429 (bot/WAF after TLS succeeds).
+    ///     Document navigations activate bypass immediately; other requests use the shared strike threshold.
+    ///     Does not convert the current MITM CONNECT — a seamless meta-refresh (documents) or a later
+    ///     CONNECT tunnels with the browser fingerprint.
+    /// </summary>
+    /// <returns>Whether bypass is active after this call.</returns>
+    internal bool TryRecordDecryptFailureFromHttpStatus(string? host, int statusCode,
+        bool isSynthetic = false, bool forceImmediate = false)
+    {
+        if (!EnableDecryptFailureBypass || string.IsNullOrWhiteSpace(host) || isSynthetic)
+            return false;
+
+        if (statusCode is not (403 or 429))
+            return false;
+
+        var wasActive = DecryptFailureBypassCache.IsBypassActive(host);
+        bool isActive;
+        if (forceImmediate)
+        {
+            DecryptFailureBypassCache.MarkBypassed(host);
+            isActive = true;
+        }
+        else
+        {
+            isActive = DecryptFailureBypassCache.RecordFailure(host);
+        }
+
+        if (isActive && !wasActive)
+            RaiseDecryptFailureBypassChanged(host);
+
+        return isActive;
+    }
+
+    private void RaiseDecryptFailureBypassChanged(string host)
+    {
+        var snap = DecryptFailureBypassCache.Snapshot()
+            .FirstOrDefault(e => string.Equals(e.Host, Network.DecryptBypassCache.Normalize(host),
+                StringComparison.OrdinalIgnoreCase));
+        if (snap != null)
+            DecryptFailureBypassChanged?.Invoke(this, snap);
+    }
+
+    /// <summary>
     ///     When <see langword="true"/>, the proxy enables RFC 8441 WebSocket-over-HTTP/2:
     ///     <list type="bullet">
     ///       <item>
@@ -377,10 +533,10 @@ public partial class ProxyServer : IDisposable
     ///       <item>
     ///         <description>
     ///           With <see cref="UpstreamHttpProtocol.Auto" /> (default), a cached Alt-Svc / HTTPS/SVCB
-    ///           capability only arms background QUIC warm-up. Outbound HTTP/3 is used once that origin
-    ///           is warm; until then the request stays on HTTP/2 or HTTP/1.1. Forced
-    ///           <see cref="UpstreamHttpProtocol.Http3" /> skips warm-up gating and fails closed with no
-    ///           TCP fallback.
+    ///           capability selects outbound HTTP/3 on the next CONNECT or new HTTP/1.1 request.
+    ///           Background QUIC warm-up starts when the cache is filled so that handshake is often
+    ///           already done. An already-open H2↔H2 MITM session is not upgraded mid-connection.
+    ///           Forced <see cref="UpstreamHttpProtocol.Http3" /> fails closed with no TCP fallback.
     ///         </description>
     ///       </item>
     ///     </list>
@@ -1320,8 +1476,9 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     /// Returns <see langword="true"/> when the global interception gate is active for the given
     /// endpoint: any session event handler is subscribed, <see cref="EnableHttpInterception"/> is
-    /// set on the server, or the endpoint's own <see cref="ProxyEndPoint.EnableHttpInterception"/>
-    /// override is set.
+    /// set on the server, the endpoint's own <see cref="ProxyEndPoint.EnableHttpInterception"/>
+    /// override is set, or <see cref="EnableDecryptFailureBypass"/> is on (seamless document
+    /// meta-refresh requires <see cref="OnBeforeResponse"/>).
     /// </summary>
     internal bool NeedsHttpInterception(ProxyEndPoint? endPoint = null) =>
         (endPoint?.EnableHttpInterception ?? EnableHttpInterception)
@@ -1329,7 +1486,8 @@ public partial class ProxyServer : IDisposable
         || BeforeResponse != null
         || AfterResponse != null
         || OnRequestBodyWrite != null
-        || OnResponseBodyWrite != null;
+        || OnResponseBodyWrite != null
+        || EnableDecryptFailureBypass;
 
     /// <summary>
     /// Returns <see langword="true"/> when this specific request/stream should go through the

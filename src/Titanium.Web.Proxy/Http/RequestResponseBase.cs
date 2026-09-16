@@ -247,6 +247,12 @@ public abstract class RequestResponseBase
     internal bool Locked { get; set; }
 
     /// <summary>
+    ///     True when this message was produced by <c>SessionEventArgs.Respond</c> / Ok / GenericResponse
+    ///     (or equivalent), not received from the origin.
+    /// </summary>
+    internal bool IsSynthetic { get; set; }
+
+    /// <summary>
     ///     True when field names were already lowercased for HTTP/2 (bridge prepare).
     ///     EncodeHeaderBlock can skip the per-header ASCII scan under writeLock.
     /// </summary>
@@ -385,6 +391,7 @@ public abstract class RequestResponseBase
         IsBodySent = false;
         BodyIsWireEncoded = false;
         Locked = false;
+        IsSynthetic = false;
         KeepBody = false;
         HeaderNamesAreHttp2Normalized = false;
         OriginalHasBody = false;

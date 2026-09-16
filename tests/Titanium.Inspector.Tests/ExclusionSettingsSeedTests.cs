@@ -51,7 +51,7 @@ public class ExclusionSettingsSeedTests
             CollectionAssert.AreEqual(
                 MitmExclusionDefaults.TunnelOnlyPinningDomains,
                 service.Current.DecryptSkipHosts.ToArray());
-            Assert.IsTrue(service.Current.ProxyLoopback);
+            Assert.IsFalse(service.Current.ProxyLoopback);
             Assert.IsTrue(service.Current.ExclusionsInitialized);
         }
         finally
@@ -102,16 +102,5 @@ public class ExclusionSettingsSeedTests
             DecryptSkipHosts = ["c.com"],
         };
         Assert.AreEqual("Exclusions: 2 OS bypass, 1 tunnel-only", ExclusionPreview.ExclusionSummary(settings));
-    }
-
-    [TestMethod]
-    public void FormatForCurrentOs_ReturnsNonEmptyPreview()
-    {
-        var settings = new InspectorSettings();
-        SettingsService.ApplyFactoryExclusionDefaults(settings);
-        var (label, value) = ExclusionPreview.FormatForCurrentOs(settings);
-        Assert.IsFalse(string.IsNullOrWhiteSpace(label));
-        Assert.IsTrue(value.Contains("login.live.com", StringComparison.OrdinalIgnoreCase)
-                      || value.Contains("microsoftonline", StringComparison.OrdinalIgnoreCase));
     }
 }

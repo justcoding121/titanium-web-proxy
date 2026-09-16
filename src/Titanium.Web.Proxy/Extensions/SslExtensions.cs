@@ -19,6 +19,14 @@ namespace Titanium.Web.Proxy.Extensions
         internal static readonly List<SslApplicationProtocol> Http2ProtocolAsList =
             new() { SslApplicationProtocol.Http2 };
 
+        /// <summary>
+        ///     Safe browser-facing ALPN when HTTP/2 should be offered: always include HTTP/1.1 so a
+        ///     mismatched or partially-parsed ClientHello cannot fail AuthenticateAsServer with
+        ///     SEC_E_NO_APPLICATION_PROTOCOL (0x80090367).
+        /// </summary>
+        internal static readonly List<SslApplicationProtocol> Http2AndHttp11ProtocolAsList =
+            new() { SslApplicationProtocol.Http2, SslApplicationProtocol.Http11 };
+
         internal static string? GetServerName(this ClientHelloInfo clientHelloInfo)
         {
             if (clientHelloInfo.Extensions != null &&

@@ -9,7 +9,9 @@ internal static class ComparisonGroup
     private static readonly string[] WorkloadSuffixes =
     [
         "-body64k", "-body256k", "-post64k", "-lossy",
-        "-slow256k", "-early64k", "-duplex-h2", "-duplex-ws",
+        "-slow256k", "-early64k", "-duplex-h2",
+        // Longer WS suffixes first so ExtractWorkloadSuffix does not stop at "-duplex-ws".
+        "-duplex-ws-h1tls", "-duplex-ws-h2", "-duplex-ws",
         "-ka-tiny", "-nc-tiny", "-ka-256k"
     ];
 
@@ -23,7 +25,9 @@ internal static class ComparisonGroup
     {
         var suffix = ExtractWorkloadSuffix(armName);
 
-        // Unary gRPC wiki row (all five products) — arm names are *-grpc-*.
+        // Unary gRPC wiki rows — distinguish H2 TLS↔H2 TLS vs H2 TLS→h2c.
+        if (armName.Contains("-grpc-h2c", StringComparison.OrdinalIgnoreCase))
+            return "grpc-unary-h2c";
         if (armName.Contains("-grpc-", StringComparison.OrdinalIgnoreCase)
             || armName.StartsWith("grpc-", StringComparison.OrdinalIgnoreCase))
             return suffix == null ? "grpc-unary" : "grpc-unary" + suffix;

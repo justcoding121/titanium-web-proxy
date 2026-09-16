@@ -27,7 +27,7 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
     public RecordingSystemProxyController Proxy { get; } = new();
     public InterceptionService Interception { get; private set; } = null!;
 
-    public async Task StartAsync(bool visualSkia = false)
+    public async Task StartAsync(bool visualSkia = false, bool useAvaloniaDialogs = false)
     {
         // visualSkia retained for call-site clarity; session always uses Skia.
         _ = visualSkia;
@@ -47,9 +47,10 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
             var buffer = new SessionStreamBuffer(registry);
             var updates = new UpdateService(settings);
             Interception = new InterceptionService(Proxy) { UseInMemoryTrustState = true };
+            IInspectorDialogs dialogs = useAvaloniaDialogs ? new AvaloniaInspectorDialogs() : Dialogs;
             (ViewModel, Window) = InspectorAppFactory.CreateMainWindow(
                 new InspectorViewModelServices(
-                    buffer, registry, updates, settings, Interception, Dialogs, PathPicker));
+                    buffer, registry, updates, settings, Interception, dialogs, PathPicker));
             ViewModel.BindPort = 0;
             ViewModel.BindAddress = "127.0.0.1";
             ViewModel.AutoStartCapture = false;
@@ -86,7 +87,7 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
     /// Wait until <paramref name="condition"/> is true, pumping the Avalonia dispatcher each poll so
     /// async RelayCommand continuations (StatusText after file I/O) can run in headless.
     /// Condition is evaluated on the UI thread. Transient Headless <c>IFontManagerImpl</c> locator
-    /// races (seen on macOS CI during StatusText remeasure) are retried until timeout.
+    /// races (seen on macOS CI during StatusText re-measure) are retried until timeout.
     /// </summary>
     public async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout, int pollMs = 50)
     {
@@ -104,7 +105,7 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
             }
             catch (InvalidOperationException ex) when (IsTransientHeadlessFontRace(ex))
             {
-                // Keep polling; shared Headless session can briefly drop font services mid-remeasure.
+                // Keep polling; shared Headless session can briefly drop font services mid-re-measure.
             }
 
             await Task.Delay(pollMs);

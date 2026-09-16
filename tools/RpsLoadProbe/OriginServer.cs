@@ -280,7 +280,10 @@ internal sealed class OriginListenOptions
     public int ResponseBytes { get; init; } = WorkloadOptions.TinyJsonBytes;
     public int EarlyResponseAfterBytes { get; init; }
     public bool EnableWebSockets { get; init; }
-    /// <summary>Map unary Echo gRPC service on HTTPS/h2 (compare-grpc).</summary>
+    /// <summary>
+    /// Map unary Echo gRPC service. With HTTPS listen → H2 TLS origin; with HttpProtocols.Http2 on
+    /// cleartext listen → h2c origin (compare-grpc H2→h2c arms).
+    /// </summary>
     public bool EnableGrpc { get; init; }
     /// <summary>Optional Cache-Control response header (edition cache-hit arm).</summary>
     public string? CacheControl { get; init; }

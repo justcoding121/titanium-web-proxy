@@ -1,0 +1,46 @@
+{
+  "name": "release-lines",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/heads/beta", "refs/heads/stable"],
+      "exclude": []
+    }
+  },
+  "rules": [
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 1,
+        "dismiss_stale_reviews_on_push": true,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": true,
+        "allowed_merge_methods": ["merge", "squash", "rebase"]
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": true,
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          { "context": ".NET / build" },
+          { "context": ".NET / ui-portable (windows-latest)" },
+          { "context": ".NET / ui-portable (ubuntu-latest)" },
+          { "context": ".NET / ui-portable (macos-latest)" },
+          { "context": ".NET / cli-e2e (windows-latest)" },
+          { "context": ".NET / cli-e2e (ubuntu-latest)" },
+          { "context": ".NET / cli-e2e (macos-latest)" },
+          { "context": "RPS saturation / rps (ubuntu-latest)" },
+          { "context": "RPS saturation / rps (windows-latest)" },
+          { "context": "RPS saturation / rps (macos-15-intel)" }
+        ]
+      }
+    },
+    { "type": "non_fast_forward" },
+    { "type": "deletion" }
+  ],
+  "bypass_actors": []
+}

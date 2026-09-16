@@ -17,9 +17,85 @@ public class BreakpointViewModelTests
         vm.Enabled = true;
         Assert.IsTrue(vm.TryEnter(session, out var hit));
         Assert.IsNotNull(vm.Active);
+        Assert.IsTrue(vm.HasActiveHit);
+        StringAssert.Contains(vm.ActiveSummary, "Paused");
         Assert.AreSame(session, hit.Session);
         vm.Continue();
         Assert.IsNull(vm.Active);
+        Assert.IsFalse(vm.HasActiveHit);
+    }
+
+    [TestMethod]
+    public void TryEnter_RaisesPropertyChangedAndActiveHitChanged()
+    {
+        var vm = new BreakpointViewModel { Enabled = true, UrlFilter = "*" };
+        var props = new List<string?>();
+        var hitChanged = 0;
+        vm.PropertyChanged += (_, e) => props.Add(e.PropertyName);
+        vm.ActiveHitChanged += (_, _) => hitChanged++;
+
+        Assert.IsTrue(vm.TryEnter(new SessionSnapshot { Method = "POST", Url = "https://api.example/v1" }, out _));
+        CollectionAssert.Contains(props, nameof(BreakpointViewModel.Active));
+        CollectionAssert.Contains(props, nameof(BreakpointViewModel.HasActiveHit));
+        CollectionAssert.Contains(props, nameof(BreakpointViewModel.ActiveSummary));
+        Assert.AreEqual(1, hitChanged);
+
+        props.Clear();
+        vm.Continue();
+        CollectionAssert.Contains(props, nameof(BreakpointViewModel.Active));
+        Assert.AreEqual(2, hitChanged);
+    }
+
+    [TestMethod]
+    public async Task DisableWhilePaused_ContinuesActiveHit()
+    {
+        var vm = new BreakpointViewModel { Enabled = true, UrlFilter = "*" };
+        Assert.IsTrue(vm.TryEnter(new SessionSnapshot { Url = "https://paused/" }, out var hit));
+        var wait = hit.WaitAsync();
+
+        vm.Enabled = false;
+        Assert.IsFalse(vm.Enabled);
+        Assert.IsNull(vm.Active);
+        Assert.IsFalse(vm.HasActiveHit);
+        Assert.AreEqual(BreakpointAction.Continue, await wait.WaitAsync(TimeSpan.FromSeconds(2)));
+        StringAssert.Contains(vm.LastOverflowMessage, "Breakpoints disabled");
+    }
+
+    [TestMethod]
+    public void DisableWhileIdle_DoesNotRaiseHitChanged()
+    {
+        var vm = new BreakpointViewModel { Enabled = true };
+        var hits = 0;
+        vm.ActiveHitChanged += (_, _) => hits++;
+        vm.Enabled = false;
+        Assert.AreEqual(0, hits);
+        Assert.IsFalse(vm.ContinueIfPaused());
+    }
+
+    [TestMethod]
+    public async Task Stop_ContinuesPausedBreakpoint()
+    {
+        using var interception = new InterceptionService { UseInMemoryTrustState = true };
+        var vm = new BreakpointViewModel { Enabled = true };
+        interception.Breakpoints = vm;
+        Assert.IsTrue(vm.TryEnter(new SessionSnapshot { Url = "https://stop-proxy/" }, out var hit));
+        var wait = hit.WaitAsync();
+
+        interception.Stop();
+        Assert.IsNull(vm.Active);
+        Assert.AreEqual(BreakpointAction.Continue, await wait.WaitAsync(TimeSpan.FromSeconds(2)));
+        StringAssert.Contains(vm.LastOverflowMessage, "Proxy stopped");
+    }
+
+    [TestMethod]
+    public async Task ContinueIfPaused_ReleasesWaiter()
+    {
+        var vm = new BreakpointViewModel { Enabled = true };
+        Assert.IsTrue(vm.TryEnter(new SessionSnapshot { Url = "https://stop/" }, out var hit));
+        var wait = hit.WaitAsync();
+        Assert.IsTrue(vm.ContinueIfPaused("Proxy stopped — paused request continued"));
+        Assert.AreEqual(BreakpointAction.Continue, await wait.WaitAsync(TimeSpan.FromSeconds(2)));
+        StringAssert.Contains(vm.LastOverflowMessage, "Proxy stopped");
     }
 
     [TestMethod]
@@ -28,6 +104,7 @@ public class BreakpointViewModelTests
         var vm = new BreakpointViewModel { Enabled = true, UrlFilter = "*" };
         Assert.IsTrue(vm.TryEnter(new SessionSnapshot { Url = "https://a/" }, out _));
         Assert.IsFalse(vm.TryEnter(new SessionSnapshot { Url = "https://b/" }, out _));
+        StringAssert.Contains(vm.LastOverflowMessage, "extra breakpoint hit continued");
         vm.Abort();
         Assert.IsNull(vm.Active);
     }

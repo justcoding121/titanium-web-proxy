@@ -1871,7 +1871,7 @@ public class SonarNewCodeCoverageTests
 
         _ = typeof(FirefoxCertificateTrust)
             .GetMethod("TryClearFirefoxPoliciesJsonImportEnterpriseRoots", flags)!
-            .Invoke(null, null);
+            .Invoke(null, [false]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

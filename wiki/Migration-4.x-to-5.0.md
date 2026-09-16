@@ -264,8 +264,8 @@ only affect you if you've already opted in:
   logs.
 - **Auto-mode SVCB is background-only:** `EnableHttpsSvcbDnsDiscovery` no longer awaits DNS on
   CONNECT/request paths. A cache miss queues coalesced background discovery and the current
-  connection continues over H2/H1; later connections may upgrade once the capability cache is warm
-  (or after `Alt-Svc`).
+  connection continues over H2/H1; later CONNECTs / new HTTP/1.1 requests use HTTP/3 once the
+  capability cache is populated (or after `Alt-Svc`). Mid-connection H2↔H2 streams are not upgraded.
 - **`DnsServerEndPoint` default:** previously hard-coded to a public resolver / loopback in docs.
   Now defaults to the first usable OS-configured plain-UDP DNS server (best-effort; does not honor
   NRPT/DoH/VPN split-DNS). When none is discoverable, proactive discovery is skipped — there is no

@@ -39,6 +39,8 @@
           <TextBox x:Name="PathBox" AutomationProperties.AutomationId="LoggingPath" />
         </DockPanel>
       </StackPanel>
+      <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                 Text="Always-on UX timing (hang diagnosis) also writes to ux-trace.log in the same logs folder — no need to enable Debug." />
     </StackPanel>
   </DockPanel>
 </Window>

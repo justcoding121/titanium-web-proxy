@@ -23,6 +23,13 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     private string? _processName;
     private double? _durationMs;
     private double? _ttfbMs;
+    private BodyCaptureState _requestBodyCapture;
+    private BodyCaptureState _responseBodyCapture;
+    private long? _requestBodyOriginalSize;
+    private long? _responseBodyOriginalSize;
+    private bool _responseBodyStreamOpen;
+    private bool _isWebSocket;
+    private OpaqueTunnelReason _opaqueReason;
 
     public long Id { get; set; }
     public string Method { get; set; } = "GET";
@@ -34,11 +41,24 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     /// and must be reloaded via <see cref="SessionStore.EnsureBodiesLoadedAsync"/>.
     /// </summary>
     public bool BodiesOnDisk { get; set; }
-    public bool IsWebSocket { get; set; }
+    public bool IsWebSocket
+    {
+        get => _isWebSocket;
+        set => SetField(ref _isWebSocket, value);
+    }
     public bool IsGrpc { get; set; }
     public bool IsTranscoded { get; set; }
     public bool IsTunnel { get; set; }
-    public OpaqueTunnelReason OpaqueReason { get; set; }
+    public OpaqueTunnelReason OpaqueReason
+    {
+        get => _opaqueReason;
+        set
+        {
+            if (!SetField(ref _opaqueReason, value))
+                return;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(OpaqueReasonDisplay)));
+        }
+    }
 
     /// <summary>Client-facing HTTP method before gRPC-JSON rewrite (when <see cref="IsTranscoded"/>).</summary>
     public string? ClientMethod { get; set; }
@@ -145,6 +165,50 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     /// <summary>Grid display for <see cref="BodySize"/> (B / KB / MB).</summary>
     public string BodySizeDisplay => SessionDisplayFormat.FormatByteSize(BodySize);
 
+    /// <summary>How the request body was retained for Inspect.</summary>
+    public BodyCaptureState RequestBodyCapture
+    {
+        get => _requestBodyCapture;
+        set => SetField(ref _requestBodyCapture, value);
+    }
+
+    /// <summary>How the response body was retained for Inspect.</summary>
+    public BodyCaptureState ResponseBodyCapture
+    {
+        get => _responseBodyCapture;
+        set => SetField(ref _responseBodyCapture, value);
+    }
+
+    /// <summary>Original request body size when known (Content-Length or pre-truncate length).</summary>
+    public long? RequestBodyOriginalSize
+    {
+        get => _requestBodyOriginalSize;
+        set => SetField(ref _requestBodyOriginalSize, value);
+    }
+
+    /// <summary>Original response body size when known (Content-Length or pre-truncate / bytes-seen).</summary>
+    public long? ResponseBodyOriginalSize
+    {
+        get => _responseBodyOriginalSize;
+        set => SetField(ref _responseBodyOriginalSize, value);
+    }
+
+    /// <summary>True while an SSE-style response stream is still open.</summary>
+    public bool ResponseBodyStreamOpen
+    {
+        get => _responseBodyStreamOpen;
+        set => SetField(ref _responseBodyStreamOpen, value);
+    }
+
+    /// <summary>In-flight SSE tee buffer (not spilled; cleared when finalized).</summary>
+    internal MemoryStream? ResponseTeeStream { get; set; }
+
+    /// <summary>Bytes seen on the response wire while teeing (may exceed preview).</summary>
+    internal long ResponseBytesSeen { get; set; }
+
+    /// <summary>UTC ticks of last coalesced SessionUpdated from the tee.</summary>
+    internal long LastTeeUiUtcTicks { get; set; }
+
     public int ProcessId
     {
         get => _processId;
@@ -196,11 +260,12 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    private void SetField<T>(ref T field, T value, [CallerMemberName] string? name = null)
+    /// <returns>True when the value changed.</returns>
+    private bool SetField<T>(ref T field, T value, [CallerMemberName] string? name = null)
     {
         if (Equals(field, value))
         {
-            return;
+            return false;
         }
 
         field = value;
@@ -214,6 +279,8 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BodySizeDisplay)));
         }
+
+        return true;
     }
 }
 

@@ -40,7 +40,7 @@ public class MacSslTrustWaitUxTests
     {
         var intro = OsTrustUxCopy.ExcludedHostsIntro();
         Assert.IsFalse(intro.Contains("Windows, macOS, and Linux", StringComparison.Ordinal));
-        var loop = OsTrustUxCopy.ExcludedHostsLoopbackHint();
+        var loop = OsTrustUxCopy.ProxyLocalhostTip();
         Assert.IsFalse(loop.Contains("macOS/Linux", StringComparison.Ordinal));
     }
 
