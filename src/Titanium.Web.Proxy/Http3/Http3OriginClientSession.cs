@@ -164,7 +164,8 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
                 if (!receivedSettings)
                 {
                     if (frame.Type != Http3FrameType.Settings)
-                        return settings; // peer violation; leave connection for request paths to fail/retry
+                        throw new Http3ConnectionException(Http3ErrorCode.MissingSettings,
+                            "RFC 9114 §6.2.2: first frame on the control stream must be SETTINGS.");
                     settings = Http3Settings.Parse(frame.Payload.Span);
                     receivedSettings = true;
                     continue;
