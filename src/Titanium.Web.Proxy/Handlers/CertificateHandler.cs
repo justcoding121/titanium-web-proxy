@@ -32,9 +32,12 @@ public partial class ProxyServer
             // handshake path parked a worker even for Task.CompletedTask (probe loopback CA).
             // When not already completed, run on the ThreadPool so a user callback that posts back to
             // a captured SynchronizationContext cannot deadlock the handshake thread.
+            // Opt out of session cancellation explicitly (S8949): observing sessionArgs.CancellationToken
+            // here surfaces OperationCanceledException as a first-chance on keep-alive happy paths when
+            // the token races the handshake, and canceling mid-callback would leave SslStream half-done.
             var pending = ServerCertificateValidationCallback.InvokeAsync(this, args, logger);
             if (!pending.IsCompletedSuccessfully)
-                Task.Run(() => pending, sessionArgs.CancellationToken).GetAwaiter().GetResult();
+                Task.Run(() => pending, CancellationToken.None).GetAwaiter().GetResult();
             return args.IsValid;
         }
 
