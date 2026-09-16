@@ -105,8 +105,12 @@ internal static class Http3RequestStream
 
                 // Fast path gate is known before session construction when interception is off.
                 var interceptionOff = !server.NeedsHttpInterception(endPoint);
-                var normalizedPath = path ?? "/";
-                if (!normalizedPath.StartsWith('/'))
+                var isConnect = method == "CONNECT";
+                if (!isConnect && path is null)
+                    throw new Http3StreamException(Http3ErrorCode.MessageError,
+                        "RFC 9114 §4.3.1: non-CONNECT requests must include :path.");
+                var normalizedPath = isConnect ? string.Empty : path!;
+                if (!isConnect && !normalizedPath.StartsWith('/'))
                     normalizedPath = "/" + normalizedPath; // NOSONAR S1075 -- Slash is the HTTP origin-form delimiter, not a filesystem path.
 
                 // Session-less H3→origin reverse tiny-GET: no SessionEventArgs / HttpWebClient / Null stream.
