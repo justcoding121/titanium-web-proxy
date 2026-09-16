@@ -543,6 +543,18 @@ namespace Titanium.Web.Proxy.Http2
                     return;
                 }
 
+                // RFC 9113 §6.5 / §6.7 / §6.8: SETTINGS, PING, GOAWAY must use stream 0.
+                if ((type == Http2FrameType.Settings || type == Http2FrameType.Ping
+                     || type == Http2FrameType.GoAway) && streamId != 0)
+                {
+                    ReportException(logger, new ProxyHttpException(
+                        $"HTTP/2 protocol error: frame of type {type} received with non-zero stream id {streamId}.",
+                        null, null));
+                    await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                        connectionState.LastClientStreamId, Http2ErrorCode.ProtocolError, input));
+                    return;
+                }
+
                 // Compressed-relay DATA: resolve stream remap + state before reading payload so we can
                 // ReadExact straight into the rented wire buffer (skip the shared frame `buffer` copy).
                 if (type == Http2FrameType.Data)
