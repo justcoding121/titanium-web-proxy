@@ -83,21 +83,21 @@ public class QpackCoverageTests
     [TestMethod]
     public void Decode_DynamicIndexedWithoutEntry_Throws()
     {
-        // Indexed Header Field, dynamic (S=0): 10xxxxxx — index 0 with no context.
+        // Indexed Header Field, dynamic (S=0): 10xxxxxx — relative index 0 with Base=0 (RIC=0).
         var ex = Assert.ThrowsExactly<Http3ConnectionException>(
             () => QpackDecoder.Decode(new byte[] { 0x00, 0x00, 0x80 }));
         Assert.AreEqual(Http3ErrorCode.QpackDecompressionFailed, ex.ErrorCode);
-        StringAssert.Contains(ex.Message, "Dynamic table absolute index");
+        StringAssert.Contains(ex.Message, "Relative index");
     }
 
     [TestMethod]
     public void Decode_DynamicNameRefWithoutEntry_Throws()
     {
-        // Literal with dynamic name ref (S=0): 0100xxxx — index 0, then value "x".
+        // Literal with dynamic name ref (S=0): 0100xxxx — relative name index 0 with Base=0.
         var ex = Assert.ThrowsExactly<Http3ConnectionException>(
             () => QpackDecoder.Decode(new byte[] { 0x00, 0x00, 0x40, 0x01, (byte)'x' }));
         Assert.AreEqual(Http3ErrorCode.QpackDecompressionFailed, ex.ErrorCode);
-        StringAssert.Contains(ex.Message, "Dynamic table name index");
+        StringAssert.Contains(ex.Message, "Relative index");
     }
 
     [TestMethod]
@@ -223,8 +223,8 @@ public class QpackCoverageTests
         ctx.MaxTableCapacityFromPeer = TableCapacity;
         ctx.InboundDecoderTable.Insert("x-dyn", "value-1");
 
-        // Indexed dynamic (S=0): 10xxxxxx — absolute index 0.
-        var block = new byte[] { 0x00, 0x00, 0x80 };
+        // Encoded RIC=1 → wire 2; S=0 ΔBase=0 → Base=1; relative index 0 → abs 0.
+        var block = new byte[] { 0x02, 0x00, 0x80 };
         var headers = QpackDecoder.Decode(block, ctx);
         Assert.AreEqual(1, headers.Count);
         Assert.AreEqual("x-dyn", headers[0].Name);
@@ -235,20 +235,21 @@ public class QpackCoverageTests
     public async System.Threading.Tasks.Task Decode_DynamicNameRefAndPostBase_Succeed()
     {
         await using var ctx = new QpackContext(TableCapacity);
+        ctx.MaxTableCapacityFromPeer = TableCapacity;
         ctx.InboundDecoderTable.Insert("x-dyn", "seed");
 
-        // Literal with dynamic name ref (S=0): 0x40 | 0, value "new"
-        var literalDynName = new byte[] { 0x00, 0x00, 0x40, 0x03, (byte)'n', (byte)'e', (byte)'w' };
+        // Relative dynamic name ref with Base=1; value "new"
+        var literalDynName = new byte[] { 0x02, 0x00, 0x40, 0x03, (byte)'n', (byte)'e', (byte)'w' };
         var h1 = QpackDecoder.Decode(literalDynName, ctx);
         Assert.AreEqual(("x-dyn", "new"), h1[0]);
 
-        // Post-base indexed: 0x10 | 0
-        var postBase = new byte[] { 0x00, 0x00, 0x10 };
+        // Post-base with Base=0 (S=1, ΔBase=0): wire index 0 → abs 0
+        var postBase = new byte[] { 0x02, 0x80, 0x10 };
         var h2 = QpackDecoder.Decode(postBase, ctx);
         Assert.AreEqual(("x-dyn", "seed"), h2[0]);
 
-        // Post-base literal name ref: 0x00 | 0, value "pb"
-        var postBaseLit = new byte[] { 0x00, 0x00, 0x00, 0x02, (byte)'p', (byte)'b' };
+        // Post-base literal name ref with Base=0; value "pb"
+        var postBaseLit = new byte[] { 0x02, 0x80, 0x00, 0x02, (byte)'p', (byte)'b' };
         var h3 = QpackDecoder.Decode(postBaseLit, ctx);
         Assert.AreEqual(("x-dyn", "pb"), h3[0]);
     }
