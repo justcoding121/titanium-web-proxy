@@ -330,7 +330,7 @@ public sealed class UpdateService
             return UpdateOfferKind.Downgrade;
         }
 
-        // Same core version: Stable over beta is a channel switch (or upgrade-ish promotion).
+        // Same semver: changing Stable↔Beta is a channel switch, not an upgrade/downgrade.
         return UpdateOfferKind.ChannelSwitch;
     }
 

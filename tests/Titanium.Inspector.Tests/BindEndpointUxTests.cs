@@ -274,7 +274,7 @@ public class BindEndpointUxTests
                 new UpdateService(settings),
                 settings,
                 interception);
-            var errors = (INotifyDataErrorInfo)vm;
+            var errors = vm;
 
             vm.BindPortText = "";
             Assert.IsFalse(vm.HasErrors);

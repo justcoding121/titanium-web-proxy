@@ -1423,12 +1423,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         return Array.Empty<object>();
     }
 
-    private IEnumerable BindPortErrors() =>
+    private object[] BindPortErrors() =>
         TryParseBindPort(_bindPortText, out _)
             ? Array.Empty<object>()
             : new object[] { InvalidBindPortMessage(_bindPortText) };
 
-    private IEnumerable AutoResponderStatusErrors() =>
+    private object[] AutoResponderStatusErrors() =>
         TryParseHttpStatus(_autoResponderStatusText, out _)
             ? Array.Empty<object>()
             : new object[] { InvalidHttpStatusMessage(_autoResponderStatusText) };
@@ -3017,25 +3017,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         _startBusy = true;
         try
         {
-            IPAddress address;
-            try
+            if (!TryResolveStartBind(out var address, out var port))
             {
-                address = ParseBindAddress(BindAddress);
-            }
-            catch (Exception ex) when (ex is FormatException or ArgumentException)
-            {
-                SetOutcomeStatus(InvalidBindAddressMessage(BindAddress), StatusSeverity.Error, toastImportant: true);
-                return;
-            }
-
-            int port;
-            try
-            {
-                port = ParseBindPort(BindPortText);
-            }
-            catch (FormatException)
-            {
-                SetOutcomeStatus(InvalidBindPortMessage(BindPortText), StatusSeverity.Error, toastImportant: true);
                 return;
             }
 
@@ -3102,6 +3085,34 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         {
             _startBusy = false;
         }
+    }
+
+    /// <summary>Parses bind address/port for start; shows error status and returns false on invalid input.</summary>
+    private bool TryResolveStartBind(out IPAddress address, out int port)
+    {
+        address = IPAddress.Any;
+        port = 0;
+        try
+        {
+            address = ParseBindAddress(BindAddress);
+        }
+        catch (Exception ex) when (ex is FormatException or ArgumentException)
+        {
+            SetOutcomeStatus(InvalidBindAddressMessage(BindAddress), StatusSeverity.Error, toastImportant: true);
+            return false;
+        }
+
+        try
+        {
+            port = ParseBindPort(BindPortText);
+        }
+        catch (FormatException)
+        {
+            SetOutcomeStatus(InvalidBindPortMessage(BindPortText), StatusSeverity.Error, toastImportant: true);
+            return false;
+        }
+
+        return true;
     }
 
     private void RefreshEndpointAndBindUi()
