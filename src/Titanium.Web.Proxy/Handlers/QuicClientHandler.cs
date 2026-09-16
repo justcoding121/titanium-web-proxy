@@ -141,7 +141,7 @@ public partial class ProxyServer
             destPort = 443;
         }
 
-        using var connectionCts = new CancellationTokenSource();
+        var connectionCts = new CancellationTokenSource();
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, connectionCts.Token);
 
         var eventArgs = new BeforeQuicAuthenticateEventArgs(
@@ -220,6 +220,7 @@ public partial class ProxyServer
 
             if (!endPoint.PendingQuicAuthArgs.TryGetValue(connection, out var authArgs))
             {
+                // Options callback never completed or auth args were lost — close without CTS ownership.
                 _ = connection.CloseAsync(0x100, cancellationToken).AsTask();
                 continue;
             }
@@ -240,6 +241,7 @@ public partial class ProxyServer
     {
         await using (connection)
         {
+            using var connectionCts = authArgs.TaskCancellationSource;
             try
             {
                 await Http3Connection.RunAsync(
