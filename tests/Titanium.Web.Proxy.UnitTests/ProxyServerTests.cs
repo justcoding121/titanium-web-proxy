@@ -132,6 +132,7 @@ namespace Titanium.Web.Proxy.UnitTests
             Assert.AreEqual(ProxyProfile.Balanced, proxy.Profile);
             Assert.AreEqual(PolicyMode.Enforce, proxy.PolicyModes[PolicyFamily.BodyBudget]);
             Assert.AreEqual(PolicyMode.Enforce, proxy.PolicyModes[PolicyFamily.AdmissionControl]);
+            Assert.AreEqual(PolicyMode.Disabled, proxy.PolicyModes[PolicyFamily.Http2RelayValidation]);
             Assert.IsFalse(proxy.PolicyModes.AllowAmbiguousFraming);
             Assert.IsFalse(proxy.BlockPrivateNetworkDestinations);
         }
@@ -158,6 +159,7 @@ namespace Titanium.Web.Proxy.UnitTests
             proxy.Profile = ProxyProfile.Balanced;
 
             Assert.AreEqual(PolicyMode.Enforce, proxy.PolicyModes[PolicyFamily.AdmissionControl]);
+            Assert.AreEqual(PolicyMode.Disabled, proxy.PolicyModes[PolicyFamily.Http2RelayValidation]);
             Assert.IsFalse(proxy.BlockPrivateNetworkDestinations);
         }
 

@@ -1131,7 +1131,10 @@ public partial class ProxyServer : IDisposable
     ///     "runtime switch to drop to Observe without redeploying" the plan requires; see
     ///     <see cref="ProxyPolicyModes.WithAllObservedExceptDisabled" /> for the one-call way to do that.
     ///     <para>
-    ///         Defaults to <see cref="ProxyPolicyModes.AllEnforce" />, matching <see cref="ProxyProfile.Balanced" />.
+    ///         Defaults to <see cref="ProxyProfile.Balanced" />'s modes (resource families enforced,
+    ///         <see cref="PolicyFamily.Http2RelayValidation" /> disabled so compressed H2 relay stays
+    ///         the verbatim-HPACK fast path). <see cref="ProxyPolicyModes.AllEnforce" /> additionally
+    ///         enforces relay validation and is what <see cref="ProxyProfile.PublicFacing" /> applies.
     ///         Assigning <see cref="Profile" /> also replaces this value with that profile's bundle;
     ///         assign <see cref="PolicyModes" /> afterward to deviate from the selected profile's modes
     ///         without changing anything else the profile set.
@@ -1143,7 +1146,7 @@ public partial class ProxyServer : IDisposable
         set => policyModes = value ?? throw new ArgumentNullException(nameof(value));
     }
 
-    private ProxyPolicyModes policyModes = ProxyPolicyModes.AllEnforce;
+    private ProxyPolicyModes policyModes = ProxyProfileSettings.Balanced.PolicyModes;
 
     /// <summary>
     ///     The last profile applied via this property's setter, defaulting to
