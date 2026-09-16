@@ -33,7 +33,7 @@ public partial class ProxyServer
             // a captured SynchronizationContext cannot deadlock the handshake thread.
             var pending = ServerCertificateValidationCallback.InvokeAsync(this, args, logger);
             if (!pending.IsCompletedSuccessfully)
-                Task.Run(() => pending.AsTask()).GetAwaiter().GetResult();
+                Task.Run(() => pending).GetAwaiter().GetResult();
             return args.IsValid;
         }
 
