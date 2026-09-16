@@ -1,5 +1,3 @@
-# Security considerations
-
 > For operators and .NET library users deploying Titanium — what protections apply, and when they do not.
 
 The 5.0 hardening pass (see the [migration guide](Migration-4.x-to-5.0) for the full list of behavior
