@@ -48,6 +48,7 @@ public class ExceptionControlFlowTests
         using var client = testSuite.GetClient(proxy);
 
         var firstChance = 0;
+        var captured = new System.Collections.Concurrent.ConcurrentBag<string>();
         EventHandler<FirstChanceExceptionEventArgs> handler = (_, e) =>
         {
             // Ignore AppDomain/test-infrastructure noise; count proxy-pipeline throws.
@@ -58,12 +59,16 @@ public class ExceptionControlFlowTests
                 return;
 
             // Happy Eyeballs intentionally cancels losing connect attempts
-            // (TcpConnectionFactory.CreateServerConnection). That surfaces as a first-chance
-            // OperationCanceledException even on a fully successful keep-alive request.
-            if (e.Exception is OperationCanceledException
+            // (TcpConnectionFactory.CreateServerConnection / CreateServerConnectionAsync).
+            // On Unix this surfaces as OperationCanceledException; on Windows it may also
+            // surface as SocketException (WSAEINTR / WSAENOTSOCK) when the losing socket
+            // is cancelled mid-connect. Both are benign and must be excluded.
+            if ((e.Exception is OperationCanceledException || e.Exception is System.Net.Sockets.SocketException)
                 && stack.Contains("TcpConnectionFactory", StringComparison.Ordinal))
                 return;
 
+            var detail = $"{typeName}: {e.Exception.Message}\nStack:\n{stack}";
+            captured.Add(detail);
             Interlocked.Increment(ref firstChance);
         };
 
@@ -82,7 +87,8 @@ public class ExceptionControlFlowTests
         }
 
         Assert.AreEqual(0, firstChance,
-            "successful keep-alive traffic must not throw first-chance exceptions in the proxy pipeline");
+            "successful keep-alive traffic must not throw first-chance exceptions in the proxy pipeline.\n"
+            + "Captured exceptions:\n" + string.Join("\n---\n", captured));
     }
 
     [TestMethod]
