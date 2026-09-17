@@ -1067,9 +1067,14 @@ public sealed partial class MainWindowViewModel
             return true;
 
         // Stay on UI sync context - ResolveTerminalTrustFailureAsync shows dialogs.
+        // Use CancellationToken.None here: VerifyOsUserSslTrust is a quick Root-store lookup and
+        // must not be aborted by the status-revert timer (which fires on a background thread and
+        // cancels StatusCancelToken). The _decryptEnableGeneration counter in EnableDecryptHttpsAsync
+        // already handles superseded enable requests, so token-level cancellation is redundant and
+        // causes a TaskCanceledException race on macOS when the guard-status 3s revert fires.
         var trusted = await RunOffUiAsync(
             () => _interception.VerifyOsUserSslTrust(),
-            StatusCancelToken);
+            CancellationToken.None);
         if (trusted)
         {
             _interception.ScheduleFirefoxEnterpriseRootsBestEffort();
