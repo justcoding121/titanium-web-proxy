@@ -13,6 +13,7 @@ using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
 [TestClass]
+[DoNotParallelize] // Exercises connection-pool internals with first-chance exception checks; isolate
 public class ConnectionPoolTests
 {
     [TestMethod]
