@@ -38,12 +38,14 @@ public partial class TrustDecisionTableTests
         harness.Dialogs.RotateRootCaResult = true;
         harness.Dialogs.InstallRootCaResult = false;
 
+        // IsRootTrusted can flip true while _trustCommandBusy is still held — require idle.
         await ExecuteUntilAsync(
             harness.Vm.RotateCaCommand,
             () => harness.Interception.RootCertificate is not null
                   && !string.Equals(before, harness.Interception.RootCertificate.Thumbprint,
                       StringComparison.OrdinalIgnoreCase)
-                  && harness.Interception.IsRootTrusted);
+                  && harness.Interception.IsRootTrusted
+                  && TrustGateIdle(harness.Vm));
 
         Assert.AreEqual(1, harness.Dialogs.RotateRootCaCalls);
         Assert.AreEqual(0, harness.Dialogs.InstallRootCaCalls);
@@ -58,9 +60,13 @@ public partial class TrustDecisionTableTests
         await using var harness = await TrustHarness.CreateAsync();
         harness.Dialogs.RotateRootCaResult = true;
 
+        // First rotate must fully leave the trust gate. Observing IsRootTrusted alone races
+        // EndTrustCommand — a follow-up Execute is rejected with "already in progress".
         await ExecuteUntilAsync(
             harness.Vm.RotateCaCommand,
-            () => harness.Dialogs.RotateRootCaCalls >= 1 && harness.Interception.IsRootTrusted);
+            () => harness.Dialogs.RotateRootCaCalls >= 1
+                  && harness.Interception.IsRootTrusted
+                  && TrustGateIdle(harness.Vm));
         var mid = harness.Interception.RootCertificate?.Thumbprint;
         Assert.IsFalse(string.IsNullOrEmpty(mid));
 
@@ -72,12 +78,14 @@ public partial class TrustDecisionTableTests
                     return false;
                 var thumb = harness.Interception.RootCertificate?.Thumbprint;
                 return !string.IsNullOrEmpty(thumb)
-                       && !string.Equals(mid, thumb, StringComparison.OrdinalIgnoreCase);
+                       && !string.Equals(mid, thumb, StringComparison.OrdinalIgnoreCase)
+                       && TrustGateIdle(harness.Vm);
             });
 
-        Assert.IsTrue(harness.Dialogs.RotateRootCaCalls >= 2, $"calls={harness.Dialogs.RotateRootCaCalls} status={harness.Vm.StatusText}");
-        await WaitUntil(() => !harness.Vm.IsStatusBusy && harness.Interception.RootCertificate is not null, 15000);
+        Assert.IsTrue(harness.Dialogs.RotateRootCaCalls >= 2,
+            $"calls={harness.Dialogs.RotateRootCaCalls} status={harness.Vm.StatusText}");
         Assert.IsNotNull(harness.Interception.RootCertificate);
+        Assert.IsTrue(TrustGateIdle(harness.Vm), harness.Vm.StatusText);
     }
 
     [TestMethod]
@@ -86,8 +94,9 @@ public partial class TrustDecisionTableTests
     {
         await using var harness = await TrustHarness.CreateAsync();
         harness.Dialogs.InstallRootCaResult = true;
-        await ExecuteUntilAsync(harness.Vm.InstallCaCommand, () => harness.Interception.IsRootTrusted);
-        await WaitUntil(() => !harness.Vm.IsStatusBusy, 10000);
+        await ExecuteUntilAsync(
+            harness.Vm.InstallCaCommand,
+            () => harness.Interception.IsRootTrusted && TrustGateIdle(harness.Vm));
         harness.Dialogs.RemoveRootCaResult = false;
 
         await ExecuteUntilAsync(
@@ -106,8 +115,9 @@ public partial class TrustDecisionTableTests
     {
         await using var harness = await TrustHarness.CreateAsync();
         harness.Dialogs.InstallRootCaResult = true;
-        await ExecuteUntilAsync(harness.Vm.InstallCaCommand, () => harness.Interception.IsRootTrusted);
-        await WaitUntil(() => !harness.Vm.IsStatusBusy, 10000);
+        await ExecuteUntilAsync(
+            harness.Vm.InstallCaCommand,
+            () => harness.Interception.IsRootTrusted && TrustGateIdle(harness.Vm));
         Assert.IsTrue(harness.Interception.IsRootTrusted);
         harness.Vm.DecryptHttps = true;
         Assert.IsTrue(harness.Vm.DecryptHttps, harness.Vm.StatusText);
@@ -161,12 +171,14 @@ public partial class TrustDecisionTableTests
         harness.Dialogs.RotateRootCaResult = true;
 
         harness.Vm.RotateCaCommand.Execute(null);
-        await Task.Delay(20);
+        // Fixed Delay(20) missed busy on fast runners and let decrypt enable race through.
+        await WaitUntil(() => harness.Vm.IsStatusBusy, 5000);
         harness.Vm.DecryptHttps = true;
-        await Task.Delay(200);
 
         Assert.IsFalse(harness.Vm.DecryptHttps);
-        await WaitUntil(() => harness.Dialogs.RotateRootCaCalls >= 1, 15000);
+        await WaitUntil(
+            () => harness.Dialogs.RotateRootCaCalls >= 1 && TrustGateIdle(harness.Vm),
+            20000);
     }
 
     [TestMethod]
@@ -178,12 +190,18 @@ public partial class TrustDecisionTableTests
         if (!harness.Interception.IsRootTrusted)
         {
             harness.Dialogs.InstallRootCaResult = true;
-            await ExecuteUntilAsync(harness.Vm.InstallCaCommand, () => harness.Interception.IsRootTrusted);
+            await ExecuteUntilAsync(
+                harness.Vm.InstallCaCommand,
+                () => harness.Interception.IsRootTrusted && TrustGateIdle(harness.Vm));
+        }
+        else
+        {
+            await WaitUntil(() => TrustGateIdle(harness.Vm), 10000);
         }
 
         await ExecuteUntilAsync(
             harness.Vm.TrustFirefoxCaCommand,
-            () => !harness.Vm.IsStatusBusy || harness.Vm.StatusText.Length > 0);
+            () => TrustGateIdle(harness.Vm) && harness.Vm.StatusText.Length > 0);
 
         StringAssert.DoesNotMatch(
             harness.Vm.StatusText,
@@ -199,14 +217,15 @@ public partial class TrustDecisionTableTests
     {
         await using var harness = await TrustHarness.CreateAsync();
         harness.Dialogs.InstallRootCaResult = true;
-        await ExecuteUntilAsync(harness.Vm.InstallCaCommand, () => harness.Interception.IsRootTrusted);
-        await WaitUntil(() => !harness.Vm.IsStatusBusy, 10000);
+        await ExecuteUntilAsync(
+            harness.Vm.InstallCaCommand,
+            () => harness.Interception.IsRootTrusted && TrustGateIdle(harness.Vm));
 
         // Second Install when already trusted → showTrustedSuccess arm (no CryptUI).
         await ExecuteUntilAsync(
             harness.Vm.InstallCaCommand,
             () => harness.Vm.StatusText.Contains("trusted", StringComparison.OrdinalIgnoreCase)
-                  || !harness.Vm.IsStatusBusy);
+                  && TrustGateIdle(harness.Vm));
         Assert.IsTrue(harness.Interception.IsRootTrusted);
 
         harness.Interception.UntrustRootCertificate(false);
@@ -254,7 +273,9 @@ public partial class TrustDecisionTableTests
             .Invoke(harness.Vm, [gen])!;
         Assert.IsFalse(harness.Vm.DecryptHttps);
 
-        await WaitUntil(() => harness.Dialogs.RotateRootCaCalls >= 1 && !harness.Vm.IsStatusBusy, 20000);
+        await WaitUntil(
+            () => harness.Dialogs.RotateRootCaCalls >= 1 && TrustGateIdle(harness.Vm),
+            20000);
 
         Assert.IsTrue(harness.Interception.InstallRootCertificate(false));
         Assert.IsTrue(await (Task<bool>)typeof(MainWindowViewModel)
@@ -267,6 +288,14 @@ public partial class TrustDecisionTableTests
         Assert.IsFalse(string.IsNullOrWhiteSpace((string)format.Invoke(null, [1, 1])!));
         Assert.IsFalse(string.IsNullOrWhiteSpace((string)format.Invoke(null, [2, 1])!));
     }
+
+    /// <summary>
+    /// Trust commands set Busy status before clearing <c>_trustCommandBusy</c> outcomes.
+    /// Follow-up Executes must wait until the UI is idle and not showing the in-progress guard.
+    /// </summary>
+    private static bool TrustGateIdle(MainWindowViewModel vm) =>
+        !vm.IsStatusBusy
+        && !vm.StatusText.Contains("already in progress", StringComparison.OrdinalIgnoreCase);
 
     private static async Task ExecuteUntilAsync(ICommand command, Func<bool> done, int timeoutMs = 20000)
     {
