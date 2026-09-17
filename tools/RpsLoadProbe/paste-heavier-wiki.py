@@ -12,9 +12,9 @@ RunIds = Union[int, List[int]]
 
 ROOT = Path("tools/RpsLoadProbe/results/gha-dl")
 WIKI = Path("wiki/Performance.md")
-HEAD = "9a2b3a1e"
+HEAD = "8bfa7852"
 RUNS = {
-    # Linux H3 HAProxy/Envoy peers remasured @ a495a9ae (2026-09-11); Windows still 9a2b3a1e wiki-grade batch.
+    # Wiki-grade batch @ 8bfa7852 (2026-09-16); prior Linux H3 HAProxy/Envoy peers re-measured @ a495a9ae.
     "saturation": [34441539402, 34441541578],
     "bodies": [34557778171, 34557780393, 34441570199, 34441572485, 34441574457, 34441576323],
     "post": [34557782264, 34441591377, 34441593359],
@@ -485,9 +485,9 @@ def main() -> None:
     block = text[a:b]
     w = block.find("**Windows**")
     l = block.find("**Linux**")
-    block = replace_table_at(block, block.find("| Arm | Generator | Sustain", w), sat_block_a(win["saturation"]))
+    block = replace_table_at(block, block.find("| Arm | Generator | RPS", w), sat_block_a(win["saturation"]))
     l = block.find("**Linux**")
-    block = replace_table_at(block, block.find("| Arm | Generator | Sustain", l), sat_block_a(lin["saturation"]))
+    block = replace_table_at(block, block.find("| Arm | Generator | RPS", l), sat_block_a(lin["saturation"]))
     text = text[:a] + block + text[b:]
 
     # Block B
@@ -510,7 +510,12 @@ def main() -> None:
 
     # Block C
     c = text.find("#### Block C — H3→H1")
-    how = text.find("**How to read the tables**")
+    # End of saturation section (do not use early "## How to read the tables" TOC heading)
+    how = text.find("\n## Windows — Titanium", c)
+    if how < 0:
+        how = text.find("\n## Windows", c)
+    if how < 0:
+        raise SystemExit("missing end of saturation Block C")
     block = text[c:how]
     w = block.find("**Windows**")
     block = replace_table_at(
@@ -549,6 +554,12 @@ def main() -> None:
         tbl = i + m.start() + 1
         # Replace Median / Userspace header line(s) between heading and table
         chunk = text[i:tbl]
+        # Drop stale peer-omission notes; new_hdr may re-add a single copy.
+        chunk = re.sub(
+            r"(?:\*Not possible:\* \*\*HAProxy\*\* and \*\*Envoy\*\* columns are omitted[^\n]*\n)+",
+            "",
+            chunk,
+        )
         chunk2 = re.sub(
             r"(Median of \*\*3\*\*[^\n]*\n|Userspace[^\n]*\n(?:[^\n]*\n)?)",
             new_hdr if new_hdr.endswith("\n") else new_hdr + "\n",
@@ -591,8 +602,8 @@ def main() -> None:
     )
 
     text = re.sub(
-        r"Median of \*\*3\*\* repeats on matched 4 vCPU / 16 GiB runners @ `[^`]+` \(\[[0-9]+\]\([^)]+\)\) \(`compare-arch`\)\.",
-        f"Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `{HEAD}` ([{rid_a}]({run_url(rid_a)})) (`compare-arch`).",
+        r"Median of \*\*3\*\* repeats on matched 4 vCPU / 16 GiB runners @ `[^`]+` \(\[[0-9]+\]\([^)]+\)\)(?: \(`compare-arch`\))?\.",
+        f"Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `{HEAD}` ([{rid_a}]({run_url(rid_a)})).",
         text,
         count=1,
     )
@@ -608,8 +619,8 @@ def main() -> None:
     w = text.find("#### Windows", tls)
     text2 = text[w:]
     text2 = re.sub(
-        r"Median of \*\*3\*\* repeats on `windows-latest` @ `[^`]+`\. Source: Actions \[[0-9]+\]\([^)]+\) \(`compare-tls-cost`\)\.[^\n]*\n",
-        f"Median of **3** repeats on `windows-latest` @ `{HEAD}`. Source: Actions [{rid_t}]({run_url(rid_t)}) (`compare-tls-cost`). Absolute RPS on GHA swings hard; prefer **TWP÷YARP**.\n",
+        r"Median of \*\*3\*\* repeats on `windows-latest` @ `[^`]+`\. Source: Actions \[[0-9]+\]\([^)]+\)(?: \(`compare-tls-cost`\))?\.[^\n]*\n",
+        f"Median of **3** repeats on `windows-latest` @ `{HEAD}`. Source: Actions [{rid_t}]({run_url(rid_t)}). Absolute RPS on GHA swings hard; prefer **TWP÷YARP**.\n",
         text2,
         count=1,
     )
@@ -621,8 +632,8 @@ def main() -> None:
     l = text.find("#### Linux", tls)
     text2 = text[l:]
     text2 = re.sub(
-        r"Median of \*\*3\*\* repeats @ `[^`]+`\. Source: Actions \[[0-9]+\]\([^)]+\) \(`compare-tls-cost`\)\.\n",
-        f"Median of **3** repeats @ `{HEAD}`. Source: Actions [{rid_t}]({run_url(rid_t)}) (`compare-tls-cost`).\n",
+        r"Median of \*\*3\*\* repeats @ `[^`]+`\. Source: Actions \[[0-9]+\]\([^)]+\)(?: \(`compare-tls-cost`\))?\.\n",
+        f"Median of **3** repeats @ `{HEAD}`. Source: Actions [{rid_t}]({run_url(rid_t)}).\n",
         text2,
         count=1,
     )

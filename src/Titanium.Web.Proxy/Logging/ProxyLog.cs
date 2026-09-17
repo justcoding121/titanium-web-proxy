@@ -125,13 +125,14 @@ internal static class ProxyLog
     {
         if (!logger.IsEnabled(LogLevel.Information)) return;
         logger.LogInformation(
-            "Starting with profile {Profile} (body={Body}, decompressionRatio={DecompressionRatio}, headerLimits={HeaderLimits}, admission={Admission}, http2AbuseBudget={Http2AbuseBudget}, allowAmbiguousFraming={AllowAmbiguousFraming}).",
+            "Starting with profile {Profile} (body={Body}, decompressionRatio={DecompressionRatio}, headerLimits={HeaderLimits}, admission={Admission}, http2AbuseBudget={Http2AbuseBudget}, http2RelayValidation={Http2RelayValidation}, allowAmbiguousFraming={AllowAmbiguousFraming}).",
             profile,
             policyModes[Options.PolicyFamily.BodyBudget],
             policyModes[Options.PolicyFamily.DecompressionRatio],
             policyModes[Options.PolicyFamily.HeaderLimits],
             policyModes[Options.PolicyFamily.AdmissionControl],
             policyModes[Options.PolicyFamily.Http2AbuseBudget],
+            policyModes[Options.PolicyFamily.Http2RelayValidation],
             policyModes.AllowAmbiguousFraming);
     }
 
@@ -162,12 +163,12 @@ internal static class ProxyLog
                 connectTarget, Describe(failure));
     }
 
-    internal static void Http2ProbeDeferredForClientAlpn(ILogger logger, string connectTarget, int budgetMs)
+    internal static void Http2ProbeDeferredForClientAlpn(ILogger logger, string connectTarget)
     {
         if (!logger.IsEnabled(LogLevel.Debug)) return;
         logger.LogDebug(
-            "[http2 probe] '{Target}': cold probe exceeded {BudgetMs}ms; speculating client h2 ALPN so ServerHello is not blocked",
-            connectTarget, budgetMs);
+            "[http2 probe] '{Target}': origin probe still in flight; speculating client h2 ALPN so ServerHello is not blocked",
+            connectTarget);
     }
 
     internal static void Http2ProbeDeferredFailed(ILogger logger, string connectTarget, Exception failure)

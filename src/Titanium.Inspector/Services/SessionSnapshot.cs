@@ -223,14 +223,35 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
 
     public long ReceivedBytes
     {
-        get => _receivedBytes;
+        get => Volatile.Read(ref _receivedBytes);
         set => SetField(ref _receivedBytes, value);
     }
 
     public long SentBytes
     {
-        get => _sentBytes;
+        get => Volatile.Read(ref _sentBytes);
         set => SetField(ref _sentBytes, value);
+    }
+
+    /// <summary>
+    /// Atomically add to <see cref="SentBytes"/> from a concurrent I/O thread
+    /// (tunnel <c>DataSent</c> / <c>DataReceived</c> can fire on separate threads).
+    /// </summary>
+    internal long AddSentBytes(long delta)
+    {
+        var total = Interlocked.Add(ref _sentBytes, delta);
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SentBytes)));
+        return total;
+    }
+
+    /// <summary>
+    /// Atomically add to <see cref="ReceivedBytes"/> from a concurrent I/O thread.
+    /// </summary>
+    internal long AddReceivedBytes(long delta)
+    {
+        var total = Interlocked.Add(ref _receivedBytes, delta);
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ReceivedBytes)));
+        return total;
     }
 
     public double? DurationMs

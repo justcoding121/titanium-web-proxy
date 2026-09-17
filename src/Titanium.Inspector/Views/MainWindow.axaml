@@ -184,13 +184,15 @@
         </WrapPanel>
         <!-- Bind / intercept controls wrap independently of the rows above. -->
         <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarEndpoint">
-          <TextBox Width="120" Watermark="Bind address" Text="{Binding BindAddress}"
+          <TextBox Width="150" Watermark="*, localhost, or IP" Text="{Binding BindAddress}"
                    IsEnabled="{Binding BindFieldsEnabled}"
                    VerticalAlignment="Center" Margin="0,0,12,6"
+                   ToolTip.Tip="127.0.0.1 or localhost = this PC only. 0.0.0.0 or * = all network adapters (includes localhost)."
                    AutomationProperties.AutomationId="ToolbarBindAddress" />
-          <TextBox Width="70" Watermark="Port" Text="{Binding BindPort}"
+          <TextBox Width="90" Watermark="*, or port" Text="{Binding BindPortText}"
                    IsEnabled="{Binding BindFieldsEnabled}"
                    VerticalAlignment="Center" Margin="0,0,12,6"
+                   ToolTip.Tip="* or empty = OS-chosen port (the real port appears after start). Otherwise 1–65535."
                    AutomationProperties.AutomationId="ToolbarBindPort" />
           <!-- Accent while idle (Start); quieter default while listening (Stop). Live pip shows running state. -->
           <Button Content="{Binding InterceptToggleText}" Command="{Binding ToggleInterceptCommand}"
@@ -536,7 +538,8 @@
                          Text="Same URL, different GraphQL operations can use different rules. Leave blank to match every operation." />
               <TextBlock Text="Respond with" />
               <WrapPanel>
-                <TextBox Watermark="Status" Text="{Binding AutoResponderStatus}" Width="80" Margin="0,0,8,8"
+                <TextBox Watermark="100–599" Text="{Binding AutoResponderStatusText}" Width="80" Margin="0,0,8,8"
+                         ToolTip.Tip="HTTP status. Empty = 200. Use 100–599."
                          AutomationProperties.AutomationId="AutoResponderStatus" />
                 <TextBox Watermark="Content-Type" Text="{Binding AutoResponderContentType}" Width="160" Margin="0,0,8,8"
                          AutomationProperties.AutomationId="AutoResponderContentType" />

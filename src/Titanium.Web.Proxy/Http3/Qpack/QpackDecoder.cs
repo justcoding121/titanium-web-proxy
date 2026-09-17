@@ -96,16 +96,42 @@ internal static class QpackDecoder
             throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed, "Invalid Required Insert Count.");
         data = data[consumed..];
 
-        // Parse S bit and Delta Base
+        // Parse S bit and Delta Base (RFC 9204 §4.5.1.2).
+        // Base = RequiredInsertCount − (S ? DeltaBase+1 : DeltaBase).
+        // Relative dynamic refs: absoluteIndex = Base − 1 − wireIndex.
+        // Post-base dynamic refs: absoluteIndex = Base + wireIndex.
         if (data.IsEmpty)
             throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed, "Missing Base field.");
-        if (!TryReadPrefixedInt(data, 7, out _, out consumed))
+        var sAndDeltaByte = data[0];
+        var sBit = (sAndDeltaByte & 0x80) != 0;
+        if (!TryReadPrefixedInt(data, 7, out var deltaBase, out consumed))
             throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed, "Invalid Delta Base.");
         data = data[consumed..];
 
         if (requiredInsertCount != 0 && context == null)
             throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed,
                 $"Dynamic QPACK table not supported: Required Insert Count = {requiredInsertCount}.");
+
+        // Wire RIC is an encoded value when non-zero (RFC 9204 §4.5.1.1).
+        ulong resolvedRic = requiredInsertCount;
+        if (requiredInsertCount != 0 && context != null)
+        {
+            resolvedRic = DecodeRequiredInsertCount(
+                requiredInsertCount,
+                context.InboundDecoderTable.InsertCount,
+                context.MaxTableCapacityFromPeer);
+        }
+
+        // Static-only path (resolvedRic == 0): Base is unused; keep the hot path allocation-free.
+        ulong @base = 0;
+        if (resolvedRic > 0)
+        {
+            var subtract = sBit ? deltaBase + 1 : deltaBase;
+            if (subtract > resolvedRic)
+                throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed,
+                    $"QPACK Base underflow: RIC={resolvedRic}, S={sBit}, DeltaBase={deltaBase}.");
+            @base = resolvedRic - subtract;
+        }
 
         var headers = new List<(string, string)>();
 
@@ -115,7 +141,7 @@ internal static class QpackDecoder
 
             if ((b & 0x80) != 0)
             {
-                // Indexed Header Field — S=1 static, S=0 dynamic
+                // Indexed Header Field — S=1 static, S=0 dynamic (relative to Base)
                 var isStatic = (b & 0x40) != 0;
                 if (!TryReadPrefixedInt(data, 6, out var index, out consumed))
                     throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed, "Invalid indexed field index.");
@@ -131,11 +157,12 @@ internal static class QpackDecoder
                 }
                 else
                 {
-                    if (context?.InboundDecoderTable.TryGetByAbsoluteIndex(index, out string dynName, out string dynValue) == true)
+                    var absIndex = ResolveRelativeDynamicIndex(@base, index);
+                    if (context?.InboundDecoderTable.TryGetByAbsoluteIndex(absIndex, out string dynName, out string dynValue) == true)
                         headers.Add((dynName, dynValue));
                     else
                         throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed,
-                            $"Dynamic table absolute index {index} not found.");
+                            $"Dynamic table absolute index {absIndex} not found.");
                 }
             }
             else if ((b & 0x40) != 0)
@@ -156,11 +183,12 @@ internal static class QpackDecoder
                 }
                 else
                 {
-                    if (context?.InboundDecoderTable.TryGetByAbsoluteIndex(nameIndex, out string dynName, out _) == true)
+                    var absIndex = ResolveRelativeDynamicIndex(@base, nameIndex);
+                    if (context?.InboundDecoderTable.TryGetByAbsoluteIndex(absIndex, out string dynName, out _) == true)
                         name = dynName;
                     else
                         throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed,
-                            $"Dynamic table name index {nameIndex} not found.");
+                            $"Dynamic table name index {absIndex} not found.");
                 }
 
                 if (!TryReadStringLiteral(data, out var value, out consumed))
@@ -200,15 +228,17 @@ internal static class QpackDecoder
             else if ((b & 0x10) != 0)
             {
                 // Indexed Header Field (post-base, dynamic): 0 0 0 1 Index(4)
+                // absoluteIndex = Base + wireIndex
                 if (!TryReadPrefixedInt(data, 4, out var index, out consumed))
                     throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed, "Invalid post-base index.");
                 data = data[consumed..];
 
-                if (context?.InboundDecoderTable.TryGetByAbsoluteIndex(index, out string pbName, out string pbValue) == true)
+                var absIndex = @base + index;
+                if (context?.InboundDecoderTable.TryGetByAbsoluteIndex(absIndex, out string pbName, out string pbValue) == true)
                     headers.Add((pbName, pbValue));
                 else
                     throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed,
-                        $"Post-base dynamic index {index} not found.");
+                        $"Post-base dynamic index {absIndex} not found.");
             }
             else
             {
@@ -217,12 +247,13 @@ internal static class QpackDecoder
                     throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed, "Invalid post-base name ref.");
                 data = data[consumed..];
 
+                var absIndex = @base + nameIndex;
                 string nameFromDyn;
-                if (context?.InboundDecoderTable.TryGetByAbsoluteIndex(nameIndex, out string pbName, out _) == true)
+                if (context?.InboundDecoderTable.TryGetByAbsoluteIndex(absIndex, out string pbName, out _) == true)
                     nameFromDyn = pbName;
                 else
                     throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed,
-                        $"Post-base dynamic name index {nameIndex} not found.");
+                        $"Post-base dynamic name index {absIndex} not found.");
 
                 if (!TryReadStringLiteral(data, out var value, out consumed))
                     throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed, "Invalid post-base literal value.");
@@ -232,6 +263,15 @@ internal static class QpackDecoder
         }
 
         return headers;
+    }
+
+    /// <summary>RFC 9204 §4.5.2: absoluteIndex = Base − 1 − relativeIndex.</summary>
+    private static ulong ResolveRelativeDynamicIndex(ulong @base, ulong wireIndex)
+    {
+        if (@base == 0 || wireIndex >= @base)
+            throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed,
+                $"Relative index {wireIndex} out of range for Base={@base}.");
+        return @base - 1 - wireIndex;
     }
 
 

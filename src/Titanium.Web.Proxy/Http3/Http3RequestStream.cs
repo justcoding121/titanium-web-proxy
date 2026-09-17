@@ -1,6 +1,7 @@
 #pragma warning disable CA1416
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.IO;
 using System.Net.Quic;
 using System.Threading;
@@ -105,8 +106,12 @@ internal static class Http3RequestStream
 
                 // Fast path gate is known before session construction when interception is off.
                 var interceptionOff = !server.NeedsHttpInterception(endPoint);
-                var normalizedPath = path ?? "/";
-                if (!normalizedPath.StartsWith('/'))
+                var isConnect = method == "CONNECT";
+                if (!isConnect && path is null)
+                    throw new Http3StreamException(Http3ErrorCode.MessageError,
+                        "RFC 9114 §4.3.1: non-CONNECT requests must include :path.");
+                var normalizedPath = isConnect ? string.Empty : path!;
+                if (!isConnect && !normalizedPath.StartsWith('/'))
                     normalizedPath = "/" + normalizedPath; // NOSONAR S1075 -- Slash is the HTTP origin-form delimiter, not a filesystem path.
 
                 // Session-less H3→origin reverse tiny-GET: no SessionEventArgs / HttpWebClient / Null stream.
@@ -1146,16 +1151,11 @@ internal static class Http3RequestStream
             response.Headers.RemoveHeader("transfer-encoding");
 
         var qpackHeaders = QpackEncoder.EncodeResponse(response, qpackContext);
+        var hasTrailers = response.HasTrailingHeaders;
 
         if (response.StreamBodyWriter != null && !response.IsBodySent)
         {
-            await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
-            // Http3OriginBridge streams the origin body; drain it as DATA frames (same contract as
-            // H1 BodyStreamWriter / H2 EmitSyntheticResponseAsync).
-            var bodyWriter = new Http3DataBodyWriter(stream);
-            await response.StreamBodyWriter(bodyWriter, ct);
-            response.IsBodySent = true;
-            await stream.FlushAsync(ct);
+            await SendStreamedResponseAsync(stream, response, qpackHeaders, qpackContext, hasTrailers, ct);
             return;
         }
 
@@ -1175,10 +1175,11 @@ internal static class Http3RequestStream
         {
             body = null;
         }
+
         // Size-gated HEADERS+DATA coalesce for already-buffered medium/large bodies only
         // (lossy / compare-bodies ≥ 16 KiB). Tiny GET keeps separate writes — full coalesce
         // there raised cool absolutes and missed Windows CI (latency bundle revert).
-        if (body is { Length: >= 16 * 1024 })
+        if (body is { Length: >= 16 * 1024 } && !hasTrailers)
         {
             await Http3Frame.WriteHeadersAndDataAsync(stream, qpackHeaders, body, ct, completeWrites: true);
             await stream.FlushAsync(ct);
@@ -1188,13 +1189,45 @@ internal static class Http3RequestStream
         if (body is { Length: > 0 })
         {
             await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
-            await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct, completeWrites: true);
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct, completeWrites: !hasTrailers);
         }
         else
         {
-            await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct, completeWrites: true);
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct, completeWrites: !hasTrailers);
         }
 
+        if (hasTrailers)
+        {
+            var trailerBlock = QpackEncoder.Encode(
+                response.TrailingHeaders.Select(h => (h.Name, h.Value)), qpackContext);
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, trailerBlock, ct, completeWrites: true);
+        }
+
+        await stream.FlushAsync(ct);
+    }
+
+    /// <summary>
+    ///     HEADERS + streamed DATA (+ optional trailer HEADERS) for origin-bridged H3 bodies.
+    /// </summary>
+    private static async Task SendStreamedResponseAsync(
+        QuicStream stream, Response response, ReadOnlyMemory<byte> qpackHeaders,
+        QpackContext? qpackContext, bool hasTrailers, CancellationToken ct)
+    {
+        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
+        // Http3OriginBridge streams the origin body; drain it as DATA frames (same contract as
+        // H1 BodyStreamWriter / H2 EmitSyntheticResponseAsync).
+        // Http3DataBodyWriter never FINs (completeWrites stays false) so trailers can follow.
+        var bodyWriter = new Http3DataBodyWriter(stream);
+        await response.StreamBodyWriter!(bodyWriter, ct);
+        response.IsBodySent = true;
+        if (hasTrailers)
+        {
+            var trailerBlock = QpackEncoder.Encode(
+                response.TrailingHeaders.Select(h => (h.Name, h.Value)), qpackContext);
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, trailerBlock, ct, completeWrites: true);
+        }
+
+        // Always Flush — Darwin MsQuic requires an explicit Flush before FIN is observed.
         await stream.FlushAsync(ct);
     }
 

@@ -22,10 +22,10 @@ namespace Titanium.Web.Proxy.Http2;
 ///         must still wait, per spec, until it becomes non-negative again before sending more on that stream.
 ///     </para>
 ///     <para>
-///         The corresponding *receive*-side credit the proxy grants back to that same peer (so its window
-///         does not run dry) is not modeled by this type - see the "always fully regrant after processing"
-///         strategy in <c>Http2Helper.CopyHttp2FrameAsync</c>, which needs no window bookkeeping at all
-///         because this relay never buffers DATA past the point of writing/discarding it inline.
+///         The corresponding *receive*-side credit the proxy grants back to that same peer is not fully
+///         modeled by this type. <c>Http2Helper.CopyHttp2FrameAsync</c> batches WINDOW_UPDATE grants at
+///         half the 768 KiB receive buffer threshold (<c>ReceiveCreditBatchThreshold</c>) and defers the
+///         client WINDOW_UPDATE until after SETTINGS is exchanged, so upstream senders are not starved.
 ///     </para>
 /// </summary>
 internal sealed class Http2FlowController

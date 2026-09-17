@@ -153,27 +153,33 @@ namespace Titanium.Web.Proxy.Http2
 
             if (headerListener.HasMalformedHeader)
             {
-                // RFC 7540 ?8.1.2/?8.1.2.1: unknown pseudo-header fields, uppercase field names, and
-                // (checked just below) connection-specific header fields are malformed - a stream-level
-                // PROTOCOL_ERROR that must not tear down the rest of the connection, whose HPACK hpack.Decoder
-                // state has already been kept in sync by the decode above.
-                ReportException(logger, new ProxyHttpException(
-                    "HTTP/2 protocol error: " + headerListener.MalformedReason, null, sessionArgs));
-                await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
-                    Http2ErrorCode.ProtocolError, input));
-                return false;
+                var malformed = "HTTP/2 protocol error: " + headerListener.MalformedReason;
+                if (EnforceHttp2RelayHeaderSemantics(connectionState, httpInterceptionEnabled, logger, malformed))
+                {
+                    // RFC 7540 ?8.1.2/?8.1.2.1: unknown pseudo-header fields, uppercase field names, and
+                    // (checked just below) connection-specific header fields are malformed - a stream-level
+                    // PROTOCOL_ERROR that must not tear down the rest of the connection, whose HPACK hpack.Decoder
+                    // state has already been kept in sync by the decode above.
+                    ReportException(logger, new ProxyHttpException(malformed, null, sessionArgs));
+                    await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
+                        Http2ErrorCode.ProtocolError, input));
+                    return false;
+                }
             }
 
             var forbiddenConnectionHeader = collected.FirstOrDefault(header =>
                 ForbiddenConnectionSpecificHeaders.Contains(header.Name));
             if (forbiddenConnectionHeader != null)
             {
-                ReportException(logger, new ProxyHttpException(
-                    "HTTP/2 protocol error: connection-specific header field '" + forbiddenConnectionHeader.Name +
-                    "' is forbidden.", null, sessionArgs));
-                await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
-                    Http2ErrorCode.ProtocolError, input));
-                return false;
+                var forbidden = "HTTP/2 protocol error: connection-specific header field '" + forbiddenConnectionHeader.Name +
+                    "' is forbidden.";
+                if (EnforceHttp2RelayHeaderSemantics(connectionState, httpInterceptionEnabled, logger, forbidden))
+                {
+                    ReportException(logger, new ProxyHttpException(forbidden, null, sessionArgs));
+                    await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
+                        Http2ErrorCode.ProtocolError, input));
+                    return false;
+                }
             }
 
             // RFC 9113 §8.5: once an extended CONNECT tunnel is established, no HEADERS or CONTINUATION
@@ -200,19 +206,22 @@ namespace Titanium.Web.Proxy.Http2
                 bool isConnect = method.Length > 0 &&
                     method.Span.SequenceEqual(ConnectMethodBytes);
                 bool isExtendedConnect = isConnect && headerListener.Protocol.Length > 0;
-                bool isMainHeaders = (method.Length > 0 && path.Length > 0) ||
-                    (isConnect && headerListener.Authority.Length > 0);
+                // Treat any :method-bearing block as request headers — never silently reclassify as trailers.
+                bool isMainHeaders = method.Length > 0 || (isConnect && headerListener.Authority.Length > 0);
 
                 // RFC 8441 §5: :protocol is only valid on CONNECT requests.
                 if (!isConnect && headerListener.Protocol.Length > 0)
                 {
-                    ReportException(logger, new ProxyHttpException(
-                        "HTTP/2 protocol error: :protocol pseudo-header is only allowed on CONNECT requests.",
-                        null, sessionArgs));
-                    removeAndFinalizeStream(hbStreamId);
-                    await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
-                        hbStreamId, Http2ErrorCode.ProtocolError, input));
-                    return false;
+                    var protocolErr =
+                        "HTTP/2 protocol error: :protocol pseudo-header is only allowed on CONNECT requests.";
+                    if (EnforceHttp2RelayHeaderSemantics(connectionState, httpInterceptionEnabled, logger, protocolErr))
+                    {
+                        ReportException(logger, new ProxyHttpException(protocolErr, null, sessionArgs));
+                        removeAndFinalizeStream(hbStreamId);
+                        await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                            hbStreamId, Http2ErrorCode.ProtocolError, input));
+                        return false;
+                    }
                 }
 
                 if (isMainHeaders)
@@ -258,14 +267,30 @@ namespace Titanium.Web.Proxy.Http2
                     }
                     else if (!isConnect && headerListener.Scheme == string.Empty)
                     {
-                        // RFC 7540 §8.1.2.3: non-CONNECT requests must include :scheme.
-                        ReportException(logger, new ProxyHttpException(
-                            "HTTP/2 protocol error: request HEADERS missing required :scheme pseudo-header.",
-                            null, sessionArgs));
-                        removeAndFinalizeStream(hbStreamId);
-                        await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
-                            hbStreamId, Http2ErrorCode.ProtocolError, input));
-                        return false;
+                        var schemeErr =
+                            "HTTP/2 protocol error: request HEADERS missing required :scheme pseudo-header.";
+                        if (EnforceHttp2RelayHeaderSemantics(connectionState, httpInterceptionEnabled, logger, schemeErr))
+                        {
+                            ReportException(logger, new ProxyHttpException(schemeErr, null, sessionArgs));
+                            removeAndFinalizeStream(hbStreamId);
+                            await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                                hbStreamId, Http2ErrorCode.ProtocolError, input));
+                            return false;
+                        }
+                    }
+
+                    if (!isConnect && path.Length == 0)
+                    {
+                        var pathErr =
+                            "HTTP/2 protocol error: request HEADERS missing required :path pseudo-header.";
+                        if (EnforceHttp2RelayHeaderSemantics(connectionState, httpInterceptionEnabled, logger, pathErr))
+                        {
+                            ReportException(logger, new ProxyHttpException(pathErr, null, sessionArgs));
+                            removeAndFinalizeStream(hbStreamId);
+                            await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                                hbStreamId, Http2ErrorCode.ProtocolError, input));
+                            return false;
+                        }
                     }
 
                     // RFC 7540 ?5.1.1: client-initiated stream ids must be odd and strictly increasing
@@ -416,14 +441,10 @@ namespace Titanium.Web.Proxy.Http2
                 if (httpInterceptionEnabled && shouldInterceptHttp != null && isMainHeaders) // NOSONAR S2589 -- Predicate is optional; interception-on still allows a null passthrough callback.
                 {
                     var authority = headerListener.Authority.GetString();
-                    var host = authority;
-                    var port = request.IsHttps ? 443 : 80;
-                    var colon = authority.LastIndexOf(':');
-                    if (colon > 0 && int.TryParse(authority.AsSpan(colon + 1), out var parsedPort))
-                    {
-                        host = authority[..colon];
-                        port = parsedPort;
-                    }
+                    var defaultPort = request.IsHttps ? 443 : 80;
+                    // AuthorityParser handles IPv6 brackets correctly (e.g. [::1]:8080).
+                    // LastIndexOf(':') would misparse bare IPv6 addresses without brackets.
+                    var (host, port) = AuthorityParser.Parse(authority, defaultPort);
 
                     var interceptionCtx = new HttpInterceptionContext
                     {
@@ -869,12 +890,15 @@ namespace Titanium.Web.Proxy.Http2
                         !IsAsciiDigit(statusSpan[1]) ||
                         !IsAsciiDigit(statusSpan[2]))
                     {
-                        ReportException(logger, new ProxyHttpException(
-                            "HTTP/2 protocol error: :status pseudo-header is not exactly three ASCII digits.",
-                            null, sessionArgs));
-                        await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
-                            hbStreamId, Http2ErrorCode.ProtocolError, input));
-                        return false;
+                        var statusErr =
+                            "HTTP/2 protocol error: :status pseudo-header is not exactly three ASCII digits.";
+                        if (EnforceHttp2RelayHeaderSemantics(connectionState, httpInterceptionEnabled, logger, statusErr))
+                        {
+                            ReportException(logger, new ProxyHttpException(statusErr, null, sessionArgs));
+                            await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                                hbStreamId, Http2ErrorCode.ProtocolError, input));
+                            return false;
+                        }
                     }
 
                     statusCode = (statusSpan[0] - '0') * 100
@@ -1378,12 +1402,15 @@ namespace Titanium.Web.Proxy.Http2
                 // pseudo-field (RFC 7540 §8.1.2.4).
                 if (headerRr.HttpVersion < HttpHeader.Version20)
                 {
-                    ReportException(logger, new ProxyHttpException(
-                        "HTTP/2 protocol error: response HEADERS missing required :status pseudo-header.",
-                        null, sessionArgs));
-                    await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
-                        hbStreamId, Http2ErrorCode.ProtocolError, input));
-                    return false;
+                    var statusMissing =
+                        "HTTP/2 protocol error: response HEADERS missing required :status pseudo-header.";
+                    if (EnforceHttp2RelayHeaderSemantics(connectionState, httpInterceptionEnabled, logger, statusMissing))
+                    {
+                        ReportException(logger, new ProxyHttpException(statusMissing, null, sessionArgs));
+                        await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                            hbStreamId, Http2ErrorCode.ProtocolError, input));
+                        return false;
+                    }
                 }
 
                 // RFC 7540 §8.1.2.1: trailer HEADERS MUST NOT contain pseudo-header fields.
@@ -1391,12 +1418,15 @@ namespace Titanium.Web.Proxy.Http2
                     headerListener.Status.Length > 0 || headerListener.Authority.Length > 0 ||
                     headerListener.Scheme != string.Empty)
                 {
-                    ReportException(logger, new ProxyHttpException(
-                        "HTTP/2 protocol error: response trailer HEADERS contains pseudo-header fields.",
-                        null, sessionArgs));
-                    await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
-                        hbStreamId, Http2ErrorCode.ProtocolError, input));
-                    return false;
+                    var trailerPseudo =
+                        "HTTP/2 protocol error: response trailer HEADERS contains pseudo-header fields.";
+                    if (EnforceHttp2RelayHeaderSemantics(connectionState, httpInterceptionEnabled, logger, trailerPseudo))
+                    {
+                        ReportException(logger, new ProxyHttpException(trailerPseudo, null, sessionArgs));
+                        await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                            hbStreamId, Http2ErrorCode.ProtocolError, input));
+                        return false;
+                    }
                 }
 
                 // RFC 9110 §6.5.1: certain fields are forbidden in trailers.
@@ -1404,12 +1434,16 @@ namespace Titanium.Web.Proxy.Http2
                     ForbiddenTrailerHeaders.Contains(header.Name));
                 if (forbiddenTrailerHeader != null)
                 {
-                    ReportException(logger, new ProxyHttpException(
+                    var trailerForbidden =
                         "HTTP/2 protocol error: response trailer HEADERS contains forbidden field '" +
-                        forbiddenTrailerHeader.Name + "'.", null, sessionArgs));
-                    await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
-                        hbStreamId, Http2ErrorCode.ProtocolError, input));
-                    return false;
+                        forbiddenTrailerHeader.Name + "'.";
+                    if (EnforceHttp2RelayHeaderSemantics(connectionState, httpInterceptionEnabled, logger, trailerForbidden))
+                    {
+                        ReportException(logger, new ProxyHttpException(trailerForbidden, null, sessionArgs));
+                        await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                            hbStreamId, Http2ErrorCode.ProtocolError, input));
+                        return false;
+                    }
                 }
 
                 foreach (var header in collected)
@@ -1423,6 +1457,27 @@ namespace Titanium.Web.Proxy.Http2
                     hbStreamId, headerRr.TrailingHeaders, endStreamFlag, output)));
                 return false;
             }
+        }
+
+        /// <summary>
+        ///     Observe mode on the no-interception path logs HPACK semantic violations without RST/GOAWAY
+        ///     and without mutating headers (so MutationCount / compressed-relay finish stays valid if the
+        ///     family is later switched). MITM (interception on) always enforces.
+        /// </summary>
+        private static bool EnforceHttp2RelayHeaderSemantics(
+            Http2ConnectionState connectionState, bool httpInterceptionEnabled, ILogger logger, string detail)
+        {
+            if (httpInterceptionEnabled)
+                return true;
+
+            var mode = connectionState.Http2RelayValidation;
+            if (mode != PolicyMode.Disabled)
+            {
+                ProxyMetrics.PolicyBreach(PolicyFamily.Http2RelayValidation, mode);
+                ProxyLog.PolicyBreach(logger, PolicyFamily.Http2RelayValidation, mode, detail);
+            }
+
+            return mode != PolicyMode.Observe;
         }
 
         private static string InternCommonHttpMethod(ReadOnlySpan<byte> methodSpan, ByteString method)

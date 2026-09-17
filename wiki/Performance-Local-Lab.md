@@ -1,5 +1,3 @@
-# Performance Local Lab
-
 > **For contributors** — local laptop cool A/B tables. Not publishable; do not compare these absolutes to [Performance](Performance).
 
 Local Windows laptop debugging / cool A/B tables. **Not publishable** — do not compare these absolutes to [Performance](Performance) GHA tables. Use cool paired ratios as a gate, then re-measure on matched Windows+Linux GHA and paste CI medians onto Performance.

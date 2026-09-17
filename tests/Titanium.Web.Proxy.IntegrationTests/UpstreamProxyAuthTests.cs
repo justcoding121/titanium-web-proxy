@@ -37,6 +37,10 @@ public class UpstreamProxyAuthTests
 
         using var upstreamProxy = new FakeUpstreamProxy(server.HttpsListeningPort);
         using var proxy = CreateProxy(testSuite, upstreamProxy, useForHttps: true);
+        // This test asserts a single upstream NTLM CONNECT sequence. Auto HTTP/2 ALPN probing
+        // starts a deferred origin connection at CONNECT that still finishes NTLM after abandon
+        // when the client does not offer h2, which duplicates Proxy-Authorization captures.
+        proxy.EnableHttp2 = false;
         using var client = testSuite.GetClient(proxy);
 
         var body = await client.GetStringAsync(server.ListeningHttpsUrl);

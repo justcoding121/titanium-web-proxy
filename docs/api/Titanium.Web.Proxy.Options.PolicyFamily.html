@@ -159,6 +159,28 @@ header-block read.</p>
 the peer-initiated incomplete-stream-reset budget.</p>
 </td>
       </tr>
+      <tr>
+        <td id="Titanium_Web_Proxy_Options_PolicyFamily_Http2RelayValidation">Http2RelayValidation</td>
+        <td><p>Whether HPACK header blocks on the H2↔H2 compressed-relay path
+(<code>httpInterceptionEnabled = false</code>) are semantically validated per RFC 9113 §8.3.
+Unlike framing (always enforced, no Observe action), header semantics can be logged
+without corrupting connection state.</p>
+<p>
+    <a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html#Titanium_Web_Proxy_Options_PolicyMode_Disabled">Disabled</a> (default on <a class="xref" href="Titanium.Web.Proxy.Options.ProxyProfile.html#Titanium_Web_Proxy_Options_ProxyProfile_Balanced">Balanced</a>)
+    skips HPACK decode entirely — maximum throughput when upstream peers are trusted.
+</p>
+<p>
+    <a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html#Titanium_Web_Proxy_Options_PolicyMode_Observe">Observe</a> decodes and records semantic violations without
+    rejecting the stream. Does not mutate headers, so the compressed-relay
+    <code>MutationCount</code> fast path is unaffected when the family is Disabled.
+</p>
+<p>
+    <a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html#Titanium_Web_Proxy_Options_PolicyMode_Enforce">Enforce</a> (default on <a class="xref" href="Titanium.Web.Proxy.Options.ProxyProfile.html#Titanium_Web_Proxy_Options_ProxyProfile_PublicFacing">PublicFacing</a>
+    and <a class="xref" href="Titanium.Web.Proxy.Options.ProxyPolicyModes.html#Titanium_Web_Proxy_Options_ProxyPolicyModes_AllEnforce">AllEnforce</a>) decodes and sends
+    <code>GOAWAY(PROTOCOL_ERROR)</code> on violations.
+</p>
+</td>
+      </tr>
     </tbody>
   </table>
 </article>

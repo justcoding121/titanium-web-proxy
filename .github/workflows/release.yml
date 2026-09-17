@@ -187,7 +187,7 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: tools/packaging/.cache/http3-natives
           key: http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json') }}-${{ matrix.rid }}
@@ -211,7 +211,7 @@ jobs:
           ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
       - name: Azure login (OIDC)
         if: matrix.rid == 'win-x64'
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -367,7 +367,7 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: tools/packaging/.cache/http3-natives
           key: http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json') }}-${{ matrix.rid }}
@@ -398,7 +398,7 @@ jobs:
           }
       - name: Azure login (OIDC)
         if: matrix.rid == 'win-x64'
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -526,7 +526,7 @@ jobs:
           - rid: linux-musl-x64
             container: alpine:3.24
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: cli-${{ matrix.rid }}
           path: dist
@@ -624,7 +624,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
       - name: Attach MIT NuGet SBOM when present

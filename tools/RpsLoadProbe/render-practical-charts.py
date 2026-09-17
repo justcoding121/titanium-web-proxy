@@ -136,9 +136,7 @@ INDUSTRY_WORKLOADS: List[Tuple[str, Dict[str, Optional[str]]]] = [
 ]
 
 # Heavier practical chart: 64 KB GET/POST on typical reverse wires (+ 256 KB H1).
-# X-axis: H1 64 KB GET/POST, H2 terminate (left of legend), short 256 KB H1 under the
-# legend, then H2 origin and H3. The 256 KB / H2 terminate swap keeps the tall cluster
-# from covering the product legend.
+# X-axis order: H1 family → H2 → H3 (client protocol). Y-axis headroom clears the legend.
 # label, twp, yarp, nginx, haproxy, envoy (None = product-impossible).
 PRACTICAL_HEAVIER_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], Optional[str]]] = [
     (
@@ -158,20 +156,20 @@ PRACTICAL_HEAVIER_ARMS: List[Tuple[str, str, str, Optional[str], Optional[str], 
         "envoy-reverse-http1-tls-post64k",
     ),
     (
-        "GET 64 KB · H2 TLS→H1c",
-        "twp-reverse-http2-cleartext-body64k",
-        "yarp-reverse-http2-body64k",
-        "nginx-reverse-http2-body64k",
-        "haproxy-reverse-http2-body64k",
-        "envoy-reverse-http2-body64k",
-    ),
-    (
         "GET 256 KB · H1 TLS→H1c",
         "twp-reverse-http1-tls-body256k",
         "yarp-reverse-http1-tls-body256k",
         "nginx-reverse-http1-tls-body256k",
         "haproxy-reverse-http1-tls-body256k",
         "envoy-reverse-http1-tls-body256k",
+    ),
+    (
+        "GET 64 KB · H2 TLS→H1c",
+        "twp-reverse-http2-cleartext-body64k",
+        "yarp-reverse-http2-body64k",
+        "nginx-reverse-http2-body64k",
+        "haproxy-reverse-http2-body64k",
+        "envoy-reverse-http2-body64k",
     ),
     (
         "GET 64 KB · H2 TLS→H2 TLS",
@@ -240,8 +238,8 @@ WIKI_WIRE_CELLS: Dict[str, Tuple[str, str]] = {
 WIKI_HEAVIER_CELLS: Dict[Tuple[Optional[str], str, str], int] = {
     ("64 KiB", "HTTP/1 · TLS", "HTTP/1 · plain"): 0,
     (None, "HTTP/1 · TLS", "HTTP/1 · plain"): 1,  # POST table (no Body col)
-    ("64 KiB", "HTTP/2 · TLS", "HTTP/1 · plain"): 2,
-    ("256 KiB", "HTTP/1 · TLS", "HTTP/1 · plain"): 3,
+    ("256 KiB", "HTTP/1 · TLS", "HTTP/1 · plain"): 2,
+    ("64 KiB", "HTTP/2 · TLS", "HTTP/1 · plain"): 3,
     ("64 KiB", "HTTP/2 · TLS", "HTTP/2 · TLS"): 4,
     ("64 KiB", "HTTP/3 · QUIC", "HTTP/1 · plain"): 5,
 }
@@ -652,6 +650,40 @@ def plot_packed_product_bars(
     return ymax
 
 
+# One-row product legend in upper-right; keep right-side bars below it.
+# Legend box ~24% of axes height; leave ~6% gap so bar tops do not kiss the frame.
+_LEGEND_HEIGHT_FRAC = 0.24
+_LEGEND_CLEARANCE_FRAC = 0.06
+_LEGEND_RIGHT_CLUSTERS = 5
+
+
+def ylim_clearing_legend(
+    series: Dict[str, List[Optional[float]]],
+    n_clusters: int,
+    ymax: float,
+) -> float:
+    """Y max with base headroom, raised further when tall bars sit under the legend."""
+    base = max(ymax * 1.12, 1.0)
+    if n_clusters <= 0:
+        return base
+    right_start = max(0, n_clusters - min(_LEGEND_RIGHT_CLUSTERS, n_clusters))
+    right_max = 0.0
+    for product in PRODUCTS:
+        vals = series.get(product) or []
+        for i in range(right_start, min(n_clusters, len(vals))):
+            v = vals[i]
+            if v is None:
+                continue
+            h = float(v)
+            if h > right_max:
+                right_max = h
+    if right_max <= 0:
+        return base
+    usable = 1.0 - _LEGEND_HEIGHT_FRAC - _LEGEND_CLEARANCE_FRAC
+    needed = right_max / usable
+    return max(base, needed)
+
+
 def arm_sustain_c64(csv_path: Path, arm: str) -> Optional[float]:
     """Sustain RPS @ c=64. Median of SLO-passing repeats; 0 if all c=64 steps miss SLO."""
     rows = [r for r in csv.DictReader(csv_path.open(newline="")) if r.get("arm") == arm]
@@ -870,7 +902,7 @@ def render_chart(
     ax.set_xticks(x)
     ax.set_xticklabels(labels, rotation=18, ha="right", fontsize=12)
     ax.tick_params(axis="y", labelsize=12)
-    ax.set_ylim(0, ymax * 1.12)
+    ax.set_ylim(0, ylim_clearing_legend(series, len(labels), ymax))
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{int(v):,}"))
     ax.grid(axis="y", linestyle=":", alpha=0.45, zorder=0)
     ax.legend(

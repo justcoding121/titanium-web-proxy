@@ -125,7 +125,7 @@ public class Http2ServerHelloProbeBudgetTests
     }
 
     [TestMethod]
-    public void ApplyDeferred_SpeculativeH2WithHttp11Origin_DoesNotForceBridgeWhenTranslationDisabled()
+    public void ApplyDeferred_SpeculativeH2WithHttp11Origin_ForcesBridgeWhenTranslationDisabled()
     {
         var negotiation = new Http2NegotiationResult(originSupportsHttp2: false, retainedConnectionTask: null);
         var requiresHttp11Bridge = false;
@@ -136,8 +136,8 @@ public class Http2ServerHelloProbeBudgetTests
             allowHttpProtocolTranslation: false,
             ref requiresHttp11Bridge, ref requiresH2OriginBridge, ref prefetch);
 
-        Assert.IsFalse(requiresHttp11Bridge,
-            "AllowHttpProtocolTranslation=false must not silently enable the H2→H1 bridge.");
+        Assert.IsTrue(requiresHttp11Bridge,
+            "Speculative client h2 already advertised ALPN; H2→H1 is required even when translation is off.");
     }
 
     [TestMethod]

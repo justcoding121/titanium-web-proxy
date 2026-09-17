@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.Http2;
 
@@ -108,6 +109,13 @@ internal sealed class Http2ConnectionState
     ///     check.
     /// </summary>
     public int LastClientStreamId;
+
+    /// <summary>
+    ///     Snapshot of <see cref="PolicyFamily.Http2RelayValidation" /> for this connection.
+    ///     <see cref="PolicyMode.Disabled"/> keeps H2↔H2 compressed relay (verbatim HPACK).
+    ///     Observe/Enforce decode header blocks on the no-interception path.
+    /// </summary>
+    public PolicyMode Http2RelayValidation;
 
     /// <summary>
     ///     Per-stream multipart observers for h2 multipart/form-data boundary-aware streaming.

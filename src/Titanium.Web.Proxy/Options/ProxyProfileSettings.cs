@@ -68,7 +68,15 @@ public sealed class ProxyProfileSettings
     {
         ResourceLimits = ProxyResourceLimits.Default.WithCertificateCacheBounds(
             maxCertificateCacheEntries: 1024, maxCertificateDiskCacheEntries: null),
-        PolicyModes = ProxyPolicyModes.AllEnforce,
+        // Resource families stay Enforce (same as AllEnforce). Http2RelayValidation is
+        // Disabled so H2↔H2 compressed relay remains the verbatim-HPACK fast path.
+        PolicyModes = ProxyPolicyModes.Create(
+            bodyBudget: PolicyMode.Enforce,
+            decompressionRatio: PolicyMode.Enforce,
+            headerLimits: PolicyMode.Enforce,
+            admissionControl: PolicyMode.Enforce,
+            http2AbuseBudget: PolicyMode.Enforce,
+            http2RelayValidation: PolicyMode.Disabled),
         SupportedSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
         BlockPrivateNetworkDestinations = false,
         MaxConcurrentClientConnections = null,
@@ -102,7 +110,8 @@ public sealed class ProxyProfileSettings
             decompressionRatio: PolicyMode.Enforce,
             headerLimits: PolicyMode.Observe,
             admissionControl: PolicyMode.Observe,
-            http2AbuseBudget: PolicyMode.Observe),
+            http2AbuseBudget: PolicyMode.Observe,
+            http2RelayValidation: PolicyMode.Disabled),
 #pragma warning disable SYSLIB0039 // Deliberate legacy-TLS opt-in for 4.x migrators, per this profile's purpose.
         SupportedSslProtocols = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Tls13, // NOSONAR S4423 - Compatible profile intentionally enables TLS 1.0/1.1 for migration
 #pragma warning restore SYSLIB0039

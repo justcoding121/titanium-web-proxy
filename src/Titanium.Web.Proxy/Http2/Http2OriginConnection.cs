@@ -51,6 +51,9 @@ internal sealed class Http2OriginConnection : IDisposable
     /// <summary>Every HTTP/2 endpoint must accept frames up to this size (RFC 7540 §4.2), so it is always safe to send.</summary>
     private const int SafeMaxFrameSize = 16384;
 
+    private const string DataPaddingProtocolError =
+        "HTTP/2 protocol error: DATA padding length is the payload length or longer.";
+
     /// <summary>Maximum total header block (HEADERS + CONTINUATION fragments) we accept from origin before treating it as a protocol violation.</summary>
     private const int MaxHeaderBlockBytes = 256 * 1024;
 
@@ -858,7 +861,7 @@ internal sealed class Http2OriginConnection : IDisposable
     }
 
     /// <summary>
-    ///     Re-grants flow-control credit for DATA frame on-wire payload (RFC 7540 §6.9). Batched at
+    ///     Re-grants flow-control credit for DATA frame on-wire payload (RFC 9113 §6.9). Batched at
     ///     <see cref="Http2Helper.ReceiveCreditBatchThreshold" /> (half of the 768 KiB stream window),
     ///     matching <see cref="Http2Helper" /> so credit is not drip-fed under the write lock per frame.
     /// </summary>
@@ -1025,9 +1028,15 @@ internal sealed class Http2OriginConnection : IDisposable
                             intake.Advance(length);
                             if (increment == 0)
                             {
-                                // RFC 7540 §6.9.1: a zero-increment WINDOW_UPDATE is a connection error PROTOCOL_ERROR.
-                                Fail(new IOException("HTTP/2 protocol error: WINDOW_UPDATE increment must not be zero."));
-                                return;
+                                // RFC 9113 §6.9.1: zero-increment WINDOW_UPDATE is a connection error when
+                                // streamId == 0, and a stream-level RST_STREAM(PROTOCOL_ERROR) otherwise.
+                                if (streamId == 0)
+                                {
+                                    Fail(new IOException("HTTP/2 protocol error: WINDOW_UPDATE increment must not be zero (connection-level)."));
+                                    return;
+                                }
+                                Http2Helper.EnqueueRstStream(Writer, streamId, Http2ErrorCode.ProtocolError);
+                                continue;
                             }
 
                             sendFlow.OnWindowUpdate(streamId, increment);
@@ -1372,16 +1381,26 @@ internal sealed class Http2OriginConnection : IDisposable
         var offset = 0;
         var end = payload.Length;
 
-        if ((flags & Http2FrameFlag.Padded) != 0 && payload.Length > 0)
+        if ((flags & Http2FrameFlag.Padded) != 0)
         {
+            if (payload.Length == 0 || payload[0] >= payload.Length)
+                throw new IOException("HTTP/2 protocol error: HEADERS padding length is the payload length or longer.");
             var padLength = payload[0];
             offset = 1;
-            end = Math.Max(offset, payload.Length - padLength);
+            end = payload.Length - padLength;
         }
 
-        if ((flags & Http2FrameFlag.Priority) != 0 && end - offset >= 5) offset += 5;
+        if ((flags & Http2FrameFlag.Priority) != 0)
+        {
+            if (end - offset < 5)
+                throw new IOException("HTTP/2 protocol error: HEADERS PRIORITY flag with truncated payload.");
+            offset += 5;
+        }
 
-        if (offset >= end) return ReadOnlySpan<byte>.Empty;
+        if (offset > end)
+            throw new IOException("HTTP/2 protocol error: HEADERS padding length is the payload length or longer.");
+
+        if (offset == end) return ReadOnlySpan<byte>.Empty;
 
         return payload.Slice(offset, end - offset);
     }
@@ -1397,8 +1416,8 @@ internal sealed class Http2OriginConnection : IDisposable
             return payload;
 
         var padLength = payload[0];
-        var end = Math.Max(1, payload.Length - padLength);
-        return payload.Slice(1, end - 1);
+        ThrowIfDataPaddingTooLong(padLength, payload.Length);
+        return payload.Slice(1, payload.Length - 1 - padLength);
     }
 
     /// <summary>Strips DATA PADDED framing into a new array (tunnel channel ownership).</summary>
@@ -1408,8 +1427,8 @@ internal sealed class Http2OriginConnection : IDisposable
             return payload.ToArray();
 
         var padLength = payload[0];
-        var end = Math.Max(1, payload.Length - padLength);
-        return payload.Slice(1, end - 1).ToArray();
+        ThrowIfDataPaddingTooLong(padLength, payload.Length);
+        return payload.Slice(1, payload.Length - 1 - padLength).ToArray();
     }
 
     /// <summary>
@@ -1421,8 +1440,8 @@ internal sealed class Http2OriginConnection : IDisposable
         if ((flags & Http2FrameFlag.Padded) == 0 || payload.Length == 0) return payload;
 
         var padLength = payload[0];
-        var end = Math.Max(1, payload.Length - padLength);
-        return payload.AsSpan(1, end - 1).ToArray();
+        ThrowIfDataPaddingTooLong(padLength, payload.Length);
+        return payload.AsSpan(1, payload.Length - 1 - padLength).ToArray();
     }
 
     /// <summary>Strips DATA padding while retaining ownership of a pooled payload buffer.</summary>
@@ -1433,8 +1452,14 @@ internal sealed class Http2OriginConnection : IDisposable
             return payload.AsMemory(0, payloadLength);
 
         var padLength = payload[0];
-        var end = Math.Max(1, payloadLength - padLength);
-        return payload.AsMemory(1, end - 1);
+        ThrowIfDataPaddingTooLong(padLength, payloadLength);
+        return payload.AsMemory(1, payloadLength - 1 - padLength);
+    }
+
+    private static void ThrowIfDataPaddingTooLong(int padLength, int payloadLength)
+    {
+        if (1 + padLength > payloadLength)
+            throw new IOException(DataPaddingProtocolError);
     }
 
     private void ProcessHeaderBlock(int streamId, ReadOnlySpan<byte> compressed, bool endStream) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.

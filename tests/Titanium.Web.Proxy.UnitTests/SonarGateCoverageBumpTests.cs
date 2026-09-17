@@ -20,6 +20,7 @@ using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.UnitTests;
 
@@ -356,10 +357,9 @@ public class SonarGateCoverageBumpTests
         CollectionAssert.AreEqual(new byte[] { (byte)'x' },
             del(both, Http2FrameFlag.Padded | Http2FrameFlag.Priority).ToArray());
 
-        // Priority but fewer than 5 bytes after pad strip → keep remaining.
+        // Priority but fewer than 5 bytes → PROTOCOL_ERROR (RFC 7540 §6.2).
         var shortPri = new byte[] { 0, 1, 2 };
-        CollectionAssert.AreEqual(new byte[] { 0, 1, 2 },
-            del(shortPri, Http2FrameFlag.Priority).ToArray());
+        Assert.ThrowsExactly<IOException>(() => del(shortPri, Http2FrameFlag.Priority));
     }
 
     private delegate ReadOnlySpan<byte> StripHeadersSpanDelegate(
@@ -552,11 +552,31 @@ public class SonarGateCoverageBumpTests
     public void ProxyLog_Http2ProbeDeferred_LogsWhenDebugEnabled()
     {
         var logger = new DebugCapturingLogger();
-        ProxyLog.Http2ProbeDeferredForClientAlpn(logger, "origin.test:443", 50);
+        ProxyLog.Http2ProbeDeferredForClientAlpn(logger, "origin.test:443");
         ProxyLog.Http2ProbeDeferredFailed(logger, "origin.test:443", new InvalidOperationException("boom"));
         Assert.IsTrue(logger.Messages.Count >= 2);
-        StringAssert.Contains(logger.Messages[0], "cold probe");
+        StringAssert.Contains(logger.Messages[0], "origin probe still in flight");
         StringAssert.Contains(logger.Messages[1], "deferred origin probe failed");
+    }
+
+    [TestMethod]
+    public void EnforceHttp2RelayHeaderSemantics_MitmObserveEnforceAndDisabled()
+    {
+        var enforce = typeof(Http2Helper).GetMethod(
+            "EnforceHttp2RelayHeaderSemantics",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        var logger = NullLogger.Instance;
+        using var cts = new CancellationTokenSource();
+        var state = new Http2ConnectionState(42, cts) { Http2RelayValidation = PolicyMode.Observe };
+
+        Assert.IsTrue((bool)enforce.Invoke(null, [state, true, logger, "mitm"])!);
+        Assert.IsFalse((bool)enforce.Invoke(null, [state, false, logger, "observe"])!);
+
+        state.Http2RelayValidation = PolicyMode.Enforce;
+        Assert.IsTrue((bool)enforce.Invoke(null, [state, false, logger, "enforce"])!);
+
+        state.Http2RelayValidation = PolicyMode.Disabled;
+        Assert.IsTrue((bool)enforce.Invoke(null, [state, false, logger, "disabled"])!);
     }
 
     private sealed class DebugCapturingLogger : Microsoft.Extensions.Logging.ILogger

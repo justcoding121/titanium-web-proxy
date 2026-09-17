@@ -21,6 +21,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     RetryPolicy path fires O(1) per stale reuse — not hot enough to justify result-shaping.
 /// </summary>
 [TestClass]
+[DoNotParallelize] // Uses global AppDomain.FirstChanceException; isolate to avoid cross-test interference
 public class StaleKeepAliveTests
 {
     private static readonly Encoding MsgEncoding = HttpHelper.GetEncodingFromContentType(null);

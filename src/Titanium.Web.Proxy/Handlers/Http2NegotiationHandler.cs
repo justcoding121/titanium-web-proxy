@@ -43,8 +43,8 @@ public partial class ProxyServer
     /// <param name="enablePrefetch">
     ///     Whether a cache hit should speculatively open the correctly-keyed connection ahead of the
     ///     client TLS handshake completing. A cold cache always opens exactly one discovery connection
-    ///     regardless of this flag. Callers wait only <see cref="Http2ServerHelloProbeBudget" /> before
-    ///     client ALPN so a slow origin does not stall ServerHello.
+    ///     regardless of this flag. Callers never wait on this task before ServerHello; a completed
+    ///     probe (cache hit) is applied immediately and an in-flight cold probe is applied after TLS.
     /// </param>
     /// <param name="cancellationToken">
     ///     Cancellation for the mandatory cold-cache discovery connection only; the optional cache-hit
@@ -503,18 +503,18 @@ public partial class ProxyServer
     }
 
     /// <summary>
-    ///     How long a cold HTTP/2 origin probe may block browser ServerHello. Chrome/Edge abort MITM
-    ///     TLS (EOF) and show <c>net::ERR_HTTP2_PROTOCOL_ERROR</c> when ServerHello is delayed by origin
-    ///     I/O, then recover on reload once <see cref="Http2OriginCapabilityCache" /> is warm. Cache hits
-    ///     complete without origin I/O and still win this wait. Learnable TLS failures that finish inside
-    ///     the budget keep same-CONNECT opaque fallback.
+    ///     How long a cold HTTP/2 origin probe may block after the MITM leaf certificate is ready.
+    ///     Callers start the probe in parallel with certificate generation so this wait does not stack on
+    ///     first-leaf BouncyCastle cost. Chrome/Edge abort MITM TLS (EOF) and show
+    ///     <c>net::ERR_HTTP2_PROTOCOL_ERROR</c> when ServerHello is delayed by origin I/O plus cert work.
+    ///     Cache hits complete without origin I/O and still win this wait.
     /// </summary>
     internal static readonly TimeSpan Http2ServerHelloProbeBudget = TimeSpan.FromMilliseconds(200);
 
     /// <summary>
-    ///     Returns the negotiation result when it finishes inside <see cref="Http2ServerHelloProbeBudget" />;
-    ///     otherwise <see langword="null"/> so the caller can offer <c>h2</c> speculatively and apply the
-    ///     probe after <c>AuthenticateAsServer</c>.
+    ///     Returns the negotiation result when it is already complete or finishes inside
+    ///     <see cref="Http2ServerHelloProbeBudget" />; otherwise <see langword="null"/> so the caller can
+    ///     offer <c>h2</c> speculatively without stalling ServerHello further.
     /// </summary>
     internal static async Task<Http2NegotiationResult?> TryCompleteHttp2NegotiationBeforeClientAlpnAsync(
         Task<Http2NegotiationResult> negotiationTask, CancellationToken cancellationToken)
@@ -529,12 +529,39 @@ public partial class ProxyServer
         }
         catch (TimeoutException) when (!negotiationTask.IsCompleted)
         {
-            // Budget elapsed; the probe is still running. A TimeoutException from the probe itself
-            // completes the task and must propagate — it is not a ServerHello-budget miss.
             return null;
         }
     }
 
+    /// <summary>
+    ///     Applies the result of a completed HTTP/2 negotiation <em>before</em> the client TLS
+    ///     <c>AuthenticateAsServerAsync</c> call, deciding what ALPN to offer in the ServerHello.
+    ///     <para>
+    ///         <b>Speculative h2 correctness:</b>
+    ///         <list type="bullet">
+    ///             <item>
+    ///                 Probe done before ServerHello (warm cache or probe finishes within
+    ///                 <see cref="Http2ServerHelloProbeBudget" />): <paramref name="negotiation" /> is not null.
+    ///                 <c>http2Supported</c> is set correctly — h2 is offered only if the origin actually
+    ///                 supports it and <see cref="TunnelConnectEventArgs.AllowHttpProtocolTranslation" /> is
+    ///                 respected for the h1-only origin case (no false h2 promise to the client).
+    ///             </item>
+    ///             <item>
+    ///                 Probe not done (slow cold start): speculation offers h2 if the client offered it.
+    ///                 Once TLS completes, <see cref="ApplyDeferredHttp2Negotiation" /> applies the real
+    ///                 result. If origin is h1-only the bridge is activated transparently — the browser
+    ///                 never sees a protocol violation. If the probe failed entirely the bridge is still
+    ///                 activated (h2-over-h1.1 fallback) — the browser retries at h1.1 semantics through
+    ///                 the bridge without knowing about the origin error.
+    ///             </item>
+    ///         </list>
+    ///     </para>
+    ///     <para>
+    ///         <b>AllowHttpProtocolTranslation=false:</b> honoured only when the probe finishes before
+    ///         ServerHello (the common warm path). In the rare cold-start speculative case the bridge is
+    ///         always activated when needed because the ALPN cannot be revised after ServerHello.
+    ///     </para>
+    /// </summary>
     private static void ApplyHttp2NegotiationBeforeClientAlpn(
         Http2NegotiationResult negotiation,
         out bool http2Supported,
@@ -562,11 +589,15 @@ public partial class ProxyServer
         if (negotiation.RetainedConnectionTask != null)
             prefetchConnectionTask = negotiation.RetainedConnectionTask;
 
-        // Speculative client h2 cannot be undone. Bridge onto HTTP/1.1 only when translation is
-        // allowed and origin TLS itself is not a learnable MITM failure (that path records bypass
-        // for the next CONNECT instead of opening a doomed H1 origin handshake).
+        _ = allowHttpProtocolTranslation;
+
+        // Speculative client h2 cannot be undone: ServerHello already advertised h2. Bridge onto
+        // HTTP/1.1 whenever the origin is not h2, including AllowHttpProtocolTranslation=false —
+        // otherwise Chrome/Edge see net::ERR_HTTP2_PROTOCOL_ERROR on a committed h2 ALPN.
+        // A learnable origin TLS failure records bypass for the next CONNECT instead of opening a
+        // doomed H1 origin handshake.
         if (clientHttp2AlreadyOffered && !negotiation.OriginSupportsHttp2 && !requiresH2OriginBridge
-            && allowHttpProtocolTranslation && !negotiation.LearnableOriginTlsFailure)
+            && !negotiation.LearnableOriginTlsFailure)
             requiresHttp11Bridge = true;
     }
 
@@ -591,7 +622,10 @@ public partial class ProxyServer
         catch (Exception ex)
         {
             ProxyLog.Http2ProbeDeferredFailed(logger, hostForBypass, ex);
-            return (clientHttp2AlreadyOffered && allowHttpProtocolTranslation, false, existingPrefetch);
+            // If h2 was already speculatively committed in the ServerHello, bridge to h1.1
+            // so the client does not get ERR_HTTP2_PROTOCOL_ERROR. If h1.1 was offered
+            // (probe completed before AuthenticateAsServer), no bridging is needed.
+            return (clientHttp2AlreadyOffered, false, existingPrefetch);
         }
 
         if (EnableDecryptFailureBypass && negotiation.LearnableOriginTlsFailure)

@@ -126,7 +126,8 @@ public partial class ProxyServer
                         await AwaitPendingClientHelloAsync(clientConnection);
                         await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
                         clientConnection.NegotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
-                        clientConnection.SslProtocol = SupportedSslProtocols;
+                        // Store the negotiated protocol, not the enabled-protocols bitmask.
+                        clientConnection.SslProtocol = sslStream.SslProtocol;
 
                         clientStream = new HttpClientStream(this, clientConnection, sslStream, BufferPool,
                             cancellationToken);
@@ -214,6 +215,12 @@ public partial class ProxyServer
                     var clientOffersHttp2 = clientHelloInfo.GetAlpn()?.Contains(SslApplicationProtocol.Http2)
                                              == true;
 
+                    var certName = HttpHelper.GetWildCardDomainName(httpsHostName,
+                        CertificateManager.DisableWildCardCertificates);
+                    var certGenerationTask = endPoint.GenericCertificate != null
+                        ? Task.FromResult<X509Certificate2?>(endPoint.GenericCertificate)
+                        : CertificateManager.CreateServerCertificate(certName);
+
                     // H3 route selection is independent of EnableHttp2 so EnableHttp2=false does not
                     // accidentally suppress forced-H3 / cached-H3 CONNECT routing.
                     var h3RouteAtConnect = ResolveHttp3Origin(
@@ -231,17 +238,32 @@ public partial class ProxyServer
                     {
                         var negotiationSession =
                             new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
-                        var negotiationTask = ResolveHttp2ForClientAsync(negotiationSession, clientOffersHttp2,
+                        deferredHttp2Negotiation = ResolveHttp2ForClientAsync(negotiationSession, clientOffersHttp2,
                             httpsHostName, args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort,
                             args.UpstreamHttpProtocol, args.AllowHttpProtocolTranslation,
                             EnableTcpServerConnectionPrefetch, cancellationToken,
                             originIsHttps: !endPoint.ForwardCleartext);
+                    }
+
+                    if (!fallThroughOpaque)
+                    {
+                    X509Certificate2? certificate = null;
+                    SslStream? sslStream = null;
+
+                    certificate = await certGenerationTask;
+                    if (certificate == null)
+                        throw new InvalidOperationException(
+                            $"Could not create a server certificate for '{certName}'.");
+
+                    if (deferredHttp2Negotiation != null)
+                    {
                         var negotiation = await TryCompleteHttp2NegotiationBeforeClientAlpnAsync(
-                            negotiationTask, cancellationToken);
+                            deferredHttp2Negotiation, cancellationToken);
                         if (negotiation != null)
                         {
                             ApplyHttp2NegotiationBeforeClientAlpn(negotiation, out http2Supported,
                                 out requiresHttp11Bridge, out requiresH2OriginBridge, out prefetchConnectionTask);
+                            deferredHttp2Negotiation = null;
 
                             if (EnableDecryptFailureBypass && negotiation.LearnableOriginTlsFailure)
                             {
@@ -256,34 +278,25 @@ public partial class ProxyServer
                         }
                         else
                         {
-                            ProxyLog.Http2ProbeDeferredForClientAlpn(logger, httpsHostName,
-                                (int)Http2ServerHelloProbeBudget.TotalMilliseconds);
+                            ProxyLog.Http2ProbeDeferredForClientAlpn(logger, httpsHostName);
+                            // Cold start: origin capability is still unknown. Speculatively offer h2 to
+                            // the client if the client offered it — the ALPN cannot be revised after
+                            // ServerHello. ApplyDeferredHttp2Negotiation (called after TLS completes)
+                            // will bridge to HTTP/1.1 if the origin turns out to be h1-only, which keeps
+                            // the client connection alive. AllowHttpProtocolTranslation=false is honoured
+                            // when the probe finishes *before* AuthenticateAsServerAsync (the common warm
+                            // path) — there the capability is known and h2 is not offered to the client
+                            // unless the origin actually supports it.
                             http2Supported = clientOffersHttp2;
-                            deferredHttp2Negotiation = negotiationTask;
                         }
                     }
 
                     if (!fallThroughOpaque)
                     {
-                    // do client authentication using certificate
-                    X509Certificate2? certificate = null;
-                    SslStream? sslStream = null;
                     try
                     {
                         sslStream = new SslStream(clientStream, false);
 
-                        var certName = HttpHelper.GetWildCardDomainName(httpsHostName,
-                            CertificateManager.DisableWildCardCertificates);
-                        certificate = endPoint.GenericCertificate ??
-                                      await CertificateManager.CreateServerCertificate(certName);
-                        if (certificate == null)
-                            throw new InvalidOperationException(
-                                $"Could not create a server certificate for '{certName}'.");
-
-                        // Use SslServerAuthenticationOptions so that SupportedSslProtocols is
-                        // respected rather than being hardcoded to TLS 1.2. h2 is offered when the
-                        // origin probe confirmed it, when a translation bridge will stand in, or when
-                        // a cold probe was deferred past Http2ServerHelloProbeBudget.
                         var options = new SslServerAuthenticationOptions
                         {
                             ServerCertificateContext = CertificateManager.CreateSslCertificateContext(certificate),
@@ -296,16 +309,13 @@ public partial class ProxyServer
                             ? SslExtensions.Http2AndHttp11ProtocolAsList
                             : SslExtensions.Http11ProtocolAsList;
 
-                        // Successfully managed to authenticate the client using the certificate
                         await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
 
                         clientStream.Connection.NegotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
 
-                        // HTTPS server created - we can now decrypt the client's traffic
                         clientStream = new HttpClientStream(this, clientStream.Connection, sslStream, BufferPool,
                             cancellationToken);
-                        sslStream = null; // clientStream was created, no need to keep SSL stream reference
-                        // Classic reverse-proxy TLS termination: decrypt for the client, cleartext to origin.
+                        sslStream = null;
                         isHttps = !endPoint.ForwardCleartext;
                     }
                     catch (Exception e)
@@ -316,12 +326,14 @@ public partial class ProxyServer
                         AbandonDeferredHttp2Negotiation(deferredHttp2Negotiation);
                         deferredHttp2Negotiation = null;
 
-                        var certName = certificate?.GetNameInfo(X509NameType.SimpleName, false);
+                        var issuedCertName = certificate?.GetNameInfo(X509NameType.SimpleName, false);
                         var session = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
                         throw new ProxyConnectException(
-                            $"Couldn't authenticate host '{httpsHostName}' with certificate '{certName}'.", e, session);
+                            $"Couldn't authenticate host '{httpsHostName}' with certificate '{issuedCertName}'.", e, session);
                     }
 
+                    if (!fallThroughOpaque)
+                    {
                     if (deferredHttp2Negotiation != null)
                     {
                         var applied = await AwaitAndApplyDeferredHttp2NegotiationAsync(
@@ -499,6 +511,8 @@ public partial class ProxyServer
                             // handling of the same (never expected from a compliant client) edge case.
                         }
                     }
+                    } // post-TLS HTTP/2 routing
+                    } // !fallThroughOpaque (TLS + HTTP/2)
                     } // !fallThroughOpaque — MITM completed (or continued below for HTTP/1)
                 }
                 else

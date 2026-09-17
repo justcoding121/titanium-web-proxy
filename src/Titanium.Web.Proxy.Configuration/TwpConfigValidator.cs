@@ -267,6 +267,7 @@ public static class TwpConfigValidator
         RequireKnownPolicy(policy.HeaderLimits, "server.policyModes.headerLimits", errors);
         RequireKnownPolicy(policy.AdmissionControl, "server.policyModes.admissionControl", errors);
         RequireKnownPolicy(policy.Http2AbuseBudget, "server.policyModes.http2AbuseBudget", errors);
+        RequireKnownPolicy(policy.Http2RelayValidation, "server.policyModes.http2RelayValidation", errors);
     }
 
     private static void ValidateUpstream(UpstreamConfig? upstream, List<string> errors)

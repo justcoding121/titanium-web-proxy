@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.ViewModels;
@@ -235,6 +237,73 @@ public class AutoResponderAndSelectionGuardTests
             await Task.Delay(50);
 
             StringAssert.Contains(vm.StatusText, "Copied URL");
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
+    public void HttpStatus_ParsesEmptyAs200_RejectsJunk()
+    {
+        Assert.IsTrue(MainWindowViewModel.TryParseHttpStatus("", out var empty));
+        Assert.AreEqual(200, empty);
+        Assert.IsTrue(MainWindowViewModel.TryParseHttpStatus("404", out var notFound));
+        Assert.AreEqual(404, notFound);
+        Assert.IsFalse(MainWindowViewModel.TryParseHttpStatus("abc", out _));
+        Assert.IsFalse(MainWindowViewModel.TryParseHttpStatus("99", out _));
+        Assert.IsFalse(MainWindowViewModel.TryParseHttpStatus("600", out _));
+    }
+
+    [TestMethod]
+    public async Task AutoResponderStatusText_EmptyHasNoError_InvalidCharsAreFriendly()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-ar-status-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            settings.Current.AutoStartCapture = false;
+            settings.Current.AutoSystemProxyOnStart = false;
+            settings.Save();
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception);
+            var errors = vm;
+
+            vm.AutoResponderStatusText = "";
+            Assert.IsFalse(vm.GetErrors(nameof(MainWindowViewModel.AutoResponderStatusText)).Cast<object>().Any());
+            Assert.AreEqual(200, vm.AutoResponderStatus);
+
+            vm.AutoResponderStatusText = "abc";
+            var messages = errors.GetErrors(nameof(MainWindowViewModel.AutoResponderStatusText)).Cast<string>().ToList();
+            Assert.AreEqual(1, messages.Count);
+            Assert.AreEqual(MainWindowViewModel.InvalidHttpStatusMessage("abc"), messages[0]);
+
+            var before = vm.AutoResponder.Rules.Count;
+            vm.AddAutoResponderRuleCommand.Execute(null);
+            await Task.Delay(50);
+            Assert.AreEqual(before, vm.AutoResponder.Rules.Count);
+            StringAssert.Contains(vm.StatusText, "Invalid status");
+
+            vm.AutoResponderStatusText = "";
+            vm.AddAutoResponderRuleCommand.Execute(null);
+            await Task.Delay(50);
+            Assert.AreEqual(before + 1, vm.AutoResponder.Rules.Count);
+            Assert.AreEqual(200, vm.AutoResponder.Rules[^1].StatusCode);
+
+            vm.EnsureShutdown();
         }
         finally
         {

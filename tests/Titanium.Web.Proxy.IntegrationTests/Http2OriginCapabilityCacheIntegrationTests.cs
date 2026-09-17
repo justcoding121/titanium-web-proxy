@@ -87,7 +87,7 @@ public class Http2OriginCapabilityCacheIntegrationTests
 
     [TestMethod]
     [Timeout(30 * 1000)]
-    public async Task Http2_ProbeAlpnRejectedByH1OnlyOrigin_DoesNotCacheFalse()
+    public async Task Http2_ProbeAlpnRejectedByH1OnlyOrigin_CachesFalseForTtl()
     {
         using var rawServer = new Http11OnlyOriginServer(CreateOriginCertificate());
 
@@ -101,14 +101,17 @@ public class Http2OriginCapabilityCacheIntegrationTests
         Assert.AreEqual(System.Net.HttpStatusCode.OK, response.StatusCode,
             "Auto mode should fall back to HTTP/1.1 after the h2-only ALPN probe is rejected.");
 
-        // NegotiateHttp2Async must not Set(false) on probe exceptions (including ALPN mismatch),
-        // or every later tunnel would be pinned to h1 for the full TTL.
+        // NegotiateHttp2Async caches false when the origin explicitly rejects h2 via ALPN
+        // (SEC_E_NO_APPLICATION_PROTOCOL). This prevents every parallel CONNECT tunnel from
+        // re-probing the same h1.1-only origin and stalling each one's ServerHello for the duration
+        // of the probe. Transient network/cert failures are NOT cached (IsAlpnNegotiationFailure guards).
         var capabilityKey = Network.Tcp.TcpConnectionFactory.GetConnectionCacheKey(
             "localhost", rawServer.Port, isHttps: true, applicationProtocols: null,
             upStreamEndPoint: null, externalProxy: null);
 
-        Assert.IsFalse(proxy.Http2OriginCapabilityCache.TryGet(capabilityKey, out var supported),
-            "ALPN-rejected h2 probe must leave the capability cache empty (no false entry).");
-        Assert.IsFalse(supported);
+        Assert.IsTrue(proxy.Http2OriginCapabilityCache.TryGet(capabilityKey, out var supported),
+            "ALPN-rejected probe is definitive: the capability cache must hold a false entry so " +
+            "parallel and subsequent tunnels skip redundant h2 probes to the same h1.1-only origin.");
+        Assert.IsFalse(supported, "The cached value must be false — origin does not support h2.");
     }
 }

@@ -859,7 +859,7 @@ public sealed partial class MainWindowViewModel
             "2. Install the exported .cer (or .pem) on the device as a trusted CA.\n" +
             $"3. Set the device HTTP proxy to this PC's LAN IP on port {BindPort} " +
             $"(current bind is {BindAddress}:{BindPort}).\n\n" +
-            "Use Bind address 0.0.0.0 so other devices can reach the proxy.";
+            "Use Bind address 0.0.0.0 or * so other devices can reach the proxy.";
 
         var owner = TryGetMainWindow();
         if (await AwaitDialogAsync(_dialogs.ShowDeviceCaSetupAsync(owner, message)))
@@ -1067,9 +1067,14 @@ public sealed partial class MainWindowViewModel
             return true;
 
         // Stay on UI sync context - ResolveTerminalTrustFailureAsync shows dialogs.
+        // Use CancellationToken.None here: VerifyOsUserSslTrust is a quick Root-store lookup and
+        // must not be aborted by the status-revert timer (which fires on a background thread and
+        // cancels StatusCancelToken). The _decryptEnableGeneration counter in EnableDecryptHttpsAsync
+        // already handles superseded enable requests, so token-level cancellation is redundant and
+        // causes a TaskCanceledException race on macOS when the guard-status 3s revert fires.
         var trusted = await RunOffUiAsync(
             () => _interception.VerifyOsUserSslTrust(),
-            StatusCancelToken);
+            CancellationToken.None);
         if (trusted)
         {
             _interception.ScheduleFirefoxEnterpriseRootsBestEffort();

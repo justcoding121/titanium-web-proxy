@@ -103,7 +103,7 @@ static Titanium.Web.Proxy.Models.HttpHeader.Encoding.get -> System.Text.Encoding
 static Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Failed() -> Titanium.Web.Proxy.Models.ProxyAuthenticationContext!
 static Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Succeeded() -> Titanium.Web.Proxy.Models.ProxyAuthenticationContext!
 static Titanium.Web.Proxy.Options.ProxyPolicyModes.AllEnforce.get -> Titanium.Web.Proxy.Options.ProxyPolicyModes!
-static Titanium.Web.Proxy.Options.ProxyPolicyModes.Create(Titanium.Web.Proxy.Options.PolicyMode bodyBudget, Titanium.Web.Proxy.Options.PolicyMode decompressionRatio, Titanium.Web.Proxy.Options.PolicyMode headerLimits, Titanium.Web.Proxy.Options.PolicyMode admissionControl, Titanium.Web.Proxy.Options.PolicyMode http2AbuseBudget) -> Titanium.Web.Proxy.Options.ProxyPolicyModes!
+static Titanium.Web.Proxy.Options.ProxyPolicyModes.Create(Titanium.Web.Proxy.Options.PolicyMode bodyBudget, Titanium.Web.Proxy.Options.PolicyMode decompressionRatio, Titanium.Web.Proxy.Options.PolicyMode headerLimits, Titanium.Web.Proxy.Options.PolicyMode admissionControl, Titanium.Web.Proxy.Options.PolicyMode http2AbuseBudget, Titanium.Web.Proxy.Options.PolicyMode http2RelayValidation = Titanium.Web.Proxy.Options.PolicyMode.Disabled) -> Titanium.Web.Proxy.Options.ProxyPolicyModes!
 static Titanium.Web.Proxy.Options.ProxyProfileSettings.Balanced.get -> Titanium.Web.Proxy.Options.ProxyProfileSettings!
 static Titanium.Web.Proxy.Options.ProxyProfileSettings.For(Titanium.Web.Proxy.Options.ProxyProfile profile) -> Titanium.Web.Proxy.Options.ProxyProfileSettings!
 static Titanium.Web.Proxy.Options.ProxyProfileSettings.LegacyCompatible.get -> Titanium.Web.Proxy.Options.ProxyProfileSettings!
@@ -669,6 +669,7 @@ Titanium.Web.Proxy.Options.PolicyFamily.BodyBudget = 0 -> Titanium.Web.Proxy.Opt
 Titanium.Web.Proxy.Options.PolicyFamily.DecompressionRatio = 1 -> Titanium.Web.Proxy.Options.PolicyFamily
 Titanium.Web.Proxy.Options.PolicyFamily.HeaderLimits = 2 -> Titanium.Web.Proxy.Options.PolicyFamily
 Titanium.Web.Proxy.Options.PolicyFamily.Http2AbuseBudget = 4 -> Titanium.Web.Proxy.Options.PolicyFamily
+Titanium.Web.Proxy.Options.PolicyFamily.Http2RelayValidation = 5 -> Titanium.Web.Proxy.Options.PolicyFamily
 Titanium.Web.Proxy.Options.PolicyMode
 Titanium.Web.Proxy.Options.PolicyMode.Disabled = 0 -> Titanium.Web.Proxy.Options.PolicyMode
 Titanium.Web.Proxy.Options.PolicyMode.Enforce = 2 -> Titanium.Web.Proxy.Options.PolicyMode

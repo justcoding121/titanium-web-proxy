@@ -61,5 +61,27 @@ public enum PolicyFamily
     ///     HTTP/2 abuse budgets: the open-header-block CONTINUATION frame-count/wall-clock bound and
     ///     the peer-initiated incomplete-stream-reset budget.
     /// </summary>
-    Http2AbuseBudget
+    Http2AbuseBudget,
+
+    /// <summary>
+    ///     Whether HPACK header blocks on the H2↔H2 compressed-relay path
+    ///     (<c>httpInterceptionEnabled = false</c>) are semantically validated per RFC 9113 §8.3.
+    ///     Unlike framing (always enforced, no Observe action), header semantics can be logged
+    ///     without corrupting connection state.
+    ///     <para>
+    ///         <see cref="PolicyMode.Disabled"/> (default on <see cref="ProxyProfile.Balanced"/>)
+    ///         skips HPACK decode entirely — maximum throughput when upstream peers are trusted.
+    ///     </para>
+    ///     <para>
+    ///         <see cref="PolicyMode.Observe"/> decodes and records semantic violations without
+    ///         rejecting the stream. Does not mutate headers, so the compressed-relay
+    ///         <c>MutationCount</c> fast path is unaffected when the family is Disabled.
+    ///     </para>
+    ///     <para>
+    ///         <see cref="PolicyMode.Enforce"/> (default on <see cref="ProxyProfile.PublicFacing"/>
+    ///         and <see cref="ProxyPolicyModes.AllEnforce"/>) decodes and sends
+    ///         <c>GOAWAY(PROTOCOL_ERROR)</c> on violations.
+    ///     </para>
+    /// </summary>
+    Http2RelayValidation
 }

@@ -1,5 +1,3 @@
-# Features
-
 Short catalog of what Titanium offers. Product how-tos live on the **[website Features page](https://titaniumproxy.com/docs/features)** — use that as the canonical list. This wiki page is a pointer for GitHub visitors.
 
 ## Highlights
