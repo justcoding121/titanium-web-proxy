@@ -324,7 +324,7 @@ jobs:
         test -f "./artifacts/inspector-$rid/TitaniumInspector" || test -f "./artifacts/inspector-$rid/Titanium.Inspector"
     - name: Upload UI failure artifacts
       if: failure()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ui-portable-${{ matrix.os }}
         path: |
@@ -387,7 +387,7 @@ jobs:
           --results-directory "artifacts/cli-e2e-${{ matrix.os }}"
     - name: Upload CLI E2E artifacts
       if: failure()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: cli-e2e-${{ matrix.os }}
         path: |
@@ -512,7 +512,7 @@ jobs:
         }
 
     - name: Upload MIT package SBOM
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: mit-nuget-sbom
         path: sbom/*.cdx.json
