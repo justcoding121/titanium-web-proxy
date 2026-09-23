@@ -31,7 +31,6 @@ public partial class ExcludedHostsWindow : Window
         _onSaved = onSaved;
         _interception = interception;
         InitializeComponent();
-        IntroText.Text = OsTrustUxCopy.ExcludedHostsIntro();
         Title = readOnly ? "Excluded hosts (view)" : "Excluded hosts";
         _settings.EnsureExclusionsSeeded();
         LoadFromSettings();
@@ -84,9 +83,6 @@ public partial class ExcludedHostsWindow : Window
         BypassHostsBox.Text = HostListFormat.Join(s.SystemProxyBypassHosts);
         SkipHostsBox.Text = HostListFormat.Join(s.DecryptSkipHosts);
         LearningEnabledCheck.IsChecked = s.EnableDecryptFailureBypass;
-        ScopeBanner.Text = _readOnly
-            ? "Read-only view of saved exclusion rules (including factory seeds)."
-            : "Changes to OS bypass apply when System proxy is on (re-applied on save if active).";
     }
 
     private void UpdateLearningPausedUi()

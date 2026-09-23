@@ -6,10 +6,6 @@
         Width="640" Height="600"
         WindowStartupLocation="CenterOwner">
   <DockPanel Margin="16">
-    <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
-      <TextBlock x:Name="IntroText" TextWrapping="Wrap" Opacity="0.9" />
-      <TextBlock x:Name="ScopeBanner" TextWrapping="Wrap" Opacity="0.75" />
-    </StackPanel>
     <DockPanel DockPanel.Dock="Bottom" Margin="0,16,0,0">
       <Button x:Name="ResetDefaultsButton" DockPanel.Dock="Left" Content="Reset to defaults" MinWidth="120"
               AutomationProperties.AutomationId="ExcludedHostsResetDefaults" />
@@ -47,7 +43,7 @@
                  AutomationProperties.AutomationId="ExcludedLearnedList" />
         <TextBlock x:Name="LearnedEmptyText" Opacity="0.6" Text="No hosts learned yet." />
         <StackPanel Orientation="Horizontal" Spacing="8">
-          <Button x:Name="PromoteLearnedButton" Content="Add to not decrypted hosts" MinWidth="160"
+          <Button x:Name="PromoteLearnedButton" Content="Promote to not decrypted hosts" MinWidth="160"
                   AutomationProperties.AutomationId="ExcludedLearnedPromote" />
           <Button x:Name="ForgetLearnedButton" Content="Forget" MinWidth="88"
                   AutomationProperties.AutomationId="ExcludedLearnedForget" />
