@@ -2302,6 +2302,24 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowSelectedOpaqueHint)));
             NotifyFilterSelectionProperties();
 
+            // Drop previous Inspect strings / preview immediately so a large prior selection
+            // does not stay duplicated in the VM while the next row loads from disk.
+            if (value is null)
+            {
+                RefreshSelectedInspectors();
+            }
+            else
+            {
+                SelectedBody = "";
+                SelectedHex = "";
+                SelectedFrames = "";
+                SelectedSseEvents = "";
+                SelectedProtobufDecoded = "";
+                BodyPreviewBitmap = null;
+                _cachedPrettyBody = null;
+                _cachedPrettySessionId = null;
+            }
+
             if (value is not null && !_suppressOpenSessionDetails)
             {
                 var openingPane = !ShowSessionDetails;
@@ -2319,7 +2337,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             {
                 _ = LoadSelectedBodiesAsync(value);
             }
-            else
+            else if (value is not null)
             {
                 RefreshSelectedInspectors();
             }

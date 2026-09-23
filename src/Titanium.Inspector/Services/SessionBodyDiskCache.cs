@@ -106,6 +106,14 @@ public sealed class SessionBodyDiskCache : IDisposable
         snapshot.ResponseBodyOriginalSize = loaded.ResponseBodyOriginalSize;
         snapshot.RequestBodyCapture = loaded.RequestBodyCapture;
         snapshot.ResponseBodyCapture = loaded.ResponseBodyCapture;
+        snapshot.UpstreamRequestBodyBytes = loaded.UpstreamRequestBodyBytes;
+        snapshot.UpstreamResponseBodyBytes = loaded.UpstreamResponseBodyBytes;
+        snapshot.GrpcFrames = loaded.GrpcFrames;
+        snapshot.MultipartParts = loaded.MultipartParts;
+        snapshot.ProtobufDecodedText = loaded.ProtobufDecodedText;
+        // Do not clobber live WS/SSE accumulation still held on the row after the first spill.
+        snapshot.WebSocketFrames ??= loaded.WebSocketFrames;
+        snapshot.SseEvents ??= loaded.SseEvents;
         return true;
     }
 

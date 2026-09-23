@@ -190,6 +190,189 @@ public class SessionStoreStressTests
         }
     }
 
+    [TestMethod]
+    public async Task LargeBodies_AfterSpillAndDeselect_InMemoryBodyBytesNearZero()
+    {
+        const int sessions = 80;
+        const int bodyBytes = 512 * 1024;
+        var dir = TempCacheDir();
+        try
+        {
+            using var store = new SessionStore(
+                new SessionStoreOptions
+                {
+                    MaxSessionsInMemory = 10_000,
+                    SpillBodiesToDisk = true,
+                    DiskCacheMaxBytes = 2L * 1024 * 1024 * 1024,
+                },
+                dir);
+
+            for (var i = 1; i <= sessions; i++)
+            {
+                store.Add(MakeSession(i, bodyBytes));
+            }
+
+            await store.FlushSpillAsync();
+
+            // ~80MB of bodies must leave RAM after spill (headers remain).
+            Assert.IsTrue(
+                store.InMemoryBodyBytes < 256 * 1024,
+                $"After spill expected <256KB in-memory bodies, got {store.InMemoryBodyBytes}");
+
+            for (var i = 1; i <= sessions; i++)
+            {
+                var snap = store.TryGet(i)!;
+                store.PinnedSessionId = i;
+                await store.EnsureBodiesLoadedAsync(snap);
+                Assert.IsNotNull(snap.ResponseBodyBytes);
+                store.PinnedSessionId = null;
+                Assert.IsNull(snap.ResponseBodyBytes, "Deselect must unload");
+            }
+
+            await store.FlushSpillAsync();
+            Assert.IsTrue(
+                store.InMemoryBodyBytes < 256 * 1024,
+                $"After pin/unpin sweep expected <256KB bodies, got {store.InMemoryBodyBytes}");
+
+            // Late NotifyUpdated must not re-attach payloads after spill.
+            var last = store.TryGet(sessions)!;
+            last.ResponseBodyBytes = new byte[bodyBytes];
+            last.ResponseBodyText = new string('z', 1024);
+            store.NotifyUpdated(last);
+            Assert.IsNull(last.ResponseBodyBytes);
+            Assert.IsTrue(store.InMemoryBodyBytes < 256 * 1024);
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [TestMethod]
+    public async Task LiveCapture_LargeResponses_WorkingSetStableAfterSpill()
+    {
+        Assert.IsTrue(QuicListener.IsSupported,
+            "QuicListener.IsSupported must be true (install libmsquic/MsQuic on Linux/macOS CI).");
+
+        using var origin = new HttpListener();
+        var probe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        probe.Start();
+        var originPort = ((IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+        origin.Prefixes.Add($"http://127.0.0.1:{originPort}/");
+        origin.Start();
+        var payloadBytes = new byte[400 * 1024];
+        payloadBytes.AsSpan().Fill(0x41);
+        using var originCts = new CancellationTokenSource();
+        _ = Task.Run(async () =>
+        {
+            while (!originCts.IsCancellationRequested && origin.IsListening)
+            {
+                try
+                {
+                    var ctx = await origin.GetContextAsync().WaitAsync(originCts.Token);
+                    ctx.Response.StatusCode = 200;
+                    ctx.Response.ContentType = "application/octet-stream";
+                    ctx.Response.ContentLength64 = payloadBytes.Length;
+                    await ctx.Response.OutputStream.WriteAsync(payloadBytes, originCts.Token);
+                    ctx.Response.Close();
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch
+                {
+                    return;
+                }
+            }
+        }, originCts.Token);
+
+        var dir = TempCacheDir();
+        try
+        {
+            using var store = new SessionStore(
+                new SessionStoreOptions
+                {
+                    MaxSessionsInMemory = 500,
+                    SpillBodiesToDisk = true,
+                    DiskCacheMaxBytes = 512L * 1024 * 1024,
+                },
+                dir);
+
+            using var interception = new InterceptionService(new RecordingSystemProxyController());
+            interception.SessionCaptured += (_, snap) => store.Add(snap);
+            interception.SessionUpdated += (_, snap) => store.NotifyUpdated(snap);
+
+            await interception.StartAsync(IPAddress.Loopback, 0);
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            var baselineWs = Environment.WorkingSet;
+
+            const int requests = 120;
+            using var handler = new HttpClientHandler
+            {
+                Proxy = new WebProxy($"http://127.0.0.1:{interception.BoundPort}"),
+                UseProxy = true,
+            };
+            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(60) };
+            for (var i = 0; i < requests; i++)
+            {
+                using var resp = await http.GetAsync($"http://127.0.0.1:{originPort}/big/{i}");
+                resp.EnsureSuccessStatusCode();
+            }
+
+            var deadline = DateTime.UtcNow.AddSeconds(20);
+            while (store.Count < requests && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(50);
+            }
+
+            await store.FlushSpillAsync();
+            // Cycle selection like a user browsing the grid.
+            foreach (var snap in store.Sessions.Take(40).ToList())
+            {
+                store.PinnedSessionId = snap.Id;
+                await store.EnsureBodiesLoadedAsync(snap);
+                store.PinnedSessionId = null;
+            }
+
+            await store.FlushSpillAsync();
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            var afterWs = Environment.WorkingSet;
+
+            Assert.IsTrue(store.Count >= requests / 2, $"Expected captures, got {store.Count}");
+            Assert.IsTrue(
+                store.InMemoryBodyBytes < 2L * 1024 * 1024,
+                $"Payload RAM after spill/deselect should be low, got {store.InMemoryBodyBytes}");
+            // Working set may not return to baseline (LOH / native), but must not hold ~120*400KB.
+            var growth = afterWs - baselineWs;
+            Assert.IsTrue(
+                growth < 180L * 1024 * 1024,
+                $"Working set grew {growth / (1024 * 1024)} MB (baseline {baselineWs / (1024 * 1024)} → {afterWs / (1024 * 1024)}); possible body leak");
+
+            interception.Stop();
+        }
+        finally
+        {
+            originCts.Cancel();
+            try
+            {
+                origin.Stop();
+                origin.Close();
+            }
+            catch
+            {
+                // ignore
+            }
+
+            TryDeleteDir(dir);
+        }
+    }
+
     private static void TryDeleteDir(string dir)
     {
         try

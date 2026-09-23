@@ -232,6 +232,47 @@ public class SessionStoreRetentionTests
     }
 
     [TestMethod]
+    public async Task Deselect_UnloadsUpstreamAndProtobuf_ReloadsFromDisk()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            using var store = new SessionStore(
+                new SessionStoreOptions
+                {
+                    MaxSessionsInMemory = 100,
+                    SpillBodiesToDisk = true,
+                    DiskCacheMaxBytes = 64L * 1024 * 1024,
+                },
+                dir);
+
+            store.PinnedSessionId = 1;
+            var s1 = MakeSession(1, 200);
+            s1.UpstreamRequestBodyBytes = [9, 9, 9, 9];
+            s1.ProtobufDecodedText = "field 1: hello";
+            s1.GrpcFrames = [new GrpcFrameSnapshot { Length = 4, HexPreview = "09090909" }];
+            store.Add(s1);
+            await store.FlushSpillAsync();
+
+            store.PinnedSessionId = null;
+            Assert.IsNull(s1.RequestBodyBytes);
+            Assert.IsNull(s1.UpstreamRequestBodyBytes);
+            Assert.IsNull(s1.ProtobufDecodedText);
+            Assert.IsNull(s1.GrpcFrames);
+
+            await store.EnsureBodiesLoadedAsync(s1, CancellationToken.None);
+            Assert.IsNotNull(s1.RequestBodyBytes);
+            CollectionAssert.AreEqual(new byte[] { 9, 9, 9, 9 }, s1.UpstreamRequestBodyBytes);
+            Assert.AreEqual("field 1: hello", s1.ProtobufDecodedText);
+            Assert.IsNotNull(s1.GrpcFrames);
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [TestMethod]
     public void InFlightSession_DoesNotSpill()
     {
         var dir = TempCacheDir();

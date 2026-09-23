@@ -491,6 +491,32 @@ public sealed class SessionStore : IDisposable
             n += (long)respText.Length * sizeof(char);
         }
 
+        if (s.UpstreamRequestBodyBytes is { } upReq)
+        {
+            n += upReq.Length;
+        }
+
+        if (s.UpstreamResponseBodyBytes is { } upResp)
+        {
+            n += upResp.Length;
+        }
+
+        if (s.ProtobufDecodedText is { } proto)
+        {
+            n += (long)proto.Length * sizeof(char);
+        }
+
+        if (s.WebSocketFrames is { Count: > 0 } frames)
+        {
+            foreach (var f in frames)
+            {
+                if (f.PayloadPreview is { } preview)
+                {
+                    n += (long)preview.Length * sizeof(char);
+                }
+            }
+        }
+
         return n;
     }
 
@@ -498,7 +524,12 @@ public sealed class SessionStore : IDisposable
         s.RequestBodyBytes is not null ||
         s.ResponseBodyBytes is not null ||
         s.RequestBodyText is not null ||
-        s.ResponseBodyText is not null;
+        s.ResponseBodyText is not null ||
+        s.UpstreamRequestBodyBytes is not null ||
+        s.UpstreamResponseBodyBytes is not null ||
+        s.GrpcFrames is not null ||
+        s.MultipartParts is not null ||
+        s.ProtobufDecodedText is not null;
 
     private static bool IsInFlight(SessionSnapshot s) =>
         s.ResponseBodyStreamOpen ||
@@ -511,12 +542,23 @@ public sealed class SessionStore : IDisposable
     private static bool IsReadyToArchive(SessionSnapshot s) =>
         !IsInFlight(s) && s.StatusCode is not null;
 
+    /// <summary>
+    /// Drop heavy HTTP/gRPC payload fields from RAM after they are on disk (or being written).
+    /// Headers stay. WebSocket frame lists stay — they keep growing after the first spill
+    /// and must not be nulled while live handlers still append.
+    /// </summary>
     private static void ClearBodyFields(SessionSnapshot snap)
     {
         snap.RequestBodyBytes = null;
         snap.ResponseBodyBytes = null;
         snap.RequestBodyText = null;
         snap.ResponseBodyText = null;
+        snap.UpstreamRequestBodyBytes = null;
+        snap.UpstreamResponseBodyBytes = null;
+        snap.GrpcFrames = null;
+        snap.MultipartParts = null;
+        snap.ProtobufDecodedText = null;
+        snap.SseEvents = null;
     }
 
     private void MaybeSpillFinishedLocked(SessionSnapshot snapshot)
@@ -537,6 +579,14 @@ public sealed class SessionStore : IDisposable
         // (avoids rewriting on every WS frame / timing tick). Bodies stay unloaded in RAM.
         if (snapshot.BodiesOnDisk)
         {
+            var keepInRam = _pinnedSessionId is long pin && snapshot.Id == pin;
+            // Timing / process-resolve / late pipeline updates must not leave payloads in RAM
+            // after spill (e.g. a second FillResponse or kept KeepBody buffers).
+            if (!keepInRam && HasInMemoryBodies(snapshot))
+            {
+                ClearBodyFields(snapshot);
+            }
+
             RecalcInMemoryBodyBytesLocked();
             return;
         }

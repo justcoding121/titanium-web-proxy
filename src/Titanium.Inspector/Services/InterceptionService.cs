@@ -1627,11 +1627,10 @@ public sealed class InterceptionService : IDisposable
         }
         finally
         {
-            // Tunnel sessions are complete after CONNECT response (no AfterResponse for opaque tunnels).
-            if (!e.DecryptSsl)
-            {
-                _live.TryRemove(e.HttpClient, out _);
-            }
+            // CONNECT capture is done after the response. Keep the snapshot in SessionStore;
+            // tunnel byte counters hold the snap via closure. Leaving DecryptSsl entries in
+            // _live roots every CONNECT HttpClient for the process lifetime.
+            _live.TryRemove(e.HttpClient, out _);
         }
 
         return Task.CompletedTask;
