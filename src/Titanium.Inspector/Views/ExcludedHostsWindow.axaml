@@ -18,7 +18,7 @@
       <StackPanel Spacing="12">
         <TextBlock FontWeight="SemiBold" Text="Bypass proxy (OS)" />
         <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                   Text="Traffic never reaches Inspector when System proxy is on. Seeded with Microsoft identity / SSO / RDP hosts. Removing them can break sign-in while System proxy is enabled." />
+                   Text="Traffic never reaches Inspector when System proxy is on. Seeded with Microsoft identity / SSO / RDP hosts. Removing them can break RDP sign-in while System proxy is enabled." />
         <TextBox x:Name="BypassHostsBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="120"
                  Watermark="*.microsoftonline.com&#x0a;login.live.com"
                  FontFamily="Consolas,Courier New,monospace"
