@@ -720,11 +720,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
 
     private void WireSessionPipelineHandlers()
     {
-        _buffer.SessionAdded += snapshot => MarshalToUi(() =>
-        {
-            _store.Add(snapshot);
-            OnSessionAddedToFilter(snapshot);
-        });
+        _buffer.SessionsBatchAdded += batch => MarshalToUi(() => OnSessionsBatchAdded(batch));
         _store.SessionsRemoved += removed => MarshalToUi(() => OnSessionsRemoved(removed));
         _interception.SessionCaptured += (_, snap) => _buffer.Publish(snap);
         _interception.SessionUpdated += (_, snap) =>

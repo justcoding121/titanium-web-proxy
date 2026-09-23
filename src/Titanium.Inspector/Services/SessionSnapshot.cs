@@ -41,6 +41,12 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     /// and must be reloaded via <see cref="SessionStore.EnsureBodiesLoadedAsync"/>.
     /// </summary>
     public bool BodiesOnDisk { get; set; }
+
+    /// <summary>
+    /// Body file was removed by the disk-cache budget (or is otherwise unavailable).
+    /// Headers and metadata remain; Inspect should explain the missing body.
+    /// </summary>
+    public bool BodiesMissingFromDisk { get; set; }
     public bool IsWebSocket
     {
         get => _isWebSocket;

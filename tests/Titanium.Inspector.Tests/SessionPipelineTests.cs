@@ -119,7 +119,7 @@ public class SessionPipelineTests
     }
 
     [TestMethod]
-    public async Task SessionCountText_BodySearchShowsInMemoryOnlyScope_WhenBodiesSpilled()
+    public async Task SessionCountText_BodySearchFindsSpilledBodies()
     {
         var settingsPath = Path.Combine(Path.GetTempPath(), "twp-inspector-body-scope-" + Guid.NewGuid().ToString("N") + ".json");
         var cacheDir = Path.Combine(Path.GetTempPath(), "twp-session-cache-" + Guid.NewGuid().ToString("N"));
@@ -130,11 +130,8 @@ public class SessionPipelineTests
                 new SessionStoreOptions
                 {
                     MaxSessionsInMemory = 100,
-                    HotBodySessions = 1,
                     SpillBodiesToDisk = true,
-                    MaxCaptureBytesInMemory = long.MaxValue,
                     DiskCacheMaxBytes = 64L * 1024 * 1024,
-                    DiskCacheMaxAgeDays = 1,
                 },
                 cacheDir);
             var buffer = new SessionStreamBuffer(registry);
@@ -166,16 +163,19 @@ public class SessionPipelineTests
                 ResponseBodyBytes = new byte[32],
             };
 
-            registry.Add(s1);
-            registry.Add(s2);
+            // Seed through VM so the filtered grid sees the rows.
+            vm.SeedSession(s1);
+            vm.SeedSession(s2);
             await registry.Store.FlushSpillAsync();
 
             Assert.IsTrue(registry.Store.SpilledCount >= 1, "Expected at least one spilled body");
+            Assert.IsNull(s1.RequestBodyText, "Bodies should be unloaded after spill");
 
             vm.SearchQuery = "body:alpha-body";
-            StringAssert.Contains(vm.SessionCountText, "bodies on disk");
-            StringAssert.Contains(vm.SessionCountText, "body search: in-memory only");
-            StringAssert.Contains(vm.SessionCountText, "on disk skipped");
+            Assert.AreEqual(1, vm.Sessions.Count);
+            Assert.AreEqual(1, vm.Sessions[0].Id);
+            StringAssert.Contains(vm.SessionCountText, "Sessions: 1 / 2");
+            Assert.IsFalse(vm.SessionCountText.Contains("in-memory only", StringComparison.Ordinal));
         }
         finally
         {

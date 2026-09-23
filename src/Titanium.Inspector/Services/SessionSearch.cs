@@ -25,7 +25,10 @@ public static class SessionSearch
         ".css", ".js", ".mjs", ".map", ".woff", ".woff2", ".ttf", ".otf", ".eot",
     ];
 
-    public static IEnumerable<SessionSnapshot> Filter(IEnumerable<SessionSnapshot> sessions, string? query)
+    public static IEnumerable<SessionSnapshot> Filter(
+        IEnumerable<SessionSnapshot> sessions,
+        string? query,
+        Func<SessionSnapshot, string, bool>? bodyMatcher = null)
     {
         if (string.IsNullOrWhiteSpace(query))
         {
@@ -33,11 +36,14 @@ public static class SessionSearch
         }
 
         var tokens = Tokenize(query);
-        return sessions.Where(s => tokens.All(t => MatchToken(s, t)));
+        return sessions.Where(s => tokens.All(t => MatchToken(s, t, bodyMatcher)));
     }
 
     /// <summary>True when <paramref name="session"/> would appear under the current search query.</summary>
-    public static bool Matches(SessionSnapshot session, string? query)
+    public static bool Matches(
+        SessionSnapshot session,
+        string? query,
+        Func<SessionSnapshot, string, bool>? bodyMatcher = null)
     {
         if (string.IsNullOrWhiteSpace(query))
         {
@@ -45,7 +51,7 @@ public static class SessionSearch
         }
 
         var tokens = Tokenize(query);
-        return tokens.All(t => MatchToken(session, t));
+        return tokens.All(t => MatchToken(session, t, bodyMatcher));
     }
 
     /// <summary>True when the query contains <c>key:value</c> (case-insensitive).</summary>
@@ -177,30 +183,13 @@ public static class SessionSearch
     }
 
     /// <summary>
-    /// Hint when <c>body:</c> is active but some session bodies live only on disk
-    /// (search does not hydrate spilled bodies).
-    /// </summary>
-    public static string? FormatBodySearchScopeHint(string? query, int spilledCount)
-    {
-        if (spilledCount <= 0 || !HasBodyToken(query))
-        {
-            return null;
-        }
-
-        return spilledCount == 1
-            ? "body search: in-memory only, 1 on disk skipped"
-            : $"body search: in-memory only, {spilledCount} on disk skipped";
-    }
-
-    /// <summary>
-    /// Status-bar session count / search-scope text. Metadata search always covers listed rows;
-    /// <c>body:</c> is in-memory only unless bodies are hot.
+    /// Status-bar session count / search-scope text. Metadata and <c>body:</c> search cover listed rows
+    /// (spilled bodies are read from disk without hydrating the grid).
     /// </summary>
     public static string BuildSessionCountText(
         int visibleCount,
         int totalCount,
         string? searchQuery,
-        int spilledCount,
         int retentionEvictedTotal,
         DateTimeOffset? oldestStartedUtc)
     {
@@ -209,29 +198,18 @@ public static class SessionSearch
             ? $"Sessions: {visibleCount} / {totalCount}"
             : $"Sessions: {totalCount}";
 
-        if (spilledCount > 0)
-        {
-            text += $" ({spilledCount} bodies on disk)";
-        }
-
         if (retentionEvictedTotal > 0 && oldestStartedUtc is { } oldest)
         {
             text += $" · since {oldest.ToLocalTime():HH:mm}";
         }
 
-        var bodyHint = FormatBodySearchScopeHint(searchQuery, spilledCount);
-        if (bodyHint is not null)
-        {
-            text += $" · {bodyHint}";
-        }
-
         if (searching && visibleCount == 0 && totalCount > 0)
-            text += FormatEmptySearchRetentionHint(bodyHint, retentionEvictedTotal);
+            text += FormatEmptySearchRetentionHint(retentionEvictedTotal);
 
         return text;
     }
 
-    private static string FormatEmptySearchRetentionHint(string? bodyHint, int retentionEvictedTotal)
+    private static string FormatEmptySearchRetentionHint(int retentionEvictedTotal)
     {
         if (retentionEvictedTotal <= 0)
             return "";
@@ -240,9 +218,7 @@ public static class SessionSearch
             ? "1 removed by retention"
             : $"{retentionEvictedTotal} removed by retention";
 
-        return bodyHint is not null
-            ? $" · {retention}"
-            : $" · no matches in current list · {retention}";
+        return $" · no matches in current list · {retention}";
     }
 
     private static List<(string Key, string Value)> Tokenize(string query)
@@ -263,7 +239,10 @@ public static class SessionSearch
         return list;
     }
 
-    private static bool MatchToken(SessionSnapshot s, (string Key, string Value) token)
+    private static bool MatchToken(
+        SessionSnapshot s,
+        (string Key, string Value) token,
+        Func<SessionSnapshot, string, bool>? bodyMatcher)
     {
         return token.Key switch
         {
@@ -271,8 +250,9 @@ public static class SessionSearch
             "status" => MatchStatus(s.StatusCode, token.Value),
             "host" => MatchHost(s, token.Value),
             "url" => s.Url.Contains(token.Value, StringComparison.OrdinalIgnoreCase),
-            "body" => (s.RequestBodyText?.Contains(token.Value, StringComparison.OrdinalIgnoreCase) == true) ||
-                      (s.ResponseBodyText?.Contains(token.Value, StringComparison.OrdinalIgnoreCase) == true),
+            "body" => bodyMatcher?.Invoke(s, token.Value) ??
+                      ((s.RequestBodyText?.Contains(token.Value, StringComparison.OrdinalIgnoreCase) == true) ||
+                       (s.ResponseBodyText?.Contains(token.Value, StringComparison.OrdinalIgnoreCase) == true)),
             "process" => MatchProcess(s, token.Value),
             "content-type" or "contenttype" =>
                 s.ContentType?.Contains(token.Value, StringComparison.OrdinalIgnoreCase) == true,

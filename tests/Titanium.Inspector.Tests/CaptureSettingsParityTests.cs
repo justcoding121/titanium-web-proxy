@@ -125,31 +125,33 @@ public class CaptureSettingsParityTests
     }
 
     [TestMethod]
-    public void DiskCache_PrunesByAge_OnWrite()
+    public void DiskCache_BudgetPrune_OnWrite()
     {
         var dir = Path.Combine(Path.GetTempPath(), "twp-age-prune-" + Guid.NewGuid().ToString("N"));
         try
         {
             Directory.CreateDirectory(dir);
             var stale = Path.Combine(dir, "1.bin");
-            File.WriteAllBytes(stale, [1, 2, 3, 4]);
+            File.WriteAllBytes(stale, new byte[5000]);
             File.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddDays(-10));
 
-            using var cache = new SessionBodyDiskCache(dir, maxBytes: 64L * 1024 * 1024, maxAge: TimeSpan.FromDays(2));
-            Assert.IsFalse(File.Exists(stale), "Startup prune should remove aged files");
-
-            // Recreate stale after construction, then Write should prune it mid-run.
-            File.WriteAllBytes(stale, [9, 9, 9]);
-            File.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddDays(-10));
+            using var cache = new SessionBodyDiskCache(dir, maxBytes: 1000, maxAge: TimeSpan.FromDays(2));
+            Assert.IsFalse(File.Exists(stale), "Startup rebuild should prune when over disk budget");
 
             cache.Write(new SessionSnapshot
             {
                 Id = 2,
-                ResponseBodyBytes = [5, 6, 7],
+                ResponseBodyBytes = new byte[800],
             });
-
-            Assert.IsFalse(File.Exists(stale), "Write should prune aged files");
             Assert.IsTrue(File.Exists(Path.Combine(dir, "2.bin")));
+
+            cache.Write(new SessionSnapshot
+            {
+                Id = 3,
+                ResponseBodyBytes = new byte[800],
+            });
+            Assert.IsFalse(File.Exists(Path.Combine(dir, "2.bin")), "Write should prune oldest when over budget");
+            Assert.IsTrue(File.Exists(Path.Combine(dir, "3.bin")));
         }
         finally
         {

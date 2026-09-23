@@ -307,8 +307,21 @@ public sealed partial class MainWindowViewModel
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanSaveResponseBody)));
     }
 
+    /// <summary>Shown in Inspect when the body spill file was removed by the disk-cache budget.</summary>
+    public const string BodiesMissingFromDiskHint =
+        "Body removed — disk cache limit reached. Headers are still available. Raise the limit under Options → Session retention…";
+
     private static string BuildBodyCaptureHint(SessionSnapshot selected)
     {
+        if (selected.BodiesMissingFromDisk &&
+            selected.RequestBodyBytes is null &&
+            selected.ResponseBodyBytes is null &&
+            selected.RequestBodyText is null &&
+            selected.ResponseBodyText is null)
+        {
+            return BodiesMissingFromDiskHint;
+        }
+
         var req = InspectorBodyLimits.FormatCaptureBanner(
             selected.RequestBodyCapture,
             selected.RequestBodyOriginalSize,
@@ -438,6 +451,15 @@ public sealed partial class MainWindowViewModel
 
     private static string BuildSelectedBodyTextCore(SessionSnapshot selected, bool pretty)
     {
+        if (selected.BodiesMissingFromDisk &&
+            selected.RequestBodyBytes is null &&
+            selected.ResponseBodyBytes is null &&
+            selected.RequestBodyText is null &&
+            selected.ResponseBodyText is null)
+        {
+            return "(body removed — disk cache limit reached)";
+        }
+
         if (InspectorBodyLimits.IsImageContentType(selected.ContentType)
             || LooksLikeImageHeaders(selected.ResponseHeadersText)
             || LooksLikeImageHeaders(selected.RequestHeadersText))

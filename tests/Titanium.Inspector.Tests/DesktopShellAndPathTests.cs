@@ -193,18 +193,23 @@ public class DesktopShellAndPathTests
     }
 
     [TestMethod]
-    public void SessionBodyDiskCache_PruneExpired_BadVersion_AndBudget()
+    public void SessionBodyDiskCache_BudgetPrune_BadVersion_AndWrite()
     {
         var dir = Path.Combine(Path.GetTempPath(), "twp-disk-prune-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         try
         {
-            var stale = Path.Combine(dir, "1.bin");
-            File.WriteAllBytes(stale, new byte[24]);
-            File.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddDays(-3));
+            var underBudget = Path.Combine(dir, "1.bin");
+            File.WriteAllBytes(underBudget, new byte[24]);
             using (var cache = new SessionBodyDiskCache(dir, maxBytes: 1024, maxAge: TimeSpan.FromHours(1)))
             {
-                Assert.IsFalse(File.Exists(stale));
+                Assert.IsTrue(File.Exists(underBudget), "Files under the disk budget stay (no age prune)");
+            }
+
+            File.WriteAllBytes(underBudget, new byte[2000]);
+            using (var over = new SessionBodyDiskCache(dir, maxBytes: 100, maxAge: TimeSpan.FromHours(1)))
+            {
+                Assert.IsFalse(File.Exists(underBudget), "Startup rebuild enforces disk budget");
             }
 
             var versioned = Path.Combine(dir, "2.bin");

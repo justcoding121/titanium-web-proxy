@@ -33,7 +33,6 @@ public class SessionStoreStressTests
     {
         const int total = 3000;
         const int maxSessions = 500;
-        const int hot = 100;
         const int bodyBytes = 2048;
         var dir = TempCacheDir();
         try
@@ -42,11 +41,8 @@ public class SessionStoreStressTests
                 new SessionStoreOptions
                 {
                     MaxSessionsInMemory = maxSessions,
-                    HotBodySessions = hot,
                     SpillBodiesToDisk = true,
-                    MaxCaptureBytesInMemory = 2L * 1024 * 1024, // 2 MiB
                     DiskCacheMaxBytes = 256L * 1024 * 1024,
-                    DiskCacheMaxAgeDays = 1,
                 },
                 dir);
 
@@ -64,9 +60,7 @@ public class SessionStoreStressTests
 
             await store.FlushSpillAsync();
 
-            var onDisk = Directory.EnumerateFiles(dir, "*.bin").Any();
-            Assert.IsTrue(onDisk || store.TryGet(total) is { BodiesOnDisk: false },
-                "Expected spill files or newest still hot after flush");
+            Assert.IsTrue(Directory.EnumerateFiles(dir, "*.bin").Any(), "Expected spill files after flush");
 
             var newest = store.TryGet(total);
             Assert.IsNotNull(newest);
@@ -135,11 +129,8 @@ public class SessionStoreStressTests
                 new SessionStoreOptions
                 {
                     MaxSessionsInMemory = 200,
-                    HotBodySessions = 40,
                     SpillBodiesToDisk = true,
-                    MaxCaptureBytesInMemory = 512 * 1024,
                     DiskCacheMaxBytes = 64L * 1024 * 1024,
-                    DiskCacheMaxAgeDays = 1,
                 },
                 dir);
 

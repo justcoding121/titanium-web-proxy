@@ -19,31 +19,31 @@ public sealed class SessionBodyDiskCache : IDisposable
 
     private readonly string _directory;
     private long _maxBytes;
-    private TimeSpan _maxAge;
     private readonly object _gate = new();
+    /// <summary>sessionId → (byte length, last write UTC).</summary>
+    private readonly Dictionary<long, (long Length, DateTime LastWriteUtc)> _index = new();
     private long _trackedBytes;
     private bool _disposed;
 
     public SessionBodyDiskCache(string directory, long maxBytes, TimeSpan maxAge)
     {
+        _ = maxAge; // Age prune removed; process-lifetime cache + disk budget only.
         _directory = directory;
-        _maxBytes = maxBytes;
-        _maxAge = maxAge;
+        _maxBytes = maxBytes > 0 ? maxBytes : 2L * 1024 * 1024 * 1024;
         Directory.CreateDirectory(_directory);
-        PruneOnStartup();
+        RebuildIndexAndEnforceBudget();
     }
 
-    /// <summary>Updates disk budget / age; next write or prune enforces the new limits.</summary>
-    public void UpdateLimits(long maxBytes, TimeSpan maxAge)
+    /// <summary>Updates disk budget; returns session ids whose files were deleted to stay under the new cap.</summary>
+    public IReadOnlyList<long> UpdateLimits(long maxBytes, TimeSpan maxAge)
     {
+        _ = maxAge;
         lock (_gate)
         {
             _maxBytes = maxBytes > 0 ? maxBytes : _maxBytes;
-            _maxAge = maxAge > TimeSpan.Zero ? maxAge : _maxAge;
         }
 
-        PruneExpiredFiles();
-        EnforceDiskBudget();
+        return EnforceDiskBudget();
     }
 
     /// <summary>
@@ -60,7 +60,10 @@ public sealed class SessionBodyDiskCache : IDisposable
 
     public string PathFor(long sessionId) => Path.Combine(_directory, sessionId.ToString("D") + ".bin");
 
-    public void Write(SessionSnapshot snapshot)
+    public bool FileExists(long sessionId) => File.Exists(PathFor(sessionId));
+
+    /// <summary>Writes the body file and returns session ids whose files were deleted to stay under budget.</summary>
+    public IReadOnlyList<long> Write(SessionSnapshot snapshot)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         var path = PathFor(snapshot.Id);
@@ -84,13 +87,13 @@ public sealed class SessionBodyDiskCache : IDisposable
         {
             var oldLen = new FileInfo(path).Length;
             File.Delete(path);
-            AdjustTracked(-oldLen);
+            RemoveFromIndex(snapshot.Id, oldLen);
         }
 
         File.Move(tmp, path);
-        AdjustTracked(new FileInfo(path).Length);
-        PruneExpiredFiles();
-        EnforceDiskBudget();
+        var newLen = new FileInfo(path).Length;
+        AddToIndex(snapshot.Id, newLen, DateTime.UtcNow);
+        return EnforceDiskBudget();
     }
 
     public bool TryLoad(SessionSnapshot snapshot)
@@ -104,14 +107,7 @@ public sealed class SessionBodyDiskCache : IDisposable
 
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         using var br = new BinaryReader(fs, Encoding.UTF8, leaveOpen: false);
-        var magic = br.ReadBytes(4);
-        if (magic.Length != 4 || magic[0] != Magic[0] || magic[1] != Magic[1] || magic[2] != Magic[2] || magic[3] != Magic[3])
-        {
-            return false;
-        }
-
-        var version = br.ReadInt32();
-        if (version is not Version and not VersionV1)
+        if (!TryReadHeader(br, out var version))
         {
             return false;
         }
@@ -120,27 +116,44 @@ public sealed class SessionBodyDiskCache : IDisposable
         snapshot.ResponseBodyBytes = ReadBytes(br);
         snapshot.RequestBodyText = ReadString(br);
         snapshot.ResponseBodyText = ReadString(br);
-
-        if (version >= Version)
-        {
-            var reqOrig = br.ReadInt64();
-            var respOrig = br.ReadInt64();
-            snapshot.RequestBodyOriginalSize = reqOrig < 0 ? null : reqOrig;
-            snapshot.ResponseBodyOriginalSize = respOrig < 0 ? null : respOrig;
-            snapshot.RequestBodyCapture = (BodyCaptureState)br.ReadByte();
-            snapshot.ResponseBodyCapture = (BodyCaptureState)br.ReadByte();
-        }
-        else
-        {
-            snapshot.RequestBodyCapture = InspectorBodyLimits.InferFromBytes(
-                snapshot.RequestBodyBytes, snapshot.RequestBodyBytes?.LongLength);
-            snapshot.ResponseBodyCapture = InspectorBodyLimits.InferFromBytes(
-                snapshot.ResponseBodyBytes, snapshot.ResponseBodyBytes?.LongLength);
-            snapshot.RequestBodyOriginalSize = snapshot.RequestBodyBytes?.LongLength;
-            snapshot.ResponseBodyOriginalSize = snapshot.ResponseBodyBytes?.LongLength;
-        }
-
+        ApplyCaptureMetadata(snapshot, br, version);
         return true;
+    }
+
+    /// <summary>
+    /// Reads body text for search without hydrating the live snapshot.
+    /// Returns false when the file is missing or corrupt.
+    /// </summary>
+    public bool TryReadBodyTexts(long sessionId, out string? requestText, out string? responseText)
+    {
+        requestText = null;
+        responseText = null;
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var path = PathFor(sessionId);
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var br = new BinaryReader(fs, Encoding.UTF8, leaveOpen: false);
+            if (!TryReadHeader(br, out _))
+            {
+                return false;
+            }
+
+            _ = ReadBytes(br);
+            _ = ReadBytes(br);
+            requestText = ReadString(br);
+            responseText = ReadString(br);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public void Delete(long sessionId)
@@ -148,6 +161,7 @@ public sealed class SessionBodyDiskCache : IDisposable
         var path = PathFor(sessionId);
         if (!File.Exists(path))
         {
+            RemoveFromIndex(sessionId, trackedLength: null);
             return;
         }
 
@@ -155,7 +169,7 @@ public sealed class SessionBodyDiskCache : IDisposable
         {
             var len = new FileInfo(path).Length;
             File.Delete(path);
-            AdjustTracked(-len);
+            RemoveFromIndex(sessionId, len);
         }
         catch
         {
@@ -175,6 +189,12 @@ public sealed class SessionBodyDiskCache : IDisposable
     {
         if (!Directory.Exists(_directory))
         {
+            lock (_gate)
+            {
+                _index.Clear();
+                _trackedBytes = 0;
+            }
+
             return;
         }
 
@@ -190,8 +210,21 @@ public sealed class SessionBodyDiskCache : IDisposable
             }
         }
 
+        foreach (var tmp in Directory.EnumerateFiles(_directory, "*.tmp"))
+        {
+            try
+            {
+                File.Delete(tmp);
+            }
+            catch
+            {
+                // Best-effort.
+            }
+        }
+
         lock (_gate)
         {
+            _index.Clear();
             _trackedBytes = 0;
         }
     }
@@ -201,53 +234,44 @@ public sealed class SessionBodyDiskCache : IDisposable
         _disposed = true;
     }
 
-    private void PruneExpiredFiles()
-    {
-        if (_maxAge <= TimeSpan.Zero || !Directory.Exists(_directory))
-        {
-            return;
-        }
-
-        var cutoff = DateTime.UtcNow - _maxAge;
-        foreach (var path in Directory.EnumerateFiles(_directory, BodyFileSearchPattern))
-        {
-            try
-            {
-                var info = new FileInfo(path);
-                if (info.LastWriteTimeUtc >= cutoff)
-                {
-                    continue;
-                }
-
-                var len = info.Length;
-                info.Delete();
-                AdjustTracked(-len);
-            }
-            catch
-            {
-                // Best-effort.
-            }
-        }
-    }
-
-    private void PruneOnStartup()
+    private void RebuildIndexAndEnforceBudget()
     {
         if (!Directory.Exists(_directory))
         {
             return;
         }
 
-        PruneExpiredFiles();
+        // Drop incomplete writes from a crash.
+        foreach (var tmp in Directory.EnumerateFiles(_directory, "*.tmp"))
+        {
+            try
+            {
+                File.Delete(tmp);
+            }
+            catch
+            {
+                // Best-effort.
+            }
+        }
 
-        long total = 0;
-        var files = new List<FileInfo>();
+        lock (_gate)
+        {
+            _index.Clear();
+            _trackedBytes = 0;
+        }
+
         foreach (var path in Directory.EnumerateFiles(_directory, BodyFileSearchPattern))
         {
             try
             {
                 var info = new FileInfo(path);
-                files.Add(info);
-                total += info.Length;
+                var name = Path.GetFileNameWithoutExtension(info.Name);
+                if (!long.TryParse(name, out var id))
+                {
+                    continue;
+                }
+
+                AddToIndex(id, info.Length, info.LastWriteTimeUtc);
             }
             catch
             {
@@ -255,71 +279,123 @@ public sealed class SessionBodyDiskCache : IDisposable
             }
         }
 
-        lock (_gate)
-        {
-            _trackedBytes = total;
-        }
-
-        if (total > _maxBytes)
-        {
-            EnforceDiskBudget(files);
-        }
+        EnforceDiskBudget();
     }
 
-    private void EnforceDiskBudget(List<FileInfo>? knownFiles = null)
+    /// <summary>
+    /// Deletes oldest files until under <see cref="_maxBytes"/>. Returns pruned session ids.
+    /// </summary>
+    private IReadOnlyList<long> EnforceDiskBudget()
     {
+        List<(long Id, long Length, DateTime LastWriteUtc)> ordered;
         long tracked;
+        long maxBytes;
         lock (_gate)
         {
             tracked = _trackedBytes;
-        }
-
-        if (tracked <= _maxBytes)
-        {
-            return;
-        }
-
-        var files = knownFiles ?? Directory.EnumerateFiles(_directory, BodyFileSearchPattern)
-            .Select(p =>
+            maxBytes = _maxBytes;
+            if (tracked <= maxBytes)
             {
-                try
-                {
-                    return new FileInfo(p);
-                }
-                catch
-                {
-                    return null!;
-                }
-            })
-            .Where(f => f is not null)
-            .ToList();
+                return Array.Empty<long>();
+            }
 
-        foreach (var file in files.OrderBy(f => f.LastWriteTimeUtc))
+            ordered = _index
+                .Select(kv => (kv.Key, kv.Value.Length, kv.Value.LastWriteUtc))
+                .OrderBy(x => x.LastWriteUtc)
+                .ToList();
+        }
+
+        var deleted = new List<long>();
+        foreach (var entry in ordered)
         {
-            if (tracked <= _maxBytes)
+            if (tracked <= maxBytes)
             {
                 break;
             }
 
             try
             {
-                var len = file.Length;
-                file.Delete();
-                tracked -= len;
-                AdjustTracked(-len);
+                var path = PathFor(entry.Id);
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+
+                tracked -= entry.Length;
+                RemoveFromIndex(entry.Id, entry.Length);
+                deleted.Add(entry.Id);
             }
             catch
             {
                 // Best-effort.
             }
         }
+
+        return deleted;
     }
 
-    private void AdjustTracked(long delta)
+    private void AddToIndex(long sessionId, long length, DateTime lastWriteUtc)
     {
         lock (_gate)
         {
-            _trackedBytes = Math.Max(0, _trackedBytes + delta);
+            if (_index.TryGetValue(sessionId, out var prev))
+            {
+                _trackedBytes = Math.Max(0, _trackedBytes - prev.Length);
+            }
+
+            _index[sessionId] = (length, lastWriteUtc);
+            _trackedBytes += length;
+        }
+    }
+
+    private void RemoveFromIndex(long sessionId, long? trackedLength)
+    {
+        lock (_gate)
+        {
+            if (_index.TryGetValue(sessionId, out var prev))
+            {
+                _trackedBytes = Math.Max(0, _trackedBytes - prev.Length);
+                _index.Remove(sessionId);
+            }
+            else if (trackedLength is long len)
+            {
+                _trackedBytes = Math.Max(0, _trackedBytes - len);
+            }
+        }
+    }
+
+    private static bool TryReadHeader(BinaryReader br, out int version)
+    {
+        version = 0;
+        var magic = br.ReadBytes(4);
+        if (magic.Length != 4 || magic[0] != Magic[0] || magic[1] != Magic[1] || magic[2] != Magic[2] || magic[3] != Magic[3])
+        {
+            return false;
+        }
+
+        version = br.ReadInt32();
+        return version is Version or VersionV1;
+    }
+
+    private static void ApplyCaptureMetadata(SessionSnapshot snapshot, BinaryReader br, int version)
+    {
+        if (version >= Version)
+        {
+            var reqOrig = br.ReadInt64();
+            var respOrig = br.ReadInt64();
+            snapshot.RequestBodyOriginalSize = reqOrig < 0 ? null : reqOrig;
+            snapshot.ResponseBodyOriginalSize = respOrig < 0 ? null : respOrig;
+            snapshot.RequestBodyCapture = (BodyCaptureState)br.ReadByte();
+            snapshot.ResponseBodyCapture = (BodyCaptureState)br.ReadByte();
+        }
+        else
+        {
+            snapshot.RequestBodyCapture = InspectorBodyLimits.InferFromBytes(
+                snapshot.RequestBodyBytes, snapshot.RequestBodyBytes?.LongLength);
+            snapshot.ResponseBodyCapture = InspectorBodyLimits.InferFromBytes(
+                snapshot.ResponseBodyBytes, snapshot.ResponseBodyBytes?.LongLength);
+            snapshot.RequestBodyOriginalSize = snapshot.RequestBodyBytes?.LongLength;
+            snapshot.ResponseBodyOriginalSize = snapshot.ResponseBodyBytes?.LongLength;
         }
     }
 
