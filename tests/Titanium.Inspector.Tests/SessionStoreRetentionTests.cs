@@ -16,11 +16,101 @@ public class SessionStoreRetentionTests
             Id = id,
             Method = "GET",
             Url = $"https://example.com/{id}",
+            StatusCode = 200,
+            RequestHeadersText = "Host: example.com\r\n",
+            ResponseHeadersText = "Content-Type: text/plain\r\n",
             RequestBodyBytes = bodyBytes > 0 ? new byte[bodyBytes] : null,
             ResponseBodyBytes = bodyBytes > 0 ? new byte[bodyBytes] : null,
             RequestBodyText = bodyBytes > 0 ? new string('a', Math.Min(bodyBytes, 64)) : null,
             ResponseBodyText = bodyBytes > 0 ? new string('b', Math.Min(bodyBytes, 64)) : null,
+            RequestBodyCapture = bodyBytes > 0 ? BodyCaptureState.Complete : BodyCaptureState.None,
+            ResponseBodyCapture = bodyBytes > 0 ? BodyCaptureState.Complete : BodyCaptureState.None,
         };
+
+    [TestMethod]
+    public async Task DoesNotArchive_UntilStatusCodeExists()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            using var store = new SessionStore(
+                new SessionStoreOptions
+                {
+                    MaxSessionsInMemory = 100,
+                    SpillBodiesToDisk = true,
+                    DiskCacheMaxBytes = 64L * 1024 * 1024,
+                },
+                dir);
+
+            var pending = new SessionSnapshot
+            {
+                Id = 1,
+                Method = "GET",
+                Url = "https://example.com/pending",
+                RequestBodyBytes = new byte[32],
+                RequestBodyText = "pending",
+                StatusCode = null,
+            };
+            store.Add(pending);
+            await store.FlushSpillAsync();
+            Assert.IsFalse(pending.BodiesOnDisk);
+            Assert.IsFalse(File.Exists(Path.Combine(dir, "1.json")));
+
+            pending.StatusCode = 200;
+            pending.ResponseBodyBytes = new byte[16];
+            pending.ResponseBodyText = "ok";
+            pending.ResponseBodyCapture = BodyCaptureState.Complete;
+            store.NotifyUpdated(pending);
+            await store.FlushSpillAsync();
+
+            Assert.IsTrue(pending.BodiesOnDisk);
+            Assert.IsTrue(File.Exists(Path.Combine(dir, "1.json")));
+            Assert.IsNull(pending.RequestBodyBytes, "Bodies unload after archive");
+            var json = File.ReadAllText(Path.Combine(dir, "1.json"));
+            StringAssert.Contains(json, "\"StatusCode\":200");
+            StringAssert.Contains(json, "pending");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [TestMethod]
+    public async Task MemoryEviction_RewritesFinalArchive_WithLatestHeaders()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            using var store = new SessionStore(
+                new SessionStoreOptions
+                {
+                    MaxSessionsInMemory = 1,
+                    SpillBodiesToDisk = true,
+                    DiskCacheMaxBytes = 64L * 1024 * 1024,
+                },
+                dir);
+
+            var first = MakeSession(1, 64);
+            store.Add(first);
+            await store.FlushSpillAsync();
+            first.ResponseHeadersText = "X-Final: 1\r\n";
+            first.DurationMs = 42;
+
+            store.Add(MakeSession(2, 64));
+            await store.FlushSpillAsync();
+
+            Assert.IsNull(store.TryGet(1));
+            Assert.IsTrue(File.Exists(Path.Combine(dir, "1.json")));
+            var json = File.ReadAllText(Path.Combine(dir, "1.json"));
+            StringAssert.Contains(json, "X-Final");
+            StringAssert.Contains(json, "42");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
 
     [TestMethod]
     public void MaxSessions_EvictsOldest()
@@ -83,8 +173,13 @@ public class SessionStoreRetentionTests
             Assert.IsNull(s2.ResponseBodyBytes);
 
             await store.FlushSpillAsync();
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "1.bin")));
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "2.bin")));
+            Assert.IsTrue(File.Exists(Path.Combine(dir, "1.json")));
+            Assert.IsTrue(File.Exists(Path.Combine(dir, "2.json")));
+
+            Assert.IsTrue(store.Options.SpillBodiesToDisk);
+            Assert.IsTrue(
+                File.ReadAllText(Path.Combine(dir, "1.json")).Contains("example.com", StringComparison.Ordinal),
+                "Disk archive must include session headers/URL");
 
             await store.EnsureBodiesLoadedAsync(s1, CancellationToken.None);
             Assert.IsTrue(s1.BodiesOnDisk, "File remains; BodiesOnDisk stays true");
@@ -121,7 +216,7 @@ public class SessionStoreRetentionTests
             Assert.IsNotNull(s1.RequestBodyBytes, "Pinned session keeps RAM bodies after spill queue");
 
             await store.FlushSpillAsync();
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "1.bin")));
+            Assert.IsTrue(File.Exists(Path.Combine(dir, "1.json")));
 
             store.PinnedSessionId = null;
             Assert.IsNull(s1.RequestBodyBytes, "Deselect unloads RAM bodies when file exists");
@@ -189,12 +284,12 @@ public class SessionStoreRetentionTests
             store.Add(MakeSession(11, 128));
             Assert.IsTrue(store.TryGet(10)!.BodiesOnDisk);
             await store.FlushSpillAsync();
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "10.bin")));
+            Assert.IsTrue(File.Exists(Path.Combine(dir, "10.json")));
 
             store.Clear();
             Assert.AreEqual(0, store.Count);
-            Assert.IsFalse(File.Exists(Path.Combine(dir, "10.bin")));
-            Assert.IsFalse(Directory.EnumerateFiles(dir, "*.bin").Any());
+            Assert.IsFalse(File.Exists(Path.Combine(dir, "10.json")));
+            Assert.IsFalse(Directory.EnumerateFiles(dir, "*.json").Any());
         }
         finally
         {
@@ -233,7 +328,7 @@ public class SessionStoreRetentionTests
     }
 
     [TestMethod]
-    public async Task Eviction_DeletesSpillFile()
+    public async Task Eviction_LeavesSessionFileOnDisk()
     {
         var dir = TempCacheDir();
         try
@@ -250,11 +345,11 @@ public class SessionStoreRetentionTests
             store.Add(MakeSession(1, 64));
             store.Add(MakeSession(2, 64));
             await store.FlushSpillAsync();
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "1.bin")));
+            Assert.IsTrue(File.Exists(Path.Combine(dir, "1.json")));
 
             store.Add(MakeSession(3, 64));
-            Assert.IsNull(store.TryGet(1));
-            Assert.IsFalse(File.Exists(Path.Combine(dir, "1.bin")));
+            Assert.IsNull(store.TryGet(1), "Memory eviction drops the row");
+            Assert.IsTrue(File.Exists(Path.Combine(dir, "1.json")), "Disk archive stays until disk budget prunes");
         }
         finally
         {
@@ -263,31 +358,40 @@ public class SessionStoreRetentionTests
     }
 
     [TestMethod]
-    public async Task DiskBudget_DeletesOldestBodyFiles()
+    public async Task DiskBudget_DeletesOldestSessionFiles_IndependentlyOfList()
     {
         var dir = TempCacheDir();
         try
         {
-            // Budget fits roughly one spilled body file; the next write drops the oldest.
             using var store = new SessionStore(
                 new SessionStoreOptions
                 {
                     MaxSessionsInMemory = 100,
                     SpillBodiesToDisk = true,
-                    DiskCacheMaxBytes = 400,
+                    DiskCacheMaxBytes = 64L * 1024 * 1024,
                 },
                 dir);
 
-            store.Add(MakeSession(1, 100));
+            store.Add(MakeSession(1, 400));
             await store.FlushSpillAsync();
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "1.bin")));
+            var path1 = Path.Combine(dir, "1.json");
+            Assert.IsTrue(File.Exists(path1));
+            var size1 = new FileInfo(path1).Length;
 
-            store.Add(MakeSession(2, 100));
+            // Cap just above one file so the next archive forces a prune — independent of list size.
+            store.ApplyOptions(new SessionStoreOptions
+            {
+                MaxSessionsInMemory = 100,
+                SpillBodiesToDisk = true,
+                DiskCacheMaxBytes = size1 + 256,
+            });
+
+            store.Add(MakeSession(2, 400));
             await store.FlushSpillAsync();
 
-            Assert.AreEqual(2, store.Count);
-            Assert.IsFalse(File.Exists(Path.Combine(dir, "1.bin")), "Oldest body file pruned by disk budget");
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "2.bin")));
+            Assert.AreEqual(2, store.Count, "Disk prune must not remove list rows");
+            Assert.IsFalse(File.Exists(path1), "Oldest disk file pruned by size budget");
+            Assert.IsTrue(File.Exists(Path.Combine(dir, "2.json")));
         }
         finally
         {
@@ -473,17 +577,26 @@ public class SessionStoreRetentionTests
                 {
                     MaxSessionsInMemory = 100,
                     SpillBodiesToDisk = true,
-                    DiskCacheMaxBytes = 400,
+                    DiskCacheMaxBytes = 64L * 1024 * 1024,
                 },
                 dir);
 
-            store.Add(MakeSession(1, 100));
+            store.Add(MakeSession(1, 400));
             await store.FlushSpillAsync();
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "1.bin")));
+            var path1 = Path.Combine(dir, "1.json");
+            Assert.IsTrue(File.Exists(path1));
+            var size1 = new FileInfo(path1).Length;
 
-            store.Add(MakeSession(2, 100));
+            store.ApplyOptions(new SessionStoreOptions
+            {
+                MaxSessionsInMemory = 100,
+                SpillBodiesToDisk = true,
+                DiskCacheMaxBytes = size1 + 256,
+            });
+
+            store.Add(MakeSession(2, 400));
             await store.FlushSpillAsync();
-            Assert.IsFalse(File.Exists(Path.Combine(dir, "1.bin")));
+            Assert.IsFalse(File.Exists(path1));
 
             var s1 = store.TryGet(1)!;
             Assert.IsTrue(s1.BodiesMissingFromDisk, "Prune should mark the live session");
@@ -515,7 +628,7 @@ public class SessionStoreRetentionTests
         };
         var text = (string)hint.Invoke(null, [snap])!;
         StringAssert.Contains(text, "disk cache limit");
-        StringAssert.Contains(text, "Headers are still available");
+        StringAssert.Contains(text, "Headers in the list are still available");
     }
 
     private static void TryDeleteDir(string dir)

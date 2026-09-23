@@ -309,7 +309,11 @@ public sealed partial class MainWindowViewModel
 
     /// <summary>Shown in Inspect when the body spill file was removed by the disk-cache budget.</summary>
     public const string BodiesMissingFromDiskHint =
-        "Body removed — disk cache limit reached. Headers are still available. Raise the limit under Options → Session retention…";
+        "Saved session data removed — disk cache limit reached. Headers in the list are still available. Raise the limit under Options → Session retention…";
+
+    /// <summary>Shown for CONNECT rows: Size is encrypted wire traffic, not an HTTP body.</summary>
+    public const string TunnelWireSizeHint =
+        "CONNECT tunnel — Size is encrypted traffic on the wire, not an HTTP message body";
 
     private static string BuildBodyCaptureHint(SessionSnapshot selected)
     {
@@ -320,6 +324,11 @@ public sealed partial class MainWindowViewModel
             selected.ResponseBodyText is null)
         {
             return BodiesMissingFromDiskHint;
+        }
+
+        if (selected.IsTunnel)
+        {
+            return TunnelWireSizeHint;
         }
 
         var req = InspectorBodyLimits.FormatCaptureBanner(
@@ -457,7 +466,12 @@ public sealed partial class MainWindowViewModel
             selected.RequestBodyText is null &&
             selected.ResponseBodyText is null)
         {
-            return "(body removed — disk cache limit reached)";
+            return "(session data removed — disk cache limit reached)";
+        }
+
+        if (selected.IsTunnel)
+        {
+            return FormatTunnelBodyInspectText(selected);
         }
 
         if (InspectorBodyLimits.IsImageContentType(selected.ContentType)
@@ -481,6 +495,21 @@ public sealed partial class MainWindowViewModel
         }
 
         return TryFormatPrettyBodyText(selected, raw);
+    }
+
+    private static string FormatTunnelBodyInspectText(SessionSnapshot selected)
+    {
+        var wire = selected.BodySize ?? selected.SentBytes + selected.ReceivedBytes;
+        var sb = new StringBuilder();
+        sb.AppendLine("CONNECT tunnel — no HTTP message body.");
+        sb.Append("Encrypted traffic on the wire: ");
+        sb.Append(SessionDisplayFormat.FormatByteSize(wire));
+        sb.Append(" (sent ");
+        sb.Append(SessionDisplayFormat.FormatByteSize(selected.SentBytes));
+        sb.Append(", received ");
+        sb.Append(SessionDisplayFormat.FormatByteSize(selected.ReceivedBytes));
+        sb.Append(')');
+        return sb.ToString();
     }
 
     private static string FormatImageBodyInspectText(SessionSnapshot selected)

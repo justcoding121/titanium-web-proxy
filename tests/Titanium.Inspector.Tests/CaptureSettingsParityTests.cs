@@ -131,27 +131,27 @@ public class CaptureSettingsParityTests
         try
         {
             Directory.CreateDirectory(dir);
-            var stale = Path.Combine(dir, "1.bin");
-            File.WriteAllBytes(stale, new byte[5000]);
-            File.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddDays(-10));
-
-            using var cache = new SessionBodyDiskCache(dir, maxBytes: 1000, maxAge: TimeSpan.FromDays(2));
-            Assert.IsFalse(File.Exists(stale), "Startup rebuild should prune when over disk budget");
+            // Legacy leftover under budget is ignored by the JSON index; write via API instead.
+            using var cache = new SessionBodyDiskCache(dir, maxBytes: 2_500, maxAge: TimeSpan.FromDays(2));
 
             cache.Write(new SessionSnapshot
             {
                 Id = 2,
-                ResponseBodyBytes = new byte[800],
+                Method = "GET",
+                Url = "https://example.com/2",
+                ResponseBodyBytes = new byte[1_200],
             });
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "2.bin")));
+            Assert.IsTrue(File.Exists(Path.Combine(dir, "2.json")));
 
             cache.Write(new SessionSnapshot
             {
                 Id = 3,
-                ResponseBodyBytes = new byte[800],
+                Method = "GET",
+                Url = "https://example.com/3",
+                ResponseBodyBytes = new byte[1_200],
             });
-            Assert.IsFalse(File.Exists(Path.Combine(dir, "2.bin")), "Write should prune oldest when over budget");
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "3.bin")));
+            Assert.IsFalse(File.Exists(Path.Combine(dir, "2.json")), "Write should prune oldest when over budget");
+            Assert.IsTrue(File.Exists(Path.Combine(dir, "3.json")));
         }
         finally
         {
@@ -410,7 +410,7 @@ public class CaptureSettingsParityTests
             Assert.IsFalse(cache.TryLoad(new SessionSnapshot { Id = 99 }));
 
             cache.ClearAll();
-            Assert.AreEqual(0, Directory.EnumerateFiles(dir, "*.bin").Count());
+            Assert.AreEqual(0, Directory.EnumerateFiles(dir, "*.json").Count());
 
             cache.Delete(12345); // missing id — no throw
             cache.Dispose();

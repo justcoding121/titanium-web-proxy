@@ -60,7 +60,7 @@ public partial class SessionRetentionWindow : Window
 
         if (!TryParsePositiveLong(DiskCacheMaxMbBox.Text, out var diskMb))
         {
-            StatusText.Text = FormatPositiveNumberError("Disk space for saved bodies (MB)", DiskCacheMaxMbBox.Text);
+            StatusText.Text = FormatPositiveNumberError("Disk space for saved sessions (MB)", DiskCacheMaxMbBox.Text);
             return;
         }
 

@@ -4,8 +4,9 @@ using System.Threading.Channels;
 namespace Titanium.Inspector.Services;
 
 /// <summary>
-/// Single source of truth for captured sessions: ordered list, body spill, and hard eviction.
-/// Finished bodies always spill to disk; selected and in-flight sessions keep bodies in RAM.
+/// Captured sessions: in-memory list (headers/metadata; bodies unloaded), full JSON archive on disk,
+/// and two independent limits — MaxSessionsInMemory (drop rows from the list) and DiskCacheMaxBytes
+/// (delete oldest archive files).
 /// </summary>
 public sealed class SessionStore : IDisposable
 {
@@ -31,7 +32,7 @@ public sealed class SessionStore : IDisposable
         {
             var dir = cacheDirectory ?? SessionBodyDiskCache.GetDefaultDirectory();
             _disk = new SessionBodyDiskCache(dir, _options.DiskCacheMaxBytes, TimeSpan.FromDays(7));
-            // Sessions are process-lifetime only; leftover .bin files from a prior run are orphans.
+            // Sessions are process-lifetime only; leftover cache files from a prior run are orphans.
             _disk.ClearAll();
             _spillChannel = Channel.CreateUnbounded<SessionSnapshot>(new UnboundedChannelOptions
             {
@@ -503,6 +504,13 @@ public sealed class SessionStore : IDisposable
         s.ResponseBodyStreamOpen ||
         s.ResponseBodyCapture == BodyCaptureState.Streaming;
 
+    /// <summary>
+    /// Do not archive on the request-only placeholder — wait until a status exists
+    /// (HTTP response or CONNECT completion) so the JSON has headers + outcome.
+    /// </summary>
+    private static bool IsReadyToArchive(SessionSnapshot s) =>
+        !IsInFlight(s) && s.StatusCode is not null;
+
     private static void ClearBodyFields(SessionSnapshot snap)
     {
         snap.RequestBodyBytes = null;
@@ -519,24 +527,14 @@ public sealed class SessionStore : IDisposable
             return;
         }
 
-        if (IsInFlight(snapshot))
+        if (!IsReadyToArchive(snapshot))
         {
             RecalcInMemoryBodyBytesLocked();
             return;
         }
 
-        if (!HasInMemoryBodies(snapshot))
-        {
-            if (snapshot.BodiesOnDisk)
-            {
-                // already spilled and unloaded
-            }
-
-            RecalcInMemoryBodyBytesLocked();
-            return;
-        }
-
-        // Already spilled to disk and still holding RAM (selected) — do not re-queue.
+        // Already archived: leave the file until memory eviction rewrites the final snapshot
+        // (avoids rewriting on every WS frame / timing tick). Bodies stay unloaded in RAM.
         if (snapshot.BodiesOnDisk)
         {
             RecalcInMemoryBodyBytesLocked();
@@ -564,18 +562,7 @@ public sealed class SessionStore : IDisposable
     private void QueueSpillLocked(SessionSnapshot snap)
     {
         var keepInRam = _pinnedSessionId is long pin && snap.Id == pin;
-        var copy = new SessionSnapshot
-        {
-            Id = snap.Id,
-            RequestBodyBytes = snap.RequestBodyBytes,
-            ResponseBodyBytes = snap.ResponseBodyBytes,
-            RequestBodyText = snap.RequestBodyText,
-            ResponseBodyText = snap.ResponseBodyText,
-            RequestBodyOriginalSize = snap.RequestBodyOriginalSize,
-            ResponseBodyOriginalSize = snap.ResponseBodyOriginalSize,
-            RequestBodyCapture = snap.RequestBodyCapture,
-            ResponseBodyCapture = snap.ResponseBodyCapture,
-        };
+        var copy = CloneForDisk(snap);
 
         if (!keepInRam)
         {
@@ -589,7 +576,11 @@ public sealed class SessionStore : IDisposable
         }
 
         snap.BodiesMissingFromDisk = false;
+        EnqueueSpillWrite(copy);
+    }
 
+    private void EnqueueSpillWrite(SessionSnapshot copy)
+    {
         Interlocked.Increment(ref _pendingSpills);
         if (!_spillChannel!.Writer.TryWrite(copy))
         {
@@ -607,6 +598,18 @@ public sealed class SessionStore : IDisposable
                 continue;
             }
 
+            // Snapshot for disk write after leaving the collections (avoid long I/O under callers'
+            // expectations — still sync, but state is already detached).
+            SessionSnapshot? persistCopy = null;
+            if (_disk is not null)
+            {
+                persistCopy = CloneForDisk(snap);
+                if (!HasInMemoryBodies(snap) && _disk.FileExists(snap.Id))
+                {
+                    _disk.TryLoad(persistCopy);
+                }
+            }
+
             Sessions.RemoveAt(i);
             _byId.Remove(snap.Id);
             if (snap.BodiesOnDisk)
@@ -614,15 +617,79 @@ public sealed class SessionStore : IDisposable
                 _spilledCount = Math.Max(0, _spilledCount - 1);
             }
 
-            _disk?.Delete(snap.Id);
             RecalcInMemoryBodyBytesLocked();
             evicted = snap;
+
+            if (persistCopy is not null && _disk is not null)
+            {
+                try
+                {
+                    var pruned = _disk.Write(persistCopy);
+                    MarkBodiesMissingLocked(pruned);
+                }
+                catch
+                {
+                    // Best-effort archive; memory eviction still proceeds.
+                }
+            }
+
             return true;
         }
 
         evicted = null!;
         return false;
     }
+
+    private static SessionSnapshot CloneForDisk(SessionSnapshot snap) =>
+        new()
+        {
+            Id = snap.Id,
+            Method = snap.Method,
+            Url = snap.Url,
+            StartedUtc = snap.StartedUtc,
+            BodiesOnDisk = false,
+            IsWebSocket = snap.IsWebSocket,
+            IsGrpc = snap.IsGrpc,
+            IsTranscoded = snap.IsTranscoded,
+            IsTunnel = snap.IsTunnel,
+            OpaqueReason = snap.OpaqueReason,
+            ClientMethod = snap.ClientMethod,
+            ClientPathAndQuery = snap.ClientPathAndQuery,
+            ClientContentType = snap.ClientContentType,
+            UpstreamMethod = snap.UpstreamMethod,
+            UpstreamPath = snap.UpstreamPath,
+            UpstreamContentType = snap.UpstreamContentType,
+            UpstreamRequestBodyBytes = snap.UpstreamRequestBodyBytes,
+            UpstreamResponseBodyBytes = snap.UpstreamResponseBodyBytes,
+            IsMultipart = snap.IsMultipart,
+            IsServerSentEvents = snap.IsServerSentEvents,
+            WebSocketFrames = snap.WebSocketFrames,
+            SseEvents = snap.SseEvents,
+            GrpcFrames = snap.GrpcFrames,
+            MultipartParts = snap.MultipartParts,
+            ProtobufDecodedText = snap.ProtobufDecodedText,
+            StatusCode = snap.StatusCode,
+            RequestHeadersText = snap.RequestHeadersText,
+            ResponseHeadersText = snap.ResponseHeadersText,
+            RequestBodyText = snap.RequestBodyText,
+            ResponseBodyText = snap.ResponseBodyText,
+            RequestBodyBytes = snap.RequestBodyBytes,
+            ResponseBodyBytes = snap.ResponseBodyBytes,
+            ContentType = snap.ContentType,
+            Protocol = snap.Protocol,
+            Host = snap.Host,
+            BodySize = snap.BodySize,
+            RequestBodyCapture = snap.RequestBodyCapture,
+            ResponseBodyCapture = snap.ResponseBodyCapture,
+            RequestBodyOriginalSize = snap.RequestBodyOriginalSize,
+            ResponseBodyOriginalSize = snap.ResponseBodyOriginalSize,
+            ProcessId = snap.ProcessId,
+            ProcessName = snap.ProcessName,
+            ReceivedBytes = snap.ReceivedBytes,
+            SentBytes = snap.SentBytes,
+            DurationMs = snap.DurationMs,
+            TtfbMs = snap.TtfbMs,
+        };
 
     private List<SessionSnapshot> RemoveIdsLocked(HashSet<long> ids)
     {

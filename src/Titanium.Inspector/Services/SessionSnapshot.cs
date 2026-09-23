@@ -162,6 +162,10 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         set => SetField(ref _host, value);
     }
 
+    /// <summary>
+    /// Size column value: larger of request/response HTTP body sizes, or CONNECT tunnel
+    /// wire bytes (sent+received). Not always equal to Inspect body text length.
+    /// </summary>
     public long? BodySize
     {
         get => _bodySize;

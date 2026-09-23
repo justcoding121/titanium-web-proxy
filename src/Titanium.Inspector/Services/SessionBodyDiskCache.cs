@@ -1,21 +1,21 @@
-using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Titanium.Inspector.Services;
 
 /// <summary>
-/// Binary spill of session body fields under a cache directory.
-/// Format: magic "TSIB" + version int32 + four length-prefixed blobs
-/// (request bytes, response bytes, request text UTF-8, response text UTF-8).
-/// Version 2 appends: requestOriginalSize int64, responseOriginalSize int64,
-/// requestCapture byte, responseCapture byte.
-/// Length -1 means null; 0 means empty.
+/// On-disk session cache under a size budget. Each finished session is stored as JSON
+/// (headers, bodies, and metadata — same shape as native archive entries).
+/// The  disk budget applies to all of these files; oldest files are deleted first.
 /// </summary>
 public sealed class SessionBodyDiskCache : IDisposable
 {
-    private const string BodyFileSearchPattern = "*.bin";
-    private const int Version = 2;
-    private const int VersionV1 = 1;
-    private static readonly byte[] Magic = "TSIB"u8.ToArray();
+    private const string SessionFileSearchPattern = "*.json";
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = false,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
 
     private readonly string _directory;
     private long _maxBytes;
@@ -27,7 +27,7 @@ public sealed class SessionBodyDiskCache : IDisposable
 
     public SessionBodyDiskCache(string directory, long maxBytes, TimeSpan maxAge)
     {
-        _ = maxAge; // Age prune removed; process-lifetime cache + disk budget only.
+        _ = maxAge;
         _directory = directory;
         _maxBytes = maxBytes > 0 ? maxBytes : 2L * 1024 * 1024 * 1024;
         Directory.CreateDirectory(_directory);
@@ -58,29 +58,19 @@ public sealed class SessionBodyDiskCache : IDisposable
 
     public string DirectoryPath => _directory;
 
-    public string PathFor(long sessionId) => Path.Combine(_directory, sessionId.ToString("D") + ".bin");
+    public string PathFor(long sessionId) => Path.Combine(_directory, sessionId.ToString("D") + ".json");
 
     public bool FileExists(long sessionId) => File.Exists(PathFor(sessionId));
 
-    /// <summary>Writes the body file and returns session ids whose files were deleted to stay under budget.</summary>
+    /// <summary>Writes the full session JSON and returns session ids pruned to stay under budget.</summary>
     public IReadOnlyList<long> Write(SessionSnapshot snapshot)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         var path = PathFor(snapshot.Id);
         var tmp = path + ".tmp";
         using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
-        using (var bw = new BinaryWriter(fs, Encoding.UTF8, leaveOpen: false))
         {
-            bw.Write(Magic);
-            bw.Write(Version);
-            WriteBytes(bw, snapshot.RequestBodyBytes);
-            WriteBytes(bw, snapshot.ResponseBodyBytes);
-            WriteString(bw, snapshot.RequestBodyText);
-            WriteString(bw, snapshot.ResponseBodyText);
-            bw.Write(snapshot.RequestBodyOriginalSize ?? -1L);
-            bw.Write(snapshot.ResponseBodyOriginalSize ?? -1L);
-            bw.Write((byte)snapshot.RequestBodyCapture);
-            bw.Write((byte)snapshot.ResponseBodyCapture);
+            JsonSerializer.Serialize(fs, snapshot, JsonOptions);
         }
 
         if (File.Exists(path))
@@ -96,38 +86,33 @@ public sealed class SessionBodyDiskCache : IDisposable
         return EnforceDiskBudget();
     }
 
+    /// <summary>
+    /// Loads body fields (and capture metadata) from the on-disk session into
+    /// <paramref name="snapshot"/> without replacing headers already in memory.
+    /// </summary>
     public bool TryLoad(SessionSnapshot snapshot)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        var path = PathFor(snapshot.Id);
-        if (!File.Exists(path))
+        if (!TryReadSession(snapshot.Id, out var loaded) || loaded is null)
         {
             return false;
         }
 
-        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        using var br = new BinaryReader(fs, Encoding.UTF8, leaveOpen: false);
-        if (!TryReadHeader(br, out var version))
-        {
-            return false;
-        }
-
-        snapshot.RequestBodyBytes = ReadBytes(br);
-        snapshot.ResponseBodyBytes = ReadBytes(br);
-        snapshot.RequestBodyText = ReadString(br);
-        snapshot.ResponseBodyText = ReadString(br);
-        ApplyCaptureMetadata(snapshot, br, version);
+        snapshot.RequestBodyBytes = loaded.RequestBodyBytes;
+        snapshot.ResponseBodyBytes = loaded.ResponseBodyBytes;
+        snapshot.RequestBodyText = loaded.RequestBodyText;
+        snapshot.ResponseBodyText = loaded.ResponseBodyText;
+        snapshot.RequestBodyOriginalSize = loaded.RequestBodyOriginalSize;
+        snapshot.ResponseBodyOriginalSize = loaded.ResponseBodyOriginalSize;
+        snapshot.RequestBodyCapture = loaded.RequestBodyCapture;
+        snapshot.ResponseBodyCapture = loaded.ResponseBodyCapture;
         return true;
     }
 
-    /// <summary>
-    /// Reads body text for search without hydrating the live snapshot.
-    /// Returns false when the file is missing or corrupt.
-    /// </summary>
-    public bool TryReadBodyTexts(long sessionId, out string? requestText, out string? responseText)
+    /// <summary>Deserializes the full session file (headers + bodies).</summary>
+    public bool TryReadSession(long sessionId, out SessionSnapshot? session)
     {
-        requestText = null;
-        responseText = null;
+        session = null;
         ObjectDisposedException.ThrowIf(_disposed, this);
         var path = PathFor(sessionId);
         if (!File.Exists(path))
@@ -138,22 +123,28 @@ public sealed class SessionBodyDiskCache : IDisposable
         try
         {
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-            using var br = new BinaryReader(fs, Encoding.UTF8, leaveOpen: false);
-            if (!TryReadHeader(br, out _))
-            {
-                return false;
-            }
-
-            _ = ReadBytes(br);
-            _ = ReadBytes(br);
-            requestText = ReadString(br);
-            responseText = ReadString(br);
-            return true;
+            session = JsonSerializer.Deserialize<SessionSnapshot>(fs, JsonOptions);
+            return session is not null;
         }
         catch
         {
             return false;
         }
+    }
+
+    /// <summary>Reads body text for search without hydrating the live snapshot.</summary>
+    public bool TryReadBodyTexts(long sessionId, out string? requestText, out string? responseText)
+    {
+        requestText = null;
+        responseText = null;
+        if (!TryReadSession(sessionId, out var loaded) || loaded is null)
+        {
+            return false;
+        }
+
+        requestText = loaded.RequestBodyText;
+        responseText = loaded.ResponseBodyText;
+        return true;
     }
 
     public void Delete(long sessionId)
@@ -198,7 +189,7 @@ public sealed class SessionBodyDiskCache : IDisposable
             return;
         }
 
-        foreach (var file in Directory.EnumerateFiles(_directory, BodyFileSearchPattern))
+        foreach (var file in Directory.EnumerateFiles(_directory, SessionFileSearchPattern))
         {
             try
             {
@@ -215,6 +206,19 @@ public sealed class SessionBodyDiskCache : IDisposable
             try
             {
                 File.Delete(tmp);
+            }
+            catch
+            {
+                // Best-effort.
+            }
+        }
+
+        // Drop legacy body-only binaries from earlier Inspector builds.
+        foreach (var legacy in Directory.EnumerateFiles(_directory, "*.bin"))
+        {
+            try
+            {
+                File.Delete(legacy);
             }
             catch
             {
@@ -241,7 +245,6 @@ public sealed class SessionBodyDiskCache : IDisposable
             return;
         }
 
-        // Drop incomplete writes from a crash.
         foreach (var tmp in Directory.EnumerateFiles(_directory, "*.tmp"))
         {
             try
@@ -260,7 +263,7 @@ public sealed class SessionBodyDiskCache : IDisposable
             _trackedBytes = 0;
         }
 
-        foreach (var path in Directory.EnumerateFiles(_directory, BodyFileSearchPattern))
+        foreach (var path in Directory.EnumerateFiles(_directory, SessionFileSearchPattern))
         {
             try
             {
@@ -362,99 +365,5 @@ public sealed class SessionBodyDiskCache : IDisposable
                 _trackedBytes = Math.Max(0, _trackedBytes - len);
             }
         }
-    }
-
-    private static bool TryReadHeader(BinaryReader br, out int version)
-    {
-        version = 0;
-        var magic = br.ReadBytes(4);
-        if (magic.Length != 4 || magic[0] != Magic[0] || magic[1] != Magic[1] || magic[2] != Magic[2] || magic[3] != Magic[3])
-        {
-            return false;
-        }
-
-        version = br.ReadInt32();
-        return version is Version or VersionV1;
-    }
-
-    private static void ApplyCaptureMetadata(SessionSnapshot snapshot, BinaryReader br, int version)
-    {
-        if (version >= Version)
-        {
-            var reqOrig = br.ReadInt64();
-            var respOrig = br.ReadInt64();
-            snapshot.RequestBodyOriginalSize = reqOrig < 0 ? null : reqOrig;
-            snapshot.ResponseBodyOriginalSize = respOrig < 0 ? null : respOrig;
-            snapshot.RequestBodyCapture = (BodyCaptureState)br.ReadByte();
-            snapshot.ResponseBodyCapture = (BodyCaptureState)br.ReadByte();
-        }
-        else
-        {
-            snapshot.RequestBodyCapture = InspectorBodyLimits.InferFromBytes(
-                snapshot.RequestBodyBytes, snapshot.RequestBodyBytes?.LongLength);
-            snapshot.ResponseBodyCapture = InspectorBodyLimits.InferFromBytes(
-                snapshot.ResponseBodyBytes, snapshot.ResponseBodyBytes?.LongLength);
-            snapshot.RequestBodyOriginalSize = snapshot.RequestBodyBytes?.LongLength;
-            snapshot.ResponseBodyOriginalSize = snapshot.ResponseBodyBytes?.LongLength;
-        }
-    }
-
-    private static void WriteBytes(BinaryWriter bw, byte[]? data)
-    {
-        if (data is null)
-        {
-            bw.Write(-1);
-            return;
-        }
-
-        bw.Write(data.Length);
-        if (data.Length > 0)
-        {
-            bw.Write(data);
-        }
-    }
-
-    private static void WriteString(BinaryWriter bw, string? text)
-    {
-        if (text is null)
-        {
-            bw.Write(-1);
-            return;
-        }
-
-        var bytes = Encoding.UTF8.GetBytes(text);
-        bw.Write(bytes.Length);
-        if (bytes.Length > 0)
-        {
-            bw.Write(bytes);
-        }
-    }
-
-    private static byte[]? ReadBytes(BinaryReader br)
-    {
-        var len = br.ReadInt32();
-        if (len < 0)
-        {
-            return null;
-        }
-
-        return len == 0 ? Array.Empty<byte>() : br.ReadBytes(len);
-    }
-
-    private static string? ReadString(BinaryReader br)
-    {
-        var len = br.ReadInt32();
-        if (len < 0)
-        {
-            return null;
-        }
-
-        if (len == 0)
-        {
-            return string.Empty;
-        }
-
-        var bytes = br.ReadBytes(len);
-        return Encoding.UTF8.GetString(bytes);
     }
 }

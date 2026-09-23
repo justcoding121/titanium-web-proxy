@@ -3,7 +3,7 @@
         x:Class="Titanium.Inspector.Views.SessionRetentionWindow"
         AutomationProperties.AutomationId="SessionRetentionWindow"
         Title="Session retention"
-        Width="520" Height="360"
+        Width="520" Height="400"
         WindowStartupLocation="CenterOwner"
         CanResize="False">
   <DockPanel Margin="16">
@@ -18,7 +18,7 @@
         <StackPanel Spacing="4">
           <TextBlock FontWeight="SemiBold" Text="Maximum sessions to keep" />
           <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                     Text="How many requests stay in the session list. When over this, the oldest rows are deleted." />
+                     Text="How many requests stay in the session list. When over this, the oldest rows leave the list but remain on disk until the disk space limit removes them." />
           <TextBox x:Name="MaxSessionsBox" Width="120" HorizontalAlignment="Left" Watermark="10000"
                    AutomationProperties.AutomationId="RetentionMaxSessions" />
         </StackPanel>
@@ -39,12 +39,12 @@
                   AutomationProperties.AutomationId="RetentionOpenCacheFolder" />
         </StackPanel>
 
-        <Expander Header="Advanced" IsExpanded="False"
+        <Expander Header="Advanced" IsExpanded="True"
                   AutomationProperties.AutomationId="RetentionAdvanced">
           <StackPanel Spacing="4" Margin="0,8,0,0">
-            <TextBlock FontWeight="SemiBold" Text="Disk space for saved bodies (MB)" />
+            <TextBlock FontWeight="SemiBold" Text="Disk space for saved sessions (MB)" />
             <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                       Text="Maximum space for saved bodies. Oldest cached files are deleted when over this. Session rows stay in the list until the session limit removes them." />
+                       Text="Maximum space for all saved sessions on disk (headers and bodies). Oldest files are deleted when over this." />
             <TextBox x:Name="DiskCacheMaxMbBox" Width="120" HorizontalAlignment="Left" Watermark="2048"
                      AutomationProperties.AutomationId="RetentionDiskCacheMb" />
           </StackPanel>

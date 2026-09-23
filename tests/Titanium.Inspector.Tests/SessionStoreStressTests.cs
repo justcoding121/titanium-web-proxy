@@ -22,10 +22,13 @@ public class SessionStoreStressTests
             Id = id,
             Method = "GET",
             Url = $"https://example.com/stress/{id}",
+            StatusCode = 200,
             RequestBodyBytes = new byte[bodyBytes],
             ResponseBodyBytes = new byte[bodyBytes],
             RequestBodyText = new string('a', Math.Min(bodyBytes, 64)),
             ResponseBodyText = new string('b', Math.Min(bodyBytes, 64)),
+            RequestBodyCapture = BodyCaptureState.Complete,
+            ResponseBodyCapture = BodyCaptureState.Complete,
         };
 
     [TestMethod]
@@ -60,7 +63,7 @@ public class SessionStoreStressTests
 
             await store.FlushSpillAsync();
 
-            Assert.IsTrue(Directory.EnumerateFiles(dir, "*.bin").Any(), "Expected spill files after flush");
+            Assert.IsTrue(Directory.EnumerateFiles(dir, "*.json").Any(), "Expected spill files after flush");
 
             var newest = store.TryGet(total);
             Assert.IsNotNull(newest);

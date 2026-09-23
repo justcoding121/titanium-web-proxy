@@ -193,34 +193,32 @@ public class DesktopShellAndPathTests
     }
 
     [TestMethod]
-    public void SessionBodyDiskCache_BudgetPrune_BadVersion_AndWrite()
+    public void SessionBodyDiskCache_BudgetPrune_CorruptAndWrite()
     {
         var dir = Path.Combine(Path.GetTempPath(), "twp-disk-prune-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         try
         {
-            var underBudget = Path.Combine(dir, "1.bin");
-            File.WriteAllBytes(underBudget, new byte[24]);
-            using (var cache = new SessionBodyDiskCache(dir, maxBytes: 1024, maxAge: TimeSpan.FromHours(1)))
+            using (var cache = new SessionBodyDiskCache(dir, maxBytes: 50_000, maxAge: TimeSpan.FromHours(1)))
             {
-                Assert.IsTrue(File.Exists(underBudget), "Files under the disk budget stay (no age prune)");
+                cache.Write(new SessionSnapshot
+                {
+                    Id = 1,
+                    Method = "GET",
+                    Url = "https://example.com/1",
+                    ResponseBodyBytes = new byte[100],
+                });
+                Assert.IsTrue(File.Exists(cache.PathFor(1)));
             }
 
-            File.WriteAllBytes(underBudget, new byte[2000]);
+            File.WriteAllBytes(Path.Combine(dir, "1.json"), new byte[5_000]);
             using (var over = new SessionBodyDiskCache(dir, maxBytes: 100, maxAge: TimeSpan.FromHours(1)))
             {
-                Assert.IsFalse(File.Exists(underBudget), "Startup rebuild enforces disk budget");
+                Assert.IsFalse(File.Exists(Path.Combine(dir, "1.json")), "Startup rebuild enforces disk budget");
             }
 
-            var versioned = Path.Combine(dir, "2.bin");
-            using (var fs = File.Create(versioned))
-            using (var bw = new BinaryWriter(fs, Encoding.UTF8, leaveOpen: false))
-            {
-                bw.Write("TSIB"u8.ToArray());
-                bw.Write(99);
-            }
-
-            using var live = new SessionBodyDiskCache(dir, maxBytes: 40, maxAge: TimeSpan.Zero);
+            File.WriteAllText(Path.Combine(dir, "2.json"), "not-json");
+            using var live = new SessionBodyDiskCache(dir, maxBytes: 40_000, maxAge: TimeSpan.Zero);
             Assert.IsFalse(live.TryLoad(new SessionSnapshot { Id = 2 }));
             live.Write(new SessionSnapshot
             {
@@ -235,6 +233,7 @@ public class DesktopShellAndPathTests
                 ResponseBodyBytes = new byte[80],
             });
             Assert.IsFalse(live.TryLoad(new SessionSnapshot { Id = 2 }));
+            Assert.IsTrue(live.TryLoad(new SessionSnapshot { Id = 4 }));
         }
         finally
         {

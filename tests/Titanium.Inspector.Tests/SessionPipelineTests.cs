@@ -147,20 +147,26 @@ public class SessionPipelineTests
                 Id = 1,
                 Method = "GET",
                 Url = "https://example.com/1",
+                StatusCode = 200,
                 RequestBodyText = "alpha-body",
                 RequestBodyBytes = new byte[32],
                 ResponseBodyText = "r1",
                 ResponseBodyBytes = new byte[32],
+                RequestBodyCapture = BodyCaptureState.Complete,
+                ResponseBodyCapture = BodyCaptureState.Complete,
             };
             var s2 = new SessionSnapshot
             {
                 Id = 2,
                 Method = "GET",
                 Url = "https://example.com/2",
+                StatusCode = 200,
                 RequestBodyText = "beta-body",
                 RequestBodyBytes = new byte[32],
                 ResponseBodyText = "r2",
                 ResponseBodyBytes = new byte[32],
+                RequestBodyCapture = BodyCaptureState.Complete,
+                ResponseBodyCapture = BodyCaptureState.Complete,
             };
 
             // Seed through VM so the filtered grid sees the rows.
