@@ -80,7 +80,7 @@ public class SessionStoreRetentionTests
     }
 
     [TestMethod]
-    public async Task MemoryEviction_RewritesFinalArchive_WithLatestHeaders()
+    public async Task MemoryEviction_KeepsExistingSpill_WithoutSyncRewrite()
     {
         var dir = TempCacheDir();
         try
@@ -97,6 +97,8 @@ public class SessionStoreRetentionTests
             var first = MakeSession(1, 64);
             store.Add(first);
             await store.FlushSpillAsync();
+            Assert.IsTrue(HarExists(dir, 1));
+            // Metadata changes after spill — eviction must not block on TryLoad+Write.
             first.ResponseHeadersText = "X-Final: 1\r\n";
             first.DurationMs = 42;
 
@@ -104,10 +106,11 @@ public class SessionStoreRetentionTests
             await store.FlushSpillAsync();
 
             Assert.IsNull(store.TryGet(1));
-            Assert.IsTrue(HarExists(dir, 1));
-            var json = File.ReadAllText(FindHar(dir, 1)!);
-            StringAssert.Contains(json, "X-Final");
-            StringAssert.Contains(json, "42");
+            Assert.IsTrue(HarExists(dir, 1), "Spill file survives memory eviction");
+            var har = File.ReadAllText(FindHar(dir, 1)!);
+            StringAssert.Contains(har, "example.com");
+            // Pre-eviction header edits are not force-rewritten (avoids UI-thread disk I/O).
+            Assert.IsFalse(har.Contains("X-Final", StringComparison.Ordinal));
         }
         finally
         {

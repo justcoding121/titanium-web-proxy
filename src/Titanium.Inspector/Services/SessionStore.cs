@@ -310,7 +310,11 @@ public sealed class SessionStore : IDisposable
             return;
         }
 
-        for (var attempt = 0; attempt < 40; attempt++)
+        // Under heavy capture, the spill writer may still be draining thousands of HARs.
+        // Keep waiting while work is queued; only mark missing once the channel is idle
+        // and the file is still absent (bounded by ct / ~2 minutes).
+        var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(2);
+        while (DateTime.UtcNow < deadline)
         {
             ct.ThrowIfCancellationRequested();
             lock (_gate)
@@ -330,7 +334,6 @@ public sealed class SessionStore : IDisposable
                 }
             }
 
-            // Spill writer may still be flushing the file.
             if (Volatile.Read(ref _pendingSpills) == 0 && !_disk.FileExists(snapshot.Id))
             {
                 snapshot.BodiesMissingFromDisk = true;
@@ -340,7 +343,9 @@ public sealed class SessionStore : IDisposable
             await Task.Delay(25, ct).ConfigureAwait(false);
         }
 
-        if (!HasInMemoryBodies(snapshot))
+        if (!HasInMemoryBodies(snapshot) &&
+            Volatile.Read(ref _pendingSpills) == 0 &&
+            !_disk.FileExists(snapshot.Id))
         {
             snapshot.BodiesMissingFromDisk = true;
         }
@@ -440,7 +445,8 @@ public sealed class SessionStore : IDisposable
             return;
         }
 
-        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(5));
+        // Default must cover large capture bursts (thousands of HAR writes); callers may shorten.
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromMinutes(2));
         while (Volatile.Read(ref _pendingSpills) > 0 && DateTime.UtcNow < deadline)
         {
             await Task.Delay(25, CancellationToken.None).ConfigureAwait(false);
@@ -650,18 +656,6 @@ public sealed class SessionStore : IDisposable
                 continue;
             }
 
-            // Snapshot for disk write after leaving the collections (avoid long I/O under callers'
-            // expectations — still sync, but state is already detached).
-            SessionSnapshot? persistCopy = null;
-            if (_disk is not null)
-            {
-                persistCopy = CloneForDisk(snap);
-                if (!HasInMemoryBodies(snap) && _disk.FileExists(snap.Id))
-                {
-                    _disk.TryLoad(persistCopy);
-                }
-            }
-
             Sessions.RemoveAt(i);
             _byId.Remove(snap.Id);
             if (snap.BodiesOnDisk)
@@ -672,17 +666,14 @@ public sealed class SessionStore : IDisposable
             RecalcInMemoryBodyBytesLocked();
             evicted = snap;
 
-            if (persistCopy is not null && _disk is not null)
+            // Never sync-read/write HAR here: Add/NotifyUpdated often run on the UI thread
+            // (batched capture). Past MaxSessionsInMemory that froze the Inspector for seconds
+            // per eviction (TryLoad + Write + budget prune).
+            // If bodies were already handed to the spill channel (BodiesOnDisk, RAM cleared),
+            // do not enqueue another CloneForDisk — an empty clone would overwrite the good HAR.
+            if (_disk is not null && _spillChannel is not null && HasInMemoryBodies(snap))
             {
-                try
-                {
-                    var pruned = _disk.Write(persistCopy);
-                    MarkBodiesMissingLocked(pruned);
-                }
-                catch
-                {
-                    // Best-effort archive; memory eviction still proceeds.
-                }
+                EnqueueSpillWrite(CloneForDisk(snap));
             }
 
             return true;
