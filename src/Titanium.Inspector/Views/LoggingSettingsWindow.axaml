@@ -3,7 +3,8 @@
         x:Class="Titanium.Inspector.Views.LoggingSettingsWindow"
         AutomationProperties.AutomationId="LoggingSettingsWindow"
         Title="Logging"
-        Width="520" Height="340"
+        Width="520"
+        SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         CanResize="False">
   <DockPanel Margin="16">
