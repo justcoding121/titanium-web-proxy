@@ -4,9 +4,9 @@ using System.Threading.Channels;
 namespace Titanium.Inspector.Services;
 
 /// <summary>
-/// Captured sessions: in-memory list (headers/metadata; bodies unloaded), full JSON archive on disk,
-/// and two independent limits — MaxSessionsInMemory (drop rows from the list) and DiskCacheMaxBytes
-/// (delete oldest archive files).
+/// Captured sessions: in-memory list (headers/metadata; bodies unloaded), HAR archive on disk
+/// (per-run subfolders under the cache root), and two independent limits — MaxSessionsInMemory
+/// (drop rows from the list) and DiskCacheMaxBytes (delete oldest HAR files across runs).
 /// </summary>
 public sealed class SessionStore : IDisposable
 {
@@ -30,10 +30,9 @@ public sealed class SessionStore : IDisposable
         // unit tests may opt out with SpillBodiesToDisk=false (no LocalAppData writers).
         if (_options.SpillBodiesToDisk)
         {
-            var dir = cacheDirectory ?? SessionBodyDiskCache.GetDefaultDirectory();
-            _disk = new SessionBodyDiskCache(dir, _options.DiskCacheMaxBytes, TimeSpan.FromDays(7));
-            // Sessions are process-lifetime only; leftover cache files from a prior run are orphans.
-            _disk.ClearAll();
+            var root = cacheDirectory ?? SessionBodyDiskCache.GetDefaultDirectory();
+            _disk = new SessionBodyDiskCache(root, _options.DiskCacheMaxBytes, TimeSpan.FromDays(7));
+            // Prior runs stay under other timestamped folders for Import HAR; this run writes here only.
             _spillChannel = Channel.CreateUnbounded<SessionSnapshot>(new UnboundedChannelOptions
             {
                 SingleReader = true,
@@ -48,8 +47,11 @@ public sealed class SessionStore : IDisposable
 
     public ObservableCollection<SessionSnapshot> Sessions { get; }
 
-    /// <summary>Resolved body spill directory when disk spill is enabled; otherwise null.</summary>
-    public string? DiskCacheDirectoryPath => _disk?.DirectoryPath;
+    /// <summary>Cache root (all run folders) when disk spill is enabled; otherwise null.</summary>
+    public string? DiskCacheDirectoryPath => _disk?.RootDirectoryPath;
+
+    /// <summary>This process run's HAR folder when disk spill is enabled; otherwise null.</summary>
+    public string? DiskCacheRunDirectoryPath => _disk?.RunDirectoryPath;
 
     public SessionStoreOptions Options => _options;
 

@@ -1,36 +1,47 @@
+using System.Globalization;
 using System.Text.Json;
 
 namespace Titanium.Inspector.Services;
 
 /// <summary>
-/// On-disk session cache under a size budget. Each finished session is stored as a
-/// single-entry HAR 1.2 document (<c>{id}.har</c>) — same format as Import/Export HAR,
-/// with Titanium fields under <c>_inspector</c>.
-/// Oldest files are deleted first when over the disk budget.
+/// On-disk session cache under a size budget. Each Inspector process run writes into a
+/// timestamped subfolder under the cache root (<c>{root}/{yyyyMMdd-HHmmss-fff}/{id}.har</c>)
+/// so restarted session ids never overwrite another run. Disk budget counts all runs and
+/// deletes oldest HAR files first (across folders).
 /// </summary>
 public sealed class SessionBodyDiskCache : IDisposable
 {
     private const string SessionFileSearchPattern = "*.har";
     private const string LegacySessionFileSearchPattern = "*.json";
 
-    private readonly string _directory;
+    private readonly string _rootDirectory;
+    private readonly string _runDirectory;
     private long _maxBytes;
     private readonly object _gate = new();
-    /// <summary>sessionId → (byte length, last write UTC).</summary>
-    private readonly Dictionary<long, (long Length, DateTime LastWriteUtc)> _index = new();
+    /// <summary>Absolute file path → tracked size / time / session id.</summary>
+    private readonly Dictionary<string, (long SessionId, long Length, DateTime LastWriteUtc)> _index = new(
+        StringComparer.OrdinalIgnoreCase);
     private long _trackedBytes;
     private bool _disposed;
 
-    public SessionBodyDiskCache(string directory, long maxBytes, TimeSpan maxAge)
+    public SessionBodyDiskCache(string rootDirectory, long maxBytes, TimeSpan maxAge)
+        : this(rootDirectory, maxBytes, maxAge, runStartedUtc: DateTimeOffset.UtcNow)
+    {
+    }
+
+    /// <summary>Test seam: inject run start time for deterministic folder names.</summary>
+    internal SessionBodyDiskCache(
+        string rootDirectory, long maxBytes, TimeSpan maxAge, DateTimeOffset runStartedUtc)
     {
         _ = maxAge;
-        _directory = directory;
+        _rootDirectory = rootDirectory;
         _maxBytes = maxBytes > 0 ? maxBytes : 2L * 1024 * 1024 * 1024;
-        Directory.CreateDirectory(_directory);
+        Directory.CreateDirectory(_rootDirectory);
+        _runDirectory = CreateRunDirectory(_rootDirectory, runStartedUtc);
         RebuildIndexAndEnforceBudget();
     }
 
-    /// <summary>Updates disk budget; returns session ids whose files were deleted to stay under the new cap.</summary>
+    /// <summary>Updates disk budget; returns current-run session ids whose files were deleted.</summary>
     public IReadOnlyList<long> UpdateLimits(long maxBytes, TimeSpan maxAge)
     {
         _ = maxAge;
@@ -43,8 +54,8 @@ public sealed class SessionBodyDiskCache : IDisposable
     }
 
     /// <summary>
-    /// Default spill directory under LocalApplicationData (Windows LocalAppData,
-    /// Linux ~/.local/share, macOS Application Support).
+    /// Default spill root under LocalApplicationData (Windows LocalAppData,
+    /// Linux ~/.local/share, macOS Application Support). Per-run subfolders live under this.
     /// </summary>
     public static string GetDefaultDirectory() =>
         Path.Combine(
@@ -52,16 +63,25 @@ public sealed class SessionBodyDiskCache : IDisposable
             "TitaniumInspector",
             "session-cache");
 
-    public string DirectoryPath => _directory;
+    /// <summary>Cache root that holds all run folders (Open cache folder target).</summary>
+    public string RootDirectoryPath => _rootDirectory;
 
-    public string PathFor(long sessionId) => Path.Combine(_directory, sessionId.ToString("D") + ".har");
+    /// <summary>This process run's spill folder.</summary>
+    public string RunDirectoryPath => _runDirectory;
+
+    /// <summary>Alias for <see cref="RootDirectoryPath"/> (UI / options).</summary>
+    public string DirectoryPath => _rootDirectory;
+
+    public string PathFor(long sessionId) =>
+        Path.Combine(_runDirectory, sessionId.ToString("D", CultureInfo.InvariantCulture) + ".har");
 
     public bool FileExists(long sessionId) => File.Exists(PathFor(sessionId));
 
-    /// <summary>Writes a single-entry HAR and returns session ids pruned to stay under budget.</summary>
+    /// <summary>Writes a single-entry HAR into the current run folder; may prune older files under budget.</summary>
     public IReadOnlyList<long> Write(SessionSnapshot snapshot)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        Directory.CreateDirectory(_runDirectory);
         var path = PathFor(snapshot.Id);
         var tmp = path + ".tmp";
         using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
@@ -73,18 +93,17 @@ public sealed class SessionBodyDiskCache : IDisposable
         {
             var oldLen = new FileInfo(path).Length;
             File.Delete(path);
-            RemoveFromIndex(snapshot.Id, oldLen);
+            RemoveFromIndex(path, oldLen);
         }
 
         File.Move(tmp, path);
         var newLen = new FileInfo(path).Length;
-        AddToIndex(snapshot.Id, newLen, DateTime.UtcNow);
+        AddToIndex(path, snapshot.Id, newLen, DateTime.UtcNow);
         return EnforceDiskBudget();
     }
 
     /// <summary>
-    /// Loads body fields (and capture metadata) from the on-disk HAR into
-    /// <paramref name="snapshot"/> without replacing headers already in memory.
+    /// Loads body fields from the current run's HAR into <paramref name="snapshot"/>.
     /// </summary>
     public bool TryLoad(SessionSnapshot snapshot)
     {
@@ -107,13 +126,11 @@ public sealed class SessionBodyDiskCache : IDisposable
         snapshot.GrpcFrames = loaded.GrpcFrames;
         snapshot.MultipartParts = loaded.MultipartParts;
         snapshot.ProtobufDecodedText = loaded.ProtobufDecodedText;
-        // Do not clobber live WS/SSE accumulation still held on the row after the first spill.
         snapshot.WebSocketFrames ??= loaded.WebSocketFrames;
         snapshot.SseEvents ??= loaded.SseEvents;
         return true;
     }
 
-    /// <summary>Deserializes the full HAR session file (headers + bodies + _inspector).</summary>
     public bool TryReadSession(long sessionId, out SessionSnapshot? session)
     {
         session = null;
@@ -143,7 +160,6 @@ public sealed class SessionBodyDiskCache : IDisposable
         }
     }
 
-    /// <summary>Reads body text for search without hydrating the live snapshot.</summary>
     public bool TryReadBodyTexts(long sessionId, out string? requestText, out string? responseText)
     {
         requestText = null;
@@ -163,7 +179,7 @@ public sealed class SessionBodyDiskCache : IDisposable
         var path = PathFor(sessionId);
         if (!File.Exists(path))
         {
-            RemoveFromIndex(sessionId, trackedLength: null);
+            RemoveFromIndex(path, trackedLength: null);
             return;
         }
 
@@ -171,7 +187,7 @@ public sealed class SessionBodyDiskCache : IDisposable
         {
             var len = new FileInfo(path).Length;
             File.Delete(path);
-            RemoveFromIndex(sessionId, len);
+            RemoveFromIndex(path, len);
         }
         catch
         {
@@ -187,9 +203,16 @@ public sealed class SessionBodyDiskCache : IDisposable
         }
     }
 
+    /// <summary>Deletes HARs for this process run only; other run folders stay for Import HAR.</summary>
     public void ClearAll()
     {
-        if (!Directory.Exists(_directory))
+        ClearCurrentRun();
+    }
+
+    /// <summary>Deletes every run folder under the cache root (tests / full wipe).</summary>
+    public void ClearAllRuns()
+    {
+        if (!Directory.Exists(_rootDirectory))
         {
             lock (_gate)
             {
@@ -200,11 +223,38 @@ public sealed class SessionBodyDiskCache : IDisposable
             return;
         }
 
-        DeleteMatchingFiles(SessionFileSearchPattern);
-        DeleteMatchingFiles(LegacySessionFileSearchPattern);
-        DeleteMatchingFiles("*.tmp");
-        DeleteMatchingFiles("*.bin");
+        foreach (var path in EnumerateAllHarFiles())
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch
+            {
+                // Best-effort.
+            }
+        }
 
+        DeleteMatchingUnderRoot(LegacySessionFileSearchPattern);
+        DeleteMatchingUnderRoot("*.tmp");
+        DeleteMatchingUnderRoot("*.bin");
+
+        foreach (var sub in Directory.EnumerateDirectories(_rootDirectory))
+        {
+            try
+            {
+                if (IsEmptyDirectory(sub))
+                {
+                    Directory.Delete(sub, recursive: false);
+                }
+            }
+            catch
+            {
+                // Best-effort.
+            }
+        }
+
+        Directory.CreateDirectory(_runDirectory);
         lock (_gate)
         {
             _index.Clear();
@@ -217,17 +267,55 @@ public sealed class SessionBodyDiskCache : IDisposable
         _disposed = true;
     }
 
+    private void ClearCurrentRun()
+    {
+        if (!Directory.Exists(_runDirectory))
+        {
+            lock (_gate)
+            {
+                RemoveIndexEntriesUnder(_runDirectory);
+            }
+
+            return;
+        }
+
+        foreach (var file in Directory.EnumerateFiles(_runDirectory, SessionFileSearchPattern))
+        {
+            try
+            {
+                var len = new FileInfo(file).Length;
+                File.Delete(file);
+                RemoveFromIndex(file, len);
+            }
+            catch
+            {
+                // Best-effort.
+            }
+        }
+
+        foreach (var tmp in Directory.EnumerateFiles(_runDirectory, "*.tmp"))
+        {
+            try
+            {
+                File.Delete(tmp);
+            }
+            catch
+            {
+                // Best-effort.
+            }
+        }
+    }
+
     private void RebuildIndexAndEnforceBudget()
     {
-        if (!Directory.Exists(_directory))
+        if (!Directory.Exists(_rootDirectory))
         {
             return;
         }
 
-        DeleteMatchingFiles("*.tmp");
-        // Drop legacy proprietary JSON spills so they do not confuse the disk budget.
-        DeleteMatchingFiles(LegacySessionFileSearchPattern);
-        DeleteMatchingFiles("*.bin");
+        DeleteMatchingUnderRoot("*.tmp");
+        DeleteMatchingUnderRoot(LegacySessionFileSearchPattern);
+        DeleteMatchingUnderRoot("*.bin");
 
         lock (_gate)
         {
@@ -235,18 +323,18 @@ public sealed class SessionBodyDiskCache : IDisposable
             _trackedBytes = 0;
         }
 
-        foreach (var path in Directory.EnumerateFiles(_directory, SessionFileSearchPattern))
+        foreach (var path in EnumerateAllHarFiles())
         {
             try
             {
                 var info = new FileInfo(path);
                 var name = Path.GetFileNameWithoutExtension(info.Name);
-                if (!long.TryParse(name, out var id))
+                if (!long.TryParse(name, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
                 {
                     continue;
                 }
 
-                AddToIndex(id, info.Length, info.LastWriteTimeUtc);
+                AddToIndex(path, id, info.Length, info.LastWriteTimeUtc);
             }
             catch
             {
@@ -257,9 +345,36 @@ public sealed class SessionBodyDiskCache : IDisposable
         EnforceDiskBudget();
     }
 
-    private void DeleteMatchingFiles(string pattern)
+    private IEnumerable<string> EnumerateAllHarFiles()
     {
-        foreach (var file in Directory.EnumerateFiles(_directory, pattern))
+        if (!Directory.Exists(_rootDirectory))
+        {
+            yield break;
+        }
+
+        // Legacy flat HARs at root (pre–run-folder builds).
+        foreach (var path in Directory.EnumerateFiles(_rootDirectory, SessionFileSearchPattern))
+        {
+            yield return path;
+        }
+
+        foreach (var sub in Directory.EnumerateDirectories(_rootDirectory))
+        {
+            foreach (var path in Directory.EnumerateFiles(sub, SessionFileSearchPattern))
+            {
+                yield return path;
+            }
+        }
+    }
+
+    private void DeleteMatchingUnderRoot(string pattern)
+    {
+        if (!Directory.Exists(_rootDirectory))
+        {
+            return;
+        }
+
+        foreach (var file in Directory.EnumerateFiles(_rootDirectory, pattern))
         {
             try
             {
@@ -270,14 +385,30 @@ public sealed class SessionBodyDiskCache : IDisposable
                 // Best-effort.
             }
         }
+
+        foreach (var sub in Directory.EnumerateDirectories(_rootDirectory))
+        {
+            foreach (var file in Directory.EnumerateFiles(sub, pattern))
+            {
+                try
+                {
+                    File.Delete(file);
+                }
+                catch
+                {
+                    // Best-effort.
+                }
+            }
+        }
     }
 
     /// <summary>
-    /// Deletes oldest files until under <see cref="_maxBytes"/>. Returns pruned session ids.
+    /// Deletes oldest HARs (any run) until under budget. Returns session ids pruned from
+    /// <see cref="_runDirectory"/> only so live rows are not marked missing for other runs.
     /// </summary>
     private IReadOnlyList<long> EnforceDiskBudget()
     {
-        List<(long Id, long Length, DateTime LastWriteUtc)> ordered;
+        List<(string Path, long SessionId, long Length, DateTime LastWriteUtc)> ordered;
         long tracked;
         long maxBytes;
         lock (_gate)
@@ -290,12 +421,12 @@ public sealed class SessionBodyDiskCache : IDisposable
             }
 
             ordered = _index
-                .Select(kv => (kv.Key, kv.Value.Length, kv.Value.LastWriteUtc))
+                .Select(kv => (kv.Key, kv.Value.SessionId, kv.Value.Length, kv.Value.LastWriteUtc))
                 .OrderBy(x => x.LastWriteUtc)
                 .ToList();
         }
 
-        var deleted = new List<long>();
+        var deletedCurrentRun = new List<long>();
         foreach (var entry in ordered)
         {
             if (tracked <= maxBytes)
@@ -305,15 +436,19 @@ public sealed class SessionBodyDiskCache : IDisposable
 
             try
             {
-                var path = PathFor(entry.Id);
-                if (File.Exists(path))
+                if (File.Exists(entry.Path))
                 {
-                    File.Delete(path);
+                    File.Delete(entry.Path);
                 }
 
                 tracked -= entry.Length;
-                RemoveFromIndex(entry.Id, entry.Length);
-                deleted.Add(entry.Id);
+                RemoveFromIndex(entry.Path, entry.Length);
+                if (IsUnderRunDirectory(entry.Path))
+                {
+                    deletedCurrentRun.Add(entry.SessionId);
+                }
+
+                TryDeleteEmptyRunFolder(Path.GetDirectoryName(entry.Path));
             }
             catch
             {
@@ -321,36 +456,111 @@ public sealed class SessionBodyDiskCache : IDisposable
             }
         }
 
-        return deleted;
+        return deletedCurrentRun;
     }
 
-    private void AddToIndex(long sessionId, long length, DateTime lastWriteUtc)
+    private bool IsUnderRunDirectory(string path)
     {
+        var full = Path.GetFullPath(path);
+        var run = Path.GetFullPath(_runDirectory);
+        return full.StartsWith(run + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+               || full.StartsWith(run + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(full, run, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void TryDeleteEmptyRunFolder(string? folder)
+    {
+        if (string.IsNullOrEmpty(folder))
+        {
+            return;
+        }
+
+        var full = Path.GetFullPath(folder);
+        var run = Path.GetFullPath(_runDirectory);
+        var root = Path.GetFullPath(_rootDirectory);
+        if (string.Equals(full, run, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(full, root, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        try
+        {
+            if (Directory.Exists(full) && IsEmptyDirectory(full))
+            {
+                Directory.Delete(full, recursive: false);
+            }
+        }
+        catch
+        {
+            // Best-effort.
+        }
+    }
+
+    private static bool IsEmptyDirectory(string path) =>
+        !Directory.EnumerateFileSystemEntries(path).Any();
+
+    private void AddToIndex(string path, long sessionId, long length, DateTime lastWriteUtc)
+    {
+        var key = Path.GetFullPath(path);
         lock (_gate)
         {
-            if (_index.TryGetValue(sessionId, out var prev))
+            if (_index.TryGetValue(key, out var prev))
             {
                 _trackedBytes = Math.Max(0, _trackedBytes - prev.Length);
             }
 
-            _index[sessionId] = (length, lastWriteUtc);
+            _index[key] = (sessionId, length, lastWriteUtc);
             _trackedBytes += length;
         }
     }
 
-    private void RemoveFromIndex(long sessionId, long? trackedLength)
+    private void RemoveFromIndex(string path, long? trackedLength)
     {
+        var key = Path.GetFullPath(path);
         lock (_gate)
         {
-            if (_index.TryGetValue(sessionId, out var prev))
+            if (_index.TryGetValue(key, out var prev))
             {
                 _trackedBytes = Math.Max(0, _trackedBytes - prev.Length);
-                _index.Remove(sessionId);
+                _index.Remove(key);
             }
             else if (trackedLength is long len)
             {
                 _trackedBytes = Math.Max(0, _trackedBytes - len);
             }
         }
+    }
+
+    private void RemoveIndexEntriesUnder(string directory)
+    {
+        var prefix = Path.GetFullPath(directory);
+        var toRemove = _index.Keys
+            .Where(k => k.StartsWith(prefix + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                        || k.StartsWith(prefix + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(k, prefix, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        foreach (var key in toRemove)
+        {
+            if (_index.TryGetValue(key, out var prev))
+            {
+                _trackedBytes = Math.Max(0, _trackedBytes - prev.Length);
+                _index.Remove(key);
+            }
+        }
+    }
+
+    internal static string CreateRunDirectory(string root, DateTimeOffset startedUtc)
+    {
+        var stamp = startedUtc.UtcDateTime.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture);
+        var path = Path.Combine(root, stamp);
+        // Extremely unlikely collision within the same millisecond.
+        if (Directory.Exists(path))
+        {
+            path = Path.Combine(root, stamp + "-" + Guid.NewGuid().ToString("N")[..6]);
+        }
+
+        Directory.CreateDirectory(path);
+        return path;
     }
 }

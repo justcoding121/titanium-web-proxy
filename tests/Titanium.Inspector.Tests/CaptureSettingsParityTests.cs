@@ -141,7 +141,7 @@ public class CaptureSettingsParityTests
                 Url = "https://example.com/2",
                 ResponseBodyBytes = new byte[1_200],
             });
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "2.har")));
+            Assert.IsTrue(File.Exists(cache.PathFor(2)));
 
             cache.Write(new SessionSnapshot
             {
@@ -150,8 +150,8 @@ public class CaptureSettingsParityTests
                 Url = "https://example.com/3",
                 ResponseBodyBytes = new byte[1_200],
             });
-            Assert.IsFalse(File.Exists(Path.Combine(dir, "2.har")), "Write should prune oldest when over budget");
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "3.har")));
+            Assert.IsFalse(File.Exists(cache.PathFor(2)), "Write should prune oldest when over budget");
+            Assert.IsTrue(File.Exists(cache.PathFor(3)));
         }
         finally
         {
@@ -410,7 +410,7 @@ public class CaptureSettingsParityTests
             Assert.IsFalse(cache.TryLoad(new SessionSnapshot { Id = 99 }));
 
             cache.ClearAll();
-            Assert.AreEqual(0, Directory.EnumerateFiles(dir, "*.har").Count());
+            Assert.AreEqual(0, Directory.EnumerateFiles(cache.RunDirectoryPath, "*.har").Count());
 
             cache.Delete(12345); // missing id — no throw
             cache.Dispose();

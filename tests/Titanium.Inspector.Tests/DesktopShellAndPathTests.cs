@@ -31,12 +31,37 @@ public class DesktopShellAndPathTests
     }
 
     [TestMethod]
-    public void SessionStore_DefaultSpillDirectory_MatchesGetDefaultDirectory()
+    public void SessionStore_DiskCacheDirectoryPath_IsRoot_RunFolderIsTimestampedChild()
     {
-        using var store = new SessionStore(new SessionStoreOptions { SpillBodiesToDisk = true });
-        Assert.AreEqual(
-            Path.GetFullPath(SessionBodyDiskCache.GetDefaultDirectory()),
-            Path.GetFullPath(store.DiskCacheDirectoryPath!));
+        var dir = Path.Combine(Path.GetTempPath(), "twp-run-cache-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var store = new SessionStore(
+                new SessionStoreOptions { SpillBodiesToDisk = true },
+                dir);
+            Assert.AreEqual(Path.GetFullPath(dir), Path.GetFullPath(store.DiskCacheDirectoryPath!));
+            Assert.IsNotNull(store.DiskCacheRunDirectoryPath);
+            Assert.IsTrue(
+                Path.GetFullPath(store.DiskCacheRunDirectoryPath!)
+                    .StartsWith(Path.GetFullPath(dir) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
+            Assert.AreNotEqual(
+                Path.GetFullPath(dir),
+                Path.GetFullPath(store.DiskCacheRunDirectoryPath!));
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(dir))
+                {
+                    Directory.Delete(dir, recursive: true);
+                }
+            }
+            catch
+            {
+                // best-effort cleanup
+            }
+        }
     }
 
     [TestMethod]

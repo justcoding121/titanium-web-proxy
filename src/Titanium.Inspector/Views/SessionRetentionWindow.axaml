@@ -44,7 +44,7 @@
           <StackPanel Spacing="4" Margin="0,8,0,0">
             <TextBlock FontWeight="SemiBold" Text="Disk space for saved sessions (MB)" />
             <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                       Text="Maximum space for all saved sessions on disk (headers and bodies). Oldest files are deleted when over this." />
+                       Text="Maximum space for all saved sessions on disk (all Inspector runs). Each run uses a timestamped subfolder; oldest HAR files are deleted first when over this." />
             <TextBox x:Name="DiskCacheMaxMbBox" Width="120" HorizontalAlignment="Left" Watermark="2048"
                      AutomationProperties.AutomationId="RetentionDiskCacheMb" />
           </StackPanel>

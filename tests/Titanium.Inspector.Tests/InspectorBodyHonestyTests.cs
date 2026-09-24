@@ -132,9 +132,53 @@ public class InspectorBodyHonestyTests
         Directory.CreateDirectory(dir);
         try
         {
-            File.WriteAllText(Path.Combine(dir, "7.har"), "{not-valid");
             using var cache = new SessionBodyDiskCache(dir, maxBytes: 10_000_000, maxAge: TimeSpan.FromDays(1));
+            File.WriteAllText(cache.PathFor(7), "{not-valid");
             Assert.IsFalse(cache.TryLoad(new SessionSnapshot { Id = 7 }));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public void SessionBodyDiskCache_SeparateRuns_DoNotOverwriteSameSessionId()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-session-runs-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var t1 = new DateTimeOffset(2026, 9, 24, 10, 0, 0, TimeSpan.Zero);
+            var t2 = new DateTimeOffset(2026, 9, 24, 11, 0, 0, TimeSpan.Zero);
+            using var run1 = new SessionBodyDiskCache(dir, maxBytes: 10_000_000, maxAge: TimeSpan.FromDays(1), t1);
+            run1.Write(new SessionSnapshot
+            {
+                Id = 1,
+                Method = "GET",
+                Url = "https://first.example/",
+                ResponseBodyText = "first",
+                ResponseBodyBytes = "first"u8.ToArray(),
+            });
+
+            using var run2 = new SessionBodyDiskCache(dir, maxBytes: 10_000_000, maxAge: TimeSpan.FromDays(1), t2);
+            run2.Write(new SessionSnapshot
+            {
+                Id = 1,
+                Method = "GET",
+                Url = "https://second.example/",
+                ResponseBodyText = "second",
+                ResponseBodyBytes = "second"u8.ToArray(),
+            });
+
+            Assert.AreNotEqual(run1.RunDirectoryPath, run2.RunDirectoryPath);
+            Assert.IsTrue(File.Exists(run1.PathFor(1)));
+            Assert.IsTrue(File.Exists(run2.PathFor(1)));
+
+            Assert.IsTrue(run1.TryReadSession(1, out var a));
+            Assert.IsTrue(run2.TryReadSession(1, out var b));
+            Assert.AreEqual("https://first.example/", a!.Url);
+            Assert.AreEqual("https://second.example/", b!.Url);
         }
         finally
         {

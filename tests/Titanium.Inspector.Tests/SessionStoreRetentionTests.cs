@@ -54,7 +54,7 @@ public class SessionStoreRetentionTests
             store.Add(pending);
             await store.FlushSpillAsync();
             Assert.IsFalse(pending.BodiesOnDisk);
-            Assert.IsFalse(File.Exists(Path.Combine(dir, "1.har")));
+            Assert.IsFalse(HarExists(dir, 1));
 
             pending.StatusCode = 200;
             pending.ResponseBodyBytes = new byte[16];
@@ -64,9 +64,9 @@ public class SessionStoreRetentionTests
             await store.FlushSpillAsync();
 
             Assert.IsTrue(pending.BodiesOnDisk);
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "1.har")));
+            Assert.IsTrue(HarExists(dir, 1));
             Assert.IsNull(pending.RequestBodyBytes, "Bodies unload after archive");
-            var har = File.ReadAllText(Path.Combine(dir, "1.har"));
+            var har = File.ReadAllText(FindHar(dir, 1)!);
             StringAssert.Contains(har, "\"log\"");
             StringAssert.Contains(har, "\"version\":\"1.2\"");
             StringAssert.Contains(har, "\"_inspector\"");
@@ -104,8 +104,8 @@ public class SessionStoreRetentionTests
             await store.FlushSpillAsync();
 
             Assert.IsNull(store.TryGet(1));
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "1.har")));
-            var json = File.ReadAllText(Path.Combine(dir, "1.har"));
+            Assert.IsTrue(HarExists(dir, 1));
+            var json = File.ReadAllText(FindHar(dir, 1)!);
             StringAssert.Contains(json, "X-Final");
             StringAssert.Contains(json, "42");
         }
@@ -176,12 +176,12 @@ public class SessionStoreRetentionTests
             Assert.IsNull(s2.ResponseBodyBytes);
 
             await store.FlushSpillAsync();
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "1.har")));
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "2.har")));
+            Assert.IsTrue(HarExists(dir, 1));
+            Assert.IsTrue(HarExists(dir, 2));
 
             Assert.IsTrue(store.Options.SpillBodiesToDisk);
             Assert.IsTrue(
-                File.ReadAllText(Path.Combine(dir, "1.har")).Contains("example.com", StringComparison.Ordinal),
+                File.ReadAllText(FindHar(dir, 1)!).Contains("example.com", StringComparison.Ordinal),
                 "Disk archive must include session headers/URL");
 
             await store.EnsureBodiesLoadedAsync(s1, CancellationToken.None);
@@ -219,7 +219,7 @@ public class SessionStoreRetentionTests
             Assert.IsNotNull(s1.RequestBodyBytes, "Pinned session keeps RAM bodies after spill queue");
 
             await store.FlushSpillAsync();
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "1.har")));
+            Assert.IsTrue(HarExists(dir, 1));
 
             store.PinnedSessionId = null;
             Assert.IsNull(s1.RequestBodyBytes, "Deselect unloads RAM bodies when file exists");
@@ -328,12 +328,12 @@ public class SessionStoreRetentionTests
             store.Add(MakeSession(11, 128));
             Assert.IsTrue(store.TryGet(10)!.BodiesOnDisk);
             await store.FlushSpillAsync();
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "10.har")));
+            Assert.IsTrue(HarExists(dir, 10));
 
             store.Clear();
             Assert.AreEqual(0, store.Count);
-            Assert.IsFalse(File.Exists(Path.Combine(dir, "10.har")));
-            Assert.IsFalse(Directory.EnumerateFiles(dir, "*.har").Any());
+            Assert.IsFalse(HarExists(dir, 10));
+            Assert.IsFalse(Directory.EnumerateFiles(dir, "*.har", SearchOption.AllDirectories).Any());
         }
         finally
         {
@@ -389,11 +389,11 @@ public class SessionStoreRetentionTests
             store.Add(MakeSession(1, 64));
             store.Add(MakeSession(2, 64));
             await store.FlushSpillAsync();
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "1.har")));
+            Assert.IsTrue(HarExists(dir, 1));
 
             store.Add(MakeSession(3, 64));
             Assert.IsNull(store.TryGet(1), "Memory eviction drops the row");
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "1.har")), "Disk archive stays until disk budget prunes");
+            Assert.IsTrue(HarExists(dir, 1), "Disk archive stays until disk budget prunes");
         }
         finally
         {
@@ -418,7 +418,7 @@ public class SessionStoreRetentionTests
 
             store.Add(MakeSession(1, 400));
             await store.FlushSpillAsync();
-            var path1 = Path.Combine(dir, "1.har");
+            var path1 = FindHar(dir, 1)!;
             Assert.IsTrue(File.Exists(path1));
             var size1 = new FileInfo(path1).Length;
 
@@ -435,7 +435,7 @@ public class SessionStoreRetentionTests
 
             Assert.AreEqual(2, store.Count, "Disk prune must not remove list rows");
             Assert.IsFalse(File.Exists(path1), "Oldest disk file pruned by size budget");
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "2.har")));
+            Assert.IsTrue(HarExists(dir, 2));
         }
         finally
         {
@@ -627,7 +627,7 @@ public class SessionStoreRetentionTests
 
             store.Add(MakeSession(1, 400));
             await store.FlushSpillAsync();
-            var path1 = Path.Combine(dir, "1.har");
+            var path1 = FindHar(dir, 1)!;
             Assert.IsTrue(File.Exists(path1));
             var size1 = new FileInfo(path1).Length;
 
@@ -674,6 +674,13 @@ public class SessionStoreRetentionTests
         StringAssert.Contains(text, "disk cache limit");
         StringAssert.Contains(text, "Headers in the list are still available");
     }
+
+    private static string? FindHar(string root, long id) =>
+        Directory.Exists(root)
+            ? Directory.EnumerateFiles(root, id.ToString("D") + ".har", SearchOption.AllDirectories).FirstOrDefault()
+            : null;
+
+    private static bool HarExists(string root, long id) => FindHar(root, id) is not null;
 
     private static void TryDeleteDir(string dir)
     {
