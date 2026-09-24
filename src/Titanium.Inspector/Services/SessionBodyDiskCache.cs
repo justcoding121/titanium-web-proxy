@@ -1,21 +1,17 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace Titanium.Inspector.Services;
 
 /// <summary>
-/// On-disk session cache under a size budget. Each finished session is stored as JSON
-/// (headers, bodies, and metadata — same shape as native archive entries).
-/// The  disk budget applies to all of these files; oldest files are deleted first.
+/// On-disk session cache under a size budget. Each finished session is stored as a
+/// single-entry HAR 1.2 document (<c>{id}.har</c>) — same format as Import/Export HAR,
+/// with Titanium fields under <c>_inspector</c>.
+/// Oldest files are deleted first when over the disk budget.
 /// </summary>
 public sealed class SessionBodyDiskCache : IDisposable
 {
-    private const string SessionFileSearchPattern = "*.json";
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = false,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
+    private const string SessionFileSearchPattern = "*.har";
+    private const string LegacySessionFileSearchPattern = "*.json";
 
     private readonly string _directory;
     private long _maxBytes;
@@ -58,11 +54,11 @@ public sealed class SessionBodyDiskCache : IDisposable
 
     public string DirectoryPath => _directory;
 
-    public string PathFor(long sessionId) => Path.Combine(_directory, sessionId.ToString("D") + ".json");
+    public string PathFor(long sessionId) => Path.Combine(_directory, sessionId.ToString("D") + ".har");
 
     public bool FileExists(long sessionId) => File.Exists(PathFor(sessionId));
 
-    /// <summary>Writes the full session JSON and returns session ids pruned to stay under budget.</summary>
+    /// <summary>Writes a single-entry HAR and returns session ids pruned to stay under budget.</summary>
     public IReadOnlyList<long> Write(SessionSnapshot snapshot)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -70,7 +66,7 @@ public sealed class SessionBodyDiskCache : IDisposable
         var tmp = path + ".tmp";
         using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
         {
-            JsonSerializer.Serialize(fs, snapshot, JsonOptions);
+            SessionArchive.WriteHarDocument(fs, snapshot);
         }
 
         if (File.Exists(path))
@@ -87,7 +83,7 @@ public sealed class SessionBodyDiskCache : IDisposable
     }
 
     /// <summary>
-    /// Loads body fields (and capture metadata) from the on-disk session into
+    /// Loads body fields (and capture metadata) from the on-disk HAR into
     /// <paramref name="snapshot"/> without replacing headers already in memory.
     /// </summary>
     public bool TryLoad(SessionSnapshot snapshot)
@@ -117,7 +113,7 @@ public sealed class SessionBodyDiskCache : IDisposable
         return true;
     }
 
-    /// <summary>Deserializes the full session file (headers + bodies).</summary>
+    /// <summary>Deserializes the full HAR session file (headers + bodies + _inspector).</summary>
     public bool TryReadSession(long sessionId, out SessionSnapshot? session)
     {
         session = null;
@@ -131,7 +127,14 @@ public sealed class SessionBodyDiskCache : IDisposable
         try
         {
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-            session = JsonSerializer.Deserialize<SessionSnapshot>(fs, JsonOptions);
+            using var doc = JsonDocument.Parse(fs);
+            var list = SessionArchive.ParseHarDocument(doc.RootElement, startId: sessionId);
+            session = list.Count > 0 ? list[0] : null;
+            if (session is not null)
+            {
+                session.Id = sessionId;
+            }
+
             return session is not null;
         }
         catch
@@ -197,42 +200,10 @@ public sealed class SessionBodyDiskCache : IDisposable
             return;
         }
 
-        foreach (var file in Directory.EnumerateFiles(_directory, SessionFileSearchPattern))
-        {
-            try
-            {
-                File.Delete(file);
-            }
-            catch
-            {
-                // Best-effort.
-            }
-        }
-
-        foreach (var tmp in Directory.EnumerateFiles(_directory, "*.tmp"))
-        {
-            try
-            {
-                File.Delete(tmp);
-            }
-            catch
-            {
-                // Best-effort.
-            }
-        }
-
-        // Drop legacy body-only binaries from earlier Inspector builds.
-        foreach (var legacy in Directory.EnumerateFiles(_directory, "*.bin"))
-        {
-            try
-            {
-                File.Delete(legacy);
-            }
-            catch
-            {
-                // Best-effort.
-            }
-        }
+        DeleteMatchingFiles(SessionFileSearchPattern);
+        DeleteMatchingFiles(LegacySessionFileSearchPattern);
+        DeleteMatchingFiles("*.tmp");
+        DeleteMatchingFiles("*.bin");
 
         lock (_gate)
         {
@@ -253,17 +224,10 @@ public sealed class SessionBodyDiskCache : IDisposable
             return;
         }
 
-        foreach (var tmp in Directory.EnumerateFiles(_directory, "*.tmp"))
-        {
-            try
-            {
-                File.Delete(tmp);
-            }
-            catch
-            {
-                // Best-effort.
-            }
-        }
+        DeleteMatchingFiles("*.tmp");
+        // Drop legacy proprietary JSON spills so they do not confuse the disk budget.
+        DeleteMatchingFiles(LegacySessionFileSearchPattern);
+        DeleteMatchingFiles("*.bin");
 
         lock (_gate)
         {
@@ -291,6 +255,21 @@ public sealed class SessionBodyDiskCache : IDisposable
         }
 
         EnforceDiskBudget();
+    }
+
+    private void DeleteMatchingFiles(string pattern)
+    {
+        foreach (var file in Directory.EnumerateFiles(_directory, pattern))
+        {
+            try
+            {
+                File.Delete(file);
+            }
+            catch
+            {
+                // Best-effort.
+            }
+        }
     }
 
     /// <summary>

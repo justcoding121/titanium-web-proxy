@@ -64,9 +64,9 @@ public class InspectorBodyHonestyTests
     }
 
     [TestMethod]
-    public void SessionBodyDiskCache_Json_RoundTripsHeadersAndBodies()
+    public async Task SessionBodyDiskCache_Har_RoundTripsHeadersAndBodies()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "twp-session-json-" + Guid.NewGuid().ToString("N"));
+        var dir = Path.Combine(Path.GetTempPath(), "twp-session-har-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         try
         {
@@ -106,6 +106,18 @@ public class InspectorBodyHonestyTests
             Assert.AreEqual(3L, loaded.RequestBodyOriginalSize);
             Assert.AreEqual(9_000_000L, loaded.ResponseBodyOriginalSize);
             CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, loaded.RequestBodyBytes);
+            CollectionAssert.AreEqual(new byte[] { 4, 5, 6, 7 }, loaded.ResponseBodyBytes);
+
+            var harText = File.ReadAllText(cache.PathFor(42));
+            StringAssert.Contains(harText, "\"log\"");
+            StringAssert.Contains(harText, "\"_inspector\"");
+
+            var imported = await SessionArchive.ImportHarAsync(cache.PathFor(42));
+            Assert.AreEqual(1, imported.Count);
+            Assert.AreEqual(42, imported[0].Id);
+            Assert.AreEqual(BodyCaptureState.Truncated, imported[0].ResponseBodyCapture);
+            CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, imported[0].RequestBodyBytes);
+            CollectionAssert.AreEqual(new byte[] { 4, 5, 6, 7 }, imported[0].ResponseBodyBytes);
         }
         finally
         {
@@ -114,13 +126,13 @@ public class InspectorBodyHonestyTests
     }
 
     [TestMethod]
-    public void SessionBodyDiskCache_CorruptJson_FailsLoad()
+    public void SessionBodyDiskCache_CorruptHar_FailsLoad()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "twp-session-bad-" + Guid.NewGuid().ToString("N"));
+        var dir = Path.Combine(Path.GetTempPath(), "twp-session-bad-har-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         try
         {
-            File.WriteAllText(Path.Combine(dir, "7.json"), "{not-valid");
+            File.WriteAllText(Path.Combine(dir, "7.har"), "{not-valid");
             using var cache = new SessionBodyDiskCache(dir, maxBytes: 10_000_000, maxAge: TimeSpan.FromDays(1));
             Assert.IsFalse(cache.TryLoad(new SessionSnapshot { Id = 7 }));
         }

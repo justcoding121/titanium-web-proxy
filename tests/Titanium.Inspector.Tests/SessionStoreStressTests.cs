@@ -63,7 +63,7 @@ public class SessionStoreStressTests
 
             await store.FlushSpillAsync();
 
-            Assert.IsTrue(Directory.EnumerateFiles(dir, "*.json").Any(), "Expected spill files after flush");
+            Assert.IsTrue(Directory.EnumerateFiles(dir, "*.har").Any(), "Expected spill files after flush");
 
             var newest = store.TryGet(total);
             Assert.IsNotNull(newest);

@@ -834,22 +834,27 @@ public sealed partial class MainWindowViewModel
     }
     private async Task ImportHarAsync()
     {
-        var path = await _pathPicker.PickOpenPathAsync("Import HAR", "HAR", "*.har", ZipFileFilter);
-        if (path is null)
+        var paths = await _pathPicker.PickOpenPathsAsync("Import HAR", "HAR", "*.har", ZipFileFilter);
+        if (paths.Count == 0)
         {
             SetGuardStatus("No .har or archive to import");
             return;
         }
 
         SetStatus("Importing…", StatusSeverity.Busy);
-        List<SessionSnapshot> imported;
-        if (path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        var imported = new List<SessionSnapshot>();
+        foreach (var path in paths)
         {
-            imported = await SessionArchive.ImportNativeArchiveAsync(path, _statusRevertCts?.Token ?? CancellationToken.None);
-        }
-        else
-        {
-            imported = await SessionArchive.ImportHarAsync(path, _statusRevertCts?.Token ?? CancellationToken.None);
+            if (path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                imported.AddRange(await SessionArchive.ImportNativeArchiveAsync(
+                    path, _statusRevertCts?.Token ?? CancellationToken.None));
+            }
+            else
+            {
+                imported.AddRange(await SessionArchive.ImportHarAsync(
+                    path, _statusRevertCts?.Token ?? CancellationToken.None));
+            }
         }
 
         foreach (var snap in imported)
@@ -859,7 +864,10 @@ public sealed partial class MainWindowViewModel
 
         ApplyFilter();
         RefreshSessionCountText();
-        SetOutcomeStatus($"Appended {imported.Count} sessions from {Path.GetFileName(path)}", StatusSeverity.Success, toastImportant: true);
+        var label = paths.Count == 1
+            ? Path.GetFileName(paths[0])
+            : $"{paths.Count} files";
+        SetOutcomeStatus($"Appended {imported.Count} sessions from {label}", StatusSeverity.Success, toastImportant: true);
     }
     private async Task ExportArchiveAsync()
     {
