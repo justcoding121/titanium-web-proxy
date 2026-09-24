@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -280,5 +281,99 @@ public class Http2ContinuationAndAbuseBudgetTests
         Assert.AreEqual(5, relayedSettings[(int)Http2SettingsId.MaxConcurrentStreams],
             "The value relayed to the client must be clamped to the proxy-owned cap, not the origin's " +
             "own (larger) advertised value.");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ACK-gated enforcement: after SETTINGS is advertised toward the client,
+    // MaxConcurrentStreams admission must not refuse until the client ACKs
+    // (RFC 9113). After ACK, over-cap streams get REFUSED_STREAM.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [TestMethod]
+    [Timeout(20_000)]
+    public async Task MaxConcurrentStreams_NotEnforcedUntilClientSettingsAck()
+    {
+        const int cap = 2;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+        using var rawServer = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        rawServer.HandleConnection(async connection =>
+        {
+            var payload = new byte[6];
+            var id = (int)Http2SettingsId.MaxConcurrentStreams;
+            payload[0] = (byte)((id >> 8) & 0xff);
+            payload[1] = (byte)(id & 0xff);
+            payload[2] = (byte)((cap >> 24) & 0xff);
+            payload[3] = (byte)((cap >> 16) & 0xff);
+            payload[4] = (byte)((cap >> 8) & 0xff);
+            payload[5] = (byte)(cap & 0xff);
+            await connection.WriteFrameAsync(Http2FrameType.Settings, 0, 0, payload);
+            // Leave requests unanswered so half-closed streams stay in the concurrent-stream count.
+            try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.ResourceLimits = CreateLimits(maxConcurrentStreamsPerConnection: cap);
+
+        var serverUri = new Uri(rawServer.Url);
+        using var rawClient =
+            await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, serverUri.Host, serverUri.Port);
+
+        var relayed = await rawClient.Connection.ReadSettingsAsync();
+        Assert.AreEqual(cap, relayed[(int)Http2SettingsId.MaxConcurrentStreams]);
+
+        // Do NOT ACK SETTINGS yet — open more streams than the advertised cap.
+        async Task OpenGetAsync(int streamId)
+        {
+            var headers = rawClient.Connection.EncodeHeaders(
+                new[]
+                {
+                    (":method", "GET"), (":scheme", "https"),
+                    (":authority", $"{serverUri.Host}:{serverUri.Port}"), (":path", "/")
+                },
+                Array.Empty<(string, string)>());
+            await rawClient.Connection.WriteHeaderBlockAsync(streamId, headers, endStream: true);
+        }
+
+        await OpenGetAsync(1);
+        await OpenGetAsync(3);
+        await OpenGetAsync(5); // cap+1 while Enforced is still unlimited
+
+        // Give the proxy time to refuse if it wrongly enforced before ACK (RSTs buffer on the wire).
+        await Task.Delay(400);
+
+        // ACK SETTINGS → promote Pending → Enforced, then one more stream must be refused.
+        await rawClient.Connection.WriteFrameAsync(Http2FrameType.Settings, 0, Http2FrameFlag.Ack,
+            Array.Empty<byte>());
+
+        await OpenGetAsync(7);
+
+        var refusedStreams = new HashSet<int>();
+        Http2ErrorCode? stream7Code = null;
+        for (var i = 0; i < 30 && stream7Code is null; i++)
+        {
+            var frame = await rawClient.Connection.ReadFrameAsync();
+            if (frame.Type != Http2FrameType.RstStream)
+            {
+                continue;
+            }
+
+            var ec = (Http2ErrorCode)((frame.Payload[0] << 24) | (frame.Payload[1] << 16) |
+                                      (frame.Payload[2] << 8) | frame.Payload[3]);
+            refusedStreams.Add(frame.StreamId);
+            if (frame.StreamId == 7)
+            {
+                stream7Code = ec;
+            }
+        }
+
+        Assert.IsFalse(refusedStreams.Contains(1) || refusedStreams.Contains(3) || refusedStreams.Contains(5),
+            "Streams opened before the client SETTINGS ACK must not be refused for MaxConcurrentStreams. " +
+            $"Refused={string.Join(",", refusedStreams)}");
+        Assert.AreEqual(Http2ErrorCode.RefusedStream, stream7Code,
+            "After SETTINGS ACK, opening past the advertised MaxConcurrentStreams must RST REFUSED_STREAM.");
+
+        cts.Cancel();
     }
 }
