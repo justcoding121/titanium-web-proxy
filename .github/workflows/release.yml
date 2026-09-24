@@ -293,7 +293,7 @@ jobs:
             [[ -f "$f" ]] && cp "$f" "staged-cli-$rid/" || true
           done
           ls -la "staged-cli-$rid"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cli-${{ matrix.rid }}
           path: staged-cli-${{ matrix.rid }}/
@@ -317,7 +317,7 @@ jobs:
           # Stamp InformationalVersion (e.g. 7.0.5-beta) while assembly Version stays numeric.
           dotnet build src/Titanium.Plus/Titanium.Plus.csproj -c Release -o artifacts/plus -p:Version="$ver"
           cp artifacts/plus/Titanium.Plus.dll "Titanium.Plus-${RELEASE_TAG}.dll"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: plus
           path: Titanium.Plus-*.dll
@@ -506,7 +506,7 @@ jobs:
             [[ -f "$f" ]] && cp "$f" "staged-inspector-$rid/" || true
           done
           ls -la "staged-inspector-$rid"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: inspector-${{ matrix.rid }}
           if-no-files-found: error
@@ -599,7 +599,7 @@ jobs:
           pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName
       - name: Upload smoke CSV
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rps-product-smoke-csv
           path: tools/RpsLoadProbe/results/rps-ramp-*.csv
