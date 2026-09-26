@@ -110,6 +110,16 @@ internal static partial class Http3OriginBridge
                     fwd.PreencodedQpackHeaders = QpackEncoder.EncodeResponse(response, context: null);
                 fwd.PreencodedBody = exchange.Body;
                 fwd.PreencodedBodyLength = exchange.Body.Length;
+                // MITM unchanged-lite seeds Response before the call. Stamp Body onto the
+                // exchange Response (which replaces that seed) so BeforeResponse /
+                // FinishMitm fallback can read it — match Tcp ForwardOverTcpFastAsync.
+                // Reverse (Response null) keeps skip-Body coalesce.
+                if (fwd.Response != null)
+                {
+                    response.Body = exchange.Body;
+                    response.BodyIsWireEncoded = true;
+                    response.IsBodyReceived = true;
+                }
             }
             else
             {

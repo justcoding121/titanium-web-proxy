@@ -289,8 +289,13 @@ internal static class Http3RequestStream
                 var mitmUnchangedH3H3 = !mitmUnchangedH3H1 && TryMitmUnchangedH3ToH3Lite(
                     sessionArgs, authArgs, request, requestHeaderRelayBaseline,
                     capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
+                var mitmUnchangedH3H2 = !mitmUnchangedH3H1 && !mitmUnchangedH3H3
+                    && TryMitmUnchangedH3ToH2Lite(
+                        sessionArgs, authArgs, request, requestHeaderRelayBaseline,
+                        capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
 
-                if (!mitmUnchangedH3H1 && !mitmUnchangedH3H3 && !sessionArgs.IsFastPath
+                if (!mitmUnchangedH3H1 && !mitmUnchangedH3H3 && !mitmUnchangedH3H2
+                                       && !sessionArgs.IsFastPath
                                        && !string.IsNullOrEmpty(server.ViaHeaderPseudonym))
                     sessionArgs.HttpClient.Request.Headers.AddHeader(
                         new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
@@ -313,11 +318,12 @@ internal static class Http3RequestStream
                             new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
                     await SendResponseAsync(stream, sessionArgs.HttpClient.Response, qpackContext, cancellationToken);
                 }
-                else if (mitmUnchangedH3H1 || mitmUnchangedH3H3)
+                else if (mitmUnchangedH3H1 || mitmUnchangedH3H3 || mitmUnchangedH3H2)
                 {
-                    // True MITM noop-safe: H3→H1 uses ForwardOverTcpFastAsync; H3→H3 captures QPACK
-                    // via ForwardOverQuicFastAsync(clientStream: null) then SendPreencoded after
-                    // BeforeResponse (same shape as H3→H1 lite — never emit before the handler).
+                    // True MITM noop-safe: H3→H1 uses ForwardOverTcpFastAsync; H3→H2 uses
+                    // ForwardOverHttp2FastAsync; H3→H3 captures QPACK via
+                    // ForwardOverQuicFastAsync(clientStream: null). All three finish with
+                    // SendPreencoded after BeforeResponse — never emit before the handler.
                     if (!streamState.RequestClosed)
                     {
                         sessionArgs.Http3BufferedBodyReader = null;
@@ -362,7 +368,9 @@ internal static class Http3RequestStream
                         stub.CustomUpStreamProxy = fwd.CustomUpStreamProxy;
                         stub.UpstreamHttpProtocol = mitmUnchangedH3H3
                             ? UpstreamHttpProtocol.Http3
-                            : UpstreamHttpProtocol.Http11;
+                            : mitmUnchangedH3H2
+                                ? UpstreamHttpProtocol.Http2
+                                : UpstreamHttpProtocol.Http11;
                         return stub;
                     }
 
@@ -385,6 +393,20 @@ internal static class Http3RequestStream
                             await FinishMitmPreencodedResponseAsync(sessionArgs, fwd, stream, server,
                                 onBeforeResponse, qpackContext, cancellationToken);
                         }
+                    }
+                    else if (mitmUnchangedH3H2)
+                    {
+                        await Http3OriginBridge.ForwardOverHttp2FastAsync(fwd, server, logger,
+                            cancellationToken, ColdOpenSessionFactory);
+
+                        // ForwardOverHttp2FastAsync assigns a new Response onto fwd (unlike
+                        // Tcp/Quic in-place populate). Point the session bag at it before
+                        // BeforeResponse / static QPACK finish.
+                        sessionArgs.HttpClient.Response = fwd.Response
+                                                          ?? sessionArgs.HttpClient.Response;
+
+                        await FinishMitmPreencodedResponseAsync(sessionArgs, fwd, stream, server,
+                            onBeforeResponse, qpackContext, cancellationToken);
                     }
                     else
                     {
@@ -744,6 +766,30 @@ internal static class Http3RequestStream
             capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
     }
 
+    /// <summary>
+    ///     True MITM H3→H2: after BeforeRequest left the exchange unchanged, reuse reverse's
+    ///     <see cref="Http3OriginBridge.ForwardOverHttp2FastAsync"/> then
+    ///     <see cref="FinishMitmPreencodedResponseAsync"/> after BeforeResponse.
+    /// </summary>
+    private static bool TryMitmUnchangedH3ToH2Lite( // NOSONAR S107 -- Baseline capture args kept explicit to avoid allocating context structs on the H3 MITM hot path.
+        SessionEventArgs sessionArgs,
+        BeforeQuicAuthenticateEventArgs authArgs,
+        Request request,
+        MitmCompressedRelayHelper.HeaderRelayBaseline requestHeaderRelayBaseline,
+        string? capturedRequestMethod,
+        ByteString capturedRequestPath,
+        ByteString capturedRequestAuthority,
+        string method)
+    {
+        if (sessionArgs.IsFastPath)
+            return false;
+        if (authArgs.UpstreamHttpProtocol != UpstreamHttpProtocol.Http2)
+            return false;
+        return MitmUnchangedLiteRequestMatches(
+            sessionArgs, request, requestHeaderRelayBaseline,
+            capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
+    }
+
     private static bool MitmUnchangedLiteRequestMatches( // NOSONAR S107
         SessionEventArgs sessionArgs,
         Request request,
@@ -775,8 +821,8 @@ internal static class Http3RequestStream
     }
 
     /// <summary>
-    ///     After H3→H1 / H3→H3 MITM lite origin fetch: BeforeResponse, then static QPACK relay or
-    ///     full re-encode. Never emits before the response handler (noop-safe).
+    ///     After H3→H1 / H3→H2 / H3→H3 MITM lite origin fetch: BeforeResponse, then static QPACK
+    ///     relay or full re-encode. Never emits before the response handler (noop-safe).
     /// </summary>
     private static async Task FinishMitmPreencodedResponseAsync( // NOSONAR S3776 -- MITM lite emit stays one method; splitting adds await/state-machine risk.
         SessionEventArgs sessionArgs,
@@ -855,7 +901,39 @@ internal static class Http3RequestStream
             if (injectVia)
                 response.Headers.AddHeader(
                     new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
-            if (fwd.PreencodedBodyRented && fwd.PreencodedBody != null)
+
+            // H2 MITM stamps Body in ForwardOverHttp2FastAsync; H1 Tcp copies onto the seed.
+            // H3 Quic capture may leave Body null with payload only in PreencodedBody — materialize
+            // before SendResponseAsync so Content-Length is not emitted without DATA.
+            if (!response.BodyAvailable && fwd.PreencodedBody != null)
+            {
+                var len = fwd.PreencodedBodyLength > 0
+                    ? fwd.PreencodedBodyLength
+                    : fwd.PreencodedBody.Length;
+                if (len <= 0)
+                {
+                    response.Body = [];
+                }
+                else if (!fwd.PreencodedBodyRented && fwd.PreencodedBody.Length == len)
+                {
+                    response.Body = fwd.PreencodedBody;
+                }
+                else
+                {
+                    var copy = new byte[len];
+                    Buffer.BlockCopy(fwd.PreencodedBody, 0, copy, 0, len);
+                    response.Body = copy;
+                    if (fwd.PreencodedBodyRented)
+                    {
+                        server.BufferPool.ReturnBuffer(fwd.PreencodedBody);
+                        fwd.PreencodedBodyRented = false;
+                    }
+                }
+
+                response.BodyIsWireEncoded = true;
+                fwd.PreencodedBody = null;
+            }
+            else if (fwd.PreencodedBodyRented && fwd.PreencodedBody != null)
             {
                 // Response.Body holds an owned copy; return the rented Preencoded buffer.
                 server.BufferPool.ReturnBuffer(fwd.PreencodedBody);

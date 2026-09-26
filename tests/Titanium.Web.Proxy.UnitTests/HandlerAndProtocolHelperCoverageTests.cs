@@ -542,15 +542,22 @@ public class HandlerAndProtocolHelperCoverageTests
         var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(request.Headers);
         var flags = PrivateStatic;
         var h1 = typeof(Http3RequestStream).GetMethod("TryMitmUnchangedH3ToH1Lite", flags)!;
+        var h2 = typeof(Http3RequestStream).GetMethod("TryMitmUnchangedH3ToH2Lite", flags)!;
         var h3 = typeof(Http3RequestStream).GetMethod("TryMitmUnchangedH3ToH3Lite", flags)!;
         var match = typeof(Http3RequestStream).GetMethod("MitmUnchangedLiteRequestMatches", flags)!;
         var path = request.RequestUriString8;
         var authority = request.Authority;
         var h1Result = (bool)h1.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"])!;
         Assert.IsTrue(h1Result);
+        Assert.IsFalse((bool)h2.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"])!);
+        auth.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+        Assert.IsTrue((bool)h2.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"])!);
+        Assert.IsFalse((bool)h1.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"])!);
+        Assert.IsFalse((bool)h3.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"])!);
         auth.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;
         var h3Result = (bool)h3.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"])!;
         Assert.IsTrue(h3Result);
+        Assert.IsFalse((bool)h2.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"])!);
         var matchPost = (bool)match.Invoke(null, [session, request, baseline, "POST", path, authority, "POST"])!;
         Assert.IsFalse(matchPost);
         request.CancelRequest = true;
@@ -560,7 +567,10 @@ public class HandlerAndProtocolHelperCoverageTests
         Assert.IsFalse((bool)match.Invoke(null, [session, request, baseline, "GET", path, authority, "GET"])!);
         request.IsBodyRead = false;
         session.IsFastPath = true;
+        auth.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
         Assert.IsFalse((bool)h1.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"])!);
+        auth.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+        Assert.IsFalse((bool)h2.Invoke(null, [session, auth, request, baseline, "GET", path, authority, "GET"])!);
     }
 #pragma warning restore TWP001
 
