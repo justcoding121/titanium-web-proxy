@@ -262,4 +262,24 @@ public class Http2FlowControllerTests
 
         Assert.IsFalse(task.IsCompleted, message);
     }
+
+    [TestMethod]
+    public void TryReservePartial_ReturnsAvailableWhenShort()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        Assert.AreEqual(3 * 16384, flow.TryReservePartial(1, 3 * 16384));
+        Assert.AreEqual(16383, flow.TryReservePartial(1, 16384));
+        Assert.AreEqual(0, flow.TryReservePartial(1, 1));
+    }
+
+    [TestMethod]
+    public void TryReserve_FalseWhenPartialWouldSucceed()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        Assert.IsTrue(flow.TryReserve(1, 3 * 16384));
+        Assert.IsFalse(flow.TryReserve(1, 16384), "All-or-nothing TryReserve must fail when one byte short.");
+        Assert.AreEqual(16383, flow.TryReservePartial(1, 16384));
+    }
 }

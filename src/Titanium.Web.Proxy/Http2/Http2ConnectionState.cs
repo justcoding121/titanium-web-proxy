@@ -51,6 +51,18 @@ internal sealed class Http2ConnectionState
     /// </summary>
     public Http2FlowController ServerSendFlow { get; } = new();
 
+    /// <summary>
+    ///     Outbound DATA toward the client that is waiting for <see cref="ClientSendFlow" /> credit.
+    ///     Drained when the client→server relay reads WINDOW_UPDATE.
+    /// </summary>
+    public Http2DeferredOutboundData ClientOutboundDeferred { get; } = new();
+
+    /// <summary>
+    ///     Outbound DATA toward the server that is waiting for <see cref="ServerSendFlow" /> credit.
+    ///     Drained when the server→client relay reads WINDOW_UPDATE.
+    /// </summary>
+    public Http2DeferredOutboundData ServerOutboundDeferred { get; } = new();
+
     /// <summary>All currently open (or draining) streams, keyed by the stream id used identically on both legs.</summary>
     public ConcurrentDictionary<int, Http2StreamState> Streams { get; } = new();
 
@@ -375,6 +387,8 @@ internal sealed class Http2ConnectionState
         TryTakeStream(streamId, out _);
         ClientSendFlow.RemoveStream(streamId);
         ServerSendFlow.RemoveStream(streamId);
+        ClientOutboundDeferred.CancelStream(streamId);
+        ServerOutboundDeferred.CancelStream(streamId);
     }
 
     /// <summary>Returns a stream state shell to the connection pool after finalization.</summary>
