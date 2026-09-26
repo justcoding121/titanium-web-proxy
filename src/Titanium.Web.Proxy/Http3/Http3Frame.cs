@@ -110,14 +110,13 @@ internal sealed class Http3Frame
             if (!payload.IsEmpty)
                 payload.Span.CopyTo(rented.AsSpan(headerLen));
             var total = headerLen + payload.Length;
-            var writeVt = WriteBufferAsync(stream, rented.AsMemory(0, total), completeWrites, cancellationToken);
-            if (writeVt.IsCompletedSuccessfully)
-            {
-                ArrayPool<byte>.Shared.Return(rented);
-                return default;
-            }
-
-            return AwaitWriteAndReturnAsync(writeVt, rented);
+            // Always await before ArrayPool.Return. Returning on IsCompletedSuccessfully without
+            // consuming the ValueTask let QuicStream/MsQuic keep the Memory while the next frame
+            // Rent reused the same array — H3_FRAME_ERROR on streamed H3 bodies (≥16 KiB chunks /
+            // H3→H2 above the 8 KiB origin buffer). Introduced by e781b009 ValueTask fast-path.
+            return AwaitWriteAndReturnAsync(
+                WriteBufferAsync(stream, rented.AsMemory(0, total), completeWrites, cancellationToken),
+                rented);
         }
 
         // Large DATA: one write for the header, then the payload buffer as-is (avoid a huge copy).
@@ -137,8 +136,10 @@ internal sealed class Http3Frame
         {
             var typeLen = Http3VarInt.Write(headerBytes, frameType);
             var lengthLen = Http3VarInt.Write(headerBytes.AsSpan(typeLen), (ulong)payload.Length);
-            await stream.WriteAsync(headerBytes.AsMemory(0, typeLen + lengthLen), cancellationToken);
-            await WriteBufferAsync(stream, payload, completeWrites, cancellationToken);
+            await stream.WriteAsync(headerBytes.AsMemory(0, typeLen + lengthLen), cancellationToken)
+                .ConfigureAwait(false);
+            await WriteBufferAsync(stream, payload, completeWrites, cancellationToken)
+                .ConfigureAwait(false);
         }
         finally
         {
@@ -200,14 +201,10 @@ internal sealed class Http3Frame
             o += dataPayload.Length;
         }
 
-        var writeVt = WriteBufferAsync(stream, rented.AsMemory(0, o), completeWrites, cancellationToken);
-        if (writeVt.IsCompletedSuccessfully)
-        {
-            ArrayPool<byte>.Shared.Return(rented);
-            return default;
-        }
-
-        return AwaitWriteAndReturnAsync(writeVt, rented);
+        // Same ValueTask-consume-before-Return rule as WriteAsync (see comment there).
+        return AwaitWriteAndReturnAsync(
+            WriteBufferAsync(stream, rented.AsMemory(0, o), completeWrites, cancellationToken),
+            rented);
     }
 
 #pragma warning disable CA1416 // QuicStream.WriteAsync(completeWrites) is gated on the runtime stream type.

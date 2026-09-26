@@ -121,11 +121,7 @@ internal static partial class Http3OriginBridge
                     response.IsBodyReceived = true;
                 }
             }
-            else
-            {
-                // Large/streamed bodies still need the Response graph for StreamBodyWriter.
-                response.IsBodyRead = true;
-            }
+            // else: leave StreamBodyWriter + IsBodyRead alone so SendResponseAsync streams DATA.
 
             if (exchange.TrailingHeaders != null && !response.HasTrailingHeaders)
             {
