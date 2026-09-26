@@ -184,34 +184,81 @@ public partial class ProxyServer
             // Known-CL ≤64 KiB: materialize then one client write (headers+body) — same as fast path.
             // Larger / chunked bodies: still stream via CopyBody with a throwaway session (hooks unused).
             const int coalesceBodyLimit = 64 * 1024;
+            // ArrayPool buckets oversize odd lengths (e.g. Rent(56) → 128). Tiny bodies stay on
+            // exact new byte[length]; pool only when a large rent is likely exact (64 KiB GET).
+            const int poolCoalesceMin = 4 * 1024;
             if (response.HasBody
                 && !response.IsChunked
                 && !response.HasTrailingHeaders
                 && response.ContentLength is > 0 and <= coalesceBodyLimit)
             {
                 var length = (int)response.ContentLength;
-                var body = new byte[length];
-                var read = 0;
-                while (read < length)
+                byte[] body;
+                byte[]? pooled = null;
+                if (length >= poolCoalesceMin)
                 {
-                    var n = await connection.Stream.ReadAsync(body.AsMemory(read, length - read),
-                        cancellationToken);
-                    if (n == 0)
-                        break;
-                    read += n;
+                    var rented = BufferPool.GetBuffer(length);
+                    if (rented.Length == length)
+                    {
+                        body = rented;
+                        pooled = rented;
+                    }
+                    else
+                    {
+                        BufferPool.ReturnBuffer(rented);
+                        body = new byte[length];
+                    }
+                }
+                else
+                {
+                    body = new byte[length];
                 }
 
-                if (read != length)
+                try
                 {
-                    Array.Resize(ref body, read);
-                    closeConnection = true;
-                }
+                    var read = 0;
+                    while (read < length)
+                    {
+                        var n = await connection.Stream.ReadAsync(body.AsMemory(read, length - read),
+                            cancellationToken);
+                        if (n == 0)
+                            break;
+                        read += n;
+                    }
 
-                response.Body = body;
-                response.BodyIsWireEncoded = true;
-                response.IsBodyReceived = true;
-                response.IsBodyRead = true;
-                await clientStream.WriteResponseAsync(response, cancellationToken);
+                    if (read != length)
+                    {
+                        closeConnection = true;
+                        if (pooled != null)
+                        {
+                            // Cannot shrink a rented buffer; hand off an exact prefix and return the rent.
+                            var exact = GC.AllocateUninitializedArray<byte>(read);
+                            if (read > 0)
+                                Buffer.BlockCopy(body, 0, exact, 0, read);
+                            BufferPool.ReturnBuffer(pooled);
+                            pooled = null;
+                            body = exact;
+                        }
+                        else
+                        {
+                            Array.Resize(ref body, read);
+                        }
+                    }
+
+                    response.Body = body;
+                    response.BodyIsWireEncoded = true;
+                    response.IsBodyReceived = true;
+                    response.IsBodyRead = true;
+                    await clientStream.WriteResponseAsync(response, cancellationToken);
+                }
+                finally
+                {
+                    if (pooled != null)
+                    {
+                        response.ClearBodyReference();
+                        BufferPool.ReturnBuffer(pooled);
+                    }
+                }
             }
             else if (response.HasBody)
             {

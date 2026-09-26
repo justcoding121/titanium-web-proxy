@@ -224,6 +224,19 @@ public abstract class RequestResponseBase
     }
 
     /// <summary>
+    ///     Drop the body reference without touching headers (e.g. after writing a rented buffer).
+    /// </summary>
+    internal void ClearBodyReference()
+    {
+        BodyInternal = null;
+        bodyString = null;
+        BodyIsWireEncoded = false;
+        IsBodyRead = false;
+        IsBodyReceived = false;
+        IsBodySent = false;
+    }
+
+    /// <summary>
     ///     Has the request/response body?
     /// </summary>
     public abstract bool HasBody { get; }
