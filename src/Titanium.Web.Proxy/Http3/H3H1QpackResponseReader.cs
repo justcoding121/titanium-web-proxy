@@ -60,6 +60,17 @@ internal static class H3H1QpackResponseReader
                     alsoPopulate);
             }
 
+            // Prefer byte-buffer fill + TryConsume on the hot path. When the buffer is full without
+            // an LF (or EOF leaves a partial line), fall back to ReadLine spanning (cold path).
+            var fill = await reader.FillBufferWithResultAsync(cancellationToken);
+            if (fill == BufferFillResult.Cancelled)
+                return null;
+            if (fill == BufferFillResult.GotData)
+                continue;
+
+            if (reader.Available == 0)
+                return Finish(builder, contentLength, isChunked, connectionClose);
+
             var (tmpLine, cancelled) = await reader.ReadLineWithResultAsync(cancellationToken);
             if (cancelled)
                 return null;

@@ -130,11 +130,12 @@ public class SonarGateCoverageBumpTests
         var buf = new byte[9];
         var data = Encoding.ASCII.GetBytes(new string('z', 17));
         await using var ms = new MemoryStream();
-        await (Task)write.Invoke(null,
+        var vt = (ValueTask)write.Invoke(null,
         [
             header, buf, 11, Http2FrameType.Headers, true, false,
             new ReadOnlyMemory<byte>(data), 8, ms
         ])!;
+        await vt;
 
         var wire = ms.ToArray();
         Assert.IsTrue(wire.Length >= 9 + 8 + 9 + 8 + 9 + 1);

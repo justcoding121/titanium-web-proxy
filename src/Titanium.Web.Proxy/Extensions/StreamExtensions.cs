@@ -18,7 +18,7 @@ internal static class StreamExtensions
     /// <param name="output"></param>
     /// <param name="onCopy"></param>
     /// <param name="bufferPool"></param>
-    internal static Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy,
+    internal static ValueTask CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy,
         IBufferPool bufferPool)
     {
         return CopyToAsync(input, output, onCopy, bufferPool, CancellationToken.None);
@@ -32,7 +32,7 @@ internal static class StreamExtensions
     /// <param name="onCopy"></param>
     /// <param name="bufferPool"></param>
     /// <param name="cancellationToken"></param>
-    internal static async Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int>? onCopy,
+    internal static async ValueTask CopyToAsync(this Stream input, Stream output, Action<byte[], int, int>? onCopy,
         IBufferPool bufferPool, CancellationToken cancellationToken)
     {
         var buffer = bufferPool.GetBuffer();
@@ -53,7 +53,11 @@ internal static class StreamExtensions
                     // corrupting whichever connection borrowed it next. Awaiting the read directly lets
                     // it observe cancellation itself and actually stop before this method reuses its
                     // buffer. HttpStream.FillBufferAsync uses the same direct-await pattern.
-                    bytesRead = await input.ReadAsync(buffer.AsMemory(), cancellationToken);
+                    var readVt = input.ReadAsync(buffer.AsMemory(), cancellationToken);
+                    if (readVt.IsCompletedSuccessfully)
+                        bytesRead = readVt.Result;
+                    else
+                        bytesRead = await readVt.ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -64,7 +68,9 @@ internal static class StreamExtensions
 
                 try
                 {
-                    await output.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
+                    var writeVt = output.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
+                    if (!writeVt.IsCompletedSuccessfully)
+                        await writeVt.ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {

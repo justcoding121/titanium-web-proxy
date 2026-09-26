@@ -175,17 +175,56 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
         }
     }
 
-    private async Task WriteLockedAsync(ReadOnlyMemory<byte> memory, CancellationToken cancellationToken)
+    private ValueTask WriteLockedAsync(ReadOnlyMemory<byte> memory, CancellationToken cancellationToken)
     {
-        if (writeLock != null)
-            await writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        if (writeLock == null)
+            return output.WriteAsync(memory, cancellationToken);
+
+        var waitTask = writeLock.WaitAsync(cancellationToken);
+        if (!waitTask.IsCompletedSuccessfully)
+            return WriteLockedSlowAsync(waitTask, memory, cancellationToken);
+
+        try
+        {
+            var writeVt = output.WriteAsync(memory, cancellationToken);
+            if (writeVt.IsCompletedSuccessfully)
+            {
+                writeLock.Release();
+                return default;
+            }
+
+            return WriteLockedAwaitWriteAsync(writeVt);
+        }
+        catch
+        {
+            writeLock.Release();
+            throw;
+        }
+    }
+
+    private async ValueTask WriteLockedSlowAsync(Task waitTask, ReadOnlyMemory<byte> memory,
+        CancellationToken cancellationToken)
+    {
+        await waitTask.ConfigureAwait(false);
         try
         {
             await output.WriteAsync(memory, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
-            writeLock?.Release();
+            writeLock!.Release();
+        }
+    }
+
+    private async ValueTask WriteLockedAwaitWriteAsync(ValueTask writeVt)
+    {
+        try
+        {
+            await writeVt.ConfigureAwait(false);
+        }
+        finally
+        {
+            writeLock!.Release();
         }
     }
 

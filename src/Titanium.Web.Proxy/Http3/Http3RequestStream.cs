@@ -1104,7 +1104,7 @@ internal static class Http3RequestStream
     /// <summary>
     ///     Writes a pre-encoded QPACK HEADERS block (+ optional DATA) from the H3→H1 one-pass path.
     /// </summary>
-    private static async Task SendPreencodedResponseAsync(
+    private static async ValueTask SendPreencodedResponseAsync(
         QuicStream stream,
         byte[] qpackHeaders,
         ReadOnlyMemory<byte> body,
@@ -1296,11 +1296,11 @@ internal static class Http3RequestStream
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
             WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
 
-        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
             CancellationToken cancellationToken = default)
         {
-            if (buffer.IsEmpty) return;
-            await Http3Frame.WriteAsync(_stream, Http3FrameType.Data, buffer, cancellationToken);
+            if (buffer.IsEmpty) return default;
+            return Http3Frame.WriteAsync(_stream, Http3FrameType.Data, buffer, cancellationToken);
         }
     }
 

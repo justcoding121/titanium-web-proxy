@@ -2180,8 +2180,8 @@ namespace Titanium.Web.Proxy.Http2
                         else
                             await connectionState.ClientWriteChain;
                         await lockedOutputWrite(() =>
-                            AsValueTask(SendBody(remoteSettings, rr, frameHeader, frameHeaderBuffer, buffer, outboundFlow,
-                                output, cancellationToken)));
+                            SendBody(remoteSettings, rr, frameHeader, frameHeaderBuffer, buffer, outboundFlow,
+                                output, cancellationToken));
                     }
                 }
 

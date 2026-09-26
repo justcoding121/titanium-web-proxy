@@ -104,9 +104,17 @@ internal static partial class Http3OriginBridge
             if (response.StreamBodyWriter == null)
             {
                 response.IsBodyRead = true;
-                response.Body = exchange.Body;
-                // Http2OriginConnection materializes H2 DATA wire bytes.
-                response.BodyIsWireEncoded = true;
+                response.ContentLength = exchange.Body.Length;
+                // Interception-off: skip response.Body — emit via Preencoded HEADERS+DATA.
+                if (fwd.PreencodedQpackHeaders == null)
+                    fwd.PreencodedQpackHeaders = QpackEncoder.EncodeResponse(response, context: null);
+                fwd.PreencodedBody = exchange.Body;
+                fwd.PreencodedBodyLength = exchange.Body.Length;
+            }
+            else
+            {
+                // Large/streamed bodies still need the Response graph for StreamBodyWriter.
+                response.IsBodyRead = true;
             }
 
             if (exchange.TrailingHeaders != null && !response.HasTrailingHeaders)

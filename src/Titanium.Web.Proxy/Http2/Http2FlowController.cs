@@ -166,10 +166,20 @@ internal sealed class Http2FlowController
     ///     with the exact on-wire payload length of the DATA frame that is about to be written, before it is
     ///     written, for every outbound DATA frame on the leg this controller governs.
     /// </summary>
-    public async Task ReserveAsync(int streamId, int bytes, CancellationToken cancellationToken)
+    public ValueTask ReserveAsync(int streamId, int bytes, CancellationToken cancellationToken)
     {
-        if (bytes <= 0) return;
+        if (bytes <= 0) return default;
 
+        // Prefer non-blocking reserve when the peer window already has room (typical after
+        // SETTINGS / WINDOW_UPDATE); avoid a Task/state-machine alloc per DATA frame.
+        if (TryReserve(streamId, bytes))
+            return default;
+
+        return ReserveSlowAsync(streamId, bytes, cancellationToken);
+    }
+
+    private async ValueTask ReserveSlowAsync(int streamId, int bytes, CancellationToken cancellationToken)
+    {
         while (true)
         {
             Task wait;

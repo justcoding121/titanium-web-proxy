@@ -39,7 +39,7 @@ public class Http2FlowControllerTests
         // exhaust stream 1's window entirely while the connection window still has ample credit.
         await flow.ReserveAsync(1, Http2FlowController.InitialConnectionWindow, CancellationToken.None);
 
-        var reserveTask = flow.ReserveAsync(1, 10, CancellationToken.None);
+        var reserveTask = flow.ReserveAsync(1, 10, CancellationToken.None).AsTask();
         await AssertRemainsIncompleteAsync(reserveTask, "Reservation should block while the stream window is exhausted.");
 
         flow.OnWindowUpdate(1, 20);
@@ -58,7 +58,7 @@ public class Http2FlowControllerTests
         // drain the connection window using stream 1, leaving stream 2's window untouched.
         await flow.ReserveAsync(1, Http2FlowController.InitialConnectionWindow, CancellationToken.None);
 
-        var reserveTask = flow.ReserveAsync(2, 10, CancellationToken.None);
+        var reserveTask = flow.ReserveAsync(2, 10, CancellationToken.None).AsTask();
         await AssertRemainsIncompleteAsync(reserveTask, "Reservation should block while the connection window is exhausted even though the stream window is untouched.");
 
         flow.OnWindowUpdate(0, 20);
@@ -119,7 +119,7 @@ public class Http2FlowControllerTests
         // shrink the initial window well below what's already been implicitly "granted" to stream 1.
         flow.OnInitialWindowSizeChanged(0);
 
-        var reserveTask = flow.ReserveAsync(1, 1, CancellationToken.None);
+        var reserveTask = flow.ReserveAsync(1, 1, CancellationToken.None).AsTask();
         await AssertRemainsIncompleteAsync(reserveTask, "A stream window driven to zero/negative by SETTINGS_INITIAL_WINDOW_SIZE must still block new reservations (RFC 7540 §6.9.2).");
 
         flow.OnWindowUpdate(1, 10);
@@ -142,7 +142,7 @@ public class Http2FlowControllerTests
 
         // the +100 delta should now be available on stream 1 without any further WINDOW_UPDATE for it.
         var reserveTask = flow.ReserveAsync(1, 100, CancellationToken.None);
-        await reserveTask.WaitAsync(TimeSpan.FromSeconds(5));
+        await reserveTask.AsTask().WaitAsync(TimeSpan.FromSeconds(5));
         Assert.IsTrue(reserveTask.IsCompletedSuccessfully);
     }
 
@@ -187,7 +187,7 @@ public class Http2FlowControllerTests
         // stream 2, whose window was untouched, must be unaffected by the other waiter's cancellation once
         // the connection window is replenished.
         flow.OnWindowUpdate(0, 10);
-        await flow.ReserveAsync(2, 10, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+        await flow.ReserveAsync(2, 10, CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     [TestMethod]
@@ -202,7 +202,7 @@ public class Http2FlowControllerTests
         var waiters = new Task[5];
         for (var i = 0; i < waiters.Length; i++)
         {
-            waiters[i] = flow.ReserveAsync(1, 100, CancellationToken.None);
+            waiters[i] = flow.ReserveAsync(1, 100, CancellationToken.None).AsTask();
         }
 
         foreach (var w in waiters)
@@ -244,7 +244,7 @@ public class Http2FlowControllerTests
         // stream 7 was never explicitly registered - ReserveAsync must not throw, treating it as having
         // the controller's current initial window rather than failing the write outright.
         var reserveTask = flow.ReserveAsync(7, 100, CancellationToken.None);
-        await reserveTask.WaitAsync(TimeSpan.FromSeconds(5));
+        await reserveTask.AsTask().WaitAsync(TimeSpan.FromSeconds(5));
         Assert.IsTrue(reserveTask.IsCompletedSuccessfully);
     }
 

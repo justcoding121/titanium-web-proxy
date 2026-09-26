@@ -92,7 +92,7 @@ internal sealed class Http3Frame
     ///     <see cref="QuicStream"/>, STREAM data and FIN share one MsQuic write. Callers must still
     ///     <c>FlushAsync</c> (Darwin skip-Flush is banned).
     /// </summary>
-    public static async ValueTask WriteAsync(
+    public static ValueTask WriteAsync(
         Stream stream,
         ulong frameType,
         ReadOnlyMemory<byte> payload,
@@ -104,25 +104,34 @@ internal sealed class Http3Frame
         if (payload.Length <= 256)
         {
             var rented = ArrayPool<byte>.Shared.Rent(headerCap + payload.Length);
-            try
-            {
-                var typeLen = Http3VarInt.Write(rented, frameType);
-                var lengthLen = Http3VarInt.Write(rented.AsSpan(typeLen), (ulong)payload.Length);
-                var headerLen = typeLen + lengthLen;
-                if (!payload.IsEmpty)
-                    payload.Span.CopyTo(rented.AsSpan(headerLen));
-                await WriteBufferAsync(stream, rented.AsMemory(0, headerLen + payload.Length),
-                    completeWrites, cancellationToken);
-            }
-            finally
+            var typeLen = Http3VarInt.Write(rented, frameType);
+            var lengthLen = Http3VarInt.Write(rented.AsSpan(typeLen), (ulong)payload.Length);
+            var headerLen = typeLen + lengthLen;
+            if (!payload.IsEmpty)
+                payload.Span.CopyTo(rented.AsSpan(headerLen));
+            var total = headerLen + payload.Length;
+            var writeVt = WriteBufferAsync(stream, rented.AsMemory(0, total), completeWrites, cancellationToken);
+            if (writeVt.IsCompletedSuccessfully)
             {
                 ArrayPool<byte>.Shared.Return(rented);
+                return default;
             }
 
-            return;
+            return AwaitWriteAndReturnAsync(writeVt, rented);
         }
 
         // Large DATA: one write for the header, then the payload buffer as-is (avoid a huge copy).
+        return WriteLargeAsync(stream, frameType, payload, completeWrites, cancellationToken);
+    }
+
+    private static async ValueTask WriteLargeAsync(
+        Stream stream,
+        ulong frameType,
+        ReadOnlyMemory<byte> payload,
+        bool completeWrites,
+        CancellationToken cancellationToken)
+    {
+        const int headerCap = 16;
         var headerBytes = ArrayPool<byte>.Shared.Rent(headerCap);
         try
         {
@@ -137,14 +146,26 @@ internal sealed class Http3Frame
         }
     }
 
+    private static async ValueTask AwaitWriteAndReturnAsync(ValueTask writeVt, byte[] rented)
+    {
+        try
+        {
+            await writeVt.ConfigureAwait(false);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
     /// <summary>
     ///     Writes a zero-payload frame (used for GOAWAY and some SETTINGS without parameters).
     /// </summary>
-    public static async ValueTask WriteAsync(
+    public static ValueTask WriteAsync(
         Stream stream,
         ulong frameType,
         CancellationToken cancellationToken)
-        => await WriteAsync(stream, frameType, ReadOnlyMemory<byte>.Empty, cancellationToken);
+        => WriteAsync(stream, frameType, ReadOnlyMemory<byte>.Empty, cancellationToken);
 
     /// <summary>
     ///     Writes HEADERS then DATA as a single stream write when the combined frames fit a modest
@@ -152,7 +173,7 @@ internal sealed class Http3Frame
     ///     UDP path does not emit a header-only datagram before the body. Tiny GET stays on the
     ///     separate-write path (HEADERS+DATA coalesce there hurt CI).
     /// </summary>
-    public static async ValueTask WriteHeadersAndDataAsync(
+    public static ValueTask WriteHeadersAndDataAsync(
         Stream stream,
         ReadOnlyMemory<byte> headersPayload,
         ReadOnlyMemory<byte> dataPayload,
@@ -162,31 +183,31 @@ internal sealed class Http3Frame
         const int headerCap = 16;
         var total = headerCap + headersPayload.Length + headerCap + dataPayload.Length;
         var rented = ArrayPool<byte>.Shared.Rent(total);
-        try
+        var o = 0;
+        o += Http3VarInt.Write(rented.AsSpan(o), Http3FrameType.Headers);
+        o += Http3VarInt.Write(rented.AsSpan(o), (ulong)headersPayload.Length);
+        if (!headersPayload.IsEmpty)
         {
-            var o = 0;
-            o += Http3VarInt.Write(rented.AsSpan(o), Http3FrameType.Headers);
-            o += Http3VarInt.Write(rented.AsSpan(o), (ulong)headersPayload.Length);
-            if (!headersPayload.IsEmpty)
-            {
-                headersPayload.Span.CopyTo(rented.AsSpan(o));
-                o += headersPayload.Length;
-            }
-
-            o += Http3VarInt.Write(rented.AsSpan(o), Http3FrameType.Data);
-            o += Http3VarInt.Write(rented.AsSpan(o), (ulong)dataPayload.Length);
-            if (!dataPayload.IsEmpty)
-            {
-                dataPayload.Span.CopyTo(rented.AsSpan(o));
-                o += dataPayload.Length;
-            }
-
-            await WriteBufferAsync(stream, rented.AsMemory(0, o), completeWrites, cancellationToken);
+            headersPayload.Span.CopyTo(rented.AsSpan(o));
+            o += headersPayload.Length;
         }
-        finally
+
+        o += Http3VarInt.Write(rented.AsSpan(o), Http3FrameType.Data);
+        o += Http3VarInt.Write(rented.AsSpan(o), (ulong)dataPayload.Length);
+        if (!dataPayload.IsEmpty)
+        {
+            dataPayload.Span.CopyTo(rented.AsSpan(o));
+            o += dataPayload.Length;
+        }
+
+        var writeVt = WriteBufferAsync(stream, rented.AsMemory(0, o), completeWrites, cancellationToken);
+        if (writeVt.IsCompletedSuccessfully)
         {
             ArrayPool<byte>.Shared.Return(rented);
+            return default;
         }
+
+        return AwaitWriteAndReturnAsync(writeVt, rented);
     }
 
 #pragma warning disable CA1416 // QuicStream.WriteAsync(completeWrites) is gated on the runtime stream type.

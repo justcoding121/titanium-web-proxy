@@ -514,6 +514,7 @@ public partial class ProxyServer
             var response = sessionArgs.HttpClient.Response;
             closeConnection = !response.KeepAlive;
             var restoreResponseVersionAfterEmit = false;
+            byte[]? eagerWireBody = null;
 
             if (!response.Locked)
             {
@@ -583,18 +584,35 @@ public partial class ProxyServer
                     }
 
                     response.HttpVersion = clientHttpVersion;
-                    response.Body = bodyBytes;
-                    response.BodyIsWireEncoded = true;
-                    response.IsBodyRead = true;
-                    response.ContentLength = bodyBytes.Length;
-                    response.HttpVersion = HttpHeader.Version11;
-                    if (!sessionArgs.IsFastPath
-                        || response.Headers.HeaderExists(KnownHeaders.TransferEncoding.String))
-                        response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
-                    response.StreamBodyWriter = null;
-                    LowercaseHeaderNames(response.Headers);
-                    if (response.HasTrailingHeaders) LowercaseHeaderNames(response.TrailingHeaders);
-                    response.Locked = true;
+                    // Fast path: keep wire bytes local and emit via wireBody — avoid Body stamp
+                    // (coalesce without dual Body materialization). Full MITM / GetResponseBody keep Body.
+                    if (sessionArgs.IsFastPath)
+                    {
+                        response.IsBodyRead = true;
+                        response.ContentLength = bodyBytes.Length;
+                        response.HttpVersion = HttpHeader.Version11;
+                        if (response.Headers.HeaderExists(KnownHeaders.TransferEncoding.String))
+                            response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+                        response.StreamBodyWriter = null;
+                        LowercaseHeaderNames(response.Headers);
+                        if (response.HasTrailingHeaders) LowercaseHeaderNames(response.TrailingHeaders);
+                        response.Locked = true;
+                        eagerWireBody = bodyBytes;
+                    }
+                    else
+                    {
+                        response.Body = bodyBytes;
+                        response.BodyIsWireEncoded = true;
+                        response.IsBodyRead = true;
+                        response.ContentLength = bodyBytes.Length;
+                        response.HttpVersion = HttpHeader.Version11;
+                        if (response.Headers.HeaderExists(KnownHeaders.TransferEncoding.String))
+                            response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+                        response.StreamBodyWriter = null;
+                        LowercaseHeaderNames(response.Headers);
+                        if (response.HasTrailingHeaders) LowercaseHeaderNames(response.TrailingHeaders);
+                        response.Locked = true;
+                    }
                 }
                 // If BeforeResponse buffered via GetResponseBody, emit the in-memory body. Otherwise
                 // stream origin→client DATA live (frames queued on the dedicated client frame writer).
@@ -703,7 +721,7 @@ public partial class ProxyServer
             }
 
             await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, streamId, connectionState, clientStream,
-                cancellationToken);
+                cancellationToken, wireBody: eagerWireBody is { } bytes ? bytes.AsMemory() : null);
 
             if (restoreResponseVersionAfterEmit)
                 sessionArgs.HttpClient.Response.HttpVersion = HttpHeader.Version11;
@@ -969,7 +987,8 @@ public partial class ProxyServer
                 // Task A: drains the inbound DATA-frame channel and forwards payloads to the
                 // origin. Cancelled via relayCt once the other direction finishes.
                 var toOriginTask = RelayChannelToStreamAsync(
-                    streamState.InboundTunnelChannel!.Reader, originStreamForRelay, sessionArgs, relayCt);
+                    streamState.InboundTunnelChannel!.Reader, originStreamForRelay, sessionArgs, relayCt)
+                    .AsTask();
 
                 // Task B: reads the origin's raw TCP bytes and forwards them to the h2 client.
                 // Uses CancellationToken.None for the source read and closes the socket below to
@@ -977,7 +996,8 @@ public partial class ProxyServer
                 // OperationCanceledException from HttpStream.FillBufferAsync without poisoning the
                 // stream, but closing the socket is a more reliable exit signal for this relay
                 // (avoids racing cancel against data that still needs to be echoed).
-                var toClientTask = RelayStreamToClientAsync(originStreamForRelay, bodyStream, sessionArgs, ct);
+                var toClientTask = RelayStreamToClientAsync(originStreamForRelay, bodyStream, sessionArgs, ct)
+                    .AsTask();
 
                 await Task.WhenAny(toOriginTask, toClientTask);
                 await relayCts.CancelAsync();
@@ -1065,7 +1085,7 @@ public partial class ProxyServer
     ///     Reads <see cref="ReadOnlyMemory{T}"/> chunks from <paramref name="reader"/> and writes
     ///     each one to <paramref name="destination"/> until the channel completes or the token fires.
     /// </summary>
-    private static async Task RelayChannelToStreamAsync(
+    private static async ValueTask RelayChannelToStreamAsync(
         ChannelReader<ReadOnlyMemory<byte>> reader,
         Stream destination,
         SessionEventArgs sessionArgs,
@@ -1074,8 +1094,13 @@ public partial class ProxyServer
         await foreach (var chunk in reader.ReadAllAsync(cancellationToken))
         {
             if (chunk.IsEmpty) continue;
-            await destination.WriteAsync(chunk, cancellationToken);
-            await destination.FlushAsync(cancellationToken);
+            var writeVt = destination.WriteAsync(chunk, cancellationToken);
+            if (!writeVt.IsCompletedSuccessfully)
+                await writeVt.ConfigureAwait(false);
+            // Flush kept (measure-gated removal only — plan W2).
+            var flushVt = destination.FlushAsync(cancellationToken);
+            if (!flushVt.IsCompletedSuccessfully)
+                await flushVt.ConfigureAwait(false);
             if (MemoryMarshal.TryGetArray(chunk, out var segment) && segment.Array != null)
                 sessionArgs.OnDataSent(segment.Array, segment.Offset, segment.Count);
         }
@@ -1091,7 +1116,7 @@ public partial class ProxyServer
     ///         cancellation alone can race with arriving data that still needs to be echoed.
     ///     </para>
     /// </summary>
-    private static async Task RelayStreamToClientAsync(
+    private static async ValueTask RelayStreamToClientAsync(
         Stream source,
         Stream destination,
         SessionEventArgs sessionArgs,
@@ -1103,7 +1128,10 @@ public partial class ProxyServer
             int read;
             try
             {
-                read = await source.ReadAsync(buf.AsMemory(), CancellationToken.None);
+                var readVt = source.ReadAsync(buf.AsMemory(), CancellationToken.None);
+                read = readVt.IsCompletedSuccessfully
+                    ? readVt.Result
+                    : await readVt.ConfigureAwait(false);
             }
             catch (Exception readEx)
             {
@@ -1116,8 +1144,13 @@ public partial class ProxyServer
 
             try
             {
-                await destination.WriteAsync(buf.AsMemory(0, read), writeCancellationToken);
-                await destination.FlushAsync(writeCancellationToken);
+                var writeVt = destination.WriteAsync(buf.AsMemory(0, read), writeCancellationToken);
+                if (!writeVt.IsCompletedSuccessfully)
+                    await writeVt.ConfigureAwait(false);
+                // Flush kept (measure-gated removal only — plan W2).
+                var flushVt = destination.FlushAsync(writeCancellationToken);
+                if (!flushVt.IsCompletedSuccessfully)
+                    await flushVt.ConfigureAwait(false);
                 sessionArgs.OnDataReceived(buf, 0, read);
             }
             catch (Exception writeEx)

@@ -31,13 +31,13 @@ namespace Titanium.Web.Proxy.Http2
 {
     internal partial class Http2Helper
     {
-        internal static async Task SendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+        internal static ValueTask SendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         {
             // Same HPACK lock as QueueSendHeader: Encoder + encode scratch are connection-direction scoped.
             ReadOnlyMemory<byte> block;
             lock (settings.Sync)
                 block = EncodeHeaderBlock(settings, rr).ToArray();
-            await WriteHeaderBlockAsync(frameHeader, frameHeaderBuffer, frameHeader.StreamId,
+            return WriteHeaderBlockAsync(frameHeader, frameHeaderBuffer, frameHeader.StreamId,
                 pushPromise ? Http2FrameType.PushPromise : Http2FrameType.Headers, endStream,
                 rr.Priority.HasValue, block, settings.MaxFrameSize, output);
         }
@@ -165,7 +165,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     encoder as <see cref="SendHeader" /> so the destination's dynamic table stays in sync
         ///     regardless of whether trailers are actually present on a given message.
         /// </summary>
-        internal static async Task SendTrailer(Http2Settings settings, Http2FrameHeader frameHeader,
+        internal static ValueTask SendTrailer(Http2Settings settings, Http2FrameHeader frameHeader,
             byte[] frameHeaderBuffer, int streamId, HeaderCollection trailingHeaders, bool endStream, Stream output)
         {
             ReadOnlyMemory<byte> block;
@@ -204,7 +204,7 @@ namespace Titanium.Web.Proxy.Http2
                 block = GetMemoryStreamMemory(ms).ToArray();
             }
 
-            await WriteHeaderBlockAsync(frameHeader, frameHeaderBuffer, streamId, Http2FrameType.Headers,
+            return WriteHeaderBlockAsync(frameHeader, frameHeaderBuffer, streamId, Http2FrameType.Headers,
                 endStream, false, block, settings.MaxFrameSize, output);
         }
 
@@ -303,12 +303,35 @@ namespace Titanium.Web.Proxy.Http2
         ///     on the first, matching the semantics of the frame types they belong to. HEADERS/CONTINUATION
         ///     frames are not subject to flow control (RFC 7540 ?6.9), so no reservation is made here.
         /// </summary>
-        private static async Task WriteHeaderBlockAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, // NOSONAR S107 -- Frame fields are kept explicit in this low-level encoder helper.
+        private static ValueTask WriteHeaderBlockAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, // NOSONAR S107 -- Frame fields are kept explicit in this low-level encoder helper.
             int streamId, Http2FrameType type, bool endStream, bool hasPriority, ReadOnlyMemory<byte> data,
             int maxFrameSize, Stream output)
         {
             if (maxFrameSize <= 0) maxFrameSize = 16384;
 
+            frameHeader.StreamId = streamId;
+
+            // Common case: one frame fits — WriteTwoAsync already sync-completes when possible.
+            if (data.Length <= maxFrameSize)
+            {
+                frameHeader.Type = type;
+                frameHeader.Length = data.Length;
+                var flags = Http2FrameFlag.EndHeaders;
+                if (endStream) flags |= Http2FrameFlag.EndStream;
+                if (hasPriority) flags |= Http2FrameFlag.Priority;
+                frameHeader.Flags = flags;
+                frameHeader.CopyToBuffer(frameHeaderBuffer);
+                return WriteTwoAsync(output, frameHeaderBuffer.AsMemory(0, 9), data);
+            }
+
+            return WriteHeaderBlockMultiAsync(frameHeader, frameHeaderBuffer, streamId, type, endStream,
+                hasPriority, data, maxFrameSize, output);
+        }
+
+        private static async ValueTask WriteHeaderBlockMultiAsync(Http2FrameHeader frameHeader,
+            byte[] frameHeaderBuffer, int streamId, Http2FrameType type, bool endStream, bool hasPriority,
+            ReadOnlyMemory<byte> data, int maxFrameSize, Stream output)
+        {
             frameHeader.StreamId = streamId;
 
             var pos = 0;
@@ -323,9 +346,7 @@ namespace Titanium.Web.Proxy.Http2
 
                 var flags = (Http2FrameFlag)0;
                 if (isLast)
-                {
                     flags |= Http2FrameFlag.EndHeaders;
-                }
 
                 if (first)
                 {
@@ -336,15 +357,14 @@ namespace Titanium.Web.Proxy.Http2
                 frameHeader.Flags = flags;
 
                 frameHeader.CopyToBuffer(frameHeaderBuffer);
-                await output.WriteAsync(frameHeaderBuffer.AsMemory());
-                await output.WriteAsync(data.Slice(pos, chunkLength));
+                await WriteTwoAsync(output, frameHeaderBuffer.AsMemory(0, 9), data.Slice(pos, chunkLength));
 
                 pos += chunkLength;
                 first = false;
             } while (pos < data.Length);
         }
 
-        internal static async Task SendBody(Http2Settings settings, RequestResponseBase rr, Http2FrameHeader frameHeader, // NOSONAR S107 -- Frame-writing state is kept explicit for this low-level helper.
+        internal static async ValueTask SendBody(Http2Settings settings, RequestResponseBase rr, Http2FrameHeader frameHeader, // NOSONAR S107 -- Frame-writing state is kept explicit for this low-level helper.
             byte[] frameHeaderBuffer, byte[] buffer, Http2FlowController flow, Stream output,
             CancellationToken cancellationToken)
         {
@@ -371,8 +391,8 @@ namespace Titanium.Web.Proxy.Http2
                     frameHeader.Flags = pos < body.Length ? (Http2FrameFlag)0 : Http2FrameFlag.EndStream;
 
                     frameHeader.CopyToBuffer(frameHeaderBuffer);
-                    await output.WriteAsync(frameHeaderBuffer.AsMemory(), cancellationToken);
-                    await output.WriteAsync(buffer.AsMemory(0, bodyFrameLength), cancellationToken);
+                    await WriteTwoAsync(output, frameHeaderBuffer.AsMemory(0, 9),
+                        buffer.AsMemory(0, bodyFrameLength), cancellationToken);
                 }
             }
         }
@@ -770,7 +790,8 @@ namespace Titanium.Web.Proxy.Http2
         /// </summary>
         internal static async Task EmitSyntheticResponseAsync(SessionEventArgs args, int streamId,
             Http2ConnectionState connectionState, Stream clientStream, CancellationToken cancellationToken,
-            Func<SessionEventArgs, Task>? onAfterResponse = null, ILogger? logger = null)
+            Func<SessionEventArgs, Task>? onAfterResponse = null, ILogger? logger = null,
+            ReadOnlyMemory<byte>? wireBody = null)
         {
             var response = args.HttpClient.Response;
 
@@ -790,6 +811,11 @@ namespace Titanium.Web.Proxy.Http2
             {
                 await EmitStreamedSyntheticResponseAsync(response, streamBodyWriter, connectionState,
                     frameHeader, frameHeaderBuffer, clientStream, cancellationToken);
+            }
+            else if (wireBody.HasValue)
+            {
+                await EmitBufferedSyntheticResponseAsync(response, streamId, connectionState, frameHeader,
+                    frameHeaderBuffer, clientStream, wireBody.Value, cancellationToken);
             }
             else
             {
@@ -854,9 +880,6 @@ namespace Titanium.Web.Proxy.Http2
             Http2ConnectionState connectionState, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
             Stream clientStream, CancellationToken cancellationToken)
         {
-            var clientWriteLock = connectionState.ClientWriteLock;
-            var clientSendFlow = connectionState.ClientSendFlow;
-
             // buffered case (Ok/GenericResponse/Redirect/buffered Respond / H2→H3 bridge) - the whole
             // body, if any, is already in memory. Compress WHILE Transfer-Encoding: chunked may still
             // be present: Response.HasBody treats CL=-1 + chunked as "has body", and stripping TE
@@ -878,12 +901,27 @@ namespace Titanium.Web.Proxy.Http2
                 body = response.CompressBodyAndUpdateContentLength();
             }
 
+            await EmitBufferedSyntheticResponseAsync(response, streamId, connectionState, frameHeader,
+                frameHeaderBuffer, clientStream, body.AsMemory(), cancellationToken);
+        }
+
+        /// <summary>
+        ///     Emits HEADERS + DATA from an already-buffered wire body without requiring
+        ///     <see cref="RequestResponseBase.Body"/> (coalesce path for unread MITM lite / reverse).
+        /// </summary>
+        private static async Task EmitBufferedSyntheticResponseAsync(Response response, int streamId,
+            Http2ConnectionState connectionState, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
+            Stream clientStream, ReadOnlyMemory<byte> wireBody, CancellationToken cancellationToken)
+        {
+            var clientWriteLock = connectionState.ClientWriteLock;
+            var clientSendFlow = connectionState.ClientSendFlow;
+
             // HTTP/2 does not use chunked transfer-encoding; body framing is done via DATA frames.
             response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
-            if (body is { Length: > 0 } && response.ContentLength < 0)
-                response.ContentLength = body.Length;
+            if (wireBody.Length > 0 && response.ContentLength < 0)
+                response.ContentLength = wireBody.Length;
 
-            var hasBody = body is { Length: > 0 };
+            var hasBody = wireBody.Length > 0;
             var maxFrameSize = connectionState.ClientSettings.MaxFrameSize;
             if (maxFrameSize <= 0) maxFrameSize = 16384;
 
@@ -902,12 +940,12 @@ namespace Titanium.Web.Proxy.Http2
             // Reserve flow-control credit per frame before queueing so queued-but-unsent DATA can never
             // exceed the client's advertised windows.
             var bodyPos = 0;
-            while (bodyPos < body!.Length)
+            while (bodyPos < wireBody.Length)
             {
-                var frameLength = Math.Min(maxFrameSize, body.Length - bodyPos);
+                var frameLength = Math.Min(maxFrameSize, wireBody.Length - bodyPos);
                 await clientSendFlow.ReserveAsync(streamId, frameLength, cancellationToken);
                 QueueDataFrame(connectionState, clientStream, streamId,
-                    body.AsMemory(bodyPos, frameLength), endStream: bodyPos + frameLength >= body.Length);
+                    wireBody.Slice(bodyPos, frameLength), endStream: bodyPos + frameLength >= wireBody.Length);
                 bodyPos += frameLength;
             }
         }
@@ -1111,7 +1149,7 @@ namespace Titanium.Web.Proxy.Http2
             ///     Reads origin bytes directly into pre-sized DATA frame buffers (header + payload),
             ///     reserves flow-control credit, and enqueues for the client frame writer.
             /// </summary>
-            internal async Task CopyFromAsync(Func<Memory<byte>, CancellationToken, ValueTask<int>> readAsync, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+            internal async ValueTask CopyFromAsync(Func<Memory<byte>, CancellationToken, ValueTask<int>> readAsync, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
                 CancellationToken cancellationToken)
             {
                 while (true)
