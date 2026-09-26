@@ -86,8 +86,10 @@ public class HappyPathSanityE2ETests
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         StringAssert.Contains(await response.Content.ReadAsStringAsync(cts.Token), "happy-inspector");
 
+        // CONNECT is captured as host:port before the decrypted request URL arrives.
         deadline = DateTime.UtcNow.AddSeconds(8);
-        while (vm.Sessions.Count == 0 && DateTime.UtcNow < deadline)
+        while (!vm.Sessions.Any(s => s.Url.Contains("happy-inspector", StringComparison.OrdinalIgnoreCase))
+               && DateTime.UtcNow < deadline)
         {
             await Task.Delay(50);
         }

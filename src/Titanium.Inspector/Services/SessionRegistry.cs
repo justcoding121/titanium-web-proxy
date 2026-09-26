@@ -9,8 +9,8 @@ namespace Titanium.Inspector.Services;
 public sealed class SessionRegistry : IDisposable
 {
     /// <summary>
-    /// Test / headless default: no disk spill (avoids LocalAppData writers).
-    /// Desktop App constructs with <see cref="SessionStoreOptions.FromSettings"/>.
+    /// Test / headless default: memory-only store (no disk writers).
+    /// Desktop App constructs with <see cref="SessionStoreOptions.FromSettings"/> (always spills).
     /// </summary>
     public SessionRegistry()
         : this(new SessionStoreOptions { SpillBodiesToDisk = false })

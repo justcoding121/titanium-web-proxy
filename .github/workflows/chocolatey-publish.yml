@@ -24,7 +24,7 @@ jobs:
             throw 'CHOCOLATEY_API_KEY repository secret is not set.'
           }
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Pack and push chocolatey packages
         env:

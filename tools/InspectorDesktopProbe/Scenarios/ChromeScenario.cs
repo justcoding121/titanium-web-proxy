@@ -425,11 +425,7 @@ public static class ChromeScenario
                           ?? throw new InvalidOperationException("SessionRetentionWindow missing");
                 var robot = new ProbeUiRobot(win);
                 robot.SetText("RetentionMaxSessions", "5000");
-                robot.SetText("RetentionMaxBodyRamMb", "256");
-                robot.SetText("RetentionHotBodies", "100");
-                robot.SetCheck("RetentionSpillBodies", true);
                 robot.SetText("RetentionDiskCacheMb", "512");
-                robot.SetText("RetentionDiskCacheAgeDays", "3");
                 // Open folder can throw Win32 "parameter is incorrect" under UseShellExecute=false —
                 // still click so the handler runs; swallow OS shell failures.
                 try { robot.Click("RetentionOpenCacheFolder"); }

@@ -375,13 +375,11 @@ public class SessionSearchAndArchiveTests
 
         Assert.IsTrue(SessionSearch.Matches(hot, "body:secret-hot"));
         Assert.IsFalse(SessionSearch.Matches(spilled, "body:secret-hot"));
+        Assert.IsTrue(
+            SessionSearch.Matches(spilled, "body:secret-hot", (_, _) => true),
+            "Optional body matcher can see spilled bodies");
         Assert.IsTrue(SessionSearch.HasBodyToken("host:a body:secret"));
         Assert.IsFalse(SessionSearch.HasBodyToken("host:a"));
-
-        var hint = SessionSearch.FormatBodySearchScopeHint("body:secret", spilledCount: 2);
-        Assert.AreEqual("body search: in-memory only, 2 on disk skipped", hint);
-        Assert.IsNull(SessionSearch.FormatBodySearchScopeHint("host:a", spilledCount: 2));
-        Assert.IsNull(SessionSearch.FormatBodySearchScopeHint("body:x", spilledCount: 0));
 
         var sessions = new[] { hot, spilled };
         var filtered = SessionSearch.Filter(sessions, "body:secret-hot").ToList();
@@ -390,46 +388,29 @@ public class SessionSearchAndArchiveTests
     }
 
     [TestMethod]
-    public void BuildSessionCountText_IncludesSpillBodyScopeAndRetentionHints()
+    public void BuildSessionCountText_IncludesRetentionHints()
     {
-        Assert.AreEqual("Sessions: 3", SessionSearch.BuildSessionCountText(3, 3, null, 0, 0, null));
-        Assert.AreEqual(
-            "Sessions: 3 (2 bodies on disk)",
-            SessionSearch.BuildSessionCountText(3, 3, "", 2, 0, null));
+        Assert.AreEqual("Sessions: 3", SessionSearch.BuildSessionCountText(3, 3, null, 0, null));
+        Assert.AreEqual("Sessions: 3", SessionSearch.BuildSessionCountText(3, 3, "", 0, null));
 
         var withBody = SessionSearch.BuildSessionCountText(
             visibleCount: 0,
             totalCount: 10,
             searchQuery: "body:needle",
-            spilledCount: 4,
             retentionEvictedTotal: 0,
             oldestStartedUtc: null);
-        Assert.AreEqual(
-            "Sessions: 0 / 10 (4 bodies on disk) · body search: in-memory only, 4 on disk skipped",
-            withBody);
+        Assert.AreEqual("Sessions: 0 / 10", withBody);
 
         var oldest = new DateTimeOffset(2026, 9, 2, 19, 2, 0, TimeSpan.Zero);
         var withRetention = SessionSearch.BuildSessionCountText(
             visibleCount: 0,
             totalCount: 50,
             searchQuery: "host:missing",
-            spilledCount: 0,
             retentionEvictedTotal: 120,
             oldestStartedUtc: oldest);
         StringAssert.Contains(withRetention, "Sessions: 0 / 50");
         StringAssert.Contains(withRetention, "since ");
         StringAssert.Contains(withRetention, "no matches in current list · 120 removed by retention");
-
-        var bodyPlusRetention = SessionSearch.BuildSessionCountText(
-            visibleCount: 0,
-            totalCount: 10,
-            searchQuery: "body:x",
-            spilledCount: 3,
-            retentionEvictedTotal: 5,
-            oldestStartedUtc: oldest);
-        StringAssert.Contains(bodyPlusRetention, "body search: in-memory only, 3 on disk skipped");
-        StringAssert.Contains(bodyPlusRetention, "5 removed by retention");
-        StringAssert.Contains(bodyPlusRetention, "since ");
     }
 
     [TestMethod]
@@ -516,7 +497,12 @@ public class SessionSearchAndArchiveTests
             var empty = await SessionArchive.ImportNativeArchiveAsync(zip);
             Assert.AreEqual(0, empty.Count);
 
-            Assert.AreEqual(0, SessionStore.EstimateInMemoryBodyBytes(new SessionSnapshot { BodiesOnDisk = true, RequestBodyText = "x" }));
+            Assert.AreEqual(0, SessionStore.EstimateInMemoryBodyBytes(new SessionSnapshot { BodiesOnDisk = true }));
+            Assert.IsTrue(SessionStore.EstimateInMemoryBodyBytes(new SessionSnapshot
+            {
+                BodiesOnDisk = true,
+                RequestBodyText = "x",
+            }) > 0, "Selected spilled sessions may still hold RAM bodies");
             Assert.IsTrue(SessionStore.EstimateInMemoryBodyBytes(new SessionSnapshot
             {
                 RequestBodyBytes = [1, 2],

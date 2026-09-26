@@ -225,10 +225,10 @@ jobs:
     # compare-product-smoke / haproxy-smoke / envoy-smoke: 120m; compare-editions: 90m.
     timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || (github.event_name == 'push' && 90 || (inputs.mode == 'compare-editions' && 90 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 120 || 360))) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
             10.0.x
@@ -897,7 +897,7 @@ jobs:
 
       - name: Upload CSV artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           # Include arm_shard so parallel shard dispatches do not collide (slash → dash via env sanitize).
           name: rps-csv-${{ matrix.os }}-shard-${{ env.RPS_ARTIFACT_SHARD }}

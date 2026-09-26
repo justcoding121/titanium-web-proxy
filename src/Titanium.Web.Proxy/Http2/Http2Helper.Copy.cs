@@ -836,8 +836,19 @@ namespace Titanium.Web.Proxy.Http2
                             }
 
                             existingStreamState = connectionState.RegisterCompressedRelayStream(streamId);
-                            if (connectionState.Streams.Count > remoteSettings.MaxConcurrentStreams)
+                            var enforcedCap = Volatile.Read(
+                                ref connectionState.EnforcedMaxConcurrentStreamsTowardClient);
+                            if (connectionState.Streams.Count > enforcedCap)
                             {
+                                if (logger.IsEnabled(LogLevel.Debug))
+                                {
+                                    ProxyDiagnostics.ReportBenign(logger,
+                                        "HTTP/2 stream refused: maximum concurrent streams exceeded.",
+                                        new ProxyHttpException(
+                                            "HTTP/2 stream refused: maximum concurrent streams exceeded.",
+                                            null, null));
+                                }
+
                                 RemoveAndFinalizeStream(streamId);
                                 await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
                                     streamId, Http2ErrorCode.RefusedStream, input));
@@ -1615,6 +1626,15 @@ namespace Titanium.Web.Proxy.Http2
                         return;
                     }
 
+                    // Client ACK of SETTINGS we advertised toward it: promote Pending → Enforced so
+                    // MaxConcurrentStreams admission matches what the browser has applied (RFC 9113).
+                    if (isClient && (flags & Http2FrameFlag.Ack) != 0)
+                    {
+                        Volatile.Write(
+                            ref connectionState.EnforcedMaxConcurrentStreamsTowardClient,
+                            Volatile.Read(ref connectionState.PendingMaxConcurrentStreamsTowardClient));
+                    }
+
                     bool invalidSettings = false;
                     Http2ErrorCode invalidSettingsError = Http2ErrorCode.ProtocolError;
                     bool sawEnablePush = false;
@@ -1731,6 +1751,8 @@ namespace Titanium.Web.Proxy.Http2
                                 // against.
                                 var effective = Math.Min(advertised, resourceLimits.MaxConcurrentStreamsPerConnection);
                                 localSettings.MaxConcurrentStreams = effective;
+                                // Advertise now; enforce only after the client's SETTINGS ACK.
+                                Volatile.Write(ref connectionState.PendingMaxConcurrentStreamsTowardClient, effective);
 
                                 buffer[valueOffset] = (byte)((effective >> 24) & 0xff);
                                 buffer[valueOffset + 1] = (byte)((effective >> 16) & 0xff);
@@ -1893,6 +1915,7 @@ namespace Titanium.Web.Proxy.Http2
                         // above.
                         var effective = resourceLimits.MaxConcurrentStreamsPerConnection;
                         localSettings.MaxConcurrentStreams = effective;
+                        Volatile.Write(ref connectionState.PendingMaxConcurrentStreamsTowardClient, effective);
 
                         buffer[length] = (byte)(((int)Http2SettingsId.MaxConcurrentStreams >> 8) & 0xff);
                         buffer[length + 1] = (byte)((int)Http2SettingsId.MaxConcurrentStreams & 0xff);

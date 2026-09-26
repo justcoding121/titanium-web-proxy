@@ -1627,11 +1627,10 @@ public sealed class InterceptionService : IDisposable
         }
         finally
         {
-            // Tunnel sessions are complete after CONNECT response (no AfterResponse for opaque tunnels).
-            if (!e.DecryptSsl)
-            {
-                _live.TryRemove(e.HttpClient, out _);
-            }
+            // CONNECT capture is done after the response. Keep the snapshot in SessionStore;
+            // tunnel byte counters hold the snap via closure. Leaving DecryptSsl entries in
+            // _live roots every CONNECT HttpClient for the process lifetime.
+            _live.TryRemove(e.HttpClient, out _);
         }
 
         return Task.CompletedTask;
@@ -1856,6 +1855,7 @@ public sealed class InterceptionService : IDisposable
         };
 
         ApplyRequestBodyCapture(snap, req, originalBody);
+        SyncHttpBodySize(snap);
         ApplyTranscodeMark(snap, mark);
         if (mark?.ClientRequestBody is { Length: > 0 } clientBody)
         {
@@ -1865,6 +1865,7 @@ public sealed class InterceptionService : IDisposable
             snap.RequestBodyCapture = clientBody.Length > MaxBodyBytes
                 ? BodyCaptureState.Truncated
                 : BodyCaptureState.Complete;
+            SyncHttpBodySize(snap);
         }
 
         if (mark?.UpstreamRequestBody is { Length: > 0 } upstreamReq)
@@ -2043,6 +2044,7 @@ public sealed class InterceptionService : IDisposable
         snap.ResponseBodyBytes = bodyBytes;
         snap.ResponseBodyText = bodyBytes is null ? null : InspectorBodyLimits.TruncateText(Encoding.UTF8.GetString(bodyBytes));
         ApplyResponseBodyCapture(snap, resp, e.HttpClient.Request, originalBody);
+        SyncHttpBodySize(snap);
 
         ApplyTiming(snap, e.Timing, snap.StartedUtc);
 
@@ -2160,6 +2162,7 @@ public sealed class InterceptionService : IDisposable
             snap.ResponseBytesSeen += len;
             snap.ResponseBodyOriginalSize = snap.ResponseBytesSeen;
             snap.BodySize = snap.ResponseBytesSeen;
+            SyncHttpBodySize(snap);
 
             var tee = snap.ResponseTeeStream;
             if (tee is null)
@@ -2240,6 +2243,8 @@ public sealed class InterceptionService : IDisposable
             snap.BodySize = snap.ResponseBytesSeen;
         }
 
+        SyncHttpBodySize(snap);
+
         snap.ResponseTeeStream?.Dispose();
         snap.ResponseTeeStream = null;
     }
@@ -2270,6 +2275,39 @@ public sealed class InterceptionService : IDisposable
         }
 
         snap.RequestBodyCapture = BodyCaptureState.None;
+    }
+
+    /// <summary>
+    /// Size column shows the larger of request/response body sizes so a large POST with a
+    /// tiny response is not labeled "10 B" while Inspect shows megabytes of request body.
+    /// CONNECT tunnels keep wire totals from <see cref="AddTunnelBytes"/> and are skipped.
+    /// </summary>
+    private static void SyncHttpBodySize(SessionSnapshot snap)
+    {
+        if (snap.IsTunnel)
+        {
+            return;
+        }
+
+        long? best = snap.BodySize;
+        TakeMax(ref best, snap.RequestBodyOriginalSize);
+        TakeMax(ref best, snap.ResponseBodyOriginalSize);
+        TakeMax(ref best, snap.RequestBodyBytes?.LongLength);
+        TakeMax(ref best, snap.ResponseBodyBytes?.LongLength);
+        if (best is not null)
+        {
+            snap.BodySize = best;
+        }
+    }
+
+    private static void TakeMax(ref long? best, long? candidate)
+    {
+        if (candidate is null or < 0)
+        {
+            return;
+        }
+
+        best = best is null ? candidate : Math.Max(best.Value, candidate.Value);
     }
 
     private static void ApplyResponseBodyCapture(

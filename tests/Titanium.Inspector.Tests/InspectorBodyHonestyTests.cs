@@ -64,9 +64,9 @@ public class InspectorBodyHonestyTests
     }
 
     [TestMethod]
-    public void SessionBodyDiskCache_V2_RoundTripsCaptureFlags()
+    public async Task SessionBodyDiskCache_Har_RoundTripsHeadersAndBodies()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "twp-tsib-v2-" + Guid.NewGuid().ToString("N"));
+        var dir = Path.Combine(Path.GetTempPath(), "twp-session-har-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         try
         {
@@ -74,6 +74,12 @@ public class InspectorBodyHonestyTests
             var snap = new SessionSnapshot
             {
                 Id = 42,
+                Method = "POST",
+                Url = "https://api.example/x",
+                Host = "api.example",
+                StatusCode = 201,
+                RequestHeadersText = "Content-Type: application/json\r\n",
+                ResponseHeadersText = "Content-Type: text/plain\r\n",
                 RequestBodyBytes = [1, 2, 3],
                 ResponseBodyBytes = [4, 5, 6, 7],
                 RequestBodyText = "req",
@@ -85,13 +91,33 @@ public class InspectorBodyHonestyTests
             };
             cache.Write(snap);
 
-            var loaded = new SessionSnapshot { Id = 42 };
+            Assert.IsTrue(cache.TryReadSession(42, out var full));
+            Assert.IsNotNull(full);
+            Assert.AreEqual("POST", full!.Method);
+            Assert.AreEqual("https://api.example/x", full.Url);
+            Assert.AreEqual(201, full.StatusCode);
+            Assert.AreEqual("Content-Type: application/json\r\n", full.RequestHeadersText);
+
+            var loaded = new SessionSnapshot { Id = 42, Method = "GET", Url = "in-memory" };
             Assert.IsTrue(cache.TryLoad(loaded));
+            Assert.AreEqual("GET", loaded.Method, "TryLoad must not overwrite in-memory headers");
             Assert.AreEqual(BodyCaptureState.Complete, loaded.RequestBodyCapture);
             Assert.AreEqual(BodyCaptureState.Truncated, loaded.ResponseBodyCapture);
             Assert.AreEqual(3L, loaded.RequestBodyOriginalSize);
             Assert.AreEqual(9_000_000L, loaded.ResponseBodyOriginalSize);
             CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, loaded.RequestBodyBytes);
+            CollectionAssert.AreEqual(new byte[] { 4, 5, 6, 7 }, loaded.ResponseBodyBytes);
+
+            var harText = File.ReadAllText(cache.PathFor(42));
+            StringAssert.Contains(harText, "\"log\"");
+            StringAssert.Contains(harText, "\"_inspector\"");
+
+            var imported = await SessionArchive.ImportHarAsync(cache.PathFor(42));
+            Assert.AreEqual(1, imported.Count);
+            Assert.AreEqual(42, imported[0].Id);
+            Assert.AreEqual(BodyCaptureState.Truncated, imported[0].ResponseBodyCapture);
+            CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, imported[0].RequestBodyBytes);
+            CollectionAssert.AreEqual(new byte[] { 4, 5, 6, 7 }, imported[0].ResponseBodyBytes);
         }
         finally
         {
@@ -100,31 +126,59 @@ public class InspectorBodyHonestyTests
     }
 
     [TestMethod]
-    public void SessionBodyDiskCache_V1_InfersComplete()
+    public void SessionBodyDiskCache_CorruptHar_FailsLoad()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "twp-tsib-v1-" + Guid.NewGuid().ToString("N"));
+        var dir = Path.Combine(Path.GetTempPath(), "twp-session-bad-har-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         try
         {
-            var path = Path.Combine(dir, "7.bin");
-            using (var fs = File.Create(path))
-            using (var bw = new BinaryWriter(fs, Encoding.UTF8, leaveOpen: false))
-            {
-                bw.Write("TSIB"u8.ToArray());
-                bw.Write(1); // v1
-                bw.Write(2);
-                bw.Write(new byte[] { 9, 8 });
-                bw.Write(-1); // null response bytes
-                bw.Write(3);
-                bw.Write(Encoding.UTF8.GetBytes("abc"));
-                bw.Write(-1); // null response text
-            }
-
             using var cache = new SessionBodyDiskCache(dir, maxBytes: 10_000_000, maxAge: TimeSpan.FromDays(1));
-            var loaded = new SessionSnapshot { Id = 7 };
-            Assert.IsTrue(cache.TryLoad(loaded));
-            Assert.AreEqual(BodyCaptureState.Complete, loaded.RequestBodyCapture);
-            Assert.AreEqual(2, loaded.RequestBodyBytes!.Length);
+            File.WriteAllText(cache.PathFor(7), "{not-valid");
+            Assert.IsFalse(cache.TryLoad(new SessionSnapshot { Id = 7 }));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public void SessionBodyDiskCache_SeparateRuns_DoNotOverwriteSameSessionId()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-session-runs-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var t1 = new DateTimeOffset(2026, 9, 24, 10, 0, 0, TimeSpan.Zero);
+            var t2 = new DateTimeOffset(2026, 9, 24, 11, 0, 0, TimeSpan.Zero);
+            using var run1 = new SessionBodyDiskCache(dir, maxBytes: 10_000_000, maxAge: TimeSpan.FromDays(1), t1);
+            run1.Write(new SessionSnapshot
+            {
+                Id = 1,
+                Method = "GET",
+                Url = "https://first.example/",
+                ResponseBodyText = "first",
+                ResponseBodyBytes = "first"u8.ToArray(),
+            });
+
+            using var run2 = new SessionBodyDiskCache(dir, maxBytes: 10_000_000, maxAge: TimeSpan.FromDays(1), t2);
+            run2.Write(new SessionSnapshot
+            {
+                Id = 1,
+                Method = "GET",
+                Url = "https://second.example/",
+                ResponseBodyText = "second",
+                ResponseBodyBytes = "second"u8.ToArray(),
+            });
+
+            Assert.AreNotEqual(run1.RunDirectoryPath, run2.RunDirectoryPath);
+            Assert.IsTrue(File.Exists(run1.PathFor(1)));
+            Assert.IsTrue(File.Exists(run2.PathFor(1)));
+
+            Assert.IsTrue(run1.TryReadSession(1, out var a));
+            Assert.IsTrue(run2.TryReadSession(1, out var b));
+            Assert.AreEqual("https://first.example/", a!.Url);
+            Assert.AreEqual("https://second.example/", b!.Url);
         }
         finally
         {
@@ -376,5 +430,69 @@ public class InspectorBodyHonestyTests
                 File.Delete(path);
             }
         }
+    }
+
+    [TestMethod]
+    public void SyncHttpBodySize_UsesLargerOfRequestAndResponse()
+    {
+        var sync = typeof(InterceptionService).GetMethod(
+            "SyncHttpBodySize",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        var snap = new SessionSnapshot
+        {
+            RequestBodyOriginalSize = 2_000_000,
+            ResponseBodyOriginalSize = 10,
+            BodySize = 10,
+        };
+        sync.Invoke(null, [snap]);
+        Assert.AreEqual(2_000_000L, snap.BodySize);
+
+        var responseOnly = new SessionSnapshot
+        {
+            ResponseBodyOriginalSize = 512,
+            BodySize = 512,
+        };
+        sync.Invoke(null, [responseOnly]);
+        Assert.AreEqual(512L, responseOnly.BodySize);
+
+        var tunnel = new SessionSnapshot
+        {
+            IsTunnel = true,
+            BodySize = 10_240,
+            RequestBodyOriginalSize = 99,
+        };
+        sync.Invoke(null, [tunnel]);
+        Assert.AreEqual(10_240L, tunnel.BodySize, "CONNECT Size stays wire bytes");
+    }
+
+    [TestMethod]
+    public void TunnelInspect_ExplainsWireSizeNotHttpBody()
+    {
+        var hint = typeof(MainWindowViewModel).GetMethod(
+            "BuildBodyCaptureHint",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        var core = typeof(MainWindowViewModel).GetMethod(
+            "BuildSelectedBodyTextCore",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        var snap = new SessionSnapshot
+        {
+            IsTunnel = true,
+            Method = "CONNECT",
+            BodySize = 10 * 1024,
+            SentBytes = 4000,
+            ReceivedBytes = 6240,
+        };
+
+        var banner = (string)hint.Invoke(null, [snap])!;
+        StringAssert.Contains(banner, "wire");
+        Assert.IsFalse(banner.Contains("(empty)", StringComparison.Ordinal));
+
+        var body = (string)core.Invoke(null, [snap, false])!;
+        StringAssert.Contains(body, "CONNECT tunnel");
+        StringAssert.Contains(body, "no HTTP message body");
+        StringAssert.Contains(body, "10 KB");
+        Assert.IsFalse(body.Contains("(empty)", StringComparison.Ordinal));
     }
 }

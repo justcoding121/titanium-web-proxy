@@ -575,10 +575,39 @@ public sealed partial class MainWindowViewModel
         StatusText = "Map Remote rule updated";
         return Task.CompletedTask;
     }
+    private void OnSessionsBatchAdded(IReadOnlyList<SessionSnapshot> batch)
+    {
+        if (batch.Count == 0)
+        {
+            return;
+        }
+
+        var bodyMatcher = BodyMatcherOrNull();
+        foreach (var snapshot in batch)
+        {
+            _store.Add(snapshot);
+            // SessionUpdated may have raced ahead of this batched capture add and already
+            // inserted the row; never append the same snapshot twice.
+            if (SessionSearch.Matches(snapshot, SearchQuery, bodyMatcher) &&
+                Sessions.IndexOf(snapshot) < 0)
+            {
+                Sessions.Add(snapshot);
+            }
+        }
+
+        RefreshSessionCountText();
+    }
+
+    private Func<SessionSnapshot, string, bool>? BodyMatcherOrNull() =>
+        SessionSearch.HasBodyToken(SearchQuery)
+            ? (s, needle) => _store.TryMatchBodySearch(s, needle)
+            : null;
+
     private void OnSessionAddedToFilter(SessionSnapshot snapshot)
     {
         // Store already holds the row — append to the filtered grid in place.
-        if (SessionSearch.Matches(snapshot, SearchQuery))
+        if (SessionSearch.Matches(snapshot, SearchQuery, BodyMatcherOrNull()) &&
+            Sessions.IndexOf(snapshot) < 0)
         {
             Sessions.Add(snapshot);
         }
@@ -592,7 +621,15 @@ public sealed partial class MainWindowViewModel
     /// </summary>
     private void OnSessionUpdatedForFilter(SessionSnapshot snapshot)
     {
-        var matches = SessionSearch.Matches(snapshot, SearchQuery);
+        // Capture is batched (~50ms). CONNECT/response updates can reach the UI first.
+        // Do not invent a grid row until the store owns the session — otherwise the later
+        // batch add would duplicate it.
+        if (_store.TryGet(snapshot.Id) is null)
+        {
+            return;
+        }
+
+        var matches = SessionSearch.Matches(snapshot, SearchQuery, BodyMatcherOrNull());
         var index = Sessions.IndexOf(snapshot);
         if (matches)
         {
@@ -655,14 +692,6 @@ public sealed partial class MainWindowViewModel
 
         _retentionEvictedTotal += removed.Count;
         RefreshSessionCountText();
-        if (removed.Count == 1)
-        {
-            StatusText = "Removed 1 oldest session to stay under limits";
-        }
-        else
-        {
-            StatusText = $"Removed {removed.Count} oldest sessions to stay under limits";
-        }
     }
     private async Task LoadSelectedBodiesAsync(SessionSnapshot snap)
     {
@@ -690,27 +719,12 @@ public sealed partial class MainWindowViewModel
     }
     private void RefreshSessionCountText()
     {
-        DateTimeOffset? oldest = null;
-        if (_retentionEvictedTotal > 0 && _all.Count > 0)
-        {
-            oldest = _all[0].StartedUtc;
-            for (var i = 1; i < _all.Count; i++)
-            {
-                var t = _all[i].StartedUtc;
-                if (t < oldest.Value)
-                {
-                    oldest = t;
-                }
-            }
-        }
-
         SessionCountText = SessionSearch.BuildSessionCountText(
             Sessions.Count,
             _all.Count,
             SearchQuery,
-            _store.SpilledCount,
             _retentionEvictedTotal,
-            oldest);
+            _store.OldestStartedUtc);
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSessions)));
         RaiseSessionCommandCanExecuteChanged();
     }
@@ -724,8 +738,9 @@ public sealed partial class MainWindowViewModel
     {
         var previouslySelected = SelectedSession;
         var detailsWereOpen = ShowSessionDetails;
+        var matched = SessionSearch.Filter(_all, SearchQuery, BodyMatcherOrNull()).ToList();
         Sessions.Clear();
-        foreach (var s in SessionSearch.Filter(_all, SearchQuery))
+        foreach (var s in matched)
         {
             Sessions.Add(s);
         }
@@ -776,8 +791,10 @@ public sealed partial class MainWindowViewModel
             // Stay on the UI sync context (RelayCommand). ConfigureAwait(false) + StatusText update
             // raced with headless WaitUntil pumps on macOS (file written, StatusText stayed Ready).
             SetStatus("Exporting HAR…", StatusSeverity.Busy);
-            await _store.EnsureBodiesLoadedAsync(sessions, _statusRevertCts?.Token ?? CancellationToken.None);
-            await SessionArchive.ExportHarAsync(sessions, path, _statusRevertCts?.Token ?? CancellationToken.None);
+            await _store.WithBodiesForExportAsync(
+                sessions,
+                list => SessionArchive.ExportHarAsync(list, path, _statusRevertCts?.Token ?? CancellationToken.None),
+                _statusRevertCts?.Token ?? CancellationToken.None);
             SetOutcomeStatus($"Exported {sessions.Count} sessions to {path}", StatusSeverity.Success, toastImportant: true);
         }
         catch (Exception ex)
@@ -804,8 +821,10 @@ public sealed partial class MainWindowViewModel
         try
         {
             SetStatus("Exporting HAR…", StatusSeverity.Busy);
-            await _store.EnsureBodiesLoadedAsync(sessions, _statusRevertCts?.Token ?? CancellationToken.None);
-            await SessionArchive.ExportHarAsync(sessions, path, _statusRevertCts?.Token ?? CancellationToken.None);
+            await _store.WithBodiesForExportAsync(
+                sessions,
+                list => SessionArchive.ExportHarAsync(list, path, _statusRevertCts?.Token ?? CancellationToken.None),
+                _statusRevertCts?.Token ?? CancellationToken.None);
             SetOutcomeStatus($"Exported {sessions.Count} sessions to {path}", StatusSeverity.Success, toastImportant: true);
         }
         catch (Exception ex)
@@ -815,22 +834,27 @@ public sealed partial class MainWindowViewModel
     }
     private async Task ImportHarAsync()
     {
-        var path = await _pathPicker.PickOpenPathAsync("Import HAR", "HAR", "*.har", ZipFileFilter);
-        if (path is null)
+        var paths = await _pathPicker.PickOpenPathsAsync("Import HAR", "HAR", "*.har", ZipFileFilter);
+        if (paths.Count == 0)
         {
             SetGuardStatus("No .har or archive to import");
             return;
         }
 
         SetStatus("Importing…", StatusSeverity.Busy);
-        List<SessionSnapshot> imported;
-        if (path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        var imported = new List<SessionSnapshot>();
+        foreach (var path in paths)
         {
-            imported = await SessionArchive.ImportNativeArchiveAsync(path, _statusRevertCts?.Token ?? CancellationToken.None);
-        }
-        else
-        {
-            imported = await SessionArchive.ImportHarAsync(path, _statusRevertCts?.Token ?? CancellationToken.None);
+            if (path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                imported.AddRange(await SessionArchive.ImportNativeArchiveAsync(
+                    path, _statusRevertCts?.Token ?? CancellationToken.None));
+            }
+            else
+            {
+                imported.AddRange(await SessionArchive.ImportHarAsync(
+                    path, _statusRevertCts?.Token ?? CancellationToken.None));
+            }
         }
 
         foreach (var snap in imported)
@@ -840,7 +864,10 @@ public sealed partial class MainWindowViewModel
 
         ApplyFilter();
         RefreshSessionCountText();
-        SetOutcomeStatus($"Appended {imported.Count} sessions from {Path.GetFileName(path)}", StatusSeverity.Success, toastImportant: true);
+        var label = paths.Count == 1
+            ? Path.GetFileName(paths[0])
+            : $"{paths.Count} files";
+        SetOutcomeStatus($"Appended {imported.Count} sessions from {label}", StatusSeverity.Success, toastImportant: true);
     }
     private async Task ExportArchiveAsync()
     {
@@ -863,8 +890,10 @@ public sealed partial class MainWindowViewModel
             // Stay on the UI sync context (RelayCommand). ConfigureAwait(false) + StatusText update
             // raced with headless WaitUntil pumps on macOS (file written, StatusText stayed Ready).
             SetStatus("Exporting archive…", StatusSeverity.Busy);
-            await _store.EnsureBodiesLoadedAsync(sessions, _statusRevertCts?.Token ?? CancellationToken.None);
-            await SessionArchive.ExportNativeArchiveAsync(sessions, path, _statusRevertCts?.Token ?? CancellationToken.None);
+            await _store.WithBodiesForExportAsync(
+                sessions,
+                list => SessionArchive.ExportNativeArchiveAsync(list, path, _statusRevertCts?.Token ?? CancellationToken.None),
+                _statusRevertCts?.Token ?? CancellationToken.None);
             SetOutcomeStatus($"Exported {sessions.Count} sessions to {path}", StatusSeverity.Success, toastImportant: true);
         }
         catch (Exception ex)
@@ -891,8 +920,10 @@ public sealed partial class MainWindowViewModel
         try
         {
             SetStatus("Exporting archive…", StatusSeverity.Busy);
-            await _store.EnsureBodiesLoadedAsync(sessions, _statusRevertCts?.Token ?? CancellationToken.None);
-            await SessionArchive.ExportNativeArchiveAsync(sessions, path, _statusRevertCts?.Token ?? CancellationToken.None);
+            await _store.WithBodiesForExportAsync(
+                sessions,
+                list => SessionArchive.ExportNativeArchiveAsync(list, path, _statusRevertCts?.Token ?? CancellationToken.None),
+                _statusRevertCts?.Token ?? CancellationToken.None);
             SetOutcomeStatus($"Exported {sessions.Count} sessions to {path}", StatusSeverity.Success, toastImportant: true);
         }
         catch (Exception ex)

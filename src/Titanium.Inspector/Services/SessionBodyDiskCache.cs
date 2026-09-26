@@ -1,54 +1,61 @@
-using System.Text;
+using System.Globalization;
+using System.Text.Json;
 
 namespace Titanium.Inspector.Services;
 
 /// <summary>
-/// Binary spill of session body fields under a cache directory.
-/// Format: magic "TSIB" + version int32 + four length-prefixed blobs
-/// (request bytes, response bytes, request text UTF-8, response text UTF-8).
-/// Version 2 appends: requestOriginalSize int64, responseOriginalSize int64,
-/// requestCapture byte, responseCapture byte.
-/// Length -1 means null; 0 means empty.
+/// On-disk session cache under a size budget. Each Inspector process run writes into a
+/// timestamped subfolder under the cache root (<c>{root}/{yyyyMMdd-HHmmss-fff}/{id}.har</c>)
+/// so restarted session ids never overwrite another run. Disk budget counts all runs and
+/// deletes oldest HAR files first (across folders).
 /// </summary>
 public sealed class SessionBodyDiskCache : IDisposable
 {
-    private const string BodyFileSearchPattern = "*.bin";
-    private const int Version = 2;
-    private const int VersionV1 = 1;
-    private static readonly byte[] Magic = "TSIB"u8.ToArray();
+    private const string SessionFileSearchPattern = "*.har";
+    private const string LegacySessionFileSearchPattern = "*.json";
 
-    private readonly string _directory;
+    private readonly string _rootDirectory;
+    private readonly string _runDirectory;
     private long _maxBytes;
-    private TimeSpan _maxAge;
     private readonly object _gate = new();
+    /// <summary>Absolute file path → tracked size / time / session id.</summary>
+    private readonly Dictionary<string, (long SessionId, long Length, DateTime LastWriteUtc)> _index = new(
+        StringComparer.OrdinalIgnoreCase);
     private long _trackedBytes;
     private bool _disposed;
 
-    public SessionBodyDiskCache(string directory, long maxBytes, TimeSpan maxAge)
+    public SessionBodyDiskCache(string rootDirectory, long maxBytes, TimeSpan maxAge)
+        : this(rootDirectory, maxBytes, maxAge, runStartedUtc: DateTimeOffset.UtcNow)
     {
-        _directory = directory;
-        _maxBytes = maxBytes;
-        _maxAge = maxAge;
-        Directory.CreateDirectory(_directory);
-        PruneOnStartup();
     }
 
-    /// <summary>Updates disk budget / age; next write or prune enforces the new limits.</summary>
-    public void UpdateLimits(long maxBytes, TimeSpan maxAge)
+    /// <summary>Test seam: inject run start time for deterministic folder names.</summary>
+    internal SessionBodyDiskCache(
+        string rootDirectory, long maxBytes, TimeSpan maxAge, DateTimeOffset runStartedUtc)
     {
+        _ = maxAge;
+        _rootDirectory = rootDirectory;
+        _maxBytes = maxBytes > 0 ? maxBytes : 2L * 1024 * 1024 * 1024;
+        Directory.CreateDirectory(_rootDirectory);
+        _runDirectory = CreateRunDirectory(_rootDirectory, runStartedUtc);
+        RebuildIndexAndEnforceBudget();
+    }
+
+    /// <summary>Updates disk budget; returns current-run session ids whose files were deleted.</summary>
+    public IReadOnlyList<long> UpdateLimits(long maxBytes, TimeSpan maxAge)
+    {
+        _ = maxAge;
         lock (_gate)
         {
             _maxBytes = maxBytes > 0 ? maxBytes : _maxBytes;
-            _maxAge = maxAge > TimeSpan.Zero ? maxAge : _maxAge;
         }
 
-        PruneExpiredFiles();
-        EnforceDiskBudget();
+        return EnforceDiskBudget();
     }
 
     /// <summary>
-    /// Default spill directory under LocalApplicationData (Windows LocalAppData,
-    /// Linux ~/.local/share, macOS Application Support).
+    /// Default spill root under LocalApplicationData (Windows LocalAppData,
+    /// Linux ~/.local/share, macOS Application Support). Per-run subfolders live under this.
     /// </summary>
     public static string GetDefaultDirectory() =>
         Path.Combine(
@@ -56,90 +63,114 @@ public sealed class SessionBodyDiskCache : IDisposable
             "TitaniumInspector",
             "session-cache");
 
-    public string DirectoryPath => _directory;
+    /// <summary>Cache root that holds all run folders (Open cache folder target).</summary>
+    public string RootDirectoryPath => _rootDirectory;
 
-    public string PathFor(long sessionId) => Path.Combine(_directory, sessionId.ToString("D") + ".bin");
+    /// <summary>This process run's spill folder.</summary>
+    public string RunDirectoryPath => _runDirectory;
 
-    public void Write(SessionSnapshot snapshot)
+    /// <summary>Alias for <see cref="RootDirectoryPath"/> (UI / options).</summary>
+    public string DirectoryPath => _rootDirectory;
+
+    public string PathFor(long sessionId) =>
+        Path.Combine(_runDirectory, sessionId.ToString("D", CultureInfo.InvariantCulture) + ".har");
+
+    public bool FileExists(long sessionId) => File.Exists(PathFor(sessionId));
+
+    /// <summary>Writes a single-entry HAR into the current run folder; may prune older files under budget.</summary>
+    public IReadOnlyList<long> Write(SessionSnapshot snapshot)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        Directory.CreateDirectory(_runDirectory);
         var path = PathFor(snapshot.Id);
         var tmp = path + ".tmp";
         using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
-        using (var bw = new BinaryWriter(fs, Encoding.UTF8, leaveOpen: false))
         {
-            bw.Write(Magic);
-            bw.Write(Version);
-            WriteBytes(bw, snapshot.RequestBodyBytes);
-            WriteBytes(bw, snapshot.ResponseBodyBytes);
-            WriteString(bw, snapshot.RequestBodyText);
-            WriteString(bw, snapshot.ResponseBodyText);
-            bw.Write(snapshot.RequestBodyOriginalSize ?? -1L);
-            bw.Write(snapshot.ResponseBodyOriginalSize ?? -1L);
-            bw.Write((byte)snapshot.RequestBodyCapture);
-            bw.Write((byte)snapshot.ResponseBodyCapture);
+            SessionArchive.WriteHarDocument(fs, snapshot);
         }
 
         if (File.Exists(path))
         {
             var oldLen = new FileInfo(path).Length;
             File.Delete(path);
-            AdjustTracked(-oldLen);
+            RemoveFromIndex(path, oldLen);
         }
 
         File.Move(tmp, path);
-        AdjustTracked(new FileInfo(path).Length);
-        PruneExpiredFiles();
-        EnforceDiskBudget();
+        var newLen = new FileInfo(path).Length;
+        AddToIndex(path, snapshot.Id, newLen, DateTime.UtcNow);
+        return EnforceDiskBudget();
     }
 
+    /// <summary>
+    /// Loads body fields from the current run's HAR into <paramref name="snapshot"/>.
+    /// </summary>
     public bool TryLoad(SessionSnapshot snapshot)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        var path = PathFor(snapshot.Id);
+        if (!TryReadSession(snapshot.Id, out var loaded) || loaded is null)
+        {
+            return false;
+        }
+
+        snapshot.RequestBodyBytes = loaded.RequestBodyBytes;
+        snapshot.ResponseBodyBytes = loaded.ResponseBodyBytes;
+        snapshot.RequestBodyText = loaded.RequestBodyText;
+        snapshot.ResponseBodyText = loaded.ResponseBodyText;
+        snapshot.RequestBodyOriginalSize = loaded.RequestBodyOriginalSize;
+        snapshot.ResponseBodyOriginalSize = loaded.ResponseBodyOriginalSize;
+        snapshot.RequestBodyCapture = loaded.RequestBodyCapture;
+        snapshot.ResponseBodyCapture = loaded.ResponseBodyCapture;
+        snapshot.UpstreamRequestBodyBytes = loaded.UpstreamRequestBodyBytes;
+        snapshot.UpstreamResponseBodyBytes = loaded.UpstreamResponseBodyBytes;
+        snapshot.GrpcFrames = loaded.GrpcFrames;
+        snapshot.MultipartParts = loaded.MultipartParts;
+        snapshot.ProtobufDecodedText = loaded.ProtobufDecodedText;
+        snapshot.WebSocketFrames ??= loaded.WebSocketFrames;
+        snapshot.SseEvents ??= loaded.SseEvents;
+        return true;
+    }
+
+    public bool TryReadSession(long sessionId, out SessionSnapshot? session)
+    {
+        session = null;
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var path = PathFor(sessionId);
         if (!File.Exists(path))
         {
             return false;
         }
 
-        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        using var br = new BinaryReader(fs, Encoding.UTF8, leaveOpen: false);
-        var magic = br.ReadBytes(4);
-        if (magic.Length != 4 || magic[0] != Magic[0] || magic[1] != Magic[1] || magic[2] != Magic[2] || magic[3] != Magic[3])
+        try
+        {
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var doc = JsonDocument.Parse(fs);
+            var list = SessionArchive.ParseHarDocument(doc.RootElement, startId: sessionId);
+            session = list.Count > 0 ? list[0] : null;
+            if (session is not null)
+            {
+                session.Id = sessionId;
+            }
+
+            return session is not null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public bool TryReadBodyTexts(long sessionId, out string? requestText, out string? responseText)
+    {
+        requestText = null;
+        responseText = null;
+        if (!TryReadSession(sessionId, out var loaded) || loaded is null)
         {
             return false;
         }
 
-        var version = br.ReadInt32();
-        if (version is not Version and not VersionV1)
-        {
-            return false;
-        }
-
-        snapshot.RequestBodyBytes = ReadBytes(br);
-        snapshot.ResponseBodyBytes = ReadBytes(br);
-        snapshot.RequestBodyText = ReadString(br);
-        snapshot.ResponseBodyText = ReadString(br);
-
-        if (version >= Version)
-        {
-            var reqOrig = br.ReadInt64();
-            var respOrig = br.ReadInt64();
-            snapshot.RequestBodyOriginalSize = reqOrig < 0 ? null : reqOrig;
-            snapshot.ResponseBodyOriginalSize = respOrig < 0 ? null : respOrig;
-            snapshot.RequestBodyCapture = (BodyCaptureState)br.ReadByte();
-            snapshot.ResponseBodyCapture = (BodyCaptureState)br.ReadByte();
-        }
-        else
-        {
-            snapshot.RequestBodyCapture = InspectorBodyLimits.InferFromBytes(
-                snapshot.RequestBodyBytes, snapshot.RequestBodyBytes?.LongLength);
-            snapshot.ResponseBodyCapture = InspectorBodyLimits.InferFromBytes(
-                snapshot.ResponseBodyBytes, snapshot.ResponseBodyBytes?.LongLength);
-            snapshot.RequestBodyOriginalSize = snapshot.RequestBodyBytes?.LongLength;
-            snapshot.ResponseBodyOriginalSize = snapshot.ResponseBodyBytes?.LongLength;
-        }
-
+        requestText = loaded.RequestBodyText;
+        responseText = loaded.ResponseBodyText;
         return true;
     }
 
@@ -148,6 +179,7 @@ public sealed class SessionBodyDiskCache : IDisposable
         var path = PathFor(sessionId);
         if (!File.Exists(path))
         {
+            RemoveFromIndex(path, trackedLength: null);
             return;
         }
 
@@ -155,7 +187,7 @@ public sealed class SessionBodyDiskCache : IDisposable
         {
             var len = new FileInfo(path).Length;
             File.Delete(path);
-            AdjustTracked(-len);
+            RemoveFromIndex(path, len);
         }
         catch
         {
@@ -171,14 +203,178 @@ public sealed class SessionBodyDiskCache : IDisposable
         }
     }
 
+    /// <summary>Deletes HARs for this process run only; other run folders stay for Import HAR.</summary>
     public void ClearAll()
     {
-        if (!Directory.Exists(_directory))
+        ClearCurrentRun();
+    }
+
+    /// <summary>Deletes every run folder under the cache root (tests / full wipe).</summary>
+    public void ClearAllRuns()
+    {
+        if (!Directory.Exists(_rootDirectory))
+        {
+            lock (_gate)
+            {
+                _index.Clear();
+                _trackedBytes = 0;
+            }
+
+            return;
+        }
+
+        foreach (var path in EnumerateAllHarFiles())
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch
+            {
+                // Best-effort.
+            }
+        }
+
+        DeleteMatchingUnderRoot(LegacySessionFileSearchPattern);
+        DeleteMatchingUnderRoot("*.tmp");
+        DeleteMatchingUnderRoot("*.bin");
+
+        foreach (var sub in Directory.EnumerateDirectories(_rootDirectory))
+        {
+            try
+            {
+                if (IsEmptyDirectory(sub))
+                {
+                    Directory.Delete(sub, recursive: false);
+                }
+            }
+            catch
+            {
+                // Best-effort.
+            }
+        }
+
+        Directory.CreateDirectory(_runDirectory);
+        lock (_gate)
+        {
+            _index.Clear();
+            _trackedBytes = 0;
+        }
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+    }
+
+    private void ClearCurrentRun()
+    {
+        if (!Directory.Exists(_runDirectory))
+        {
+            lock (_gate)
+            {
+                RemoveIndexEntriesUnder(_runDirectory);
+            }
+
+            return;
+        }
+
+        foreach (var file in Directory.EnumerateFiles(_runDirectory, SessionFileSearchPattern))
+        {
+            try
+            {
+                var len = new FileInfo(file).Length;
+                File.Delete(file);
+                RemoveFromIndex(file, len);
+            }
+            catch
+            {
+                // Best-effort.
+            }
+        }
+
+        foreach (var tmp in Directory.EnumerateFiles(_runDirectory, "*.tmp"))
+        {
+            try
+            {
+                File.Delete(tmp);
+            }
+            catch
+            {
+                // Best-effort.
+            }
+        }
+    }
+
+    private void RebuildIndexAndEnforceBudget()
+    {
+        if (!Directory.Exists(_rootDirectory))
         {
             return;
         }
 
-        foreach (var file in Directory.EnumerateFiles(_directory, BodyFileSearchPattern))
+        DeleteMatchingUnderRoot("*.tmp");
+        DeleteMatchingUnderRoot(LegacySessionFileSearchPattern);
+        DeleteMatchingUnderRoot("*.bin");
+
+        lock (_gate)
+        {
+            _index.Clear();
+            _trackedBytes = 0;
+        }
+
+        foreach (var path in EnumerateAllHarFiles())
+        {
+            try
+            {
+                var info = new FileInfo(path);
+                var name = Path.GetFileNameWithoutExtension(info.Name);
+                if (!long.TryParse(name, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
+                {
+                    continue;
+                }
+
+                AddToIndex(path, id, info.Length, info.LastWriteTimeUtc);
+            }
+            catch
+            {
+                // Ignore unreadable entries.
+            }
+        }
+
+        EnforceDiskBudget();
+    }
+
+    private IEnumerable<string> EnumerateAllHarFiles()
+    {
+        if (!Directory.Exists(_rootDirectory))
+        {
+            yield break;
+        }
+
+        // Legacy flat HARs at root (pre–run-folder builds).
+        foreach (var path in Directory.EnumerateFiles(_rootDirectory, SessionFileSearchPattern))
+        {
+            yield return path;
+        }
+
+        foreach (var sub in Directory.EnumerateDirectories(_rootDirectory))
+        {
+            foreach (var path in Directory.EnumerateFiles(sub, SessionFileSearchPattern))
+            {
+                yield return path;
+            }
+        }
+    }
+
+    private void DeleteMatchingUnderRoot(string pattern)
+    {
+        if (!Directory.Exists(_rootDirectory))
+        {
+            return;
+        }
+
+        foreach (var file in Directory.EnumerateFiles(_rootDirectory, pattern))
         {
             try
             {
@@ -190,195 +386,181 @@ public sealed class SessionBodyDiskCache : IDisposable
             }
         }
 
-        lock (_gate)
+        foreach (var sub in Directory.EnumerateDirectories(_rootDirectory))
         {
-            _trackedBytes = 0;
-        }
-    }
-
-    public void Dispose()
-    {
-        _disposed = true;
-    }
-
-    private void PruneExpiredFiles()
-    {
-        if (_maxAge <= TimeSpan.Zero || !Directory.Exists(_directory))
-        {
-            return;
-        }
-
-        var cutoff = DateTime.UtcNow - _maxAge;
-        foreach (var path in Directory.EnumerateFiles(_directory, BodyFileSearchPattern))
-        {
-            try
-            {
-                var info = new FileInfo(path);
-                if (info.LastWriteTimeUtc >= cutoff)
-                {
-                    continue;
-                }
-
-                var len = info.Length;
-                info.Delete();
-                AdjustTracked(-len);
-            }
-            catch
-            {
-                // Best-effort.
-            }
-        }
-    }
-
-    private void PruneOnStartup()
-    {
-        if (!Directory.Exists(_directory))
-        {
-            return;
-        }
-
-        PruneExpiredFiles();
-
-        long total = 0;
-        var files = new List<FileInfo>();
-        foreach (var path in Directory.EnumerateFiles(_directory, BodyFileSearchPattern))
-        {
-            try
-            {
-                var info = new FileInfo(path);
-                files.Add(info);
-                total += info.Length;
-            }
-            catch
-            {
-                // Ignore unreadable entries.
-            }
-        }
-
-        lock (_gate)
-        {
-            _trackedBytes = total;
-        }
-
-        if (total > _maxBytes)
-        {
-            EnforceDiskBudget(files);
-        }
-    }
-
-    private void EnforceDiskBudget(List<FileInfo>? knownFiles = null)
-    {
-        long tracked;
-        lock (_gate)
-        {
-            tracked = _trackedBytes;
-        }
-
-        if (tracked <= _maxBytes)
-        {
-            return;
-        }
-
-        var files = knownFiles ?? Directory.EnumerateFiles(_directory, BodyFileSearchPattern)
-            .Select(p =>
+            foreach (var file in Directory.EnumerateFiles(sub, pattern))
             {
                 try
                 {
-                    return new FileInfo(p);
+                    File.Delete(file);
                 }
                 catch
                 {
-                    return null!;
+                    // Best-effort.
                 }
-            })
-            .Where(f => f is not null)
-            .ToList();
+            }
+        }
+    }
 
-        foreach (var file in files.OrderBy(f => f.LastWriteTimeUtc))
+    /// <summary>
+    /// Deletes oldest HARs (any run) until under budget. Returns session ids pruned from
+    /// <see cref="_runDirectory"/> only so live rows are not marked missing for other runs.
+    /// </summary>
+    private IReadOnlyList<long> EnforceDiskBudget()
+    {
+        List<(string Path, long SessionId, long Length, DateTime LastWriteUtc)> ordered;
+        long tracked;
+        long maxBytes;
+        lock (_gate)
         {
-            if (tracked <= _maxBytes)
+            tracked = _trackedBytes;
+            maxBytes = _maxBytes;
+            if (tracked <= maxBytes)
+            {
+                return Array.Empty<long>();
+            }
+
+            ordered = _index
+                .Select(kv => (kv.Key, kv.Value.SessionId, kv.Value.Length, kv.Value.LastWriteUtc))
+                .OrderBy(x => x.LastWriteUtc)
+                .ToList();
+        }
+
+        var deletedCurrentRun = new List<long>();
+        foreach (var entry in ordered)
+        {
+            if (tracked <= maxBytes)
             {
                 break;
             }
 
             try
             {
-                var len = file.Length;
-                file.Delete();
-                tracked -= len;
-                AdjustTracked(-len);
+                if (File.Exists(entry.Path))
+                {
+                    File.Delete(entry.Path);
+                }
+
+                tracked -= entry.Length;
+                RemoveFromIndex(entry.Path, entry.Length);
+                if (IsUnderRunDirectory(entry.Path))
+                {
+                    deletedCurrentRun.Add(entry.SessionId);
+                }
+
+                TryDeleteEmptyRunFolder(Path.GetDirectoryName(entry.Path));
             }
             catch
             {
                 // Best-effort.
             }
         }
+
+        return deletedCurrentRun;
     }
 
-    private void AdjustTracked(long delta)
+    private bool IsUnderRunDirectory(string path)
     {
+        var full = Path.GetFullPath(path);
+        var run = Path.GetFullPath(_runDirectory);
+        return full.StartsWith(run + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+               || full.StartsWith(run + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(full, run, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void TryDeleteEmptyRunFolder(string? folder)
+    {
+        if (string.IsNullOrEmpty(folder))
+        {
+            return;
+        }
+
+        var full = Path.GetFullPath(folder);
+        var run = Path.GetFullPath(_runDirectory);
+        var root = Path.GetFullPath(_rootDirectory);
+        if (string.Equals(full, run, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(full, root, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        try
+        {
+            if (Directory.Exists(full) && IsEmptyDirectory(full))
+            {
+                Directory.Delete(full, recursive: false);
+            }
+        }
+        catch
+        {
+            // Best-effort.
+        }
+    }
+
+    private static bool IsEmptyDirectory(string path) =>
+        !Directory.EnumerateFileSystemEntries(path).Any();
+
+    private void AddToIndex(string path, long sessionId, long length, DateTime lastWriteUtc)
+    {
+        var key = Path.GetFullPath(path);
         lock (_gate)
         {
-            _trackedBytes = Math.Max(0, _trackedBytes + delta);
+            if (_index.TryGetValue(key, out var prev))
+            {
+                _trackedBytes = Math.Max(0, _trackedBytes - prev.Length);
+            }
+
+            _index[key] = (sessionId, length, lastWriteUtc);
+            _trackedBytes += length;
         }
     }
 
-    private static void WriteBytes(BinaryWriter bw, byte[]? data)
+    private void RemoveFromIndex(string path, long? trackedLength)
     {
-        if (data is null)
+        var key = Path.GetFullPath(path);
+        lock (_gate)
         {
-            bw.Write(-1);
-            return;
-        }
-
-        bw.Write(data.Length);
-        if (data.Length > 0)
-        {
-            bw.Write(data);
+            if (_index.TryGetValue(key, out var prev))
+            {
+                _trackedBytes = Math.Max(0, _trackedBytes - prev.Length);
+                _index.Remove(key);
+            }
+            else if (trackedLength is long len)
+            {
+                _trackedBytes = Math.Max(0, _trackedBytes - len);
+            }
         }
     }
 
-    private static void WriteString(BinaryWriter bw, string? text)
+    private void RemoveIndexEntriesUnder(string directory)
     {
-        if (text is null)
+        var prefix = Path.GetFullPath(directory);
+        var toRemove = _index.Keys
+            .Where(k => k.StartsWith(prefix + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                        || k.StartsWith(prefix + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(k, prefix, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        foreach (var key in toRemove)
         {
-            bw.Write(-1);
-            return;
-        }
-
-        var bytes = Encoding.UTF8.GetBytes(text);
-        bw.Write(bytes.Length);
-        if (bytes.Length > 0)
-        {
-            bw.Write(bytes);
+            if (_index.TryGetValue(key, out var prev))
+            {
+                _trackedBytes = Math.Max(0, _trackedBytes - prev.Length);
+                _index.Remove(key);
+            }
         }
     }
 
-    private static byte[]? ReadBytes(BinaryReader br)
+    internal static string CreateRunDirectory(string root, DateTimeOffset startedUtc)
     {
-        var len = br.ReadInt32();
-        if (len < 0)
+        var stamp = startedUtc.UtcDateTime.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture);
+        var path = Path.Combine(root, stamp);
+        // Extremely unlikely collision within the same millisecond.
+        if (Directory.Exists(path))
         {
-            return null;
+            path = Path.Combine(root, stamp + "-" + Guid.NewGuid().ToString("N")[..6]);
         }
 
-        return len == 0 ? Array.Empty<byte>() : br.ReadBytes(len);
-    }
-
-    private static string? ReadString(BinaryReader br)
-    {
-        var len = br.ReadInt32();
-        if (len < 0)
-        {
-            return null;
-        }
-
-        if (len == 0)
-        {
-            return string.Empty;
-        }
-
-        var bytes = br.ReadBytes(len);
-        return Encoding.UTF8.GetString(bytes);
+        Directory.CreateDirectory(path);
+        return path;
     }
 }

@@ -87,6 +87,20 @@ internal sealed class Http2ConnectionState
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>
+    ///     Last <c>SETTINGS_MAX_CONCURRENT_STREAMS</c> value advertised toward the client (clamped /
+    ///     injected on the origin→client SETTINGS rewrite). Not used for admission until the client
+    ///     ACKs that SETTINGS (RFC 9113: sender must not assume the peer applied settings before ACK).
+    ///     Default <see cref="int.MaxValue"/> = unlimited (RFC default before a finite setting).
+    /// </summary>
+    public int PendingMaxConcurrentStreamsTowardClient = int.MaxValue;
+
+    /// <summary>
+    ///     Concurrent-stream cap enforced against client-initiated stream admission. Promoted from
+    ///     <see cref="PendingMaxConcurrentStreamsTowardClient"/> when a client SETTINGS ACK is received.
+    /// </summary>
+    public int EnforcedMaxConcurrentStreamsTowardClient = int.MaxValue;
+
+    /// <summary>
     ///     Background tasks for synthetic (proxy-generated) responses, tracked so they can be observed for
     ///     failure and awaited before the owning relay direction completes. Completed tasks are unrooted
     ///     immediately (see <see cref="Http2PendingWork"/>).

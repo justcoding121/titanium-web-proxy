@@ -29,7 +29,7 @@ jobs:
       version: ${{ steps.v.outputs.version }}
       channel: ${{ steps.v.outputs.channel }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - id: v
         name: Resolve release tag / channel
         run: |
@@ -64,8 +64,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
       - name: Restore and build
@@ -122,8 +122,8 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
       - name: Linux Playwright OS deps
@@ -176,7 +176,7 @@ jobs:
           - rid: osx-arm64
             os: macos-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Free disk space (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -184,7 +184,7 @@ jobs:
             /usr/local/share/boost /usr/share/swift /usr/local/.ghcup || true
           sudo docker system prune -af || true
           df -h
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
       - uses: actions/cache@v6
@@ -293,7 +293,7 @@ jobs:
             [[ -f "$f" ]] && cp "$f" "staged-cli-$rid/" || true
           done
           ls -la "staged-cli-$rid"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cli-${{ matrix.rid }}
           path: staged-cli-${{ matrix.rid }}/
@@ -304,8 +304,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
       - name: Build Plus
@@ -317,7 +317,7 @@ jobs:
           # Stamp InformationalVersion (e.g. 7.0.5-beta) while assembly Version stays numeric.
           dotnet build src/Titanium.Plus/Titanium.Plus.csproj -c Release -o artifacts/plus -p:Version="$ver"
           cp artifacts/plus/Titanium.Plus.dll "Titanium.Plus-${RELEASE_TAG}.dll"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: plus
           path: Titanium.Plus-*.dll
@@ -356,7 +356,7 @@ jobs:
             os: macos-latest
             msi: false
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Free disk space (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -364,7 +364,7 @@ jobs:
             /usr/local/share/boost /usr/share/swift /usr/local/.ghcup || true
           sudo docker system prune -af || true
           df -h
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
       - uses: actions/cache@v6
@@ -506,7 +506,7 @@ jobs:
             [[ -f "$f" ]] && cp "$f" "staged-inspector-$rid/" || true
           done
           ls -la "staged-inspector-$rid"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: inspector-${{ matrix.rid }}
           if-no-files-found: error
@@ -566,8 +566,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
       - name: Install libmsquic (HTTP/3)
@@ -599,7 +599,7 @@ jobs:
           pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName
       - name: Upload smoke CSV
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rps-product-smoke-csv
           path: tools/RpsLoadProbe/results/rps-ramp-*.csv
@@ -621,7 +621,7 @@ jobs:
       contents: write
       actions: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: actions/download-artifact@v8
@@ -807,7 +807,7 @@ jobs:
             "skip=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           }
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: steps.gate.outputs.skip != 'true'
 
       # Runs on every product release cut from beta/stable (via cut-product-tag → this workflow).

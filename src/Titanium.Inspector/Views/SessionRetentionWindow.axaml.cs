@@ -18,8 +18,6 @@ public partial class SessionRetentionWindow : Window
         _settings = settings;
         InitializeComponent();
         LoadFromSettings();
-        SpillBodiesCheck.IsCheckedChanged += (_, _) => SyncDiskFieldsEnabled();
-        SyncDiskFieldsEnabled();
         SaveButton.Click += OnSave;
         CancelButton.Click += (_, _) => Close();
         OpenCacheFolderButton.Click += OnOpenCacheFolder;
@@ -37,20 +35,9 @@ public partial class SessionRetentionWindow : Window
     private void LoadFromSettings()
     {
         var s = _settings.Current;
-        SpillBodiesCheck.IsChecked = s.SpillBodiesToDisk;
         DiskCacheMaxMbBox.Text = BytesToMb(s.DiskCacheMaxBytes).ToString();
-        DiskCacheMaxAgeDaysBox.Text = s.DiskCacheMaxAgeDays.ToString();
         MaxSessionsBox.Text = s.MaxSessionsInMemory.ToString();
-        HotBodySessionsBox.Text = s.HotBodySessions.ToString();
-        MaxBodyRamMbBox.Text = BytesToMb(s.MaxCaptureBytesInMemory).ToString();
         CacheFolderPathBox.Text = SessionBodyDiskCache.GetDefaultDirectory();
-    }
-
-    private void SyncDiskFieldsEnabled()
-    {
-        var on = SpillBodiesCheck.IsChecked == true;
-        DiskFieldsPanel.IsEnabled = on;
-        DiskFieldsPanel.Opacity = on ? 1 : 0.5;
     }
 
     private void OnOpenCacheFolder(object? sender, RoutedEventArgs e)
@@ -71,37 +58,17 @@ public partial class SessionRetentionWindow : Window
             return;
         }
 
-        if (!TryParsePositiveInt(HotBodySessionsBox.Text, out var hotBodies))
-        {
-            StatusText.Text = FormatPositiveNumberError("Keep full bodies in memory", HotBodySessionsBox.Text);
-            return;
-        }
-
-        if (!TryParsePositiveInt(DiskCacheMaxAgeDaysBox.Text, out var maxAgeDays))
-        {
-            StatusText.Text = FormatPositiveNumberError("Delete cached bodies older than (days)", DiskCacheMaxAgeDaysBox.Text);
-            return;
-        }
-
         if (!TryParsePositiveLong(DiskCacheMaxMbBox.Text, out var diskMb))
         {
-            StatusText.Text = FormatPositiveNumberError("Disk cache size limit (MB)", DiskCacheMaxMbBox.Text);
-            return;
-        }
-
-        if (!TryParsePositiveLong(MaxBodyRamMbBox.Text, out var ramMb))
-        {
-            StatusText.Text = FormatPositiveNumberError("Memory for request/response bodies (MB)", MaxBodyRamMbBox.Text);
+            StatusText.Text = FormatPositiveNumberError("Disk space for saved sessions (MB)", DiskCacheMaxMbBox.Text);
             return;
         }
 
         var s = _settings.Current;
-        s.SpillBodiesToDisk = SpillBodiesCheck.IsChecked == true;
         s.DiskCacheMaxBytes = MbToBytes(diskMb);
-        s.DiskCacheMaxAgeDays = maxAgeDays;
         s.MaxSessionsInMemory = maxSessions;
-        s.HotBodySessions = hotBodies;
-        s.MaxCaptureBytesInMemory = MbToBytes(ramMb);
+        // Bodies always spill; keep legacy fields stable for older settings JSON readers.
+        s.SpillBodiesToDisk = true;
         _settings.Save();
         _saved = true;
         Close();
