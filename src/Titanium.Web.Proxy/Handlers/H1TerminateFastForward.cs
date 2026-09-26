@@ -181,39 +181,16 @@ public partial class ProxyServer
 
             response.Locked = true;
 
-            // Known-CL ≤64 KiB: materialize then one client write (headers+body) — same as fast path.
+            // Known-CL ≤64 KiB: one coalesced client write without assigning Response.Body.
             // Larger / chunked bodies: still stream via CopyBody with a throwaway session (hooks unused).
             const int coalesceBodyLimit = 64 * 1024;
-            // ArrayPool buckets oversize odd lengths (e.g. Rent(56) → 128). Tiny bodies stay on
-            // exact new byte[length]; pool only when a large rent is likely exact (64 KiB GET).
-            const int poolCoalesceMin = 4 * 1024;
             if (response.HasBody
                 && !response.IsChunked
                 && !response.HasTrailingHeaders
                 && response.ContentLength is > 0 and <= coalesceBodyLimit)
             {
                 var length = (int)response.ContentLength;
-                byte[] body;
-                byte[]? pooled = null;
-                if (length >= poolCoalesceMin)
-                {
-                    var rented = BufferPool.GetBuffer(length);
-                    if (rented.Length == length)
-                    {
-                        body = rented;
-                        pooled = rented;
-                    }
-                    else
-                    {
-                        BufferPool.ReturnBuffer(rented);
-                        body = new byte[length];
-                    }
-                }
-                else
-                {
-                    body = new byte[length];
-                }
-
+                var (body, pooled, poolKind) = RentH1CoalesceBodyBuffer(length);
                 try
                 {
                     var read = 0;
@@ -229,35 +206,16 @@ public partial class ProxyServer
                     if (read != length)
                     {
                         closeConnection = true;
-                        if (pooled != null)
-                        {
-                            // Cannot shrink a rented buffer; hand off an exact prefix and return the rent.
-                            var exact = GC.AllocateUninitializedArray<byte>(read);
-                            if (read > 0)
-                                Buffer.BlockCopy(body, 0, exact, 0, read);
-                            BufferPool.ReturnBuffer(pooled);
-                            pooled = null;
-                            body = exact;
-                        }
-                        else
-                        {
-                            Array.Resize(ref body, read);
-                        }
+                        if (response.ContentLength != read)
+                            response.ContentLength = read;
                     }
 
-                    response.Body = body;
-                    response.BodyIsWireEncoded = true;
-                    response.IsBodyReceived = true;
-                    response.IsBodyRead = true;
-                    await clientStream.WriteResponseAsync(response, cancellationToken);
+                    await clientStream.WriteResponseWithWireBodyAsync(response, body.AsMemory(0, read),
+                        cancellationToken);
                 }
                 finally
                 {
-                    if (pooled != null)
-                    {
-                        response.ClearBodyReference();
-                        BufferPool.ReturnBuffer(pooled);
-                    }
+                    ReturnH1CoalesceBodyBuffer(pooled, poolKind);
                 }
             }
             else if (response.HasBody)
@@ -416,45 +374,78 @@ public partial class ProxyServer
                 return false;
             }
 
-            // Known-CL ≤64 KiB: materialize before BeforeResponse so handlers can read the body.
+            // Defer known-CL body consume until after BeforeResponse so GetResponseBody still works.
+            // When still unread and no AfterResponse / body-write consumers need Body, coalesce via
+            // WriteResponseWithWireBodyAsync (probe no-op MITM). Otherwise keep Body assignment.
             const int coalesceBodyLimit = 64 * 1024;
-            if (response.HasBody
+            var knownClCoalesce = response.HasBody
                 && !response.IsChunked
                 && !response.HasTrailingHeaders
-                && response.ContentLength is > 0 and <= coalesceBodyLimit)
-            {
-                var length = (int)response.ContentLength;
-                var body = new byte[length];
-                var read = 0;
-                while (read < length)
-                {
-                    var n = await connection.Stream.ReadAsync(body.AsMemory(read, length - read),
-                        cancellationToken);
-                    if (n == 0)
-                        break;
-                    read += n;
-                }
-
-                if (read != length)
-                {
-                    Array.Resize(ref body, read);
-                    closeConnection = true;
-                }
-
-                response.Body = body;
-                response.BodyIsWireEncoded = true;
-                response.IsBodyReceived = true;
-                response.IsBodyRead = true;
-            }
+                && response.ContentLength is > 0 and <= coalesceBodyLimit;
 
             args.HttpClient.Response = response;
             await OnBeforeResponse(args);
             response = args.HttpClient.Response;
             response.Locked = true;
 
+            var mayNeedBodyAfterWrite = AfterResponse != null || HasOnResponseBodyWriteSubscribers;
             if (response.HasBody && response.IsBodyRead)
             {
                 await clientStream.WriteResponseAsync(response, cancellationToken);
+            }
+            else if (knownClCoalesce && !response.IsBodyRead)
+            {
+                var length = (int)response.ContentLength;
+                var (body, pooled, poolKind) = RentH1CoalesceBodyBuffer(length);
+                try
+                {
+                    var read = 0;
+                    while (read < length)
+                    {
+                        var n = await connection.Stream.ReadAsync(body.AsMemory(read, length - read),
+                            cancellationToken);
+                        if (n == 0)
+                            break;
+                        read += n;
+                    }
+
+                    if (read != length)
+                    {
+                        closeConnection = true;
+                        if (response.ContentLength != read)
+                            response.ContentLength = read;
+                    }
+
+                    if (mayNeedBodyAfterWrite)
+                    {
+                        byte[] exact;
+                        if (read == body.Length && poolKind == H1CoalescePoolKind.None)
+                        {
+                            exact = body;
+                        }
+                        else
+                        {
+                            exact = GC.AllocateUninitializedArray<byte>(read);
+                            if (read > 0)
+                                Buffer.BlockCopy(body, 0, exact, 0, read);
+                        }
+
+                        response.Body = exact;
+                        response.BodyIsWireEncoded = true;
+                        response.IsBodyReceived = true;
+                        response.IsBodyRead = true;
+                        await clientStream.WriteResponseAsync(response, cancellationToken);
+                    }
+                    else
+                    {
+                        await clientStream.WriteResponseWithWireBodyAsync(response, body.AsMemory(0, read),
+                            cancellationToken);
+                    }
+                }
+                finally
+                {
+                    ReturnH1CoalesceBodyBuffer(pooled, poolKind);
+                }
             }
             else if (response.HasBody)
             {
@@ -495,6 +486,48 @@ public partial class ProxyServer
                 openSession.Dispose();
             }
         }
+    }
+
+    private enum H1CoalescePoolKind
+    {
+        None,
+        BufferPool,
+        ArrayPool
+    }
+
+    /// <summary>
+    ///     Rent a coalesce buffer: exact BufferPool when possible (≥4 KiB), else ArrayPool for tiny CL
+    ///     (product ~56 B GET), else a fresh array when neither pool returns an exact-length buffer.
+    /// </summary>
+    private (byte[] Body, byte[]? Pooled, H1CoalescePoolKind Kind) RentH1CoalesceBodyBuffer(int length)
+    {
+        const int poolCoalesceMin = 4 * 1024;
+        if (length >= poolCoalesceMin)
+        {
+            var rented = BufferPool.GetBuffer(length);
+            if (rented.Length == length)
+                return (rented, rented, H1CoalescePoolKind.BufferPool);
+
+            BufferPool.ReturnBuffer(rented);
+        }
+
+        var arrayPooled = System.Buffers.ArrayPool<byte>.Shared.Rent(length);
+        if (arrayPooled.Length == length || length < poolCoalesceMin)
+            return (arrayPooled, arrayPooled, H1CoalescePoolKind.ArrayPool);
+
+        System.Buffers.ArrayPool<byte>.Shared.Return(arrayPooled);
+        return (new byte[length], null, H1CoalescePoolKind.None);
+    }
+
+    private void ReturnH1CoalesceBodyBuffer(byte[]? pooled, H1CoalescePoolKind kind)
+    {
+        if (pooled == null || kind == H1CoalescePoolKind.None)
+            return;
+
+        if (kind == H1CoalescePoolKind.BufferPool)
+            BufferPool.ReturnBuffer(pooled);
+        else
+            System.Buffers.ArrayPool<byte>.Shared.Return(pooled);
     }
 
     private static bool H1TerminateClientRequestedClose(Request request)

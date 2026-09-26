@@ -22,17 +22,25 @@ internal sealed class HttpServerStream : HttpStream
     /// <param name="request">The request object.</param>
     /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
     /// <returns></returns>
-    internal async ValueTask WriteRequestAsync(Request request, CancellationToken cancellationToken = default)
+    internal ValueTask WriteRequestAsync(Request request, CancellationToken cancellationToken = default)
     {
         var headerBuilder = HeaderBuilder.Rent();
         try
         {
             headerBuilder.WriteRequestLine(request.Method, request.RequestUriString, request.HttpVersion);
-            await WriteAsync(request, headerBuilder, cancellationToken);
+            var writeVt = WriteAsync(request, headerBuilder, cancellationToken);
+            if (writeVt.IsCompletedSuccessfully)
+            {
+                HeaderBuilder.Return(headerBuilder);
+                return default;
+            }
+
+            return AwaitAndReturnHeaderBuilder(writeVt, headerBuilder);
         }
-        finally
+        catch
         {
             HeaderBuilder.Return(headerBuilder);
+            throw;
         }
     }
 
@@ -43,22 +51,60 @@ internal sealed class HttpServerStream : HttpStream
     ///     The parsed status info, or <c>null</c> when the peer closed the connection before sending
     ///     any status line (normal EOF / keep-alive idle close). Malformed status lines still throw.
     /// </returns>
-    internal async ValueTask<ResponseStatusInfo?> ReadResponseStatus(CancellationToken cancellationToken = default)
+    internal ValueTask<ResponseStatusInfo?> ReadResponseStatus(CancellationToken cancellationToken = default)
     {
-        var httpStatus = await ReadLineAsync(cancellationToken);
-        if (httpStatus == null)
-            return null;
-
-        if (httpStatus.Length == 0)
+        if (TryParseResponseLineFromBuffer(out var version, out var statusCode, out var description,
+                out var emptyLine))
         {
-            // A blank line before the status is unusual; read again. A subsequent EOF is still a normal close,
-            // not a protocol error.
-            httpStatus = await ReadLineAsync(cancellationToken);
-            if (httpStatus == null)
-                return null;
+            if (!emptyLine)
+            {
+                return new ValueTask<ResponseStatusInfo?>(new ResponseStatusInfo
+                {
+                    Version = version, StatusCode = statusCode, Description = description
+                });
+            }
+
+            // Blank line before status — try again from the buffer, else fill.
+            if (TryParseResponseLineFromBuffer(out version, out statusCode, out description, out emptyLine)
+                && !emptyLine)
+            {
+                return new ValueTask<ResponseStatusInfo?>(new ResponseStatusInfo
+                {
+                    Version = version, StatusCode = statusCode, Description = description
+                });
+            }
         }
 
-        Response.ParseResponseLine(httpStatus, out var version, out var statusCode, out var description);
-        return new ResponseStatusInfo { Version = version, StatusCode = statusCode, Description = description };
+        return ReadResponseStatusFillAsync(cancellationToken);
+    }
+
+    private async ValueTask<ResponseStatusInfo?> ReadResponseStatusFillAsync(CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            if (!await FillBufferAsync(cancellationToken))
+                return null;
+
+            if (!TryParseResponseLineFromBuffer(out var version, out var statusCode, out var description,
+                    out var emptyLine))
+                continue;
+
+            if (emptyLine)
+                continue;
+
+            return new ResponseStatusInfo { Version = version, StatusCode = statusCode, Description = description };
+        }
+    }
+
+    private static async ValueTask AwaitAndReturnHeaderBuilder(ValueTask writeVt, HeaderBuilder headerBuilder)
+    {
+        try
+        {
+            await writeVt;
+        }
+        finally
+        {
+            HeaderBuilder.Return(headerBuilder);
+        }
     }
 }

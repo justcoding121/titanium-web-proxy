@@ -49,6 +49,38 @@ public class HttpStreamCoverageTests
     }
 
     [TestMethod]
+    public async Task WriteResponseWithWireBodyAsync_DoesNotSetBody_AndCoalescesWrite()
+    {
+        var proxy = new ProxyServer(false, false, false);
+        var destination = new MemoryStream();
+        var connection = new QuicClientConnection(
+            proxy, new IPEndPoint(IPAddress.Loopback, 4433), new IPEndPoint(IPAddress.Loopback, 12345));
+        await using var clientStream = new HttpClientStream(proxy, connection, destination, proxy.BufferPool,
+            CancellationToken.None, rentReadBuffer: false);
+
+        var response = new Response
+        {
+            HttpVersion = HttpHeader.Version11,
+            StatusCode = 200,
+            StatusDescription = "OK"
+        };
+        response.Headers.AddHeader(KnownHeaders.ContentType, "application/json");
+        response.ContentLength = 2;
+
+        var wire = "[]"u8.ToArray();
+        await clientStream.WriteResponseWithWireBodyAsync(response, wire);
+
+        Assert.IsFalse(response.BodyAvailable);
+        Assert.IsTrue(response.IsBodySent);
+        Assert.IsTrue(response.IsBodyReceived);
+
+        var text = Encoding.ASCII.GetString(destination.ToArray());
+        StringAssert.StartsWith(text, "HTTP/1.1 200 OK\r\n");
+        StringAssert.Contains(text, "Content-Length: 2\r\n");
+        StringAssert.EndsWith(text, "\r\n\r\n[]");
+    }
+
+    [TestMethod]
     public async Task FillBufferAsync_AfterEof_ReturnsFalseIdempotently()
     {
         using var stream = MakeReader(Encoding.ASCII.GetBytes("abc"));

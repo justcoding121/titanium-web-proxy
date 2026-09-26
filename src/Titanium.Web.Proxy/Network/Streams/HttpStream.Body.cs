@@ -44,7 +44,7 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
         return WriteAsync(data, cancellationToken: cancellationToken);
     }
 
-    public async Task CopyBodyAsync(RequestResponseBase requestResponse, bool useOriginalHeaderValues,
+    public async ValueTask CopyBodyAsync(RequestResponseBase requestResponse, bool useOriginalHeaderValues,
         IHttpStreamWriter writer, TransformationMode transformation, bool isRequest, SessionEventArgs args,
         CancellationToken cancellationToken)
     {
@@ -106,7 +106,7 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
     /// <param name="onCopy"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    public Task CopyBodyAsync(IHttpStreamWriter writer, bool isChunked, long contentLength,
+    public ValueTask CopyBodyAsync(IHttpStreamWriter writer, bool isChunked, long contentLength,
         bool isRequest,
         SessionEventArgs args, CancellationToken cancellationToken)
     {
@@ -124,7 +124,7 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
             ((isRequest && args.HttpClient.Request.OriginalHasBody && !args.HttpClient.Request.IsBodyRead && server.ShouldCallBeforeRequestBodyWrite()) ||
              (isResponse && args.HttpClient.Response.OriginalHasBody && !args.HttpClient.Response.IsBodyRead && server.ShouldCallBeforeResponseBodyWrite())))
         {
-            return HandleBodyWrite(writer, isChunked, isRequest, args, cancellationToken);
+            return new ValueTask(HandleBodyWrite(writer, isChunked, isRequest, args, cancellationToken));
         }
 
         // For chunked request we need to read data as they arrive, until we reach a chunk end symbol
@@ -364,7 +364,7 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
     /// <param name="onCopy"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    private async Task CopyBodyChunkedAsync(IHttpStreamWriter writer, bool isRequest, SessionEventArgs args,
+    private async ValueTask CopyBodyChunkedAsync(IHttpStreamWriter writer, bool isRequest, SessionEventArgs args,
         CancellationToken cancellationToken)
     {
         var requestResponse = isRequest ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
@@ -412,7 +412,7 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
     /// <param name="onCopy"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    private async Task CopyBytesToStream(IHttpStreamWriter writer, long count, bool isRequest, SessionEventArgs args, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+    private async ValueTask CopyBytesToStream(IHttpStreamWriter writer, long count, bool isRequest, SessionEventArgs args, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         CancellationToken cancellationToken)
     {
         var remainingBytes = count;
@@ -444,9 +444,17 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
                         break;
 
                     if (httpWriter != null)
-                        await httpWriter.WriteAsync(largeBuf.AsMemory(0, read), cancellationToken);
+                    {
+                        var writeVt = httpWriter.WriteAsync(largeBuf.AsMemory(0, read), cancellationToken);
+                        if (!writeVt.IsCompletedSuccessfully)
+                            await writeVt;
+                    }
                     else
-                        await writer.WriteAsync(largeBuf, 0, read, cancellationToken);
+                    {
+                        var writeVt = writer.WriteAsync(largeBuf, 0, read, cancellationToken);
+                        if (!writeVt.IsCompletedSuccessfully)
+                            await writeVt;
+                    }
 
                     if (isRequest)
                         args.OnDataSent(largeBuf, 0, read);
@@ -472,9 +480,17 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
                 // Write the unread window in place — no second pooled rent/copy. Await before the next
                 // fill: FillBuffer compact-moves streamBuffer and would invalidate this window.
                 if (httpWriter != null)
-                    await httpWriter.WriteAsync(streamBuffer.AsMemory(offset, n), cancellationToken);
+                {
+                    var writeVt = httpWriter.WriteAsync(streamBuffer.AsMemory(offset, n), cancellationToken);
+                    if (!writeVt.IsCompletedSuccessfully)
+                        await writeVt;
+                }
                 else
-                    await writer.WriteAsync(streamBuffer, offset, n, cancellationToken);
+                {
+                    var writeVt = writer.WriteAsync(streamBuffer, offset, n, cancellationToken);
+                    if (!writeVt.IsCompletedSuccessfully)
+                        await writeVt;
+                }
 
                 if (isRequest)
                     args.OnDataSent(streamBuffer, offset, n);
@@ -500,7 +516,7 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
     /// <param name="headerBuilder"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    protected async ValueTask WriteAsync(RequestResponseBase requestResponse, HeaderBuilder headerBuilder,
+    protected ValueTask WriteAsync(RequestResponseBase requestResponse, HeaderBuilder headerBuilder,
         CancellationToken cancellationToken = default)
     {
         var body = requestResponse.CompressBodyAndUpdateContentLength();
@@ -515,18 +531,49 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
             && !requestResponse.HasTrailingHeaders)
         {
             headerBuilder.WriteRaw(body);
-            await WriteHeadersAsync(headerBuilder, cancellationToken);
-            requestResponse.IsBodySent = true;
-            return;
+            var coalesceVt = WriteHeadersAsync(headerBuilder, cancellationToken);
+            if (coalesceVt.IsCompletedSuccessfully)
+            {
+                requestResponse.IsBodySent = true;
+                return default;
+            }
+
+            return MarkBodySentAfterWriteAsync(coalesceVt, requestResponse);
         }
 
-        await WriteHeadersAsync(headerBuilder, cancellationToken);
+        var headersVt = WriteHeadersAsync(headerBuilder, cancellationToken);
+        if (body == null)
+            return headersVt;
 
-        if (body != null)
+        if (headersVt.IsCompletedSuccessfully)
         {
-            await WriteBodyAsync(body, requestResponse.IsChunked,
+            var bodyVt = WriteBodyAsync(body, requestResponse.IsChunked,
                 requestResponse.HasTrailingHeaders ? requestResponse.TrailingHeaders : null, cancellationToken);
-            requestResponse.IsBodySent = true;
+            if (bodyVt.IsCompletedSuccessfully)
+            {
+                requestResponse.IsBodySent = true;
+                return default;
+            }
+
+            return MarkBodySentAfterWriteAsync(bodyVt, requestResponse);
         }
+
+        return WriteHeadersThenBodyAsync(headersVt, body, requestResponse, cancellationToken);
+    }
+
+    private static async ValueTask MarkBodySentAfterWriteAsync(ValueTask writeVt,
+        RequestResponseBase requestResponse)
+    {
+        await writeVt;
+        requestResponse.IsBodySent = true;
+    }
+
+    private async ValueTask WriteHeadersThenBodyAsync(ValueTask headersVt, byte[] body,
+        RequestResponseBase requestResponse, CancellationToken cancellationToken)
+    {
+        await headersVt;
+        await WriteBodyAsync(body, requestResponse.IsChunked,
+            requestResponse.HasTrailingHeaders ? requestResponse.TrailingHeaders : null, cancellationToken);
+        requestResponse.IsBodySent = true;
     }
 }

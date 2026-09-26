@@ -907,7 +907,7 @@ Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs.Count.get -> int
 Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs.DataEventArgs(byte[]! buffer, int offset, int count) -> void
 Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs.Offset.get -> int
 Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader
-Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.CopyBodyAsync(Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter! writer, bool isChunked, long contentLength, bool isRequest, Titanium.Web.Proxy.EventArguments.SessionEventArgs! args, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.CopyBodyAsync(Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter! writer, bool isChunked, long contentLength, bool isRequest, Titanium.Web.Proxy.EventArguments.SessionEventArgs! args, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.Read(byte[]! buffer, int offset, int count) -> int
 Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.ReadAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
 Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter

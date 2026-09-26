@@ -182,6 +182,20 @@ namespace Titanium.Web.Proxy.UnitTests
             Assert.AreEqual(200, status);
             Assert.AreSame("OK", description);
         }
+
+        [TestMethod]
+        public void ParseResponseLine_Bytes_InternsOkAndMatchesStringOverload()
+        {
+            Response.ParseResponseLine("HTTP/1.1 200 OK"u8, out var version, out var status, out var description);
+            Assert.AreEqual(HttpHeader.Version11, version);
+            Assert.AreEqual(200, status);
+            Assert.AreSame("OK", description);
+
+            Response.ParseResponseLine("HTTP/1.0 404 Not Found"u8, out version, out status, out description);
+            Assert.AreEqual(HttpHeader.Version10, version);
+            Assert.AreEqual(404, status);
+            Assert.AreEqual("Not Found", description);
+        }
     }
 
     internal static class HeaderCollectionTestExtensions

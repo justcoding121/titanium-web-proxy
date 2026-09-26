@@ -193,6 +193,32 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         [TestMethod]
+        public void ParseResponseLine_Bytes_MatchesStringOverload()
+        {
+            foreach (var line in new[]
+                     {
+                         "HTTP/1.0 404 Not Found", "HTTP/1.1 204", "HTTP/1.1 200 OK", "HTTP/9.9 299 Custom"
+                     })
+            {
+                Response.ParseResponseLine(line, out var v1, out var s1, out var d1);
+                Response.ParseResponseLine(System.Text.Encoding.ASCII.GetBytes(line), out var v2, out var s2,
+                    out var d2);
+                Assert.AreEqual(v1, v2, line);
+                Assert.AreEqual(s1, s2, line);
+                Assert.AreEqual(d1, d2, line);
+                if (d1 == "OK")
+                    Assert.AreSame(d1, d2, line);
+            }
+        }
+
+        [TestMethod]
+        public void ParseResponseLine_Bytes_WithoutStatusSeparator_ThrowsFormatException()
+        {
+            Assert.ThrowsExactly<FormatException>(() =>
+                Response.ParseResponseLine("HTTP/1.1"u8, out _, out _, out _));
+        }
+
+        [TestMethod]
         public void Request_OriginFormUrl_UsesHostAndScheme()
         {
             var request = new Request { RequestUriString = "/path?q=1", Host = "example.com" };

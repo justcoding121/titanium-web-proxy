@@ -183,4 +183,53 @@ public class Response : RequestResponseBase
             statusDescription = string.Empty;
         }
     }
+
+    /// <summary>
+    ///     Parse a status line from UTF-8/ASCII bytes without allocating the full line string.
+    /// </summary>
+    internal static void ParseResponseLine(ReadOnlySpan<byte> httpStatus, out Version version, out int statusCode,
+        out string statusDescription)
+    {
+        var firstSpace = httpStatus.IndexOf((byte)' ');
+        if (firstSpace == -1)
+            throw new FormatException("Invalid HTTP status line.");
+
+        version = HttpHeader.Version11;
+        if (IsHttp10(httpStatus.Slice(0, firstSpace)))
+            version = HttpHeader.Version10;
+
+        var rest = httpStatus.Slice(firstSpace + 1);
+        var secondSpace = rest.IndexOf((byte)' ');
+        if (secondSpace != -1)
+        {
+            if (!System.Buffers.Text.Utf8Parser.TryParse(rest.Slice(0, secondSpace), out statusCode, out _))
+                throw new FormatException("Invalid HTTP status line.");
+
+            var description = rest.Slice(secondSpace + 1);
+            statusDescription = description.SequenceEqual("OK"u8)
+                ? "OK"
+                : System.Text.Encoding.ASCII.GetString(description);
+        }
+        else
+        {
+            if (!System.Buffers.Text.Utf8Parser.TryParse(rest, out statusCode, out _))
+                throw new FormatException("Invalid HTTP status line.");
+
+            statusDescription = string.Empty;
+        }
+    }
+
+    private static bool IsHttp10(ReadOnlySpan<byte> httpVersion)
+    {
+        if (httpVersion.Length != 8) return false;
+        ReadOnlySpan<byte> expected = "HTTP/1.0"u8;
+        for (var i = 0; i < 8; i++)
+        {
+            var c = httpVersion[i];
+            if (c is >= (byte)'a' and <= (byte)'z') c = (byte)(c - 32);
+            if (c != expected[i]) return false;
+        }
+
+        return true;
+    }
 }

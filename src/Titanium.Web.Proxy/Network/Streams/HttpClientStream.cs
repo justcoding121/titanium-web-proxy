@@ -25,7 +25,7 @@ internal sealed class HttpClientStream : HttpStream
     /// <param name="response">The response object.</param>
     /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
     /// <returns>The Task.</returns>
-    internal async ValueTask WriteResponseAsync(Response response, CancellationToken cancellationToken = default)
+    internal ValueTask WriteResponseAsync(Response response, CancellationToken cancellationToken = default)
     {
         var headerBuilder = HeaderBuilder.Rent();
         try
@@ -42,7 +42,75 @@ internal sealed class HttpClientStream : HttpStream
                 response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
             }
 
-            await WriteAsync(response, headerBuilder, cancellationToken);
+            var writeVt = WriteAsync(response, headerBuilder, cancellationToken);
+            if (writeVt.IsCompletedSuccessfully)
+            {
+                HeaderBuilder.Return(headerBuilder);
+                return default;
+            }
+
+            return AwaitAndReturnHeaderBuilder(writeVt, headerBuilder);
+        }
+        catch
+        {
+            HeaderBuilder.Return(headerBuilder);
+            throw;
+        }
+    }
+
+    /// <summary>
+    ///     Writes response headers plus an already-materialized wire body in one coalesced write
+    ///     without assigning <see cref="RequestResponseBase.Body"/> (skips CompressBody).
+    /// </summary>
+    internal ValueTask WriteResponseWithWireBodyAsync(Response response, ReadOnlyMemory<byte> wireBody,
+        CancellationToken cancellationToken = default)
+    {
+        var headerBuilder = HeaderBuilder.Rent();
+        try
+        {
+            headerBuilder.WriteResponseLine(response.HttpVersion, response.StatusCode, response.StatusDescription);
+            headerBuilder.WriteHeaders(response.Headers);
+            if (!wireBody.IsEmpty)
+                headerBuilder.WriteRaw(wireBody.Span);
+
+            var writeVt = WriteHeadersAsync(headerBuilder, cancellationToken);
+            if (writeVt.IsCompletedSuccessfully)
+            {
+                response.IsBodySent = true;
+                response.IsBodyReceived = true;
+                HeaderBuilder.Return(headerBuilder);
+                return default;
+            }
+
+            return AwaitWireBodyWriteAsync(writeVt, headerBuilder, response);
+        }
+        catch
+        {
+            HeaderBuilder.Return(headerBuilder);
+            throw;
+        }
+    }
+
+    private static async ValueTask AwaitWireBodyWriteAsync(ValueTask writeVt, HeaderBuilder headerBuilder,
+        Response response)
+    {
+        try
+        {
+            await writeVt;
+            response.IsBodySent = true;
+            response.IsBodyReceived = true;
+        }
+        finally
+        {
+            HeaderBuilder.Return(headerBuilder);
+        }
+    }
+
+    private static async ValueTask AwaitAndReturnHeaderBuilder(ValueTask writeVt, HeaderBuilder headerBuilder)
+    {
+        try
+        {
+            await writeVt;
         }
         finally
         {

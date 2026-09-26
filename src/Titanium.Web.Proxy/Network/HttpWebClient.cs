@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
@@ -229,7 +230,7 @@ public class HttpWebClient
     ///     Prepare and send the http(s) request
     /// </summary>
     /// <returns></returns>
-    internal async Task SendRequest(bool enable100ContinueBehaviour, bool isTransparent, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+    internal ValueTask SendRequest(bool enable100ContinueBehaviour, bool isTransparent, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         OriginHttpVersionPolicy originHttpVersionPolicy, CancellationToken cancellationToken)
     {
         var upstreamProxy = Connection.UpStreamProxy;
@@ -294,6 +295,7 @@ public class HttpWebClient
 
         // prepare the request & headers
         var headerBuilder = HeaderBuilder.Rent();
+        ValueTask writeVt;
         try
         {
             if (url != null)
@@ -308,8 +310,33 @@ public class HttpWebClient
             headerBuilder.WriteHeaders(Request.Headers, !isTransparent, upstreamProxyUserName,
                 upstreamProxyPassword, Request.UpstreamCleartextHostOverride);
 
-            // write request headers
-            await serverStream.WriteHeadersAsync(headerBuilder, cancellationToken);
+            writeVt = serverStream.WriteHeadersAsync(headerBuilder, cancellationToken);
+        }
+        catch
+        {
+            HeaderBuilder.Return(headerBuilder);
+            throw;
+        }
+
+        if (writeVt.IsCompletedSuccessfully)
+        {
+            HeaderBuilder.Return(headerBuilder);
+            if (enable100ContinueBehaviour && Request.ExpectContinue)
+                return SendRequestExpectContinueAsync(cancellationToken);
+
+            return default;
+        }
+
+        return SendRequestAwaitWriteAsync(writeVt, headerBuilder, enable100ContinueBehaviour,
+            cancellationToken);
+    }
+
+    private async ValueTask SendRequestAwaitWriteAsync(ValueTask writeVt, HeaderBuilder headerBuilder,
+        bool enable100ContinueBehaviour, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await writeVt;
         }
         finally
         {
@@ -317,29 +344,40 @@ public class HttpWebClient
         }
 
         if (enable100ContinueBehaviour && Request.ExpectContinue)
-        {
-            // wait for expectation response from server
-            await ReceiveResponse(cancellationToken);
+            await SendRequestExpectContinueAsync(cancellationToken);
+    }
 
-            if (Response.StatusCode == (int)HttpStatusCode.Continue)
-                Request.ExpectationSucceeded = true;
-            else
-                Request.ExpectationFailed = true;
-        }
+    private async ValueTask SendRequestExpectContinueAsync(CancellationToken cancellationToken)
+    {
+        await ReceiveResponse(cancellationToken);
+
+        if (Response.StatusCode == (int)HttpStatusCode.Continue)
+            Request.ExpectationSucceeded = true;
+        else
+            Request.ExpectationFailed = true;
     }
 
     /// <summary>
     ///     Receive and parse the http response from server
     /// </summary>
     /// <returns></returns>
-    internal async Task ReceiveResponse(CancellationToken cancellationToken)
+    internal ValueTask ReceiveResponse(CancellationToken cancellationToken)
     {
         // return if this is already read
-        if (Response.StatusCode != 0) return;
+        if (Response.StatusCode != 0) return default;
 
         Response.RequestMethod = Request.Method;
 
-        var httpStatus = await Connection.Stream.ReadResponseStatus(cancellationToken);
+        var statusVt = Connection.Stream.ReadResponseStatus(cancellationToken);
+        if (!statusVt.IsCompletedSuccessfully)
+            return ReceiveResponseSlowAsync(statusVt, cancellationToken);
+
+        return ReceiveResponseAfterStatus(statusVt.Result, cancellationToken);
+    }
+
+    private ValueTask ReceiveResponseAfterStatus(ResponseStatusInfo? httpStatus,
+        CancellationToken cancellationToken)
+    {
         if (httpStatus == null)
         {
             // EOF before any response bytes: typically a stale pooled keep-alive connection.
@@ -356,8 +394,29 @@ public class HttpWebClient
         Response.StatusCode = httpStatus.Value.StatusCode;
         Response.StatusDescription = httpStatus.Value.Description;
 
-        // Read the response headers in to unique and non-unique header collections
-        await HeaderParser.ReadHeaders(Connection.Stream, Response.Headers, cancellationToken);
+        var headersVt = HeaderParser.TryReadHeadersAsync(Connection.Stream, Response.Headers, cancellationToken);
+        if (headersVt.IsCompletedSuccessfully)
+        {
+            if (!headersVt.Result)
+                cancellationToken.ThrowIfCancellationRequested();
+            return default;
+        }
+
+        return ReceiveResponseAwaitHeadersAsync(headersVt, cancellationToken);
+    }
+
+    private async ValueTask ReceiveResponseSlowAsync(ValueTask<ResponseStatusInfo?> statusVt,
+        CancellationToken cancellationToken)
+    {
+        var httpStatus = await statusVt;
+        await ReceiveResponseAfterStatus(httpStatus, cancellationToken);
+    }
+
+    private static async ValueTask ReceiveResponseAwaitHeadersAsync(ValueTask<bool> headersVt,
+        CancellationToken cancellationToken)
+    {
+        if (!await headersVt)
+            cancellationToken.ThrowIfCancellationRequested();
     }
 
     /// <summary>
