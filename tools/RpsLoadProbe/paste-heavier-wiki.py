@@ -12,9 +12,9 @@ RunIds = Union[int, List[int]]
 
 ROOT = Path("tools/RpsLoadProbe/results/gha-dl")
 WIKI = Path("wiki/Performance.md")
-HEAD = "8bfa7852"
+HEAD = "e781b009"
 RUNS = {
-    # Wiki-grade batch @ 8bfa7852 (2026-09-16); prior Linux H3 HAProxy/Envoy peers re-measured @ a495a9ae.
+    # Wiki-grade batch @ e781b009 (2026-09-26); prior @ 8bfa7852 (2026-09-16).
     "saturation": [34441539402, 34441541578],
     "bodies": [34557778171, 34557780393, 34441570199, 34441572485, 34441574457, 34441576323],
     "post": [34557782264, 34441591377, 34441593359],
@@ -238,10 +238,13 @@ def replace_table_at(text: str, start: int, new_table: str) -> str:
 
 
 def main() -> None:
+    global HEAD
     ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--head-sha", default=HEAD, help="Short commit SHA stamped into wiki intros")
     for mode in RUNS:
         ap.add_argument(f"--{mode}", help="Run id or comma-separated shard ids")
     args = ap.parse_args()
+    HEAD = (args.head_sha or HEAD)[:8]
 
     runs: Dict[str, RunIds] = dict(RUNS)
     for mode in RUNS:
@@ -472,7 +475,7 @@ def main() -> None:
         f"(serve-proxy → nginx master → workers); origin-direct samples the **origin** child. Product matrices below use matched `dotnet-httpclient` only (not bombardier).\n"
     )
     text = re.sub(
-        r"Calibration for the shared 4 vCPU loopback shape:.*?(?=\n\n\n```powershell\npwsh tools/RpsLoadProbe/run-rps\.ps1 -Mode compare-saturation)",
+        r"Calibration for the shared 4 vCPU loopback shape:.*?(?=\n\n#### Block A)",
         sat_intro.rstrip() + "\n",
         text,
         count=1,

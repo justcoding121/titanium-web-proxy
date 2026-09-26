@@ -20,6 +20,8 @@ param(
     [string[]] $TlsRunIds = @(),
     [string[]] $ArchRunIds = @(),
     [string[]] $GrpcRunIds = @(),
+    [string[]] $WsH1TlsRunIds = @(),
+    [string[]] $WsH2RunIds = @(),
     [switch] $PasteHeavier,
     [string] $HeadSha = '9a2b3a1e',
     [string] $GhaDlRoot = 'tools/RpsLoadProbe/results/gha-dl'
@@ -55,6 +57,8 @@ $LossyRunIds = Expand-Ids $LossyRunIds
 $TlsRunIds = Expand-Ids $TlsRunIds
 $ArchRunIds = Expand-Ids $ArchRunIds
 $GrpcRunIds = Expand-Ids $GrpcRunIds
+$WsH1TlsRunIds = Expand-Ids $WsH1TlsRunIds
+$WsH2RunIds = Expand-Ids $WsH2RunIds
 
 $primary = $ProductRunIds[0]
 $root = Join-Path $GhaDlRoot $primary
@@ -88,7 +92,16 @@ if ($PasteHeavier -or $SaturationRunIds.Count -or $BodiesRunIds.Count) {
     if ($LossyRunIds.Count) { $heavierArgs += @('--lossy', ($LossyRunIds -join ',')) }
     if ($TlsRunIds.Count) { $heavierArgs += @('--tls', ($TlsRunIds -join ',')) }
     if ($ArchRunIds.Count) { $heavierArgs += @('--arch', ($ArchRunIds -join ',')) }
+    $heavierArgs += @('--head-sha', $HeadSha)
     & $py tools/RpsLoadProbe/paste-heavier-wiki.py @heavierArgs
+}
+
+if ($GrpcRunIds.Count -or $WsH1TlsRunIds.Count -or $WsH2RunIds.Count) {
+    $grpcWsArgs = @('--apply', '--head-sha', $HeadSha, '--primary-run-id', $primary)
+    foreach ($id in $GrpcRunIds) { $grpcWsArgs += @('--grpc-root', $id) }
+    foreach ($id in $WsH1TlsRunIds) { $grpcWsArgs += @('--ws-h1tls-root', $id) }
+    foreach ($id in $WsH2RunIds) { $grpcWsArgs += @('--ws-h2-root', $id) }
+    & $py tools/RpsLoadProbe/paste-grpc-ws-wiki.py @grpcWsArgs
 }
 
 & $py -m pip install -q -r tools/RpsLoadProbe/requirements-charts.txt
