@@ -117,6 +117,62 @@ public class LiveSessionUpdateUxTests
     }
 
     [TestMethod]
+    public void SessionUpdated_BeforeBatchedCapture_DoesNotDuplicateGridRow()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-dup-race-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            // Long batch window so SessionUpdated can race ahead of SessionsBatchAdded.
+            var buffer = new SessionStreamBuffer(capacity: 100, batchWindowMs: 500, batchMax: 64);
+            var vm = new MainWindowViewModel(
+                buffer,
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception);
+
+            var snap = new SessionSnapshot
+            {
+                Id = 1,
+                Method = "CONNECT",
+                Url = "c.msn.com:443",
+                Host = "c.msn.com",
+                StatusCode = 200,
+                IsTunnel = true,
+            };
+
+            // Simulate CONNECT response update before the capture batch lands in the store.
+            RaiseSessionUpdated(interception, snap);
+            Assert.AreEqual(0, vm.Sessions.Count, "Update before capture must not invent a grid row");
+
+            buffer.Publish(snap);
+            var deadline = DateTime.UtcNow.AddSeconds(2);
+            while (vm.Sessions.Count == 0 && DateTime.UtcNow < deadline)
+            {
+                Thread.Sleep(20);
+            }
+
+            Assert.AreEqual(1, vm.Sessions.Count);
+            Assert.AreSame(snap, vm.Sessions[0]);
+
+            // A second update after capture must still not duplicate.
+            snap.BodySize = 28_000;
+            RaiseSessionUpdated(interception, snap);
+            Assert.AreEqual(1, vm.Sessions.Count);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
     public void SessionStore_ApplyOptions_EvictsImmediately()
     {
         var dir = Path.Combine(Path.GetTempPath(), "twp-apply-opt-" + Guid.NewGuid().ToString("N"));

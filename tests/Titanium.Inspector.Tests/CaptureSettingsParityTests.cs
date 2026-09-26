@@ -125,31 +125,33 @@ public class CaptureSettingsParityTests
     }
 
     [TestMethod]
-    public void DiskCache_PrunesByAge_OnWrite()
+    public void DiskCache_BudgetPrune_OnWrite()
     {
         var dir = Path.Combine(Path.GetTempPath(), "twp-age-prune-" + Guid.NewGuid().ToString("N"));
         try
         {
             Directory.CreateDirectory(dir);
-            var stale = Path.Combine(dir, "1.bin");
-            File.WriteAllBytes(stale, [1, 2, 3, 4]);
-            File.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddDays(-10));
-
-            using var cache = new SessionBodyDiskCache(dir, maxBytes: 64L * 1024 * 1024, maxAge: TimeSpan.FromDays(2));
-            Assert.IsFalse(File.Exists(stale), "Startup prune should remove aged files");
-
-            // Recreate stale after construction, then Write should prune it mid-run.
-            File.WriteAllBytes(stale, [9, 9, 9]);
-            File.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddDays(-10));
+            // One HAR (~1.2KB body + base64/_inspector overhead) fits; two exceed the budget.
+            using var cache = new SessionBodyDiskCache(dir, maxBytes: 8_000, maxAge: TimeSpan.FromDays(2));
 
             cache.Write(new SessionSnapshot
             {
                 Id = 2,
-                ResponseBodyBytes = [5, 6, 7],
+                Method = "GET",
+                Url = "https://example.com/2",
+                ResponseBodyBytes = new byte[1_200],
             });
+            Assert.IsTrue(File.Exists(cache.PathFor(2)));
 
-            Assert.IsFalse(File.Exists(stale), "Write should prune aged files");
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "2.bin")));
+            cache.Write(new SessionSnapshot
+            {
+                Id = 3,
+                Method = "GET",
+                Url = "https://example.com/3",
+                ResponseBodyBytes = new byte[1_200],
+            });
+            Assert.IsFalse(File.Exists(cache.PathFor(2)), "Write should prune oldest when over budget");
+            Assert.IsTrue(File.Exists(cache.PathFor(3)));
         }
         finally
         {
@@ -408,7 +410,7 @@ public class CaptureSettingsParityTests
             Assert.IsFalse(cache.TryLoad(new SessionSnapshot { Id = 99 }));
 
             cache.ClearAll();
-            Assert.AreEqual(0, Directory.EnumerateFiles(dir, "*.bin").Count());
+            Assert.AreEqual(0, Directory.EnumerateFiles(cache.RunDirectoryPath, "*.har").Count());
 
             cache.Delete(12345); // missing id — no throw
             cache.Dispose();
@@ -420,7 +422,8 @@ public class CaptureSettingsParityTests
             try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch { }
         }
     }
-[TestMethod]
+
+    [TestMethod]
     public void DiskCache_ClearAll_OnEmptyDirectory_IsNoOp()
     {
         var dir = Path.Combine(Path.GetTempPath(), "twp-disk-empty-" + Guid.NewGuid().ToString("N"));

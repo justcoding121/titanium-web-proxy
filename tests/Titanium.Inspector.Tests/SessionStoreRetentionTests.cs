@@ -1,5 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
+using Titanium.Inspector.ViewModels;
 
 namespace Titanium.Inspector.Tests;
 
@@ -15,11 +16,107 @@ public class SessionStoreRetentionTests
             Id = id,
             Method = "GET",
             Url = $"https://example.com/{id}",
+            StatusCode = 200,
+            RequestHeadersText = "Host: example.com\r\n",
+            ResponseHeadersText = "Content-Type: text/plain\r\n",
             RequestBodyBytes = bodyBytes > 0 ? new byte[bodyBytes] : null,
             ResponseBodyBytes = bodyBytes > 0 ? new byte[bodyBytes] : null,
             RequestBodyText = bodyBytes > 0 ? new string('a', Math.Min(bodyBytes, 64)) : null,
             ResponseBodyText = bodyBytes > 0 ? new string('b', Math.Min(bodyBytes, 64)) : null,
+            RequestBodyCapture = bodyBytes > 0 ? BodyCaptureState.Complete : BodyCaptureState.None,
+            ResponseBodyCapture = bodyBytes > 0 ? BodyCaptureState.Complete : BodyCaptureState.None,
         };
+
+    [TestMethod]
+    public async Task DoesNotArchive_UntilStatusCodeExists()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            using var store = new SessionStore(
+                new SessionStoreOptions
+                {
+                    MaxSessionsInMemory = 100,
+                    SpillBodiesToDisk = true,
+                    DiskCacheMaxBytes = 64L * 1024 * 1024,
+                },
+                dir);
+
+            var pending = new SessionSnapshot
+            {
+                Id = 1,
+                Method = "GET",
+                Url = "https://example.com/pending",
+                RequestBodyBytes = new byte[32],
+                RequestBodyText = "pending",
+                StatusCode = null,
+            };
+            store.Add(pending);
+            await store.FlushSpillAsync();
+            Assert.IsFalse(pending.BodiesOnDisk);
+            Assert.IsFalse(HarExists(dir, 1));
+
+            pending.StatusCode = 200;
+            pending.ResponseBodyBytes = new byte[16];
+            pending.ResponseBodyText = "ok";
+            pending.ResponseBodyCapture = BodyCaptureState.Complete;
+            store.NotifyUpdated(pending);
+            await store.FlushSpillAsync();
+
+            Assert.IsTrue(pending.BodiesOnDisk);
+            Assert.IsTrue(HarExists(dir, 1));
+            Assert.IsNull(pending.RequestBodyBytes, "Bodies unload after archive");
+            var har = File.ReadAllText(FindHar(dir, 1)!);
+            StringAssert.Contains(har, "\"log\"");
+            StringAssert.Contains(har, "\"version\":\"1.2\"");
+            StringAssert.Contains(har, "\"_inspector\"");
+            StringAssert.Contains(har, "\"status\":200");
+            StringAssert.Contains(har, "pending");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [TestMethod]
+    public async Task MemoryEviction_KeepsExistingSpill_WithoutSyncRewrite()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            using var store = new SessionStore(
+                new SessionStoreOptions
+                {
+                    MaxSessionsInMemory = 1,
+                    SpillBodiesToDisk = true,
+                    DiskCacheMaxBytes = 64L * 1024 * 1024,
+                },
+                dir);
+
+            var first = MakeSession(1, 64);
+            store.Add(first);
+            await store.FlushSpillAsync();
+            Assert.IsTrue(HarExists(dir, 1));
+            // Metadata changes after spill — eviction must not block on TryLoad+Write.
+            first.ResponseHeadersText = "X-Final: 1\r\n";
+            first.DurationMs = 42;
+
+            store.Add(MakeSession(2, 64));
+            await store.FlushSpillAsync();
+
+            Assert.IsNull(store.TryGet(1));
+            Assert.IsTrue(HarExists(dir, 1), "Spill file survives memory eviction");
+            var har = File.ReadAllText(FindHar(dir, 1)!);
+            StringAssert.Contains(har, "example.com");
+            // Pre-eviction header edits are not force-rewritten (avoids UI-thread disk I/O).
+            Assert.IsFalse(har.Contains("X-Final", StringComparison.Ordinal));
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
 
     [TestMethod]
     public void MaxSessions_EvictsOldest()
@@ -31,9 +128,7 @@ public class SessionStoreRetentionTests
                 new SessionStoreOptions
                 {
                     MaxSessionsInMemory = 3,
-                    HotBodySessions = 3,
                     SpillBodiesToDisk = false,
-                    MaxCaptureBytesInMemory = long.MaxValue,
                 },
                 dir);
 
@@ -59,7 +154,7 @@ public class SessionStoreRetentionTests
     }
 
     [TestMethod]
-    public async Task HotWindow_SpillsBodies_AndReloadRestores()
+    public async Task FinishedSession_SpillsImmediately_AndReloadRestores()
     {
         var dir = TempCacheDir();
         try
@@ -68,31 +163,32 @@ public class SessionStoreRetentionTests
                 new SessionStoreOptions
                 {
                     MaxSessionsInMemory = 100,
-                    HotBodySessions = 2,
                     SpillBodiesToDisk = true,
-                    MaxCaptureBytesInMemory = long.MaxValue,
                     DiskCacheMaxBytes = 64L * 1024 * 1024,
-                    DiskCacheMaxAgeDays = 1,
                 },
                 dir);
 
             var s1 = MakeSession(1, 200);
             var s2 = MakeSession(2, 200);
-            var s3 = MakeSession(3, 200);
             store.Add(s1);
             store.Add(s2);
-            store.Add(s3);
 
-            Assert.IsTrue(s1.BodiesOnDisk, "Oldest should spill past hot window");
+            Assert.IsTrue(s1.BodiesOnDisk, "Finished session spills immediately");
             Assert.IsNull(s1.RequestBodyBytes);
-            Assert.IsFalse(s3.BodiesOnDisk, "Newest stays hot");
-            Assert.IsNotNull(s3.ResponseBodyBytes);
+            Assert.IsTrue(s2.BodiesOnDisk, "Newest finished session also spills");
+            Assert.IsNull(s2.ResponseBodyBytes);
 
             await store.FlushSpillAsync();
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "1.bin")));
+            Assert.IsTrue(HarExists(dir, 1));
+            Assert.IsTrue(HarExists(dir, 2));
+
+            Assert.IsTrue(store.Options.SpillBodiesToDisk);
+            Assert.IsTrue(
+                File.ReadAllText(FindHar(dir, 1)!).Contains("example.com", StringComparison.Ordinal),
+                "Disk archive must include session headers/URL");
 
             await store.EnsureBodiesLoadedAsync(s1, CancellationToken.None);
-            Assert.IsFalse(s1.BodiesOnDisk);
+            Assert.IsTrue(s1.BodiesOnDisk, "File remains; BodiesOnDisk stays true");
             Assert.IsNotNull(s1.RequestBodyBytes);
             Assert.AreEqual(200, s1.RequestBodyBytes!.Length);
             Assert.AreEqual(200, s1.ResponseBodyBytes!.Length);
@@ -105,7 +201,7 @@ public class SessionStoreRetentionTests
     }
 
     [TestMethod]
-    public void ByteBudget_ForcesSpillThenEvict()
+    public async Task PinnedSession_KeepsBodiesInRam_UnloadOnDeselect()
     {
         var dir = TempCacheDir();
         try
@@ -114,26 +210,101 @@ public class SessionStoreRetentionTests
                 new SessionStoreOptions
                 {
                     MaxSessionsInMemory = 100,
-                    HotBodySessions = 100,
                     SpillBodiesToDisk = true,
-                    // Each session ~ 200+200 bytes + text; keep budget tiny so spill then evict.
-                    MaxCaptureBytesInMemory = 50,
                     DiskCacheMaxBytes = 64L * 1024 * 1024,
-                    DiskCacheMaxAgeDays = 1,
                 },
                 dir);
 
-            var removed = new List<SessionSnapshot>();
-            store.SessionsRemoved += list => removed.AddRange(list);
+            store.PinnedSessionId = 1;
+            var s1 = MakeSession(1, 200);
+            store.Add(s1);
+            Assert.IsTrue(s1.BodiesOnDisk);
+            Assert.IsNotNull(s1.RequestBodyBytes, "Pinned session keeps RAM bodies after spill queue");
 
-            store.Add(MakeSession(1, 200));
-            store.Add(MakeSession(2, 200));
-            store.Add(MakeSession(3, 200));
+            await store.FlushSpillAsync();
+            Assert.IsTrue(HarExists(dir, 1));
 
-            // Bodies spilled so in-memory budget drops; if still over, oldest rows evict.
-            Assert.IsTrue(store.Count <= 3);
-            Assert.IsTrue(store.InMemoryBodyBytes <= 50 || store.SpilledCount > 0 || removed.Count > 0);
-            Assert.IsTrue(store.SpilledCount > 0 || removed.Count > 0);
+            store.PinnedSessionId = null;
+            Assert.IsNull(s1.RequestBodyBytes, "Deselect unloads RAM bodies when file exists");
+            Assert.IsTrue(s1.BodiesOnDisk);
+
+            await store.EnsureBodiesLoadedAsync(s1, CancellationToken.None);
+            Assert.IsNotNull(s1.RequestBodyBytes);
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [TestMethod]
+    public async Task Deselect_UnloadsUpstreamAndProtobuf_ReloadsFromDisk()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            using var store = new SessionStore(
+                new SessionStoreOptions
+                {
+                    MaxSessionsInMemory = 100,
+                    SpillBodiesToDisk = true,
+                    DiskCacheMaxBytes = 64L * 1024 * 1024,
+                },
+                dir);
+
+            store.PinnedSessionId = 1;
+            var s1 = MakeSession(1, 200);
+            s1.UpstreamRequestBodyBytes = [9, 9, 9, 9];
+            s1.ProtobufDecodedText = "field 1: hello";
+            s1.GrpcFrames = [new GrpcFrameSnapshot { Length = 4, HexPreview = "09090909" }];
+            store.Add(s1);
+            await store.FlushSpillAsync();
+
+            store.PinnedSessionId = null;
+            Assert.IsNull(s1.RequestBodyBytes);
+            Assert.IsNull(s1.UpstreamRequestBodyBytes);
+            Assert.IsNull(s1.ProtobufDecodedText);
+            Assert.IsNull(s1.GrpcFrames);
+
+            await store.EnsureBodiesLoadedAsync(s1, CancellationToken.None);
+            Assert.IsNotNull(s1.RequestBodyBytes);
+            CollectionAssert.AreEqual(new byte[] { 9, 9, 9, 9 }, s1.UpstreamRequestBodyBytes);
+            Assert.AreEqual("field 1: hello", s1.ProtobufDecodedText);
+            Assert.IsNotNull(s1.GrpcFrames);
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [TestMethod]
+    public void InFlightSession_DoesNotSpill()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            using var store = new SessionStore(
+                new SessionStoreOptions
+                {
+                    MaxSessionsInMemory = 100,
+                    SpillBodiesToDisk = true,
+                    DiskCacheMaxBytes = 64L * 1024 * 1024,
+                },
+                dir);
+
+            var s = MakeSession(1, 200);
+            s.ResponseBodyStreamOpen = true;
+            s.ResponseBodyCapture = BodyCaptureState.Streaming;
+            store.Add(s);
+            Assert.IsFalse(s.BodiesOnDisk);
+            Assert.IsNotNull(s.ResponseBodyBytes);
+
+            s.ResponseBodyStreamOpen = false;
+            s.ResponseBodyCapture = BodyCaptureState.Complete;
+            store.NotifyUpdated(s);
+            Assert.IsTrue(s.BodiesOnDisk);
+            Assert.IsNull(s.ResponseBodyBytes);
         }
         finally
         {
@@ -151,11 +322,8 @@ public class SessionStoreRetentionTests
                 new SessionStoreOptions
                 {
                     MaxSessionsInMemory = 100,
-                    HotBodySessions = 1,
                     SpillBodiesToDisk = true,
-                    MaxCaptureBytesInMemory = long.MaxValue,
                     DiskCacheMaxBytes = 64L * 1024 * 1024,
-                    DiskCacheMaxAgeDays = 1,
                 },
                 dir);
 
@@ -163,12 +331,12 @@ public class SessionStoreRetentionTests
             store.Add(MakeSession(11, 128));
             Assert.IsTrue(store.TryGet(10)!.BodiesOnDisk);
             await store.FlushSpillAsync();
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "10.bin")));
+            Assert.IsTrue(HarExists(dir, 10));
 
             store.Clear();
             Assert.AreEqual(0, store.Count);
-            Assert.IsFalse(File.Exists(Path.Combine(dir, "10.bin")));
-            Assert.IsFalse(Directory.EnumerateFiles(dir, "*.bin").Any());
+            Assert.IsFalse(HarExists(dir, 10));
+            Assert.IsFalse(Directory.EnumerateFiles(dir, "*.har", SearchOption.AllDirectories).Any());
         }
         finally
         {
@@ -186,9 +354,7 @@ public class SessionStoreRetentionTests
                 new SessionStoreOptions
                 {
                     MaxSessionsInMemory = 2,
-                    HotBodySessions = 2,
                     SpillBodiesToDisk = false,
-                    MaxCaptureBytesInMemory = long.MaxValue,
                 },
                 dir);
 
@@ -209,6 +375,78 @@ public class SessionStoreRetentionTests
     }
 
     [TestMethod]
+    public async Task Eviction_LeavesSessionFileOnDisk()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            using var store = new SessionStore(
+                new SessionStoreOptions
+                {
+                    MaxSessionsInMemory = 2,
+                    SpillBodiesToDisk = true,
+                    DiskCacheMaxBytes = 64L * 1024 * 1024,
+                },
+                dir);
+
+            store.Add(MakeSession(1, 64));
+            store.Add(MakeSession(2, 64));
+            await store.FlushSpillAsync();
+            Assert.IsTrue(HarExists(dir, 1));
+
+            store.Add(MakeSession(3, 64));
+            Assert.IsNull(store.TryGet(1), "Memory eviction drops the row");
+            Assert.IsTrue(HarExists(dir, 1), "Disk archive stays until disk budget prunes");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [TestMethod]
+    public async Task DiskBudget_DeletesOldestSessionFiles_IndependentlyOfList()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            using var store = new SessionStore(
+                new SessionStoreOptions
+                {
+                    MaxSessionsInMemory = 100,
+                    SpillBodiesToDisk = true,
+                    DiskCacheMaxBytes = 64L * 1024 * 1024,
+                },
+                dir);
+
+            store.Add(MakeSession(1, 400));
+            await store.FlushSpillAsync();
+            var path1 = FindHar(dir, 1)!;
+            Assert.IsTrue(File.Exists(path1));
+            var size1 = new FileInfo(path1).Length;
+
+            // Cap just above one file so the next archive forces a prune — independent of list size.
+            store.ApplyOptions(new SessionStoreOptions
+            {
+                MaxSessionsInMemory = 100,
+                SpillBodiesToDisk = true,
+                DiskCacheMaxBytes = size1 + 256,
+            });
+
+            store.Add(MakeSession(2, 400));
+            await store.FlushSpillAsync();
+
+            Assert.AreEqual(2, store.Count, "Disk prune must not remove list rows");
+            Assert.IsFalse(File.Exists(path1), "Oldest disk file pruned by size budget");
+            Assert.IsTrue(HarExists(dir, 2));
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [TestMethod]
     public async Task BufferBurst_ThenStoreEviction_DoesNotThrow()
     {
         var dir = TempCacheDir();
@@ -218,11 +456,8 @@ public class SessionStoreRetentionTests
                 new SessionStoreOptions
                 {
                     MaxSessionsInMemory = 5,
-                    HotBodySessions = 2,
                     SpillBodiesToDisk = true,
-                    MaxCaptureBytesInMemory = long.MaxValue,
                     DiskCacheMaxBytes = 64L * 1024 * 1024,
-                    DiskCacheMaxAgeDays = 1,
                 },
                 dir);
             var buffer = new SessionStreamBuffer(registry, capacity: 100);
@@ -279,7 +514,8 @@ public class SessionStoreRetentionTests
 
             var opts = SessionStoreOptions.FromSettings(loaded);
             Assert.AreEqual(1234, opts.MaxSessionsInMemory);
-            Assert.IsFalse(opts.SpillBodiesToDisk);
+            Assert.AreEqual(1_000_000, opts.DiskCacheMaxBytes);
+            Assert.IsTrue(opts.SpillBodiesToDisk, "FromSettings always enables spill");
         }
         finally
         {
@@ -300,29 +536,22 @@ public class SessionStoreRetentionTests
                 new SessionStoreOptions
                 {
                     MaxSessionsInMemory = 100,
-                    HotBodySessions = 1,
                     SpillBodiesToDisk = true,
-                    MaxCaptureBytesInMemory = long.MaxValue,
                     DiskCacheMaxBytes = 64L * 1024 * 1024,
-                    DiskCacheMaxAgeDays = 1,
                 },
                 dir);
 
-            var hot = MakeSession(1, 80);
             var spilled = MakeSession(2, 80);
-            store.Add(hot);
             store.Add(spilled);
-            store.Add(MakeSession(3, 80));
-            Assert.IsTrue(hot.BodiesOnDisk || spilled.BodiesOnDisk);
+            Assert.IsTrue(spilled.BodiesOnDisk);
 
             using var cts = new CancellationTokenSource();
             cts.Cancel();
 
-            var onDisk = hot.BodiesOnDisk ? hot : spilled;
             await Assert.ThrowsExactlyAsync<OperationCanceledException>(
-                () => store.EnsureBodiesLoadedAsync(onDisk, cts.Token));
+                () => store.EnsureBodiesLoadedAsync(spilled, cts.Token));
             await Assert.ThrowsExactlyAsync<OperationCanceledException>(
-                () => store.EnsureBodiesLoadedAsync(new[] { hot, spilled }, cts.Token));
+                () => store.EnsureBodiesLoadedAsync(new[] { spilled }, cts.Token));
 
             await store.EnsureBodiesLoadedAsync(new[] { MakeSession(9, 0) }, CancellationToken.None);
         }
@@ -340,8 +569,6 @@ public class SessionStoreRetentionTests
             {
                 SpillBodiesToDisk = false,
                 MaxSessionsInMemory = 10,
-                HotBodySessions = 10,
-                MaxCaptureBytesInMemory = long.MaxValue,
             });
 
         var snap = MakeSession(1, 32);
@@ -354,6 +581,109 @@ public class SessionStoreRetentionTests
         Assert.IsFalse(snap.BodiesOnDisk);
         await store.EnsureBodiesLoadedAsync(new[] { snap }, CancellationToken.None);
     }
+
+    [TestMethod]
+    public async Task TryMatchBodySearch_ReadsSpilledTextWithoutHydrating()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            using var store = new SessionStore(
+                new SessionStoreOptions
+                {
+                    MaxSessionsInMemory = 100,
+                    SpillBodiesToDisk = true,
+                    DiskCacheMaxBytes = 64L * 1024 * 1024,
+                },
+                dir);
+
+            var s = MakeSession(1, 64);
+            s.ResponseBodyText = "find-me-secret";
+            store.Add(s);
+            await store.FlushSpillAsync();
+            Assert.IsNull(s.ResponseBodyText);
+
+            Assert.IsTrue(store.TryMatchBodySearch(s, "find-me-secret"));
+            Assert.IsNull(s.ResponseBodyText, "Search must not leave text on the snapshot");
+            Assert.IsFalse(store.TryMatchBodySearch(s, "nope"));
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [TestMethod]
+    public async Task DiskBudget_MarksBodiesMissing_AndEnsureLoadIsFast()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            using var store = new SessionStore(
+                new SessionStoreOptions
+                {
+                    MaxSessionsInMemory = 100,
+                    SpillBodiesToDisk = true,
+                    DiskCacheMaxBytes = 64L * 1024 * 1024,
+                },
+                dir);
+
+            store.Add(MakeSession(1, 400));
+            await store.FlushSpillAsync();
+            var path1 = FindHar(dir, 1)!;
+            Assert.IsTrue(File.Exists(path1));
+            var size1 = new FileInfo(path1).Length;
+
+            store.ApplyOptions(new SessionStoreOptions
+            {
+                MaxSessionsInMemory = 100,
+                SpillBodiesToDisk = true,
+                DiskCacheMaxBytes = size1 + 256,
+            });
+
+            store.Add(MakeSession(2, 400));
+            await store.FlushSpillAsync();
+            Assert.IsFalse(File.Exists(path1));
+
+            var s1 = store.TryGet(1)!;
+            Assert.IsTrue(s1.BodiesMissingFromDisk, "Prune should mark the live session");
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            await store.EnsureBodiesLoadedAsync(s1, CancellationToken.None);
+            sw.Stop();
+            Assert.IsTrue(sw.ElapsedMilliseconds < 200, "Missing body must not poll for ~1s");
+            Assert.IsNull(s1.RequestBodyBytes);
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [TestMethod]
+    public void BuildBodyCaptureHint_ExplainsDiskPrunedBody()
+    {
+        var hint = typeof(MainWindowViewModel).GetMethod(
+            "BuildBodyCaptureHint",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var snap = new SessionSnapshot
+        {
+            BodiesOnDisk = true,
+            BodiesMissingFromDisk = true,
+            ResponseBodyCapture = BodyCaptureState.Complete,
+            BodySize = 12_000,
+        };
+        var text = (string)hint.Invoke(null, [snap])!;
+        StringAssert.Contains(text, "disk cache limit");
+        StringAssert.Contains(text, "Headers in the list are still available");
+    }
+
+    private static string? FindHar(string root, long id) =>
+        Directory.Exists(root)
+            ? Directory.EnumerateFiles(root, id.ToString("D") + ".har", SearchOption.AllDirectories).FirstOrDefault()
+            : null;
+
+    private static bool HarExists(string root, long id) => FindHar(root, id) is not null;
 
     private static void TryDeleteDir(string dir)
     {

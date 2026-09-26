@@ -338,15 +338,24 @@ namespace Titanium.Web.Proxy.Http2
                     return false;
                 }
 
-                if (isMainHeaders && connectionState.Streams.Count > remoteSettings.MaxConcurrentStreams)
+                var enforcedMaxConcurrent = Volatile.Read(
+                    ref connectionState.EnforcedMaxConcurrentStreamsTowardClient);
+                if (isMainHeaders && connectionState.Streams.Count > enforcedMaxConcurrent)
                 {
                     // Streams.Count already includes this stream (registered by the caller before
                     // decoding, so HPACK state stays in sync regardless of admission) - so ">" (not
-                    // ">=") here correctly means "admitting this one would exceed the limit the server
-                    // (this stream's ultimate destination) advertised it will tolerate concurrently"
-                    // (RFC 7540 ?6.5.2 SETTINGS_MAX_CONCURRENT_STREAMS).
-                    ReportException(logger, new ProxyHttpException(
-                        "HTTP/2 stream refused: maximum concurrent streams exceeded.", null, sessionArgs));
+                    // ">=") here correctly means "admitting this one would exceed the limit we
+                    // advertised and the client has ACKed" (RFC 7540 §6.5.2 / RFC 9113 SETTINGS ACK).
+                    // Capacity refuse is expected under burst / load-shed — Debug, not Error.
+                    if (logger.IsEnabled(LogLevel.Debug))
+                    {
+                        ProxyDiagnostics.ReportBenign(logger,
+                            "HTTP/2 stream refused: maximum concurrent streams exceeded.",
+                            new ProxyHttpException(
+                                "HTTP/2 stream refused: maximum concurrent streams exceeded.",
+                                null, sessionArgs));
+                    }
+
                     removeAndFinalizeStream(hbStreamId);
                     await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
                         Http2ErrorCode.RefusedStream, input));

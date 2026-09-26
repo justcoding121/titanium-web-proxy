@@ -152,7 +152,7 @@ abort
 |-------|--------|
 | **OS bypass** | Traffic never reaches Inspector (when **System proxy** is on) |
 | **Not decrypted hosts** | Session stays visible but HTTPS stays opaque |
-| **Automatically not decrypt on decrypt failure** | Session-only list of hosts learned after origin TLS fails under decrypt, or after the origin server returns **403/429**. Document navigations auto-retry via meta-refresh onto an opaque CONNECT. **On by default.** Cap + TTL; cleared on restart unless you **Add to not decrypted hosts**. |
+| **Automatically not decrypt on decrypt failure** | Session-only list of hosts learned after origin TLS fails under decrypt, or after the origin server returns **403/429**. Document navigations auto-retry via meta-refresh onto an opaque CONNECT. **On by default.** Cap + TTL; cleared on restart unless you **Promote to not decrypted hosts**. |
 
 Factory seeds keep common identity / SSO hosts on OS bypass so sign-in keeps working. Right-click a session → **Exclude host…** to stop reading that host's HTTPS (it still appears in the list). Opaque sessions show why they stayed encrypted (including **auto-tunneled after decrypt failure**). Search: `is:opaque`, `opaque-reason:learned`. **Chrome QUIC** may bypass the proxy entirely — not fixable via host lists.
 

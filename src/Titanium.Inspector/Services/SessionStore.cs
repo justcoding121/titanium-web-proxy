@@ -4,7 +4,9 @@ using System.Threading.Channels;
 namespace Titanium.Inspector.Services;
 
 /// <summary>
-/// Single source of truth for captured sessions: ordered list, byte budget, body spill, and hard eviction.
+/// Captured sessions: in-memory list (headers/metadata; bodies unloaded), HAR archive on disk
+/// (per-run subfolders under the cache root), and two independent limits — MaxSessionsInMemory
+/// (drop rows from the list) and DiskCacheMaxBytes (delete oldest HAR files across runs).
 /// </summary>
 public sealed class SessionStore : IDisposable
 {
@@ -12,25 +14,25 @@ public sealed class SessionStore : IDisposable
     private readonly SessionStoreOptions _options;
     private readonly SessionBodyDiskCache? _disk;
     private readonly Dictionary<long, SessionSnapshot> _byId = new();
-    private readonly Dictionary<long, long> _bodyBytes = new();
     private readonly Channel<SessionSnapshot>? _spillChannel;
     private readonly CancellationTokenSource? _spillCts;
     private readonly Task? _spillLoop;
     private int _pendingSpills;
     private long _inMemoryBodyBytes;
+    private int _spilledCount;
     private long? _pinnedSessionId;
     private bool _disposed;
 
     public SessionStore(SessionStoreOptions? options = null, string? cacheDirectory = null)
     {
         _options = options ?? new SessionStoreOptions();
+        // Finished bodies always spill when enabled. FromSettings forces SpillBodiesToDisk=true;
+        // unit tests may opt out with SpillBodiesToDisk=false (no LocalAppData writers).
         if (_options.SpillBodiesToDisk)
         {
-            var dir = cacheDirectory ?? SessionBodyDiskCache.GetDefaultDirectory();
-            _disk = new SessionBodyDiskCache(
-                dir,
-                _options.DiskCacheMaxBytes,
-                TimeSpan.FromDays(_options.DiskCacheMaxAgeDays));
+            var root = cacheDirectory ?? SessionBodyDiskCache.GetDefaultDirectory();
+            _disk = new SessionBodyDiskCache(root, _options.DiskCacheMaxBytes, TimeSpan.FromDays(7));
+            // Prior runs stay under other timestamped folders for Import HAR; this run writes here only.
             _spillChannel = Channel.CreateUnbounded<SessionSnapshot>(new UnboundedChannelOptions
             {
                 SingleReader = true,
@@ -45,15 +47,16 @@ public sealed class SessionStore : IDisposable
 
     public ObservableCollection<SessionSnapshot> Sessions { get; }
 
-    /// <summary>Resolved body spill directory when disk spill is enabled; otherwise null.</summary>
-    public string? DiskCacheDirectoryPath => _disk?.DirectoryPath;
+    /// <summary>Cache root (all run folders) when disk spill is enabled; otherwise null.</summary>
+    public string? DiskCacheDirectoryPath => _disk?.RootDirectoryPath;
+
+    /// <summary>This process run's HAR folder when disk spill is enabled; otherwise null.</summary>
+    public string? DiskCacheRunDirectoryPath => _disk?.RunDirectoryPath;
 
     public SessionStoreOptions Options => _options;
 
     /// <summary>
     /// Applies retention knobs in-process and enforces limits immediately (no Inspector restart).
-    /// Disk spill enable/disable that requires a different spill loop is best-effort: toggling
-    /// spill off leaves existing spilled bodies loadable until restart when a disk cache was never started.
     /// </summary>
     public void ApplyOptions(SessionStoreOptions options)
     {
@@ -62,20 +65,13 @@ public sealed class SessionStore : IDisposable
         lock (_gate)
         {
             _options.MaxSessionsInMemory = options.MaxSessionsInMemory > 0 ? options.MaxSessionsInMemory : 10_000;
-            _options.MaxCaptureBytesInMemory = options.MaxCaptureBytesInMemory > 0
-                ? options.MaxCaptureBytesInMemory
-                : 512L * 1024 * 1024;
-            _options.HotBodySessions = options.HotBodySessions > 0 ? options.HotBodySessions : 2_000;
             _options.DiskCacheMaxBytes = options.DiskCacheMaxBytes > 0
                 ? options.DiskCacheMaxBytes
                 : 2L * 1024 * 1024 * 1024;
-            _options.DiskCacheMaxAgeDays = options.DiskCacheMaxAgeDays > 0 ? options.DiskCacheMaxAgeDays : 7;
-            // SpillBodiesToDisk cannot flip on mid-flight without a disk cache.
-            // Turning it off stops new spills while the existing cache stays readable.
             if (_disk is not null)
             {
-                _options.SpillBodiesToDisk = options.SpillBodiesToDisk;
-                _disk.UpdateLimits(_options.DiskCacheMaxBytes, TimeSpan.FromDays(_options.DiskCacheMaxAgeDays));
+                var pruned = _disk.UpdateLimits(_options.DiskCacheMaxBytes, TimeSpan.FromDays(7));
+                MarkBodiesMissingLocked(pruned);
             }
 
             EnforceLimitsLocked(ref removed);
@@ -104,16 +100,7 @@ public sealed class SessionStore : IDisposable
         {
             lock (_gate)
             {
-                var n = 0;
-                foreach (var s in _byId.Values)
-                {
-                    if (s.BodiesOnDisk)
-                    {
-                        n++;
-                    }
-                }
-
-                return n;
+                return _spilledCount;
             }
         }
     }
@@ -125,6 +112,18 @@ public sealed class SessionStore : IDisposable
             lock (_gate)
             {
                 return _inMemoryBodyBytes;
+            }
+        }
+    }
+
+    /// <summary>Oldest retained session start time (list is oldest-first). Null when empty.</summary>
+    public DateTimeOffset? OldestStartedUtc
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return Sessions.Count > 0 ? Sessions[0].StartedUtc : null;
             }
         }
     }
@@ -141,10 +140,30 @@ public sealed class SessionStore : IDisposable
         }
         set
         {
+            SessionSnapshot? previous = null;
+            SessionSnapshot? next = null;
             lock (_gate)
             {
+                var prevId = _pinnedSessionId;
                 _pinnedSessionId = value;
+                if (prevId is long oldId && oldId != value && _byId.TryGetValue(oldId, out previous))
+                {
+                    // Drop RAM bodies for the previous selection when the file already exists.
+                    if (previous.BodiesOnDisk)
+                    {
+                        ClearBodyFields(previous);
+                        RecalcInMemoryBodyBytesLocked();
+                    }
+                }
+
+                if (value is long newId && _byId.TryGetValue(newId, out next))
+                {
+                    // no-op here; UI loads via EnsureBodiesLoadedAsync
+                }
             }
+
+            _ = previous;
+            _ = next;
         }
     }
 
@@ -166,7 +185,7 @@ public sealed class SessionStore : IDisposable
         {
             if (_byId.ContainsKey(snapshot.Id))
             {
-                TouchBodyBudget(snapshot);
+                MaybeSpillFinishedLocked(snapshot);
                 EnforceLimitsLocked(ref removed);
             }
             else
@@ -174,7 +193,7 @@ public sealed class SessionStore : IDisposable
                 isNew = true;
                 _byId[snapshot.Id] = snapshot;
                 Sessions.Add(snapshot);
-                TouchBodyBudget(snapshot);
+                MaybeSpillFinishedLocked(snapshot);
                 EnforceLimitsLocked(ref removed);
             }
         }
@@ -214,7 +233,7 @@ public sealed class SessionStore : IDisposable
                 return;
             }
 
-            TouchBodyBudget(snapshot);
+            MaybeSpillFinishedLocked(snapshot);
             EnforceLimitsLocked(ref removed);
         }
 
@@ -253,8 +272,8 @@ public sealed class SessionStore : IDisposable
         {
             removed = _byId.Values.ToList();
             _byId.Clear();
-            _bodyBytes.Clear();
             _inMemoryBodyBytes = 0;
+            _spilledCount = 0;
             Sessions.Clear();
         }
 
@@ -268,31 +287,67 @@ public sealed class SessionStore : IDisposable
     public async Task EnsureBodiesLoadedAsync(SessionSnapshot snapshot, CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (!snapshot.BodiesOnDisk || _disk is null)
+        if (_disk is null)
         {
             return;
         }
 
-        for (var attempt = 0; attempt < 40; attempt++)
+        // Already hydrated in RAM (selected or in-flight).
+        if (!snapshot.BodiesOnDisk || HasInMemoryBodies(snapshot))
+        {
+            return;
+        }
+
+        if (snapshot.BodiesMissingFromDisk)
+        {
+            return;
+        }
+
+        // Fast path: file already gone and nothing pending — do not wait ~1s.
+        if (!_disk.FileExists(snapshot.Id) && Volatile.Read(ref _pendingSpills) == 0)
+        {
+            snapshot.BodiesMissingFromDisk = true;
+            return;
+        }
+
+        // Under heavy capture, the spill writer may still be draining thousands of HARs.
+        // Keep waiting while work is queued; only mark missing once the channel is idle
+        // and the file is still absent (bounded by ct / ~2 minutes).
+        var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(2);
+        while (DateTime.UtcNow < deadline)
         {
             ct.ThrowIfCancellationRequested();
             lock (_gate)
             {
-                if (!snapshot.BodiesOnDisk)
+                if (HasInMemoryBodies(snapshot))
                 {
+                    snapshot.BodiesMissingFromDisk = false;
                     return;
                 }
 
                 if (_disk.TryLoad(snapshot))
                 {
-                    snapshot.BodiesOnDisk = false;
-                    TouchBodyBudget(snapshot);
+                    // Keep BodiesOnDisk=true so deselect can unload without rewriting the file.
+                    snapshot.BodiesMissingFromDisk = false;
+                    RecalcInMemoryBodyBytesLocked();
                     return;
                 }
             }
 
-            // Spill writer may still be flushing the file.
+            if (Volatile.Read(ref _pendingSpills) == 0 && !_disk.FileExists(snapshot.Id))
+            {
+                snapshot.BodiesMissingFromDisk = true;
+                return;
+            }
+
             await Task.Delay(25, ct).ConfigureAwait(false);
+        }
+
+        if (!HasInMemoryBodies(snapshot) &&
+            Volatile.Read(ref _pendingSpills) == 0 &&
+            !_disk.FileExists(snapshot.Id))
+        {
+            snapshot.BodiesMissingFromDisk = true;
         }
     }
 
@@ -305,6 +360,83 @@ public sealed class SessionStore : IDisposable
         }
     }
 
+    /// <summary>
+    /// For export: hydrate spilled bodies, invoke <paramref name="use"/>, then unload unless selected.
+    /// </summary>
+    public async Task WithBodiesForExportAsync(
+        IEnumerable<SessionSnapshot> snapshots,
+        Func<IReadOnlyList<SessionSnapshot>, Task> use,
+        CancellationToken ct = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var list = snapshots as IReadOnlyList<SessionSnapshot> ?? snapshots.ToList();
+        var hydrated = new List<SessionSnapshot>();
+        foreach (var snap in list)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!snap.BodiesOnDisk || HasInMemoryBodies(snap))
+            {
+                continue;
+            }
+
+            await EnsureBodiesLoadedAsync(snap, ct).ConfigureAwait(false);
+            hydrated.Add(snap);
+        }
+
+        try
+        {
+            await use(list).ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                foreach (var snap in hydrated)
+                {
+                    if (_pinnedSessionId is long pin && snap.Id == pin)
+                    {
+                        continue;
+                    }
+
+                    if (snap.BodiesOnDisk)
+                    {
+                        ClearBodyFields(snap);
+                    }
+                }
+
+                RecalcInMemoryBodyBytesLocked();
+            }
+        }
+    }
+
+    /// <summary>Peek spilled body text for search without pinning bytes on the snapshot.</summary>
+    public bool TryMatchBodySearch(SessionSnapshot snapshot, string needle)
+    {
+        if (string.IsNullOrEmpty(needle))
+        {
+            return true;
+        }
+
+        if (snapshot.RequestBodyText?.Contains(needle, StringComparison.OrdinalIgnoreCase) == true ||
+            snapshot.ResponseBodyText?.Contains(needle, StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return true;
+        }
+
+        if (!snapshot.BodiesOnDisk || _disk is null)
+        {
+            return false;
+        }
+
+        if (!_disk.TryReadBodyTexts(snapshot.Id, out var req, out var resp))
+        {
+            return false;
+        }
+
+        return req?.Contains(needle, StringComparison.OrdinalIgnoreCase) == true ||
+               resp?.Contains(needle, StringComparison.OrdinalIgnoreCase) == true;
+    }
+
     /// <summary>Flush pending spill writes (tests).</summary>
     public async Task FlushSpillAsync(TimeSpan? timeout = null)
     {
@@ -313,7 +445,8 @@ public sealed class SessionStore : IDisposable
             return;
         }
 
-        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(5));
+        // Default must cover large capture bursts (thousands of HAR writes); callers may shorten.
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromMinutes(2));
         while (Volatile.Read(ref _pendingSpills) > 0 && DateTime.UtcNow < deadline)
         {
             await Task.Delay(25, CancellationToken.None).ConfigureAwait(false);
@@ -345,11 +478,6 @@ public sealed class SessionStore : IDisposable
 
     internal static long EstimateInMemoryBodyBytes(SessionSnapshot s)
     {
-        if (s.BodiesOnDisk)
-        {
-            return 0;
-        }
-
         long n = 0;
         if (s.RequestBodyBytes is { } req)
         {
@@ -371,31 +499,113 @@ public sealed class SessionStore : IDisposable
             n += (long)respText.Length * sizeof(char);
         }
 
+        if (s.UpstreamRequestBodyBytes is { } upReq)
+        {
+            n += upReq.Length;
+        }
+
+        if (s.UpstreamResponseBodyBytes is { } upResp)
+        {
+            n += upResp.Length;
+        }
+
+        if (s.ProtobufDecodedText is { } proto)
+        {
+            n += (long)proto.Length * sizeof(char);
+        }
+
+        if (s.WebSocketFrames is { Count: > 0 } frames)
+        {
+            foreach (var f in frames)
+            {
+                if (f.PayloadPreview is { } preview)
+                {
+                    n += (long)preview.Length * sizeof(char);
+                }
+            }
+        }
+
         return n;
     }
 
-    private void TouchBodyBudget(SessionSnapshot snapshot)
+    private static bool HasInMemoryBodies(SessionSnapshot s) =>
+        s.RequestBodyBytes is not null ||
+        s.ResponseBodyBytes is not null ||
+        s.RequestBodyText is not null ||
+        s.ResponseBodyText is not null ||
+        s.UpstreamRequestBodyBytes is not null ||
+        s.UpstreamResponseBodyBytes is not null ||
+        s.GrpcFrames is not null ||
+        s.MultipartParts is not null ||
+        s.ProtobufDecodedText is not null;
+
+    private static bool IsInFlight(SessionSnapshot s) =>
+        s.ResponseBodyStreamOpen ||
+        s.ResponseBodyCapture == BodyCaptureState.Streaming;
+
+    /// <summary>
+    /// Do not archive on the request-only placeholder — wait until a status exists
+    /// (HTTP response or CONNECT completion) so the JSON has headers + outcome.
+    /// </summary>
+    private static bool IsReadyToArchive(SessionSnapshot s) =>
+        !IsInFlight(s) && s.StatusCode is not null;
+
+    /// <summary>
+    /// Drop heavy HTTP/gRPC payload fields from RAM after they are on disk (or being written).
+    /// Headers stay. WebSocket frame lists stay — they keep growing after the first spill
+    /// and must not be nulled while live handlers still append.
+    /// </summary>
+    private static void ClearBodyFields(SessionSnapshot snap)
     {
-        var next = EstimateInMemoryBodyBytes(snapshot);
-        if (_bodyBytes.TryGetValue(snapshot.Id, out var prev))
+        snap.RequestBodyBytes = null;
+        snap.ResponseBodyBytes = null;
+        snap.RequestBodyText = null;
+        snap.ResponseBodyText = null;
+        snap.UpstreamRequestBodyBytes = null;
+        snap.UpstreamResponseBodyBytes = null;
+        snap.GrpcFrames = null;
+        snap.MultipartParts = null;
+        snap.ProtobufDecodedText = null;
+        snap.SseEvents = null;
+    }
+
+    private void MaybeSpillFinishedLocked(SessionSnapshot snapshot)
+    {
+        if (_disk is null || _spillChannel is null)
         {
-            _inMemoryBodyBytes -= prev;
+            RecalcInMemoryBodyBytesLocked();
+            return;
         }
 
-        _bodyBytes[snapshot.Id] = next;
-        _inMemoryBodyBytes += next;
-        if (_inMemoryBodyBytes < 0)
+        if (!IsReadyToArchive(snapshot))
         {
-            _inMemoryBodyBytes = 0;
+            RecalcInMemoryBodyBytesLocked();
+            return;
         }
+
+        // Already archived: leave the file until memory eviction rewrites the final snapshot
+        // (avoids rewriting on every WS frame / timing tick). Bodies stay unloaded in RAM.
+        if (snapshot.BodiesOnDisk)
+        {
+            var keepInRam = _pinnedSessionId is long pin && snapshot.Id == pin;
+            // Timing / process-resolve / late pipeline updates must not leave payloads in RAM
+            // after spill (e.g. a second FillResponse or kept KeepBody buffers).
+            if (!keepInRam && HasInMemoryBodies(snapshot))
+            {
+                ClearBodyFields(snapshot);
+            }
+
+            RecalcInMemoryBodyBytesLocked();
+            return;
+        }
+
+        QueueSpillLocked(snapshot);
+        RecalcInMemoryBodyBytesLocked();
     }
 
     private void EnforceLimitsLocked(ref List<SessionSnapshot>? removed)
     {
-        SpillColdBodiesLocked();
-
-        while (_byId.Count > _options.MaxSessionsInMemory ||
-               _inMemoryBodyBytes > _options.MaxCaptureBytesInMemory)
+        while (_byId.Count > _options.MaxSessionsInMemory)
         {
             if (!TryEvictOldestLocked(out var evicted))
             {
@@ -404,68 +614,31 @@ public sealed class SessionStore : IDisposable
 
             removed ??= new List<SessionSnapshot>();
             removed.Add(evicted);
-            SpillColdBodiesLocked();
-        }
-    }
-
-    private void SpillColdBodiesLocked()
-    {
-        if (!_options.SpillBodiesToDisk || _disk is null || _spillChannel is null)
-            return;
-
-        var hot = _options.HotBodySessions;
-        if (Sessions.Count <= hot && _inMemoryBodyBytes <= _options.MaxCaptureBytesInMemory)
-            return;
-
-        SpillOutsideHotWindowLocked(hot);
-        SpillUntilUnderBudgetLocked();
-    }
-
-    private void SpillOutsideHotWindowLocked(int hot)
-    {
-        var spillUntilIndex = Math.Max(0, Sessions.Count - hot);
-        for (var i = 0; i < spillUntilIndex; i++)
-        {
-            var snap = Sessions[i];
-            if (snap.BodiesOnDisk || EstimateInMemoryBodyBytes(snap) == 0)
-                continue;
-            QueueSpillLocked(snap);
-        }
-    }
-
-    private void SpillUntilUnderBudgetLocked()
-    {
-        if (_inMemoryBodyBytes <= _options.MaxCaptureBytesInMemory)
-            return;
-
-        for (var i = 0; i < Sessions.Count && _inMemoryBodyBytes > _options.MaxCaptureBytesInMemory; i++)
-        {
-            var snap = Sessions[i];
-            if (snap.BodiesOnDisk || EstimateInMemoryBodyBytes(snap) == 0)
-                continue;
-            if (_pinnedSessionId is long pin && snap.Id == pin)
-                continue;
-            QueueSpillLocked(snap);
         }
     }
 
     private void QueueSpillLocked(SessionSnapshot snap)
     {
-        var copy = new SessionSnapshot
-        {
-            Id = snap.Id,
-            RequestBodyBytes = snap.RequestBodyBytes,
-            ResponseBodyBytes = snap.ResponseBodyBytes,
-            RequestBodyText = snap.RequestBodyText,
-            ResponseBodyText = snap.ResponseBodyText,
-        };
+        var keepInRam = _pinnedSessionId is long pin && snap.Id == pin;
+        var copy = CloneForDisk(snap);
 
-        snap.RequestBodyBytes = null;
-        snap.ResponseBodyBytes = null;
-        snap.RequestBodyText = null;
-        snap.ResponseBodyText = null;
-        snap.BodiesOnDisk = true;
-        TouchBodyBudget(snap);
+        if (!keepInRam)
+        {
+            ClearBodyFields(snap);
+        }
+
+        if (!snap.BodiesOnDisk)
+        {
+            snap.BodiesOnDisk = true;
+            _spilledCount++;
+        }
+
+        snap.BodiesMissingFromDisk = false;
+        EnqueueSpillWrite(copy);
+    }
+
+    private void EnqueueSpillWrite(SessionSnapshot copy)
+    {
         Interlocked.Increment(ref _pendingSpills);
         if (!_spillChannel!.Writer.TryWrite(copy))
         {
@@ -485,20 +658,81 @@ public sealed class SessionStore : IDisposable
 
             Sessions.RemoveAt(i);
             _byId.Remove(snap.Id);
-            if (_bodyBytes.TryGetValue(snap.Id, out var bytes))
+            if (snap.BodiesOnDisk)
             {
-                _inMemoryBodyBytes -= bytes;
-                _bodyBytes.Remove(snap.Id);
+                _spilledCount = Math.Max(0, _spilledCount - 1);
             }
 
-            _disk?.Delete(snap.Id);
+            RecalcInMemoryBodyBytesLocked();
             evicted = snap;
+
+            // Never sync-read/write HAR here: Add/NotifyUpdated often run on the UI thread
+            // (batched capture). Past MaxSessionsInMemory that froze the Inspector for seconds
+            // per eviction (TryLoad + Write + budget prune).
+            // If bodies were already handed to the spill channel (BodiesOnDisk, RAM cleared),
+            // do not enqueue another CloneForDisk — an empty clone would overwrite the good HAR.
+            if (_disk is not null && _spillChannel is not null && HasInMemoryBodies(snap))
+            {
+                EnqueueSpillWrite(CloneForDisk(snap));
+            }
+
             return true;
         }
 
         evicted = null!;
         return false;
     }
+
+    private static SessionSnapshot CloneForDisk(SessionSnapshot snap) =>
+        new()
+        {
+            Id = snap.Id,
+            Method = snap.Method,
+            Url = snap.Url,
+            StartedUtc = snap.StartedUtc,
+            BodiesOnDisk = false,
+            IsWebSocket = snap.IsWebSocket,
+            IsGrpc = snap.IsGrpc,
+            IsTranscoded = snap.IsTranscoded,
+            IsTunnel = snap.IsTunnel,
+            OpaqueReason = snap.OpaqueReason,
+            ClientMethod = snap.ClientMethod,
+            ClientPathAndQuery = snap.ClientPathAndQuery,
+            ClientContentType = snap.ClientContentType,
+            UpstreamMethod = snap.UpstreamMethod,
+            UpstreamPath = snap.UpstreamPath,
+            UpstreamContentType = snap.UpstreamContentType,
+            UpstreamRequestBodyBytes = snap.UpstreamRequestBodyBytes,
+            UpstreamResponseBodyBytes = snap.UpstreamResponseBodyBytes,
+            IsMultipart = snap.IsMultipart,
+            IsServerSentEvents = snap.IsServerSentEvents,
+            WebSocketFrames = snap.WebSocketFrames,
+            SseEvents = snap.SseEvents,
+            GrpcFrames = snap.GrpcFrames,
+            MultipartParts = snap.MultipartParts,
+            ProtobufDecodedText = snap.ProtobufDecodedText,
+            StatusCode = snap.StatusCode,
+            RequestHeadersText = snap.RequestHeadersText,
+            ResponseHeadersText = snap.ResponseHeadersText,
+            RequestBodyText = snap.RequestBodyText,
+            ResponseBodyText = snap.ResponseBodyText,
+            RequestBodyBytes = snap.RequestBodyBytes,
+            ResponseBodyBytes = snap.ResponseBodyBytes,
+            ContentType = snap.ContentType,
+            Protocol = snap.Protocol,
+            Host = snap.Host,
+            BodySize = snap.BodySize,
+            RequestBodyCapture = snap.RequestBodyCapture,
+            ResponseBodyCapture = snap.ResponseBodyCapture,
+            RequestBodyOriginalSize = snap.RequestBodyOriginalSize,
+            ResponseBodyOriginalSize = snap.ResponseBodyOriginalSize,
+            ProcessId = snap.ProcessId,
+            ProcessName = snap.ProcessName,
+            ReceivedBytes = snap.ReceivedBytes,
+            SentBytes = snap.SentBytes,
+            DurationMs = snap.DurationMs,
+            TtfbMs = snap.TtfbMs,
+        };
 
     private List<SessionSnapshot> RemoveIdsLocked(HashSet<long> ids)
     {
@@ -513,22 +747,58 @@ public sealed class SessionStore : IDisposable
 
             Sessions.RemoveAt(i);
             _byId.Remove(snap.Id);
-            if (_bodyBytes.TryGetValue(snap.Id, out var bytes))
+            if (snap.BodiesOnDisk)
             {
-                _inMemoryBodyBytes -= bytes;
-                _bodyBytes.Remove(snap.Id);
+                _spilledCount = Math.Max(0, _spilledCount - 1);
             }
 
             _disk?.Delete(snap.Id);
             removed.Add(snap);
         }
 
-        if (_inMemoryBodyBytes < 0)
+        RecalcInMemoryBodyBytesLocked();
+        return removed;
+    }
+
+    private void MarkBodiesMissing(IReadOnlyList<long> sessionIds)
+    {
+        if (sessionIds.Count == 0)
         {
-            _inMemoryBodyBytes = 0;
+            return;
         }
 
-        return removed;
+        lock (_gate)
+        {
+            MarkBodiesMissingLocked(sessionIds);
+        }
+    }
+
+    private void MarkBodiesMissingLocked(IReadOnlyList<long> sessionIds)
+    {
+        foreach (var id in sessionIds)
+        {
+            if (!_byId.TryGetValue(id, out var snap))
+            {
+                continue;
+            }
+
+            // Do not blank the selected session's in-RAM body; only mark if already unloaded.
+            if (!HasInMemoryBodies(snap))
+            {
+                snap.BodiesMissingFromDisk = true;
+            }
+        }
+    }
+
+    private void RecalcInMemoryBodyBytesLocked()
+    {
+        long n = 0;
+        foreach (var s in _byId.Values)
+        {
+            n += EstimateInMemoryBodyBytes(s);
+        }
+
+        _inMemoryBodyBytes = n;
     }
 
     private async Task SpillLoopAsync(CancellationToken ct)
@@ -544,7 +814,8 @@ public sealed class SessionStore : IDisposable
             {
                 try
                 {
-                    _disk.Write(snap);
+                    var pruned = _disk.Write(snap);
+                    MarkBodiesMissing(pruned);
                 }
                 catch
                 {

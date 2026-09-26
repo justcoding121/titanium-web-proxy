@@ -219,7 +219,11 @@ independently-maintained values that could drift apart.
 **Now:** an open header block is bounded by both a frame-count and a wall-clock
 (`ProxyResourceLimits.MaxOpenHeaderBlockDuration`) limit; peer-initiated incomplete resets are capped
 by a budget; and the advertised/enforced concurrent-stream limit is a single consolidated value.
-Breaching any of these sends `GOAWAY`/`RST_STREAM` with `ENHANCE_YOUR_CALM`.
+The wire value toward the client is clamped to `ProxyResourceLimits.MaxConcurrentStreamsPerConnection`,
+and admission enforces that cap only after the client's SETTINGS ACK (RFC 9113 — the proxy must not
+assume the browser applied SETTINGS before ACK).
+Breaching CONTINUATION / Rapid Reset budgets sends `GOAWAY`/`RST_STREAM` with `ENHANCE_YOUR_CALM`.
+Over-cap stream admission sends `RST_STREAM(REFUSED_STREAM)`.
 
 **Why:** unbounded CONTINUATION sequences and rapid resets are known HTTP/2 resource-exhaustion attack
 patterns (CVE-2023-44487 and related CONTINUATION-flood advisories).

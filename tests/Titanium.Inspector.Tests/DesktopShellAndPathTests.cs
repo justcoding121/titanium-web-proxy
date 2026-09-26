@@ -31,12 +31,37 @@ public class DesktopShellAndPathTests
     }
 
     [TestMethod]
-    public void SessionStore_DefaultSpillDirectory_MatchesGetDefaultDirectory()
+    public void SessionStore_DiskCacheDirectoryPath_IsRoot_RunFolderIsTimestampedChild()
     {
-        using var store = new SessionStore(new SessionStoreOptions { SpillBodiesToDisk = true });
-        Assert.AreEqual(
-            Path.GetFullPath(SessionBodyDiskCache.GetDefaultDirectory()),
-            Path.GetFullPath(store.DiskCacheDirectoryPath!));
+        var dir = Path.Combine(Path.GetTempPath(), "twp-run-cache-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var store = new SessionStore(
+                new SessionStoreOptions { SpillBodiesToDisk = true },
+                dir);
+            Assert.AreEqual(Path.GetFullPath(dir), Path.GetFullPath(store.DiskCacheDirectoryPath!));
+            Assert.IsNotNull(store.DiskCacheRunDirectoryPath);
+            Assert.IsTrue(
+                Path.GetFullPath(store.DiskCacheRunDirectoryPath!)
+                    .StartsWith(Path.GetFullPath(dir) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
+            Assert.AreNotEqual(
+                Path.GetFullPath(dir),
+                Path.GetFullPath(store.DiskCacheRunDirectoryPath!));
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(dir))
+                {
+                    Directory.Delete(dir, recursive: true);
+                }
+            }
+            catch
+            {
+                // best-effort cleanup
+            }
+        }
     }
 
     [TestMethod]
@@ -193,29 +218,32 @@ public class DesktopShellAndPathTests
     }
 
     [TestMethod]
-    public void SessionBodyDiskCache_PruneExpired_BadVersion_AndBudget()
+    public void SessionBodyDiskCache_BudgetPrune_CorruptAndWrite()
     {
         var dir = Path.Combine(Path.GetTempPath(), "twp-disk-prune-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         try
         {
-            var stale = Path.Combine(dir, "1.bin");
-            File.WriteAllBytes(stale, new byte[24]);
-            File.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddDays(-3));
-            using (var cache = new SessionBodyDiskCache(dir, maxBytes: 1024, maxAge: TimeSpan.FromHours(1)))
+            using (var cache = new SessionBodyDiskCache(dir, maxBytes: 50_000, maxAge: TimeSpan.FromHours(1)))
             {
-                Assert.IsFalse(File.Exists(stale));
+                cache.Write(new SessionSnapshot
+                {
+                    Id = 1,
+                    Method = "GET",
+                    Url = "https://example.com/1",
+                    ResponseBodyBytes = new byte[100],
+                });
+                Assert.IsTrue(File.Exists(cache.PathFor(1)));
             }
 
-            var versioned = Path.Combine(dir, "2.bin");
-            using (var fs = File.Create(versioned))
-            using (var bw = new BinaryWriter(fs, Encoding.UTF8, leaveOpen: false))
+            File.WriteAllBytes(Path.Combine(dir, "1.json"), new byte[5_000]);
+            using (var over = new SessionBodyDiskCache(dir, maxBytes: 100, maxAge: TimeSpan.FromHours(1)))
             {
-                bw.Write("TSIB"u8.ToArray());
-                bw.Write(99);
+                Assert.IsFalse(File.Exists(Path.Combine(dir, "1.json")), "Startup rebuild enforces disk budget");
             }
 
-            using var live = new SessionBodyDiskCache(dir, maxBytes: 40, maxAge: TimeSpan.Zero);
+            File.WriteAllText(Path.Combine(dir, "2.json"), "not-json");
+            using var live = new SessionBodyDiskCache(dir, maxBytes: 40_000, maxAge: TimeSpan.Zero);
             Assert.IsFalse(live.TryLoad(new SessionSnapshot { Id = 2 }));
             live.Write(new SessionSnapshot
             {
@@ -230,6 +258,7 @@ public class DesktopShellAndPathTests
                 ResponseBodyBytes = new byte[80],
             });
             Assert.IsFalse(live.TryLoad(new SessionSnapshot { Id = 2 }));
+            Assert.IsTrue(live.TryLoad(new SessionSnapshot { Id = 4 }));
         }
         finally
         {

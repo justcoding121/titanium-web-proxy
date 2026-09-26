@@ -102,19 +102,19 @@ public sealed class InspectorSettings
     /// <summary>Hard cap on sessions retained in the Inspector grid.</summary>
     public int MaxSessionsInMemory { get; set; } = 10_000;
 
-    /// <summary>Soft budget for in-RAM body bytes+text across retained sessions.</summary>
+    /// <summary>Legacy body-RAM soft budget. Ignored by SessionStore (bodies always spill).</summary>
     public long MaxCaptureBytesInMemory { get; set; } = 512L * 1024 * 1024;
 
-    /// <summary>Newest N sessions keep bodies in RAM; older ones spill to disk.</summary>
+    /// <summary>Legacy hot-window size. Ignored by SessionStore (bodies always spill).</summary>
     public int HotBodySessions { get; set; } = 2_000;
 
-    /// <summary>When true, cold session bodies are written under LocalAppData session-cache.</summary>
+    /// <summary>Legacy spill toggle. SessionStore always spills finished bodies when a cache is configured.</summary>
     public bool SpillBodiesToDisk { get; set; } = true;
 
     /// <summary>Max size of the on-disk session body cache.</summary>
     public long DiskCacheMaxBytes { get; set; } = 2L * 1024 * 1024 * 1024;
 
-    /// <summary>Delete spill files older than this many days on startup.</summary>
+    /// <summary>Legacy max age. Ignored by SessionStore (process-lifetime cache; budget prune only).</summary>
     public int DiskCacheMaxAgeDays { get; set; } = 7;
 
     /// <summary>Host patterns that skip HTTPS decryption (tunnel only). Supports *.example.com.</summary>

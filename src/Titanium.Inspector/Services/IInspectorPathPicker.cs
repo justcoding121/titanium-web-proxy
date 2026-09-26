@@ -13,6 +13,9 @@ public interface IInspectorPathPicker
     Task<string?> PickSavePathAsync(string title, string suggestedFileName, IReadOnlyList<PathPickerFileType> fileTypes);
 
     Task<string?> PickOpenPathAsync(string title, string filterName, params string[] patterns);
+
+    /// <summary>Open one or more files (multi-select). Empty when cancelled.</summary>
+    Task<IReadOnlyList<string>> PickOpenPathsAsync(string title, string filterName, params string[] patterns);
 }
 
 /// <summary>
@@ -41,13 +44,20 @@ public sealed class AvaloniaInspectorPathPicker : IInspectorPathPicker
 
     public async Task<string?> PickOpenPathAsync(string title, string filterName, params string[] patterns)
     {
-        var attempt = await InspectorPathPickerHelpers.TryOpenViaStorageAsync(title, filterName, patterns);
+        var paths = await PickOpenPathsAsync(title, filterName, patterns).ConfigureAwait(false);
+        return paths.Count > 0 ? paths[0] : null;
+    }
+
+    public async Task<IReadOnlyList<string>> PickOpenPathsAsync(string title, string filterName, params string[] patterns)
+    {
+        var attempt = await InspectorPathPickerHelpers.TryOpenViaStorageAsync(title, filterName, patterns, allowMultiple: true);
         if (attempt.DialogShown)
         {
-            return attempt.Path;
+            return attempt.Paths;
         }
 
-        return InspectorPathPickerHelpers.FallbackDesktopOpenPath(patterns);
+        var single = InspectorPathPickerHelpers.FallbackDesktopOpenPath(patterns);
+        return single is null ? Array.Empty<string>() : [single];
     }
 }
 
@@ -56,6 +66,8 @@ public sealed class ScriptedInspectorPathPicker : IInspectorPathPicker
 {
     public string? SavePath { get; set; }
     public string? OpenPath { get; set; }
+    /// <summary>When set, <see cref="PickOpenPathsAsync"/> returns these paths (multi-file import tests).</summary>
+    public IReadOnlyList<string>? OpenPaths { get; set; }
     public int SaveCalls { get; private set; }
     public int OpenCalls { get; private set; }
     public IReadOnlyList<PathPickerFileType>? LastSaveFileTypes { get; private set; }
@@ -78,13 +90,29 @@ public sealed class ScriptedInspectorPathPicker : IInspectorPathPicker
         OpenCalls++;
         return Task.FromResult(OpenPath);
     }
+
+    public Task<IReadOnlyList<string>> PickOpenPathsAsync(string title, string filterName, params string[] patterns)
+    {
+        OpenCalls++;
+        if (OpenPaths is { Count: > 0 })
+        {
+            return Task.FromResult(OpenPaths);
+        }
+
+        return Task.FromResult<IReadOnlyList<string>>(
+            OpenPath is null ? Array.Empty<string>() : [OpenPath]);
+    }
 }
 
 /// <summary>
 /// Result of a StorageProvider pick. <see cref="DialogShown"/> is true when a native
 /// dialog ran (including Cancel). Callers must not fall back to Desktop in that case.
 /// </summary>
-internal readonly record struct StoragePickAttempt(bool DialogShown, string? Path);
+internal readonly record struct StoragePickAttempt(bool DialogShown, string? Path)
+{
+    public IReadOnlyList<string> Paths { get; init; } =
+        string.IsNullOrEmpty(Path) ? Array.Empty<string>() : [Path!];
+}
 
 internal static class InspectorPathPickerHelpers
 {
@@ -114,7 +142,11 @@ internal static class InspectorPathPickerHelpers
         return new StoragePickAttempt(true, NormalizePickedPath(file?.TryGetLocalPath()));
     }
 
-    public static async Task<StoragePickAttempt> TryOpenViaStorageAsync(string title, string filterName, string[] patterns)
+    public static Task<StoragePickAttempt> TryOpenViaStorageAsync(string title, string filterName, string[] patterns) =>
+        TryOpenViaStorageAsync(title, filterName, patterns, allowMultiple: false);
+
+    public static async Task<StoragePickAttempt> TryOpenViaStorageAsync(
+        string title, string filterName, string[] patterns, bool allowMultiple)
     {
         var top = TryGetMainWindow();
         if (top?.StorageProvider is not { CanOpen: true } sp)
@@ -125,14 +157,20 @@ internal static class InspectorPathPickerHelpers
         var files = await sp.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = title,
-            AllowMultiple = false,
+            AllowMultiple = allowMultiple,
             FileTypeFilter =
             [
                 new FilePickerFileType(filterName) { Patterns = patterns.ToList() },
             ],
         });
-        var path = files.Count > 0 ? files[0].TryGetLocalPath() : null;
-        return new StoragePickAttempt(true, NormalizePickedPath(path));
+
+        var paths = files
+            .Select(f => NormalizePickedPath(f.TryGetLocalPath()))
+            .Where(p => p is not null)
+            .Cast<string>()
+            .ToList();
+
+        return new StoragePickAttempt(true, paths.Count > 0 ? paths[0] : null) { Paths = paths };
     }
 
     /// <summary>
