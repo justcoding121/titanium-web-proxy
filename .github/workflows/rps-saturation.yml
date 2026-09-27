@@ -878,6 +878,34 @@ jobs:
           # Same floors on all OS: MITM Lite÷Reverse >= 0.50, Full÷Reverse >= 0.50, reverse TWP÷YARP >= 0.75. No nginx gate.
           pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName
 
+      - name: Validate heavier YARP gates (bodies)
+        if: env.RPS_MODE == 'compare-bodies'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for heavier YARP gate validation' }
+          pwsh tools/RpsLoadProbe/validate-heavier-yarp-gates.ps1 -CsvPath $csv.FullName -NameSuffix body64k
+          pwsh tools/RpsLoadProbe/validate-heavier-yarp-gates.ps1 -CsvPath $csv.FullName -NameSuffix body256k
+
+      - name: Validate heavier YARP gates (post)
+        if: env.RPS_MODE == 'compare-post'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for heavier YARP gate validation' }
+          pwsh tools/RpsLoadProbe/validate-heavier-yarp-gates.ps1 -CsvPath $csv.FullName -NameSuffix post64k
+
+      - name: Validate gRPC YARP gates
+        if: env.RPS_MODE == 'compare-grpc'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for gRPC YARP gate validation' }
+          pwsh tools/RpsLoadProbe/validate-grpc-yarp-gates.ps1 -CsvPath $csv.FullName
+
       - name: Validate cross-version gates
         if: env.RPS_MODE == 'compare-cross-version'
         shell: pwsh

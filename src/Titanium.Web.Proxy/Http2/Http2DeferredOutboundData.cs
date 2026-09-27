@@ -11,11 +11,18 @@ namespace Titanium.Web.Proxy.Http2;
 /// </summary>
 internal sealed class Http2DeferredOutboundData
 {
-    /// <summary>Soft cap: stop granting origin receive credit while this many frames wait.</summary>
-    internal const int MaxFramesPerStream = 2;
+    /// <summary>
+    /// Soft hint for receive-credit throttle helpers. Compressed-relay currently always grants
+    /// credit (withheld reclaim was unsafe); hard cap below is the memory bound.
+    /// </summary>
+    internal const int MaxFramesPerStream = 4;
 
-    /// <summary>Hard cap: RST if more DATA arrives while already deferred (in-flight after soft cap).</summary>
-    internal const int HardMaxFramesPerStream = 4;
+    /// <summary>
+    /// Hard cap: RST if more DATA arrives while already deferred. Sized for a 256 KiB response
+    /// (~16 × 16 KiB DATA frames) plus a small burst margin — the prior cap of 4 RST'd 256 KiB
+    /// H2 TLS→H2 / H2→h2c bodies once the peer send window filled.
+    /// </summary>
+    internal const int HardMaxFramesPerStream = 20;
 
     private readonly object gate = new();
     private readonly Dictionary<int, Queue<PendingFrame>> byStream = new();
