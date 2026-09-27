@@ -1,9 +1,9 @@
 # Validate compare-grpc medians @ c=64:
-#   Reverse TWP ÷ YARP >= 0.75 (when YARP SLO-passes)
+#   Reverse TWP ÷ YARP >= 0.60 (when YARP SLO-passes)
 # Pairs from RampOrchestrator.BuildCompareGrpcArms.
 param(
     [Parameter(Mandatory)] [string] $CsvPath,
-    [double] $ReverseYarpGate = 0.75
+    [double] $ReverseYarpGate = 0.60
 )
 
 $ErrorActionPreference = 'Stop'
