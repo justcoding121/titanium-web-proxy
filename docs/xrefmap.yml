@@ -9001,6 +9001,19 @@ references:
   commentId: E:Titanium.Web.Proxy.ProxyServer.BeforeUpStreamConnectRequest
   fullName: Titanium.Web.Proxy.ProxyServer.BeforeUpStreamConnectRequest
   nameWithType: ProxyServer.BeforeUpStreamConnectRequest
+- uid: Titanium.Web.Proxy.ProxyServer.BlockLoopbackDestinations
+  name: BlockLoopbackDestinations
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BlockLoopbackDestinations
+  commentId: P:Titanium.Web.Proxy.ProxyServer.BlockLoopbackDestinations
+  fullName: Titanium.Web.Proxy.ProxyServer.BlockLoopbackDestinations
+  nameWithType: ProxyServer.BlockLoopbackDestinations
+- uid: Titanium.Web.Proxy.ProxyServer.BlockLoopbackDestinations*
+  name: BlockLoopbackDestinations
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BlockLoopbackDestinations_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.BlockLoopbackDestinations
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.BlockLoopbackDestinations
+  nameWithType: ProxyServer.BlockLoopbackDestinations
 - uid: Titanium.Web.Proxy.ProxyServer.BlockPrivateNetworkDestinations
   name: BlockPrivateNetworkDestinations
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BlockPrivateNetworkDestinations
