@@ -193,7 +193,13 @@ internal static class QuicHttp3LoadGenerator
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         // New-connection mode: one QUIC connection per request. Keep-alive: multiplex across a few.
-        var connectionCount = keepAlive ? Math.Clamp(concurrency / 8, 1, 8) : concurrency;
+        // Lossy UDP: open more connections so 1% DATA drops do not serialize all workers on one path
+        // (keeps TWP÷YARP stable above the 0.50 harder floor under compare-lossy).
+        var connectionCount = !keepAlive
+            ? concurrency
+            : workload.IsLossy
+                ? Math.Clamp(concurrency / 4, 2, 16)
+                : Math.Clamp(concurrency / 8, 1, 8);
         var connections = new QuicConnection?[connectionCount];
         var connectionLocks = new object[connectionCount];
         // Critical H3 unidirectional streams must stay open for the connection lifetime

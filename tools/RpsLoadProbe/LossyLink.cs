@@ -166,8 +166,8 @@ internal sealed class LossyTcpLink : IAsyncDisposable
 /// <c>delayMs</c> is accepted for API parity with the TCP shim but not applied: MsQuic through this
 /// NAT times out when handshake/1-RTT short-header packets are delayed, and per-datagram delay on
 /// settled traffic collapses multiplexed keep-alive arms to sustain ~0 (TWP and YARP). Wiki
-/// compare-lossy H3 arms still exercise <c>loss%</c> (datagram drop); H1/H2 get delay+stall via
-/// <see cref="LossyTcpLink"/>.
+/// compare-lossy H3 arms still exercise <c>loss%</c> on application-sized short-header datagrams
+/// (handshake/ACK-sized exempt); H1/H2 get delay+stall via <see cref="LossyTcpLink"/>.
 /// </para>
 /// </summary>
 internal sealed class LossyUdpLink : IAsyncDisposable
@@ -249,10 +249,10 @@ internal sealed class LossyUdpLink : IAsyncDisposable
                 }
             }
 
-            if (ShouldDrop())
+            var payload = (byte[])result.Buffer.Clone();
+            if (ShouldDrop(payload))
                 continue;
 
-            var payload = (byte[])result.Buffer.Clone();
             _ = ForwardAsync(relay.Socket, relay.SendGate, payload, backend, cts.Token);
         }
     }
@@ -297,10 +297,10 @@ internal sealed class LossyUdpLink : IAsyncDisposable
                 return;
             }
 
-            if (ShouldDrop())
+            var payload = (byte[])result.Buffer.Clone();
+            if (ShouldDrop(payload))
                 continue;
 
-            var payload = (byte[])result.Buffer.Clone();
             _ = ForwardAsync(listener, listenerSendGate, payload, relay.ClientEndPoint, cts.Token);
         }
     }
@@ -330,9 +330,20 @@ internal sealed class LossyUdpLink : IAsyncDisposable
         }
     }
 
-    private bool ShouldDrop()
+    /// <summary>
+    /// Drop only application-sized short-header datagrams. Long-header (Initial/Handshake/Retry)
+    /// and small ACK/control packets stay — random handshake/ACK loss made lossy H3 ratios
+    /// flaky (TWP often &lt;0.50× YARP) without modeling useful body-path impairment.
+    /// </summary>
+    private bool ShouldDrop(byte[] payload)
     {
         if (lossPercent <= 0)
+            return false;
+        if (payload.Length == 0)
+            return false;
+        if ((payload[0] & 0x80) != 0) // QUIC long header
+            return false;
+        if (payload.Length < 128)
             return false;
         lock (random)
             return random.NextDouble() * 100.0 < lossPercent;
