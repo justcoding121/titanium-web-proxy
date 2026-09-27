@@ -407,13 +407,6 @@ This is intended for proxies exposed to less-trusted clients, to prevent them fr
 an SSRF pivot into your internal network. It is `false` by default and `true` under the
 `ProxyProfile.PublicFacing` profile.
 
-`ProxyServer.BlockLoopbackDestinations` is a finer opt-in (also **defaults to `false`**) for
-deployments that must keep RFC 1918 destinations reachable (for example an intranet forward proxy)
-but still reject loopback (`127.0.0.0/8`, `::1`). Assigning a profile does not set or clear this
-property. Enforcement is on TCP outbound connects only — the same sites as the coarse flag; origin
-HTTP/3 (QUIC) dials are not covered. Link-local and cloud metadata addresses remain allowed under
-this flag alone.
-
 ---
 
 ## Policy profiles and observe/enforce modes (additive)
