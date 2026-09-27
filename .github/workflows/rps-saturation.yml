@@ -197,6 +197,10 @@ on:
         description: 'Comparison-group partition (all = no split; i/n = exclusive 1-based shard of wiki rows / Client×Origin wires, not individual arms)'
         required: true
         default: all
+      arm_contains:
+        description: 'Optional arm-name substring filter (e.g. nc-tiny). Empty = all arms in mode.'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -213,6 +217,7 @@ jobs:
       RPS_DURATION_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.duration_sec || 8 }}
       RPS_REPEATS: ${{ github.event_name == 'workflow_dispatch' && inputs.repeats || 1 }}
       RPS_ARM_SHARD: ${{ github.event_name == 'workflow_dispatch' && inputs.arm_shard || 'all' }}
+      RPS_ARM_CONTAINS: ${{ github.event_name == 'workflow_dispatch' && inputs.arm_contains || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -835,12 +840,18 @@ jobs:
           RPS_DURATION_SEC: ${{ env.RPS_DURATION_SEC }}
           RPS_REPEATS: ${{ env.RPS_REPEATS }}
           RPS_ARM_SHARD: ${{ env.RPS_ARM_SHARD }}
+          RPS_ARM_CONTAINS: ${{ env.RPS_ARM_CONTAINS }}
         run: |
           $hap = Join-Path $env:RUNNER_TEMP 'haproxy-quic/sbin/haproxy'
           $hapArgs = @()
           if ((Test-Path -LiteralPath $hap)) {
             Write-Host "Pinning HAProxy QUIC binary: $hap"
             $hapArgs = @('-HaproxyPath', $hap)
+          }
+          $containsArgs = @()
+          if ($env:RPS_ARM_CONTAINS) {
+            Write-Host "Arm name filter: $($env:RPS_ARM_CONTAINS)"
+            $containsArgs = @('-ArmContains', $env:RPS_ARM_CONTAINS)
           }
           pwsh tools/RpsLoadProbe/run-rps.ps1 `
             -Mode $env:RPS_MODE `
@@ -851,6 +862,7 @@ jobs:
             -ArmShard $env:RPS_ARM_SHARD `
             -ResultsDir tools/RpsLoadProbe/results `
             -BombardierCheck `
+            @containsArgs `
             @hapArgs
 
       - name: Sanitize artifact shard label
