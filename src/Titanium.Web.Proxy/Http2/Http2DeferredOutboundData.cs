@@ -28,6 +28,10 @@ internal sealed class Http2DeferredOutboundData
     // LinkedList so a partial drain can AddFirst the remainder without reordering later frames.
     private readonly Dictionary<int, LinkedList<PendingFrame>> byStream = new();
     private readonly List<int> roundRobinOrder = new();
+    // Stream ids whose END_STREAM frame is already on the writer, including after the queue
+    // hits zero. Cleared by CancelStream. Lets a concurrent RST observe "response still in flight"
+    // under this same lock instead of a PendingCount-then-flag gap.
+    private readonly HashSet<int> endStreamHandedOff = new();
     private int roundRobinIndex;
 
     internal readonly struct PendingFrame
@@ -56,6 +60,20 @@ internal sealed class Http2DeferredOutboundData
         lock (gate)
         {
             return byStream.TryGetValue(streamId, out var q) ? q.Count : 0;
+        }
+    }
+
+    /// <summary>
+    ///     True when outbound bytes for <paramref name="streamId" /> are still queued, or END_STREAM
+    ///     has been handed to the writer and <see cref="CancelStream" /> has not run yet.
+    /// </summary>
+    public bool HasOutboundInFlight(int streamId)
+    {
+        lock (gate)
+        {
+            if (endStreamHandedOff.Contains(streamId))
+                return true;
+            return byStream.TryGetValue(streamId, out var q) && q.Count > 0;
         }
     }
 
@@ -92,6 +110,7 @@ internal sealed class Http2DeferredOutboundData
         LinkedList<PendingFrame>? q;
         lock (gate)
         {
+            endStreamHandedOff.Remove(streamId);
             if (!byStream.Remove(streamId, out q))
                 return;
             roundRobinOrder.Remove(streamId);
@@ -111,14 +130,30 @@ internal sealed class Http2DeferredOutboundData
     ///     Writes as many deferred frames as <paramref name="flow" /> currently allows, round-robin across
     ///     streams so one stream cannot spend the whole connection window. Returns true if any bytes were
     ///     enqueued to <paramref name="writer" />.
-    ///     <paramref name="onEndStreamSent" /> is invoked with the deferred stream id when a frame carrying
-    ///     END_STREAM is written (so the relay can mark the half-closed state).
+    ///     <paramref name="onEndStreamQueued" /> runs under this queue's lock when END_STREAM is handed to
+    ///     <paramref name="writer" />, before <see cref="TryDrain" /> returns, so a concurrent reader that
+    ///     takes the same lock (for example <see cref="PendingCount" />) observes the half-closed flag
+    ///     before it can see an empty queue. It must not call back into this instance.
+    ///     <paramref name="onEndStreamSent" /> runs after the lock is released with the same stream id and
+    ///     may remove the stream (which cancels this queue).
     /// </summary>
     public bool TryDrain(Http2FlowController flow, Http2FrameWriter writer,
-        Action<int>? onEndStreamSent = null)
+        Action<int>? onEndStreamSent = null, Action<int>? onEndStreamQueued = null)
     {
         var wrote = false;
         List<int>? endedStreams = null;
+
+        void NoteEndStream(int endedStreamId)
+        {
+            // Record under the lock, before onEndStreamSent → RemoveStream → CancelStream, which
+            // would Remove() roundRobinOrder mid-iteration. The handed-off set stays until CancelStream
+            // so a concurrent RST still sees the response as in flight after the queue hits zero.
+            endStreamHandedOff.Add(endedStreamId);
+            onEndStreamQueued?.Invoke(endedStreamId);
+            endedStreams ??= new List<int>();
+            endedStreams.Add(endedStreamId);
+        }
+
         lock (gate)
         {
             if (roundRobinOrder.Count == 0)
@@ -153,10 +188,7 @@ internal sealed class Http2DeferredOutboundData
                     wrote = true;
                     ArrayPool<byte>.Shared.Return(pending.Rented);
                     if (pending.EndStream)
-                    {
-                        endedStreams ??= new List<int>();
-                        endedStreams.Add(streamId);
-                    }
+                        NoteEndStream(streamId);
 
                     if (q.Count == 0)
                     {
@@ -203,14 +235,7 @@ internal sealed class Http2DeferredOutboundData
                 {
                     ArrayPool<byte>.Shared.Return(pending.Rented);
                     if (endStreamNow)
-                    {
-                        // Invoke outside the lock: OnDeferredEndStream → RemoveStream → CancelStream
-                        // also takes this lock and removes roundRobinOrder by value; doing that
-                        // mid-iteration then RemoveAt(roundRobinIndex) corrupts the list / aborts
-                        // the origin reader (slow-consumer ResponseEnded under concurrency).
-                        endedStreams ??= new List<int>();
-                        endedStreams.Add(streamId);
-                    }
+                        NoteEndStream(streamId);
                 }
 
                 if (q.Count == 0)

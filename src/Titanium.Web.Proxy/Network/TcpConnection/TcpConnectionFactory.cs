@@ -1195,12 +1195,6 @@ internal class TcpConnectionFactory : IDisposable
     }
 
     /// <summary>
-    ///     Attaches a fire-and-forget continuation to each still-in-flight Happy Eyeballs attempt after
-    ///     a race has already been decided by a different, faster address, so that a straggler which
-    ///     later connects anyway has its socket disposed instead of leaking. Failed attempts
-    ///     (<c>Ok=false</c>) already disposed their sockets inside <c>ConnectToAddressAsync</c>.
-    /// </summary>
-    /// <summary>
     ///     Shared outbound destination policy for both the SOCKS-origin check and each Happy Eyeballs
     ///     address attempt. Upstream proxy hops are exempt; when
     ///     <see cref="ProxyServer.BlockPrivateNetworkDestinations" /> is on, only
@@ -1223,6 +1217,12 @@ internal class TcpConnectionFactory : IDisposable
         return null;
     }
 
+    /// <summary>
+    ///     Attaches a fire-and-forget continuation to each still-in-flight Happy Eyeballs attempt after
+    ///     a race has already been decided by a different, faster address, so that a straggler which
+    ///     later connects anyway has its socket disposed instead of leaking. Failed attempts
+    ///     (<c>Ok=false</c>) already disposed their sockets inside <c>ConnectToAddressAsync</c>.
+    /// </summary>
     private static void AbandonLosingAttempts(
         IReadOnlyCollection<Task<(bool Ok, Socket? Socket, IPEndPoint? Bound, Exception? Error, IPAddress Address)>>
             losingAttempts)

@@ -232,6 +232,50 @@ public class Http2DeferredOutboundDataTests
         Assert.AreEqual((byte)Http2FrameFlag.EndStream, bytes[4] & (byte)Http2FrameFlag.EndStream);
     }
 
+    [TestMethod]
+    public async Task DeferredQueue_EndStream_StaysInFlightUntilCancel_AndHalfCloseRunsBeforeFinalize()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        flow.OnWindowUpdate(0, 1_000_000);
+        flow.OnWindowUpdate(1, 1_000_000);
+
+        await using var ms = new MemoryStream();
+        await using var writer = new Http2FrameWriter(ms);
+        var deferred = new Http2DeferredOutboundData();
+
+        var body = ArrayPool<byte>.Shared.Rent(4);
+        Assert.IsTrue(deferred.TryEnqueue(1, body, 0, 4, endStream: true));
+
+        var queued = 0;
+        var sent = 0;
+        var inFlightDuringHalfClose = false;
+        Assert.IsTrue(deferred.TryDrain(flow, writer,
+            onEndStreamSent: _ =>
+            {
+                Assert.AreEqual(1, queued);
+                sent++;
+            },
+            onEndStreamQueued: id =>
+            {
+                Assert.AreEqual(0, sent);
+                queued++;
+                inFlightDuringHalfClose = deferred.HasOutboundInFlight(id);
+                Assert.AreEqual(0, deferred.PendingCount(id));
+            }));
+
+        Assert.AreEqual(1, queued);
+        Assert.AreEqual(1, sent);
+        Assert.IsTrue(inFlightDuringHalfClose);
+        Assert.AreEqual(0, deferred.PendingCount(1));
+        Assert.IsTrue(deferred.HasOutboundInFlight(1),
+            "END_STREAM handed to the writer must stay visible until CancelStream.");
+
+        deferred.CancelStream(1);
+        Assert.IsFalse(deferred.HasOutboundInFlight(1));
+        await writer.DisposeAsync();
+    }
+
     private static int ReadStreamId(byte[] buf, int offset) =>
         ((buf[offset] & 0x7f) << 24) | (buf[offset + 1] << 16) | (buf[offset + 2] << 8) | buf[offset + 3];
 }

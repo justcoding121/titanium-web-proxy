@@ -1675,27 +1675,43 @@ namespace Titanium.Web.Proxy.Http2
                         else
                         {
                             // Resume DATA that was deferred so the peer frame loop never parked on ReserveAsync.
-                            void OnDeferredEndStream(int deferredStreamId)
+                            // Mark the half inside the drain lock; RemoveStream only after the lock drops
+                            // (CancelStream mutates the round-robin list mid-iteration).
+                            bool TryResolveDeferredStream(int deferredStreamId, out int clientStreamId,
+                                out Http2StreamState? resolved)
                             {
-                                // Origin-leg deferred keys are origin stream ids; map back to client id.
-                                var clientStreamId = deferredStreamId;
+                                clientStreamId = deferredStreamId;
                                 if (originReceiveLeg != null
                                     && originReceiveLeg.OriginToClient.TryGetValue(deferredStreamId, out var mapped))
                                     clientStreamId = mapped;
 
-                                if (!connectionState.Streams.TryGetValue(clientStreamId, out var st))
+                                return connectionState.Streams.TryGetValue(clientStreamId, out resolved);
+                            }
+
+                            void MarkDeferredHalfClosed(int deferredStreamId)
+                            {
+                                if (!TryResolveDeferredStream(deferredStreamId, out _, out var st) || st == null)
                                     return;
 
                                 // Client WINDOW_UPDATE resumes origin→client DATA (response).
                                 // Origin WINDOW_UPDATE resumes client→origin DATA (request).
+                                // Flags only: channel completion and RemoveStream run after the lock.
                                 if (isClient && originReceiveLeg == null)
                                     st.ResponseClosed = true;
                                 else
-                                {
                                     st.RequestClosed = true;
-                                    if (st.IsExtendedConnect)
-                                        st.InboundTunnelChannel?.Writer.TryComplete();
-                                }
+                            }
+
+                            void OnDeferredEndStream(int deferredStreamId)
+                            {
+                                if (!TryResolveDeferredStream(deferredStreamId, out var clientStreamId, out var st) ||
+                                    st == null)
+                                    return;
+
+                                // Idempotent with MarkDeferredHalfClosed (already run under the drain lock).
+                                MarkDeferredHalfClosed(deferredStreamId);
+                                if (st.RequestClosed && st.IsExtendedConnect)
+                                    st.InboundTunnelChannel?.Writer.TryComplete();
 
                                 if (st.IsClosed)
                                 {
@@ -1708,19 +1724,21 @@ namespace Titanium.Web.Proxy.Http2
                             if (originReceiveLeg != null)
                             {
                                 originReceiveLeg.OutboundDeferred.TryDrain(flow, originReceiveLeg.Writer,
-                                    OnDeferredEndStream);
+                                    OnDeferredEndStream, MarkDeferredHalfClosed);
                             }
                             else if (isClient)
                             {
                                 var writer = connectionState.ClientFrameWriter;
                                 if (writer != null)
-                                    connectionState.ClientOutboundDeferred.TryDrain(flow, writer, OnDeferredEndStream);
+                                    connectionState.ClientOutboundDeferred.TryDrain(flow, writer,
+                                        OnDeferredEndStream, MarkDeferredHalfClosed);
                             }
                             else
                             {
                                 var writer = connectionState.ServerFrameWriter;
                                 if (writer != null)
-                                    connectionState.ServerOutboundDeferred.TryDrain(flow, writer, OnDeferredEndStream);
+                                    connectionState.ServerOutboundDeferred.TryDrain(flow, writer,
+                                        OnDeferredEndStream, MarkDeferredHalfClosed);
                             }
                         }
                     }
@@ -2160,8 +2178,13 @@ namespace Titanium.Web.Proxy.Http2
                     if (benignOriginRst
                         && connectionState.Streams.TryGetValue(streamId, out var absorbState))
                     {
-                        var pendingTowardClient = connectionState.ClientOutboundDeferred.PendingCount(streamId) > 0;
-                        if (pendingTowardClient || absorbState.ResponseClosed)
+                        // HasOutboundInFlight covers queued DATA and END_STREAM already handed to the
+                        // writer (pending count is 0 in that window). ResponseClosed covers the
+                        // fast path that never entered the deferred queue.
+                        var responseStillInFlight =
+                            connectionState.ClientOutboundDeferred.HasOutboundInFlight(streamId)
+                            || absorbState.ResponseClosed;
+                        if (responseStillInFlight)
                         {
                             sendPacket = false;
                             connectionState.ServerOutboundDeferred.CancelStream(streamId);
@@ -2534,22 +2557,23 @@ namespace Titanium.Web.Proxy.Http2
                                     rentedFrame, wl);
                         }
 
-                        var reserved = sendFlow.TryReservePartial(wireStreamId, frameLength);
-                        if (dataPadded && reserved > 0 && reserved < frameLength)
+                        async ValueTask RejectDeferredCapAsync()
                         {
-                            sendFlow.OnWindowUpdate(wireStreamId, reserved);
-                            sendFlow.OnWindowUpdate(0, reserved);
-                            reserved = 0;
+                            ReportException(logger, new ProxyHttpException(
+                                "HTTP/2 deferred DATA queue exceeded its per-stream cap.", null, args));
+                            await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(),
+                                new byte[9], streamId, Http2ErrorCode.EnhanceYourCalm, input));
+                            // Cap overflow must drop the stream. Leaving it tracked stalls the peer
+                            // after ENHANCE_YOUR_CALM with no half-close and no AfterResponse.
+                            RemoveAndFinalizeStream(streamId);
                         }
 
-                        // Same overtake rule as compressed-relay: never emit past deferred DATA.
+                        // Pending before reserve: the WINDOW_UPDATE drain runs on the other leg.
+                        // Reserving credit and then queueing the frame (because older DATA is still
+                        // deferred) permanently shrinks the send window and stalls the stream.
                         if (sendDeferred.PendingCount(wireStreamId) > 0)
                         {
-                            if (frameLength == 0 && !dataEndStream)
-                            {
-                                // nothing
-                            }
-                            else
+                            if (!(frameLength == 0 && !dataEndStream))
                             {
                                 var payloadRented = ArrayPool<byte>.Shared.Rent(Math.Max(1, frameLength));
                                 if (frameLength > 0)
@@ -2558,67 +2582,69 @@ namespace Titanium.Web.Proxy.Http2
                                         dataEndStream))
                                 {
                                     ArrayPool<byte>.Shared.Return(payloadRented);
-                                    ReportException(logger, new ProxyHttpException(
-                                        "HTTP/2 deferred DATA queue exceeded its per-stream cap.", null, args));
-                                    await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(),
-                                        new byte[9], streamId, Http2ErrorCode.EnhanceYourCalm, input));
+                                    await RejectDeferredCapAsync();
                                 }
                             }
                         }
-                        else if (reserved == frameLength)
-                        {
-                            frameHeader.CopyToBuffer(frameHeaderBuffer);
-                            var wireLen = 9 + frameLength;
-                            var rented = ArrayPool<byte>.Shared.Rent(wireLen);
-                            frameHeaderBuffer.AsSpan(0, 9).CopyTo(rented);
-                            if (frameLength > 0)
-                                buffer.AsSpan(0, frameLength).CopyTo(rented.AsSpan(9));
-                            if (dedicatedWriter != null)
-                                dedicatedWriter.EnqueueRented(rented, wireLen);
-                            else
-                                connectionState.EnqueueWriteRented(towardServer: isClient, outputWriteLock, output,
-                                    rented, wireLen);
-                            MarkNonRelayClosedIfFullySent();
-                        }
-                        else if (reserved > 0)
-                        {
-                            EnqueueNonRelayWire(buffer.AsSpan(0, reserved), endStreamFlag: false);
-                            var rem = frameLength - reserved;
-                            var payloadRented = ArrayPool<byte>.Shared.Rent(rem);
-                            buffer.AsSpan(reserved, rem).CopyTo(payloadRented);
-                            if (!sendDeferred.TryEnqueue(wireStreamId, payloadRented, 0, rem, dataEndStream))
-                            {
-                                ArrayPool<byte>.Shared.Return(payloadRented);
-                                ReportException(logger, new ProxyHttpException(
-                                    "HTTP/2 deferred DATA queue exceeded its per-stream cap.", null, args));
-                                await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(),
-                                    new byte[9], streamId, Http2ErrorCode.EnhanceYourCalm, input));
-                            }
-                        }
-                        else if (frameLength == 0)
-                        {
-                            frameHeader.CopyToBuffer(frameHeaderBuffer);
-                            var wireLen = 9;
-                            var rented = ArrayPool<byte>.Shared.Rent(wireLen);
-                            frameHeaderBuffer.AsSpan(0, 9).CopyTo(rented);
-                            if (dedicatedWriter != null)
-                                dedicatedWriter.EnqueueRented(rented, wireLen);
-                            else
-                                connectionState.EnqueueWriteRented(towardServer: isClient, outputWriteLock, output,
-                                    rented, wireLen);
-                            MarkNonRelayClosedIfFullySent();
-                        }
                         else
                         {
-                            var payloadRented = ArrayPool<byte>.Shared.Rent(frameLength);
-                            buffer.AsSpan(0, frameLength).CopyTo(payloadRented);
-                            if (!sendDeferred.TryEnqueue(wireStreamId, payloadRented, 0, frameLength, dataEndStream))
+                            var reserved = sendFlow.TryReservePartial(wireStreamId, frameLength);
+                            if (dataPadded && reserved > 0 && reserved < frameLength)
                             {
-                                ArrayPool<byte>.Shared.Return(payloadRented);
-                                ReportException(logger, new ProxyHttpException(
-                                    "HTTP/2 deferred DATA queue exceeded its per-stream cap.", null, args));
-                                await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(),
-                                    new byte[9], streamId, Http2ErrorCode.EnhanceYourCalm, input));
+                                sendFlow.OnWindowUpdate(wireStreamId, reserved);
+                                sendFlow.OnWindowUpdate(0, reserved);
+                                reserved = 0;
+                            }
+
+                            if (reserved == frameLength)
+                            {
+                                frameHeader.CopyToBuffer(frameHeaderBuffer);
+                                var wireLen = 9 + frameLength;
+                                var rented = ArrayPool<byte>.Shared.Rent(wireLen);
+                                frameHeaderBuffer.AsSpan(0, 9).CopyTo(rented);
+                                if (frameLength > 0)
+                                    buffer.AsSpan(0, frameLength).CopyTo(rented.AsSpan(9));
+                                if (dedicatedWriter != null)
+                                    dedicatedWriter.EnqueueRented(rented, wireLen);
+                                else
+                                    connectionState.EnqueueWriteRented(towardServer: isClient, outputWriteLock, output,
+                                        rented, wireLen);
+                                MarkNonRelayClosedIfFullySent();
+                            }
+                            else if (reserved > 0)
+                            {
+                                EnqueueNonRelayWire(buffer.AsSpan(0, reserved), endStreamFlag: false);
+                                var rem = frameLength - reserved;
+                                var payloadRented = ArrayPool<byte>.Shared.Rent(rem);
+                                buffer.AsSpan(reserved, rem).CopyTo(payloadRented);
+                                if (!sendDeferred.TryEnqueue(wireStreamId, payloadRented, 0, rem, dataEndStream))
+                                {
+                                    ArrayPool<byte>.Shared.Return(payloadRented);
+                                    await RejectDeferredCapAsync();
+                                }
+                            }
+                            else if (frameLength == 0)
+                            {
+                                frameHeader.CopyToBuffer(frameHeaderBuffer);
+                                var wireLen = 9;
+                                var rented = ArrayPool<byte>.Shared.Rent(wireLen);
+                                frameHeaderBuffer.AsSpan(0, 9).CopyTo(rented);
+                                if (dedicatedWriter != null)
+                                    dedicatedWriter.EnqueueRented(rented, wireLen);
+                                else
+                                    connectionState.EnqueueWriteRented(towardServer: isClient, outputWriteLock, output,
+                                        rented, wireLen);
+                                MarkNonRelayClosedIfFullySent();
+                            }
+                            else
+                            {
+                                var payloadRented = ArrayPool<byte>.Shared.Rent(frameLength);
+                                buffer.AsSpan(0, frameLength).CopyTo(payloadRented);
+                                if (!sendDeferred.TryEnqueue(wireStreamId, payloadRented, 0, frameLength, dataEndStream))
+                                {
+                                    ArrayPool<byte>.Shared.Return(payloadRented);
+                                    await RejectDeferredCapAsync();
+                                }
                             }
                         }
                     }
