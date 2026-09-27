@@ -117,13 +117,20 @@ def load_arm_medians(csvs: list[Path]) -> dict[str, dict[str, float]]:
     return out
 
 
-def cell(stats: Optional[dict[str, float]], impossible: Optional[str] = None) -> str:
+MEDAL = "\U0001F947"
+
+
+def cell(
+    stats: Optional[dict[str, float]],
+    impossible: Optional[str] = None,
+    *,
+    medal: bool = False,
+) -> str:
     if impossible:
         return f"*{impossible}*"
     if stats is None or not stats or all(v != v for v in stats.values()):  # noqa: PLR0124
         return "*Not measured*"
     sustain = stats.get("Sustain", float("nan"))
-    peak = stats.get("Peak", float("nan"))
     rss = stats.get("Rss", float("nan"))
     cpu = stats.get("Cpu", float("nan"))
     if sustain != sustain:  # NaN
@@ -131,7 +138,44 @@ def cell(stats: Optional[dict[str, float]], impossible: Optional[str] = None) ->
     rps = int(round(sustain)) if sustain == sustain else 0
     rss_s = f"{rss:.0f} MiB" if rss == rss else "?"
     cpu_s = f"{cpu:.1f}% CPU" if cpu == cpu else "?"
-    return f"**{rps:,}**<br><sub>({rss_s} / {cpu_s})</sub>"
+    prefix = f"{MEDAL} " if medal else ""
+    return f"{prefix}**{rps:,}**<br><sub>({rss_s} / {cpu_s})</sub>"
+
+
+def pick_row_winner(
+    products: list[str],
+    arms: dict[str, Optional[str]],
+    data: dict[str, dict[str, float]],
+    *,
+    os_key: str,
+    win_no_haproxy_envoy: bool,
+) -> Optional[str]:
+    """Highest sustain > 0 among OS-possible peers; ties break on lower RSS then CPU."""
+    best_name: Optional[str] = None
+    best_key: Optional[tuple[float, float, float]] = None
+    for product in products:
+        arm = arms.get(product)
+        if arm is None:
+            continue
+        if win_no_haproxy_envoy and os_key == "windows" and product in ("HAProxy", "Envoy"):
+            continue
+        stats = data.get(arm)
+        if not stats:
+            continue
+        sustain = stats.get("Sustain", float("nan"))
+        if sustain != sustain or sustain <= 0:
+            continue
+        rss = stats.get("Rss", float("inf"))
+        cpu = stats.get("Cpu", float("inf"))
+        if rss != rss:
+            rss = float("inf")
+        if cpu != cpu:
+            cpu = float("inf")
+        key = (-sustain, rss, cpu)
+        if best_key is None or key < best_key:
+            best_key = key
+            best_name = product
+    return best_name
 
 
 def render_table(
@@ -163,6 +207,9 @@ def render_table(
     lines.extend([header, rule])
     for os_label, os_key in (("Windows", "windows"), ("Linux", "linux"), ("macOS", "macos")):
         data = by_os.get(os_key, {})
+        winner = pick_row_winner(
+            products, arms, data, os_key=os_key, win_no_haproxy_envoy=win_no_haproxy_envoy
+        )
         cells = []
         for product in products:
             arm = arms.get(product)
@@ -171,7 +218,7 @@ def render_table(
             elif win_no_haproxy_envoy and os_key == "windows" and product in ("HAProxy", "Envoy"):
                 cells.append(cell(None, "Not possible"))
             else:
-                cells.append(cell(data.get(arm)))
+                cells.append(cell(data.get(arm), medal=(winner == product)))
         lines.append("| " + " | ".join([os_label, *cells]) + " |")
     return "\n".join(lines)
 

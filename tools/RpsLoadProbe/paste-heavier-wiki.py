@@ -34,6 +34,12 @@ def median(vals: List[float]) -> Optional[float]:
 
 
 def arm_metrics(csv_path: Path, arm: str) -> Optional[dict]:
+    """Median sustain/peak/RSS/CPU for one arm.
+
+    Prefer c=64 SLO-pass (wiki default). If c=64 never meets SLO, fall back to the
+    highest concurrency that does — same rule as validate-lossy-arch-gates — so
+    published TWP cells are not forced to 0 when a lower step still sustains.
+    """
     rows = [r for r in csv.DictReader(csv_path.open(newline="")) if r.get("arm") == arm]
     if not rows:
         return None
@@ -52,22 +58,39 @@ def arm_metrics(csv_path: Path, arm: str) -> Optional[dict]:
             rss.append(float(r.get("proxy_rss_peak_bytes") or 0))
             cpu.append(float(r.get("proxy_cpu_avg_pct") or 0))
         else:
+            slo_any = [r for r in chunk if r.get("meets_slo") == "1"]
             c64_any = [r for r in chunk if r.get("concurrency") == "64"]
-            if c64_any:
-                r = c64_any[-1]
-                sustains.append(0.0)
-                peaks.append(float(r["rps"]))
+            peak_row = c64_any[-1] if c64_any else (chunk[-1] if chunk else None)
+            if slo_any:
+                best_c = max(int(r["concurrency"]) for r in slo_any)
+                r = [x for x in slo_any if int(x["concurrency"]) == best_c][-1]
+                sustains.append(float(r["rps"]))
+                peaks.append(float(peak_row["rps"]) if peak_row else float(r["rps"]))
                 rss.append(float(r.get("proxy_rss_peak_bytes") or 0))
                 cpu.append(float(r.get("proxy_cpu_avg_pct") or 0))
+            elif peak_row is not None:
+                sustains.append(0.0)
+                peaks.append(float(peak_row["rps"]))
+                rss.append(float(peak_row.get("proxy_rss_peak_bytes") or 0))
+                cpu.append(float(peak_row.get("proxy_cpu_avg_pct") or 0))
         i += STEPS
     if not peaks:
+        slo = [r for r in rows if r.get("meets_slo") == "1"]
+        if slo:
+            best_c = max(int(r["concurrency"]) for r in slo)
+            r = [x for x in slo if int(x["concurrency"]) == best_c][-1]
+            return {
+                "Sustain": float(r["rps"]),
+                "Peak": float(r["rps"]),
+                "Rss": float(r.get("proxy_rss_peak_bytes") or 0),
+                "Cpu": float(r.get("proxy_cpu_avg_pct") or 0),
+            }
         c64 = [r for r in rows if r.get("concurrency") == "64"]
         if not c64:
             return None
         r = c64[-1]
-        ok = r.get("meets_slo") == "1"
         return {
-            "Sustain": float(r["rps"]) if ok else 0.0,
+            "Sustain": 0.0,
             "Peak": float(r["rps"]),
             "Rss": float(r.get("proxy_rss_peak_bytes") or 0),
             "Cpu": float(r.get("proxy_cpu_avg_pct") or 0),
@@ -114,6 +137,15 @@ def load_os(run_ids: RunIds, os_folder: str) -> Dict[str, dict]:
 
 def primary_run_id(run_ids: RunIds) -> int:
     return _run_id_list(run_ids)[0]
+
+
+def run_id_with_os(run_ids: RunIds, os_folder: str) -> int:
+    """Prefer the newest run id that actually has CSVs for this OS folder."""
+    ids = _run_id_list(run_ids)
+    for rid in reversed(ids):
+        if _csv_files_for_os(ROOT / str(rid), os_folder):
+            return rid
+    return ids[0]
 
 
 def parse_run_ids(text: str) -> RunIds:
@@ -254,12 +286,14 @@ def main() -> None:
 
     win = {k: load_os(rid, "windows-latest") for k, rid in runs.items()}
     lin = {k: load_os(rid, "ubuntu-latest") for k, rid in runs.items()}
+    mac = {k: load_os(rid, "macos-15-intel") for k, rid in runs.items()}
     text = WIKI.read_text(encoding="utf-8")
     rid_b = primary_run_id(runs["bodies"])
     rid_p = primary_run_id(runs["post"])
     rid_l = primary_run_id(runs["lossy"])
     rid_a = primary_run_id(runs["arch"])
     rid_t = primary_run_id(runs["tls"])
+    rid_t_mac = run_id_with_os(runs["tls"], "macos-15-intel")
     rid_s = primary_run_id(runs["saturation"])
 
     body_spec = [
@@ -595,12 +629,12 @@ def main() -> None:
     )
     patch_heavier(
         "### Windows — lossy / high-RTT (H2 HOL / H3 loss)",
-        f"Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2) or UDP datagram drop (H3); **64 KiB** GET. Median of **3** repeats on `windows-latest` @ `{HEAD}` — [{rid_l}]({run_url(rid_l)}) (`compare-lossy`).\n\n{WIN_NO_HAPROXY_ENVOY_NOTE}",
+        f"Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2); UDP is **loss% only** (no per-datagram delay; MsQuic-safe) + **1%** datagram drop (H3); **64 KiB** GET. Median of **3** repeats on `windows-latest` @ `{HEAD}` — [{rid_l}]({run_url(rid_l)}) (`compare-lossy`).\n\n{WIN_NO_HAPROXY_ENVOY_NOTE}",
         lossy_table(win["lossy"], True),
     )
     patch_heavier(
         "### Linux — lossy / high-RTT (H2 HOL / H3 loss)",
-        f"Median of **3** repeats @ `{HEAD}`. Source: [{rid_l}]({run_url(rid_l)}) (`compare-lossy`; lossy H3 uses `quic-http3`).\n",
+        f"Median of **3** repeats @ `{HEAD}`. Source: [{rid_l}]({run_url(rid_l)}) (`compare-lossy`; lossy H3 uses `quic-http3`, UDP drop-only).\n",
         lossy_table(lin["lossy"], False),
     )
 
@@ -644,9 +678,65 @@ def main() -> None:
     text2 = replace_table_at(text2, tls_tbl_l, tls_table(lin["tls"], False))
     text = text[:l] + text2
 
+    tls = text.find("### TLS termination cost")
+    mac_hdr = (
+        f"#### macOS\n\n"
+        f"Median of **3** repeats on `macos-15-intel` @ `{HEAD}`. "
+        f"Source: Actions [{rid_t_mac}]({run_url(rid_t_mac)}).\n\n"
+    )
+    mac_tbl = tls_table(mac["tls"], False)
+    mac_section = mac_hdr + mac_tbl + "\n\n"
+    m = text.find("#### macOS", tls)
+    next_h2 = text.find("\n## ", tls + 1)
+    if next_h2 < 0:
+        next_h2 = len(text)
+    prose_pat = re.compile(
+        r"\nAll three workloads are \*\*>1\.00×\*\* YARP[^\n]*\n",
+    )
+    mac_prose = (
+        "\nAll three workloads are **>1.00×** YARP on Windows and Linux. On Linux, "
+        "HAProxy leads keep-alive tiny (near-tie with nginx) and Envoy leads "
+        "new-connection; TWP stays ahead of YARP on all three. On macOS, HAProxy "
+        "leads keep-alive tiny; YARP leads keep-alive 256 KiB; new-connection "
+        "sustain @ c=64 is peer-led (TWP/YARP 0).\n"
+    )
+    if m >= 0 and m < next_h2:
+        # Replace existing macOS TLS subsection through next ####/## or prose.
+        end = next_h2
+        prose_m = prose_pat.search(text, m, next_h2)
+        if prose_m:
+            end = prose_m.start()
+        else:
+            nxt = text.find("\n#### ", m + 1)
+            if 0 <= nxt < next_h2:
+                end = nxt
+        text = text[:m] + mac_section.rstrip() + "\n" + text[end:]
+    else:
+        # Insert after Linux TLS table, before closing prose / next ##.
+        linux = text.find("#### Linux", tls)
+        tbl = text.find("| Workload |", linux)
+        # skip table
+        lines = text[tbl:].splitlines()
+        i = 0
+        while i < len(lines) and (lines[i].startswith("|") or not lines[i].strip()):
+            i += 1
+        insert_at = tbl + sum(len(lines[j]) + 1 for j in range(i))
+        # Prefer splicing just before the summary prose if present.
+        prose_m = prose_pat.search(text, linux, next_h2)
+        if prose_m:
+            insert_at = prose_m.start()
+        text = text[:insert_at].rstrip() + "\n\n" + mac_section + text[insert_at:].lstrip("\n")
+
+    text, n_prose = prose_pat.subn(mac_prose, text, count=1)
+    if n_prose == 0:
+        # Ensure prose sits after macOS table when the old sentence was already edited.
+        grpc = text.find("\n## Unary gRPC", tls)
+        if grpc > 0 and "On macOS, HAProxy leads" not in text[tls:grpc]:
+            text = text[:grpc] + mac_prose + text[grpc:]
+
     WIKI.write_text(text, encoding="utf-8")
     print("heavier+saturation pasted")
-    for s in ("9d7c2966", "32871900682", "32866709227", HEAD, str(rid_b)):
+    for s in ("9d7c2966", "32871900682", "32866709227", HEAD, str(rid_b), str(rid_t_mac)):
         print(f"  count {s}={text.count(s)}")
 
 
