@@ -162,17 +162,20 @@ internal sealed class LossyTcpLink : IAsyncDisposable
 /// Userspace UDP delay + datagram-drop shim for HTTP/3 / QUIC.
 /// Per-client ephemeral sockets demux replies back to the correct peer.
 /// Delays are scheduled off the receive loops so MsQuic keeps pacing.
+/// <see cref="UdpClient"/> is not safe for concurrent <c>SendAsync</c>; each socket has a send gate.
+/// The backend→client receive loop is armed before the first client datagram is forwarded so a
+/// fast QUIC Retry/Initial response cannot land on a socket with no reader yet.
 /// </summary>
 internal sealed class LossyUdpLink : IAsyncDisposable
 {
     private readonly UdpClient listener;
+    private readonly SemaphoreSlim listenerSendGate = new(1, 1);
     private readonly IPEndPoint backend;
     private readonly int delayMs;
     private readonly double lossPercent;
     private readonly CancellationTokenSource cts = new();
     private readonly Random random = new();
-    private readonly ConcurrentDictionary<string, UdpClient> clientSockets = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, byte> relayStarted = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, ClientRelay> relays = new(StringComparer.Ordinal);
     private Task? loop;
 
     public int Port { get; }
@@ -217,28 +220,62 @@ internal sealed class LossyUdpLink : IAsyncDisposable
             }
 
             var key = result.RemoteEndPoint.ToString() ?? "unknown";
-            var clientEp = result.RemoteEndPoint;
-            var socket = clientSockets.GetOrAdd(key, static _ => new UdpClient(new IPEndPoint(IPAddress.Loopback, 0)));
-            if (relayStarted.TryAdd(key, 0))
-                _ = RelayBackendToClientAsync(socket, clientEp);
+            var relay = await GetOrCreateRelayAsync(key, result.RemoteEndPoint);
 
             if (ShouldDrop())
                 continue;
 
             // Clone: ReceiveAsync may reuse buffers; delay is scheduled off this loop.
             var payload = (byte[])result.Buffer.Clone();
-            _ = ForwardAsync(socket, payload, backend, cts.Token);
+            _ = ForwardAsync(relay.Socket, relay.SendGate, payload, backend, cts.Token);
         }
     }
 
-    private async Task RelayBackendToClientAsync(UdpClient socket, IPEndPoint client)
+    private async ValueTask<ClientRelay> GetOrCreateRelayAsync(string key, IPEndPoint clientEp)
     {
+        if (relays.TryGetValue(key, out var existing))
+            return existing;
+
+        var socket = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var gate = new SemaphoreSlim(1, 1);
+        var receiving = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var created = new ClientRelay(socket, gate, clientEp, receiving);
+        if (!relays.TryAdd(key, created))
+        {
+            gate.Dispose();
+            socket.Dispose();
+            return relays[key];
+        }
+
+        _ = RelayBackendToClientAsync(created);
+        // Arm ReceiveAsync before the first client→backend forward (QUIC Retry can be immediate).
+        await receiving.Task.WaitAsync(cts.Token);
+        return created;
+    }
+
+    private async Task RelayBackendToClientAsync(ClientRelay relay)
+    {
+        // Issue the first ReceiveAsync before unblocking the client→backend forward so a
+        // QUIC Retry/Initial response cannot race an empty socket recv queue on Windows.
+        ValueTask<UdpReceiveResult> receiveTask;
+        try
+        {
+            receiveTask = relay.Socket.ReceiveAsync(cts.Token);
+        }
+        catch (ObjectDisposedException)
+        {
+            relay.Receiving.TrySetResult();
+            return;
+        }
+
+        relay.Receiving.TrySetResult();
+
         while (!cts.IsCancellationRequested)
         {
             UdpReceiveResult result;
             try
             {
-                result = await socket.ReceiveAsync(cts.Token);
+                result = await receiveTask;
             }
             catch (OperationCanceledException)
             {
@@ -249,22 +286,39 @@ internal sealed class LossyUdpLink : IAsyncDisposable
                 return;
             }
 
+            try
+            {
+                receiveTask = relay.Socket.ReceiveAsync(cts.Token);
+            }
+            catch (ObjectDisposedException)
+            {
+                return;
+            }
+
             if (ShouldDrop())
                 continue;
 
             var payload = (byte[])result.Buffer.Clone();
-            _ = ForwardAsync(listener, payload, client, cts.Token);
+            _ = ForwardAsync(listener, listenerSendGate, payload, relay.ClientEndPoint, cts.Token);
         }
     }
 
-    private async Task ForwardAsync(UdpClient socket, byte[] payload, IPEndPoint destination,
-        CancellationToken cancellationToken)
+    private async Task ForwardAsync(UdpClient socket, SemaphoreSlim sendGate, byte[] payload,
+        IPEndPoint destination, CancellationToken cancellationToken)
     {
         try
         {
             if (delayMs > 0)
                 await Task.Delay(delayMs, cancellationToken);
-            await socket.SendAsync(payload, destination, cancellationToken);
+            await sendGate.WaitAsync(cancellationToken);
+            try
+            {
+                await socket.SendAsync(payload, destination, cancellationToken);
+            }
+            finally
+            {
+                sendGate.Release();
+            }
         }
         catch (OperationCanceledException)
         {
@@ -272,7 +326,7 @@ internal sealed class LossyUdpLink : IAsyncDisposable
         }
         catch
         {
-            // ignore
+            // ignore — peer closed / transient UDP errors under loss
         }
     }
 
@@ -296,17 +350,20 @@ internal sealed class LossyUdpLink : IAsyncDisposable
             // ignore
         }
 
-        foreach (var kv in clientSockets)
+        foreach (var kv in relays)
         {
             try
             {
-                kv.Value.Dispose();
+                kv.Value.SendGate.Dispose();
+                kv.Value.Socket.Dispose();
             }
             catch
             {
                 // ignore
             }
         }
+
+        listenerSendGate.Dispose();
 
         if (loop != null)
         {
@@ -321,5 +378,22 @@ internal sealed class LossyUdpLink : IAsyncDisposable
         }
 
         cts.Dispose();
+    }
+
+    private sealed class ClientRelay
+    {
+        public ClientRelay(UdpClient socket, SemaphoreSlim sendGate, IPEndPoint clientEndPoint,
+            TaskCompletionSource receiving)
+        {
+            Socket = socket;
+            SendGate = sendGate;
+            ClientEndPoint = clientEndPoint;
+            Receiving = receiving;
+        }
+
+        public UdpClient Socket { get; }
+        public SemaphoreSlim SendGate { get; }
+        public IPEndPoint ClientEndPoint { get; }
+        public TaskCompletionSource Receiving { get; }
     }
 }
