@@ -897,7 +897,7 @@ internal static class Cli
               --response-bytes N      Origin response size (default ~64 B tiny JSON)
               --request-bytes N       POST body size (default 0)
               --no-keepalive          New TCP/TLS connection per request (handshake cost)
-              --delay-ms N            Userspace one-way delay via lossy shim (0 = off)
+              --delay-ms N            Userspace one-way delay via TCP lossy shim (0 = off; ignored on H3/UDP)
               --loss-percent P        TCP connection stall % or UDP datagram drop % (0 = off)
               --early-response-after N  Origin starts response after N request bytes (0 = drain-then-write)
               --websocket             Origin /ws echo; client uses ClientWebSocket

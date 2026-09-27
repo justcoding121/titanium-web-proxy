@@ -2343,7 +2343,7 @@ internal static class RampOrchestrator
                     targetUris = null;
 
                     ProbeLog.Info(
-                        $"  lossy-udp port={udpLink.Port} -> quic={backendQuicPort} delay={workload.DelayMs}ms loss={workload.LossPercent}%");
+                        $"  lossy-udp port={udpLink.Port} -> quic={backendQuicPort} delay={workload.DelayMs}ms (not applied; MsQuic) loss={workload.LossPercent}%");
                 }
                 else
                 {
