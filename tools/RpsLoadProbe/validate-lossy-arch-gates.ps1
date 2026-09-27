@@ -44,7 +44,7 @@ function Get-ArmSustain([string] $arm) {
 }
 
 function New-Pairs([string[]] $suffixes) {
-    $list = [System.Collections.Generic.List[object]]::new()
+    $list = [System.Collections.Generic.List[hashtable]]::new()
     foreach ($suffix in $suffixes) {
         $list.Add(@{ Label = "H1 TLS->H1 plain ($suffix)"; Twp = "twp-reverse-http1-tls-$suffix"; Yarp = "yarp-reverse-http1-tls-$suffix" })
         $list.Add(@{ Label = "H2 TLS->H1 plain ($suffix)"; Twp = "twp-reverse-http2-cleartext-$suffix"; Yarp = "yarp-reverse-http2-$suffix" })
@@ -55,16 +55,19 @@ function New-Pairs([string[]] $suffixes) {
         $list.Add(@{ Label = "H3->H2 TLS ($suffix)"; Twp = "twp-reverse-http3-to-http2-$suffix"; Yarp = "yarp-reverse-http3-to-http2-$suffix" })
         $list.Add(@{ Label = "H3->H1 TLS ($suffix)"; Twp = "twp-reverse-http3-to-https-http1-$suffix"; Yarp = "yarp-reverse-http3-to-https-http1-$suffix" })
     }
-    return $list
+    # Unary comma: PowerShell unwraps IEnumerable on return otherwise (fixed-size Object[]).
+    return ,$list
 }
 
-$pairs = switch ($Suite) {
-    'lossy' { New-Pairs @('lossy') }
+$pairs = [System.Collections.Generic.List[hashtable]]::new()
+switch ($Suite) {
+    'lossy' {
+        foreach ($item in (New-Pairs @('lossy'))) { $pairs.Add($item) }
+    }
     'arch' {
-        $p = New-Pairs @('slow256k', 'early64k')
-        $p.Add(@{ Label = 'Duplex H2 TLS->H2 TLS'; Twp = 'twp-reverse-http2-duplex-h2'; Yarp = 'yarp-reverse-http2-to-https-duplex-h2' })
-        $p.Add(@{ Label = 'Duplex WebSocket H1 TLS'; Twp = 'twp-reverse-http1-tls-duplex-ws'; Yarp = 'yarp-reverse-http1-tls-duplex-ws' })
-        $p
+        foreach ($item in (New-Pairs @('slow256k', 'early64k'))) { $pairs.Add($item) }
+        $pairs.Add(@{ Label = 'Duplex H2 TLS->H2 TLS'; Twp = 'twp-reverse-http2-duplex-h2'; Yarp = 'yarp-reverse-http2-to-https-duplex-h2' })
+        $pairs.Add(@{ Label = 'Duplex WebSocket H1 TLS'; Twp = 'twp-reverse-http1-tls-duplex-ws'; Yarp = 'yarp-reverse-http1-tls-duplex-ws' })
     }
 }
 

@@ -818,6 +818,11 @@ jobs:
           ulimit -n 65535 || true
           ulimit -n
 
+      # Catch PowerShell/runtime bugs in post-ramp validators before a multi-hour ramp.
+      - name: Smoke-test post-ramp gate scripts
+        shell: pwsh
+        run: pwsh tools/RpsLoadProbe/smoke-validate-gates.ps1
+
       # Pass workflow_dispatch inputs via env (not ${{ }} in the script) to avoid
       # githubactions:S7630 script-injection findings on user-controlled values.
       - name: Run saturation ramp
