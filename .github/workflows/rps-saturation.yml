@@ -897,6 +897,24 @@ jobs:
           if (-not $csv) { throw 'No CSV found for heavier YARP gate validation' }
           pwsh tools/RpsLoadProbe/validate-heavier-yarp-gates.ps1 -CsvPath $csv.FullName -NameSuffix post64k
 
+      - name: Validate lossy hard-bar gates
+        if: env.RPS_MODE == 'compare-lossy'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for lossy hard-bar gate validation' }
+          pwsh tools/RpsLoadProbe/validate-lossy-arch-gates.ps1 -CsvPath $csv.FullName -Suite lossy
+
+      - name: Validate arch hard-bar gates
+        if: env.RPS_MODE == 'compare-arch'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for arch hard-bar gate validation' }
+          pwsh tools/RpsLoadProbe/validate-lossy-arch-gates.ps1 -CsvPath $csv.FullName -Suite arch
+
       - name: Validate gRPC YARP gates
         if: env.RPS_MODE == 'compare-grpc'
         shell: pwsh
