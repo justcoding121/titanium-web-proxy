@@ -163,11 +163,15 @@ internal sealed class LossyTcpLink : IAsyncDisposable
 /// Per-client ephemeral sockets demux replies back to the correct peer.
 /// Delays are scheduled off the receive loops so MsQuic keeps pacing.
 /// <see cref="UdpClient"/> is not safe for concurrent <c>SendAsync</c>; each socket has a send gate.
-/// The backend→client receive loop is armed before the first client datagram is forwarded so a
-/// fast QUIC Retry/Initial response cannot land on a socket with no reader yet.
+/// Per-datagram delay is withheld for a short grace period after each client path starts so MsQuic
+/// can finish the handshake (1-RTT short-header packets still carry HANDSHAKE_DONE); loss% applies
+/// immediately. After the grace window, delay applies to all datagrams (models RTT for the body).
 /// </summary>
 internal sealed class LossyUdpLink : IAsyncDisposable
 {
+    /// <summary>No userspace delay for this long after the first client datagram (handshake / 1-RTT settle).</summary>
+    private const int DelayGraceMs = 500;
+
     private readonly UdpClient listener;
     private readonly SemaphoreSlim listenerSendGate = new(1, 1);
     private readonly IPEndPoint backend;
@@ -193,6 +197,8 @@ internal sealed class LossyUdpLink : IAsyncDisposable
     {
         // IPv4 loopback only — dual-stack + localhost (::1) broke MsQuic on windows-latest GHA.
         var listener = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        listener.Client.ReceiveBufferSize = 1 << 20;
+        listener.Client.SendBufferSize = 1 << 20;
         var link = new LossyUdpLink(listener, new IPEndPoint(IPAddress.Loopback, backendPort), delayMs,
             lossPercent);
         link.loop = link.AcceptLoopAsync();
@@ -220,62 +226,45 @@ internal sealed class LossyUdpLink : IAsyncDisposable
             }
 
             var key = result.RemoteEndPoint.ToString() ?? "unknown";
-            var relay = await GetOrCreateRelayAsync(key, result.RemoteEndPoint);
+            if (!relays.TryGetValue(key, out var relay))
+            {
+                var socket = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+                // Larger recv buffer: delayed client→origin forward gives the origin time to reply
+                // with Retry/Initial before we read; avoid silent drops under burst.
+                socket.Client.ReceiveBufferSize = 1 << 20;
+                socket.Client.SendBufferSize = 1 << 20;
+                var gate = new SemaphoreSlim(1, 1);
+                var created = new ClientRelay(socket, gate, result.RemoteEndPoint);
+                if (relays.TryAdd(key, created))
+                {
+                    relay = created;
+                    _ = RelayBackendToClientAsync(relay);
+                }
+                else
+                {
+                    gate.Dispose();
+                    socket.Dispose();
+                    relay = relays[key];
+                }
+            }
 
             if (ShouldDrop())
                 continue;
 
             // Clone: ReceiveAsync may reuse buffers; delay is scheduled off this loop.
             var payload = (byte[])result.Buffer.Clone();
-            _ = ForwardAsync(relay.Socket, relay.SendGate, payload, backend, cts.Token);
+            _ = ForwardAsync(relay.Socket, relay.SendGate, payload, backend, relay, cts.Token);
         }
-    }
-
-    private async ValueTask<ClientRelay> GetOrCreateRelayAsync(string key, IPEndPoint clientEp)
-    {
-        if (relays.TryGetValue(key, out var existing))
-            return existing;
-
-        var socket = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
-        var gate = new SemaphoreSlim(1, 1);
-        var receiving = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var created = new ClientRelay(socket, gate, clientEp, receiving);
-        if (!relays.TryAdd(key, created))
-        {
-            gate.Dispose();
-            socket.Dispose();
-            return relays[key];
-        }
-
-        _ = RelayBackendToClientAsync(created);
-        // Arm ReceiveAsync before the first client→backend forward (QUIC Retry can be immediate).
-        await receiving.Task.WaitAsync(cts.Token);
-        return created;
     }
 
     private async Task RelayBackendToClientAsync(ClientRelay relay)
     {
-        // Issue the first ReceiveAsync before unblocking the client→backend forward so a
-        // QUIC Retry/Initial response cannot race an empty socket recv queue on Windows.
-        ValueTask<UdpReceiveResult> receiveTask;
-        try
-        {
-            receiveTask = relay.Socket.ReceiveAsync(cts.Token);
-        }
-        catch (ObjectDisposedException)
-        {
-            relay.Receiving.TrySetResult();
-            return;
-        }
-
-        relay.Receiving.TrySetResult();
-
         while (!cts.IsCancellationRequested)
         {
             UdpReceiveResult result;
             try
             {
-                result = await receiveTask;
+                result = await relay.Socket.ReceiveAsync(cts.Token);
             }
             catch (OperationCanceledException)
             {
@@ -286,30 +275,28 @@ internal sealed class LossyUdpLink : IAsyncDisposable
                 return;
             }
 
-            try
-            {
-                receiveTask = relay.Socket.ReceiveAsync(cts.Token);
-            }
-            catch (ObjectDisposedException)
-            {
-                return;
-            }
-
             if (ShouldDrop())
                 continue;
 
             var payload = (byte[])result.Buffer.Clone();
-            _ = ForwardAsync(listener, listenerSendGate, payload, relay.ClientEndPoint, cts.Token);
+            _ = ForwardAsync(listener, listenerSendGate, payload, relay.ClientEndPoint, relay, cts.Token);
         }
     }
 
     private async Task ForwardAsync(UdpClient socket, SemaphoreSlim sendGate, byte[] payload,
-        IPEndPoint destination, CancellationToken cancellationToken)
+        IPEndPoint destination, ClientRelay relay, CancellationToken cancellationToken)
     {
         try
         {
-            if (delayMs > 0)
-                await Task.Delay(delayMs, cancellationToken);
+            // MsQuic on Windows through this NAT completes the handshake with 1-RTT short-header
+            // packets (HANDSHAKE_DONE, etc.). Delaying those from the first datagram left both
+            // TWP and YARP at sustain 0 (handshake timed out at 10s). Skip delay for a short
+            // grace window; loss% still applies to every datagram including the handshake.
+            var delay = delayMs > 0 && Environment.TickCount64 >= relay.AllowDelayAfterTick
+                ? delayMs
+                : 0;
+            if (delay > 0)
+                await Task.Delay(delay, cancellationToken);
             await sendGate.WaitAsync(cancellationToken);
             try
             {
@@ -382,18 +369,17 @@ internal sealed class LossyUdpLink : IAsyncDisposable
 
     private sealed class ClientRelay
     {
-        public ClientRelay(UdpClient socket, SemaphoreSlim sendGate, IPEndPoint clientEndPoint,
-            TaskCompletionSource receiving)
+        public ClientRelay(UdpClient socket, SemaphoreSlim sendGate, IPEndPoint clientEndPoint)
         {
             Socket = socket;
             SendGate = sendGate;
             ClientEndPoint = clientEndPoint;
-            Receiving = receiving;
+            AllowDelayAfterTick = Environment.TickCount64 + DelayGraceMs;
         }
 
         public UdpClient Socket { get; }
         public SemaphoreSlim SendGate { get; }
         public IPEndPoint ClientEndPoint { get; }
-        public TaskCompletionSource Receiving { get; }
+        public long AllowDelayAfterTick { get; }
     }
 }
