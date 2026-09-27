@@ -143,17 +143,6 @@ internal sealed class Http2DeferredOutboundData
         var wrote = false;
         List<int>? endedStreams = null;
 
-        void NoteEndStream(int endedStreamId)
-        {
-            // Record under the lock, before onEndStreamSent → RemoveStream → CancelStream, which
-            // would Remove() roundRobinOrder mid-iteration. The handed-off set stays until CancelStream
-            // so a concurrent RST still sees the response as in flight after the queue hits zero.
-            endStreamHandedOff.Add(endedStreamId);
-            onEndStreamQueued?.Invoke(endedStreamId);
-            endedStreams ??= new List<int>();
-            endedStreams.Add(endedStreamId);
-        }
-
         lock (gate)
         {
             if (roundRobinOrder.Count == 0)
@@ -188,7 +177,7 @@ internal sealed class Http2DeferredOutboundData
                     wrote = true;
                     ArrayPool<byte>.Shared.Return(pending.Rented);
                     if (pending.EndStream)
-                        NoteEndStream(streamId);
+                        NoteEndStream(streamId, onEndStreamQueued, ref endedStreams);
 
                     if (q.Count == 0)
                     {
@@ -235,7 +224,7 @@ internal sealed class Http2DeferredOutboundData
                 {
                     ArrayPool<byte>.Shared.Return(pending.Rented);
                     if (endStreamNow)
-                        NoteEndStream(streamId);
+                        NoteEndStream(streamId, onEndStreamQueued, ref endedStreams);
                 }
 
                 if (q.Count == 0)
@@ -255,13 +244,32 @@ internal sealed class Http2DeferredOutboundData
             }
         }
 
-        if (endedStreams != null && onEndStreamSent != null)
-        {
-            foreach (var id in endedStreams)
-                onEndStreamSent(id);
-        }
-
+        FlushEndStreamSentCallbacks(endedStreams, onEndStreamSent);
         return wrote;
+    }
+
+    /// <summary>
+    /// Record under the lock, before <paramref name="onEndStreamQueued"/> / later
+    /// <c>onEndStreamSent</c> → RemoveStream → CancelStream, which would Remove()
+    /// <see cref="roundRobinOrder"/> mid-iteration. The handed-off set stays until
+    /// <see cref="CancelStream"/> so a concurrent RST still sees the response as in flight
+    /// after the queue hits zero.
+    /// </summary>
+    private void NoteEndStream(int endedStreamId, Action<int>? onEndStreamQueued, ref List<int>? endedStreams)
+    {
+        endStreamHandedOff.Add(endedStreamId);
+        onEndStreamQueued?.Invoke(endedStreamId);
+        endedStreams ??= new List<int>();
+        endedStreams.Add(endedStreamId);
+    }
+
+    private static void FlushEndStreamSentCallbacks(List<int>? endedStreams, Action<int>? onEndStreamSent)
+    {
+        if (endedStreams is null || onEndStreamSent is null)
+            return;
+
+        foreach (var id in endedStreams)
+            onEndStreamSent(id);
     }
 
     private static void EnqueueDataFrame(Http2FrameWriter writer, int streamId, ReadOnlySpan<byte> payload,
