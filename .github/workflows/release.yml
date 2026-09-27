@@ -738,10 +738,16 @@ jobs:
             --generate-notes \
             --target "$GITHUB_SHA" \
             $PRE
-          # When GitHub finds no PR merges, --generate-notes is only a compare link.
-          # Fall back to commit-subject bullets from the previous different-SHA release tag.
+          # --generate-notes only lists merged PRs. Develop→beta cuts often have a single
+          # "Release …" PR while product work was direct-pushed to develop — that still
+          # produces a "What's Changed" heading with almost nothing useful. Fall back to
+          # commit-subject bullets when notes are missing or thinner than 3 bullets.
           BODY="$(gh release view "$TAG" --json body -q .body 2>/dev/null || true)"
-          if [[ "$BODY" != *"What's Changed"* ]]; then
+          BULLET_COUNT="$(printf '%s\n' "$BODY" | grep -c '^\* ' || true)"
+          NEED_COMMIT_NOTES=false
+          if [[ "$BODY" != *"What's Changed"* ]]; then NEED_COMMIT_NOTES=true; fi
+          if [[ "$BULLET_COUNT" -lt 3 ]]; then NEED_COMMIT_NOTES=true; fi
+          if [[ "$NEED_COMMIT_NOTES" == true ]]; then
             CUR_SHA="$(git rev-parse "${TAG}^{commit}" 2>/dev/null || echo "$GITHUB_SHA")"
             RANGE_PREV=""
             while read -r cand; do
@@ -757,7 +763,8 @@ jobs:
             {
               echo "## What's Changed"
               if [[ -n "$RANGE_PREV" ]]; then
-                git log --no-merges --pretty=format:'* %s' "${RANGE_PREV}..${TAG}"
+                git log --no-merges --pretty=format:'* %s' "${RANGE_PREV}..${TAG}" \
+                  | grep -Ev '^\* (Release |chore\(release\): bump product version)' || true
                 echo ""
                 echo ""
                 echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${RANGE_PREV}...${TAG}"
