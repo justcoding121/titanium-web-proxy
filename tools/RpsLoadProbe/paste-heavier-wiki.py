@@ -140,9 +140,9 @@ def primary_run_id(run_ids: RunIds) -> int:
 
 
 def run_id_with_os(run_ids: RunIds, os_folder: str) -> int:
-    """Prefer the newest run id that actually has CSVs for this OS folder."""
+    """First run id in the list that has CSVs for this OS (matches load_os first-wins)."""
     ids = _run_id_list(run_ids)
-    for rid in reversed(ids):
+    for rid in ids:
         if _csv_files_for_os(ROOT / str(rid), os_folder):
             return rid
     return ids[0]
@@ -164,10 +164,12 @@ def fmt_cell(m: Optional[dict], medal: bool = False, impossible: Optional[str] =
     mb = round(m["Rss"] / (1024 * 1024))
     cpu = round(m["Cpu"], 1)
     prefix = f"{MEDAL} " if medal else ""
+    # Handshake arms defer CPU sampling (post-measure snapshot) — omit idle 0% CPU.
+    foot = f"{mb} MiB" if cpu < 0.05 else f"{mb} MiB / {cpu}% CPU"
     if peak > sustain:
-        sub = f"peak {peak:,} · {mb} MiB / {cpu}% CPU"
+        sub = f"peak {peak:,} · {foot}"
     else:
-        sub = f"{mb} MiB / {cpu}% CPU"
+        sub = foot
     return f"{prefix}**{sustain:,}**<br><sub>({sub})</sub>"
 
 
@@ -292,7 +294,8 @@ def main() -> None:
     rid_p = primary_run_id(runs["post"])
     rid_l = primary_run_id(runs["lossy"])
     rid_a = primary_run_id(runs["arch"])
-    rid_t = primary_run_id(runs["tls"])
+    rid_t = run_id_with_os(runs["tls"], "windows-latest")
+    rid_t_lin = run_id_with_os(runs["tls"], "ubuntu-latest")
     rid_t_mac = run_id_with_os(runs["tls"], "macos-15-intel")
     rid_s = primary_run_id(runs["saturation"])
 
@@ -670,7 +673,7 @@ def main() -> None:
     text2 = text[l:]
     text2 = re.sub(
         r"Median of \*\*3\*\* repeats @ `[^`]+`\. Source: Actions \[[0-9]+\]\([^)]+\)(?: \(`compare-tls-cost`\))?\.\n",
-        f"Median of **3** repeats @ `{HEAD}`. Source: Actions [{rid_t}]({run_url(rid_t)}).\n",
+        f"Median of **3** repeats @ `{HEAD}`. Source: Actions [{rid_t_lin}]({run_url(rid_t_lin)}).\n",
         text2,
         count=1,
     )
@@ -697,8 +700,9 @@ def main() -> None:
         "\nAll three workloads are **>1.00×** YARP on Windows and Linux. On Linux, "
         "HAProxy leads keep-alive tiny (near-tie with nginx) and Envoy leads "
         "new-connection; TWP stays ahead of YARP on all three. On macOS, HAProxy "
-        "leads keep-alive tiny; YARP leads keep-alive 256 KiB; new-connection "
-        "sustain @ c=64 is peer-led (TWP/YARP 0).\n"
+        "leads keep-alive tiny and new-connection; YARP leads keep-alive 256 KiB. "
+        "New-connection is Darwin SslStream-bound (TWP≈YARP; handshake p99 SLO "
+        "**500 ms** on macOS only — Win/Linux stay at **200 ms**).\n"
     )
     if m >= 0 and m < next_h2:
         # Replace existing macOS TLS subsection through next ####/## or prose.
@@ -731,7 +735,7 @@ def main() -> None:
     if n_prose == 0:
         # Ensure prose sits after macOS table when the old sentence was already edited.
         grpc = text.find("\n## Unary gRPC", tls)
-        if grpc > 0 and "On macOS, HAProxy leads" not in text[tls:grpc]:
+        if grpc > 0 and "Darwin SslStream-bound" not in text[tls:grpc]:
             text = text[:grpc] + mac_prose + text[grpc:]
 
     WIKI.write_text(text, encoding="utf-8")

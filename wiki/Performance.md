@@ -454,6 +454,8 @@ Median of **3** repeats on `windows-latest` @ `062f4e72`. Source: Actions [36315
 
 
 
+
+
 | Body | Client | Origin | TWP | nginx | YARP |
 |---|---|---|---:|---:|---:|
 | 64 KiB | HTTP/1 · TLS | HTTP/1 · plain | 🥇 **9,238**<br><sub>(93 MiB / 44.9% CPU)</sub> | **614**<br><sub>(142 MiB / 24.7% CPU)</sub> | **8,008**<br><sub>(135 MiB / 49.3% CPU)</sub> |
@@ -505,6 +507,8 @@ On this GHA pass TWP÷YARP H1 TLS ≈ **1.21×** (64 KiB) / **1.26×** (256 KiB)
 Median of **3** repeats on `windows-latest` @ `062f4e72`. Source: Actions [36315371509](https://github.com/justcoding121/titanium-web-proxy/actions/runs/36315371509) (`compare-post`).
 
 *Not possible:* **HAProxy** and **Envoy** columns are omitted (no official Windows port).
+
+
 
 
 
@@ -652,15 +656,15 @@ Median of **3** repeats @ `062f4e72`. Source: Actions [36316343827](https://gith
 
 #### macOS
 
-Median of **3** repeats on `macos-15-intel` @ `062f4e72`. Source: Actions [36325271707](https://github.com/justcoding121/titanium-web-proxy/actions/runs/36325271707).
+Median of **3** repeats on `macos-15-intel` @ `062f4e72`. Source: Actions [36330150552](https://github.com/justcoding121/titanium-web-proxy/actions/runs/36330150552) (`nc-tiny`) + [36325271707](https://github.com/justcoding121/titanium-web-proxy/actions/runs/36325271707) (keep-alive).
 
 | Workload | TWP | nginx | HAProxy | Envoy | YARP |
 |---|---:|---:|---:|---:|---:|
 | Keep-alive · tiny GET | **8,347**<br><sub>(94 MiB / 35.1% CPU)</sub> | **5,697**<br><sub>(73 MiB / 18.6% CPU)</sub> | 🥇 **8,782**<br><sub>(65 MiB / 32.6% CPU)</sub> | **1,758**<br><sub>(75 MiB / 20.6% CPU)</sub> | **8,456**<br><sub>(118 MiB / 37.0% CPU)</sub> |
-| New-connection · tiny GET | **0**<br><sub>(peak 73 · 79 MiB / 11.1% CPU)</sub> | 🥇 **333**<br><sub>(70 MiB / 15.6% CPU)</sub> | **321**<br><sub>(61 MiB / 19.3% CPU)</sub> | **318**<br><sub>(79 MiB / 18.1% CPU)</sub> | **0**<br><sub>(peak 72 · 113 MiB / 6.0% CPU)</sub> |
+| New-connection · tiny GET | **97**<br><sub>(76 MiB)</sub> | **454**<br><sub>(87 MiB)</sub> | 🥇 **561**<br><sub>(66 MiB)</sub> | **408**<br><sub>(88 MiB / 0.1% CPU)</sub> | **102**<br><sub>(107 MiB / 0.4% CPU)</sub> |
 | Keep-alive · 256 KiB GET | **1,034**<br><sub>(184 MiB / 27.6% CPU)</sub> | **226**<br><sub>(peak 229 · 70 MiB / 15.8% CPU)</sub> | **596**<br><sub>(66 MiB / 23.7% CPU)</sub> | **268**<br><sub>(90 MiB / 10.0% CPU)</sub> | 🥇 **1,120**<br><sub>(119 MiB / 36.8% CPU)</sub> |
 
-All three workloads are **>1.00×** YARP on Windows and Linux. On Linux, HAProxy leads keep-alive tiny (near-tie with nginx) and Envoy leads new-connection; TWP stays ahead of YARP on all three. On macOS, HAProxy leads keep-alive tiny; YARP leads keep-alive 256 KiB; new-connection sustain @ c=64 is peer-led (TWP/YARP 0).
+All three workloads are **>1.00×** YARP on Windows and Linux. On Linux, HAProxy leads keep-alive tiny (near-tie with nginx) and Envoy leads new-connection; TWP stays ahead of YARP on all three. On macOS, HAProxy leads keep-alive tiny and new-connection; YARP leads keep-alive 256 KiB. New-connection is Darwin SslStream-bound (TWP≈YARP; handshake p99 SLO **500 ms** on macOS only — Win/Linux stay at **200 ms**).
 
 ## Unary gRPC (H2 TLS)
 
