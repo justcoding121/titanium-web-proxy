@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -21,6 +22,7 @@ using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Options;
+using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy.UnitTests;
 
@@ -130,11 +132,12 @@ public class SonarGateCoverageBumpTests
         var buf = new byte[9];
         var data = Encoding.ASCII.GetBytes(new string('z', 17));
         await using var ms = new MemoryStream();
-        await (Task)write.Invoke(null,
+        var vt = (ValueTask)write.Invoke(null,
         [
             header, buf, 11, Http2FrameType.Headers, true, false,
             new ReadOnlyMemory<byte>(data), 8, ms
         ])!;
+        await vt;
 
         var wire = ms.ToArray();
         Assert.IsTrue(wire.Length >= 9 + 8 + 9 + 8 + 9 + 1);
@@ -577,6 +580,330 @@ public class SonarGateCoverageBumpTests
 
         state.Http2RelayValidation = PolicyMode.Disabled;
         Assert.IsTrue((bool)enforce.Invoke(null, [state, false, logger, "disabled"])!);
+    }
+
+    [TestMethod]
+    public void ClearBodyReference_DropsBodyAndWireFlags()
+    {
+        var r = new Response(Encoding.ASCII.GetBytes("abc"));
+        r.IsBodyRead = r.IsBodyReceived = r.IsBodySent = r.BodyIsWireEncoded = true;
+        _ = r.BodyString;
+        Assert.IsTrue(r.BodyAvailable);
+
+        r.ClearBodyReference();
+
+        Assert.IsFalse(r.BodyAvailable);
+        Assert.IsFalse(r.IsBodyRead);
+        Assert.IsFalse(r.IsBodyReceived);
+        Assert.IsFalse(r.IsBodySent);
+        Assert.IsFalse(r.BodyIsWireEncoded);
+        Assert.ThrowsExactly<InvalidOperationException>(() => _ = r.Body);
+    }
+
+    [TestMethod]
+    public void RequestResponseBase_HeaderAndWireHelpers_CoverNewBranches()
+    {
+        var r = new Response(Encoding.ASCII.GetBytes("abcd")) { IsChunked = true };
+        r.Headers.AddHeader(KnownHeaders.ContentEncoding, "gzip");
+        r.IsChunked = false;
+        r.ContentLength = 4;
+        r.SetOriginalHeaders();
+        Assert.IsTrue(r.OriginalHasBody);
+        Assert.AreEqual(4, r.OriginalContentLength);
+        Assert.IsFalse(r.OriginalIsChunked);
+        Assert.AreEqual("gzip", r.OriginalContentEncoding);
+
+        var peer = new Response();
+        peer.SetOriginalHeaders(r);
+        Assert.AreEqual(4, peer.OriginalContentLength);
+        Assert.AreEqual("gzip", peer.OriginalContentEncoding);
+
+        var drop = new Response(Encoding.ASCII.GetBytes("x")) { KeepBody = false };
+        drop.FinishSession();
+        Assert.IsFalse(drop.BodyAvailable);
+
+        var keep = new Response(Encoding.ASCII.GetBytes("y")) { KeepBody = true };
+        keep.FinishSession();
+        Assert.IsTrue(keep.BodyAvailable);
+
+        var wire = new Response
+        {
+            Http2BodyData = new MemoryStream([1, 2, 3]),
+            Priority = 1,
+            ReadHttp2BeforeHandlerTaskCompletionSource = new TaskCompletionSource<bool>(),
+            ReadHttp2BodyTaskCompletionSource = new TaskCompletionSource<bool>(),
+            IsSynthetic = true
+        };
+        wire.ResetWireState();
+        Assert.IsNull(wire.Http2BodyData);
+        Assert.IsNull(wire.Priority);
+        Assert.IsFalse(wire.IsSynthetic);
+        Assert.IsNull(wire.ReadHttp2BeforeHandlerTaskCompletionSource);
+        Assert.IsNull(wire.ReadHttp2BodyTaskCompletionSource);
+
+        var h2 = new Response { HttpVersion = HttpHeader.Version20 };
+        h2.ContentLength = 12;
+        Assert.IsTrue(h2.Headers.HeaderExists(KnownHeaders.ContentLengthHttp2.String));
+
+        h2.Headers.AddHeader(KnownHeaders.ContentLength, "-3");
+        Assert.AreEqual(-1, h2.ContentLength);
+        h2.Headers.SetOrAddHeaderValue(KnownHeaders.ContentLength, "abc");
+        Assert.AreEqual(-1, h2.ContentLength);
+
+        var compress = new Response(Encoding.ASCII.GetBytes("hello-world"));
+        compress.ContentLength = -1;
+        var body = compress.CompressBodyAndUpdateContentLength();
+        Assert.IsNotNull(body);
+        Assert.AreEqual(body!.Length, compress.ContentLength);
+    }
+
+    [TestMethod]
+    public void ParseResponseLine_Bytes_LowercaseHttp10AndBadStatus()
+    {
+        Response.ParseResponseLine("http/1.0 200 OK"u8, out var v10, out var code, out var desc);
+        Assert.AreEqual(HttpHeader.Version10, v10);
+        Assert.AreEqual(200, code);
+        Assert.AreEqual("OK", desc);
+
+        Assert.ThrowsExactly<FormatException>(() =>
+            Response.ParseResponseLine("HTTP/1.1 xyz Extra"u8, out _, out _, out _));
+        Assert.ThrowsExactly<FormatException>(() =>
+            Response.ParseResponseLine("HTTP/1.1 xyz"u8, out _, out _, out _));
+
+        var omitCl = new Response
+        {
+            HttpVersion = HttpHeader.Version20,
+            StatusCode = 200,
+            RequestMethod = "GET"
+        };
+        Assert.IsTrue(omitCl.HasBody);
+
+        var withBody = new Response(Encoding.ASCII.GetBytes("ok"));
+        withBody.EnsureBodyAvailable();
+        Assert.ThrowsExactly<BodyNotFoundException>(() =>
+            new Response { StatusCode = 204 }.EnsureBodyAvailable());
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            new Response { StatusCode = 200, ContentLength = 4, IsBodyRead = false }.EnsureBodyAvailable());
+    }
+
+    [TestMethod]
+    public async Task ReadRequestLine_PrefetchHttp10BlankEofAndCancel()
+    {
+        await using (var s = MakeClientStream(Encoding.ASCII.GetBytes("GET /q HTTP/1.1\r\n")))
+        {
+            Assert.IsTrue(await s.FillBufferAsync());
+            var status = await s.ReadRequestLine();
+            Assert.AreEqual("GET", status.Method);
+            Assert.AreEqual("/q", status.RequestUri.ToString());
+            Assert.AreEqual(HttpHeader.Version11, status.Version);
+        }
+
+        await using (var s = MakeClientStream(Encoding.ASCII.GetBytes("POST / HTTP/1.0\n")))
+        {
+            var status = await s.ReadRequestLine();
+            Assert.AreEqual("POST", status.Method);
+            Assert.AreEqual(HttpHeader.Version10, status.Version);
+        }
+
+        await using (var s = MakeClientStream(Encoding.ASCII.GetBytes("\r\nGET / HTTP/1.1\r\n")))
+        {
+            var blank = await s.ReadRequestLineWithResultAsync();
+            Assert.IsFalse(blank.Cancelled);
+            Assert.IsNull(blank.Status.Method);
+            var next = await s.ReadRequestLine();
+            Assert.AreEqual("GET", next.Method);
+        }
+
+        await using (var s = MakeClientStream([]))
+        {
+            var eof = await s.ReadRequestLine();
+            Assert.IsNull(eof.Method);
+        }
+
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using (var s = MakeClientStream(new GatedPayloadStream(gate.Task, Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\n"))))
+        {
+            using var cts = new CancellationTokenSource();
+            var pending = s.ReadRequestLineWithResultAsync(cts.Token);
+            cts.Cancel();
+            var result = await pending;
+            Assert.IsTrue(result.Cancelled);
+            gate.TrySetResult();
+        }
+    }
+
+    [TestMethod]
+    public async Task ReadResponseStatus_BlankThenStatus_AndWriteRequest()
+    {
+        await using (var s = MakeServerStream(Encoding.ASCII.GetBytes("\r\nHTTP/1.1 204\r\n")))
+        {
+            // Prefill so the blank-line + status double-parse sync path runs.
+            Assert.IsTrue(await s.FillBufferAsync());
+            var status = await s.ReadResponseStatus();
+            Assert.IsNotNull(status);
+            Assert.AreEqual(204, status!.Value.StatusCode);
+            Assert.AreEqual(string.Empty, status.Value.Description);
+            Assert.AreEqual(HttpHeader.Version11, status.Value.Version);
+        }
+
+        await using var dest = new MemoryStream();
+        await using (var s = new HttpServerStream(
+                           new ProxyServer(false, false, false), dest, new DefaultBufferPool(), CancellationToken.None))
+        {
+            await s.WriteRequestAsync(new Request
+            {
+                Method = "GET",
+                RequestUriString = "/",
+                HttpVersion = HttpHeader.Version11
+            });
+        }
+
+        var text = Encoding.ASCII.GetString(dest.ToArray());
+        StringAssert.StartsWith(text, "GET / HTTP/1.1\r\n");
+    }
+
+    [TestMethod]
+    public async Task StreamExtensions_CopyToOnCopyAndWithCancellation()
+    {
+        var pool = new DefaultBufferPool();
+        var input = new MemoryStream(Encoding.ASCII.GetBytes(new string('x', 100)));
+        var output = new MemoryStream();
+        var copied = 0;
+        await input.CopyToAsync(output, (buf, off, count) => copied += count, pool);
+        Assert.AreEqual(100, copied);
+        Assert.AreEqual(100, output.Length);
+
+        var done = await Task.FromResult(7).WithCancellation(CancellationToken.None);
+        Assert.AreEqual(7, done);
+
+        var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var cancelled = await tcs.Task.WithCancellation(cts.Token);
+        Assert.AreEqual(0, cancelled);
+    }
+
+    [TestMethod]
+    public void HttpStreamLineHelpers_DecodeGrowAndCapacity()
+    {
+        var decodeBytes = typeof(HttpStream).GetMethod(
+            "DecodeCompletedLine", PrivateStatic, [typeof(byte[]), typeof(int), typeof(byte)])!;
+        Assert.AreEqual("ab", (string)decodeBytes.Invoke(null, [Encoding.ASCII.GetBytes("ab\n"), 2, (byte)'b'])!);
+        Assert.AreEqual("a", (string)decodeBytes.Invoke(null, [Encoding.ASCII.GetBytes("ab\n"), 2, (byte)'\r'])!);
+
+        var ensureCap = typeof(HttpStream).GetMethod("EnsureLineBufferCapacity", PrivateStatic)!;
+        var args = new object[] { new byte[4], 4, 16L };
+        ensureCap.Invoke(null, args);
+        Assert.IsTrue(((byte[])args[0]).Length >= 8);
+
+        args = [new byte[4], 5, 4L];
+        Assert.ThrowsExactly<TargetInvocationException>(() => ensureCap.Invoke(null, args));
+
+        var ensureMin = typeof(HttpStream).GetMethod("EnsureLineBufferMinLength", PrivateStatic)!;
+        args = [new byte[4], 10, 32L];
+        ensureMin.Invoke(null, args);
+        Assert.IsTrue(((byte[])args[0]).Length >= 10);
+
+        args = [new byte[4], 40, 16L];
+        Assert.ThrowsExactly<TargetInvocationException>(() => ensureMin.Invoke(null, args));
+    }
+
+    [TestMethod]
+    public void Http2FlowController_ReserveEdgeBranches()
+    {
+        var flow = new Http2FlowController();
+        Assert.IsTrue(flow.TryReserve(99, 0));
+        Assert.IsTrue(flow.TryReserve(99, -1));
+        Assert.AreEqual(0, flow.TryReservePartial(1, 0));
+        Assert.AreEqual(0, flow.TryReservePartial(1, -1));
+        Assert.IsTrue(flow.TryReserve(7, 100));
+
+        flow.OnInitialWindowSizeChanged(0);
+        Assert.AreEqual(0, flow.TryReservePartial(11, 10));
+
+        var flow2 = new Http2FlowController();
+        flow2.RegisterStream(1);
+        Assert.AreEqual(Http2FlowController.InitialConnectionWindow,
+            flow2.TryReservePartial(1, Http2FlowController.InitialConnectionWindow));
+        Assert.IsFalse(flow2.TryReserve(2, 1));
+    }
+
+    [TestMethod]
+    public async Task Http2FrameWriter_WaitsWhenLockHeld()
+    {
+        await using var ms = new MemoryStream();
+        var gate = new SemaphoreSlim(1, 1);
+        await using var writer = new Http2FrameWriter(ms, gate);
+        await gate.WaitAsync();
+        var payload = ArrayPool<byte>.Shared.Rent(8);
+        payload.AsSpan(0, 8).Fill(0x5A);
+        writer.EnqueueRented(payload, 8);
+        var release = Task.Run(async () =>
+        {
+            await Task.Delay(50);
+            gate.Release();
+        });
+        await writer.DisposeAsync();
+        await release;
+        CollectionAssert.AreEqual(new byte[] { 0x5A, 0x5A, 0x5A, 0x5A, 0x5A, 0x5A, 0x5A, 0x5A }, ms.ToArray());
+    }
+
+    private static HttpClientStream MakeClientStream(byte[] payload) =>
+        MakeClientStream(new MemoryStream(payload));
+
+    private static HttpClientStream MakeClientStream(Stream baseStream)
+    {
+        var proxy = new ProxyServer(false, false, false);
+        var connection = new QuicClientConnection(
+            proxy, new IPEndPoint(IPAddress.Loopback, 4433), new IPEndPoint(IPAddress.Loopback, 12345));
+        return new HttpClientStream(proxy, connection, baseStream, proxy.BufferPool, CancellationToken.None);
+    }
+
+    private static HttpServerStream MakeServerStream(byte[] payload) =>
+        new(new ProxyServer(false, false, false), new MemoryStream(payload), new DefaultBufferPool(),
+            CancellationToken.None);
+
+    private sealed class GatedPayloadStream : Stream
+    {
+        private readonly Task gate;
+        private readonly byte[] payload;
+        private int offset;
+
+        public GatedPayloadStream(Task gate, byte[] payload)
+        {
+            this.gate = gate;
+            this.payload = payload;
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush() { }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            await gate.WaitAsync(cancellationToken);
+            if (offset >= payload.Length) return 0;
+            var toCopy = Math.Min(buffer.Length, payload.Length - offset);
+            payload.AsMemory(this.offset, toCopy).CopyTo(buffer);
+            this.offset += toCopy;
+            return toCopy;
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     private sealed class DebugCapturingLogger : Microsoft.Extensions.Logging.ILogger

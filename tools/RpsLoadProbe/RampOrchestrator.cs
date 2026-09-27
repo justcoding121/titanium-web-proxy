@@ -327,6 +327,11 @@ internal sealed class RampOptions
     /// Lite÷Reverse stay same-job. Applied after capability / QuicListener filtering.
     /// </summary>
     public (int Index, int Count)? ArmShard { get; init; }
+    /// <summary>
+    /// When set, keep only arms whose name contains this substring (case-insensitive).
+    /// Surgical re-runs (e.g. <c>nc-tiny</c> after a Mac TLS handshake fix).
+    /// </summary>
+    public string? ArmNameContains { get; init; }
     /// <summary>Default workload when an arm does not override (preserves tiny-GET matrix).</summary>
     public WorkloadOptions Workload { get; init; } = WorkloadOptions.TinyGet;
 }
@@ -370,6 +375,12 @@ internal static class RampOrchestrator
 
         if (options.ArmShard is { } shard)
             arms = ApplyArmShard(arms, shard.Index, shard.Count);
+
+        if (!string.IsNullOrWhiteSpace(options.ArmNameContains))
+        {
+            var needle = options.ArmNameContains.Trim();
+            arms = arms.Where(a => a.Name.Contains(needle, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
 
         return arms.Select(a => a.Name).ToList();
     }
@@ -457,6 +468,14 @@ internal static class RampOrchestrator
             arms = ApplyArmShard(arms, shard.Index, shard.Count);
             ProbeLog.Info(
                 $"arm-shard {shard.Index}/{shard.Count}: {arms.Count}/{before} arms after capability filter.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.ArmNameContains))
+        {
+            var needle = options.ArmNameContains.Trim();
+            var before = arms.Count;
+            arms = arms.Where(a => a.Name.Contains(needle, StringComparison.OrdinalIgnoreCase)).ToList();
+            ProbeLog.Info($"arm-contains '{needle}': {arms.Count}/{before} arms.");
         }
 
         if (arms.Count == 0)
@@ -2343,7 +2362,7 @@ internal static class RampOrchestrator
                     targetUris = null;
 
                     ProbeLog.Info(
-                        $"  lossy-udp port={udpLink.Port} -> quic={backendQuicPort} delay={workload.DelayMs}ms loss={workload.LossPercent}%");
+                        $"  lossy-udp port={udpLink.Port} -> quic={backendQuicPort} delay={workload.DelayMs}ms (not applied; MsQuic) loss={workload.LossPercent}%");
                 }
                 else
                 {
@@ -2472,7 +2491,11 @@ internal static class RampOrchestrator
                             cancellationToken);
                     }
 
-                    Task<ProcessResourceSample?>? sampleTask = samplePid is int pid
+                    // Handshake (new-connection TLS) is p99-tight on 4-core macOS. Concurrent
+                    // Process.Refresh / pgrep sampling steals CPU from SslStream and tipped historical
+                    // c=8 p99 over the 200 ms SLO. Measure first; snapshot RSS/CPU afterward.
+                    var deferResourceSample = workload.IsHandshake;
+                    Task<ProcessResourceSample?>? sampleTask = !deferResourceSample && samplePid is int pid
                         ? ProcessResourceSampler.SampleDuringAsync(pid, options.StepDuration, cancellationToken)
                         : null;
 
@@ -2481,6 +2504,12 @@ internal static class RampOrchestrator
                     result = await measureTask.WaitAsync(measureBudget, cancellationToken);
                     if (sampleTask != null)
                         resources = await sampleTask.WaitAsync(measureBudget, cancellationToken);
+                    else if (deferResourceSample && samplePid is int sampleAfterPid)
+                    {
+                        resources = await ProcessResourceSampler
+                            .SampleDuringAsync(sampleAfterPid, TimeSpan.FromSeconds(1), cancellationToken)
+                            .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+                    }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                 {

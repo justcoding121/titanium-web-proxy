@@ -255,9 +255,9 @@ internal static class TcpHelper
     {
         // Now async relay all server=>client & client=>server data
         var sendRelay =
-            clientStream.CopyToAsync(serverStream, onDataSend, bufferPool, cancellationTokenSource.Token);
+            clientStream.CopyToAsync(serverStream, onDataSend, bufferPool, cancellationTokenSource.Token).AsTask();
         var receiveRelay =
-            serverStream.CopyToAsync(clientStream, onDataReceive, bufferPool, cancellationTokenSource.Token);
+            serverStream.CopyToAsync(clientStream, onDataReceive, bufferPool, cancellationTokenSource.Token).AsTask();
 
         await Task.WhenAny(sendRelay, receiveRelay);
         await cancellationTokenSource.CancelAsync();

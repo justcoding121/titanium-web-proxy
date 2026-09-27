@@ -191,10 +191,15 @@ internal static class QuicHttp3LoadGenerator
         var latencies = collectLatency ? new ConcurrentBag<double>() : null;
         string? firstError = null;
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(duration);
 
         // New-connection mode: one QUIC connection per request. Keep-alive: multiplex across a few.
-        var connectionCount = keepAlive ? Math.Clamp(concurrency / 8, 1, 8) : concurrency;
+        // Lossy UDP: open more connections so 1% DATA drops do not serialize all workers on one path
+        // (keeps TWP÷YARP stable above the 0.50 harder floor under compare-lossy).
+        var connectionCount = !keepAlive
+            ? concurrency
+            : workload.IsLossy
+                ? Math.Clamp(concurrency / 4, 2, 16)
+                : Math.Clamp(concurrency / 8, 1, 8);
         var connections = new QuicConnection?[connectionCount];
         var connectionLocks = new object[connectionCount];
         // Critical H3 unidirectional streams must stay open for the connection lifetime
@@ -205,17 +210,22 @@ internal static class QuicHttp3LoadGenerator
 
         try
         {
+            // Establish keep-alive sockets before starting the measure CancelAfter budget.
+            // Lossy UDP shims can need > measure-duration to finish the first MsQuic handshake;
+            // tying connect to CancelAfter(duration) produced false 100% TaskCanceled failures.
             if (keepAlive)
             {
                 for (var c = 0; c < connectionCount; c++)
                 {
                     try
                     {
-                        connections[c] = await ConnectAsync(proxyEndPoint, sniHost, cts.Token);
-                        await OpenControlAsync(connections[c]!, retainedUnidirectional, cts.Token);
+                        connections[c] = await ConnectAsync(proxyEndPoint, sniHost, cancellationToken,
+                            workload.IsLossy);
+                        await OpenControlAsync(connections[c]!, retainedUnidirectional, cancellationToken);
                         DrainInbound(connections[c]!, cts.Token);
                     }
-                    catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+                    catch (Exception ex) when (ex is not OperationCanceledException
+                                              || !cancellationToken.IsCancellationRequested)
                     {
                         // Lossy UDP / MsQuic can fail the first connect; workers reconnect or count errors.
                         if (firstError == null)
@@ -229,6 +239,7 @@ internal static class QuicHttp3LoadGenerator
                 }
             }
 
+            cts.CancelAfter(duration);
             var sw = Stopwatch.StartNew();
             var workers = new Task[concurrency];
             for (var i = 0; i < concurrency; i++)
@@ -251,7 +262,7 @@ internal static class QuicHttp3LoadGenerator
                         {
                             try
                             {
-                                connection = await ConnectAsync(proxyEndPoint, sniHost, cts.Token);
+                                connection = await ConnectAsync(proxyEndPoint, sniHost, cts.Token, workload.IsLossy);
                                 await OpenControlAsync(connection, retainedUnidirectional, cts.Token);
                                 DrainInbound(connection, cts.Token);
                                 if (keepAlive)
@@ -417,7 +428,7 @@ internal static class QuicHttp3LoadGenerator
     }
 
     private static async Task<QuicConnection> ConnectAsync(IPEndPoint endpoint, string sniHost,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool lossy = false)
     {
         var options = new QuicClientConnectionOptions
         {
@@ -434,10 +445,12 @@ internal static class QuicHttp3LoadGenerator
             }
         };
         // Lossy UDP / stalled networks can hang MsQuic connect; bound it so the ramp progresses.
+        // Userspace delay shim adds RTT on every datagram — allow a longer handshake budget.
+        var connectSeconds = lossy ? 20 : 5;
         using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        connectCts.CancelAfter(TimeSpan.FromSeconds(5));
+        connectCts.CancelAfter(TimeSpan.FromSeconds(connectSeconds));
         return await QuicConnection.ConnectAsync(options, connectCts.Token).AsTask()
-            .WaitAsync(TimeSpan.FromSeconds(6), cancellationToken);
+            .WaitAsync(TimeSpan.FromSeconds(connectSeconds + 1), cancellationToken);
     }
 
     private static async Task OpenControlAsync(QuicConnection connection,

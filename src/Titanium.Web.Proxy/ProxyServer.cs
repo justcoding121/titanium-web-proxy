@@ -1123,6 +1123,29 @@ public partial class ProxyServer : IDisposable
     public bool BlockPrivateNetworkDestinations { get; set; }
 
     /// <summary>
+    ///     Outbound destination policy hook: when <see langword="true" />, every resolved destination
+    ///     IP address is checked for loopback (<c>127.0.0.0/8</c>, <c>::1</c>, including IPv4-mapped
+    ///     forms such as <c>::ffff:127.0.0.1</c>) before connecting, and the connection attempt is
+    ///     rejected with an <see cref="Exceptions.OutboundDestinationBlockedException" /> if it matches.
+    ///     Private (RFC 1918), link-local, and cloud metadata addresses (including
+    ///     <c>169.254.169.254</c>) remain reachable under this flag alone.
+    ///     <para>
+    ///         Off by default. Use when the proxy must allow intranet destinations (for example
+    ///         <c>10.*</c>) but must still stop clients from pivoting to the proxy host's own loopback.
+    ///         <see cref="BlockPrivateNetworkDestinations" /> already covers loopback as part of its
+    ///         broader set; when that flag is enabled, this property is not consulted for the reject.
+    ///         Assigning <see cref="Profile" /> does not read or clear this property.
+    ///     </para>
+    ///     <para>
+    ///         Enforced on TCP outbound connects only (the same call sites as
+    ///         <see cref="BlockPrivateNetworkDestinations" />). Origin HTTP/3 (QUIC) dials a hostname
+    ///         and is not covered. An explicitly configured upstream proxy address is always exempt.
+    ///         Not currently enforced for a SOCKS upstream with <c>ProxyDnsRequests</c> enabled.
+    ///     </para>
+    /// </summary>
+    public bool BlockLoopbackDestinations { get; set; }
+
+    /// <summary>
     ///     Which resource-bound <see cref="PolicyFamily" /> is enforced, observed, or disabled, per
     ///     the plan's rollout section. Read live by each family's enforcement call site - not baked
     ///     into a per-request snapshot at connection accept time - so assigning a new value here (a

@@ -189,7 +189,9 @@ public class Http3OriginBridgeCoverageTests
         Assert.IsTrue(fwd.Response!.IsBodyRead);
         BridgeMethod("AppendMitmQuicBody").Invoke(null, [fwd, new ReadOnlyMemory<byte>([3])]);
         Assert.AreEqual(3, fwd.PreencodedBodyLength);
-        CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, fwd.Response.Body);
+        // Skip dual Body stamp — wire bytes live on PreencodedBody only.
+        Assert.IsFalse(fwd.Response.BodyAvailable);
+        CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, fwd.PreencodedBody![..fwd.PreencodedBodyLength]);
 
         var emptyFwd = new H3H2FastForward
         {
@@ -213,8 +215,9 @@ public class Http3OriginBridgeCoverageTests
         BridgeMethod("CaptureMitmQuicResponse").Invoke(null,
             [bodyFwd, new ReadOnlyMemory<byte>(qpack), new ReadOnlyMemory<byte>([9, 8])]);
         Assert.AreEqual(2, bodyFwd.PreencodedBodyLength);
-        CollectionAssert.AreEqual(new byte[] { 9, 8 }, bodyFwd.Response!.Body);
-        Assert.IsTrue(bodyFwd.Response.BodyIsWireEncoded);
+        CollectionAssert.AreEqual(new byte[] { 9, 8 }, bodyFwd.PreencodedBody![..bodyFwd.PreencodedBodyLength]);
+        Assert.IsFalse(bodyFwd.Response!.BodyAvailable);
+        Assert.IsTrue(bodyFwd.Response.IsBodyRead);
     }
 
     [TestMethod]

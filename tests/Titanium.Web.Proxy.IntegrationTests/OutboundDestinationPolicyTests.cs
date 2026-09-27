@@ -92,4 +92,60 @@ public class OutboundDestinationPolicyTests
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode,
             "an explicitly configured upstream proxy address must be exempt from the destination block");
     }
+
+    [TestMethod]
+    public async Task LoopbackOnly_Default_AllowsLoopbackDestination()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync("ok"));
+
+        var proxy = testSuite.GetProxy();
+        Assert.IsFalse(proxy.BlockLoopbackDestinations, "must be off by default");
+        Assert.IsFalse(proxy.BlockPrivateNetworkDestinations);
+
+        var client = testSuite.GetClient(proxy);
+        var response = await client.GetAsync(new Uri(server.ListeningHttpUrl));
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task LoopbackOnly_Enabled_BlocksLoopbackDestination_WithoutCoarseFlag()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync("ok"));
+
+        var proxy = testSuite.GetProxy();
+        proxy.BlockLoopbackDestinations = true;
+        Assert.IsFalse(proxy.BlockPrivateNetworkDestinations,
+            "loopback-only must not imply the coarse private-network flag");
+
+        var client = testSuite.GetClient(proxy);
+
+        await Assert.ThrowsExactlyAsync<HttpRequestException>(
+            () => client.GetStringAsync(new Uri(server.ListeningHttpUrl)),
+            "a blocked loopback destination must never be forwarded to");
+    }
+
+    [TestMethod]
+    public async Task LoopbackOnly_ExemptsExplicitlyConfiguredUpstreamProxy()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync("ok"));
+
+        var upstream = testSuite.GetProxy();
+        upstream.ViaHeaderPseudonym = "upstream-proxy";
+        var proxy = testSuite.GetProxy(upstream);
+        proxy.ViaHeaderPseudonym = "outer-proxy";
+        proxy.BlockLoopbackDestinations = true;
+
+        var client = testSuite.GetClient(proxy);
+        var response = await client.GetAsync(new Uri(server.ListeningHttpUrl));
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode,
+            "an explicitly configured upstream proxy address must be exempt from the loopback block");
+    }
 }

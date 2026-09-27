@@ -541,9 +541,9 @@ internal static partial class Http3OriginBridge
                     var earlyPump = earlyBodyPump;
                     var bodyPump = sessionArgs.Http3RequestBodyPump;
                     var trailing = request.HasTrailingHeaders ? request.TrailingHeaders : null;
-                    uploadTask = PumpUploadAsync();
+                    uploadTask = PumpUploadAsync().AsTask();
 
-                    async Task PumpUploadAsync()
+                    async ValueTask PumpUploadAsync()
                     {
                         try
                         {
@@ -561,10 +561,10 @@ internal static partial class Http3OriginBridge
                             else if (bodyPump != null)
                             {
                                 await bodyPump(
-                                    async (data, ct) =>
+                                    (data, ct) =>
                                     {
-                                        if (!data.IsEmpty)
-                                            await bodyWriter.WriteAsync(data, ct);
+                                        if (data.IsEmpty) return default;
+                                        return bodyWriter.WriteAsync(data, ct);
                                     },
                                     cancellationToken);
                             }
@@ -669,7 +669,7 @@ internal static partial class Http3OriginBridge
 
                 response.StreamBodyWriter = async (clientBodyStream, ct) =>
                 {
-                    async Task CopyResponseAsync()
+                    async ValueTask CopyResponseAsync()
                     {
                         IHttpStreamReader reader = originConnection.Stream;
                         using var limited = new LimitedStream(reader, server.BufferPool, originIsChunked,
@@ -689,11 +689,11 @@ internal static partial class Http3OriginBridge
                     }
 
                     // Keep request upload live while copying the response (true duplex).
-                    var copyTask = CopyResponseAsync();
+                    var copyVt = CopyResponseAsync();
                     if (pendingUpload != null)
-                        await Task.WhenAll(pendingUpload, copyTask);
+                        await Task.WhenAll(pendingUpload, copyVt.AsTask());
                     else
-                        await copyTask;
+                        await copyVt;
                 };
             }
             else if (uploadTask != null)

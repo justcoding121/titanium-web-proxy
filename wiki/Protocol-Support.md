@@ -120,7 +120,7 @@ Two principles apply — do not collapse them into “never show the client an o
 1. **Hide retryable connection failures when safe.** HTTP/1.x `RetryableServerConnectionException` and the H1→H2 bridge’s one-shot replay after origin `GOAWAY` (stream never processed) retry on a fresh upstream so the client often never sees the blip. Benign disconnects / cancellations log at Debug.
 2. **Keep stream admission and peer RST semantics honest.** Native h2↔h2 MITM relays origin `RST_STREAM` (including `REFUSED_STREAM` under load-shed). When the client opens more streams than the ACKed `SETTINGS_MAX_CONCURRENT_STREAMS` budget, the proxy sends `RST_STREAM(REFUSED_STREAM)` — browsers may briefly show a protocol error and reload. That is expected capacity signaling, not a leaked origin failure after a failed retry. Capacity refuses log at Debug; Rapid Reset / framing violations stay Error.
 
-See also the advertised=enforced consolidation in [Migration 4.x to 5.0](Migration-4.x-to-5.0#http2-continuation-and-reset-abuse-budgets).
+See also the advertised=enforced consolidation in [Migration from 4.x](Migration-from-4.x#http2-continuation-and-reset-abuse-budgets).
 
 ## WebSocket safety
 

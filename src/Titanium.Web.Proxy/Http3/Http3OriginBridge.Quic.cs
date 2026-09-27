@@ -828,10 +828,10 @@ internal static partial class Http3OriginBridge
             fwd.PreencodedBodyRented = false;
             if (fwd.Response != null)
             {
-                fwd.Response.Body = Array.Empty<byte>();
-                fwd.Response.BodyIsWireEncoded = true;
+                // Skip Body stamp — emit uses Preencoded; headers-only for BeforeResponse.
                 fwd.Response.IsBodyReceived = true;
                 fwd.Response.IsBodyRead = true;
+                fwd.Response.ContentLength = 0;
             }
 
             return;
@@ -843,12 +843,10 @@ internal static partial class Http3OriginBridge
         fwd.PreencodedBodyRented = false;
         if (fwd.Response != null)
         {
-            var copy = new byte[body.Length];
-            Buffer.BlockCopy(body, 0, copy, 0, body.Length);
-            fwd.Response.Body = copy;
-            fwd.Response.BodyIsWireEncoded = true;
+            // Skip dual Body copy — PreencodedBody is the wire buffer for SendPreencoded.
             fwd.Response.IsBodyReceived = true;
             fwd.Response.IsBodyRead = true;
+            fwd.Response.ContentLength = body.Length;
         }
     }
 
@@ -870,12 +868,9 @@ internal static partial class Http3OriginBridge
         fwd.PreencodedBodyRented = false;
         if (fwd.Response != null)
         {
-            var copy = new byte[combined.Length];
-            Buffer.BlockCopy(combined, 0, copy, 0, combined.Length);
-            fwd.Response.Body = copy;
-            fwd.Response.BodyIsWireEncoded = true;
             fwd.Response.IsBodyReceived = true;
             fwd.Response.IsBodyRead = true;
+            fwd.Response.ContentLength = combined.Length;
         }
     }
 

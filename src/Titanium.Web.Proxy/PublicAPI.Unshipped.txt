@@ -81,6 +81,8 @@ Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeHttpAuthenticate -> Tit
 [TWP001]Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundUnidirectionalStreams.get -> int
 [TWP001]Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundUnidirectionalStreams.set -> void
 static readonly Titanium.Web.Proxy.Http.KnownHeaders.AltSvc -> Titanium.Web.Proxy.Http.KnownHeader!
+Titanium.Web.Proxy.ProxyServer.BlockLoopbackDestinations.get -> bool
+Titanium.Web.Proxy.ProxyServer.BlockLoopbackDestinations.set -> void
 Titanium.Web.Proxy.ProxyServer.EnableHttpInterception.get -> bool
 Titanium.Web.Proxy.ProxyServer.EnableHttpInterception.set -> void
 Titanium.Web.Proxy.ProxyServer.IgnoreServerCertificateErrors.get -> bool
