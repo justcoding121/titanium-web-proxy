@@ -47,15 +47,6 @@ $revPairs = @(
     @{ Label = 'H3->H1 TLS'; Twp = "twp-reverse-http3-to-https-http1-$NameSuffix"; Yarp = "yarp-reverse-http3-to-https-http1-$NameSuffix" }
 )
 
-# POST H2↔H2 duplex still SLO-fails above ~c=8 (request+response deferred DATA); wiki still
-# publishes the arm. Exclude from the hard gate until that path sustains to c=64.
-if ($NameSuffix -eq 'post64k') {
-    $revPairs = @(
-        $revPairs | Where-Object { $_.Label -notin @('H2 TLS->h2c', 'H2 TLS->H2 TLS') }
-    )
-    Write-Host "NOTE: post64k excludes H2 TLS->h2c / H2 TLS->H2 TLS (duplex sustain gap)" -ForegroundColor DarkYellow
-}
-
 $failed = $false
 Write-Host "Heavier reverse TWP/YARP gates ($NameSuffix; >= $ReverseYarpGate @ c=64 median; skip when YARP SLO-fails)" -ForegroundColor Cyan
 foreach ($p in $revPairs) {

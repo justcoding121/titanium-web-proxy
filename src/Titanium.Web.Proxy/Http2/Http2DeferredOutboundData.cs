@@ -18,14 +18,15 @@ internal sealed class Http2DeferredOutboundData
     internal const int MaxFramesPerStream = 4;
 
     /// <summary>
-    /// Hard cap: RST if more DATA arrives while already deferred. Sized for a 256 KiB response
-    /// (~16 × 16 KiB DATA frames) plus a small burst margin — the prior cap of 4 RST'd 256 KiB
-    /// H2 TLS→H2 / H2→h2c bodies once the peer send window filled.
+    /// Hard cap: RST if more DATA arrives while already deferred. Sized for a 256 KiB body under
+    /// tight connection-window pressure (peers may emit ~1 KiB DATA frames, not only 16 KiB),
+    /// plus END_STREAM / burst margin for early-response duplex and slow-consumer backpressure.
     /// </summary>
-    internal const int HardMaxFramesPerStream = 20;
+    internal const int HardMaxFramesPerStream = 256;
 
     private readonly object gate = new();
-    private readonly Dictionary<int, Queue<PendingFrame>> byStream = new();
+    // LinkedList so a partial drain can AddFirst the remainder without reordering later frames.
+    private readonly Dictionary<int, LinkedList<PendingFrame>> byStream = new();
     private readonly List<int> roundRobinOrder = new();
     private int roundRobinIndex;
 
@@ -72,7 +73,7 @@ internal sealed class Http2DeferredOutboundData
         {
             if (!byStream.TryGetValue(streamId, out var q))
             {
-                q = new Queue<PendingFrame>(HardMaxFramesPerStream);
+                q = new LinkedList<PendingFrame>();
                 byStream[streamId] = q;
                 roundRobinOrder.Add(streamId);
             }
@@ -80,7 +81,7 @@ internal sealed class Http2DeferredOutboundData
             if (q.Count >= HardMaxFramesPerStream)
                 return false;
 
-            q.Enqueue(new PendingFrame(rented, offset, payloadLength, endStream));
+            q.AddLast(new PendingFrame(rented, offset, payloadLength, endStream));
             return true;
         }
     }
@@ -88,7 +89,7 @@ internal sealed class Http2DeferredOutboundData
     /// <summary>Drops and returns all queued buffers for a closed/reset stream.</summary>
     public void CancelStream(int streamId)
     {
-        Queue<PendingFrame>? q;
+        LinkedList<PendingFrame>? q;
         lock (gate)
         {
             if (!byStream.Remove(streamId, out q))
@@ -100,7 +101,8 @@ internal sealed class Http2DeferredOutboundData
 
         while (q.Count > 0)
         {
-            var frame = q.Dequeue();
+            var frame = q.First!.Value;
+            q.RemoveFirst();
             ArrayPool<byte>.Shared.Return(frame.Rented);
         }
     }
@@ -116,6 +118,7 @@ internal sealed class Http2DeferredOutboundData
         Action<int>? onEndStreamSent = null)
     {
         var wrote = false;
+        List<int>? endedStreams = null;
         lock (gate)
         {
             if (roundRobinOrder.Count == 0)
@@ -139,7 +142,39 @@ internal sealed class Http2DeferredOutboundData
                     continue;
                 }
 
-                var pending = q.Peek();
+                var pending = q.First!.Value;
+                // Empty END_STREAM (or empty DATA) needs no send-window credit but must still be
+                // framed — otherwise a queued trailer END_STREAM behind deferred body bytes stalls forever.
+                if (pending.PayloadLength <= 0)
+                {
+                    idlePasses = 0;
+                    q.RemoveFirst();
+                    EnqueueDataFrame(writer, streamId, ReadOnlySpan<byte>.Empty, pending.EndStream);
+                    wrote = true;
+                    ArrayPool<byte>.Shared.Return(pending.Rented);
+                    if (pending.EndStream)
+                    {
+                        endedStreams ??= new List<int>();
+                        endedStreams.Add(streamId);
+                    }
+
+                    if (q.Count == 0)
+                    {
+                        byStream.Remove(streamId);
+                        roundRobinOrder.RemoveAt(roundRobinIndex);
+                        if (roundRobinOrder.Count == 0)
+                            roundRobinIndex = 0;
+                        else if (roundRobinIndex >= roundRobinOrder.Count)
+                            roundRobinIndex = 0;
+                    }
+                    else
+                    {
+                        roundRobinIndex = (roundRobinIndex + 1) % roundRobinOrder.Count;
+                    }
+
+                    continue;
+                }
+
                 var reserved = flow.TryReservePartial(streamId, pending.PayloadLength);
                 if (reserved <= 0)
                 {
@@ -149,7 +184,7 @@ internal sealed class Http2DeferredOutboundData
                 }
 
                 idlePasses = 0;
-                q.Dequeue();
+                q.RemoveFirst();
 
                 var remaining = pending.PayloadLength - reserved;
                 var endStreamNow = pending.EndStream && remaining == 0;
@@ -158,15 +193,24 @@ internal sealed class Http2DeferredOutboundData
 
                 if (remaining > 0)
                 {
-                    // Keep the same rented buffer for the tail (offset advanced).
-                    q.Enqueue(new PendingFrame(pending.Rented, pending.Offset + reserved, remaining,
+                    // Remainder must stay at the front of this stream's queue. Enqueue-at-back would
+                    // send later frames before finishing this one (corrupt POST bodies under a short
+                    // connection window).
+                    q.AddFirst(new PendingFrame(pending.Rented, pending.Offset + reserved, remaining,
                         pending.EndStream));
                 }
                 else
                 {
                     ArrayPool<byte>.Shared.Return(pending.Rented);
                     if (endStreamNow)
-                        onEndStreamSent?.Invoke(streamId);
+                    {
+                        // Invoke outside the lock: OnDeferredEndStream → RemoveStream → CancelStream
+                        // also takes this lock and removes roundRobinOrder by value; doing that
+                        // mid-iteration then RemoveAt(roundRobinIndex) corrupts the list / aborts
+                        // the origin reader (slow-consumer ResponseEnded under concurrency).
+                        endedStreams ??= new List<int>();
+                        endedStreams.Add(streamId);
+                    }
                 }
 
                 if (q.Count == 0)
@@ -184,6 +228,12 @@ internal sealed class Http2DeferredOutboundData
                     roundRobinIndex = (roundRobinIndex + 1) % roundRobinOrder.Count;
                 }
             }
+        }
+
+        if (endedStreams != null && onEndStreamSent != null)
+        {
+            foreach (var id in endedStreams)
+                onEndStreamSent(id);
         }
 
         return wrote;

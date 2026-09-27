@@ -660,6 +660,27 @@ namespace Titanium.Web.Proxy.Http2
                             return;
                         }
 
+                        // Request half already closed (e.g. absorbed origin RST after early response):
+                        // consume bytes for flow-control hygiene but do not forward toward a dead origin.
+                        if (isClient && compressedDataState.RequestClosed)
+                        {
+                            if (length > 0)
+                                ArrayPool<byte>.Shared.Return(payloadRented);
+                            if (dataEndStream)
+                            {
+                                // already RequestClosed; may now finalize if response half is done
+                                if (compressedDataState.IsClosed)
+                                {
+                                    connectionState.OriginRelayPool?.ReleaseStream(dataStreamId);
+                                    connectionState.RemoveStream(dataStreamId);
+                                    ScheduleFinalize(compressedDataState, onAfterResponse, logger,
+                                        connectionState);
+                                }
+                            }
+
+                            continue;
+                        }
+
                         void MarkCompressedClosedIfFullySent()
                         {
                             if (!dataEndStream)
@@ -701,6 +722,51 @@ namespace Titanium.Web.Proxy.Http2
 
                         // Padded frames are not split (pad length + padding layout); defer whole frame.
                         var reserveBytes = length;
+
+                        // Never await ReserveAsync on either DATA direction: parking the shared frame
+                        // reader HOL-blocks WINDOW_UPDATE (early-response / duplex H2↔H2: client
+                        // WINDOW_UPDATE cannot drain deferred response DATA while request DATA waits).
+                        // Partial+defer + AddFirst remainder keeps wire order; PendingCount overtake
+                        // guard prevents END_STREAM racing ahead of queued bytes.
+
+                        // If this stream already has deferred DATA, do not send the new frame (or an
+                        // empty END_STREAM) immediately — that would overtake queued bytes and truncate
+                        // the body under a slow client (arch slow-consumer 256 KiB short-read at 65535).
+                        if (sendDeferred.PendingCount(wireStreamId) > 0)
+                        {
+                            if (length == 0 && !dataEndStream)
+                            {
+                                // nothing to forward
+                            }
+                            else
+                            {
+                                var toEnqueue = length > 0
+                                    ? payloadRented
+                                    : ArrayPool<byte>.Shared.Rent(1);
+                                var ownedPayload = length > 0;
+                                if (!sendDeferred.TryEnqueue(wireStreamId, toEnqueue, 0, length, dataEndStream))
+                                {
+                                    ArrayPool<byte>.Shared.Return(toEnqueue);
+                                    if (ownedPayload)
+                                        payloadRented = Array.Empty<byte>(); // already returned
+                                    ReportException(logger, new ProxyHttpException(
+                                        "HTTP/2 deferred DATA queue exceeded its per-stream cap.", null, null));
+                                    await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(),
+                                        new byte[9], peerStreamId != 0 ? peerStreamId : dataStreamId,
+                                        Http2ErrorCode.EnhanceYourCalm, input));
+                                    connectionState.RemoveStream(dataStreamId);
+                                }
+                                else if (ownedPayload)
+                                {
+                                    payloadRented = Array.Empty<byte>(); // ownership transferred
+                                }
+                            }
+
+                            if (length > 0 && payloadRented.Length > 0)
+                                ArrayPool<byte>.Shared.Return(payloadRented);
+                            continue;
+                        }
+
                         var reserved = sendFlow.TryReservePartial(wireStreamId, reserveBytes);
                         if (dataPadded && reserved > 0 && reserved < reserveBytes)
                         {
@@ -2082,6 +2148,40 @@ namespace Titanium.Web.Proxy.Http2
 
                     int errorCode = ReadHttp2ErrorCode(buffer);
 
+                    // Origin NO_ERROR / CANCEL / STREAM_CLOSED after (or while) completing a response is
+                    // normal cleanup of an unread request body (early-response / duplex). Forwarding that
+                    // RST to the client while deferred response DATA is still queued — or after the
+                    // response half is already closed — makes HttpClient fail mid-CopyTo with NO_ERROR.
+                    // Absorb it: stop feeding the origin, keep draining toward the client.
+                    var benignOriginRst = !isClient
+                        && (errorCode == (int)Http2ErrorCode.NoError
+                            || errorCode == (int)Http2ErrorCode.Cancel
+                            || errorCode == (int)Http2ErrorCode.StreamClosed);
+                    if (benignOriginRst
+                        && connectionState.Streams.TryGetValue(streamId, out var absorbState))
+                    {
+                        var pendingTowardClient = connectionState.ClientOutboundDeferred.PendingCount(streamId) > 0;
+                        if (pendingTowardClient || absorbState.ResponseClosed)
+                        {
+                            sendPacket = false;
+                            connectionState.ServerOutboundDeferred.CancelStream(streamId);
+                            absorbState.RequestClosed = true;
+                            if (absorbState.IsClosed)
+                            {
+                                connectionState.OriginRelayPool?.ReleaseStream(streamId);
+                                connectionState.RemoveStream(streamId);
+                                ScheduleFinalize(absorbState, onAfterResponse, logger, connectionState);
+                            }
+                            else
+                            {
+                                // Response DATA still draining; do not tear the stream down yet.
+                                connectionState.OriginRelayPool?.ReleaseStream(streamId);
+                            }
+
+                            continue;
+                        }
+                    }
+
                     // stream error: cancel any waiter/synthetic task scoped to this stream and stop tracking
                     // its flow-control windows and session mapping - regardless of the error code, the
                     // stream is now closed.
@@ -2442,7 +2542,30 @@ namespace Titanium.Web.Proxy.Http2
                             reserved = 0;
                         }
 
-                        if (reserved == frameLength)
+                        // Same overtake rule as compressed-relay: never emit past deferred DATA.
+                        if (sendDeferred.PendingCount(wireStreamId) > 0)
+                        {
+                            if (frameLength == 0 && !dataEndStream)
+                            {
+                                // nothing
+                            }
+                            else
+                            {
+                                var payloadRented = ArrayPool<byte>.Shared.Rent(Math.Max(1, frameLength));
+                                if (frameLength > 0)
+                                    buffer.AsSpan(0, frameLength).CopyTo(payloadRented);
+                                if (!sendDeferred.TryEnqueue(wireStreamId, payloadRented, 0, frameLength,
+                                        dataEndStream))
+                                {
+                                    ArrayPool<byte>.Shared.Return(payloadRented);
+                                    ReportException(logger, new ProxyHttpException(
+                                        "HTTP/2 deferred DATA queue exceeded its per-stream cap.", null, args));
+                                    await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(),
+                                        new byte[9], streamId, Http2ErrorCode.EnhanceYourCalm, input));
+                                }
+                            }
+                        }
+                        else if (reserved == frameLength)
                         {
                             frameHeader.CopyToBuffer(frameHeaderBuffer);
                             var wireLen = 9 + frameLength;

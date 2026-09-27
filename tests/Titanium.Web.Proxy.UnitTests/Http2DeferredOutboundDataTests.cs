@@ -159,6 +159,79 @@ public class Http2DeferredOutboundDataTests
         deferred.CancelStream(7);
     }
 
+    [TestMethod]
+    public async Task DeferredQueue_PartialDrain_DoesNotReorderLaterFramesOnSameStream()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        flow.RegisterStream(2);
+        // Exhaust only the connection window via stream 2; leave stream 1's window full.
+        flow.OnWindowUpdate(2, 1_000_000);
+        Assert.AreEqual(Http2FlowController.InitialConnectionWindow,
+            flow.TryReservePartial(2, Http2FlowController.InitialConnectionWindow));
+
+        await using var ms = new MemoryStream();
+        await using var writer = new Http2FrameWriter(ms);
+        var deferred = new Http2DeferredOutboundData();
+
+        var f1 = ArrayPool<byte>.Shared.Rent(100);
+        f1.AsSpan(0, 100).Fill(0x11);
+        var f2 = ArrayPool<byte>.Shared.Rent(100);
+        f2.AsSpan(0, 100).Fill(0x22);
+        Assert.IsTrue(deferred.TryEnqueue(1, f1, 0, 100, endStream: false));
+        Assert.IsTrue(deferred.TryEnqueue(1, f2, 0, 100, endStream: true));
+
+        // Enough credit for 40 bytes of the first frame only.
+        flow.OnWindowUpdate(0, 40);
+        Assert.IsTrue(deferred.TryDrain(flow, writer));
+        Assert.AreEqual(2, deferred.PendingCount(1)); // remainder of f1 + full f2
+
+        // Finish f1 (60) then all of f2 (100).
+        flow.OnWindowUpdate(0, 160);
+        Assert.IsTrue(deferred.TryDrain(flow, writer));
+        Assert.AreEqual(0, deferred.PendingCount(1));
+
+        await writer.DisposeAsync();
+        var bytes = ms.ToArray();
+
+        // Expect DATA frames: len=40 (0x11...), len=60 (0x11...), len=100 (0x22... + END_STREAM)
+        Assert.AreEqual(9 + 40 + 9 + 60 + 9 + 100, bytes.Length);
+        Assert.AreEqual(40, (bytes[0] << 16) | (bytes[1] << 8) | bytes[2]);
+        Assert.AreEqual(0x11, bytes[9]);
+        Assert.AreEqual(60, (bytes[49] << 16) | (bytes[50] << 8) | bytes[51]);
+        Assert.AreEqual(0x11, bytes[58]);
+        Assert.AreEqual(100, (bytes[118] << 16) | (bytes[119] << 8) | bytes[120]);
+        Assert.AreEqual((byte)Http2FrameType.Data, bytes[121]);
+        Assert.AreEqual((byte)Http2FrameFlag.EndStream, bytes[122] & (byte)Http2FrameFlag.EndStream);
+        Assert.AreEqual(0x22, bytes[127]);
+    }
+
+    [TestMethod]
+    public async Task DeferredQueue_EmptyEndStream_DrainsWithoutWindowCredit()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        Assert.AreEqual(Http2FlowController.InitialConnectionWindow,
+            flow.TryReservePartial(1, Http2FlowController.InitialConnectionWindow));
+
+        await using var ms = new MemoryStream();
+        await using var writer = new Http2FrameWriter(ms);
+        var deferred = new Http2DeferredOutboundData();
+
+        var endBuf = ArrayPool<byte>.Shared.Rent(1);
+        Assert.IsTrue(deferred.TryEnqueue(1, endBuf, 0, 0, endStream: true));
+
+        // Empty END_STREAM needs no credit.
+        Assert.IsTrue(deferred.TryDrain(flow, writer));
+        Assert.AreEqual(0, deferred.PendingCount(1));
+
+        await writer.DisposeAsync();
+        var bytes = ms.ToArray();
+        Assert.AreEqual(9, bytes.Length);
+        Assert.AreEqual(0, (bytes[0] << 16) | (bytes[1] << 8) | bytes[2]);
+        Assert.AreEqual((byte)Http2FrameFlag.EndStream, bytes[4] & (byte)Http2FrameFlag.EndStream);
+    }
+
     private static int ReadStreamId(byte[] buf, int offset) =>
         ((buf[offset] & 0x7f) << 24) | (buf[offset + 1] << 16) | (buf[offset + 2] << 8) | buf[offset + 3];
 }
