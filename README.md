@@ -139,7 +139,7 @@ Point your client at `127.0.0.1:8000` as its HTTP and HTTPS proxy. Trusting a ge
 
 ## Maintainers
 
-Actively maintained by [justcoding121](https://github.com/justcoding121). Past contributor: [honfika](https://github.com/honfika).
+Actively maintained by [justcoding121](https://github.com/justcoding121). Past collaborator: [honfika](https://github.com/honfika).
 
 ## License
 
