@@ -323,6 +323,55 @@ without the trailing TIME_WAIT delay.</p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_BlockLoopbackDestinations.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.BlockLoopbackDestinations%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1146">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_ProxyServer_BlockLoopbackDestinations_" data-uid="Titanium.Web.Proxy.ProxyServer.BlockLoopbackDestinations*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_BlockLoopbackDestinations" data-uid="Titanium.Web.Proxy.ProxyServer.BlockLoopbackDestinations">BlockLoopbackDestinations</h4>
+  <div class="markdown level1 summary"><p>Outbound destination policy hook: when <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a>, every resolved destination
+IP address is checked for loopback (<code>127.0.0.0/8</code>, <code>::1</code>, including IPv4-mapped
+forms such as <code>::ffff:127.0.0.1</code>) before connecting, and the connection attempt is
+rejected with an <a class="xref" href="Titanium.Web.Proxy.Exceptions.OutboundDestinationBlockedException.html">OutboundDestinationBlockedException</a> if it matches.
+Private (RFC 1918), link-local, and cloud metadata addresses (including
+<code>169.254.169.254</code>) remain reachable under this flag alone.</p>
+<p>
+    Off by default. Use when the proxy must allow intranet destinations (for example
+    <code>10.*</code>) but must still stop clients from pivoting to the proxy host's own loopback.
+    <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BlockPrivateNetworkDestinations">BlockPrivateNetworkDestinations</a> already covers loopback as part of its
+    broader set; when that flag is enabled, this property is not consulted for the reject.
+    Assigning <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_Profile">Profile</a> does not read or clear this property.
+</p>
+<p>
+    Enforced on TCP outbound connects only (the same call sites as
+    <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BlockPrivateNetworkDestinations">BlockPrivateNetworkDestinations</a>). Origin HTTP/3 (QUIC) dials a hostname
+    and is not covered. An explicitly configured upstream proxy address is always exempt.
+    Not currently enforced for a SOCKS upstream with <code>ProxyDnsRequests</code> enabled.
+</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool BlockLoopbackDestinations { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_BlockPrivateNetworkDestinations.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.BlockPrivateNetworkDestinations%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
@@ -378,7 +427,7 @@ connecting, and the connection attempt is rejected with an
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_BufferPool.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.BufferPool%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1197">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1220">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_BufferPool_" data-uid="Titanium.Web.Proxy.ProxyServer.BufferPool*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_BufferPool" data-uid="Titanium.Web.Proxy.ProxyServer.BufferPool">BufferPool</h4>
@@ -412,7 +461,7 @@ Buffer size should be at least 10 bytes.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_CertificateManager.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.CertificateManager%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1202">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1225">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_CertificateManager_" data-uid="Titanium.Web.Proxy.ProxyServer.CertificateManager*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_CertificateManager" data-uid="Titanium.Web.Proxy.ProxyServer.CertificateManager">CertificateManager</h4>
@@ -650,7 +699,7 @@ Default value is 60 seconds.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_CustomUpStreamProxyFailureFunc.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.CustomUpStreamProxyFailureFunc%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1250">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1273">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_CustomUpStreamProxyFailureFunc_" data-uid="Titanium.Web.Proxy.ProxyServer.CustomUpStreamProxyFailureFunc*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_CustomUpStreamProxyFailureFunc" data-uid="Titanium.Web.Proxy.ProxyServer.CustomUpStreamProxyFailureFunc">CustomUpStreamProxyFailureFunc</h4>
@@ -1027,7 +1076,7 @@ public bool EnableHttp3 { get; set; }</code></pre>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_EnableHttpInterception.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.EnableHttpInterception%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1469">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1492">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_EnableHttpInterception_" data-uid="Titanium.Web.Proxy.ProxyServer.EnableHttpInterception*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_EnableHttpInterception" data-uid="Titanium.Web.Proxy.ProxyServer.EnableHttpInterception">EnableHttpInterception</h4>
@@ -1172,7 +1221,7 @@ public bool EnableQpackDynamicTable { get; set; }</code></pre>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_EnableRequestTimingCapture.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.EnableRequestTimingCapture%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1347">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1370">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_EnableRequestTimingCapture_" data-uid="Titanium.Web.Proxy.ProxyServer.EnableRequestTimingCapture*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_EnableRequestTimingCapture" data-uid="Titanium.Web.Proxy.ProxyServer.EnableRequestTimingCapture">EnableRequestTimingCapture</h4>
@@ -1432,7 +1481,7 @@ Defaults to false.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_GetCustomUpStreamProxyFunc.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.GetCustomUpStreamProxyFunc%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1244">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1267">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_GetCustomUpStreamProxyFunc_" data-uid="Titanium.Web.Proxy.ProxyServer.GetCustomUpStreamProxyFunc*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_GetCustomUpStreamProxyFunc" data-uid="Titanium.Web.Proxy.ProxyServer.GetCustomUpStreamProxyFunc">GetCustomUpStreamProxyFunc</h4>
@@ -1690,7 +1739,7 @@ A subscribed <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_Logger.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.Logger%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1275">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1298">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_Logger_" data-uid="Titanium.Web.Proxy.ProxyServer.Logger*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_Logger" data-uid="Titanium.Web.Proxy.ProxyServer.Logger">Logger</h4>
@@ -1722,7 +1771,7 @@ A subscribed <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_Logging.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.Logging%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1265">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1288">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_Logging_" data-uid="Titanium.Web.Proxy.ProxyServer.Logging*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_Logging" data-uid="Titanium.Web.Proxy.ProxyServer.Logging">Logging</h4>
@@ -2117,7 +2166,7 @@ to write the response back to the client.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_PolicyModes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.PolicyModes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1143">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1166">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_PolicyModes_" data-uid="Titanium.Web.Proxy.ProxyServer.PolicyModes*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_PolicyModes" data-uid="Titanium.Web.Proxy.ProxyServer.PolicyModes">PolicyModes</h4>
@@ -2163,7 +2212,7 @@ next check any in-flight or new request makes, without restarting the proxy. Thi
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_Profile.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.Profile%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1169">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1192">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_Profile_" data-uid="Titanium.Web.Proxy.ProxyServer.Profile*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_Profile" data-uid="Titanium.Web.Proxy.ProxyServer.Profile">Profile</h4>
@@ -2240,7 +2289,7 @@ without needing its setter to run once at construction time.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ProxyAuthenticationSchemes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationSchemes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1373">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1396">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_ProxyAuthenticationSchemes_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationSchemes*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyAuthenticationSchemes" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationSchemes">ProxyAuthenticationSchemes</h4>
@@ -2273,7 +2322,7 @@ Works in relation with ProxySchemeAuthenticateFunc.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ProxyBasicAuthenticateFunc.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ProxyBasicAuthenticateFunc%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1354">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1377">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_ProxyBasicAuthenticateFunc_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyBasicAuthenticateFunc*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyBasicAuthenticateFunc" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyBasicAuthenticateFunc">ProxyBasicAuthenticateFunc</h4>
@@ -2306,7 +2355,7 @@ Should return true for successful authentication.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ProxyEndPoints.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ProxyEndPoints%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1238">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1261">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_ProxyEndPoints_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyEndPoints*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyEndPoints" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyEndPoints">ProxyEndPoints</h4>
@@ -2368,7 +2417,7 @@ Should return true for successful authentication.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ProxySchemeAuthenticateFunc.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ProxySchemeAuthenticateFunc%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1362">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1385">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_ProxySchemeAuthenticateFunc_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxySchemeAuthenticateFunc*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ProxySchemeAuthenticateFunc" data-uid="Titanium.Web.Proxy.ProxyServer.ProxySchemeAuthenticateFunc">ProxySchemeAuthenticateFunc</h4>
@@ -2550,7 +2599,7 @@ non-Windows, .NET Core 3+ / compatible runtimes).</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ReverseProxy.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ReverseProxy%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1462">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1485">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_ReverseProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.ReverseProxy*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ReverseProxy" data-uid="Titanium.Web.Proxy.ProxyServer.ReverseProxy">ReverseProxy</h4>
@@ -2614,7 +2663,7 @@ For HTTP/3-only upstreams see <a class="xref" href="Titanium.Web.Proxy.ProxyServ
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ShouldInterceptHttp.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ShouldInterceptHttp%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1477">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1500">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_ShouldInterceptHttp_" data-uid="Titanium.Web.Proxy.ProxyServer.ShouldInterceptHttp*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ShouldInterceptHttp" data-uid="Titanium.Web.Proxy.ProxyServer.ShouldInterceptHttp">ShouldInterceptHttp</h4>
@@ -2763,7 +2812,7 @@ accumulation; the 1-second connection disposal delay already prefers peer-first 
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ThreadPoolWorkerThread.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1512">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1535">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_ThreadPoolWorkerThread_" data-uid="Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ThreadPoolWorkerThread" data-uid="Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread">ThreadPoolWorkerThread</h4>
@@ -2796,7 +2845,7 @@ starved while the pool is still ramping workers.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_UpStreamEndPoint.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.UpStreamEndPoint%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1221">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1244">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_UpStreamEndPoint_" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamEndPoint*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_UpStreamEndPoint" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamEndPoint">UpStreamEndPoint</h4>
@@ -2831,7 +2880,7 @@ ignored so dual-stack destinations can still connect (see
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_UpStreamEndPointIPv4.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.UpStreamEndPointIPv4%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1227">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1250">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_UpStreamEndPointIPv4_" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamEndPointIPv4*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_UpStreamEndPointIPv4" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamEndPointIPv4">UpStreamEndPointIPv4</h4>
@@ -2863,7 +2912,7 @@ Takes precedence over <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_UpStreamEndPointIPv6.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.UpStreamEndPointIPv6%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1233">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1256">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_UpStreamEndPointIPv6_" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamEndPointIPv6*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_UpStreamEndPointIPv6" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamEndPointIPv6">UpStreamEndPointIPv6</h4>
@@ -2895,7 +2944,7 @@ Takes precedence over <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_UpStreamHttpProxy.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.UpStreamHttpProxy%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1207">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1230">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_UpStreamHttpProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamHttpProxy*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_UpStreamHttpProxy" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamHttpProxy">UpStreamHttpProxy</h4>
@@ -2926,7 +2975,7 @@ Takes precedence over <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_UpStreamHttpsProxy.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.UpStreamHttpsProxy%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1212">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1235">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_UpStreamHttpsProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamHttpsProxy*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_UpStreamHttpsProxy" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamHttpsProxy">UpStreamHttpsProxy</h4>
@@ -3092,7 +3141,7 @@ Windows SSPI only; ignored on non-Windows platforms.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ApplyLoggingConfiguration.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ApplyLoggingConfiguration%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1285">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1308">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_ApplyLoggingConfiguration_" data-uid="Titanium.Web.Proxy.ProxyServer.ApplyLoggingConfiguration*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ApplyLoggingConfiguration" data-uid="Titanium.Web.Proxy.ProxyServer.ApplyLoggingConfiguration">ApplyLoggingConfiguration()</h4>
@@ -4091,7 +4140,7 @@ can show a status message instead of crashing.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_AfterResponse.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.AfterResponse%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1441">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1464">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_ProxyServer_AfterResponse" data-uid="Titanium.Web.Proxy.ProxyServer.AfterResponse">AfterResponse</h4>
   <div class="markdown level1 summary"><p>Intercept after response event from server.</p>
@@ -4121,7 +4170,7 @@ can show a status message instead of crashing.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_BeforeRequest.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.BeforeRequest%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1408">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1431">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_ProxyServer_BeforeRequest" data-uid="Titanium.Web.Proxy.ProxyServer.BeforeRequest">BeforeRequest</h4>
   <div class="markdown level1 summary"><p>Intercept request event to server.</p>
@@ -4151,7 +4200,7 @@ can show a status message instead of crashing.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_BeforeResponse.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.BeforeResponse%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1420">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1443">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_ProxyServer_BeforeResponse" data-uid="Titanium.Web.Proxy.ProxyServer.BeforeResponse">BeforeResponse</h4>
   <div class="markdown level1 summary"><p>Intercept response event from server.</p>
@@ -4181,7 +4230,7 @@ can show a status message instead of crashing.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_BeforeUpStreamConnectRequest.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.BeforeUpStreamConnectRequest%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1456">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1479">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_ProxyServer_BeforeUpStreamConnectRequest" data-uid="Titanium.Web.Proxy.ProxyServer.BeforeUpStreamConnectRequest">BeforeUpStreamConnectRequest</h4>
   <div class="markdown level1 summary"><p>Intercept connect request sent to upstream proxy.</p>
@@ -4211,7 +4260,7 @@ can show a status message instead of crashing.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ClientCertificateSelectionCallback.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ClientCertificateSelectionCallback%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1403">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1426">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ClientCertificateSelectionCallback" data-uid="Titanium.Web.Proxy.ProxyServer.ClientCertificateSelectionCallback">ClientCertificateSelectionCallback</h4>
   <div class="markdown level1 summary"><p>Event to override client certificate selection during mutual SSL authentication.</p>
@@ -4241,7 +4290,7 @@ can show a status message instead of crashing.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ClientConnectionCountChanged.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ClientConnectionCountChanged%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1378">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1401">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ClientConnectionCountChanged" data-uid="Titanium.Web.Proxy.ProxyServer.ClientConnectionCountChanged">ClientConnectionCountChanged</h4>
   <div class="markdown level1 summary"><p>Event occurs when client connection count changed.</p>
@@ -4302,7 +4351,7 @@ Handlers must not block; Inspector marshals to the UI thread.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_Http3ClientConnectionCountChanged.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.Http3ClientConnectionCountChanged%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1388">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1411">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_ProxyServer_Http3ClientConnectionCountChanged" data-uid="Titanium.Web.Proxy.ProxyServer.Http3ClientConnectionCountChanged">Http3ClientConnectionCountChanged</h4>
   <div class="markdown level1 summary"><p>Event occurs when inbound HTTP/3 client connection count changed.</p>
@@ -4332,7 +4381,7 @@ Handlers must not block; Inspector marshals to the UI thread.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_Http3ServerConnectionCountChanged.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.Http3ServerConnectionCountChanged%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1393">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1416">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_ProxyServer_Http3ServerConnectionCountChanged" data-uid="Titanium.Web.Proxy.ProxyServer.Http3ServerConnectionCountChanged">Http3ServerConnectionCountChanged</h4>
   <div class="markdown level1 summary"><p>Event occurs when upstream HTTP/3 server connection count changed.</p>
@@ -4362,7 +4411,7 @@ Handlers must not block; Inspector marshals to the UI thread.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_OnClientConnectionCreate.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.OnClientConnectionCreate%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1446">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1469">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_ProxyServer_OnClientConnectionCreate" data-uid="Titanium.Web.Proxy.ProxyServer.OnClientConnectionCreate">OnClientConnectionCreate</h4>
   <div class="markdown level1 summary"><p>Customize TcpClient used for client connection upon create.</p>
@@ -4392,7 +4441,7 @@ Handlers must not block; Inspector marshals to the UI thread.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_OnRequestBodyWrite.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.OnRequestBodyWrite%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1415">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1438">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_ProxyServer_OnRequestBodyWrite" data-uid="Titanium.Web.Proxy.ProxyServer.OnRequestBodyWrite">OnRequestBodyWrite</h4>
   <div class="markdown level1 summary"><p>Intercept request body send event to server.
@@ -4424,7 +4473,7 @@ without buffering the whole body. Do not combine with SessionEventArgs.GetReques
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_OnResponseBodyWrite.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.OnResponseBodyWrite%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1427">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1450">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_ProxyServer_OnResponseBodyWrite" data-uid="Titanium.Web.Proxy.ProxyServer.OnResponseBodyWrite">OnResponseBodyWrite</h4>
   <div class="markdown level1 summary"><p>Intercept response body send event to client.
@@ -4456,7 +4505,7 @@ without buffering the whole body. Do not combine with SessionEventArgs.GetRespon
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_OnServerConnectionCreate.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.OnServerConnectionCreate%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1451">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1474">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_ProxyServer_OnServerConnectionCreate" data-uid="Titanium.Web.Proxy.ProxyServer.OnServerConnectionCreate">OnServerConnectionCreate</h4>
   <div class="markdown level1 summary"><p>Customize TcpClient used for server connection upon create.</p>
@@ -4486,7 +4535,7 @@ without buffering the whole body. Do not combine with SessionEventArgs.GetRespon
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ServerCertificateValidationCallback.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ServerCertificateValidationCallback%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1398">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1421">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ServerCertificateValidationCallback" data-uid="Titanium.Web.Proxy.ProxyServer.ServerCertificateValidationCallback">ServerCertificateValidationCallback</h4>
   <div class="markdown level1 summary"><p>Event to override the default verification logic of remote SSL certificate received during authentication.</p>
@@ -4516,7 +4565,7 @@ without buffering the whole body. Do not combine with SessionEventArgs.GetRespon
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ServerConnectionCountChanged.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ServerConnectionCountChanged%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1383">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1406">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ServerConnectionCountChanged" data-uid="Titanium.Web.Proxy.ProxyServer.ServerConnectionCountChanged">ServerConnectionCountChanged</h4>
   <div class="markdown level1 summary"><p>Event occurs when server connection count changed.</p>

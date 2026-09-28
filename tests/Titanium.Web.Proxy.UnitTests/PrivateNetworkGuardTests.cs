@@ -49,4 +49,28 @@ public class PrivateNetworkGuardTests
     {
         Assert.IsTrue(PrivateNetworkGuard.IsBlocked(IPAddress.Parse("::ffff:127.0.0.1")));
     }
+
+    [DataTestMethod]
+    [DataRow("127.0.0.1")]
+    [DataRow("127.0.0.2")]
+    [DataRow("::1")]
+    [DataRow("::ffff:127.0.0.1")]
+    public void IsLoopback_LoopbackAddresses_ReturnsTrue(string address)
+    {
+        Assert.IsTrue(PrivateNetworkGuard.IsLoopback(IPAddress.Parse(address)),
+            $"{address} should be classified as loopback");
+    }
+
+    [DataTestMethod]
+    [DataRow("10.0.0.5")]
+    [DataRow("8.8.8.8")]
+    [DataRow("169.254.169.254")]
+    [DataRow("192.168.1.1")]
+    [DataRow("fc00::1")]
+    [DataRow("fe80::1")]
+    public void IsLoopback_NonLoopbackAddresses_ReturnsFalse(string address)
+    {
+        Assert.IsFalse(PrivateNetworkGuard.IsLoopback(IPAddress.Parse(address)),
+            $"{address} should not be classified as loopback");
+    }
 }

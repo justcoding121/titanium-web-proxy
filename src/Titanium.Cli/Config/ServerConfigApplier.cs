@@ -138,6 +138,7 @@ internal static class ServerConfigApplier
         }
 
         ApplyBool(server.BlockPrivateNetworkDestinations, v => proxy.BlockPrivateNetworkDestinations = v);
+        ApplyBool(server.BlockLoopbackDestinations, v => proxy.BlockLoopbackDestinations = v);
 
         if (!string.IsNullOrWhiteSpace(server.CheckCertificateRevocation) &&
             Enum.TryParse<X509RevocationMode>(server.CheckCertificateRevocation, ignoreCase: true, out var revocation))

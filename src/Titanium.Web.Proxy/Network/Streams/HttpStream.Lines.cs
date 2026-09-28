@@ -64,6 +64,47 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
     }
 
     /// <summary>
+    ///     When a complete response status line is already buffered, parse it from bytes (no line string).
+    ///     Returns <see langword="false"/> when more socket data is needed.
+    /// </summary>
+    protected bool TryParseResponseLineFromBuffer(out Version version, out int statusCode, out string description,
+        out bool emptyLine)
+    {
+        version = HttpHeader.VersionUnknown;
+        statusCode = 0;
+        description = string.Empty;
+        emptyLine = false;
+
+        var maxLineBytes = server.ResourceLimits.MaxHeaderLineBytes;
+        var window = streamBuffer.AsSpan(bufferPos, Available);
+        var lfIndex = window.IndexOf((byte)'\n');
+        if (lfIndex < 0)
+            return false;
+
+        if (lfIndex > maxLineBytes)
+            throw new ProxyHttpException(
+                $"HTTP header/request line exceeded the configured maximum of {maxLineBytes:N0} bytes.",
+                null, null);
+
+        var line = window.Slice(0, lfIndex);
+        if (line.Length > 0 && line[^1] == (byte)'\r')
+            line = line[..^1];
+
+        var consumed = lfIndex + 1;
+        bufferPos += consumed;
+        Available -= consumed;
+
+        if (line.Length == 0)
+        {
+            emptyLine = true;
+            return true;
+        }
+
+        Response.ParseResponseLine(line, out version, out statusCode, out description);
+        return true;
+    }
+
+    /// <summary>
     ///     When a complete request line is already buffered, parse it from bytes (no line string).
     ///     Returns <see langword="false"/> when more socket data is needed.
     /// </summary>

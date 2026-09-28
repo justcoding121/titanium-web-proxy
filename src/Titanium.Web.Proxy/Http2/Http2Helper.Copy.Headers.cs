@@ -414,8 +414,8 @@ namespace Titanium.Web.Proxy.Http2
                         // Drain queued HEADERS/DATA so trailers cannot overtake them on the wire.
                         if (isClient)
                             await connectionState.ServerWriteChain;
-                        await lockedOutputWrite(() => AsValueTask(SendTrailer(remoteSettings, frameHeader, frameHeaderBuffer,
-                            hbStreamId, headerRr.TrailingHeaders, endStreamFlag, output)));
+                        await lockedOutputWrite(() => SendTrailer(remoteSettings, frameHeader, frameHeaderBuffer,
+                            hbStreamId, headerRr.TrailingHeaders, endStreamFlag, output));
                     }
 
                     return false;
@@ -1462,8 +1462,8 @@ namespace Titanium.Web.Proxy.Http2
 
                 // Drain queued response HEADERS/DATA so trailers cannot overtake them.
                 await connectionState.ClientWriteChain;
-                await lockedOutputWrite(() => AsValueTask(SendTrailer(remoteSettings, frameHeader, frameHeaderBuffer,
-                    hbStreamId, headerRr.TrailingHeaders, endStreamFlag, output)));
+                await lockedOutputWrite(() => SendTrailer(remoteSettings, frameHeader, frameHeaderBuffer,
+                    hbStreamId, headerRr.TrailingHeaders, endStreamFlag, output));
                 return false;
             }
         }

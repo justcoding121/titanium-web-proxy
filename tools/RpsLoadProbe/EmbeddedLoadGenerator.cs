@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace Titanium.Web.Proxy.RpsLoadProbe;
@@ -246,7 +247,9 @@ internal static class EmbeddedLoadGenerator
                                              !IsTruthyEnv("TWP_RPS_SINGLE_HTTP3_CONNECTION"),
             SslOptions = new SslClientAuthenticationOptions
             {
-                RemoteCertificateValidationCallback = static (_, _, _, _) => true
+                RemoteCertificateValidationCallback = static (_, _, _, _) => true,
+                // Avoid OCSP/CRL round-trips on every new-connection TLS request (Darwin especially).
+                CertificateRevocationCheckMode = X509RevocationMode.NoCheck
             }
         };
 

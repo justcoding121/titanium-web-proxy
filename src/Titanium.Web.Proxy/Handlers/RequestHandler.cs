@@ -795,19 +795,37 @@ public partial class ProxyServer
                     }
 
                     h3Response.Locked = true;
-                    await h3ClientStream.WriteResponseAsync(h3Response, cancellationToken);
-                    args.IsClientResponseCommitted = true;
 
-                    if (h3Response.StreamBodyWriter != null && !h3Response.IsBodySent)
+                    // IsFastPath + already-buffered fixed body: coalesce without CompressBody.
+                    if (args.IsFastPath
+                        && h3Response.IsBodyRead
+                        && h3Response.BodyAvailable
+                        && !h3Response.IsChunked
+                        && !h3Response.HasTrailingHeaders
+                        && h3Response.StreamBodyWriter == null)
                     {
-                        var bodyWriter = new BodyStreamWriter(h3ClientStream, h3Response.IsChunked);
-                        await h3Response.StreamBodyWriter(bodyWriter, cancellationToken);
-                        await bodyWriter.CompleteAsync(
-                            h3Response.HasTrailingHeaders ? h3Response.TrailingHeaders : null, cancellationToken);
-                        h3Response.IsBodySent = true;
+                        var wire = h3Response.Body;
+                        h3Response.ClearBodyReference();
+                        await h3ClientStream.WriteResponseWithWireBodyAsync(h3Response, wire, cancellationToken);
+                        args.IsClientResponseCommitted = true;
+                        h3Response.IsBodyReceived = true;
                     }
+                    else
+                    {
+                        await h3ClientStream.WriteResponseAsync(h3Response, cancellationToken);
+                        args.IsClientResponseCommitted = true;
 
-                    h3Response.IsBodyReceived = true;
+                        if (h3Response.StreamBodyWriter != null && !h3Response.IsBodySent)
+                        {
+                            var bodyWriter = new BodyStreamWriter(h3ClientStream, h3Response.IsChunked);
+                            await h3Response.StreamBodyWriter(bodyWriter, cancellationToken);
+                            await bodyWriter.CompleteAsync(
+                                h3Response.HasTrailingHeaders ? h3Response.TrailingHeaders : null, cancellationToken);
+                            h3Response.IsBodySent = true;
+                        }
+
+                        h3Response.IsBodyReceived = true;
+                    }
                 }
 
                 return new RetryResult(null, null, h3Response.KeepAlive);
@@ -958,10 +976,7 @@ public partial class ProxyServer
                 fastResponse.ContentLength = fastResponse.Body.Length;
             }
 
-            // Known-CL bodies up to one large-copy grain: materialize then one client write
-            // (headers+body). Streaming WriteResponse + CopyBody emits a tiny header-only TLS
-            // record first — under userspace delay that costs an extra shim RTT vs YARP, which
-            // typically forwards a larger first write (lossy H1 cool ~0.86× → target ≥0.95×).
+            // Known-CL bodies up to one large-copy grain: coalesce headers+body without assigning Body.
             // Skip when the body is already buffered (e.g. HTTP/1.0 chunked reframe above) —
             // another ReadAsync would pull the next keep-alive response off the pooled socket.
             const int coalesceBodyLimit = 64 * 1024;
@@ -973,7 +988,7 @@ public partial class ProxyServer
             {
                 var serverStream = args.HttpClient.Connection.Stream;
                 var length = (int)fastResponse.ContentLength;
-                var coalescedBody = new byte[length];
+                var (coalescedBody, pooled, poolKind) = RentH1CoalesceBodyBuffer(length);
                 try
                 {
                     using var idleDeadline = args.Deadlines.Start(cancellationToken,
@@ -992,9 +1007,10 @@ public partial class ProxyServer
 
                         if (read != length)
                         {
-                            Array.Resize(ref coalescedBody, read);
                             // Short CL read: do not return this socket to the pool (desync).
                             args.HttpClient.CloseServerConnection = true;
+                            if (fastResponse.ContentLength != read)
+                                fastResponse.ContentLength = read;
                         }
                         else if (serverStream.DataAvailable)
                         {
@@ -1002,10 +1018,10 @@ public partial class ProxyServer
                             args.HttpClient.CloseServerConnection = true;
                         }
 
-                        fastResponse.Body = coalescedBody;
-                        fastResponse.BodyIsWireEncoded = true;
-                        fastResponse.IsBodyReceived = true;
-                        fastResponse.IsBodyRead = true;
+                        await args.ClientStream.WriteResponseWithWireBodyAsync(fastResponse,
+                            coalescedBody.AsMemory(0, read), cancellationToken);
+                        args.IsClientResponseCommitted = true;
+                        return;
                     }
                     catch (OperationCanceledException ex)
                     {
@@ -1017,10 +1033,10 @@ public partial class ProxyServer
                     await HandleProxyTimeoutAsync(args, ex, cancellationToken);
                     return;
                 }
-
-                await args.ClientStream.WriteResponseAsync(fastResponse, cancellationToken);
-                args.IsClientResponseCommitted = true;
-                return;
+                finally
+                {
+                    ReturnH1CoalesceBodyBuffer(pooled, poolKind);
+                }
             }
 
             await args.ClientStream.WriteResponseAsync(fastResponse, cancellationToken);

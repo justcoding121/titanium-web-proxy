@@ -197,6 +197,10 @@ on:
         description: 'Comparison-group partition (all = no split; i/n = exclusive 1-based shard of wiki rows / Client×Origin wires, not individual arms)'
         required: true
         default: all
+      arm_contains:
+        description: 'Optional arm-name substring filter (e.g. nc-tiny). Empty = all arms in mode.'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -213,6 +217,7 @@ jobs:
       RPS_DURATION_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.duration_sec || 8 }}
       RPS_REPEATS: ${{ github.event_name == 'workflow_dispatch' && inputs.repeats || 1 }}
       RPS_ARM_SHARD: ${{ github.event_name == 'workflow_dispatch' && inputs.arm_shard || 'all' }}
+      RPS_ARM_CONTAINS: ${{ github.event_name == 'workflow_dispatch' && inputs.arm_contains || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -818,6 +823,11 @@ jobs:
           ulimit -n 65535 || true
           ulimit -n
 
+      # Catch PowerShell/runtime bugs in post-ramp validators before a multi-hour ramp.
+      - name: Smoke-test post-ramp gate scripts
+        shell: pwsh
+        run: pwsh tools/RpsLoadProbe/smoke-validate-gates.ps1
+
       # Pass workflow_dispatch inputs via env (not ${{ }} in the script) to avoid
       # githubactions:S7630 script-injection findings on user-controlled values.
       - name: Run saturation ramp
@@ -830,12 +840,18 @@ jobs:
           RPS_DURATION_SEC: ${{ env.RPS_DURATION_SEC }}
           RPS_REPEATS: ${{ env.RPS_REPEATS }}
           RPS_ARM_SHARD: ${{ env.RPS_ARM_SHARD }}
+          RPS_ARM_CONTAINS: ${{ env.RPS_ARM_CONTAINS }}
         run: |
           $hap = Join-Path $env:RUNNER_TEMP 'haproxy-quic/sbin/haproxy'
           $hapArgs = @()
           if ((Test-Path -LiteralPath $hap)) {
             Write-Host "Pinning HAProxy QUIC binary: $hap"
             $hapArgs = @('-HaproxyPath', $hap)
+          }
+          $containsArgs = @()
+          if ($env:RPS_ARM_CONTAINS) {
+            Write-Host "Arm name filter: $($env:RPS_ARM_CONTAINS)"
+            $containsArgs = @('-ArmContains', $env:RPS_ARM_CONTAINS)
           }
           pwsh tools/RpsLoadProbe/run-rps.ps1 `
             -Mode $env:RPS_MODE `
@@ -846,6 +862,7 @@ jobs:
             -ArmShard $env:RPS_ARM_SHARD `
             -ResultsDir tools/RpsLoadProbe/results `
             -BombardierCheck `
+            @containsArgs `
             @hapArgs
 
       - name: Sanitize artifact shard label
@@ -875,8 +892,54 @@ jobs:
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
             Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $csv) { throw 'No CSV found for compare-product gate validation' }
-          # Same floors on all OS: MITM Lite÷Reverse >= 0.50, Full÷Reverse >= 0.50, reverse TWP÷YARP >= 0.75. No nginx gate.
+          # Same floors on all OS: MITM Lite÷Reverse >= 0.50, Full÷Reverse >= 0.50, reverse TWP÷YARP >= 0.60. No nginx gate.
           pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName
+
+      - name: Validate heavier YARP gates (bodies)
+        if: env.RPS_MODE == 'compare-bodies'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for heavier YARP gate validation' }
+          pwsh tools/RpsLoadProbe/validate-heavier-yarp-gates.ps1 -CsvPath $csv.FullName -NameSuffix body64k
+          pwsh tools/RpsLoadProbe/validate-heavier-yarp-gates.ps1 -CsvPath $csv.FullName -NameSuffix body256k
+
+      - name: Validate heavier YARP gates (post)
+        if: env.RPS_MODE == 'compare-post'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for heavier YARP gate validation' }
+          pwsh tools/RpsLoadProbe/validate-heavier-yarp-gates.ps1 -CsvPath $csv.FullName -NameSuffix post64k
+
+      - name: Validate lossy hard-bar gates
+        if: env.RPS_MODE == 'compare-lossy'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for lossy hard-bar gate validation' }
+          pwsh tools/RpsLoadProbe/validate-lossy-arch-gates.ps1 -CsvPath $csv.FullName -Suite lossy
+
+      - name: Validate arch hard-bar gates
+        if: env.RPS_MODE == 'compare-arch'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for arch hard-bar gate validation' }
+          pwsh tools/RpsLoadProbe/validate-lossy-arch-gates.ps1 -CsvPath $csv.FullName -Suite arch
+
+      - name: Validate gRPC YARP gates
+        if: env.RPS_MODE == 'compare-grpc'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for gRPC YARP gate validation' }
+          pwsh tools/RpsLoadProbe/validate-grpc-yarp-gates.ps1 -CsvPath $csv.FullName
 
       - name: Validate cross-version gates
         if: env.RPS_MODE == 'compare-cross-version'

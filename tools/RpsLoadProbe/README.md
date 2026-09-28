@@ -117,7 +117,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-arch
 |---|---|
 | `compare-bodies` | GET, keep-alive, **64 KiB** and **256 KiB** responses |
 | `compare-post` | POST **64 KiB** request + **64 KiB** response |
-| `compare-lossy` | GET **64 KiB**, userspace **5 ms** delay + **1%** stall/drop (H1/H2 TCP stall; H3 UDP datagram drop) |
+| `compare-lossy` | GET **64 KiB**, userspace **5 ms** delay + **1%** stall/drop on H1/H2 (TCP); H3 gets **1%** UDP datagram drop only (per-datagram delay breaks MsQuic through the shim) |
 | `compare-tls-cost` | H1 TLS only: keep-alive tiny, **new-connection** tiny, keep-alive **256 KiB** |
 | `compare-arch` | Slow consumer (256 KiB GET, throttled read), early response (POST overlap), H2 TLS↔H2 TLS duplex, WebSocket echo |
 

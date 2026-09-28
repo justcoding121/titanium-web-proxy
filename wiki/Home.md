@@ -26,7 +26,7 @@ Short catalog: [Features](Features) · full tables: [website Features](https://t
 - [Performance](Performance) — measured throughput vs peers
 - [Security considerations](Security-Considerations)
 - [Protocol feature support](Protocol-Support) ([bridges](Protocol-Support#protocol-bridges))
-- [Migrating from 4.x to 5.0](Migration-4.x-to-5.0)
+- [Migrating from 4.x](Migration-from-4.x)
 
 ### Library API (.NET)
 
@@ -605,16 +605,16 @@ Current packages target **.NET 10** only. Older product lines also supported .NE
   strongly typed and only allocated when `EnableRequestTimingCapture` is set.
 - `ClientConnectionId` / `ServerConnectionId` / `HttpRequestTiming.UpstreamConnectionId` changed from
   `Guid` to process-wide monotonic `long` counters (unbound server id is `0`, not `Guid.Empty`). See
-  [Connection IDs are monotonic `long` counters, not `Guid`](Migration-4.x-to-5.0#connection-ids-are-monotonic-long-counters-not-guid)
-  in the 5.0 migration guide.
+  [Connection IDs are monotonic `long` counters, not `Guid`](Migration-from-4.x#connection-ids-are-monotonic-long-counters-not-guid)
+  in the [migration from 4.x](Migration-from-4.x) guide.
 
-## Migrating from 4.x to 5.0
+## Migrating from 4.x
 
-5.0 bundles a large security- and correctness-hardening pass — TLS defaults, certificate storage
-location, HTTP/1 framing strictness, body-size budgets, WebSocket/HTTP-2/HTTP-3 abuse limits, and a
-few credential/redaction fixes all changed observable behavior in some way. See the dedicated
-**[Migration guide: 4.x → 5.0](Migration-4.x-to-5.0)** page for the full list, each with its rationale
-and remedy.
+The bulk of the security- and correctness-hardening pass shipped as 5.0; current releases are 7.x
+(no public 6.x line). TLS defaults, certificate storage location, HTTP/1 framing strictness, body-size
+budgets, WebSocket/HTTP-2/HTTP-3 abuse limits, and a few credential/redaction fixes all changed
+observable behavior for 4.x apps. See **[Migration from 4.x](Migration-from-4.x)** for the full
+cumulative list, each with its rationale and remedy.
 
 ## Protocol feature support
 

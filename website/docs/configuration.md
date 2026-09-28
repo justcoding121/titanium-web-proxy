@@ -186,6 +186,7 @@ server:
   originHttpVersionPolicy: PreserveClientVersion  # or NormalizeToHttp11
   viaHeaderPseudonym: "titanium-web-proxy"
   blockPrivateNetworkDestinations: false
+  blockLoopbackDestinations: false
   checkCertificateRevocation: NoCheck
   dnsServerEndPoint: "8.8.8.8:53"
   accessLog:

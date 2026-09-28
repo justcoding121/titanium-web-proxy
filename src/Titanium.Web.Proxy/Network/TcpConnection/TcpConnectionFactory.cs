@@ -720,12 +720,11 @@ internal class TcpConnectionFactory : IDisposable
                 // Unlike ProxyDnsRequests=true (where the SOCKS proxy itself resolves the origin and
                 // this proxy never learns an address to validate - a case the hardening plan explicitly
                 // leaves for a future design spike), this branch resolves the real origin locally, so it
-                // is exactly the case BlockPrivateNetworkDestinations is meant to cover. Checked against
+                // is exactly the case outbound destination policy is meant to cover. Checked against
                 // the exact address about to be used below, not re-resolved afterward.
-                if (proxyServer.BlockPrivateNetworkDestinations &&
-                    PrivateNetworkGuard.IsBlocked(socksRemoteIpAddresses[0]))
-                    throw new OutboundDestinationBlockedException(connectHostName,
-                        socksRemoteIpAddresses[0].ToString());
+                var socksOriginBlock = EvaluateOutboundDestinationPolicy(proxyServer,
+                    socksRemoteIpAddresses[0], connectHostName, exemptAsUpstreamProxy: false);
+                if (socksOriginBlock != null) throw socksOriginBlock;
             }
 
             var connectTimeoutMs = (int)(sessionArgs?.ConnectTimeout?.TotalMilliseconds
@@ -742,16 +741,16 @@ internal class TcpConnectionFactory : IDisposable
             async Task<(bool Ok, Socket? Socket, IPEndPoint? Bound, Exception? Error, IPAddress Address)>
                 ConnectToAddressAsync(IPAddress ipAddress, CancellationToken attemptToken)
             {
-                // externalProxy == null here means this attempt's target is the real destination
-                // (connectHostName), not an operator-configured upstream proxy address, which is
-                // always exempt (see BlockPrivateNetworkDestinations). Checked against this exact
-                // resolved address, immediately before it is used to connect below - never
-                // re-resolving the hostname afterward - so the check cannot be defeated by a DNS
-                // answer that changes between validation and use (rebinding).
-                if (proxyServer.BlockPrivateNetworkDestinations && externalProxy == null &&
-                    PrivateNetworkGuard.IsBlocked(ipAddress))
-                    return (false, null, null,
-                        new OutboundDestinationBlockedException(hostname, ipAddress.ToString()), ipAddress);
+                // externalProxy != null means this attempt's target is an operator-configured upstream
+                // proxy address, which is always exempt (see BlockPrivateNetworkDestinations /
+                // BlockLoopbackDestinations). Checked against this exact resolved address, immediately
+                // before it is used to connect below - never re-resolving the hostname afterward - so
+                // the check cannot be defeated by a DNS answer that changes between validation and use
+                // (rebinding).
+                var destinationBlock = EvaluateOutboundDestinationPolicy(proxyServer, ipAddress, hostname,
+                    exemptAsUpstreamProxy: externalProxy != null);
+                if (destinationBlock != null)
+                    return (false, null, null, destinationBlock, ipAddress);
 
                 // Select local bind after destination resolution so IPv4/IPv6 adapters can coexist (#951).
                 var resolvedBind = UpStreamEndPointSelector.Resolve(ipAddress.AddressFamily,
@@ -1193,6 +1192,29 @@ internal class TcpConnectionFactory : IDisposable
             Timing = timing,
             PoolSizeLimit = sessionArgs?.ProxyEndPoint?.MaxCachedConnections
         };
+    }
+
+    /// <summary>
+    ///     Shared outbound destination policy for both the SOCKS-origin check and each Happy Eyeballs
+    ///     address attempt. Upstream proxy hops are exempt; when
+    ///     <see cref="ProxyServer.BlockPrivateNetworkDestinations" /> is on, only
+    ///     <see cref="PrivateNetworkGuard.IsBlocked" /> is used (loopback included); otherwise
+    ///     <see cref="ProxyServer.BlockLoopbackDestinations" /> uses
+    ///     <see cref="PrivateNetworkGuard.IsLoopback" /> alone.
+    /// </summary>
+    private static OutboundDestinationBlockedException? EvaluateOutboundDestinationPolicy(
+        ProxyServer proxyServer, IPAddress address, string hostname, bool exemptAsUpstreamProxy)
+    {
+        if (exemptAsUpstreamProxy) return null;
+
+        if (proxyServer.BlockPrivateNetworkDestinations && PrivateNetworkGuard.IsBlocked(address))
+            return new OutboundDestinationBlockedException(hostname, address.ToString());
+
+        if (proxyServer.BlockLoopbackDestinations && PrivateNetworkGuard.IsLoopback(address))
+            return new OutboundDestinationBlockedException(hostname, address.ToString(),
+                OutboundDestinationBlockedException.LoopbackDestinationBlockTag.Instance);
+
+        return null;
     }
 
     /// <summary>

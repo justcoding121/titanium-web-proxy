@@ -1,7 +1,8 @@
 > For operators and .NET library users deploying Titanium — what protections apply, and when they do not.
 
-The 5.0 hardening pass (see the [migration guide](Migration-4.x-to-5.0) for the full list of behavior
-changes) closes a lot of gaps, but none of it should be read as a blanket guarantee. This page calls
+The 5.0 hardening pass (see [Migration from 4.x](Migration-from-4.x) for the full list of behavior
+changes through current 7.x) closes a lot of gaps, but none of it should be read as a blanket
+guarantee. This page calls
 out where a protection is **conditional** — it only applies under a specific configuration or code
 path — so you don't assume coverage you don't actually have.
 
@@ -27,7 +28,7 @@ and intercepted, not relayed opaquely.
 
 `MaxBufferedBodyBytes` (and its HTTP/2/HTTP/3 equivalents) now cumulatively bounds every
 *whole-body-buffering* code path — see
-[Cumulative body budgets](Migration-4.x-to-5.0#cumulative-body-budgets-are-now-enforced-end-to-end).
+[Cumulative body budgets](Migration-from-4.x#cumulative-body-budgets-are-now-enforced-end-to-end).
 It does **not** bound:
 
 - **The streaming hooks** (`OnRequestBodyWrite`/`OnResponseBodyWrite`, see
@@ -42,7 +43,7 @@ It does **not** bound:
   family (see `PolicyFamily.cs`) but is not yet wired to numeric enforcement at every header-reading
   call site; only the HTTP/2 decoded-header-list cap (`MaxDecodedHeaderListBytes`) and the client
   header *read deadline* (a time bound, not a byte bound — see
-  [New: client header read deadline](Migration-4.x-to-5.0#new-client-header-read-deadline)) are
+  [New: client header read deadline](Migration-from-4.x#new-client-header-read-deadline-opt-in)) are
   actually enforced today.
 
 Treat memory-exhaustion protection as scoped to the specific mechanism you're using, and prefer the
@@ -62,7 +63,7 @@ of how thoroughly it's been hardened here.
 
 Moving the certificate store to a per-user folder and no longer passing the real PFX password on the
 `certutil.exe` command line (see
-[Certificate store relocated](Migration-4.x-to-5.0#certificate-store-relocated-to-a-per-user-protected-folder))
+[Certificate store relocated](Migration-from-4.x#certificate-store-relocated-to-a-per-user-protected-folder))
 raises the bar from *"any local user or process on the machine can read the CA private key"* to *"any
 process running as the same OS user account can."* That second bar is not, and cannot be, eliminated
 by this proxy: a MITM TLS proxy must hold a CA private key somewhere accessible to itself at runtime in
@@ -115,6 +116,5 @@ thread's `SynchronizationContext`.
 
 ## See also
 
-- [Migration guide: 4.x → 5.0](Migration-4.x-to-5.0) — the full list of behavior changes this release
-  introduces.
+- [Migration from 4.x](Migration-from-4.x) — cumulative behavior changes from 4.x through current 7.x.
 - [Protocol Feature Support](Protocol-Support) — full Yes/No/Partial breakdown per protocol.

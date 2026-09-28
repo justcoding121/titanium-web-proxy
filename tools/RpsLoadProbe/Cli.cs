@@ -46,6 +46,7 @@ internal static class Cli
         var clientReadSleepMs = 0;
         var stopOnSloFail = true;
         (int Index, int Count)? armShard = null;
+        string? armNameContains = null;
         var printArms = false;
 
         for (var i = 0; i < args.Length; i++)
@@ -154,6 +155,11 @@ internal static class Cli
 
                     break;
                 }
+                case "--arm-contains":
+                    armNameContains = RequireValue(args, ref i, "--arm-contains").Trim();
+                    if (armNameContains.Length == 0)
+                        return Fail("--arm-contains must be a non-empty substring");
+                    break;
                 case "--method":
                     method = RequireValue(args, ref i, "--method").ToUpperInvariant();
                     if (method is not ("GET" or "POST"))
@@ -252,7 +258,7 @@ internal static class Cli
                     originHttpsExtraPorts, nginxPath, haproxyPath, envoyPath, maxCachedConnections, cts.Token, workload),
                 "serve" => RunServe(modeText, nginxPath, haproxyPath, envoyPath, maxCachedConnections, cts.Token, workload),
                 "ramp" => RunRamp(modeText, nginxPath, haproxyPath, envoyPath, resultsDir, concurrency, warmupSec, durationSec,
-                    maxCachedConnections, repeats, workload, stopOnSloFail, armShard, printArms, cts.Token),
+                    maxCachedConnections, repeats, workload, stopOnSloFail, armShard, armNameContains, printArms, cts.Token),
                 _ => Fail("Required: --serve | --serve-origin | --serve-proxy | --ramp")
             };
         }
@@ -306,7 +312,7 @@ internal static class Cli
     private static int RunRamp(string? modeText, string? nginxPath, string? haproxyPath, string? envoyPath,
         string? resultsDir, List<int> concurrency, int warmupSec, int durationSec, int? maxCachedConnections,
         int repeats, WorkloadOptions workload, bool stopOnSloFail, (int Index, int Count)? armShard,
-        bool printArms, CancellationToken ct)
+        string? armNameContains, bool printArms, CancellationToken ct)
     {
         if (modeText == null || !TryParseMode(modeText, out var mode))
             return Fail("Required: --ramp --mode <see --help>");
@@ -324,6 +330,7 @@ internal static class Cli
             Repeats = Math.Max(1, repeats),
             StopOnSloFail = stopOnSloFail,
             ArmShard = armShard,
+            ArmNameContains = armNameContains,
             ConcurrencySteps = concurrency.Count > 0
                 ? concurrency.ToArray()
                 : [8, 16, 24, 32, 48, 64, 128, 256, 512],
@@ -892,12 +899,13 @@ internal static class Cli
               --duration-sec N
               --repeats N             Full arm sequence N times; print median peaks (default 1)
               --arm-shard i/n|all     Exclusive comparison-group (wiki-row) partition; all = no split
+              --arm-contains TEXT     Keep only arms whose name contains TEXT (surgical re-run)
               --max-cached-connections N   Override ProxyServer.MaxCachedConnections for TWP arms
               --method GET|POST       Default GET (compare-post sets POST per arm)
               --response-bytes N      Origin response size (default ~64 B tiny JSON)
               --request-bytes N       POST body size (default 0)
               --no-keepalive          New TCP/TLS connection per request (handshake cost)
-              --delay-ms N            Userspace one-way delay via lossy shim (0 = off)
+              --delay-ms N            Userspace one-way delay via TCP lossy shim (0 = off; ignored on H3/UDP)
               --loss-percent P        TCP connection stall % or UDP datagram drop % (0 = off)
               --early-response-after N  Origin starts response after N request bytes (0 = drain-then-write)
               --websocket             Origin /ws echo; client uses ClientWebSocket

@@ -32,6 +32,13 @@ public sealed class ServerConfig
 
     public bool? BlockPrivateNetworkDestinations { get; set; }
 
+    /// <summary>
+    ///     When true, reject TCP outbound connects to loopback destinations only
+    ///     (<c>127.0.0.0/8</c>, <c>::1</c>). Private and link-local ranges stay allowed.
+    ///     Omit to leave the library default (<see langword="false" />).
+    /// </summary>
+    public bool? BlockLoopbackDestinations { get; set; }
+
     /// <summary>NoCheck, Online, Offline, or OnlineNoCheck.</summary>
     public string? CheckCertificateRevocation { get; set; }
 

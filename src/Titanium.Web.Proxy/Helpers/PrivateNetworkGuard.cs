@@ -4,8 +4,9 @@ using System.Net.Sockets;
 namespace Titanium.Web.Proxy.Helpers;
 
 /// <summary>
-///     Backing implementation for the opt-in outbound destination policy hook (see
-///     <see cref="ProxyServer.BlockPrivateNetworkDestinations" />): classifies an <see cref="IPAddress" />
+///     Backing implementation for the opt-in outbound destination policy hooks (see
+///     <see cref="ProxyServer.BlockPrivateNetworkDestinations" /> and
+///     <see cref="ProxyServer.BlockLoopbackDestinations" />): classifies an <see cref="IPAddress" />
 ///     as private, link-local, loopback, or a well-known cloud metadata endpoint - the set of
 ///     destinations a request smuggled through the proxy (e.g. via SSRF in a proxied request, or a
 ///     malicious/compromised client) should not be able to reach when the proxy is deployed facing
@@ -14,6 +15,17 @@ namespace Titanium.Web.Proxy.Helpers;
 internal static class PrivateNetworkGuard
 {
     /// <summary>
+    ///     True if <paramref name="address" /> is loopback after unwrapping IPv4-mapped IPv6
+    ///     (<c>127.0.0.0/8</c> and <c>::1</c>). Used by <see cref="ProxyServer.BlockLoopbackDestinations" />
+    ///     and by <see cref="IsBlocked" /> so the mapped-address rule cannot diverge.
+    /// </summary>
+    public static bool IsLoopback(IPAddress address)
+    {
+        if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
+        return IPAddress.IsLoopback(address);
+    }
+
+    /// <summary>
     ///     True if <paramref name="address" /> is loopback, a private/unique-local range, link-local
     ///     (which subsumes the 169.254.169.254 cloud metadata endpoint on IPv4), or otherwise not a
     ///     globally routable unicast address that an external client should be able to direct this
@@ -21,9 +33,11 @@ internal static class PrivateNetworkGuard
     /// </summary>
     public static bool IsBlocked(IPAddress address)
     {
-        if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
+        // Loopback first via the shared helper (handles IPv4-mapped forms). Remaining checks unwrap
+        // once for the private/link-local/multicast ranges.
+        if (IsLoopback(address)) return true;
 
-        if (IPAddress.IsLoopback(address)) return true;
+        if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
 
         return address.AddressFamily switch
         {

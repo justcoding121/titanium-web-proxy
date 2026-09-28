@@ -161,15 +161,55 @@ internal sealed class Http2FlowController
     }
 
     /// <summary>
+    ///     Non-blocking reserve of as many of <paramref name="bytes" /> as currently fit in both the
+    ///     connection window and the stream window (Kestrel <c>CheckStreamWindow</c> shape). Returns the
+    ///     reserved count (0..<paramref name="bytes" />); never waits. Used by the compressed-relay DATA
+    ///     path so a short client window cannot park the shared origin frame reader.
+    /// </summary>
+    public int TryReservePartial(int streamId, int bytes)
+    {
+        if (bytes <= 0) return 0;
+
+        lock (gate)
+        {
+            if (!streamWindows.TryGetValue(streamId, out var streamWindow))
+            {
+                streamWindow = initialStreamWindow;
+                streamWindows[streamId] = streamWindow;
+            }
+
+            var streamAvail = streamWindow > 0 ? streamWindow : 0;
+            var connAvail = connectionWindow > 0 ? connectionWindow : 0;
+            var available = (int)Math.Min(Math.Min(streamAvail, connAvail), bytes);
+            if (available <= 0)
+                return 0;
+
+            connectionWindow -= available;
+            streamWindows[streamId] = streamWindow - available;
+            return available;
+        }
+    }
+
+    /// <summary>
     ///     Waits until both the connection window and the given stream's window have at least
     ///     <paramref name="bytes" /> of credit, then atomically reserves (decrements) both. Must be called
     ///     with the exact on-wire payload length of the DATA frame that is about to be written, before it is
     ///     written, for every outbound DATA frame on the leg this controller governs.
     /// </summary>
-    public async Task ReserveAsync(int streamId, int bytes, CancellationToken cancellationToken)
+    public ValueTask ReserveAsync(int streamId, int bytes, CancellationToken cancellationToken)
     {
-        if (bytes <= 0) return;
+        if (bytes <= 0) return default;
 
+        // Prefer non-blocking reserve when the peer window already has room (typical after
+        // SETTINGS / WINDOW_UPDATE); avoid a Task/state-machine alloc per DATA frame.
+        if (TryReserve(streamId, bytes))
+            return default;
+
+        return ReserveSlowAsync(streamId, bytes, cancellationToken);
+    }
+
+    private async ValueTask ReserveSlowAsync(int streamId, int bytes, CancellationToken cancellationToken)
+    {
         while (true)
         {
             Task wait;

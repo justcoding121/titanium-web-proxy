@@ -126,25 +126,85 @@ internal static class Http3VarInt
     ///     Reads a variable-length integer from a <see cref="Stream" /> (including <see cref="QuicStream" />).
     ///     Returns <see langword="null" /> when the stream ends before a complete integer arrives.
     /// </summary>
-    public static async ValueTask<ulong?> ReadAsync(Stream stream, CancellationToken cancellationToken)
+    public static ValueTask<ulong?> ReadAsync(Stream stream, CancellationToken cancellationToken)
     {
         // RFC 9000 VarInts are at most 8 bytes. One small buffer replaces the previous
         // per-call <c>new byte[1]</c> + <c>new byte[1+remaining]</c> pair (two VarInts per H3 frame).
         var buf = ArrayPool<byte>.Shared.Rent(8);
+        var firstVt = ReadExactAsync(stream, buf.AsMemory(0, 1), cancellationToken);
+        if (!firstVt.IsCompletedSuccessfully)
+            return ReadAsyncSlow(stream, buf, firstVt, firstDone: false, cancellationToken);
+
+        if (!firstVt.Result)
+        {
+            ArrayPool<byte>.Shared.Return(buf);
+            return new ValueTask<ulong?>((ulong?)null);
+        }
+
+        var prefix = (buf[0] & 0xC0) >> 6;
+        int remaining = prefix switch
+        {
+            0 => 0,
+            1 => 1,
+            2 => 3,
+            _ => 7
+        };
+
+        if (remaining == 0)
+        {
+            TryRead(buf.AsSpan(0, 1), out var value, out _);
+            ArrayPool<byte>.Shared.Return(buf);
+            return new ValueTask<ulong?>(value);
+        }
+
+        var restVt = ReadExactAsync(stream, buf.AsMemory(1, remaining), cancellationToken);
+        if (!restVt.IsCompletedSuccessfully)
+            return ReadAsyncSlow(stream, buf, restVt, firstDone: true, cancellationToken, remaining);
+
+        if (!restVt.Result)
+        {
+            ArrayPool<byte>.Shared.Return(buf);
+            return new ValueTask<ulong?>((ulong?)null);
+        }
+
+        TryRead(buf.AsSpan(0, 1 + remaining), out var full, out _);
+        ArrayPool<byte>.Shared.Return(buf);
+        return new ValueTask<ulong?>(full);
+    }
+
+    private static async ValueTask<ulong?> ReadAsyncSlow(
+        Stream stream,
+        byte[] buf,
+        ValueTask<bool> pending,
+        bool firstDone,
+        CancellationToken cancellationToken,
+        int remainingHint = -1)
+    {
         try
         {
-            if (!await ReadExactAsync(stream, buf.AsMemory(0, 1), cancellationToken)) return null;
+            if (!await pending.ConfigureAwait(false))
+                return null;
 
-            var prefix = (buf[0] & 0xC0) >> 6;
-            int remaining = prefix switch
+            int remaining;
+            if (!firstDone)
             {
-                0 => 0,
-                1 => 1,
-                2 => 3,
-                _ => 7
-            };
+                var prefix = (buf[0] & 0xC0) >> 6;
+                remaining = prefix switch
+                {
+                    0 => 0,
+                    1 => 1,
+                    2 => 3,
+                    _ => 7
+                };
+            }
+            else
+            {
+                remaining = remainingHint;
+            }
 
-            if (remaining > 0 && !await ReadExactAsync(stream, buf.AsMemory(1, remaining), cancellationToken))
+            if (!firstDone && remaining > 0
+                && !await ReadExactAsync(stream, buf.AsMemory(1, remaining), cancellationToken)
+                    .ConfigureAwait(false))
                 return null;
 
             TryRead(buf.AsSpan(0, 1 + remaining), out var value, out _);
@@ -156,15 +216,44 @@ internal static class Http3VarInt
         }
     }
 
-    private static async ValueTask<bool> ReadExactAsync(Stream stream, Memory<byte> buffer, CancellationToken ct)
+    private static ValueTask<bool> ReadExactAsync(Stream stream, Memory<byte> buffer, CancellationToken ct)
+    {
+        if (buffer.Length == 0)
+            return new ValueTask<bool>(true);
+
+        var readVt = stream.ReadAsync(buffer, ct);
+        if (!readVt.IsCompletedSuccessfully)
+            return ReadExactSlowAsync(stream, buffer, readVt, ct);
+
+        var read = readVt.Result;
+        if (read == 0)
+            return new ValueTask<bool>(false);
+        if (read == buffer.Length)
+            return new ValueTask<bool>(true);
+
+        return ReadExactContinueAsync(stream, buffer.Slice(read), ct);
+    }
+
+    private static async ValueTask<bool> ReadExactSlowAsync(
+        Stream stream, Memory<byte> buffer, ValueTask<int> firstRead, CancellationToken ct)
+    {
+        var read = await firstRead.ConfigureAwait(false);
+        if (read == 0) return false;
+        if (read == buffer.Length) return true;
+        return await ReadExactContinueAsync(stream, buffer.Slice(read), ct).ConfigureAwait(false);
+    }
+
+    private static async ValueTask<bool> ReadExactContinueAsync(
+        Stream stream, Memory<byte> buffer, CancellationToken ct)
     {
         var offset = 0;
         while (offset < buffer.Length)
         {
-            var read = await stream.ReadAsync(buffer.Slice(offset), ct);
+            var read = await stream.ReadAsync(buffer.Slice(offset), ct).ConfigureAwait(false);
             if (read == 0) return false;
             offset += read;
         }
+
         return true;
     }
 }

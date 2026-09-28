@@ -135,6 +135,7 @@ namespace Titanium.Web.Proxy.UnitTests
             Assert.AreEqual(PolicyMode.Disabled, proxy.PolicyModes[PolicyFamily.Http2RelayValidation]);
             Assert.IsFalse(proxy.PolicyModes.AllowAmbiguousFraming);
             Assert.IsFalse(proxy.BlockPrivateNetworkDestinations);
+            Assert.IsFalse(proxy.BlockLoopbackDestinations);
         }
 
         [TestMethod]
@@ -144,10 +145,25 @@ namespace Titanium.Web.Proxy.UnitTests
 
             Assert.AreEqual(ProxyProfile.PublicFacing, proxy.Profile);
             Assert.IsTrue(proxy.BlockPrivateNetworkDestinations);
+            Assert.IsFalse(proxy.BlockLoopbackDestinations,
+                "Profile must not set or clear BlockLoopbackDestinations");
             Assert.AreEqual(10_000, proxy.MaxConcurrentClientConnections);
             Assert.AreEqual(SslProtocols.Tls12 | SslProtocols.Tls13, proxy.SupportedSslProtocols);
             Assert.AreEqual(PolicyMode.Enforce, proxy.PolicyModes[PolicyFamily.AdmissionControl]);
             Assert.IsTrue(proxy.ClientHeaderTimeoutSeconds > 0);
+        }
+
+        [TestMethod]
+        public void SettingProfile_DoesNotClearBlockLoopbackDestinations()
+        {
+            var proxy = new ProxyServer { BlockLoopbackDestinations = true };
+
+            proxy.Profile = ProxyProfile.Balanced;
+            Assert.IsTrue(proxy.BlockLoopbackDestinations);
+
+            proxy.Profile = ProxyProfile.PublicFacing;
+            Assert.IsTrue(proxy.BlockLoopbackDestinations);
+            Assert.IsTrue(proxy.BlockPrivateNetworkDestinations);
         }
 
         [TestMethod]

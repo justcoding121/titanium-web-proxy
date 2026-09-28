@@ -1,16 +1,11 @@
-# Migration guide: 4.x → 5.0
+> For developers upgrading embedded Titanium.Web.Proxy apps from 4.x to current 7.x.
 
-> For developers upgrading embedded Titanium.Web.Proxy apps.
-
-Version 5.0 bundles a large security- and correctness-hardening pass (RFC-compliance fixes, resource
-budgets, and defense-in-depth limits across every protocol the proxy speaks). Rather than stage these
-across an interim 6.0, all of them ship together in 5.0.0, since most of the individually-breaking
-pieces are small and independently justified but few applications will be affected by every one of
-them at once.
-
-This page enumerates **every breaking or observable-behavior change** introduced since 4.x, with the
-rationale and the remedy if the new default does not fit your deployment. If you are upgrading from
-before 4.0, also read
+The bulk of the security- and correctness-hardening pass shipped as **5.0** (RFC-compliance fixes,
+resource budgets, and defense-in-depth limits). There was no public **6.x** line; the current series
+is **7.x**. This page is the cumulative guide for anyone still on 4.x: every breaking or
+observable-behavior change since then that still matters on today's defaults, with the rationale and
+the remedy if the new default does not fit your deployment. If you are upgrading from before 4.0,
+also read
 [Breaking changes: unified logging and timing](Home#breaking-changes-unified-logging-and-timing) on
 the Home page first.
 
@@ -37,6 +32,7 @@ the Home page first.
 - [New: client header read deadline (opt-in)](#new-client-header-read-deadline-opt-in)
 - [New: global/per-endpoint connection admission limits (opt-in)](#new-globalper-endpoint-connection-admission-limits-opt-in)
 - [New: outbound private-network destination blocking (opt-in)](#new-outbound-private-network-destination-blocking-opt-in)
+- [New: loopback-only destination blocking (opt-in)](#new-loopback-only-destination-blocking-opt-in)
 - [Policy profiles and observe/enforce modes (additive)](#policy-profiles-and-observeenforce-modes-additive)
 - [New: Happy Eyeballs (RFC 8305) address racing](#new-happy-eyeballs-rfc-8305-address-racing)
 - [Connection IDs are monotonic `long` counters, not `Guid`](#connection-ids-are-monotonic-long-counters-not-guid)
@@ -401,11 +397,22 @@ opt-in; setting no other option in this guide changes your admission behavior at
 ## New: outbound private-network destination blocking (opt-in)
 
 `ProxyServer.BlockPrivateNetworkDestinations` is new and **defaults to `false`**. When enabled, the
-proxy refuses to open an outbound connection to a private, link-local, loopback, or multicast address
-resolved for a proxied request (unless an explicit upstream proxy is configured for that request).
-This is intended for proxies exposed to less-trusted clients, to prevent them from using the proxy as
-an SSRF pivot into your internal network. It is `false` by default and `true` under the
+proxy refuses to open an outbound TCP connection to a private, link-local, loopback, or multicast
+address resolved for a proxied request (unless an explicit upstream proxy is configured for that
+request). This is intended for proxies exposed to less-trusted clients, to prevent them from using
+the proxy as an SSRF pivot into your internal network. It is `false` by default and `true` under the
 `ProxyProfile.PublicFacing` profile.
+
+---
+
+## New: loopback-only destination blocking (opt-in)
+
+`ProxyServer.BlockLoopbackDestinations` (**7.0.13+**, defaults to `false`) is a finer opt-in for
+intranet forward proxies that must keep RFC 1918 destinations reachable (for example `10.*`) but
+still reject loopback (`127.0.0.0/8`, `::1`, including IPv4-mapped forms). Assigning
+`ProxyServer.Profile` does not set or clear this property. Enforcement is on the same TCP connect-time
+sites as the coarse flag (not on origin HTTP/3 / QUIC dials). Link-local and cloud metadata addresses
+remain allowed under this flag alone. CLI: `server.blockLoopbackDestinations` in `twp.yaml`.
 
 ---
 
@@ -443,6 +450,7 @@ task. When `EnableIpv6UnreachableSoftSkip` is `true` (the default), a single IPv
 `NetworkUnreachable`-class failure temporarily omits IPv6 from the race for 5 minutes — operators who
 need strict IPv6 preference on healthy dual-stack can set the knob to `false`. This is a pure latency /
 exception-overhead improvement with no behavior change for successful connects.
+
 ## Connection IDs are monotonic `long` counters, not `Guid`
 
 **Before:** `SessionEventArgsBase.ClientConnectionId`, `SessionEventArgsBase.ServerConnectionId`, and

@@ -17,6 +17,39 @@ namespace Titanium.Cli.Tests;
 public class ServerConfigApplierTests
 {
     [TestMethod]
+    public void Apply_BlockLoopbackDestinations_Omitted_LeavesFalse()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        Assert.IsFalse(proxy.BlockLoopbackDestinations);
+        ServerConfigApplier.Apply(proxy, new ServerConfig());
+        Assert.IsFalse(proxy.BlockLoopbackDestinations);
+    }
+
+    [TestMethod]
+    public void Apply_BlockLoopbackDestinations_True_SetsOnlyLoopbackFlag()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        ServerConfigApplier.Apply(proxy, new ServerConfig { BlockLoopbackDestinations = true });
+
+        Assert.IsTrue(proxy.BlockLoopbackDestinations);
+        Assert.IsFalse(proxy.BlockPrivateNetworkDestinations);
+    }
+
+    [TestMethod]
+    public void Apply_PublicFacingPlusBlockLoopback_KeepsCoarseFlag()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        ServerConfigApplier.Apply(proxy, new ServerConfig
+        {
+            Profile = "PublicFacing",
+            BlockLoopbackDestinations = true,
+        });
+
+        Assert.IsTrue(proxy.BlockPrivateNetworkDestinations);
+        Assert.IsTrue(proxy.BlockLoopbackDestinations);
+    }
+
+    [TestMethod]
     public void Apply_NullServer_IsNoOp()
     {
         using var proxy = new ProxyServer(userTrustRootCertificate: false);

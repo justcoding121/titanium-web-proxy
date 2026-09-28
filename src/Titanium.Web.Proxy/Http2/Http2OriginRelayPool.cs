@@ -116,6 +116,7 @@ internal sealed class Http2OriginRelayPool : IAsyncDisposable
 
         assignment.Leg.OriginToClient.TryRemove(assignment.OriginStreamId, out _);
         assignment.Leg.SendFlow.RemoveStream(assignment.OriginStreamId);
+        assignment.Leg.OutboundDeferred.CancelStream(assignment.OriginStreamId);
         lock (assignment.Leg.IdLock)
         {
             if (assignment.Leg.ActiveStreams > 0)
@@ -264,6 +265,7 @@ internal sealed class Http2OriginRelayPool : IAsyncDisposable
             OwnsWriteLock = ownsWriteLock;
             NextStreamId = 1;
             SendFlow = new Http2FlowController();
+            OutboundDeferred = new Http2DeferredOutboundData();
         }
 
         public TcpServerConnection Connection { get; }
@@ -276,6 +278,8 @@ internal sealed class Http2OriginRelayPool : IAsyncDisposable
         public int ActiveStreams;
         public ConcurrentDictionary<int, int> OriginToClient { get; } = new();
         public Http2FlowController SendFlow { get; }
+        /// <summary>DATA waiting on <see cref="SendFlow" /> so the client frame loop never parks.</summary>
+        public Http2DeferredOutboundData OutboundDeferred { get; }
         public Http2Settings Settings { get; } = new();
         public int InitialWindowUpdateSent;
     }

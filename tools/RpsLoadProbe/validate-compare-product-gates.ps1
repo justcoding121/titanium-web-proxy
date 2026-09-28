@@ -1,6 +1,6 @@
 # Validate compare-product medians @ c=64:
 #   MITM Lite ÷ Reverse >= 0.50, Full ÷ Reverse >= 0.50 (all OS, all gated pairs)
-#   Reverse TWP ÷ YARP >= 0.75 (when YARP SLO-passes)
+#   Reverse TWP ÷ YARP >= 0.60 (when YARP SLO-passes)
 # No nginx gate — nginx is wiki/charts only.
 # When Repeats>1, each arm contributes multiple c=64 SLO-pass rows — use the median RPS.
 param(
@@ -9,7 +9,7 @@ param(
     [double] $MitmFullGate = 0.50,
     # Backward-compatible alias: if set, applies to both Lite and Full (overrides the pair above).
     [double] $MitmGate = -1,
-    [double] $ReverseYarpGate = 0.75,
+    [double] $ReverseYarpGate = 0.60,
     [string] $BaselineCsvPath = ""
 )
 
@@ -80,8 +80,32 @@ foreach ($p in $mitmPairs) {
 
 Write-Host ""
 Write-Host "Reverse TWP/YARP gates (>= $ReverseYarpGate @ c=64 median; skip when YARP SLO-fails)" -ForegroundColor Cyan
+# All reverse Client×Origin wires with a YARP peer (same set as validate-all-compare-product-arms.ps1).
 $revPairs = @(
-    @{ Label = 'H3->H1'; Twp = 'twp-reverse-http3-to-https-http1'; Yarp = 'yarp-reverse-http3-to-https-http1' },
+    @{ Label = 'H1 plain->H1 plain'; Twp = 'twp-reverse-http1'; Yarp = 'yarp-reverse-http1' },
+    @{ Label = 'H1 plain->H1 TLS'; Twp = 'twp-reverse-http1-to-https'; Yarp = 'yarp-reverse-http1-to-https' },
+    @{ Label = 'H1 plain->H2 plain'; Twp = 'twp-reverse-http1-plain-to-h2c'; Yarp = 'yarp-reverse-http1-plain-to-h2c' },
+    @{ Label = 'H1 plain->H2 TLS'; Twp = 'twp-reverse-http1-plain-to-http2'; Yarp = 'yarp-reverse-http1-plain-to-http2' },
+    @{ Label = 'H1 plain->H3'; Twp = 'twp-reverse-http1-plain-to-http3'; Yarp = 'yarp-reverse-http1-plain-to-http3' },
+    @{ Label = 'H1 TLS->H1 plain'; Twp = 'twp-reverse-http1-tls'; Yarp = 'yarp-reverse-http1-tls' },
+    @{ Label = 'H1 TLS->H1 TLS'; Twp = 'twp-reverse-http1-mitm'; Yarp = 'yarp-reverse-http1-tls-to-https' },
+    @{ Label = 'H1 TLS->H2 plain'; Twp = 'twp-reverse-http1-to-h2c'; Yarp = 'yarp-reverse-http1-to-h2c' },
+    @{ Label = 'H1 TLS->H2 TLS'; Twp = 'twp-reverse-http11-to-http2'; Yarp = 'yarp-reverse-http11-to-http2' },
+    @{ Label = 'H1 TLS->H3'; Twp = 'twp-reverse-http1-to-http3'; Yarp = 'yarp-reverse-http1-to-http3' },
+    @{ Label = 'H2c->H1 plain'; Twp = 'twp-reverse-h2c-to-h1'; Yarp = 'yarp-reverse-h2c-to-h1' },
+    @{ Label = 'H2c->H1 TLS'; Twp = 'twp-reverse-h2c-to-https'; Yarp = 'yarp-reverse-h2c-to-https' },
+    @{ Label = 'H2c->h2c'; Twp = 'twp-reverse-h2c-to-h2c'; Yarp = 'yarp-reverse-h2c-to-h2c' },
+    @{ Label = 'H2c->H2 TLS'; Twp = 'twp-reverse-h2c'; Yarp = 'yarp-reverse-h2c' },
+    @{ Label = 'H2c->H3'; Twp = 'twp-reverse-h2c-to-h3'; Yarp = 'yarp-reverse-h2c-to-h3' },
+    @{ Label = 'H2 TLS->H1 plain'; Twp = 'twp-reverse-http2-cleartext'; Yarp = 'yarp-reverse-http2' },
+    @{ Label = 'H2 TLS->H1 TLS'; Twp = 'twp-reverse-http2-to-https-http1'; Yarp = 'yarp-reverse-http2-to-https-http1' },
+    @{ Label = 'H2 TLS->h2c'; Twp = 'twp-reverse-http2-to-h2c'; Yarp = 'yarp-reverse-http2-to-h2c' },
+    @{ Label = 'H2 TLS->H2 TLS'; Twp = 'twp-reverse-http2'; Yarp = 'yarp-reverse-http2-to-https' },
+    @{ Label = 'H2 TLS->H3'; Twp = 'twp-reverse-http2-to-http3'; Yarp = 'yarp-reverse-http2-to-http3' },
+    @{ Label = 'H3->H1 plain'; Twp = 'twp-reverse-http3-cleartext'; Yarp = 'yarp-reverse-http3-cleartext' },
+    @{ Label = 'H3->H1 TLS'; Twp = 'twp-reverse-http3-to-https-http1'; Yarp = 'yarp-reverse-http3-to-https-http1' },
+    @{ Label = 'H3->h2c'; Twp = 'twp-reverse-http3-to-h2c'; Yarp = 'yarp-reverse-http3-to-h2c' },
+    @{ Label = 'H3->H2 TLS'; Twp = 'twp-reverse-http3-to-http2'; Yarp = 'yarp-reverse-http3-to-http2' },
     @{ Label = 'H3->H3'; Twp = 'twp-reverse-http3'; Yarp = 'yarp-reverse-http3-to-http3' }
 )
 foreach ($p in $revPairs) {

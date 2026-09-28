@@ -172,4 +172,32 @@ public class Http3FrameTests
         CollectionAssert.AreEqual(payload, frame.Payload.ToArray());
         frame.ReturnPayload();
     }
+
+    [TestMethod]
+    public async Task WriteAsync_ManyConsecutiveSmallAndLargeFrames_RoundTrip()
+    {
+        // Regression for e781b009: early ArrayPool.Return on sync-complete writes corrupted
+        // subsequent frames when the same rented array was reused (H3_FRAME_ERROR under load).
+        await using var ms = new MemoryStream();
+        const int frames = 32;
+        for (var i = 0; i < frames; i++)
+        {
+            var payload = new byte[i < 16 ? 64 : 16 * 1024];
+            payload.AsSpan().Fill((byte)(i + 1));
+            await Http3Frame.WriteAsync(ms, Http3FrameType.Data, payload, CancellationToken.None);
+        }
+
+        ms.Position = 0;
+        for (var i = 0; i < frames; i++)
+        {
+            var expectedLen = i < 16 ? 64 : 16 * 1024;
+            var frame = await Http3Frame.ReadAsync(ms, maxPayloadBytes: 32 * 1024, CancellationToken.None);
+            Assert.IsNotNull(frame);
+            Assert.AreEqual(Http3FrameType.Data, frame!.Type);
+            Assert.AreEqual(expectedLen, frame.Payload.Length);
+            Assert.AreEqual((byte)(i + 1), frame.Payload.Span[0]);
+            Assert.AreEqual((byte)(i + 1), frame.Payload.Span[expectedLen - 1]);
+            frame.ReturnPayload();
+        }
+    }
 }

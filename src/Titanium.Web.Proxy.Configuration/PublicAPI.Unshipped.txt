@@ -238,6 +238,8 @@ Titanium.Web.Proxy.Configuration.Models.AccessLogConfig.SampleRate.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.AccessLog.get -> Titanium.Web.Proxy.Configuration.Models.AccessLogConfig?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.AccessLog.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.BlockLoopbackDestinations.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.BlockLoopbackDestinations.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.BlockPrivateNetworkDestinations.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.BlockPrivateNetworkDestinations.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.CertificateManager.get -> Titanium.Web.Proxy.Configuration.Models.CertificateManagerConfig?

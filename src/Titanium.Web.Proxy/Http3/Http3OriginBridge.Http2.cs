@@ -104,10 +104,24 @@ internal static partial class Http3OriginBridge
             if (response.StreamBodyWriter == null)
             {
                 response.IsBodyRead = true;
-                response.Body = exchange.Body;
-                // Http2OriginConnection materializes H2 DATA wire bytes.
-                response.BodyIsWireEncoded = true;
+                response.ContentLength = exchange.Body.Length;
+                // Interception-off: skip response.Body — emit via Preencoded HEADERS+DATA.
+                if (fwd.PreencodedQpackHeaders == null)
+                    fwd.PreencodedQpackHeaders = QpackEncoder.EncodeResponse(response, context: null);
+                fwd.PreencodedBody = exchange.Body;
+                fwd.PreencodedBodyLength = exchange.Body.Length;
+                // MITM unchanged-lite seeds Response before the call. Stamp Body onto the
+                // exchange Response (which replaces that seed) so BeforeResponse /
+                // FinishMitm fallback can read it — match Tcp ForwardOverTcpFastAsync.
+                // Reverse (Response null) keeps skip-Body coalesce.
+                if (fwd.Response != null)
+                {
+                    response.Body = exchange.Body;
+                    response.BodyIsWireEncoded = true;
+                    response.IsBodyReceived = true;
+                }
             }
+            // else: leave StreamBodyWriter + IsBodyRead alone so SendResponseAsync streams DATA.
 
             if (exchange.TrailingHeaders != null && !response.HasTrailingHeaders)
             {

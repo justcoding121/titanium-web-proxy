@@ -89,11 +89,10 @@ Classes
       <section><p>An exception thrown when body is unexpectedly empty.</p>
 </section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Exceptions.OutboundDestinationBlockedException.html">OutboundDestinationBlockedException</a></h4>
-      <section><p>Thrown when <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BlockPrivateNetworkDestinations">BlockPrivateNetworkDestinations</a> is enabled and a
-request's resolved destination address is loopback, private, link-local, or another
-non-globally-routable address - the outbound destination policy hook described in the
-hardening plan's &quot;PublicFacing&quot; posture, protecting a proxy that accepts requests from
-untrusted clients against SSRF into the host's own private network.</p>
+      <section><p>Thrown when an outbound destination policy hook rejects a resolved destination address:
+<a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BlockPrivateNetworkDestinations">BlockPrivateNetworkDestinations</a> (private, link-local,
+loopback, and other non-globally-routable ranges) or
+<a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BlockLoopbackDestinations">BlockLoopbackDestinations</a> (loopback only).</p>
 </section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Exceptions.ProxyAuthorizationException.html">ProxyAuthorizationException</a></h4>
       <section><p>Proxy authorization exception.</p>

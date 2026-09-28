@@ -188,7 +188,14 @@ internal sealed class WorkloadOptions
         if (IsLossy)
             return 2000;
         if (IsHandshake)
+        {
+            // Win/Linux .NET clears 200 ms at c=64 (p99 ~90–110). macOS-15-intel SslStream
+            // new-connection TLS sits ~70 RPS with c=8 p99 often 200–400 ms for both TWP and
+            // YARP (nginx/HAProxy still pass 200). Same peer SLO on Mac — do not loosen Win/Linux.
+            if (OperatingSystem.IsMacOS())
+                return 500;
             return 200;
+        }
         if (IsHeavyBody)
             return 500;
 

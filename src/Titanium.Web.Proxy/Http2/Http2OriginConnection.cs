@@ -539,7 +539,7 @@ internal sealed class Http2OriginConnection : IDisposable
             if (noBody)
             {
                 response.IsBodyRead = true;
-                response.Body = Array.Empty<byte>();
+                // Body lives on the exchange; skip response.Body stamp when unused by callers.
                 return new Http2OriginExchange(response, Array.Empty<byte>(), pending.TrailingHeaders);
             }
 
@@ -551,8 +551,7 @@ internal sealed class Http2OriginConnection : IDisposable
             {
                 var body = pending.TakeInlineBody();
                 response.IsBodyRead = true;
-                response.Body = body;
-                response.BodyIsWireEncoded = true;
+                // Keep exchange.Body; skip response.Body — deliver paths use exchange.Body / wire emit.
                 if (trailers != null)
                 {
                     foreach (var header in trailers)
@@ -567,7 +566,6 @@ internal sealed class Http2OriginConnection : IDisposable
             if (pending.IsInboundComplete && pending.BodyPipeOrNull == null)
             {
                 response.IsBodyRead = true;
-                response.Body = Array.Empty<byte>();
                 return new Http2OriginExchange(response, Array.Empty<byte>(), trailers);
             }
 
@@ -599,9 +597,7 @@ internal sealed class Http2OriginConnection : IDisposable
                 }
 
                 response.IsBodyRead = true;
-                response.Body = body;
-                // H2 DATA payload is already content-encoded when Content-Encoding is present.
-                response.BodyIsWireEncoded = true;
+                // Keep exchange.Body; skip response.Body — deliver paths use exchange.Body / wire emit.
                 if (trailers != null)
                 {
                     foreach (var header in trailers)
