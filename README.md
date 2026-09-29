@@ -8,7 +8,7 @@ A lightweight, high-performance HTTP(S) proxy for Windows, Linux, and macOS.
 |---------|----------|
 | **Titanium.Cli** (`titanium` / `twp`)<br>[Download](https://titaniumproxy.com/download#cli) | Standalone reverse / edge proxy from the command line |
 | **Titanium Inspector**<br>[Download](https://titaniumproxy.com/download#inspector) | Desktop MITM debugger — session grid, inspectors, AutoResponder, breakpoints, HAR export |
-| **Titanium.Plus**<br>`titanium update --plus` (after installing CLI) | Optional ops: control plane, dashboard, observability |
+| **Titanium.Plus**<br>`titanium update --plus` (after installing CLI) | Optional extra features for CLI such as control plane, dashboard, observability |
 | **Titanium.Web.Proxy**<br>[NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy) | Embed a proxy (MITM and/or reverse) in a .NET app |
 
 Requires .NET 10 or later for the library. CLI and Inspector downloads are self-contained (no SDK needed to run them).
