@@ -42,7 +42,7 @@ public class LiveWebSocketFrameRaceTests
             }
         });
 
-        InvalidOperationException? caught = null;
+        Exception? caught = null;
         try
         {
             for (var i = 0; i < 2_000_000 && caught is null; i++)
@@ -51,8 +51,16 @@ public class LiveWebSocketFrameRaceTests
                 {
                     _ = SessionStore.EstimateInMemoryBodyBytes(snap);
                 }
-                catch (InvalidOperationException ex)
+                catch (InvalidOperationException ex) when (ex.Message.Contains(
+                           "Collection was modified",
+                           StringComparison.Ordinal))
                 {
+                    // Classic List enumerator fail-fast under concurrent Add.
+                    caught = ex;
+                }
+                catch (NullReferenceException ex)
+                {
+                    // Concurrent List resize can also tear reads (null element / enumerator).
                     caught = ex;
                 }
             }
@@ -65,8 +73,7 @@ public class LiveWebSocketFrameRaceTests
 
         Assert.IsNotNull(
             caught,
-            "Arm A must hit List modified-during-enumeration; stress was too weak if this fails.");
-        StringAssert.Contains(caught!.Message, "Collection was modified");
+            "Arm A must hit shared-list race (modified-during-enumeration or torn null); stress was too weak if this fails.");
     }
 
     [TestMethod]
