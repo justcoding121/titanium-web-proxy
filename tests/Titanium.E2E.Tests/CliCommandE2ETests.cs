@@ -347,7 +347,7 @@ public class CliCommandE2ETests
                 using var req304 = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{listen}/");
                 req304.Headers.TryAddWithoutValidation("If-None-Match", etag);
                 var notModified = await http.SendAsync(req304);
-                // Prefer 304; some proxies strip validators â€” accept OK with same ETag as soft pass.
+                // Prefer 304; some proxies strip validators — accept OK with same ETag as soft pass.
                 Assert.IsTrue(
                     notModified.StatusCode is HttpStatusCode.NotModified or HttpStatusCode.OK,
                     $"Unexpected status {notModified.StatusCode}");
@@ -394,7 +394,7 @@ public class CliCommandE2ETests
         var (code, _, _) = await harness.RunOnceAsync(["test", "-c", cfg]);
         Assert.AreEqual(0, code);
 
-        // Site-file has no listener â€” default explicit :8000. Use JSON reverse for live traffic
+        // Site-file has no listener — default explicit :8000. Use JSON reverse for live traffic
         // of the same dialect family is covered by WriteRoutes; here assert parse succeeds.
     }
 
@@ -411,7 +411,7 @@ public class CliCommandE2ETests
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-            // HttpServer single location sets ForwardHost â€” connect to listener.
+            // HttpServer single location sets ForwardHost — connect to listener.
             var response = await http.GetAsync($"http://127.0.0.1:{listen}/conf");
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         }

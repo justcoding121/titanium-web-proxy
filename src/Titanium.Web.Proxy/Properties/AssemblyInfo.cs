@@ -11,7 +11,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("Titanium.Web.Proxy")]
-[assembly: AssemblyCopyright("Copyright Â© Titanium 2015-2020")]
+[assembly: AssemblyCopyright("Copyright © Titanium 2015-2020")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 [assembly: InternalsVisibleTo("Titanium.Web.Proxy.UnitTests, PublicKey=" +
