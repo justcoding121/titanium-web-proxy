@@ -2091,13 +2091,16 @@ public sealed class InterceptionService : IDisposable
 
     private void AttachLiveWebSocketFrames(SessionEventArgs e, SessionSnapshot snap)
     {
-        var frames = new List<WebSocketFrameSnapshot>();
-        snap.WebSocketFrames = frames;
+        // Immutable snapshots: proxy threads append while the UI dispatcher may
+        // enumerate WebSocketFrames (EstimateInMemoryBodyBytes). A shared List
+        // threw InvalidOperationException and killed the process (tray + system proxy gone).
+        var live = new LiveWebSocketFrames();
+        snap.WebSocketFrames = live.Current;
         e.BeforeWebSocketFrame += (_, args) =>
         {
             var direction = args.Direction == WebSocketFrameDirection.ClientToServer ? "Client" : "Server";
             var opcode = args.OpCode.ToString();
-            frames.Add(ProtocolFrameInspectors.FromLiveFrame(direction, opcode, args.Data));
+            live.Append(snap, ProtocolFrameInspectors.FromLiveFrame(direction, opcode, args.Data));
             var profile = ThrottleProfile;
             if (profile is { IsEnabled: true })
             {
