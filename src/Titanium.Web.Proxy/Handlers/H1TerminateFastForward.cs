@@ -21,6 +21,17 @@ using SslExtensions = Titanium.Web.Proxy.Extensions.SslExtensions;
 
 namespace Titanium.Web.Proxy;
 
+/// <summary>
+///     Signals that H1 terminate-lite cannot finish this exchange (typically a 1xx interim response)
+///     and the caller should fall through to the full session path without treating it as a failure.
+/// </summary>
+internal sealed class H1TerminateLiteFallbackException : Exception
+{
+    public H1TerminateLiteFallbackException(string message) : base(message)
+    {
+    }
+}
+
 public partial class ProxyServer
 {
     private static readonly Lazy<int> H1TerminateLiteProcessId = new(() => 0);
@@ -156,8 +167,10 @@ public partial class ProxyServer
             var response = http.Response;
             if (response.StatusCode is >= 100 and <= 199)
             {
-                // 1xx needs the full session path's interim loop — close origin and signal fallback.
-                throw new InvalidOperationException("H1 terminate lite does not handle interim 1xx responses.");
+                // Full session path has the interim 1xx loop; keep the origin connection for it.
+                closeConnection = false;
+                throw new H1TerminateLiteFallbackException(
+                    "H1 terminate lite does not handle interim 1xx responses.");
             }
 
             try
@@ -351,7 +364,8 @@ public partial class ProxyServer
             var response = http.Response;
             if (response.StatusCode is >= 100 and <= 199)
             {
-                throw new InvalidOperationException(
+                closeConnection = false;
+                throw new H1TerminateLiteFallbackException(
                     "H1 terminate MITM lite does not handle interim 1xx responses.");
             }
 

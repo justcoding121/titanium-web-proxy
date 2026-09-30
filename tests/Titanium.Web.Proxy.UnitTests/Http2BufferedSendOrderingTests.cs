@@ -243,4 +243,85 @@ public class Http2BufferedSendOrderingTests
         Assert.AreEqual(0, origin.Length);
         Assert.IsTrue(admitted.Task.IsCompletedSuccessfully);
     }
+
+    [TestMethod]
+    public async Task SendBody_WithTrailers_EmitsHeadersDataThenTrailersEndStream()
+    {
+        using var cts = new CancellationTokenSource();
+        var state = new Http2ConnectionState(1, cts);
+        var settings = new Http2Settings { MaxFrameSize = 16384 };
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        using var ms = new MemoryStream();
+        using var gate = new SemaphoreSlim(1, 1);
+
+        var request = NewBufferedPost("/trail", "body");
+        request.TrailingHeaders.AddHeader("grpc-status", "0");
+
+        await using (var writer = new Http2FrameWriter(ms, gate))
+        {
+            state.ServerFrameWriter = writer;
+            await Http2Helper.SendBody(state, towardServer: true, settings, request,
+                new Http2FrameHeader { StreamId = 1 }, new byte[9], 16384, flow, ms,
+                CancellationToken.None, gate);
+        }
+
+        var frames = ParseFrames(ms.ToArray());
+        Assert.IsTrue(frames.Count >= 3, $"Expected HEADERS+DATA+trailer HEADERS, got {frames.Count}");
+        Assert.AreEqual((byte)Http2FrameType.Headers, frames[0].Type);
+        Assert.AreEqual(0, frames[0].Flags & 0x1, "First HEADERS must not set END_STREAM when trailers follow.");
+        Assert.AreEqual((byte)Http2FrameType.Data, frames[1].Type);
+        Assert.AreEqual(0, frames[1].Flags & 0x1, "DATA must not set END_STREAM when trailers follow.");
+        var trailer = frames[^1];
+        Assert.AreEqual((byte)Http2FrameType.Headers, trailer.Type);
+        Assert.AreEqual(0x1, trailer.Flags & 0x1, "Trailer HEADERS must set END_STREAM.");
+    }
+
+    [TestMethod]
+    public async Task SendBody_ResponseWithTrailers_AfterDeferredHeaders_TrailersFollowData()
+    {
+        using var cts = new CancellationTokenSource();
+        var state = new Http2ConnectionState(1, cts);
+        var settings = new Http2Settings { MaxFrameSize = 16384 };
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        using var ms = new MemoryStream();
+        using var gate = new SemaphoreSlim(1, 1);
+
+        var response = new Response
+        {
+            HttpVersion = HttpHeader.Version20,
+            StatusCode = 200,
+            Body = Encoding.ASCII.GetBytes("ok"),
+            IsBodyRead = true
+        };
+        response.TrailingHeaders.AddHeader("x-trailer", "v");
+
+        await using (var writer = new Http2FrameWriter(ms, gate))
+        {
+            state.ClientFrameWriter = writer;
+            await Http2Helper.SendBody(state, towardServer: false, settings, response,
+                new Http2FrameHeader { StreamId = 1 }, new byte[9], 16384, flow, ms,
+                CancellationToken.None, gate);
+        }
+
+        var types = ParseFrames(ms.ToArray()).Select(f => f.Type).ToArray();
+        CollectionAssert.AreEqual(new byte[]
+        {
+            (byte)Http2FrameType.Headers,
+            (byte)Http2FrameType.Data,
+            (byte)Http2FrameType.Headers
+        }, types);
+    }
+
+    [TestMethod]
+    public void TryReserve_UnknownStream_DoesNotInsertWindow()
+    {
+        var flow = new Http2FlowController();
+        Assert.IsFalse(flow.TryReserve(99, 1));
+        Assert.AreEqual(0, flow.TryReservePartial(99, 16));
+        flow.RegisterStream(99);
+        flow.RemoveStream(99);
+        Assert.IsFalse(flow.TryReserve(99, 1));
+    }
 }

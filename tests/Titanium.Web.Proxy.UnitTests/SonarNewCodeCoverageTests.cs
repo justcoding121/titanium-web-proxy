@@ -1457,11 +1457,14 @@ public class SonarNewCodeCoverageTests
         Assert.IsTrue(equals("Host"u8, "host"u8));
         Assert.IsFalse(equals("ab"u8, "abc"u8));
 
-        var omit = typeof(Http2Helper).GetMethod("ShouldOmitHttp2Header", PrivateStatic)!;
-        Assert.IsTrue((bool)omit.Invoke(null, ["Connection".GetByteString()])!);
-        Assert.IsTrue((bool)omit.Invoke(null, ["host".GetByteString()])!);
-        Assert.IsTrue((bool)omit.Invoke(null, ["te".GetByteString()])!);
-        Assert.IsFalse((bool)omit.Invoke(null, ["accept".GetByteString()])!);
+        var omit = typeof(Http2Helper).GetMethod("ShouldOmitHttp2Header", PrivateStatic,
+            binder: null, [typeof(ByteString), typeof(ByteString)], modifiers: null)!;
+        ByteString Empty = default;
+        Assert.IsTrue((bool)omit.Invoke(null, ["Connection".GetByteString(), Empty])!);
+        Assert.IsTrue((bool)omit.Invoke(null, ["host".GetByteString(), Empty])!);
+        Assert.IsTrue((bool)omit.Invoke(null, ["te".GetByteString(), Empty])!);
+        Assert.IsFalse((bool)omit.Invoke(null, ["te".GetByteString(), "trailers".GetByteString()])!);
+        Assert.IsFalse((bool)omit.Invoke(null, ["accept".GetByteString(), Empty])!);
 
         var schemeByte = typeof(Http2Helper).GetMethod("StaticIndexedSchemeByte", PrivateStatic)!;
         Assert.AreNotEqual((byte)0, (byte)schemeByte.Invoke(null, [ProxyServer.UriSchemeHttp8])!);

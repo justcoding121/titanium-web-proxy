@@ -165,12 +165,19 @@ public partial class ProxyServer
                                 }
 
                                 preparedRequest.SetOriginalHeaders();
-                                var keepClient = await ForwardH1TerminateLiteAsync(
-                                    (TransparentBaseProxyEndPoint)endPoint, clientStream, preparedRequest,
-                                    cancellationToken);
-                                if (!keepClient)
-                                    return;
-                                continue;
+                                try
+                                {
+                                    var keepClient = await ForwardH1TerminateLiteAsync(
+                                        (TransparentBaseProxyEndPoint)endPoint, clientStream, preparedRequest,
+                                        cancellationToken);
+                                    if (!keepClient)
+                                        return;
+                                    continue;
+                                }
+                                catch (H1TerminateLiteFallbackException)
+                                {
+                                    // 1xx (e.g. 103 Early Hints): fall through to the full session path.
+                                }
                             }
 
                             // Gate failed after headers (e.g. body) — fall through with prepared request.
@@ -488,14 +495,21 @@ public partial class ProxyServer
                                 && request.Authority.Equals(capturedRequestAuthority)
                                 && !args.HttpClient.Response.Locked)
                             {
-                                var keepClient = await ForwardH1TerminateSessionLiteAsync(
-                                    mitmTerminateEp, clientStream, args, requestToken);
-                                args.IsClientResponseCommitted = true;
-                                if (!keepClient)
-                                    return;
+                                try
+                                {
+                                    var keepClient = await ForwardH1TerminateSessionLiteAsync(
+                                        mitmTerminateEp, clientStream, args, requestToken);
+                                    args.IsClientResponseCommitted = true;
+                                    if (!keepClient)
+                                        return;
 
-                                allowMitmUnchangedRecycle = true;
-                                continue;
+                                    allowMitmUnchangedRecycle = true;
+                                    continue;
+                                }
+                                catch (H1TerminateLiteFallbackException)
+                                {
+                                    // 1xx: fall through to the full session response path below.
+                                }
                             }
 
                             // If prefetch task is available.

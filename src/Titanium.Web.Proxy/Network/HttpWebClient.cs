@@ -390,12 +390,9 @@ public class HttpWebClient
         if (httpStatus == null)
         {
             // EOF before any response bytes: typically a stale pooled keep-alive connection.
-            // A malformed status line (same method, below) is the sibling case: the socket
-            // stayed open but the next bytes are not an HTTP status line, usually leftover
-            // body from a desynced keep-alive. RetryPolicy re-runs the whole exchange; only
-            // safe when there is no body or the body is buffered in memory (IsBodyRead).
-            // A streamed body cannot be replayed.
-            if (!Request.HasBody || Request.IsBodyRead)
+            // Only replay-safe for idempotent methods with a replayable body (same gate as
+            // malformed status). A POST that already reached the origin must not be replayed.
+            if (CanRetryEofBeforeResponse())
                 throw new RetryableServerConnectionException(
                     "Server connection was closed before any response was received.");
 
@@ -443,6 +440,8 @@ public class HttpWebClient
     private bool CanRetryMalformedStatusLine() =>
         (!Request.HasBody || Request.IsBodyRead)
         && Routing.StreamDestinationDispatch.IsIdempotentMethod(Request.Method);
+
+    private bool CanRetryEofBeforeResponse() => CanRetryMalformedStatusLine();
 
     private static RetryableServerConnectionException MalformedStatusLine(FormatException ex) =>
         new("Server returned a response that did not start with an HTTP status line.", ex);

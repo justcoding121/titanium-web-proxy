@@ -1035,7 +1035,17 @@ internal sealed class Http2OriginConnection : IDisposable
                                 continue;
                             }
 
-                            sendFlow.OnWindowUpdate(streamId, increment);
+                            if (sendFlow.OnWindowUpdate(streamId, increment))
+                            {
+                                // RFC 9113 §6.9.1: window exceeding 2^31-1 is FLOW_CONTROL_ERROR.
+                                if (streamId == 0)
+                                {
+                                    Fail(new IOException("HTTP/2 protocol error: connection flow-control window overflow."));
+                                    return;
+                                }
+
+                                Http2Helper.EnqueueRstStream(Writer, streamId, Http2ErrorCode.FlowControlError);
+                            }
                         }
 
                         continue;
@@ -1333,7 +1343,12 @@ internal sealed class Http2OriginConnection : IDisposable
                     return;
                 }
 
-                sendFlow.OnInitialWindowSizeChanged(value);
+                if (sendFlow.OnInitialWindowSizeChanged(value))
+                {
+                    Fail(new IOException(
+                        "HTTP/2 protocol error: SETTINGS_INITIAL_WINDOW_SIZE drove a stream window above 2^31-1."));
+                    return;
+                }
             }
             else if (identifier == (int)Http2SettingsId.MaxConcurrentStreams)
                 originSettings.MaxConcurrentStreams = value;

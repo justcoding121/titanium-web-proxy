@@ -391,8 +391,10 @@ namespace Titanium.Web.Proxy.Http2
 
                 if (leftover > 0)
                 {
-                    // Fire-and-forget under the loop; connection credit stays batched.
-                    _ = GrantReceiveCreditLockedAsync(removeStreamId, 0, leftover).AsTask();
+                    // Fire-and-forget under the loop; connection credit stays batched. Observe faults
+                    // so an unexpected GrantReceiveCredit failure is not an unobserved task exception.
+                    var creditTask = GrantReceiveCreditLockedAsync(removeStreamId, 0, leftover).AsTask();
+                    pendingSynthetics.Track(creditTask);
                 }
 
                 connectionState.OriginRelayPool?.ReleaseStream(removeStreamId);
@@ -401,6 +403,7 @@ namespace Titanium.Web.Proxy.Http2
                 {
                     removedState.InboundTunnelChannel?.Writer.TryComplete(
                         new IOException("HTTP/2 stream removed due to protocol error."));
+                    CompleteAndDrainRequestBodyChannel(removedState);
                     removedState.Cancellation.Cancel();
                     // Compressed-relay CTS is TryReset in PrepareForPool; disposing here forces a new CTS.
                     if (!removedState.IsCompressedRelay)
@@ -415,6 +418,16 @@ namespace Titanium.Web.Proxy.Http2
 
             Action<int> removeAndFinalizeStream = RemoveAndFinalizeStream;
             Func<Func<ValueTask>, ValueTask> lockedOutputWriteFn = lockedOutputWrite;
+
+            static void CompleteAndDrainRequestBodyChannel(Http2StreamState state)
+            {
+                var channel = state.InboundRequestBodyChannel;
+                if (channel == null)
+                    return;
+                channel.Writer.TryComplete();
+                while (channel.Reader.TryRead(out var item))
+                    ArrayPool<byte>.Shared.Return(item.Buffer);
+            }
 
             byte[] buffer = new byte[MaxAcceptableFrameSize];
             // Typical HTTP/2 server stacks read a large Pipe buffer then peel frames with
@@ -896,18 +909,17 @@ namespace Titanium.Web.Proxy.Http2
                     args = existingStreamState.SessionArgs;
                 }
 
-                // Request DATA must not be routed before the stream's BeforeRequest dispatch has finished:
-                // the dispatch task (thread-pool since the HEADERS decode was decoupled from handler
-                // execution) is what marks bridge/synthetic streams (syntheticStreams, Http2IgnoreBodyFrames).
-                // DATA racing past it falls through to the default relay and reserves send-window credit
-                // toward the origin leg - which for bridge connections is a NullOriginStream that never
-                // grants WINDOW_UPDATE, permanently leaking the 64 KiB connection window and deadlocking the
-                // whole frame loop in ReserveAsync (uploads and every response writer stall together). The
-                // The dispatch completes even when the user handler is still waiting on the request body
+                // DATA must not be routed before the stream's BeforeRequest/BeforeResponse dispatch has
+                // finished: the dispatch task is what marks bridge/synthetic streams and (on the MITM
+                // static-HPACK path) queues HEADERS onto the dedicated writer. DATA racing past it either
+                // reserves send-window credit toward a NullOriginStream (request side) or enqueues DATA
+                // ahead of still-pending response HEADERS (response side → PROTOCOL_ERROR on the client).
+                // The dispatch completes even when the user handler is still waiting on the body
                 // (ReadHttp2BeforeHandlerTaskCompletionSource unblocks it), so awaiting here cannot deadlock.
-                // The END_STREAM/SendBody path below already relies on the same contract.
-                if (isClient && type == Http2FrameType.Data
-                    && args?.HttpClient.Request.Http2BeforeHandlerTask is { IsCompleted: false } dataDispatch)
+                if (type == Http2FrameType.Data
+                    && (isClient
+                        ? args?.HttpClient.Request.Http2BeforeHandlerTask
+                        : args?.HttpClient.Response.Http2BeforeHandlerTask) is { IsCompleted: false } dataDispatch)
                 {
                     await dataDispatch;
                 }
@@ -1318,9 +1330,10 @@ namespace Titanium.Web.Proxy.Http2
                                         "HTTP/2 bridge stream exceeded its bounded request-body buffer.",
                                         null, args));
                                     RemoveAndFinalizeStream(streamId);
-                                    await lockedOwnLegWrite(() => SendRstStreamAsync(
-                                        new Http2FrameHeader(), new byte[9], streamId,
-                                        Http2ErrorCode.EnhanceYourCalm, input));
+                                    // Queue RST on the client FIFO (isClient: InboundRequestBodyChannel is
+                                    // only used on the client→proxy leg for external bridges).
+                                    QueueRstStreamFrame(connectionState, input, streamId,
+                                        Http2ErrorCode.EnhanceYourCalm);
                                 }
                             }
 
@@ -1935,7 +1948,11 @@ namespace Titanium.Web.Proxy.Http2
                                     flow = connectionState.ClientSendFlow;
                                 else
                                     flow = connectionState.ServerSendFlow;
-                                flow.OnInitialWindowSizeChanged((int)value);
+                                if (flow.OnInitialWindowSizeChanged((int)value))
+                                {
+                                    invalidSettings = true;
+                                    invalidSettingsError = Http2ErrorCode.FlowControlError;
+                                }
 
                                 if (!suppressConnectionFrameRelay && value < ClientInitialStreamWindowSize)
                                 {
@@ -2231,6 +2248,7 @@ namespace Titanium.Web.Proxy.Http2
                         // RFC 8441: if the reset stream is an extended CONNECT tunnel, unblock the relay
                         // that is reading from the inbound channel so it can shut down promptly.
                         resetStream.InboundTunnelChannel?.Writer.TryComplete();
+                        CompleteAndDrainRequestBodyChannel(resetStream);
                         await resetStream.Cancellation.CancelAsync();
                         if (!resetStream.IsCompressedRelay)
                             resetStream.Cancellation.Dispose();

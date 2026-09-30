@@ -31,6 +31,11 @@ namespace Titanium.Web.Proxy.Http2
 {
     internal partial class Http2Helper
     {
+        /// <summary>
+        ///     Direct socket write of a HEADERS block. Prefer <see cref="QueueSendHeader"/> so encode order
+        ///     matches wire order on the dedicated frame writer. Kept for unit-test coverage of the legacy
+        ///     path; production relay code must not call this.
+        /// </summary>
         internal static ValueTask SendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         {
             // Same HPACK lock as QueueSendHeader: Encoder + encode scratch are connection-direction scoped.
@@ -142,7 +147,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     Queues a client-bound RST_STREAM through the same FIFO as the stream's queued HEADERS/DATA so
         ///     it cannot overtake them on the wire (a direct locked write could).
         /// </summary>
-        private static void QueueRstStreamFrame(Http2ConnectionState connectionState, Stream clientStream,
+        internal static void QueueRstStreamFrame(Http2ConnectionState connectionState, Stream clientStream,
             int streamId, Http2ErrorCode errorCode)
         {
             const int frameSize = 9 + 4;
@@ -393,18 +398,25 @@ namespace Titanium.Web.Proxy.Http2
             // Dispatch may already have queued HEADERS. Encoding them again makes the peer decode the
             // priority prefix as HPACK (COMPRESSION_ERROR) or reject the second block (PROTOCOL_ERROR).
             var streamId = frameHeader.StreamId;
+            var hasTrailers = rr.HasTrailingHeaders;
+            // END_STREAM belongs on the trailer HEADERS when trailers are present (RFC 9113 §8.1).
             if (!rr.Http2HeadersQueued)
                 QueueSendHeader(connectionState, towardServer, writeLock, settings, frameHeader,
-                    frameHeaderBuffer, rr, endStream: !hasBody, output, pushPromise: false);
+                    frameHeaderBuffer, rr, endStream: !hasBody && !hasTrailers, output, pushPromise: false);
 
-            if (!hasBody)
-                return;
+            if (hasBody)
+            {
+                var maxFrameSize = settings.MaxFrameSize > 0
+                    ? Math.Min(maxDataFrameSize, settings.MaxFrameSize)
+                    : maxDataFrameSize;
+                await QueueSendData(connectionState, towardServer, writeLock, streamId, body!,
+                    endStream: !hasTrailers, maxFrameSize, flow, output, cancellationToken)
+                    .ConfigureAwait(false);
+            }
 
-            var maxFrameSize = settings.MaxFrameSize > 0
-                ? Math.Min(maxDataFrameSize, settings.MaxFrameSize)
-                : maxDataFrameSize;
-            await QueueSendData(connectionState, towardServer, writeLock, streamId, body!, endStream: true,
-                maxFrameSize, flow, output, cancellationToken).ConfigureAwait(false);
+            if (hasTrailers)
+                QueueSendTrailer(connectionState, towardServer, writeLock, settings, frameHeader,
+                    frameHeaderBuffer, streamId, rr.TrailingHeaders, endStream: true, output);
         }
 
         /// <summary>
@@ -468,6 +480,11 @@ namespace Titanium.Web.Proxy.Http2
         ///     blocked trying to take the same lock for control-frame replies. Matches the order used by
         ///     the main <see cref="CopyHttp2FrameAsync" /> DATA relay.
         /// </param>
+        /// <summary>
+        ///     Direct socket write of DATA frames. Prefer <see cref="QueueSendData"/> so DATA cannot overtake
+        ///     HEADERS still queued on the dedicated frame writer. Kept for unit-test coverage of the legacy
+        ///     path; production relay code must not call this.
+        /// </summary>
         internal static async ValueTask SendData(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, int streamId, // NOSONAR S107 -- Frame-writing state is kept explicit for this low-level helper.
             ReadOnlyMemory<byte> data, bool endStream, int maxFrameSize, Http2FlowController flow, Stream output,
             CancellationToken cancellationToken, SemaphoreSlim? writeLock = null)
@@ -815,15 +832,11 @@ namespace Titanium.Web.Proxy.Http2
                 endStream: false, clientStream, pushPromise: false);
 
             // Flush so Navigation Timing responseStart can move before the final response arrives.
-            await connectionState.ClientWriteLock.WaitAsync(cancellationToken);
-            try
-            {
-                await clientStream.FlushAsync(cancellationToken);
-            }
-            finally
-            {
-                connectionState.ClientWriteLock.Release();
-            }
+            // Do not take ClientWriteLock around Flush: the 1xx HEADERS are already on ClientFrameWriter's
+            // FIFO and the drain shares that lock — holding it here can Flush before the queued frame
+            // is written. Best-effort flush after a yield lets the drain run first.
+            await Task.Yield();
+            await clientStream.FlushAsync(cancellationToken);
         }
 
         /// <summary>
@@ -1520,11 +1533,38 @@ namespace Titanium.Web.Proxy.Http2
                     }
                 }
 
+                // RFC 9113 §8.2.1: field names and values must not contain CR, LF, or NUL.
+                if (!HasMalformedHeader && ContainsCtlDelimiter(name.Span))
+                {
+                    HasMalformedHeader = true;
+                    MalformedReason = "header field name contains CR, LF, or NUL";
+                }
+
+                if (!HasMalformedHeader && ContainsCtlDelimiter(value.Span))
+                {
+                    HasMalformedHeader = true;
+                    MalformedReason = "header field value contains CR, LF, or NUL";
+                }
+
+                if (HasMalformedHeader)
+                    return;
+
                 addHeaderFunc?.Invoke(name, value);
                 if (prebuilt != null)
                     decodeTarget?.AddHeader(prebuilt);
                 else
                     decodeTarget?.AddHeader(new HttpHeader(name, value));
+            }
+
+            private static bool ContainsCtlDelimiter(ReadOnlySpan<byte> span)
+            {
+                foreach (var b in span)
+                {
+                    if (b is 0 or (byte)'\r' or (byte)'\n')
+                        return true;
+                }
+
+                return false;
             }
 
             private void MarkMalformed(string reason)

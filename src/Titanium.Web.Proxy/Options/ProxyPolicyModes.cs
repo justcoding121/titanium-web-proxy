@@ -48,7 +48,8 @@ public sealed class ProxyPolicyModes
         headerLimits: PolicyMode.Enforce,
         admissionControl: PolicyMode.Enforce,
         http2AbuseBudget: PolicyMode.Enforce,
-        http2RelayValidation: PolicyMode.Enforce);
+        http2RelayValidation: PolicyMode.Enforce,
+        http1ReplaySafety: PolicyMode.Enforce);
 
     /// <summary>Returns the mode selected for <paramref name="family" />.</summary>
     public PolicyMode this[PolicyFamily family] => modes[family];
@@ -60,7 +61,8 @@ public sealed class ProxyPolicyModes
         PolicyMode headerLimits,
         PolicyMode admissionControl,
         PolicyMode http2AbuseBudget,
-        PolicyMode http2RelayValidation = PolicyMode.Disabled)
+        PolicyMode http2RelayValidation = PolicyMode.Disabled,
+        PolicyMode http1ReplaySafety = PolicyMode.Observe)
     {
         var dict = new Dictionary<PolicyFamily, PolicyMode>
         {
@@ -69,7 +71,8 @@ public sealed class ProxyPolicyModes
             [PolicyFamily.HeaderLimits] = headerLimits,
             [PolicyFamily.AdmissionControl] = admissionControl,
             [PolicyFamily.Http2AbuseBudget] = http2AbuseBudget,
-            [PolicyFamily.Http2RelayValidation] = http2RelayValidation
+            [PolicyFamily.Http2RelayValidation] = http2RelayValidation,
+            [PolicyFamily.Http1ReplaySafety] = http1ReplaySafety
         };
         return new ProxyPolicyModes(dict, false);
     }

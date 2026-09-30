@@ -162,6 +162,7 @@ internal class HeaderBuilder
 
     public void WriteHeader(HttpHeader header)
     {
+        HttpHeaderHygiene.ThrowIfForbidden(header.NameData, header.ValueData);
         // NameData/ValueData are already ISO-8859-1 bytes — do not force string + GetBytes.
         Write(header.NameData);
         WriteAscii(": ");

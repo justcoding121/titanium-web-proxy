@@ -1,5 +1,8 @@
+using System;
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Titanium.Web.Proxy.Logging;
 
 namespace Titanium.Web.Proxy.Http2;
 
@@ -11,21 +14,29 @@ namespace Titanium.Web.Proxy.Http2;
 internal sealed class Http2PendingWork
 {
     private readonly ConcurrentDictionary<Task, byte> pending = new();
+    private readonly ILogger? logger;
+
+    public Http2PendingWork(ILogger? logger = null) => this.logger = logger;
 
     public bool IsEmpty => pending.IsEmpty;
 
     public void Track(Task task)
     {
         if (task.IsCompleted)
+        {
+            ObserveFault(task);
             return;
+        }
 
         if (!pending.TryAdd(task, 0))
             return;
 
         _ = task.ContinueWith(static (t, state) =>
         {
-            ((ConcurrentDictionary<Task, byte>)state!).TryRemove(t, out _);
-        }, pending, TaskContinuationOptions.ExecuteSynchronously);
+            var self = (Http2PendingWork)state!;
+            self.pending.TryRemove(t, out _);
+            self.ObserveFault(t);
+        }, this, TaskContinuationOptions.ExecuteSynchronously);
     }
 
     public Task WhenAllAsync()
@@ -38,6 +49,16 @@ internal sealed class Http2PendingWork
         var i = 0;
         foreach (var t in snapshot)
             array[i++] = t;
-        return Task.WhenAll(array);
+        // OnlyWaitOnAll: faults were already observed/logged in Track's continuation; do not let a
+        // single synthetic failure tear down the whole relay via Task.WhenAll's aggregate throw.
+        return Task.WhenAll(array).ContinueWith(static _ => { }, TaskContinuationOptions.ExecuteSynchronously);
+    }
+
+    private void ObserveFault(Task task)
+    {
+        if (!task.IsFaulted || task.Exception == null)
+            return;
+        ProxyDiagnostics.ReportCaught(logger ?? ProxyDiagnostics.Logger,
+            "HTTP/2 background work faulted", task.Exception.GetBaseException());
     }
 }

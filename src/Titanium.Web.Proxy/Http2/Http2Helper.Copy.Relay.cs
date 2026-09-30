@@ -185,7 +185,7 @@ namespace Titanium.Web.Proxy.Http2
                 ReportException(logger, new ProxyHttpException(
                     "Failed to decode HTTP/2 headers on compressed-relay stream", ex, null));
                 await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
-                    hbStreamId, Http2ErrorCode.CompressionError, input));
+                    connectionState.LastClientStreamId, Http2ErrorCode.CompressionError, input));
                 throw;
             }
 

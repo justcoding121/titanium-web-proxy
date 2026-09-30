@@ -133,6 +133,7 @@ namespace Titanium.Web.Proxy.Http2
                     "HTTP/2 header list too large: " + ex.Message, ex, sessionArgs));
                 await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
                     (Http2ErrorCode)0xb /* ENHANCE_YOUR_CALM */, input));
+                removeAndFinalizeStream(hbStreamId);
                 return false;
             }
             catch (Exception ex)
@@ -146,8 +147,8 @@ namespace Titanium.Web.Proxy.Http2
                 // connection down instead so both sides observe a clean failure and can retry on a new
                 // connection.
                 ReportException(logger, new ProxyHttpException("Failed to decode HTTP/2 headers", ex, sessionArgs));
-                await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
-                    Http2ErrorCode.CompressionError, input));
+                await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                    connectionState.LastClientStreamId, Http2ErrorCode.CompressionError, input));
                 throw;
             }
 
@@ -163,6 +164,7 @@ namespace Titanium.Web.Proxy.Http2
                     ReportException(logger, new ProxyHttpException(malformed, null, sessionArgs));
                     await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
                         Http2ErrorCode.ProtocolError, input));
+                    removeAndFinalizeStream(hbStreamId);
                     return false;
                 }
             }
@@ -178,6 +180,7 @@ namespace Titanium.Web.Proxy.Http2
                     ReportException(logger, new ProxyHttpException(forbidden, null, sessionArgs));
                     await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
                         Http2ErrorCode.ProtocolError, input));
+                    removeAndFinalizeStream(hbStreamId);
                     return false;
                 }
             }
@@ -383,6 +386,7 @@ namespace Titanium.Web.Proxy.Http2
                             null, sessionArgs));
                         await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
                             hbStreamId, Http2ErrorCode.ProtocolError, input));
+                        removeAndFinalizeStream(hbStreamId);
                         return false;
                     }
 
@@ -396,6 +400,7 @@ namespace Titanium.Web.Proxy.Http2
                             forbiddenTrailerHeader.Name + "'.", null, sessionArgs));
                         await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
                             hbStreamId, Http2ErrorCode.ProtocolError, input));
+                        removeAndFinalizeStream(hbStreamId);
                         return false;
                     }
 
@@ -407,15 +412,31 @@ namespace Titanium.Web.Proxy.Http2
                     // a request answered synthetically never reached the server - nothing to forward,
                     // but the block above still had to be decoded to keep this connection's HPACK
                     // hpack.Decoder state in sync with the peer's encoder.
-                    await hpack.RequestDispatchChain;
-
-                    if (!syntheticStreams.ContainsKey(hbStreamId))
+                    //
+                    // Never await RequestDispatchChain (the connection-wide admission tail) here: for a
+                    // buffered/deferred request that tail is this stream's own Http2OriginAdmitted, which
+                    // only completes in SendBody after this method returns (frame-loop deadlock). Trailers
+                    // also replace DATA END_STREAM, so the body-end path that runs SendBody sits right
+                    // after we return — enqueueing trailers here would put them on the FIFO before HEADERS.
+                    if (!syntheticStreams.ContainsKey(hbStreamId) && headerRr.Http2HeadersQueued)
                     {
-                        // Queued on the same ordered FIFO as the stream's HEADERS/DATA so trailers cannot
-                        // overtake them on the wire.
+                        // Streamed path: HEADERS (and DATA) are already on the FIFO. Await only this
+                        // stream's own dispatch so trailers cannot overtake a still-pending HEADERS enqueue.
+                        if (headerRr.Http2BeforeHandlerTask is { IsCompleted: false } ownDispatch)
+                            await ownDispatch;
                         QueueSendTrailer(connectionState, towardServer: isClient, outputWriteLock, remoteSettings,
                             frameHeader, frameHeaderBuffer, hbStreamId, headerRr.TrailingHeaders, endStreamFlag,
                             output);
+                    }
+                    // else: deferred/buffered — TrailingHeaders stay on rr; SendBody emits them after
+                    // HEADERS+DATA when the body-end path runs (endStreamFlag is set by the caller).
+                    // External bridges (H2→H3): trailers replace DATA END_STREAM, so complete the body
+                    // channel here or copyRequestBody hangs forever in ReadAllAsync.
+                    if (connectionState.Streams.TryGetValue(hbStreamId, out var trailerBridgeState)
+                        && trailerBridgeState.InboundRequestBodyChannel != null
+                        && endStreamFlag)
+                    {
+                        trailerBridgeState.InboundRequestBodyChannel.Writer.TryComplete();
                     }
 
                     return false;
@@ -1484,6 +1505,7 @@ namespace Titanium.Web.Proxy.Http2
                         ReportException(logger, new ProxyHttpException(trailerForbidden, null, sessionArgs));
                         await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
                             hbStreamId, Http2ErrorCode.ProtocolError, input));
+                        removeAndFinalizeStream(hbStreamId);
                         return false;
                     }
                 }
@@ -1493,9 +1515,16 @@ namespace Titanium.Web.Proxy.Http2
                     headerRr.TrailingHeaders.AddHeader(header);
                 }
 
-                // Same ordered FIFO as the response HEADERS/DATA so trailers cannot overtake them.
-                QueueSendTrailer(connectionState, towardServer: false, outputWriteLock, remoteSettings,
-                    frameHeader, frameHeaderBuffer, hbStreamId, headerRr.TrailingHeaders, endStreamFlag, output);
+                // Same contract as request trailers: only enqueue when HEADERS are already on the FIFO.
+                // GetResponseBody defers HEADERS to SendBody; enqueueing trailers here would put them first.
+                if (headerRr.Http2HeadersQueued)
+                {
+                    if (headerRr.Http2BeforeHandlerTask is { IsCompleted: false } ownDispatch)
+                        await ownDispatch;
+                    QueueSendTrailer(connectionState, towardServer: false, outputWriteLock, remoteSettings,
+                        frameHeader, frameHeaderBuffer, hbStreamId, headerRr.TrailingHeaders, endStreamFlag, output);
+                }
+
                 return false;
             }
         }
