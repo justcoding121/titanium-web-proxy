@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -99,18 +100,77 @@ internal sealed class Http2ConnectionState
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>
-    ///     Last <c>SETTINGS_MAX_CONCURRENT_STREAMS</c> value advertised toward the client (clamped /
-    ///     injected on the origin→client SETTINGS rewrite). Not used for admission until the client
-    ///     ACKs that SETTINGS (RFC 9113: sender must not assume the peer applied settings before ACK).
-    ///     Default <see cref="int.MaxValue"/> = unlimited (RFC default before a finite setting).
+    ///     Last <c>SETTINGS_MAX_CONCURRENT_STREAMS</c> value written into an origin→client SETTINGS
+    ///     frame. Diagnostic only: admission uses <see cref="EnforcedMaxConcurrentStreamsTowardClient"/>,
+    ///     which advances one acknowledged frame at a time. Copying this field on every client ACK
+    ///     applied a newer, lower cap to an ACK of an older frame and reset streams the browser was
+    ///     still allowed to open (x.com timeline and comments).
     /// </summary>
     public int PendingMaxConcurrentStreamsTowardClient = int.MaxValue;
 
     /// <summary>
-    ///     Concurrent-stream cap enforced against client-initiated stream admission. Promoted from
-    ///     <see cref="PendingMaxConcurrentStreamsTowardClient"/> when a client SETTINGS ACK is received.
+    ///     Concurrent-stream cap enforced against client-initiated stream admission. Stays at the RFC
+    ///     default (unlimited) until the client ACKs the SETTINGS frame that advertised a finite cap.
     /// </summary>
     public int EnforcedMaxConcurrentStreamsTowardClient = int.MaxValue;
+
+    /// <summary>
+    ///     Caps of non-ACK SETTINGS frames already written toward the client, in send order.
+    ///     <c>-1</c> means that frame did not change <c>SETTINGS_MAX_CONCURRENT_STREAMS</c>.
+    ///     A client ACK consumes the oldest entry (RFC 9113: ACKs are not numbered and apply in order).
+    /// </summary>
+    private readonly Queue<int> outboundSettingsCapsTowardClient = new();
+
+    /// <summary>
+    ///     ACKs that arrived before <see cref="CommitSettingsFrameTowardClient"/> ran for the frame
+    ///     they acknowledge. Localhost can ACK in the window after the write returns and before the
+    ///     relay task records the frame.
+    /// </summary>
+    private int unmatchedClientSettingsAcks;
+
+    private readonly object settingsAckGate = new();
+
+    /// <summary>
+    ///     Records one non-ACK SETTINGS frame that has been written toward the client.
+    ///     <paramref name="maxConcurrentStreams"/> is the cap that frame advertised, or
+    ///     <see langword="null"/> when the frame did not change the cap.
+    /// </summary>
+    internal void CommitSettingsFrameTowardClient(int? maxConcurrentStreams)
+    {
+        var encoded = maxConcurrentStreams ?? -1;
+        lock (settingsAckGate)
+        {
+            if (unmatchedClientSettingsAcks > 0)
+            {
+                unmatchedClientSettingsAcks--;
+                if (encoded >= 0)
+                    Volatile.Write(ref EnforcedMaxConcurrentStreamsTowardClient, encoded);
+                return;
+            }
+
+            outboundSettingsCapsTowardClient.Enqueue(encoded);
+        }
+    }
+
+    /// <summary>
+    ///     Applies one client SETTINGS ACK to the oldest SETTINGS frame written toward the client.
+    ///     An ACK never adopts a cap that was staged for a frame the client has not been sent.
+    /// </summary>
+    internal void ApplyClientSettingsAck()
+    {
+        lock (settingsAckGate)
+        {
+            if (outboundSettingsCapsTowardClient.Count == 0)
+            {
+                unmatchedClientSettingsAcks++;
+                return;
+            }
+
+            var encoded = outboundSettingsCapsTowardClient.Dequeue();
+            if (encoded >= 0)
+                Volatile.Write(ref EnforcedMaxConcurrentStreamsTowardClient, encoded);
+        }
+    }
 
     /// <summary>
     ///     Background tasks for synthetic (proxy-generated) responses, tracked so they can be observed for

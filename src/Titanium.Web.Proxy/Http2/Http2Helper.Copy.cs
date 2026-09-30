@@ -485,6 +485,11 @@ namespace Titanium.Web.Proxy.Http2
                 var flags = (Http2FrameFlag)frameHeaderBuffer[4];
                 int streamId = ReadHttp2StreamId(frameHeaderBuffer);
 
+                // Cap carried by a non-ACK SETTINGS frame relayed toward the client on this iteration.
+                // null = the frame does not change SETTINGS_MAX_CONCURRENT_STREAMS. Applied only when
+                // that exact frame is ACKed (see Http2ConnectionState.ApplyClientSettingsAck).
+                int? clientBoundSettingsCap = null;
+
                 // Wire id on `input` (origin stream id when reading an origin leg).
                 int peerStreamId = streamId;
 
@@ -1848,14 +1853,11 @@ namespace Titanium.Web.Proxy.Http2
                         return;
                     }
 
-                    // Client ACK of SETTINGS we advertised toward it: promote Pending → Enforced so
-                    // MaxConcurrentStreams admission matches what the browser has applied (RFC 9113).
+                    // Client ACK of one SETTINGS frame we wrote toward it. ACKs are unnumbered and
+                    // apply in order, so this must not copy the newest pending cap: that value may
+                    // belong to a later SETTINGS frame still on its way to the browser.
                     if (isClient && (flags & Http2FrameFlag.Ack) != 0)
-                    {
-                        Volatile.Write(
-                            ref connectionState.EnforcedMaxConcurrentStreamsTowardClient,
-                            Volatile.Read(ref connectionState.PendingMaxConcurrentStreamsTowardClient));
-                    }
+                        connectionState.ApplyClientSettingsAck();
 
                     bool invalidSettings = false;
                     Http2ErrorCode invalidSettingsError = Http2ErrorCode.ProtocolError;
@@ -1973,8 +1975,10 @@ namespace Titanium.Web.Proxy.Http2
                                 // against.
                                 var effective = Math.Min(advertised, resourceLimits.MaxConcurrentStreamsPerConnection);
                                 localSettings.MaxConcurrentStreams = effective;
-                                // Advertise now; enforce only after the client's SETTINGS ACK.
+                                // Record the value on this frame. Enforcement waits for the ACK of
+                                // this frame, not the next ACK that happens to be in flight.
                                 Volatile.Write(ref connectionState.PendingMaxConcurrentStreamsTowardClient, effective);
+                                clientBoundSettingsCap = effective;
 
                                 buffer[valueOffset] = (byte)((effective >> 24) & 0xff);
                                 buffer[valueOffset + 1] = (byte)((effective >> 16) & 0xff);
@@ -2138,6 +2142,7 @@ namespace Titanium.Web.Proxy.Http2
                         var effective = resourceLimits.MaxConcurrentStreamsPerConnection;
                         localSettings.MaxConcurrentStreams = effective;
                         Volatile.Write(ref connectionState.PendingMaxConcurrentStreamsTowardClient, effective);
+                        clientBoundSettingsCap = effective;
 
                         buffer[length] = (byte)(((int)Http2SettingsId.MaxConcurrentStreams >> 8) & 0xff);
                         buffer[length + 1] = (byte)((int)Http2SettingsId.MaxConcurrentStreams & 0xff);
@@ -2703,6 +2708,11 @@ namespace Titanium.Web.Proxy.Http2
                     // response on the other relay can safely send HEADERS afterwards.
                     if (!isClient && type == Http2FrameType.Settings && (flags & Http2FrameFlag.Ack) == 0)
                     {
+                        // The SETTINGS bytes are already written (connection-level frames are awaited
+                        // under the output lock above). Pair this frame with its future ACK before any
+                        // further await, so a localhost ACK cannot land against an empty queue and
+                        // then be matched to a later, lower cap.
+                        connectionState.CommitSettingsFrameTowardClient(clientBoundSettingsCap);
                         connectionState.ServerSettingsRelayed.TrySetResult(true);
 
                         // 1 MiB connection window toward the client — must follow SETTINGS on the

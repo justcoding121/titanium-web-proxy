@@ -141,8 +141,12 @@ public sealed class ProxyProfileSettings
     /// </summary>
     public static ProxyProfileSettings PublicFacing { get; } = new()
     {
-        ResourceLimits = ProxyResourceLimits.Default.WithCertificateCacheBounds(
-            maxCertificateCacheEntries: 4096, maxCertificateDiskCacheEntries: 50_000),
+        // Keep the pre-1000 stream cap. Default moved to 1000 so a single-user browser session
+        // (Balanced) can carry an x.com-sized fan-out; an untrusted client must not get that budget.
+        ResourceLimits = ProxyResourceLimits.Default
+            .WithMaxConcurrentStreamsPerConnection(256)
+            .WithCertificateCacheBounds(
+                maxCertificateCacheEntries: 4096, maxCertificateDiskCacheEntries: 50_000),
         PolicyModes = ProxyPolicyModes.AllEnforce,
         SupportedSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
         BlockPrivateNetworkDestinations = true,

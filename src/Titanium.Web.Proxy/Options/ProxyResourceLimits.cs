@@ -142,12 +142,13 @@ public sealed class ProxyResourceLimits
     public int? MaxCertificateDiskCacheEntries { get; private init; }
 
     /// <summary>
-    ///     Today's shipped values, carried forward as the <c>Balanced</c> profile's starting point
-    ///     per the plan's rollout section: this is not a behavior change for existing traffic. Limits
-    ///     newly introduced by the hardening plan (header aggregate bytes, decompression ratio,
-    ///     CONTINUATION frame count, reset budget, admission cap) are set high enough that no
-    ///     browser-generated traffic should reach them; they are expected to move once the benchmark
-    ///     project has real numbers behind them.
+    ///     Today's shipped values, carried forward as the <c>Balanced</c> profile's starting point.
+    ///     Header, decompression, CONTINUATION, and reset budgets stay high enough that ordinary
+    ///     browser traffic does not trip them. <see cref="MaxConcurrentStreamsPerConnection"/> is 1000,
+    ///     matching Chrome's own concurrent-stream setting: 256 reset later requests on a single
+    ///     x.com connection (<c>REFUSED_STREAM</c>) while the same page succeeded with no proxy.
+    ///     The check runs only when a stream is opened, so traffic under the old cap takes the same
+    ///     DATA path. <see cref="ProxyProfile.PublicFacing"/> pins the cap back to 256.
     ///     <para>
     ///         <see cref="MaxCertificateCacheEntries" /> is the one deliberate exception to "unchanged
     ///         for existing traffic": measurement showed process memory holding steady at ~100 MB
@@ -167,7 +168,10 @@ public sealed class ProxyResourceLimits
         maxDecodedBodyBytes: null,
         maxDecompressionRatio: 200,
         maxConcurrentClients: null,
-        maxConcurrentStreamsPerConnection: 256,
+        // Chrome advertises 1000. 256 was below the fan-out of one x.com connection once the
+        // inspector holds streams open for capture, so later timeline and comment requests were
+        // reset with REFUSED_STREAM. Workloads that stay under 256 take the same frame path.
+        maxConcurrentStreamsPerConnection: 1000,
         maxPeerInitiatedIncompleteStreamResets: 100,
         maxOpenHeaderBlockFrames: 128,
         maxOpenHeaderBlockDuration: TimeSpan.FromSeconds(10),
