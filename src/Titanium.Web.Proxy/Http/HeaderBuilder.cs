@@ -15,7 +15,8 @@ internal class HeaderBuilder
 
     private readonly MemoryStream stream = new(256);
 #if DEBUG
-    private bool inUse;
+    // Directly constructed builders (never pooled) are always live; only Return() clears this.
+    private bool inUse = true;
 #endif
 
     /// <summary>Rents a thread-local builder (cleared). Caller must <see cref="Return"/> it.</summary>

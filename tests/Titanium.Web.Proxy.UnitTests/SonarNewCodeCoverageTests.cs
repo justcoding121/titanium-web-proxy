@@ -180,7 +180,7 @@ public class SonarNewCodeCoverageTests
         using var trailers = new MemoryStream();
         var trailing = new HeaderCollection();
         trailing.AddHeader("ETag", "abc");
-        await Http2Helper.SendTrailer(settings, header, buf, 3, trailing, endStream: true, trailers);
+        await Http2QueuedSend.SendTrailer(settings, header, buf, 3, trailing, endStream: true, trailers);
         Assert.IsTrue(trailers.Length > 9);
 
         var response = new Response
@@ -191,7 +191,7 @@ public class SonarNewCodeCoverageTests
         response.Body = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
         response.IsBodyRead = true;
         using var body = new MemoryStream();
-        await Http2Helper.SendBody(settings, response, header, buf, new byte[4], flow, body, CancellationToken.None);
+        await Http2QueuedSend.SendBody(settings, response, header, buf, 4, flow, body);
         Assert.IsTrue(body.Length > 9 + 8);
 
         using var data = new MemoryStream();

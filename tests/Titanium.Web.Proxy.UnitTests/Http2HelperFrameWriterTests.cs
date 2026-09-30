@@ -250,7 +250,7 @@ public class Http2HelperFrameWriterTests
         var trailers = new HeaderCollection();
         trailers.AddHeader("x-trailer", "done");
 
-        await Http2Helper.SendTrailer(settings, header, buf, 1, trailers, endStream: true, ms);
+        await Http2QueuedSend.SendTrailer(settings, header, buf, 1, trailers, endStream: true, ms);
 
         var wire = ms.ToArray();
         Assert.IsTrue(wire.Length > 9);
@@ -269,7 +269,7 @@ public class Http2HelperFrameWriterTests
         var trailers = new HeaderCollection();
         trailers.AddHeader("X-Long-Trailer", new string('z', 100));
 
-        await Http2Helper.SendTrailer(settings, header, buf, 11, trailers, endStream: false, ms);
+        await Http2QueuedSend.SendTrailer(settings, header, buf, 11, trailers, endStream: false, ms);
 
         var wire = ms.ToArray();
         Assert.AreEqual((byte)Http2FrameType.Headers, wire[3]);
@@ -358,7 +358,7 @@ public class Http2HelperFrameWriterTests
         var flow = new Http2FlowController();
         flow.RegisterStream(3);
 
-        await Http2Helper.SendBody(new Http2Settings(), response, header, buf, new byte[4], flow, ms,
+        await Http2QueuedSend.SendBody(new Http2Settings(), response, header, buf, 4, flow, ms,
             CancellationToken.None);
 
         var wire = ms.ToArray();
@@ -383,7 +383,7 @@ public class Http2HelperFrameWriterTests
         var flow = new Http2FlowController();
         flow.RegisterStream(7);
 
-        await Http2Helper.SendBody(new Http2Settings(), response, header, buf, new byte[4], flow, ms,
+        await Http2QueuedSend.SendBody(new Http2Settings(), response, header, buf, 4, flow, ms,
             CancellationToken.None);
 
         var wire = ms.ToArray();
@@ -422,9 +422,13 @@ public class Http2HelperFrameWriterTests
         flow.OnInitialWindowSizeChanged(0);
         flow.RegisterStream(3);
         using var writeLock = new SemaphoreSlim(1, 1);
+        using var cts = new CancellationTokenSource();
+        var state = new Http2ConnectionState(1, cts);
+        await using var writer = new Http2FrameWriter(ms, writeLock);
+        state.ServerFrameWriter = writer;
 
-        var send = Http2Helper.SendBody(new Http2Settings(), response, header, buf, new byte[4], flow, ms,
-            CancellationToken.None, writeLock).AsTask();
+        var send = Http2Helper.SendBody(state, towardServer: true, new Http2Settings(), response, header, buf, 4,
+            flow, ms, CancellationToken.None, writeLock).AsTask();
 
         // Headers must already be on the wire, the send still blocked, and the lock free.
         // Acquiring the lock before SendBody starts would pass even if the wait held the lock.

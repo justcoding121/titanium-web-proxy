@@ -51,6 +51,7 @@ public class Http2ProxyThroughputBenchmarks
         });
         originApp = builder.Build();
         originApp.MapGet("/bench", () => ResponseBody);
+        originApp.MapPost("/bench", () => ResponseBody);
         originApp.Start();
 
         proxyServer = new ProxyServer(false, false, false);
@@ -61,6 +62,14 @@ public class Http2ProxyThroughputBenchmarks
         {
             args.IsValid = LoopbackCertificateAuthority.Validate(args.Certificate);
             return Task.CompletedTask;
+        };
+
+        // Buffer request bodies like an inspecting client (Titanium Inspector) does: this selects the
+        // buffered-body path (deferred HEADERS until body end), not the streamed relay path.
+        proxyServer.BeforeRequest += async (_, args) =>
+        {
+            if (args.HttpClient.Request.HasBody)
+                await args.GetRequestBody();
         };
 
         var endPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 0);
@@ -98,6 +107,18 @@ public class Http2ProxyThroughputBenchmarks
         for (var i = 0; i < ConcurrentStreams; i++)
             tasks[i] = client.GetStringAsync(targetUri);
         await Task.WhenAll(tasks);
+    }
+
+    /// <summary>Buffered-body requests multiplexed on one connection (the x.com-shaped path).</summary>
+    [Benchmark]
+    public async Task MultiplexedBufferedPosts()
+    {
+        var tasks = new Task<HttpResponseMessage>[ConcurrentStreams];
+        for (var i = 0; i < ConcurrentStreams; i++)
+            tasks[i] = client.PostAsync(targetUri, new StringContent("{\"q\":\"0123456789abcdef\"}"));
+        var responses = await Task.WhenAll(tasks);
+        foreach (var response in responses)
+            response.Dispose();
     }
 
     private static int GetFreeTcpPort()

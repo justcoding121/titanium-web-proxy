@@ -33,6 +33,26 @@ public abstract class RequestResponseBase
 
     internal bool Http2IgnoreBodyFrames;
 
+    /// <summary>True once this message's HEADERS have been queued toward the peer. SendBody must not send them again.</summary>
+    internal bool Http2HeadersQueued;
+
+    /// <summary>
+    ///     Requests that carry a body: completes once this request's origin decision is final and its HEADERS
+    ///     are queued (or it will never be sent). The next request's dispatch chains on it so the origin
+    ///     observes newly opened streams in increasing stream-id order (RFC 9113 §5.1.1) even when this
+    ///     request's HEADERS are only sent after its buffered body arrived. Never awaited by the frame loop.
+    /// </summary>
+    internal TaskCompletionSource<bool>? Http2OriginAdmitted;
+
+    /// <summary>
+    ///     Admission of the previous request on the connection; a buffered-body request queues its HEADERS
+    ///     only after this completes. Set when the HEADERS are deferred until the body arrived.
+    /// </summary>
+    internal Task? Http2AdmitAfter;
+
+    /// <summary>True when the HEADERS were deferred until the buffered body was complete.</summary>
+    internal bool Http2HeadersDeferred;
+
     /// <summary>
     ///     Priority used only in HTTP/2
     /// </summary>
@@ -416,6 +436,10 @@ public abstract class RequestResponseBase
         Http2BodyData?.Dispose();
         Http2BodyData = null;
         Http2IgnoreBodyFrames = false;
+        Http2HeadersQueued = false;
+        Http2OriginAdmitted = null;
+        Http2AdmitAfter = null;
+        Http2HeadersDeferred = false;
         Priority = null;
         ReadHttp2BeforeHandlerTaskCompletionSource = null;
         ReadHttp2BodyTaskCompletionSource = null;

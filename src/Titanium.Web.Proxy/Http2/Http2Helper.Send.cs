@@ -61,6 +61,7 @@ namespace Titanium.Web.Proxy.Http2
                     pushPromise ? Http2FrameType.PushPromise : Http2FrameType.Headers, endStream,
                     rr.Priority.HasValue, block, settings.MaxFrameSize);
                 connectionState.EnqueueWriteRented(towardServer, writeLock, output, framed.Array!, framed.Count);
+                rr.Http2HeadersQueued = true;
             }
         }
 
@@ -164,11 +165,15 @@ namespace Titanium.Web.Proxy.Http2
         ///     HEADERS frame carrying no pseudo-headers, using the same persistent per-direction HPACK
         ///     encoder as <see cref="SendHeader" /> so the destination's dynamic table stays in sync
         ///     regardless of whether trailers are actually present on a given message.
+        ///     The block is encoded and enqueued on the direction's ordered FIFO under one
+        ///     <c>settings.Sync</c> hold (same contract as <see cref="QueueSendHeader"/>): a direct write
+        ///     would let this block overtake earlier-encoded HEADERS still queued on the dedicated writer,
+        ///     and the peer's HPACK decoder would desynchronize (COMPRESSION_ERROR).
         /// </summary>
-        internal static ValueTask SendTrailer(Http2Settings settings, Http2FrameHeader frameHeader,
+        internal static void QueueSendTrailer(Http2ConnectionState connectionState, bool towardServer,
+            SemaphoreSlim writeLock, Http2Settings settings, Http2FrameHeader frameHeader,
             byte[] frameHeaderBuffer, int streamId, HeaderCollection trailingHeaders, bool endStream, Stream output)
         {
-            ReadOnlyMemory<byte> block;
             lock (settings.Sync)
             {
                 var encoder = settings.Encoder;
@@ -200,12 +205,11 @@ namespace Titanium.Web.Proxy.Http2
                 }
 
                 writer.Flush();
-                // Encode scratch is reused; copy before releasing the HPACK lock.
-                block = GetMemoryStreamMemory(ms).ToArray();
+                // RentFramedHeaderBlock copies out of the shared encode scratch before the lock is released.
+                var framed = RentFramedHeaderBlock(frameHeader, frameHeaderBuffer, streamId, Http2FrameType.Headers,
+                    endStream, false, GetMemoryStreamMemory(ms), settings.MaxFrameSize);
+                connectionState.EnqueueWriteRented(towardServer, writeLock, output, framed.Array!, framed.Count);
             }
-
-            return WriteHeaderBlockAsync(frameHeader, frameHeaderBuffer, streamId, Http2FrameType.Headers,
-                endStream, false, block, settings.MaxFrameSize, output);
         }
 
         private static ReadOnlyMemory<byte> GetMemoryStreamMemory(MemoryStream ms)
@@ -364,84 +368,88 @@ namespace Titanium.Web.Proxy.Http2
             } while (pos < data.Length);
         }
 
-        internal static async ValueTask SendBody(Http2Settings settings, RequestResponseBase rr, Http2FrameHeader frameHeader, // NOSONAR S107 -- Frame-writing state is kept explicit for this low-level helper.
-            byte[] frameHeaderBuffer, byte[] buffer, Http2FlowController flow, Stream output,
-            CancellationToken cancellationToken, SemaphoreSlim? writeLock = null)
+        /// <summary>
+        ///     Sends a message whose body the handler buffered (GetRequestBody / GetResponseBody): HEADERS
+        ///     (unless dispatch already queued them) followed by the DATA frames.
+        ///     Both go through the direction's ordered writer FIFO (<see cref="QueueSendHeader"/> /
+        ///     <see cref="QueueSendData"/>), never a direct socket write. These HEADERS are encoded late,
+        ///     after the frame loop has already encoded and queued HEADERS for other streams. A direct
+        ///     write here landed on the wire ahead of those queued blocks although it was encoded after
+        ///     them, so the peer's HPACK decoder desynchronized (COMPRESSION_ERROR / illegal index), and a
+        ///     DATA frame could precede its own HEADERS. Awaiting the legacy write chain does not help: the
+        ///     dedicated frame writers never feed it. The FIFO also means no write lock is held while
+        ///     waiting for flow-control credit.
+        /// </summary>
+        internal static async ValueTask SendBody(Http2ConnectionState connectionState, bool towardServer, // NOSONAR S107 -- Frame-writing state is kept explicit for this low-level helper.
+            Http2Settings settings, RequestResponseBase rr, Http2FrameHeader frameHeader,
+            byte[] frameHeaderBuffer, int maxDataFrameSize, Http2FlowController flow, Stream output,
+            CancellationToken cancellationToken, SemaphoreSlim writeLock)
         {
-            // When writeLock is set, this method owns it. Credit waits must not hold it: the other
-            // direction's frame loop needs the same lock to write receive-credit WINDOW_UPDATE, and
-            // that loop is also what reads the WINDOW_UPDATE that would unblock this reserve.
-            // Holding the lock across ReserveAsync stalls both and hits ReservationTimeout (60s).
-            // The common path (TryReserve succeeds) keeps HEADERS + DATA under one lock acquire.
-            var lockHeld = false;
+            var body = rr.CompressBodyAndUpdateContentLength();
+            var hasBody = rr.HasBody && rr.IsBodyRead;
+            if (hasBody && body == null)
+                throw new InvalidOperationException("An HTTP/2 body was marked as read but is unavailable.");
 
-            async ValueTask EnsureLockAsync()
-            {
-                if (writeLock == null || lockHeld)
-                    return;
+            // Dispatch may already have queued HEADERS. Encoding them again makes the peer decode the
+            // priority prefix as HPACK (COMPRESSION_ERROR) or reject the second block (PROTOCOL_ERROR).
+            var streamId = frameHeader.StreamId;
+            if (!rr.Http2HeadersQueued)
+                QueueSendHeader(connectionState, towardServer, writeLock, settings, frameHeader,
+                    frameHeaderBuffer, rr, endStream: !hasBody, output, pushPromise: false);
 
-                await writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-                lockHeld = true;
-            }
+            if (!hasBody)
+                return;
 
-            void ReleaseLock()
-            {
-                if (writeLock == null || !lockHeld)
-                    return;
+            var maxFrameSize = settings.MaxFrameSize > 0
+                ? Math.Min(maxDataFrameSize, settings.MaxFrameSize)
+                : maxDataFrameSize;
+            await QueueSendData(connectionState, towardServer, writeLock, streamId, body!, endStream: true,
+                maxFrameSize, flow, output, cancellationToken).ConfigureAwait(false);
+        }
 
-                writeLock.Release();
-                lockHeld = false;
-            }
-
+        /// <summary>
+        ///     Sends a buffered request once every earlier request on the connection has been admitted, so the
+        ///     origin sees HEADERS in increasing stream-id order (RFC 9113 §5.1.1: a lower id after a higher
+        ///     one is a connection PROTOCOL_ERROR). Runs off the frame loop: the frame that completes the
+        ///     earlier request's body may sit behind this stream's END_STREAM, so the loop must never wait here.
+        ///     Always completes <paramref name="admitted"/> so later requests are never held back.
+        /// </summary>
+        internal static async Task SendBufferedRequestAfterAdmissionAsync(Http2ConnectionState connectionState, // NOSONAR S107 -- Frame-writing state is kept explicit for this low-level helper.
+            Http2Settings settings, Request request, int streamId, int maxDataFrameSize, Http2FlowController flow,
+            Stream serverOutput, Stream clientStream, SemaphoreSlim serverWriteLock, Task admitAfter,
+            TaskCompletionSource<bool> admitted, ILogger logger, SessionEventArgs? args,
+            CancellationToken cancellationToken)
+        {
             try
             {
-                var body = rr.CompressBodyAndUpdateContentLength();
-                await EnsureLockAsync().ConfigureAwait(false);
-                await SendHeader(settings, frameHeader, frameHeaderBuffer, rr, !(rr.HasBody && rr.IsBodyRead), output,
-                    false);
-
-                if (rr.HasBody && rr.IsBodyRead)
+                try
                 {
-                    if (body == null)
-                        throw new InvalidOperationException("An HTTP/2 body was marked as read but is unavailable.");
-
-                    int streamId = frameHeader.StreamId;
-                    int pos = 0;
-                    while (pos < body.Length)
-                    {
-                        int bodyFrameLength = Math.Min(buffer.Length, body.Length - pos);
-                        Buffer.BlockCopy(body, pos, buffer, 0, bodyFrameLength);
-                        pos += bodyFrameLength;
-
-                        if (writeLock != null)
-                        {
-                            if (!flow.TryReserve(streamId, bodyFrameLength))
-                            {
-                                ReleaseLock();
-                                await flow.ReserveAsync(streamId, bodyFrameLength, cancellationToken)
-                                    .ConfigureAwait(false);
-                                await EnsureLockAsync().ConfigureAwait(false);
-                            }
-                        }
-                        else
-                        {
-                            await flow.ReserveAsync(streamId, bodyFrameLength, cancellationToken)
-                                .ConfigureAwait(false);
-                        }
-
-                        frameHeader.Length = bodyFrameLength;
-                        frameHeader.Type = Http2FrameType.Data;
-                        frameHeader.Flags = pos < body.Length ? (Http2FrameFlag)0 : Http2FrameFlag.EndStream;
-
-                        frameHeader.CopyToBuffer(frameHeaderBuffer);
-                        await WriteTwoAsync(output, frameHeaderBuffer.AsMemory(0, 9),
-                            buffer.AsMemory(0, bodyFrameLength), cancellationToken);
-                    }
+                    await admitAfter.WaitAsync(cancellationToken).ConfigureAwait(false);
                 }
+                catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+                {
+                    // The earlier request failing is its own problem; this one is still ordered after it.
+                }
+
+                if (!connectionState.Streams.ContainsKey(streamId))
+                    return; // reset or closed while waiting: nothing to send
+
+                await SendBody(connectionState, towardServer: true, settings, request,
+                    new Http2FrameHeader { StreamId = streamId }, new byte[9], maxDataFrameSize, flow, serverOutput,
+                    cancellationToken, serverWriteLock).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // connection is going away
+            }
+            catch (Exception ex)
+            {
+                ReportException(logger, new ProxyHttpException("HTTP/2 buffered request send failed", ex, args));
+                QueueRstStreamFrame(connectionState, clientStream, streamId, Http2ErrorCode.InternalError);
             }
             finally
             {
-                ReleaseLock();
+                admitted.TrySetResult(true);
             }
         }
 

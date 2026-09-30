@@ -2222,8 +2222,12 @@ namespace Titanium.Web.Proxy.Http2
                     if (isClient)
                         connectionState.MultipartObservers.TryRemove(streamId, out _);
                     connectionState.OriginRelayPool?.ReleaseStream(streamId);
+                    var resetBeforeOriginHeaders = false;
                     if (connectionState.TryTakeStream(streamId, out var resetStream))
                     {
+                        resetBeforeOriginHeaders = isClient
+                            && resetStream.SessionArgs?.HttpClient.Request is
+                                { Http2HeadersDeferred: true, Http2HeadersQueued: false };
                         // RFC 8441: if the reset stream is an extended CONNECT tunnel, unblock the relay
                         // that is reading from the inbound channel so it can shut down promptly.
                         resetStream.InboundTunnelChannel?.Writer.TryComplete();
@@ -2345,6 +2349,13 @@ namespace Titanium.Web.Proxy.Http2
                             new ProxyHttpException(
                                 $"HTTP/2 peer stream reset code {errorCode}", null, args));
                     }
+
+                    // Client RST for a buffered request whose HEADERS were deferred to body end and never
+                    // written: the origin has not seen the stream, so forwarding the RST would be an RST on
+                    // an idle stream (connection PROTOCOL_ERROR). (Captured before finalize, which may
+                    // reset the request object.)
+                    if (resetBeforeOriginHeaders)
+                        sendPacket = false;
                 }
 
                 if (endStream && rr == null)
@@ -2440,15 +2451,36 @@ namespace Titanium.Web.Proxy.Http2
                     connectionState.Streams.TryGetValue(streamId, out var bodyStreamState);
                     if (bodyStreamState?.IsExternalBridge != true)
                     {
-                        // Drain queued HEADERS/DATA so this SendBody cannot overtake them on the wire.
-                        // SendBody takes outputWriteLock around the writes and drops it while waiting
-                        // for WINDOW_UPDATE, so this frame loop is not parked on ReserveAsync.
-                        if (isClient)
-                            await connectionState.ServerWriteChain;
+                        // HEADERS + DATA join the direction's ordered writer FIFO behind whatever is already
+                        // queued (see SendBody). Draining the legacy write chain here was a no-op with the
+                        // dedicated frame writers, which is how late HEADERS overtook queued blocks.
+                        //
+                        // Origin-bound requests are additionally admitted in stream-id order: this request's
+                        // HEADERS are only encoded now, so a later stream may already have been sent.
+                        // If an earlier request is still waiting for its body, send from a tracked
+                        // background task; the frame loop must keep reading (that body is behind us).
+                        var admitted = rr.Http2OriginAdmitted;
+                        var admitAfter = rr.Http2AdmitAfter;
+                        if (isClient && admitted != null && admitAfter is { IsCompleted: false }
+                            && rr is Request deferredRequest)
+                        {
+                            pendingSynthetics.Track(SendBufferedRequestAfterAdmissionAsync(connectionState,
+                                remoteSettings, deferredRequest, streamId, buffer.Length, outboundFlow, output, input,
+                                outputWriteLock, admitAfter, admitted, logger, args, cancellationToken));
+                        }
                         else
-                            await connectionState.ClientWriteChain;
-                        await SendBody(remoteSettings, rr, frameHeader, frameHeaderBuffer, buffer, outboundFlow,
-                            output, cancellationToken, outputWriteLock);
+                        {
+                            try
+                            {
+                                await SendBody(connectionState, towardServer: isClient, remoteSettings, rr,
+                                    frameHeader, frameHeaderBuffer, buffer.Length, outboundFlow, output,
+                                    cancellationToken, outputWriteLock);
+                            }
+                            finally
+                            {
+                                admitted?.TrySetResult(true);
+                            }
+                        }
                     }
                 }
 

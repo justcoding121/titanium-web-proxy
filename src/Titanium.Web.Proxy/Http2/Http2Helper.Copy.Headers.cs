@@ -411,11 +411,11 @@ namespace Titanium.Web.Proxy.Http2
 
                     if (!syntheticStreams.ContainsKey(hbStreamId))
                     {
-                        // Drain queued HEADERS/DATA so trailers cannot overtake them on the wire.
-                        if (isClient)
-                            await connectionState.ServerWriteChain;
-                        await lockedOutputWrite(() => SendTrailer(remoteSettings, frameHeader, frameHeaderBuffer,
-                            hbStreamId, headerRr.TrailingHeaders, endStreamFlag, output));
+                        // Queued on the same ordered FIFO as the stream's HEADERS/DATA so trailers cannot
+                        // overtake them on the wire.
+                        QueueSendTrailer(connectionState, towardServer: isClient, outputWriteLock, remoteSettings,
+                            frameHeader, frameHeaderBuffer, hbStreamId, headerRr.TrailingHeaders, endStreamFlag,
+                            output);
                     }
 
                     return false;
@@ -473,6 +473,14 @@ namespace Titanium.Web.Proxy.Http2
                 // END_STREAM on HEADERS ⇒ no request body; skip TCS used by GetRequestBody waiters.
                 TaskCompletionSource<bool>? tcs = endStreamFlag ? null : new TaskCompletionSource<bool>();
                 request.ReadHttp2BeforeHandlerTaskCompletionSource = tcs;
+
+                // Requests with a body may buffer it (GetRequestBody) and then send their HEADERS only at
+                // body end. The next request must not reach the origin before that (stream ids must
+                // increase on the wire), so its dispatch chains on this admission instead of the dispatch task.
+                var originAdmitted = tcs == null
+                    ? null
+                    : new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                request.Http2OriginAdmitted = originAdmitted;
 
                 var streamContext = new Http2StreamContext(hbStreamId, connectionState,
                     isClient ? input : output, cancellationToken);
@@ -595,7 +603,11 @@ namespace Titanium.Web.Proxy.Http2
                     // The origin must observe newly opened client streams in increasing stream-id order.
                     // Handlers run concurrently, but admit each completed decision after the prior stream's
                     // decision has queued (or suppressed) its HEADERS.
-                    await previousDispatch;
+                    // A request whose handler is waiting for the buffered body defers its HEADERS to body
+                    // end; that wait must not run here (this task gates DATA routing on the frame loop, and
+                    // the previous request's body may only arrive in frames behind this stream's DATA).
+                    if (handlerCompleted)
+                        await previousDispatch;
 
                     if (handlerCompleted)
                     {
@@ -869,6 +881,8 @@ namespace Titanium.Web.Proxy.Http2
                     }
                     else
                     {
+                        request.Http2AdmitAfter = previousDispatch;
+                        request.Http2HeadersDeferred = true;
                         request.Http2IgnoreBodyFrames = true;
                     }
 
@@ -880,8 +894,27 @@ namespace Titanium.Web.Proxy.Http2
                 Task dispatchTask = forceStaticHpackTable && httpInterceptionEnabled
                     ? StartMitmStaticRequestDispatch()
                     : Task.Run(() => DispatchRequestAfterHeadersAsync(), cancellationToken);
-                hpack.RequestDispatchChain = dispatchTask;
                 request.Http2BeforeHandlerTask = dispatchTask;
+                if (originAdmitted == null)
+                {
+                    hpack.RequestDispatchChain = dispatchTask;
+                }
+                else
+                {
+                    // Admitted once dispatch queued/suppressed the HEADERS; when they are deferred to the
+                    // buffered body's end, SendBody (or stream teardown) completes it instead.
+                    hpack.RequestDispatchChain = originAdmitted.Task;
+                    _ = dispatchTask.ContinueWith(
+                        static (_, state) =>
+                        {
+                            var r = (Request)state!;
+                            if (!r.Http2HeadersDeferred)
+                                r.Http2OriginAdmitted?.TrySetResult(true);
+                        },
+                        request, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously,
+                        TaskScheduler.Default);
+                }
+
                 pendingSynthetics.Track(dispatchTask);
                 return false;
             }
@@ -1460,10 +1493,9 @@ namespace Titanium.Web.Proxy.Http2
                     headerRr.TrailingHeaders.AddHeader(header);
                 }
 
-                // Drain queued response HEADERS/DATA so trailers cannot overtake them.
-                await connectionState.ClientWriteChain;
-                await lockedOutputWrite(() => SendTrailer(remoteSettings, frameHeader, frameHeaderBuffer,
-                    hbStreamId, headerRr.TrailingHeaders, endStreamFlag, output));
+                // Same ordered FIFO as the response HEADERS/DATA so trailers cannot overtake them.
+                QueueSendTrailer(connectionState, towardServer: false, outputWriteLock, remoteSettings,
+                    frameHeader, frameHeaderBuffer, hbStreamId, headerRr.TrailingHeaders, endStreamFlag, output);
                 return false;
             }
         }

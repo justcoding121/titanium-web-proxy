@@ -435,9 +435,14 @@ public class HttpWebClient
 
     /// <summary>
     ///     A status-line <see cref="FormatException"/> happens before any response bytes are committed
-    ///     to the client. Replaying is the same rule as EOF-before-response.
+    ///     to the client, so a replay is possible when the request is replayable (no body, or buffered).
+    ///     Unlike EOF-before-response, the origin did answer (with leftover bytes of a desynced
+    ///     keep-alive) and has very likely processed the request, so only idempotent GET/HEAD are
+    ///     replayed: a POST/PATCH replay could be applied twice.
     /// </summary>
-    private bool CanRetryMalformedStatusLine() => !Request.HasBody || Request.IsBodyRead;
+    private bool CanRetryMalformedStatusLine() =>
+        (!Request.HasBody || Request.IsBodyRead)
+        && Routing.StreamDestinationDispatch.IsIdempotentMethod(Request.Method);
 
     private static RetryableServerConnectionException MalformedStatusLine(FormatException ex) =>
         new("Server returned a response that did not start with an HTTP status line.", ex);
