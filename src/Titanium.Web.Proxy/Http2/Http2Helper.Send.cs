@@ -366,34 +366,82 @@ namespace Titanium.Web.Proxy.Http2
 
         internal static async ValueTask SendBody(Http2Settings settings, RequestResponseBase rr, Http2FrameHeader frameHeader, // NOSONAR S107 -- Frame-writing state is kept explicit for this low-level helper.
             byte[] frameHeaderBuffer, byte[] buffer, Http2FlowController flow, Stream output,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken, SemaphoreSlim? writeLock = null)
         {
-            var body = rr.CompressBodyAndUpdateContentLength();
-            await SendHeader(settings, frameHeader, frameHeaderBuffer, rr, !(rr.HasBody && rr.IsBodyRead), output, false);
+            // When writeLock is set, this method owns it. Credit waits must not hold it: the other
+            // direction's frame loop needs the same lock to write receive-credit WINDOW_UPDATE, and
+            // that loop is also what reads the WINDOW_UPDATE that would unblock this reserve.
+            // Holding the lock across ReserveAsync stalls both and hits ReservationTimeout (60s).
+            // The common path (TryReserve succeeds) keeps HEADERS + DATA under one lock acquire.
+            var lockHeld = false;
 
-            if (rr.HasBody && rr.IsBodyRead)
+            async ValueTask EnsureLockAsync()
             {
-                if (body == null)
-                    throw new InvalidOperationException("An HTTP/2 body was marked as read but is unavailable.");
+                if (writeLock == null || lockHeld)
+                    return;
 
-                int streamId = frameHeader.StreamId;
-                int pos = 0;
-                while (pos < body.Length)
+                await writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+                lockHeld = true;
+            }
+
+            void ReleaseLock()
+            {
+                if (writeLock == null || !lockHeld)
+                    return;
+
+                writeLock.Release();
+                lockHeld = false;
+            }
+
+            try
+            {
+                var body = rr.CompressBodyAndUpdateContentLength();
+                await EnsureLockAsync().ConfigureAwait(false);
+                await SendHeader(settings, frameHeader, frameHeaderBuffer, rr, !(rr.HasBody && rr.IsBodyRead), output,
+                    false);
+
+                if (rr.HasBody && rr.IsBodyRead)
                 {
-                    int bodyFrameLength = Math.Min(buffer.Length, body.Length - pos);
-                    Buffer.BlockCopy(body, pos, buffer, 0, bodyFrameLength);
-                    pos += bodyFrameLength;
+                    if (body == null)
+                        throw new InvalidOperationException("An HTTP/2 body was marked as read but is unavailable.");
 
-                    await flow.ReserveAsync(streamId, bodyFrameLength, cancellationToken);
+                    int streamId = frameHeader.StreamId;
+                    int pos = 0;
+                    while (pos < body.Length)
+                    {
+                        int bodyFrameLength = Math.Min(buffer.Length, body.Length - pos);
+                        Buffer.BlockCopy(body, pos, buffer, 0, bodyFrameLength);
+                        pos += bodyFrameLength;
 
-                    frameHeader.Length = bodyFrameLength;
-                    frameHeader.Type = Http2FrameType.Data;
-                    frameHeader.Flags = pos < body.Length ? (Http2FrameFlag)0 : Http2FrameFlag.EndStream;
+                        if (writeLock != null)
+                        {
+                            if (!flow.TryReserve(streamId, bodyFrameLength))
+                            {
+                                ReleaseLock();
+                                await flow.ReserveAsync(streamId, bodyFrameLength, cancellationToken)
+                                    .ConfigureAwait(false);
+                                await EnsureLockAsync().ConfigureAwait(false);
+                            }
+                        }
+                        else
+                        {
+                            await flow.ReserveAsync(streamId, bodyFrameLength, cancellationToken)
+                                .ConfigureAwait(false);
+                        }
 
-                    frameHeader.CopyToBuffer(frameHeaderBuffer);
-                    await WriteTwoAsync(output, frameHeaderBuffer.AsMemory(0, 9),
-                        buffer.AsMemory(0, bodyFrameLength), cancellationToken);
+                        frameHeader.Length = bodyFrameLength;
+                        frameHeader.Type = Http2FrameType.Data;
+                        frameHeader.Flags = pos < body.Length ? (Http2FrameFlag)0 : Http2FrameFlag.EndStream;
+
+                        frameHeader.CopyToBuffer(frameHeaderBuffer);
+                        await WriteTwoAsync(output, frameHeaderBuffer.AsMemory(0, 9),
+                            buffer.AsMemory(0, bodyFrameLength), cancellationToken);
+                    }
                 }
+            }
+            finally
+            {
+                ReleaseLock();
             }
         }
 

@@ -2441,13 +2441,14 @@ namespace Titanium.Web.Proxy.Http2
                     if (bodyStreamState?.IsExternalBridge != true)
                     {
                         // Drain queued HEADERS/DATA so this SendBody cannot overtake them on the wire.
+                        // SendBody takes outputWriteLock around the writes and drops it while waiting
+                        // for WINDOW_UPDATE, so this frame loop is not parked on ReserveAsync.
                         if (isClient)
                             await connectionState.ServerWriteChain;
                         else
                             await connectionState.ClientWriteChain;
-                        await lockedOutputWrite(() =>
-                            SendBody(remoteSettings, rr, frameHeader, frameHeaderBuffer, buffer, outboundFlow,
-                                output, cancellationToken));
+                        await SendBody(remoteSettings, rr, frameHeader, frameHeaderBuffer, buffer, outboundFlow,
+                            output, cancellationToken, outputWriteLock);
                     }
                 }
 

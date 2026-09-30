@@ -407,6 +407,55 @@ public class Http2HelperFrameWriterTests
     }
 
     [TestMethod]
+    public async Task SendBody_DropsWriteLockWhileWaitingForWindowCredit()
+    {
+        using var ms = new MemoryStream();
+        var (header, buf) = NewFrameScratch(3);
+        var response = new Response
+        {
+            HttpVersion = HttpHeader.Version20,
+            StatusCode = 200,
+            Body = Encoding.ASCII.GetBytes("abcd"),
+            IsBodyRead = true
+        };
+        var flow = new Http2FlowController();
+        flow.OnInitialWindowSizeChanged(0);
+        flow.RegisterStream(3);
+        using var writeLock = new SemaphoreSlim(1, 1);
+
+        var send = Http2Helper.SendBody(new Http2Settings(), response, header, buf, new byte[4], flow, ms,
+            CancellationToken.None, writeLock).AsTask();
+
+        // Headers must already be on the wire, the send still blocked, and the lock free.
+        // Acquiring the lock before SendBody starts would pass even if the wait held the lock.
+        var sawHeadersWrittenWhileLockFree = false;
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (DateTime.UtcNow < deadline && !send.IsCompleted)
+        {
+            if (ms.Length > 0 && await writeLock.WaitAsync(20))
+            {
+                if (!send.IsCompleted && ms.Length > 0)
+                    sawHeadersWrittenWhileLockFree = true;
+                writeLock.Release();
+                if (sawHeadersWrittenWhileLockFree)
+                    break;
+            }
+            else
+            {
+                await Task.Delay(5);
+            }
+        }
+
+        Assert.IsTrue(sawHeadersWrittenWhileLockFree,
+            "SendBody held the output write lock while waiting for WINDOW_UPDATE credit.");
+
+        flow.OnWindowUpdate(3, 65535);
+        await send.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.IsTrue(ms.Length > 9, "HEADERS plus DATA should have been written after credit arrived.");
+    }
+
+    [TestMethod]
     public async Task EnqueueRstStream_MatchesSendRstStreamAsync()
     {
         using var expected = new MemoryStream();

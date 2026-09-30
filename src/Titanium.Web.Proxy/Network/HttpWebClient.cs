@@ -368,7 +368,16 @@ public class HttpWebClient
 
         Response.RequestMethod = Request.Method;
 
-        var statusVt = Connection.Stream.ReadResponseStatus(cancellationToken);
+        ValueTask<ResponseStatusInfo?> statusVt;
+        try
+        {
+            statusVt = Connection.Stream.ReadResponseStatus(cancellationToken);
+        }
+        catch (FormatException ex) when (CanRetryMalformedStatusLine())
+        {
+            throw MalformedStatusLine(ex);
+        }
+
         if (!statusVt.IsCompletedSuccessfully)
             return ReceiveResponseSlowAsync(statusVt, cancellationToken);
 
@@ -381,8 +390,11 @@ public class HttpWebClient
         if (httpStatus == null)
         {
             // EOF before any response bytes: typically a stale pooled keep-alive connection.
-            // RetryPolicy re-runs the whole exchange; only safe when there is no body or the
-            // body is buffered in memory (IsBodyRead). A streamed body cannot be replayed.
+            // A malformed status line (same method, below) is the sibling case: the socket
+            // stayed open but the next bytes are not an HTTP status line, usually leftover
+            // body from a desynced keep-alive. RetryPolicy re-runs the whole exchange; only
+            // safe when there is no body or the body is buffered in memory (IsBodyRead).
+            // A streamed body cannot be replayed.
             if (!Request.HasBody || Request.IsBodyRead)
                 throw new RetryableServerConnectionException(
                     "Server connection was closed before any response was received.");
@@ -408,9 +420,27 @@ public class HttpWebClient
     private async ValueTask ReceiveResponseSlowAsync(ValueTask<ResponseStatusInfo?> statusVt,
         CancellationToken cancellationToken)
     {
-        var httpStatus = await statusVt;
+        ResponseStatusInfo? httpStatus;
+        try
+        {
+            httpStatus = await statusVt;
+        }
+        catch (FormatException ex) when (CanRetryMalformedStatusLine())
+        {
+            throw MalformedStatusLine(ex);
+        }
+
         await ReceiveResponseAfterStatus(httpStatus, cancellationToken);
     }
+
+    /// <summary>
+    ///     A status-line <see cref="FormatException"/> happens before any response bytes are committed
+    ///     to the client. Replaying is the same rule as EOF-before-response.
+    /// </summary>
+    private bool CanRetryMalformedStatusLine() => !Request.HasBody || Request.IsBodyRead;
+
+    private static RetryableServerConnectionException MalformedStatusLine(FormatException ex) =>
+        new("Server returned a response that did not start with an HTTP status line.", ex);
 
     private static async ValueTask ReceiveResponseAwaitHeadersAsync(ValueTask<bool> headersVt,
         CancellationToken cancellationToken)
