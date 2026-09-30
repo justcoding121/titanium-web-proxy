@@ -10,6 +10,7 @@ namespace Titanium.Inspector.ViewModels;
 /// <summary>AutoResponder rules — evaluated before breakpoints. Optional Map Local file body.</summary>
 public sealed class AutoResponderViewModel : INotifyPropertyChanged
 {
+    private readonly object _rulesGate = new();
     private bool _enabled;
     private AutoResponderRule? _selectedRule;
 
@@ -29,6 +30,7 @@ public sealed class AutoResponderViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>UI-bound rule list. Mutate only via <see cref="AddRule"/> / <see cref="RemoveRule"/> / <see cref="LoadFromDtos"/>.</summary>
     public ObservableCollection<AutoResponderRule> Rules { get; } = new();
 
     public AutoResponderRule? SelectedRule
@@ -52,26 +54,53 @@ public sealed class AutoResponderViewModel : INotifyPropertyChanged
 
     public void NotifyRulesChanged() => RulesChanged?.Invoke(this, EventArgs.Empty);
 
+    public void AddRule(AutoResponderRule rule)
+    {
+        lock (_rulesGate)
+        {
+            Rules.Add(rule);
+        }
+    }
+
+    public bool RemoveRule(AutoResponderRule rule)
+    {
+        lock (_rulesGate)
+        {
+            return Rules.Remove(rule);
+        }
+    }
+
+    public void ClearRules()
+    {
+        lock (_rulesGate)
+        {
+            Rules.Clear();
+        }
+    }
+
     public void LoadFromDtos(IEnumerable<AutoResponderRuleDto> dtos)
     {
-        Rules.Clear();
-        foreach (var dto in dtos)
+        lock (_rulesGate)
         {
-            Rules.Add(new AutoResponderRule
+            Rules.Clear();
+            foreach (var dto in dtos)
             {
-                MatchUrl = dto.MatchUrl,
-                StatusCode = dto.StatusCode,
-                Body = dto.Body,
-                ContentType = string.IsNullOrEmpty(dto.ContentType) ? "text/plain" : dto.ContentType,
-                Enabled = dto.Enabled,
-                LocalFilePath = dto.LocalFilePath ?? string.Empty,
-                GraphQlOperationName = dto.GraphQlOperationName ?? string.Empty,
-            });
+                Rules.Add(new AutoResponderRule
+                {
+                    MatchUrl = dto.MatchUrl,
+                    StatusCode = dto.StatusCode,
+                    Body = dto.Body,
+                    ContentType = string.IsNullOrEmpty(dto.ContentType) ? "text/plain" : dto.ContentType,
+                    Enabled = dto.Enabled,
+                    LocalFilePath = dto.LocalFilePath ?? string.Empty,
+                    GraphQlOperationName = dto.GraphQlOperationName ?? string.Empty,
+                });
+            }
         }
     }
 
     public List<AutoResponderRuleDto> ToDtos() =>
-        Rules.Select(r => new AutoResponderRuleDto
+        SnapshotRules().Select(r => new AutoResponderRuleDto
         {
             MatchUrl = r.MatchUrl,
             StatusCode = r.StatusCode,
@@ -82,6 +111,20 @@ public sealed class AutoResponderViewModel : INotifyPropertyChanged
             GraphQlOperationName = string.IsNullOrWhiteSpace(r.GraphQlOperationName) ? null : r.GraphQlOperationName,
         }).ToList();
 
+    /// <summary>True when an enabled rule filters by GraphQL operation (needs request body).</summary>
+    public bool HasEnabledGraphQlRule()
+    {
+        foreach (var r in SnapshotRules())
+        {
+            if (r.Enabled && !string.IsNullOrWhiteSpace(r.GraphQlOperationName))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public bool TryMatch(string url, string? requestBody, out AutoResponderRule? matched)
     {
         matched = null;
@@ -90,7 +133,8 @@ public sealed class AutoResponderViewModel : INotifyPropertyChanged
             return false;
         }
 
-        foreach (var rule in Rules)
+        // Snapshot: proxy OnBeforeRequest enumerates while the UI may Add/Remove.
+        foreach (var rule in SnapshotRules())
         {
             if (!rule.Enabled)
             {
@@ -112,6 +156,16 @@ public sealed class AutoResponderViewModel : INotifyPropertyChanged
         }
 
         return false;
+    }
+
+    private AutoResponderRule[] SnapshotRules()
+    {
+        lock (_rulesGate)
+        {
+            var arr = new AutoResponderRule[Rules.Count];
+            Rules.CopyTo(arr, 0);
+            return arr;
+        }
     }
 
     public bool TryMatch(string url, out AutoResponderRule? matched)
