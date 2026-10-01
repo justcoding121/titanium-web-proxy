@@ -574,7 +574,7 @@ internal sealed class Http2OriginConnection : IDisposable
             // Known-CL bodies that exceeded the inline threshold still buffer then return so H1
             // deliver can coalesce headers+body. Streaming via StreamBodyWriter pays an extra
             // pipe+async hop per request for these.
-            if (response.ContentLength is >= 0 and <= 8 * 1024)
+            if (response.ContentLength is >= 0 and <= PendingStream.InlineBodyThresholdBytes)
             {
                 var expected = (int)response.ContentLength;
                 byte[] body;
@@ -1776,9 +1776,10 @@ internal sealed class Http2OriginConnection : IDisposable
     private sealed class PendingStream : IDisposable
     {
         /// <summary>
-        ///     Known Content-Length bodies ≤ 8 KiB are filled here on the ReadLoop (no <see cref="BoundedBodyPipe" />).
+        ///     Known Content-Length bodies ≤ 64 KiB are filled here on the ReadLoop (no <see cref="BoundedBodyPipe" />).
+        ///     Matches H3→H1 / H2→H1 eager-buffer so 64 KiB reverse bodies skip the pipe+async hop.
         /// </summary>
-        internal const int InlineBodyThresholdBytes = 8 * 1024;
+        internal const int InlineBodyThresholdBytes = 64 * 1024;
 
         private BoundedBodyPipe? bodyPipe;
         private readonly long maxBodyBytes;

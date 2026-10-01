@@ -372,6 +372,12 @@ public partial class ProxyServer
                             return;
                         }
 
+                        // Route transforms (RequestHeaderSet / PathPrefix / …) must run while the
+                        // Mitm COW baseline is still armed so append-only sets stay on terminate-lite.
+                        // Taking the baseline before TryApply made MutationCount diverge and forced
+                        // the full session path (~0.75× CLI reverse for intercept-http1).
+                        Routing.ReverseProxySessionDispatch.TryApply(this, args);
+
                         var requestHeaderRelayBaseline = request.Headers.TakeMitmRelayBaseline();
 
                         // Total per-request deadline starts after BeforeRequest so session overrides apply.
@@ -379,9 +385,6 @@ public partial class ProxyServer
                             ResolveRequestTimeout(args), ProxyTimeoutKind.Request);
                         var requestToken = requestDeadline.Token;
                         args.OperationCancellationToken = requestToken;
-
-                        // Per-request route → destination (no-op when ReverseProxy routes unset).
-                        Routing.ReverseProxySessionDispatch.TryApply(this, args);
 
                         try
                         {

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -36,6 +37,36 @@ public partial class ProxyServer
 {
     private static readonly Lazy<int> H1TerminateLiteProcessId = new(() => 0);
     private static readonly object H1TerminateLiteMiddlewareSession = new();
+
+    /// <summary>
+    ///     Await-safe shell pool for terminate-lite. ThreadStatic is unsafe here: a second Rent on the
+    ///     same worker can <see cref="HttpWebClient.RebindForTerminateLite"/> while the first request
+    ///     still awaits across the shared Response (HTTP/0.0 0 / spliced status lines under load).
+    /// </summary>
+    private static readonly ConcurrentBag<HttpWebClient> H1TerminateLiteClients = new();
+    private const int H1TerminateLiteClientPoolCap = 256;
+
+    private static HttpWebClient RentH1TerminateLiteClient(Request request)
+    {
+        if (H1TerminateLiteClients.TryTake(out var client))
+        {
+            client.RebindForTerminateLite(request);
+            return client;
+        }
+
+        client = new HttpWebClient(null, request, H1TerminateLiteProcessId);
+        // Force Response materialization once so Rebind can ResetForKeepAlive.
+        _ = client.Response;
+        return client;
+    }
+
+    private static void ReleaseH1TerminateLiteClient(HttpWebClient client)
+    {
+        // Drop the origin socket reference so TcpConnectionFactory.Release remains the sole owner.
+        client.RebindForTerminateLite(client.Request);
+        if (H1TerminateLiteClients.Count < H1TerminateLiteClientPoolCap)
+            H1TerminateLiteClients.Add(client);
+    }
 
     /// <summary>
     ///     Interception-off transparent reverse with fixed <see cref="TransparentBaseProxyEndPoint.ForwardHost" />:
@@ -159,7 +190,9 @@ public partial class ProxyServer
                 endPoint.CachedHttp11PoolIsHttps = isHttps;
             }
 
-            var http = new HttpWebClient(null, request, H1TerminateLiteProcessId);
+            var http = RentH1TerminateLiteClient(request);
+            try
+            {
             http.SetConnection(connection);
             await http.SendRequest(false, isTransparent: true, OriginHttpVersionPolicy, cancellationToken);
             await http.ReceiveResponse(cancellationToken);
@@ -263,6 +296,11 @@ public partial class ProxyServer
 
             // Client Connection: close (NC) → stop accept-loop KA (origin may stay pooled).
             return response.KeepAlive && !clientRequestedClose;
+            }
+            finally
+            {
+                ReleaseH1TerminateLiteClient(http);
+            }
         }
         catch (RetryableServerConnectionException)
         {

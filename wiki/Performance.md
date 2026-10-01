@@ -132,7 +132,7 @@ Calibration for the shared 4 vCPU loopback shape: how close client + origin are 
 | yarp-reverse-http1 | dotnet-httpclient | **41,100**<br><sub>(116 MiB / 48.6% CPU)</sub> | **40.7%** |
 | twp-reverse-http1 | dotnet-httpclient | **48,351**<br><sub>(84 MiB / 49.3% CPU)</sub> | **47.9%** |
 
-Reverse peers are about **50–48%** of the origin-direct HttpClient peak on this runner class (Win TWP **50.1%**, Lin TWP **48.3%**). Prefer the **%** column over absolute RPS across runs. Bare and origin-direct are controls (not medal peers).
+Reverse peers are about **51–48%** of the origin-direct HttpClient peak on this runner class (Win TWP **51.2%**, Lin TWP **47.9%**). Prefer the **%** column over absolute RPS across runs. Bare and origin-direct are controls (not medal peers).
 
 #### Block B — H2 TLS→H1
 

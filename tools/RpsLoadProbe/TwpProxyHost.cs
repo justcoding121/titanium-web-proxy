@@ -817,6 +817,20 @@ internal sealed class TwpProxyHost : IDisposable
         proxy.EnableHttpsSvcbDnsDiscovery = false;
         // Saturation probe: raise floor so 4-vCPU Linux hosts are not stuck at OS defaults.
         proxy.ThreadPoolWorkerThread = Math.Max(Environment.ProcessorCount * 8, 64);
+        if (int.TryParse(Environment.GetEnvironmentVariable("TWP_RPS_THREADPOOL_MIN"), out var tpMin)
+            && tpMin >= 1)
+            proxy.ThreadPoolWorkerThread = tpMin;
+
+        // Product profiles often use 30s header/request deadlines (linked CTS per request when >0).
+        // Probe default stays 0; set TWP_RPS_CLIENT_HEADER_TIMEOUT / TWP_RPS_REQUEST_TIMEOUT to
+        // re-measure product-default timeout tax without a code rebuild of Core.
+        if (int.TryParse(Environment.GetEnvironmentVariable("TWP_RPS_CLIENT_HEADER_TIMEOUT"), out var cht)
+            && cht >= 0)
+            proxy.ClientHeaderTimeoutSeconds = cht;
+        if (int.TryParse(Environment.GetEnvironmentVariable("TWP_RPS_REQUEST_TIMEOUT"), out var rt)
+            && rt >= 0)
+            proxy.RequestTimeoutSeconds = rt;
+
         proxy.MaxCachedConnections = maxCachedConnections ?? 256;
         // Lossy H2 HOL: cap client streams so EnableMultipleHttp2Connections spreads across TCP
         // connections (NullOriginStream omits SETTINGS_MAX_CONCURRENT_STREAMS; Http2Helper appends this).

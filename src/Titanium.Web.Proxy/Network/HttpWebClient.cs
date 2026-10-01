@@ -126,7 +126,7 @@ public class HttpWebClient
     /// <summary>
     ///     Web Request.
     /// </summary>
-    public Request Request { get; }
+    public Request Request { get; private set; }
 
     /// <summary>
     ///     Web Response. Created on first access so H2/H3 MITM Lite request-only work
@@ -485,6 +485,29 @@ public class HttpWebClient
         response?.ResetForKeepAlive();
         data?.Clear();
         UserData = null;
+    }
+
+    /// <summary>
+    ///     Rebind a pooled lite client onto a new request without allocating a new
+    ///     <see cref="HttpWebClient"/> / response shell (H1 terminate-lite hot path).
+    /// </summary>
+    internal void RebindForTerminateLite(Request request)
+    {
+        connection = null;
+        upstreamConnectionId = null;
+        upstreamRemoteEndPoint = null;
+        upstreamConnectionTiming = null;
+        CloseServerConnection = false;
+        Request = request;
+        if (response is not null)
+            response.ResetForKeepAlive();
+        else
+            response = new Response();
+        data?.Clear();
+        UserData = null;
+        UpStreamEndPoint = null;
+        UpStreamEndPointIPv4 = null;
+        UpStreamEndPointIPv6 = null;
     }
 
 }
