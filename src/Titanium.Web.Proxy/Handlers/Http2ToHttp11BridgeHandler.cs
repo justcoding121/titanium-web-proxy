@@ -737,7 +737,7 @@ public partial class ProxyServer
             }
 
             await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, streamId, connectionState, clientStream,
-                cancellationToken, wireBody: eagerWireBody is { } bytes ? bytes.AsMemory() : null);
+                cancellationToken, wireBody: eagerWireBody is { } bytes ? (ReadOnlyMemory<byte>?)bytes.AsMemory() : null);
 
             if (restoreResponseVersionAfterEmit)
                 sessionArgs.HttpClient.Response.HttpVersion = HttpHeader.Version11;

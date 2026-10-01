@@ -718,6 +718,36 @@ namespace Titanium.Web.Proxy.Http2
                             }
                         }
 
+                        // Lost-wakeup guard: the peer's WINDOW_UPDATE is handled by the *other* frame loop and
+                        // may drain this queue between TryReservePartial/PendingCount and TryEnqueue, parking
+                        // the bytes with no further WINDOW_UPDATE ever coming. Re-drain once they are queued.
+                        void RedrainIfParked()
+                        {
+                            if (originReceiveLeg != null || dedicatedWriter == null || wireStreamId != dataStreamId
+                                || sendDeferred.PendingCount(wireStreamId) == 0)
+                                return;
+
+                            sendDeferred.TryDrain(sendFlow, dedicatedWriter,
+                                sentId =>
+                                {
+                                    if (connectionState.Streams.TryGetValue(sentId, out var st) && st.IsClosed)
+                                    {
+                                        connectionState.OriginRelayPool?.ReleaseStream(sentId);
+                                        connectionState.RemoveStream(sentId);
+                                        ScheduleFinalize(st, onAfterResponse, logger, connectionState);
+                                    }
+                                },
+                                queuedId =>
+                                {
+                                    if (!connectionState.Streams.TryGetValue(queuedId, out var st))
+                                        return;
+                                    if (isClient)
+                                        st.RequestClosed = true;
+                                    else
+                                        st.ResponseClosed = true;
+                                });
+                        }
+
                         void EnqueueWireFrame(ReadOnlySpan<byte> payload, bool endStream)
                         {
                             var wireLen = 9 + payload.Length;
@@ -782,6 +812,7 @@ namespace Titanium.Web.Proxy.Http2
 
                             if (length > 0 && payloadRented.Length > 0)
                                 ArrayPool<byte>.Shared.Return(payloadRented);
+                            RedrainIfParked();
                             continue;
                         }
 
@@ -839,6 +870,7 @@ namespace Titanium.Web.Proxy.Http2
                             connectionState.RemoveStream(dataStreamId);
                         }
 
+                        RedrainIfParked();
                         continue;
                     }
 
@@ -1657,6 +1689,43 @@ namespace Titanium.Web.Proxy.Http2
                                     await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(),
                                         new byte[9], streamId, Http2ErrorCode.EnhanceYourCalm, input));
                                     RemoveAndFinalizeStream(streamId);
+                                }
+
+                                if (queued != QueueSendDataResult.CapExceeded
+                                    && originReceiveLeg == null && bodyDeferred.PendingCount(streamId) > 0)
+                                {
+                                    // Lost-wakeup guard: the peer's WINDOW_UPDATE is processed by the *other*
+                                    // frame loop and may have drained the queue between TryReservePartial
+                                    // (short) and TryEnqueue above, leaving these bytes parked with no further
+                                    // WINDOW_UPDATE ever coming. Re-drain now that they are queued.
+                                    var hookWriter = isClient
+                                        ? connectionState.ServerFrameWriter
+                                        : connectionState.ClientFrameWriter;
+                                    var hookTowardServer = isClient;
+                                    if (hookWriter != null)
+                                    {
+                                        bodyDeferred.TryDrain(outboundFlow, hookWriter,
+                                            sentId =>
+                                            {
+                                                if (!connectionState.Streams.TryGetValue(sentId, out var st))
+                                                    return;
+                                                if (st.IsClosed)
+                                                {
+                                                    connectionState.OriginRelayPool?.ReleaseStream(sentId);
+                                                    connectionState.RemoveStream(sentId);
+                                                    ScheduleFinalize(st, onAfterResponse, logger, connectionState);
+                                                }
+                                            },
+                                            queuedId =>
+                                            {
+                                                if (!connectionState.Streams.TryGetValue(queuedId, out var st))
+                                                    return;
+                                                if (hookTowardServer)
+                                                    st.RequestClosed = true;
+                                                else
+                                                    st.ResponseClosed = true;
+                                            });
+                                    }
                                 }
                             }
 
