@@ -57,13 +57,57 @@ internal sealed class Http2OriginRelayPool : IAsyncDisposable
     }
 
     /// <summary>
+    ///     Assigns <paramref name="clientStreamId"/> to an origin leg without opening a new connection.
+    ///     Returns <see langword="false"/> when every open leg is at soft capacity and a cold open is
+    ///     required (caller must use <see cref="AssignStreamAsync"/> off the frame loop).
+    /// </summary>
+    public bool TryAssignStreamWithoutOpen(int clientStreamId, out StreamAssignment assignment)
+    {
+        if (clientToOrigin.TryGetValue(clientStreamId, out assignment!))
+            return true;
+
+        OriginLeg? chosen;
+        lock (gate)
+        {
+            chosen = PickLegUnderLock();
+            if (chosen == null || NeedsNewLeg(chosen))
+            {
+                assignment = default!;
+                return false;
+            }
+        }
+
+        int originStreamId;
+        lock (chosen.IdLock)
+        {
+            originStreamId = chosen.NextStreamId;
+            chosen.NextStreamId += 2;
+            chosen.ActiveStreams++;
+        }
+
+        chosen.SendFlow.RegisterStream(originStreamId);
+
+        assignment = new StreamAssignment(chosen, originStreamId);
+        if (!clientToOrigin.TryAdd(clientStreamId, assignment))
+        {
+            chosen.SendFlow.RemoveStream(originStreamId);
+            lock (chosen.IdLock) chosen.ActiveStreams--;
+            assignment = clientToOrigin[clientStreamId];
+            return true;
+        }
+
+        chosen.OriginToClient[originStreamId] = clientStreamId;
+        return true;
+    }
+
+    /// <summary>
     ///     Assigns <paramref name="clientStreamId"/> to an origin leg, opening a new leg when every
     ///     existing leg is at its soft capacity and the pool has room.
     /// </summary>
     public async ValueTask<StreamAssignment> AssignStreamAsync(int clientStreamId,
         CancellationToken cancellationToken)
     {
-        if (clientToOrigin.TryGetValue(clientStreamId, out var existing))
+        if (TryAssignStreamWithoutOpen(clientStreamId, out var existing))
             return existing;
 
         OriginLeg? chosen;
@@ -83,6 +127,10 @@ internal sealed class Http2OriginRelayPool : IAsyncDisposable
         {
             lock (gate) chosen = PickLeastLoadedUnderLock();
         }
+
+        // After a cold open (or while waiting), another racer may have assigned this stream.
+        if (clientToOrigin.TryGetValue(clientStreamId, out var raced))
+            return raced;
 
         int originStreamId;
         lock (chosen.IdLock)

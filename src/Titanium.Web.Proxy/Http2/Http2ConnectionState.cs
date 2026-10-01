@@ -95,6 +95,13 @@ internal sealed class Http2ConnectionState
     /// </summary>
     public Http2OriginRelayPool? OriginRelayPool { get; set; }
 
+    /// <summary>
+    ///     Client stream id → in-flight <see cref="Http2OriginRelayPool.AssignStreamAsync"/> (cold
+    ///     leg open). The gate-off frame loop must not await these; DATA awaits the task before
+    ///     looking up the assignment so HEADERS cannot race DATA onto the wrong writer.
+    /// </summary>
+    public ConcurrentDictionary<int, Task> PendingOriginAssignments { get; } = new();
+
     /// <summary>Completed once the server's connection SETTINGS frame has been relayed to the client.</summary>
     public TaskCompletionSource<bool> ServerSettingsRelayed { get; } =
         new(TaskCreationOptions.RunContinuationsAsynchronously);

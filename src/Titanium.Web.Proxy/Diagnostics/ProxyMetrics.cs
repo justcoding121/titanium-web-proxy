@@ -208,4 +208,24 @@ internal static class ProxyMetrics
         Http2ProbeDurationMs.Record(durationMs);
 
     public static void Http2CapabilityMismatch() => Http2CapabilityMismatches.Add(1);
+
+    private static readonly Histogram<long> Http2FrameWriterPending =
+        Meter.CreateHistogram<long>("twp.http2.frame_writer.pending_frames", "{frame}",
+            "Frames queued on an HTTP/2 frame writer when a sample is recorded (enqueue high-water crossings).");
+
+    private static readonly Counter<long> Http2FrameWriterHighWater =
+        Meter.CreateCounter<long>("twp.http2.frame_writer.high_water_crossings", "{crossing}",
+            "Times an HTTP/2 frame-writer pending depth crossed a watermark threshold.");
+
+    /// <summary>
+    ///     Records a frame-writer queue-depth sample when a high-water threshold is crossed.
+    ///     Call sites sample sparsely (threshold crossings only) so the hot enqueue path stays cheap.
+    /// </summary>
+    public static void Http2FrameWriterDepthSample(long pendingFrames, string threshold) =>
+        Http2FrameWriterPending.Record(pendingFrames,
+            new KeyValuePair<string, object?>("threshold", threshold));
+
+    public static void Http2FrameWriterHighWaterCrossed(string threshold) =>
+        Http2FrameWriterHighWater.Add(1,
+            new KeyValuePair<string, object?>("threshold", threshold));
 }

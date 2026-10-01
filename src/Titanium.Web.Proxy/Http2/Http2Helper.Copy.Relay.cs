@@ -118,7 +118,7 @@ namespace Titanium.Web.Proxy.Http2
             return Task.CompletedTask;
         }
 
-        private static async Task RelayCompressedWithOriginPoolAsync( // NOSONAR S107 -- Origin-pool assignment args stay explicit.
+        private static Task RelayCompressedWithOriginPoolAsync( // NOSONAR S107 -- Origin-pool assignment args stay explicit.
         Http2ConnectionState connectionState,
         bool isClient,
         Http2Settings remoteSettings,
@@ -126,11 +126,44 @@ namespace Titanium.Web.Proxy.Http2
         int hbStreamId, ReadOnlyMemory<byte> blockToRelay,
         bool endStreamFlag, byte[]? appendSuffix)
         {
-            var assignment = await connectionState.OriginRelayPool! // NOSONAR S8969 -- Caller already gated OriginRelayPool != null.
-                .AssignStreamAsync(hbStreamId, cancellationToken).ConfigureAwait(false);
-            EnqueueRelayedHeaderBlock(connectionState, isClient, remoteSettings,
-                assignment.OriginStreamId, blockToRelay, endStreamFlag, appendSuffix,
-                assignment.Leg.Writer, assignment.Leg.WriteLock, assignment.Leg.Stream);
+            // Warm path: existing assignment or capacity on an open leg — sync enqueue, no frame-loop await.
+            if (connectionState.OriginRelayPool!.TryAssignStreamWithoutOpen(hbStreamId, out var assignment))
+            {
+                EnqueueRelayedHeaderBlock(connectionState, isClient, remoteSettings,
+                    assignment.OriginStreamId, blockToRelay, endStreamFlag, appendSuffix,
+                    assignment.Leg.Writer, assignment.Leg.WriteLock, assignment.Leg.Stream);
+                return Task.CompletedTask;
+            }
+
+            // Cold path: may open a new TCP+H2 origin leg. Never run that await on the shared frame
+            // reader — publish a pending task so DATA waits for assignment instead.
+            return AssignOriginAndEnqueueAsync(connectionState, isClient, remoteSettings, cancellationToken,
+                hbStreamId, blockToRelay, endStreamFlag, appendSuffix);
+        }
+
+        private static async Task AssignOriginAndEnqueueAsync(
+            Http2ConnectionState connectionState,
+            bool isClient,
+            Http2Settings remoteSettings,
+            CancellationToken cancellationToken,
+            int hbStreamId, ReadOnlyMemory<byte> blockToRelay,
+            bool endStreamFlag, byte[]? appendSuffix)
+        {
+            var assignTask = connectionState.OriginRelayPool!
+                .AssignStreamAsync(hbStreamId, cancellationToken);
+            var tracked = assignTask.AsTask();
+            connectionState.PendingOriginAssignments[hbStreamId] = tracked;
+            try
+            {
+                var assignment = await assignTask.ConfigureAwait(false);
+                EnqueueRelayedHeaderBlock(connectionState, isClient, remoteSettings,
+                    assignment.OriginStreamId, blockToRelay, endStreamFlag, appendSuffix,
+                    assignment.Leg.Writer, assignment.Leg.WriteLock, assignment.Leg.Stream);
+            }
+            finally
+            {
+                connectionState.PendingOriginAssignments.TryRemove(hbStreamId, out _);
+            }
         }
 
         private static async Task RelayCompressedWithSchemeDecodeAsync( // NOSONAR S107 -- Scheme-decode fallback keeps the same explicit relay signature as the fast path.

@@ -924,6 +924,16 @@ namespace Titanium.Web.Proxy.Http2
                     await dataDispatch;
                 }
 
+                // Gate-off multi-origin: cold AssignStreamAsync is published off the frame loop. DATA
+                // must wait for that assignment before TryGetAssignment / remapped send.
+                if (type == Http2FrameType.Data
+                    && isClient
+                    && connectionState.PendingOriginAssignments.TryGetValue(streamId, out var pendingOrigin)
+                    && !pendingOrigin.IsCompleted)
+                {
+                    await pendingOrigin;
+                }
+
                 if (type == Http2FrameType.Data && existingStreamState == null)
                 {
                     // DATA is flow-controlled at the connection level even when it arrives
@@ -1054,11 +1064,15 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             var fragment = new byte[fragmentLength];
                             Buffer.BlockCopy(buffer, offset, fragment, 0, fragmentLength);
-                            await RelayCompressedHeaderBlockAsync(
+                            var relayTask = RelayCompressedHeaderBlockAsync(
                             connectionState, input, output, outputWriteLock, ownLegWriteLock, originReceiveLeg,
             compressedRelaySchemeOverride, isClient, cancellationToken, hpack, remoteSettings,
             maxDecodedHeaderListBytes, logger, removeAndFinalizeStream,
                             streamId, fragment, endStreamFlag);
+                            // Warm assign / verbatim enqueue completes inline. Cold origin open must
+                            // not HOL this frame reader — DATA awaits PendingOriginAssignments.
+                            if (!relayTask.IsCompletedSuccessfully)
+                                connectionState.PendingSynthetics.Track(relayTask);
                             if (endStreamFlag)
                                 endStream = true;
                         }
@@ -1246,11 +1260,13 @@ namespace Titanium.Web.Proxy.Http2
 
                         if (pCompressedRelay)
                         {
-                            await RelayCompressedHeaderBlockAsync(
+                            var relayTask = RelayCompressedHeaderBlockAsync(
                             connectionState, input, output, outputWriteLock, ownLegWriteLock, originReceiveLeg,
             compressedRelaySchemeOverride, isClient, cancellationToken, hpack, remoteSettings,
             maxDecodedHeaderListBytes, logger, removeAndFinalizeStream,
                             pStreamId, completeBlock, pEndStream);
+                            if (!relayTask.IsCompletedSuccessfully)
+                                connectionState.PendingSynthetics.Track(relayTask);
                             if (pEndStream)
                                 endStream = true;
                         }
@@ -1618,13 +1634,14 @@ namespace Titanium.Web.Proxy.Http2
                             // empty+END_STREAM must still be framed (trailers / bodiless end).
                             if (outBytes.Length > 0 || endStreamFlag)
                             {
-                                // Queue on the same FIFO as QueueSendHeader. A direct SendData write can
-                                // overtake MITM-re-encoded HEADERS still sitting on ClientFrameWriter /
-                                // ServerFrameWriter (Inspector always subscribes OnResponseBodyWrite),
-                                // which Chrome treats as DATA on an idle stream (PROTOCOL_ERROR).
-                                await QueueSendData(connectionState, towardServer: isClient, outputWriteLock,
+                                // Queue on the same FIFO as QueueSendHeader. Never await ReserveAsync on
+                                // the frame loop (HOL for WINDOW_UPDATE / other streams); defer when short.
+                                var bodyDeferred = isClient
+                                    ? connectionState.ServerOutboundDeferred
+                                    : connectionState.ClientOutboundDeferred;
+                                QueueSendData(connectionState, towardServer: isClient, outputWriteLock,
                                     streamId, outBytes, endStreamFlag, remoteSettings.MaxFrameSize, outboundFlow,
-                                    output, cancellationToken);
+                                    bodyDeferred, output);
                             }
 
                             // we have emitted our own (possibly re-sized) DATA frame(s); suppress the default relay

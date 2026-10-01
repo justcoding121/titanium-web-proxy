@@ -112,13 +112,10 @@ namespace Titanium.Web.Proxy.Http2
                 clientStream, streamId, payload, endStream);
 
         /// <summary>
-        ///     Same framing and flow-control reservation as <see cref="SendData"/>, but the frames are
-        ///     queued on the dedicated writer FIFO used by <see cref="QueueSendHeader"/>. The per-chunk
-        ///     <c>OnRequestBodyWrite</c>/<c>OnResponseBodyWrite</c> path previously called <see cref="SendData"/>
-        ///     (direct locked write). That raced the MITM HEADERS enqueue: DATA could hit the peer socket
-        ///     first, which Chrome treats as DATA on an idle stream (<c>ERR_HTTP2_PROTOCOL_ERROR</c>).
+        ///     Off-loop variant used by <see cref="SendBody"/>: may await flow-control credit because it
+        ///     does not run on the shared frame reader.
         /// </summary>
-        private static async ValueTask QueueSendData(Http2ConnectionState connectionState, bool towardServer, // NOSONAR S107 -- Frame-writing state is kept explicit for this low-level helper.
+        private static async ValueTask QueueSendDataAsync(Http2ConnectionState connectionState, bool towardServer,
             SemaphoreSlim writeLock, int streamId, ReadOnlyMemory<byte> data, bool endStream, int maxFrameSize,
             Http2FlowController flow, Stream output, CancellationToken cancellationToken)
         {
@@ -140,6 +137,72 @@ namespace Titanium.Web.Proxy.Http2
                 QueueDataFrame(connectionState, towardServer, writeLock, output, streamId,
                     data.Slice(pos, frameLength), isLastFrame && endStream);
                 pos += frameLength;
+            }
+        }
+
+        /// <summary>
+        ///     Same framing as <see cref="SendData"/>, but frames are queued on the dedicated writer FIFO
+        ///     used by <see cref="QueueSendHeader"/>. Never awaits <see cref="Http2FlowController.ReserveAsync"/>:
+        ///     parking the shared frame reader on credit would HOL-block WINDOW_UPDATE (and every other
+        ///     stream). When credit is short, payload bytes go onto <paramref name="deferred"/> and drain
+        ///     when the peer grants window — same shape as the compressed-relay DATA path.
+        /// </summary>
+        private static void QueueSendData(Http2ConnectionState connectionState, bool towardServer,
+            SemaphoreSlim writeLock, int streamId, ReadOnlyMemory<byte> data, bool endStream, int maxFrameSize,
+            Http2FlowController flow, Http2DeferredOutboundData deferred, Stream output)
+        {
+            if (maxFrameSize <= 0) maxFrameSize = 16384;
+
+            if (data.Length == 0)
+            {
+                if (deferred.PendingCount(streamId) > 0)
+                {
+                    // End-stream must not overtake deferred bytes.
+                    var empty = ArrayPool<byte>.Shared.Rent(1);
+                    if (!deferred.TryEnqueue(streamId, empty, 0, 0, endStream))
+                        ArrayPool<byte>.Shared.Return(empty);
+                    return;
+                }
+
+                QueueDataFrame(connectionState, towardServer, writeLock, output, streamId,
+                    ReadOnlyMemory<byte>.Empty, endStream);
+                return;
+            }
+
+            var pos = 0;
+            while (pos < data.Length)
+            {
+                var remaining = data.Length - pos;
+                var want = Math.Min(maxFrameSize, remaining);
+                var isLastSlice = pos + want >= data.Length;
+
+                if (deferred.PendingCount(streamId) > 0)
+                {
+                    var rented = ArrayPool<byte>.Shared.Rent(want);
+                    data.Span.Slice(pos, want).CopyTo(rented);
+                    if (!deferred.TryEnqueue(streamId, rented, 0, want, isLastSlice && endStream))
+                        ArrayPool<byte>.Shared.Return(rented);
+                    pos += want;
+                    continue;
+                }
+
+                var reserved = flow.TryReservePartial(streamId, want);
+                if (reserved > 0)
+                {
+                    QueueDataFrame(connectionState, towardServer, writeLock, output, streamId,
+                        data.Slice(pos, reserved), isLastSlice && reserved == want && endStream);
+                    pos += reserved;
+                }
+
+                if (reserved < want)
+                {
+                    var rem = want - reserved;
+                    var rented = ArrayPool<byte>.Shared.Rent(rem);
+                    data.Span.Slice(pos, rem).CopyTo(rented);
+                    if (!deferred.TryEnqueue(streamId, rented, 0, rem, isLastSlice && endStream))
+                        ArrayPool<byte>.Shared.Return(rented);
+                    pos += rem;
+                }
             }
         }
 
@@ -409,7 +472,8 @@ namespace Titanium.Web.Proxy.Http2
                 var maxFrameSize = settings.MaxFrameSize > 0
                     ? Math.Min(maxDataFrameSize, settings.MaxFrameSize)
                     : maxDataFrameSize;
-                await QueueSendData(connectionState, towardServer, writeLock, streamId, body!,
+                // SendBody runs off the frame loop (admission / body-complete); awaiting credit is safe.
+                await QueueSendDataAsync(connectionState, towardServer, writeLock, streamId, body!,
                     endStream: !hasTrailers, maxFrameSize, flow, output, cancellationToken)
                     .ConfigureAwait(false);
             }

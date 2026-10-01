@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Diagnostics;
 
 namespace Titanium.Web.Proxy.Http2;
 
@@ -25,6 +26,11 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
     private const int CoalesceByteBudget = 288 * 1024;
     private const int CoalesceMaxFrames = 64;
 
+    // Watermark thresholds for Metrics (sparse samples on crossing only — not every enqueue).
+    private const int WatermarkSoft = 64;
+    private const int WatermarkWarn = 256;
+    private const int WatermarkCritical = 1024;
+
     private readonly Channel<ArraySegment<byte>> channel;
     private readonly System.IO.Stream output;
     private readonly SemaphoreSlim? writeLock;
@@ -33,6 +39,9 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
     // SingleReader drain: reuse coalesce scratch (avoids new ArraySegment[64] under multiplex).
     private readonly ArraySegment<byte>[] coalesceFrames = new ArraySegment<byte>[CoalesceMaxFrames];
     private int disposed;
+    private int pendingFrames;
+    private int highWaterMark;
+    private int watermarkTierCrossed; // bit0=soft, bit1=warn, bit2=critical (per writer lifetime)
 
     public Http2FrameWriter(System.IO.Stream output, SemaphoreSlim? writeLock = null)
     {
@@ -49,6 +58,12 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
         drainTask = Task.Run(() => DrainAsync(cts.Token), cts.Token);
     }
 
+    /// <summary>Frames currently sitting in the channel (approximate; for tests/metrics).</summary>
+    public int PendingFrameCount => Volatile.Read(ref pendingFrames);
+
+    /// <summary>Peak pending depth observed on this writer.</summary>
+    public int HighWaterMark => Volatile.Read(ref highWaterMark);
+
     /// <summary>
     ///     Enqueues a rented buffer for write. Ownership transfers; the buffer is returned to
     ///     <see cref="ArrayPool{T}.Shared" /> after the write (or on writer fault/dispose).
@@ -61,8 +76,41 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
             return;
         }
 
+        var depth = Interlocked.Increment(ref pendingFrames);
+        // Relaxed high-water: races under count by at most one sample — fine for metrics.
+        var hw = highWaterMark;
+        if (depth > hw)
+            Interlocked.CompareExchange(ref highWaterMark, depth, hw);
+
+        ObserveWatermarkCrossing(depth);
+
         if (!channel.Writer.TryWrite(new ArraySegment<byte>(rented, 0, length)))
+        {
+            Interlocked.Decrement(ref pendingFrames);
             ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    private void ObserveWatermarkCrossing(int depth)
+    {
+        // Sparse: only the first crossing of each tier per writer lifetime.
+        if (depth >= WatermarkCritical)
+            RecordTier(0b100, "critical", depth);
+        else if (depth >= WatermarkWarn)
+            RecordTier(0b010, "warn", depth);
+        else if (depth >= WatermarkSoft)
+            RecordTier(0b001, "soft", depth);
+    }
+
+    private void RecordTier(int bit, string name, int depth)
+    {
+        var prev = watermarkTierCrossed;
+        if ((prev & bit) != 0)
+            return;
+        if (Interlocked.CompareExchange(ref watermarkTierCrossed, prev | bit, prev) != prev)
+            return;
+        ProxyMetrics.Http2FrameWriterHighWaterCrossed(name);
+        ProxyMetrics.Http2FrameWriterDepthSample(depth, name);
     }
 
     public Task Completion => drainTask;
@@ -87,6 +135,7 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
 
                 while (reader.TryRead(out var first))
                 {
+                    Interlocked.Decrement(ref pendingFrames);
                     try
                     {
                         // Second grace after taking first frame — next writeLock holder may enqueue.
@@ -116,6 +165,7 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
                                && total < CoalesceByteBudget
                                && reader.TryRead(out var next))
                         {
+                            Interlocked.Decrement(ref pendingFrames);
                             frames[count++] = next;
                             total += next.Count;
                         }
@@ -169,6 +219,7 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
         {
             while (reader.TryRead(out var leftover))
             {
+                Interlocked.Decrement(ref pendingFrames);
                 if (leftover.Array != null)
                     ArrayPool<byte>.Shared.Return(leftover.Array);
             }
