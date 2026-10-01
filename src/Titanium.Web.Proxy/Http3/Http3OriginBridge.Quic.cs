@@ -553,11 +553,13 @@ internal static partial class Http3OriginBridge
         }
         finally
         {
-            // When StreamBodyWriter owns the stream/connection, it releases on completion.
-            // If the writer never started (response replaced / cancelled before emit), release here.
-            if (pendingHandoffRelease != null)
-                await pendingHandoffRelease();
-            else if (!streamHandedOff && quicConn != null)
+            // When StreamBodyWriter owns the stream/connection, only that writer may release.
+            // Calling pendingHandoffRelease here races EmitSyntheticResponseAsync / the bridge body
+            // pump: ForwardOverQuicAsync returns before StreamBodyWriter runs, so an eager release
+            // disposes QuicStream under the reader (ObjectDisposedException → H2→H3 stream failure,
+            // observed on api.x.com 2026-10-01). Callers that replace the response without invoking
+            // StreamBodyWriter must drain it to Stream.Null (see H2→H3 bridge After BeforeResponse).
+            if (!streamHandedOff && quicConn != null)
                 await QuicConnectionPool.ReleaseAsync(quicConn);
         }
     }

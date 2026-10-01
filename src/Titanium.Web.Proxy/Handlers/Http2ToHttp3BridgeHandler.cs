@@ -324,7 +324,24 @@ public partial class ProxyServer
                 sessionArgs.HttpClient.Response.SetOriginalHeaders();
 
             if (!sessionArgs.IsFastPath && !sessionArgs.HttpClient.Response.Locked)
+            {
+                var responseBeforeHandler = sessionArgs.HttpClient.Response;
                 await OnBeforeResponse(sessionArgs);
+                // If BeforeResponse replaced the response, the QUIC StreamBodyWriter never runs —
+                // drain it so the origin stream/lease is released (same shape as H1→H2).
+                if (!ReferenceEquals(responseBeforeHandler, sessionArgs.HttpClient.Response)
+                    && responseBeforeHandler.StreamBodyWriter != null)
+                {
+                    try
+                    {
+                        await responseBeforeHandler.StreamBodyWriter(Stream.Null, cancellationToken);
+                    }
+                    catch
+                    {
+                        // Best-effort release of the QUIC stream/lease; emit path uses the new response.
+                    }
+                }
+            }
 
             var response = sessionArgs.HttpClient.Response;
 
