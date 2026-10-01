@@ -86,12 +86,20 @@ function Get-MedianMetrics([string]$OsFolder, [string]$Arm) {
         $dir = Join-Path $ResultsRoot $runId
         # Exact OS folder or shard-suffixed (rps-csv-ubuntu-latest-shard-1-3).
         # Also accept flat artifact layouts (csv directly under runId).
+        # Never accept retired macos-15-intel paths when requesting macos-15.
         $csv = Get-ChildItem `
             "$dir/rps-csv-$OsFolder/*.csv", `
             "$dir/rps-csv-$OsFolder-*/*.csv", `
             "$dir/$OsFolder/*.csv", `
             "$dir/*.csv" `
             -ErrorAction SilentlyContinue |
+            Where-Object {
+                if ($OsFolder -ne 'macos-15') { $true }
+                else {
+                    $p = $_.FullName.ToLowerInvariant().Replace('\', '/')
+                    $p -notmatch 'macos-15-intel'
+                }
+            } |
             Select-Object -First 1
         if (-not $csv) { continue }
         $m = Get-ArmMetrics $csv.FullName $Arm

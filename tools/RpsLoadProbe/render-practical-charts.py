@@ -195,7 +195,7 @@ HEAVIER_COUNT = len(PRACTICAL_HEAVIER_ARMS)
 OS_SPECS = (
     ("linux", "Linux", ("ubuntu-latest",), "4-core / 16 GiB"),
     ("windows", "Windows", ("windows-latest",), "4-core / 16 GiB"),
-    ("macos", "macOS", ("macos-15", "macos-latest", "macos-15-intel"), "Apple Silicon 3-core / 7 GB"),
+    ("macos", "macOS", ("macos-15",), "Apple Silicon 3-core / 7 GB"),
 )
 
 TINY_FOOTER_PREFIX = (
@@ -731,6 +731,12 @@ def parse_path_list(values: Optional[Sequence[Union[Path, str]]]) -> List[Path]:
     return out
 
 
+def _is_retired_mac_intel(path: Path) -> bool:
+    """Former `macos-15-intel` runners must never feed macOS charts."""
+    low = str(path).lower().replace("\\", "/")
+    return "macos-15-intel" in low or "/macos-latest/" in low or "macos-latest-" in low
+
+
 def find_csv(results_root: Path, os_keys: Iterable[str]) -> Optional[Path]:
     for key in os_keys:
         for pattern in (
@@ -740,7 +746,13 @@ def find_csv(results_root: Path, os_keys: Iterable[str]) -> Optional[Path]:
             f"**/*{key}*/**/*.csv",
             f"**/*{key}*.csv",
         ):
-            hits = sorted(results_root.glob(pattern))
+            hits = [
+                p
+                for p in sorted(results_root.glob(pattern))
+                if not _is_retired_mac_intel(p)
+                # `macos-15` must not match `macos-15-intel` via substring globs.
+                and (key != "macos-15" or "macos-15-intel" not in str(p).lower().replace("\\", "/"))
+            ]
             if hits:
                 return hits[0]
     return None

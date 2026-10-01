@@ -23,7 +23,8 @@ from typing import Optional
 OS_FOLDERS = {
     "windows": ("windows", "win"),
     "linux": ("linux", "ubuntu"),
-    "macos": ("macos", "osx", "darwin"),
+    # Apple Silicon only — never match retired `macos-15-intel` paths.
+    "macos": ("macos-15",),
 }
 
 GRPC_H2 = {
@@ -65,7 +66,15 @@ def find_csvs(root: Path) -> dict[str, list[Path]]:
         return by_os
     for path in root.rglob("*.csv"):
         low = str(path).lower().replace("\\", "/")
+        if "macos-15-intel" in low:
+            continue
         for os_name, keys in OS_FOLDERS.items():
+            if os_name == "macos":
+                # Exact Apple Silicon label only (avoid matching macos-15-intel).
+                if "macos-15" in low and "macos-15-intel" not in low:
+                    by_os[os_name].append(path)
+                    break
+                continue
             if any(k in low for k in keys):
                 by_os[os_name].append(path)
                 break

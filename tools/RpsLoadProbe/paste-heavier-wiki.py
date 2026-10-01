@@ -114,6 +114,9 @@ def _csv_files_for_os(run_dir: Path, os_folder: str) -> List[Path]:
     if files:
         return files
     for d in sorted(run_dir.glob(f"rps-csv-{os_folder}-*")):
+        # `rps-csv-macos-15-*` must not pick up retired `rps-csv-macos-15-intel-*`.
+        if os_folder == "macos-15" and "macos-15-intel" in d.name:
+            continue
         files.extend(sorted(d.glob("*.csv")))
     return files
 
@@ -288,10 +291,8 @@ def main() -> None:
 
     win = {k: load_os(rid, "windows-latest") for k, rid in runs.items()}
     lin = {k: load_os(rid, "ubuntu-latest") for k, rid in runs.items()}
-    # Apple Silicon `macos-15` going forward; older run folders were `macos-15-intel`.
+    # macOS wiki/charts use Apple Silicon `macos-15` only — never `macos-15-intel`.
     mac_folder = "macos-15"
-    if not any(_csv_files_for_os(ROOT / str(r), mac_folder) for rids in runs.values() for r in _run_id_list(rids)):
-        mac_folder = "macos-15-intel"
     mac = {k: load_os(rid, mac_folder) for k, rid in runs.items()}
     text = WIKI.read_text(encoding="utf-8")
     rid_b = primary_run_id(runs["bodies"])
