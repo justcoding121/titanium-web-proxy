@@ -898,6 +898,7 @@ namespace Titanium.Web.Proxy.Http2
                 }
 
                 bool sendPacket = true;
+                bool hookEndStreamDeferred = false;
                 bool endStream = false;
 
                 SessionEventArgs? args = null;
@@ -919,7 +920,7 @@ namespace Titanium.Web.Proxy.Http2
                 if (type == Http2FrameType.Data
                     && (isClient
                         ? args?.HttpClient.Request.Http2BeforeHandlerTask
-                        : args?.HttpClient.Response.Http2BeforeHandlerTask) is { IsCompleted: false } dataDispatch)
+                        : args?.HttpClient.Response.Http2ResponseDispatchGate) is { IsCompleted: false } dataDispatch)
                 {
                     await dataDispatch;
                 }
@@ -1639,9 +1640,24 @@ namespace Titanium.Web.Proxy.Http2
                                 var bodyDeferred = isClient
                                     ? connectionState.ServerOutboundDeferred
                                     : connectionState.ClientOutboundDeferred;
-                                QueueSendData(connectionState, towardServer: isClient, outputWriteLock,
-                                    streamId, outBytes, endStreamFlag, remoteSettings.MaxFrameSize, outboundFlow,
-                                    bodyDeferred, output);
+                                var queued = QueueSendData(connectionState, towardServer: isClient,
+                                    outputWriteLock, streamId, outBytes, endStreamFlag, remoteSettings.MaxFrameSize,
+                                    outboundFlow, bodyDeferred, output);
+                                if (queued == QueueSendDataResult.EndStreamDeferred)
+                                {
+                                    // Last byte is parked behind send-window credit: the WINDOW_UPDATE drain
+                                    // (OnDeferredEndStream) half-closes. Closing here would RemoveStream,
+                                    // which cancels the deferred queue and the flow window → stream never ends.
+                                    hookEndStreamDeferred = true;
+                                }
+                                else if (queued == QueueSendDataResult.CapExceeded)
+                                {
+                                    ReportException(logger, new ProxyHttpException(
+                                        "HTTP/2 deferred DATA queue exceeded its per-stream cap.", null, args));
+                                    await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(),
+                                        new byte[9], streamId, Http2ErrorCode.EnhanceYourCalm, input));
+                                    RemoveAndFinalizeStream(streamId);
+                                }
                             }
 
                             // we have emitted our own (possibly re-sized) DATA frame(s); suppress the default relay
@@ -2523,7 +2539,7 @@ namespace Titanium.Web.Proxy.Http2
                 // half-close / finalize until the last byte is actually queued (see sendPacket /
                 // OnDeferredEndStream). Non-DATA END_STREAM (HEADERS) and DATA that is not forwarded
                 // still close here.
-                if (endStream && (type != Http2FrameType.Data || !sendPacket))
+                if (endStream && !hookEndStreamDeferred && (type != Http2FrameType.Data || !sendPacket))
                 {
                     if (isClient)
                         connectionState.MultipartObservers.TryRemove(streamId, out _);

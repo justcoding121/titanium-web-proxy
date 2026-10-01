@@ -1283,6 +1283,7 @@ namespace Titanium.Web.Proxy.Http2
                     {
                         var dispatchTask = StartMitmStaticResponseDispatch();
                         response.Http2BeforeHandlerTask = dispatchTask;
+                        response.Http2ResponseDispatchGate = dispatchTask;
                         pendingSynthetics.Track(dispatchTask);
                         return false;
                     }

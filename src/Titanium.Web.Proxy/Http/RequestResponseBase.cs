@@ -29,6 +29,14 @@ public abstract class RequestResponseBase
 
     internal Task? Http2BeforeHandlerTask;
 
+    /// <summary>
+    ///     Off-loop (static-HPACK MITM) response dispatch only: completes as soon as HEADERS are queued or the
+    ///     handler asked for the body, never when the user handler itself finishes. The frame loop gates DATA
+    ///     on this; gating on <see cref="Http2BeforeHandlerTask" /> would deadlock a handler awaiting
+    ///     GetResponseBody on the inline (dynamic-HPACK / bridge) path, where that task is the raw handler.
+    /// </summary>
+    internal Task? Http2ResponseDispatchGate;
+
     internal MemoryStream? Http2BodyData;
 
     internal bool Http2IgnoreBodyFrames;
@@ -433,6 +441,7 @@ public abstract class RequestResponseBase
         OriginalContentEncoding = null;
         HttpVersion = HttpHeader.VersionUnknown;
         Http2BeforeHandlerTask = null;
+        Http2ResponseDispatchGate = null;
         Http2BodyData?.Dispose();
         Http2BodyData = null;
         Http2IgnoreBodyFrames = false;

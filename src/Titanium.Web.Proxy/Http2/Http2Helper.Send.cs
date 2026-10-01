@@ -146,12 +146,20 @@ namespace Titanium.Web.Proxy.Http2
         ///     parking the shared frame reader on credit would HOL-block WINDOW_UPDATE (and every other
         ///     stream). When credit is short, payload bytes go onto <paramref name="deferred"/> and drain
         ///     when the peer grants window — same shape as the compressed-relay DATA path.
+        ///     <para>
+        ///         <see cref="QueueSendDataResult.EndStreamDeferred"/>: END_STREAM is parked on
+        ///         <paramref name="deferred"/>; the caller must not half-close / <c>RemoveStream</c> (that cancels
+        ///         the deferred queue and drops the flow window) — the drain's end-stream callback closes.
+        ///         <see cref="QueueSendDataResult.CapExceeded"/>: the per-stream cap rejected bytes; the caller
+        ///         must reset the stream (silently dropping them would hang the peer).
+        ///     </para>
         /// </summary>
-        private static void QueueSendData(Http2ConnectionState connectionState, bool towardServer,
+        private static QueueSendDataResult QueueSendData(Http2ConnectionState connectionState, bool towardServer,
             SemaphoreSlim writeLock, int streamId, ReadOnlyMemory<byte> data, bool endStream, int maxFrameSize,
             Http2FlowController flow, Http2DeferredOutboundData deferred, Stream output)
         {
             if (maxFrameSize <= 0) maxFrameSize = 16384;
+            var result = QueueSendDataResult.Sent;
 
             if (data.Length == 0)
             {
@@ -160,13 +168,17 @@ namespace Titanium.Web.Proxy.Http2
                     // End-stream must not overtake deferred bytes.
                     var empty = ArrayPool<byte>.Shared.Rent(1);
                     if (!deferred.TryEnqueue(streamId, empty, 0, 0, endStream))
+                    {
                         ArrayPool<byte>.Shared.Return(empty);
-                    return;
+                        return QueueSendDataResult.CapExceeded;
+                    }
+
+                    return endStream ? QueueSendDataResult.EndStreamDeferred : QueueSendDataResult.Sent;
                 }
 
                 QueueDataFrame(connectionState, towardServer, writeLock, output, streamId,
                     ReadOnlyMemory<byte>.Empty, endStream);
-                return;
+                return QueueSendDataResult.Sent;
             }
 
             var pos = 0;
@@ -181,7 +193,13 @@ namespace Titanium.Web.Proxy.Http2
                     var rented = ArrayPool<byte>.Shared.Rent(want);
                     data.Span.Slice(pos, want).CopyTo(rented);
                     if (!deferred.TryEnqueue(streamId, rented, 0, want, isLastSlice && endStream))
+                    {
                         ArrayPool<byte>.Shared.Return(rented);
+                        return QueueSendDataResult.CapExceeded;
+                    }
+
+                    if (isLastSlice && endStream)
+                        result = QueueSendDataResult.EndStreamDeferred;
                     pos += want;
                     continue;
                 }
@@ -200,10 +218,25 @@ namespace Titanium.Web.Proxy.Http2
                     var rented = ArrayPool<byte>.Shared.Rent(rem);
                     data.Span.Slice(pos, rem).CopyTo(rented);
                     if (!deferred.TryEnqueue(streamId, rented, 0, rem, isLastSlice && endStream))
+                    {
                         ArrayPool<byte>.Shared.Return(rented);
+                        return QueueSendDataResult.CapExceeded;
+                    }
+
+                    if (isLastSlice && endStream)
+                        result = QueueSendDataResult.EndStreamDeferred;
                     pos += rem;
                 }
             }
+
+            return result;
+        }
+
+        private enum QueueSendDataResult
+        {
+            Sent,
+            EndStreamDeferred,
+            CapExceeded,
         }
 
         /// <summary>
