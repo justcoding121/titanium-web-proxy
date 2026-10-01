@@ -274,9 +274,9 @@ Emit-SinkRedirect { Emit-ReverseTable 'ubuntu-latest' }
 Out '---LIN_MITM---'
 Emit-SinkRedirect { Emit-MitmTable 'ubuntu-latest' }
 Out '---MAC_REVERSE---'
-Emit-SinkRedirect { Emit-ReverseTable 'macos-15-intel' }
+Emit-SinkRedirect { Emit-ReverseTable 'macos-15' }
 Out '---MAC_MITM---'
-Emit-SinkRedirect { Emit-MitmTable 'macos-15-intel' }
+Emit-SinkRedirect { Emit-MitmTable 'macos-15' }
 
 $text = ($lines -join "`n") + "`n"
 if ($OutFile) {

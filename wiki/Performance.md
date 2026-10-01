@@ -1,6 +1,6 @@
 Throughput and footprint of **Titanium** as a reverse / edge proxy and as a decrypting (**MITM**) proxy, measured on the same harness against **YARP**, **nginx**, **HAProxy**, and **Envoy** where each OS can run them.
 
-**RPS** is requests per second (gRPC tables use **RPC/s**). Numbers are Release builds on matched GitHub-hosted runners: Windows and Linux at **4 vCPU / 16 GiB**, macOS at **`macos-15-intel` 4-core / 14 GB**. Read within one table — absolute RPS is not comparable across operating systems. *Not possible* means that product cannot run that path on that OS; *Not measured* means the path exists but no published number yet.
+**RPS** is requests per second (gRPC tables use **RPC/s**). Numbers are Release builds on matched GitHub-hosted runners: Windows and Linux at **4 vCPU / 16 GiB**, macOS at **`macos-15` Apple Silicon 3-core / 7 GB**. We compare products within an OS, not OS against OS, so read within one table — absolute RPS is not comparable across operating systems. **macOS tables below that cite `macos-15-intel` were measured on the former Intel runner and are replaced as they are re-measured on Apple Silicon.** *Not possible* means that product cannot run that path on that OS; *Not measured* means the path exists but no published number yet.
 
 For pooling knobs and certificate first-visit tuning, see [Performance and pooling](Home#performance-and-pooling). Laptop cool A/B tables (not publishable) live on [Performance Local Lab](Performance-Local-Lab).
 
@@ -8,7 +8,7 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 
 - Same load generator, same origin process, and the same warmup / measure windows (2s / 8s) with the same concurrency ramp (8, 16, 32, 64).
 - Every reverse arm is three OS processes: load generator + origin + proxy. Origin-direct omits the proxy; peers are never in-process with the client.
-- Same runner class per table (`windows-latest` / `ubuntu-latest` / `macos-15-intel`). Laptop numbers are never mixed into these tables.
+- Same runner class per table (`windows-latest` / `ubuntu-latest` / `macos-15`). Laptop numbers are never mixed into these tables.
 - Peers use equivalent TLS/ALPN and streaming-friendly settings on the same loopback shape. HAProxy and Envoy are Linux/macOS only — *Not possible* on Windows, so their columns are omitted there.
 - MITM (HTTPS decryption with forged certificates) is Titanium-only; peers cannot MITM. Those tables show Titanium MITM overhead versus its own reverse path on the same wires.
 - **Tiny keep-alive GET** (~56-byte JSON) is the industry RPS shape (same class as wrk / TechEmpower). It is also real for small JSON APIs and health checks.
@@ -29,7 +29,7 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 - [Measurement environment](#measurement-environment)
     - [Windows (GitHub-hosted `windows-latest`)](#windows-github-hosted-windows-latest)
     - [Linux (GitHub-hosted `ubuntu-latest`)](#linux-github-hosted-ubuntu-latest)
-    - [macOS (GitHub-hosted `macos-15-intel`)](#macos-github-hosted-macos-15-intel)
+    - [macOS (GitHub-hosted `macos-15`, Apple Silicon)](#macos-github-hosted-macos-15-apple-silicon)
     - [Saturation control](#saturation-control)
 - [Windows — Titanium vs nginx vs YARP](#windows--titanium-vs-nginx-vs-yarp)
 - [Linux — Titanium vs nginx vs HAProxy vs Envoy vs YARP](#linux--titanium-vs-nginx-vs-haproxy-vs-envoy-vs-yarp)
@@ -47,7 +47,7 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 
 ## Measurement environment
 
-All three OS use the **4-core-class** public-repo GitHub-hosted runners: **Windows / Linux** at **4 vCPU / 16 GiB / 14 GB SSD**, **macOS** at **`macos-15-intel` 4-core / 14 GB** (not `macos-latest`). Same harness knobs: warmup 2s / measure 8s; concurrency 8, 16, 32, 64; median of 3 repeats. Prefer Titanium÷YARP / Titanium÷nginx ratios over absolute RPS.
+All three OS use public-repo GitHub-hosted runners: **Windows / Linux** at **4 vCPU / 16 GiB / 14 GB SSD**, **macOS** at **`macos-15` Apple Silicon (M1) 3-core / 7 GB** (pinned, not `macos-latest`). macOS is Apple Silicon because that is what Mac users run today; the runner sizes differ, which is fine because we compare products within an OS. Same harness knobs: warmup 2s / measure 8s; concurrency 8, 16, 32, 64; median of 3 repeats. Prefer Titanium÷YARP / Titanium÷nginx ratios over absolute RPS.
 
 Laptop High-perf / cool-paired Windows numbers live on [Performance Local Lab](Performance-Local-Lab). Do not mix those absolutes into the tables below.
 
@@ -79,22 +79,22 @@ Laptop High-perf / cool-paired Windows numbers live on [Performance Local Lab](P
 | YARP | Yarp.ReverseProxy **2.3.0** |
 | Harness | RpsLoadProbe Release; median of 3 repeats where noted |
 
-### macOS (GitHub-hosted `macos-15-intel`)
+### macOS (GitHub-hosted `macos-15`, Apple Silicon)
 
 |||
 |---|---|
-| OS | macOS 15 (GitHub-hosted `macos-15-intel`, Intel x86_64) |
-| CPU | **4** logical processors |
-| RAM | **14** GB |
+| OS | macOS 15 (GitHub-hosted `macos-15`, Apple Silicon arm64) |
+| CPU | **3** logical processors (Apple M1) |
+| RAM | **7** GB |
 | Runtime | .NET 10.0.x |
 | nginx | Homebrew nginx with `--with-http_v3_module` (workflow fails if missing) |
 | HAProxy | Homebrew `haproxy` with `USE_QUIC` (workflow fails if missing; 3.2.23 osx source fallback) |
-| Envoy | Homebrew bottle when present; else pinned darwin-amd64 **1.36.7** (official GitHub assets are Linux-only). HTTP/3 compiled in. |
+| Envoy | Homebrew bottle when present; else pinned darwin-arm64 **1.36.7** (official GitHub assets are Linux-only). HTTP/3 compiled in. |
 | MsQuic | Homebrew `libmsquic` + `openssl@3` on `DYLD_LIBRARY_PATH` / `DYLD_FALLBACK_LIBRARY_PATH` (`QuicListener.IsSupported`) |
 | YARP | Yarp.ReverseProxy **2.3.0** |
 | Harness | RpsLoadProbe Release; median of 3 repeats where noted |
 
-Do **not** use `macos-latest` (Apple Silicon, 3-core / 7 GB) for publishable saturation numbers.
+Use the pinned `macos-15` label (not `macos-latest`) so the image does not change between runs. Numbers measured earlier on the former `macos-15-intel` runner are not comparable with Apple Silicon numbers.
 
 ### Saturation control
 

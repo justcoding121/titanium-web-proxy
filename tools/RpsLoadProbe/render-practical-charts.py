@@ -195,7 +195,7 @@ HEAVIER_COUNT = len(PRACTICAL_HEAVIER_ARMS)
 OS_SPECS = (
     ("linux", "Linux", ("ubuntu-latest",), "4-core / 16 GiB"),
     ("windows", "Windows", ("windows-latest",), "4-core / 16 GiB"),
-    ("macos", "macOS", ("macos-15-intel", "macos-latest"), "4-core / 14 GB"),
+    ("macos", "macOS", ("macos-15", "macos-latest", "macos-15-intel"), "Apple Silicon 3-core / 7 GB"),
 )
 
 TINY_FOOTER_PREFIX = (

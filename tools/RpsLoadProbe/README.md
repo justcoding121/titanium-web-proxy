@@ -4,11 +4,11 @@
 
 Saturation RPS harness for Titanium.Web.Proxy. Measures the **breaking point** (last concurrency that still meets error/latency SLOs) and **peak RPS**.
 
-Published numbers and external control-arm comparisons live only on the wiki [Performance](../../wiki/Performance.md) page (GitHub Actions medians on matched **4-core-class** runners: `ubuntu-latest` / `windows-latest` at 4 vCPU / 16 GiB, and `macos-15-intel` at 4-core / 14 GB). Local cool A/B and laptop tables live on [Performance Local Lab](../../wiki/Performance-Local-Lab.md); the playbook is on [Performance Profiling](../../wiki/Performance-Profiling.md). This README lists how to run the local harness.
+Published numbers and external control-arm comparisons live only on the wiki [Performance](../../wiki/Performance.md) page (GitHub Actions medians on GitHub-hosted runners; products are compared within an OS, not across OSes: `ubuntu-latest` / `windows-latest` at 4 vCPU / 16 GiB, and `macos-15` Apple Silicon at 3-core / 7 GB). Local cool A/B and laptop tables live on [Performance Local Lab](../../wiki/Performance-Local-Lab.md); the playbook is on [Performance Profiling](../../wiki/Performance-Profiling.md). This README lists how to run the local harness.
 
-Manual CI: [RPS saturation](../../.github/workflows/rps-saturation.yml) (`workflow_dispatch`, matrix `ubuntu-latest` + `windows-latest` + `macos-15-intel`). Do **not** use `macos-latest` (3-core M1 / 7 GiB) for publishable numbers.
+Manual CI: [RPS saturation](../../.github/workflows/rps-saturation.yml) (`workflow_dispatch`, matrix `ubuntu-latest` + `windows-latest` + `macos-15`). Use the pinned `macos-15` label (Apple Silicon, 3-core M1 / 7 GiB) rather than `macos-latest` so the image does not change between runs.
 
-**macOS lab deps (workflow):** Homebrew nginx with `http_v3_module` (fail if missing), Homebrew `haproxy` with `USE_QUIC` (fail if missing; 3.2 osx source fallback), Homebrew `envoy` when a bottle exists otherwise pinned darwin-amd64 1.36.7, Homebrew `libmsquic` + `openssl@3` on `DYLD_LIBRARY_PATH` / `DYLD_FALLBACK_LIBRARY_PATH` (assert `QuicListener.IsSupported`), bombardier darwin-amd64, and YARP via the same .NET probe arms as Linux/Windows.
+**macOS lab deps (workflow):** Homebrew nginx with `http_v3_module` (fail if missing), Homebrew `haproxy` with `USE_QUIC` (fail if missing; 3.2 osx source fallback), Homebrew `envoy` when a bottle exists otherwise pinned darwin-arm64 1.36.7, Homebrew `libmsquic` + `openssl@3` on `DYLD_LIBRARY_PATH` / `DYLD_FALLBACK_LIBRARY_PATH` (assert `QuicListener.IsSupported`), bombardier darwin-arm64, and YARP via the same .NET probe arms as Linux/Windows.
 
 ## Tiered cadence
 

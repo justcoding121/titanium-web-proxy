@@ -288,7 +288,11 @@ def main() -> None:
 
     win = {k: load_os(rid, "windows-latest") for k, rid in runs.items()}
     lin = {k: load_os(rid, "ubuntu-latest") for k, rid in runs.items()}
-    mac = {k: load_os(rid, "macos-15-intel") for k, rid in runs.items()}
+    # Apple Silicon `macos-15` going forward; older run folders were `macos-15-intel`.
+    mac_folder = "macos-15"
+    if not any(_csv_files_for_os(ROOT / str(r), mac_folder) for rids in runs.values() for r in _run_id_list(rids)):
+        mac_folder = "macos-15-intel"
+    mac = {k: load_os(rid, mac_folder) for k, rid in runs.items()}
     text = WIKI.read_text(encoding="utf-8")
     rid_b = primary_run_id(runs["bodies"])
     rid_p = primary_run_id(runs["post"])
@@ -296,7 +300,7 @@ def main() -> None:
     rid_a = primary_run_id(runs["arch"])
     rid_t = run_id_with_os(runs["tls"], "windows-latest")
     rid_t_lin = run_id_with_os(runs["tls"], "ubuntu-latest")
-    rid_t_mac = run_id_with_os(runs["tls"], "macos-15-intel")
+    rid_t_mac = run_id_with_os(runs["tls"], mac_folder)
     rid_s = primary_run_id(runs["saturation"])
 
     body_spec = [
@@ -684,7 +688,7 @@ def main() -> None:
     tls = text.find("### TLS termination cost")
     mac_hdr = (
         f"#### macOS\n\n"
-        f"Median of **3** repeats on `macos-15-intel` @ `{HEAD}`. "
+        f"Median of **3** repeats on `{mac_folder}` @ `{HEAD}`. "
         f"Source: Actions [{rid_t_mac}]({run_url(rid_t_mac)}).\n\n"
     )
     mac_tbl = tls_table(mac["tls"], False)
