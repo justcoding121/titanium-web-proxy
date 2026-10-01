@@ -94,7 +94,7 @@ Laptop High-perf / cool-paired Windows numbers live on [Performance Local Lab](P
 | YARP | Yarp.ReverseProxy **2.3.0** |
 | Harness | RpsLoadProbe Release; median of 3 repeats where noted |
 
-Use the pinned `macos-15` label (not `macos-latest`) so the image does not change between runs. Numbers measured earlier on the former `macos-15-intel` runner are not comparable with Apple Silicon numbers.
+Use the pinned `macos-15` label (not `macos-latest`) so the image does not change between runs.
 
 ### Saturation control
 
@@ -322,7 +322,7 @@ Same Client×Origin wires with interception on (`compare-product` [36316337559](
 
 ### Reverse
 
-Median of **3 repeats** on `macos-15-intel` (4-core / 14 GB). Bare reverse 5×5 @ `062f4e72` — `compare-product` [36316337559](https://github.com/justcoding121/titanium-web-proxy/actions/runs/36316337559). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP÷peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as `<br><sub>(MiB / CPU%)</sub>`. The RPS workflow installs Homebrew nginx (`http_v3_module`), Homebrew HAProxy with `USE_QUIC` (3.2 source fallback), Envoy (Homebrew bottle or pinned darwin-amd64 1.36.7), Homebrew `libmsquic` (+ `DYLD_*`), and YARP. Do not publish from `macos-latest` (3-core / 7 GB). Product 5×5 is **~56-byte JSON keep-alive GET**; H2/H3 same-protocol cells are mostly header work with a tiny body (Titanium best case) — see [Why this comparison is fair](#why-this-comparison-is-fair).
+Median of **3 repeats** on `macos-15-intel` (4-core / 14 GB). Bare reverse 5×5 @ `062f4e72` — `compare-product` [36316337559](https://github.com/justcoding121/titanium-web-proxy/actions/runs/36316337559). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP÷peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as `<br><sub>(MiB / CPU%)</sub>`. The RPS workflow installs Homebrew nginx (`http_v3_module`), Homebrew HAProxy with `USE_QUIC` (3.2 source fallback), Envoy (Homebrew bottle or pinned darwin-arm64 1.36.7), Homebrew `libmsquic` (+ `DYLD_*`), and YARP. **These Mac cells are still from the former `macos-15-intel` runner; they will be replaced with `macos-15` Apple Silicon medians on the next paste.** Product 5×5 is **~56-byte JSON keep-alive GET**; H2/H3 same-protocol cells are mostly header work with a tiny body (Titanium best case) — see [Why this comparison is fair](#why-this-comparison-is-fair).
 
 | Client | Origin | TWP | nginx | HAProxy | Envoy | YARP |
 |---|---|---:|---:|---:|---:|---:|
