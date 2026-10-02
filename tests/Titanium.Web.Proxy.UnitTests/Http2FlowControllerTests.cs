@@ -282,4 +282,74 @@ public class Http2FlowControllerTests
         Assert.IsFalse(flow.TryReserve(1, 16384), "All-or-nothing TryReserve must fail when one byte short.");
         Assert.AreEqual(16383, flow.TryReservePartial(1, 16384));
     }
+
+    [TestMethod]
+    public void AvailableSendCredit_FreshStream_IsDefaultWindow()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        Assert.AreEqual(Http2FlowController.InitialConnectionWindow, flow.AvailableSendCredit(1));
+    }
+
+    [TestMethod]
+    public void AvailableSendCredit_UnknownStream_IsZero()
+    {
+        var flow = new Http2FlowController();
+        Assert.AreEqual(0, flow.AvailableSendCredit(7));
+    }
+
+    [TestMethod]
+    public void AvailableSendCredit_AfterReserve_IsRemainder()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        Assert.IsTrue(flow.TryReserve(1, 1000));
+        Assert.AreEqual(Http2FlowController.InitialConnectionWindow - 1000, flow.AvailableSendCredit(1));
+    }
+
+    [TestMethod]
+    public void AvailableSendCredit_ConnectionSmallerThanStream_ReturnsConnection()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        flow.RegisterStream(3);
+        Assert.IsTrue(flow.TryReserve(1, 50000));
+        Assert.AreEqual(Http2FlowController.InitialConnectionWindow - 50000, flow.AvailableSendCredit(3));
+    }
+
+    [TestMethod]
+    public void AvailableSendCredit_NegativeWindow_IsZero()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        Assert.IsTrue(flow.TryReserve(1, 1000));
+        flow.OnInitialWindowSizeChanged(0);
+        Assert.AreEqual(0, flow.AvailableSendCredit(1));
+    }
+
+    [TestMethod]
+    public void SelectDataPayloadCap_FullFrameWhenCreditCoversOrBelowFloor()
+    {
+        Assert.AreEqual(16384, Http2FlowController.SelectDataPayloadCap(16384, 256 * 1024, 0));
+        Assert.AreEqual(16384, Http2FlowController.SelectDataPayloadCap(16384, 256 * 1024, 100));
+        Assert.AreEqual(16384, Http2FlowController.SelectDataPayloadCap(16384, 256 * 1024, 4095));
+        Assert.AreEqual(16384, Http2FlowController.SelectDataPayloadCap(16384, 256 * 1024, 16384));
+        Assert.AreEqual(16384, Http2FlowController.SelectDataPayloadCap(16384, 256 * 1024, 1_000_000));
+        Assert.AreEqual(16384, Http2FlowController.SelectDataPayloadCap(0, 1024 * 1024, 65535));
+    }
+
+    [TestMethod]
+    public void SelectDataPayloadCap_TrimsToCreditAboveFloor()
+    {
+        Assert.AreEqual(4096, Http2FlowController.SelectDataPayloadCap(16384, 256 * 1024, 4096));
+        Assert.AreEqual(16383, Http2FlowController.SelectDataPayloadCap(16384, 256 * 1024, 16383));
+    }
+
+    [TestMethod]
+    public void SelectDataPayloadCap_RemainingSmallerThanCredit_UsesRemaining()
+    {
+        Assert.AreEqual(1000, Http2FlowController.SelectDataPayloadCap(16384, 1000, 16383));
+        Assert.AreEqual(8000, Http2FlowController.SelectDataPayloadCap(16384, 8000, 16383));
+        Assert.AreEqual(0, Http2FlowController.SelectDataPayloadCap(16384, 0, 16383));
+    }
 }
