@@ -989,7 +989,9 @@ jobs:
         with:
           # Include arm_shard so parallel shard dispatches do not collide (slash → dash via env sanitize).
           name: rps-csv-${{ matrix.os }}-shard-${{ env.RPS_ARTIFACT_SHARD }}
-          path: tools/RpsLoadProbe/results/rps-ramp-*.csv
+          path: |
+            tools/RpsLoadProbe/results/rps-ramp-*.csv
+            tools/RpsLoadProbe/results/rps-ramp-*.tls.tsv
           if-no-files-found: error
 
       - name: Upload incomplete marker

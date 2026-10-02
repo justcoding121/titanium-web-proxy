@@ -398,6 +398,7 @@ internal static class RampOrchestrator
         Directory.CreateDirectory(options.ResultsDir);
         var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
         var csvPath = Path.Combine(options.ResultsDir, $"rps-ramp-{stamp}.csv");
+        TlsParityProbe.SetSidecarPath(Path.Combine(options.ResultsDir, $"rps-ramp-{stamp}.tls.tsv"));
 
         string? nginxVersion = null;
         var nginxExe = NginxHost.ResolveNginxExecutable(options.NginxPath);
@@ -2543,6 +2544,9 @@ internal static class RampOrchestrator
                 ProbeLog.Info(
                     $"  attach: split origin pid={stack.OriginProcessId} proxy pid={stack.ProxyProcessId}");
             }
+
+            await TlsParityProbe.ProbeAsync(arm.Name, stack.TargetUri, stack.RequestHttpVersion,
+                stack.VersionPolicy, stack.ExplicitProxyUrl, useBombardier, cancellationToken);
 
             foreach (var concurrency in options.ConcurrencySteps)
             {
