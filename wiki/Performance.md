@@ -679,6 +679,8 @@ WebSocket echo round-trips/sec over **dual-TLS** H1 (`proxy_ssl` style). Mode: `
 
 WebSocket echo over **RFC 8441** extended CONNECT (H2 TLS client → H1 plain origin). Mode: `compare-ws-h2` (`*-duplex-ws-h2`).
 
+Linux on this row (~1.5k, ~9% CPU) was measured with the probe client leaving Nagle on and splitting each HTTP/2 frame into two TLS records. That matches a ~40 ms delayed ACK, and HAProxy landed at the same rate. The probe now sets `NoDelay` and writes the frame in one record. Treat the Linux numbers below as the pre-fix harness until a re-measure replaces them. The change is in the client, so every peer on this row moves together.
+
 *Not possible:* **nginx** column omitted (no RFC 8441 extended CONNECT).
 
 | OS | Titanium | YARP | HAProxy | Envoy |
