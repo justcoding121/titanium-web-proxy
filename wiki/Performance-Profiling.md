@@ -16,6 +16,7 @@ How the throughput hotspots behind the numbers on the [Performance](Performance)
 - [nginx portable takeaways](#nginx-portable-takeaways)
 - [TWP vs YARP IO model](#twp-vs-yarp-io-model)
 - [Case studies: symptom → tool → root cause → fix](#case-studies-symptom--tool--root-cause--fix)
+- [Linux C# limit ledger](#linux-c-limit-ledger)
 - [Guardrails while optimizing](#guardrails-while-optimizing)
 - [Checklist](#checklist)
 
@@ -364,6 +365,37 @@ WS H2 harness fix (CI-proven, `f2061c27`): Linux median **42,050** vs the old **
 
 **H3 per-stream scratch — kept** (`f2061c27`). Cleartext H3→H1 (Block C) moved Titanium÷YARP from **0.93×** to **1.02×** on Windows (15,068 vs YARP 14,729) and from **1.09×** to **1.13×** on Linux (20,833 vs YARP 18,511). Linux HAProxy on that run is still ahead (**22,785**). RSS did not grow (Windows 104 MiB vs 102 MiB; Linux 142 MiB vs 144 MiB). The TLS-origin product filter ([37005024499](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37005024499) Linux, [37005028454](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37005028454) Windows) failed `validate-compare-product-gates.ps1` only because `arm_contains` dropped the MITM twins ("partial pair"). Reverse ratios on those CSVs are Linux **1.05×** (24,889 / 23,674) and Windows **0.94×** (13,315 / 14,170), both above the 0.60 floor. Linux vs HAProxy on that arm is **0.91×** (24,889 / 27,276), the same as the published 19,461 / 21,322. Windows absolute 13,315 vs published 13,870 is inside the ~5% noise band (samples 13,315 / 13,858 / 13,131). `compare-spot` Win+Linux ([37004996572](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37004996572) / [37004992722](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37004992722)) did not show a tiny-GET drop on the H2 arms this change does not touch. QPACK block buffer, VarInt batching, skip-Flush, and tiny HEADERS+DATA coalesce stay off: the scratch gain is real and small, HAProxy is still ahead, and there is no new profile that says the next cut is one of those.
 
+
+## Linux C# limit ledger
+
+Every Linux row that trails a native peer in the published tables, classified as **Noise** (inside the same-job A/A band), **C# floor** (TWP is at the bare managed/OpenSSL ceiling or ahead of the managed peer; the remaining gap is native-C peer code and cannot be closed without leaving managed code or runtime knobs) or **Real room** (a TWP-owned frame above the 1.5% gate). Evidence strength: **VM-only** means a 4 vCPU shared box (load generator, origin and proxy compete for CPU), diagnosis-only, no run ID; **CI-proven** needs `rps-ab.yml` / `rps-profile.yml` run IDs, which were not available (workflow dispatch was not possible from the authoring environment). Published tables stay at their original SHAs and are untouched.
+
+How the classification was made: `rps-profile.yml` / `profile-arm.sh` (perf `-g`, `dotnet-trace`, gc-verbose ticks) split the proxy tree into TWP managed / .NET libs / SslStream + OpenSSL / kernel / GC / JIT / thread pool / locks; a TWP-owned frame needs more than 1.5% inclusive CPU on the call graph and a self-time share, to be a Phase-2 candidate. `rps-ab.yml` pairs baseline and candidate on one VM (alternating, at least 5 pairs) and applies a CI-based keep gate. An A/A run of 5 pairs on the authoring VM gave RPS -2.7% [-5.7, +0.3] and CPU/request within 4%, so a 2% claim needs 6+ pairs or longer runs there.
+
+| Row (published Linux) | Class | Evidence | Code state | Strength |
+|---|---|---|---|---|
+| H1 plain tiny GET vs nginx / HAProxy | C# floor (about 10% above bare managed, about 60% above native) | TWP 25.7 us/req vs bare managed 23.2 vs nginx 14.7 / HAProxy 16.7. Kernel 56% of TWP samples; TWP managed 14% but every TWP-owned inclusive frame below the gate after the shell-pool change (AddHeader 0.85%, ResetWireState 0.88%, origin pool Release + TryRentFromPool about 0.9% together) | Kept: lock-free terminate-lite shell pool (`f8946ece`). 6 paired A/B: RPS +5.57% [+3.11, +8.02], CPU/req -8.04% [-11.89, -4.19], p99 -4.1% | VM-only |
+| H1 plain->TLS, TLS->plain, TLS->TLS tiny GET vs nginx / HAProxy | C# floor | After the shell-pool change TWP 30.9 us/req vs bare managed TLS 30.5 (57.7k vs 59.0k RPS); nginx 19.7 / HAProxy 20.2. Same TLS 1.3 / AES_256_GCM_SHA384 / RSA-2048 on every arm (tls-parity sidecar) | Same commit. 6 paired A/B: RPS +6.25% [+1.12, +11.37], CPU/req -9.52% [-14.74, -4.29], RSS and p99 noise | VM-only |
+| Keep-alive TLS tiny GET, TLS cost row | C# floor (same path as above) | Same arm family as H1 TLS tiny; not separately profiled | None | Inferred, not measured |
+| WebSocket H1 TLS->TLS vs Envoy / nginx / HAProxy | C# floor | TWP 59.5k vs YARP 53.4k RPS on the same VM; TWP-owned managed share 2.6% (0.7 us of 27.7 us/req), kernel 54%, SslStream + OpenSSL 18%. The relay is one `ReadAsync` and one `WriteAsync` per frame (`StreamExtensions.CopyToAsync`) with `NoDelay` on both sockets, so there is nothing to coalesce; the only TWP allocation is the `ReadAsyncSlow` state-machine box (about 350 B/frame, GC about 0.1% of CPU) | None | VM-only |
+| H3->H1 plain / TLS vs HAProxy | C# floor against a native QUIC peer; not reproducible locally | TWP 27.2k vs YARP 26.7k RPS and 60.3 vs 65.9 us/req on the VM; no TWP-owned frame above 0.6% self time (the 25% inclusive frames are async state machines that contain the QUIC/TCP I/O waits). HAProxy 2.8 on the authoring VM has no QUIC listener, so the HAProxy gap itself cannot be re-measured here | None | VM-only for TWP vs YARP; HAProxy gap unmeasured |
+| 256 KiB H2 TLS->H1 vs HAProxy / Envoy / YARP | C# floor; kernel- and copy-bound | TWP 2.70k vs YARP 2.47k RPS and 487 vs 667 us/req; kernel 44%, OpenSSL 12%, TWP managed 4.8% with no self frame above 0.6%. HAProxy on the authoring VM produced 1.73k RPS with 13 errors, so it is not a usable peer locally | None | VM-only; HAProxy and Envoy not usable locally |
+| 256 KiB / 64 KiB H1 TLS GET, 256 KiB H2 plain->H1, 256 KiB H3->H2, POST 64 KiB H1 TLS | Not separately profiled; expected C# floor | Share the relay and TLS path of the profiled rows, so a C# floor is expected, but no profile was taken; run `rps-profile.yml` on these arms to confirm | None | Not measured |
+| Lossy rows, early response, slow consumer, new-connection TLS | Noise / latency-bound (not profiled) | Published gaps are 1-4% or the throughput is set by the injected delay / loss; classification is from the row shape, no profile was taken | None | Not measured |
+| Duplex WS (arch) vs 37.6k | C# floor | Same WS relay as the profiled row | None | Inferred |
+
+Remaining Phase-2 hypotheses, each evaluated against the profile and not implemented because no TWP-owned frame reached the 1.5% gate:
+
+| Hypothesis | Result |
+|---|---|
+| Lite-path string caches (origin Host, Connection / Content-Length / Content-Encoding span checks) | Not done: `Request.ApplyTransparentForwardCleartextHost` / `HttpHostHeader.Format` and the header checks are below 1% inclusive on H1 plain and TLS |
+| HeaderParser per-connection interning | Not done: unknown-header `HttpHeader` allocation is about 360 B/req but GC is 0.3-2% of CPU, below the gate |
+| Body copy into the HeaderBuilder buffer tail | Not done: no body-copy frame above the gate on tiny GET; large-body rows are kernel- and OpenSSL-bound |
+| Lock-free origin pool rent | Not done: `TcpConnectionFactory.Release` + `TryRentFromPool` are about 0.9% of samples; a prior lock-free attempt was already aborted for noisy dips, and the fresh profile gives no reason to retry |
+| `ForwardH1TerminateLiteAsync` as `ValueTask<bool>` | Not done: the async state-machine boxes are about 1.3 KB/req of about 2.2 KB/req, but GC is 0.3-2% of CPU, so the saving is below the A/B noise floor |
+| Thread-pool idle spin (`ThreadNative_SpinWait`, 3-5% of CPU) | Not done: it only responds to runtime configuration knobs, which are excluded |
+
+The shell-pool profile finding is recorded here because it supersedes the `ConcurrentBag` note in the 2026-10-01 table: `ConcurrentBag.Count` freezes every per-thread list under a `Monitor`, and Rent and Release run on different thread-pool workers, so the bag was a contention point (Release 7.1% inclusive, Rent 2.0% before the change). The replacement keeps the same single-owner semantics (a shell is dequeued by `Rent` and enqueued only by `Release`), is covered by `H1TerminateLiteClientPoolTests`, and the pool cap (256) is unchanged in effect. CI re-measure with `rps-ab.yml` (`baseline_ref=develop`, `candidate_ref=<this branch>`, `mode=compare-ceiling`, `arm_contains=twp-reverse-http1`, `pairs=5`) is required before this row moves to CI-proven or any wiki table is updated.
 
 ## Guardrails while optimizing
 
