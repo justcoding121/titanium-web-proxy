@@ -98,7 +98,7 @@ Use the pinned `macos-15` label (not `macos-latest`) so the image does not chang
 
 ### Saturation control
 
-Calibration for the shared 4 vCPU loopback shape: how close client + origin are to saturated before ranking reverse peers. Tiny keep-alive GET. Median of **3** repeats @ `41f4adee` — [36853300134](https://github.com/justcoding121/titanium-web-proxy/actions/runs/36853300134). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Block A **% of origin-HttpClient** uses median **peak** RPS. Blocks B/C use peer÷YARP / ÷nginx on median peak (not % of H1 origin). **RPS cells** embed median RSS / CPU for the **proxy child** plus its **full descendant tree** (serve-proxy → nginx master → workers); origin-direct samples the **origin** child. Product matrices below use matched `dotnet-httpclient` only (not bombardier).
+Calibration for the shared 4 vCPU loopback shape: how close client + origin are to saturated before ranking reverse peers. Tiny keep-alive GET. Blocks A and B: median of **3** repeats @ `41f4adee` — [36853300134](https://github.com/justcoding121/titanium-web-proxy/actions/runs/36853300134). Block C is a later re-measure (see that heading). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Block A **% of origin-HttpClient** uses median **peak** RPS. Blocks B/C use peer÷YARP / ÷nginx on median peak (not % of H1 origin). **RPS cells** embed median RSS / CPU for the **proxy child** plus its **full descendant tree** (serve-proxy → nginx master → workers); origin-direct samples the **origin** child. Product matrices below use matched `dotnet-httpclient` only (not bombardier).
 
 
 #### Block A — H1 plain
@@ -158,21 +158,23 @@ Peer ratios (÷YARP / ÷nginx) on median peak; **RPS cells** embed `(MiB / CPU%)
 
 Same layout as Block B. Requires QuicListener. nginx needs `http_v3_module` (Windows nginx has no QUIC). HAProxy needs `USE_QUIC` (GHA Linux/macOS require it). Envoy 1.20+ includes HTTP/3.
 
+Re-measured @ `f2061c27` after the per-stream HTTP/3 write scratch — Windows [37005020668](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37005020668), Linux [37005016067](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37005016067). Medals are still nginx / YARP / Titanium only. On the Linux run HAProxy was **22,785** (86 MiB / 27.1% CPU) and Envoy **3,669** (134 MiB / 24.3% CPU); HAProxy is still ahead of Titanium. The TLS-origin twin is not in this table (the 5×5 below stays @ `41f4adee`); that re-measure is in [Performance Profiling](Performance-Profiling#linux-h2h3ws-gap-close--baseline-2026-10-02). macOS was not re-measured.
+
 **Windows** (`windows-latest`)
 
 | Arm | Generator | RPS | ÷YARP | ÷nginx |
 |---|---|---:|---:|---:|
 | nginx-reverse-http3-cleartext | dotnet-httpclient | *Not possible (no QUIC)* | — | — |
-| yarp-reverse-http3-cleartext | dotnet-httpclient | 🥇 **15,752**<br><sub>(140 MiB / 51.4% CPU)</sub> | **1.00×** | — |
-| twp-reverse-http3-cleartext | dotnet-httpclient | **14,716**<br><sub>(102 MiB / 43.2% CPU)</sub> | **0.93×** | — |
+| yarp-reverse-http3-cleartext | dotnet-httpclient | **14,729**<br><sub>(141 MiB / 50.6% CPU)</sub> | **1.00×** | — |
+| twp-reverse-http3-cleartext | dotnet-httpclient | 🥇 **15,068**<br><sub>(104 MiB / 45.2% CPU)</sub> | **1.02×** | — |
 
 **Linux** (`ubuntu-latest`)
 
 | Arm | Generator | RPS | ÷YARP | ÷nginx |
 |---|---|---:|---:|---:|
-| nginx-reverse-http3-cleartext | dotnet-httpclient | **0**<br><sub>(peak 14,970 · 107 MiB / 22.5% CPU)</sub> | **0.83×** | **1.00×** |
-| yarp-reverse-http3-cleartext | dotnet-httpclient | **17,957**<br><sub>(181 MiB / 50.3% CPU)</sub> | **1.00×** | **1.20×** |
-| twp-reverse-http3-cleartext | dotnet-httpclient | 🥇 **19,545**<br><sub>(144 MiB / 48.6% CPU)</sub> | **1.09×** | **1.31×** |
+| nginx-reverse-http3-cleartext | dotnet-httpclient | **0**<br><sub>(peak 15,485 · 106 MiB / 22.3% CPU)</sub> | **0.84×** | **1.00×** |
+| yarp-reverse-http3-cleartext | dotnet-httpclient | **18,511**<br><sub>(183 MiB / 49.5% CPU)</sub> | **1.00×** | **1.20×** |
+| twp-reverse-http3-cleartext | dotnet-httpclient | 🥇 **20,833**<br><sub>(142 MiB / 49.8% CPU)</sub> | **1.13×** | **1.35×** |
 
 ## Windows — Titanium vs nginx vs HAProxy vs Envoy vs YARP
 

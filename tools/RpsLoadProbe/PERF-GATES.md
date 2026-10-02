@@ -157,6 +157,11 @@ Verification dispatched on `f2061c27` (do not mix with `c6b39165` baseline runs)
 | [37005024499](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37005024499) | `compare-product` `http3-to-https-http1` | Linux |
 | [37005028454](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37005028454) | `compare-product` `http3-to-https-http1` | Windows |
 
-Mac bodies / Mac H3 wait until the in-flight macOS queue on `c6b39165` drains. `compare-spot` is the cross-arm regression check; full `compare-product` shards are not re-run for this change.
+Mac bodies / Mac H3 were not re-measured (the macOS queue was already on post/gRPC shards). `compare-spot` is the cross-arm regression check; full `compare-product` shards are not re-run for this change.
+
+Outcome @ `f2061c27` (do not paste the body shards into one table — Linux shard 2 and Windows shard 2 ran much slower than shard 1 for every peer, including HAProxy and YARP):
+
+- H2 credit-sized frames stay. Linux target-arm ratio vs HAProxy **0.89×** (was **0.80×**); 64 KiB Titanium÷YARP stays **1.15×**. Absolute RPS on that shard is not comparable to `41f4adee`.
+- H3 scratch stays. Block C in the performance wiki is this SHA. The filtered `http3-to-https-http1` product jobs failed the MITM gate because the filter omitted the Lite/Full twins; reverse Titanium÷YARP was **1.05×** Linux and **0.94×** Windows (floor 0.60). That failure is not a product miss.
 
 On gate failure: classify (real regression / miscalibrated threshold / runner noise / harness bug / build-env), fix the root cause, and re-run until **Win and Linux pass** (required). For wiki-grade `compare-product`, also require **`macos-15`** (Apple Silicon; historical results before 2026-10-01 were on `macos-15-intel`) before publishing Mac tables. Partial OS **gate** passes do not count as a green product gate. Gate steps **hard-fail** the job on every event (including manual `workflow_dispatch`); CSVs still upload via `if: always()`, and `fail-fast: false` never cancels sibling matrix legs for a gate miss. Cross-version thresholds (0.95 / 1.10) match the same-version gate and must not be relaxed for code convenience.
