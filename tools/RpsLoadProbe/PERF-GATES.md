@@ -129,6 +129,17 @@ Do not retune the harness to pass a gate — fix Core / CLI / Plus instead. Neve
 
 **Stable cut (2026-09-01):** `v7.0.4` GA shipped from `beta` → `stable` (NuGet `7.0.4`, non-prerelease product release, `/download` Stable links refreshed).
 
+### Linux A/B, profile and CPU-per-request tooling
+
+| Tool | Use |
+|------|-----|
+| [`rps-ab.yml`](../../.github/workflows/rps-ab.yml) (`workflow_dispatch`) | Same-job paired A/B: builds `baseline_ref` and `candidate_ref` in two worktrees with the identical probe harness, alternates A,B for `pairs` (at least 5) with a cool-down, and reports paired deltas with a 95% CI for RPS, CPU per request, RSS and p99. Keep gate: target arm gains at least 2% (RPS or CPU per request) with a CI that excludes zero, RPS not down more than 3%, RSS and p99 not worse, zero errors. Scripts: [`rps-ab-run.py`](rps-ab-run.py), [`rps-ab-analyze.py`](rps-ab-analyze.py). |
+| [`rps-profile.yml`](../../.github/workflows/rps-profile.yml) (`workflow_dispatch`) | Linux profile per arm via [`profile-arm.sh`](profile-arm.sh): `perf record -g`, `dotnet-trace` sampled thread time, gc-verbose allocation ticks ([`tools/RpsAllocTicks`](../RpsAllocTicks)) and `dotnet-counters`; [`summarize-profile.py`](summarize-profile.py) splits the proxy tree into TWP managed / .NET libs / SslStream + OpenSSL / kernel / GC / JIT / thread pool / locks, with the same split for nginx and HAProxy arms. A TWP-owned frame needs more than 1.5% inclusive CPU to be a change candidate. Profiling-only settings (`DOTNET_PerfMapEnabled`, `DOTNET_EnableWriteXorExecute=0`) are set by the script and never by the product. |
+| [`rps-cpu-per-request.py`](rps-cpu-per-request.py) | CPU per request from existing CSV columns: `proxy_cpu_avg_pct * ProcessorCount / 100 / rps` (microseconds). No CSV schema change. Prefer it over RPS when the load generator shares the box. |
+| `rps-ramp-*.tls.tsv` sidecar | Written next to each ramp CSV (and uploaded by `rps-saturation.yml`): negotiated TLS version, cipher suite, ALPN and certificate key type per arm, so TLS parity between TWP and the peers is checked from the run, not assumed. The product cipher policy is not changed. |
+
+Local 4 vCPU VMs share CPU with the load generator and origin: use these tools for diagnosis and treat absolute RPS as non-publishable. Wiki tables take CI-proven, single-SHA numbers only.
+
 ### Fix-and-rerun policy
 
 ### Linux H2/H3/WS gap close (2026-10-02)
