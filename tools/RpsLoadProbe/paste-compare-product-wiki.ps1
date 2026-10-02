@@ -15,7 +15,10 @@ if ($RunIds.Count -eq 1 -and $RunIds[0] -match ',') {
 }
 $Steps = 4
 $mul = [string][char]0x00D7          # ×
-$goldMedal = [char]::ConvertFromUtf32(0x1F947)  # 🥇
+$goldMedal = [char]::ConvertFromUtf32(0x1F947)   # 🥇
+$silverMedal = [char]::ConvertFromUtf32(0x1F948) # 🥈
+$bronzeMedal = [char]::ConvertFromUtf32(0x1F949) # 🥉
+$podiumMedals = @($goldMedal, $silverMedal, $bronzeMedal)
 
 function Median([double[]]$vals) {
     if ($vals.Count -eq 0) { return $null }
@@ -112,13 +115,13 @@ function Get-MedianMetrics([string]$OsFolder, [string]$Arm) {
     return $best
 }
 
-function Format-RpsCell($metrics, [switch]$Medal) {
+function Format-RpsCell($metrics, [string]$Medal = '') {
     if (-not $metrics) { return '*Not measured*' }
     $sustain = [int][math]::Round($metrics.Sustain, 0)
     $peak = [int][math]::Round($metrics.Peak, 0)
     $mb = [int][math]::Round($metrics.Rss / 1MB, 0)
     $cpu = [math]::Round($metrics.Cpu, 1)
-    $prefix = if ($Medal) { "$goldMedal " } else { '' }
+    $prefix = if ($Medal) { "$Medal " } else { '' }
     $inv = [cultureinfo]::InvariantCulture
     $sustainText = $sustain.ToString('N0', $inv)
     if ($peak -gt $sustain) {
@@ -190,7 +193,7 @@ function Format-TerminatePeerCell(
     [hashtable]$w,
     [string]$PeerKey,
     $metrics,
-    [switch]$Medal
+    [string]$Medal = ''
 ) {
     if ($PeerKey -in @('Haproxy', 'Envoy') -and $OsFolder -eq 'windows-latest') {
         return Format-Impossible 'Not possible'
@@ -201,10 +204,27 @@ function Format-TerminatePeerCell(
     }
     $arm = $w[$PeerKey]
     if ($arm) {
-        return Format-RpsCell $metrics -Medal:$Medal
+        return Format-RpsCell $metrics -Medal $Medal
     }
     $reason = Get-PeerImpossibleReason $w $PeerKey $arm
     return Format-Impossible $reason
+}
+
+function Get-MedalMap([object[]]$Candidates) {
+    # Top-3 by sustain; ties break on lower RSS then CPU.
+    $valid = @(
+        $Candidates |
+            Where-Object { $_.M -and $_.M.Sustain -gt 0 } |
+            Sort-Object `
+                @{ Expression = { -$_.M.Sustain }; Ascending = $true }, `
+                @{ Expression = { $_.M.Rss }; Ascending = $true }, `
+                @{ Expression = { $_.M.Cpu }; Ascending = $true }
+    )
+    $map = @{}
+    for ($i = 0; $i -lt [Math]::Min(3, $valid.Count); $i++) {
+        $map[$valid[$i].K] = $podiumMedals[$i]
+    }
+    return $map
 }
 
 function Emit-ReverseTable([string]$OsFolder) {
@@ -222,27 +242,30 @@ function Emit-ReverseTable([string]$OsFolder) {
         $nginx = if ($w.Nginx) { Get-MedianMetrics $OsFolder $w.Nginx } else { $null }
         $haproxy = if (-not $omitNative -and $w.Haproxy) { Get-MedianMetrics $OsFolder $w.Haproxy } else { $null }
         $envoy = if (-not $omitNative -and $w.Envoy) { Get-MedianMetrics $OsFolder $w.Envoy } else { $null }
-        $candidates = @(@{ M = $twp; K = 'twp' }, @{ M = $yarp; K = 'yarp' })
-        $peerPairs = @(@{ M = $nginx; K = 'nginx' })
+        $candidates = @(
+            @{ M = $twp; K = 'twp' },
+            @{ M = $yarp; K = 'yarp' },
+            @{ M = $nginx; K = 'nginx' }
+        )
         if (-not $omitNative) {
-            $peerPairs += @(@{ M = $haproxy; K = 'haproxy' }, @{ M = $envoy; K = 'envoy' })
+            $candidates += @(
+                @{ M = $haproxy; K = 'haproxy' },
+                @{ M = $envoy; K = 'envoy' }
+            )
         }
-        foreach ($pair in $peerPairs) {
-            if ($pair.M -and $pair.M.Sustain -gt 0) { $candidates += $pair }
-        }
-        $best = ($candidates | Where-Object { $_.M } | Sort-Object { $_.M.Sustain } -Descending | Select-Object -First 1).K
+        $medals = Get-MedalMap $candidates
         if ($omitNative) {
             Write-Output ("| {0} | {1} | {2} | {3} | {4} |" -f $w.C, $w.O,
-                (Format-RpsCell $twp -Medal:($best -eq 'twp')),
-                (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx')),
-                (Format-RpsCell $yarp -Medal:($best -eq 'yarp')))
+                (Format-RpsCell $twp -Medal ($medals['twp'])),
+                (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal ($medals['nginx'])),
+                (Format-RpsCell $yarp -Medal ($medals['yarp'])))
         } else {
             Write-Output ("| {0} | {1} | {2} | {3} | {4} | {5} | {6} |" -f $w.C, $w.O,
-                (Format-RpsCell $twp -Medal:($best -eq 'twp')),
-                (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx')),
-                (Format-TerminatePeerCell $OsFolder $w 'Haproxy' $haproxy -Medal:($best -eq 'haproxy')),
-                (Format-TerminatePeerCell $OsFolder $w 'Envoy' $envoy -Medal:($best -eq 'envoy')),
-                (Format-RpsCell $yarp -Medal:($best -eq 'yarp')))
+                (Format-RpsCell $twp -Medal ($medals['twp'])),
+                (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal ($medals['nginx'])),
+                (Format-TerminatePeerCell $OsFolder $w 'Haproxy' $haproxy -Medal ($medals['haproxy'])),
+                (Format-TerminatePeerCell $OsFolder $w 'Envoy' $envoy -Medal ($medals['envoy'])),
+                (Format-RpsCell $yarp -Medal ($medals['yarp'])))
         }
     }
 }

@@ -22,7 +22,10 @@ RUNS = {
     "tls": [34441599658, 34441602032],
     "arch": [34557786074, 34557788179, 34557790004, 34441578556, 34441580725, 34441583238, 34441585221, 34441587413, 34441589415],
 }
-MEDAL = "\U0001F947"
+GOLD = "\U0001F947"
+SILVER = "\U0001F948"
+BRONZE = "\U0001F949"
+MEDALS = (GOLD, SILVER, BRONZE)
 STEPS = 4
 
 
@@ -157,7 +160,7 @@ def parse_run_ids(text: str) -> RunIds:
     return ids[0] if len(ids) == 1 else ids
 
 
-def fmt_cell(m: Optional[dict], medal: bool = False, impossible: Optional[str] = None) -> str:
+def fmt_cell(m: Optional[dict], medal: Optional[str] = None, impossible: Optional[str] = None) -> str:
     if impossible:
         return f"*{impossible}*"
     if not m:
@@ -166,7 +169,7 @@ def fmt_cell(m: Optional[dict], medal: bool = False, impossible: Optional[str] =
     peak = round(m["Peak"])
     mb = round(m["Rss"] / (1024 * 1024))
     cpu = round(m["Cpu"], 1)
-    prefix = f"{MEDAL} " if medal else ""
+    prefix = f"{medal} " if medal else ""
     # Handshake arms defer CPU sampling (post-measure snapshot) — omit idle 0% CPU.
     foot = f"{mb} MiB" if cpu < 0.05 else f"{mb} MiB / {cpu}% CPU"
     if peak > sustain:
@@ -176,11 +179,11 @@ def fmt_cell(m: Optional[dict], medal: bool = False, impossible: Optional[str] =
     return f"{prefix}**{sustain:,}**<br><sub>({sub})</sub>"
 
 
-def pick_medal(cands: List[Tuple[str, Optional[dict]]]) -> Optional[str]:
+def pick_medals(cands: List[Tuple[str, Optional[dict]]]) -> Dict[str, str]:
+    """Top-3 by sustain RPS; ties break on lower RSS then CPU."""
     valid = [(k, m) for k, m in cands if m and (m["Sustain"] or 0) > 0]
-    if not valid:
-        return None
-    return min(valid, key=lambda km: (-km[1]["Sustain"], km[1]["Rss"], km[1]["Cpu"]))[0]
+    ordered = sorted(valid, key=lambda km: (-km[1]["Sustain"], km[1]["Rss"], km[1]["Cpu"]))
+    return {k: MEDALS[i] for i, (k, _) in enumerate(ordered[:3])}
 
 
 WIN_NO_HAPROXY_ENVOY_NOTE = (
@@ -239,18 +242,18 @@ def peer_row(
         medal_peers = [("twp", twp), ("nginx", nginx), ("yarp", yarp)]
     else:
         medal_peers = [("twp", twp), ("nginx", nginx), ("haproxy", haproxy), ("envoy", envoy), ("yarp", yarp)]
-    medal = pick_medal(medal_peers)
+    medals = pick_medals(medal_peers)
     cells = prefix + [
-        fmt_cell(twp, medal=(medal == "twp")),
-        fmt_cell(nginx, medal=(medal == "nginx"), impossible=nginx_imp),
+        fmt_cell(twp, medal=medals.get("twp")),
+        fmt_cell(nginx, medal=medals.get("nginx"), impossible=nginx_imp),
     ]
     if not win_no_haproxy_envoy:
         cells += [
-            fmt_cell(haproxy, medal=(medal == "haproxy"), impossible=haproxy_imp),
-            fmt_cell(envoy, medal=(medal == "envoy"), impossible=envoy_imp),
+            fmt_cell(haproxy, medal=medals.get("haproxy"), impossible=haproxy_imp),
+            fmt_cell(envoy, medal=medals.get("envoy"), impossible=envoy_imp),
         ]
     cells += [
-        fmt_cell(yarp, medal=(medal == "yarp")),
+        fmt_cell(yarp, medal=medals.get("yarp")),
     ]
     return "| " + " | ".join(cells) + " |"
 
@@ -460,7 +463,7 @@ def main() -> None:
         origin = data.get("origin-direct")
         op = origin["Peak"] if origin else None
         peer_keys = ["nginx-reverse-http1", "yarp-reverse-http1", "twp-reverse-http1"]
-        medal = pick_medal([(k, data.get(k)) for k in peer_keys])
+        medals = pick_medals([(k, data.get(k)) for k in peer_keys])
         arms = [
             ("origin-direct", "dotnet-httpclient", False),
             ("origin-direct-bombardier", "bombardier", False),
@@ -475,7 +478,7 @@ def main() -> None:
         ]
         for arm, gen, is_peer in arms:
             m = data.get(arm)
-            med = is_peer and medal == arm
+            med = medals.get(arm) if is_peer else None
             pct = "—"
             if m and op and op > 0:
                 pct = f"**{m['Peak'] / op * 100:.1f}%**"
@@ -488,7 +491,7 @@ def main() -> None:
         nginx = None if win_no_nginx else data.get(nginx_a)
         yarp = data.get(yarp_a)
         twp = data.get(twp_a)
-        medal = pick_medal([("nginx", nginx), ("yarp", yarp), ("twp", twp)])
+        medals = pick_medals([("nginx", nginx), ("yarp", yarp), ("twp", twp)])
 
         def rdiv(num: Optional[dict], den: Optional[dict]) -> str:
             if not num or not den or not den["Peak"]:
@@ -508,7 +511,7 @@ def main() -> None:
                 rows.append(f"| {arm} | dotnet-httpclient | *{imp}* | — | — |")
                 continue
             rows.append(
-                f"| {arm} | dotnet-httpclient | {fmt_cell(m, medal=(medal == key))} | "
+                f"| {arm} | dotnet-httpclient | {fmt_cell(m, medal=medals.get(key))} | "
                 f"{rdiv(m, yarp)} | {rdiv(m, nginx)} |"
             )
         return "\n".join(rows)
