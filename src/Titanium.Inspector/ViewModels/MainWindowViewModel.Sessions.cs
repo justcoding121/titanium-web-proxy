@@ -446,7 +446,7 @@ public sealed partial class MainWindowViewModel
             return Task.CompletedTask;
         }
 
-        AutoResponder.Rules.Add(new AutoResponderRule
+        AutoResponder.AddRule(new AutoResponderRule
         {
             MatchUrl = AutoResponderMatch,
             StatusCode = status,
@@ -468,7 +468,7 @@ public sealed partial class MainWindowViewModel
             return Task.CompletedTask;
         }
 
-        AutoResponder.Rules.Remove(AutoResponder.SelectedRule);
+        AutoResponder.RemoveRule(AutoResponder.SelectedRule);
         AutoResponder.SelectedRule = null;
         PersistAutoResponder();
         StatusText = "AutoResponder rule deleted";
@@ -534,7 +534,7 @@ public sealed partial class MainWindowViewModel
     }
     private Task AddMapRemoteRuleAsync()
     {
-        MapRemote.Rules.Add(new MapRemoteRule
+        MapRemote.AddRule(new MapRemoteRule
         {
             MatchUrl = MapRemoteMatch,
             TargetUrl = MapRemoteTarget,
@@ -553,7 +553,7 @@ public sealed partial class MainWindowViewModel
             return Task.CompletedTask;
         }
 
-        MapRemote.Rules.Remove(MapRemote.SelectedRule);
+        MapRemote.RemoveRule(MapRemote.SelectedRule);
         MapRemote.SelectedRule = null;
         PersistMapRemote();
         StatusText = "Map Remote rule deleted";

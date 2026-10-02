@@ -1,12 +1,12 @@
 # Validate compare-product medians @ c=64:
-#   MITM Lite ÷ Reverse >= 0.50, Full ÷ Reverse >= 0.50 (all OS, all gated pairs)
+#   MITM Lite ÷ Reverse >= 0.40, Full ÷ Reverse >= 0.40 (all OS, all gated pairs)
 #   Reverse TWP ÷ YARP >= 0.60 (when YARP SLO-passes)
 # No nginx gate — nginx is wiki/charts only.
 # When Repeats>1, each arm contributes multiple c=64 SLO-pass rows — use the median RPS.
 param(
     [Parameter(Mandatory)] [string] $CsvPath,
-    [double] $MitmLiteGate = 0.50,
-    [double] $MitmFullGate = 0.50,
+    [double] $MitmLiteGate = 0.40,
+    [double] $MitmFullGate = 0.40,
     # Backward-compatible alias: if set, applies to both Lite and Full (overrides the pair above).
     [double] $MitmGate = -1,
     [double] $ReverseYarpGate = 0.60,

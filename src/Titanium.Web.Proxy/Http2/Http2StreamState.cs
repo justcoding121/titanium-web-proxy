@@ -191,24 +191,39 @@ internal sealed class Http2StreamState
         SessionArgs = null;
         // Prefer TryReset over dispose+new: compressed-relay streams churn one CTS per request
         // otherwise (Cancel on finalize path, then Return).
-        if (!Cancellation.TryReset())
-        {
-            try { Cancellation.Dispose(); }
-            catch { /* ignore */ }
-            Cancellation = new CancellationTokenSource();
-        }
+        ReplaceCancellationIfNotResettable();
 
         ResetMutableFields(preserveCancellation: true);
     }
 
+    /// <summary>
+    ///     RST / protocol-error teardown disposes the non-relay CTS before finalize returns the state to
+    ///     the pool; <see cref="CancellationTokenSource.TryReset"/> throws on a disposed instance.
+    /// </summary>
+    private void ReplaceCancellationIfNotResettable()
+    {
+        bool reset;
+        try
+        {
+            reset = Cancellation.TryReset();
+        }
+        catch (ObjectDisposedException)
+        {
+            reset = false;
+        }
+
+        if (reset)
+            return;
+
+        try { Cancellation.Dispose(); }
+        catch { /* ignore */ }
+        Cancellation = new CancellationTokenSource();
+    }
+
     private void ResetMutableFields(bool preserveCancellation = false)
     {
-        if (!preserveCancellation && !Cancellation.TryReset())
-        {
-            try { Cancellation.Dispose(); }
-            catch { /* ignore */ }
-            Cancellation = new CancellationTokenSource();
-        }
+        if (!preserveCancellation)
+            ReplaceCancellationIfNotResettable();
 
         RequestClosed = false;
         ResponseClosed = false;

@@ -36,6 +36,23 @@ public class Http2StreamStatePoolTests
     }
 
     [TestMethod]
+    public void Return_AfterCancellationDisposed_ReplacesTokenSourceInsteadOfThrowing()
+    {
+        // RST / protocol-error teardown disposes the (non-relay) CTS before finalize returns the shell.
+        var pool = new Http2StreamStatePool(4);
+        var state = new Http2StreamState(1);
+        state.Cancellation.Cancel();
+        state.Cancellation.Dispose();
+
+        pool.Return(state);
+
+        Assert.IsFalse(state.Cancellation.IsCancellationRequested);
+        var reused = pool.RentCompressed(3);
+        Assert.AreSame(state, reused);
+        Assert.IsFalse(reused.Cancellation.Token.IsCancellationRequested);
+    }
+
+    [TestMethod]
     public void RentCompressed_ReusesReturnedShell()
     {
         var pool = new Http2StreamStatePool(4);

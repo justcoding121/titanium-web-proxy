@@ -154,6 +154,21 @@ header-block read.</p>
 </td>
       </tr>
       <tr>
+        <td id="Titanium_Web_Proxy_Options_PolicyFamily_Http1ReplaySafety">Http1ReplaySafety</td>
+        <td><p>Whether HTTP/1 keep-alive retries (EOF-before-response, malformed status, mid-exchange
+IOException) and bare CR in header values follow the strict replay-safe rules.</p>
+<p>
+    <a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html#Titanium_Web_Proxy_Options_PolicyMode_Observe">Observe</a> (default on <a class="xref" href="Titanium.Web.Proxy.Options.ProxyProfile.html#Titanium_Web_Proxy_Options_ProxyProfile_Balanced">Balanced</a> and
+    <a class="xref" href="Titanium.Web.Proxy.Options.ProxyProfile.html#Titanium_Web_Proxy_Options_ProxyProfile_LegacyCompatible">LegacyCompatible</a>) keeps today's lenient behavior and
+    records a policy breach metric when the strict rule would have fired.
+</p>
+<p>
+    <a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html#Titanium_Web_Proxy_Options_PolicyMode_Enforce">Enforce</a> (default on <a class="xref" href="Titanium.Web.Proxy.Options.ProxyProfile.html#Titanium_Web_Proxy_Options_ProxyProfile_PublicFacing">PublicFacing</a>)
+    refuses to replay non-idempotent methods and rejects bare CR/LF/NUL in header values.
+</p>
+</td>
+      </tr>
+      <tr>
         <td id="Titanium_Web_Proxy_Options_PolicyFamily_Http2AbuseBudget">Http2AbuseBudget</td>
         <td><p>HTTP/2 abuse budgets: the open-header-block CONTINUATION frame-count/wall-clock bound and
 the peer-initiated incomplete-stream-reset budget.</p>

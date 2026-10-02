@@ -36,9 +36,9 @@ public static class MapRemoteScenario
             {
                 previousEnabled = harness.ViewModel.MapRemote.Enabled;
                 previousRules = harness.ViewModel.MapRemote.Rules.ToArray();
-                harness.ViewModel.MapRemote.Rules.Clear();
+                harness.ViewModel.MapRemote.ClearRules();
                 harness.ViewModel.MapRemote.Enabled = true;
-                harness.ViewModel.MapRemote.Rules.Add(new MapRemoteRule
+                harness.ViewModel.MapRemote.AddRule(new MapRemoteRule
                 {
                     MatchUrl = "*probe-map-remote*",
                     TargetUrl = $"http://127.0.0.1:{originPort}/ok",
@@ -81,10 +81,10 @@ public static class MapRemoteScenario
         {
             await harness.OnUiAsync(() =>
             {
-                harness.ViewModel.MapRemote.Rules.Clear();
+                harness.ViewModel.MapRemote.ClearRules();
                 foreach (var r in previousRules)
                 {
-                    harness.ViewModel.MapRemote.Rules.Add(r);
+                    harness.ViewModel.MapRemote.AddRule(r);
                 }
 
                 harness.ViewModel.MapRemote.Enabled = previousEnabled;

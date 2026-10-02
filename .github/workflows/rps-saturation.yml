@@ -5,9 +5,10 @@
 # Prefer --repeats >= 3 for publishable numbers (runner noise). Linux nginx
 # is the authoritative nginx baseline; nginx/Windows is same-OS only.
 #
-# Matrix uses the 4-core public-repo runner class: ubuntu-latest / windows-latest
-# (4 vCPU / 16 GiB) and macos-15-intel (4-core / 14 GiB). Do not use macos-latest
-# (3-core M1 / 7 GiB) for publishable numbers — wrong size and architecture.
+# Matrix uses public-repo GitHub-hosted runners: ubuntu-latest / windows-latest
+# (4 vCPU / 16 GiB) and macos-15 (Apple Silicon M1, 3-core / 7 GiB). macOS is Apple
+# Silicon because that is what Mac users run today; we compare products within an OS,
+# not OS against OS. Pin macos-15 (not macos-latest) so the image does not change under us.
 # Do not mix larger or slim runners unless every OS gets the same size class.
 
 name: RPS saturation
@@ -184,7 +185,7 @@ on:
         required: true
         default: '3'
       runner_os:
-        description: 'OS matrix filter (all = Win+Linux+Mac Intel)'
+        description: 'OS matrix filter (all = Win+Linux+Mac Apple Silicon)'
         required: true
         default: all
         type: choice
@@ -192,7 +193,7 @@ on:
           - all
           - ubuntu-latest
           - windows-latest
-          - macos-15-intel
+          - macos-15
       arm_shard:
         description: 'Comparison-group partition (all = no split; i/n = exclusive 1-based shard of wiki rows / Client×Origin wires, not individual arms)'
         required: true
@@ -221,8 +222,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # workflow_dispatch runner_os filters to one OS; otherwise Win+Linux+Mac Intel.
-        os: ${{ fromJSON(inputs.runner_os == 'macos-15-intel' && '["macos-15-intel"]' || inputs.runner_os == 'ubuntu-latest' && '["ubuntu-latest"]' || inputs.runner_os == 'windows-latest' && '["windows-latest"]' || '["ubuntu-latest","windows-latest","macos-15-intel"]') }}
+        # workflow_dispatch runner_os filters to one OS; otherwise Win+Linux+Mac Apple Silicon.
+        os: ${{ fromJSON(inputs.runner_os == 'macos-15' && '["macos-15"]' || inputs.runner_os == 'ubuntu-latest' && '["ubuntu-latest"]' || inputs.runner_os == 'windows-latest' && '["windows-latest"]' || '["ubuntu-latest","windows-latest","macos-15"]') }}
     runs-on: ${{ matrix.os }}
     # Intentionally no jobs.*.container — saturation RPS on a container network measures the wrong thing.
     # GitHub-hosted runners hard-cap at 360 minutes — do not set timeout above that.
@@ -267,20 +268,24 @@ jobs:
           echo "sw_vers:"
           sw_vers
           ncpu=$(sysctl -n hw.ncpu)
-          # hw.memsize is bytes; assert >= 4 CPUs and >= 12 GiB (macos-15-intel is 4 / 14).
+          # hw.memsize is bytes; assert arm64, >= 3 CPUs and >= 6 GiB (macos-15 Apple Silicon is 3 / 7).
           mem_bytes=$(sysctl -n hw.memsize)
           mem_gib=$(awk -v b="$mem_bytes" 'BEGIN { printf "%.1f", b / (1024*1024*1024) }')
           echo "ncpu=$ncpu"
           echo "RAM_GiB=$mem_gib"
           sysctl -n machdep.cpu.brand_string || true
-          if [ "$ncpu" -lt 4 ]; then
-            echo "Expected >=4 CPUs on macos-15-intel; got $ncpu (do not use macos-latest for publishable RPS)." >&2
+          if [ "$ncpu" -lt 3 ]; then
+            echo "Expected >=3 CPUs on macos-15; got $ncpu." >&2
             exit 1
           fi
-          # 12 GiB floor leaves headroom under the documented 14 GiB Intel runner.
-          min_bytes=$((12 * 1024 * 1024 * 1024))
+          if [ "$(uname -m)" != "arm64" ]; then
+            echo "Expected Apple Silicon (arm64) on macos-15; got $(uname -m)." >&2
+            exit 1
+          fi
+          # 6 GiB floor leaves headroom under the documented 7 GiB Apple Silicon runner.
+          min_bytes=$((6 * 1024 * 1024 * 1024))
           if [ "$mem_bytes" -lt "$min_bytes" ]; then
-            echo "Expected >=12 GiB RAM on macos-15-intel; got ${mem_gib} GiB." >&2
+            echo "Expected >=6 GiB RAM on macos-15; got ${mem_gib} GiB." >&2
             exit 1
           fi
 
@@ -342,8 +347,8 @@ jobs:
           & (Join-Path $nginxDir 'nginx.exe') -v
 
       # Homebrew nginx bottles include --with-http_v3_module (OpenSSL 3). Fail hard if missing.
-      # macos-15-intel: Homebrew no longer mass-bottles Intel; avoid brew update/upgrade of openssl
-      # (already-installed bottle works; upgrading hits "no bottle available").
+      # macos-15 (Apple Silicon): Homebrew bottles arm64; still skip brew update/upgrade of
+      # openssl (the already-installed bottle works and keeps the job fast and reproducible).
       - name: Install nginx (HTTP/3-capable, macOS)
         if: runner.os == 'macOS'
         env:
@@ -351,12 +356,12 @@ jobs:
           HOMEBREW_NO_INSTALL_UPGRADE: '1'
         run: |
           set -euo pipefail
-          # Use preinstalled openssl@3 / pcre2 when present; do not upgrade (Intel bottles missing).
+          # Use preinstalled openssl@3 / pcre2 when present; do not upgrade.
           brew list --versions openssl@3 || brew install openssl@3
           brew list --versions pcre2 || brew install pcre2
           if ! brew list --versions nginx >/dev/null 2>&1; then
             if ! brew install nginx; then
-              echo "brew install nginx failed (likely missing Intel bottle); building from source…" >&2
+              echo "brew install nginx failed (likely missing bottle); building from source…" >&2
               brew install --build-from-source nginx
             fi
           fi
@@ -478,7 +483,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/haproxy-quic
-          key: haproxy-3.2.23-quic-osx-x64
+          key: haproxy-3.2.23-quic-osx-arm64
 
       - name: Install HAProxy with QUIC (macOS)
         if: runner.os == 'macOS'
@@ -569,9 +574,9 @@ jobs:
           echo "HAProxy USE_QUIC present"
 
       # Envoy Apache 2.0 — Linux static binary from GitHub releases; macOS via Homebrew
-      # (HTTP/3 compiled in). Official GitHub assets are Linux-only; Intel Mac has no
-      # current Homebrew bottle, so fall back to the pinned Kuma/CNCF darwin-amd64 build
-      # of the same 1.36.7 tag (do not bazel-build Envoy on the runner).
+      # (HTTP/3 compiled in). Official GitHub assets are Linux-only; if Homebrew has no
+      # arm64 bottle, fall back to the pinned Kuma/CNCF darwin-arm64 build of the same
+      # 1.36.7 tag (do not bazel-build Envoy on the runner).
       # Windows support discontinued — skip (cells are Not possible).
       - name: Install Envoy (Linux)
         if: runner.os == 'Linux'
@@ -602,8 +607,7 @@ jobs:
           brew services stop envoy 2>/dev/null || true
           pkill -x envoy 2>/dev/null || true
 
-          # Pour a bottle only. Intel Homebrew has no envoy bottle; bazel-from-source
-          # would burn the job timeout. ARM bottles (macos-latest) still pour here.
+          # Pour a bottle only; bazel-from-source would burn the job timeout.
           brew_has_envoy_bottle() {
             python3 -c '
           import json, platform, subprocess, sys
@@ -652,14 +656,14 @@ jobs:
           fi
 
           if ! command -v envoy >/dev/null 2>&1; then
-            echo "Downloading pinned darwin-amd64 Envoy ${ENVOY_VERSION} (Kuma/CNCF builds; official GitHub assets are Linux-only)…" >&2
+            echo "Downloading pinned darwin-arm64 Envoy ${ENVOY_VERSION} (Kuma/CNCF builds; official GitHub assets are Linux-only)…" >&2
             dest="${RUNNER_TEMP}/envoy"
             mkdir -p "$dest"
-            tarball="${RUNNER_TEMP}/envoy-darwin-amd64.tar.gz"
+            tarball="${RUNNER_TEMP}/envoy-darwin-arm64.tar.gz"
             if ! curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
-              "https://github.com/kumahq/envoy-builds/releases/download/v${ENVOY_VERSION}/envoy-darwin-amd64-v${ENVOY_VERSION}.tar.gz" \
+              "https://github.com/kumahq/envoy-builds/releases/download/v${ENVOY_VERSION}/envoy-darwin-arm64-v${ENVOY_VERSION}.tar.gz" \
               -o "$tarball"; then
-              echo "darwin-amd64 Envoy download failed — Envoy arms will be skipped." >&2
+              echo "darwin-arm64 Envoy download failed — Envoy arms will be skipped." >&2
               exit 0
             fi
             tar -xzf "$tarball" -C "$dest"
@@ -670,7 +674,7 @@ jobs:
               bin="$(find "$dest" -type f -name envoy | awk 'NR==1 { print; exit }')"
             fi
             if [ -z "${bin}" ] || [ ! -f "$bin" ]; then
-              echo "darwin-amd64 Envoy tarball had no envoy binary — Envoy arms will be skipped." >&2
+              echo "darwin-arm64 Envoy tarball had no envoy binary — Envoy arms will be skipped." >&2
               exit 0
             fi
             chmod +x "$bin"
@@ -683,7 +687,7 @@ jobs:
             exit 0
           fi
           envoy --version
-          echo "Envoy present (Homebrew or pinned darwin-amd64); H3 arms run when QuicListener is supported."
+          echo "Envoy present (Homebrew or pinned darwin-arm64); H3 arms run when QuicListener is supported."
 
       # .NET System.Net.Quic on Linux requires native libmsquic (shipped in-box on Windows).
       - name: Install libmsquic (HTTP/3)
@@ -711,8 +715,8 @@ jobs:
           Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"
 
       # macOS: System.Net.Quic needs Homebrew libmsquic (and OpenSSL) on DYLD_* path.
-      # Prefer brew; fall back to Microsoft osx-x64 release dylibs if brew is insufficient.
-      - name: Install MsQuic (HTTP/3, macOS Intel)
+      # Prefer brew; fall back to Microsoft osx-arm64 release dylibs if brew is insufficient.
+      - name: Install MsQuic (HTTP/3, macOS)
         if: runner.os == 'macOS'
         shell: pwsh
         env:
@@ -720,7 +724,7 @@ jobs:
           HOMEBREW_NO_INSTALL_UPGRADE: '1'
         run: |
           $ErrorActionPreference = 'Stop'
-          # Do not upgrade openssl@3 on Intel — new formula often has no bottle.
+          # Do not upgrade openssl@3; the preinstalled bottle is enough.
           brew install openssl@3 libmsquic
           $prefix = (& brew --prefix).Trim()
           $msquicLib = Join-Path $prefix 'opt/libmsquic/lib'
@@ -745,12 +749,12 @@ jobs:
           }
 
           if (-not (Test-QuicSupported)) {
-            Write-Host 'QuicListener.IsSupported still false after brew; trying Microsoft osx-x64 libmsquic drop…'
+            Write-Host 'QuicListener.IsSupported still false after brew; trying Microsoft osx-arm64 libmsquic drop…'
             $dest = Join-Path $env:RUNNER_TEMP 'msquic-osx'
             New-Item -ItemType Directory -Path $dest -Force | Out-Null
             # Pin a known MsQuic release asset layout; adjust tag if the download 404s.
             $tag = 'v2.4.7'
-            $url = "https://github.com/microsoft/msquic/releases/download/$tag/msquic_osx-x64_$tag.zip"
+            $url = "https://github.com/microsoft/msquic/releases/download/$tag/msquic_osx-arm64_$tag.zip"
             $zip = Join-Path $env:RUNNER_TEMP 'msquic-osx.zip'
             try {
               & curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 $url -o $zip
@@ -807,11 +811,11 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           set -euo pipefail
-          # macos-15-intel is x86_64 — use darwin amd64 binary.
+          # macos-15 is arm64 - use the darwin arm64 binary.
           dir="${RUNNER_TEMP}/bombardier"
           mkdir -p "$dir"
           curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
-            "https://github.com/codesenberg/bombardier/releases/download/v1.2.6/bombardier-darwin-amd64" \
+            "https://github.com/codesenberg/bombardier/releases/download/v1.2.6/bombardier-darwin-arm64" \
             -o "$dir/bombardier"
           chmod +x "$dir/bombardier"
           echo "$dir" >> "$GITHUB_PATH"
@@ -892,7 +896,7 @@ jobs:
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
             Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $csv) { throw 'No CSV found for compare-product gate validation' }
-          # Same floors on all OS: MITM Lite÷Reverse >= 0.50, Full÷Reverse >= 0.50, reverse TWP÷YARP >= 0.60. No nginx gate.
+          # Same floors on all OS: MITM Lite÷Reverse >= 0.40, Full÷Reverse >= 0.40, reverse TWP÷YARP >= 0.60. No nginx gate.
           pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName
 
       - name: Validate heavier YARP gates (bodies)

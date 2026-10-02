@@ -14,6 +14,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Http3;
+using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.StreamExtended.Network;
@@ -270,6 +271,7 @@ public partial class ProxyServer
             Func<System.Net.Quic.QuicStream, CancellationToken, Task>? copyRequestBody = null;
             if (requestBodyChannel != null && !sessionArgs.HttpClient.Request.IsBodyRead)
             {
+                var request = sessionArgs.HttpClient.Request;
                 copyRequestBody = async (originStream, ct) =>
                 {
                     await foreach (var chunk in requestBodyChannel.Reader.ReadAllAsync(ct))
@@ -286,7 +288,15 @@ public partial class ProxyServer
                         }
                     }
 
-                    sessionArgs.HttpClient.Request.IsBodyReceived = true;
+                    if (request.HasTrailingHeaders)
+                    {
+                        var trailerBlock = QpackEncoder.Encode(
+                            request.TrailingHeaders.Select(h => (h.Name, h.Value)));
+                        await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, trailerBlock, ct,
+                            completeWrites: true);
+                    }
+
+                    request.IsBodyReceived = true;
                 };
             }
 
@@ -314,7 +324,24 @@ public partial class ProxyServer
                 sessionArgs.HttpClient.Response.SetOriginalHeaders();
 
             if (!sessionArgs.IsFastPath && !sessionArgs.HttpClient.Response.Locked)
+            {
+                var responseBeforeHandler = sessionArgs.HttpClient.Response;
                 await OnBeforeResponse(sessionArgs);
+                // If BeforeResponse replaced the response, the QUIC StreamBodyWriter never runs —
+                // drain it so the origin stream/lease is released (same shape as H1→H2).
+                if (!ReferenceEquals(responseBeforeHandler, sessionArgs.HttpClient.Response)
+                    && responseBeforeHandler.StreamBodyWriter != null)
+                {
+                    try
+                    {
+                        await responseBeforeHandler.StreamBodyWriter(Stream.Null, cancellationToken);
+                    }
+                    catch
+                    {
+                        // Best-effort release of the QUIC stream/lease; emit path uses the new response.
+                    }
+                }
+            }
 
             var response = sessionArgs.HttpClient.Response;
 
@@ -375,18 +402,10 @@ public partial class ProxyServer
                     else
                     {
                         // Headers (and possibly part of the body) already reached the client before the
-                        // origin round trip failed.  Send RST_STREAM to signal abnormal termination.
-                        await connectionState.ClientWriteLock.WaitAsync(CancellationToken.None);
-                        try
-                        {
-                            await Http2Helper.SendRstStreamAsync(
-                                new Http2FrameHeader(), new byte[9],
-                                streamId, Http2ErrorCode.InternalError, clientStream);
-                        }
-                        finally
-                        {
-                            connectionState.ClientWriteLock.Release();
-                        }
+                        // origin round trip failed. Queue RST through the FIFO so it cannot overtake
+                        // still-queued HEADERS/DATA.
+                        Http2Helper.QueueRstStreamFrame(connectionState, clientStream, streamId,
+                            Http2ErrorCode.InternalError);
                     }
                 }
                 catch
@@ -404,6 +423,15 @@ public partial class ProxyServer
             // concurrent RST_STREAM / GOAWAY finalization.
             if (connectionState.TryTakeStream(streamId, out var finalStreamState))
             {
+                // Drain any leftover rented body buffers if the copy task never ran.
+                var bodyCh = finalStreamState.InboundRequestBodyChannel;
+                if (bodyCh != null)
+                {
+                    bodyCh.Writer.TryComplete();
+                    while (bodyCh.Reader.TryRead(out var leftover))
+                        ArrayPool<byte>.Shared.Return(leftover.Buffer);
+                }
+
                 connectionState.ClientSendFlow.RemoveStream(streamId);
                 connectionState.ServerSendFlow.RemoveStream(streamId);
                 await Http2Helper.FinalizeStreamAsync(

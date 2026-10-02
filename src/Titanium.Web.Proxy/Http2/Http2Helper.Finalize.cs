@@ -49,6 +49,10 @@ namespace Titanium.Web.Proxy.Http2
                 return;
             }
 
+            // A buffered request reset or aborted before its body completed never reaches SendBody; release
+            // the stream-id ordering chain so later requests are not held back by a dead stream.
+            state.SessionArgs.HttpClient.Request.Http2OriginAdmitted?.TrySetResult(true);
+
             try
             {
                 var requestDispatch = state.SessionArgs.HttpClient.Request.Http2BeforeHandlerTask;

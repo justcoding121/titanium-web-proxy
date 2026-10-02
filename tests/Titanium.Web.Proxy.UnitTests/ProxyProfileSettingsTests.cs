@@ -88,6 +88,8 @@ public class ProxyProfileSettingsTests
         Assert.IsTrue(settings.IdleReadTimeoutSeconds > 0);
         Assert.IsTrue(settings.IdleWriteTimeoutSeconds > 0);
         Assert.IsTrue(settings.RequestTimeoutSeconds > 0);
+        Assert.AreEqual(256, settings.ResourceLimits.MaxConcurrentStreamsPerConnection,
+            "PublicFacing keeps the tighter stream cap; Balanced uses Chrome's 1000.");
     }
 
     [TestMethod]

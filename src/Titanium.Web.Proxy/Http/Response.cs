@@ -115,22 +115,62 @@ public class Response : RequestResponseBase
     {
         get
         {
-            Headers.TryGetUniqueHeader(KnownHeaders.Connection, out var connectionHeader);
+            // Connection is a comma-separated token list (RFC 9110 §7.6.1). "close" wins;
+            // duplicates / "close, te" must not keep the socket in the pool.
+            var close = false;
+            var keepAlive = false;
+            if (Headers.Headers.TryGetValue(KnownHeaders.Connection.String, out var unique))
+                ClassifyConnectionTokens(unique.ValueData.Span, ref close, ref keepAlive);
+            else if (Headers.NonUniqueHeaders.TryGetValue(KnownHeaders.Connection.String, out var list))
+            {
+                foreach (var header in list)
+                    ClassifyConnectionTokens(header.ValueData.Span, ref close, ref keepAlive);
+            }
 
-            // HTTP/1.0 is non-persistent by default: the connection is only reusable when the
-            // response explicitly opts in with "Connection: keep-alive". Treating a plain HTTP/1.0
-            // response as keep-alive would let us pool a connection the server is about to close.
             if (HttpVersion == HttpHeader.Version10)
-                return connectionHeader != null
-                       && connectionHeader.ValueData.EqualsIgnoreCaseAscii(KnownHeaders.ConnectionKeepAlive.String8);
+                return keepAlive && !close;
 
-            // HTTP/1.1 (and HTTP/2) are persistent by default unless the response asks to close.
-            if (connectionHeader != null
-                && connectionHeader.ValueData.EqualsIgnoreCaseAscii(KnownHeaders.ConnectionClose.String8))
-                return false;
-
-            return true;
+            return !close;
         }
+    }
+
+    private static void ClassifyConnectionTokens(ReadOnlySpan<byte> value, ref bool close, ref bool keepAlive)
+    {
+        while (!value.IsEmpty)
+        {
+            var comma = value.IndexOf((byte)',');
+            var token = comma >= 0 ? value[..comma] : value;
+            value = comma >= 0 ? value[(comma + 1)..] : default;
+            token = TrimAsciiWs(token);
+            if (AsciiEqualsIgnoreCase(token, "close"u8))
+                close = true;
+            else if (AsciiEqualsIgnoreCase(token, "keep-alive"u8))
+                keepAlive = true;
+        }
+    }
+
+    private static bool AsciiEqualsIgnoreCase(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b)
+    {
+        if (a.Length != b.Length) return false;
+        for (var i = 0; i < a.Length; i++)
+        {
+            var x = a[i];
+            var y = b[i];
+            if (x is >= (byte)'A' and <= (byte)'Z') x = (byte)(x + 32);
+            if (y is >= (byte)'A' and <= (byte)'Z') y = (byte)(y + 32);
+            if (x != y) return false;
+        }
+
+        return true;
+    }
+
+    private static ReadOnlySpan<byte> TrimAsciiWs(ReadOnlySpan<byte> span)
+    {
+        while (!span.IsEmpty && span[0] is (byte)' ' or (byte)'\t')
+            span = span[1..];
+        while (!span.IsEmpty && span[^1] is (byte)' ' or (byte)'\t')
+            span = span[..^1];
+        return span;
     }
 
     /// <summary>

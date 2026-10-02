@@ -1673,8 +1673,8 @@ public sealed class InterceptionService : IDisposable
 
             string? requestBody = null;
             var needsBodyForTools =
-                (AutoResponder is { Enabled: true } && AutoResponder.Rules.Any(r => r.Enabled && !string.IsNullOrWhiteSpace(r.GraphQlOperationName))) ||
-                (MapRemote is { Enabled: true } && MapRemote.Rules.Any(r => r.Enabled && !string.IsNullOrWhiteSpace(r.GraphQlOperationName))) ||
+                (AutoResponder is { Enabled: true } && AutoResponder.HasEnabledGraphQlRule()) ||
+                (MapRemote is { Enabled: true } && MapRemote.HasEnabledGraphQlRule()) ||
                 (Breakpoints is { Enabled: true } && !string.IsNullOrWhiteSpace(Breakpoints.GraphQlOperationName));
             if (needsBodyForTools && e.HttpClient.Request.IsBodyRead)
             {

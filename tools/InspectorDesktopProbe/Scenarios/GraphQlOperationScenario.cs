@@ -18,9 +18,9 @@ public static class GraphQlOperationScenario
             {
                 previousEnabled = harness.ViewModel.AutoResponder.Enabled;
                 previousRules = harness.ViewModel.AutoResponder.Rules.ToArray();
-                harness.ViewModel.AutoResponder.Rules.Clear();
+                harness.ViewModel.AutoResponder.ClearRules();
                 harness.ViewModel.AutoResponder.Enabled = true;
-                harness.ViewModel.AutoResponder.Rules.Add(new AutoResponderRule
+                harness.ViewModel.AutoResponder.AddRule(new AutoResponderRule
                 {
                     MatchUrl = "*graphql*",
                     StatusCode = 200,
@@ -70,10 +70,10 @@ public static class GraphQlOperationScenario
         {
             await harness.OnUiAsync(() =>
             {
-                harness.ViewModel.AutoResponder.Rules.Clear();
+                harness.ViewModel.AutoResponder.ClearRules();
                 foreach (var r in previousRules)
                 {
-                    harness.ViewModel.AutoResponder.Rules.Add(r);
+                    harness.ViewModel.AutoResponder.AddRule(r);
                 }
 
                 harness.ViewModel.AutoResponder.Enabled = previousEnabled;

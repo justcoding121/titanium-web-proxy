@@ -458,18 +458,34 @@ public partial class ProxyServer
                 if (streamRequestBody && requestBodyChannel is { } bodyChannel)
                 {
                     var bodyWriter = new Helpers.BodyStreamWriter(connection.Stream, request.IsChunked);
+                    long written = 0;
                     await foreach (var chunk in bodyChannel.Reader.ReadAllAsync(cancellationToken))
                     {
                         try
                         {
                             if (chunk.Length > 0)
+                            {
+                                written += chunk.Length;
                                 await bodyWriter.WriteAsync(chunk.Buffer.AsMemory(0, chunk.Length),
                                     cancellationToken);
+                            }
                         }
                         finally
                         {
                             ArrayPool<byte>.Shared.Return(chunk.Buffer);
                         }
+                    }
+
+                    // Declared Content-Length must match bytes actually streamed; a short body would leave
+                    // the H1 origin waiting and desync the pooled keep-alive socket.
+                    if (!request.IsChunked && request.ContentLength >= 0 && written != request.ContentLength)
+                    {
+                        sessionArgs.HttpClient.CloseServerConnection = true;
+                        Http2Helper.QueueRstStreamFrame(connectionState, clientStream, streamId,
+                            Http2ErrorCode.ProtocolError);
+                        throw new ProxyHttpException(
+                            $"HTTP/2→HTTP/1.1 streamed body length {written} did not match Content-Length {request.ContentLength}.",
+                            null, sessionArgs);
                     }
 
                     await bodyWriter.CompleteAsync(
@@ -721,7 +737,7 @@ public partial class ProxyServer
             }
 
             await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, streamId, connectionState, clientStream,
-                cancellationToken, wireBody: eagerWireBody is { } bytes ? bytes.AsMemory() : null);
+                cancellationToken, wireBody: eagerWireBody is { } bytes ? (ReadOnlyMemory<byte>?)bytes.AsMemory() : null);
 
             if (restoreResponseVersionAfterEmit)
                 sessionArgs.HttpClient.Response.HttpVersion = HttpHeader.Version11;
@@ -765,16 +781,9 @@ public partial class ProxyServer
                         // round trip failed (e.g. the origin dropped the connection mid-body) - an
                         // already-sent HEADERS frame cannot be replaced, so the best this can do is tell the
                         // client the stream ended abnormally instead of silently truncating the body.
-                        await connectionState.ClientWriteLock.WaitAsync(CancellationToken.None);
-                        try
-                        {
-                            await Http2Helper.SendRstStreamAsync(new Http2FrameHeader(), new byte[9], streamId,
-                                Http2ErrorCode.InternalError, clientStream);
-                        }
-                        finally
-                        {
-                            connectionState.ClientWriteLock.Release();
-                        }
+                        // Queue through the FIFO so RST cannot overtake still-queued HEADERS/DATA.
+                        Http2Helper.QueueRstStreamFrame(connectionState, clientStream, streamId,
+                            Http2ErrorCode.InternalError);
                     }
                 }
                 catch (Exception clientErrorFrameEx)
@@ -854,6 +863,8 @@ public partial class ProxyServer
 
             // Build and send the WebSocket upgrade request toward the h1 origin.
             var request = sessionArgs.HttpClient.Request;
+            if (HttpHeaderHygiene.ContainsForbiddenDelimiter(request.RequestUri.PathAndQuery))
+                throw new InvalidOperationException("Request path contains CR, LF, or NUL.");
             var wsKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
             var sb = new StringBuilder();
             sb.Append($"GET {request.RequestUri.PathAndQuery} HTTP/1.1\r\n");
@@ -862,6 +873,8 @@ public partial class ProxyServer
             var authorityStr = request.Host
                 ?? (request.Authority.Length > 0 ? request.Authority.GetString() : null)
                 ?? $"{remoteHostName}:{remotePort}";
+            if (HttpHeaderHygiene.ContainsForbiddenDelimiter(authorityStr))
+                throw new InvalidOperationException("Authority contains CR, LF, or NUL.");
             sb.Append($"Host: {authorityStr}\r\n");
             sb.Append("Upgrade: websocket\r\n");
             sb.Append("Connection: Upgrade\r\n");
@@ -878,6 +891,7 @@ public partial class ProxyServer
                     lname == "connection" || lname == "sec-websocket-key" ||
                     lname == "sec-websocket-version")
                     continue;
+                HttpHeaderHygiene.ThrowIfForbidden(header.Name, header.Value);
                 sb.Append($"{header.Name}: {header.Value}\r\n");
             }
 
@@ -1040,16 +1054,8 @@ public partial class ProxyServer
                     }
                     else
                     {
-                        await ctx.ConnectionState.ClientWriteLock.WaitAsync(CancellationToken.None);
-                        try
-                        {
-                            await Http2Helper.SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
-                                ctx.StreamId, Http2ErrorCode.InternalError, ctx.ClientStream);
-                        }
-                        finally
-                        {
-                            ctx.ConnectionState.ClientWriteLock.Release();
-                        }
+                        Http2Helper.QueueRstStreamFrame(ctx.ConnectionState, ctx.ClientStream,
+                            ctx.StreamId, Http2ErrorCode.InternalError);
                     }
                 }
                 catch (Exception rstEx)

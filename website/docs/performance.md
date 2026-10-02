@@ -55,4 +55,4 @@ with your RPS load probe after enabling if relay throughput matters for your wor
 
 ---
 
-*How we measure:* matched GitHub Actions runners (~4 vCPU / 16 GiB) on Windows, Linux, and macOS; Titanium vs YARP, nginx, HAProxy, and Envoy; same client, origin, warmup, duration, and concurrency (sustain at 64). Absolute RPS varies slightly with runner noise.
+*How we measure:* GitHub Actions runners — Windows / Linux at ~4 vCPU / 16 GiB, macOS at `macos-15` Apple Silicon (3-core / 7 GB). Products are compared within an OS, not across OSes. Titanium vs YARP, nginx, HAProxy, and Envoy; same client, origin, warmup, duration, and concurrency (sustain at 64). Absolute RPS varies slightly with runner noise.

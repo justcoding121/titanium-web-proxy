@@ -77,24 +77,30 @@ internal sealed class Http2FlowController
     ///     Applies the peer's SETTINGS_INITIAL_WINDOW_SIZE (RFC 7540 §6.9.2): the delta from the previous
     ///     value is applied to every currently tracked stream window (which may drive some negative - that
     ///     is valid and callers must simply keep waiting), and the new value becomes the initial window for
-    ///     streams registered after this point.
+    ///     streams registered after this point. Returns <c>true</c> if any stream window would exceed
+    ///     <see cref="MaxWindow"/> (FLOW_CONTROL_ERROR).
     /// </summary>
-    public void OnInitialWindowSizeChanged(int newValue)
+    public bool OnInitialWindowSizeChanged(int newValue)
     {
         lock (gate)
         {
             var delta = (long)newValue - initialStreamWindow;
             initialStreamWindow = newValue;
+            var overflow = false;
             if (delta != 0)
             {
                 var streamIds = new List<int>(streamWindows.Keys);
                 foreach (var id in streamIds)
                 {
-                    streamWindows[id] += delta;
+                    var updated = streamWindows[id] + delta;
+                    streamWindows[id] = updated;
+                    if (updated > MaxWindow)
+                        overflow = true;
                 }
             }
 
             WakeWaitersNoLock();
+            return overflow;
         }
     }
 
@@ -137,7 +143,8 @@ internal sealed class Http2FlowController
     /// <summary>
     ///     Non-blocking variant of <see cref="ReserveAsync"/>. Returns <c>false</c> when credit is
     ///     insufficient instead of waiting. Used to keep HEADERS + first DATA under one write lock
-    ///     when the peer window already has room.
+    ///     when the peer window already has room. Does not register unknown streams: a DATA path
+    ///     that races <see cref="RemoveStream"/> must not leak a window entry or consume connection credit.
     /// </summary>
     public bool TryReserve(int streamId, int bytes)
     {
@@ -146,10 +153,7 @@ internal sealed class Http2FlowController
         lock (gate)
         {
             if (!streamWindows.TryGetValue(streamId, out var streamWindow))
-            {
-                streamWindow = initialStreamWindow;
-                streamWindows[streamId] = streamWindow;
-            }
+                return false;
 
             if (connectionWindow < bytes || streamWindow < bytes)
                 return false;
@@ -164,7 +168,8 @@ internal sealed class Http2FlowController
     ///     Non-blocking reserve of as many of <paramref name="bytes" /> as currently fit in both the
     ///     connection window and the stream window (Kestrel <c>CheckStreamWindow</c> shape). Returns the
     ///     reserved count (0..<paramref name="bytes" />); never waits. Used by the compressed-relay DATA
-    ///     path so a short client window cannot park the shared origin frame reader.
+    ///     path so a short client window cannot park the shared origin frame reader. Unknown streams
+    ///     yield 0 (same race-safe contract as <see cref="TryReserve"/>).
     /// </summary>
     public int TryReservePartial(int streamId, int bytes)
     {
@@ -173,10 +178,7 @@ internal sealed class Http2FlowController
         lock (gate)
         {
             if (!streamWindows.TryGetValue(streamId, out var streamWindow))
-            {
-                streamWindow = initialStreamWindow;
-                streamWindows[streamId] = streamWindow;
-            }
+                return 0;
 
             var streamAvail = streamWindow > 0 ? streamWindow : 0;
             var connAvail = connectionWindow > 0 ? connectionWindow : 0;

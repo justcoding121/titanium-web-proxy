@@ -123,7 +123,7 @@ public class Http2SyntheticFinalizeAndAuthUserPassTests
         };
         response.IsBodyRead = true;
 
-        await Http2Helper.SendBody(settings, response, header, buf, new byte[16], flow, ms,
+        await Http2QueuedSend.SendBody(settings, response, header, buf, 16, flow, ms,
             CancellationToken.None);
 
         Assert.IsTrue(ms.Length > 9);

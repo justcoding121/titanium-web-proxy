@@ -376,4 +376,110 @@ public class Http2ContinuationAndAbuseBudgetTests
 
         cts.Cancel();
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // An ACK applies only to the SETTINGS frame it acknowledges. A later,
+    // lower MAX_CONCURRENT_STREAMS must not be enforced by the previous ACK
+    // (that reset in-flight x.com timeline/comment streams).
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [TestMethod]
+    [Timeout(20_000)]
+    public async Task MaxConcurrentStreams_FirstAckDoesNotEnforceALaterLowerCap()
+    {
+        const int firstCap = 4;
+        const int secondCap = 1;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+        using var rawServer = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        rawServer.HandleConnection(async connection =>
+        {
+            await connection.WriteFrameAsync(Http2FrameType.Settings, 0, 0, MaxConcurrentStreamsPayload(firstCap));
+            await connection.WriteFrameAsync(Http2FrameType.Settings, 0, 0, MaxConcurrentStreamsPayload(secondCap));
+            try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.ResourceLimits = CreateLimits(maxConcurrentStreamsPerConnection: 100);
+
+        var serverUri = new Uri(rawServer.Url);
+        using var rawClient =
+            await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, serverUri.Host, serverUri.Port);
+
+        var first = await rawClient.Connection.ReadSettingsAsync();
+        var second = await rawClient.Connection.ReadSettingsAsync();
+        Assert.AreEqual(firstCap, first[(int)Http2SettingsId.MaxConcurrentStreams]);
+        Assert.AreEqual(secondCap, second[(int)Http2SettingsId.MaxConcurrentStreams]);
+
+        // ACK only the first frame. The second cap is already on the wire, which is the race.
+        await rawClient.Connection.WriteFrameAsync(Http2FrameType.Settings, 0, Http2FrameFlag.Ack,
+            Array.Empty<byte>());
+
+        async Task OpenGetAsync(int streamId)
+        {
+            var headers = rawClient.Connection.EncodeHeaders(
+                new[]
+                {
+                    (":method", "GET"), (":scheme", "https"),
+                    (":authority", $"{serverUri.Host}:{serverUri.Port}"), (":path", "/")
+                },
+                Array.Empty<(string, string)>());
+            await rawClient.Connection.WriteHeaderBlockAsync(streamId, headers, endStream: true);
+        }
+
+        await OpenGetAsync(1);
+        await OpenGetAsync(3);
+
+        Task<Http2RawFrame.Frame>? pendingRead = null;
+        async Task<int?> WaitForRstAsync(int[] streamIds, TimeSpan timeout)
+        {
+            var deadline = DateTime.UtcNow + timeout;
+            while (DateTime.UtcNow < deadline)
+            {
+                pendingRead ??= rawClient.Connection.ReadFrameAsync();
+                var remaining = deadline - DateTime.UtcNow;
+                if (remaining <= TimeSpan.Zero)
+                    break;
+
+                var finished = await Task.WhenAny(pendingRead, Task.Delay(remaining));
+                if (finished != pendingRead)
+                    return null;
+
+                var frame = await pendingRead;
+                pendingRead = null;
+                if (frame.Type == Http2FrameType.RstStream && Array.IndexOf(streamIds, frame.StreamId) >= 0)
+                    return frame.StreamId;
+            }
+
+            return null;
+        }
+
+        var earlyRefusal = await WaitForRstAsync(new[] { 1, 3 }, TimeSpan.FromMilliseconds(400));
+        Assert.IsNull(earlyRefusal,
+            "Streams within the ACKed cap must not be refused because a later SETTINGS lowered the cap.");
+
+        await rawClient.Connection.WriteFrameAsync(Http2FrameType.Settings, 0, Http2FrameFlag.Ack,
+            Array.Empty<byte>());
+        await OpenGetAsync(5);
+
+        var refused = await WaitForRstAsync(new[] { 5 }, TimeSpan.FromSeconds(3));
+        Assert.AreEqual(5, refused,
+            "After the second SETTINGS is ACKed, a new stream past that cap must be REFUSED_STREAM.");
+
+        cts.Cancel();
+    }
+
+    private static byte[] MaxConcurrentStreamsPayload(int cap)
+    {
+        var payload = new byte[6];
+        var id = (int)Http2SettingsId.MaxConcurrentStreams;
+        payload[0] = (byte)((id >> 8) & 0xff);
+        payload[1] = (byte)(id & 0xff);
+        payload[2] = (byte)((cap >> 24) & 0xff);
+        payload[3] = (byte)((cap >> 16) & 0xff);
+        payload[4] = (byte)((cap >> 8) & 0xff);
+        payload[5] = (byte)(cap & 0xff);
+        return payload;
+    }
 }
