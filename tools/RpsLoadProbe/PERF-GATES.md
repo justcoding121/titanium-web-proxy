@@ -139,4 +139,24 @@ Baseline product is `c6b39165` (same library as the published tables @ `41f4adee
 - H2 bodies over 64 KiB: DATA payload is trimmed to advertised send credit when that credit is at least 4 KiB and short of `MAX_FRAME_SIZE`. `ReserveAsync` stays all-or-nothing. Ship only if Linux `body256k` is at least +2% and the 64 KiB arm does not drop by more than 3%.
 - H3 small frames: per-stream scratch, consumed before reuse. Do not return it to the pool while a write is in flight (e781b009). Tiny HEADERS+DATA coalesce and skip-Flush stay off this change.
 
+Verification dispatched on `f2061c27` (do not mix with `c6b39165` baseline runs):
+
+| Run | Mode | OS |
+|-----|------|----|
+| [37004979850](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37004979850) | `compare-ws-h2` | Linux |
+| [37004984433](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37004984433) | `compare-ws-h2` | Windows |
+| [37004988043](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37004988043) | `compare-ws-h2` | macOS |
+| [37004992722](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37004992722) | `compare-spot` | Linux |
+| [37004996572](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37004996572) | `compare-spot` | Windows |
+| [37005000462](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37005000462) | `compare-bodies` 1/2 | Linux |
+| [37005004373](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37005004373) | `compare-bodies` 2/2 | Linux |
+| [37005008306](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37005008306) | `compare-bodies` 1/2 | Windows |
+| [37005012067](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37005012067) | `compare-bodies` 2/2 | Windows |
+| [37005016067](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37005016067) | `compare-http3-cleartext` | Linux |
+| [37005020668](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37005020668) | `compare-http3-cleartext` | Windows |
+| [37005024499](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37005024499) | `compare-product` `http3-to-https-http1` | Linux |
+| [37005028454](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37005028454) | `compare-product` `http3-to-https-http1` | Windows |
+
+Mac bodies / Mac H3 wait until the in-flight macOS queue on `c6b39165` drains. `compare-spot` is the cross-arm regression check; full `compare-product` shards are not re-run for this change.
+
 On gate failure: classify (real regression / miscalibrated threshold / runner noise / harness bug / build-env), fix the root cause, and re-run until **Win and Linux pass** (required). For wiki-grade `compare-product`, also require **`macos-15`** (Apple Silicon; historical results before 2026-10-01 were on `macos-15-intel`) before publishing Mac tables. Partial OS **gate** passes do not count as a green product gate. Gate steps **hard-fail** the job on every event (including manual `workflow_dispatch`); CSVs still upload via `if: always()`, and `fail-fast: false` never cancels sibling matrix legs for a gate miss. Cross-version thresholds (0.95 / 1.10) match the same-version gate and must not be relaxed for code convenience.
