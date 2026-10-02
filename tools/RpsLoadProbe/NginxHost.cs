@@ -249,6 +249,11 @@ internal sealed class NginxHost : IDisposable
 
         var confPath = Path.Combine(prefixDir, "conf", "nginx.conf");
         var conf = confBuilder(prefixDir, port);
+        // GHA macos-15 is 3-core / 7 GiB; worker_processes auto plus a concurrent load
+        // generator has wedged the VM during plain nginx-reverse-http1 (lost-communication
+        // ~45m later). Cap workers on Darwin; leave auto elsewhere.
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            conf = conf.Replace("worker_processes auto;", "worker_processes 1;", StringComparison.Ordinal);
         await File.WriteAllTextAsync(confPath, conf, Encoding.ASCII);
 
         // Official nginx.org packages compile in /var/log/nginx/error.log and open it before

@@ -96,8 +96,41 @@ try {
         if ($w1.Count -ne $ws.Count -or $w2.Count -ne 0) {
             throw "$mode should be one group (shard1=$($w1.Count) shard2=$($w2.Count) all=$($ws.Count))"
         }
-        Write-Host "OK: $mode $($ws.Count) arms stay on one shard" -ForegroundColor Green
+    Write-Host "OK: $mode $($ws.Count) arms stay on one shard" -ForegroundColor Green
     }
+
+    function Assert-ShardUnion([string] $Mode, [int] $N, [string] $Label) {
+        Write-Host "Validating $Mode $N-way shards ($Label)..." -ForegroundColor Cyan
+        $all = @(Get-Arms $Mode)
+        if ($all.Count -lt 2) { throw "Expected $Mode arms; got $($all.Count)" }
+        $parts = @()
+        for ($i = 1; $i -le $N; $i++) {
+            $parts += ,@(Get-Arms $Mode "$i/$N")
+        }
+        $union = @($parts | ForEach-Object { $_ } | Select-Object -Unique)
+        if ($union.Count -ne $all.Count) {
+            throw "$Mode ${N}-way union size $($union.Count) != all $($all.Count)"
+        }
+        for ($a = 0; $a -lt $N; $a++) {
+            for ($b = $a + 1; $b -lt $N; $b++) {
+                $inter = $parts[$a] | Where-Object { $parts[$b] -contains $_ }
+                if ($inter) {
+                    throw ("{0} shard {1}/{2} intersects {3}/{2}: {4}" -f $Mode, ($a + 1), $N, ($b + 1), ($inter -join ', '))
+                }
+            }
+        }
+        $counts = ($parts | ForEach-Object { $_.Count }) -join '/'
+        Write-Host "OK: $Mode $($all.Count) arms -> $counts ($Label)" -ForegroundColor Green
+    }
+
+    # Mac Apple Silicon wiki refresh uses finer shards (PERF-GATES.md).
+    Assert-ShardUnion 'compare-product' 9 'Mac product'
+    Assert-ShardUnion 'compare-bodies' 4 'Mac bodies'
+    Assert-ShardUnion 'compare-arch' 6 'Mac arch'
+    Assert-ShardUnion 'compare-grpc' 4 'Mac grpc'
+    Assert-ShardUnion 'compare-post' 2 'Mac post'
+    Assert-ShardUnion 'compare-lossy' 2 'Mac lossy'
+    Assert-ShardUnion 'compare-tls-cost' 2 'Mac tls-cost'
 }
 finally {
     Pop-Location

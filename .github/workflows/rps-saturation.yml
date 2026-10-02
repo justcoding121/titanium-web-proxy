@@ -835,7 +835,11 @@ jobs:
       # Pass workflow_dispatch inputs via env (not ${{ }} in the script) to avoid
       # githubactions:S7630 script-injection findings on user-controlled values.
       - name: Run saturation ramp
-        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 110 || 345))) }}
+        id: ramp
+        # macOS Apple Silicon (3-core) has been reclaiming wedged VMs ~47-48m after start with
+        # "lost communication" and 0 artifacts. Cap the ramp so step cancel + Upload CSV can save
+        # a partial CSV before the host dies. Other OS keep the long wiki-grade budget.
+        timeout-minutes: ${{ runner.os == 'macOS' && 40 || (github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 110 || 345)))) }}
         shell: pwsh
         env:
           RPS_MODE: ${{ env.RPS_MODE }}
@@ -868,6 +872,22 @@ jobs:
             -BombardierCheck `
             @containsArgs `
             @hapArgs
+
+      - name: Mark incomplete ramp
+        if: always() && steps.ramp.outcome != 'success'
+        shell: pwsh
+        env:
+          RAMP_OUTCOME: ${{ steps.ramp.outcome }}
+        run: |
+          $dir = 'tools/RpsLoadProbe/results'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          @(
+            "ramp_outcome=$env:RAMP_OUTCOME"
+            "marked_at_utc=$((Get-Date).ToUniversalTime().ToString('o'))"
+            "os=$env:RUNNER_OS"
+            "arm_shard=$env:RPS_ARM_SHARD"
+          ) | Set-Content -LiteralPath (Join-Path $dir 'INCOMPLETE.txt') -Encoding utf8
+          Write-Host "Wrote INCOMPLETE.txt (ramp outcome=$env:RAMP_OUTCOME)"
 
       - name: Sanitize artifact shard label
         if: always()
@@ -970,3 +990,11 @@ jobs:
           name: rps-csv-${{ matrix.os }}-shard-${{ env.RPS_ARTIFACT_SHARD }}
           path: tools/RpsLoadProbe/results/rps-ramp-*.csv
           if-no-files-found: error
+
+      - name: Upload incomplete marker
+        if: always() && hashFiles('tools/RpsLoadProbe/results/INCOMPLETE.txt') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: rps-incomplete-${{ matrix.os }}-shard-${{ env.RPS_ARTIFACT_SHARD }}
+          path: tools/RpsLoadProbe/results/INCOMPLETE.txt
+          if-no-files-found: ignore

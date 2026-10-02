@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 
 namespace Titanium.Web.Proxy.RpsLoadProbe;
 
@@ -373,8 +375,14 @@ internal static class RampOrchestrator
                 && !PeerWire.IsHttp3ClientOrOrigin(a.Mode)).ToList();
         }
 
+        arms = MoveNginxArmsLastWithinGroups(arms);
+
         if (options.ArmShard is { } shard)
             arms = ApplyArmShard(arms, shard.Index, shard.Count);
+
+        // After sharding: run every nginx peer last in the job so a macOS nginx wedge
+        // cannot take down non-nginx arms that already finished (CSV rows are flushed).
+        arms = MoveNginxArmsToEnd(arms);
 
         if (!string.IsNullOrWhiteSpace(options.ArmNameContains))
         {
@@ -462,6 +470,8 @@ internal static class RampOrchestrator
                 ProbeLog.Info("QuicListener is not supported on this host — skipping HTTP/3 arms.");
         }
 
+        arms = MoveNginxArmsLastWithinGroups(arms);
+
         if (options.ArmShard is { } shard)
         {
             var before = arms.Count;
@@ -469,6 +479,8 @@ internal static class RampOrchestrator
             ProbeLog.Info(
                 $"arm-shard {shard.Index}/{shard.Count}: {arms.Count}/{before} arms after capability filter.");
         }
+
+        arms = MoveNginxArmsToEnd(arms);
 
         if (!string.IsNullOrWhiteSpace(options.ArmNameContains))
         {
@@ -556,6 +568,7 @@ internal static class RampOrchestrator
         var rssByArm = new Dictionary<string, List<long>>(StringComparer.Ordinal);
         var cpuByArm = new Dictionary<string, List<double>>(StringComparer.Ordinal);
         var repeats = Math.Max(1, options.Repeats);
+        var rampClock = Stopwatch.StartNew();
         for (var rep = 1; rep <= repeats; rep++)
         {
             if (repeats > 1)
@@ -570,11 +583,15 @@ internal static class RampOrchestrator
 
             foreach (var arm in arms)
             {
-                ProbeLog.Info($"--- arm {arm.Name} ---");
+                var elapsed = rampClock.Elapsed;
+                ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
+                    $"--- arm {arm.Name} starting --- elapsed={elapsed.TotalMinutes:F1}m"));
                 ArmPeakResult peak;
                 using (var armCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
                 {
                     armCts.CancelAfter(armTimeout);
+                    using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(armCts.Token);
+                    var heartbeat = StartArmHeartbeat(arm.Name, rampClock, heartbeatCts.Token);
                     try
                     {
                         peak = await RunArmAsync(arm, options, csv, nginxVersion, haproxyVersion, envoyVersion,
@@ -596,7 +613,17 @@ internal static class RampOrchestrator
                         ProbeLog.Error($"Arm {arm.Name} failed: {ex.GetType().Name}: {ex.Message}");
                         peak = new ArmPeakResult(0, null, null);
                     }
+                    finally
+                    {
+                        heartbeatCts.Cancel();
+                        try { await heartbeat.ConfigureAwait(false); }
+                        catch (OperationCanceledException) { /* expected */ }
+                    }
                 }
+
+                ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
+                    $"--- arm {arm.Name} done --- elapsed={rampClock.Elapsed.TotalMinutes:F1}m peak_rps={peak.PeakRps:F0}"));
+                SweepMacStrayPeers();
 
                 if (!peakByArm.TryGetValue(arm.Name, out var list))
                 {
@@ -962,13 +989,15 @@ internal static class RampOrchestrator
         var i = arms.FindIndex(a => a.Mode == yarpMode);
         if (i < 0)
             return;
+        // Insert nginx last among native peers so a macOS nginx wedge cannot take down
+        // already-measured TWP/YARP/HAProxy/Envoy rows in the same comparison group.
         var insertAt = i + 1;
-        if (nginxAvailable && nginxMode is { } nm && nginxName != null)
-            arms.Insert(insertAt++, new(nginxName, nm, null, workload));
         if (haproxyAvailable)
             arms.Insert(insertAt++, new(haproxyName, haproxyMode, null, workload));
         if (envoyAvailable)
-            arms.Insert(insertAt, new(envoyName, envoyMode, null, workload));
+            arms.Insert(insertAt++, new(envoyName, envoyMode, null, workload));
+        if (nginxAvailable && nginxMode is { } nm && nginxName != null)
+            arms.Insert(insertAt, new(nginxName, nm, null, workload));
     }
 
     private static bool NativeWireAvailable(NativePeerWire wire, bool nginxAvailable, bool haproxyAvailable,
@@ -992,12 +1021,12 @@ internal static class RampOrchestrator
         if (i < 0)
             return;
         var insertAt = i + 1;
-        if (nginxAvailable && nginxName != null && PeerWire.TryParseName(nginxName, out var nginxMode))
-            arms.Insert(insertAt++, new(nginxName, nginxMode, null));
         if (haproxyAvailable && haproxyName != null && PeerWire.TryParseName(haproxyName, out var haproxyMode))
             arms.Insert(insertAt++, new(haproxyName, haproxyMode, null));
         if (envoyAvailable && envoyName != null && PeerWire.TryParseName(envoyName, out var envoyMode))
-            arms.Insert(insertAt, new(envoyName, envoyMode, null));
+            arms.Insert(insertAt++, new(envoyName, envoyMode, null));
+        if (nginxAvailable && nginxName != null && PeerWire.TryParseName(nginxName, out var nginxMode))
+            arms.Insert(insertAt, new(nginxName, nginxMode, null));
     }
 
     private static IReadOnlyList<ArmSpec> ResolveArms(ProbeMode mode, bool nginxAvailable,
@@ -1752,30 +1781,30 @@ internal static class RampOrchestrator
             if (i >= 0)
             {
                 var insertAt = i + 1;
-                if (nginxHttp3Available)
-                    arms.Insert(insertAt++,
-                        new("nginx-reverse-http3-cleartext", ProbeMode.NginxReverseHttp3Cleartext, null));
                 if (haproxyHttp3Available)
                     arms.Insert(insertAt++,
                         new("haproxy-reverse-http3-cleartext", ProbeMode.HaproxyReverseHttp3Cleartext, null));
                 if (envoyHttp3Available)
-                    arms.Insert(insertAt,
+                    arms.Insert(insertAt++,
                         new("envoy-reverse-http3-cleartext", ProbeMode.EnvoyReverseHttp3Cleartext, null));
+                if (nginxHttp3Available)
+                    arms.Insert(insertAt,
+                        new("nginx-reverse-http3-cleartext", ProbeMode.NginxReverseHttp3Cleartext, null));
             }
 
             i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp3ToHttpsHttp1);
             if (i >= 0)
             {
                 var insertAt = i + 1;
-                if (nginxHttp3Available)
-                    arms.Insert(insertAt++,
-                        new("nginx-reverse-http3-to-https-http1", ProbeMode.NginxReverseHttp3ToHttpsHttp1, null));
                 if (haproxyHttp3Available)
                     arms.Insert(insertAt++,
                         new("haproxy-reverse-http3-to-https-http1", ProbeMode.HaproxyReverseHttp3ToHttpsHttp1, null));
                 if (envoyHttp3Available)
-                    arms.Insert(insertAt,
+                    arms.Insert(insertAt++,
                         new("envoy-reverse-http3-to-https-http1", ProbeMode.EnvoyReverseHttp3ToHttpsHttp1, null));
+                if (nginxHttp3Available)
+                    arms.Insert(insertAt,
+                        new("nginx-reverse-http3-to-https-http1", ProbeMode.NginxReverseHttp3ToHttpsHttp1, null));
             }
         }
 
@@ -2267,8 +2296,99 @@ internal static class RampOrchestrator
     /// <paramref name="shardCount"/> (1-based). Groups are first-seen order; group k → shard
     /// (k % n) + 1. Preserves original arm order inside the shard so peers stay back-to-back.
     /// </summary>
+    /// <summary>
+    /// Within each comparison group, run nginx peers last so a macOS nginx wedge cannot
+    /// prevent TWP/YARP (and other natives) from writing CSV rows for that wiki row.
+    /// </summary>
+    private static List<ArmSpec> MoveNginxArmsLastWithinGroups(List<ArmSpec> arms)
+    {
+        var result = new List<ArmSpec>(arms.Count);
+        var i = 0;
+        while (i < arms.Count)
+        {
+            var key = ComparisonGroup.Key(arms[i].Mode, arms[i].Name);
+            var group = new List<ArmSpec>();
+            while (i < arms.Count &&
+                   string.Equals(ComparisonGroup.Key(arms[i].Mode, arms[i].Name), key, StringComparison.Ordinal))
+            {
+                group.Add(arms[i++]);
+            }
+
+            result.AddRange(group.Where(a => !a.Name.StartsWith("nginx-", StringComparison.Ordinal)));
+            result.AddRange(group.Where(a => a.Name.StartsWith("nginx-", StringComparison.Ordinal)));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Stable partition: every non-nginx arm first, then every nginx arm. Used after sharding.
+    /// </summary>
+    private static List<ArmSpec> MoveNginxArmsToEnd(List<ArmSpec> arms)
+    {
+        var nonNginx = arms.Where(a => !a.Name.StartsWith("nginx-", StringComparison.Ordinal)).ToList();
+        var nginx = arms.Where(a => a.Name.StartsWith("nginx-", StringComparison.Ordinal)).ToList();
+        if (nginx.Count == 0)
+            return arms;
+        nonNginx.AddRange(nginx);
+        return nonNginx;
+    }
+
     private static List<ArmSpec> ApplyArmShard(List<ArmSpec> arms, int shardIndex, int shardCount) =>
         ComparisonGroup.ApplyShard(arms, a => ComparisonGroup.Key(a.Mode, a.Name), shardIndex, shardCount);
+
+    /// <summary>
+    /// Periodic "still alive" line so GHA log tails show progress when a measure step is long.
+    /// </summary>
+    private static Task StartArmHeartbeat(string armName, Stopwatch rampClock, CancellationToken cancellationToken) =>
+        Task.Run(async () =>
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+
+                ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
+                    $"  heartbeat arm={armName} elapsed={rampClock.Elapsed.TotalMinutes:F1}m"));
+            }
+        }, cancellationToken);
+
+    /// <summary>
+    /// Best-effort cleanup of orphaned peer binaries between arms on macOS. A wedged leftover
+    /// nginx/haproxy/envoy can starve the 3-core / 7 GiB GHA runner and trigger lost-communication.
+    /// </summary>
+    private static void SweepMacStrayPeers()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            return;
+
+        foreach (var name in new[] { "nginx", "haproxy", "envoy" })
+        {
+            try
+            {
+                using var p = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "/usr/bin/pkill",
+                    Arguments = "-x " + name,
+                    UseShellExecute = false,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true,
+                    CreateNoWindow = true
+                });
+                p?.WaitForExit(3000);
+            }
+            catch
+            {
+                // best effort
+            }
+        }
+    }
 
     /// <summary>
     /// Budget: child start + one full concurrency ramp (warmup+measure+overhead per step) + margin.

@@ -39,10 +39,25 @@ Do **not** run full `compare-product` on every develop PR. Thresholds change onl
 | Beta / stable publish | push to `beta`/`stable` | `compare-editions` + parallel `compare-spot` ([`run-spot-matrix.ps1`](run-spot-matrix.ps1)) | ~60 min wall |
 | Pre-wiki smoke (required) | after Core / harness changes | **`compare-product-smoke`** Linux **2** comparison-group shards (`repeats=1`) before full product | ~30–60 min |
 | Cross-version (Gate 2) | before `v7.0.0` tag | `compare-cross-version` + [`validate-cross-version.ps1`](validate-cross-version.ps1) | ~1–2h |
-| Release / wiki refresh | release SHA | `compare-product` (median of 3) on Win/Linux/mac with **`arm_shard` 1/3,2/3,3/3** (comparison groups); paste `-RunIds` union | ~2–2½h wall (360m hard cap) |
-| Unary gRPC | as needed | `compare-grpc` (H2↔H2 + H2→h2c; shard 1/2 + 2/2) | ~20–50 min |
+| Release / wiki refresh | release SHA | `compare-product` (median of 3) on **Win/Linux** with **`arm_shard` 1/3,2/3,3/3**; on **macos-15** use the Mac shard table below; paste `-RunIds` union | Win/Linux ~2–2½h wall; Mac serial ~longer (360m hard cap) |
+| Unary gRPC | as needed | `compare-grpc` (H2↔H2 + H2→h2c; Win/Linux shard 1/2 + 2/2; Mac see table) | ~20–50 min |
 | WebSocket dual-TLS / RFC 8441 | as needed | `compare-ws-h1tls` / `compare-ws-h2` | ~15–40 min each |
-| Heavier wiki tables | as needed | `compare-bodies` (**2** shards) / `post` / `lossy` / `arch` (**3** shards) / `tls-cost` | 30–90 min each |
+| Heavier wiki tables | as needed | `compare-bodies` (Win/Linux **2** shards) / `post` / `lossy` / `arch` (Win/Linux **3** shards) / `tls-cost`; Mac see table | 30–90 min each |
+
+### Mac Apple Silicon (`macos-15`) shard counts
+
+Hosted `macos-15` is 3-core / 7 GiB. Wedged ramps have been killed by GitHub at ~47–48m with "lost communication" and **0 artifacts** (often during `nginx-reverse-http1`). Use **finer shards** so a dying VM loses fewer arms, keep **≤2–3 concurrent** Mac jobs, and prefer **serial** dispatch for wiki refresh. Ramp step `timeout-minutes` is **40** on macOS so a partial CSV can still upload (`INCOMPLETE.txt` marks the shard for re-dispatch).
+
+| Mode | Win/Linux shards | Mac shards (target ≤ ~15–18 arms / ~38m) |
+|------|------------------|------------------------------------------|
+| `compare-product` | 3 | **9** (`1/9` … `9/9`) |
+| `compare-bodies` | 2 | **4** |
+| `compare-arch` | 3 | **6** |
+| `compare-grpc` | 2 | **4** |
+| `compare-post` / `compare-lossy` / `compare-tls-cost` | 1 | **2** or **3** |
+| `compare-saturation` / `compare-ws-*` | 1 | 1 (only shard further if a run exceeds ~38m) |
+
+Validate locally with [`validate-arm-shards.ps1`](validate-arm-shards.ps1) (includes Mac product 9-way / bodies 4-way / arch 6-way / grpc 4-way checks). Paste scripts already union `rps-csv-<os>-shard-*`.
 
 Do **not** run full `compare-product` as a daily smoke. Prefer TWP÷YARP / TWP÷nginx / edition ratios over absolute RPS. Shards keep one Client×Origin row on one VM — do not compare absolute RPS across shards. Early-stop (`--stop-on-slo-fail`, default on) aborts an arm after the first SLO fail plus one peak confirmation step. Local shard check: [`validate-arm-shards.ps1`](validate-arm-shards.ps1).
 
