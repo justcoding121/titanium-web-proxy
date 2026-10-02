@@ -358,6 +358,8 @@ Phase 0–2 on tip after `062f4e72` (H2 correctness ~+1.5k LOC). Mac not profile
 
 Pinned at `c6b39165`. Product code matches the published Windows/Linux tables @ `41f4adee` (commits after that SHA are wiki, docs, and the macOS ramp timeout only). In-flight `rps-saturation` runs on `c6b39165` / `be4d4e89` are the same product. Do not mix those CSVs with runs taken after the harness or flow-control changes below.
 
+WS H2 harness fix (CI-proven, `f2061c27`): Linux median **42,050** vs the old **1,532** (HAProxy **38,112** vs **1,537**). Windows **28,294** vs **23,836**. The client had Nagle on and wrote the HTTP/2 frame as two TLS records, so both peers waited out the Linux delayed ACK. Runs [37004979850](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37004979850) / [37004984433](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37004984433) / [37004988043](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37004988043). macOS median is noisy (6.1k / 7.7k / 19.4k).
+
 
 ## Guardrails while optimizing
 
