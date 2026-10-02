@@ -836,10 +836,11 @@ jobs:
       # githubactions:S7630 script-injection findings on user-controlled values.
       - name: Run saturation ramp
         id: ramp
-        # macOS Apple Silicon (3-core) has been reclaiming wedged VMs ~47-48m after start with
-        # "lost communication" and 0 artifacts. Cap the ramp so step cancel + Upload CSV can save
-        # a partial CSV before the host dies. Other OS keep the long wiki-grade budget.
-        timeout-minutes: ${{ runner.os == 'macOS' && 40 || (github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 110 || 345)))) }}
+        # macOS Apple Silicon (3-core) has been reclaiming *wedged* VMs ~47-48m after start with
+        # "lost communication" and 0 artifacts. Healthy ramps routinely run past that. Cap the ramp
+        # so a true hang still uploads a partial CSV before a long stall, but allow ~55m so a
+        # ~13-arm / repeats=3 shard (often ~39-45m) can finish without INCOMPLETE churn.
+        timeout-minutes: ${{ runner.os == 'macOS' && 55 || (github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 110 || 345)))) }}
         shell: pwsh
         env:
           RPS_MODE: ${{ env.RPS_MODE }}
