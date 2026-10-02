@@ -126,17 +126,14 @@ def load_arm_medians(csvs: list[Path]) -> dict[str, dict[str, float]]:
     return out
 
 
-GOLD = "\U0001F947"
-SILVER = "\U0001F948"
-BRONZE = "\U0001F949"
-MEDALS = (GOLD, SILVER, BRONZE)
+MEDAL = "\U0001F947"
 
 
 def cell(
     stats: Optional[dict[str, float]],
     impossible: Optional[str] = None,
     *,
-    medal: Optional[str] = None,
+    medal: bool = False,
 ) -> str:
     if impossible:
         return f"*{impossible}*"
@@ -150,20 +147,21 @@ def cell(
     rps = int(round(sustain)) if sustain == sustain else 0
     rss_s = f"{rss:.0f} MiB" if rss == rss else "?"
     cpu_s = f"{cpu:.1f}% CPU" if cpu == cpu else "?"
-    prefix = f"{medal} " if medal else ""
+    prefix = f"{MEDAL} " if medal else ""
     return f"{prefix}**{rps:,}**<br><sub>({rss_s} / {cpu_s})</sub>"
 
 
-def pick_row_medals(
+def pick_row_winner(
     products: list[str],
     arms: dict[str, Optional[str]],
     data: dict[str, dict[str, float]],
     *,
     os_key: str,
     win_no_haproxy_envoy: bool,
-) -> dict[str, str]:
-    """Top-3 sustain > 0 among OS-possible peers; ties break on lower RSS then CPU."""
-    ranked: list[tuple[tuple[float, float, float], str]] = []
+) -> Optional[str]:
+    """Highest sustain > 0 among OS-possible peers; ties break on lower RSS then CPU."""
+    best_name: Optional[str] = None
+    best_key: Optional[tuple[float, float, float]] = None
     for product in products:
         arm = arms.get(product)
         if arm is None:
@@ -182,9 +180,11 @@ def pick_row_medals(
             rss = float("inf")
         if cpu != cpu:
             cpu = float("inf")
-        ranked.append(((-sustain, rss, cpu), product))
-    ranked.sort(key=lambda item: item[0])
-    return {name: MEDALS[i] for i, (_, name) in enumerate(ranked[:3])}
+        key = (-sustain, rss, cpu)
+        if best_key is None or key < best_key:
+            best_key = key
+            best_name = product
+    return best_name
 
 
 def render_table(
@@ -216,7 +216,7 @@ def render_table(
     lines.extend([header, rule])
     for os_label, os_key in (("Windows", "windows"), ("Linux", "linux"), ("macOS", "macos")):
         data = by_os.get(os_key, {})
-        medals = pick_row_medals(
+        winner = pick_row_winner(
             products, arms, data, os_key=os_key, win_no_haproxy_envoy=win_no_haproxy_envoy
         )
         cells = []
@@ -227,7 +227,7 @@ def render_table(
             elif win_no_haproxy_envoy and os_key == "windows" and product in ("HAProxy", "Envoy"):
                 cells.append(cell(None, "Not possible"))
             else:
-                cells.append(cell(data.get(arm), medal=medals.get(product)))
+                cells.append(cell(data.get(arm), medal=(winner == product)))
         lines.append("| " + " | ".join([os_label, *cells]) + " |")
     return "\n".join(lines)
 
