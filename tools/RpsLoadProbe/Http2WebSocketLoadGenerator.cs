@@ -125,6 +125,8 @@ internal static class Http2WebSocketLoadGenerator
         private readonly Stream stream;
         private readonly Titanium.Web.Proxy.Http2.Hpack.Encoder encoder = new(4096);
         private readonly Titanium.Web.Proxy.Http2.Hpack.Decoder decoder = new(4096, 8192);
+        // One buffer for header + payload. EchoOnceAsync is awaited, so this is not reused mid-write.
+        private byte[] frameScratch = new byte[256];
         private int nextStreamId = 1;
         private int activeStreamId;
         private bool tunnelOpen;
@@ -143,7 +145,7 @@ internal static class Http2WebSocketLoadGenerator
             if (!string.Equals(target.Scheme, "https", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("RFC 8441 probe requires https:// reverse listen.");
 
-            var tcp = new TcpClient();
+            var tcp = new TcpClient { NoDelay = true };
             await tcp.ConnectAsync(target.Host, target.Port, cancellationToken);
             var ssl = new SslStream(tcp.GetStream(), leaveInnerStreamOpen: false,
                 static (_, _, _, _) => true);
@@ -323,20 +325,24 @@ internal static class Http2WebSocketLoadGenerator
         private async Task WriteFrameAsync(Http2FrameType type, int streamId, Http2FrameFlag flags, byte[] payload,
             CancellationToken cancellationToken)
         {
-            var header = new byte[9];
+            // One TLS record. Two WriteAsync calls (9-byte header, then payload) plus Nagle
+            // (NoDelay off) stalled Linux loopback for a delayed ACK (~40 ms) per echo.
             var length = payload.Length;
-            header[0] = (byte)((length >> 16) & 0xff);
-            header[1] = (byte)((length >> 8) & 0xff);
-            header[2] = (byte)(length & 0xff);
-            header[3] = (byte)type;
-            header[4] = (byte)flags;
-            header[5] = (byte)((streamId >> 24) & 0x7f);
-            header[6] = (byte)((streamId >> 16) & 0xff);
-            header[7] = (byte)((streamId >> 8) & 0xff);
-            header[8] = (byte)(streamId & 0xff);
-            await stream.WriteAsync(header, cancellationToken);
+            var total = 9 + length;
+            if (frameScratch.Length < total)
+                frameScratch = new byte[total];
+            frameScratch[0] = (byte)((length >> 16) & 0xff);
+            frameScratch[1] = (byte)((length >> 8) & 0xff);
+            frameScratch[2] = (byte)(length & 0xff);
+            frameScratch[3] = (byte)type;
+            frameScratch[4] = (byte)flags;
+            frameScratch[5] = (byte)((streamId >> 24) & 0x7f);
+            frameScratch[6] = (byte)((streamId >> 16) & 0xff);
+            frameScratch[7] = (byte)((streamId >> 8) & 0xff);
+            frameScratch[8] = (byte)(streamId & 0xff);
             if (length > 0)
-                await stream.WriteAsync(payload.AsMemory(0, length), cancellationToken);
+                payload.AsSpan(0, length).CopyTo(frameScratch.AsSpan(9));
+            await stream.WriteAsync(frameScratch.AsMemory(0, total), cancellationToken);
         }
 
         private async Task<Frame> ReadFrameAsync(CancellationToken cancellationToken)
