@@ -21,6 +21,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+trap {
+    Write-Log "WAITER CRASH: $($_.Exception.Message)"
+    break
+}
 
 if (-not $LogPath) {
     $LogPath = Join-Path (Split-Path -Parent $MapPath) 'wiki-publish-waiter.log'
@@ -104,6 +108,38 @@ function Ensure-MacSlots($map) {
         $map.mac | Add-Member -NotePropertyName $key -NotePropertyValue @($existing) -Force
     }
     return $map
+}
+
+# compare-grpc has two comparison groups, so Mac shards 3/4 and 4/4 run zero arms
+# and the probe exits 2. Remember those run IDs so the waiter does not re-dispatch them.
+$NoArmsPath = Join-Path (Split-Path -Parent $MapPath) 'wiki-publish-no-arms.txt'
+$script:NoArms = [System.Collections.Generic.HashSet[long]]::new()
+$script:NoArmsChecked = [System.Collections.Generic.HashSet[long]]::new()
+if (Test-Path -LiteralPath $NoArmsPath) {
+    foreach ($line in Get-Content -LiteralPath $NoArmsPath) {
+        $id = 0L
+        if ([long]::TryParse($line.Trim(), [ref]$id) -and $id -gt 0) { [void]$script:NoArms.Add($id) }
+    }
+}
+
+function Test-NoArmsRun([long] $RunId) {
+    if ($RunId -le 0) { return $false }
+    if ($script:NoArms.Contains($RunId)) { return $true }
+    if ($script:NoArmsChecked.Contains($RunId)) { return $false }
+    [void]$script:NoArmsChecked.Add($RunId)
+    try {
+        $log = & gh run view $RunId --repo $Repo --log-failed 2>&1 | Out-String
+        if ($log -match 'No arms to run for this mode/host combination') {
+            [void]$script:NoArms.Add($RunId)
+            Add-Content -LiteralPath $NoArmsPath -Value $RunId
+            Write-Log "NO-ARMS shard run $RunId (empty after shard/capability filter) — counted ready"
+            return $true
+        }
+    }
+    catch {
+        Write-Log "no-arms probe failed for $RunId : $($_.Exception.Message)"
+    }
+    return $false
 }
 
 function Get-RunCsvCount([long] $RunId) {
@@ -216,6 +252,10 @@ while ($true) {
 
             $csvN = Get-RunCsvCount $runId
             if ($csvN -gt 0) {
+                $ready++
+                continue
+            }
+            if ($csvN -eq 0 -and (Test-NoArmsRun $runId)) {
                 $ready++
                 continue
             }

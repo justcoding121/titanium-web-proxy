@@ -132,7 +132,21 @@ Calibration for the shared 4 vCPU loopback shape: how close client + origin are 
 | yarp-reverse-http1 | dotnet-httpclient | **27,147**<br><sub>(114 MiB / 50.6% CPU)</sub> | **40.0%** |
 | twp-reverse-http1 | dotnet-httpclient | **31,727**<br><sub>(85 MiB / 49.7% CPU)</sub> | **46.8%** |
 
-Reverse peers are about **51–48%** of the origin-direct HttpClient peak on this runner class (Win TWP **51.2%**, Lin TWP **47.9%**). Prefer the **%** column over absolute RPS across runs. Bare and origin-direct are controls (not medal peers).
+
+**macOS** (`macos-15`, Apple Silicon)
+
+| Arm | Generator | RPS | % of origin-HttpClient |
+|---|---|---:|---:|
+| origin-direct | dotnet-httpclient | **8,344**<br><sub>(89 MiB / 5.9% CPU)</sub> | **100.0%** |
+| origin-direct-bombardier | bombardier | **39,982**<br><sub>(89 MiB / 23.1% CPU)</sub> | **479.2%** |
+| bare-reverse-http1 | dotnet-httpclient | **19,997**<br><sub>(82 MiB / 26.7% CPU)</sub> | **239.7%** |
+| nginx-reverse-http1 | dotnet-httpclient | 🥇 **25,507**<br><sub>(68 MiB / 21.2% CPU)</sub> | **305.7%** |
+| yarp-reverse-http1 | dotnet-httpclient | **21,354**<br><sub>(135 MiB / 37.1% CPU)</sub> | **255.9%** |
+| twp-reverse-http1 | dotnet-httpclient | **17,976**<br><sub>(106 MiB / 35.9% CPU)</sub> | **215.4%** |
+
+On this macOS run `origin-direct` stayed near idle (5.9% CPU), so the % of origin-HttpClient column is not a ceiling. Rank those Mac peers by RPS.
+
+Reverse peers are about **51–48%** of the origin-direct HttpClient peak on the Windows and Linux runners (Win TWP **51.2%**, Lin TWP **47.9%**). Prefer the **%** column over absolute RPS across runs. Bare and origin-direct are controls (not medal peers).
 
 #### Block B — H2 TLS→H1
 
@@ -154,11 +168,18 @@ Peer ratios (÷YARP / ÷nginx) on median peak; **RPS cells** embed `(MiB / CPU%)
 | yarp-reverse-http2 | dotnet-httpclient | **28,734**<br><sub>(122 MiB / 50.0% CPU)</sub> | **1.00×** | **1.97×** |
 | twp-reverse-http2-cleartext | dotnet-httpclient | 🥇 **33,677**<br><sub>(116 MiB / 51.1% CPU)</sub> | **1.17×** | **2.30×** |
 
+**macOS** (`macos-15`, Apple Silicon)
+
+| Arm | Generator | RPS | ÷YARP | ÷nginx |
+|---|---|---:|---:|---:|
+| nginx-reverse-http2 | dotnet-httpclient | **19,705**<br><sub>(82 MiB / 22.9% CPU)</sub> | **0.62×** | **1.00×** |
+| yarp-reverse-http2 | dotnet-httpclient | 🥇 **31,903**<br><sub>(140 MiB / 43.2% CPU)</sub> | **1.00×** | **1.62×** |
+| twp-reverse-http2-cleartext | dotnet-httpclient | **31,623**<br><sub>(118 MiB / 41.3% CPU)</sub> | **0.99×** | **1.60×** |
 #### Block C — H3→H1
 
 Same layout as Block B. Requires QuicListener. nginx needs `http_v3_module` (Windows nginx has no QUIC). HAProxy needs `USE_QUIC` (GHA Linux/macOS require it). Envoy 1.20+ includes HTTP/3.
 
-Re-measured @ `f2061c27` after the per-stream HTTP/3 write scratch — Windows [37005020668](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37005020668), Linux [37005016067](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37005016067). Medals are still nginx / YARP / Titanium only. On the Linux run HAProxy was **22,785** (86 MiB / 27.1% CPU) and Envoy **3,669** (134 MiB / 24.3% CPU); HAProxy is still ahead of Titanium. The TLS-origin twin is not in this table (the 5×5 below stays @ `41f4adee`); that re-measure is in [Performance Profiling](Performance-Profiling#linux-h2h3ws-gap-close--baseline-2026-10-02). macOS was not re-measured.
+Re-measured @ `f2061c27` after the per-stream HTTP/3 write scratch — Windows [37005020668](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37005020668), Linux [37005016067](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37005016067). Medals are still nginx / YARP / Titanium only. On the Linux run HAProxy was **22,785** (86 MiB / 27.1% CPU) and Envoy **3,669** (134 MiB / 24.3% CPU); HAProxy is still ahead of Titanium. The TLS-origin twin is not in this table (the 5×5 below stays @ `41f4adee`); that re-measure is in [Performance Profiling](Performance-Profiling#linux-h2h3ws-gap-close--baseline-2026-10-02). macOS Apple Silicon: [37011523949](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37011523949).
 
 **Windows** (`windows-latest`)
 
@@ -175,6 +196,14 @@ Re-measured @ `f2061c27` after the per-stream HTTP/3 write scratch — Windows [
 | nginx-reverse-http3-cleartext | dotnet-httpclient | **0**<br><sub>(peak 15,485 · 106 MiB / 22.3% CPU)</sub> | **0.84×** | **1.00×** |
 | yarp-reverse-http3-cleartext | dotnet-httpclient | **18,511**<br><sub>(183 MiB / 49.5% CPU)</sub> | **1.00×** | **1.20×** |
 | twp-reverse-http3-cleartext | dotnet-httpclient | 🥇 **20,833**<br><sub>(142 MiB / 49.8% CPU)</sub> | **1.13×** | **1.35×** |
+
+**macOS** (`macos-15`, Apple Silicon)
+
+| Arm | Generator | RPS | ÷YARP | ÷nginx |
+|---|---|---:|---:|---:|
+| nginx-reverse-http3-cleartext | dotnet-httpclient | **0**<br><sub>(peak 20,873 · 88 MiB / 19.0% CPU)</sub> | **1.58×** | **1.00×** |
+| yarp-reverse-http3-cleartext | dotnet-httpclient | **13,182**<br><sub>(215 MiB / 42.5% CPU)</sub> | **1.00×** | **0.63×** |
+| twp-reverse-http3-cleartext | dotnet-httpclient | 🥇 **15,605**<br><sub>(126 MiB / 43.1% CPU)</sub> | **1.18×** | **0.75×** |
 
 ## Windows — Titanium vs nginx vs HAProxy vs Envoy vs YARP
 
@@ -324,39 +353,39 @@ Same Client×Origin wires with interception on (`compare-product` [36853254836](
 
 ### Reverse
 
-**Pending re-measure** on `macos-15` (Apple Silicon M1, 3-core / 7 GB): cells below read *Not measured* until the Mac shards finish. Bare reverse 5×5 @ `41f4adee`. Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP÷peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as `<br><sub>(MiB / CPU%)</sub>`. The RPS workflow installs Homebrew nginx (`http_v3_module`), Homebrew HAProxy with `USE_QUIC` (3.2 source fallback), Envoy (Homebrew bottle or pinned darwin-arm64 1.36.7), Homebrew `libmsquic` (+ `DYLD_*`), and YARP. Use the pinned `macos-15` label, not `macos-latest`. Product 5×5 is **~56-byte JSON keep-alive GET**; H2/H3 same-protocol cells are mostly header work with a tiny body (Titanium best case) — see [Why this comparison is fair](#why-this-comparison-is-fair).
+Median of **3 repeats** on `macos-15` (Apple Silicon M1, 3-core / 7 GB). Bare reverse 5×5 @ `41f4adee` — `compare-product` [36982444617](https://github.com/justcoding121/titanium-web-proxy/actions/runs/36982444617). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP÷peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as `<br><sub>(MiB / CPU%)</sub>`. The RPS workflow installs Homebrew nginx (`http_v3_module`), Homebrew HAProxy with `USE_QUIC` (3.2 source fallback), Envoy (Homebrew bottle or pinned darwin-arm64 1.36.7), Homebrew `libmsquic` (+ `DYLD_*`), and YARP. Use the pinned `macos-15` label, not `macos-latest`. Product 5×5 is **~56-byte JSON keep-alive GET**; H2/H3 same-protocol cells are mostly header work with a tiny body (Titanium best case) — see [Why this comparison is fair](#why-this-comparison-is-fair).
 
 | Client | Origin | TWP | nginx | HAProxy | Envoy | YARP |
 |---|---|---:|---:|---:|---:|---:|
-| HTTP/1 · plain | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/1 · plain | HTTP/1 · TLS | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/1 · plain | HTTP/2 · plain | *Not measured* | *Not possible (no H2 upstream)* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/1 · plain | HTTP/2 · TLS | *Not measured* | *Not possible (no H2 upstream)* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/1 · plain | HTTP/3 · QUIC | *Not measured* | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | *Not measured* | *Not measured* |
-| HTTP/1 · TLS | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/1 · TLS | HTTP/1 · TLS | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/1 · TLS | HTTP/2 · plain | *Not measured* | *Not possible (no H2 upstream)* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/1 · TLS | HTTP/2 · TLS | *Not measured* | *Not possible (no H2 upstream)* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/1 · TLS | HTTP/3 · QUIC | *Not measured* | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | *Not measured* | *Not measured* |
-| HTTP/2 · plain | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/2 · plain | HTTP/1 · TLS | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/2 · plain | HTTP/2 · plain | *Not measured* | *Not possible (no H2 upstream)* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/2 · plain | HTTP/2 · TLS | *Not measured* | *Not possible (no H2 upstream)* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/2 · plain | HTTP/3 · QUIC | *Not measured* | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | *Not measured* | *Not measured* |
-| HTTP/2 · TLS | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/2 · TLS | HTTP/1 · TLS | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/2 · TLS | HTTP/2 · plain | *Not measured* | *Not possible (no H2 upstream)* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/2 · TLS | HTTP/2 · TLS | *Not measured* | *Not possible (no H2 upstream)* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/2 · TLS | HTTP/3 · QUIC | *Not measured* | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | *Not measured* | *Not measured* |
-| HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/3 · QUIC | HTTP/1 · TLS | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/3 · QUIC | HTTP/2 · plain | *Not measured* | *Not possible (no H2 upstream)* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/3 · QUIC | HTTP/2 · TLS | *Not measured* | *Not possible (no H2 upstream)* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/3 · QUIC | HTTP/3 · QUIC | *Not measured* | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | *Not measured* | *Not measured* |
+| HTTP/1 · plain | HTTP/1 · plain | **27,016**<br><sub>(112 MiB / 37.6% CPU)</sub> | **30,305**<br><sub>(68 MiB / 21.1% CPU)</sub> | 🥇 **37,730**<br><sub>(82 MiB / 28.5% CPU)</sub> | **25,845**<br><sub>(111 MiB / 46.9% CPU)</sub> | **27,245**<br><sub>(148 MiB / 35.8% CPU)</sub> |
+| HTTP/1 · plain | HTTP/1 · TLS | **17,198**<br><sub>(132 MiB / 37.6% CPU)</sub> | **17,074**<br><sub>(80 MiB / 21% CPU)</sub> | 🥇 **31,358**<br><sub>(88 MiB / 32.3% CPU)</sub> | **23,774**<br><sub>(113 MiB / 45.6% CPU)</sub> | **19,704**<br><sub>(159 MiB / 35.1% CPU)</sub> |
+| HTTP/1 · plain | HTTP/2 · plain | **32,773**<br><sub>(127 MiB / 29.2% CPU)</sub> | *Not possible (no H2 upstream)* | **20,883**<br><sub>(84 MiB / 27.6% CPU)</sub> | **21,625**<br><sub>(111 MiB / 31.8% CPU)</sub> | 🥇 **41,904**<br><sub>(163 MiB / 38.8% CPU)</sub> |
+| HTTP/1 · plain | HTTP/2 · TLS | **33,673**<br><sub>(168 MiB / 37.2% CPU)</sub> | *Not possible (no H2 upstream)* | **38,027**<br><sub>(85 MiB / 35.8% CPU)</sub> | **25,071**<br><sub>(112 MiB / 45.3% CPU)</sub> | 🥇 **38,644**<br><sub>(162 MiB / 38.6% CPU)</sub> |
+| HTTP/1 · plain | HTTP/3 · QUIC | **10,473**<br><sub>(133 MiB / 42.8% CPU)</sub> | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | **22,465**<br><sub>(116 MiB / 46.9% CPU)</sub> | 🥇 **33,872**<br><sub>(175 MiB / 42.6% CPU)</sub> |
+| HTTP/1 · TLS | HTTP/1 · plain | **13,136**<br><sub>(124 MiB / 32% CPU)</sub> | 🥇 **19,550**<br><sub>(84 MiB / 22.3% CPU)</sub> | **10,364**<br><sub>(101 MiB / 14.3% CPU)</sub> | **5,884**<br><sub>(122 MiB / 22.7% CPU)</sub> | **14,207**<br><sub>(157 MiB / 32.7% CPU)</sub> |
+| HTTP/1 · TLS | HTTP/1 · TLS | **16,562**<br><sub>(152 MiB / 36.9% CPU)</sub> | **15,789**<br><sub>(89 MiB / 22.6% CPU)</sub> | 🥇 **24,029**<br><sub>(103 MiB / 32.1% CPU)</sub> | **11,615**<br><sub>(123 MiB / 38.3% CPU)</sub> | **15,260**<br><sub>(166 MiB / 37.4% CPU)</sub> |
+| HTTP/1 · TLS | HTTP/2 · plain | **12,874**<br><sub>(156 MiB / 29.4% CPU)</sub> | *Not possible (no H2 upstream)* | **17,595**<br><sub>(101 MiB / 28.5% CPU)</sub> | **17,894**<br><sub>(121 MiB / 42% CPU)</sub> | 🥇 **25,472**<br><sub>(187 MiB / 26% CPU)</sub> |
+| HTTP/1 · TLS | HTTP/2 · TLS | **7,448**<br><sub>(209 MiB / 17.2% CPU)</sub> | *Not possible (no H2 upstream)* | 🥇 **20,146**<br><sub>(101 MiB / 30.3% CPU)</sub> | **14,340**<br><sub>(121 MiB / 39.7% CPU)</sub> | **4,544**<br><sub>(190 MiB / 9.9% CPU)</sub> |
+| HTTP/1 · TLS | HTTP/3 · QUIC | **16,589**<br><sub>(156 MiB / 44.3% CPU)</sub> | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | **15,066**<br><sub>(125 MiB / 42.2% CPU)</sub> | 🥇 **20,502**<br><sub>(173 MiB / 39.9% CPU)</sub> |
+| HTTP/2 · plain | HTTP/1 · plain | 🥇 **45,158**<br><sub>(126 MiB / 40% CPU)</sub> | **29,051**<br><sub>(69 MiB / 23.5% CPU)</sub> | **29,130**<br><sub>(87 MiB / 23.7% CPU)</sub> | **15,366**<br><sub>(111 MiB / 29.5% CPU)</sub> | **35,765**<br><sub>(147 MiB / 39.4% CPU)</sub> |
+| HTTP/2 · plain | HTTP/1 · TLS | **30,201**<br><sub>(140 MiB / 42.2% CPU)</sub> | **18,471**<br><sub>(81 MiB / 23% CPU)</sub> | **28,685**<br><sub>(92 MiB / 27.6% CPU)</sub> | **13,578**<br><sub>(113 MiB / 27.4% CPU)</sub> | 🥇 **33,191**<br><sub>(159 MiB / 43.4% CPU)</sub> |
+| HTTP/2 · plain | HTTP/2 · plain | 🥇 **98,980**<br><sub>(116 MiB / 30% CPU)</sub> | *Not possible (no H2 upstream)* | **34,877**<br><sub>(87 MiB / 27.6% CPU)</sub> | **23,568**<br><sub>(109 MiB / 25.8% CPU)</sub> | **58,570**<br><sub>(151 MiB / 42.5% CPU)</sub> |
+| HTTP/2 · plain | HTTP/2 · TLS | 🥇 **107,876**<br><sub>(125 MiB / 32.2% CPU)</sub> | *Not possible (no H2 upstream)* | **33,056**<br><sub>(89 MiB / 26.7% CPU)</sub> | **22,703**<br><sub>(111 MiB / 26.9% CPU)</sub> | **83,722**<br><sub>(157 MiB / 42.3% CPU)</sub> |
+| HTTP/2 · plain | HTTP/3 · QUIC | **14,700**<br><sub>(143 MiB / 35.1% CPU)</sub> | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | **10,618**<br><sub>(114 MiB / 30% CPU)</sub> | 🥇 **22,834**<br><sub>(163 MiB / 43.6% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/1 · plain | **35,882**<br><sub>(131 MiB / 41.1% CPU)</sub> | **23,621**<br><sub>(81 MiB / 22.6% CPU)</sub> | **34,868**<br><sub>(101 MiB / 25.3% CPU)</sub> | **20,382**<br><sub>(121 MiB / 30.2% CPU)</sub> | 🥇 **39,986**<br><sub>(153 MiB / 42.5% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/1 · TLS | **22,919**<br><sub>(137 MiB / 42.2% CPU)</sub> | 🥇 **23,815**<br><sub>(88 MiB / 22% CPU)</sub> | **23,102**<br><sub>(104 MiB / 27.6% CPU)</sub> | **12,429**<br><sub>(122 MiB / 27.6% CPU)</sub> | **18,991**<br><sub>(162 MiB / 37.8% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/2 · plain | 🥇 **68,025**<br><sub>(131 MiB / 28.6% CPU)</sub> | *Not possible (no H2 upstream)* | **25,181**<br><sub>(101 MiB / 27.5% CPU)</sub> | **19,086**<br><sub>(119 MiB / 24.2% CPU)</sub> | **39,591**<br><sub>(161 MiB / 35.7% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/2 · TLS | 🥇 **94,817**<br><sub>(136 MiB / 32.7% CPU)</sub> | *Not possible (no H2 upstream)* | **47,241**<br><sub>(102 MiB / 29% CPU)</sub> | **31,349**<br><sub>(119 MiB / 26% CPU)</sub> | **68,743**<br><sub>(157 MiB / 44.1% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/3 · QUIC | **20,008**<br><sub>(160 MiB / 47.8% CPU)</sub> | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | **10,706**<br><sub>(123 MiB / 30.9% CPU)</sub> | 🥇 **29,346**<br><sub>(168 MiB / 42.5% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/1 · plain | **12,512**<br><sub>(138 MiB / 42.8% CPU)</sub> | **0**<br><sub>(peak 18,612 · 88 MiB / 18.9% CPU)</sub> | 🥇 **30,575**<br><sub>(101 MiB / 29.4% CPU)</sub> | **5,838**<br><sub>(129 MiB / 37.9% CPU)</sub> | **18,511**<br><sub>(213 MiB / 45% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/1 · TLS | **13,728**<br><sub>(152 MiB / 39.5% CPU)</sub> | **0**<br><sub>(peak 18,482 · 93 MiB / 20.6% CPU)</sub> | 🥇 **22,531**<br><sub>(104 MiB / 31.5% CPU)</sub> | **5,728**<br><sub>(130 MiB / 31% CPU)</sub> | **12,918**<br><sub>(274 MiB / 45.7% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/2 · plain | **20,661**<br><sub>(147 MiB / 47.8% CPU)</sub> | *Not possible (no H2 upstream)* | 🥇 **43,121**<br><sub>(101 MiB / 31% CPU)</sub> | **12,596**<br><sub>(125 MiB / 39% CPU)</sub> | **28,622**<br><sub>(219 MiB / 45.1% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/2 · TLS | **20,776**<br><sub>(147 MiB / 49.2% CPU)</sub> | *Not possible (no H2 upstream)* | 🥇 **23,721**<br><sub>(102 MiB / 28.4% CPU)</sub> | **7,012**<br><sub>(125 MiB / 37.3% CPU)</sub> | **23,520**<br><sub>(222 MiB / 45.4% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/3 · QUIC | **17,192**<br><sub>(144 MiB / 45.3% CPU)</sub> | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | **5,502**<br><sub>(125 MiB / 33.7% CPU)</sub> | 🥇 **19,828**<br><sub>(232 MiB / 44% CPU)</sub> |
 
 ### MITM (TWP only)
 
-Same Client×Origin wires with interception on (`compare-product` [36853254836](https://github.com/justcoding121/titanium-web-proxy/actions/runs/36853254836)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via `MitmCompressedRelayHelper`). nginx/HAProxy/Envoy/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (**same job / comparison-group shard**). Completion gate: Lite ≥ **0.40×** and Full ≥ **0.40×** reverse sustain @ c=64 (median of 3 GHA runs); reverse TWP÷YARP ≥ **0.60×** (no terminate-peer gate).
+Same Client×Origin wires with interception on (`compare-product` [36982444617](https://github.com/justcoding121/titanium-web-proxy/actions/runs/36982444617)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via `MitmCompressedRelayHelper`). nginx/HAProxy/Envoy/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (**same job / comparison-group shard**). Completion gate: Lite ≥ **0.40×** and Full ≥ **0.40×** reverse sustain @ c=64 (median of 3 GHA runs); reverse TWP÷YARP ≥ **0.60×** (no terminate-peer gate).
 
 **v1 append-only relay (2026-08-27):** Pre-fix H2→H2 Full÷Reverse was **0.13–0.16×** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ `df172718`: H2 plain→H2 plain Full **0.77–0.79×**, H3→H1 Full **0.91–0.93×**, all MITM arms ≥ **0.70×** on median of [33041445371](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33041445371), [33055267086](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055267086), [33055272140](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055272140).
 
@@ -364,6 +393,31 @@ Same Client×Origin wires with interception on (`compare-product` [36853254836](
 
 | Client | Origin | Lite sustain | Full sustain | Lite÷Reverse | Full÷Reverse |
 |---|---|---:|---:|---:|---:|
+| HTTP/1 · plain | HTTP/1 · plain | **35,746**<br><sub>(112 MiB / 36.5% CPU)</sub> | **24,534**<br><sub>(117 MiB / 34.6% CPU)</sub> | **1.32×** | **0.91×** |
+| HTTP/1 · plain | HTTP/1 · TLS | **15,942**<br><sub>(131 MiB / 32.8% CPU)</sub> | **20,982**<br><sub>(129 MiB / 32.4% CPU)</sub> | **0.93×** | **1.22×** |
+| HTTP/1 · plain | HTTP/2 · plain | **34,723**<br><sub>(144 MiB / 36.3% CPU)</sub> | **45,571**<br><sub>(148 MiB / 42% CPU)</sub> | **1.06×** | **1.39×** |
+| HTTP/1 · plain | HTTP/2 · TLS | **30,884**<br><sub>(166 MiB / 38.8% CPU)</sub> | **30,650**<br><sub>(159 MiB / 37.9% CPU)</sub> | **0.92×** | **0.91×** |
+| HTTP/1 · plain | HTTP/3 · QUIC | **22,609**<br><sub>(143 MiB / 46.4% CPU)</sub> | **18,784**<br><sub>(150 MiB / 45.1% CPU)</sub> | **2.16×** | **1.79×** |
+| HTTP/1 · TLS | HTTP/1 · plain | **15,544**<br><sub>(124 MiB / 32.4% CPU)</sub> | **16,418**<br><sub>(126 MiB / 31.7% CPU)</sub> | **1.18×** | **1.25×** |
+| HTTP/1 · TLS | HTTP/1 · TLS | **12,869**<br><sub>(154 MiB / 31% CPU)</sub> | **17,295**<br><sub>(151 MiB / 35.2% CPU)</sub> | **0.78×** | **1.04×** |
+| HTTP/1 · TLS | HTTP/2 · plain | **21,932**<br><sub>(138 MiB / 41.4% CPU)</sub> | **24,957**<br><sub>(146 MiB / 38.8% CPU)</sub> | **1.7×** | **1.94×** |
+| HTTP/1 · TLS | HTTP/2 · TLS | **22,604**<br><sub>(204 MiB / 38.1% CPU)</sub> | **17,668**<br><sub>(190 MiB / 35.4% CPU)</sub> | **3.03×** | **2.37×** |
+| HTTP/1 · TLS | HTTP/3 · QUIC | **16,816**<br><sub>(157 MiB / 45.6% CPU)</sub> | **12,059**<br><sub>(157 MiB / 41.3% CPU)</sub> | **1.01×** | **0.73×** |
+| HTTP/2 · plain | HTTP/1 · plain | **36,969**<br><sub>(129 MiB / 41.5% CPU)</sub> | **32,390**<br><sub>(126 MiB / 41.6% CPU)</sub> | **0.82×** | **0.72×** |
+| HTTP/2 · plain | HTTP/1 · TLS | **20,368**<br><sub>(143 MiB / 42.5% CPU)</sub> | **26,284**<br><sub>(140 MiB / 43.6% CPU)</sub> | **0.67×** | **0.87×** |
+| HTTP/2 · plain | HTTP/2 · plain | **78,223**<br><sub>(118 MiB / 37.4% CPU)</sub> | **73,211**<br><sub>(118 MiB / 35.7% CPU)</sub> | **0.79×** | **0.74×** |
+| HTTP/2 · plain | HTTP/2 · TLS | **98,122**<br><sub>(121 MiB / 37.3% CPU)</sub> | **81,877**<br><sub>(125 MiB / 37% CPU)</sub> | **0.91×** | **0.76×** |
+| HTTP/2 · plain | HTTP/3 · QUIC | **17,556**<br><sub>(142 MiB / 48.1% CPU)</sub> | **18,565**<br><sub>(143 MiB / 50.8% CPU)</sub> | **1.19×** | **1.26×** |
+| HTTP/2 · TLS | HTTP/1 · plain | **34,535**<br><sub>(133 MiB / 40.3% CPU)</sub> | **33,251**<br><sub>(135 MiB / 41.6% CPU)</sub> | **0.96×** | **0.93×** |
+| HTTP/2 · TLS | HTTP/1 · TLS | **27,152**<br><sub>(138 MiB / 44% CPU)</sub> | **37,855**<br><sub>(140 MiB / 45.4% CPU)</sub> | **1.18×** | **1.65×** |
+| HTTP/2 · TLS | HTTP/2 · plain | **66,090**<br><sub>(128 MiB / 35.8% CPU)</sub> | **60,172**<br><sub>(130 MiB / 34.3% CPU)</sub> | **0.97×** | **0.88×** |
+| HTTP/2 · TLS | HTTP/2 · TLS | **70,582**<br><sub>(132 MiB / 37.8% CPU)</sub> | **75,340**<br><sub>(132 MiB / 35.7% CPU)</sub> | **0.74×** | **0.79×** |
+| HTTP/2 · TLS | HTTP/3 · QUIC | **17,434**<br><sub>(160 MiB / 49.2% CPU)</sub> | **17,244**<br><sub>(157 MiB / 49% CPU)</sub> | **0.87×** | **0.86×** |
+| HTTP/3 · QUIC | HTTP/1 · plain | **14,529**<br><sub>(139 MiB / 45.5% CPU)</sub> | **12,468**<br><sub>(138 MiB / 42.3% CPU)</sub> | **1.16×** | **1×** |
+| HTTP/3 · QUIC | HTTP/1 · TLS | **13,631**<br><sub>(143 MiB / 45.8% CPU)</sub> | **11,639**<br><sub>(148 MiB / 45.7% CPU)</sub> | **0.99×** | **0.85×** |
+| HTTP/3 · QUIC | HTTP/2 · plain | **31,499**<br><sub>(149 MiB / 48.5% CPU)</sub> | **20,464**<br><sub>(146 MiB / 49% CPU)</sub> | **1.52×** | **0.99×** |
+| HTTP/3 · QUIC | HTTP/2 · TLS | **18,549**<br><sub>(148 MiB / 48.6% CPU)</sub> | **17,494**<br><sub>(146 MiB / 45.2% CPU)</sub> | **0.89×** | **0.84×** |
+| HTTP/3 · QUIC | HTTP/3 · QUIC | **9,942**<br><sub>(143 MiB / 45.6% CPU)</sub> | **12,760**<br><sub>(140 MiB / 45.5% CPU)</sub> | **0.58×** | **0.74×** |
 
 ## Editions (CLI / Plus / Intercept)
 
@@ -434,6 +488,8 @@ Median of **3** repeats on `windows-latest` @ `41f4adee`. Source: Actions [36853
 
 
 
+
+
 | Body | Client | Origin | TWP | nginx | YARP |
 |---|---|---|---:|---:|---:|
 | 64 KiB | HTTP/1 · TLS | HTTP/1 · plain | 🥇 **9,134**<br><sub>(97 MiB / 44.1% CPU)</sub> | **620**<br><sub>(141 MiB / 24.7% CPU)</sub> | **6,985**<br><sub>(134 MiB / 41.5% CPU)</sub> |
@@ -480,11 +536,36 @@ Median of **3** repeats @ `41f4adee`. Source: Actions [36853268072](https://gith
 
 On this GHA pass TWP÷YARP H1 TLS ≈ **1.21×** (64 KiB) / **1.26×** (256 KiB); H2→H1 ≈ **1.20×** / **1.15×**; H3→H1 ≈ **1.29×** / **1.16×**. TWP÷nginx H1 TLS ≈ **1.43** / **1.85**. Absolute RPS swings by VM; prefer ratios.
 
+### macOS — heavier reverse GET (64 KiB / 256 KiB)
+
+Median of **3** repeats on `macos-15` (Apple Silicon M1, 3-core / 7 GB) @ `41f4adee`. Source: Actions [36998170689](https://github.com/justcoding121/titanium-web-proxy/actions/runs/36998170689) (`compare-bodies`). Warmup 2s / measure 8s.
+
+| Body | Client | Origin | TWP | nginx | HAProxy | Envoy | YARP |
+|---|---|---|---:|---:|---:|---:|---:|
+| 64 KiB | HTTP/1 · TLS | HTTP/1 · plain | **4,965**<br><sub>(181 MiB / 33.9% CPU)</sub> | **6,239**<br><sub>(84 MiB / 25.0% CPU)</sub> | **6,811**<br><sub>(101 MiB / 34.8% CPU)</sub> | 🥇 **6,927**<br><sub>(132 MiB / 29.8% CPU)</sub> | **5,833**<br><sub>(183 MiB / 40.2% CPU)</sub> |
+| 64 KiB | HTTP/2 · TLS | HTTP/1 · plain | **3,190**<br><sub>(432 MiB / 25.3% CPU)</sub> | **5,651**<br><sub>(85 MiB / 24.4% CPU)</sub> | **4,656**<br><sub>(103 MiB / 20.4% CPU)</sub> | **3,817**<br><sub>(145 MiB / 18.1% CPU)</sub> | 🥇 **5,858**<br><sub>(169 MiB / 44.3% CPU)</sub> |
+| 64 KiB | HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **2,322**<br><sub>(281 MiB / 33.9% CPU)</sub> | **0**<br><sub>(peak 2,645 · 106 MiB / 28.5% CPU)</sub> | **2,009**<br><sub>(103 MiB / 29.8% CPU)</sub> | **1,329**<br><sub>(138 MiB / 31.6% CPU)</sub> | **2,001**<br><sub>(423 MiB / 32.9% CPU)</sub> |
+| 256 KiB | HTTP/1 · TLS | HTTP/1 · plain | 🥇 **2,900**<br><sub>(203 MiB / 30.8% CPU)</sub> | **2,230**<br><sub>(85 MiB / 23.9% CPU)</sub> | **2,706**<br><sub>(101 MiB / 30.5% CPU)</sub> | **1,812**<br><sub>(154 MiB / 25.4% CPU)</sub> | **1,823**<br><sub>(185 MiB / 35.0% CPU)</sub> |
+| 256 KiB | HTTP/2 · TLS | HTTP/1 · plain | **1,620**<br><sub>(400 MiB / 35.5% CPU)</sub> | **1,930**<br><sub>(85 MiB / 23.7% CPU)</sub> | 🥇 **2,510**<br><sub>(101 MiB / 23.9% CPU)</sub> | **2,147**<br><sub>(155 MiB / 25.9% CPU)</sub> | **1,477**<br><sub>(181 MiB / 43.1% CPU)</sub> |
+| 256 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **592**<br><sub>(174 MiB / 30.8% CPU)</sub> | 🥇 **782**<br><sub>(peak 957 · 82 MiB / 28.2% CPU)</sub> | **484**<br><sub>(100 MiB / 31.8% CPU)</sub> | **277**<br><sub>(160 MiB / 35.6% CPU)</sub> | **290**<br><sub>(469 MiB / 31.8% CPU)</sub> |
+| 64 KiB | HTTP/2 · plain | HTTP/1 · plain | **4,044**<br><sub>(443 MiB / 15.8% CPU)</sub> | **9,200**<br><sub>(73 MiB / 23.0% CPU)</sub> | **10,775**<br><sub>(89 MiB / 23.9% CPU)</sub> | 🥇 **13,514**<br><sub>(135 MiB / 27.6% CPU)</sub> | **11,451**<br><sub>(181 MiB / 37.0% CPU)</sub> |
+| 64 KiB | HTTP/2 · TLS | HTTP/2 · plain | **6,719**<br><sub>(304 MiB / 32.0% CPU)</sub> | *Not possible* | **3,562**<br><sub>(104 MiB / 24.1% CPU)</sub> | **6,814**<br><sub>(131 MiB / 27.9% CPU)</sub> | 🥇 **7,703**<br><sub>(244 MiB / 43.3% CPU)</sub> |
+| 64 KiB | HTTP/2 · TLS | HTTP/2 · TLS | **5,719**<br><sub>(209 MiB / 33.7% CPU)</sub> | *Not possible* | **3,312**<br><sub>(101 MiB / 24.9% CPU)</sub> | 🥇 **5,834**<br><sub>(131 MiB / 28.5% CPU)</sub> | **4,946**<br><sub>(236 MiB / 42.3% CPU)</sub> |
+| 64 KiB | HTTP/3 · QUIC | HTTP/2 · TLS | 🥇 **1,893**<br><sub>(238 MiB / 32.0% CPU)</sub> | *Not possible* | **1,328**<br><sub>(103 MiB / 31.9% CPU)</sub> | **700**<br><sub>(129 MiB / 39.1% CPU)</sub> | **1,795**<br><sub>(432 MiB / 33.8% CPU)</sub> |
+| 64 KiB | HTTP/3 · QUIC | HTTP/1 · TLS | 🥇 **2,180**<br><sub>(247 MiB / 42.0% CPU)</sub> | **0**<br><sub>(peak 1,559 · 112 MiB / 24.6% CPU)</sub> | **1,788**<br><sub>(104 MiB / 34.2% CPU)</sub> | **1,286**<br><sub>(139 MiB / 39.2% CPU)</sub> | **1,291**<br><sub>(389 MiB / 40.4% CPU)</sub> |
+| 256 KiB | HTTP/2 · plain | HTTP/1 · plain | **3,184**<br><sub>(370 MiB / 29.6% CPU)</sub> | **3,310**<br><sub>(73 MiB / 19.6% CPU)</sub> | 🥇 **3,514**<br><sub>(87 MiB / 21.9% CPU)</sub> | **3,199**<br><sub>(146 MiB / 24.7% CPU)</sub> | **2,653**<br><sub>(192 MiB / 34.1% CPU)</sub> |
+| 256 KiB | HTTP/2 · TLS | HTTP/2 · plain | 🥇 **2,076**<br><sub>(705 MiB / 30.5% CPU)</sub> | *Not possible* | **1,050**<br><sub>(112 MiB / 23.1% CPU)</sub> | **2,021**<br><sub>(155 MiB / 27.1% CPU)</sub> | **1,535**<br><sub>(330 MiB / 39.0% CPU)</sub> |
+| 256 KiB | HTTP/2 · TLS | HTTP/2 · TLS | 🥇 **1,313**<br><sub>(449 MiB / 32.4% CPU)</sub> | *Not possible* | **807**<br><sub>(102 MiB / 24.3% CPU)</sub> | **1,311**<br><sub>(155 MiB / 26.9% CPU)</sub> | **1,017**<br><sub>(304 MiB / 38.5% CPU)</sub> |
+| 256 KiB | HTTP/3 · QUIC | HTTP/2 · TLS | **112**<br><sub>(peak 168 · 279 MiB / 25.3% CPU)</sub> | *Not possible* | **310**<br><sub>(peak 370 · 103 MiB / 30.3% CPU)</sub> | **164**<br><sub>(126 MiB / 36.6% CPU)</sub> | 🥇 **495**<br><sub>(484 MiB / 40.4% CPU)</sub> |
+| 256 KiB | HTTP/3 · QUIC | HTTP/1 · TLS | 🥇 **630**<br><sub>(218 MiB / 39.4% CPU)</sub> | **575**<br><sub>(105 MiB / 28.2% CPU)</sub> | **506**<br><sub>(104 MiB / 33.6% CPU)</sub> | **249**<br><sub>(125 MiB / 31.5% CPU)</sub> | **504**<br><sub>(423 MiB / 43.1% CPU)</sub> |
+
 ### Windows — POST 64 KiB request + 64 KiB response
 
 Median of **3** repeats on `windows-latest` @ `41f4adee`. Source: Actions [36853276459](https://github.com/justcoding121/titanium-web-proxy/actions/runs/36853276459) (`compare-post`).
 
 *Not possible:* **HAProxy** and **Envoy** columns are omitted (no official Windows port).
+
+
 
 
 
@@ -527,6 +608,21 @@ Median of **3** repeats @ `41f4adee`. Source: Actions [36853276459](https://gith
 
 Linux nginx H1/H2/H3 POST completed (nginx.org mainline). TWP÷YARP H1 ≈ **1.5×**; H2→H1 ≈ **1.2×**; H3 ≈ **1.1×**. TWP÷nginx H3 ≈ **6×**.
 
+### macOS — POST 64 KiB request + 64 KiB response
+
+Median of **3** repeats on `macos-15` (Apple Silicon M1, 3-core / 7 GB) @ `41f4adee`. Source: Actions [37006733365](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37006733365) (`compare-post`).
+
+| Client | Origin | TWP | nginx | HAProxy | Envoy | YARP |
+|---|---|---:|---:|---:|---:|---:|
+| HTTP/1 · TLS | HTTP/1 · plain | **2,944**<br><sub>(246 MiB / 28.8% CPU)</sub> | 🥇 **3,446**<br><sub>(89 MiB / 22.7% CPU)</sub> | **3,383**<br><sub>(102 MiB / 32.7% CPU)</sub> | **3,264**<br><sub>(132 MiB / 30.9% CPU)</sub> | **1,832**<br><sub>(195 MiB / 35.5% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/1 · plain | **2,377**<br><sub>(419 MiB / 36.4% CPU)</sub> | 🥇 **2,705**<br><sub>(97 MiB / 21.8% CPU)</sub> | **2,257**<br><sub>(101 MiB / 24.2% CPU)</sub> | **0**<br><sub>(peak 2,840 · 146 MiB / 27.0% CPU)</sub> | **2,266**<br><sub>(182 MiB / 41.1% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **918**<br><sub>(371 MiB / 31.7% CPU)</sub> | **0**<br><sub>(peak 1,042 · 86 MiB / 26.5% CPU)</sub> | **862**<br><sub>(101 MiB / 32.1% CPU)</sub> | **311**<br><sub>(122 MiB / 38.2% CPU)</sub> | **735**<br><sub>(447 MiB / 29.2% CPU)</sub> |
+| HTTP/2 · plain | HTTP/1 · plain | **4,651**<br><sub>(388 MiB / 31.7% CPU)</sub> | 🥇 **4,975**<br><sub>(85 MiB / 21.3% CPU)</sub> | **3,694**<br><sub>(86 MiB / 23.4% CPU)</sub> | **0**<br><sub>(peak 4,705 · 135 MiB / 25.7% CPU)</sub> | **3,661**<br><sub>(189 MiB / 41.0% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/2 · plain | **3,798**<br><sub>(317 MiB / 30.6% CPU)</sub> | *Not possible* | **2,251**<br><sub>(102 MiB / 24.1% CPU)</sub> | 🥇 **4,595**<br><sub>(134 MiB / 26.9% CPU)</sub> | **3,220**<br><sub>(203 MiB / 45.5% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/2 · TLS | **2,110**<br><sub>(245 MiB / 33.3% CPU)</sub> | *Not possible* | **1,592**<br><sub>(103 MiB / 25.1% CPU)</sub> | 🥇 **2,156**<br><sub>(133 MiB / 26.5% CPU)</sub> | **1,876**<br><sub>(209 MiB / 40.6% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/2 · TLS | 🥇 **1,233**<br><sub>(263 MiB / 39.1% CPU)</sub> | *Not possible* | **647**<br><sub>(103 MiB / 32.6% CPU)</sub> | **429**<br><sub>(peak 477 · 129 MiB / 39.7% CPU)</sub> | **925**<br><sub>(400 MiB / 41.4% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/1 · TLS | 🥇 **1,035**<br><sub>(278 MiB / 39.5% CPU)</sub> | **313**<br><sub>(peak 779 · 83 MiB / 12.8% CPU)</sub> | **663**<br><sub>(99 MiB / 31.0% CPU)</sub> | **309**<br><sub>(peak 409 · 130 MiB / 32.1% CPU)</sub> | **828**<br><sub>(435 MiB / 37.6% CPU)</sub> |
+
 ### Windows — lossy / high-RTT (H2 HOL / H3 loss)
 
 Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2); UDP is **loss% only** (no per-datagram delay; MsQuic-safe) + **1%** datagram drop (H3); **64 KiB** GET. Median of **3** repeats on `windows-latest` @ `41f4adee` — [36853280515](https://github.com/justcoding121/titanium-web-proxy/actions/runs/36853280515) (`compare-lossy`).
@@ -562,6 +658,21 @@ Median of **3** repeats @ `41f4adee`. Source: [36853280515](https://github.com/j
 | HTTP/3 · QUIC | HTTP/1 · TLS | **1,351**<br><sub>(169 MiB / 21.9% CPU)</sub> | 🥇 **1,452**<br><sub>(120 MiB / 23.7% CPU)</sub> | **1,289**<br><sub>(92 MiB / 20.8% CPU)</sub> | **1,404**<br><sub>(138 MiB / 25.9% CPU)</sub> | **1,384**<br><sub>(213 MiB / 30.8% CPU)</sub> |
 
 TWP H2 HOL ≫ YARP (~**7.8×**). H3 TWP÷YARP ≈ **1.07×**.
+
+### macOS — lossy / high-RTT (H2 HOL / H3 loss)
+
+Median of **3** repeats on `macos-15` (Apple Silicon M1, 3-core / 7 GB) @ `41f4adee`. Source: [37007354328](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37007354328) (`compare-lossy`; lossy H3 uses `quic-http3`, UDP drop-only).
+
+| Client | Origin | TWP | nginx | HAProxy | Envoy | YARP |
+|---|---|---:|---:|---:|---:|---:|
+| HTTP/1 · TLS | HTTP/1 · plain | **502**<br><sub>(261 MiB / 7.8% CPU)</sub> | 🥇 **533**<br><sub>(86 MiB / 3.5% CPU)</sub> | **497**<br><sub>(101 MiB / 2.7% CPU)</sub> | **450**<br><sub>(131 MiB / 3.2% CPU)</sub> | **431**<br><sub>(208 MiB / 5.5% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/1 · plain | 🥇 **24**<br><sub>(peak 45 · 140 MiB / 3.6% CPU)</sub> | **12**<br><sub>(81 MiB / 0.2% CPU)</sub> | **10**<br><sub>(96 MiB / 0.2% CPU)</sub> | **8**<br><sub>(118 MiB / 0.3% CPU)</sub> | **11**<br><sub>(130 MiB / 3.3% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/1 · plain | **1,103**<br><sub>(279 MiB / 25.6% CPU)</sub> | 🥇 **1,532**<br><sub>(98 MiB / 15.9% CPU)</sub> | **673**<br><sub>(101 MiB / 21.7% CPU)</sub> | **1,023**<br><sub>(131 MiB / 29.9% CPU)</sub> | **557**<br><sub>(429 MiB / 21.6% CPU)</sub> |
+| HTTP/2 · plain | HTTP/1 · plain | 🥇 **19**<br><sub>(peak 46 · 119 MiB / 2.4% CPU)</sub> | **12**<br><sub>(69 MiB / 0.1% CPU)</sub> | **12**<br><sub>(83 MiB / 0.2% CPU)</sub> | **10**<br><sub>(108 MiB / 0.3% CPU)</sub> | **12**<br><sub>(117 MiB / 2.5% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/2 · plain | 🥇 **12**<br><sub>(114 MiB / 2.2% CPU)</sub> | *Not possible* | **11**<br><sub>(97 MiB / 0.3% CPU)</sub> | **8**<br><sub>(118 MiB / 0.3% CPU)</sub> | **11**<br><sub>(128 MiB / 3.2% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/2 · TLS | **10**<br><sub>(125 MiB / 2.3% CPU)</sub> | *Not possible* | **10**<br><sub>(peak 12 · 98 MiB / 0.4% CPU)</sub> | **8**<br><sub>(118 MiB / 0.3% CPU)</sub> | 🥇 **11**<br><sub>(131 MiB / 3.6% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/2 · TLS | **906**<br><sub>(194 MiB / 24.3% CPU)</sub> | *Not possible* | **840**<br><sub>(105 MiB / 22.4% CPU)</sub> | 🥇 **1,154**<br><sub>(131 MiB / 31.1% CPU)</sub> | **1,016**<br><sub>(444 MiB / 31.0% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/1 · TLS | **1,346**<br><sub>(195 MiB / 27.6% CPU)</sub> | 🥇 **1,437**<br><sub>(101 MiB / 18.0% CPU)</sub> | **872**<br><sub>(106 MiB / 22.9% CPU)</sub> | **946**<br><sub>(131 MiB / 35.0% CPU)</sub> | **878**<br><sub>(389 MiB / 31.5% CPU)</sub> |
 
 ### Architecture-sensitive
 
@@ -605,6 +716,24 @@ Lossy-link runs (slow **network**) are already published above; they are not a s
 | Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | 🥇 **1,934**<br><sub>(141 MiB / 35.7% CPU)</sub> | *Not possible* | **256**<br><sub>(86 MiB / 4.8% CPU)</sub> | **0**<br><sub>(peak 2,083 · 156 MiB / 21.4% CPU)</sub> | **6**<br><sub>(150 MiB / 0.4% CPU)</sub> |
 | Duplex (WebSocket / H1 Upgrade) | HTTP/1 · TLS | HTTP/1 · plain | **34,436**<br><sub>(124 MiB / 44.9% CPU)</sub> | **37,247**<br><sub>(100 MiB / 36.4% CPU)</sub> | 🥇 **37,608**<br><sub>(83 MiB / 39.8% CPU)</sub> | **36,405**<br><sub>(127 MiB / 41.2% CPU)</sub> | **31,719**<br><sub>(125 MiB / 44.9% CPU)</sub> |
 
+#### macOS
+
+Median of **3** repeats on `macos-15` (Apple Silicon M1, 3-core / 7 GB) @ `41f4adee`. Source: Actions [37000022693](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37000022693) (`compare-arch`).
+
+| Scenario | Client | Origin | TWP | nginx | HAProxy | Envoy | YARP |
+|---|---|---|---:|---:|---:|---:|---:|
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/1 · TLS | HTTP/1 · plain | **113**<br><sub>(266 MiB / 3.5% CPU)</sub> | 🥇 **116**<br><sub>(85 MiB / 2.1% CPU)</sub> | **112**<br><sub>(101 MiB / 2.2% CPU)</sub> | **104**<br><sub>(145 MiB / 2.8% CPU)</sub> | **111**<br><sub>(222 MiB / 4.0% CPU)</sub> |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/1 · plain | **103**<br><sub>(311 MiB / 5.5% CPU)</sub> | **95**<br><sub>(84 MiB / 1.3% CPU)</sub> | 🥇 **120**<br><sub>(100 MiB / 1.9% CPU)</sub> | **88**<br><sub>(155 MiB / 2.0% CPU)</sub> | **112**<br><sub>(215 MiB / 5.5% CPU)</sub> |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **155**<br><sub>(135 MiB / 18.8% CPU)</sub> | **116**<br><sub>(94 MiB / 6.6% CPU)</sub> | **113**<br><sub>(102 MiB / 10.0% CPU)</sub> | **154**<br><sub>(159 MiB / 33.9% CPU)</sub> | **144**<br><sub>(366 MiB / 20.1% CPU)</sub> |
+| Early response (origin writes after first request chunk) | HTTP/1 · TLS | HTTP/1 · plain | **3,869**<br><sub>(228 MiB / 33.6% CPU)</sub> | **0**<br><sub>(peak 4,499 · 89 MiB / 25.2% CPU)</sub> | 🥇 **5,508**<br><sub>(102 MiB / 35.3% CPU)</sub> | **4,603**<br><sub>(130 MiB / 36.9% CPU)</sub> | **3,471**<br><sub>(195 MiB / 45.9% CPU)</sub> |
+| Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | **1,324**<br><sub>(443 MiB / 27.6% CPU)</sub> | **0**<br><sub>(peak 3,690 · 98 MiB / 22.5% CPU)</sub> | 🥇 **3,214**<br><sub>(103 MiB / 25.1% CPU)</sub> | **0**<br><sub>(peak 2,363 · 147 MiB / 25.7% CPU)</sub> | **2,337**<br><sub>(179 MiB / 42.3% CPU)</sub> |
+| Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **1,181**<br><sub>(277 MiB / 39.3% CPU)</sub> | **0**<br><sub>(peak 1,423 · 112 MiB / 26.5% CPU)</sub> | **0**<br><sub>(66 MiB)</sub> | **390**<br><sub>(133 MiB / 34.0% CPU)</sub> | **978**<br><sub>(450 MiB / 38.5% CPU)</sub> |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · plain | HTTP/1 · plain | **112**<br><sub>(185 MiB / 5.6% CPU)</sub> | **104**<br><sub>(72 MiB / 1.1% CPU)</sub> | 🥇 **112**<br><sub>(86 MiB / 1.9% CPU)</sub> | **89**<br><sub>(145 MiB / 1.7% CPU)</sub> | **96**<br><sub>(145 MiB / 2.8% CPU)</sub> |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/2 · TLS | **128**<br><sub>(306 MiB / 5.9% CPU)</sub> | *Not possible* | 🥇 **139**<br><sub>(105 MiB / 5.8% CPU)</sub> | **104**<br><sub>(144 MiB / 3.8% CPU)</sub> | **122**<br><sub>(286 MiB / 4.5% CPU)</sub> |
+| Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/2 · TLS | 🥇 **1,925**<br><sub>(183 MiB / 27.5% CPU)</sub> | *Not possible* | **0**<br><sub>(98 MiB)</sub> | **0**<br><sub>(peak 2,622 · 146 MiB / 25.5% CPU)</sub> | **125**<br><sub>(181 MiB / 1.3% CPU)</sub> |
+| Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | 🥇 **1,922**<br><sub>(peak 2,353 · 179 MiB / 29.7% CPU)</sub> | *Not possible* | **1,517**<br><sub>(98 MiB / 22.9% CPU)</sub> | **0**<br><sub>(peak 1,960 · 119 MiB / 14.0% CPU)</sub> | **5**<br><sub>(173 MiB / 0.1% CPU)</sub> |
+| Duplex (WebSocket / H1 Upgrade) | HTTP/1 · TLS | HTTP/1 · plain | **31,243**<br><sub>(163 MiB / 32.6% CPU)</sub> | **25,995**<br><sub>(87 MiB / 18.8% CPU)</sub> | **32,045**<br><sub>(100 MiB / 28.2% CPU)</sub> | 🥇 **38,061**<br><sub>(122 MiB / 33.2% CPU)</sub> | **31,518**<br><sub>(188 MiB / 33.7% CPU)</sub> |
+
 Slow consumer is sleep-bound; H1/H2/H3 sit in the same band. Early-response H1: TWP leads (~**1.79x** / **1.50x** YARP Win/Linux). **Duplex H2** sustain is non-zero for TWP on this GHA pass (@ `41f4adee`). WebSocket: TWP is ~**1.07x** YARP on Windows; on Linux HAProxy and nginx lead and TWP is ~**1.09x** YARP.
 
 ### TLS termination cost (H1 TLS → cleartext origin)
@@ -635,15 +764,15 @@ Median of **3** repeats @ `41f4adee`. Source: Actions [36853284423](https://gith
 
 #### macOS
 
-**Pending re-measure** on `macos-15` (Apple Silicon M1, 3-core / 7 GB): cells below read *Not measured* until the Mac shards finish.
+Median of **3** repeats on `macos-15` @ `41f4adee`. Source: Actions [37008082576](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37008082576).
 
 | Workload | TWP | nginx | HAProxy | Envoy | YARP |
 |---|---:|---:|---:|---:|---:|
-| Keep-alive · tiny GET | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| New-connection · tiny GET | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| Keep-alive · 256 KiB GET | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
+| Keep-alive · tiny GET | **15,772**<br><sub>(130 MiB / 23.8% CPU)</sub> | 🥇 **24,097**<br><sub>(84 MiB / 20.7% CPU)</sub> | **20,381**<br><sub>(101 MiB / 21.1% CPU)</sub> | **14,436**<br><sub>(121 MiB / 31.3% CPU)</sub> | **4,022**<br><sub>(179 MiB / 8.1% CPU)</sub> |
+| New-connection · tiny GET | **106**<br><sub>(106 MiB / 0.1% CPU)</sub> | **597**<br><sub>(86 MiB)</sub> | 🥇 **680**<br><sub>(101 MiB)</sub> | **625**<br><sub>(131 MiB / 0.1% CPU)</sub> | **108**<br><sub>(154 MiB / 0.2% CPU)</sub> |
+| Keep-alive · 256 KiB GET | **2,259**<br><sub>(213 MiB / 24.0% CPU)</sub> | **2,003**<br><sub>(84 MiB / 19.1% CPU)</sub> | 🥇 **2,619**<br><sub>(101 MiB / 29.3% CPU)</sub> | **2,341**<br><sub>(155 MiB / 25.2% CPU)</sub> | **1,664**<br><sub>(165 MiB / 34.8% CPU)</sub> |
 
-On Windows, TWP leads YARP on keep-alive tiny (~**1.18x**) and keep-alive 256 KiB (~**1.07x**); new-connection is a tie (~**1.01x**). On Linux, nginx and HAProxy lead keep-alive tiny, Envoy leads new-connection, and HAProxy leads keep-alive 256 KiB; TWP stays ahead of YARP on keep-alive and ties on new-connection (~**1.00x**). macOS Apple Silicon numbers are pending re-measure. New-connection is Darwin SslStream-bound (TWP≈YARP; handshake p99 SLO **500 ms** on macOS only — Win/Linux stay at **200 ms**).
+On Windows, TWP leads YARP on keep-alive tiny (~**1.18×**) and keep-alive 256 KiB (~**1.07×**); new-connection is a tie (~**1.01×**). On Linux, nginx leads keep-alive tiny (near-tie with HAProxy), Envoy leads new-connection, and HAProxy leads keep-alive 256 KiB; TWP stays ahead of YARP on keep-alive (~**1.16×** tiny, ~**1.28×** 256 KiB) and ties on new-connection. On macOS, nginx leads keep-alive tiny, and HAProxy leads new-connection and keep-alive 256 KiB; TWP is ~**3.9×** YARP on keep-alive tiny and ~**1.36×** on 256 KiB. New-connection is Darwin SslStream-bound for TWP and YARP (handshake p99 SLO **500 ms** on macOS only — Win/Linux stay at **200 ms**).
 
 ## Unary gRPC (H2 TLS)
 
@@ -653,7 +782,7 @@ Unary Echo **RPC/s** @ c=64 over H2 TLS→H2 TLS for Titanium, YARP, nginx (`grp
 |---|---:|---:|---:|---:|---:|
 | Windows | 🥇 **52,009**<br><sub>(96 MiB / 22.7% CPU)</sub> | **31,057**<br><sub>(126 MiB / 45.5% CPU)</sub> | **0**<br><sub>(143 MiB / 24.9% CPU)</sub> | *Not possible* | *Not possible* |
 | Linux | 🥇 **41,339**<br><sub>(117 MiB / 30.4% CPU)</sub> | **24,277**<br><sub>(158 MiB / 41.9% CPU)</sub> | **0**<br><sub>(114 MiB / 24.8% CPU)</sub> | **8,952**<br><sub>(83 MiB / 24.4% CPU)</sub> | **14,753**<br><sub>(127 MiB / 20.7% CPU)</sub> |
-| macOS | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
+| macOS | **28,466**<br><sub>(152 MiB / 11.5% CPU)</sub> | 🥇 **29,087**<br><sub>(189 MiB / 21.3% CPU)</sub> | **0**<br><sub>(85 MiB / 2.4% CPU)</sub> | **18,511**<br><sub>(104 MiB / 19.6% CPU)</sub> | **16,457**<br><sub>(120 MiB / 16.1% CPU)</sub> |
 
 ## Unary gRPC (H2 TLS → h2c)
 
@@ -665,7 +794,7 @@ Unary Echo **RPC/s** @ c=64 over **H2 TLS → h2c** (edge TLS, cleartext H2 orig
 |---|---:|---:|---:|---:|
 | Windows | 🥇 **61,643**<br><sub>(90 MiB / 23.5% CPU)</sub> | **36,011**<br><sub>(116 MiB / 48.1% CPU)</sub> | *Not possible* | *Not possible* |
 | Linux | 🥇 **43,166**<br><sub>(121 MiB / 29.6% CPU)</sub> | **24,252**<br><sub>(161 MiB / 43.4% CPU)</sub> | **7,782**<br><sub>(83 MiB / 24.5% CPU)</sub> | **12,044**<br><sub>(127 MiB / 22.2% CPU)</sub> |
-| macOS | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
+| macOS | 🥇 **22,187**<br><sub>(158 MiB / 9.5% CPU)</sub> | **6,717**<br><sub>(193 MiB / 16.0% CPU)</sub> | **7,750**<br><sub>(100 MiB / 13.9% CPU)</sub> | **16,573**<br><sub>(119 MiB / 19.7% CPU)</sub> |
 
 ## WebSocket (H1 TLS → H1 TLS)
 
@@ -675,7 +804,7 @@ WebSocket echo round-trips/sec over **dual-TLS** H1 (`proxy_ssl` style). Mode: `
 |---|---:|---:|---:|---:|---:|
 | Windows | 🥇 **22,332**<br><sub>(101 MiB / 47.4% CPU)</sub> | **21,366**<br><sub>(93 MiB / 43.1% CPU)</sub> | **9,361**<br><sub>(142 MiB / 24.6% CPU)</sub> | *Not possible* | *Not possible* |
 | Linux | **25,321**<br><sub>(141 MiB / 43.7% CPU)</sub> | **22,634**<br><sub>(134 MiB / 44.1% CPU)</sub> | **26,985**<br><sub>(103 MiB / 37.3% CPU)</sub> | **26,853**<br><sub>(83 MiB / 39.7% CPU)</sub> | 🥇 **28,050**<br><sub>(127 MiB / 37.9% CPU)</sub> |
-| macOS | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
+| macOS | **13,710**<br><sub>(168 MiB / 18.8% CPU)</sub> | **6,452**<br><sub>(148 MiB / 14.1% CPU)</sub> | **9,309**<br><sub>(86 MiB / 16.6% CPU)</sub> | 🥇 **14,432**<br><sub>(100 MiB / 20.5% CPU)</sub> | **11,461**<br><sub>(119 MiB / 20.6% CPU)</sub> |
 
 ## WebSocket (H2 TLS 8441 → H1)
 
@@ -687,9 +816,9 @@ The probe client sets `NoDelay` and writes each HTTP/2 frame as one TLS record. 
 
 | OS | Titanium | YARP | HAProxy | Envoy |
 |---|---:|---:|---:|---:|
-| Windows | 🥇 **28,294**<br><sub>(154 MiB / 43.7% CPU)</sub> | **0**<br><sub>(152 MiB / 19.4% CPU)</sub> | *Not possible* | *Not possible* |
-| Linux | 🥇 **42,050**<br><sub>(200 MiB / 49.6% CPU)</sub> | **0**<br><sub>(198 MiB / 43.0% CPU)</sub> | **38,112**<br><sub>(83 MiB / 40.3% CPU)</sub> | **0**<br><sub>(124 MiB / 0.3% CPU)</sub> |
-| macOS | **7,705**<br><sub>(288 MiB / 15.9% CPU)</sub> | **0**<br><sub>(186 MiB / 9.8% CPU)</sub> | 🥇 **9,015**<br><sub>(101 MiB / 15.4% CPU)</sub> | **0**<br><sub>(116 MiB / 0.4% CPU)</sub> |
+| Windows | 🥇 **23,836**<br><sub>(168 MiB / 44.5% CPU)</sub> | **0**<br><sub>(167 MiB / 19.6% CPU)</sub> | *Not possible* | *Not possible* |
+| Linux | **1,532**<br><sub>(146 MiB / 9.2% CPU)</sub> | **0**<br><sub>(174 MiB / 19.4% CPU)</sub> | 🥇 **1,537**<br><sub>(83 MiB / 3.1% CPU)</sub> | **0**<br><sub>(122 MiB / 0.3% CPU)</sub> |
+| macOS | **7,199**<br><sub>(313 MiB / 20.6% CPU)</sub> | **0**<br><sub>(183 MiB / 10.6% CPU)</sub> | 🥇 **19,220**<br><sub>(101 MiB / 21.6% CPU)</sub> | **0**<br><sub>(116 MiB / 0.3% CPU)</sub> |
 
 ## Other measurements
 

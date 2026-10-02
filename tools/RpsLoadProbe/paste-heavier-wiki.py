@@ -302,7 +302,12 @@ def main() -> None:
     rid_t = run_id_with_os(runs["tls"], "windows-latest")
     rid_t_lin = run_id_with_os(runs["tls"], "ubuntu-latest")
     rid_t_mac = run_id_with_os(runs["tls"], mac_folder)
+    rid_b_mac = run_id_with_os(runs["bodies"], mac_folder)
+    rid_p_mac = run_id_with_os(runs["post"], mac_folder)
+    rid_l_mac = run_id_with_os(runs["lossy"], mac_folder)
+    rid_a_mac = run_id_with_os(runs["arch"], mac_folder)
     rid_s = primary_run_id(runs["saturation"])
+    rid_s_mac = run_id_with_os(runs["saturation"], mac_folder)
 
     body_spec = [
         ("64 KiB", "HTTP/1 · TLS", "HTTP/1 · plain", "twp-reverse-http1-tls-body64k", "nginx-reverse-http1-tls-body64k", "yarp-reverse-http1-tls-body64k"),
@@ -516,13 +521,16 @@ def main() -> None:
         f"Blocks B/C use peer÷YARP / ÷nginx on median peak (not % of H1 origin). **RPS cells** embed median RSS / CPU for the **proxy child** plus its **full descendant tree** "
         f"(serve-proxy → nginx master → workers); origin-direct samples the **origin** child. Product matrices below use matched `dotnet-httpclient` only (not bombardier).\n"
     )
-    text = re.sub(
-        r"Calibration for the shared 4 vCPU loopback shape:.*?(?=\n\n#### Block A)",
-        sat_intro.rstrip() + "\n",
-        text,
-        count=1,
-        flags=re.S,
-    )
+    cal_at = text.find("Calibration for the shared")
+    block_a_at = text.find("\n\n#### Block A")
+    if cal_at < 0 or "later re-measure" not in text[cal_at:block_a_at]:
+        text = re.sub(
+            r"Calibration for the shared 4 vCPU loopback shape:.*?(?=\n\n#### Block A)",
+            sat_intro.rstrip() + "\n",
+            text,
+            count=1,
+            flags=re.S,
+        )
 
     # Block A
     a = text.find("#### Block A — H1 plain")
@@ -533,6 +541,14 @@ def main() -> None:
     block = replace_table_at(block, block.find("| Arm | Generator | RPS", w), sat_block_a(win["saturation"]))
     l = block.find("**Linux**")
     block = replace_table_at(block, block.find("| Arm | Generator | RPS", l), sat_block_a(lin["saturation"]))
+    if "**macOS**" not in block:
+        mac_a = (
+            f"\n\n**macOS** (`{mac_folder}`, Apple Silicon)\n\n"
+            + sat_block_a(mac["saturation"])
+            + "\n"
+        )
+        prose = block.find("\nReverse peers are about")
+        block = (block[:prose] + mac_a + block[prose:]) if prose > 0 else block.rstrip() + mac_a
     text = text[:a] + block + text[b:]
 
     # Block B
@@ -551,6 +567,17 @@ def main() -> None:
         block.find("| Arm |", l),
         sat_block_bc(lin["saturation"], "nginx-reverse-http2", "yarp-reverse-http2", "twp-reverse-http2-cleartext"),
     )
+    if "**macOS**" not in block:
+        block = block.rstrip() + (
+            f"\n\n**macOS** (`{mac_folder}`, Apple Silicon)\n\n"
+            + sat_block_bc(
+                mac["saturation"],
+                "nginx-reverse-http2",
+                "yarp-reverse-http2",
+                "twp-reverse-http2-cleartext",
+            )
+            + "\n"
+        )
     text = text[:b] + block + text[c:]
 
     # Block C
@@ -562,29 +589,46 @@ def main() -> None:
     if how < 0:
         raise SystemExit("missing end of saturation Block C")
     block = text[c:how]
-    w = block.find("**Windows**")
-    block = replace_table_at(
-        block,
-        block.find("| Arm |", w),
-        sat_block_bc(
-            win["saturation"],
-            "nginx-reverse-http3-cleartext",
-            "yarp-reverse-http3-cleartext",
-            "twp-reverse-http3-cleartext",
-            win_no_nginx=True,
-        ),
-    )
-    l = block.find("**Linux**")
-    block = replace_table_at(
-        block,
-        block.find("| Arm |", l),
-        sat_block_bc(
-            lin["saturation"],
-            "nginx-reverse-http3-cleartext",
-            "yarp-reverse-http3-cleartext",
-            "twp-reverse-http3-cleartext",
-        ),
-    )
+    # Block C on develop is a later H3 scratch re-measure. Do not paste the older saturation CSV over it.
+    if "f2061c27" not in block:
+        w = block.find("**Windows**")
+        block = replace_table_at(
+            block,
+            block.find("| Arm |", w),
+            sat_block_bc(
+                win["saturation"],
+                "nginx-reverse-http3-cleartext",
+                "yarp-reverse-http3-cleartext",
+                "twp-reverse-http3-cleartext",
+                win_no_nginx=True,
+            ),
+        )
+        l = block.find("**Linux**")
+        block = replace_table_at(
+            block,
+            block.find("| Arm |", l),
+            sat_block_bc(
+                lin["saturation"],
+                "nginx-reverse-http3-cleartext",
+                "yarp-reverse-http3-cleartext",
+                "twp-reverse-http3-cleartext",
+            ),
+        )
+    if "**macOS**" not in block:
+        block = block.rstrip() + (
+            f"\n\n**macOS** (`{mac_folder}`, Apple Silicon)\n\n"
+            + sat_block_bc(
+                mac["saturation"],
+                "nginx-reverse-http3-cleartext",
+                "yarp-reverse-http3-cleartext",
+                "twp-reverse-http3-cleartext",
+            )
+            + "\n"
+        )
+        block = block.replace(
+            "macOS was not re-measured.",
+            f"macOS Apple Silicon: [{rid_s_mac}]({run_url(rid_s_mac)}).",
+        )
     text = text[:c] + block + text[how:]
 
     def patch_heavier(heading: str, new_hdr: str, new_table: str) -> None:
@@ -699,14 +743,15 @@ def main() -> None:
     if next_h2 < 0:
         next_h2 = len(text)
     prose_pat = re.compile(
-        r"\nAll three workloads are \*\*>1\.00×\*\* YARP[^\n]*\n",
+        r"\n(?:All three workloads are \*\*>1\.00×\*\* YARP|On Windows, TWP leads YARP on keep-alive tiny)[^\n]*\n",
     )
     mac_prose = (
-        "\nAll three workloads are **>1.00×** YARP on Windows and Linux. On Linux, "
-        "HAProxy leads keep-alive tiny (near-tie with nginx) and Envoy leads "
-        "new-connection; TWP stays ahead of YARP on all three. On macOS, HAProxy "
-        "leads keep-alive tiny and new-connection; YARP leads keep-alive 256 KiB. "
-        "New-connection is Darwin SslStream-bound (TWP≈YARP; handshake p99 SLO "
+        "\nOn Windows, TWP leads YARP on keep-alive tiny (~**1.18×**) and keep-alive 256 KiB (~**1.07×**); "
+        "new-connection is a tie (~**1.01×**). On Linux, nginx leads keep-alive tiny (near-tie with HAProxy), "
+        "Envoy leads new-connection, and HAProxy leads keep-alive 256 KiB; TWP stays ahead of YARP on keep-alive "
+        "(~**1.16×** tiny, ~**1.28×** 256 KiB) and ties on new-connection. On macOS, nginx leads keep-alive tiny, "
+        "and HAProxy leads new-connection and keep-alive 256 KiB; TWP is ~**3.9×** YARP on keep-alive tiny and "
+        "~**1.36×** on 256 KiB. New-connection is Darwin SslStream-bound for TWP and YARP (handshake p99 SLO "
         "**500 ms** on macOS only — Win/Linux stay at **200 ms**).\n"
     )
     if m >= 0 and m < next_h2:
@@ -742,6 +787,48 @@ def main() -> None:
         grpc = text.find("\n## Unary gRPC", tls)
         if grpc > 0 and "Darwin SslStream-bound" not in text[tls:grpc]:
             text = text[:grpc] + mac_prose + text[grpc:]
+
+    def ensure_mac_heading(anchor: str, following: str, heading: str, hdr: str, table: str) -> None:
+        nonlocal text
+        a = text.find(anchor)
+        b = text.find(following, a + len(anchor)) if a >= 0 else -1
+        if a < 0 or b < 0:
+            raise SystemExit(f"missing anchor {anchor!r} -> {following!r}")
+        if heading in text[a:b]:
+            return
+        text = text[:b] + f"{heading}\n\n{hdr}\n\n{table}\n\n" + text[b:]
+
+    mac_intro = (
+        f"Median of **3** repeats on `{mac_folder}` (Apple Silicon M1, 3-core / 7 GB) @ `{HEAD}`."
+    )
+    ensure_mac_heading(
+        "### Linux — heavier reverse GET (64 KiB / 256 KiB)",
+        "### Windows — POST 64 KiB request + 64 KiB response",
+        "### macOS — heavier reverse GET (64 KiB / 256 KiB)",
+        f"{mac_intro} Source: Actions [{rid_b_mac}]({run_url(rid_b_mac)}) (`compare-bodies`). Warmup 2s / measure 8s.",
+        bodies_table(mac["bodies"], False),
+    )
+    ensure_mac_heading(
+        "### Linux — POST 64 KiB request + 64 KiB response",
+        "### Windows — lossy / high-RTT (H2 HOL / H3 loss)",
+        "### macOS — POST 64 KiB request + 64 KiB response",
+        f"{mac_intro} Source: Actions [{rid_p_mac}]({run_url(rid_p_mac)}) (`compare-post`).",
+        post_table(mac["post"], False),
+    )
+    ensure_mac_heading(
+        "### Linux — lossy / high-RTT (H2 HOL / H3 loss)",
+        "### Architecture-sensitive",
+        "### macOS — lossy / high-RTT (H2 HOL / H3 loss)",
+        f"{mac_intro} Source: [{rid_l_mac}]({run_url(rid_l_mac)}) (`compare-lossy`; lossy H3 uses `quic-http3`, UDP drop-only).",
+        lossy_table(mac["lossy"], False),
+    )
+    ensure_mac_heading(
+        "#### Linux",
+        "Slow consumer is sleep-bound",
+        "#### macOS",
+        f"{mac_intro} Source: Actions [{rid_a_mac}]({run_url(rid_a_mac)}) (`compare-arch`).",
+        arch_table(mac["arch"], False),
+    )
 
     WIKI.write_text(text, encoding="utf-8")
     print("heavier+saturation pasted")
