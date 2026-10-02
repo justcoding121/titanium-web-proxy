@@ -131,16 +131,21 @@ function Get-RunStatus([long] $RunId) {
     return @{ status = $r.status; conclusion = $r.conclusion; created = $r.created_at }
 }
 
+function Parse-GhUtc([object] $value) {
+    if ($value -is [datetime]) {
+        return ([datetime]$value).ToUniversalTime()
+    }
+    $s = [string]$value
+    if ($s.EndsWith('Z')) { $s = $s.TrimEnd('Z') }
+    return [datetime]::Parse($s, $null, [System.Globalization.DateTimeStyles]::AssumeUniversal).ToUniversalTime()
+}
+
 function Find-NewRunId([datetime] $AfterUtc) {
     $list = Invoke-GhJson -GhArgs @(
         'api', "repos/$Repo/actions/workflows/rps-saturation.yml/runs?event=workflow_dispatch&per_page=15"
     )
     foreach ($r in @($list.workflow_runs)) {
-        $created = [datetime]::Parse(
-            $r.created_at.TrimEnd('Z'),
-            $null,
-            [System.Globalization.DateTimeStyles]::AssumeUniversal
-        ).ToUniversalTime()
+        $created = Parse-GhUtc $r.created_at
         if ($created -lt $AfterUtc.AddSeconds(-20)) { continue }
         return [long]$r.id
     }
