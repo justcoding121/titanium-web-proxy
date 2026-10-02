@@ -46,7 +46,7 @@ Do **not** run full `compare-product` on every develop PR. Thresholds change onl
 
 ### Mac Apple Silicon (`macos-15`) shard counts
 
-Hosted `macos-15` is 3-core / 7 GiB. Wedged ramps have been killed by GitHub at ~47–48m with "lost communication" and **0 artifacts** (often during `nginx-reverse-http1`). Use **finer shards** so a dying VM loses fewer arms, keep **≤2–3 concurrent** Mac jobs, and prefer **serial** dispatch for wiki refresh. Ramp step `timeout-minutes` is **40** on macOS so a partial CSV can still upload (`INCOMPLETE.txt` marks the shard for re-dispatch).
+Hosted `macos-15` is 3-core / 7 GiB. Wedged ramps have been killed by GitHub at ~47–48m with "lost communication" and **0 artifacts** (often during `nginx-reverse-http1`). Use **finer shards** so a dying VM loses fewer arms, keep **≤2–3 concurrent** Mac jobs, and prefer **serial** dispatch for wiki refresh. Ramp step `timeout-minutes` is **55** on macOS so a ~13-arm / repeats=3 shard can finish; `INCOMPLETE.txt` still marks true hangs for re-dispatch.
 
 | Mode | Win/Linux shards | Mac shards (target ≤ ~15–18 arms / ~38m) |
 |------|------------------|------------------------------------------|
