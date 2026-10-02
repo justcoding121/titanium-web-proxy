@@ -816,9 +816,9 @@ The probe client sets `NoDelay` and writes each HTTP/2 frame as one TLS record. 
 
 | OS | Titanium | YARP | HAProxy | Envoy |
 |---|---:|---:|---:|---:|
-| Windows | 🥇 **23,836**<br><sub>(168 MiB / 44.5% CPU)</sub> | **0**<br><sub>(167 MiB / 19.6% CPU)</sub> | *Not possible* | *Not possible* |
-| Linux | **1,532**<br><sub>(146 MiB / 9.2% CPU)</sub> | **0**<br><sub>(174 MiB / 19.4% CPU)</sub> | 🥇 **1,537**<br><sub>(83 MiB / 3.1% CPU)</sub> | **0**<br><sub>(122 MiB / 0.3% CPU)</sub> |
-| macOS | **7,199**<br><sub>(313 MiB / 20.6% CPU)</sub> | **0**<br><sub>(183 MiB / 10.6% CPU)</sub> | 🥇 **19,220**<br><sub>(101 MiB / 21.6% CPU)</sub> | **0**<br><sub>(116 MiB / 0.3% CPU)</sub> |
+| Windows | 🥇 **28,294**<br><sub>(154 MiB / 43.7% CPU)</sub> | **0**<br><sub>(152 MiB / 19.4% CPU)</sub> | *Not possible* | *Not possible* |
+| Linux | 🥇 **42,050**<br><sub>(200 MiB / 49.6% CPU)</sub> | **0**<br><sub>(198 MiB / 43.0% CPU)</sub> | **38,112**<br><sub>(83 MiB / 40.3% CPU)</sub> | **0**<br><sub>(124 MiB / 0.3% CPU)</sub> |
+| macOS | **7,705**<br><sub>(288 MiB / 15.9% CPU)</sub> | **0**<br><sub>(186 MiB / 9.8% CPU)</sub> | 🥇 **9,015**<br><sub>(101 MiB / 15.4% CPU)</sub> | **0**<br><sub>(116 MiB / 0.4% CPU)</sub> |
 
 ## Other measurements
 
