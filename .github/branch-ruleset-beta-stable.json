@@ -35,7 +35,7 @@
           { "context": ".NET / cli-e2e (macos-latest)" },
           { "context": "RPS saturation / rps (ubuntu-latest)" },
           { "context": "RPS saturation / rps (windows-latest)" },
-          { "context": "RPS saturation / rps (macos-15-intel)" }
+          { "context": "RPS saturation / rps (macos-15)" }
         ]
       }
     },

@@ -240,6 +240,39 @@ public class MitmCompressedRelayHelperTests
     }
 
     [TestMethod]
+    public void AppendLogBaseline_RequestHeaderSetStyle_SetOrAdd_AllowsRelay()
+    {
+        // Mirrors ReverseProxySessionDispatch applying RequestHeaderSet while COW is armed
+        // (TryApply before TakeMitmRelayBaseline).
+        var headers = new HeaderCollection();
+        headers.AddHeader("accept", "text/html");
+        headers.ArmMitmRelayBaseline();
+        headers.SetOrAddHeaderValue("X-Route-Probe", "yes");
+        var baseline = headers.TakeMitmRelayBaseline();
+
+        Assert.IsTrue(baseline.TryGetPrecomputedAppends(out var expected));
+        Assert.AreEqual(1, expected.Count);
+        Assert.IsTrue(MitmCompressedRelayHelper.AllowsCompressedRelay(
+            baseline, headers, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out var added));
+        Assert.AreEqual("X-Route-Probe", added[0].Name);
+        Assert.AreEqual("yes", added[0].Value);
+    }
+
+    [TestMethod]
+    public void HeaderCollection_NonUniqueMapsStayLazyUntilDuplicateName()
+    {
+        var headers = new HeaderCollection();
+        headers.AddHeader("accept", "text/html");
+        headers.AddHeader("host", "example.com");
+        Assert.AreEqual(0, headers.NonUniqueHeaders.Count);
+
+        headers.AddHeader("set-cookie", "a=1");
+        headers.AddHeader("set-cookie", "b=2");
+        Assert.AreEqual(1, headers.NonUniqueHeaders.Count);
+        Assert.AreEqual(2, headers.NonUniqueHeaders["set-cookie"].Count);
+    }
+
+    [TestMethod]
     public void DropOnly_Rejected()
     {
         var before = new HeaderCollection();

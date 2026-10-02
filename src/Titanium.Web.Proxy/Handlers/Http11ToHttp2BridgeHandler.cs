@@ -552,6 +552,21 @@ public partial class ProxyServer
 
             PrepareRequestForOrigin(request);
 
+            // Expect: 100-continue — H1 clients wait for 100 before sending the body. The h2 origin
+            // path sends HEADERS then immediately pumps the body, so without a synthetic 100 a
+            // strict client deadlocks. Mirror RequestHandler: synthetic 100 when CompatibilityMode
+            // is on or when Enable100ContinueBehaviour is off (the default). Strip Expect so the
+            // origin does not also wait.
+            if (request.ExpectContinue && !request.IsBodyRead
+                && (CompatibilityMode100Continue || !Enable100ContinueBehaviour))
+            {
+                var continueBuilder = new HeaderBuilder();
+                continueBuilder.WriteResponseLine(request.HttpVersion, 100, "Continue");
+                continueBuilder.WriteHeaders(new HeaderCollection());
+                await clientStream.WriteHeadersAsync(continueBuilder, cancellationToken);
+                request.Headers.RemoveHeader(KnownHeaders.Expect);
+            }
+
             // Http2OriginConnection.SendAsync performs the whole request-send + response-receive round trip
             // in one call rather than exposing separate phases, so - unlike the HTTP/1.1 and h2-to-HTTP/1.1
             // paths - RequestSentAt and ResponseHeadersReceivedAt below are necessarily approximated as the
@@ -720,9 +735,21 @@ public partial class ProxyServer
 
         MaybeInjectClientAltSvc(args);
 
+        // Capture before BeforeResponse: a user replacement clears StreamBodyWriter on the new
+        // Response object, and the origin concurrency gate / lease would never be released.
+        var originStreamBody = response.StreamBodyWriter;
+
         if (!response.Locked) await OnBeforeResponse(args);
 
         response = args.HttpClient.Response;
+
+        if (!ReferenceEquals(response, exchange.Response) && originStreamBody != null)
+        {
+            exchange.Response.StreamBodyWriter = null;
+            // Drain and release origin resources; the replacement body is unrelated.
+            await originStreamBody(Stream.Null, cancellationToken);
+            originStreamBody = null;
+        }
 
         if (response.Locked)
         {

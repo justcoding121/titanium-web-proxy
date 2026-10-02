@@ -126,7 +126,7 @@ public class HttpWebClient
     /// <summary>
     ///     Web Request.
     /// </summary>
-    public Request Request { get; }
+    public Request Request { get; private set; }
 
     /// <summary>
     ///     Web Response. Created on first access so H2/H3 MITM Lite request-only work
@@ -368,7 +368,16 @@ public class HttpWebClient
 
         Response.RequestMethod = Request.Method;
 
-        var statusVt = Connection.Stream.ReadResponseStatus(cancellationToken);
+        ValueTask<ResponseStatusInfo?> statusVt;
+        try
+        {
+            statusVt = Connection.Stream.ReadResponseStatus(cancellationToken);
+        }
+        catch (FormatException ex) when (CanRetryMalformedStatusLine())
+        {
+            throw MalformedStatusLine(ex);
+        }
+
         if (!statusVt.IsCompletedSuccessfully)
             return ReceiveResponseSlowAsync(statusVt, cancellationToken);
 
@@ -381,9 +390,9 @@ public class HttpWebClient
         if (httpStatus == null)
         {
             // EOF before any response bytes: typically a stale pooled keep-alive connection.
-            // RetryPolicy re-runs the whole exchange; only safe when there is no body or the
-            // body is buffered in memory (IsBodyRead). A streamed body cannot be replayed.
-            if (!Request.HasBody || Request.IsBodyRead)
+            // Only replay-safe for idempotent methods with a replayable body (same gate as
+            // malformed status). A POST that already reached the origin must not be replayed.
+            if (CanRetryEofBeforeResponse())
                 throw new RetryableServerConnectionException(
                     "Server connection was closed before any response was received.");
 
@@ -408,9 +417,34 @@ public class HttpWebClient
     private async ValueTask ReceiveResponseSlowAsync(ValueTask<ResponseStatusInfo?> statusVt,
         CancellationToken cancellationToken)
     {
-        var httpStatus = await statusVt;
+        ResponseStatusInfo? httpStatus;
+        try
+        {
+            httpStatus = await statusVt;
+        }
+        catch (FormatException ex) when (CanRetryMalformedStatusLine())
+        {
+            throw MalformedStatusLine(ex);
+        }
+
         await ReceiveResponseAfterStatus(httpStatus, cancellationToken);
     }
+
+    /// <summary>
+    ///     A status-line <see cref="FormatException"/> happens before any response bytes are committed
+    ///     to the client, so a replay is possible when the request is replayable (no body, or buffered).
+    ///     Unlike EOF-before-response, the origin did answer (with leftover bytes of a desynced
+    ///     keep-alive) and has very likely processed the request, so only idempotent GET/HEAD are
+    ///     replayed: a POST/PATCH replay could be applied twice.
+    /// </summary>
+    private bool CanRetryMalformedStatusLine() =>
+        (!Request.HasBody || Request.IsBodyRead)
+        && Routing.StreamDestinationDispatch.IsIdempotentMethod(Request.Method);
+
+    private bool CanRetryEofBeforeResponse() => CanRetryMalformedStatusLine();
+
+    private static RetryableServerConnectionException MalformedStatusLine(FormatException ex) =>
+        new("Server returned a response that did not start with an HTTP status line.", ex);
 
     private static async ValueTask ReceiveResponseAwaitHeadersAsync(ValueTask<bool> headersVt,
         CancellationToken cancellationToken)
@@ -451,6 +485,29 @@ public class HttpWebClient
         response?.ResetForKeepAlive();
         data?.Clear();
         UserData = null;
+    }
+
+    /// <summary>
+    ///     Rebind a pooled lite client onto a new request without allocating a new
+    ///     <see cref="HttpWebClient"/> / response shell (H1 terminate-lite hot path).
+    /// </summary>
+    internal void RebindForTerminateLite(Request request)
+    {
+        connection = null;
+        upstreamConnectionId = null;
+        upstreamRemoteEndPoint = null;
+        upstreamConnectionTiming = null;
+        CloseServerConnection = false;
+        Request = request;
+        if (response is not null)
+            response.ResetForKeepAlive();
+        else
+            response = new Response();
+        data?.Clear();
+        UserData = null;
+        UpStreamEndPoint = null;
+        UpStreamEndPointIPv4 = null;
+        UpStreamEndPointIPv6 = null;
     }
 
 }

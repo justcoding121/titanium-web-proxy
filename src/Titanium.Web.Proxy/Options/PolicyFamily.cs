@@ -83,5 +83,20 @@ public enum PolicyFamily
     ///         <c>GOAWAY(PROTOCOL_ERROR)</c> on violations.
     ///     </para>
     /// </summary>
-    Http2RelayValidation
+    Http2RelayValidation,
+
+    /// <summary>
+    ///     Whether HTTP/1 keep-alive retries (EOF-before-response, malformed status, mid-exchange
+    ///     IOException) and bare CR in header values follow the strict replay-safe rules.
+    ///     <para>
+    ///         <see cref="PolicyMode.Observe"/> (default on <see cref="ProxyProfile.Balanced"/> and
+    ///         <see cref="ProxyProfile.LegacyCompatible"/>) keeps today's lenient behavior and
+    ///         records a policy breach metric when the strict rule would have fired.
+    ///     </para>
+    ///     <para>
+    ///         <see cref="PolicyMode.Enforce"/> (default on <see cref="ProxyProfile.PublicFacing"/>)
+    ///         refuses to replay non-idempotent methods and rejects bare CR/LF/NUL in header values.
+    ///     </para>
+    /// </summary>
+    Http1ReplaySafety
 }

@@ -532,9 +532,25 @@ internal sealed class Http3Connection
                 {
                     _logger.LogError(ex, "Error in AfterResponse during HTTP/3 connection teardown");
                 }
+
+                try
+                {
+                    await state.Cancellation.CancelAsync();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Stream path already returned/disposed the CTS.
+                }
+
+                try
+                {
+                    state.Cancellation.Dispose();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Already returned to the session CTS pool by the stream fast path.
+                }
             }
-            await state.Cancellation.CancelAsync();
-            state.Cancellation.Dispose();
         }
         _activeStreams.Clear();
     }

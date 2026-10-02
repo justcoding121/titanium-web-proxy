@@ -154,6 +154,106 @@ public class Http2BodyWriteHookFrameOrderTests
             "Request DATA must not precede HEADERS toward the origin (idle-stream PROTOCOL_ERROR).");
     }
 
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task Http2_Mitm_BeforeResponse_GetResponseBody_With_BodyWriteHook_Completes()
+    {
+        // Inspector's BeforeResponse awaits GetResponseBody for inspectable bodies. The frame loop must keep
+        // routing the origin's DATA while that handler is parked (response DATA must not be gated on the
+        // raw handler task, which only completes after the body arrives).
+        var payload = new string('a', 4096);
+        using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
+        rawServer.HandleConnection(async connection =>
+        {
+            await connection.SendInitialSettingsAsync();
+            var (streamId, _, _) = await connection.ReadRequestAsync();
+            var responseHeaders = connection.EncodeHeaders(
+                new[] { (":status", "200") },
+                new[] { ("content-type", "text/plain") });
+            await connection.WriteHeaderBlockAsync(streamId, responseHeaders, endStream: false);
+            await connection.WriteFrameAsync(Http2FrameType.Data, streamId, 0,
+                Encoding.ASCII.GetBytes(payload[..2048]));
+            await connection.WriteFrameAsync(Http2FrameType.Data, streamId, Http2FrameFlag.EndStream,
+                Encoding.ASCII.GetBytes(payload[2048..]));
+        });
+
+        using var testSuite = new TestSuite();
+        var proxy = SubscribeInspectorLikeHooks(testSuite.GetProxy());
+        proxy.BeforeResponse += async (_, e) => { await e.GetResponseBody(); };
+
+        var uri = new Uri(rawServer.Url);
+        using var rawClient = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+        await SendGetAsync(rawClient, uri, 1);
+
+        var (_, body) = await ReadStreamFramesUntilEndAsync(rawClient, 1);
+        Assert.AreEqual(payload, Encoding.ASCII.GetString(body));
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task Http2_Mitm_OnResponseBodyWrite_Body_Larger_Than_Client_Window_Completes()
+    {
+        // The hook path must not park the frame loop on flow control AND must not lose the deferred tail:
+        // END_STREAM parked behind a short client window used to be closed (RemoveStream cancels the
+        // deferred queue and drops the flow window) so the client never saw the end of the body.
+        const int total = 300 * 1024;
+        var expected = new byte[total];
+        new Random(7).NextBytes(expected);
+
+        using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
+        rawServer.HandleConnection(async connection =>
+        {
+            await connection.SendInitialSettingsAsync();
+            var (streamId, _, _) = await connection.ReadRequestAsync();
+            var responseHeaders = connection.EncodeHeaders(
+                new[] { (":status", "200") },
+                new[] { ("content-type", "application/octet-stream") });
+            await connection.WriteHeaderBlockAsync(streamId, responseHeaders, endStream: false);
+            for (var offset = 0; offset < total; offset += 16384)
+            {
+                var len = Math.Min(16384, total - offset);
+                await connection.WriteFrameAsync(Http2FrameType.Data, streamId,
+                    offset + len >= total ? Http2FrameFlag.EndStream : 0,
+                    expected.AsMemory(offset, len).ToArray());
+            }
+        });
+
+        using var testSuite = new TestSuite();
+        var proxy = SubscribeInspectorLikeHooks(testSuite.GetProxy());
+
+        var uri = new Uri(rawServer.Url);
+        using var rawClient = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+        await SendGetAsync(rawClient, uri, 1);
+
+        var received = new MemoryStream();
+        var ended = false;
+        for (var i = 0; i < 2048 && !ended; i++)
+        {
+            var frame = await rawClient.Connection.ReadFrameAsync();
+            if (frame.Type == Http2FrameType.RstStream && frame.StreamId == 1)
+                Assert.Fail("Stream was reset before the body completed.");
+            if (frame.Type != Http2FrameType.Data || frame.StreamId != 1)
+                continue;
+
+            received.Write(frame.Payload, 0, frame.Payload.Length);
+            ended = (frame.Flags & Http2FrameFlag.EndStream) != 0;
+            if (!ended && frame.Payload.Length > 0)
+            {
+                // Replenish the (default 65535-byte) windows as a real client does.
+                var increment = new byte[]
+                {
+                    (byte)(frame.Payload.Length >> 24), (byte)(frame.Payload.Length >> 16),
+                    (byte)(frame.Payload.Length >> 8), (byte)frame.Payload.Length
+                };
+                await rawClient.Connection.WriteFrameAsync(Http2FrameType.WindowUpdate, 0, 0, increment);
+                await rawClient.Connection.WriteFrameAsync(Http2FrameType.WindowUpdate, 1, 0, increment);
+            }
+        }
+
+        Assert.IsTrue(ended, "Client never received END_STREAM for a body larger than its window.");
+        CollectionAssert.AreEqual(expected, received.ToArray());
+    }
+
     private static ProxyServer SubscribeInspectorLikeHooks(ProxyServer proxy)
     {
         proxy.EnableHttp2 = true;

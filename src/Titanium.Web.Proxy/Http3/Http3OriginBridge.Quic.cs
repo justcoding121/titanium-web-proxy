@@ -86,6 +86,9 @@ internal static partial class Http3OriginBridge
         QuicServerConnection? quicConn = null;
         // When true, StreamBodyWriter owns originStream + quicConn release (do not dispose/release here).
         var streamHandedOff = false;
+        // Invoked by StreamBodyWriter's finally, or by the outer finally if the writer never ran
+        // (BeforeResponse replaced the response / cancellation before emit).
+        Func<Task>? pendingHandoffRelease = null;
         // A pooled connection can go stale between requests: MsQuic's own (server-negotiated) idle
         // timeout is often shorter than QuicConnectionPool's bookkeeping window, and a silently
         // dead connection isn't reflected by QuicServerConnection.IsClosed until it's actually used.
@@ -182,40 +185,50 @@ internal static partial class Http3OriginBridge
                 responseHeadersFrame = await Http3Frame.ReadAsync(originStream,
                     maxPayloadBytes: server.MaxDecodedHeaderListBytes, cancellationToken);
 
-                if (responseHeadersFrame == null)
-                    throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
-                        "Expected HEADERS frame as first frame on origin response stream.");
-
-                // RFC 9114 §9: ignore unknown/GREASE frames. DATA before HEADERS is a protocol error.
-                if (responseHeadersFrame.Type != Http3FrameType.Headers)
+                try
                 {
-                    if (responseHeadersFrame.Type == Http3FrameType.Data)
+                    if (responseHeadersFrame == null)
                         throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
-                            "DATA frame received before response HEADERS.");
-                    if (IsForbiddenOnRequestStream(responseHeadersFrame.Type))
-                        throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
-                            $"Frame type 0x{responseHeadersFrame.Type:X} not permitted on request stream.");
-                    continue; // GREASE / unknown / PRIORITY_UPDATE etc.
-                }
+                            "Expected HEADERS frame as first frame on origin response stream.");
 
-                decodedResponseHeaders = QpackDecoder.Decode(responseHeadersFrame.Payload.Span);
-                finalStatus = ParseStatusCode(decodedResponseHeaders);
-
-                if (finalStatus is >= 100 and < 200)
-                {
-                    if (++interimCount > maxInterimResponses)
-                        throw new Http3StreamException(Http3ErrorCode.InternalError,
-                            $"Origin sent more than {maxInterimResponses} interim responses.");
-
-                    if (onInterimResponse != null)
+                    // RFC 9114 §9: ignore unknown/GREASE frames. DATA before HEADERS is a protocol error.
+                    if (responseHeadersFrame.Type != Http3FrameType.Headers)
                     {
-                        var interim = BuildResponseFromHeaders(decodedResponseHeaders, HttpHeader.Version30);
-                        await onInterimResponse(interim, cancellationToken);
+                        if (responseHeadersFrame.Type == Http3FrameType.Data)
+                            throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
+                                "DATA frame received before response HEADERS.");
+                        if (IsForbiddenOnRequestStream(responseHeadersFrame.Type))
+                            throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
+                                $"Frame type 0x{responseHeadersFrame.Type:X} not permitted on request stream.");
+                        continue; // GREASE / unknown / PRIORITY_UPDATE etc.
                     }
-                    continue;
-                }
 
-                break;
+                    decodedResponseHeaders = QpackDecoder.Decode(responseHeadersFrame.Payload.Span);
+                    finalStatus = ParseStatusCode(decodedResponseHeaders);
+                    if (finalStatus is < 100 or > 599)
+                        throw new Http3StreamException(Http3ErrorCode.MessageError,
+                            $"Origin response :status is missing or invalid ({finalStatus}).");
+
+                    if (finalStatus is >= 100 and < 200)
+                    {
+                        if (++interimCount > maxInterimResponses)
+                            throw new Http3StreamException(Http3ErrorCode.InternalError,
+                                $"Origin sent more than {maxInterimResponses} interim responses.");
+
+                        if (onInterimResponse != null)
+                        {
+                            var interim = BuildResponseFromHeaders(decodedResponseHeaders, HttpHeader.Version30);
+                            await onInterimResponse(interim, cancellationToken);
+                        }
+                        continue;
+                    }
+
+                    break;
+                }
+                finally
+                {
+                    responseHeadersFrame?.ReturnPayload();
+                }
             }
 
             sessionArgs.Timing?.MarkResponseHeadersReceived();
@@ -228,13 +241,16 @@ internal static partial class Http3OriginBridge
             if (!string.IsNullOrEmpty(altSvc))
             {
                 var entries = AltSvcParser.Parse(altSvc);
-                if (entries.Count > 0 && entries[0].MaxAgeSeconds > 0)
+                var originPort = request.GetOriginHostPort(port).Port;
+                foreach (var entry in entries)
                 {
-                    var originPort = request.GetOriginHostPort(port).Port;
-                    var ttlSeconds = Math.Min(entries[0].MaxAgeSeconds, Http3OriginCapabilityCache.DefaultTtl.TotalSeconds * 2);
+                    if (entry.MaxAgeSeconds <= 0)
+                        continue;
+                    var ttlSeconds = Math.Min(entry.MaxAgeSeconds, Http3OriginCapabilityCache.DefaultTtl.TotalSeconds * 2);
                     var ttl = TimeSpan.FromSeconds(ttlSeconds);
                     server.Http3OriginCapabilityCache.Set($"{sniHost}:{originPort}",
-                        entries[0].Port == originPort ? int.MinValue : entries[0].Port, ttl);
+                        entry.Port == originPort ? int.MinValue : entry.Port, ttl);
+                    break;
                 }
             }
 
@@ -332,6 +348,15 @@ internal static partial class Http3OriginBridge
             quicConn = null;
             streamHandedOff = true;
 
+            var handoffReleased = 0;
+            pendingHandoffRelease = async () =>
+            {
+                if (Interlocked.Exchange(ref handoffReleased, 1) != 0)
+                    return;
+                try { await streamToClient.DisposeAsync(); } catch { /* best effort */ }
+                try { await QuicConnectionPool.ReleaseAsync(connToRelease); } catch { /* best effort */ }
+            };
+
             var hasBodyWriteHook = server.HasOnResponseBodyWriteSubscribers;
 
             response.StreamBodyWriter = async (clientBodyStream, ct) =>
@@ -414,8 +439,8 @@ internal static partial class Http3OriginBridge
                 }
                 finally
                 {
-                    try { await streamToClient.DisposeAsync(); } catch { /* best effort */ }
-                    try { await QuicConnectionPool.ReleaseAsync(connToRelease); } catch { /* best effort */ }
+                    if (pendingHandoffRelease != null)
+                        await pendingHandoffRelease();
                 }
             };
 
@@ -492,11 +517,12 @@ internal static partial class Http3OriginBridge
                 continue;
             }
 
-            if (!isForcedH3)
+            if (!isForcedH3 && !requestSent)
             {
                 // Auto policy: the cached H3 capability is stale or unusable — evict and fall back to TCP.
-                // Evict by origin identity (request URI port), not the QUIC connect port, which may
-                // differ when Alt-Svc / SVCB advertised an alternative port.
+                // Only when no request bytes were written: replaying a POST/PUT after HEADERS were sent
+                // would double-submit. Evict by origin identity (request URI port), not the QUIC connect
+                // port, which may differ when Alt-Svc / SVCB advertised an alternative port.
                 var originPort = request.GetOriginHostPort(port).Port;
                 var hostAndPort = $"{sniHost}:{originPort}";
                 server.Http3OriginCapabilityCache.Evict(hostAndPort);
@@ -518,7 +544,8 @@ internal static partial class Http3OriginBridge
                 return;
             }
 
-            // Forced H3: surface as a 502 — never fall back silently.
+            // Forced H3, or Auto after the request was already on the wire: surface as a 502 —
+            // never silently replay a non-idempotent exchange on TCP.
             sessionArgs.HttpClient.Response = MakeBadGatewayResponse(ex.Message);
             return;
         }
@@ -526,8 +553,12 @@ internal static partial class Http3OriginBridge
         }
         finally
         {
-            // When StreamBodyWriter owns the stream/connection, it releases on completion.
-            // Otherwise give up this request's stream so idle eviction is not blocked forever.
+            // When StreamBodyWriter owns the stream/connection, only that writer may release.
+            // Calling pendingHandoffRelease here races EmitSyntheticResponseAsync / the bridge body
+            // pump: ForwardOverQuicAsync returns before StreamBodyWriter runs, so an eager release
+            // disposes QuicStream under the reader (ObjectDisposedException → H2→H3 stream failure,
+            // observed on api.x.com 2026-10-01). Callers that replace the response without invoking
+            // StreamBodyWriter must drain it to Stream.Null (see H2→H3 bridge After BeforeResponse).
             if (!streamHandedOff && quicConn != null)
                 await QuicConnectionPool.ReleaseAsync(quicConn);
         }

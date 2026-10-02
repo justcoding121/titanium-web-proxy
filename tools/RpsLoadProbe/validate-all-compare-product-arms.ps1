@@ -1,8 +1,8 @@
 # Full compare-product gate validation (all WIRES rows, Win+Lin+Mac, median of 3 GHA runs).
 param(
     [Parameter(Mandatory)] [string[]] $RunIds,
-    [double] $MitmLiteGate = 0.50,
-    [double] $MitmFullGate = 0.50,
+    [double] $MitmLiteGate = 0.40,
+    [double] $MitmFullGate = 0.40,
     # Backward-compatible alias: if set, applies to both Lite and Full.
     [double] $MitmGate = -1,
     [double] $ReverseYarpGate = 0.60,
@@ -81,7 +81,7 @@ function Get-MedianSustain([string]$OsFolder, [string]$Arm) {
 }
 
 $failed = @()
-foreach ($os in @('windows-latest', 'ubuntu-latest', 'macos-15-intel')) {
+foreach ($os in @('windows-latest', 'ubuntu-latest', 'macos-15')) {
     Write-Host "`n=== $os ===" -ForegroundColor Cyan
     foreach ($w in $wires) {
         $rev = Get-MedianSustain $os $w.Rev

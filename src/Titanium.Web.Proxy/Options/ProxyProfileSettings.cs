@@ -76,7 +76,8 @@ public sealed class ProxyProfileSettings
             headerLimits: PolicyMode.Enforce,
             admissionControl: PolicyMode.Enforce,
             http2AbuseBudget: PolicyMode.Enforce,
-            http2RelayValidation: PolicyMode.Disabled),
+            http2RelayValidation: PolicyMode.Disabled,
+            http1ReplaySafety: PolicyMode.Observe),
         SupportedSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
         BlockPrivateNetworkDestinations = false,
         MaxConcurrentClientConnections = null,
@@ -111,7 +112,8 @@ public sealed class ProxyProfileSettings
             headerLimits: PolicyMode.Observe,
             admissionControl: PolicyMode.Observe,
             http2AbuseBudget: PolicyMode.Observe,
-            http2RelayValidation: PolicyMode.Disabled),
+            http2RelayValidation: PolicyMode.Disabled,
+            http1ReplaySafety: PolicyMode.Observe),
 #pragma warning disable SYSLIB0039 // Deliberate legacy-TLS opt-in for 4.x migrators, per this profile's purpose.
         SupportedSslProtocols = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Tls13, // NOSONAR S4423 - Compatible profile intentionally enables TLS 1.0/1.1 for migration
 #pragma warning restore SYSLIB0039
@@ -141,8 +143,12 @@ public sealed class ProxyProfileSettings
     /// </summary>
     public static ProxyProfileSettings PublicFacing { get; } = new()
     {
-        ResourceLimits = ProxyResourceLimits.Default.WithCertificateCacheBounds(
-            maxCertificateCacheEntries: 4096, maxCertificateDiskCacheEntries: 50_000),
+        // Keep the pre-1000 stream cap. Default moved to 1000 so a single-user browser session
+        // (Balanced) can carry an x.com-sized fan-out; an untrusted client must not get that budget.
+        ResourceLimits = ProxyResourceLimits.Default
+            .WithMaxConcurrentStreamsPerConnection(256)
+            .WithCertificateCacheBounds(
+                maxCertificateCacheEntries: 4096, maxCertificateDiskCacheEntries: 50_000),
         PolicyModes = ProxyPolicyModes.AllEnforce,
         SupportedSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
         BlockPrivateNetworkDestinations = true,

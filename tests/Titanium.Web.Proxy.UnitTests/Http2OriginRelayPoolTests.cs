@@ -21,7 +21,10 @@ public class Http2OriginRelayPoolTests
     [TestMethod]
     public async Task AssignStreamAsync_OpensAdditionalLegs_WhenSoftCapExceeded()
     {
+        // Explicit small cap: the soft cap per leg is derived from MaxConcurrentStreamsPerConnection, whose
+        // default (1000) is too high for 20 streams to overflow the first leg.
         var limits = ProxyResourceLimits.Default
+            .WithMaxConcurrentStreamsPerConnection(16)
             .WithMaxOriginHttp2ConnectionsPerAuthority(4);
 
         var openCount = 0;

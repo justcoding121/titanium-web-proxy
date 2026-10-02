@@ -567,7 +567,7 @@ internal static class Http3RequestStream
         string normalizedPath,
         List<(string Name, string Value)> regularHeaders)
     {
-        var cts = new CancellationTokenSource();
+        var cts = server.RentSessionCancellation();
         // Link so connection teardown cancels stream waits even before FinalizeAllStreams runs.
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
         var streamToken = linkedCts.Token;
@@ -617,18 +617,22 @@ internal static class Http3RequestStream
                 OriginAuthorityHost = originAuthorityHost
             };
 
+            // Allocate the cold-open factory only when a pool miss actually needs a session stub.
+            // Warm reverse never invokes it — avoid per-stream closure+delegate on the hot path.
+            SessionEventArgs? coldStub = null;
             SessionEventArgs ColdOpenSessionFactory()
             {
-                // Cold pool miss only (after warmup the open callback is never invoked).
+                if (coldStub is not null)
+                    return coldStub;
                 var nullStream = new HttpClientStream(
                     server, clientConnection, System.IO.Stream.Null,
                     server.BufferPool, CancellationToken.None, rentReadBuffer: false);
                 var stubCts = new CancellationTokenSource();
-                var stub = new SessionEventArgs(server, endPoint, nullStream, null, stubCts);
-                stub.IsFastPath = true;
-                stub.CustomUpStreamProxy = authArgs.CustomUpStreamProxy;
-                stub.UpstreamHttpProtocol = authArgs.UpstreamHttpProtocol;
-                return stub;
+                coldStub = new SessionEventArgs(server, endPoint, nullStream, null, stubCts);
+                coldStub.IsFastPath = true;
+                coldStub.CustomUpStreamProxy = authArgs.CustomUpStreamProxy;
+                coldStub.UpstreamHttpProtocol = authArgs.UpstreamHttpProtocol;
+                return coldStub;
             }
 
             switch (authArgs.UpstreamHttpProtocol)
@@ -708,7 +712,19 @@ internal static class Http3RequestStream
         finally
         {
             if (Interlocked.CompareExchange(ref streamState.FinalizedFlag, 1, 0) == 0)
-                cts.Dispose();
+            {
+                try
+                {
+                    if (!cts.IsCancellationRequested)
+                        cts.Cancel();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Already torn down.
+                }
+
+                server.ReturnSessionCancellation(cts);
+            }
         }
     }
 

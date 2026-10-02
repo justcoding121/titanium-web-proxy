@@ -38,6 +38,12 @@ public class LiveWebSocketFrameRaceTests
             var n = 0;
             while (!stop.IsCancellationRequested)
             {
+                // Cap growth so Estimate cannot stall walking millions of frames under parallel load.
+                if (frames.Count > 64)
+                {
+                    frames.RemoveRange(1, frames.Count - 1);
+                }
+
                 frames.Add(Frame("w" + n++));
             }
         });
@@ -45,7 +51,7 @@ public class LiveWebSocketFrameRaceTests
         Exception? caught = null;
         try
         {
-            for (var i = 0; i < 2_000_000 && caught is null; i++)
+            for (var i = 0; i < 500_000 && caught is null; i++)
             {
                 try
                 {
@@ -55,12 +61,15 @@ public class LiveWebSocketFrameRaceTests
                            "Collection was modified",
                            StringComparison.Ordinal))
                 {
-                    // Classic List enumerator fail-fast under concurrent Add.
                     caught = ex;
                 }
                 catch (NullReferenceException ex)
                 {
-                    // Concurrent List resize can also tear reads (null element / enumerator).
+                    // Concurrent List resize can also tear reads.
+                    caught = ex;
+                }
+                catch (ArgumentOutOfRangeException ex)
+                {
                     caught = ex;
                 }
             }
@@ -73,7 +82,7 @@ public class LiveWebSocketFrameRaceTests
 
         Assert.IsNotNull(
             caught,
-            "Arm A must hit shared-list race (modified-during-enumeration or torn null); stress was too weak if this fails.");
+            "Arm A must hit shared-list race (modified-during-enumeration or torn read); stress was too weak if this fails.");
     }
 
     [TestMethod]

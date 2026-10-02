@@ -71,15 +71,17 @@ namespace Titanium.Web.Proxy.Http2
 
         /// <summary>
         ///     Hop-by-hop / connection-specific names RFC 7540 §8.1.2.2 forbids on HTTP/2 (plus Host, which
-        ///     becomes :authority). Compared on <see cref="ByteString"/> so EncodeHeaderBlock does not
-        ///     force <c>header.Name</c> GetString under writeLock.
+        ///     becomes :authority). <c>TE</c> is omitted unless its value is exactly <c>trailers</c>
+        ///     (the one TE value HTTP/2 allows). Compared on <see cref="ByteString"/> so EncodeHeaderBlock
+        ///     does not force <c>header.Name</c> GetString under writeLock.
         /// </summary>
-        private static bool ShouldOmitHttp2Header(ByteString name)
+        private static bool ShouldOmitHttp2Header(ByteString name, ByteString value)
         {
             var span = name.Span;
             return span.Length switch
             {
-                2 => EqualsAsciiIgnoreCase(span, "te"u8),
+                2 => EqualsAsciiIgnoreCase(span, "te"u8)
+                     && !EqualsAsciiIgnoreCase(value.Span, "trailers"u8),
                 4 => EqualsAsciiIgnoreCase(span, "host"u8),
                 7 => EqualsAsciiIgnoreCase(span, "upgrade"u8),
                 10 => EqualsAsciiIgnoreCase(span, "connection"u8)
@@ -274,7 +276,7 @@ namespace Titanium.Web.Proxy.Http2
 
                 // Strip hop-by-hop / Host here so PrepareRequestForOrigin need not RemoveHeader seven
                 // times under the H1→H2 path (still strips Host for Authority capture separately).
-                if (ShouldOmitHttp2Header(nameData))
+                if (ShouldOmitHttp2Header(nameData, header.ValueData))
                     continue;
 
                 // Via is added by the proxy itself on every request and varies across hops; it must

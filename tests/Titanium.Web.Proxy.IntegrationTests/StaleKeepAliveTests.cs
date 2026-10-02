@@ -108,6 +108,137 @@ public class StaleKeepAliveTests
             + string.Join(" | ", capturing.DebugMessages));
     }
 
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    public async Task MalformedStatusOnReusedConnection_BodylessRequest_SucceedsViaRetry()
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+
+        var acceptCount = 0;
+        var requestsOnFirstConnection = 0;
+
+        server.HandleTcpRequest(async context =>
+        {
+            var n = Interlocked.Increment(ref acceptCount);
+            await DrainRequestHeaders(context);
+
+            if (n == 1)
+            {
+                var response = MsgEncoding.GetBytes(
+                    "HTTP/1.1 200 OK\r\n" +
+                    "Content-Length: 2\r\n" +
+                    "Connection: keep-alive\r\n" +
+                    "\r\n" +
+                    "ok");
+                await context.Transport.Output.WriteAsync(response);
+
+                // Same socket, next request: bytes that are not an HTTP status line.
+                await DrainRequestHeaders(context);
+                Interlocked.Increment(ref requestsOnFirstConnection);
+                await context.Transport.Output.WriteAsync(MsgEncoding.GetBytes("NOTHTTP\r\n"));
+                await Task.Delay(500);
+                return;
+            }
+
+            var retry = MsgEncoding.GetBytes(
+                "HTTP/1.1 200 OK\r\n" +
+                "Content-Length: 2\r\n" +
+                "Connection: close\r\n" +
+                "\r\n" +
+                "ok");
+            await context.Transport.Output.WriteAsync(retry);
+        });
+
+        var proxy = testSuite.GetReverseProxy();
+        proxy.EnableConnectionPool = true;
+
+        proxy.BeforeRequest += (_, e) =>
+        {
+            e.HttpClient.Request.Url = server.ListeningTcpUrl;
+            return Task.CompletedTask;
+        };
+
+        var client = testSuite.GetReverseProxyClient();
+        var proxyUrl = new Uri($"http://localhost:{proxy.ProxyEndPoints[0].Port}/");
+
+        var first = await client.GetAsync(proxyUrl);
+        Assert.AreEqual(HttpStatusCode.OK, first.StatusCode);
+        Assert.AreEqual("ok", await first.Content.ReadAsStringAsync());
+
+        var second = await client.GetAsync(proxyUrl);
+        Assert.AreEqual(HttpStatusCode.OK, second.StatusCode);
+        Assert.AreEqual("ok", await second.Content.ReadAsStringAsync());
+
+        Assert.IsTrue(requestsOnFirstConnection >= 1,
+            "The pooled connection was not reused, so the malformed status line was never read.");
+        Assert.IsTrue(acceptCount >= 2,
+            $"Expected a fresh upstream accept after the malformed status line; acceptCount={acceptCount}");
+    }
+
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    public async Task MalformedStatusOnReusedConnection_PostRequest_IsNotReplayed()
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+
+        var acceptCount = 0;
+        var postsSeen = 0;
+
+        server.HandleTcpRequest(async context =>
+        {
+            var n = Interlocked.Increment(ref acceptCount);
+            await DrainRequestHeaders(context);
+
+            if (n == 1)
+            {
+                await context.Transport.Output.WriteAsync(MsgEncoding.GetBytes(
+                    "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok"));
+
+                // Same socket, the POST: answer with bytes that are not an HTTP status line.
+                await DrainRequestHeaders(context);
+                Interlocked.Increment(ref postsSeen);
+                await context.Transport.Output.WriteAsync(MsgEncoding.GetBytes("NOTHTTP\r\n"));
+                await Task.Delay(500);
+                return;
+            }
+
+            // A replay of the POST would land on a fresh connection.
+            Interlocked.Increment(ref postsSeen);
+            await context.Transport.Output.WriteAsync(MsgEncoding.GetBytes(
+                "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"));
+        });
+
+        var proxy = testSuite.GetReverseProxy();
+        proxy.EnableConnectionPool = true;
+        proxy.BeforeRequest += (_, e) =>
+        {
+            e.HttpClient.Request.Url = server.ListeningTcpUrl;
+            return Task.CompletedTask;
+        };
+
+        var client = testSuite.GetReverseProxyClient();
+        var proxyUrl = new Uri($"http://localhost:{proxy.ProxyEndPoints[0].Port}/");
+
+        var first = await client.GetAsync(proxyUrl);
+        Assert.AreEqual(HttpStatusCode.OK, first.StatusCode);
+
+        try
+        {
+            using var post = await client.PostAsync(proxyUrl, new StringContent("x"));
+            Assert.AreNotEqual(HttpStatusCode.OK, post.StatusCode);
+        }
+        catch (HttpRequestException)
+        {
+            // Connection torn down by the proxy is also an acceptable non-replay outcome.
+        }
+
+        await Task.Delay(300);
+        Assert.AreEqual(1, acceptCount, "A POST must not be replayed on a fresh upstream connection.");
+        Assert.AreEqual(1, postsSeen, "The POST must reach the origin exactly once.");
+    }
+
     private static async Task DrainRequestHeaders(ConnectionContext context)
     {
         var requestText = string.Empty;

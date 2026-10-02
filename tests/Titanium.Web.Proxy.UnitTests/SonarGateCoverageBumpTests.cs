@@ -380,15 +380,18 @@ public class SonarGateCoverageBumpTests
         }
 
         var omit = typeof(Http2Helper).GetMethod("ShouldOmitHttp2Header",
-            BindingFlags.NonPublic | BindingFlags.Static)!;
-        Assert.IsTrue((bool)omit.Invoke(null, ["Upgrade".GetByteString()])!);
-        Assert.IsTrue((bool)omit.Invoke(null, ["Keep-Alive".GetByteString()])!);
-        Assert.IsTrue((bool)omit.Invoke(null, ["Proxy-Connection".GetByteString()])!);
-        Assert.IsTrue((bool)omit.Invoke(null, ["Transfer-Encoding".GetByteString()])!);
-        Assert.IsTrue((bool)omit.Invoke(null, ["te".GetByteString()])!);
-        Assert.IsTrue((bool)omit.Invoke(null, ["host".GetByteString()])!);
-        Assert.IsFalse((bool)omit.Invoke(null, ["content-length".GetByteString()])!);
-        Assert.IsFalse((bool)omit.Invoke(null, ["accept".GetByteString()])!);
+            BindingFlags.NonPublic | BindingFlags.Static,
+            null, [typeof(ByteString), typeof(ByteString)], null)!;
+        ByteString Empty = default;
+        Assert.IsTrue((bool)omit.Invoke(null, ["Upgrade".GetByteString(), Empty])!);
+        Assert.IsTrue((bool)omit.Invoke(null, ["Keep-Alive".GetByteString(), Empty])!);
+        Assert.IsTrue((bool)omit.Invoke(null, ["Proxy-Connection".GetByteString(), Empty])!);
+        Assert.IsTrue((bool)omit.Invoke(null, ["Transfer-Encoding".GetByteString(), Empty])!);
+        Assert.IsTrue((bool)omit.Invoke(null, ["te".GetByteString(), Empty])!);
+        Assert.IsFalse((bool)omit.Invoke(null, ["te".GetByteString(), "trailers".GetByteString()])!);
+        Assert.IsTrue((bool)omit.Invoke(null, ["host".GetByteString(), Empty])!);
+        Assert.IsFalse((bool)omit.Invoke(null, ["content-length".GetByteString(), Empty])!);
+        Assert.IsFalse((bool)omit.Invoke(null, ["accept".GetByteString(), Empty])!);
     }
 
     [TestMethod]
@@ -816,6 +819,7 @@ public class SonarGateCoverageBumpTests
         Assert.IsTrue(flow.TryReserve(99, -1));
         Assert.AreEqual(0, flow.TryReservePartial(1, 0));
         Assert.AreEqual(0, flow.TryReservePartial(1, -1));
+        flow.RegisterStream(7);
         Assert.IsTrue(flow.TryReserve(7, 100));
 
         flow.OnInitialWindowSizeChanged(0);

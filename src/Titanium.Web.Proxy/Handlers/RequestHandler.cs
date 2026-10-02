@@ -165,12 +165,19 @@ public partial class ProxyServer
                                 }
 
                                 preparedRequest.SetOriginalHeaders();
-                                var keepClient = await ForwardH1TerminateLiteAsync(
-                                    (TransparentBaseProxyEndPoint)endPoint, clientStream, preparedRequest,
-                                    cancellationToken);
-                                if (!keepClient)
-                                    return;
-                                continue;
+                                try
+                                {
+                                    var keepClient = await ForwardH1TerminateLiteAsync(
+                                        (TransparentBaseProxyEndPoint)endPoint, clientStream, preparedRequest,
+                                        cancellationToken);
+                                    if (!keepClient)
+                                        return;
+                                    continue;
+                                }
+                                catch (H1TerminateLiteFallbackException)
+                                {
+                                    // 1xx (e.g. 103 Early Hints): fall through to the full session path.
+                                }
                             }
 
                             // Gate failed after headers (e.g. body) — fall through with prepared request.
@@ -365,6 +372,12 @@ public partial class ProxyServer
                             return;
                         }
 
+                        // Route transforms (RequestHeaderSet / PathPrefix / …) must run while the
+                        // Mitm COW baseline is still armed so append-only sets stay on terminate-lite.
+                        // Taking the baseline before TryApply made MutationCount diverge and forced
+                        // the full session path (~0.75× CLI reverse for intercept-http1).
+                        Routing.ReverseProxySessionDispatch.TryApply(this, args);
+
                         var requestHeaderRelayBaseline = request.Headers.TakeMitmRelayBaseline();
 
                         // Total per-request deadline starts after BeforeRequest so session overrides apply.
@@ -372,9 +385,6 @@ public partial class ProxyServer
                             ResolveRequestTimeout(args), ProxyTimeoutKind.Request);
                         var requestToken = requestDeadline.Token;
                         args.OperationCancellationToken = requestToken;
-
-                        // Per-request route → destination (no-op when ReverseProxy routes unset).
-                        Routing.ReverseProxySessionDispatch.TryApply(this, args);
 
                         try
                         {
@@ -488,14 +498,21 @@ public partial class ProxyServer
                                 && request.Authority.Equals(capturedRequestAuthority)
                                 && !args.HttpClient.Response.Locked)
                             {
-                                var keepClient = await ForwardH1TerminateSessionLiteAsync(
-                                    mitmTerminateEp, clientStream, args, requestToken);
-                                args.IsClientResponseCommitted = true;
-                                if (!keepClient)
-                                    return;
+                                try
+                                {
+                                    var keepClient = await ForwardH1TerminateSessionLiteAsync(
+                                        mitmTerminateEp, clientStream, args, requestToken);
+                                    args.IsClientResponseCommitted = true;
+                                    if (!keepClient)
+                                        return;
 
-                                allowMitmUnchangedRecycle = true;
-                                continue;
+                                    allowMitmUnchangedRecycle = true;
+                                    continue;
+                                }
+                                catch (H1TerminateLiteFallbackException)
+                                {
+                                    // 1xx: fall through to the full session response path below.
+                                }
                             }
 
                             // If prefetch task is available.

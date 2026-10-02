@@ -19,7 +19,7 @@ public class ProxyResourceLimitsTests
         var limits = ProxyResourceLimits.Default;
 
         Assert.IsTrue(limits.MaxHeaderLineBytes > 0);
-        Assert.IsTrue(limits.MaxConcurrentStreamsPerConnection > 0);
+        Assert.AreEqual(1000, limits.MaxConcurrentStreamsPerConnection);
         Assert.IsTrue(limits.ConnectionPoolingEnabled);
         Assert.IsTrue(limits.MaxCachedConnectionsPerHost > 0);
         Assert.IsNull(limits.MaxConcurrentClients, "Admission cap is opt-in under the Balanced default.");

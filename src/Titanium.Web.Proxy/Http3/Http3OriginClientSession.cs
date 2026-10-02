@@ -171,9 +171,10 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
                     continue;
                 }
 
-                // Drain remaining control frames (GOAWAY, etc.).
+                // Drain remaining control frames. GOAWAY means stop new streams but keep the
+                // control stream open (RFC 9114 §6.2.1: closing it is H3_CLOSED_CRITICAL_STREAM).
                 if (frame.Type == Http3FrameType.GoAway)
-                    return settings;
+                    continue;
             }
             finally
             {
