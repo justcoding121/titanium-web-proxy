@@ -450,18 +450,18 @@ Median of **3** repeats @ `41f4adee`. Source: Actions [36853305087](https://gith
 
 ## Cross-version (7.0 vs 6.0)
 
-Same reverse matrix measured on Titanium 7.0 versus committed 6.0 baselines ([33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466)). Median of **3** @ `0ef6d4dd`. Source: Actions [33270571908](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33270571908). Sustain RPS @ **c=64**. Absolute 7.0÷6.0 ≈ **0.96–1.00×** on same-protocol arms; peer-normalized ratios ≈ **0.90–1.03×**.
+Same reverse matrix measured on Titanium 7.0 versus committed 6.0 baselines ([33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466)). Median of **3** @ `be4d4e89`. Source: Windows [36995934758](https://github.com/justcoding121/titanium-web-proxy/actions/runs/36995934758), Linux [36995938517](https://github.com/justcoding121/titanium-web-proxy/actions/runs/36995938517). Sustain RPS @ **c=64**. Absolute 7.0÷6.0 is **0.92–1.38×** (Windows H3 is the high end). Peer-normalized TWP÷YARP is **0.94–1.17×**.
 
 | Arm | Win 6.0 | Win 7.0 | Win÷ | Linux 6.0 | Linux 7.0 | Lin÷ |
 |---|---:|---:|---:|---:|---:|---:|
-| `twp-reverse-http1` | **32525** | **32213** | **0.99×** | **32755** | **31932** | **0.97×** |
-| `twp-reverse-http1-tls` | **26461** | **26570** | **1.00×** | **22784** | **22351** | **0.98×** |
-| `twp-reverse-http2` | **76038** | **75316** | **0.99×** | **47690** | **46678** | **0.98×** |
-| `twp-reverse-http2-cleartext` | **40347** | **40236** | **1.00×** | **34556** | **33316** | **0.96×** |
-| `twp-reverse-http3` | **17529** | **17380** | **0.99×** | **19468** | **19423** | **1.00×** |
-| `twp-reverse-http3-cleartext` | **19956** | **19529** | **0.98×** | **20395** | **20070** | **0.98×** |
-| `yarp-reverse-http1` (peer) | **27504** | **27254** | **0.99×** | **27713** | **27102** | **0.98×** |
-| `yarp-reverse-http2` (peer) | **35553** | **35189** | **0.99×** | **29111** | **28733** | **0.99×** |
+| `twp-reverse-http1` | **32525** | **29929** | **0.92×** | **32755** | **31847** | **0.97×** |
+| `twp-reverse-http1-tls` | **26461** | **25778** | **0.97×** | **22784** | **23663** | **1.04×** |
+| `twp-reverse-http2` | **76038** | **87371** | **1.15×** | **47690** | **53242** | **1.12×** |
+| `twp-reverse-http2-cleartext` | **40347** | **39304** | **0.97×** | **34556** | **34483** | **1.00×** |
+| `twp-reverse-http3` | **17529** | **24213** | **1.38×** | **19468** | **20398** | **1.05×** |
+| `twp-reverse-http3-cleartext` | **19956** | **19143** | **0.96×** | **20395** | **20825** | **1.02×** |
+| `yarp-reverse-http1` (peer) | **27504** | **26807** | **0.97×** | **27713** | **28228** | **1.02×** |
+| `yarp-reverse-http2` (peer) | **35553** | **34854** | **0.98×** | **29111** | **28944** | **0.99×** |
 
 Both OS CSVs passed the cross-version check for this run. MITM arms are measured with the product reverse matrix, not this reverse-only comparison.
 
