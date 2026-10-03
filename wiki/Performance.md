@@ -603,7 +603,7 @@ H1-client rows in this table were re-measured @ `1632b059` ([37087741549](https:
 | HTTP/3 · QUIC | HTTP/2 · TLS | 🥇 **2,301**<br><sub>(164 MiB / 43.3% CPU)</sub> | *Not possible* | **2,018**<br><sub>(206 MiB / 48.5% CPU)</sub> |
 | HTTP/3 · QUIC | HTTP/1 · TLS | 🥇 **2,104**<br><sub>(183 MiB / 41.8% CPU)</sub> | *Not possible (no QUIC)* | **2,002**<br><sub>(215 MiB / 49.3% CPU)</sub> |
 
-TWP leads H1 POST (~**1.44×** / **1.51×** YARP on Windows and Linux, @ `1632b059`), H2→H1 POST (~**1.1-1.3x** YARP), and H3 POST (~**1.0-1.1x** YARP). H2 TLS→H2 TLS POST sustain is healthy on this pass (@ `41f4adee`; TWP ~**1.2-1.4x** YARP).
+TWP leads H2→H1 POST (about **1.1–1.3×** YARP) and H3 POST (about **1.0–1.1×** YARP). H2 TLS→H2 TLS POST sustain is about **1.2–1.4×** YARP.
 
 ### Linux — POST 64 KiB request + 64 KiB response
 
