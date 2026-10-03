@@ -248,10 +248,6 @@ internal enum ProbeMode
     /// Product editions: library H1 baselines + CLI daemon / CLI+Plus / CLI+Intercept arms.
     /// </summary>
     CompareEditions,
-    /// <summary>
-    /// Alias for <see cref="CompareMatrix"/> used by Gate 2 cross-version validation (routes unset).
-    /// </summary>
-    CompareCrossVersion,
     /// <summary>Shipped CLI daemon: H1 plain forwardHost (product defaults).</summary>
     TwpCliReverseHttp1,
     /// <summary>Shipped CLI daemon: H1 TLS terminate → cleartext origin.</summary>
@@ -1284,8 +1280,6 @@ internal static class RampOrchestrator
             ],
             ProbeMode.CompareMatrix => BuildFullMatrixArms(nginxAvailable, nginxHttp3Available, haproxyAvailable,
                 haproxyQuicAvailable, envoyAvailable, envoyHttp3Available),
-            ProbeMode.CompareCrossVersion => BuildFullMatrixArms(nginxAvailable, nginxHttp3Available,
-                haproxyAvailable, haproxyQuicAvailable, envoyAvailable, envoyHttp3Available),
             ProbeMode.CompareEditions => BuildEditionArms(),
             ProbeMode.TwpCliReverseHttp1 => [new("twp-cli-reverse-http1", ProbeMode.TwpCliReverseHttp1, null)],
             ProbeMode.TwpCliReverseHttp1Tls =>

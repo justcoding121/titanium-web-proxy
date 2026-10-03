@@ -18,7 +18,6 @@ Manual CI: [RPS saturation](../../.github/workflows/rps-saturation.yml) (`workfl
 | Milestone | `compare-terminate` / `compare-matrix` | ~1–2h investigation |
 | Editions | `compare-editions` | CLI / Plus / Intercept / stress arms vs baselines (~60 min) |
 | Beta/stable publish | `compare-editions` + `compare-spot` (parallel GHA jobs) | ~60 min wall; peer gate catches Core÷YARP regressions editions miss |
-| Cross-version | `compare-cross-version` | 7.0 vs committed 6.0 baselines (Gate 2) |
 | Release / wiki | `compare-product` | median of 3; Win/Linux **3** comparison-group shards; **macos-15** **9** shards (see [PERF-GATES.md](PERF-GATES.md) Mac table); paste unions shard CSVs |
 | Unary gRPC | `compare-grpc` | H2 TLS Echo RPC/s @ c=64 — H2↔H2 + H2→h2c groups (Mac: **4** shards) |
 | WebSocket dual-TLS | `compare-ws-h1tls` | H1 TLS→H1 TLS echo (`*-duplex-ws-h1tls`) |
@@ -222,18 +221,7 @@ Plus arms allocate an explicit `controlPlane.dashboardPort` (separate from the c
 
 Gates: see [PERF-GATES.md](PERF-GATES.md). Thresholds lock after a clean Win+Linux pass. Build/publish `Titanium.Cli` (and Plus DLL beside it for Plus arms) before ramping.
 
-## Cross-version (7.0 vs 6.0)
-
-```powershell
-pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-cross-version
-pwsh tools/RpsLoadProbe/validate-cross-version.ps1 `
-  -BaselineCsv tools/RpsLoadProbe/results/baseline-6.0-win.csv `
-  -CurrentCsv  tools/RpsLoadProbe/results/rps-ramp-*.csv
-```
-
-`compare-cross-version` runs the reverse matrix with routes unset (same ForwardHost path as 6.x). Baselines are committed CSVs from the published 6.0 GHA medians — do not re-run 6.0.
-
-## Bridge matrix (cross-version)
+## Bridge matrix
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-bridges

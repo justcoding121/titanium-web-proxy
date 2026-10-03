@@ -13,7 +13,7 @@ param(
         'compare-http3-cleartext', 'compare-nginx-https', 'compare-haproxy-smoke', 'compare-envoy-smoke', 'compare-mitm', 'compare-matrix', 'compare-product', 'compare-product-smoke', 'compare-spot', 'compare-ceiling',
         'compare-bodies', 'compare-post', 'compare-lossy', 'compare-tls-cost', 'compare-arch', 'compare-grpc',
         'compare-ws-h1tls', 'compare-ws-h2', 'compare-saturation',
-        'compare-editions', 'compare-cross-version',
+        'compare-editions',
         'origin-direct', 'explicit-pool-sweep',
         'reverse-http1', 'bare-reverse-http1', 'nginx-reverse-http1', 'haproxy-reverse-http1', 'envoy-reverse-http1', 'yarp-reverse-http1',
         'reverse-http1-tls', 'bare-reverse-http1-tls', 'nginx-reverse-http1-tls', 'haproxy-reverse-http1-tls', 'envoy-reverse-http1-tls', 'yarp-reverse-http1-tls',
@@ -109,7 +109,7 @@ if (-not $SkipBuild) {
     & dotnet build -c Release $project --warnaserror
     if ($LASTEXITCODE -ne 0) { throw 'RpsLoadProbe build failed' }
 
-    $needsCli = $Mode -match '^(compare-editions|compare-cross-version|twp-cli-)'
+    $needsCli = $Mode -match '^(compare-editions|twp-cli-)'
     if ($needsCli -or $Mode -eq 'compare-editions') {
         $cliProj = Join-Path $repoRoot 'src/Titanium.Cli/Titanium.Cli.csproj'
         Write-Host 'Building Titanium.Cli Release...' -ForegroundColor Cyan

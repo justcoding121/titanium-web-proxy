@@ -90,7 +90,6 @@ on:
           - envoy-reverse-http3-to-http2
           - envoy-reverse-http3-to-http3
           - compare-editions
-          - compare-cross-version
           - compare-ceiling
           - compare-bodies
           - compare-post
@@ -964,23 +963,6 @@ jobs:
             Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $csv) { throw 'No CSV found for gRPC YARP gate validation' }
           pwsh tools/RpsLoadProbe/validate-grpc-yarp-gates.ps1 -CsvPath $csv.FullName
-
-      - name: Validate cross-version gates
-        if: env.RPS_MODE == 'compare-cross-version'
-        shell: pwsh
-        run: |
-          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
-            Sort-Object LastWriteTime -Descending | Select-Object -First 1
-          if (-not $csv) { throw 'No CSV found for cross-version gate validation' }
-          $baseline = if ($env:RUNNER_OS -eq 'Windows') {
-            'tools/RpsLoadProbe/results/baseline-6.0-win.csv'
-          } else {
-            'tools/RpsLoadProbe/results/baseline-6.0-linux.csv'
-          }
-          if (-not (Test-Path $baseline)) { throw "Missing baseline: $baseline" }
-          pwsh tools/RpsLoadProbe/validate-cross-version.ps1 `
-            -BaselineCsv $baseline `
-            -CurrentCsv $csv.FullName
 
       - name: Upload CSV artifact
         if: always()

@@ -306,7 +306,7 @@ internal static class Cli
         or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost or ProbeMode.CompareArch
         or ProbeMode.CompareGrpc or ProbeMode.CompareWsH1Tls or ProbeMode.CompareWsH2
         or ProbeMode.CompareSaturation
-        or ProbeMode.CompareEditions or ProbeMode.CompareCrossVersion
+        or ProbeMode.CompareEditions
         or ProbeMode.ExplicitPoolSweep;
 
     private static int RunRamp(string? modeText, string? nginxPath, string? haproxyPath, string? envoyPath,
@@ -680,9 +680,6 @@ internal static class Cli
                 return true;
             case "compare-editions":
                 mode = ProbeMode.CompareEditions;
-                return true;
-            case "compare-cross-version":
-                mode = ProbeMode.CompareCrossVersion;
                 return true;
             case "twp-cli-reverse-http1":
                 mode = ProbeMode.TwpCliReverseHttp1;
