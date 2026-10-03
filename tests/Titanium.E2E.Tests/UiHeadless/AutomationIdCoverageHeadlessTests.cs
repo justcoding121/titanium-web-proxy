@@ -407,10 +407,11 @@ public class AutomationIdCoverageHeadlessTests
             fx.Robot.Click("MenuExportArchive");
         });
 
+        // File.Exists is true as soon as the zip is created, before the central directory
+        // is written. Wait for the status that is set only after the writer closes.
         await fx.WaitUntilAsync(
             () => fx.ViewModel.StatusText.Contains("Exported 1 sessions", StringComparison.Ordinal)
-                  || fx.ViewModel.StatusText.Contains("Export archive failed", StringComparison.Ordinal)
-                  || File.Exists(zip),
+                  || fx.ViewModel.StatusText.Contains("Export archive failed", StringComparison.Ordinal),
             TimeSpan.FromSeconds(20));
 
         await fx.DispatchAsync(() =>

@@ -88,16 +88,18 @@ public class HappyPathSanityE2ETests
 
         // CONNECT is captured as host:port before the decrypted request URL arrives.
         deadline = DateTime.UtcNow.AddSeconds(8);
-        while (!vm.Sessions.Any(s => s.Url.Contains("happy-inspector", StringComparison.OrdinalIgnoreCase))
+        var sessions = SessionListPoll.Copy(vm.Sessions);
+        while (!sessions.Any(s => s.Url.Contains("happy-inspector", StringComparison.OrdinalIgnoreCase))
                && DateTime.UtcNow < deadline)
         {
             await Task.Delay(50);
+            sessions = SessionListPoll.Copy(vm.Sessions);
         }
 
-        Assert.IsTrue(vm.Sessions.Count > 0, $"Expected UI sessions; status={vm.StatusText}");
+        Assert.IsTrue(sessions.Length > 0, $"Expected UI sessions; status={vm.StatusText}");
         Assert.IsTrue(
-            vm.Sessions.Any(s => s.Url.Contains("happy-inspector", StringComparison.OrdinalIgnoreCase)),
-            string.Join(", ", vm.Sessions.Select(s => s.Url)));
+            sessions.Any(s => s.Url.Contains("happy-inspector", StringComparison.OrdinalIgnoreCase)),
+            string.Join(", ", sessions.Select(s => s.Url)));
         Assert.IsTrue(vm.SessionCountText.Contains("Sessions:", StringComparison.OrdinalIgnoreCase), vm.SessionCountText);
 
         vm.EnsureShutdown();

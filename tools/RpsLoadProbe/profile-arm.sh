@@ -86,8 +86,14 @@ if [ "$managed" = 1 ]; then
   sleep 3
 fi
 
-echo "[window 1] perf record -g ${cap}s" | tee -a "$out/capture.txt"
-perf record -F 997 -g --call-graph fp -p "$pids" -o "$out/perf.data" -- sleep "$cap" > "$out/perf-record.log" 2>&1 || \
+# cycles is the hardware default. Cloud VMs often expose no PMU ("<not supported>");
+# cpu-clock still produces call stacks and is what the frame gate reads.
+perf_event=cycles
+if perf stat -e cycles -- sleep 0.05 2>&1 | grep -q 'not supported'; then
+  perf_event=cpu-clock
+fi
+echo "[window 1] perf record -e $perf_event -g ${cap}s" | tee -a "$out/capture.txt"
+perf record -F 997 -e "$perf_event" -g --call-graph fp -p "$pids" -o "$out/perf.data" -- sleep "$cap" > "$out/perf-record.log" 2>&1 || \
   echo "perf record failed (see perf-record.log)" | tee -a "$out/capture.txt"
 sleep "$gap"
 
