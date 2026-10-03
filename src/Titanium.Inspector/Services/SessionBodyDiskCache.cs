@@ -15,9 +15,14 @@ public sealed class SessionBodyDiskCache : IDisposable
     private const string LegacySessionFileSearchPattern = "*.json";
 
     private readonly string _rootDirectory;
-    private readonly string _runDirectory;
+    private string _runDirectory;
+    private int _runGeneration;
     private long _maxBytes;
     private readonly object _gate = new();
+    private readonly object _writeGate = new();
+    private readonly object _cleanupGate = new();
+    private readonly Queue<string> _cleanupPaths = new();
+    private Task _cleanupTask = Task.CompletedTask;
     /// <summary>Absolute file path → tracked size / time / session id.</summary>
     private readonly Dictionary<string, (long SessionId, long Length, DateTime LastWriteUtc)> _index = new(
         StringComparer.OrdinalIgnoreCase);
@@ -41,16 +46,37 @@ public sealed class SessionBodyDiskCache : IDisposable
         RebuildIndexAndEnforceBudget();
     }
 
-    /// <summary>Updates disk budget; returns current-run session ids whose files were deleted.</summary>
+    /// <summary>Updates disk budget. Index updates return immediately; file deletes run in the background.</summary>
     public IReadOnlyList<long> UpdateLimits(long maxBytes, TimeSpan maxAge)
     {
         _ = maxAge;
-        lock (_gate)
-        {
-            _maxBytes = maxBytes > 0 ? maxBytes : _maxBytes;
-        }
+        return ScheduleBudgetPrune(maxBytes);
+    }
 
-        return EnforceDiskBudget();
+    /// <summary>Generation of the current run folder. Writes captured under an older generation are dropped.</summary>
+    internal int CurrentGeneration => Volatile.Read(ref _runGeneration);
+
+    /// <summary>Thread that last drained queued file deletes. Zero until the first cleanup runs.</summary>
+    internal int LastCleanupThreadId { get; private set; }
+
+    /// <summary>Waits until queued directory and file deletes have finished.</summary>
+    public async Task FlushCleanupAsync()
+    {
+        while (true)
+        {
+            Task task;
+            lock (_cleanupGate)
+            {
+                if (_cleanupPaths.Count == 0 && _cleanupTask.IsCompleted)
+                {
+                    return;
+                }
+
+                task = _cleanupTask;
+            }
+
+            await task.ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -78,9 +104,29 @@ public sealed class SessionBodyDiskCache : IDisposable
     public bool FileExists(long sessionId) => File.Exists(PathFor(sessionId));
 
     /// <summary>Writes a single-entry HAR into the current run folder; may prune older files under budget.</summary>
-    public IReadOnlyList<long> Write(SessionSnapshot snapshot)
+    public IReadOnlyList<long> Write(SessionSnapshot snapshot) =>
+        Write(snapshot, expectedGeneration: null);
+
+    /// <summary>
+    /// Writes when <paramref name="expectedGeneration"/> still matches. A clear that rotated the run
+    /// folder rejects the write so an in-flight spill cannot recreate the abandoned session id.
+    /// </summary>
+    internal IReadOnlyList<long> Write(SessionSnapshot snapshot, int? expectedGeneration)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        lock (_writeGate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (expectedGeneration is int expected && expected != _runGeneration)
+            {
+                return Array.Empty<long>();
+            }
+
+            return WriteCurrentRun(snapshot);
+        }
+    }
+
+    private IReadOnlyList<long> WriteCurrentRun(SessionSnapshot snapshot)
+    {
         Directory.CreateDirectory(_runDirectory);
         var path = PathFor(snapshot.Id);
         var tmp = path + ".tmp";
@@ -201,6 +247,112 @@ public sealed class SessionBodyDiskCache : IDisposable
         {
             Delete(id);
         }
+    }
+
+    /// <summary>
+    /// Drops the current run folder from the index and moves it aside. New writes use a fresh folder.
+    /// The moved folder is deleted on a background thread. Other run folders are left in place.
+    /// </summary>
+    public void AbandonCurrentRun()
+    {
+        string old;
+        lock (_writeGate)
+        {
+            lock (_gate)
+            {
+                old = _runDirectory;
+                Interlocked.Increment(ref _runGeneration);
+                RemoveIndexEntriesUnder(old);
+                _runDirectory = CreateRunDirectory(_rootDirectory, DateTimeOffset.UtcNow);
+            }
+
+            if (!Directory.Exists(old))
+            {
+                return;
+            }
+
+            var trash = Path.Combine(Path.GetTempPath(), "ti-discard-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.Move(old, trash);
+                QueueCleanup([trash]);
+            }
+            catch
+            {
+                QueueCleanup([old]);
+            }
+        }
+    }
+
+    /// <summary>Removes session files from the size index immediately and deletes them in the background.</summary>
+    public void ScheduleDelete(IEnumerable<long> sessionIds)
+    {
+        var paths = new List<string>();
+        lock (_writeGate)
+        {
+            lock (_gate)
+            {
+                foreach (var id in sessionIds)
+                {
+                    var path = Path.Combine(
+                        _runDirectory,
+                        id.ToString("D", CultureInfo.InvariantCulture) + ".har");
+                    paths.Add(path);
+                    RemoveIndexEntryLocked(path);
+                }
+            }
+        }
+
+        QueueCleanup(paths);
+    }
+
+    /// <summary>
+    /// Applies <paramref name="maxBytes"/> when positive, drops the oldest indexed files from the budget,
+    /// and deletes those files in the background. Returns current-run session ids that were dropped.
+    /// </summary>
+    public IReadOnlyList<long> ScheduleBudgetPrune(long maxBytes)
+    {
+        List<string> paths;
+        List<long> currentRunIds;
+        lock (_writeGate)
+        {
+            lock (_gate)
+            {
+                if (maxBytes > 0)
+                {
+                    _maxBytes = maxBytes;
+                }
+
+                if (_trackedBytes <= _maxBytes)
+                {
+                    return Array.Empty<long>();
+                }
+
+                var ordered = _index
+                    .Select(kv => (Path: kv.Key, kv.Value.SessionId, kv.Value.Length, kv.Value.LastWriteUtc))
+                    .OrderBy(x => x.LastWriteUtc)
+                    .ToList();
+                paths = new List<string>();
+                currentRunIds = new List<long>();
+                foreach (var entry in ordered)
+                {
+                    if (_trackedBytes <= _maxBytes)
+                    {
+                        break;
+                    }
+
+                    RemoveIndexEntryLocked(entry.Path);
+                    paths.Add(entry.Path);
+                    if (IsUnderRunDirectory(entry.Path))
+                    {
+                        currentRunIds.Add(entry.SessionId);
+                    }
+                }
+            }
+        }
+
+        QueueCleanup(paths);
+        return currentRunIds;
     }
 
     /// <summary>Deletes HARs for this process run only; other run folders stay for Import HAR.</summary>
@@ -528,6 +680,90 @@ public sealed class SessionBodyDiskCache : IDisposable
             else if (trackedLength is long len)
             {
                 _trackedBytes = Math.Max(0, _trackedBytes - len);
+            }
+        }
+    }
+
+    /// <summary>Caller holds <see cref="_gate"/>.</summary>
+    private void RemoveIndexEntryLocked(string path)
+    {
+        var key = Path.GetFullPath(path);
+        if (_index.TryGetValue(key, out var prev))
+        {
+            _trackedBytes = Math.Max(0, _trackedBytes - prev.Length);
+            _index.Remove(key);
+        }
+    }
+
+    private void QueueCleanup(IReadOnlyList<string> paths)
+    {
+        if (paths.Count == 0)
+        {
+            return;
+        }
+
+        lock (_cleanupGate)
+        {
+            foreach (var path in paths)
+            {
+                if (!string.IsNullOrEmpty(path))
+                {
+                    _cleanupPaths.Enqueue(path);
+                }
+            }
+
+            _cleanupTask = _cleanupTask.ContinueWith(
+                _ => DrainCleanupBatch(),
+                CancellationToken.None,
+                TaskContinuationOptions.RunContinuationsAsynchronously,
+                TaskScheduler.Default);
+        }
+    }
+
+    private void DrainCleanupBatch()
+    {
+        LastCleanupThreadId = Environment.CurrentManagedThreadId;
+        List<string> batch;
+        lock (_cleanupGate)
+        {
+            if (_cleanupPaths.Count == 0)
+            {
+                return;
+            }
+
+            batch = _cleanupPaths.ToList();
+            _cleanupPaths.Clear();
+        }
+
+        foreach (var path in batch)
+        {
+            TryDeletePathWithRetry(path);
+        }
+    }
+
+    private static void TryDeletePathWithRetry(string path)
+    {
+        for (var attempt = 0; attempt < 8; attempt++)
+        {
+            try
+            {
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, recursive: true);
+                    return;
+                }
+
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                    return;
+                }
+
+                return;
+            }
+            catch
+            {
+                Thread.Sleep(25 * (attempt + 1));
             }
         }
     }

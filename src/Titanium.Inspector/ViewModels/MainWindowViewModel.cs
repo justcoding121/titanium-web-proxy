@@ -159,7 +159,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         _dialogs = services.Dialogs ?? new AvaloniaInspectorDialogs();
         _pathPicker = services.PathPicker ?? new AvaloniaInspectorPathPicker();
         _statusNotifier = services.StatusNotifier ?? NullStatusNotifier.Instance;
-        Sessions = new ObservableCollection<SessionSnapshot>();
+        Sessions = new SessionListCollection();
         Breakpoints = new BreakpointViewModel();
         AutoResponder = new AutoResponderViewModel();
         MapRemote = new MapRemoteViewModel();

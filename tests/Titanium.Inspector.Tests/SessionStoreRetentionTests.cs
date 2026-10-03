@@ -335,6 +335,7 @@ public class SessionStoreRetentionTests
 
             store.Clear();
             Assert.AreEqual(0, store.Count);
+            await store.FlushDiskCleanupAsync();
             Assert.IsFalse(HarExists(dir, 10));
             Assert.IsFalse(Directory.EnumerateFiles(dir, "*.har", SearchOption.AllDirectories).Any());
         }
