@@ -1155,7 +1155,7 @@ public sealed partial class MainWindowViewModel
         pending?.Invoke();
     }
 
-    private void QueueLiveUi(Action action)
+    internal void QueueLiveUi(Action action)
     {
         if (IsLiveDispatcherTurn())
         {
