@@ -955,11 +955,11 @@ public sealed partial class MainWindowViewModel
                 sessions,
                 "Exporting HAR…",
                 list => SessionArchive.ExportHarAsync(list, path, StatusCancelToken),
-                $"Exported {sessions.Count} sessions to {path}");
+                $"Exported {sessions.Count} sessions to {path}").ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            SetOutcomeStatus("Export HAR failed: " + Truncate(ex.Message, 160), StatusSeverity.Error, toastImportant: true);
+            await ReportExportFailureAsync("Export HAR failed: " + Truncate(ex.Message, 160)).ConfigureAwait(false);
         }
     }
     private async Task ExportSelectedHarAsync()
@@ -984,11 +984,11 @@ public sealed partial class MainWindowViewModel
                 sessions,
                 "Exporting HAR…",
                 list => SessionArchive.ExportHarAsync(list, path, StatusCancelToken),
-                $"Exported {sessions.Count} sessions to {path}");
+                $"Exported {sessions.Count} sessions to {path}").ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            SetOutcomeStatus("Export HAR failed: " + Truncate(ex.Message, 160), StatusSeverity.Error, toastImportant: true);
+            await ReportExportFailureAsync("Export HAR failed: " + Truncate(ex.Message, 160)).ConfigureAwait(false);
         }
     }
     private async Task ImportHarAsync()
@@ -1002,13 +1002,19 @@ public sealed partial class MainWindowViewModel
 
         SetStatus("Importing…", StatusSeverity.Busy);
         var token = StatusCancelToken;
-        var imported = await ReadImportedSessionsAsync(paths, token);
-        AppendImportedSessions(imported);
-        RefreshSessionCountText();
+        var imported = await ReadImportedSessionsAsync(paths, token).ConfigureAwait(false);
         var label = paths.Count == 1
             ? Path.GetFileName(paths[0])
             : $"{paths.Count} files";
-        SetOutcomeStatus($"Appended {imported.Count} sessions from {label}", StatusSeverity.Success, toastImportant: true);
+        var count = imported.Count;
+        // Apply on the dispatcher via Post. Awaiting Task.Run resumes through the UI
+        // sync context, which headless RunJobs does not drain, so StatusText stayed "Importing…".
+        await MarshalToUiAsync(() =>
+        {
+            AppendImportedSessions(imported);
+            RefreshSessionCountText();
+            PublishOutcome($"Appended {count} sessions from {label}", StatusSeverity.Success);
+        }, token).ConfigureAwait(false);
     }
     private async Task ExportArchiveAsync()
     {
@@ -1032,11 +1038,11 @@ public sealed partial class MainWindowViewModel
                 sessions,
                 "Exporting archive…",
                 list => SessionArchive.ExportNativeArchiveAsync(list, path, StatusCancelToken),
-                $"Exported {sessions.Count} sessions to {path}");
+                $"Exported {sessions.Count} sessions to {path}").ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            SetOutcomeStatus("Export archive failed: " + Truncate(ex.Message, 160), StatusSeverity.Error, toastImportant: true);
+            await ReportExportFailureAsync("Export archive failed: " + Truncate(ex.Message, 160)).ConfigureAwait(false);
         }
     }
     private async Task ExportSelectedArchiveAsync()
@@ -1061,11 +1067,11 @@ public sealed partial class MainWindowViewModel
                 sessions,
                 "Exporting archive…",
                 list => SessionArchive.ExportNativeArchiveAsync(list, path, StatusCancelToken),
-                $"Exported {sessions.Count} sessions to {path}");
+                $"Exported {sessions.Count} sessions to {path}").ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            SetOutcomeStatus("Export archive failed: " + Truncate(ex.Message, 160), StatusSeverity.Error, toastImportant: true);
+            await ReportExportFailureAsync("Export archive failed: " + Truncate(ex.Message, 160)).ConfigureAwait(false);
         }
     }
     private async Task ImportArchiveAsync()
@@ -1080,47 +1086,58 @@ public sealed partial class MainWindowViewModel
         SetStatus("Importing archive…", StatusSeverity.Busy);
         try
         {
-            // Parse off the UI thread. Status text is set only after this await, which keeps
-            // the RelayCommand sync context (ConfigureAwait(false) here left StatusText stuck).
             var token = StatusCancelToken;
-            var imported = await ReadImportedSessionsAsync([path], token);
-            AppendImportedSessions(imported);
-            RefreshSessionCountText();
-            SetOutcomeStatus($"Appended {imported.Count} sessions from {Path.GetFileName(path)}", StatusSeverity.Success, toastImportant: true);
+            var imported = await ReadImportedSessionsAsync([path], token).ConfigureAwait(false);
+            var fileName = Path.GetFileName(path);
+            var count = imported.Count;
+            await MarshalToUiAsync(() =>
+            {
+                AppendImportedSessions(imported);
+                RefreshSessionCountText();
+                PublishOutcome($"Appended {count} sessions from {fileName}", StatusSeverity.Success);
+            }, token).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            SetOutcomeStatus("Import archive failed: " + Truncate(ex.Message, 160), StatusSeverity.Error, toastImportant: true);
+            await ReportExportFailureAsync("Import archive failed: " + Truncate(ex.Message, 160)).ConfigureAwait(false);
         }
     }
+    private async Task ReportExportFailureAsync(string message) =>
+        await MarshalToUiAsync(() => PublishOutcome(message, StatusSeverity.Error)).ConfigureAwait(false);
+
+    /// <summary>
+    /// Set the outcome and drain dispatcher jobs while the headless app is still up.
+    /// <see cref="SetOutcomeStatus"/> posts the toast; the next
+    /// <c>ResetForUnitTests</c> would otherwise run that toast after the clock is gone.
+    /// </summary>
+    private void PublishOutcome(string text, StatusSeverity severity)
+    {
+        SetOutcomeStatus(text, severity, toastImportant: true);
+        if (Application.Current is not null && Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.RunJobs();
+        }
+    }
+
     private async Task ExportSessionsOffUiAsync(
         IReadOnlyList<SessionSnapshot> sessions,
         string busyText,
         Func<IReadOnlyList<SessionSnapshot>, Task> write,
         string successText)
     {
-        // Await without ConfigureAwait(false) so the success toast stays on the UI sync context.
-        // JSON and zip work run inside Task.Run.
+        // Write off the dispatcher. Publish the toast with Post (MarshalToUiAsync), not by
+        // resuming the async command on the UI sync context: headless RunJobs drains Post
+        // and does not complete that resume, which left StatusText on "Exporting…".
         SetStatus(busyText, StatusSeverity.Busy);
         var token = StatusCancelToken;
-        void Write()
+        await Task.Run(() =>
         {
             LastExportThreadId = Environment.CurrentManagedThreadId;
             _store.WithBodiesForExportAsync(sessions, write, token).GetAwaiter().GetResult();
-        }
+        }, token).ConfigureAwait(false);
 
-        if (Application.Current is null)
-        {
-            // No UI sync context: finish before the command returns so tests observe the file
-            // and the toast. The write itself is still off the caller thread.
-            RunOnBackgroundThread(Write);
-        }
-        else
-        {
-            await Task.Run(Write, token);
-        }
-
-        SetOutcomeStatus(successText, StatusSeverity.Success, toastImportant: true);
+        await MarshalToUiAsync(() => PublishOutcome(successText, StatusSeverity.Success), token)
+            .ConfigureAwait(false);
     }
 
     private async Task<List<SessionSnapshot>> ReadImportedSessionsAsync(
@@ -1146,12 +1163,7 @@ public sealed partial class MainWindowViewModel
             return list;
         }
 
-        if (Application.Current is null)
-        {
-            return RunOnBackgroundThread(Read);
-        }
-
-        return await Task.Run(Read, token);
+        return await Task.Run(Read, token).ConfigureAwait(false);
     }
 
     private static T RunOnBackgroundThread<T>(Func<T> work)
@@ -1181,13 +1193,6 @@ public sealed partial class MainWindowViewModel
 
         return result!;
     }
-
-    private static void RunOnBackgroundThread(Action work) =>
-        RunOnBackgroundThread(() =>
-        {
-            work();
-            return true;
-        });
 
     private void AppendImportedSessions(List<SessionSnapshot> imported)
     {
