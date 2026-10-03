@@ -487,7 +487,7 @@ internal static class RampOrchestrator
         {
             var needle = options.ArmNameContains.Trim();
             var before = arms.Count;
-            arms = arms.Where(a => a.Name.Contains(needle, StringComparison.OrdinalIgnoreCase)).ToList();
+            arms = arms.Where(a => ArmNameMatches(a.Name, needle)).ToList();
             ProbeLog.Info($"arm-contains '{needle}': {arms.Count}/{before} arms.");
         }
 
@@ -2320,6 +2320,28 @@ internal static class RampOrchestrator
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// <c>--arm-contains</c> filter: comma-separated alternatives, any match keeps the arm.
+    /// A trailing <c>$</c> anchors that alternative to the end of the arm name.
+    /// </summary>
+    internal static bool ArmNameMatches(string armName, string filter)
+    {
+        foreach (var raw in filter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (raw.EndsWith('$'))
+            {
+                if (raw.Length > 1 && armName.EndsWith(raw[..^1], StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            else if (armName.Contains(raw, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

@@ -899,7 +899,8 @@ internal static class Cli
               --duration-sec N
               --repeats N             Full arm sequence N times; print median peaks (default 1)
               --arm-shard i/n|all     Exclusive comparison-group (wiki-row) partition; all = no split
-              --arm-contains TEXT     Keep only arms whose name contains TEXT (surgical re-run)
+              --arm-contains TEXT     Keep only arms whose name contains TEXT (surgical re-run);
+                                      comma-separated alternatives, trailing $ = name ends with
               --max-cached-connections N   Override ProxyServer.MaxCachedConnections for TWP arms
               --method GET|POST       Default GET (compare-post sets POST per arm)
               --response-bytes N      Origin response size (default ~64 B tiny JSON)
