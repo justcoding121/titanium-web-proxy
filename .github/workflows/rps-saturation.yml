@@ -840,7 +840,7 @@ jobs:
         # "lost communication" and 0 artifacts. Healthy ramps routinely run past that. Cap the ramp
         # so a true hang still uploads a partial CSV before a long stall, but allow ~55m so a
         # ~13-arm / repeats=3 shard (often ~39-45m) can finish without INCOMPLETE churn.
-        timeout-minutes: ${{ runner.os == 'macOS' && 55 || (github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 110 || 345)))) }}
+        timeout-minutes: ${{ runner.os == 'macOS' && 90 || (github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 110 || 345)))) }}
         shell: pwsh
         env:
           RPS_MODE: ${{ env.RPS_MODE }}
