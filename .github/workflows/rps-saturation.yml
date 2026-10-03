@@ -836,11 +836,10 @@ jobs:
       # githubactions:S7630 script-injection findings on user-controlled values.
       - name: Run saturation ramp
         id: ramp
-        # macOS Apple Silicon (3-core) has been reclaiming *wedged* VMs ~47-48m after start with
-        # "lost communication" and 0 artifacts. Healthy ramps routinely run past that. Cap the ramp
-        # so a true hang still uploads a partial CSV before a long stall, but allow ~55m so a
-        # ~13-arm / repeats=3 shard (often ~39-45m) can finish without INCOMPLETE churn.
-        timeout-minutes: ${{ runner.os == 'macOS' && 180 || (github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 110 || 345)))) }}
+        # Same cap on every OS (macOS included): the 180m macOS-only cap was hit by the full
+        # saturation ramp (run 37110567901). Leave headroom under the 360m job timeout so a true
+        # hang still uploads a partial CSV.
+        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 110 || 345))) }}
         shell: pwsh
         env:
           RPS_MODE: ${{ env.RPS_MODE }}
