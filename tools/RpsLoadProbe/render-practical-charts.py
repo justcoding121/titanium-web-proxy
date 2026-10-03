@@ -769,9 +769,28 @@ def find_csv(results_root: Path, os_keys: Iterable[str]) -> Optional[Path]:
 
 
 def find_csvs(results_roots: Sequence[Path], os_keys: Iterable[str]) -> List[Path]:
+    """Every shard CSV for this OS. One suite run holds many rps-csv-<os>-shard-* folders."""
     seen: set = set()
     out: List[Path] = []
     for root in results_roots:
+        matched = False
+        for key in os_keys:
+            for pattern in (
+                f"rps-csv-{key}/*.csv",
+                f"rps-csv-{key}-*/*.csv",
+                f"{key}/*.csv",
+            ):
+                for path in sorted(root.glob(pattern)):
+                    if _is_retired_mac_intel(path):
+                        continue
+                    if key == "macos-15" and "macos-15-intel" in str(path).lower().replace("\\", "/"):
+                        continue
+                    matched = True
+                    if path not in seen:
+                        seen.add(path)
+                        out.append(path)
+        if matched:
+            continue
         found = find_csv(root, os_keys)
         if found and found not in seen:
             seen.add(found)

@@ -125,16 +125,14 @@ def load_os(run_ids: RunIds, os_folder: str) -> Dict[str, dict]:
     """Union arm metrics across shard run ids; first non-empty wins per arm."""
     merged: Dict[str, dict] = {}
     for rid in _run_id_list(run_ids):
-        files = _csv_files_for_os(ROOT / str(rid), os_folder)
-        if not files:
-            continue
-        arms = {r["arm"] for r in csv.DictReader(files[0].open(newline=""))}
-        for a in arms:
-            if a in merged:
-                continue
-            m = arm_metrics(files[0], a)
-            if m is not None:
-                merged[a] = m
+        for path in _csv_files_for_os(ROOT / str(rid), os_folder):
+            arms = {r["arm"] for r in csv.DictReader(path.open(newline=""))}
+            for a in arms:
+                if a in merged:
+                    continue
+                m = arm_metrics(path, a)
+                if m is not None:
+                    merged[a] = m
     return merged
 
 
@@ -521,16 +519,13 @@ def main() -> None:
         f"Blocks B/C use peer÷YARP / ÷nginx on median peak (not % of H1 origin). **RPS cells** embed median RSS / CPU for the **proxy child** plus its **full descendant tree** "
         f"(serve-proxy → nginx master → workers); origin-direct samples the **origin** child. Product matrices below use matched `dotnet-httpclient` only (not bombardier).\n"
     )
-    cal_at = text.find("Calibration for the shared")
-    block_a_at = text.find("\n\n#### Block A")
-    if cal_at < 0 or "later re-measure" not in text[cal_at:block_a_at]:
-        text = re.sub(
-            r"Calibration for the shared 4 vCPU loopback shape:.*?(?=\n\n#### Block A)",
-            sat_intro.rstrip() + "\n",
-            text,
-            count=1,
-            flags=re.S,
-        )
+    text = re.sub(
+        r"Calibration for the shared 4 vCPU loopback shape:.*?(?=\n\n#### Block A)",
+        sat_intro.rstrip() + "\n",
+        text,
+        count=1,
+        flags=re.S,
+    )
 
     # Block A
     a = text.find("#### Block A — H1 plain")
@@ -541,14 +536,41 @@ def main() -> None:
     block = replace_table_at(block, block.find("| Arm | Generator | RPS", w), sat_block_a(win["saturation"]))
     l = block.find("**Linux**")
     block = replace_table_at(block, block.find("| Arm | Generator | RPS", l), sat_block_a(lin["saturation"]))
+    mac_a = sat_block_a(mac["saturation"])
     if "**macOS**" not in block:
-        mac_a = (
-            f"\n\n**macOS** (`{mac_folder}`, Apple Silicon)\n\n"
-            + sat_block_a(mac["saturation"])
-            + "\n"
-        )
+        mac_section = f"\n\n**macOS** (`{mac_folder}`, Apple Silicon)\n\n" + mac_a + "\n"
         prose = block.find("\nReverse peers are about")
-        block = (block[:prose] + mac_a + block[prose:]) if prose > 0 else block.rstrip() + mac_a
+        if prose < 0:
+            prose = block.find("\nOn this macOS run")
+        block = (block[:prose] + mac_section + block[prose:]) if prose > 0 else block.rstrip() + mac_section
+    else:
+        mpos = block.find("**macOS**")
+        block = replace_table_at(block, block.find("| Arm |", mpos), mac_a)
+    def peak_pct(data: dict, arm: str, origin: str) -> str:
+        num = data.get(arm)
+        den = data.get(origin)
+        if not num or not den or not den.get("Peak"):
+            return "—"
+        return f"{num['Peak'] / den['Peak'] * 100:.1f}%"
+    block = re.sub(
+        r"Reverse peers on Block A @ .*?Bare and origin-direct are controls \(not medal peers\)\.",
+        (
+            f"Reverse peers on Block A @ `{HEAD}`: Windows TWP is **{peak_pct(win['saturation'], 'twp-reverse-http1', 'origin-direct')}** "
+            f"of origin-direct and Linux TWP is **{peak_pct(lin['saturation'], 'twp-reverse-http1', 'origin-direct')}**. "
+            f"Prefer the **%** column over absolute RPS across runs. Bare and origin-direct are controls (not medal peers)."
+        ),
+        block,
+        count=1,
+        flags=re.S,
+    )
+    mac_origin = mac["saturation"].get("origin-direct")
+    if mac_origin:
+        block = re.sub(
+            r"On this macOS run `origin-direct` was \*\*[0-9.]+%\*\* CPU",
+            f"On this macOS run `origin-direct` was **{mac_origin['Cpu']:.1f}%** CPU",
+            block,
+            count=1,
+        )
     text = text[:a] + block + text[b:]
 
     # Block B
@@ -567,17 +589,17 @@ def main() -> None:
         block.find("| Arm |", l),
         sat_block_bc(lin["saturation"], "nginx-reverse-http2", "yarp-reverse-http2", "twp-reverse-http2-cleartext"),
     )
+    mac_b = sat_block_bc(
+        mac["saturation"],
+        "nginx-reverse-http2",
+        "yarp-reverse-http2",
+        "twp-reverse-http2-cleartext",
+    )
     if "**macOS**" not in block:
-        block = block.rstrip() + (
-            f"\n\n**macOS** (`{mac_folder}`, Apple Silicon)\n\n"
-            + sat_block_bc(
-                mac["saturation"],
-                "nginx-reverse-http2",
-                "yarp-reverse-http2",
-                "twp-reverse-http2-cleartext",
-            )
-            + "\n"
-        )
+        block = block.rstrip() + f"\n\n**macOS** (`{mac_folder}`, Apple Silicon)\n\n" + mac_b + "\n"
+    else:
+        mpos = block.find("**macOS**")
+        block = replace_table_at(block, block.find("| Arm |", mpos), mac_b)
     text = text[:b] + block + text[c:]
 
     # Block C
@@ -589,46 +611,63 @@ def main() -> None:
     if how < 0:
         raise SystemExit("missing end of saturation Block C")
     block = text[c:how]
-    # Block C on develop is a later H3 scratch re-measure. Do not paste the older saturation CSV over it.
-    if "f2061c27" not in block:
-        w = block.find("**Windows**")
-        block = replace_table_at(
-            block,
-            block.find("| Arm |", w),
-            sat_block_bc(
-                win["saturation"],
-                "nginx-reverse-http3-cleartext",
-                "yarp-reverse-http3-cleartext",
-                "twp-reverse-http3-cleartext",
-                win_no_nginx=True,
-            ),
-        )
-        l = block.find("**Linux**")
-        block = replace_table_at(
-            block,
-            block.find("| Arm |", l),
-            sat_block_bc(
-                lin["saturation"],
-                "nginx-reverse-http3-cleartext",
-                "yarp-reverse-http3-cleartext",
-                "twp-reverse-http3-cleartext",
-            ),
-        )
+    w = block.find("**Windows**")
+    block = replace_table_at(
+        block,
+        block.find("| Arm |", w),
+        sat_block_bc(
+            win["saturation"],
+            "nginx-reverse-http3-cleartext",
+            "yarp-reverse-http3-cleartext",
+            "twp-reverse-http3-cleartext",
+            win_no_nginx=True,
+        ),
+    )
+    l = block.find("**Linux**")
+    block = replace_table_at(
+        block,
+        block.find("| Arm |", l),
+        sat_block_bc(
+            lin["saturation"],
+            "nginx-reverse-http3-cleartext",
+            "yarp-reverse-http3-cleartext",
+            "twp-reverse-http3-cleartext",
+        ),
+    )
+    mac_table = sat_block_bc(
+        mac["saturation"],
+        "nginx-reverse-http3-cleartext",
+        "yarp-reverse-http3-cleartext",
+        "twp-reverse-http3-cleartext",
+    )
     if "**macOS**" not in block:
-        block = block.rstrip() + (
-            f"\n\n**macOS** (`{mac_folder}`, Apple Silicon)\n\n"
-            + sat_block_bc(
-                mac["saturation"],
-                "nginx-reverse-http3-cleartext",
-                "yarp-reverse-http3-cleartext",
-                "twp-reverse-http3-cleartext",
-            )
-            + "\n"
+        block = block.rstrip() + f"\n\n**macOS** (`{mac_folder}`, Apple Silicon)\n\n" + mac_table + "\n"
+    else:
+        mpos = block.find("**macOS**")
+        block = replace_table_at(block, block.find("| Arm |", mpos), mac_table)
+    remeasure = block.find("Re-measured @")
+    win_heading = block.find("\n\n**Windows**")
+    if remeasure > 0 and win_heading > remeasure:
+        def peer_aside(os_name: str, data: dict) -> str:
+            bits = []
+            for label, arm in (
+                ("HAProxy", "haproxy-reverse-http3-cleartext"),
+                ("Envoy", "envoy-reverse-http3-cleartext"),
+            ):
+                measured = data.get(arm)
+                if measured and ((measured.get("Sustain") or 0) > 0 or (measured.get("Peak") or 0) > 0):
+                    bits.append(f"{label} {fmt_cell(measured)}")
+            if not bits:
+                return ""
+            return f" On the {os_name} run " + " and ".join(bits) + "."
+
+        para = (
+            f"Medals are nginx / YARP / Titanium only, from the same run as Blocks A and B "
+            f"([{rid_s}]({run_url(rid_s)}))."
+            + peer_aside("Linux", lin["saturation"])
+            + peer_aside("macOS", mac["saturation"])
         )
-        block = block.replace(
-            "macOS was not re-measured.",
-            f"macOS Apple Silicon: [{rid_s_mac}]({run_url(rid_s_mac)}).",
-        )
+        block = block[:remeasure] + para + "\n" + block[win_heading + 2 :]
     text = text[:c] + block + text[how:]
 
     def patch_heavier(heading: str, new_hdr: str, new_table: str) -> None:
@@ -647,6 +686,11 @@ def main() -> None:
         chunk = re.sub(
             r"(?:\*Not possible:\* \*\*HAProxy\*\* and \*\*Envoy\*\* columns are omitted[^\n]*\n)+",
             "",
+            chunk,
+        )
+        chunk = re.sub(
+            r"\nH1-client rows in this table were re-measured @[^\n]*\n",
+            "\n",
             chunk,
         )
         chunk2 = re.sub(
@@ -746,12 +790,8 @@ def main() -> None:
         r"\n(?:All three workloads are \*\*>1\.00×\*\* YARP|On Windows, TWP leads YARP on keep-alive tiny)[^\n]*\n",
     )
     mac_prose = (
-        "\nOn Windows, TWP leads YARP on keep-alive tiny (~**1.18×**) and keep-alive 256 KiB (~**1.07×**); "
-        "new-connection is a tie (~**1.01×**). On Linux, nginx leads keep-alive tiny (near-tie with HAProxy), "
-        "Envoy leads new-connection, and HAProxy leads keep-alive 256 KiB; TWP stays ahead of YARP on keep-alive "
-        "(~**1.16×** tiny, ~**1.28×** 256 KiB) and ties on new-connection. On macOS, nginx leads keep-alive tiny, "
-        "and HAProxy leads new-connection and keep-alive 256 KiB; TWP is ~**3.9×** YARP on keep-alive tiny and "
-        "~**1.36×** on 256 KiB. New-connection is Darwin SslStream-bound for TWP and YARP (handshake p99 SLO "
+        "\nPrefer **TWP÷YARP** in the table. Absolute RPS on GHA swings hard. "
+        "New-connection is Darwin SslStream-bound for TWP and YARP (handshake p99 SLO "
         "**500 ms** on macOS only — Win/Linux stay at **200 ms**).\n"
     )
     if m >= 0 and m < next_h2:
@@ -794,9 +834,12 @@ def main() -> None:
         b = text.find(following, a + len(anchor)) if a >= 0 else -1
         if a < 0 or b < 0:
             raise SystemExit(f"missing anchor {anchor!r} -> {following!r}")
-        if heading in text[a:b]:
+        block = f"{heading}\n\n{hdr}\n\n{table}\n\n"
+        pos = text.find(heading, a, b)
+        if pos < 0:
+            text = text[:b] + block + text[b:]
             return
-        text = text[:b] + f"{heading}\n\n{hdr}\n\n{table}\n\n" + text[b:]
+        text = text[:pos] + block + text[b:]
 
     mac_intro = (
         f"Median of **3** repeats on `{mac_folder}` (Apple Silicon M1, 3-core / 7 GB) @ `{HEAD}`."
@@ -828,6 +871,38 @@ def main() -> None:
         "#### macOS",
         f"{mac_intro} Source: Actions [{rid_a_mac}]({run_url(rid_a_mac)}) (`compare-arch`).",
         arch_table(mac["arch"], False),
+    )
+
+    text = re.sub(r"\nH1-client rows[^\n]*\n", "\n", text)
+    text = re.sub(
+        r"\nnginx/Windows collapses on large reverse bodies[^\n]*\n",
+        "\nnginx/Windows collapses on large reverse bodies in this harness; treat as same-OS only. Prefer the ratio columns; absolute RPS swings by VM.\n",
+        text,
+        count=1,
+    )
+    text = re.sub(
+        r"\nOn this GHA pass TWP÷YARP H1 TLS[^\n]*\n",
+        "\nPrefer the ratio columns; absolute RPS swings by VM.\n",
+        text,
+        count=1,
+    )
+    text = re.sub(
+        r"\nH1 is near parity with YARP\.[^\n]*\n",
+        "\nH1, H2, and H3 loss sustain are in the table. Prefer the ratio columns.\n",
+        text,
+        count=1,
+    )
+    text = re.sub(
+        r"\nSlow consumer is sleep-bound;[^\n]*\n",
+        "\nSlow consumer is sleep-bound; H1/H2/H3 sit in the same band. Prefer the ratio columns for early-response, duplex, and WebSocket rows.\n",
+        text,
+        count=1,
+    )
+    text = re.sub(
+        r"\(H1-client rows re-measured @ `[^`]+`; other rows stay @ `[^`]+`\)",
+        f"(@ `{HEAD}`)",
+        text,
+        count=1,
     )
 
     WIKI.write_text(text, encoding="utf-8")
