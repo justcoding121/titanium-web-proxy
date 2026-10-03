@@ -149,7 +149,7 @@ Two TWP-only MITM shapes on the same Client×Origin wires (+ CONNECT). nginx/YAR
 Two PNG families per OS:
 
 1. **Tiny** (`rps-practical-{os}.png`) — **10 clusters**: eight industry reverse wires (tiny keep-alive GET ~56 B) plus WebSocket / gRPC unary. Chart order puts typical reverse paths first (TLS in → HTTP/1 out), then H2 same-protocol, H3→H1c, **H3→h2c**, then WS / gRPC.
-2. **64 KB** (`rps-practical-heavier-{os}.png`) — six heavier clusters: GET 64 KB H1/H2/H3→H1c, GET 64 KB H2→H2, POST 64 KB H1, GET 256 KB H1. Skipped when the OS has no heavier wiki/CSV data (macOS today).
+2. **64 KB** (`rps-practical-heavier-{os}.png`) — six heavier clusters: GET 64 KB H1/H2/H3→H1c, GET 64 KB H2→H2, POST 64 KB H1, GET 256 KB H1. Skipped when that OS has no heavier wiki/CSV data.
 
 After downloading `compare-product` plus heavier roots:
 
@@ -174,7 +174,7 @@ python3 tools/RpsLoadProbe/render-practical-charts.py \
   --title-suffix '@ <sha>'
 ```
 
-Writes up to six PNGs: `wiki/images/rps-practical-{linux,windows,macos}.png` and `rps-practical-heavier-{linux,windows,macos}.png` when data exists (macOS heavier is skipped today). Linux embeds both in the repo README; the website Performance page shows all OS tiny charts plus Win/Linux 64 KB. Five series: Titanium / YARP / nginx / HAProxy / Envoy. Tiny wires: H1 TLS→H1c · H1 TLS→H1 TLS · H2 TLS→H1c · H2 TLS→H1 TLS · H2 TLS→h2c · H2 TLS→H2 TLS · H3→H1c · H3→h2c. Workloads fold in from `--arch-root` / `--grpc-root`; heavier bodies/POST from `--bodies-root` / `--post-root` (or sibling `gha-dl/` folders when omitted). Wiki Performance tables stay chart-free.
+Writes up to six PNGs: `wiki/images/rps-practical-{linux,windows,macos}.png` and `rps-practical-heavier-{linux,windows,macos}.png` when that OS has heavier data. Linux embeds both in the repo README; the website Performance page shows all OS tiny charts plus Win/Linux 64 KB. Five series: Titanium / YARP / nginx / HAProxy / Envoy. Tiny wires: H1 TLS→H1c · H1 TLS→H1 TLS · H2 TLS→H1c · H2 TLS→H1 TLS · H2 TLS→h2c · H2 TLS→H2 TLS · H3→H1c · H3→h2c. Workloads fold in from `--arch-root` / `--grpc-root`; heavier bodies/POST from `--bodies-root` / `--post-root` (or sibling `gha-dl/` folders when omitted). Wiki Performance tables stay chart-free.
 
 ### Native peer smoke (HAProxy / Envoy)
 

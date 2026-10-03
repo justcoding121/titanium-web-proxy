@@ -492,6 +492,11 @@ def parse_wiki_heavier(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]:
             in_body_table = False
             body_header = []
             continue
+        if line.startswith("### macOS — heavier reverse GET"):
+            body_os = "macos"
+            in_body_table = False
+            body_header = []
+            continue
         if line.startswith("### ") and body_os is not None and "heavier reverse GET" not in line:
             body_os = None
             in_body_table = False
@@ -536,6 +541,11 @@ def parse_wiki_heavier(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]:
             continue
         if line.startswith("### Linux — POST"):
             post_os = "linux"
+            in_post_table = False
+            post_header = []
+            continue
+        if line.startswith("### macOS — POST"):
+            post_os = "macos"
             in_post_table = False
             post_header = []
             continue
