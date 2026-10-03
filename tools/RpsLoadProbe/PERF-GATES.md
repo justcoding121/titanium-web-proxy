@@ -39,7 +39,7 @@ Do **not** run full `compare-product` on every develop PR. Thresholds change onl
 | Beta / stable publish | push to `beta`/`stable` | `compare-editions` + parallel `compare-spot` ([`run-spot-matrix.ps1`](run-spot-matrix.ps1)) | ~60 min wall |
 | Pre-wiki smoke (required) | after Core / harness changes | **`compare-product-smoke`** Linux **2** comparison-group shards (`repeats=1`) before full product | ~30–60 min |
 | Release / wiki refresh | release SHA | `compare-product` (median of 3) via the [RPS suite](../../.github/workflows/rps-suite.yml): one job per wiki row on Win/Linux/macOS; paste unions the row CSVs | ~5h wall on a Free account (5 macOS slots) |
-| Unary gRPC | as needed | `compare-grpc` (H2↔H2 + H2→h2c; Win/Linux shard 1/2 + 2/2; Mac see table) | ~20–50 min |
+| Unary gRPC | as needed | `compare-grpc` (H2 TLS and H2 TLS→h2c; one job per row on Win/Linux/macOS) | ~20–50 min |
 | WebSocket dual-TLS / RFC 8441 | as needed | `compare-ws-h1tls` / `compare-ws-h2` | ~15–40 min each |
 | Heavier wiki tables | as needed | `compare-bodies` / `post` / `lossy` / `arch` / `tls-cost`, each its own suite run | one row per job |
 
