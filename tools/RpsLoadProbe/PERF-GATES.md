@@ -38,25 +38,20 @@ Do **not** run full `compare-product` on every develop PR. Thresholds change onl
 | Editions | after CLI/Plus changes | `compare-editions` + [`validate-edition-gates.ps1`](validate-edition-gates.ps1) | ~60 min |
 | Beta / stable publish | push to `beta`/`stable` | `compare-editions` + parallel `compare-spot` ([`run-spot-matrix.ps1`](run-spot-matrix.ps1)) | ~60 min wall |
 | Pre-wiki smoke (required) | after Core / harness changes | **`compare-product-smoke`** Linux **2** comparison-group shards (`repeats=1`) before full product | ~30–60 min |
-| Release / wiki refresh | release SHA | `compare-product` (median of 3) on **Win/Linux** with **`arm_shard` 1/3,2/3,3/3**; on **macos-15** use the Mac shard table below; paste `-RunIds` union | Win/Linux ~2–2½h wall; Mac serial ~longer (360m hard cap) |
+| Release / wiki refresh | release SHA | `compare-product` (median of 3) via the [RPS suite](../../.github/workflows/rps-suite.yml): one job per wiki row on Win/Linux/macOS; paste unions the row CSVs | ~5h wall on a Free account (5 macOS slots) |
 | Unary gRPC | as needed | `compare-grpc` (H2↔H2 + H2→h2c; Win/Linux shard 1/2 + 2/2; Mac see table) | ~20–50 min |
 | WebSocket dual-TLS / RFC 8441 | as needed | `compare-ws-h1tls` / `compare-ws-h2` | ~15–40 min each |
-| Heavier wiki tables | as needed | `compare-bodies` (Win/Linux **2** shards) / `post` / `lossy` / `arch` (Win/Linux **3** shards) / `tls-cost`; Mac see table | 30–90 min each |
+| Heavier wiki tables | as needed | `compare-bodies` / `post` / `lossy` / `arch` / `tls-cost`, each its own suite run | one row per job |
 
-### Mac Apple Silicon (`macos-15`) shard counts
+### One job per wiki row
 
-Hosted `macos-15` is 3-core / 7 GiB. Wedged ramps have been killed by GitHub at ~47–48m with "lost communication" and **0 artifacts** (often during `nginx-reverse-http1`). Use **finer shards** so a dying VM loses fewer arms, keep **≤2–3 concurrent** Mac jobs, and prefer **serial** dispatch for wiki refresh. Ramp step `timeout-minutes` is **55** on macOS so a ~13-arm / repeats=3 shard can finish; `INCOMPLETE.txt` still marks true hangs for re-dispatch.
+Dispatch the [RPS suite](../../.github/workflows/rps-suite.yml) once per mode. Its prep job lists the comparison groups (`--print-groups`) and each group becomes one job per OS, so a wiki row's peers and its MITM Lite and Full arms stay on the same VM while no single job can run for hours. `compare-saturation` and `compare-editions` stay one job per OS, because saturation compares proxy arms against `origin-direct` from the same run. Address a row by its group key (`--arm-shard h1c-h1c`), not by an `i/n` index, so a re-run measures the same row even if a peer install fails. `i/n` remains for the smoke modes.
 
-| Mode | Win/Linux shards | Mac shards (target ≤ ~15–18 arms / ~38m) |
-|------|------------------|------------------------------------------|
-| `compare-product` | 3 | **9** (`1/9` … `9/9`) |
-| `compare-bodies` | 2 | **4** |
-| `compare-arch` | 3 | **6** |
-| `compare-grpc` | 2 | **4** |
-| `compare-post` / `compare-lossy` / `compare-tls-cost` | 1 | **2** or **3** |
-| `compare-saturation` / `compare-ws-*` | 1 | 1 (only shard further if a run exceeds ~38m) |
+A single-row leg times out after 60 minutes of ramp and 75 minutes overall, so a wedged macOS VM costs one of the five slots for about an hour instead of six. Each leg uploads a `leg-status.json` (overwritten on re-run) and the suite's aggregate job fails unless every row reports success on every OS.
 
-Validate locally with [`validate-arm-shards.ps1`](validate-arm-shards.ps1) (includes Mac product 9-way / bodies 4-way / arch 6-way / grpc 4-way checks). Paste scripts already union `rps-csv-<os>-shard-*`.
+Free-plan accounts run 20 jobs at once and only 5 of them can be macOS. Give the suite a quiet window: do not push pull requests or start other macOS jobs while it runs. Re-run only infrastructure failures (`gh run rerun --failed`); a failed gate is a finding and is never re-rolled, and the published numbers are the last attempt, never the best of several.
+
+Validate locally with [`validate-arm-shards.ps1`](validate-arm-shards.ps1). Paste scripts union `rps-csv-<os>-shard-*`, and [`download-rps-suite.ps1`](download-rps-suite.ps1) lays the artifacts out for them.
 
 Do **not** run full `compare-product` as a daily smoke. Prefer TWP÷YARP / TWP÷nginx / edition ratios over absolute RPS. Shards keep one Client×Origin row on one VM — do not compare absolute RPS across shards. Early-stop (`--stop-on-slo-fail`, default on) aborts an arm after the first SLO fail plus one peak confirmation step. Local shard check: [`validate-arm-shards.ps1`](validate-arm-shards.ps1).
 

@@ -48,6 +48,8 @@ internal static class Cli
         (int Index, int Count)? armShard = null;
         string? armNameContains = null;
         var printArms = false;
+        var printGroups = false;
+        string? armGroupKey = null;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -139,7 +141,15 @@ internal static class Cli
                 case "--arm-shard":
                 {
                     var shardText = RequireValue(args, ref i, "--arm-shard").Trim();
-                    if (!string.Equals(shardText, "all", StringComparison.OrdinalIgnoreCase))
+                    if (shardText.Length > 0 && !shardText.Contains('/')
+                        && !string.Equals(shardText, "all", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Group key (wiki row), e.g. h1c-h1c or h3-h3-body64k. List with --print-groups.
+                        if (!shardText.All(c => char.IsAsciiLetterOrDigit(c) || c == '-'))
+                            return Fail("--arm-shard group key may only contain letters, digits and '-'");
+                        armGroupKey = shardText;
+                    }
+                    else if (!string.Equals(shardText, "all", StringComparison.OrdinalIgnoreCase))
                     {
                         var parts = shardText.Split('/', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
                         if (parts.Length != 2
@@ -147,7 +157,7 @@ internal static class Cli
                             || !int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var count)
                             || count < 1 || idx < 1 || idx > count)
                         {
-                            return Fail("--arm-shard must be 'all' or i/n (1-based i, n >= 1)");
+                            return Fail("--arm-shard must be 'all', i/n (1-based i, n >= 1) or a group key");
                         }
 
                         armShard = (idx, count);
@@ -212,6 +222,11 @@ internal static class Cli
                     if (command == null)
                         command = "ramp";
                     break;
+                case "--print-groups":
+                    printGroups = true;
+                    if (command == null)
+                        command = "ramp";
+                    break;
                 default:
                     ProbeLog.Error($"Unknown argument: {args[i]}");
                     PrintHelp();
@@ -258,7 +273,7 @@ internal static class Cli
                     originHttpsExtraPorts, nginxPath, haproxyPath, envoyPath, maxCachedConnections, cts.Token, workload),
                 "serve" => RunServe(modeText, nginxPath, haproxyPath, envoyPath, maxCachedConnections, cts.Token, workload),
                 "ramp" => RunRamp(modeText, nginxPath, haproxyPath, envoyPath, resultsDir, concurrency, warmupSec, durationSec,
-                    maxCachedConnections, repeats, workload, stopOnSloFail, armShard, armNameContains, printArms, cts.Token),
+                    maxCachedConnections, repeats, workload, stopOnSloFail, armShard, armGroupKey, armNameContains, printArms, printGroups, cts.Token),
                 _ => Fail("Required: --serve | --serve-origin | --serve-proxy | --ramp")
             };
         }
@@ -312,7 +327,7 @@ internal static class Cli
     private static int RunRamp(string? modeText, string? nginxPath, string? haproxyPath, string? envoyPath,
         string? resultsDir, List<int> concurrency, int warmupSec, int durationSec, int? maxCachedConnections,
         int repeats, WorkloadOptions workload, bool stopOnSloFail, (int Index, int Count)? armShard,
-        string? armNameContains, bool printArms, CancellationToken ct)
+        string? armGroupKey, string? armNameContains, bool printArms, bool printGroups, CancellationToken ct)
     {
         if (modeText == null || !TryParseMode(modeText, out var mode))
             return Fail("Required: --ramp --mode <see --help>");
@@ -330,12 +345,21 @@ internal static class Cli
             Repeats = Math.Max(1, repeats),
             StopOnSloFail = stopOnSloFail,
             ArmShard = armShard,
+            ArmGroupKey = armGroupKey,
             ArmNameContains = armNameContains,
             ConcurrencySteps = concurrency.Count > 0
                 ? concurrency.ToArray()
                 : [8, 16, 24, 32, 48, 64, 128, 256, 512],
             Workload = workload
         };
+        if (printGroups)
+        {
+            // Tab-separated: <group-key>\t<arm-count>. Stdout only; ProbeLog lines start with '['.
+            foreach (var (key, armCount) in RampOrchestrator.ListArmGroups(options))
+                Console.WriteLine($"{key}\t{armCount}");
+            return 0;
+        }
+
         if (printArms)
         {
             foreach (var name in RampOrchestrator.ListArmNames(options))
@@ -895,7 +919,8 @@ internal static class Cli
               --warmup-sec N
               --duration-sec N
               --repeats N             Full arm sequence N times; print median peaks (default 1)
-              --arm-shard i/n|all     Exclusive comparison-group (wiki-row) partition; all = no split
+              --arm-shard i/n|all|KEY Exclusive comparison-group (wiki-row) partition; all = no split;
+                                      KEY (e.g. h1c-h1c, h3-h3-body64k) runs exactly one wiki row
               --arm-contains TEXT     Keep only arms whose name contains TEXT (surgical re-run);
                                       comma-separated alternatives, trailing $ = name ends with
               --max-cached-connections N   Override ProxyServer.MaxCachedConnections for TWP arms
@@ -909,6 +934,7 @@ internal static class Cli
               --websocket             Origin /ws echo; client uses ClientWebSocket
               --grpc                  Origin MapGrpcService Echo; client uses Grpc.Net.Client unary
               --print-arms            Resolve arm list (+ optional --arm-shard) and exit (no ramp)
+              --print-groups          Print "<group-key>\t<arm-count>" per wiki row for the mode and exit
             """);
     }
 }

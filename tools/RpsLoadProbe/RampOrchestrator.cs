@@ -326,6 +326,12 @@ internal sealed class RampOptions
     /// </summary>
     public (int Index, int Count)? ArmShard { get; init; }
     /// <summary>
+    /// Run exactly one comparison group (wiki row), e.g. <c>h1c-h1c</c> or <c>h3-h3-body64k</c>.
+    /// Used by the row-level GHA suite; list keys with <c>--print-groups</c>. Applied after the
+    /// capability / QuicListener filters, like <see cref="ArmShard"/>.
+    /// </summary>
+    public string? ArmGroupKey { get; init; }
+    /// <summary>
     /// When set, keep only arms whose name contains this substring (case-insensitive).
     /// Surgical re-runs (e.g. <c>nc-tiny</c> after a Mac TLS handshake fix).
     /// </summary>
@@ -340,7 +346,18 @@ internal static class RampOrchestrator
     /// Resolve runnable arm names for <paramref name="options"/> (capability filter + optional shard).
     /// Used by <c>--print-arms</c> for local shard atomicity checks.
     /// </summary>
-    public static IReadOnlyList<string> ListArmNames(RampOptions options)
+    public static IReadOnlyList<string> ListArmNames(RampOptions options) =>
+        ListArms(options, applySelection: true).Select(a => a.Name).ToList();
+
+    /// <summary>
+    /// Comparison groups (wiki rows) runnable on this host for the mode, ignoring any
+    /// shard / group / name selection. Used by <c>--print-groups</c> to build the row-level GHA matrix.
+    /// </summary>
+    public static IReadOnlyList<(string Key, int ArmCount)> ListArmGroups(RampOptions options) =>
+        ComparisonGroup.ListGroups(ListArms(options, applySelection: false),
+            a => ComparisonGroup.Key(a.Mode, a.Name));
+
+    private static List<ArmSpec> ListArms(RampOptions options, bool applySelection)
     {
         var nginxExe = NginxHost.ResolveNginxExecutable(options.NginxPath);
         var haproxyExe = HaproxyHost.ResolveHaproxyExecutable(options.HaproxyPath);
@@ -373,8 +390,13 @@ internal static class RampOrchestrator
 
         arms = MoveNginxArmsLastWithinGroups(arms);
 
+        if (!applySelection)
+            return arms;
+
         if (options.ArmShard is { } shard)
             arms = ApplyArmShard(arms, shard.Index, shard.Count);
+        if (!string.IsNullOrWhiteSpace(options.ArmGroupKey))
+            arms = ApplyArmGroup(arms, options.ArmGroupKey);
 
         // After sharding: run every nginx peer last in the job so a macOS nginx wedge
         // cannot take down non-nginx arms that already finished (CSV rows are flushed).
@@ -386,7 +408,7 @@ internal static class RampOrchestrator
             arms = arms.Where(a => a.Name.Contains(needle, StringComparison.OrdinalIgnoreCase)).ToList();
         }
 
-        return arms.Select(a => a.Name).ToList();
+        return arms;
     }
 
     public static async Task<int> RunAsync(RampOptions options, CancellationToken cancellationToken)
@@ -475,6 +497,14 @@ internal static class RampOrchestrator
             arms = ApplyArmShard(arms, shard.Index, shard.Count);
             ProbeLog.Info(
                 $"arm-shard {shard.Index}/{shard.Count}: {arms.Count}/{before} arms after capability filter.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.ArmGroupKey))
+        {
+            var before = arms.Count;
+            arms = ApplyArmGroup(arms, options.ArmGroupKey);
+            ProbeLog.Info(
+                $"arm-group {options.ArmGroupKey}: {arms.Count}/{before} arms after capability filter.");
         }
 
         arms = MoveNginxArmsToEnd(arms);
@@ -2353,6 +2383,9 @@ internal static class RampOrchestrator
 
     private static List<ArmSpec> ApplyArmShard(List<ArmSpec> arms, int shardIndex, int shardCount) =>
         ComparisonGroup.ApplyShard(arms, a => ComparisonGroup.Key(a.Mode, a.Name), shardIndex, shardCount);
+
+    private static List<ArmSpec> ApplyArmGroup(List<ArmSpec> arms, string groupKey) =>
+        ComparisonGroup.ApplyGroup(arms, a => ComparisonGroup.Key(a.Mode, a.Name), groupKey);
 
     /// <summary>
     /// Periodic "still alive" line so GHA log tails show progress when a measure step is long.
