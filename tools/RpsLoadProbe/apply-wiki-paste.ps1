@@ -73,9 +73,9 @@ $linHdrNew = "## Linux $em Titanium vs nginx vs HAProxy vs Envoy vs YARP"
 $macHdrNew = "## macOS $em Titanium vs nginx vs HAProxy vs Envoy vs YARP"
 # Use \r?$ so CRLF wiki files still match (.$ alone can eat CR; bare $ before \n fails when \r remains).
 $productHdrPattern = '(?m)^## (Windows|Linux|macOS) .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?$'
-# After Linux product tables: macOS, then Editions / Heavier / Cross-version depending on wiki shape.
-$afterLinuxLookahead = '(?=\r?\n## (?:macOS|Editions|Heavier|Cross-version))'
-$afterMacLookahead = '(?=\r?\n## (?:Editions|Heavier|Cross-version))'
+# After Linux product tables: macOS, then Editions / Heavier depending on wiki shape.
+$afterLinuxLookahead = '(?=\r?\n## (?:macOS|Editions|Heavier))'
+$afterMacLookahead = '(?=\r?\n## (?:Editions|Heavier))'
 
 # Normalize product section headings (old 3-peer or new 5-peer titles).
 $wiki = [regex]::Replace($wiki, $productHdrPattern, {
@@ -163,9 +163,9 @@ if ($macHdrMatch.Success) {
     $tail = $macHead + $macTail
 }
 else {
-    # Insert macOS after Linux product tables and before Editions / Heavier / Cross-version.
-    $insertAt = [regex]::Match($tail, '\r?\n## (?:Editions|Heavier|Cross-version)')
-    if (-not $insertAt.Success) { throw 'Could not find ## Editions / ## Heavier / ## Cross-version to insert macOS section' }
+    # Insert macOS after Linux product tables and before Editions / Heavier.
+    $insertAt = [regex]::Match($tail, '\r?\n## (?:Editions|Heavier)')
+    if (-not $insertAt.Success) { throw 'Could not find ## Editions / ## Heavier to insert macOS section' }
     $tail = $tail.Substring(0, $insertAt.Index) + "`n`n" + $macBlock + $tail.Substring($insertAt.Index)
 }
 

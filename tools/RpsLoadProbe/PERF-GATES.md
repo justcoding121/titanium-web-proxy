@@ -38,26 +38,20 @@ Do **not** run full `compare-product` on every develop PR. Thresholds change onl
 | Editions | after CLI/Plus changes | `compare-editions` + [`validate-edition-gates.ps1`](validate-edition-gates.ps1) | ~60 min |
 | Beta / stable publish | push to `beta`/`stable` | `compare-editions` + parallel `compare-spot` ([`run-spot-matrix.ps1`](run-spot-matrix.ps1)) | ~60 min wall |
 | Pre-wiki smoke (required) | after Core / harness changes | **`compare-product-smoke`** Linux **2** comparison-group shards (`repeats=1`) before full product | ~30–60 min |
-| Cross-version (Gate 2) | before `v7.0.0` tag | `compare-cross-version` + [`validate-cross-version.ps1`](validate-cross-version.ps1) | ~1–2h |
-| Release / wiki refresh | release SHA | `compare-product` (median of 3) on **Win/Linux** with **`arm_shard` 1/3,2/3,3/3**; on **macos-15** use the Mac shard table below; paste `-RunIds` union | Win/Linux ~2–2½h wall; Mac serial ~longer (360m hard cap) |
+| Release / wiki refresh | release SHA | `compare-product` (median of 3) via the [RPS suite](../../.github/workflows/rps-suite.yml): one job per wiki row on Win/Linux/macOS; paste unions the row CSVs | ~5h wall on a Free account (5 macOS slots) |
 | Unary gRPC | as needed | `compare-grpc` (H2↔H2 + H2→h2c; Win/Linux shard 1/2 + 2/2; Mac see table) | ~20–50 min |
 | WebSocket dual-TLS / RFC 8441 | as needed | `compare-ws-h1tls` / `compare-ws-h2` | ~15–40 min each |
-| Heavier wiki tables | as needed | `compare-bodies` (Win/Linux **2** shards) / `post` / `lossy` / `arch` (Win/Linux **3** shards) / `tls-cost`; Mac see table | 30–90 min each |
+| Heavier wiki tables | as needed | `compare-bodies` / `post` / `lossy` / `arch` / `tls-cost`, each its own suite run | one row per job |
 
-### Mac Apple Silicon (`macos-15`) shard counts
+### One job per wiki row
 
-Hosted `macos-15` is 3-core / 7 GiB. Wedged ramps have been killed by GitHub at ~47–48m with "lost communication" and **0 artifacts** (often during `nginx-reverse-http1`). Use **finer shards** so a dying VM loses fewer arms, keep **≤2–3 concurrent** Mac jobs, and prefer **serial** dispatch for wiki refresh. Ramp step `timeout-minutes` is **55** on macOS so a ~13-arm / repeats=3 shard can finish; `INCOMPLETE.txt` still marks true hangs for re-dispatch.
+Dispatch the [RPS suite](../../.github/workflows/rps-suite.yml) once per mode. Its prep job lists the comparison groups (`--print-groups`) and each group becomes one job per OS, so a wiki row's peers and its MITM Lite and Full arms stay on the same VM while no single job can run for hours. `compare-saturation` and `compare-editions` stay one job per OS, because saturation compares proxy arms against `origin-direct` from the same run. Address a row by its group key (`--arm-shard h1c-h1c`), not by an `i/n` index, so a re-run measures the same row even if a peer install fails. `i/n` remains for the smoke modes.
 
-| Mode | Win/Linux shards | Mac shards (target ≤ ~15–18 arms / ~38m) |
-|------|------------------|------------------------------------------|
-| `compare-product` | 3 | **9** (`1/9` … `9/9`) |
-| `compare-bodies` | 2 | **4** |
-| `compare-arch` | 3 | **6** |
-| `compare-grpc` | 2 | **4** |
-| `compare-post` / `compare-lossy` / `compare-tls-cost` | 1 | **2** or **3** |
-| `compare-saturation` / `compare-ws-*` | 1 | 1 (only shard further if a run exceeds ~38m) |
+A single-row leg times out after 60 minutes of ramp and 75 minutes overall, so a wedged macOS VM costs one of the five slots for about an hour instead of six. Each leg uploads a `leg-status.json` (overwritten on re-run) and the suite's aggregate job fails unless every row reports success on every OS.
 
-Validate locally with [`validate-arm-shards.ps1`](validate-arm-shards.ps1) (includes Mac product 9-way / bodies 4-way / arch 6-way / grpc 4-way checks). Paste scripts already union `rps-csv-<os>-shard-*`.
+Free-plan accounts run 20 jobs at once and only 5 of them can be macOS. Give the suite a quiet window: do not push pull requests or start other macOS jobs while it runs. Re-run only infrastructure failures (`gh run rerun --failed`); a failed gate is a finding and is never re-rolled, and the published numbers are the last attempt, never the best of several.
+
+Validate locally with [`validate-arm-shards.ps1`](validate-arm-shards.ps1). Paste scripts union `rps-csv-<os>-shard-*`, and [`download-rps-suite.ps1`](download-rps-suite.ps1) lays the artifacts out for them.
 
 Do **not** run full `compare-product` as a daily smoke. Prefer TWP÷YARP / TWP÷nginx / edition ratios over absolute RPS. Shards keep one Client×Origin row on one VM — do not compare absolute RPS across shards. Early-stop (`--stop-on-slo-fail`, default on) aborts an arm after the first SLO fail plus one peak confirmation step. Local shard check: [`validate-arm-shards.ps1`](validate-arm-shards.ps1).
 
@@ -126,7 +120,7 @@ Do not retune the harness to pass a gate — fix Core / CLI / Plus instead. Neve
 - **Mac editions “missing arm” (2026-09-10):** Stable [34542460330](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34542460330) / beta [34537927049](https://github.com/justcoding121/titanium-web-proxy/actions/runs/34537927049) Mac `compare-editions` failed `validate-edition-gates.ps1` with “missing arm data” even though CSV rows existed — Plus/feature arms often missed `meets_slo` at c=64 (p99 > 50ms). Root cause: Darwin RSS sampler forked `pgrep` every 200ms during the measure window (inflating p99 on 4-core Intel runners). Fixed: throttle Mac tree refresh to 2s; CLI host HTTP-settles after ready; validator reports **ratio** (or clear absent-CSV) instead of conflating SLO-fail with missing arms.
 - **Historical (local Win + Docker Linux, 2026-08-29):** Route/dialect locked at 0.90; Plus JWT 0.70; CIDR/WAF/rate-limit 0.80; cache/intercept 0.70; Plus-base/cache-hit 0.90; resilience 0.85; discovery/metrics 0.80; lb-leasttime 0.85 — superseded by the 0.50 edition floor above.
 
-**Pre-beta note:** Gate 1/2 matrix, editions, cross-version, and product are green on `develop` as of 2026-08-29. Remaining before tag: feature freeze on the release SHA, then cut `v7.0.4-beta` (heavier wiki tables optional).
+**Pre-beta note:** Gate 1/2 matrix, editions, and product are green on `develop` as of 2026-08-29. Remaining before tag: feature freeze on the release SHA, then cut `v7.0.4-beta` (heavier wiki tables optional). The 7.0-vs-6.0 cross-version gate was retired; there is no committed baseline comparison.
 
 **Stable cut (2026-09-01):** `v7.0.4` GA shipped from `beta` → `stable` (NuGet `7.0.4`, non-prerelease product release, `/download` Stable links refreshed).
 
@@ -176,4 +170,4 @@ Outcome @ `f2061c27` (do not paste the body shards into one table — Linux shar
 - H2 credit-sized frames stay. Linux target-arm ratio vs HAProxy **0.89×** (was **0.80×**); 64 KiB Titanium÷YARP stays **1.15×**. Absolute RPS on that shard is not comparable to `41f4adee`.
 - H3 scratch stays. Block C in the performance wiki is this SHA. The filtered `http3-to-https-http1` product jobs failed the MITM gate because the filter omitted the Lite/Full twins; reverse Titanium÷YARP was **1.05×** Linux and **0.94×** Windows (floor 0.60). That failure is not a product miss.
 
-On gate failure: classify (real regression / miscalibrated threshold / runner noise / harness bug / build-env), fix the root cause, and re-run until **Win and Linux pass** (required). For wiki-grade `compare-product`, also require **`macos-15`** (Apple Silicon; historical results before 2026-10-01 were on `macos-15-intel`) before publishing Mac tables. Partial OS **gate** passes do not count as a green product gate. Gate steps **hard-fail** the job on every event (including manual `workflow_dispatch`); CSVs still upload via `if: always()`, and `fail-fast: false` never cancels sibling matrix legs for a gate miss. Cross-version thresholds (0.95 / 1.10) match the same-version gate and must not be relaxed for code convenience.
+On gate failure: classify (real regression / miscalibrated threshold / runner noise / harness bug / build-env), fix the root cause, and re-run until **Win and Linux pass** (required). For wiki-grade `compare-product`, also require **`macos-15`** (Apple Silicon; historical results before 2026-10-01 were on `macos-15-intel`) before publishing Mac tables. Partial OS **gate** passes do not count as a green product gate. Gate steps **hard-fail** the job on every event (including manual `workflow_dispatch`); CSVs still upload via `if: always()`, and `fail-fast: false` never cancels sibling matrix legs for a gate miss. Thresholds must not be relaxed for code convenience.

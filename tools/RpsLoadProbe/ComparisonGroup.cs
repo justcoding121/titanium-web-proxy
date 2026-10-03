@@ -87,6 +87,41 @@ internal static class ComparisonGroup
         return kept;
     }
 
+    /// <summary>
+    /// Keep only arms that belong to the comparison group <paramref name="groupKey"/> (one wiki row).
+    /// Match is case-insensitive. Preserves arm order. Used by the row-level GHA suite where each
+    /// job runs exactly one group.
+    /// </summary>
+    public static List<T> ApplyGroup<T>(IReadOnlyList<T> arms, Func<T, string> keySelector, string groupKey)
+    {
+        if (string.IsNullOrWhiteSpace(groupKey))
+            throw new ArgumentException("Group key must be non-empty.", nameof(groupKey));
+        var key = groupKey.Trim();
+        return arms.Where(a => string.Equals(keySelector(a), key, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+
+    /// <summary>Distinct group keys (first-seen order) with arm counts.</summary>
+    public static List<(string Key, int ArmCount)> ListGroups<T>(IReadOnlyList<T> arms, Func<T, string> keySelector)
+    {
+        var order = new List<string>();
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var arm in arms)
+        {
+            var key = keySelector(arm);
+            if (counts.TryGetValue(key, out var n))
+            {
+                counts[key] = n + 1;
+            }
+            else
+            {
+                counts[key] = 1;
+                order.Add(key);
+            }
+        }
+
+        return order.Select(k => (k, counts[k])).ToList();
+    }
+
     private static Dictionary<ProbeMode, string> BuildWireMap()
     {
         var map = new Dictionary<ProbeMode, string>();

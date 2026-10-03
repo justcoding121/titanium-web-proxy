@@ -35,7 +35,6 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 - [Linux — Titanium vs nginx vs HAProxy vs Envoy vs YARP](#linux--titanium-vs-nginx-vs-haproxy-vs-envoy-vs-yarp)
 - [macOS — Titanium vs nginx vs HAProxy vs Envoy vs YARP](#macos--titanium-vs-nginx-vs-haproxy-vs-envoy-vs-yarp)
 - [Editions (CLI / Plus / Intercept)](#editions-cli--plus--intercept)
-- [Cross-version (7.0 vs 6.0)](#cross-version-70-vs-60)
 - [Heavier reverse workloads](#heavier-reverse-workloads)
 - [Unary gRPC (H2 TLS)](#unary-grpc-h2-tls)
 - [Unary gRPC (H2 TLS → h2c)](#unary-grpc-h2-tls--h2c)
@@ -453,23 +452,6 @@ Median of **3** repeats @ `41f4adee`. Source: Actions [36853305087](https://gith
 | `twp-cli-dialect-twp-http1` vs CLI | **66,493**<br><sub>(134 MiB / 46.4% CPU)</sub> | **33,965**<br><sub>(158 MiB / 50.3% CPU)</sub> | **1.00×** | **1.00×** | ≥ **0.90×** |
 
 `validate-edition-gates.ps1` **passed** on both OS for this run. Library baselines @ c=64 (same job): Win H1 **64191** / TLS **56711**; Linux H1 **31717** / TLS **23716**. Laptop smoke ratios stay on [Performance Local Lab — Editions](Performance-Local-Lab#editions-cli--plus-stress).
-
-## Cross-version (7.0 vs 6.0)
-
-Same reverse matrix measured on Titanium 7.0 versus committed 6.0 baselines ([33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466)). Median of **3** @ `be4d4e89`. Source: Windows [36995934758](https://github.com/justcoding121/titanium-web-proxy/actions/runs/36995934758), Linux [36995938517](https://github.com/justcoding121/titanium-web-proxy/actions/runs/36995938517). Sustain RPS @ **c=64**. Absolute 7.0÷6.0 is **0.92–1.38×** (Windows H3 is the high end). Peer-normalized TWP÷YARP is **0.94–1.17×**.
-
-| Arm | Win 6.0 | Win 7.0 | Win÷ | Linux 6.0 | Linux 7.0 | Lin÷ |
-|---|---:|---:|---:|---:|---:|---:|
-| `twp-reverse-http1` | **32525** | **29929** | **0.92×** | **32755** | **31847** | **0.97×** |
-| `twp-reverse-http1-tls` | **26461** | **25778** | **0.97×** | **22784** | **23663** | **1.04×** |
-| `twp-reverse-http2` | **76038** | **87371** | **1.15×** | **47690** | **53242** | **1.12×** |
-| `twp-reverse-http2-cleartext` | **40347** | **39304** | **0.97×** | **34556** | **34483** | **1.00×** |
-| `twp-reverse-http3` | **17529** | **24213** | **1.38×** | **19468** | **20398** | **1.05×** |
-| `twp-reverse-http3-cleartext` | **19956** | **19143** | **0.96×** | **20395** | **20825** | **1.02×** |
-| `yarp-reverse-http1` (peer) | **27504** | **26807** | **0.97×** | **27713** | **28228** | **1.02×** |
-| `yarp-reverse-http2` (peer) | **35553** | **34854** | **0.98×** | **29111** | **28944** | **0.99×** |
-
-Both OS CSVs passed the cross-version check for this run. MITM arms are measured with the product reverse matrix, not this reverse-only comparison.
 
 ## Heavier reverse workloads
 
@@ -923,7 +905,6 @@ CI cadence, shards, paste scripts, and gate floors for people refreshing these t
 | Daily / per-PR | `compare-spot` | minutes |
 | Milestone | `compare-terminate` / `compare-matrix` | ~1–2h |
 | Editions | `compare-editions` | ~60 min (CLI / Plus / Intercept stress arms) |
-| Cross-version (Gate 2) | `compare-cross-version` | ~1–2h vs committed 6.0 baselines |
 | Pre-wiki smoke | `compare-product-smoke` (Linux 2 shards, `repeats=1`) | ~30–60 min; required before full product |
 | Release / wiki | `compare-product` (**3** comparison-group shards × Win/Linux/mac) | ~2–2½h wall (Free account queues beyond 20 jobs) |
 | Unary gRPC | `compare-grpc` | Win/Linux/mac; H2↔H2 + H2→h2c (`arm_shard` 1/2, 2/2) |
@@ -935,7 +916,7 @@ See [PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/dev
 
 ### Arm shards (comparison groups)
 
-`--arm-shard i/n` (workflow input `arm_shard`) partitions **wiki rows** (Client×Origin + heavier/arch workload suffix), not individual proxy arms. Paste unions shard CSVs (`paste-compare-product-wiki.ps1 -RunIds …`; heavier `RUNS` lists). Table “Source: Actions” may list several run URLs for one table — **do not mix SHAs**. Free GitHub accounts allow **20** concurrent jobs (~34 for a full suite); extras **queue**, they do not fail. Dispatch product (and cross-version) first when wall clock matters.
+`--arm-shard i/n` (workflow input `arm_shard`) partitions **wiki rows** (Client×Origin + heavier/arch workload suffix), not individual proxy arms. Paste unions shard CSVs (`paste-compare-product-wiki.ps1 -RunIds …`; heavier `RUNS` lists). Table “Source: Actions” may list several run URLs for one table — **do not mix SHAs**. Free GitHub accounts allow **20** concurrent jobs (~34 for a full suite); extras **queue**, they do not fail. Dispatch product first when wall clock matters.
 
 One wiki row = one GHA job’s Client×Origin cell set: TWP + YARP + nginx + HAProxy + Envoy (when the OS can run them) + TWP Lite + Full stay on the **same VM**. Shards split **rows**, not individual proxies — so **TWP÷YARP** and **Lite÷Reverse** remain same-job ratios. Do not compare **absolute** RPS across shards (different VMs).
 
@@ -945,22 +926,6 @@ One wiki row = one GHA job’s Client×Origin cell set: TWP + YARP + nginx + HAP
 - MITM overhead: **Lite÷Reverse ≥ 0.25** and **Full÷Reverse ≥ 0.25** (median of 3 GHA runs @ c=64). Absolute RPS moves with runner heat; ratios are the claim.
 - Do **not** enable the HTTP/2 MITM multi-origin relay pool (`MaxOriginHttp2ConnectionsPerAuthority` > 1 under interception): Tip A/B showed Lite err%~29 and RSS blow-up, which fails the Lite/Full÷Reverse floors. Multi-origin remains gate-off compressed-relay only.
 - Editions: see [PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/PERF-GATES.md) and `validate-edition-gates.ps1`.
-- Cross-version (Gate 2) before a major tag: run `compare-cross-version` (reverse matrix, routes unset) on `develop` vs committed 6.0 baselines (`baseline-6.0-win.csv` / `baseline-6.0-linux.csv`).
-
-| Gate | Threshold |
-|------|-----------|
-| Peer-normalized RPS (when YARP peer exists) | `(TWP÷YARP)_7 ÷ (TWP÷YARP)_6 ≥ 0.90` **or** current `(TWP÷YARP) ≥ 0.90` |
-| Absolute RPS floor (TWP arms) | `7.0 ÷ 6.0 ≥ 0.70` (runner heat — peers move with the box) |
-| RSS | `7.0 ÷ 6.0 ≤ 1.20` per TWP arm @ c=64 |
-
-nginx/YARP absolute RPS is **not** gated. See [`validate-cross-version.ps1`](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/validate-cross-version.ps1).
-
-```powershell
-pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-cross-version
-pwsh tools/RpsLoadProbe/validate-cross-version.ps1 `
-  -BaselineCsv tools/RpsLoadProbe/results/baseline-6.0-win.csv `
-  -CurrentCsv  tools/RpsLoadProbe/results/rps-ramp-*.csv
-```
 
 ### Paste / regenerate
 

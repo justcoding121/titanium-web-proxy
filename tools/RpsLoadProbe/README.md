@@ -18,14 +18,13 @@ Manual CI: [RPS saturation](../../.github/workflows/rps-saturation.yml) (`workfl
 | Milestone | `compare-terminate` / `compare-matrix` | ~1–2h investigation |
 | Editions | `compare-editions` | CLI / Plus / Intercept / stress arms vs baselines (~60 min) |
 | Beta/stable publish | `compare-editions` + `compare-spot` (parallel GHA jobs) | ~60 min wall; peer gate catches Core÷YARP regressions editions miss |
-| Cross-version | `compare-cross-version` | 7.0 vs committed 6.0 baselines (Gate 2) |
-| Release / wiki | `compare-product` | median of 3; Win/Linux **3** comparison-group shards; **macos-15** **9** shards (see [PERF-GATES.md](PERF-GATES.md) Mac table); paste unions shard CSVs |
-| Unary gRPC | `compare-grpc` | H2 TLS Echo RPC/s @ c=64 — H2↔H2 + H2→h2c groups (Mac: **4** shards) |
+| Release / wiki | `compare-product` | median of 3; the [RPS suite](../../.github/workflows/rps-suite.yml) runs one job per wiki row on Win/Linux/macOS (see [PERF-GATES.md](PERF-GATES.md)); paste unions the row CSVs |
+| Unary gRPC | `compare-grpc` | H2 TLS Echo RPC/s @ c=64 — H2↔H2 and H2→h2c rows, one job each |
 | WebSocket dual-TLS | `compare-ws-h1tls` | H1 TLS→H1 TLS echo (`*-duplex-ws-h1tls`) |
 | WebSocket RFC 8441 | `compare-ws-h2` | H2 TLS extended CONNECT → H1 plain (`*-duplex-ws-h2`) |
-| Heavier tables | `compare-bodies` (Win/Linux **2** / Mac **4** shards) / `post` / `lossy` / `arch` (Win/Linux **3** / Mac **6**) / `tls-cost` | dispatch independently from the workflow |
+| Heavier tables | `compare-bodies` / `post` / `lossy` / `arch` / `tls-cost` | one suite run each, one job per row |
 
-Harness defaults: warmup **2s** / measure **8s** / concurrency **8,16,32,64** / median of **3** for publishable GHA numbers (repeats **inside** a shard). `--arm-shard i/n` splits **wiki rows** (same-job TWP÷YARP and Lite÷Reverse); paste unions shard CSVs. Hosted job cap **360** minutes; **macOS ramp step is capped at 55 minutes** so a wedged Apple Silicon VM still uploads a partial CSV (`INCOMPLETE.txt`) while healthy ~13-arm shards can finish. `--stop-on-slo-fail` (default **on**) stops an arm after the first SLO fail plus one peak confirmation step. See [PERF-GATES.md](PERF-GATES.md).
+Harness defaults: warmup **2s** / measure **8s** / concurrency **8,16,32,64** / median of **3** for publishable GHA numbers. `--arm-shard` takes a comparison-group key (`h1c-h1c`, listed by `--print-groups`) to run exactly one wiki row, so TWP÷YARP and Lite÷Reverse stay same-job ratios; `i/n` still partitions rows for the smoke modes. A single-row leg allows 60 minutes of ramp and 75 minutes overall, so a wedged VM loses one row rather than the run. `--stop-on-slo-fail` (default **on**) stops an arm after the first SLO fail plus one peak confirmation step. See [PERF-GATES.md](PERF-GATES.md).
 
 ## Full 5×5 reverse matrix
 
@@ -222,18 +221,7 @@ Plus arms allocate an explicit `controlPlane.dashboardPort` (separate from the c
 
 Gates: see [PERF-GATES.md](PERF-GATES.md). Thresholds lock after a clean Win+Linux pass. Build/publish `Titanium.Cli` (and Plus DLL beside it for Plus arms) before ramping.
 
-## Cross-version (7.0 vs 6.0)
-
-```powershell
-pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-cross-version
-pwsh tools/RpsLoadProbe/validate-cross-version.ps1 `
-  -BaselineCsv tools/RpsLoadProbe/results/baseline-6.0-win.csv `
-  -CurrentCsv  tools/RpsLoadProbe/results/rps-ramp-*.csv
-```
-
-`compare-cross-version` runs the reverse matrix with routes unset (same ForwardHost path as 6.x). Baselines are committed CSVs from the published 6.0 GHA medians — do not re-run 6.0.
-
-## Bridge matrix (cross-version)
+## Bridge matrix
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-bridges
