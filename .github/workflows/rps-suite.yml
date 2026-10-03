@@ -88,7 +88,13 @@ jobs:
             $keys = @($groups | Sort-Object Arms -Descending | Select-Object -ExpandProperty Key)
           }
           Write-Host ("{0}: {1} group(s): {2}" -f $env:SUITE_MODE, $keys.Count, ($keys -join ', '))
-          "keys=$($keys | ConvertTo-Json -Compress)" >> $env:GITHUB_OUTPUT
+          # Piping a one-element array into ConvertTo-Json unwraps it to a JSON string.
+          # fromJSON then is not an array, and the OS matrices are skipped (saturation,
+          # editions, and any mode with a single comparison group).
+          $keysJson = '[' + (($keys | ForEach-Object { ConvertTo-Json -InputObject ([string]$_) }) -join ',') + ']'
+          $roundTrip = @($keysJson | ConvertFrom-Json)
+          if ($roundTrip.Count -ne $keys.Count) { throw "keys output must be a JSON array of $($keys.Count): $keysJson" }
+          "keys=$keysJson" >> $env:GITHUB_OUTPUT
 
   linux:
     name: ${{ inputs.mode }} / ${{ matrix.key }} / linux
