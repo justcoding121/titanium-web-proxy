@@ -350,14 +350,16 @@ internal static class RampOrchestrator
         ListArms(options, applySelection: true).Select(a => a.Name).ToList();
 
     /// <summary>
-    /// Comparison groups (wiki rows) runnable on this host for the mode, ignoring any
-    /// shard / group / name selection. Used by <c>--print-groups</c> to build the row-level GHA matrix.
+    /// Every comparison group (wiki row) for the mode, ignoring shard / group / name selection and the
+    /// host's QUIC support. The group list must be host-independent: the suite's prep job runs before
+    /// libmsquic is installed, and dropping HTTP/3 groups there silently skips those wiki rows on every
+    /// OS. The legs apply the real capability filters when they run.
     /// </summary>
     public static IReadOnlyList<(string Key, int ArmCount)> ListArmGroups(RampOptions options) =>
-        ComparisonGroup.ListGroups(ListArms(options, applySelection: false),
+        ComparisonGroup.ListGroups(ListArms(options, applySelection: false, filterQuic: false),
             a => ComparisonGroup.Key(a.Mode, a.Name));
 
-    private static List<ArmSpec> ListArms(RampOptions options, bool applySelection)
+    private static List<ArmSpec> ListArms(RampOptions options, bool applySelection, bool filterQuic = true)
     {
         var nginxExe = NginxHost.ResolveNginxExecutable(options.NginxPath);
         var haproxyExe = HaproxyHost.ResolveHaproxyExecutable(options.HaproxyPath);
@@ -368,7 +370,7 @@ internal static class RampOrchestrator
         var bombardierAvailable = BombardierLoadGenerator.IsAvailable();
         var arms = ResolveArms(options.Mode, nginxExe != null, nginxHttp3, bombardierAvailable,
             haproxyExe != null, haproxyQuic, envoyExe != null, envoyHttp3).ToList();
-        if (!System.Net.Quic.QuicListener.IsSupported)
+        if (filterQuic && !System.Net.Quic.QuicListener.IsSupported)
         {
             arms = arms.Where(a =>
                 a.Mode is not (ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp3Cleartext
