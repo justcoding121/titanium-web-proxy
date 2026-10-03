@@ -154,16 +154,18 @@ public class InspectorHeadlessUiE2ETests
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
 
         deadline = DateTime.UtcNow.AddSeconds(8);
-        while (!vm.Sessions.Any(s => s.Url.Contains("ui-session-grid", StringComparison.OrdinalIgnoreCase))
+        var sessions = SessionListPoll.Copy(vm.Sessions);
+        while (!sessions.Any(s => s.Url.Contains("ui-session-grid", StringComparison.OrdinalIgnoreCase))
                && DateTime.UtcNow < deadline)
         {
             await Task.Delay(50);
+            sessions = SessionListPoll.Copy(vm.Sessions);
         }
 
-        Assert.IsTrue(vm.Sessions.Count > 0, $"Expected sessions in UI collection; status={vm.StatusText}");
+        Assert.IsTrue(sessions.Length > 0, $"Expected sessions in UI collection; status={vm.StatusText}");
         Assert.IsTrue(
-            vm.Sessions.Any(s => s.Url.Contains("ui-session-grid", StringComparison.OrdinalIgnoreCase)),
-            string.Join(", ", vm.Sessions.Select(s => s.Url)));
+            sessions.Any(s => s.Url.Contains("ui-session-grid", StringComparison.OrdinalIgnoreCase)),
+            string.Join(", ", sessions.Select(s => s.Url)));
         Assert.IsTrue(vm.SessionCountText.Contains("Sessions:", StringComparison.OrdinalIgnoreCase), vm.SessionCountText);
 
         vm.EnsureShutdown();
