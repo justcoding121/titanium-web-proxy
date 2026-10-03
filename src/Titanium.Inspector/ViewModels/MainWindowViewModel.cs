@@ -149,6 +149,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
 
     public MainWindowViewModel(InspectorViewModelServices services)
     {
+        NoteAvaloniaApp();
         _buffer = services.Buffer;
         _registry = services.Registry;
         _store = services.Registry.Store;
@@ -2496,7 +2497,17 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
 
     public string StatusText
     {
-        get => _statusText;
+        get
+        {
+            // Headless polls read this after SetupUnsafe. Present any export/import
+            // result that was stashed while ResetForUnitTests was tearing the clock down.
+            if (Volatile.Read(ref _hasDeferredUi) != 0)
+            {
+                FlushDeferredInspectorUi();
+            }
+
+            return _statusText;
+        }
         set
         {
             if (_settingStatus)

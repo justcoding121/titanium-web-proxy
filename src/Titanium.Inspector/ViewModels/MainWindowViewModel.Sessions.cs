@@ -959,7 +959,7 @@ public sealed partial class MainWindowViewModel
         }
         catch (Exception ex)
         {
-            await ReportExportFailureAsync("Export HAR failed: " + Truncate(ex.Message, 160)).ConfigureAwait(false);
+            ReportExportFailure("Export HAR failed: " + Truncate(ex.Message, 160));
         }
     }
     private async Task ExportSelectedHarAsync()
@@ -988,7 +988,7 @@ public sealed partial class MainWindowViewModel
         }
         catch (Exception ex)
         {
-            await ReportExportFailureAsync("Export HAR failed: " + Truncate(ex.Message, 160)).ConfigureAwait(false);
+            ReportExportFailure("Export HAR failed: " + Truncate(ex.Message, 160));
         }
     }
     private async Task ImportHarAsync()
@@ -1007,14 +1007,12 @@ public sealed partial class MainWindowViewModel
             ? Path.GetFileName(paths[0])
             : $"{paths.Count} files";
         var count = imported.Count;
-        // Apply on the dispatcher via Post. Awaiting Task.Run resumes through the UI
-        // sync context, which headless RunJobs does not drain, so StatusText stayed "Importing…".
-        await MarshalToUiAsync(() =>
+        QueueLiveUi(() =>
         {
             AppendImportedSessions(imported);
             RefreshSessionCountText();
-            PublishOutcome($"Appended {count} sessions from {label}", StatusSeverity.Success);
-        }, token).ConfigureAwait(false);
+            PresentOutcome($"Appended {count} sessions from {label}", StatusSeverity.Success);
+        });
     }
     private async Task ExportArchiveAsync()
     {
@@ -1042,7 +1040,7 @@ public sealed partial class MainWindowViewModel
         }
         catch (Exception ex)
         {
-            await ReportExportFailureAsync("Export archive failed: " + Truncate(ex.Message, 160)).ConfigureAwait(false);
+            ReportExportFailure("Export archive failed: " + Truncate(ex.Message, 160));
         }
     }
     private async Task ExportSelectedArchiveAsync()
@@ -1071,7 +1069,7 @@ public sealed partial class MainWindowViewModel
         }
         catch (Exception ex)
         {
-            await ReportExportFailureAsync("Export archive failed: " + Truncate(ex.Message, 160)).ConfigureAwait(false);
+            ReportExportFailure("Export archive failed: " + Truncate(ex.Message, 160));
         }
     }
     private async Task ImportArchiveAsync()
@@ -1090,33 +1088,124 @@ public sealed partial class MainWindowViewModel
             var imported = await ReadImportedSessionsAsync([path], token).ConfigureAwait(false);
             var fileName = Path.GetFileName(path);
             var count = imported.Count;
-            await MarshalToUiAsync(() =>
+            QueueLiveUi(() =>
             {
                 AppendImportedSessions(imported);
                 RefreshSessionCountText();
-                PublishOutcome($"Appended {count} sessions from {fileName}", StatusSeverity.Success);
-            }, token).ConfigureAwait(false);
+                PresentOutcome($"Appended {count} sessions from {fileName}", StatusSeverity.Success);
+            });
         }
         catch (Exception ex)
         {
-            await ReportExportFailureAsync("Import archive failed: " + Truncate(ex.Message, 160)).ConfigureAwait(false);
+            ReportExportFailure("Import archive failed: " + Truncate(ex.Message, 160));
         }
     }
-    private async Task ReportExportFailureAsync(string message) =>
-        await MarshalToUiAsync(() => PublishOutcome(message, StatusSeverity.Error)).ConfigureAwait(false);
+    private void ReportExportFailure(string message) =>
+        QueueLiveUi(() => PresentOutcome(message, StatusSeverity.Error));
 
     /// <summary>
-    /// Set the outcome and drain dispatcher jobs while the headless app is still up.
-    /// <see cref="SetOutcomeStatus"/> posts the toast; the next
-    /// <c>ResetForUnitTests</c> would otherwise run that toast after the clock is gone.
+    /// Headless <c>Dispatch</c> starts with <c>ResetForUnitTests</c>, which runs queued jobs
+    /// before <c>IGlobalClock</c> exists. <c>WindowNotificationManager.Show</c> is async void:
+    /// its card post then throws, and the later <c>Close</c> resumes on the thread pool.
+    /// Stash the outcome and present it on the next live dispatcher turn.
     /// </summary>
-    private void PublishOutcome(string text, StatusSeverity severity)
+    private int _seenAvaloniaApp;
+    private int _hasDeferredUi;
+    private readonly object _deferredUiGate = new();
+    private Action? _deferredUi;
+
+    private void NoteAvaloniaApp()
     {
-        SetOutcomeStatus(text, severity, toastImportant: true);
-        if (Application.Current is not null && Dispatcher.UIThread.CheckAccess())
+        if (Application.Current is not null)
         {
-            Dispatcher.UIThread.RunJobs();
+            Volatile.Write(ref _seenAvaloniaApp, 1);
         }
+    }
+
+    private bool RunsWithoutAvaloniaApp =>
+        Application.Current is null && Volatile.Read(ref _seenAvaloniaApp) == 0;
+
+    private bool IsLiveDispatcherTurn()
+    {
+        NoteAvaloniaApp();
+        // ResetForUnitTests runs while the new locator scope is empty, so Current is null.
+        // A live Dispatch action runs after SetupUnsafe.
+        return Application.Current is not null && Dispatcher.UIThread.CheckAccess();
+    }
+
+    /// <summary>
+    /// Apply export/import UI updates that were queued off the dispatcher.
+    /// Headless pumps call this after the application services exist.
+    /// </summary>
+    public void FlushDeferredInspectorUi()
+    {
+        if (!IsLiveDispatcherTurn())
+        {
+            return;
+        }
+
+        Action? pending;
+        lock (_deferredUiGate)
+        {
+            pending = _deferredUi;
+            _deferredUi = null;
+            Volatile.Write(ref _hasDeferredUi, 0);
+        }
+
+        pending?.Invoke();
+    }
+
+    private void QueueLiveUi(Action action)
+    {
+        if (IsLiveDispatcherTurn())
+        {
+            FlushDeferredInspectorUi();
+            action();
+            return;
+        }
+
+        if (RunsWithoutAvaloniaApp)
+        {
+            action();
+            return;
+        }
+
+        lock (_deferredUiGate)
+        {
+            var previous = _deferredUi;
+            _deferredUi = previous is null
+                ? action
+                : () =>
+                {
+                    previous();
+                    action();
+                };
+            Volatile.Write(ref _hasDeferredUi, 1);
+        }
+
+        // Production loop drains this. A headless reset may run it with no clock;
+        // Flush then returns and the next live turn presents the outcome.
+        if (Application.Current is not null && !Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(FlushDeferredInspectorUi);
+        }
+    }
+
+    private void PresentOutcome(string text, StatusSeverity severity)
+    {
+        // Show() is async void and awaits a delay before Close. With no sync context that
+        // Close runs on the thread pool and aborts the headless host. Skip the toast then;
+        // the status bar text is what the UI tests observe.
+        var toast = SynchronizationContext.Current is not null;
+        SetOutcomeStatus(text, severity, toastImportant: toast);
+        if (!toast || Application.Current is null || !Dispatcher.UIThread.CheckAccess())
+        {
+            return;
+        }
+
+        // Show() posts the card. Drain it before this dispatch resets the dispatcher,
+        // while IGlobalClock is still registered.
+        Dispatcher.UIThread.RunJobs();
     }
 
     private async Task ExportSessionsOffUiAsync(
@@ -1125,25 +1214,32 @@ public sealed partial class MainWindowViewModel
         Func<IReadOnlyList<SessionSnapshot>, Task> write,
         string successText)
     {
-        // Write off the dispatcher. Publish the toast with Post (MarshalToUiAsync), not by
-        // resuming the async command on the UI sync context: headless RunJobs drains Post
-        // and does not complete that resume, which left StatusText on "Exporting…".
+        NoteAvaloniaApp();
         SetStatus(busyText, StatusSeverity.Busy);
         var token = StatusCancelToken;
-        await Task.Run(() =>
+        void Write()
         {
             LastExportThreadId = Environment.CurrentManagedThreadId;
             _store.WithBodiesForExportAsync(sessions, write, token).GetAwaiter().GetResult();
-        }, token).ConfigureAwait(false);
+        }
 
-        await MarshalToUiAsync(() => PublishOutcome(successText, StatusSeverity.Success), token)
-            .ConfigureAwait(false);
+        if (RunsWithoutAvaloniaApp)
+        {
+            // Unit tests have no dispatcher. Finish before the command returns.
+            RunOnBackgroundThread(Write);
+            PresentOutcome(successText, StatusSeverity.Success);
+            return;
+        }
+
+        await Task.Run(Write, token).ConfigureAwait(false);
+        QueueLiveUi(() => PresentOutcome(successText, StatusSeverity.Success));
     }
 
     private async Task<List<SessionSnapshot>> ReadImportedSessionsAsync(
         IReadOnlyList<string> paths,
         CancellationToken token)
     {
+        NoteAvaloniaApp();
         List<SessionSnapshot> Read()
         {
             var list = new List<SessionSnapshot>();
@@ -1161,6 +1257,11 @@ public sealed partial class MainWindowViewModel
             }
 
             return list;
+        }
+
+        if (RunsWithoutAvaloniaApp)
+        {
+            return RunOnBackgroundThread<List<SessionSnapshot>>(Read);
         }
 
         return await Task.Run(Read, token).ConfigureAwait(false);
@@ -1193,6 +1294,13 @@ public sealed partial class MainWindowViewModel
 
         return result!;
     }
+
+    private static void RunOnBackgroundThread(Action work) =>
+        RunOnBackgroundThread(() =>
+        {
+            work();
+            return true;
+        });
 
     private void AppendImportedSessions(List<SessionSnapshot> imported)
     {
