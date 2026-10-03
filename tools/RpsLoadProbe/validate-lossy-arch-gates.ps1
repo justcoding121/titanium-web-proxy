@@ -1,7 +1,7 @@
 # Validate compare-lossy / compare-arch against the hard bar:
 #   - Every TWP arm present in the CSV must have sustain RPS > 0 (best SLO-pass step, else peak)
-#   - When YARP has an SLO-pass sustain > 0 at the same concurrency band, TWP÷YARP >= 0.50
-#   - SKIP ratio when YARP sustain is 0 / absent (still FAIL if TWP is 0)
+#   - TWP ÷ closest peer >= 0.50 (YARP, nginx, HAProxy, Envoy with sustain > 0)
+#   - SKIP ratio when no peer sustain is > 0 (still FAIL if TWP is 0)
 # Pair list mirrors RampOrchestrator.HeavierReverseArms + BuildArchArms duplex.
 param(
     [Parameter(Mandatory)] [string] $CsvPath,
@@ -10,6 +10,8 @@ param(
     [string] $Suite,
     [double] $ReverseYarpGate = 0.50
 )
+
+. (Join-Path $PSScriptRoot 'rps-peer-gate.ps1')
 
 $ErrorActionPreference = 'Stop'
 
@@ -72,13 +74,20 @@ switch ($Suite) {
 }
 
 $failed = $false
-Write-Host "Lossy/arch hard-bar gates ($Suite; TWP>0; TWP/YARP >= $ReverseYarpGate when YARP>0)" -ForegroundColor Cyan
+Write-Host "Lossy/arch hard-bar gates ($Suite; TWP>0; TWP/closest-peer >= $ReverseYarpGate when a peer is >0)" -ForegroundColor Cyan
 
 foreach ($p in $pairs) {
     $twp = Get-ArmSustain $p.Twp
-    $yarp = Get-ArmSustain $p.Yarp
+    $peerSustain = @{}
+    $anyPeer = $false
+    foreach ($arm in (Get-PeerArmCandidates $p.Yarp)) {
+        $got = Get-ArmSustain $arm
+        if ($null -eq $got) { continue }
+        $anyPeer = $true
+        if ($got.Value -gt 0) { $peerSustain[$arm] = $got.Value }
+    }
 
-    if ($null -eq $twp -and $null -eq $yarp) {
+    if ($null -eq $twp -and -not $anyPeer) {
         Write-Host "SKIP $($p.Label) : not in this shard/CSV" -ForegroundColor DarkYellow
         continue
     }
@@ -91,15 +100,15 @@ foreach ($p in $pairs) {
 
     Write-Host ("OK   {0} : TWP={1:N1} ({2})" -f $p.Label, $twp.Value, $twp.Band) -ForegroundColor Green
 
-    if ($null -eq $yarp -or $yarp.Value -le 0) {
-        Write-Host "SKIP $($p.Label) : YARP sustain/peak <= 0 (ratio N/A; TWP>0 holds)" -ForegroundColor DarkYellow
+    $peer = Get-ClosestPeer $peerSustain $twp.Value $p.Yarp
+    if ($null -eq $peer) {
+        Write-Host "SKIP $($p.Label) : no peer sustain > 0 (ratio N/A; TWP>0 holds)" -ForegroundColor DarkYellow
         continue
     }
 
-    $ratio = $twp.Value / $yarp.Value
-    $ok = $ratio -ge $ReverseYarpGate
+    $ok = $peer.Ratio -ge $ReverseYarpGate
     $color = if ($ok) { 'Green' } else { 'Red' }
-    Write-Host ("{0} TWP/YARP = {1:N3} (gate {2:N2}; YARP={3:N1} {4})" -f $(if ($ok) { 'OK  ' } else { 'FAIL' }), $ratio, $ReverseYarpGate, $yarp.Value, $yarp.Band) -ForegroundColor $color
+    Write-Host ("{0} TWP/{1} = {2:N3} (gate {3:N2}; peer={4:N1})" -f $(if ($ok) { 'OK  ' } else { 'FAIL' }), $peer.Arm, $peer.Ratio, $ReverseYarpGate, $peer.Sustain) -ForegroundColor $color
     if (-not $ok) { $failed = $true }
 }
 
