@@ -14,9 +14,10 @@ public sealed class SessionStore : IDisposable
     private readonly SessionStoreOptions _options;
     private readonly SessionBodyDiskCache? _disk;
     private readonly Dictionary<long, SessionSnapshot> _byId = new();
-    private readonly Channel<SessionSnapshot>? _spillChannel;
+    private readonly Channel<SpillWork>? _spillChannel;
     private readonly CancellationTokenSource? _spillCts;
     private readonly Task? _spillLoop;
+    private long _spillEpoch;
     private int _pendingSpills;
     private long _inMemoryBodyBytes;
     private int _spilledCount;
@@ -33,7 +34,7 @@ public sealed class SessionStore : IDisposable
             var root = cacheDirectory ?? SessionBodyDiskCache.GetDefaultDirectory();
             _disk = new SessionBodyDiskCache(root, _options.DiskCacheMaxBytes, TimeSpan.FromDays(7));
             // Prior runs stay under other timestamped folders for Import HAR; this run writes here only.
-            _spillChannel = Channel.CreateUnbounded<SessionSnapshot>(new UnboundedChannelOptions
+            _spillChannel = Channel.CreateUnbounded<SpillWork>(new UnboundedChannelOptions
             {
                 SingleReader = true,
                 SingleWriter = false,
@@ -42,7 +43,7 @@ public sealed class SessionStore : IDisposable
             _spillLoop = Task.Run(() => SpillLoopAsync(_spillCts.Token), _spillCts.Token);
         }
 
-        Sessions = new ObservableCollection<SessionSnapshot>();
+        Sessions = new SessionListCollection();
     }
 
     public ObservableCollection<SessionSnapshot> Sessions { get; }
@@ -260,29 +261,79 @@ public sealed class SessionStore : IDisposable
 
         if (removed.Count > 0)
         {
+            _disk?.ScheduleDelete(removed.Select(s => s.Id));
             SessionsRemoved?.Invoke(removed);
         }
     }
 
+    /// <summary>
+    /// Drops every in-memory session and rotates the current-run HAR folder.
+    /// Does not raise <see cref="SessionsRemoved"/> — the caller clears the grid itself.
+    /// Disk deletion continues in the background (<see cref="FlushDiskCleanupAsync"/>).
+    /// </summary>
     public void Clear()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        List<SessionSnapshot> removed;
         lock (_gate)
         {
-            removed = _byId.Values.ToList();
             _byId.Clear();
             _inMemoryBodyBytes = 0;
             _spilledCount = 0;
             Sessions.Clear();
+            Interlocked.Increment(ref _spillEpoch);
         }
 
-        _disk?.ClearAll();
-        if (removed.Count > 0)
+        _disk?.AbandonCurrentRun();
+    }
+
+    /// <summary>
+    /// Inserts many sessions under one lock and enforces the memory cap once.
+    /// Spill writes are queued; HAR files are not written on the caller thread.
+    /// </summary>
+    public void AddMany(IReadOnlyList<SessionSnapshot> snapshots)
+    {
+        if (_disposed || snapshots.Count == 0)
+        {
+            return;
+        }
+
+        List<SessionSnapshot>? removed = null;
+        lock (_gate)
+        {
+            foreach (var snapshot in snapshots)
+            {
+                if (_byId.ContainsKey(snapshot.Id))
+                {
+                    MaybeSpillFinishedLocked(snapshot);
+                    continue;
+                }
+
+                _byId[snapshot.Id] = snapshot;
+                Sessions.Add(snapshot);
+                MaybeSpillFinishedLocked(snapshot);
+            }
+
+            EnforceLimitsLocked(ref removed);
+        }
+
+        if (removed is { Count: > 0 })
         {
             SessionsRemoved?.Invoke(removed);
         }
     }
+
+    /// <summary>Waits for queued spill writes and background HAR deletes.</summary>
+    public async Task FlushDiskCleanupAsync(TimeSpan? timeout = null)
+    {
+        await FlushSpillAsync(timeout).ConfigureAwait(false);
+        if (_disk is not null)
+        {
+            await _disk.FlushCleanupAsync().ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Thread that last deleted abandoned HAR files. Zero until a cleanup runs.</summary>
+    internal int LastDiskCleanupThreadId => _disk?.LastCleanupThreadId ?? 0;
 
     public async Task EnsureBodiesLoadedAsync(SessionSnapshot snapshot, CancellationToken ct = default)
     {
@@ -605,6 +656,17 @@ public sealed class SessionStore : IDisposable
 
     private void EnforceLimitsLocked(ref List<SessionSnapshot>? removed)
     {
+        var excess = _byId.Count - _options.MaxSessionsInMemory;
+        if (excess <= 0)
+        {
+            return;
+        }
+
+        if (excess >= 32)
+        {
+            EvictOldestBulkLocked(excess, ref removed);
+        }
+
         while (_byId.Count > _options.MaxSessionsInMemory)
         {
             if (!TryEvictOldestLocked(out var evicted))
@@ -615,6 +677,53 @@ public sealed class SessionStore : IDisposable
             removed ??= new List<SessionSnapshot>();
             removed.Add(evicted);
         }
+    }
+
+    private void EvictOldestBulkLocked(int excess, ref List<SessionSnapshot>? removed)
+    {
+        var evict = new List<SessionSnapshot>(excess);
+        var keep = new List<SessionSnapshot>(Math.Max(0, Sessions.Count - excess));
+        foreach (var snap in Sessions)
+        {
+            var pinned = _pinnedSessionId is long pin && snap.Id == pin;
+            if (evict.Count < excess && !pinned)
+            {
+                evict.Add(snap);
+            }
+            else
+            {
+                keep.Add(snap);
+            }
+        }
+
+        if (evict.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var snap in evict)
+        {
+            _byId.Remove(snap.Id);
+            if (snap.BodiesOnDisk)
+            {
+                _spilledCount = Math.Max(0, _spilledCount - 1);
+            }
+
+            if (_disk is not null && _spillChannel is not null && HasInMemoryBodies(snap))
+            {
+                EnqueueSpillWrite(CloneForDisk(snap));
+            }
+
+            removed ??= new List<SessionSnapshot>();
+            removed.Add(snap);
+        }
+
+        if (Sessions is SessionListCollection list)
+        {
+            list.ReplaceAll(keep);
+        }
+
+        RecalcInMemoryBodyBytesLocked();
     }
 
     private void QueueSpillLocked(SessionSnapshot snap)
@@ -639,8 +748,10 @@ public sealed class SessionStore : IDisposable
 
     private void EnqueueSpillWrite(SessionSnapshot copy)
     {
+        var epoch = Interlocked.Read(ref _spillEpoch);
+        var generation = _disk?.CurrentGeneration ?? 0;
         Interlocked.Increment(ref _pendingSpills);
-        if (!_spillChannel!.Writer.TryWrite(copy))
+        if (!_spillChannel!.Writer.TryWrite(new SpillWork(copy, epoch, generation)))
         {
             Interlocked.Decrement(ref _pendingSpills);
         }
@@ -737,6 +848,31 @@ public sealed class SessionStore : IDisposable
     private List<SessionSnapshot> RemoveIdsLocked(HashSet<long> ids)
     {
         var removed = new List<SessionSnapshot>();
+        if (ids.Count >= 32 && ids.Count * 2 >= Sessions.Count && Sessions is SessionListCollection list)
+        {
+            var keep = new List<SessionSnapshot>(Math.Max(0, Sessions.Count - ids.Count));
+            foreach (var snap in Sessions)
+            {
+                if (!ids.Contains(snap.Id))
+                {
+                    keep.Add(snap);
+                    continue;
+                }
+
+                _byId.Remove(snap.Id);
+                if (snap.BodiesOnDisk)
+                {
+                    _spilledCount = Math.Max(0, _spilledCount - 1);
+                }
+
+                removed.Add(snap);
+            }
+
+            list.ReplaceAll(keep);
+            RecalcInMemoryBodyBytesLocked();
+            return removed;
+        }
+
         for (var i = Sessions.Count - 1; i >= 0; i--)
         {
             var snap = Sessions[i];
@@ -752,7 +888,6 @@ public sealed class SessionStore : IDisposable
                 _spilledCount = Math.Max(0, _spilledCount - 1);
             }
 
-            _disk?.Delete(snap.Id);
             removed.Add(snap);
         }
 
@@ -810,11 +945,16 @@ public sealed class SessionStore : IDisposable
 
         try
         {
-            await foreach (var snap in _spillChannel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
+            await foreach (var work in _spillChannel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
             {
                 try
                 {
-                    var pruned = _disk.Write(snap);
+                    if (work.Epoch != Interlocked.Read(ref _spillEpoch))
+                    {
+                        continue;
+                    }
+
+                    var pruned = _disk.Write(work.Snapshot, work.DiskGeneration);
                     MarkBodiesMissing(pruned);
                 }
                 catch
@@ -832,4 +972,6 @@ public sealed class SessionStore : IDisposable
             // Shutdown.
         }
     }
+
+    private readonly record struct SpillWork(SessionSnapshot Snapshot, long Epoch, int DiskGeneration);
 }

@@ -18,10 +18,23 @@ namespace Titanium.Inspector.ViewModels;
 
 public sealed partial class MainWindowViewModel
 {
+    private const int BulkGridEditThreshold = 32;
+    private const string SearchingBodiesStatus = "Searching bodies…";
+
+    private int _bodyFilterGeneration;
+    private CancellationTokenSource? _bodyFilterCts;
+
+    /// <summary>Managed thread id of the last <c>body:</c> scan. Zero until one runs.</summary>
+    internal int LastBodyFilterThreadId { get; private set; }
+
+    /// <summary>Managed thread id of the last HAR/archive export write.</summary>
+    internal int LastExportThreadId { get; private set; }
+
     private Task ClearSessionsAsync()
     {
         // Drop selection before mutating the grid so the DataGrid cannot cascade-select
         // a neighbor row (SelectedSession setter would reopen a closed details pane).
+        CancelBodyFilter();
         _selectedSessions.Clear();
         SelectedSession = null;
         ShowSessionDetails = false;
@@ -30,6 +43,7 @@ public sealed partial class MainWindowViewModel
         _suppressOpenSessionDetails = true;
         try
         {
+            // Store.Clear does not raise SessionsRemoved. One grid Clear is a single Reset.
             _store.Clear();
             Sessions.Clear();
         }
@@ -68,14 +82,8 @@ public sealed partial class MainWindowViewModel
         _suppressOpenSessionDetails = true;
         try
         {
+            // SessionsRemoved updates the grid (one Reset when the selection is large).
             _store.Remove(ids);
-            for (var i = Sessions.Count - 1; i >= 0; i--)
-            {
-                if (ids.Contains(Sessions[i].Id))
-                {
-                    Sessions.RemoveAt(i);
-                }
-            }
         }
         finally
         {
@@ -582,13 +590,24 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        var bodyMatcher = BodyMatcherOrNull();
         foreach (var snapshot in batch)
         {
             _store.Add(snapshot);
+        }
+
+        if (SessionSearch.HasBodyToken(SearchQuery))
+        {
+            // HAR body reads stay off the UI thread and coalesce while capture is hot.
+            RunBodyFilter();
+            RefreshSessionCountText();
+            return;
+        }
+
+        foreach (var snapshot in batch)
+        {
             // SessionUpdated may have raced ahead of this batched capture add and already
             // inserted the row; never append the same snapshot twice.
-            if (SessionSearch.Matches(snapshot, SearchQuery, bodyMatcher) &&
+            if (SessionSearch.Matches(snapshot, SearchQuery, bodyMatcher: null) &&
                 Sessions.IndexOf(snapshot) < 0)
             {
                 Sessions.Add(snapshot);
@@ -598,15 +617,16 @@ public sealed partial class MainWindowViewModel
         RefreshSessionCountText();
     }
 
-    private Func<SessionSnapshot, string, bool>? BodyMatcherOrNull() =>
-        SessionSearch.HasBodyToken(SearchQuery)
-            ? (s, needle) => _store.TryMatchBodySearch(s, needle)
-            : null;
-
     private void OnSessionAddedToFilter(SessionSnapshot snapshot)
     {
+        if (SessionSearch.HasBodyToken(SearchQuery))
+        {
+            RunBodyFilter();
+            return;
+        }
+
         // Store already holds the row — append to the filtered grid in place.
-        if (SessionSearch.Matches(snapshot, SearchQuery, BodyMatcherOrNull()) &&
+        if (SessionSearch.Matches(snapshot, SearchQuery, bodyMatcher: null) &&
             Sessions.IndexOf(snapshot) < 0)
         {
             Sessions.Add(snapshot);
@@ -629,7 +649,13 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        var matches = SessionSearch.Matches(snapshot, SearchQuery, BodyMatcherOrNull());
+        if (SessionSearch.HasBodyToken(SearchQuery))
+        {
+            RunBodyFilter();
+            return;
+        }
+
+        var matches = SessionSearch.Matches(snapshot, SearchQuery, bodyMatcher: null);
         var index = Sessions.IndexOf(snapshot);
         if (matches)
         {
@@ -671,13 +697,7 @@ public sealed partial class MainWindowViewModel
         _suppressOpenSessionDetails = true;
         try
         {
-            for (var i = Sessions.Count - 1; i >= 0; i--)
-            {
-                if (ids.Contains(Sessions[i].Id))
-                {
-                    Sessions.RemoveAt(i);
-                }
-            }
+            RemoveVisibleByIds(ids);
         }
         finally
         {
@@ -736,17 +756,39 @@ public sealed partial class MainWindowViewModel
     }
     private void ApplyFilter()
     {
+        if (SessionSearch.HasBodyToken(SearchQuery))
+        {
+            RunBodyFilter();
+            return;
+        }
+
+        CancelBodyFilter();
         var previouslySelected = SelectedSession;
         var detailsWereOpen = ShowSessionDetails;
-        var matched = SessionSearch.Filter(_all, SearchQuery, BodyMatcherOrNull()).ToList();
+        var matched = SessionSearch.Filter(_all, SearchQuery, bodyMatcher: null).ToList();
+        ReplaceVisibleSessions(matched);
+        RestoreSelectionAfterFilter(previouslySelected, detailsWereOpen);
+    }
+
+    private void ReplaceVisibleSessions(IReadOnlyList<SessionSnapshot> matched)
+    {
+        if (Sessions is SessionListCollection list)
+        {
+            list.ReplaceAll(matched);
+            return;
+        }
+
         Sessions.Clear();
         foreach (var s in matched)
         {
             Sessions.Add(s);
         }
+    }
 
+    private void RestoreSelectionAfterFilter(SessionSnapshot? previouslySelected, bool detailsWereOpen)
+    {
         // Restore single selection used by the detail pane when the row still matches the filter.
-        // Do not force the pane open — the user may have closed it, and Sessions.Clear() can
+        // Do not force the pane open — the user may have closed it, and a grid reset can
         // briefly null SelectedSession via the DataGrid binding.
         if (previouslySelected is not null && Sessions.Contains(previouslySelected))
         {
@@ -770,6 +812,127 @@ public sealed partial class MainWindowViewModel
             SelectedSession = null;
         }
     }
+
+    private void RemoveVisibleByIds(HashSet<long> ids)
+    {
+        if (ids.Count == 0 || Sessions.Count == 0)
+        {
+            return;
+        }
+
+        var removeCount = 0;
+        foreach (var session in Sessions)
+        {
+            if (ids.Contains(session.Id))
+            {
+                removeCount++;
+            }
+        }
+
+        if (removeCount == 0)
+        {
+            return;
+        }
+
+        if (removeCount == Sessions.Count)
+        {
+            Sessions.Clear();
+            return;
+        }
+
+        if (removeCount >= BulkGridEditThreshold && removeCount * 2 >= Sessions.Count)
+        {
+            var keep = new List<SessionSnapshot>(Sessions.Count - removeCount);
+            foreach (var session in Sessions)
+            {
+                if (!ids.Contains(session.Id))
+                {
+                    keep.Add(session);
+                }
+            }
+
+            ReplaceVisibleSessions(keep);
+            return;
+        }
+
+        for (var i = Sessions.Count - 1; i >= 0; i--)
+        {
+            if (ids.Contains(Sessions[i].Id))
+            {
+                Sessions.RemoveAt(i);
+            }
+        }
+    }
+
+    private void CancelBodyFilter()
+    {
+        _bodyFilterGeneration++;
+        _bodyFilterCts?.Cancel();
+        _bodyFilterCts?.Dispose();
+        _bodyFilterCts = null;
+    }
+
+    private void RunBodyFilter()
+    {
+        _bodyFilterCts?.Cancel();
+        _bodyFilterCts?.Dispose();
+        _bodyFilterCts = new CancellationTokenSource();
+        var token = _bodyFilterCts.Token;
+        var generation = ++_bodyFilterGeneration;
+        var query = SearchQuery;
+        var sessions = _all.ToList();
+        var previouslySelected = SelectedSession;
+        var detailsWereOpen = ShowSessionDetails;
+
+        List<SessionSnapshot> Match()
+        {
+            LastBodyFilterThreadId = Environment.CurrentManagedThreadId;
+            return SessionSearch.Filter(
+                sessions,
+                query,
+                (snapshot, needle) => _store.TryMatchBodySearch(snapshot, needle)).ToList();
+        }
+
+        void Apply(List<SessionSnapshot> matched)
+        {
+            if (generation != _bodyFilterGeneration || token.IsCancellationRequested)
+            {
+                return;
+            }
+
+            ReplaceVisibleSessions(matched);
+            RestoreSelectionAfterFilter(previouslySelected, detailsWereOpen);
+            RefreshSessionCountText();
+            if (StatusText == SearchingBodiesStatus)
+            {
+                StatusText = StatusReady;
+            }
+        }
+
+        // Unit tests have no dispatcher. Match on a dedicated thread (the test thread-pool can
+        // inline Task.Run onto the caller) and apply before returning. The live UI debounces.
+        if (Application.Current is null)
+        {
+            var matched = RunOnBackgroundThread(Match);
+            Apply(matched);
+            return;
+        }
+
+        StatusText = SearchingBodiesStatus;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(200, token).ConfigureAwait(false);
+                var matched = Match();
+                await MarshalToUiAsync(() => Apply(matched), token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // A newer query replaced this scan.
+            }
+        }, token);
+    }
     private async Task ExportHarAsync()
     {
         if (_all.Count == 0)
@@ -788,18 +951,15 @@ public sealed partial class MainWindowViewModel
         try
         {
             var sessions = _all.ToList();
-            // Stay on the UI sync context (RelayCommand). ConfigureAwait(false) + StatusText update
-            // raced with headless WaitUntil pumps on macOS (file written, StatusText stayed Ready).
-            SetStatus("Exporting HAR…", StatusSeverity.Busy);
-            await _store.WithBodiesForExportAsync(
+            await ExportSessionsOffUiAsync(
                 sessions,
-                list => SessionArchive.ExportHarAsync(list, path, _statusRevertCts?.Token ?? CancellationToken.None),
-                _statusRevertCts?.Token ?? CancellationToken.None);
-            SetOutcomeStatus($"Exported {sessions.Count} sessions to {path}", StatusSeverity.Success, toastImportant: true);
+                "Exporting HAR…",
+                list => SessionArchive.ExportHarAsync(list, path, StatusCancelToken),
+                $"Exported {sessions.Count} sessions to {path}").ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            SetOutcomeStatus("Export HAR failed: " + Truncate(ex.Message, 160), StatusSeverity.Error, toastImportant: true);
+            ReportExportFailure("Export HAR failed: " + Truncate(ex.Message, 160));
         }
     }
     private async Task ExportSelectedHarAsync()
@@ -820,16 +980,15 @@ public sealed partial class MainWindowViewModel
 
         try
         {
-            SetStatus("Exporting HAR…", StatusSeverity.Busy);
-            await _store.WithBodiesForExportAsync(
+            await ExportSessionsOffUiAsync(
                 sessions,
-                list => SessionArchive.ExportHarAsync(list, path, _statusRevertCts?.Token ?? CancellationToken.None),
-                _statusRevertCts?.Token ?? CancellationToken.None);
-            SetOutcomeStatus($"Exported {sessions.Count} sessions to {path}", StatusSeverity.Success, toastImportant: true);
+                "Exporting HAR…",
+                list => SessionArchive.ExportHarAsync(list, path, StatusCancelToken),
+                $"Exported {sessions.Count} sessions to {path}").ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            SetOutcomeStatus("Export HAR failed: " + Truncate(ex.Message, 160), StatusSeverity.Error, toastImportant: true);
+            ReportExportFailure("Export HAR failed: " + Truncate(ex.Message, 160));
         }
     }
     private async Task ImportHarAsync()
@@ -842,32 +1001,18 @@ public sealed partial class MainWindowViewModel
         }
 
         SetStatus("Importing…", StatusSeverity.Busy);
-        var imported = new List<SessionSnapshot>();
-        foreach (var path in paths)
-        {
-            if (path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-            {
-                imported.AddRange(await SessionArchive.ImportNativeArchiveAsync(
-                    path, _statusRevertCts?.Token ?? CancellationToken.None));
-            }
-            else
-            {
-                imported.AddRange(await SessionArchive.ImportHarAsync(
-                    path, _statusRevertCts?.Token ?? CancellationToken.None));
-            }
-        }
-
-        foreach (var snap in imported)
-        {
-            _store.Add(snap);
-        }
-
-        ApplyFilter();
-        RefreshSessionCountText();
+        var token = StatusCancelToken;
+        var imported = await ReadImportedSessionsAsync(paths, token).ConfigureAwait(false);
         var label = paths.Count == 1
             ? Path.GetFileName(paths[0])
             : $"{paths.Count} files";
-        SetOutcomeStatus($"Appended {imported.Count} sessions from {label}", StatusSeverity.Success, toastImportant: true);
+        var count = imported.Count;
+        QueueLiveUi(() =>
+        {
+            AppendImportedSessions(imported);
+            RefreshSessionCountText();
+            PresentOutcome($"Appended {count} sessions from {label}", StatusSeverity.Success);
+        });
     }
     private async Task ExportArchiveAsync()
     {
@@ -887,18 +1032,15 @@ public sealed partial class MainWindowViewModel
         try
         {
             var sessions = _all.ToList();
-            // Stay on the UI sync context (RelayCommand). ConfigureAwait(false) + StatusText update
-            // raced with headless WaitUntil pumps on macOS (file written, StatusText stayed Ready).
-            SetStatus("Exporting archive…", StatusSeverity.Busy);
-            await _store.WithBodiesForExportAsync(
+            await ExportSessionsOffUiAsync(
                 sessions,
-                list => SessionArchive.ExportNativeArchiveAsync(list, path, _statusRevertCts?.Token ?? CancellationToken.None),
-                _statusRevertCts?.Token ?? CancellationToken.None);
-            SetOutcomeStatus($"Exported {sessions.Count} sessions to {path}", StatusSeverity.Success, toastImportant: true);
+                "Exporting archive…",
+                list => SessionArchive.ExportNativeArchiveAsync(list, path, StatusCancelToken),
+                $"Exported {sessions.Count} sessions to {path}").ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            SetOutcomeStatus("Export archive failed: " + Truncate(ex.Message, 160), StatusSeverity.Error, toastImportant: true);
+            ReportExportFailure("Export archive failed: " + Truncate(ex.Message, 160));
         }
     }
     private async Task ExportSelectedArchiveAsync()
@@ -919,16 +1061,15 @@ public sealed partial class MainWindowViewModel
 
         try
         {
-            SetStatus("Exporting archive…", StatusSeverity.Busy);
-            await _store.WithBodiesForExportAsync(
+            await ExportSessionsOffUiAsync(
                 sessions,
-                list => SessionArchive.ExportNativeArchiveAsync(list, path, _statusRevertCts?.Token ?? CancellationToken.None),
-                _statusRevertCts?.Token ?? CancellationToken.None);
-            SetOutcomeStatus($"Exported {sessions.Count} sessions to {path}", StatusSeverity.Success, toastImportant: true);
+                "Exporting archive…",
+                list => SessionArchive.ExportNativeArchiveAsync(list, path, StatusCancelToken),
+                $"Exported {sessions.Count} sessions to {path}").ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            SetOutcomeStatus("Export archive failed: " + Truncate(ex.Message, 160), StatusSeverity.Error, toastImportant: true);
+            ReportExportFailure("Export archive failed: " + Truncate(ex.Message, 160));
         }
     }
     private async Task ImportArchiveAsync()
@@ -943,24 +1084,230 @@ public sealed partial class MainWindowViewModel
         SetStatus("Importing archive…", StatusSeverity.Busy);
         try
         {
-            // Stay on the UI sync context (RelayCommand). ConfigureAwait(false) + off-thread
-            // StatusText throws Avalonia "Call from invalid thread" on Windows CI, and
-            // nested MarshalToUiAsync StatusText updates flaked on macOS headless.
-            var imported = await SessionArchive.ImportNativeArchiveAsync(path, _statusRevertCts?.Token ?? CancellationToken.None);
-            foreach (var snap in imported)
+            var token = StatusCancelToken;
+            var imported = await ReadImportedSessionsAsync([path], token).ConfigureAwait(false);
+            var fileName = Path.GetFileName(path);
+            var count = imported.Count;
+            QueueLiveUi(() =>
             {
-                _store.Add(snap);
-            }
-
-            ApplyFilter();
-            RefreshSessionCountText();
-            SetOutcomeStatus($"Appended {imported.Count} sessions from {Path.GetFileName(path)}", StatusSeverity.Success, toastImportant: true);
+                AppendImportedSessions(imported);
+                RefreshSessionCountText();
+                PresentOutcome($"Appended {count} sessions from {fileName}", StatusSeverity.Success);
+            });
         }
         catch (Exception ex)
         {
-            SetOutcomeStatus("Import archive failed: " + Truncate(ex.Message, 160), StatusSeverity.Error, toastImportant: true);
+            ReportExportFailure("Import archive failed: " + Truncate(ex.Message, 160));
         }
     }
+    private void ReportExportFailure(string message) =>
+        QueueLiveUi(() => PresentOutcome(message, StatusSeverity.Error));
+
+    /// <summary>
+    /// Headless <c>Dispatch</c> starts with <c>ResetForUnitTests</c>, which runs queued jobs
+    /// before <c>IGlobalClock</c> exists. <c>WindowNotificationManager.Show</c> is async void:
+    /// its card post then throws, and the later <c>Close</c> resumes on the thread pool.
+    /// Stash the outcome and present it on the next live dispatcher turn.
+    /// </summary>
+    private int _seenAvaloniaApp;
+    private int _hasDeferredUi;
+    private readonly object _deferredUiGate = new();
+    private Action? _deferredUi;
+
+    private void NoteAvaloniaApp()
+    {
+        if (Application.Current is not null)
+        {
+            Volatile.Write(ref _seenAvaloniaApp, 1);
+        }
+    }
+
+    private bool RunsWithoutAvaloniaApp =>
+        Application.Current is null && Volatile.Read(ref _seenAvaloniaApp) == 0;
+
+    private bool IsLiveDispatcherTurn()
+    {
+        NoteAvaloniaApp();
+        // ResetForUnitTests runs while the new locator scope is empty, so Current is null.
+        // A live Dispatch action runs after SetupUnsafe.
+        return Application.Current is not null && Dispatcher.UIThread.CheckAccess();
+    }
+
+    /// <summary>
+    /// Apply export/import UI updates that were queued off the dispatcher.
+    /// Headless pumps call this after the application services exist.
+    /// </summary>
+    public void FlushDeferredInspectorUi()
+    {
+        if (!IsLiveDispatcherTurn())
+        {
+            return;
+        }
+
+        Action? pending;
+        lock (_deferredUiGate)
+        {
+            pending = _deferredUi;
+            _deferredUi = null;
+            Volatile.Write(ref _hasDeferredUi, 0);
+        }
+
+        pending?.Invoke();
+    }
+
+    internal void QueueLiveUi(Action action)
+    {
+        if (IsLiveDispatcherTurn())
+        {
+            FlushDeferredInspectorUi();
+            action();
+            return;
+        }
+
+        if (RunsWithoutAvaloniaApp)
+        {
+            action();
+            return;
+        }
+
+        lock (_deferredUiGate)
+        {
+            var previous = _deferredUi;
+            _deferredUi = previous is null
+                ? action
+                : () =>
+                {
+                    previous();
+                    action();
+                };
+            Volatile.Write(ref _hasDeferredUi, 1);
+        }
+
+        // Production loop drains this. A headless reset may run it with no clock;
+        // Flush then returns and the next live turn presents the outcome.
+        if (Application.Current is not null && !Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(FlushDeferredInspectorUi);
+        }
+    }
+
+    private void PresentOutcome(string text, StatusSeverity severity)
+    {
+        // Show() is async void and awaits a delay before Close. With no sync context that
+        // Close runs on the thread pool and aborts the headless host. Skip the toast then;
+        // the status bar text is what the UI tests observe.
+        var toast = SynchronizationContext.Current is not null;
+        SetOutcomeStatus(text, severity, toastImportant: toast);
+        if (!toast || Application.Current is null || !Dispatcher.UIThread.CheckAccess())
+        {
+            return;
+        }
+
+        // Show() posts the card. Drain it before this dispatch resets the dispatcher,
+        // while IGlobalClock is still registered.
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private async Task ExportSessionsOffUiAsync(
+        IReadOnlyList<SessionSnapshot> sessions,
+        string busyText,
+        Func<IReadOnlyList<SessionSnapshot>, Task> write,
+        string successText)
+    {
+        NoteAvaloniaApp();
+        SetStatus(busyText, StatusSeverity.Busy);
+        var token = StatusCancelToken;
+        void Write()
+        {
+            LastExportThreadId = Environment.CurrentManagedThreadId;
+            _store.WithBodiesForExportAsync(sessions, write, token).GetAwaiter().GetResult();
+        }
+
+        if (RunsWithoutAvaloniaApp)
+        {
+            // Unit tests have no dispatcher. Finish before the command returns.
+            RunOnBackgroundThread(Write);
+            PresentOutcome(successText, StatusSeverity.Success);
+            return;
+        }
+
+        await Task.Run(Write, token).ConfigureAwait(false);
+        QueueLiveUi(() => PresentOutcome(successText, StatusSeverity.Success));
+    }
+
+    private async Task<List<SessionSnapshot>> ReadImportedSessionsAsync(
+        IReadOnlyList<string> paths,
+        CancellationToken token)
+    {
+        NoteAvaloniaApp();
+        List<SessionSnapshot> Read()
+        {
+            var list = new List<SessionSnapshot>();
+            foreach (var path in paths)
+            {
+                token.ThrowIfCancellationRequested();
+                if (path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    list.AddRange(SessionArchive.ImportNativeArchiveAsync(path, token).GetAwaiter().GetResult());
+                }
+                else
+                {
+                    list.AddRange(SessionArchive.ImportHarAsync(path, token).GetAwaiter().GetResult());
+                }
+            }
+
+            return list;
+        }
+
+        if (RunsWithoutAvaloniaApp)
+        {
+            return RunOnBackgroundThread<List<SessionSnapshot>>(Read);
+        }
+
+        return await Task.Run(Read, token).ConfigureAwait(false);
+    }
+
+    private static T RunOnBackgroundThread<T>(Func<T> work)
+    {
+        T? result = default;
+        Exception? error = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                result = work();
+            }
+            catch (Exception ex)
+            {
+                error = ex;
+            }
+        })
+        {
+            IsBackground = true,
+        };
+        thread.Start();
+        thread.Join();
+        if (error is not null)
+        {
+            throw error;
+        }
+
+        return result!;
+    }
+
+    private static void RunOnBackgroundThread(Action work) =>
+        RunOnBackgroundThread(() =>
+        {
+            work();
+            return true;
+        });
+
+    private void AppendImportedSessions(List<SessionSnapshot> imported)
+    {
+        _store.AddMany(imported);
+        ApplyFilter();
+    }
+
     private IReadOnlyList<SessionSnapshot> ResolveExportSelection()
     {
         if (_selectedSessions.Count > 0)

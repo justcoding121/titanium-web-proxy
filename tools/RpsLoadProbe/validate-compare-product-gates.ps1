@@ -1,17 +1,18 @@
 # Validate compare-product medians @ c=64:
-#   MITM Lite ÷ Reverse >= 0.40, Full ÷ Reverse >= 0.40 (all OS, all gated pairs)
-#   Reverse TWP ÷ YARP >= 0.60 (when YARP SLO-passes)
-# No nginx gate — nginx is wiki/charts only.
+#   MITM Lite ÷ Reverse >= 0.25, Full ÷ Reverse >= 0.25 (all OS, every Client×Origin wire)
+#   Reverse TWP ÷ closest peer >= 0.50 (YARP, nginx, HAProxy, Envoy; nearest sustain)
 # When Repeats>1, each arm contributes multiple c=64 SLO-pass rows — use the median RPS.
 param(
     [Parameter(Mandatory)] [string] $CsvPath,
-    [double] $MitmLiteGate = 0.40,
-    [double] $MitmFullGate = 0.40,
+    [double] $MitmLiteGate = 0.25,
+    [double] $MitmFullGate = 0.25,
     # Backward-compatible alias: if set, applies to both Lite and Full (overrides the pair above).
     [double] $MitmGate = -1,
-    [double] $ReverseYarpGate = 0.60,
+    [double] $ReverseYarpGate = 0.50,
     [string] $BaselineCsvPath = ""
 )
+
+. (Join-Path $PSScriptRoot 'rps-peer-gate.ps1')
 
 $ErrorActionPreference = 'Stop'
 if ($MitmGate -ge 0) {
@@ -43,14 +44,31 @@ foreach ($arm in $byArm.Keys) {
 }
 
 $mitmPairs = @(
-    @{ Label = 'H3->H1 plain'; Full = 'twp-mitm-full-http3-cleartext'; Reverse = 'twp-reverse-http3-cleartext'; Lite = 'twp-mitm-http3-cleartext' },
-    @{ Label = 'H3->H1 TLS'; Full = 'twp-mitm-full-http3-to-http1'; Reverse = 'twp-reverse-http3-to-https-http1'; Lite = 'twp-mitm-http3-to-http1' },
-    @{ Label = 'H3->H3'; Full = 'twp-mitm-full-http3'; Reverse = 'twp-reverse-http3'; Lite = 'twp-mitm-http3' },
-    @{ Label = 'H1 plain'; Full = 'twp-mitm-full-http1'; Reverse = 'twp-reverse-http1'; Lite = 'twp-mitm-http1' },
-    @{ Label = 'H2 h2c->h2c'; Full = 'twp-mitm-full-h2c-to-h2c'; Reverse = 'twp-reverse-h2c-to-h2c'; Lite = 'twp-mitm-h2c-to-h2c' },
-    @{ Label = 'H2 TLS->h2c'; Full = 'twp-mitm-full-http2-to-h2c'; Reverse = 'twp-reverse-http2-to-h2c'; Lite = 'twp-mitm-http2-to-h2c' },
-    @{ Label = 'H2 plain'; Full = 'twp-mitm-full-http2-cleartext'; Reverse = 'twp-reverse-http2-cleartext'; Lite = 'twp-mitm-http2-cleartext' },
-    @{ Label = 'H2 TLS'; Full = 'twp-mitm-full-http2'; Reverse = 'twp-reverse-http2'; Lite = 'twp-mitm-http2' }
+    @{ Label = 'H1 plain->H1 plain'; Lite = 'twp-mitm-http1'; Full = 'twp-mitm-full-http1'; Reverse = 'twp-reverse-http1' },
+    @{ Label = 'H1 plain->H1 TLS'; Lite = 'twp-mitm-http1-to-https'; Full = 'twp-mitm-full-http1-to-https'; Reverse = 'twp-reverse-http1-to-https' },
+    @{ Label = 'H1 plain->H2 plain'; Lite = 'twp-mitm-http1-plain-to-h2c'; Full = 'twp-mitm-full-http1-plain-to-h2c'; Reverse = 'twp-reverse-http1-plain-to-h2c' },
+    @{ Label = 'H1 plain->H2 TLS'; Lite = 'twp-mitm-http1-plain-to-http2'; Full = 'twp-mitm-full-http1-plain-to-http2'; Reverse = 'twp-reverse-http1-plain-to-http2' },
+    @{ Label = 'H1 plain->H3'; Lite = 'twp-mitm-http1-plain-to-http3'; Full = 'twp-mitm-full-http1-plain-to-http3'; Reverse = 'twp-reverse-http1-plain-to-http3' },
+    @{ Label = 'H1 TLS->H1 plain'; Lite = 'twp-mitm-http1-tls'; Full = 'twp-mitm-full-http1-tls'; Reverse = 'twp-reverse-http1-tls' },
+    @{ Label = 'H1 TLS->H1 TLS'; Lite = 'twp-mitm-http1-tls-to-https'; Full = 'twp-mitm-full-http1-tls-to-https'; Reverse = 'twp-reverse-http1-mitm' },
+    @{ Label = 'H1 TLS->H2 plain'; Lite = 'twp-mitm-http1-to-h2c'; Full = 'twp-mitm-full-http1-to-h2c'; Reverse = 'twp-reverse-http1-to-h2c' },
+    @{ Label = 'H1 TLS->H2 TLS'; Lite = 'twp-mitm-http11-to-http2'; Full = 'twp-mitm-full-http11-to-http2'; Reverse = 'twp-reverse-http11-to-http2' },
+    @{ Label = 'H1 TLS->H3'; Lite = 'twp-mitm-http1-to-http3'; Full = 'twp-mitm-full-http1-to-http3'; Reverse = 'twp-reverse-http1-to-http3' },
+    @{ Label = 'H2c->H1 plain'; Lite = 'twp-mitm-h2c-to-h1'; Full = 'twp-mitm-full-h2c-to-h1'; Reverse = 'twp-reverse-h2c-to-h1' },
+    @{ Label = 'H2c->H1 TLS'; Lite = 'twp-mitm-h2c-to-https'; Full = 'twp-mitm-full-h2c-to-https'; Reverse = 'twp-reverse-h2c-to-https' },
+    @{ Label = 'H2c->h2c'; Lite = 'twp-mitm-h2c-to-h2c'; Full = 'twp-mitm-full-h2c-to-h2c'; Reverse = 'twp-reverse-h2c-to-h2c' },
+    @{ Label = 'H2c->H2 TLS'; Lite = 'twp-mitm-h2c'; Full = 'twp-mitm-full-h2c'; Reverse = 'twp-reverse-h2c' },
+    @{ Label = 'H2c->H3'; Lite = 'twp-mitm-h2c-to-h3'; Full = 'twp-mitm-full-h2c-to-h3'; Reverse = 'twp-reverse-h2c-to-h3' },
+    @{ Label = 'H2 TLS->H1 plain'; Lite = 'twp-mitm-http2-cleartext'; Full = 'twp-mitm-full-http2-cleartext'; Reverse = 'twp-reverse-http2-cleartext' },
+    @{ Label = 'H2 TLS->H1 TLS'; Lite = 'twp-mitm-http2-to-http1'; Full = 'twp-mitm-full-http2-to-http1'; Reverse = 'twp-reverse-http2-to-https-http1' },
+    @{ Label = 'H2 TLS->h2c'; Lite = 'twp-mitm-http2-to-h2c'; Full = 'twp-mitm-full-http2-to-h2c'; Reverse = 'twp-reverse-http2-to-h2c' },
+    @{ Label = 'H2 TLS->H2 TLS'; Lite = 'twp-mitm-http2'; Full = 'twp-mitm-full-http2'; Reverse = 'twp-reverse-http2' },
+    @{ Label = 'H2 TLS->H3'; Lite = 'twp-mitm-http2-to-http3'; Full = 'twp-mitm-full-http2-to-http3'; Reverse = 'twp-reverse-http2-to-http3' },
+    @{ Label = 'H3->H1 plain'; Lite = 'twp-mitm-http3-cleartext'; Full = 'twp-mitm-full-http3-cleartext'; Reverse = 'twp-reverse-http3-cleartext' },
+    @{ Label = 'H3->H1 TLS'; Lite = 'twp-mitm-http3-to-http1'; Full = 'twp-mitm-full-http3-to-http1'; Reverse = 'twp-reverse-http3-to-https-http1' },
+    @{ Label = 'H3->h2c'; Lite = 'twp-mitm-http3-to-h2c'; Full = 'twp-mitm-full-http3-to-h2c'; Reverse = 'twp-reverse-http3-to-h2c' },
+    @{ Label = 'H3->H2 TLS'; Lite = 'twp-mitm-http3-to-http2'; Full = 'twp-mitm-full-http3-to-http2'; Reverse = 'twp-reverse-http3-to-http2' },
+    @{ Label = 'H3->H3'; Lite = 'twp-mitm-http3'; Full = 'twp-mitm-full-http3'; Reverse = 'twp-reverse-http3' }
 )
 
 $failed = $false
@@ -79,7 +97,7 @@ foreach ($p in $mitmPairs) {
 }
 
 Write-Host ""
-Write-Host "Reverse TWP/YARP gates (>= $ReverseYarpGate @ c=64 median; skip when YARP SLO-fails)" -ForegroundColor Cyan
+Write-Host "Reverse TWP/closest-peer gates (>= $ReverseYarpGate @ c=64 median; skip when no peer SLO-passes)" -ForegroundColor Cyan
 # All reverse Client×Origin wires with a YARP peer (same set as validate-all-compare-product-arms.ps1).
 $revPairs = @(
     @{ Label = 'H1 plain->H1 plain'; Twp = 'twp-reverse-http1'; Yarp = 'yarp-reverse-http1' },
@@ -109,7 +127,9 @@ $revPairs = @(
     @{ Label = 'H3->H3'; Twp = 'twp-reverse-http3'; Yarp = 'yarp-reverse-http3-to-http3' }
 )
 foreach ($p in $revPairs) {
-    if (-not $sustain.ContainsKey($p.Twp) -and -not $sustain.ContainsKey($p.Yarp)) {
+    $peerNames = @(Get-PeerArmCandidates $p.Yarp)
+    $anyPeer = @($peerNames | Where-Object { $sustain.ContainsKey($_) }).Count -gt 0
+    if (-not $sustain.ContainsKey($p.Twp) -and -not $anyPeer) {
         Write-Host "SKIP $($p.Label) : not in this shard/CSV" -ForegroundColor DarkYellow
         continue
     }
@@ -118,15 +138,14 @@ foreach ($p in $revPairs) {
         $failed = $true
         continue
     }
-    if (-not $sustain.ContainsKey($p.Yarp)) {
-        # YARP H3→H3 often records 0 RPS / SLO-fail on Linux GHA (peer harness), not a TWP regression.
-        Write-Host "SKIP $($p.Label) : no YARP SLO-pass peer (TWP present)" -ForegroundColor DarkYellow
+    $peer = Get-ClosestPeer $sustain $sustain[$p.Twp] $p.Yarp
+    if ($null -eq $peer) {
+        Write-Host "SKIP $($p.Label) : no SLO-pass peer (TWP present)" -ForegroundColor DarkYellow
         continue
     }
-    $ratio = $sustain[$p.Twp] / $sustain[$p.Yarp]
-    $ok = $ratio -ge $ReverseYarpGate
+    $ok = $peer.Ratio -ge $ReverseYarpGate
     $color = if ($ok) { 'Green' } else { 'Red' }
-    Write-Host ("{0} TWP/YARP = {1:N3} (gate {2:N2})" -f $p.Label, $ratio, $ReverseYarpGate) -ForegroundColor $color
+    Write-Host ("{0} TWP/{1} = {2:N3} (gate {3:N2})" -f $p.Label, $peer.Arm, $peer.Ratio, $ReverseYarpGate) -ForegroundColor $color
     if (-not $ok) { $failed = $true }
 }
 

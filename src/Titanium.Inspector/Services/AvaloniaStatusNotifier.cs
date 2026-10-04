@@ -1,3 +1,4 @@
+using Avalonia.Controls;
 using Avalonia.Controls.Notifications;
 
 namespace Titanium.Inspector.Services;
@@ -18,7 +19,7 @@ public sealed class AvaloniaStatusNotifier : IStatusNotifier
         }
 
         var manager = _manager();
-        if (manager is null)
+        if (manager is null || !CanShowWindowToast(manager))
         {
             return;
         }
@@ -47,5 +48,25 @@ public sealed class AvaloniaStatusNotifier : IStatusNotifier
             : TimeSpan.FromSeconds(4);
 
         manager.Show(new Notification(title, message, type, duration));
+    }
+
+    /// <summary>
+    /// <see cref="WindowNotificationManager.Show"/> is async void: it posts the card, then
+    /// closes it after <c>Task.Delay</c>. Headless drains that post in
+    /// <c>ResetForUnitTests</c> before the animation clock exists, and the delay
+    /// continuation runs after the dispatch clears the sync context, so <c>Close</c>
+    /// hits the thread pool and crashes the test host. The status bar still updates.
+    /// </summary>
+    private static bool CanShowWindowToast(WindowNotificationManager manager)
+    {
+        var top = TopLevel.GetTopLevel(manager);
+        var platform = (top as Window)?.PlatformImpl ?? top?.PlatformImpl;
+        var name = platform?.GetType().FullName;
+        if (string.IsNullOrEmpty(name))
+        {
+            return false;
+        }
+
+        return !name.Contains("Avalonia.Headless", StringComparison.Ordinal);
     }
 }

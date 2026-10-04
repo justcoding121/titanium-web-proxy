@@ -200,4 +200,126 @@ public class Http3FrameTests
             frame.ReturnPayload();
         }
     }
+
+    [TestMethod]
+    public async Task WriteAsync_Scratch_ManySmallFrames_RoundTrip()
+    {
+        await using var ms = new MemoryStream();
+        var scratch = Http3FrameScratch.Rent();
+        try
+        {
+            const int frames = 8;
+            for (var i = 0; i < frames; i++)
+            {
+                var payload = new byte[] { (byte)(i + 1), 2, 3, 4 };
+                await Http3Frame.WriteAsync(ms, Http3FrameType.Data, payload, CancellationToken.None,
+                    scratch: scratch);
+            }
+
+            ms.Position = 0;
+            for (var i = 0; i < frames; i++)
+            {
+                var frame = await Http3Frame.ReadAsync(ms, maxPayloadBytes: 1024, CancellationToken.None);
+                Assert.IsNotNull(frame);
+                Assert.AreEqual(4, frame!.Payload.Length);
+                Assert.AreEqual((byte)(i + 1), frame.Payload.Span[0]);
+                frame.ReturnPayload();
+            }
+        }
+        finally
+        {
+            scratch.Return();
+        }
+    }
+
+    [TestMethod]
+    public async Task WriteAsync_Scratch_CompleteWrites_RoundTrips()
+    {
+        await using var ms = new MemoryStream();
+        var scratch = Http3FrameScratch.Rent();
+        var payload = new byte[] { 0x0a, 0x0b };
+        try
+        {
+            await Http3Frame.WriteAsync(ms, Http3FrameType.Data, payload, CancellationToken.None,
+                completeWrites: true, scratch: scratch);
+        }
+        finally
+        {
+            scratch.Return();
+        }
+
+        ms.Position = 0;
+        var frame = await Http3Frame.ReadAsync(ms, maxPayloadBytes: 1024, CancellationToken.None);
+        Assert.IsNotNull(frame);
+        CollectionAssert.AreEqual(payload, frame!.Payload.ToArray());
+        frame.ReturnPayload();
+    }
+
+    [TestMethod]
+    public async Task WriteAsync_Scratch_DelayedWrite_DoesNotOverwriteInFlightBytes()
+    {
+        var scratch = Http3FrameScratch.Rent();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var held = new HoldBufferStream(gate.Task);
+        var payloadA = new byte[] { 1, 2, 3, 4 };
+        var pending = Http3Frame.WriteAsync(held, Http3FrameType.Data, payloadA, CancellationToken.None,
+            scratch: scratch);
+        Assert.IsFalse(pending.IsCompleted, "The first write must still own the scratch.");
+
+        await using var ms = new MemoryStream();
+        var payloadB = new byte[] { 9, 9, 9, 9 };
+        await Http3Frame.WriteAsync(ms, Http3FrameType.Data, payloadB, CancellationToken.None, scratch: scratch);
+
+        gate.SetResult();
+        await pending;
+        scratch.Return();
+
+        Assert.IsTrue(held.CompletedBytes.Length >= 6);
+        Assert.AreEqual(1, held.CompletedBytes[^4]);
+        Assert.AreEqual(4, held.CompletedBytes[^1]);
+
+        ms.Position = 0;
+        var frame = await Http3Frame.ReadAsync(ms, maxPayloadBytes: 1024, CancellationToken.None);
+        Assert.IsNotNull(frame);
+        CollectionAssert.AreEqual(payloadB, frame!.Payload.ToArray());
+        frame.ReturnPayload();
+    }
+
+    private sealed class HoldBufferStream : Stream
+    {
+        private readonly Task _release;
+        private ReadOnlyMemory<byte> _pending;
+
+        public HoldBufferStream(Task release) => _release = release;
+
+        public byte[] CompletedBytes { get; private set; } = [];
+
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            _pending = buffer;
+            return new ValueTask(FinishAsync());
+        }
+
+        private async Task FinishAsync()
+        {
+            await _release.ConfigureAwait(false);
+            CompletedBytes = _pending.ToArray();
+        }
+    }
 }

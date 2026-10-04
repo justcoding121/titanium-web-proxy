@@ -24,6 +24,8 @@ internal static class ProbeLog
                 try
                 {
                     await Console.Out.WriteLineAsync(line).ConfigureAwait(false);
+                    // Flush so GHA log tails show the current arm instead of lagging behind.
+                    await Console.Out.FlushAsync().ConfigureAwait(false);
                 }
                 catch
                 {

@@ -107,7 +107,7 @@ internal static class ServeProxyHost
             or ProbeMode.CompareBodies
             or ProbeMode.ComparePost or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost
             or ProbeMode.CompareArch or ProbeMode.CompareSaturation or ProbeMode.CompareEditions
-            or ProbeMode.CompareCrossVersion or ProbeMode.CompareSpot or ProbeMode.ExplicitPoolSweep
+            or ProbeMode.CompareSpot or ProbeMode.ExplicitPoolSweep
             or ProbeMode.CompareGrpc or ProbeMode.CompareWsH1Tls or ProbeMode.CompareWsH2)
         {
             ProbeLog.Error("--serve-proxy requires a single arm mode");
@@ -1241,7 +1241,6 @@ internal static class ServeProxyHost
         ProbeMode.CompareArch => "compare-arch",
         ProbeMode.CompareSaturation => "compare-saturation",
         ProbeMode.CompareEditions => "compare-editions",
-        ProbeMode.CompareCrossVersion => "compare-cross-version",
         ProbeMode.TwpCliReverseHttp1 => "twp-cli-reverse-http1",
         ProbeMode.TwpCliReverseHttp1Tls => "twp-cli-reverse-http1-tls",
         ProbeMode.TwpCliReverseHttp1Route => "twp-cli-reverse-http1-route",

@@ -23,6 +23,7 @@ jobs:
         env:
           TWP_NC_MAINTAINERS: ${{ vars.TWP_NC_MAINTAINERS }}
           ACTOR: ${{ github.actor }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         shell: bash
         run: |
           set -euo pipefail
@@ -31,7 +32,9 @@ jobs:
           is_maintainer=false
           for m in "${MAINTAINERS[@]}"; do
             m="$(echo "$m" | xargs)"
-            if [[ "$ACTOR" == "$m" ]]; then
+            # A cloud agent push sets actor to cursor[bot] on a maintainer-owned PR.
+            # The PR author is the account that opened it.
+            if [[ "$ACTOR" == "$m" || "$PR_AUTHOR" == "$m" ]]; then
               is_maintainer=true
               break
             fi

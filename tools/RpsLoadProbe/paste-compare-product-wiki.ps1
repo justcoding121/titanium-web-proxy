@@ -87,7 +87,7 @@ function Get-MedianMetrics([string]$OsFolder, [string]$Arm) {
         # Exact OS folder or shard-suffixed (rps-csv-ubuntu-latest-shard-1-3).
         # Also accept flat artifact layouts (csv directly under runId).
         # Never accept retired macos-15-intel paths when requesting macos-15.
-        $csv = Get-ChildItem `
+        $csvs = @(Get-ChildItem `
             "$dir/rps-csv-$OsFolder/*.csv", `
             "$dir/rps-csv-$OsFolder-*/*.csv", `
             "$dir/$OsFolder/*.csv", `
@@ -99,14 +99,14 @@ function Get-MedianMetrics([string]$OsFolder, [string]$Arm) {
                     $p = $_.FullName.ToLowerInvariant().Replace('\', '/')
                     $p -notmatch 'macos-15-intel'
                 }
-            } |
-            Select-Object -First 1
-        if (-not $csv) { continue }
-        $m = Get-ArmMetrics $csv.FullName $Arm
-        if (-not $m) { continue }
-        if ($null -eq $best -or $m.Sustain -gt $best.Sustain -or
-            ($m.Sustain -eq $best.Sustain -and $m.Peak -gt $best.Peak)) {
-            $best = $m
+            })
+        foreach ($csv in $csvs) {
+            $m = Get-ArmMetrics $csv.FullName $Arm
+            if (-not $m) { continue }
+            if ($null -eq $best -or $m.Sustain -gt $best.Sustain -or
+                ($m.Sustain -eq $best.Sustain -and $m.Peak -gt $best.Peak)) {
+                $best = $m
+            }
         }
     }
     return $best
@@ -222,15 +222,26 @@ function Emit-ReverseTable([string]$OsFolder) {
         $nginx = if ($w.Nginx) { Get-MedianMetrics $OsFolder $w.Nginx } else { $null }
         $haproxy = if (-not $omitNative -and $w.Haproxy) { Get-MedianMetrics $OsFolder $w.Haproxy } else { $null }
         $envoy = if (-not $omitNative -and $w.Envoy) { Get-MedianMetrics $OsFolder $w.Envoy } else { $null }
-        $candidates = @(@{ M = $twp; K = 'twp' }, @{ M = $yarp; K = 'yarp' })
-        $peerPairs = @(@{ M = $nginx; K = 'nginx' })
+        $candidates = @(
+            @{ M = $twp; K = 'twp' },
+            @{ M = $yarp; K = 'yarp' },
+            @{ M = $nginx; K = 'nginx' }
+        )
         if (-not $omitNative) {
-            $peerPairs += @(@{ M = $haproxy; K = 'haproxy' }, @{ M = $envoy; K = 'envoy' })
+            $candidates += @(
+                @{ M = $haproxy; K = 'haproxy' },
+                @{ M = $envoy; K = 'envoy' }
+            )
         }
-        foreach ($pair in $peerPairs) {
-            if ($pair.M -and $pair.M.Sustain -gt 0) { $candidates += $pair }
-        }
-        $best = ($candidates | Where-Object { $_.M } | Sort-Object { $_.M.Sustain } -Descending | Select-Object -First 1).K
+        $best = @(
+            $candidates |
+                Where-Object { $_.M -and $_.M.Sustain -gt 0 } |
+                Sort-Object `
+                    @{ Expression = { -$_.M.Sustain }; Ascending = $true }, `
+                    @{ Expression = { $_.M.Rss }; Ascending = $true }, `
+                    @{ Expression = { $_.M.Cpu }; Ascending = $true } |
+                Select-Object -First 1
+        ).K
         if ($omitNative) {
             Write-Output ("| {0} | {1} | {2} | {3} | {4} |" -f $w.C, $w.O,
                 (Format-RpsCell $twp -Medal:($best -eq 'twp')),

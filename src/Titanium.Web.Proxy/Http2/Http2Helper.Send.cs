@@ -1326,7 +1326,13 @@ namespace Titanium.Web.Proxy.Http2
                     if (expectedLength >= 0 && remaining <= 0)
                         break;
 
-                    var payloadCap = (int)Math.Min(maxFrameSize, remaining);
+                    // Size the frame to currently advertised credit when that credit is a usable
+                    // partial frame (for example 16,383 bytes left in a 65,535 window). ReserveAsync
+                    // is still all-or-nothing and remains the accounting arbiter if the snapshot is stale.
+                    var payloadCap = Http2FlowController.SelectDataPayloadCap(
+                        maxFrameSize, remaining, flow.AvailableSendCredit(streamId));
+                    if (payloadCap <= 0)
+                        break;
                     var rented = ArrayPool<byte>.Shared.Rent(9 + payloadCap);
                     var read = 0;
                     try

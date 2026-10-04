@@ -1,0 +1,165 @@
+# Linux CPU / allocation / perf capture for a few RPS arms (workflow_dispatch only; diagnosis, not publishable RPS).
+#
+# One arm at a time, fixed concurrency, ~60 s measure per arm. Per arm the capture is
+#   - perf record -g on the whole proxy process tree (kernel + OpenSSL + runtime + JIT frames named
+#     via DOTNET_PerfMapEnabled and libcoreclr / libclrjit symbols from the Microsoft symbol server)
+#   - dotnet-trace dotnet-sampled-thread-time (managed stacks)
+#   - dotnet-trace gc-verbose  -> GCAllocationTick -> bytes allocated per request by type
+#   - dotnet-counters System.Runtime (alloc rate, GC counts, lock contentions, thread-pool queue)
+# Native peers (nginx / HAProxy) get the perf window only: that is the native floor for the same wire.
+# summarize-profile.py turns the captures into a markdown table (job summary + artifact).
+#
+#   gh workflow run rps-profile.yml --ref <branch> \
+#     -f arms='reverse-http1-tls,bare-reverse-http1-tls,nginx-reverse-http1-tls,haproxy-reverse-http1-tls'
+#
+# Peers use the distro nginx / HAProxy builds (H1 + TLS terminate only); use rps-saturation.yml for
+# publishable peer numbers.
+
+name: RPS profile (Linux)
+
+on:
+  workflow_dispatch:
+    inputs:
+      arms:
+        description: 'Comma-separated single-arm probe modes (e.g. reverse-http1,bare-reverse-http1,nginx-reverse-http1)'
+        required: true
+        default: 'reverse-http1-tls,bare-reverse-http1-tls,nginx-reverse-http1-tls,haproxy-reverse-http1-tls'
+      concurrency:
+        description: 'Fixed concurrency for every captured arm'
+        required: true
+        default: '32'
+      capture_sec:
+        description: 'Seconds per capture window (perf, sampled-thread-time, gc-verbose); measure step = 3 windows + slack'
+        required: true
+        default: '20'
+      probe_args:
+        description: 'Extra probe arguments, space separated (e.g. "--response-bytes 65536")'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      PF_ARMS: ${{ inputs.arms }}
+      PF_CONCURRENCY: ${{ inputs.concurrency }}
+      PF_CAPTURE_SEC: ${{ inputs.capture_sec }}
+      PF_PROBE_ARGS: ${{ inputs.probe_args }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+
+      - name: Log runner shape
+        run: |
+          set -euo pipefail
+          echo "os=$(uname -s) $(uname -r)"
+          echo "nproc=$(nproc)"
+          lscpu | sed -n '1,20p'
+
+      - name: Install profiling tools, nginx, HAProxy and libmsquic
+        run: |
+          set -euo pipefail
+          sudo find /etc/apt -type f \( -iname '*chrome*' -o -iname '*google*chrome*' \) -print -delete || true
+          sudo apt-get update || true
+          sudo apt-get install -y linux-tools-common "linux-tools-$(uname -r)" || sudo apt-get install -y linux-tools-generic || true
+          # linux-tools-generic ships perf under /usr/lib/linux-tools/<version>/ ; expose one that runs.
+          perf_bin="$(command -v perf || true)"
+          if [ -z "$perf_bin" ] || ! "$perf_bin" --version >/dev/null 2>&1; then
+            cand="$(ls -d /usr/lib/linux-tools/*/perf 2>/dev/null | tail -n 1 || true)"
+            [ -n "$cand" ] && sudo ln -sf "$cand" /usr/local/bin/perf
+          fi
+          perf --version
+          sudo apt-get install -y nginx haproxy || true
+          sudo systemctl stop nginx haproxy || true
+          . /etc/os-release
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            "https://packages.microsoft.com/config/${ID}/${VERSION_ID}/packages-microsoft-prod.deb" \
+            -o packages-microsoft-prod.deb
+          sudo dpkg -i packages-microsoft-prod.deb
+          rm -f packages-microsoft-prod.deb
+          sudo apt-get update || true
+          sudo apt-get install -y libmsquic || true
+          dotnet tool install -g dotnet-trace
+          dotnet tool install -g dotnet-counters
+          dotnet tool install -g dotnet-symbol
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+          nginx -v || true
+          haproxy -v | head -n 1 || true
+
+      - name: Install runtime native symbols (libcoreclr, libclrjit) for perf
+        run: |
+          set -euo pipefail
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          rt="$(dirname "$(dotnet --list-runtimes | awk '/Microsoft.NETCore.App 10\./ {gsub(/\[|\]/,"",$3); print $3 "/" $2 "/x"}' | tail -n 1)")"
+          echo "runtime dir: $rt"
+          mkdir -p "$RUNNER_TEMP/sym"
+          dotnet-symbol --symbols --output "$RUNNER_TEMP/sym" "$rt/libcoreclr.so" "$rt/libclrjit.so"
+          for f in libcoreclr libclrjit; do
+            bid="$(readelf -n "$rt/$f.so" | awk '/Build ID/ {print $3}')"
+            d="/usr/lib/debug/.build-id/${bid:0:2}"
+            sudo mkdir -p "$d"
+            sudo cp "$RUNNER_TEMP/sym/$f.so.dbg" "$d/${bid:2}.debug"
+            echo "$f build-id $bid"
+          done
+
+      - name: Build probe and allocation-tick reader
+        run: |
+          set -euo pipefail
+          dotnet build -c Release tools/RpsLoadProbe/RpsLoadProbe.csproj --warnaserror
+          dotnet build -c Release tools/RpsAllocTicks/RpsAllocTicks.csproj
+
+      - name: Capture arms
+        run: |
+          set -euo pipefail
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          ulimit -n 65535 || true
+          export RPS_ALLOC_TICKS="$PWD/tools/RpsAllocTicks/bin/Release/net10.0/RpsAllocTicks"
+          extra=()
+          if [ -n "${PF_PROBE_ARGS:-}" ]; then
+            # shellcheck disable=SC2206
+            for a in $PF_PROBE_ARGS; do extra+=(--probe-arg "$a"); done
+          fi
+          IFS=',' read -ra arms <<< "$PF_ARMS"
+          for arm in "${arms[@]}"; do
+            arm="$(echo "$arm" | xargs)"
+            [ -z "$arm" ] && continue
+            echo "::group::profile $arm"
+            bash tools/RpsLoadProbe/profile-arm.sh --probe "$PWD/tools/RpsLoadProbe/bin/Release/net10.0/RpsLoadProbe" \
+              --mode "$arm" --out "$RUNNER_TEMP/profile/$arm" --concurrency "$PF_CONCURRENCY" \
+              --capture-sec "$PF_CAPTURE_SEC" "${extra[@]}" || echo "::warning::profile of $arm failed"
+            echo "::endgroup::"
+            sleep 10
+          done
+
+      - name: Summarise
+        if: always()
+        run: |
+          set -euo pipefail
+          test -d "$RUNNER_TEMP/profile" || exit 0
+          python3 tools/RpsLoadProbe/summarize-profile.py "$RUNNER_TEMP/profile" --cpus "$(nproc)" \
+            --markdown "$RUNNER_TEMP/profile/summary.md" > /dev/null
+          cat "$RUNNER_TEMP/profile/summary.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload captures
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rps-profile-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/profile/summary.md
+            ${{ runner.temp }}/profile/**/*.txt
+            ${{ runner.temp }}/profile/**/*.csv
+            ${{ runner.temp }}/profile/**/*.log
+            ${{ runner.temp }}/profile/**/*.tsv
+            ${{ runner.temp }}/profile/**/*.nettrace
+            ${{ runner.temp }}/profile/**/*.speedscope.json
+            ${{ runner.temp }}/profile/**/perf.data.gz
+          if-no-files-found: error

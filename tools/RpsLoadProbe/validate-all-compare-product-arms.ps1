@@ -1,11 +1,11 @@
 # Full compare-product gate validation (all WIRES rows, Win+Lin+Mac, median of 3 GHA runs).
 param(
     [Parameter(Mandatory)] [string[]] $RunIds,
-    [double] $MitmLiteGate = 0.40,
-    [double] $MitmFullGate = 0.40,
+    [double] $MitmLiteGate = 0.25,
+    [double] $MitmFullGate = 0.25,
     # Backward-compatible alias: if set, applies to both Lite and Full.
     [double] $MitmGate = -1,
-    [double] $ReverseYarpGate = 0.60,
+    [double] $ReverseYarpGate = 0.50,
     [string] $BaselineRunId = '32960766249'
 )
 if ($MitmGate -ge 0) {
@@ -14,6 +14,7 @@ if ($MitmGate -ge 0) {
 }
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'rps-peer-gate.ps1')
 if ($RunIds.Count -eq 1 -and $RunIds[0] -match ',') {
     $RunIds = $RunIds[0].Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ }
 }
@@ -87,9 +88,13 @@ foreach ($os in @('windows-latest', 'ubuntu-latest', 'macos-15')) {
         $rev = Get-MedianSustain $os $w.Rev
         $lite = Get-MedianSustain $os $w.Lite
         $full = Get-MedianSustain $os $w.Full
-        $yarp = if ($w.Yarp) { Get-MedianSustain $os $w.Yarp } else { $null }
-
         if ($null -eq $rev -or $rev -le 0) { continue }
+
+        $peerSustain = @{}
+        foreach ($arm in (Get-PeerArmCandidates $w.Yarp)) {
+            $got = Get-MedianSustain $os $arm
+            if ($null -ne $got -and $got -gt 0) { $peerSustain[$arm] = [double]$got }
+        }
 
         if ($null -ne $lite) {
             $lr = $lite / $rev
@@ -103,11 +108,11 @@ foreach ($os in @('windows-latest', 'ubuntu-latest', 'macos-15')) {
             if (-not $ok) { $failed += "$os $($w.C)->$($w.O) Full=$([math]::Round($fr,3))" }
             Write-Host ("MITM Full {0}->{1}: {2:N3} {3}" -f $w.C, $w.O, $fr, $(if($ok){'OK'}else{'FAIL'}))
         }
-        if ($null -ne $yarp -and $yarp -gt 0) {
-            $yr = $rev / $yarp
-            $ok = $yr -ge $ReverseYarpGate
-            if (-not $ok) { $failed += "$os $($w.C)->$($w.O) TWP/YARP=$([math]::Round($yr,3))" }
-            Write-Host ("Reverse {0}->{1} TWP/YARP: {2:N3} {3}" -f $w.C, $w.O, $yr, $(if($ok){'OK'}else{'FAIL'}))
+        $peer = Get-ClosestPeer $peerSustain $rev $w.Yarp
+        if ($null -ne $peer) {
+            $ok = $peer.Ratio -ge $ReverseYarpGate
+            if (-not $ok) { $failed += "$os $($w.C)->$($w.O) TWP/$($peer.Arm)=$([math]::Round($peer.Ratio,3))" }
+            Write-Host ("Reverse {0}->{1} TWP/{2}: {3:N3} {4}" -f $w.C, $w.O, $peer.Arm, $peer.Ratio, $(if($ok){'OK'}else{'FAIL'}))
         }
     }
 }

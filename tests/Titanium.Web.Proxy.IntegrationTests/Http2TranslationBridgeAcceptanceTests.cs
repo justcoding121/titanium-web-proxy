@@ -423,4 +423,244 @@ public class Http2TranslationBridgeAcceptanceTests
             "invocation.");
         Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised: {exceptionCapture.LastException}");
     }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task H2ToH11Bridge_256KiB_DefaultWindow_TrimsShortFrameAndCompletes()
+    {
+        const int length = 256 * 1024;
+        var body = await ReadBridgedBodyAsync(length, initialWindow: null, grantCreditAfter: 65535);
+        Assert.AreEqual(length, body.Bytes.Length);
+        Assert.IsTrue(body.SawShortFrame,
+            "A 65,535-byte client window must produce a DATA frame shorter than 16 KiB (the 16,383-byte remainder) " +
+            "instead of stalling for one more byte.");
+        for (var i = 0; i < body.Bytes.Length; i++)
+            Assert.AreEqual((byte)(i & 0xff), body.Bytes[i]);
+    }
+
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    public async Task H2ToH11Bridge_1MiB_DefaultWindow_Completes()
+    {
+        const int length = 1024 * 1024;
+        var body = await ReadBridgedBodyAsync(length, initialWindow: null, grantCreditAfter: 65535);
+        Assert.AreEqual(length, body.Bytes.Length);
+        Assert.IsTrue(body.SawShortFrame);
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task H2ToH11Bridge_256KiB_LargeInitialWindow_UsesFullFrames()
+    {
+        const int length = 256 * 1024;
+        var body = await ReadBridgedBodyAsync(length, initialWindow: 1024 * 1024, grantCreditAfter: int.MaxValue);
+        Assert.AreEqual(length, body.Bytes.Length);
+        Assert.IsFalse(body.SawShortFrame,
+            "A 1 MiB client initial window covers a 256 KiB body, so every DATA frame should be 16 KiB.");
+        Assert.IsTrue(body.DataFrames > 0);
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task H2ToH11Bridge_TwoStreams_ShareConnectionWindow_BothComplete()
+    {
+        const int length = 200 * 1024;
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+        server.HandleRequest(async context =>
+        {
+            var payload = new byte[length];
+            for (var i = 0; i < payload.Length; i++)
+                payload[i] = (byte)(i & 0xff);
+            context.Response.ContentLength = payload.Length;
+            await context.Response.Body.WriteAsync(payload);
+        });
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        var endpoint = (Models.ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
+        endpoint.BeforeTunnelConnectRequest += (_, e) =>
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            e.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        using var rawClient = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, "localhost",
+            server.HttpsListeningPort);
+        var requestHeaders = rawClient.Connection.EncodeHeaders(
+            new[] { (":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", "/") },
+            Array.Empty<(string, string)>());
+        await rawClient.Connection.WriteHeaderBlockAsync(1, requestHeaders, endStream: true);
+        await rawClient.Connection.WriteHeaderBlockAsync(3, requestHeaders, endStream: true);
+
+        var bodies = new System.Collections.Generic.Dictionary<int, MemoryStream>
+        {
+            [1] = new MemoryStream(),
+            [3] = new MemoryStream()
+        };
+        var open = 2;
+        var granted = false;
+        for (var n = 0; n < 20000 && open > 0; n++)
+        {
+            var frame = await rawClient.Connection.ReadFrameAsync();
+            if (frame.Type == Http2FrameType.GoAway || frame.Type == Http2FrameType.RstStream)
+                Assert.Fail($"Unexpected {frame.Type} on stream {frame.StreamId}.");
+            if (frame.Type != Http2FrameType.Data || !bodies.ContainsKey(frame.StreamId))
+                continue;
+            if (frame.Payload.Length > 0)
+                bodies[frame.StreamId].Write(frame.Payload, 0, frame.Payload.Length);
+            if ((frame.Flags & Http2FrameFlag.EndStream) != 0)
+                open--;
+            var total = bodies[1].Length + bodies[3].Length;
+            if (!granted && total >= 30000)
+            {
+                granted = true;
+                var increment = WindowIncrement(1024 * 1024);
+                await rawClient.Connection.WriteFrameAsync(Http2FrameType.WindowUpdate, 0, 0, increment);
+                await rawClient.Connection.WriteFrameAsync(Http2FrameType.WindowUpdate, 1, 0, increment);
+                await rawClient.Connection.WriteFrameAsync(Http2FrameType.WindowUpdate, 3, 0, increment);
+            }
+        }
+
+        Assert.AreEqual(0, open, "Both streams must finish.");
+        Assert.AreEqual(length, bodies[1].Length);
+        Assert.AreEqual(length, bodies[3].Length);
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task H2ToH11Bridge_LargeBody_RstStream_DoesNotHang()
+    {
+        const int length = 256 * 1024;
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+        server.HandleRequest(async context =>
+        {
+            context.Response.ContentLength = length;
+            await context.Response.Body.WriteAsync(new byte[length]);
+        });
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        var exceptionCapture = new TestExceptionCapture();
+        proxy.Logging.LoggerFactory = exceptionCapture;
+        proxy.ApplyLoggingConfiguration();
+        var endpoint = (Models.ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
+        endpoint.BeforeTunnelConnectRequest += (_, e) =>
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            e.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        using var rawClient = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, "localhost",
+            server.HttpsListeningPort);
+        var requestHeaders = rawClient.Connection.EncodeHeaders(
+            new[] { (":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", "/") },
+            Array.Empty<(string, string)>());
+        await rawClient.Connection.WriteHeaderBlockAsync(1, requestHeaders, endStream: true);
+        await rawClient.Connection.ReadHeaderBlockAsync();
+
+        var received = 0;
+        while (received < 48 * 1024)
+        {
+            var frame = await rawClient.Connection.ReadFrameAsync();
+            if (frame.Type == Http2FrameType.Data)
+                received += frame.Payload.Length;
+        }
+
+        var payload = new byte[4];
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(payload, (int)Http2ErrorCode.Cancel);
+        await rawClient.Connection.WriteFrameAsync(Http2FrameType.RstStream, 1, 0, payload);
+        await Task.Delay(200);
+        Assert.IsTrue(exceptionCapture.LastException is not TimeoutException);
+    }
+
+    private static byte[] WindowIncrement(int increment) =>
+    [
+        (byte)((increment >> 24) & 0x7f),
+        (byte)((increment >> 16) & 0xff),
+        (byte)((increment >> 8) & 0xff),
+        (byte)(increment & 0xff)
+    ];
+
+    private static async Task<(byte[] Bytes, bool SawShortFrame, int DataFrames)> ReadBridgedBodyAsync(
+        int length, int? initialWindow, int grantCreditAfter)
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+        server.HandleRequest(async context =>
+        {
+            var payload = new byte[length];
+            for (var i = 0; i < payload.Length; i++)
+                payload[i] = (byte)(i & 0xff);
+            context.Response.ContentLength = payload.Length;
+            await context.Response.Body.WriteAsync(payload);
+        });
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        var endpoint = (Models.ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
+        endpoint.BeforeTunnelConnectRequest += (_, e) =>
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            e.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        using var rawClient = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, "localhost",
+            server.HttpsListeningPort);
+        if (initialWindow.HasValue)
+        {
+            // INITIAL_WINDOW_SIZE changes stream windows only. The connection window stays at
+            // 65,535 until a stream-0 WINDOW_UPDATE, so grant that before the request.
+            var settings = new byte[6];
+            settings[0] = 0;
+            settings[1] = (byte)Http2SettingsId.InitialWindowSize;
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(settings.AsSpan(2), initialWindow.Value);
+            await rawClient.Connection.WriteFrameAsync(Http2FrameType.Settings, 0, 0, settings);
+            await rawClient.Connection.WriteFrameAsync(Http2FrameType.WindowUpdate, 0, 0,
+                WindowIncrement(initialWindow.Value));
+        }
+
+        var requestHeaders = rawClient.Connection.EncodeHeaders(
+            new[] { (":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", "/") },
+            Array.Empty<(string, string)>());
+        await rawClient.Connection.WriteHeaderBlockAsync(1, requestHeaders, endStream: true);
+        var (streamId, _, endStream) = await rawClient.Connection.ReadHeaderBlockAsync();
+
+        var body = new MemoryStream();
+        var sawShort = false;
+        var dataFrames = 0;
+        var granted = false;
+        if (!endStream)
+        {
+            while (true)
+            {
+                var frame = await rawClient.Connection.ReadFrameAsync();
+                if (frame.Type == Http2FrameType.GoAway || frame.Type == Http2FrameType.RstStream)
+                    Assert.Fail($"Unexpected {frame.Type}.");
+                if (frame.Type != Http2FrameType.Data || frame.StreamId != streamId)
+                    continue;
+                dataFrames++;
+                if (frame.Payload.Length > 0 && frame.Payload.Length < 16384)
+                    sawShort = true;
+                if (frame.Payload.Length > 0)
+                    body.Write(frame.Payload, 0, frame.Payload.Length);
+                if (!granted && body.Length >= grantCreditAfter && body.Length < length)
+                {
+                    granted = true;
+                    var increment = WindowIncrement(2 * 1024 * 1024);
+                    await rawClient.Connection.WriteFrameAsync(Http2FrameType.WindowUpdate, 0, 0, increment);
+                    await rawClient.Connection.WriteFrameAsync(Http2FrameType.WindowUpdate, streamId, 0, increment);
+                }
+
+                if ((frame.Flags & Http2FrameFlag.EndStream) != 0)
+                    break;
+            }
+        }
+
+        return (body.ToArray(), sawShort, dataFrames);
+    }
 }

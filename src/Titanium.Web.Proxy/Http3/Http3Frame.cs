@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Net.Quic;
 using System.Threading;
@@ -97,10 +98,18 @@ internal sealed class Http3Frame
         ulong frameType,
         ReadOnlyMemory<byte> payload,
         CancellationToken cancellationToken,
-        bool completeWrites = false)
+        bool completeWrites = false,
+        Http3FrameScratch? scratch = null)
     {
         // Max VarInt is 8 bytes each for type + length.
         const int headerCap = 16;
+        if (scratch != null
+            && payload.Length <= Http3FrameScratch.Capacity - headerCap
+            && scratch.TryAcquire())
+        {
+            return WriteScratchAsync(stream, frameType, payload, completeWrites, scratch, cancellationToken);
+        }
+
         if (payload.Length <= 256)
         {
             var rented = ArrayPool<byte>.Shared.Rent(headerCap + payload.Length);
@@ -121,6 +130,78 @@ internal sealed class Http3Frame
 
         // Large DATA: one write for the header, then the payload buffer as-is (avoid a huge copy).
         return WriteLargeAsync(stream, frameType, payload, completeWrites, cancellationToken);
+    }
+
+    /// <summary>
+    ///     Copies the frame into <paramref name="scratch"/> and does not release it until the
+    ///     <see cref="QuicStream"/> write has been consumed. Sync completion calls <c>GetResult</c>
+    ///     before release so MsQuic cannot still hold the memory (the e781b009 ArrayPool bug).
+    ///     A second write while this one is in flight must not call <see cref="Http3FrameScratch.TryAcquire"/>
+    ///     successfully; callers fall back to <see cref="ArrayPool{T}"/>.
+    /// </summary>
+    private static ValueTask WriteScratchAsync(
+        Stream stream,
+        ulong frameType,
+        ReadOnlyMemory<byte> payload,
+        bool completeWrites,
+        Http3FrameScratch scratch,
+        CancellationToken cancellationToken)
+    {
+        int total;
+        try
+        {
+            var span = scratch.Buffer.AsSpan();
+            var typeLen = Http3VarInt.Write(span, frameType);
+            var lengthLen = Http3VarInt.Write(span.Slice(typeLen), (ulong)payload.Length);
+            var headerLen = typeLen + lengthLen;
+            if (!payload.IsEmpty)
+                payload.Span.CopyTo(span.Slice(headerLen));
+            total = headerLen + payload.Length;
+        }
+        catch
+        {
+            scratch.Release();
+            throw;
+        }
+
+        ValueTask write;
+        try
+        {
+            write = WriteBufferAsync(stream, scratch.Buffer.AsMemory(0, total), completeWrites, cancellationToken);
+        }
+        catch
+        {
+            scratch.Release();
+            throw;
+        }
+
+        if (write.IsCompletedSuccessfully)
+        {
+            try
+            {
+                write.GetAwaiter().GetResult();
+            }
+            finally
+            {
+                scratch.Release();
+            }
+
+            return default;
+        }
+
+        return AwaitScratchAsync(write, scratch);
+    }
+
+    private static async ValueTask AwaitScratchAsync(ValueTask write, Http3FrameScratch scratch)
+    {
+        try
+        {
+            await write.ConfigureAwait(false);
+        }
+        finally
+        {
+            scratch.Release();
+        }
     }
 
     private static async ValueTask WriteLargeAsync(
@@ -223,4 +304,50 @@ internal sealed class Http3Frame
         return stream.WriteAsync(buffer, cancellationToken);
     }
 #pragma warning restore CA1416
+}
+
+/// <summary>
+///     Single-owner buffer for small HTTP/3 frames on one stream. The buffer stays owned until
+///     <see cref="Release"/> runs, which is only after the write ValueTask has been consumed.
+///     Do not return this object to the pool while <see cref="TryAcquire"/> is held.
+///     Writes on one stream are sequential (each <c>WriteAsync</c> is awaited). A concurrent
+///     writer fails <see cref="TryAcquire"/> and uses <see cref="ArrayPool{T}"/> instead.
+/// </summary>
+internal sealed class Http3FrameScratch
+{
+    internal const int Capacity = 1024;
+
+    private static readonly ConcurrentBag<Http3FrameScratch> Pool = new();
+
+    private readonly byte[] buffer = new byte[Capacity];
+    private int busy;
+    private int checkedOut;
+
+    internal byte[] Buffer => buffer;
+
+    internal static Http3FrameScratch Rent()
+    {
+        if (!Pool.TryTake(out var scratch))
+            scratch = new Http3FrameScratch();
+        scratch.checkedOut = 1;
+        scratch.busy = 0;
+        return scratch;
+    }
+
+    /// <summary>
+    ///     Returns the scratch to the pool. If a write is still in flight the instance is dropped
+    ///     instead of being reused, so MsQuic cannot observe a recycled buffer.
+    /// </summary>
+    internal void Return()
+    {
+        if (Volatile.Read(ref busy) != 0)
+            return;
+        if (Interlocked.Exchange(ref checkedOut, 0) != 1)
+            return;
+        Pool.Add(this);
+    }
+
+    internal bool TryAcquire() => Interlocked.CompareExchange(ref busy, 1, 0) == 0;
+
+    internal void Release() => Volatile.Write(ref busy, 0);
 }

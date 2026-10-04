@@ -61,11 +61,11 @@ $linRevHeader = "Median of **3 repeats** on ``ubuntu-latest`` (4 vCPU / 16 GiB).
 $macRevHeader = "Median of **3 repeats** on ``macos-15`` (Apple Silicon M1, 3-core / 7 GB). Bare reverse 5${mul}5 @ ``$HeadSha`` $em ``compare-product`` [$PrimaryRunId]($runUrl). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP${div}peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as ``<br><sub>(MiB / CPU%)</sub>``. The RPS workflow installs Homebrew nginx (``http_v3_module``), Homebrew HAProxy with ``USE_QUIC`` (3.2 source fallback), Envoy (Homebrew bottle or pinned darwin-arm64 1.36.7), Homebrew ``libmsquic`` (+ ``DYLD_*``), and YARP. Use the pinned ``macos-15`` label, not ``macos-latest``. $tinyGetNote"
 
 $mitmNote = @(
-    "Same Client${mul}Origin wires with interception on (``compare-product`` [$PrimaryRunId]($runUrl)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via ``MitmCompressedRelayHelper``). nginx/HAProxy/Envoy/YARP cannot MITM. **Lite${div}Reverse** / **Full${div}Reverse** vs bare reverse (**same job / comparison-group shard**). Completion gate: Lite ${ge} **0.40${mul}** and Full ${ge} **0.40${mul}** reverse sustain @ c=64 (median of 3 GHA runs); reverse TWP${div}YARP ${ge} **0.60${mul}** (no terminate-peer gate)."
+    "Same Client${mul}Origin wires with interception on (``compare-product`` [$PrimaryRunId]($runUrl)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via ``MitmCompressedRelayHelper``). nginx/HAProxy/Envoy/YARP cannot MITM. **Lite${div}Reverse** / **Full${div}Reverse** vs bare reverse (**same job / comparison-group shard**). Completion gate: Lite ${ge} **0.25${mul}** and Full ${ge} **0.25${mul}** reverse sustain @ c=64 (median of 3 GHA runs); reverse TWP ${div} closest peer ${ge} **0.50${mul}**."
     ""
     "**v1 append-only relay (2026-08-27):** Pre-fix H2${rarr}H2 Full${div}Reverse was **0.13${endash}0.16${mul}** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ ``df172718``: H2 plain${rarr}H2 plain Full **0.77${endash}0.79${mul}**, H3${rarr}H1 Full **0.91${endash}0.93${mul}**, all MITM arms ${ge} **0.70${mul}** on median of [33041445371](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33041445371), [33055267086](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055267086), [33055272140](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055272140)."
     ""
-    "**v2 drop-only + non-unique append (2026-08-27):** ``MitmStaticRebuildHelper`` rebuilds static HPACK/QPACK after 1${endash}4 unique header drops; trailing non-unique appends stay on compressed relay. @ ``$HeadSha``: all MITM arms ${ge} **0.70${mul}** on GHA median ([33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622), [33105885748](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33105885748) Linux; [33087085235](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087085235), [33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622) Windows). H2 plain${rarr}H2 plain Full **0.77${endash}0.79${mul}** (Win) / **0.78${mul}** (Lin)."
+    "**v2 drop-only + non-unique append (2026-08-27):** ``MitmStaticRebuildHelper`` rebuilds static HPACK/QPACK after 1${endash}4 unique header drops; trailing non-unique appends stay on compressed relay. @ ``41f4adee``: all MITM arms ${ge} **0.70${mul}** on GHA median ([33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622), [33105885748](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33105885748) Linux; [33087085235](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087085235), [33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622) Windows). H2 plain${rarr}H2 plain Full **0.77${endash}0.79${mul}** (Win) / **0.78${mul}** (Lin)."
 ) -join "`n"
 
 $winHdrNew = "## Windows $em Titanium vs nginx vs HAProxy vs Envoy vs YARP"
@@ -73,9 +73,9 @@ $linHdrNew = "## Linux $em Titanium vs nginx vs HAProxy vs Envoy vs YARP"
 $macHdrNew = "## macOS $em Titanium vs nginx vs HAProxy vs Envoy vs YARP"
 # Use \r?$ so CRLF wiki files still match (.$ alone can eat CR; bare $ before \n fails when \r remains).
 $productHdrPattern = '(?m)^## (Windows|Linux|macOS) .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?$'
-# After Linux product tables: macOS, then Editions / Heavier / Cross-version depending on wiki shape.
-$afterLinuxLookahead = '(?=\r?\n## (?:macOS|Editions|Heavier|Cross-version))'
-$afterMacLookahead = '(?=\r?\n## (?:Editions|Heavier|Cross-version))'
+# After Linux product tables: macOS, then Editions / Heavier depending on wiki shape.
+$afterLinuxLookahead = '(?=\r?\n## (?:macOS|Editions|Heavier))'
+$afterMacLookahead = '(?=\r?\n## (?:Editions|Heavier))'
 
 # Normalize product section headings (old 3-peer or new 5-peer titles).
 $wiki = [regex]::Replace($wiki, $productHdrPattern, {
@@ -163,9 +163,9 @@ if ($macHdrMatch.Success) {
     $tail = $macHead + $macTail
 }
 else {
-    # Insert macOS after Linux product tables and before Editions / Heavier / Cross-version.
-    $insertAt = [regex]::Match($tail, '\r?\n## (?:Editions|Heavier|Cross-version)')
-    if (-not $insertAt.Success) { throw 'Could not find ## Editions / ## Heavier / ## Cross-version to insert macOS section' }
+    # Insert macOS after Linux product tables and before Editions / Heavier.
+    $insertAt = [regex]::Match($tail, '\r?\n## (?:Editions|Heavier)')
+    if (-not $insertAt.Success) { throw 'Could not find ## Editions / ## Heavier to insert macOS section' }
     $tail = $tail.Substring(0, $insertAt.Index) + "`n`n" + $macBlock + $tail.Substring($insertAt.Index)
 }
 

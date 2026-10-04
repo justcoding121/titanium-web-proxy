@@ -42,14 +42,20 @@ public partial class ProxyServer
     ///     Await-safe shell pool for terminate-lite. ThreadStatic is unsafe here: a second Rent on the
     ///     same worker can <see cref="HttpWebClient.RebindForTerminateLite"/> while the first request
     ///     still awaits across the shared Response (HTTP/0.0 0 / spliced status lines under load).
+    ///     A shell is owned by exactly one request between Rent (dequeued) and Release (enqueued).
+    ///     <see cref="ConcurrentQueue{T}"/> is lock-free; <c>ConcurrentBag.Count</c> freezes every
+    ///     per-thread list under Monitor and Rent/Release usually run on different workers, so the bag
+    ///     steal path serialized the hot path (about 7% of proxy-tree CPU in a Linux profile).
     /// </summary>
-    private static readonly ConcurrentBag<HttpWebClient> H1TerminateLiteClients = new();
-    private const int H1TerminateLiteClientPoolCap = 256;
+    private static readonly ConcurrentQueue<HttpWebClient> H1TerminateLiteClients = new();
+    private static int h1TerminateLiteClientCount;
+    internal const int H1TerminateLiteClientPoolCap = 256;
 
-    private static HttpWebClient RentH1TerminateLiteClient(Request request)
+    internal static HttpWebClient RentH1TerminateLiteClient(Request request)
     {
-        if (H1TerminateLiteClients.TryTake(out var client))
+        if (H1TerminateLiteClients.TryDequeue(out var client))
         {
+            Interlocked.Decrement(ref h1TerminateLiteClientCount);
             client.RebindForTerminateLite(request);
             return client;
         }
@@ -60,12 +66,14 @@ public partial class ProxyServer
         return client;
     }
 
-    private static void ReleaseH1TerminateLiteClient(HttpWebClient client)
+    internal static void ReleaseH1TerminateLiteClient(HttpWebClient client)
     {
         // Drop the origin socket reference so TcpConnectionFactory.Release remains the sole owner.
         client.RebindForTerminateLite(client.Request);
-        if (H1TerminateLiteClients.Count < H1TerminateLiteClientPoolCap)
-            H1TerminateLiteClients.Add(client);
+        if (Interlocked.Increment(ref h1TerminateLiteClientCount) <= H1TerminateLiteClientPoolCap)
+            H1TerminateLiteClients.Enqueue(client);
+        else
+            Interlocked.Decrement(ref h1TerminateLiteClientCount);
     }
 
     /// <summary>

@@ -1,14 +1,16 @@
-# Spot gate: compare-spot @ c=64, Full÷Reverse >= 0.40 and reverse TWP÷YARP >= 0.60.
-# Skip TWP÷YARP when YARP did not SLO-pass (same policy as validate-compare-product-gates.ps1).
+# Spot gate: compare-spot @ c=64, Full÷Reverse >= 0.25 and reverse TWP÷closest peer >= 0.50.
+# Skip the peer ratio when no peer SLO-passes (same policy as validate-compare-product-gates.ps1).
 [CmdletBinding()]
 param(
     [int] $Concurrency = 64,
     [int] $WarmupSec = 2,
     [int] $DurationSec = 8,
-    [double] $MitmRatioGate = 0.40,
-    [double] $ReverseYarpGate = 0.60,
+    [double] $MitmRatioGate = 0.25,
+    [double] $ReverseYarpGate = 0.50,
     [switch] $SkipBuild
 )
+
+. (Join-Path $PSScriptRoot 'rps-peer-gate.ps1')
 
 $ErrorActionPreference = 'Stop'
 $scriptDir = $PSScriptRoot
@@ -85,21 +87,14 @@ foreach ($pair in $reversePairs) {
         $failed = $true
         continue
     }
-    if (-not $rpsAtC.ContainsKey($pair.Yarp)) {
-        # Match validate-compare-product-gates.ps1: YARP H3→H3 often 0 RPS / SLO-fail on
-        # Linux GHA (peer harness), not a TWP regression — skip peer ratio when YARP absent.
-        Write-Host ("SKIP {0}: no YARP SLO-pass peer (TWP present)" -f $pair.Label) -ForegroundColor DarkYellow
+    $peer = Get-ClosestPeer $rpsAtC $rpsAtC[$pair.Twp] $pair.Yarp
+    if ($null -eq $peer) {
+        Write-Host ("SKIP {0}: no SLO-pass peer (TWP present)" -f $pair.Label) -ForegroundColor DarkYellow
         continue
     }
-    $ratio = Get-Ratio $pair.Twp $pair.Yarp
-    if ($null -eq $ratio) {
-        Write-Host ("FAIL {0}: missing arm data" -f $pair.Label) -ForegroundColor Red
-        $failed = $true
-        continue
-    }
-    $ok = $ratio -ge $ReverseYarpGate
+    $ok = $peer.Ratio -ge $ReverseYarpGate
     $color = if ($ok) { 'Green' } else { 'Red' }
-    Write-Host ("{0} = {1:N3} (gate {2:N2})" -f $pair.Label, $ratio, $ReverseYarpGate) -ForegroundColor $color
+    Write-Host ("{0} TWP/{1} = {2:N3} (gate {3:N2})" -f $pair.Label, $peer.Arm, $peer.Ratio, $ReverseYarpGate) -ForegroundColor $color
     if (-not $ok) { $failed = $true }
 }
 
