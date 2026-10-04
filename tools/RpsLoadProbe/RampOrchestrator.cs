@@ -365,11 +365,12 @@ internal static class RampOrchestrator
         var haproxyExe = HaproxyHost.ResolveHaproxyExecutable(options.HaproxyPath);
         var envoyExe = EnvoyHost.ResolveEnvoyExecutable(options.EnvoyPath);
         var nginxHttp3 = nginxExe != null && NginxHost.SupportsHttp3Module(NginxHost.ReadConfigureArguments(nginxExe));
+        var nginxH2c = NginxHost.SupportsPriorKnowledgeH2c(nginxExe);
         var haproxyQuic = haproxyExe != null && HaproxyHost.SupportsQuic(haproxyExe);
         var envoyHttp3 = envoyExe != null && EnvoyHost.SupportsHttp3(envoyExe);
         var bombardierAvailable = BombardierLoadGenerator.IsAvailable();
         var arms = ResolveArms(options.Mode, nginxExe != null, nginxHttp3, bombardierAvailable,
-            haproxyExe != null, haproxyQuic, envoyExe != null, envoyHttp3).ToList();
+            haproxyExe != null, haproxyQuic, envoyExe != null, envoyHttp3, nginxH2c).ToList();
         if (filterQuic && !System.Net.Quic.QuicListener.IsSupported)
         {
             arms = arms.Where(a =>
@@ -455,8 +456,11 @@ internal static class RampOrchestrator
         await CsvWriter.WriteHeaderAsync(csv);
 
         var nginxHttp3 = nginxExe != null && NginxHost.SupportsHttp3Module(NginxHost.ReadConfigureArguments(nginxExe));
+        var nginxH2c = NginxHost.SupportsPriorKnowledgeH2c(nginxExe);
         if (nginxExe != null && !nginxHttp3)
             ProbeLog.Info("nginx has no http_v3_module — skipping HTTP/3 native reverse arms (install nginx.org mainline on Linux).");
+        if (options.Mode == ProbeMode.CompareProductSmoke && nginxExe != null && !nginxH2c)
+            ProbeLog.Info("nginx is older than 1.25.1 — skipping the prior-knowledge h2c canary (needs http2 on; Ubuntu 24.04 is 1.24).");
 
         var haproxyQuic = haproxyExe != null && HaproxyHost.SupportsQuic(haproxyExe);
         if (haproxyExe != null && !haproxyQuic)
@@ -468,7 +472,7 @@ internal static class RampOrchestrator
 
         var bombardierAvailable = BombardierLoadGenerator.IsAvailable();
         var arms = ResolveArms(options.Mode, nginxExe != null, nginxHttp3, bombardierAvailable,
-            haproxyExe != null, haproxyQuic, envoyExe != null, envoyHttp3).ToList();
+            haproxyExe != null, haproxyQuic, envoyExe != null, envoyHttp3, nginxH2c).ToList();
         if (!System.Net.Quic.QuicListener.IsSupported)
         {
             var removed = arms.RemoveAll(a =>
@@ -1061,7 +1065,8 @@ internal static class RampOrchestrator
     private static IReadOnlyList<ArmSpec> ResolveArms(ProbeMode mode, bool nginxAvailable,
         bool nginxHttp3Available = false, bool bombardierAvailable = false,
         bool haproxyAvailable = false, bool haproxyQuicAvailable = false,
-        bool envoyAvailable = false, bool envoyHttp3Available = false)
+        bool envoyAvailable = false, bool envoyHttp3Available = false,
+        bool nginxH2cAvailable = false)
     {
         if (PeerWire.TryGet(mode, out var nativeWire))
             return NativeWireAvailable(nativeWire, nginxAvailable, haproxyAvailable, haproxyQuicAvailable,
@@ -1358,7 +1363,7 @@ internal static class RampOrchestrator
                 ..BuildMitmArms(),
                 ..BuildMitmFullArms()
             ],
-            ProbeMode.CompareProductSmoke => BuildProductSmokeArms(nginxAvailable, haproxyAvailable, envoyAvailable),
+            ProbeMode.CompareProductSmoke => BuildProductSmokeArms(haproxyAvailable, envoyAvailable, nginxH2cAvailable),
             ProbeMode.CompareSpot => BuildSpotArms(),
             ProbeMode.CompareCeiling => BuildCompareCeilingArms(nginxAvailable, haproxyAvailable, envoyAvailable),
             ProbeMode.CompareBodies =>
@@ -1608,8 +1613,8 @@ internal static class RampOrchestrator
     /// Minimal arm set for <c>validate-compare-product-gates.ps1</c> (every Lite/Full/Reverse
     /// pair the script scores, plus YARP H3 reverse peers). Intended for Mac-only GHA smoke.
     /// </summary>
-    private static IReadOnlyList<ArmSpec> BuildProductSmokeArms(bool nginxAvailable, bool haproxyAvailable,
-        bool envoyAvailable)
+    private static IReadOnlyList<ArmSpec> BuildProductSmokeArms(bool haproxyAvailable,
+        bool envoyAvailable, bool nginxH2cAvailable)
     {
         const bool intercept = true;
         const bool mutate = true;
@@ -1663,10 +1668,17 @@ internal static class RampOrchestrator
         };
 
         // Remainder canaries (1a1d78f2) — fail Phase-1 smoke on config typos before full product.
-        // TWP reverse twins keep each canary in a comparison group (not a singleton peer).
-        if (nginxAvailable)
+        // Prior-knowledge h2c needs nginx 1.25.1+ (`http2 on`). A distro 1.24 binary is on PATH
+        // on ubuntu-latest but cannot serve the wire; scheduling it still records
+        // twp-reverse-h2c-to-h1, and the MITM gate then fails that wire as a partial pair.
+        // When the canary does run, include Lite and Full so the reverse row is a complete pair.
+        if (nginxH2cAvailable)
         {
             arms.Add(new("twp-reverse-h2c-to-h1", ProbeMode.ReverseH2cToH1, null));
+            arms.Add(new("twp-mitm-h2c-to-h1", ProbeMode.ReverseH2cToH1, null,
+                EnableHttpInterception: intercept));
+            arms.Add(new("twp-mitm-full-h2c-to-h1", ProbeMode.ReverseH2cToH1, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate));
             arms.Add(new("nginx-reverse-h2c-to-h1", ProbeMode.NginxReverseH2cToH1, null));
         }
 
