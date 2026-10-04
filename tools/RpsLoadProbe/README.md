@@ -18,14 +18,13 @@ Manual CI: [RPS saturation](../../.github/workflows/rps-saturation.yml) (`workfl
 | Milestone | `compare-terminate` / `compare-matrix` | ~1–2h investigation |
 | Editions | `compare-editions` | CLI / Plus / Intercept / stress arms vs baselines (~60 min) |
 | Beta/stable publish | `compare-editions` + `compare-spot` (parallel GHA jobs) | ~60 min wall; peer gate catches Core÷YARP regressions editions miss |
-| Cross-version | `compare-cross-version` | 7.0 vs committed 6.0 baselines (Gate 2) |
-| Release / wiki | `compare-product` | median of 3; **3** comparison-group shards × OS (~2–2½h wall; hosted cap 360m) |
-| Unary gRPC | `compare-grpc` | H2 TLS Echo RPC/s @ c=64 — H2↔H2 + H2→h2c groups |
+| Release / wiki | `compare-product` | median of 3; the [RPS suite](../../.github/workflows/rps-suite.yml) runs one job per wiki row on Win/Linux/macOS (see [PERF-GATES.md](PERF-GATES.md)); paste unions the row CSVs |
+| Unary gRPC | `compare-grpc` | H2 TLS Echo RPC/s @ c=64 — H2↔H2 and H2→h2c rows, one job each |
 | WebSocket dual-TLS | `compare-ws-h1tls` | H1 TLS→H1 TLS echo (`*-duplex-ws-h1tls`) |
 | WebSocket RFC 8441 | `compare-ws-h2` | H2 TLS extended CONNECT → H1 plain (`*-duplex-ws-h2`) |
-| Heavier tables | `compare-bodies` (**2** shards) / `post` / `lossy` / `arch` (**3** shards) / `tls-cost` | dispatch independently from the workflow |
+| Heavier tables | `compare-bodies` / `post` / `lossy` / `arch` / `tls-cost` | one suite run each, one job per row |
 
-Harness defaults: warmup **2s** / measure **8s** / concurrency **8,16,32,64** / median of **3** for publishable GHA numbers (repeats **inside** a shard). `--arm-shard i/n` splits **wiki rows** (same-job TWP÷YARP and Lite÷Reverse); paste unions shard CSVs. Hosted job cap **360** minutes. `--stop-on-slo-fail` (default **on**) stops an arm after the first SLO fail plus one peak confirmation step. See [PERF-GATES.md](PERF-GATES.md).
+Harness defaults: warmup **2s** / measure **8s** / concurrency **8,16,32,64** / median of **3** for publishable GHA numbers. `--arm-shard` takes a comparison-group key (`h1c-h1c`, listed by `--print-groups`) to run exactly one wiki row, so TWP÷YARP and Lite÷Reverse stay same-job ratios; `i/n` still partitions rows for the smoke modes. A single-row leg allows 60 minutes of ramp and 75 minutes overall, so a wedged VM loses one row rather than the run. `--stop-on-slo-fail` (default **on**) stops an arm after the first SLO fail plus one peak confirmation step. See [PERF-GATES.md](PERF-GATES.md).
 
 ## Full 5×5 reverse matrix
 
@@ -149,7 +148,7 @@ Two TWP-only MITM shapes on the same Client×Origin wires (+ CONNECT). nginx/YAR
 Two PNG families per OS:
 
 1. **Tiny** (`rps-practical-{os}.png`) — **10 clusters**: eight industry reverse wires (tiny keep-alive GET ~56 B) plus WebSocket / gRPC unary. Chart order puts typical reverse paths first (TLS in → HTTP/1 out), then H2 same-protocol, H3→H1c, **H3→h2c**, then WS / gRPC.
-2. **64 KB** (`rps-practical-heavier-{os}.png`) — six heavier clusters: GET 64 KB H1/H2/H3→H1c, GET 64 KB H2→H2, POST 64 KB H1, GET 256 KB H1. Skipped when the OS has no heavier wiki/CSV data (macOS today).
+2. **64 KB** (`rps-practical-heavier-{os}.png`) — six heavier clusters: GET 64 KB H1/H2/H3→H1c, GET 64 KB H2→H2, POST 64 KB H1, GET 256 KB H1. Skipped when that OS has no heavier wiki/CSV data.
 
 After downloading `compare-product` plus heavier roots:
 
@@ -174,7 +173,7 @@ python3 tools/RpsLoadProbe/render-practical-charts.py \
   --title-suffix '@ <sha>'
 ```
 
-Writes up to six PNGs: `wiki/images/rps-practical-{linux,windows,macos}.png` and `rps-practical-heavier-{linux,windows,macos}.png` when data exists (macOS heavier is skipped today). Linux embeds both in the repo README; the website Performance page shows all OS tiny charts plus Win/Linux 64 KB. Five series: Titanium / YARP / nginx / HAProxy / Envoy. Tiny wires: H1 TLS→H1c · H1 TLS→H1 TLS · H2 TLS→H1c · H2 TLS→H1 TLS · H2 TLS→h2c · H2 TLS→H2 TLS · H3→H1c · H3→h2c. Workloads fold in from `--arch-root` / `--grpc-root`; heavier bodies/POST from `--bodies-root` / `--post-root` (or sibling `gha-dl/` folders when omitted). Wiki Performance tables stay chart-free.
+Writes up to six PNGs: `wiki/images/rps-practical-{linux,windows,macos}.png` and `rps-practical-heavier-{linux,windows,macos}.png` when that OS has heavier data. Linux embeds both in the repo README; the website Performance page shows all OS tiny charts plus Win/Linux 64 KB. Five series: Titanium / YARP / nginx / HAProxy / Envoy. Tiny wires: H1 TLS→H1c · H1 TLS→H1 TLS · H2 TLS→H1c · H2 TLS→H1 TLS · H2 TLS→h2c · H2 TLS→H2 TLS · H3→H1c · H3→h2c. Workloads fold in from `--arch-root` / `--grpc-root`; heavier bodies/POST from `--bodies-root` / `--post-root` (or sibling `gha-dl/` folders when omitted). Wiki Performance tables stay chart-free.
 
 ### Native peer smoke (HAProxy / Envoy)
 
@@ -222,18 +221,7 @@ Plus arms allocate an explicit `controlPlane.dashboardPort` (separate from the c
 
 Gates: see [PERF-GATES.md](PERF-GATES.md). Thresholds lock after a clean Win+Linux pass. Build/publish `Titanium.Cli` (and Plus DLL beside it for Plus arms) before ramping.
 
-## Cross-version (7.0 vs 6.0)
-
-```powershell
-pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-cross-version
-pwsh tools/RpsLoadProbe/validate-cross-version.ps1 `
-  -BaselineCsv tools/RpsLoadProbe/results/baseline-6.0-win.csv `
-  -CurrentCsv  tools/RpsLoadProbe/results/rps-ramp-*.csv
-```
-
-`compare-cross-version` runs the reverse matrix with routes unset (same ForwardHost path as 6.x). Baselines are committed CSVs from the published 6.0 GHA medians — do not re-run 6.0.
-
-## Bridge matrix (cross-version)
+## Bridge matrix
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-bridges

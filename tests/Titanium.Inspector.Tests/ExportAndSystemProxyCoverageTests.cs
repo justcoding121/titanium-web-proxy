@@ -142,6 +142,34 @@ public class ExportAndSystemProxyCoverageTests
             picker.SavePath = missingDir;
             await ExecuteAsync(vm.ExportSelectedHarCommand);
             StringAssert.Contains(vm.StatusText, "Export HAR failed");
+
+            var missingZip = Path.Combine(
+                Path.GetTempPath(),
+                "twp-missing-" + Guid.NewGuid().ToString("N"),
+                "out.zip");
+            picker.SavePath = missingZip;
+            await ExecuteAsync(vm.ExportArchiveCommand);
+            StringAssert.Contains(vm.StatusText, "Export archive failed");
+
+            picker.SavePath = missingZip;
+            await ExecuteAsync(vm.ExportSelectedArchiveCommand);
+            StringAssert.Contains(vm.StatusText, "Export archive failed");
+
+            var badZip = Path.Combine(Path.GetTempPath(), "twp-bad-" + Guid.NewGuid().ToString("N") + ".zip");
+            await File.WriteAllTextAsync(badZip, "not a zip");
+            try
+            {
+                picker.OpenPath = badZip;
+                await ExecuteAsync(vm.ImportArchiveCommand);
+                StringAssert.Contains(vm.StatusText, "Import archive failed");
+            }
+            finally
+            {
+                if (File.Exists(badZip))
+                {
+                    File.Delete(badZip);
+                }
+            }
         }
         finally
         {

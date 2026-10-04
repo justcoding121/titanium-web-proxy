@@ -1,0 +1,194 @@
+# One job per wiki row for a single ramp mode, on all three OS.
+# Dispatch one run per mode (compare-product, compare-bodies, ...) so each table has one
+# Source URL and the paste scripts, which look arms up by name, never mix modes.
+# compare-saturation and compare-editions stay one job per OS (key "all"): saturation Block A
+# compares proxy arms against origin-direct from the same job.
+#
+# Free-plan account limits: 20 concurrent jobs, 5 of them macOS. This workflow caps each OS
+# matrix itself; runs of different modes still queue together against the account limit.
+
+name: RPS suite
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Ramp mode (one suite run per mode)'
+        required: true
+        default: compare-product
+        type: choice
+        options:
+          - compare-product
+          - compare-bodies
+          - compare-post
+          - compare-lossy
+          - compare-tls-cost
+          - compare-arch
+          - compare-grpc
+          - compare-ws-h1tls
+          - compare-ws-h2
+          - compare-saturation
+          - compare-editions
+      repeats:
+        description: 'Repeats per arm (median peaks)'
+        required: true
+        default: '3'
+      max_parallel_mac:
+        description: 'Concurrent macOS legs (Free plan allows 5)'
+        required: true
+        default: '5'
+      max_parallel_other:
+        description: 'Concurrent Windows or Linux legs'
+        required: true
+        default: '15'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prep:
+    name: prep ${{ inputs.mode }}
+    runs-on: ubuntu-latest
+    outputs:
+      keys: ${{ steps.groups.outputs.keys }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+
+      - name: Resolve comparison groups
+        id: groups
+        shell: pwsh
+        env:
+          SUITE_MODE: ${{ inputs.mode }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # These modes compare arms that must share a job, so they stay unsharded.
+          $unsharded = @('compare-saturation', 'compare-editions')
+          if ($unsharded -contains $env:SUITE_MODE) {
+            $keys = @('all')
+          }
+          else {
+            dotnet build -c Release tools/RpsLoadProbe/RpsLoadProbe.csproj --nologo -v q | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw 'Probe build failed' }
+            $lines = & dotnet run --project tools/RpsLoadProbe/RpsLoadProbe.csproj --no-build -c Release -- `
+              --ramp --mode $env:SUITE_MODE --print-groups 2>$null
+            $groups = @($lines | Where-Object { $_ -match '^\S+\t\d+$' } | ForEach-Object {
+                $p = $_ -split "`t"
+                [pscustomobject]@{ Key = $p[0]; Arms = [int]$p[1] }
+              })
+            if ($groups.Count -eq 0) { throw "No comparison groups for $($env:SUITE_MODE)" }
+            if ($groups.Count -gt 256) { throw "$($groups.Count) groups exceeds the 256-job matrix limit" }
+            # Longest rows first so the slowest work starts in the first wave.
+            $keys = @($groups | Sort-Object Arms -Descending | Select-Object -ExpandProperty Key)
+          }
+          Write-Host ("{0}: {1} group(s): {2}" -f $env:SUITE_MODE, $keys.Count, ($keys -join ', '))
+          # Piping a one-element array into ConvertTo-Json unwraps it to a JSON string.
+          # fromJSON then is not an array, and the OS matrices are skipped (saturation,
+          # editions, and any mode with a single comparison group).
+          $keysJson = '[' + (($keys | ForEach-Object { ConvertTo-Json -InputObject ([string]$_) }) -join ',') + ']'
+          $roundTrip = @($keysJson | ConvertFrom-Json)
+          if ($roundTrip.Count -ne $keys.Count) { throw "keys output must be a JSON array of $($keys.Count): $keysJson" }
+          "keys=$keysJson" >> $env:GITHUB_OUTPUT
+
+  linux:
+    name: ${{ inputs.mode }} / ${{ matrix.key }} / linux
+    needs: prep
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(inputs.max_parallel_other) }}
+      matrix:
+        key: ${{ fromJSON(needs.prep.outputs.keys) }}
+    uses: ./.github/workflows/rps-saturation.yml
+    with:
+      mode: ${{ inputs.mode }}
+      runner_os: ubuntu-latest
+      arm_shard: ${{ matrix.key }}
+      repeats: ${{ inputs.repeats }}
+
+  windows:
+    name: ${{ inputs.mode }} / ${{ matrix.key }} / windows
+    needs: prep
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(inputs.max_parallel_other) }}
+      matrix:
+        key: ${{ fromJSON(needs.prep.outputs.keys) }}
+    uses: ./.github/workflows/rps-saturation.yml
+    with:
+      mode: ${{ inputs.mode }}
+      runner_os: windows-latest
+      arm_shard: ${{ matrix.key }}
+      repeats: ${{ inputs.repeats }}
+
+  macos:
+    name: ${{ inputs.mode }} / ${{ matrix.key }} / macos
+    needs: prep
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(inputs.max_parallel_mac) }}
+      matrix:
+        key: ${{ fromJSON(needs.prep.outputs.keys) }}
+    uses: ./.github/workflows/rps-saturation.yml
+    with:
+      mode: ${{ inputs.mode }}
+      runner_os: macos-15
+      arm_shard: ${{ matrix.key }}
+      repeats: ${{ inputs.repeats }}
+
+  aggregate:
+    name: aggregate ${{ inputs.mode }}
+    needs: [prep, linux, windows, macos]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check every row on every OS
+        shell: pwsh
+        env:
+          SUITE_MODE: ${{ inputs.mode }}
+          KEYS_JSON: ${{ needs.prep.outputs.keys }}
+          LINUX_RESULT: ${{ needs.linux.result }}
+          WINDOWS_RESULT: ${{ needs.windows.result }}
+          MACOS_RESULT: ${{ needs.macos.result }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $keys = @($env:KEYS_JSON | ConvertFrom-Json)
+          $arts = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID/artifacts?per_page=100" --paginate --jq '.artifacts[] | select(.name | startswith("rps-status-")) | .name'
+          $statusNames = @($arts | Where-Object { $_ })
+          $osLabels = [ordered]@{ linux = 'ubuntu-latest'; windows = 'windows-latest'; macos = 'macos-15' }
+          $missing = @()
+          foreach ($key in $keys) {
+            $label = ($key -replace '/', '-')
+            foreach ($os in $osLabels.Values) {
+              $name = "rps-status-$os-shard-$label"
+              if ($statusNames -notcontains $name) { $missing += $name }
+            }
+          }
+          $summary = @(
+            "### RPS suite: $env:SUITE_MODE",
+            "",
+            "| OS | Result |",
+            "|---|---|",
+            "| linux | $env:LINUX_RESULT |",
+            "| windows | $env:WINDOWS_RESULT |",
+            "| macos | $env:MACOS_RESULT |",
+            "",
+            "Expected rows: $($keys.Count) x 3 OS.",
+            "Status artifacts found: $($statusNames.Count)."
+          )
+          if ($missing) {
+            $summary += ""
+            $summary += "Missing status artifacts:"
+            $summary += ($missing | ForEach-Object { "- $_" })
+          }
+          $summary -join "`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8
+          $osFailed = @($env:LINUX_RESULT, $env:WINDOWS_RESULT, $env:MACOS_RESULT) | Where-Object { $_ -ne 'success' }
+          if ($missing -or $osFailed) {
+            throw "Suite incomplete: $($missing.Count) status artifact(s) missing, OS results: linux=$env:LINUX_RESULT windows=$env:WINDOWS_RESULT macos=$env:MACOS_RESULT"
+          }
+          Write-Host "Suite complete: $($keys.Count) rows x 3 OS"

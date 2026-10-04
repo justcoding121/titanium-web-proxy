@@ -72,6 +72,9 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
     public Task DispatchAsync(Action action) =>
         _session!.Dispatch(() =>
         {
+            // After SetupUnsafe, before the caller's action. Export/import completion
+            // stashes UI work so ResetForUnitTests does not show a toast with no clock.
+            ViewModel?.FlushDeferredInspectorUi();
             action();
             Dispatcher.UIThread.RunJobs();
         }, CancellationToken.None);
@@ -79,6 +82,7 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
     public async Task DispatchAsync(Func<Task> action) =>
         await _session!.Dispatch(async () =>
         {
+            ViewModel?.FlushDeferredInspectorUi();
             await action();
             Dispatcher.UIThread.RunJobs();
         }, CancellationToken.None);

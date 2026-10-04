@@ -190,7 +190,7 @@ public sealed partial class MainWindowViewModel
         };
 
         _store.Add(snap);
-        ApplyFilter();
+        OnSessionAddedToFilter(snap);
         RefreshSessionCountText();
         // Select the synthetic row without forcing Inspect open (Composer may already be showing).
         SelectSessionWithoutOpeningDetails(snap);

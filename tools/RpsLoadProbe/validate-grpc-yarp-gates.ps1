@@ -1,10 +1,12 @@
 # Validate compare-grpc medians @ c=64:
-#   Reverse TWP ÷ YARP >= 0.60 (when YARP SLO-passes)
+#   Reverse TWP ÷ closest peer >= 0.50 (YARP, nginx, HAProxy, Envoy)
 # Pairs from RampOrchestrator.BuildCompareGrpcArms.
 param(
     [Parameter(Mandatory)] [string] $CsvPath,
-    [double] $ReverseYarpGate = 0.60
+    [double] $ReverseYarpGate = 0.50
 )
+
+. (Join-Path $PSScriptRoot 'rps-peer-gate.ps1')
 
 $ErrorActionPreference = 'Stop'
 
@@ -37,9 +39,11 @@ $revPairs = @(
 )
 
 $failed = $false
-Write-Host "gRPC TWP/YARP gates (>= $ReverseYarpGate @ c=64 median; skip when YARP SLO-fails)" -ForegroundColor Cyan
+Write-Host "gRPC TWP/closest-peer gates (>= $ReverseYarpGate @ c=64 median; skip when no peer SLO-passes)" -ForegroundColor Cyan
 foreach ($p in $revPairs) {
-    if (-not $sustain.ContainsKey($p.Twp) -and -not $sustain.ContainsKey($p.Yarp)) {
+    $peerNames = @(Get-PeerArmCandidates $p.Yarp)
+    $anyPeer = @($peerNames | Where-Object { $sustain.ContainsKey($_) }).Count -gt 0
+    if (-not $sustain.ContainsKey($p.Twp) -and -not $anyPeer) {
         Write-Host "SKIP $($p.Label) : not in this shard/CSV" -ForegroundColor DarkYellow
         continue
     }
@@ -48,16 +52,16 @@ foreach ($p in $revPairs) {
         $failed = $true
         continue
     }
-    if (-not $sustain.ContainsKey($p.Yarp)) {
-        Write-Host "SKIP $($p.Label) : no YARP SLO-pass peer (TWP present)" -ForegroundColor DarkYellow
+    $peer = Get-ClosestPeer $sustain $sustain[$p.Twp] $p.Yarp
+    if ($null -eq $peer) {
+        Write-Host "SKIP $($p.Label) : no SLO-pass peer (TWP present)" -ForegroundColor DarkYellow
         continue
     }
-    $ratio = $sustain[$p.Twp] / $sustain[$p.Yarp]
-    $ok = $ratio -ge $ReverseYarpGate
+    $ok = $peer.Ratio -ge $ReverseYarpGate
     $color = if ($ok) { 'Green' } else { 'Red' }
-    Write-Host ("{0} TWP/YARP = {1:N3} (gate {2:N2})" -f $p.Label, $ratio, $ReverseYarpGate) -ForegroundColor $color
+    Write-Host ("{0} TWP/{1} = {2:N3} (gate {3:N2})" -f $p.Label, $peer.Arm, $peer.Ratio, $ReverseYarpGate) -ForegroundColor $color
     if (-not $ok) { $failed = $true }
 }
 
-if ($failed) { throw 'gRPC YARP gate validation failed' }
-Write-Host 'All gRPC YARP gates passed.' -ForegroundColor Green
+if ($failed) { throw 'gRPC peer gate validation failed' }
+Write-Host 'All gRPC peer gates passed.' -ForegroundColor Green

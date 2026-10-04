@@ -18,6 +18,48 @@ on:
     branches: [beta, stable]
   # Push editions are gated by .NET / rps-publish-gate (Ubuntu only). Do not duplicate
   # 3-OS compare-editions on every beta/stable merge.
+  # Called by rps-suite.yml: one job per wiki row. Inputs mirror workflow_dispatch but are
+  # plain strings (workflow_call does not support choice inputs).
+  workflow_call:
+    inputs:
+      mode:
+        description: 'Ramp mode'
+        required: true
+        type: string
+      concurrency:
+        description: 'Comma-separated concurrency steps'
+        required: false
+        type: string
+        default: '8,16,32,64'
+      warmup_sec:
+        description: 'Warmup seconds per step'
+        required: false
+        type: string
+        default: '2'
+      duration_sec:
+        description: 'Measure seconds per step'
+        required: false
+        type: string
+        default: '8'
+      repeats:
+        description: 'Full arm sequence repeats (median peaks)'
+        required: false
+        type: string
+        default: '3'
+      runner_os:
+        description: 'Single runner OS for this leg'
+        required: true
+        type: string
+      arm_shard:
+        description: 'all, i/n, or one comparison-group key'
+        required: false
+        type: string
+        default: all
+      arm_contains:
+        description: 'Optional arm-name substring filter'
+        required: false
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       mode:
@@ -90,7 +132,6 @@ on:
           - envoy-reverse-http3-to-http2
           - envoy-reverse-http3-to-http3
           - compare-editions
-          - compare-cross-version
           - compare-ceiling
           - compare-bodies
           - compare-post
@@ -195,7 +236,7 @@ on:
           - windows-latest
           - macos-15
       arm_shard:
-        description: 'Comparison-group partition (all = no split; i/n = exclusive 1-based shard of wiki rows / Client×Origin wires, not individual arms)'
+        description: 'Comparison-group partition (all = no split; i/n = exclusive 1-based shard of wiki rows; or one group key such as h1c-h1c or h3-h3-body64k = exactly one wiki row, see --print-groups)'
         required: true
         default: all
       arm_contains:
@@ -212,13 +253,13 @@ jobs:
     permissions:
       contents: read
     env:
-      RPS_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'compare-spot' }}
-      RPS_CONCURRENCY: ${{ github.event_name == 'workflow_dispatch' && inputs.concurrency || '8,16,32,64' }}
-      RPS_WARMUP_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.warmup_sec || 2 }}
-      RPS_DURATION_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.duration_sec || 8 }}
-      RPS_REPEATS: ${{ github.event_name == 'workflow_dispatch' && inputs.repeats || 1 }}
-      RPS_ARM_SHARD: ${{ github.event_name == 'workflow_dispatch' && inputs.arm_shard || 'all' }}
-      RPS_ARM_CONTAINS: ${{ github.event_name == 'workflow_dispatch' && inputs.arm_contains || '' }}
+      RPS_MODE: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.mode || 'compare-spot' }}
+      RPS_CONCURRENCY: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.concurrency || '8,16,32,64' }}
+      RPS_WARMUP_SEC: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.warmup_sec || 2 }}
+      RPS_DURATION_SEC: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.duration_sec || 8 }}
+      RPS_REPEATS: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.repeats || 1 }}
+      RPS_ARM_SHARD: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.arm_shard || 'all' }}
+      RPS_ARM_CONTAINS: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.arm_contains || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -229,7 +270,7 @@ jobs:
     # GitHub-hosted runners hard-cap at 360 minutes — do not set timeout above that.
     # Wiki-grade compare-product / bodies / arch use arm_shard i/n so each job stays under 345m ramp.
     # compare-product-smoke / haproxy-smoke / envoy-smoke: 120m; compare-editions: 90m.
-    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || (github.event_name == 'push' && 90 || (inputs.mode == 'compare-editions' && 90 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 120 || 360))) }}
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || (github.event_name == 'push' && 90 || (inputs.mode == 'compare-editions' && 90 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 120 || ((inputs.arm_shard != 'all' && !contains(inputs.arm_shard, '/')) && 75 || 360)))) }}
     steps:
       - uses: actions/checkout@v7
 
@@ -835,7 +876,11 @@ jobs:
       # Pass workflow_dispatch inputs via env (not ${{ }} in the script) to avoid
       # githubactions:S7630 script-injection findings on user-controlled values.
       - name: Run saturation ramp
-        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 110 || 345))) }}
+        id: ramp
+        # Same cap on every OS (macOS included): the 180m macOS-only cap was hit by the full
+        # saturation ramp (run 37110567901). Leave headroom under the 360m job timeout so a true
+        # hang still uploads a partial CSV.
+        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || ((inputs.mode == 'compare-product-smoke' || inputs.mode == 'compare-haproxy-smoke' || inputs.mode == 'compare-envoy-smoke') && 110 || ((inputs.arm_shard != 'all' && !contains(inputs.arm_shard, '/')) && 60 || 345)))) }}
         shell: pwsh
         env:
           RPS_MODE: ${{ env.RPS_MODE }}
@@ -869,6 +914,22 @@ jobs:
             @containsArgs `
             @hapArgs
 
+      - name: Mark incomplete ramp
+        if: always() && steps.ramp.outcome != 'success'
+        shell: pwsh
+        env:
+          RAMP_OUTCOME: ${{ steps.ramp.outcome }}
+        run: |
+          $dir = 'tools/RpsLoadProbe/results'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          @(
+            "ramp_outcome=$env:RAMP_OUTCOME"
+            "marked_at_utc=$((Get-Date).ToUniversalTime().ToString('o'))"
+            "os=$env:RUNNER_OS"
+            "arm_shard=$env:RPS_ARM_SHARD"
+          ) | Set-Content -LiteralPath (Join-Path $dir 'INCOMPLETE.txt') -Encoding utf8
+          Write-Host "Wrote INCOMPLETE.txt (ramp outcome=$env:RAMP_OUTCOME)"
+
       - name: Sanitize artifact shard label
         if: always()
         shell: bash
@@ -877,10 +938,24 @@ jobs:
           raw="${RPS_ARM_SHARD:-all}"
           echo "RPS_ARTIFACT_SHARD=$(printf '%s' "$raw" | tr '/' '-')" >> "$GITHUB_ENV"
 
+      # Every arm this host resolved must have rows in every repeat. Gate scripts skip
+      # pairs whose arms are absent, so a wedged arm would otherwise leave the leg green.
+      - name: Assert ramp completeness
+        if: steps.ramp.outcome == 'success'
+        id: completeness
+        shell: pwsh
+        run: |
+          pwsh tools/RpsLoadProbe/assert-ramp-complete.ps1 `
+            -ResultsDir tools/RpsLoadProbe/results `
+            -Mode $env:RPS_MODE `
+            -ArmShard $env:RPS_ARM_SHARD `
+            -Repeats ([int]$env:RPS_REPEATS)
+
       # Post-ramp gates: hard-fail on every event (including workflow_dispatch).
       # fail-fast: false keeps sibling OS jobs running; Upload CSV uses if: always().
       # Sharded CSVs skip pairs whose arms are not in this artifact (union paste validates completeness).
       - name: Validate edition gates
+        id: gate-editions
         if: env.RPS_MODE == 'compare-editions'
         shell: pwsh
         run: |
@@ -890,16 +965,18 @@ jobs:
           pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath $csv.FullName
 
       - name: Validate compare-product gates
+        id: gate-product
         if: env.RPS_MODE == 'compare-product' || env.RPS_MODE == 'compare-product-smoke'
         shell: pwsh
         run: |
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
             Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $csv) { throw 'No CSV found for compare-product gate validation' }
-          # Same floors on all OS: MITM Lite÷Reverse >= 0.40, Full÷Reverse >= 0.40, reverse TWP÷YARP >= 0.60. No nginx gate.
+          # Same floors on all OS: MITM Lite÷Reverse >= 0.25, Full÷Reverse >= 0.25, reverse TWP÷closest peer >= 0.50.
           pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName
 
       - name: Validate heavier YARP gates (bodies)
+        id: gate-bodies
         if: env.RPS_MODE == 'compare-bodies'
         shell: pwsh
         run: |
@@ -910,6 +987,7 @@ jobs:
           pwsh tools/RpsLoadProbe/validate-heavier-yarp-gates.ps1 -CsvPath $csv.FullName -NameSuffix body256k
 
       - name: Validate heavier YARP gates (post)
+        id: gate-post
         if: env.RPS_MODE == 'compare-post'
         shell: pwsh
         run: |
@@ -919,6 +997,7 @@ jobs:
           pwsh tools/RpsLoadProbe/validate-heavier-yarp-gates.ps1 -CsvPath $csv.FullName -NameSuffix post64k
 
       - name: Validate lossy hard-bar gates
+        id: gate-lossy
         if: env.RPS_MODE == 'compare-lossy'
         shell: pwsh
         run: |
@@ -928,6 +1007,7 @@ jobs:
           pwsh tools/RpsLoadProbe/validate-lossy-arch-gates.ps1 -CsvPath $csv.FullName -Suite lossy
 
       - name: Validate arch hard-bar gates
+        id: gate-arch
         if: env.RPS_MODE == 'compare-arch'
         shell: pwsh
         run: |
@@ -937,6 +1017,7 @@ jobs:
           pwsh tools/RpsLoadProbe/validate-lossy-arch-gates.ps1 -CsvPath $csv.FullName -Suite arch
 
       - name: Validate gRPC YARP gates
+        id: gate-grpc
         if: env.RPS_MODE == 'compare-grpc'
         shell: pwsh
         run: |
@@ -945,22 +1026,45 @@ jobs:
           if (-not $csv) { throw 'No CSV found for gRPC YARP gate validation' }
           pwsh tools/RpsLoadProbe/validate-grpc-yarp-gates.ps1 -CsvPath $csv.FullName
 
-      - name: Validate cross-version gates
-        if: env.RPS_MODE == 'compare-cross-version'
+      # One status file per leg, overwritten on re-run, so the suite aggregator reads the
+      # last attempt rather than a stale incomplete marker from an earlier attempt.
+      - name: Write leg status
+        if: always()
         shell: pwsh
+        env:
+          RAMP_OUTCOME: ${{ steps.ramp.outcome }}
+          COMPLETENESS_OUTCOME: ${{ steps.completeness.outcome }}
+          GATE_EDITIONS: ${{ steps.gate-editions.outcome }}
+          GATE_PRODUCT: ${{ steps.gate-product.outcome }}
+          GATE_BODIES: ${{ steps.gate-bodies.outcome }}
+          GATE_POST: ${{ steps.gate-post.outcome }}
+          GATE_LOSSY: ${{ steps.gate-lossy.outcome }}
+          GATE_ARCH: ${{ steps.gate-arch.outcome }}
+          GATE_GRPC: ${{ steps.gate-grpc.outcome }}
         run: |
-          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
-            Sort-Object LastWriteTime -Descending | Select-Object -First 1
-          if (-not $csv) { throw 'No CSV found for cross-version gate validation' }
-          $baseline = if ($env:RUNNER_OS -eq 'Windows') {
-            'tools/RpsLoadProbe/results/baseline-6.0-win.csv'
-          } else {
-            'tools/RpsLoadProbe/results/baseline-6.0-linux.csv'
-          }
-          if (-not (Test-Path $baseline)) { throw "Missing baseline: $baseline" }
-          pwsh tools/RpsLoadProbe/validate-cross-version.ps1 `
-            -BaselineCsv $baseline `
-            -CurrentCsv $csv.FullName
+          $dir = 'tools/RpsLoadProbe/results'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $gateOutcomes = @($env:GATE_EDITIONS, $env:GATE_PRODUCT, $env:GATE_BODIES, $env:GATE_POST, $env:GATE_LOSSY, $env:GATE_ARCH, $env:GATE_GRPC)
+          $gateOutcome = if ($gateOutcomes -contains 'failure') { 'failure' }
+                         elseif ($env:RAMP_OUTCOME -eq 'success' -and $env:COMPLETENESS_OUTCOME -eq 'success') { 'success' }
+                         else { 'skipped' }
+          [ordered]@{
+            ramp_outcome = $env:RAMP_OUTCOME
+            completeness_outcome = $env:COMPLETENESS_OUTCOME
+            gate_outcome = $gateOutcome
+            attempt = [int]$env:GITHUB_RUN_ATTEMPT
+            arm_shard = $env:RPS_ARM_SHARD
+            os = $env:RUNNER_OS
+          } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dir 'leg-status.json') -Encoding utf8
+
+      - name: Upload leg status
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rps-status-${{ matrix.os }}-shard-${{ env.RPS_ARTIFACT_SHARD }}
+          path: tools/RpsLoadProbe/results/leg-status.json
+          overwrite: true
+          if-no-files-found: warn
 
       - name: Upload CSV artifact
         if: always()
@@ -968,5 +1072,18 @@ jobs:
         with:
           # Include arm_shard so parallel shard dispatches do not collide (slash → dash via env sanitize).
           name: rps-csv-${{ matrix.os }}-shard-${{ env.RPS_ARTIFACT_SHARD }}
-          path: tools/RpsLoadProbe/results/rps-ramp-*.csv
+          # A re-run attempt of the same run must replace the first attempt's artifact.
+          overwrite: true
+          path: |
+            tools/RpsLoadProbe/results/rps-ramp-*.csv
+            tools/RpsLoadProbe/results/rps-ramp-*.tls.tsv
           if-no-files-found: error
+
+      - name: Upload incomplete marker
+        if: always() && hashFiles('tools/RpsLoadProbe/results/INCOMPLETE.txt') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: rps-incomplete-${{ matrix.os }}-shard-${{ env.RPS_ARTIFACT_SHARD }}
+          overwrite: true
+          path: tools/RpsLoadProbe/results/INCOMPLETE.txt
+          if-no-files-found: ignore

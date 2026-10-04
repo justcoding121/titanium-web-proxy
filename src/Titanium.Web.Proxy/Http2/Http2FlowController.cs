@@ -40,6 +40,14 @@ internal sealed class Http2FlowController
     /// <summary>RFC 7540 §6.9.2 default initial flow-control window size for both the connection and every stream.</summary>
     internal const int InitialConnectionWindow = 65535;
 
+    /// <summary>
+    ///     Smallest DATA payload this proxy will emit just to fit a short send window. Below this, the
+    ///     caller waits for a full frame instead of spraying tiny frames. 4 KiB is large enough to avoid
+    ///     a frame storm and small enough to use the 16,383 bytes left after three 16 KiB frames in a
+    ///     65,535-byte window.
+    /// </summary>
+    internal const int PartialDataFrameFloor = 4096;
+
     /// <summary>RFC 7540 §6.9.1 - a flow-control window (connection or stream) must never exceed this value.</summary>
     internal const long MaxWindow = int.MaxValue; // 2^31 - 1
 
@@ -138,6 +146,47 @@ internal sealed class Http2FlowController
             WakeWaitersNoLock();
             return overflow;
         }
+    }
+
+    /// <summary>
+    ///     Read-only snapshot of send credit: the minimum of the connection window and the stream window,
+    ///     clamped at zero. Does not reserve. An unknown stream returns 0. The value can be stale by the
+    ///     time the caller reserves — <see cref="TryReserve"/> / <see cref="ReserveAsync"/> stay the arbiter.
+    /// </summary>
+    public int AvailableSendCredit(int streamId)
+    {
+        lock (gate)
+        {
+            if (!streamWindows.TryGetValue(streamId, out var streamWindow))
+                return 0;
+
+            var available = Math.Min(connectionWindow, streamWindow);
+            if (available <= 0)
+                return 0;
+            if (available > int.MaxValue)
+                return int.MaxValue;
+            return (int)available;
+        }
+    }
+
+    /// <summary>
+    ///     How many payload bytes to read for the next DATA frame. A full frame when credit covers it,
+    ///     or when credit is below <see cref="PartialDataFrameFloor"/> (the caller then waits in
+    ///     <see cref="ReserveAsync"/>). When credit is at least that floor and short of a full frame,
+    ///     returns the credit so the frame is not parked for a few bytes. DATA shorter than
+    ///     MAX_FRAME_SIZE is valid (RFC 9113 §4.1).
+    /// </summary>
+    internal static int SelectDataPayloadCap(int maxFrameSize, long remaining, int availableCredit)
+    {
+        if (maxFrameSize <= 0)
+            maxFrameSize = 16384;
+        if (remaining <= 0)
+            return 0;
+
+        var cap = remaining >= maxFrameSize ? maxFrameSize : (int)remaining;
+        if (availableCredit >= PartialDataFrameFloor && availableCredit < cap)
+            return availableCredit;
+        return cap;
     }
 
     /// <summary>

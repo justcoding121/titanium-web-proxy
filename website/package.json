@@ -13,5 +13,9 @@
   },
   "dependencies": {
     "markdown-it": "^15.0.1"
+  },
+  "overrides": {
+    "vite": "^6.4.3",
+    "esbuild": "^0.25.0"
   }
 }
