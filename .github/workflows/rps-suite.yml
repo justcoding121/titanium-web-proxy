@@ -171,6 +171,7 @@ jobs:
       - name: Check every row on every OS
         shell: pwsh
         env:
+          GH_TOKEN: ${{ github.token }}
           SUITE_MODE: ${{ inputs.mode }}
           KEYS_JSON: ${{ needs.prep.outputs.keys }}
           LINUX_RESULT: ${{ needs.linux.result }}
@@ -180,6 +181,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $keys = @($env:KEYS_JSON | ConvertFrom-Json)
           $arts = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID/artifacts?per_page=100" --paginate --jq '.artifacts[] | select(.name | startswith("rps-status-")) | .name'
+          if ($LASTEXITCODE -ne 0) { throw "Could not list status artifacts (gh exit $LASTEXITCODE)" }
           $statusNames = @($arts | Where-Object { $_ })
           $threeOs = @('compare-product', 'compare-bodies') -contains $env:SUITE_MODE
           $osLabels = [ordered]@{ linux = 'ubuntu-latest' }
