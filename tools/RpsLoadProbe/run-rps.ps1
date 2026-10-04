@@ -76,6 +76,7 @@ param(
     [int]    $Repeats = 1,
     [string] $ArmShard = 'all',
     [string] $ArmContains = '',
+    [string] $ArmExcludes = '',
     [string] $ResultsDir,
     [ValidateSet('GET', 'POST')]
     [string] $Method = 'GET',
@@ -101,7 +102,7 @@ if (-not $ResultsDir) {
 
 Write-Host ''
 Write-Host 'RpsLoadProbe — close browsers / heavy apps before a publishable run.' -ForegroundColor Yellow
-Write-Host "Mode=$Mode  concurrency=$Concurrency  warmup=${WarmupSec}s  duration=${DurationSec}s  repeats=$Repeats  arm-shard=$ArmShard$(if ($ArmContains) { "  arm-contains=$ArmContains" })" -ForegroundColor Cyan
+Write-Host "Mode=$Mode  concurrency=$Concurrency  warmup=${WarmupSec}s  duration=${DurationSec}s  repeats=$Repeats  arm-shard=$ArmShard$(if ($ArmContains) { "  arm-contains=$ArmContains" })$(if ($ArmExcludes) { "  arm-excludes=$ArmExcludes" })" -ForegroundColor Cyan
 Write-Host ''
 
 if (-not $SkipBuild) {
@@ -165,6 +166,9 @@ $probeArgs = $probePrefix + @(
 )
 if ($ArmContains) {
     $probeArgs += @('--arm-contains', $ArmContains)
+}
+if ($ArmExcludes) {
+    $probeArgs += @('--arm-excludes', $ArmExcludes)
 }
 if ($ResponseBytes -gt 0) {
     $probeArgs += @('--response-bytes', $ResponseBytes)

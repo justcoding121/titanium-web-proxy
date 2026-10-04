@@ -37,12 +37,12 @@ features:
   <div class="edition-card">
     <h3>Inspect traffic</h3>
     <p class="license">Inspector · Windows / macOS / Linux</p>
-    <p>Desktop debugger for HTTP and HTTPS. Free for personal and education use (<a href="/docs/editions">PolyForm Noncommercial</a>); commercial use needs a separate license. <a href="/download#inspector">Download</a> → <a href="/docs/inspector">Inspector guide</a>.</p>
+    <p>Desktop debugger for HTTP and HTTPS. Free for personal and education use (<a href="/docs/editions">PolyForm Noncommercial</a>); commercial use needs a separate license. <a href="/download#stable-inspector">Download</a> → <a href="/docs/inspector">Inspector guide</a>.</p>
   </div>
   <div class="edition-card">
     <h3>Run a reverse proxy</h3>
     <p class="license">CLI · MIT</p>
-    <p>Standalone proxy for any backend stack. <a href="/download#cli">Download CLI</a> → <a href="/docs/cli">CLI guide</a>.</p>
+    <p>Standalone proxy for any backend stack. <a href="/download#stable-cli">Download CLI</a> → <a href="/docs/cli">CLI guide</a>.</p>
   </div>
   <div class="edition-card">
     <h3>Ops add-on</h3>

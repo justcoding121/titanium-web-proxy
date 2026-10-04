@@ -712,7 +712,10 @@ public class SonarGateCoverageBumpTests
         {
             var blank = await s.ReadRequestLineWithResultAsync();
             Assert.IsFalse(blank.Cancelled);
+            // Method is annotated non-nullable but a blank request line leaves it null.
+#pragma warning disable MSTEST0025
             Assert.IsNull(blank.Status.Method);
+#pragma warning restore MSTEST0025
             var next = await s.ReadRequestLine();
             Assert.AreEqual("GET", next.Method);
         }
@@ -720,7 +723,10 @@ public class SonarGateCoverageBumpTests
         await using (var s = MakeClientStream([]))
         {
             var eof = await s.ReadRequestLine();
+            // Method is annotated non-nullable but EOF leaves it null.
+#pragma warning disable MSTEST0025
             Assert.IsNull(eof.Method);
+#pragma warning restore MSTEST0025
         }
 
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

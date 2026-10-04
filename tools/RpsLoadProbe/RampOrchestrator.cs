@@ -276,6 +276,12 @@ internal enum ProbeMode
     TwpCliPlusMetricsScrapeHttp1,
     /// <summary>CLI + Plus cache.enable with Cache-Control origin; warm then measure.</summary>
     TwpCliPlusCacheHitHttp1,
+    /// <summary>CLI + Plus CORS response headers on terminate-lite.</summary>
+    TwpCliPlusCorsHttp1,
+    /// <summary>CLI + Plus circuit breaker (session path; expects intercept-like cost).</summary>
+    TwpCliPlusCircuitHttp1,
+    /// <summary>CLI + Plus idempotent retry (session path; expects intercept-like cost).</summary>
+    TwpCliPlusRetryHttp1,
     /// <summary>CLI staticFiles.root tiny file.</summary>
     TwpCliStaticHttp1,
     /// <summary>CLI logging.enabled + Info file sink.</summary>
@@ -336,6 +342,11 @@ internal sealed class RampOptions
     /// Surgical re-runs (e.g. <c>nc-tiny</c> after a Mac TLS handshake fix).
     /// </summary>
     public string? ArmNameContains { get; init; }
+    /// <summary>
+    /// When set, drop arms whose name matches this filter (<see cref="ArmNameMatches"/>).
+    /// Windows and macOS product jobs pass <c>twp-mitm-</c> so MITM stays Linux-only.
+    /// </summary>
+    public string? ArmNameExcludes { get; init; }
     /// <summary>Default workload when an arm does not override (preserves tiny-GET matrix).</summary>
     public WorkloadOptions Workload { get; init; } = WorkloadOptions.TinyGet;
 }
@@ -355,9 +366,14 @@ internal static class RampOrchestrator
     /// libmsquic is installed, and dropping HTTP/3 groups there silently skips those wiki rows on every
     /// OS. The legs apply the real capability filters when they run.
     /// </summary>
-    public static IReadOnlyList<(string Key, int ArmCount)> ListArmGroups(RampOptions options) =>
-        ComparisonGroup.ListGroups(ListArms(options, applySelection: false, filterQuic: false),
+    public static IReadOnlyList<(string Key, int ArmCount)> ListArmGroups(RampOptions options)
+    {
+        if (options.Mode == ProbeMode.CompareEditions)
+            return ComparisonGroup.ListEditionGroups();
+
+        return ComparisonGroup.ListGroups(ListArms(options, applySelection: false, filterQuic: false),
             a => ComparisonGroup.Key(a.Mode, a.Name));
+    }
 
     private static List<ArmSpec> ListArms(RampOptions options, bool applySelection, bool filterQuic = true)
     {
@@ -410,6 +426,9 @@ internal static class RampOrchestrator
             var needle = options.ArmNameContains.Trim();
             arms = arms.Where(a => a.Name.Contains(needle, StringComparison.OrdinalIgnoreCase)).ToList();
         }
+
+        if (!string.IsNullOrWhiteSpace(options.ArmNameExcludes))
+            arms = arms.Where(a => !ArmNameMatches(a.Name, options.ArmNameExcludes)).ToList();
 
         return arms;
     }
@@ -523,6 +542,14 @@ internal static class RampOrchestrator
             ProbeLog.Info($"arm-contains '{needle}': {arms.Count}/{before} arms.");
         }
 
+        if (!string.IsNullOrWhiteSpace(options.ArmNameExcludes))
+        {
+            var needle = options.ArmNameExcludes.Trim();
+            var before = arms.Count;
+            arms = arms.Where(a => !ArmNameMatches(a.Name, needle)).ToList();
+            ProbeLog.Info($"arm-excludes '{needle}': {arms.Count}/{before} arms.");
+        }
+
         if (arms.Count == 0)
         {
             // CompareHaproxySmoke on Windows: HAProxy unavailable is the expected outcome (skip).
@@ -535,6 +562,12 @@ internal static class RampOrchestrator
             if (options.Mode is ProbeMode.CompareEnvoySmoke && envoyExe == null)
             {
                 ProbeLog.Info("compare-envoy-smoke: Envoy not available on this OS (expected on Windows) — skip OK.");
+                return 0;
+            }
+
+            if (!string.IsNullOrWhiteSpace(options.ArmNameExcludes))
+            {
+                ProbeLog.Info($"arm-excludes '{options.ArmNameExcludes}' removed every arm — skip OK.");
                 return 0;
             }
 
@@ -1348,6 +1381,12 @@ internal static class RampOrchestrator
             ProbeMode.TwpCliPlusCacheHitHttp1 =>
                 [new("twp-cli-plus-cache-hit-http1", ProbeMode.TwpCliPlusCacheHitHttp1, null,
                     WarmCacheFirst: true)],
+            ProbeMode.TwpCliPlusCorsHttp1 =>
+                [new("twp-cli-plus-cors-http1", ProbeMode.TwpCliPlusCorsHttp1, null)],
+            ProbeMode.TwpCliPlusCircuitHttp1 =>
+                [new("twp-cli-plus-circuit-http1", ProbeMode.TwpCliPlusCircuitHttp1, null)],
+            ProbeMode.TwpCliPlusRetryHttp1 =>
+                [new("twp-cli-plus-retry-http1", ProbeMode.TwpCliPlusRetryHttp1, null)],
             ProbeMode.TwpCliStaticHttp1 =>
                 [new("twp-cli-static-http1", ProbeMode.TwpCliStaticHttp1, null)],
             ProbeMode.TwpCliLoggingHttp1 =>
@@ -1720,6 +1759,9 @@ internal static class RampOrchestrator
         new("twp-cli-plus-metrics-scrape-http1", ProbeMode.TwpCliPlusMetricsScrapeHttp1, null,
             BackgroundControlPlaneScrape: true),
         new("twp-cli-plus-cache-hit-http1", ProbeMode.TwpCliPlusCacheHitHttp1, null, WarmCacheFirst: true),
+        new("twp-cli-plus-cors-http1", ProbeMode.TwpCliPlusCorsHttp1, null),
+        new("twp-cli-plus-circuit-http1", ProbeMode.TwpCliPlusCircuitHttp1, null),
+        new("twp-cli-plus-retry-http1", ProbeMode.TwpCliPlusRetryHttp1, null),
         new("twp-cli-static-http1", ProbeMode.TwpCliStaticHttp1, null),
         new("twp-cli-logging-http1", ProbeMode.TwpCliLoggingHttp1, null),
         new("twp-cli-lb-leasttime-http1", ProbeMode.TwpCliLbLeastTimeHttp1, null),
@@ -2398,8 +2440,16 @@ internal static class RampOrchestrator
     private static List<ArmSpec> ApplyArmShard(List<ArmSpec> arms, int shardIndex, int shardCount) =>
         ComparisonGroup.ApplyShard(arms, a => ComparisonGroup.Key(a.Mode, a.Name), shardIndex, shardCount);
 
-    private static List<ArmSpec> ApplyArmGroup(List<ArmSpec> arms, string groupKey) =>
-        ComparisonGroup.ApplyGroup(arms, a => ComparisonGroup.Key(a.Mode, a.Name), groupKey);
+    private static List<ArmSpec> ApplyArmGroup(List<ArmSpec> arms, string groupKey)
+    {
+        if (ComparisonGroup.TryEditionArms(groupKey, out var names))
+        {
+            var set = new HashSet<string>(names, StringComparer.Ordinal);
+            return arms.Where(a => set.Contains(a.Name)).ToList();
+        }
+
+        return ComparisonGroup.ApplyGroup(arms, a => ComparisonGroup.Key(a.Mode, a.Name), groupKey);
+    }
 
     /// <summary>
     /// Periodic "still alive" line so GHA log tails show progress when a measure step is long.

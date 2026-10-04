@@ -141,7 +141,7 @@ namespace Titanium.Web.Proxy.Http2
                 hbStreamId, blockToRelay, endStreamFlag, appendSuffix);
         }
 
-        private static async Task AssignOriginAndEnqueueAsync(
+        private static async Task AssignOriginAndEnqueueAsync( // NOSONAR S107 -- Cold origin assign keeps the relay signature explicit (no per-open context object).
             Http2ConnectionState connectionState,
             bool isClient,
             Http2Settings remoteSettings,
@@ -151,11 +151,12 @@ namespace Titanium.Web.Proxy.Http2
         {
             var assignTask = connectionState.OriginRelayPool!
                 .AssignStreamAsync(hbStreamId, cancellationToken);
+            // AsTask consumes the ValueTask. Await that Task; a second await of assignTask is undefined.
             var tracked = assignTask.AsTask();
             connectionState.PendingOriginAssignments[hbStreamId] = tracked;
             try
             {
-                var assignment = await assignTask.ConfigureAwait(false);
+                var assignment = await tracked.ConfigureAwait(false);
                 EnqueueRelayedHeaderBlock(connectionState, isClient, remoteSettings,
                     assignment.OriginStreamId, blockToRelay, endStreamFlag, appendSuffix,
                     assignment.Leg.Writer, assignment.Leg.WriteLock, assignment.Leg.Stream);

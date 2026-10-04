@@ -209,6 +209,9 @@ internal static class ServeProxyHost
             case ProbeMode.TwpCliPlusDiscoveryFileHttp1:
             case ProbeMode.TwpCliPlusMetricsScrapeHttp1:
             case ProbeMode.TwpCliPlusCacheHitHttp1:
+            case ProbeMode.TwpCliPlusCorsHttp1:
+            case ProbeMode.TwpCliPlusCircuitHttp1:
+            case ProbeMode.TwpCliPlusRetryHttp1:
             case ProbeMode.TwpCliStaticHttp1:
             case ProbeMode.TwpCliLoggingHttp1:
             case ProbeMode.TwpCliLbLeastTimeHttp1:
@@ -230,6 +233,9 @@ internal static class ServeProxyHost
                     ProbeMode.TwpCliPlusDiscoveryFileHttp1 => TitaniumCliHost.CliArmKind.PlusDiscoveryFile,
                     ProbeMode.TwpCliPlusMetricsScrapeHttp1 => TitaniumCliHost.CliArmKind.PlusMetricsScrape,
                     ProbeMode.TwpCliPlusCacheHitHttp1 => TitaniumCliHost.CliArmKind.PlusCacheHit,
+                    ProbeMode.TwpCliPlusCorsHttp1 => TitaniumCliHost.CliArmKind.PlusCors,
+                    ProbeMode.TwpCliPlusCircuitHttp1 => TitaniumCliHost.CliArmKind.PlusCircuit,
+                    ProbeMode.TwpCliPlusRetryHttp1 => TitaniumCliHost.CliArmKind.PlusRetry,
                     ProbeMode.TwpCliStaticHttp1 => TitaniumCliHost.CliArmKind.StaticFiles,
                     ProbeMode.TwpCliLoggingHttp1 => TitaniumCliHost.CliArmKind.Logging,
                     ProbeMode.TwpCliLbLeastTimeHttp1 => TitaniumCliHost.CliArmKind.LbLeastTime,
@@ -1255,6 +1261,9 @@ internal static class ServeProxyHost
         ProbeMode.TwpCliPlusDiscoveryFileHttp1 => "twp-cli-plus-discovery-file-http1",
         ProbeMode.TwpCliPlusMetricsScrapeHttp1 => "twp-cli-plus-metrics-scrape-http1",
         ProbeMode.TwpCliPlusCacheHitHttp1 => "twp-cli-plus-cache-hit-http1",
+        ProbeMode.TwpCliPlusCorsHttp1 => "twp-cli-plus-cors-http1",
+        ProbeMode.TwpCliPlusCircuitHttp1 => "twp-cli-plus-circuit-http1",
+        ProbeMode.TwpCliPlusRetryHttp1 => "twp-cli-plus-retry-http1",
         ProbeMode.TwpCliStaticHttp1 => "twp-cli-static-http1",
         ProbeMode.TwpCliLoggingHttp1 => "twp-cli-logging-http1",
         ProbeMode.TwpCliLbLeastTimeHttp1 => "twp-cli-lb-leasttime-http1",

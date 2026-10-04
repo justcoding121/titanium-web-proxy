@@ -96,6 +96,8 @@ foreach ($os in @('windows-latest', 'ubuntu-latest', 'macos-15')) {
             if ($null -ne $got -and $got -gt 0) { $peerSustain[$arm] = [double]$got }
         }
 
+        # Windows and macOS product jobs do not run twp-mitm-* (Linux-only MITM).
+        # A null Lite/Full is that omission, not a missing arm.
         if ($null -ne $lite) {
             $lr = $lite / $rev
             $ok = $lr -ge $MitmLiteGate

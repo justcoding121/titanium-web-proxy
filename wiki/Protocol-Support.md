@@ -52,7 +52,7 @@ Not supported:
 - Explicit QUIC proxying (inbound HTTP/3 is `TransparentQuicProxyEndPoint` only).
 
 WebSocket over HTTP/2 (`EnableRfc8441`) reuses the HTTP/1.1 ↔ HTTP/2 bridges (plus a native h2↔h2 DATA
-tunnel). See [RFC 8441](#http2-safety-and-frame-validation) below. QUIC endpoint setup is on
+tunnel). See [RFC 8441](#user-content-http2-safety-and-frame-validation) below. QUIC endpoint setup is on
 [HTTP/3](HTTP-3).
 
 ## Connections and framing
@@ -120,7 +120,7 @@ Two principles apply — do not collapse them into “never show the client an o
 1. **Hide retryable connection failures when safe.** HTTP/1.x `RetryableServerConnectionException` and the H1→H2 bridge’s one-shot replay after origin `GOAWAY` (stream never processed) retry on a fresh upstream so the client often never sees the blip. Benign disconnects / cancellations log at Debug.
 2. **Keep stream admission and peer RST semantics honest.** Native h2↔h2 MITM relays origin `RST_STREAM` (including `REFUSED_STREAM` under load-shed). When the client opens more streams than the ACKed `SETTINGS_MAX_CONCURRENT_STREAMS` budget, the proxy sends `RST_STREAM(REFUSED_STREAM)` — browsers may briefly show a protocol error and reload. That is expected capacity signaling, not a leaked origin failure after a failed retry. Capacity refuses log at Debug; Rapid Reset / framing violations stay Error.
 
-See also the advertised=enforced consolidation in [Migration from 4.x](Migration-from-4.x#http2-continuation-and-reset-abuse-budgets).
+See also the advertised=enforced consolidation in [Migration from 4.x](Migration-from-4.x#user-content-http2-continuation-and-reset-abuse-budgets).
 
 ## WebSocket safety
 
@@ -153,7 +153,7 @@ HTTP/3 support is gated behind `ProxyServer.EnableHttp3 = true` (marked `[Experi
 It requires the MsQuic native library and `System.Net.Quic.QuicListener.IsSupported == true` at runtime.
 CLI/Inspector Release zips bundle natives per RID (Windows uses OS MsQuic on Win11/Server 2022+).
 NuGet library hosts install system `libmsquic` on Linux/macOS (or bundle with `@loader_path` on macOS) — see [HTTP-3](HTTP-3).
-The H3-related rows below are the HTTP/3 legs of the [protocol bridges](#protocol-bridges) matrix.
+The H3-related rows below are the HTTP/3 legs of the [protocol bridges](#user-content-protocol-bridges) matrix.
 
 | Feature | Support | Notes |
 |---------|---------|-------|

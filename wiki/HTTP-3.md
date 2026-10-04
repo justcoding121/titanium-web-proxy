@@ -27,7 +27,7 @@ Release zips **bundle MsQuic natives** for:
 | `linux-musl-x64` / `linux-musl-arm64` | Alpine / musl containers |
 | `osx-x64` / `osx-arm64` | macOS Intel / Apple Silicon |
 
-Linux/macOS natives sit next to the binary with `$ORIGIN` / `@loader_path` RPATH so `QuicListener.IsSupported` works without a system package. See [CLI/Inspector packaging](#cliinspector-packaging).
+Linux/macOS natives sit next to the binary with `$ORIGIN` / `@loader_path` RPATH so `QuicListener.IsSupported` works without a system package. See [CLI/Inspector packaging](#user-content-cliinspector-packaging).
 
 ```bash
 titanium http3-deps status
@@ -245,7 +245,7 @@ First-connection adoption also still comes from `Alt-Svc` on the first response.
 
 HTTP/3 participates in four of the seven translation pairs (plus native H3↔H3). The full client→origin
 matrix, including TCP HTTP/1.1 ↔ HTTP/2 translation, is on
-[Protocol Support — Protocol bridges](Protocol-Support#protocol-bridges).
+[Protocol Support — Protocol bridges](Protocol-Support#user-content-protocol-bridges).
 
 HTTP/3-specific limits:
 
@@ -345,9 +345,9 @@ that endpoint receive `Alt-Svc: h3=":PORT"; ma=86400` when the origin did not al
 ## Limitations
 
 - **No explicit (system-proxy) inbound HTTP/3**: see
-  [Why no explicit HTTP/3 endpoint yet](#why-no-explicit-http3-endpoint-yet) below.
+  [Why no explicit HTTP/3 endpoint yet](#user-content-why-no-explicit-http3-endpoint-yet) below.
   Reverse dual-listen and transparent UDP-only cover the supported inbound shapes.
-- **QPACK dynamic table is opt-in**: static-table-only mode is the default; see [QPACK](#qpack) above.
+- **QPACK dynamic table is opt-in**: static-table-only mode is the default; see [QPACK](#user-content-qpack) above.
 - **Upstream proxy with QUIC falls back to TCP**: `System.Net.Quic` does not support HTTP CONNECT
   tunnelling or SOCKS5 UDP ASSOCIATE. When a per-request or global upstream proxy is configured, the
   QUIC leg gracefully falls back to `ForwardOverTcpAsync` where the proxy rules are honoured on the
@@ -355,7 +355,7 @@ that endpoint receive `Alt-Svc: h3=":PORT"; ma=86400` when the origin did not al
 - **No 0-RTT**: early data is not supported by `System.Net.Quic` in .NET 10.
 - **No connection migration**: `System.Net.Quic` does not expose migration APIs.
 - **No server push**: removed from RFC 9114.
-- **macOS**: see [macOS](#macos) below.
+- **macOS**: see [macOS](#user-content-macos) below.
 
 ### Why no explicit HTTP/3 endpoint yet
 
@@ -466,7 +466,7 @@ cached `h3` via Alt-Svc, they will fall back to TCP on the next request cycle. T
 
 ## See also
 
-- [Protocol Support](Protocol-Support) — feature matrix for all protocols, including [protocol bridges](Protocol-Support#protocol-bridges).
+- [Protocol Support](Protocol-Support) — feature matrix for all protocols, including [protocol bridges](Protocol-Support#user-content-protocol-bridges).
 - [Home](Home) — general usage and the rest of the public API surface.
 - RFC 9114 — HTTP/3
 - RFC 9204 — QPACK

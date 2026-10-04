@@ -358,6 +358,9 @@ internal sealed class EnvoyHost : IDisposable
                 // RFC 8441 extended CONNECT (compare-ws-h2); harmless for ordinary H2 reverse.
                 W(col + 4, "http2_protocol_options:");
                 W(col + 6, "allow_connect: true");
+                // Same class as Titanium: 64 KiB stream window, 1 MiB connection window.
+                W(col + 6, "initial_stream_window_size: 65535");
+                W(col + 6, "initial_connection_window_size: 1048576");
             }
             // Kestrel rejects :scheme that does not match the upstream transport (https on h2c,
             // http on HTTPS). Align :scheme with the cluster socket, not the downstream TLS.
@@ -440,11 +443,11 @@ internal sealed class EnvoyHost : IDisposable
                     WriteExplicitHttp("http_protocol_options: {}");
                     break;
                 case PeerOriginProto.H2c:
-                    WriteExplicitHttp("http2_protocol_options: {}");
+                    WriteExplicitHttp2();
                     break;
                 case PeerOriginProto.H2Tls:
                     WriteUpstreamTls(["h2"]);
-                    WriteExplicitHttp("http2_protocol_options: {}");
+                    WriteExplicitHttp2();
                     break;
                 case PeerOriginProto.H3:
                     WriteUpstreamQuic();
@@ -488,6 +491,13 @@ internal sealed class EnvoyHost : IDisposable
             W(8, "\"@type\": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions");
             W(8, "explicit_http_config:");
             W(10, protocolOptionsLine);
+        }
+
+        private void WriteExplicitHttp2()
+        {
+            WriteExplicitHttp("http2_protocol_options:");
+            W(12, "initial_stream_window_size: 65535");
+            W(12, "initial_connection_window_size: 1048576");
         }
 
         public override string ToString() => sb.ToString();

@@ -1500,6 +1500,19 @@ public partial class ProxyServer : IDisposable
     public Func<HttpInterceptionContext, bool>? ShouldInterceptHttp { get; set; }
 
     /// <summary>
+    /// Fills the GET/HEAD response cache from a session that is already on the interception path.
+    /// Does not subscribe <see cref="BeforeResponse"/> or <see cref="AfterResponse"/>, so it does
+    /// not turn <see cref="NeedsHttpInterception"/> on.
+    /// </summary>
+    public Action<SessionEventArgs>? HttpResponseCacheFiller { get; set; }
+
+    /// <summary>
+    /// Adds response headers on the way to the client without subscribing <see cref="BeforeResponse"/>.
+    /// Plus CORS uses this so a listener can stay on H1 terminate-lite.
+    /// </summary>
+    public Action<Response>? ResponseHeaderContributor { get; set; }
+
+    /// <summary>
     /// Returns <see langword="true"/> when the global interception gate is active for the given
     /// endpoint: any session event handler is subscribed, <see cref="EnableHttpInterception"/> is
     /// set on the server, the endpoint's own <see cref="ProxyEndPoint.EnableHttpInterception"/>

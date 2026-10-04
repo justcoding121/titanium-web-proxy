@@ -134,6 +134,7 @@ def cell(
     impossible: Optional[str] = None,
     *,
     medal: bool = False,
+    cpus: int = 4,
 ) -> str:
     if impossible:
         return f"*{impossible}*"
@@ -147,8 +148,12 @@ def cell(
     rps = int(round(sustain)) if sustain == sustain else 0
     rss_s = f"{rss:.0f} MiB" if rss == rss else "?"
     cpu_s = f"{cpu:.1f}% CPU" if cpu == cpu else "?"
+    cost = ""
+    if sustain == sustain and sustain > 0 and cpu == cpu and cpu >= 0.05:
+        us = cpu * cpus / 100.0 / sustain * 1_000_000
+        cost = f" · {us:.1f} µs CPU/req"
     prefix = f"{MEDAL} " if medal else ""
-    return f"{prefix}**{rps:,}**<br><sub>({rss_s} / {cpu_s})</sub>"
+    return f"{prefix}**{rps:,}**<br><sub>({rss_s} / {cpu_s}{cost})</sub>"
 
 
 def pick_row_winner(
@@ -195,6 +200,8 @@ def render_table(
     nginx_impossible: Optional[str] = None,
     *,
     include_heading: bool = True,
+    measured_os: Optional[set[str]] = None,
+    preserve_rows: Optional[dict[str, str]] = None,
 ) -> str:
     # Drop nginx when it is impossible on every OS (h2c / RFC 8441).
     products = ["Titanium", "YARP", "nginx", "HAProxy", "Envoy"]
@@ -215,6 +222,11 @@ def render_table(
         lines.append("")
     lines.extend([header, rule])
     for os_label, os_key in (("Windows", "windows"), ("Linux", "linux"), ("macOS", "macos")):
+        if measured_os is not None and os_key not in measured_os:
+            kept = (preserve_rows or {}).get(os_label)
+            if kept:
+                lines.append(kept)
+                continue
         data = by_os.get(os_key, {})
         winner = pick_row_winner(
             products, arms, data, os_key=os_key, win_no_haproxy_envoy=win_no_haproxy_envoy
@@ -227,21 +239,33 @@ def render_table(
             elif win_no_haproxy_envoy and os_key == "windows" and product in ("HAProxy", "Envoy"):
                 cells.append(cell(None, "Not possible"))
             else:
-                cells.append(cell(data.get(arm), medal=(winner == product)))
+                cells.append(cell(
+                    data.get(arm),
+                    medal=(winner == product),
+                    cpus=3 if os_key == "macos" else 4,
+                ))
         lines.append("| " + " | ".join([os_label, *cells]) + " |")
     return "\n".join(lines)
 
 
+def _os_row(body: str, label: str) -> Optional[str]:
+    prefix = f"| {label} |"
+    for line in body.splitlines():
+        if line.startswith(prefix):
+            return line
+    return None
+
+
 def apply_to_wiki(
     wiki_path: Path,
-    sections: list[tuple[str, str]],
+    sections: list[tuple[str, str, set[str]]],
     head_sha: str,
     primary_run_id: str,
 ) -> None:
     import re
 
     text = wiki_path.read_text(encoding="utf-8")
-    for heading, table_md in sections:
+    for heading, table_md, measured in sections:
         pat = re.compile(
             rf"(^## {re.escape(heading)}\n)(.*?)(?=^## |\Z)",
             re.MULTILINE | re.DOTALL,
@@ -250,12 +274,42 @@ def apply_to_wiki(
         if not m:
             raise SystemExit(f"Section not found in wiki: ## {heading}")
         head, body = m.group(1), m.group(2)
+        if measured >= {"windows", "linux", "macos"}:
+            sha_line = (
+                f"Median of **3** repeats @ `{head_sha}` — [{primary_run_id}]"
+                f"(https://github.com/justcoding121/titanium-web-proxy/actions/runs/{primary_run_id})"
+            )
+        else:
+            skipped = []
+            if "windows" not in measured:
+                skipped.append("Windows")
+            if "macos" not in measured:
+                skipped.append("macOS")
+            stay = " and ".join(skipped) + " rows were not re-measured"
+            sha_line = (
+                f"Median of **3** repeats. Linux @ `{head_sha}` — [{primary_run_id}]"
+                f"(https://github.com/justcoding121/titanium-web-proxy/actions/runs/{primary_run_id}). {stay}"
+            )
         body = re.sub(
             r"Median of \*\*3\*\* repeats @ `[^`]+` — \[[0-9]+\]\(https://github\.com/justcoding121/titanium-web-proxy/actions/runs/[0-9]+\)",
-            f"Median of **3** repeats @ `{head_sha}` — [{primary_run_id}](https://github.com/justcoding121/titanium-web-proxy/actions/runs/{primary_run_id})",
+            sha_line,
             body,
             count=1,
         )
+        if not measured >= {"windows", "linux", "macos"}:
+            rewritten: list[str] = []
+            for line in table_md.splitlines():
+                replaced = False
+                for label, key in (("Windows", "windows"), ("Linux", "linux"), ("macOS", "macos")):
+                    if line.startswith(f"| {label} |") and key not in measured:
+                        old = _os_row(body, label)
+                        if old:
+                            rewritten.append(old)
+                            replaced = True
+                        break
+                if not replaced:
+                    rewritten.append(line)
+            table_md = "\n".join(rewritten)
         prose_end = re.search(r"(?:\*Not possible:.*\n\n)?\| OS \|", body)
         if not prose_end:
             raise SystemExit(f"No OS table under ## {heading}")
@@ -286,18 +340,22 @@ def main() -> None:
             out.append(p)
         return out
 
-    def load(ids: list[str]) -> dict[str, dict[str, dict[str, float]]]:
+    def load(ids: list[str]) -> tuple[dict[str, dict[str, dict[str, float]]], set[str]]:
         merged: dict[str, dict[str, dict[str, float]]] = {k: {} for k in OS_FOLDERS}
+        present: set[str] = set()
         for root in roots(ids):
             for os_name, csvs in find_csvs(root).items():
+                if not csvs:
+                    continue
+                present.add(os_name)
                 med = load_arm_medians(csvs)
                 merged[os_name].update(med)
-        return merged
+        return merged, present
 
-    sections: list[tuple[str, str]] = []
+    sections: list[tuple[str, str, set[str]]] = []
     print_blocks: list[str] = []
     if args.grpc_root:
-        grpc_data = load(args.grpc_root)
+        grpc_data, grpc_os = load(args.grpc_root)
         h2 = render_table("Unary gRPC (H2 TLS)", GRPC_H2, grpc_data, include_heading=False)
         h2c = render_table(
             "Unary gRPC (H2 TLS → h2c)",
@@ -306,28 +364,30 @@ def main() -> None:
             nginx_impossible="Not possible (no H2 upstream)",
             include_heading=False,
         )
-        sections.append(("Unary gRPC (H2 TLS)", h2))
-        sections.append(("Unary gRPC (H2 TLS → h2c)", h2c))
+        sections.append(("Unary gRPC (H2 TLS)", h2, grpc_os))
+        sections.append(("Unary gRPC (H2 TLS → h2c)", h2c, grpc_os))
         print_blocks.extend([h2, h2c])
     if args.ws_h1tls_root:
+        ws_data, ws_os = load(args.ws_h1tls_root)
         t = render_table(
             "WebSocket (H1 TLS → H1 TLS)",
             WS_H1TLS,
-            load(args.ws_h1tls_root),
+            ws_data,
             include_heading=False,
         )
-        sections.append(("WebSocket (H1 TLS → H1 TLS)", t))
+        sections.append(("WebSocket (H1 TLS → H1 TLS)", t, ws_os))
         print_blocks.append(t)
     if args.ws_h2_root:
+        h2_data, h2_os = load(args.ws_h2_root)
         t = render_table(
             "WebSocket (H2 TLS 8441 → H1)",
             WS_H2,
-            load(args.ws_h2_root),
+            h2_data,
             nginx_impossible="Not possible (no RFC 8441 extended CONNECT)",
             include_heading=False,
         )
         # Wiki heading uses "8441 → H1" (not "RFC 8441 → H1 plain").
-        sections.append(("WebSocket (H2 TLS 8441 → H1)", t))
+        sections.append(("WebSocket (H2 TLS 8441 → H1)", t, h2_os))
         print_blocks.append(t)
     if not sections:
         ap.error("Provide at least one of --grpc-root / --ws-h1tls-root / --ws-h2-root")

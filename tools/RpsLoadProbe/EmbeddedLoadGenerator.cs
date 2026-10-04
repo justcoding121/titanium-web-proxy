@@ -20,7 +20,15 @@ internal sealed record LoadResult(
     double P50Ms,
     double P99Ms,
     double MaxMs,
-    string NegotiatedVersionHint);
+    string NegotiatedVersionHint)
+{
+    /// <summary>
+    /// Client connections used for this step. HTTP/2 and HTTP/3 use a fixed pool so each
+    /// connection is owned by one handler. HTTP/1 reports in-flight concurrency (one request
+    /// per connection).
+    /// </summary>
+    public int ClientConnections { get; init; }
+}
 
 internal sealed class LoadRequestOptions
 {
@@ -87,14 +95,26 @@ internal static class EmbeddedLoadGenerator
         if (requestBody != null)
             Array.Fill(requestBody, (byte)'p');
 
-        using var handler = CreateHandler(options.ExplicitProxyUrl, options.HttpVersion, workload.KeepAlive);
-        using var client = new HttpClient(handler)
+        var multiplexed = options.HttpVersion.Major >= 2;
+        var connectionCount = ClientConnectionCount(options.HttpVersion, concurrency);
+        var clients = new HttpClient[connectionCount];
+        for (var c = 0; c < connectionCount; c++)
         {
-            Timeout = TimeSpan.FromSeconds(30),
-            DefaultRequestVersion = options.HttpVersion,
-            DefaultVersionPolicy = options.VersionPolicy
-        };
+            // One handler per HTTP/2 or HTTP/3 connection. EnableMultipleHttp2Connections only
+            // opens another socket after the peer stream cap, which is above this ramp, so a
+            // shared handler stays on one TCP connection and pins nginx/HAProxy/Envoy to one worker.
+            var handler = CreateHandler(options.ExplicitProxyUrl, workload.KeepAlive,
+                pinOneConnection: multiplexed);
+            clients[c] = new HttpClient(handler)
+            {
+                Timeout = TimeSpan.FromSeconds(30),
+                DefaultRequestVersion = options.HttpVersion,
+                DefaultVersionPolicy = options.VersionPolicy
+            };
+        }
 
+        try
+        {
         var ok = 0L;
         var errors = 0L;
         var versionHits = new ConcurrentDictionary<string, long>();
@@ -114,6 +134,7 @@ internal static class EmbeddedLoadGenerator
                 while (!cts.IsCancellationRequested)
                 {
                     var target = targets[rr++ % targets.Count];
+                    var client = clients[workerId % clients.Length];
                     var requestSw = collectLatency ? Stopwatch.StartNew() : null;
                     try
                     {
@@ -209,7 +230,38 @@ internal static class EmbeddedLoadGenerator
             P50Ms: Percentile(samples, 0.50),
             P99Ms: Percentile(samples, 0.99),
             MaxMs: samples.Length == 0 ? 0 : samples[^1],
-            NegotiatedVersionHint: versionHint);
+            NegotiatedVersionHint: versionHint)
+        {
+            ClientConnections = connectionCount
+        };
+        }
+        finally
+        {
+            foreach (var client in clients)
+                client?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// HTTP/2 and HTTP/3 capacity shape: <c>min(concurrency, max(4×cores, 16))</c> connections.
+    /// On a 4 vCPU runner that is 8, 16, 16, 16 at concurrency 8, 16, 32, 64.
+    /// <c>TWP_RPS_SINGLE_HTTP2_CONNECTION</c> / <c>TWP_RPS_SINGLE_HTTP3_CONNECTION</c> force one.
+    /// HTTP/1 reports concurrency (one in-flight request per connection).
+    /// </summary>
+    internal static int ClientConnectionCount(Version httpVersion, int concurrency)
+    {
+        concurrency = Math.Max(1, concurrency);
+        if (httpVersion.Major < 2)
+            return concurrency;
+
+        var single = httpVersion.Major >= 3
+            ? IsTruthyEnv("TWP_RPS_SINGLE_HTTP3_CONNECTION")
+            : IsTruthyEnv("TWP_RPS_SINGLE_HTTP2_CONNECTION");
+        if (single)
+            return 1;
+
+        var cap = Math.Max(4 * Environment.ProcessorCount, 16);
+        return Math.Min(concurrency, cap);
     }
 
     internal static async Task<long> CopyThrottledAsync(HttpResponseMessage response, WorkloadOptions workload,
@@ -231,20 +283,19 @@ internal static class EmbeddedLoadGenerator
         throw new ArgumentException("LoadRequestOptions requires Target or Targets.");
     }
 
-    private static SocketsHttpHandler CreateHandler(string? explicitProxyUrl, Version httpVersion, bool keepAlive)
+    private static SocketsHttpHandler CreateHandler(string? explicitProxyUrl, bool keepAlive,
+        bool pinOneConnection = false)
     {
         var handler = new SocketsHttpHandler
         {
-            MaxConnectionsPerServer = keepAlive ? 256 : 1024,
+            MaxConnectionsPerServer = pinOneConnection ? 1 : keepAlive ? 256 : 1024,
             PooledConnectionLifetime = keepAlive ? TimeSpan.FromMinutes(10) : TimeSpan.Zero,
             PooledConnectionIdleTimeout = keepAlive ? TimeSpan.FromMinutes(2) : TimeSpan.Zero,
-            // Multiplex across HTTP/2 connections under load. A single client H2 connection serializes
-            // all DATA writes on ClientWriteLock and fans every stream onto the H2→H1 bridge at once;
-            // multiple connections match browser-style fan-out and keep error rates down.
-            // Set TWP_RPS_SINGLE_HTTP2_CONNECTION=1 to force one client H2 connection (Memory/RSS A/B).
-            EnableMultipleHttp2Connections = !IsTruthyEnv("TWP_RPS_SINGLE_HTTP2_CONNECTION"),
-            EnableMultipleHttp3Connections = httpVersion.Major >= 3 &&
-                                             !IsTruthyEnv("TWP_RPS_SINGLE_HTTP3_CONNECTION"),
+            // Fan-out is a pool of handlers (one connection each). A shared handler with
+            // EnableMultipleHttp2Connections still stays on one socket until the stream cap.
+            // TWP_RPS_SINGLE_HTTP2_CONNECTION=1 forces a one-handler pool (Memory/RSS A/B).
+            EnableMultipleHttp2Connections = false,
+            EnableMultipleHttp3Connections = false,
             SslOptions = new SslClientAuthenticationOptions
             {
                 RemoteCertificateValidationCallback = static (_, _, _, _) => true,

@@ -366,11 +366,12 @@ internal static class Http3RequestStream
                         var stub = new SessionEventArgs(server, endPoint, nullStream, null, stubCts);
                         stub.IsFastPath = true;
                         stub.CustomUpStreamProxy = fwd.CustomUpStreamProxy;
-                        stub.UpstreamHttpProtocol = mitmUnchangedH3H3
-                            ? UpstreamHttpProtocol.Http3
-                            : mitmUnchangedH3H2
-                                ? UpstreamHttpProtocol.Http2
-                                : UpstreamHttpProtocol.Http11;
+                        if (mitmUnchangedH3H3)
+                            stub.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;
+                        else if (mitmUnchangedH3H2)
+                            stub.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+                        else
+                            stub.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
                         return stub;
                     }
 
@@ -715,8 +716,10 @@ internal static class Http3RequestStream
             {
                 try
                 {
+                    // Sync Cancel runs registered callbacks on this thread and returns before the
+                    // CTS is pooled. CancelAsync queues those callbacks and allocates a Task.
                     if (!cts.IsCancellationRequested)
-                        cts.Cancel();
+                        cts.Cancel(); // NOSONAR S6966 -- Keep teardown inline on the H3 fast path.
                 }
                 catch (ObjectDisposedException)
                 {

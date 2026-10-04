@@ -6,9 +6,9 @@ Playbook (harness, dumps, stage timing, Memory techniques) stays on [Performance
 
 ## Contents
 
-- [Local Windows lab (developer laptop)](#local-windows-lab-developer-laptop)
-- [Local saturation control (laptop)](#local-saturation-control-laptop)
-- [Editions (CLI / Plus stress)](#editions-cli--plus-stress)
+- [Local Windows lab (developer laptop)](#user-content-local-windows-lab-developer-laptop)
+- [Local saturation control (laptop)](#user-content-local-saturation-control-laptop)
+- [Editions (CLI / Plus stress)](#user-content-editions-cli--plus-stress)
 
 ## Local Windows lab (developer laptop)
 
@@ -153,7 +153,7 @@ H1 stays usable; H2 collapses under connection stalls (HOL). **H3 is the protoco
 
 ### Architecture-sensitive
 
-`compare-arch` (1-repeat; warmup 2s / measure 8s; c=8,16,32,64). Source: `windows-20260822-arch/`. Slow consumer = 256 KiB GET, client reads 16 KiB then sleeps 8 ms. Early response = 64 KiB POST, origin writes after the first 8 KiB. Duplex H2 = overlapping 64 KiB POST on H2 TLS↔H2 TLS. WebSocket = echo round-trips/sec on H1 TLS→H1 plain `/ws`. See [TWP vs YARP IO model](Performance-Profiling#twp-vs-yarp-io-model).
+`compare-arch` (1-repeat; warmup 2s / measure 8s; c=8,16,32,64). Source: `windows-20260822-arch/`. Slow consumer = 256 KiB GET, client reads 16 KiB then sleeps 8 ms. Early response = 64 KiB POST, origin writes after the first 8 KiB. Duplex H2 = overlapping 64 KiB POST on H2 TLS↔H2 TLS. WebSocket = echo round-trips/sec on H1 TLS→H1 plain `/ws`. See [TWP vs YARP IO model](Performance-Profiling#user-content-twp-vs-yarp-io-model).
 
 | Scenario | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---|---:|---:|---:|---:|---:|---:|
@@ -182,7 +182,7 @@ Slow consumer is sleep-bound (~16 × 8 ms per 256 KiB); H1/H2 sit in the same ba
 
 ### Local saturation control (laptop)
 
-Same shape as [Performance § Saturation control](Performance#saturation-control); one OS = this laptop. Fill after cool `compare-saturation` (median of repeats; Memory/CPU at peak-RPS step).
+Same shape as [Performance § Saturation control](Performance#user-content-saturation-control); one OS = this laptop. Fill after cool `compare-saturation` (median of repeats; Memory/CPU at peak-RPS step).
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
@@ -229,7 +229,7 @@ Laptop cool-ish A/B before bag/lite fix (2026-08-23, c=64, 8 s) — superseded b
 
 ## Editions (CLI / Plus stress)
 
-Local Win smoke 2026-08-29 (`rps-ramp-20260829-104306.csv`): c=64, warmup 2s / measure 5s, **1** repeat — **not publishable**. Prefer ÷CLI ratios. **Superseded for publishable numbers** by GHA [33259699099](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33259699099) after terminate-lite middleware + JWT validate cache — see [Performance — Editions](Performance#editions-cli--plus--intercept) (JWT ~0.93×, CIDR/WAF/rate-limit ~0.98×, cache ~1.05×). Table below is the pre-fix smoke (JWT ~0.51×).
+Local Win smoke 2026-08-29 (`rps-ramp-20260829-104306.csv`): c=64, warmup 2s / measure 5s, **1** repeat — **not publishable**. Prefer ÷CLI ratios. **Superseded for publishable numbers** by GHA [33259699099](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33259699099) after terminate-lite middleware + JWT validate cache — see [Performance — Editions](Performance#user-content-editions-cli--plus--intercept) (JWT ~0.93×, CIDR/WAF/rate-limit ~0.98×, cache ~1.05×). Table below is the pre-fix smoke (JWT ~0.51×).
 
 | Arm | Sustain RPS | Memory (RSS) | ÷CLI | Gate (then) |
 |---|---:|---:|---:|---:|

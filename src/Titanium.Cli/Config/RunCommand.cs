@@ -691,41 +691,10 @@ internal static class RunCommand
         var cacheMiddleware = new HttpResponseCacheMiddleware(responseCache);
         middleware.Add(cacheMiddleware);
 
-        // Buffer in BeforeResponse so fill does not depend on MITM session-lite coalescing.
-        // After the body is streamed, IsBodyReceived is set without IsBodyRead and
-        // AfterResponse GetResponseBody throws — perpetual misses (~0.64× CLI vs ~0.99× hits).
-        proxy.BeforeResponse += async (_, e) =>
-        {
-            try
-            {
-                var response = e.HttpClient.Response;
-                if (response.StatusCode == 200 &&
-                    response.HasBody &&
-                    !response.IsBodyRead)
-                {
-                    response.KeepBody = true;
-                    await e.GetResponseBody().ConfigureAwait(false);
-                }
-            }
-            catch
-            {
-                // Cache best-effort only.
-            }
-        };
-
-        proxy.AfterResponse += (_, e) =>
-        {
-            try
-            {
-                cacheMiddleware.TryCacheCurrentResponse(e);
-            }
-            catch
-            {
-                // Cache best-effort only.
-            }
-
-            return Task.CompletedTask;
-        };
+        // Session-path fill (a transform plus cache) buffers a small 200 inside the response
+        // handler. Do not subscribe BeforeResponse/AfterResponse: those force every request
+        // off H1 terminate-lite, so a hit never skips the origin.
+        proxy.HttpResponseCacheFiller = cacheMiddleware.TryCacheCurrentResponse;
     }
 
     private static async Task TryActivatePlusAsync(TwpConfig config, PlusActivationContext context)

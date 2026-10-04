@@ -123,6 +123,8 @@ public partial class ProxyServer
 
         // it may changed in the user event
         response = args.HttpClient.Response;
+        await TryFillHttpResponseCacheAsync(args, cancellationToken);
+        ApplyResponseHeaderContributor(response);
 
         var clientStream = args.ClientStream;
 
@@ -333,6 +335,50 @@ public partial class ProxyServer
 
         if (BeforeResponse != null)
             await BeforeResponse.InvokeAsync(this, args, logger).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Buffer a small known-length 200 and store it when a cache filler is set.
+    /// No-op when cache is off, so the hot path does not read the body.
+    /// </summary>
+    private async Task TryFillHttpResponseCacheAsync(SessionEventArgs args, CancellationToken cancellationToken)
+    {
+        var fill = HttpResponseCacheFiller;
+        if (fill == null)
+            return;
+
+        var response = args.HttpClient.Response;
+        if (response.StatusCode != 200)
+            return;
+
+        if (!response.IsBodyRead
+            && response.HasBody
+            && !response.IsChunked
+            && !response.HasTrailingHeaders
+            && response.ContentLength is > 0 and <= Caching.HttpResponseCacheMiddleware.MaxCachedBodyBytes)
+        {
+            try
+            {
+                response.KeepBody = true;
+                await args.GetResponseBody(cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                return;
+            }
+        }
+
+        if (!response.IsBodyRead)
+            return;
+
+        try
+        {
+            fill(args);
+        }
+        catch
+        {
+            // Cache best-effort only.
+        }
     }
 
     /// <summary>

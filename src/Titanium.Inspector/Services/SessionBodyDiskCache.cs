@@ -695,7 +695,7 @@ public sealed class SessionBodyDiskCache : IDisposable
         }
     }
 
-    private void QueueCleanup(IReadOnlyList<string> paths)
+    private void QueueCleanup(List<string> paths)
     {
         if (paths.Count == 0)
         {
@@ -704,12 +704,9 @@ public sealed class SessionBodyDiskCache : IDisposable
 
         lock (_cleanupGate)
         {
-            foreach (var path in paths)
+            foreach (var path in paths.Where(static path => !string.IsNullOrEmpty(path)))
             {
-                if (!string.IsNullOrEmpty(path))
-                {
-                    _cleanupPaths.Enqueue(path);
-                }
+                _cleanupPaths.Enqueue(path);
             }
 
             _cleanupTask = _cleanupTask.ContinueWith(
