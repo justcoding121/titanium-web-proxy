@@ -212,6 +212,9 @@ pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath tools/RpsLoadProbe/r
 | `twp-cli-plus-discovery-file-http1` | File discovery + mid-ramp rewrite |
 | `twp-cli-plus-metrics-scrape-http1` | Background `/v1/snapshot` + dashboard `/metrics` every 10s |
 | `twp-cli-plus-cache-hit-http1` | Cache warm then measure (vs plus-cache cold) |
+| `twp-cli-plus-cors-http1` | CORS response headers on terminate-lite |
+| `twp-cli-plus-circuit-http1` | Circuit breaker (session path; near intercept) |
+| `twp-cli-plus-retry-http1` | Idempotent retry (session path; near intercept) |
 | `twp-cli-static-http1` | `staticFiles.root` tiny file |
 | `twp-cli-logging-http1` | Logging enabled + Info file sink |
 | `twp-cli-lb-leasttime-http1` | LeastTime across two healthy origins |

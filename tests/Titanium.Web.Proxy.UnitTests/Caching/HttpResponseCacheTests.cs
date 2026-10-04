@@ -156,6 +156,103 @@ public class HttpResponseCacheMiddlewareTests
     }
 
     [TestMethod]
+    public async Task InvokeAsync_LiteHit_ShortCircuitsWithBodyBytes()
+    {
+        var cache = new MemoryHttpResponseCache();
+        var body = Encoding.UTF8.GetBytes("cached");
+        cache.Set("GET:example.com/hit", new CachedHttpResponse
+        {
+            StatusCode = 200,
+            Body = body,
+            Headers = [new KeyValuePair<string, string>("Content-Type", "text/plain")],
+            ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(5),
+        }, TimeSpan.FromMinutes(5));
+
+        var mw = new HttpResponseCacheMiddleware(cache);
+        var nextCalled = false;
+        var ctx = new ProxyMiddlewareContext
+        {
+            Session = new object(),
+            Request = new MiddlewareRequestView { Method = "GET", Path = "/hit", Host = "example.com" },
+        };
+        await mw.InvokeAsync(ctx, (_, _) =>
+        {
+            nextCalled = true;
+            return ValueTask.CompletedTask;
+        }, CancellationToken.None);
+
+        Assert.IsFalse(nextCalled);
+        Assert.IsTrue(ctx.IsHandled);
+        Assert.AreEqual(200, ctx.HandledStatusCode);
+        CollectionAssert.AreEqual(body, ctx.HandledBodyBytes);
+        Assert.IsTrue(ctx.HandledHeaders!.Exists(h =>
+            h.Key.Equals("X-Cache", StringComparison.OrdinalIgnoreCase) && h.Value == "HIT"));
+    }
+
+    [TestMethod]
+    public async Task InvokeAsync_LiteMiss_CallsNext()
+    {
+        var mw = new HttpResponseCacheMiddleware(new MemoryHttpResponseCache());
+        var nextCalled = false;
+        var ctx = new ProxyMiddlewareContext
+        {
+            Session = new object(),
+            Request = new MiddlewareRequestView { Method = "GET", Path = "/miss", Host = "example.com" },
+        };
+        await mw.InvokeAsync(ctx, (_, _) =>
+        {
+            nextCalled = true;
+            return ValueTask.CompletedTask;
+        }, CancellationToken.None);
+
+        Assert.IsTrue(nextCalled);
+        Assert.IsFalse(ctx.IsHandled);
+        Assert.IsNull(ctx.HandledBodyBytes);
+    }
+
+    [TestMethod]
+    public async Task TryStore_ThenLiteHit_ReturnsBody()
+    {
+        var cache = new MemoryHttpResponseCache();
+        var mw = new HttpResponseCacheMiddleware(cache, TimeSpan.FromMinutes(3));
+        var body = Encoding.UTF8.GetBytes("from-coalesce");
+        mw.TryStore("GET", "example.com", "/a", 200,
+            [new HttpHeader("Content-Type", "text/plain"), new HttpHeader("Connection", "keep-alive")],
+            body);
+
+        Assert.IsTrue(cache.TryGet("GET:example.com/a", out var stored));
+        CollectionAssert.AreEqual(body, stored!.Body);
+        foreach (var header in stored.Headers)
+            Assert.IsFalse(header.Key.Equals("Connection", StringComparison.OrdinalIgnoreCase));
+
+        var nextCalled = false;
+        var ctx = new ProxyMiddlewareContext
+        {
+            Session = new object(),
+            Request = new MiddlewareRequestView { Method = "GET", Path = "/a", Host = "example.com" },
+        };
+        await mw.InvokeAsync(ctx, (_, _) =>
+        {
+            nextCalled = true;
+            return ValueTask.CompletedTask;
+        }, CancellationToken.None);
+
+        Assert.IsFalse(nextCalled);
+        CollectionAssert.AreEqual(body, ctx.HandledBodyBytes);
+    }
+
+    [TestMethod]
+    public void TryStore_SkipsNon200AndOversized()
+    {
+        var cache = new MemoryHttpResponseCache();
+        var mw = new HttpResponseCacheMiddleware(cache);
+        mw.TryStore("GET", "example.com", "/no", 404, [], [1]);
+        mw.TryStore("POST", "example.com", "/no", 200, [], [1]);
+        mw.TryStore("GET", "example.com", "/big", 200, [], new byte[HttpResponseCacheMiddleware.MaxCachedBodyBytes + 1]);
+        Assert.AreEqual(0, cache.Count);
+    }
+
+    [TestMethod]
     public async Task InvokeAsync_GetHit_ShortCircuits()
     {
         using var proxy = new ProxyServer(false, false, false);

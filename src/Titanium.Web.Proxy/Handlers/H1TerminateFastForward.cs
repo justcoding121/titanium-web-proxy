@@ -83,9 +83,10 @@ public partial class ProxyServer
     ///     GC under c=32 (cool: c=1 already leads YARP, c=32 was ~0.88–0.90×).
     ///     Callers must also refuse <see cref="UpstreamHttpProtocol.Http2"/> / <see cref="UpstreamHttpProtocol.Http3"/>
     ///     at the connection level — this path only speaks HTTP/1.1 TCP to the origin.
-    ///     Pre-origin middleware (CIDR/WAF/JWT/rate-limit) runs on this path via
-    ///     <see cref="ProxyMiddlewareContext"/> without a session bag; AfterResponse subscribers
-    ///     still force the full session path via <see cref="NeedsHttpInterception"/>.
+    ///     Pre-origin middleware (CIDR/WAF/JWT/rate-limit/cache/CORS) runs on this path via
+    ///     <see cref="ProxyMiddlewareContext"/> without a session bag. A <see cref="BeforeResponse"/>
+    ///     or <see cref="AfterResponse"/> subscriber still forces the full session path via
+    ///     <see cref="NeedsHttpInterception"/>.
     /// </summary>
     internal bool CanUseH1TerminateLite(ProxyEndPoint endPoint, Request request, bool enable100Continue,
         bool enableWinAuth, bool hasCustomUpstreamProxyFunc, UpstreamHttpProtocol? upstreamProtocol = null)
@@ -139,6 +140,7 @@ public partial class ProxyServer
 
         request.Locked = true;
         request.IsBodyReceived = true;
+        CaptureTerminateLiteCacheIdentity(endPoint, request, out var cacheMethod, out var cacheHost, out var cachePath);
 
         // Remember before stripping hop-by-hop Connection for the origin write — NC clients send
         // Connection: close; forwarding it forces the origin to close and defeats pooling (Bare still
@@ -229,6 +231,7 @@ public partial class ProxyServer
                     HttpVersion = request.HttpVersion
                 };
                 badGateway.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionClose);
+                ApplyResponseHeaderContributor(badGateway);
                 await clientStream.WriteResponseAsync(badGateway, cancellationToken);
                 return false;
             }
@@ -237,7 +240,7 @@ public partial class ProxyServer
 
             // Known-CL ≤64 KiB: one coalesced client write without assigning Response.Body.
             // Larger / chunked bodies: still stream via CopyBody with a throwaway session (hooks unused).
-            const int coalesceBodyLimit = 64 * 1024;
+            const int coalesceBodyLimit = Caching.HttpResponseCacheMiddleware.MaxCachedBodyBytes;
             if (response.HasBody
                 && !response.IsChunked
                 && !response.HasTrailingHeaders
@@ -263,7 +266,13 @@ public partial class ProxyServer
                         if (response.ContentLength != read)
                             response.ContentLength = read;
                     }
+                    else
+                    {
+                        TryStoreH1TerminateLiteCache(cacheMethod, cacheHost, cachePath, response,
+                            body.AsSpan(0, read));
+                    }
 
+                    ApplyResponseHeaderContributor(response);
                     await clientStream.WriteResponseWithWireBodyAsync(response, body.AsMemory(0, read),
                         cancellationToken);
                 }
@@ -274,6 +283,7 @@ public partial class ProxyServer
             }
             else if (response.HasBody)
             {
+                ApplyResponseHeaderContributor(response);
                 await clientStream.WriteResponseAsync(response, cancellationToken);
                 var copySession = openSession ?? CreateH1TerminateLiteColdSession(endPoint, clientStream);
                 try
@@ -295,6 +305,9 @@ public partial class ProxyServer
             }
             else
             {
+                if (response.StatusCode == 200)
+                    TryStoreH1TerminateLiteCache(cacheMethod, cacheHost, cachePath, response, ReadOnlySpan<byte>.Empty);
+                ApplyResponseHeaderContributor(response);
                 await clientStream.WriteResponseAsync(response, cancellationToken);
             }
 
@@ -347,6 +360,7 @@ public partial class ProxyServer
         var request = args.HttpClient.Request;
         request.Locked = true;
         request.IsBodyReceived = true;
+        CaptureTerminateLiteCacheIdentity(endPoint, request, out var cacheMethod, out var cacheHost, out var cachePath);
 
         var clientRequestedClose = H1TerminateClientRequestedClose(request);
         request.StripHopByHopConnectionForTransparentOrigin();
@@ -451,6 +465,8 @@ public partial class ProxyServer
             var mayNeedBodyAfterWrite = AfterResponse != null || HasOnResponseBodyWriteSubscribers;
             if (response.HasBody && response.IsBodyRead)
             {
+                await TryFillHttpResponseCacheAsync(args, cancellationToken);
+                ApplyResponseHeaderContributor(response);
                 await clientStream.WriteResponseAsync(response, cancellationToken);
             }
             else if (knownClCoalesce && !response.IsBodyRead)
@@ -475,7 +491,13 @@ public partial class ProxyServer
                         if (response.ContentLength != read)
                             response.ContentLength = read;
                     }
+                    else
+                    {
+                        TryStoreH1TerminateLiteCache(cacheMethod, cacheHost, cachePath, response,
+                            body.AsSpan(0, read));
+                    }
 
+                    ApplyResponseHeaderContributor(response);
                     if (mayNeedBodyAfterWrite)
                     {
                         byte[] exact;
@@ -509,6 +531,7 @@ public partial class ProxyServer
             }
             else if (response.HasBody)
             {
+                ApplyResponseHeaderContributor(response);
                 await clientStream.WriteResponseAsync(response, cancellationToken);
                 await connection.Stream.CopyBodyAsync(response, false, clientStream, TransformationMode.None,
                     false, args, cancellationToken);
@@ -516,6 +539,9 @@ public partial class ProxyServer
             }
             else
             {
+                if (response.StatusCode == 200)
+                    TryStoreH1TerminateLiteCache(cacheMethod, cacheHost, cachePath, response, ReadOnlySpan<byte>.Empty);
+                ApplyResponseHeaderContributor(response);
                 await clientStream.WriteResponseAsync(response, cancellationToken);
             }
 
@@ -619,7 +645,7 @@ public partial class ProxyServer
     ///     <see cref="SessionEventArgs"/>. Returns keep-alive when middleware handled the request;
     ///     null when the origin forward should continue.
     /// </summary>
-    private static async Task<bool?> TryRunTerminateLiteMiddlewareAsync(
+    private async Task<bool?> TryRunTerminateLiteMiddlewareAsync(
         TransparentBaseProxyEndPoint endPoint,
         HttpClientStream clientStream,
         Request request,
@@ -680,7 +706,7 @@ public partial class ProxyServer
         };
     }
 
-    private static async Task WriteTerminateLiteMiddlewareResponseAsync(
+    private async Task WriteTerminateLiteMiddlewareResponseAsync(
         HttpClientStream clientStream,
         Request request,
         ProxyMiddlewareContext ctx,
@@ -697,11 +723,49 @@ public partial class ProxyServer
                 response.Headers.AddHeader(h.Key, h.Value);
         }
 
-        response.Body = response.Encoding.GetBytes(ctx.HandledBody ?? string.Empty);
+        response.Body = ctx.HandledBodyBytes ?? response.Encoding.GetBytes(ctx.HandledBody ?? string.Empty);
+        ApplyResponseHeaderContributor(response);
         response.Headers.AddHeader(KnownHeaders.Connection,
             H1TerminateClientRequestedClose(request)
                 ? KnownHeaders.ConnectionClose
                 : KnownHeaders.ConnectionKeepAlive);
         await clientStream.WriteResponseAsync(response, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static void CaptureTerminateLiteCacheIdentity(
+        TransparentBaseProxyEndPoint endPoint,
+        Request request,
+        out string method,
+        out string host,
+        out string path)
+    {
+        var view = CreateTerminateLiteMiddlewareRequest(endPoint, request);
+        method = view.Method;
+        host = view.Host;
+        path = view.Path;
+    }
+
+    private void ApplyResponseHeaderContributor(Response response) =>
+        ResponseHeaderContributor?.Invoke(response);
+
+    private void TryStoreH1TerminateLiteCache(
+        string method,
+        string host,
+        string path,
+        Response response,
+        ReadOnlySpan<byte> body)
+    {
+        var middleware = ReverseProxy?.Middleware;
+        if (middleware == null)
+            return;
+
+        for (var i = 0; i < middleware.Count; i++)
+        {
+            if (middleware[i] is Caching.HttpResponseCacheMiddleware cache)
+            {
+                cache.TryStore(method, host, path, response.StatusCode, response.Headers, body);
+                return;
+            }
+        }
     }
 }

@@ -421,7 +421,8 @@ public class CliPlusE2ETests
         });
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+            using var handler = new HttpClientHandler { UseProxy = false };
+            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
             await WaitControlPlaneAsync(http, control);
 
             using (var denied = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{listen}/secure"))

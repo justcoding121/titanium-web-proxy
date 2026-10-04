@@ -747,6 +747,15 @@ internal static class Cli
             case "twp-cli-plus-cache-hit-http1":
                 mode = ProbeMode.TwpCliPlusCacheHitHttp1;
                 return true;
+            case "twp-cli-plus-cors-http1":
+                mode = ProbeMode.TwpCliPlusCorsHttp1;
+                return true;
+            case "twp-cli-plus-circuit-http1":
+                mode = ProbeMode.TwpCliPlusCircuitHttp1;
+                return true;
+            case "twp-cli-plus-retry-http1":
+                mode = ProbeMode.TwpCliPlusRetryHttp1;
+                return true;
             case "twp-cli-static-http1":
                 mode = ProbeMode.TwpCliStaticHttp1;
                 return true;

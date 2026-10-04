@@ -1,8 +1,9 @@
 # One job per wiki row for a single ramp mode, on all three OS.
 # Dispatch one run per mode (compare-product, compare-bodies, ...) so each table has one
 # Source URL and the paste scripts, which look arms up by name, never mix modes.
-# compare-saturation and compare-editions stay one job per OS (key "all"): saturation Block A
-# compares proxy arms against origin-direct from the same job.
+# compare-saturation stays one job per OS (key "all"): saturation Block A compares proxy
+# arms against origin-direct from the same job. compare-editions is one group per wiki row;
+# each group contains the feature arm and the baseline it is divided by.
 #
 # Free-plan account limits: 20 concurrent jobs, 5 of them macOS. This workflow caps each OS
 # matrix itself; runs of different modes still queue together against the account limit.
@@ -41,6 +42,11 @@ on:
         description: 'Concurrent Windows or Linux legs'
         required: true
         default: '15'
+      only_keys:
+        description: 'Comma-separated group keys (empty = every group for the mode)'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -66,10 +72,11 @@ jobs:
         shell: pwsh
         env:
           SUITE_MODE: ${{ inputs.mode }}
+          ONLY_KEYS: ${{ inputs.only_keys }}
         run: |
           $ErrorActionPreference = 'Stop'
-          # These modes compare arms that must share a job, so they stay unsharded.
-          $unsharded = @('compare-saturation', 'compare-editions')
+          # Saturation compares proxy arms against origin-direct from the same job.
+          $unsharded = @('compare-saturation')
           if ($unsharded -contains $env:SUITE_MODE) {
             $keys = @('all')
           }
@@ -86,6 +93,15 @@ jobs:
             if ($groups.Count -gt 256) { throw "$($groups.Count) groups exceeds the 256-job matrix limit" }
             # Longest rows first so the slowest work starts in the first wave.
             $keys = @($groups | Sort-Object Arms -Descending | Select-Object -ExpandProperty Key)
+          }
+          if (-not [string]::IsNullOrWhiteSpace($env:ONLY_KEYS)) {
+            $want = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+            foreach ($part in $env:ONLY_KEYS.Split(',')) {
+              $trimmed = $part.Trim()
+              if ($trimmed) { [void]$want.Add($trimmed) }
+            }
+            $keys = @($keys | Where-Object { $want.Contains($_) })
+            if ($keys.Count -eq 0) { throw "only_keys matched no groups: $($env:ONLY_KEYS)" }
           }
           Write-Host ("{0}: {1} group(s): {2}" -f $env:SUITE_MODE, $keys.Count, ($keys -join ', '))
           # Piping a one-element array into ConvertTo-Json unwraps it to a JSON string.

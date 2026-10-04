@@ -74,6 +74,8 @@ Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.ClientRemoteEn
 Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.ClientRemoteEndPoint.set -> void
 Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.HandledBody.get -> string?
 Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.HandledBody.set -> void
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.HandledBodyBytes.get -> byte[]?
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.HandledBodyBytes.set -> void
 Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.HandledHeaders.get -> System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<string!, string!>>?
 Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.HandledHeaders.set -> void
 Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.HandledStatusCode.get -> int?

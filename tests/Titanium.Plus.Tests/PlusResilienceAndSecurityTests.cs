@@ -1,3 +1,4 @@
+using System.Net;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Plus.Resilience;
 using Titanium.Plus.Security;
@@ -113,6 +114,21 @@ public class PlusResilienceAndSecurityTests
         Assert.AreEqual(2, middleware.Count);
         Assert.IsInstanceOfType<ApiKeyBasicAuthMiddleware>(middleware[0]);
         Assert.IsInstanceOfType<CorsMiddleware>(middleware[1]);
+        Assert.IsFalse(proxy.NeedsHttpInterception());
+        Assert.IsNotNull(proxy.ResponseHeaderContributor);
+        var response = new Titanium.Web.Proxy.Http.Responses.GenericResponse(HttpStatusCode.OK);
+        proxy.ResponseHeaderContributor!(response);
+        var allowOrigin = false;
+        foreach (var header in response.Headers)
+        {
+            if (header.Name.Equals("Access-Control-Allow-Origin", StringComparison.OrdinalIgnoreCase) &&
+                header.Value == "https://app.example")
+            {
+                allowOrigin = true;
+            }
+        }
+
+        Assert.IsTrue(allowOrigin);
     }
 
     [TestMethod]
