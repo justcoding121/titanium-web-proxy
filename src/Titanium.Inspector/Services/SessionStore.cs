@@ -373,6 +373,15 @@ public sealed class SessionStore : IDisposable
         }
     }
 
+    public async Task EnsureBodiesLoadedAsync(IEnumerable<SessionSnapshot> snapshots, CancellationToken ct = default)
+    {
+        foreach (var snap in snapshots)
+        {
+            ct.ThrowIfCancellationRequested();
+            await EnsureBodiesLoadedAsync(snap, ct).ConfigureAwait(false);
+        }
+    }
+
     /// <summary>
     ///     Under heavy capture, the spill writer may still be draining thousands of HARs.
     ///     Keep waiting while work is queued; only mark missing once the channel is idle
@@ -413,15 +422,6 @@ public sealed class SessionStore : IDisposable
         }
 
         return false;
-    }
-
-    public async Task EnsureBodiesLoadedAsync(IEnumerable<SessionSnapshot> snapshots, CancellationToken ct = default)
-    {
-        foreach (var snap in snapshots)
-        {
-            ct.ThrowIfCancellationRequested();
-            await EnsureBodiesLoadedAsync(snap, ct).ConfigureAwait(false);
-        }
     }
 
     /// <summary>
