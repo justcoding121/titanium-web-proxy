@@ -312,6 +312,11 @@ function Emit-SinkRedirect {
 }
 
 function Emit-MitmOrKeep([string]$OsFolder) {
+    # Published MITM is Linux only. Windows and macOS product jobs never run twp-mitm-*.
+    if ($OsFolder -ne 'ubuntu-latest') {
+        Write-Output 'DROP'
+        return
+    }
     $names = Get-OsArmNames $OsFolder
     $hasReverse = @($names | Where-Object { $_ -like 'twp-reverse-*' -or $_ -like 'yarp-reverse-*' }).Count -gt 0
     $hasMitm = @($names | Where-Object { $_.StartsWith('twp-mitm-') }).Count -gt 0

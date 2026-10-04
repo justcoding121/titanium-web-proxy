@@ -10,7 +10,7 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 - Every reverse arm is three OS processes: load generator + origin + proxy. Origin-direct omits the proxy; peers are never in-process with the client.
 - Same runner class per table (`windows-latest` / `ubuntu-latest` / `macos-15`). Laptop numbers are never mixed into these tables.
 - Peers use equivalent TLS/ALPN and streaming-friendly settings on the same loopback shape. HAProxy and Envoy are Linux/macOS only — *Not possible* on Windows, so their columns are omitted there.
-- MITM (HTTPS decryption with forged certificates) is Titanium-only; peers cannot MITM. Those tables show Titanium MITM overhead versus its own reverse path on the same wires.
+- MITM (HTTPS decryption with forged certificates) is Titanium-only; peers cannot MITM. The published MITM table is Linux only. It shows Titanium MITM overhead versus its own reverse path on the same wires.
 - **Tiny keep-alive GET** (~56-byte JSON) is the industry RPS shape (same class as wrk / TechEmpower). It is also real for small JSON APIs and health checks.
 - **Same-protocol H2↔H2 / H3↔H3** on that shape is Titanium’s **best case**: with interception off, Titanium copies frames instead of decoding and re-encoding headers (peers do a full HTTP decode). Medals there are not the typical reverse-proxy job.
 - **Typical reverse** is H1 TLS→H1 or H2→H1 (~1.1× YARP on Win/Linux tiny GET). With **larger bodies**, see [Heavier reverse](#heavier-reverse-workloads) (@ `0386b2aa`).
@@ -19,7 +19,7 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 
 - Bold RPS is **sustain** (last concurrency that still met error/latency SLOs). When peak differs, it appears in the same cell as `<sub>(peak N · …)</sub>` with RSS/CPU. When sustain equals peak, peak is omitted.
 - 🥇 = best among OS-possible peers on that row (highest sustain RPS; on a tie, lower memory then lower CPU%). On tiny Reverse that is Titanium / nginx / YARP (plus HAProxy / Envoy on Linux/macOS). The same rule applies to heavier reverse, architecture-sensitive, TLS-cost, gRPC, and WebSocket peer tables. Gold on tiny GET is that frame-copy best case, not “Titanium is 1.7× on all reverse.” For larger-body H2→H2, see the [heavier tables](#heavier-reverse-workloads).
-- **MITM** tables are Titanium-only (no peer medal). **Lite÷Reverse** / **Full÷Reverse** = Titanium MITM sustain ÷ Titanium reverse sustain on the same Client×Origin pair — the overhead of decrypting and intercepting versus bare reverse, not versus nginx or YARP.
+- **MITM** is published on Linux only (Titanium-only, no peer medal). **Lite÷Reverse** / **Full÷Reverse** = Titanium MITM sustain ÷ Titanium reverse sustain on the same Client×Origin pair — the overhead of decrypting and intercepting versus bare reverse, not versus nginx or YARP.
 - *Not possible* = cannot do that path. *Not measured* = path exists but no published number yet. When every row would be *Not possible* for a peer, that column is omitted and a note above the table explains why.
 
 ## Contents
@@ -242,42 +242,6 @@ Median of **3 repeats** on `windows-latest` (4 vCPU / 16 GiB). Bare reverse 5×5
 | HTTP/3 · QUIC | HTTP/2 · TLS | 🥇 **31,884**<br><sub>(131 MiB / 45.7% CPU)</sub> | *Not possible (no H2 upstream)* | **21,920**<br><sub>(151 MiB / 47.7% CPU)</sub> |
 | HTTP/3 · QUIC | HTTP/3 · QUIC | 🥇 **16,882**<br><sub>(117 MiB / 47.2% CPU)</sub> | *Not possible (no H3 upstream)* | **12,348**<br><sub>(150 MiB / 49.9% CPU)</sub> |
 
-### MITM (TWP only)
-
-Same Client×Origin wires with interception on (`compare-product` [37138944205](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37138944205)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via `MitmCompressedRelayHelper`). nginx/HAProxy/Envoy/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (**same job / comparison-group shard**). Completion gate: Lite ≥ **0.25×** and Full ≥ **0.25×** reverse sustain @ c=64 (median of 3 GHA runs); reverse TWP ÷ closest peer ≥ **0.50×**.
-
-**v1 append-only relay (2026-08-27):** Pre-fix H2→H2 Full÷Reverse was **0.13–0.16×** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ `df172718`: H2 plain→H2 plain Full **0.77–0.79×**, H3→H1 Full **0.91–0.93×**, all MITM arms ≥ **0.70×** on median of [33041445371](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33041445371), [33055267086](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055267086), [33055272140](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055272140).
-
-**v2 drop-only + non-unique append (2026-08-27):** `MitmStaticRebuildHelper` rebuilds static HPACK/QPACK after 1–4 unique header drops; trailing non-unique appends stay on compressed relay. @ `41f4adee`: all MITM arms ≥ **0.70×** on GHA median ([33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622), [33105885748](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33105885748) Linux; [33087085235](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087085235), [33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622) Windows). H2 plain→H2 plain Full **0.77–0.79×** (Win) / **0.78×** (Lin).
-
-| Client | Origin | Lite sustain | Full sustain | Lite÷Reverse | Full÷Reverse |
-|---|---|---:|---:|---:|---:|
-| HTTP/1 · plain | HTTP/1 · plain | **25,596**<br><sub>(79 MiB / 51.2% CPU)</sub> | **24,770**<br><sub>(77 MiB / 50.7% CPU)</sub> | **1×** | **0.96×** |
-| HTTP/1 · plain | HTTP/1 · TLS | **64,100**<br><sub>(91 MiB / 48.2% CPU)</sub> | **62,483**<br><sub>(91 MiB / 48.5% CPU)</sub> | **1.01×** | **0.99×** |
-| HTTP/1 · plain | HTTP/2 · plain | **36,209**<br><sub>(106 MiB / 46.9% CPU)</sub> | **35,681**<br><sub>(105 MiB / 45.4% CPU)</sub> | **0.97×** | **0.96×** |
-| HTTP/1 · plain | HTTP/2 · TLS | **38,208**<br><sub>(118 MiB / 48.4% CPU)</sub> | **37,384**<br><sub>(112 MiB / 47.8% CPU)</sub> | **0.99×** | **0.96×** |
-| HTTP/1 · plain | HTTP/3 · QUIC | **29,048**<br><sub>(125 MiB / 52.1% CPU)</sub> | **28,872**<br><sub>(124 MiB / 48.6% CPU)</sub> | **0.96×** | **0.96×** |
-| HTTP/1 · TLS | HTTP/1 · plain | **20,594**<br><sub>(88 MiB / 48.4% CPU)</sub> | **20,274**<br><sub>(91 MiB / 48.8% CPU)</sub> | **0.98×** | **0.97×** |
-| HTTP/1 · TLS | HTTP/1 · TLS | **27,913**<br><sub>(93 MiB / 48.2% CPU)</sub> | **27,461**<br><sub>(90 MiB / 47.1% CPU)</sub> | **0.98×** | **0.97×** |
-| HTTP/1 · TLS | HTTP/2 · plain | **27,517**<br><sub>(112 MiB / 43.8% CPU)</sub> | **27,067**<br><sub>(109 MiB / 45.5% CPU)</sub> | **0.98×** | **0.96×** |
-| HTTP/1 · TLS | HTTP/2 · TLS | **25,288**<br><sub>(129 MiB / 46.3% CPU)</sub> | **24,611**<br><sub>(120 MiB / 45.8% CPU)</sub> | **1.02×** | **1×** |
-| HTTP/1 · TLS | HTTP/3 · QUIC | **15,935**<br><sub>(113 MiB / 50.6% CPU)</sub> | **15,776**<br><sub>(116 MiB / 51.1% CPU)</sub> | **0.99×** | **0.98×** |
-| HTTP/2 · plain | HTTP/1 · plain | **35,722**<br><sub>(89 MiB / 54.4% CPU)</sub> | **35,125**<br><sub>(88 MiB / 53.6% CPU)</sub> | **0.97×** | **0.95×** |
-| HTTP/2 · plain | HTTP/1 · TLS | **27,212**<br><sub>(93 MiB / 48.9% CPU)</sub> | **29,793**<br><sub>(102 MiB / 54.1% CPU)</sub> | **0.86×** | **0.94×** |
-| HTTP/2 · plain | HTTP/2 · plain | **86,486**<br><sub>(68 MiB / 41.6% CPU)</sub> | **82,565**<br><sub>(65 MiB / 43.3% CPU)</sub> | **0.77×** | **0.74×** |
-| HTTP/2 · plain | HTTP/2 · TLS | **73,024**<br><sub>(72 MiB / 39% CPU)</sub> | **60,496**<br><sub>(72 MiB / 32.7% CPU)</sub> | **0.82×** | **0.68×** |
-| HTTP/2 · plain | HTTP/3 · QUIC | **44,714**<br><sub>(138 MiB / 51.8% CPU)</sub> | **43,393**<br><sub>(142 MiB / 53.7% CPU)</sub> | **0.99×** | **0.96×** |
-| HTTP/2 · TLS | HTTP/1 · plain | **34,283**<br><sub>(98 MiB / 54.4% CPU)</sub> | **33,345**<br><sub>(101 MiB / 53.7% CPU)</sub> | **0.98×** | **0.95×** |
-| HTTP/2 · TLS | HTTP/1 · TLS | **42,583**<br><sub>(105 MiB / 50.4% CPU)</sub> | **44,500**<br><sub>(105 MiB / 52.2% CPU)</sub> | **0.93×** | **0.98×** |
-| HTTP/2 · TLS | HTTP/2 · plain | **86,893**<br><sub>(87 MiB / 41% CPU)</sub> | **82,646**<br><sub>(84 MiB / 40.1% CPU)</sub> | **0.82×** | **0.78×** |
-| HTTP/2 · TLS | HTTP/2 · TLS | **95,422**<br><sub>(80 MiB / 38.6% CPU)</sub> | **91,256**<br><sub>(86 MiB / 39.3% CPU)</sub> | **0.86×** | **0.82×** |
-| HTTP/2 · TLS | HTTP/3 · QUIC | **42,970**<br><sub>(137 MiB / 53.7% CPU)</sub> | **40,850**<br><sub>(146 MiB / 50.5% CPU)</sub> | **0.98×** | **0.94×** |
-| HTTP/3 · QUIC | HTTP/1 · plain | **14,677**<br><sub>(110 MiB / 46.1% CPU)</sub> | **13,733**<br><sub>(111 MiB / 45% CPU)</sub> | **0.96×** | **0.9×** |
-| HTTP/3 · QUIC | HTTP/1 · TLS | **12,654**<br><sub>(114 MiB / 46.6% CPU)</sub> | **11,528**<br><sub>(115 MiB / 46.4% CPU)</sub> | **0.93×** | **0.85×** |
-| HTTP/3 · QUIC | HTTP/2 · plain | **34,184**<br><sub>(130 MiB / 48.5% CPU)</sub> | **31,041**<br><sub>(124 MiB / 44.8% CPU)</sub> | **0.97×** | **0.88×** |
-| HTTP/3 · QUIC | HTTP/2 · TLS | **31,178**<br><sub>(136 MiB / 47.7% CPU)</sub> | **30,002**<br><sub>(136 MiB / 47.4% CPU)</sub> | **0.98×** | **0.94×** |
-| HTTP/3 · QUIC | HTTP/3 · QUIC | **15,983**<br><sub>(119 MiB / 49.3% CPU)</sub> | **15,523**<br><sub>(114 MiB / 48.4% CPU)</sub> | **0.95×** | **0.92×** |
-
 ## Linux — Titanium vs nginx vs HAProxy vs Envoy vs YARP
 
 ### Reverse
@@ -381,42 +345,6 @@ Median of **3 repeats** on `macos-15` (Apple Silicon M1, 3-core / 7 GB). Bare re
 | HTTP/3 · QUIC | HTTP/2 · plain | **15,867**<br><sub>(139 MiB / 21.5% CPU)</sub> | *Not possible (no H2 upstream)* | 🥇 **21,919**<br><sub>(102 MiB / 19.7% CPU)</sub> | **9,652**<br><sub>(125 MiB / 32.5% CPU)</sub> | **10,054**<br><sub>(267 MiB / 14.1% CPU)</sub> |
 | HTTP/3 · QUIC | HTTP/2 · TLS | **28,390**<br><sub>(146 MiB / 24.8% CPU)</sub> | *Not possible (no H2 upstream)* | 🥇 **34,002**<br><sub>(102 MiB / 20.4% CPU)</sub> | **11,891**<br><sub>(125 MiB / 28.3% CPU)</sub> | **26,452**<br><sub>(232 MiB / 28% CPU)</sub> |
 | HTTP/3 · QUIC | HTTP/3 · QUIC | **4,442**<br><sub>(138 MiB / 9% CPU)</sub> | *Not possible (no H3 upstream)* | *Not possible (no H3 upstream)* | **7,144**<br><sub>(124 MiB / 38.2% CPU)</sub> | 🥇 **23,628**<br><sub>(226 MiB / 44.2% CPU)</sub> |
-
-### MITM (TWP only)
-
-Same Client×Origin wires with interception on (`compare-product` [37138944205](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37138944205)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via `MitmCompressedRelayHelper`). nginx/HAProxy/Envoy/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (**same job / comparison-group shard**). Completion gate: Lite ≥ **0.25×** and Full ≥ **0.25×** reverse sustain @ c=64 (median of 3 GHA runs); reverse TWP ÷ closest peer ≥ **0.50×**.
-
-**v1 append-only relay (2026-08-27):** Pre-fix H2→H2 Full÷Reverse was **0.13–0.16×** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ `df172718`: H2 plain→H2 plain Full **0.77–0.79×**, H3→H1 Full **0.91–0.93×**, all MITM arms ≥ **0.70×** on median of [33041445371](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33041445371), [33055267086](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055267086), [33055272140](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055272140).
-
-**v2 drop-only + non-unique append (2026-08-27):** `MitmStaticRebuildHelper` rebuilds static HPACK/QPACK after 1–4 unique header drops; trailing non-unique appends stay on compressed relay. @ `41f4adee`: all MITM arms ≥ **0.70×** on GHA median ([33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622), [33105885748](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33105885748) Linux; [33087085235](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087085235), [33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622) Windows). H2 plain→H2 plain Full **0.77–0.79×** (Win) / **0.78×** (Lin).
-
-| Client | Origin | Lite sustain | Full sustain | Lite÷Reverse | Full÷Reverse |
-|---|---|---:|---:|---:|---:|
-| HTTP/1 · plain | HTTP/1 · plain | **7,576**<br><sub>(114 MiB / 14.9% CPU)</sub> | **9,645**<br><sub>(115 MiB / 16.8% CPU)</sub> | **0.67×** | **0.85×** |
-| HTTP/1 · plain | HTTP/1 · TLS | **24,309**<br><sub>(128 MiB / 35.4% CPU)</sub> | **27,202**<br><sub>(131 MiB / 37.7% CPU)</sub> | **1.22×** | **1.36×** |
-| HTTP/1 · plain | HTTP/2 · plain | **14,974**<br><sub>(124 MiB / 19.1% CPU)</sub> | **17,313**<br><sub>(126 MiB / 21.7% CPU)</sub> | **0.7×** | **0.8×** |
-| HTTP/1 · plain | HTTP/2 · TLS | **34,172**<br><sub>(159 MiB / 39.3% CPU)</sub> | **31,029**<br><sub>(164 MiB / 38.3% CPU)</sub> | **1.98×** | **1.8×** |
-| HTTP/1 · plain | HTTP/3 · QUIC | **12,590**<br><sub>(132 MiB / 25.2% CPU)</sub> | **11,926**<br><sub>(130 MiB / 20.1% CPU)</sub> | **1.58×** | **1.49×** |
-| HTTP/1 · TLS | HTTP/1 · plain | **20,534**<br><sub>(131 MiB / 26.5% CPU)</sub> | **15,946**<br><sub>(129 MiB / 22.1% CPU)</sub> | **2.56×** | **1.99×** |
-| HTTP/1 · TLS | HTTP/1 · TLS | **11,892**<br><sub>(153 MiB / 21.9% CPU)</sub> | **17,346**<br><sub>(153 MiB / 26.1% CPU)</sub> | **0.99×** | **1.44×** |
-| HTTP/1 · TLS | HTTP/2 · plain | **35,283**<br><sub>(155 MiB / 40.2% CPU)</sub> | **31,431**<br><sub>(140 MiB / 42.3% CPU)</sub> | **1.06×** | **0.95×** |
-| HTTP/1 · TLS | HTTP/2 · TLS | **14,403**<br><sub>(194 MiB / 20.9% CPU)</sub> | **12,129**<br><sub>(183 MiB / 20.9% CPU)</sub> | **1.26×** | **1.06×** |
-| HTTP/1 · TLS | HTTP/3 · QUIC | **10,352**<br><sub>(163 MiB / 35% CPU)</sub> | **14,285**<br><sub>(168 MiB / 45.1% CPU)</sub> | **1.62×** | **2.23×** |
-| HTTP/2 · plain | HTTP/1 · plain | **15,612**<br><sub>(125 MiB / 19.1% CPU)</sub> | **21,319**<br><sub>(131 MiB / 23% CPU)</sub> | **0.79×** | **1.07×** |
-| HTTP/2 · plain | HTTP/1 · TLS | **34,941**<br><sub>(135 MiB / 28.7% CPU)</sub> | **24,438**<br><sub>(133 MiB / 21.6% CPU)</sub> | **0.89×** | **0.63×** |
-| HTTP/2 · plain | HTTP/2 · plain | **31,292**<br><sub>(117 MiB / 8.2% CPU)</sub> | **12,801**<br><sub>(118 MiB / 4.9% CPU)</sub> | **0.81×** | **0.33×** |
-| HTTP/2 · plain | HTTP/2 · TLS | **20,941**<br><sub>(122 MiB / 9.6% CPU)</sub> | **22,810**<br><sub>(122 MiB / 9.8% CPU)</sub> | **1.01×** | **1.1×** |
-| HTTP/2 · plain | HTTP/3 · QUIC | **17,307**<br><sub>(142 MiB / 27.5% CPU)</sub> | **20,389**<br><sub>(141 MiB / 28.4% CPU)</sub> | **1.58×** | **1.86×** |
-| HTTP/2 · TLS | HTTP/1 · plain | **23,294**<br><sub>(129 MiB / 20.6% CPU)</sub> | **43,858**<br><sub>(134 MiB / 36.2% CPU)</sub> | **1.25×** | **2.35×** |
-| HTTP/2 · TLS | HTTP/1 · TLS | **22,634**<br><sub>(136 MiB / 24.4% CPU)</sub> | **25,783**<br><sub>(138 MiB / 27.3% CPU)</sub> | **2.5×** | **2.85×** |
-| HTTP/2 · TLS | HTTP/2 · plain | **42,178**<br><sub>(131 MiB / 13.2% CPU)</sub> | **17,298**<br><sub>(129 MiB / 6% CPU)</sub> | **0.62×** | **0.25×** |
-| HTTP/2 · TLS | HTTP/2 · TLS | **62,521**<br><sub>(135 MiB / 35.5% CPU)</sub> | **64,449**<br><sub>(128 MiB / 36.4% CPU)</sub> | **0.71×** | **0.73×** |
-| HTTP/2 · TLS | HTTP/3 · QUIC | **18,866**<br><sub>(155 MiB / 24.2% CPU)</sub> | **14,641**<br><sub>(148 MiB / 24.6% CPU)</sub> | **3.44×** | **2.67×** |
-| HTTP/3 · QUIC | HTTP/1 · plain | **8,665**<br><sub>(134 MiB / 26.2% CPU)</sub> | **9,121**<br><sub>(133 MiB / 23.3% CPU)</sub> | **1.03×** | **1.09×** |
-| HTTP/3 · QUIC | HTTP/1 · TLS | **4,672**<br><sub>(145 MiB / 13.6% CPU)</sub> | **11,598**<br><sub>(162 MiB / 44.7% CPU)</sub> | **0.36×** | **0.9×** |
-| HTTP/3 · QUIC | HTTP/2 · plain | **18,806**<br><sub>(138 MiB / 22.9% CPU)</sub> | **20,631**<br><sub>(139 MiB / 23.9% CPU)</sub> | **1.19×** | **1.3×** |
-| HTTP/3 · QUIC | HTTP/2 · TLS | **25,202**<br><sub>(146 MiB / 29.8% CPU)</sub> | **33,495**<br><sub>(166 MiB / 48.8% CPU)</sub> | **0.89×** | **1.18×** |
-| HTTP/3 · QUIC | HTTP/3 · QUIC | **15,107**<br><sub>(147 MiB / 44.2% CPU)</sub> | **18,546**<br><sub>(143 MiB / 47.7% CPU)</sub> | **3.4×** | **4.18×** |
 
 ## Editions (CLI / Plus / Intercept)
 

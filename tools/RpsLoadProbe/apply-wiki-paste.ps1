@@ -89,7 +89,7 @@ $wiki = [regex]::Replace($wiki, $productHdrPattern, {
 
 # Allow optional intro lines between section heading and ### Reverse (Windows has a Client/Origin blurb).
 $wiki = [regex]::Replace($wiki,
-    "(?ms)(^## Windows .+? Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?\n(?:.*?\r?\n)*?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
+    "(?ms)(^## Windows .+? Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?\n(?:.*?\r?\n)*?### Reverse\r?\n\r?\n).*?(?=\r?\n## Linux)",
     [System.Text.RegularExpressions.MatchEvaluator]{
         param($m)
         $loadGen = "**Load generators:** Reverse inbound H3 arms use **``dotnet-httpclient``** (``http_version=3.0``, ``RequestVersionExact``). nginx/Windows is same-OS only (no QUIC). HAProxy/Envoy are Linux-only terminate peers."
@@ -97,13 +97,9 @@ $wiki = [regex]::Replace($wiki,
     },
     1)
 
-if ($winMitm -ne 'KEEP') {
-$wiki = [regex]::Replace($wiki,
-    '(?s)(### MITM \(TWP only\)\r?\n\r?\n).*?(?=\r?\n## Linux)',
-    [System.Text.RegularExpressions.MatchEvaluator]{
-        param($m) $m.Groups[1].Value + $mitmNote + "`n`n" + $winMitm + "`n"
-    },
-    1)
+# Published MITM is Linux only. A Windows reverse paste stops at ## Linux, which drops any MITM subsection.
+if ($winMitm -and $winMitm -ne 'DROP' -and $winMitm -ne 'KEEP') {
+    Write-Host 'WIN_MITM ignored: MITM tables are Linux only'
 }
 
 $wiki = [regex]::Replace($wiki,
@@ -128,7 +124,7 @@ $tail = [regex]::Replace($tail,
     1)
 }
 
-$macBlockLines = @(
+$macBlock = @(
     $macHdrNew
     ''
     '### Reverse'
@@ -137,41 +133,21 @@ $macBlockLines = @(
     ''
     $macRev
     ''
-)
-if ($macMitm -ne 'KEEP') {
-    $macBlockLines += @(
-        '### MITM (TWP only)'
-        ''
-        $mitmNote
-        ''
-        $macMitm
-        ''
-    )
-}
-$macBlock = $macBlockLines -join "`n"
+) -join "`n"
 
 $macHdrMatch = [regex]::Match($tail, '(?m)^## macOS .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?$')
 if ($macHdrMatch.Success) {
     $tail = [regex]::Replace($tail,
-        "(?ms)(^## macOS .+? Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?\n(?:.*?\r?\n)*?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
+        "(?ms)(^## macOS .+? Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?\n(?:.*?\r?\n)*?### Reverse\r?\n\r?\n).*?$afterMacLookahead",
         [System.Text.RegularExpressions.MatchEvaluator]{
             param($m) $m.Groups[1].Value + $macRevHeader + "`n`n" + $macRev + "`n"
         },
         1)
     $macHdrMatch2 = [regex]::Match($tail, '(?m)^## macOS .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?$')
     if (-not $macHdrMatch2.Success) { throw "Missing wiki heading: macOS product section after reverse paste" }
-    $macIdx = $macHdrMatch2.Index
-    $macHead = $tail.Substring(0, $macIdx)
-    $macTail = $tail.Substring($macIdx)
-    if ($macMitm -ne 'KEEP') {
-    $macTail = [regex]::Replace($macTail,
-        "(?s)(### MITM \(TWP only\)\r?\n\r?\n).*?$afterMacLookahead",
-        [System.Text.RegularExpressions.MatchEvaluator]{
-            param($m) $m.Groups[1].Value + $mitmNote + "`n`n" + $macMitm + "`n"
-        },
-        1)
+    if ($macMitm -and $macMitm -ne 'DROP' -and $macMitm -ne 'KEEP') {
+        Write-Host 'MAC_MITM ignored: MITM tables are Linux only'
     }
-    $tail = $macHead + $macTail
 }
 else {
     # Insert macOS after Linux product tables and before Editions / Heavier.
