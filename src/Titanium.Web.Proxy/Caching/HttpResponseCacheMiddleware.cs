@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -233,12 +232,13 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
         {
             if (header.Name.Equals("Connection", StringComparison.OrdinalIgnoreCase))
             {
-                foreach (var part in header.Value
-                    .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-                    .Where(part => !part.Equals("close", StringComparison.OrdinalIgnoreCase) &&
-                                   !part.Equals("keep-alive", StringComparison.OrdinalIgnoreCase)))
+                foreach (var part in header.Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)) // NOSONAR S3267 -- Where would allocate an enumerator on every cache store.
                 {
-                    hopByHop.Add(part);
+                    if (!part.Equals("close", StringComparison.OrdinalIgnoreCase) &&
+                        !part.Equals("keep-alive", StringComparison.OrdinalIgnoreCase))
+                    {
+                        hopByHop.Add(part);
+                    }
                 }
 
                 continue;
@@ -248,9 +248,12 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
         }
 
         var kept = new List<KeyValuePair<string, string>>(staged.Count);
-        foreach (var header in staged.Where(header => !hopByHop.Contains(header.Key)))
+        foreach (var header in staged) // NOSONAR S3267 -- A capturing Where allocates a closure on every cache store.
         {
-            kept.Add(header);
+            if (!hopByHop.Contains(header.Key))
+            {
+                kept.Add(header);
+            }
         }
 
         return kept;

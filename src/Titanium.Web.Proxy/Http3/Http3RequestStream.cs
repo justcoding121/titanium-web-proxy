@@ -716,8 +716,10 @@ internal static class Http3RequestStream
             {
                 try
                 {
+                    // Sync Cancel runs registered callbacks on this thread and returns before the
+                    // CTS is pooled. CancelAsync queues those callbacks and allocates a Task.
                     if (!cts.IsCancellationRequested)
-                        await cts.CancelAsync().ConfigureAwait(false);
+                        cts.Cancel(); // NOSONAR S6966 -- Keep teardown inline on the H3 fast path.
                 }
                 catch (ObjectDisposedException)
                 {

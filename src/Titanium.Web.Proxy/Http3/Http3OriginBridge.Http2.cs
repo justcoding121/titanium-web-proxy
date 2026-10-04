@@ -57,10 +57,11 @@ internal static partial class Http3OriginBridge
         if (request.Authority.Length == 0 && !string.IsNullOrEmpty(request.Host))
             request.Authority = request.Host.GetByteString();
 
-        var origin = ResolveFastHttp2Origin(fwd, request, server);
-
         try
         {
+            // Origin resolution stays inside the restore so a throw cannot leave the
+            // request stamped as HTTP/2.
+            var origin = ResolveFastHttp2Origin(fwd, request, server);
             var target = new Http2OriginTarget(
                 origin.Host, origin.Port, origin.ConnectHost, origin.ConnectPort, origin.PoolKey);
             var exchange = await SendHttp2OriginFastWithGoAwayRetryAsync(
