@@ -49,7 +49,7 @@ Prefer the [Download](/download) page.
 - **MSI** — installer wizard; uninstall from **Settings → Apps**.
 - **Portable zip** — extract and run `TitaniumInspector.exe`.
 
-Stable links (`v7.0.5`): [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.5/TitaniumInspector-win-x64.msi) · [zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.5/TitaniumInspector-win-x64.zip). Beta: the Download beta section.
+Current Windows installers are on the [Download](/download#stable-inspector) page. Beta builds are in the [beta Inspector](/download#beta-inspector) section.
 
 ### Linux
 
