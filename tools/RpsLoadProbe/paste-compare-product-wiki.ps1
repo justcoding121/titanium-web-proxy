@@ -258,6 +258,32 @@ function Emit-ReverseTable([string]$OsFolder) {
     }
 }
 
+function Get-OsArmNames([string]$OsFolder) {
+    $names = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($runId in $RunIds) {
+        $dir = Join-Path $ResultsRoot $runId
+        $csvs = @(Get-ChildItem `
+            "$dir/rps-csv-$OsFolder/*.csv", `
+            "$dir/rps-csv-$OsFolder-*/*.csv", `
+            "$dir/$OsFolder/*.csv", `
+            "$dir/*.csv" `
+            -ErrorAction SilentlyContinue |
+            Where-Object {
+                if ($OsFolder -ne 'macos-15') { $true }
+                else {
+                    $p = $_.FullName.ToLowerInvariant().Replace('\', '/')
+                    $p -notmatch 'macos-15-intel'
+                }
+            })
+        foreach ($csv in $csvs) {
+            foreach ($row in @(Import-Csv $csv.FullName)) {
+                if ($row.arm) { [void]$names.Add([string]$row.arm) }
+            }
+        }
+    }
+    return $names
+}
+
 function Emit-MitmTable([string]$OsFolder) {
     Write-Output '| Client | Origin | Lite sustain | Full sustain | Lite÷Reverse | Full÷Reverse |'
     Write-Output '|---|---|---:|---:|---:|---:|'
@@ -285,17 +311,28 @@ function Emit-SinkRedirect {
     foreach ($line in (& $Block)) { [void]$script:EmitSink.Add([string]$line) }
 }
 
+function Emit-MitmOrKeep([string]$OsFolder) {
+    $names = Get-OsArmNames $OsFolder
+    $hasReverse = @($names | Where-Object { $_ -like 'twp-reverse-*' -or $_ -like 'yarp-reverse-*' }).Count -gt 0
+    $hasMitm = @($names | Where-Object { $_.StartsWith('twp-mitm-') }).Count -gt 0
+    if ($hasReverse -and -not $hasMitm) {
+        Write-Output 'KEEP'
+        return
+    }
+    Emit-MitmTable $OsFolder
+}
+
 Emit-SinkRedirect { Emit-ReverseTable 'windows-latest' }
 Out '---WIN_MITM---'
-Emit-SinkRedirect { Emit-MitmTable 'windows-latest' }
+Emit-SinkRedirect { Emit-MitmOrKeep 'windows-latest' }
 Out '---LIN_REVERSE---'
 Emit-SinkRedirect { Emit-ReverseTable 'ubuntu-latest' }
 Out '---LIN_MITM---'
-Emit-SinkRedirect { Emit-MitmTable 'ubuntu-latest' }
+Emit-SinkRedirect { Emit-MitmOrKeep 'ubuntu-latest' }
 Out '---MAC_REVERSE---'
 Emit-SinkRedirect { Emit-ReverseTable 'macos-15' }
 Out '---MAC_MITM---'
-Emit-SinkRedirect { Emit-MitmTable 'macos-15' }
+Emit-SinkRedirect { Emit-MitmOrKeep 'macos-15' }
 
 $text = ($lines -join "`n") + "`n"
 if ($OutFile) {

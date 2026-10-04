@@ -72,8 +72,15 @@ $mitmPairs = @(
 )
 
 $failed = $false
+# Windows and macOS product legs drop twp-mitm-* (MITM is Linux-only). A CSV with reverse
+# rows and no MITM arms is that case, not a partial pair.
+$mitmMeasured = @($sustain.Keys | Where-Object { $_ -like 'twp-mitm-*' }).Count -gt 0
 Write-Host "MITM gates (Lite >= $MitmLiteGate / Full >= $MitmFullGate x Reverse @ c=64 median; all OS)" -ForegroundColor Cyan
+if (-not $mitmMeasured) {
+    Write-Host "SKIP MITM gates: no twp-mitm-* arms in this CSV" -ForegroundColor DarkYellow
+}
 foreach ($p in $mitmPairs) {
+    if (-not $mitmMeasured) { continue }
     foreach ($kind in @('Lite', 'Full')) {
         $num = $p.$kind
         $den = $p.Reverse

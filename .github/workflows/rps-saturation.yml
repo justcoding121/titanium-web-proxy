@@ -60,6 +60,11 @@ on:
         required: false
         type: string
         default: ''
+      arm_excludes:
+        description: 'Drop arms whose name matches this substring (same syntax as arm_contains)'
+        required: false
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       mode:
@@ -243,6 +248,10 @@ on:
         description: 'Optional arm-name substring filter (e.g. nc-tiny). Empty = all arms in mode.'
         required: false
         default: ''
+      arm_excludes:
+        description: 'Drop arms whose name matches this substring. Empty = keep every arm.'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -260,6 +269,7 @@ jobs:
       RPS_REPEATS: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.repeats || 1 }}
       RPS_ARM_SHARD: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.arm_shard || 'all' }}
       RPS_ARM_CONTAINS: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.arm_contains || '' }}
+      RPS_ARM_EXCLUDES: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.arm_excludes || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -890,6 +900,7 @@ jobs:
           RPS_REPEATS: ${{ env.RPS_REPEATS }}
           RPS_ARM_SHARD: ${{ env.RPS_ARM_SHARD }}
           RPS_ARM_CONTAINS: ${{ env.RPS_ARM_CONTAINS }}
+          RPS_ARM_EXCLUDES: ${{ env.RPS_ARM_EXCLUDES }}
         run: |
           $hap = Join-Path $env:RUNNER_TEMP 'haproxy-quic/sbin/haproxy'
           $hapArgs = @()
@@ -901,6 +912,10 @@ jobs:
           if ($env:RPS_ARM_CONTAINS) {
             Write-Host "Arm name filter: $($env:RPS_ARM_CONTAINS)"
             $containsArgs = @('-ArmContains', $env:RPS_ARM_CONTAINS)
+          }
+          if ($env:RPS_ARM_EXCLUDES) {
+            Write-Host "Arm name exclude: $($env:RPS_ARM_EXCLUDES)"
+            $containsArgs += @('-ArmExcludes', $env:RPS_ARM_EXCLUDES)
           }
           pwsh tools/RpsLoadProbe/run-rps.ps1 `
             -Mode $env:RPS_MODE `
@@ -949,7 +964,8 @@ jobs:
             -ResultsDir tools/RpsLoadProbe/results `
             -Mode $env:RPS_MODE `
             -ArmShard $env:RPS_ARM_SHARD `
-            -Repeats ([int]$env:RPS_REPEATS)
+            -Repeats ([int]$env:RPS_REPEATS) `
+            -ArmExcludes $env:RPS_ARM_EXCLUDES
 
       # Post-ramp gates: hard-fail on every event (including workflow_dispatch).
       # fail-fast: false keeps sibling OS jobs running; Upload CSV uses if: always().

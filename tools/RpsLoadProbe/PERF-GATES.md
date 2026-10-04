@@ -38,16 +38,16 @@ Do **not** run full `compare-product` on every develop PR. Thresholds change onl
 | Editions | after CLI/Plus changes | `compare-editions` on Linux + [`validate-edition-gates.ps1`](validate-edition-gates.ps1) | ~60 min |
 | Beta / stable publish | push to `beta`/`stable` | Linux `compare-editions` + parallel `compare-spot` ([`run-spot-matrix.ps1`](run-spot-matrix.ps1)) | ~60 min wall |
 | Pre-wiki smoke (required) | after Core / harness changes | **`compare-product-smoke`** Linux **2** comparison-group shards (`repeats=1`) before full product | ~30–60 min |
-| Release / wiki refresh | release SHA | `compare-product` and `compare-bodies` (median of 3) via the [RPS suite](../../.github/workflows/rps-suite.yml) on Win/Linux/macOS. Other suite modes are Linux only | ~5h wall on a Free account when macOS runs |
-| Unary gRPC | as needed | `compare-grpc` on Linux (H2 TLS and H2 TLS→h2c) | ~20–50 min |
-| WebSocket dual-TLS / RFC 8441 | as needed | `compare-ws-h1tls` / `compare-ws-h2` on Linux | ~15–40 min each |
-| Heavier wiki tables | as needed | `compare-bodies` on all three OS; `post` / `lossy` / `arch` / `tls-cost` on Linux | one row per job |
+| Release / wiki refresh | release SHA | `compare-product` reverse, `compare-bodies`, `post`, `lossy`, `arch`, `tls-cost`, `grpc`, both WebSocket modes, and `compare-saturation` (median of 3) via the [RPS suite](../../.github/workflows/rps-suite.yml) on Win/Linux/macOS. TWP MITM arms stay on Linux, in the same product job as that row's reverse peers. `compare-editions` is Linux only | ~5h wall on a Free account when macOS runs |
+| Unary gRPC | as needed | `compare-grpc` on Win/Linux/macOS (H2 TLS and H2 TLS→h2c) | ~20–50 min |
+| WebSocket dual-TLS / RFC 8441 | as needed | `compare-ws-h1tls` / `compare-ws-h2` on Win/Linux/macOS | ~15–40 min each |
+| Heavier wiki tables | as needed | `compare-bodies`, `post`, `lossy`, `arch`, `tls-cost`, and `compare-saturation` on all three OS | one row per job |
 
 ### One job per wiki row
 
-Dispatch the [RPS suite](../../.github/workflows/rps-suite.yml) once per mode. Its prep job lists the comparison groups (`--print-groups`) and each group becomes one job per OS, so a wiki row's peers and its MITM Lite and Full arms stay on the same VM while no single job can run for hours. `compare-saturation` and `compare-editions` stay one job per OS, because saturation compares proxy arms against `origin-direct` from the same run. Address a row by its group key (`--arm-shard h1c-h1c`), not by an `i/n` index, so a re-run measures the same row even if a peer install fails. `i/n` remains for the smoke modes.
+Dispatch the [RPS suite](../../.github/workflows/rps-suite.yml) once per mode. Its prep job lists the comparison groups (`--print-groups`) and each group becomes one job per OS, so a wiki row's peers stay on the same VM while no single job can run for hours. On Linux, that product job also runs MITM Lite and Full, so Lite÷Reverse stays same-VM. Windows and macOS product jobs drop `twp-mitm-*`. `compare-saturation` stays one job per OS, because saturation compares proxy arms against `origin-direct` from the same run. `compare-editions` is one Linux job per wiki row (feature arm plus its baseline). Address a row by its group key (`--arm-shard h1c-h1c`), not by an `i/n` index, so a re-run measures the same row even if a peer install fails. `i/n` remains for the smoke modes.
 
-A single-row leg times out after 60 minutes of ramp and 75 minutes overall, so a wedged macOS VM costs one of the five slots for about an hour instead of six. Each leg uploads a `leg-status.json` (overwritten on re-run) and the suite's aggregate job fails unless every row reports success on every OS.
+A single-row leg times out after 60 minutes of ramp and 75 minutes overall, so a wedged macOS VM costs one of the five slots for about an hour instead of six. Each leg uploads a `leg-status.json` (overwritten on re-run) and the suite's aggregate job fails unless every row reports success on every OS that mode runs. `compare-editions` is Linux only, so a skipped Windows or macOS job does not fail that suite.
 
 Free-plan accounts run 20 jobs at once and only 5 of them can be macOS. Give the suite a quiet window: do not push pull requests or start other macOS jobs while it runs. Re-run only infrastructure failures (`gh run rerun --failed`); a failed gate is a finding and is never re-rolled, and the published numbers are the last attempt, never the best of several.
 

@@ -97,12 +97,14 @@ $wiki = [regex]::Replace($wiki,
     },
     1)
 
+if ($winMitm -ne 'KEEP') {
 $wiki = [regex]::Replace($wiki,
     '(?s)(### MITM \(TWP only\)\r?\n\r?\n).*?(?=\r?\n## Linux)',
     [System.Text.RegularExpressions.MatchEvaluator]{
         param($m) $m.Groups[1].Value + $mitmNote + "`n`n" + $winMitm + "`n"
     },
     1)
+}
 
 $wiki = [regex]::Replace($wiki,
     "(?ms)(^## Linux .+? Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?\n(?:.*?\r?\n)*?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
@@ -117,14 +119,16 @@ $idx = $linuxHdrMatch.Index
 $head = $wiki.Substring(0, $idx)
 $tail = $wiki.Substring($idx)
 
+if ($linMitm -ne 'KEEP') {
 $tail = [regex]::Replace($tail,
     "(?s)(### MITM \(TWP only\)\r?\n\r?\n).*?$afterLinuxLookahead",
     [System.Text.RegularExpressions.MatchEvaluator]{
         param($m) $m.Groups[1].Value + $mitmNote + "`n`n" + $linMitm + "`n"
     },
     1)
+}
 
-$macBlock = @(
+$macBlockLines = @(
     $macHdrNew
     ''
     '### Reverse'
@@ -133,13 +137,18 @@ $macBlock = @(
     ''
     $macRev
     ''
-    '### MITM (TWP only)'
-    ''
-    $mitmNote
-    ''
-    $macMitm
-    ''
-) -join "`n"
+)
+if ($macMitm -ne 'KEEP') {
+    $macBlockLines += @(
+        '### MITM (TWP only)'
+        ''
+        $mitmNote
+        ''
+        $macMitm
+        ''
+    )
+}
+$macBlock = $macBlockLines -join "`n"
 
 $macHdrMatch = [regex]::Match($tail, '(?m)^## macOS .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?$')
 if ($macHdrMatch.Success) {
@@ -154,12 +163,14 @@ if ($macHdrMatch.Success) {
     $macIdx = $macHdrMatch2.Index
     $macHead = $tail.Substring(0, $macIdx)
     $macTail = $tail.Substring($macIdx)
+    if ($macMitm -ne 'KEEP') {
     $macTail = [regex]::Replace($macTail,
         "(?s)(### MITM \(TWP only\)\r?\n\r?\n).*?$afterMacLookahead",
         [System.Text.RegularExpressions.MatchEvaluator]{
             param($m) $m.Groups[1].Value + $mitmNote + "`n`n" + $macMitm + "`n"
         },
         1)
+    }
     $tail = $macHead + $macTail
 }
 else {
