@@ -134,6 +134,7 @@ def cell(
     impossible: Optional[str] = None,
     *,
     medal: bool = False,
+    cpus: int = 4,
 ) -> str:
     if impossible:
         return f"*{impossible}*"
@@ -147,8 +148,12 @@ def cell(
     rps = int(round(sustain)) if sustain == sustain else 0
     rss_s = f"{rss:.0f} MiB" if rss == rss else "?"
     cpu_s = f"{cpu:.1f}% CPU" if cpu == cpu else "?"
+    cost = ""
+    if sustain == sustain and sustain > 0 and cpu == cpu and cpu >= 0.05:
+        us = cpu * cpus / 100.0 / sustain * 1_000_000
+        cost = f" · {us:.1f} µs CPU/req"
     prefix = f"{MEDAL} " if medal else ""
-    return f"{prefix}**{rps:,}**<br><sub>({rss_s} / {cpu_s})</sub>"
+    return f"{prefix}**{rps:,}**<br><sub>({rss_s} / {cpu_s}{cost})</sub>"
 
 
 def pick_row_winner(
@@ -234,7 +239,11 @@ def render_table(
             elif win_no_haproxy_envoy and os_key == "windows" and product in ("HAProxy", "Envoy"):
                 cells.append(cell(None, "Not possible"))
             else:
-                cells.append(cell(data.get(arm), medal=(winner == product)))
+                cells.append(cell(
+                    data.get(arm),
+                    medal=(winner == product),
+                    cpus=3 if os_key == "macos" else 4,
+                ))
         lines.append("| " + " | ".join([os_label, *cells]) + " |")
     return "\n".join(lines)
 

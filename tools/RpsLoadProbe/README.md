@@ -96,7 +96,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
 - **compare-saturation:** Block A prints median peak RPS as **% of origin-direct** (and bombardier when present) plus median Memory (RSS) / CPU at the peak-RPS step. Blocks B/C print peer÷YARP and peer÷nginx (when present) plus Memory (RSS) / CPU — not % of H1 origin-direct.
 - **Other compare-* matrix modes:** median peak RPS for all arms; **TWP-only** median Memory (RSS) / CPU (`median_memory_rss_bytes` / `median_cpu_avg_pct`). nginx/YARP Memory/CPU remain saturation-only for peer comparison.
 
-Memory A/B knobs (load generator): `TWP_RPS_SINGLE_HTTP2_CONNECTION=1` / `TWP_RPS_SINGLE_HTTP3_CONNECTION=1` force a single multiplexed client connection (`EnableMultipleHttp2Connections` / `EnableMultipleHttp3Connections` off). See [Performance Profiling — Memory (RSS)](../../wiki/Performance-Profiling.md#memory-rss--h2h1-vs-h1--h3).
+HTTP/2 and HTTP/3 open `min(concurrency, max(4×cores, 16))` client connections (one `SocketsHttpHandler` each, `MaxConnectionsPerServer = 1`). On a 4 vCPU runner that is 16 connections at concurrency 64. A single shared handler stays on one connection until the peer stream cap and pins nginx, HAProxy, and Envoy to one worker. `TWP_RPS_SINGLE_HTTP2_CONNECTION=1` / `TWP_RPS_SINGLE_HTTP3_CONNECTION=1` force one connection for a local memory A/B. CSV column `client_connections` records the pool size. See [Performance Profiling — Memory (RSS)](../../wiki/Performance-Profiling.md#memory-rss--h2h1-vs-h1--h3).
 
 Paste CI medians into the wiki [Performance — Saturation control](../../wiki/Performance.md#saturation-control) section. Do not mix bombardier into the publishable TWP÷YARP÷nginx matrices.
 

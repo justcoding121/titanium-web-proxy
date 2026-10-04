@@ -308,6 +308,7 @@ internal sealed class NginxHost : IDisposable
             access_log off;
             sendfile on;
             keepalive_timeout 65;
+                    http2_chunk_size 16k;
             client_max_body_size 10m;
             client_body_temp_path temp/client_body;
             proxy_temp_path temp/proxy;
@@ -319,7 +320,7 @@ internal sealed class NginxHost : IDisposable
                 keepalive 256;
             }
             server {
-                listen 127.0.0.1:{{port}};
+                listen 127.0.0.1:{{port}} reuseport;
                 location / {
                     proxy_http_version 1.1;
                     proxy_set_header Connection "";
@@ -344,6 +345,7 @@ internal sealed class NginxHost : IDisposable
             access_log off;
             sendfile on;
             keepalive_timeout 65;
+                    http2_chunk_size 16k;
             client_max_body_size 10m;
             client_body_temp_path temp/client_body;
             proxy_temp_path temp/proxy;
@@ -355,7 +357,7 @@ internal sealed class NginxHost : IDisposable
                 keepalive 256;
             }
             server {
-                listen 127.0.0.1:{{port}};
+                listen 127.0.0.1:{{port}} reuseport;
                 http2 on;
                 location / {
                     proxy_http_version 1.1;
@@ -381,6 +383,7 @@ internal sealed class NginxHost : IDisposable
             access_log off;
             sendfile on;
             keepalive_timeout 65;
+                    http2_chunk_size 16k;
             client_max_body_size 10m;
             client_body_temp_path temp/client_body;
             proxy_temp_path temp/proxy;
@@ -396,7 +399,7 @@ internal sealed class NginxHost : IDisposable
                 '' close;
             }
             server {
-                listen 127.0.0.1:{{port}};
+                listen 127.0.0.1:{{port}} reuseport;
                 http2 on;
                 {{HttpsOriginProxyLocations().Trim()}}
             }
@@ -424,6 +427,7 @@ internal sealed class NginxHost : IDisposable
                     access_log off;
                     sendfile on;
                     keepalive_timeout 65;
+                    http2_chunk_size 16k;
                     client_max_body_size 10m;
                     client_body_temp_path temp/client_body;
                     proxy_temp_path temp/proxy;
@@ -439,7 +443,7 @@ internal sealed class NginxHost : IDisposable
                         '' close;
                     }
                     server {
-                        listen 127.0.0.1:{{port}} ssl;
+                        listen 127.0.0.1:{{port}} ssl reuseport;
                         ssl_certificate {{certDest}};
                         ssl_certificate_key {{keyDest}};
                         ssl_protocols TLSv1.2 TLSv1.3;
@@ -478,8 +482,8 @@ internal sealed class NginxHost : IDisposable
             keyDest = keyDest.Replace('\\', '/');
             // Prefer `http2 on` when available; fall back to listen-parameter form for builds < 1.25.1.
             var listenAndHttp2 = useHttp2OnDirective
-                ? $"listen 127.0.0.1:{port} ssl;\n                        http2 on;"
-                : $"listen 127.0.0.1:{port} ssl http2;";
+                ? $"listen 127.0.0.1:{port} ssl reuseport;\n                        http2 on;"
+                : $"listen 127.0.0.1:{port} ssl http2 reuseport;";
             return $$"""
                 worker_processes auto;
                 daemon off;
@@ -492,6 +496,7 @@ internal sealed class NginxHost : IDisposable
                     access_log off;
                     sendfile on;
                     keepalive_timeout 65;
+                    http2_chunk_size 16k;
                     client_max_body_size 10m;
                     client_body_temp_path temp/client_body;
                     proxy_temp_path temp/proxy;
@@ -531,8 +536,8 @@ internal sealed class NginxHost : IDisposable
             certDest = certDest.Replace('\\', '/');
             keyDest = keyDest.Replace('\\', '/');
             var listenAndHttp2 = useHttp2OnDirective
-                ? $"listen 127.0.0.1:{port} ssl;\n                        http2 on;"
-                : $"listen 127.0.0.1:{port} ssl http2;";
+                ? $"listen 127.0.0.1:{port} ssl reuseport;\n                        http2 on;"
+                : $"listen 127.0.0.1:{port} ssl http2 reuseport;";
             return $$"""
                 worker_processes auto;
                 daemon off;
@@ -545,6 +550,7 @@ internal sealed class NginxHost : IDisposable
                     access_log off;
                     sendfile on;
                     keepalive_timeout 65;
+                    http2_chunk_size 16k;
                     client_max_body_size 10m;
                     client_body_temp_path temp/client_body;
                     proxy_temp_path temp/proxy;
@@ -593,6 +599,7 @@ internal sealed class NginxHost : IDisposable
                     access_log off;
                     sendfile on;
                     keepalive_timeout 65;
+                    http2_chunk_size 16k;
                     client_max_body_size 10m;
                     client_body_temp_path temp/client_body;
                     proxy_temp_path temp/proxy;
@@ -604,8 +611,8 @@ internal sealed class NginxHost : IDisposable
                         keepalive 256;
                     }
                     server {
-                        listen 127.0.0.1:{{port}} ssl;
-                        listen [::1]:{{port}} ssl ipv6only=on;
+                        listen 127.0.0.1:{{port}} ssl reuseport;
+                        listen [::1]:{{port}} ssl reuseport ipv6only=on;
                         listen 127.0.0.1:{{port}} quic reuseport;
                         listen [::1]:{{port}} quic reuseport ipv6only=on;
                         http3 on;
@@ -683,6 +690,7 @@ internal sealed class NginxHost : IDisposable
                 access_log off;
                 sendfile on;
                 keepalive_timeout 65;
+                    http2_chunk_size 16k;
                 client_max_body_size 10m;
                 client_body_temp_path temp/client_body;
                 proxy_temp_path temp/proxy;
@@ -698,7 +706,7 @@ internal sealed class NginxHost : IDisposable
                     '' close;
                 }
                 server {
-                    listen 127.0.0.1:{{port}};
+                    listen 127.0.0.1:{{port}} reuseport;
                     {{HttpsOriginProxyLocations().Trim()}}
                 }
             }
@@ -726,6 +734,7 @@ internal sealed class NginxHost : IDisposable
                     access_log off;
                     sendfile on;
                     keepalive_timeout 65;
+                    http2_chunk_size 16k;
                     client_max_body_size 10m;
                     client_body_temp_path temp/client_body;
                     proxy_temp_path temp/proxy;
@@ -741,7 +750,7 @@ internal sealed class NginxHost : IDisposable
                         '' close;
                     }
                     server {
-                        listen 127.0.0.1:{{port}} ssl;
+                        listen 127.0.0.1:{{port}} ssl reuseport;
                         ssl_certificate {{certDest}};
                         ssl_certificate_key {{keyDest}};
                         ssl_protocols TLSv1.2 TLSv1.3;
@@ -762,8 +771,8 @@ internal sealed class NginxHost : IDisposable
             certDest = certDest.Replace('\\', '/');
             keyDest = keyDest.Replace('\\', '/');
             var listenAndHttp2 = useHttp2OnDirective
-                ? $"listen 127.0.0.1:{port} ssl;\n                        http2 on;"
-                : $"listen 127.0.0.1:{port} ssl http2;";
+                ? $"listen 127.0.0.1:{port} ssl reuseport;\n                        http2 on;"
+                : $"listen 127.0.0.1:{port} ssl http2 reuseport;";
             return $$"""
                 worker_processes auto;
                 daemon off;
@@ -776,6 +785,7 @@ internal sealed class NginxHost : IDisposable
                     access_log off;
                     sendfile on;
                     keepalive_timeout 65;
+                    http2_chunk_size 16k;
                     client_max_body_size 10m;
                     client_body_temp_path temp/client_body;
                     proxy_temp_path temp/proxy;
@@ -819,6 +829,7 @@ internal sealed class NginxHost : IDisposable
                     access_log off;
                     sendfile on;
                     keepalive_timeout 65;
+                    http2_chunk_size 16k;
                     client_max_body_size 10m;
                     client_body_temp_path temp/client_body;
                     proxy_temp_path temp/proxy;
@@ -830,8 +841,8 @@ internal sealed class NginxHost : IDisposable
                         keepalive 256;
                     }
                     server {
-                        listen 127.0.0.1:{{port}} ssl;
-                        listen [::1]:{{port}} ssl ipv6only=on;
+                        listen 127.0.0.1:{{port}} ssl reuseport;
+                        listen [::1]:{{port}} ssl reuseport ipv6only=on;
                         listen 127.0.0.1:{{port}} quic reuseport;
                         listen [::1]:{{port}} quic reuseport ipv6only=on;
                         http3 on;

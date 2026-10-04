@@ -25,20 +25,28 @@ internal static class GrpcLoadGenerator
     private static async Task<LoadResult> RunAsync(Uri target, int concurrency, TimeSpan duration,
         bool collectLatency, CancellationToken cancellationToken)
     {
-        using var handler = new SocketsHttpHandler
+        var connectionCount = EmbeddedLoadGenerator.ClientConnectionCount(System.Net.HttpVersion.Version20, concurrency);
+        var channels = new GrpcChannel[connectionCount];
+        var clients = new Echo.EchoClient[connectionCount];
+        for (var c = 0; c < connectionCount; c++)
         {
-            EnableMultipleHttp2Connections = true,
-            SslOptions = new SslClientAuthenticationOptions
+            var handler = new SocketsHttpHandler
             {
-                RemoteCertificateValidationCallback = static (_, _, _, _) => true
-            }
-        };
-        using var channel = GrpcChannel.ForAddress(target, new GrpcChannelOptions
-        {
-            HttpHandler = handler,
-            DisposeHttpClient = true
-        });
-        var client = new Echo.EchoClient(channel);
+                MaxConnectionsPerServer = 1,
+                EnableMultipleHttp2Connections = false,
+                SslOptions = new SslClientAuthenticationOptions
+                {
+                    RemoteCertificateValidationCallback = static (_, _, _, _) => true
+                }
+            };
+            channels[c] = GrpcChannel.ForAddress(target, new GrpcChannelOptions
+            {
+                HttpHandler = handler,
+                DisposeHttpClient = true
+            });
+            clients[c] = new Echo.EchoClient(channels[c]);
+        }
+
         var request = new EchoRequest { Message = "x" };
 
         var ok = 0L;
@@ -50,6 +58,7 @@ internal static class GrpcLoadGenerator
         var workers = new Task[Math.Max(1, concurrency)];
         for (var i = 0; i < workers.Length; i++)
         {
+            var client = clients[i % clients.Length];
             workers[i] = Task.Run(async () =>
             {
                 while (!cts.IsCancellationRequested)
@@ -76,30 +85,42 @@ internal static class GrpcLoadGenerator
 
         try
         {
-            await Task.WhenAll(workers);
-        }
-        catch
-        {
-            // workers swallow; ignore aggregate
-        }
+            try
+            {
+                await Task.WhenAll(workers);
+            }
+            catch
+            {
+                // workers swallow; ignore aggregate
+            }
 
-        sw.Stop();
-        var seconds = Math.Max(sw.Elapsed.TotalSeconds, 0.001);
-        var total = ok + errors;
-        var samples = latencies?.ToArray() ?? [];
-        Array.Sort(samples);
-        return new LoadResult(
-            GeneratorName,
-            concurrency,
-            seconds,
-            ok,
-            errors,
-            ok / seconds,
-            total == 0 ? 100 : 100.0 * errors / total,
-            Percentile(samples, 0.50),
-            Percentile(samples, 0.99),
-            samples.Length == 0 ? 0 : samples[^1],
-            "h2-grpc");
+            sw.Stop();
+            var seconds = Math.Max(sw.Elapsed.TotalSeconds, 0.001);
+            var total = ok + errors;
+            var samples = latencies?.ToArray() ?? [];
+            Array.Sort(samples);
+
+            return new LoadResult(
+                GeneratorName,
+                concurrency,
+                seconds,
+                ok,
+                errors,
+                ok / seconds,
+                total == 0 ? 100 : 100.0 * errors / total,
+                Percentile(samples, 0.50),
+                Percentile(samples, 0.99),
+                samples.Length == 0 ? 0 : samples[^1],
+                "h2-grpc")
+            {
+                ClientConnections = connectionCount
+            };
+        }
+        finally
+        {
+            foreach (var channel in channels)
+                channel?.Dispose();
+        }
     }
 
     private static double Percentile(long[] sortedMs, double p)

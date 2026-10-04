@@ -47,6 +47,7 @@ def arm_metrics(csv_path: Path, arm: str) -> Optional[dict]:
     peaks: List[float] = []
     rss: List[float] = []
     cpu: List[float] = []
+    payload: List[float] = []
     i = 0
     while i + STEPS <= len(rows):
         chunk = rows[i : i + STEPS]
@@ -57,6 +58,7 @@ def arm_metrics(csv_path: Path, arm: str) -> Optional[dict]:
             peaks.append(float(r["rps"]))
             rss.append(float(r.get("proxy_rss_peak_bytes") or 0))
             cpu.append(float(r.get("proxy_cpu_avg_pct") or 0))
+            payload.append(_payload_bytes(r))
         else:
             slo_any = [r for r in chunk if r.get("meets_slo") == "1"]
             c64_any = [r for r in chunk if r.get("concurrency") == "64"]
@@ -68,11 +70,13 @@ def arm_metrics(csv_path: Path, arm: str) -> Optional[dict]:
                 peaks.append(float(peak_row["rps"]) if peak_row else float(r["rps"]))
                 rss.append(float(r.get("proxy_rss_peak_bytes") or 0))
                 cpu.append(float(r.get("proxy_cpu_avg_pct") or 0))
+                payload.append(_payload_bytes(r))
             elif peak_row is not None:
                 sustains.append(0.0)
                 peaks.append(float(peak_row["rps"]))
                 rss.append(float(peak_row.get("proxy_rss_peak_bytes") or 0))
                 cpu.append(float(peak_row.get("proxy_cpu_avg_pct") or 0))
+                payload.append(_payload_bytes(peak_row))
         i += STEPS
     if not peaks:
         slo = [r for r in rows if r.get("meets_slo") == "1"]
@@ -84,6 +88,7 @@ def arm_metrics(csv_path: Path, arm: str) -> Optional[dict]:
                 "Peak": float(r["rps"]),
                 "Rss": float(r.get("proxy_rss_peak_bytes") or 0),
                 "Cpu": float(r.get("proxy_cpu_avg_pct") or 0),
+                "Bytes": _payload_bytes(r),
             }
         c64 = [r for r in rows if r.get("concurrency") == "64"]
         if not c64:
@@ -94,13 +99,19 @@ def arm_metrics(csv_path: Path, arm: str) -> Optional[dict]:
             "Peak": float(r["rps"]),
             "Rss": float(r.get("proxy_rss_peak_bytes") or 0),
             "Cpu": float(r.get("proxy_cpu_avg_pct") or 0),
+            "Bytes": _payload_bytes(r),
         }
     return {
         "Sustain": median(sustains),
         "Peak": median(peaks),
         "Rss": median(rss),
         "Cpu": median(cpu),
+        "Bytes": median(payload) or 0,
     }
+
+
+def _payload_bytes(row: dict) -> float:
+    return float(row.get("response_bytes") or 0) + float(row.get("request_bytes") or 0)
 
 
 def _run_id_list(run_ids: RunIds) -> List[int]:
@@ -160,7 +171,29 @@ def parse_run_ids(text: str) -> RunIds:
     return ids[0] if len(ids) == 1 else ids
 
 
-def fmt_cell(m: Optional[dict], medal: bool = False, impossible: Optional[str] = None) -> str:
+def _cost_suffix(m: dict, cpus: int) -> str:
+    rps = m.get("Sustain") or 0
+    if rps <= 0:
+        return ""
+    parts: List[str] = []
+    payload = m.get("Bytes") or 0
+    # Large bodies are read as goodput. Tiny GET stays RPS-only in the footnote.
+    if payload >= 1024:
+        mib_s = rps * payload / (1024 * 1024)
+        parts.append(f"{mib_s:,.0f} MiB/s" if mib_s >= 10 else f"{mib_s:.1f} MiB/s")
+    cpu = m.get("Cpu") or 0
+    if cpu >= 0.05:
+        us = cpu * cpus / 100.0 / rps * 1_000_000
+        parts.append(f"{us:.1f} µs CPU/req")
+    return (" · " + " · ".join(parts)) if parts else ""
+
+
+def fmt_cell(
+    m: Optional[dict],
+    medal: bool = False,
+    impossible: Optional[str] = None,
+    cpus: int = 4,
+) -> str:
     if impossible:
         return f"*{impossible}*"
     if not m:
@@ -172,6 +205,7 @@ def fmt_cell(m: Optional[dict], medal: bool = False, impossible: Optional[str] =
     prefix = f"{MEDAL} " if medal else ""
     # Handshake arms defer CPU sampling (post-measure snapshot) — omit idle 0% CPU.
     foot = f"{mb} MiB" if cpu < 0.05 else f"{mb} MiB / {cpu}% CPU"
+    foot += _cost_suffix(m, cpus)
     if peak > sustain:
         sub = f"peak {peak:,} · {foot}"
     else:
@@ -183,7 +217,15 @@ def pick_medal(cands: List[Tuple[str, Optional[dict]]]) -> Optional[str]:
     valid = [(k, m) for k, m in cands if m and (m["Sustain"] or 0) > 0]
     if not valid:
         return None
-    return min(valid, key=lambda km: (-km[1]["Sustain"], km[1]["Rss"], km[1]["Cpu"]))[0]
+
+    def rank(m: dict) -> float:
+        payload = m.get("Bytes") or 0
+        # 1 KiB and up: medal on goodput (RPS × body). Same body size keeps RPS order.
+        if payload >= 1024:
+            return (m["Sustain"] or 0) * payload
+        return m["Sustain"] or 0
+
+    return min(valid, key=lambda km: (-rank(km[1]), km[1]["Rss"], km[1]["Cpu"]))[0]
 
 
 WIN_NO_HAPROXY_ENVOY_NOTE = (
@@ -219,6 +261,7 @@ def peer_row(
     win_no_haproxy_envoy: bool = False,
     haproxy_a: Optional[str] = None,
     envoy_a: Optional[str] = None,
+    cpus: int = 4,
 ) -> str:
     twp = data.get(twp_a) if twp_a else None
     nginx = data.get(nginx_a) if nginx_a else None
@@ -244,16 +287,16 @@ def peer_row(
         medal_peers = [("twp", twp), ("nginx", nginx), ("haproxy", haproxy), ("envoy", envoy), ("yarp", yarp)]
     medal = pick_medal(medal_peers)
     cells = prefix + [
-        fmt_cell(twp, medal=(medal == "twp")),
-        fmt_cell(nginx, medal=(medal == "nginx"), impossible=nginx_imp),
+        fmt_cell(twp, medal=(medal == "twp"), cpus=cpus),
+        fmt_cell(nginx, medal=(medal == "nginx"), impossible=nginx_imp, cpus=cpus),
     ]
     if not win_no_haproxy_envoy:
         cells += [
-            fmt_cell(haproxy, medal=(medal == "haproxy"), impossible=haproxy_imp),
-            fmt_cell(envoy, medal=(medal == "envoy"), impossible=envoy_imp),
+            fmt_cell(haproxy, medal=(medal == "haproxy"), impossible=haproxy_imp, cpus=cpus),
+            fmt_cell(envoy, medal=(medal == "envoy"), impossible=envoy_imp, cpus=cpus),
         ]
     cells += [
-        fmt_cell(yarp, medal=(medal == "yarp")),
+        fmt_cell(yarp, medal=(medal == "yarp"), cpus=cpus),
     ]
     return "| " + " | ".join(cells) + " |"
 
@@ -331,7 +374,7 @@ def main() -> None:
         ("256 KiB", "HTTP/3 · QUIC", "HTTP/1 · TLS", "twp-reverse-http3-to-https-http1-body256k", "nginx-reverse-http3-to-https-http1-body256k", "yarp-reverse-http3-to-https-http1-body256k"),
     ]
 
-    def bodies_table(data: dict, is_win: bool) -> str:
+    def bodies_table(data: dict, is_win: bool, cpus: int = 4) -> str:
         include_he = not is_win
         rows = [
             f"| Body | Client | Origin | {peer_cols(include_he)} |",
@@ -343,7 +386,7 @@ def main() -> None:
                 stem = t.replace("twp-reverse-", "", 1)
                 extra = {"haproxy_a": f"haproxy-reverse-{stem}", "envoy_a": f"envoy-reverse-{stem}"}
             rows.append(
-                peer_row([body, c, o], t, n, y, data, win_no_quic=is_win, win_no_haproxy_envoy=is_win, **extra)
+                peer_row([body, c, o], t, n, y, data, win_no_quic=is_win, win_no_haproxy_envoy=is_win, cpus=cpus, **extra)
             )
         return "\n".join(rows)
 
@@ -358,7 +401,7 @@ def main() -> None:
         ("HTTP/3 · QUIC", "HTTP/1 · TLS", "twp-reverse-http3-to-https-http1-post64k", "nginx-reverse-http3-to-https-http1-post64k", "yarp-reverse-http3-to-https-http1-post64k"),
     ]
 
-    def post_table(data: dict, is_win: bool) -> str:
+    def post_table(data: dict, is_win: bool, cpus: int = 4) -> str:
         include_he = not is_win
         rows = [
             f"| Client | Origin | {peer_cols(include_he)} |",
@@ -370,7 +413,7 @@ def main() -> None:
                 stem = t.replace("twp-reverse-", "", 1)
                 extra = {"haproxy_a": f"haproxy-reverse-{stem}", "envoy_a": f"envoy-reverse-{stem}"}
             rows.append(
-                peer_row([c, o], t, n, y, data, win_no_quic=is_win, win_no_haproxy_envoy=is_win, **extra)
+                peer_row([c, o], t, n, y, data, win_no_quic=is_win, win_no_haproxy_envoy=is_win, cpus=cpus, **extra)
             )
         return "\n".join(rows)
 
@@ -385,7 +428,7 @@ def main() -> None:
         ("HTTP/3 · QUIC", "HTTP/1 · TLS", "twp-reverse-http3-to-https-http1-lossy", "nginx-reverse-http3-to-https-http1-lossy", "yarp-reverse-http3-to-https-http1-lossy"),
     ]
 
-    def lossy_table(data: dict, is_win: bool) -> str:
+    def lossy_table(data: dict, is_win: bool, cpus: int = 4) -> str:
         include_he = not is_win
         rows = [
             f"| Client | Origin | {peer_cols(include_he)} |",
@@ -397,7 +440,7 @@ def main() -> None:
                 stem = t.replace("twp-reverse-", "", 1)
                 extra = {"haproxy_a": f"haproxy-reverse-{stem}", "envoy_a": f"envoy-reverse-{stem}"}
             rows.append(
-                peer_row([c, o], t, n, y, data, win_no_quic=is_win, win_no_haproxy_envoy=is_win, **extra)
+                peer_row([c, o], t, n, y, data, win_no_quic=is_win, win_no_haproxy_envoy=is_win, cpus=cpus, **extra)
             )
         return "\n".join(rows)
 
@@ -415,7 +458,7 @@ def main() -> None:
         ("Duplex (WebSocket / H1 Upgrade)", "HTTP/1 · TLS", "HTTP/1 · plain", "twp-reverse-http1-tls-duplex-ws", "nginx-reverse-http1-tls-duplex-ws", "yarp-reverse-http1-tls-duplex-ws"),
     ]
 
-    def arch_table(data: dict, is_win: bool) -> str:
+    def arch_table(data: dict, is_win: bool, cpus: int = 4) -> str:
         include_he = not is_win
         rows = [
             f"| Scenario | Client | Origin | {peer_cols(include_he)} |",
@@ -438,6 +481,7 @@ def main() -> None:
                     data,
                     win_no_quic=is_win and bool(n and "http3" in n),
                     win_no_haproxy_envoy=is_win,
+                    cpus=cpus,
                     **extra,
                 )
             )
@@ -449,14 +493,14 @@ def main() -> None:
         ("Keep-alive · 256 KiB GET", "twp-reverse-http1-tls-ka-256k", "nginx-reverse-http1-tls-ka-256k", "yarp-reverse-http1-tls-ka-256k"),
     ]
 
-    def tls_table(data: dict, is_win: bool) -> str:
+    def tls_table(data: dict, is_win: bool, cpus: int = 4) -> str:
         include_he = not is_win
         rows = [
             f"| Workload | {peer_cols(include_he)} |",
             f"|---|{peer_rule(include_he)}|",
         ]
         for label, t, n, y in tls_spec:
-            rows.append(peer_row([label], t, n, y, data, win_no_haproxy_envoy=is_win))
+            rows.append(peer_row([label], t, n, y, data, win_no_haproxy_envoy=is_win, cpus=cpus))
         return "\n".join(rows)
 
     def sat_block_a(data: dict) -> str:
@@ -812,7 +856,7 @@ def main() -> None:
             f"Median of **3** repeats on `{mac_folder}` @ `{HEAD}`. "
             f"Source: Actions [{rid_t_mac}]({run_url(rid_t_mac)}).\n\n"
         )
-        mac_tbl = tls_table(mac["tls"], False)
+        mac_tbl = tls_table(mac["tls"], False, cpus=3)
         mac_section = mac_hdr + mac_tbl + "\n\n"
         m = text.find("#### macOS", tls)
         next_h2 = text.find("\n## ", tls + 1)
@@ -881,7 +925,7 @@ def main() -> None:
         "### Windows — POST 64 KiB request + 64 KiB response",
         "### macOS — heavier reverse GET (64 KiB / 256 KiB)",
         f"{mac_intro} Source: Actions [{rid_b_mac}]({run_url(rid_b_mac)}) (`compare-bodies`). Warmup 2s / measure 8s.",
-        bodies_table(mac["bodies"], False),
+        bodies_table(mac["bodies"], False, cpus=3),
     )
     if has_os(runs["post"], mac_folder):
         ensure_mac_heading(
@@ -889,7 +933,7 @@ def main() -> None:
             "### Windows — lossy / high-RTT (H2 HOL / H3 loss)",
             "### macOS — POST 64 KiB request + 64 KiB response",
             f"{mac_intro} Source: Actions [{rid_p_mac}]({run_url(rid_p_mac)}) (`compare-post`).",
-            post_table(mac["post"], False),
+            post_table(mac["post"], False, cpus=3),
         )
     if has_os(runs["lossy"], mac_folder):
         ensure_mac_heading(
@@ -897,7 +941,7 @@ def main() -> None:
             "### Architecture-sensitive",
             "### macOS — lossy / high-RTT (H2 HOL / H3 loss)",
             f"{mac_intro} Source: [{rid_l_mac}]({run_url(rid_l_mac)}) (`compare-lossy`; lossy H3 uses `quic-http3`, UDP drop-only).",
-            lossy_table(mac["lossy"], False),
+            lossy_table(mac["lossy"], False, cpus=3),
         )
     if has_os(runs["arch"], mac_folder):
         ensure_mac_heading(
@@ -905,7 +949,7 @@ def main() -> None:
             "Slow consumer is sleep-bound",
             "#### macOS",
             f"{mac_intro} Source: Actions [{rid_a_mac}]({run_url(rid_a_mac)}) (`compare-arch`).",
-            arch_table(mac["arch"], False),
+            arch_table(mac["arch"], False, cpus=3),
         )
 
     text = re.sub(r"\nH1-client rows[^\n]*\n", "\n", text)
