@@ -666,7 +666,7 @@ def plot_packed_product_bars(
 
 
 # One-row product legend in upper-right. This first limit is conservative;
-# render_chart then drops one major y tick when the real legend box still clears.
+# render_chart then drops major y ticks while the real legend box still clears.
 _LEGEND_HEIGHT_FRAC = 0.24
 _LEGEND_CLEARANCE_FRAC = 0.06
 _LEGEND_RIGHT_CLUSTERS = 5
@@ -733,12 +733,13 @@ def _tallest_bar(ax) -> float:
     return tallest
 
 
-def lower_top_tick_one_step(fig, ax) -> None:
+def lower_top_tick_one_step(fig, ax) -> bool:
     """Drop the highest y tick one step when bars still clear the legend and the frame.
 
-    The first ylim often rounds up to an extra grid line. Use the next-lower
-    labeled tick when the legend still has ``_LEGEND_GAP_PX`` of room and the
-    tallest bar keeps ``_TOP_HEADROOM_FRAC`` under the axis top.
+    Returns True when the axis max changed. The first ylim often rounds up to an
+    extra grid line. Use the next-lower labeled tick when the legend still has
+    ``_LEGEND_GAP_PX`` of room and the tallest bar keeps ``_TOP_HEADROOM_FRAC``
+    under the axis top.
     """
     from matplotlib.ticker import AutoLocator, MultipleLocator
 
@@ -746,7 +747,7 @@ def lower_top_tick_one_step(fig, ax) -> None:
     original = ax.get_ylim()[1]
     ticks = [t for t in ax.get_yticks() if t > 1 and t <= original + 1e-6]
     if len(ticks) < 2:
-        return
+        return False
     top = ticks[-1]
     step = top - ticks[-2]
     target = top - step
@@ -772,10 +773,10 @@ def lower_top_tick_one_step(fig, ax) -> None:
         floor = max(floor, tallest / (1.0 - _TOP_HEADROOM_FRAC))
     if floor >= hi or gap_at(hi) < _LEGEND_GAP_PX:
         restore()
-        return
+        return False
     if gap_at(floor) >= _LEGEND_GAP_PX:
         ax.set_ylim(0, floor)
-        return
+        return True
 
     lo = floor
     best = hi
@@ -786,6 +787,7 @@ def lower_top_tick_one_step(fig, ax) -> None:
         else:
             lo = mid
     ax.set_ylim(0, best)
+    return True
 
 
 def arm_sustain_c64(csv_path: Path, arm: str) -> Optional[float]:
@@ -1045,12 +1047,13 @@ def render_chart(
         framealpha=0.92,
         ncols=5,
         fontsize=13,
-        handlelength=1.8,
+        handlelength=1.4,
         handleheight=1.4,
-        borderpad=0.6,
+        borderpad=0.45,
         labelspacing=0.45,
-        columnspacing=1.4,
+        columnspacing=1.0,
         handletextpad=0.5,
+        borderaxespad=0.2,
     )
     ax.set_axisbelow(True)
     fig.text(
@@ -1061,7 +1064,10 @@ def render_chart(
         color="#444444",
     )
     fig.tight_layout(rect=(0, 0.06, 1, 1))
-    lower_top_tick_one_step(fig, ax)
+    # Keep dropping a grid step while the legend and the top spine still clear.
+    for _ in range(4):
+        if not lower_top_tick_one_step(fig, ax):
+            break
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, bbox_inches="tight")
     plt.close(fig)
