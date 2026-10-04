@@ -152,7 +152,7 @@ def main() -> None:
         )
 
     block2, n = re.subn(
-        r"Median of \*\*3\*\* repeats @ `[^`]+`\. Source: Actions \[[0-9]+\]\([^)]+\)\.[^\n]*",
+        r"Median of \*\*3\*\* repeats[^\n]*",
         header,
         block,
         count=1,
