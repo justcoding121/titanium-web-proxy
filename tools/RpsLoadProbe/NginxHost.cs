@@ -850,6 +850,16 @@ internal sealed class NginxHost : IDisposable
         configureOrVersionText.Contains("http_v3_module", StringComparison.OrdinalIgnoreCase)
         || configureOrVersionText.Contains("http_quic_module", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// True when <paramref name="nginxPath"/> (or PATH) is nginx 1.25.1+, which can serve
+    /// prior-knowledge h2c via <c>http2 on</c> without ssl. Ubuntu 24.04's 1.24 cannot.
+    /// </summary>
+    internal static bool SupportsPriorKnowledgeH2c(string? nginxPath)
+    {
+        var exe = ResolveNginxExecutable(nginxPath);
+        return exe != null && SupportsHttp2OnDirective(ReadVersion(exe));
+    }
+
     /// <summary>True when the binary supports the <c>http2 on;</c> directive (1.25.1+).</summary>
     internal static bool SupportsHttp2OnDirective(string versionText)
     {
