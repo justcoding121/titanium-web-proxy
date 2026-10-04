@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -134,7 +135,7 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
         return $"{method}:{host}{path}";
     }
 
-    private void ServeHit(ProxyMiddlewareContext context, CachedHttpResponse cached)
+    private static void ServeHit(ProxyMiddlewareContext context, CachedHttpResponse cached)
     {
         var headers = new List<HttpHeader>(cached.Headers.Count + 1);
         foreach (var h in cached.Headers)
@@ -232,13 +233,12 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
         {
             if (header.Name.Equals("Connection", StringComparison.OrdinalIgnoreCase))
             {
-                foreach (var part in header.Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                foreach (var part in header.Value
+                    .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                    .Where(part => !part.Equals("close", StringComparison.OrdinalIgnoreCase) &&
+                                   !part.Equals("keep-alive", StringComparison.OrdinalIgnoreCase)))
                 {
-                    if (!part.Equals("close", StringComparison.OrdinalIgnoreCase) &&
-                        !part.Equals("keep-alive", StringComparison.OrdinalIgnoreCase))
-                    {
-                        hopByHop.Add(part);
-                    }
+                    hopByHop.Add(part);
                 }
 
                 continue;
@@ -248,12 +248,9 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
         }
 
         var kept = new List<KeyValuePair<string, string>>(staged.Count);
-        foreach (var header in staged)
+        foreach (var header in staged.Where(header => !hopByHop.Contains(header.Key)))
         {
-            if (!hopByHop.Contains(header.Key))
-            {
-                kept.Add(header);
-            }
+            kept.Add(header);
         }
 
         return kept;
