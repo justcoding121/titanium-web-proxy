@@ -149,6 +149,11 @@ def run_id_with_os(run_ids: RunIds, os_folder: str) -> int:
     return ids[0]
 
 
+def has_os(run_ids: RunIds, os_folder: str) -> bool:
+    """True when a downloaded rps-csv folder exists for this OS. Absent folders must not wipe wiki rows."""
+    return any(_csv_files_for_os(ROOT / str(rid), os_folder) for rid in _run_id_list(run_ids))
+
+
 def parse_run_ids(text: str) -> RunIds:
     parts = [p.strip() for p in text.split(",") if p.strip()]
     ids = [int(p) for p in parts]
@@ -519,87 +524,99 @@ def main() -> None:
         f"Blocks B/C use peer÷YARP / ÷nginx on median peak (not % of H1 origin). **RPS cells** embed median RSS / CPU for the **proxy child** plus its **full descendant tree** "
         f"(serve-proxy → nginx master → workers); origin-direct samples the **origin** child. Product matrices below use matched `dotnet-httpclient` only (not bombardier).\n"
     )
-    text = re.sub(
-        r"Calibration for the shared 4 vCPU loopback shape:.*?(?=\n\n#### Block A)",
-        sat_intro.rstrip() + "\n",
-        text,
-        count=1,
-        flags=re.S,
-    )
+    # Saturation is Linux-only unless a Windows or macOS folder was actually downloaded.
+    sat_win = has_os(runs["saturation"], "windows-latest")
+    sat_lin = has_os(runs["saturation"], "ubuntu-latest")
+    sat_mac = has_os(runs["saturation"], mac_folder)
+    if sat_win and sat_lin:
+        text = re.sub(
+            r"Calibration for the shared 4 vCPU loopback shape:.*?(?=\n\n#### Block A)",
+            sat_intro.rstrip() + "\n",
+            text,
+            count=1,
+            flags=re.S,
+        )
 
     # Block A
     a = text.find("#### Block A — H1 plain")
     b = text.find("#### Block B — H2 TLS→H1")
     block = text[a:b]
-    w = block.find("**Windows**")
-    l = block.find("**Linux**")
-    block = replace_table_at(block, block.find("| Arm | Generator | RPS", w), sat_block_a(win["saturation"]))
-    l = block.find("**Linux**")
-    block = replace_table_at(block, block.find("| Arm | Generator | RPS", l), sat_block_a(lin["saturation"]))
-    mac_a = sat_block_a(mac["saturation"])
-    if "**macOS**" not in block:
-        mac_section = f"\n\n**macOS** (`{mac_folder}`, Apple Silicon)\n\n" + mac_a + "\n"
-        prose = block.find("\nReverse peers are about")
-        if prose < 0:
-            prose = block.find("\nOn this macOS run")
-        block = (block[:prose] + mac_section + block[prose:]) if prose > 0 else block.rstrip() + mac_section
-    else:
-        mpos = block.find("**macOS**")
-        block = replace_table_at(block, block.find("| Arm |", mpos), mac_a)
+    if sat_win:
+        w = block.find("**Windows**")
+        block = replace_table_at(block, block.find("| Arm | Generator | RPS", w), sat_block_a(win["saturation"]))
+    if sat_lin:
+        l = block.find("**Linux**")
+        block = replace_table_at(block, block.find("| Arm | Generator | RPS", l), sat_block_a(lin["saturation"]))
+    if sat_mac:
+        mac_a = sat_block_a(mac["saturation"])
+        if "**macOS**" not in block:
+            mac_section = f"\n\n**macOS** (`{mac_folder}`, Apple Silicon)\n\n" + mac_a + "\n"
+            prose = block.find("\nReverse peers are about")
+            if prose < 0:
+                prose = block.find("\nOn this macOS run")
+            block = (block[:prose] + mac_section + block[prose:]) if prose > 0 else block.rstrip() + mac_section
+        else:
+            mpos = block.find("**macOS**")
+            block = replace_table_at(block, block.find("| Arm |", mpos), mac_a)
     def peak_pct(data: dict, arm: str, origin: str) -> str:
         num = data.get(arm)
         den = data.get(origin)
         if not num or not den or not den.get("Peak"):
             return "—"
         return f"{num['Peak'] / den['Peak'] * 100:.1f}%"
-    block = re.sub(
-        r"Reverse peers on Block A @ .*?Bare and origin-direct are controls \(not medal peers\)\.",
-        (
-            f"Reverse peers on Block A @ `{HEAD}`: Windows TWP is **{peak_pct(win['saturation'], 'twp-reverse-http1', 'origin-direct')}** "
-            f"of origin-direct and Linux TWP is **{peak_pct(lin['saturation'], 'twp-reverse-http1', 'origin-direct')}**. "
-            f"Prefer the **%** column over absolute RPS across runs. Bare and origin-direct are controls (not medal peers)."
-        ),
-        block,
-        count=1,
-        flags=re.S,
-    )
-    mac_origin = mac["saturation"].get("origin-direct")
-    if mac_origin:
+    if sat_win and sat_lin:
         block = re.sub(
-            r"On this macOS run `origin-direct` was \*\*[0-9.]+%\*\* CPU",
-            f"On this macOS run `origin-direct` was **{mac_origin['Cpu']:.1f}%** CPU",
+            r"Reverse peers on Block A @ .*?Bare and origin-direct are controls \(not medal peers\)\.",
+            (
+                f"Reverse peers on Block A @ `{HEAD}`: Windows TWP is **{peak_pct(win['saturation'], 'twp-reverse-http1', 'origin-direct')}** "
+                f"of origin-direct and Linux TWP is **{peak_pct(lin['saturation'], 'twp-reverse-http1', 'origin-direct')}**. "
+                f"Prefer the **%** column over absolute RPS across runs. Bare and origin-direct are controls (not medal peers)."
+            ),
             block,
             count=1,
+            flags=re.S,
         )
+    if sat_mac:
+        mac_origin = mac["saturation"].get("origin-direct")
+        if mac_origin:
+            block = re.sub(
+                r"On this macOS run `origin-direct` was \*\*[0-9.]+%\*\* CPU",
+                f"On this macOS run `origin-direct` was **{mac_origin['Cpu']:.1f}%** CPU",
+                block,
+                count=1,
+            )
     text = text[:a] + block + text[b:]
 
     # Block B
     b = text.find("#### Block B — H2 TLS→H1")
     c = text.find("#### Block C — H3→H1")
     block = text[b:c]
-    w = block.find("**Windows**")
-    block = replace_table_at(
-        block,
-        block.find("| Arm |", w),
-        sat_block_bc(win["saturation"], "nginx-reverse-http2", "yarp-reverse-http2", "twp-reverse-http2-cleartext"),
-    )
-    l = block.find("**Linux**")
-    block = replace_table_at(
-        block,
-        block.find("| Arm |", l),
-        sat_block_bc(lin["saturation"], "nginx-reverse-http2", "yarp-reverse-http2", "twp-reverse-http2-cleartext"),
-    )
-    mac_b = sat_block_bc(
-        mac["saturation"],
-        "nginx-reverse-http2",
-        "yarp-reverse-http2",
-        "twp-reverse-http2-cleartext",
-    )
-    if "**macOS**" not in block:
-        block = block.rstrip() + f"\n\n**macOS** (`{mac_folder}`, Apple Silicon)\n\n" + mac_b + "\n"
-    else:
-        mpos = block.find("**macOS**")
-        block = replace_table_at(block, block.find("| Arm |", mpos), mac_b)
+    if sat_win:
+        w = block.find("**Windows**")
+        block = replace_table_at(
+            block,
+            block.find("| Arm |", w),
+            sat_block_bc(win["saturation"], "nginx-reverse-http2", "yarp-reverse-http2", "twp-reverse-http2-cleartext"),
+        )
+    if sat_lin:
+        l = block.find("**Linux**")
+        block = replace_table_at(
+            block,
+            block.find("| Arm |", l),
+            sat_block_bc(lin["saturation"], "nginx-reverse-http2", "yarp-reverse-http2", "twp-reverse-http2-cleartext"),
+        )
+    if sat_mac:
+        mac_b = sat_block_bc(
+            mac["saturation"],
+            "nginx-reverse-http2",
+            "yarp-reverse-http2",
+            "twp-reverse-http2-cleartext",
+        )
+        if "**macOS**" not in block:
+            block = block.rstrip() + f"\n\n**macOS** (`{mac_folder}`, Apple Silicon)\n\n" + mac_b + "\n"
+        else:
+            mpos = block.find("**macOS**")
+            block = replace_table_at(block, block.find("| Arm |", mpos), mac_b)
     text = text[:b] + block + text[c:]
 
     # Block C
@@ -611,43 +628,46 @@ def main() -> None:
     if how < 0:
         raise SystemExit("missing end of saturation Block C")
     block = text[c:how]
-    w = block.find("**Windows**")
-    block = replace_table_at(
-        block,
-        block.find("| Arm |", w),
-        sat_block_bc(
-            win["saturation"],
+    if sat_win:
+        w = block.find("**Windows**")
+        block = replace_table_at(
+            block,
+            block.find("| Arm |", w),
+            sat_block_bc(
+                win["saturation"],
+                "nginx-reverse-http3-cleartext",
+                "yarp-reverse-http3-cleartext",
+                "twp-reverse-http3-cleartext",
+                win_no_nginx=True,
+            ),
+        )
+    if sat_lin:
+        l = block.find("**Linux**")
+        block = replace_table_at(
+            block,
+            block.find("| Arm |", l),
+            sat_block_bc(
+                lin["saturation"],
+                "nginx-reverse-http3-cleartext",
+                "yarp-reverse-http3-cleartext",
+                "twp-reverse-http3-cleartext",
+            ),
+        )
+    if sat_mac:
+        mac_table = sat_block_bc(
+            mac["saturation"],
             "nginx-reverse-http3-cleartext",
             "yarp-reverse-http3-cleartext",
             "twp-reverse-http3-cleartext",
-            win_no_nginx=True,
-        ),
-    )
-    l = block.find("**Linux**")
-    block = replace_table_at(
-        block,
-        block.find("| Arm |", l),
-        sat_block_bc(
-            lin["saturation"],
-            "nginx-reverse-http3-cleartext",
-            "yarp-reverse-http3-cleartext",
-            "twp-reverse-http3-cleartext",
-        ),
-    )
-    mac_table = sat_block_bc(
-        mac["saturation"],
-        "nginx-reverse-http3-cleartext",
-        "yarp-reverse-http3-cleartext",
-        "twp-reverse-http3-cleartext",
-    )
-    if "**macOS**" not in block:
-        block = block.rstrip() + f"\n\n**macOS** (`{mac_folder}`, Apple Silicon)\n\n" + mac_table + "\n"
-    else:
-        mpos = block.find("**macOS**")
-        block = replace_table_at(block, block.find("| Arm |", mpos), mac_table)
+        )
+        if "**macOS**" not in block:
+            block = block.rstrip() + f"\n\n**macOS** (`{mac_folder}`, Apple Silicon)\n\n" + mac_table + "\n"
+        else:
+            mpos = block.find("**macOS**")
+            block = replace_table_at(block, block.find("| Arm |", mpos), mac_table)
     remeasure = block.find("Re-measured @")
     win_heading = block.find("\n\n**Windows**")
-    if remeasure > 0 and win_heading > remeasure:
+    if sat_win and sat_lin and remeasure > 0 and win_heading > remeasure:
         def peer_aside(os_name: str, data: dict) -> str:
             bits = []
             for label, arm in (
@@ -713,120 +733,132 @@ def main() -> None:
         f"Median of **3** repeats @ `{HEAD}`. Source: Actions [{rid_b}]({run_url(rid_b)}) (`compare-bodies`). Warmup 2s / measure 8s.\n",
         bodies_table(lin["bodies"], False),
     )
-    patch_heavier(
-        "### Windows — POST 64 KiB request + 64 KiB response",
-        f"Median of **3** repeats on `windows-latest` @ `{HEAD}`. Source: Actions [{rid_p}]({run_url(rid_p)}) (`compare-post`).\n\n{WIN_NO_HAPROXY_ENVOY_NOTE}",
-        post_table(win["post"], True),
-    )
-    patch_heavier(
-        "### Linux — POST 64 KiB request + 64 KiB response",
-        f"Median of **3** repeats @ `{HEAD}`. Source: Actions [{rid_p}]({run_url(rid_p)}) (`compare-post`).\n",
-        post_table(lin["post"], False),
-    )
-    patch_heavier(
-        "### Windows — lossy / high-RTT (H2 HOL / H3 loss)",
-        f"Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2); UDP is **loss% only** (no per-datagram delay; MsQuic-safe) + **1%** datagram drop (H3); **64 KiB** GET. Median of **3** repeats on `windows-latest` @ `{HEAD}` — [{rid_l}]({run_url(rid_l)}) (`compare-lossy`).\n\n{WIN_NO_HAPROXY_ENVOY_NOTE}",
-        lossy_table(win["lossy"], True),
-    )
-    patch_heavier(
-        "### Linux — lossy / high-RTT (H2 HOL / H3 loss)",
-        f"Median of **3** repeats @ `{HEAD}`. Source: [{rid_l}]({run_url(rid_l)}) (`compare-lossy`; lossy H3 uses `quic-http3`, UDP drop-only).\n",
-        lossy_table(lin["lossy"], False),
-    )
+    if has_os(runs["post"], "windows-latest"):
+        patch_heavier(
+            "### Windows — POST 64 KiB request + 64 KiB response",
+            f"Median of **3** repeats on `windows-latest` @ `{HEAD}`. Source: Actions [{rid_p}]({run_url(rid_p)}) (`compare-post`).\n\n{WIN_NO_HAPROXY_ENVOY_NOTE}",
+            post_table(win["post"], True),
+        )
+    if has_os(runs["post"], "ubuntu-latest"):
+        patch_heavier(
+            "### Linux — POST 64 KiB request + 64 KiB response",
+            f"Median of **3** repeats @ `{HEAD}`. Source: Actions [{rid_p}]({run_url(rid_p)}) (`compare-post`).\n",
+            post_table(lin["post"], False),
+        )
+    if has_os(runs["lossy"], "windows-latest"):
+        patch_heavier(
+            "### Windows — lossy / high-RTT (H2 HOL / H3 loss)",
+            f"Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2); UDP is **loss% only** (no per-datagram delay; MsQuic-safe) + **1%** datagram drop (H3); **64 KiB** GET. Median of **3** repeats on `windows-latest` @ `{HEAD}` — [{rid_l}]({run_url(rid_l)}) (`compare-lossy`).\n\n{WIN_NO_HAPROXY_ENVOY_NOTE}",
+            lossy_table(win["lossy"], True),
+        )
+    if has_os(runs["lossy"], "ubuntu-latest"):
+        patch_heavier(
+            "### Linux — lossy / high-RTT (H2 HOL / H3 loss)",
+            f"Median of **3** repeats @ `{HEAD}`. Source: [{rid_l}]({run_url(rid_l)}) (`compare-lossy`; lossy H3 uses `quic-http3`, UDP drop-only).\n",
+            lossy_table(lin["lossy"], False),
+        )
 
-    text = re.sub(
-        r"Median of \*\*3\*\* repeats on matched 4 vCPU / 16 GiB runners @ `[^`]+` \(\[[0-9]+\]\([^)]+\)\)(?: \(`compare-arch`\))?\.",
-        f"Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `{HEAD}` ([{rid_a}]({run_url(rid_a)})).",
-        text,
-        count=1,
-    )
+    arch_win = has_os(runs["arch"], "windows-latest")
+    arch_lin = has_os(runs["arch"], "ubuntu-latest")
+    if arch_win and arch_lin:
+        text = re.sub(
+            r"Median of \*\*3\*\* repeats on matched 4 vCPU / 16 GiB runners @ `[^`]+` \(\[[0-9]+\]\([^)]+\)\)(?: \(`compare-arch`\))?\.",
+            f"Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `{HEAD}` ([{rid_a}]({run_url(rid_a)})).",
+            text,
+            count=1,
+        )
     arch = text.find("### Architecture-sensitive")
-    w = text.find("#### Windows", arch)
-    arch_w = text.find("| Scenario |", w)
-    text = replace_table_at(text, arch_w, arch_table(win["arch"], True))
-    l = text.find("#### Linux", text.find("### Architecture-sensitive"))
-    arch_l = text.find("| Scenario |", l)
-    text = replace_table_at(text, arch_l, arch_table(lin["arch"], False))
+    if arch_win:
+        w = text.find("#### Windows", arch)
+        arch_w = text.find("| Scenario |", w)
+        text = replace_table_at(text, arch_w, arch_table(win["arch"], True))
+    if arch_lin:
+        l = text.find("#### Linux", text.find("### Architecture-sensitive"))
+        arch_l = text.find("| Scenario |", l)
+        text = replace_table_at(text, arch_l, arch_table(lin["arch"], False))
 
-    tls = text.find("### TLS termination cost")
-    w = text.find("#### Windows", tls)
-    text2 = text[w:]
-    text2 = re.sub(
-        r"Median of \*\*3\*\* repeats on `windows-latest` @ `[^`]+`\. Source: Actions \[[0-9]+\]\([^)]+\)(?: \(`compare-tls-cost`\))?\.[^\n]*\n",
-        f"Median of **3** repeats on `windows-latest` @ `{HEAD}`. Source: Actions [{rid_t}]({run_url(rid_t)}). Absolute RPS on GHA swings hard; prefer **TWP÷YARP**.\n",
-        text2,
-        count=1,
-    )
-    tls_tbl_w = text2.find("| Workload |")
-    text2 = replace_table_at(text2, tls_tbl_w, tls_table(win["tls"], True))
-    text = text[:w] + text2
+    if has_os(runs["tls"], "windows-latest"):
+        tls = text.find("### TLS termination cost")
+        w = text.find("#### Windows", tls)
+        text2 = text[w:]
+        text2 = re.sub(
+            r"Median of \*\*3\*\* repeats on `windows-latest` @ `[^`]+`\. Source: Actions \[[0-9]+\]\([^)]+\)(?: \(`compare-tls-cost`\))?\.[^\n]*\n",
+            f"Median of **3** repeats on `windows-latest` @ `{HEAD}`. Source: Actions [{rid_t}]({run_url(rid_t)}). Absolute RPS on GHA swings hard; prefer **TWP÷YARP**.\n",
+            text2,
+            count=1,
+        )
+        tls_tbl_w = text2.find("| Workload |")
+        text2 = replace_table_at(text2, tls_tbl_w, tls_table(win["tls"], True))
+        text = text[:w] + text2
 
-    tls = text.find("### TLS termination cost")
-    l = text.find("#### Linux", tls)
-    text2 = text[l:]
-    text2 = re.sub(
-        r"Median of \*\*3\*\* repeats @ `[^`]+`\. Source: Actions \[[0-9]+\]\([^)]+\)(?: \(`compare-tls-cost`\))?\.\n",
-        f"Median of **3** repeats @ `{HEAD}`. Source: Actions [{rid_t_lin}]({run_url(rid_t_lin)}).\n",
-        text2,
-        count=1,
-    )
-    tls_tbl_l = text2.find("| Workload |")
-    text2 = replace_table_at(text2, tls_tbl_l, tls_table(lin["tls"], False))
-    text = text[:l] + text2
+    if has_os(runs["tls"], "ubuntu-latest"):
+        tls = text.find("### TLS termination cost")
+        l = text.find("#### Linux", tls)
+        text2 = text[l:]
+        text2 = re.sub(
+            r"Median of \*\*3\*\* repeats @ `[^`]+`\. Source: Actions \[[0-9]+\]\([^)]+\)(?: \(`compare-tls-cost`\))?\.\n",
+            f"Median of **3** repeats @ `{HEAD}`. Source: Actions [{rid_t_lin}]({run_url(rid_t_lin)}).\n",
+            text2,
+            count=1,
+        )
+        tls_tbl_l = text2.find("| Workload |")
+        text2 = replace_table_at(text2, tls_tbl_l, tls_table(lin["tls"], False))
+        text = text[:l] + text2
 
-    tls = text.find("### TLS termination cost")
-    mac_hdr = (
-        f"#### macOS\n\n"
-        f"Median of **3** repeats on `{mac_folder}` @ `{HEAD}`. "
-        f"Source: Actions [{rid_t_mac}]({run_url(rid_t_mac)}).\n\n"
-    )
-    mac_tbl = tls_table(mac["tls"], False)
-    mac_section = mac_hdr + mac_tbl + "\n\n"
-    m = text.find("#### macOS", tls)
-    next_h2 = text.find("\n## ", tls + 1)
-    if next_h2 < 0:
-        next_h2 = len(text)
-    prose_pat = re.compile(
-        r"\n(?:All three workloads are \*\*>1\.00×\*\* YARP|On Windows, TWP leads YARP on keep-alive tiny)[^\n]*\n",
-    )
-    mac_prose = (
-        "\nPrefer **TWP÷YARP** in the table. Absolute RPS on GHA swings hard. "
-        "New-connection is Darwin SslStream-bound for TWP and YARP (handshake p99 SLO "
-        "**500 ms** on macOS only — Win/Linux stay at **200 ms**).\n"
-    )
-    if m >= 0 and m < next_h2:
-        # Replace existing macOS TLS subsection through next ####/## or prose.
-        end = next_h2
-        prose_m = prose_pat.search(text, m, next_h2)
-        if prose_m:
-            end = prose_m.start()
+    if has_os(runs["tls"], mac_folder):
+        tls = text.find("### TLS termination cost")
+        mac_hdr = (
+            f"#### macOS\n\n"
+            f"Median of **3** repeats on `{mac_folder}` @ `{HEAD}`. "
+            f"Source: Actions [{rid_t_mac}]({run_url(rid_t_mac)}).\n\n"
+        )
+        mac_tbl = tls_table(mac["tls"], False)
+        mac_section = mac_hdr + mac_tbl + "\n\n"
+        m = text.find("#### macOS", tls)
+        next_h2 = text.find("\n## ", tls + 1)
+        if next_h2 < 0:
+            next_h2 = len(text)
+        prose_pat = re.compile(
+            r"\n(?:All three workloads are \*\*>1\.00×\*\* YARP|On Windows, TWP leads YARP on keep-alive tiny)[^\n]*\n",
+        )
+        mac_prose = (
+            "\nPrefer **TWP÷YARP** in the table. Absolute RPS on GHA swings hard. "
+            "New-connection is Darwin SslStream-bound for TWP and YARP (handshake p99 SLO "
+            "**500 ms** on macOS only — Win/Linux stay at **200 ms**).\n"
+        )
+        if m >= 0 and m < next_h2:
+            # Replace existing macOS TLS subsection through next ####/## or prose.
+            end = next_h2
+            prose_m = prose_pat.search(text, m, next_h2)
+            if prose_m:
+                end = prose_m.start()
+            else:
+                nxt = text.find("\n#### ", m + 1)
+                if 0 <= nxt < next_h2:
+                    end = nxt
+            text = text[:m] + mac_section.rstrip() + "\n" + text[end:]
         else:
-            nxt = text.find("\n#### ", m + 1)
-            if 0 <= nxt < next_h2:
-                end = nxt
-        text = text[:m] + mac_section.rstrip() + "\n" + text[end:]
-    else:
-        # Insert after Linux TLS table, before closing prose / next ##.
-        linux = text.find("#### Linux", tls)
-        tbl = text.find("| Workload |", linux)
-        # skip table
-        lines = text[tbl:].splitlines()
-        i = 0
-        while i < len(lines) and (lines[i].startswith("|") or not lines[i].strip()):
-            i += 1
-        insert_at = tbl + sum(len(lines[j]) + 1 for j in range(i))
-        # Prefer splicing just before the summary prose if present.
-        prose_m = prose_pat.search(text, linux, next_h2)
-        if prose_m:
-            insert_at = prose_m.start()
-        text = text[:insert_at].rstrip() + "\n\n" + mac_section + text[insert_at:].lstrip("\n")
+            # Insert after Linux TLS table, before closing prose / next ##.
+            linux = text.find("#### Linux", tls)
+            tbl = text.find("| Workload |", linux)
+            # skip table
+            lines = text[tbl:].splitlines()
+            i = 0
+            while i < len(lines) and (lines[i].startswith("|") or not lines[i].strip()):
+                i += 1
+            insert_at = tbl + sum(len(lines[j]) + 1 for j in range(i))
+            # Prefer splicing just before the summary prose if present.
+            prose_m = prose_pat.search(text, linux, next_h2)
+            if prose_m:
+                insert_at = prose_m.start()
+            text = text[:insert_at].rstrip() + "\n\n" + mac_section + text[insert_at:].lstrip("\n")
 
-    text, n_prose = prose_pat.subn(mac_prose, text, count=1)
-    if n_prose == 0:
-        # Ensure prose sits after macOS table when the old sentence was already edited.
-        grpc = text.find("\n## Unary gRPC", tls)
-        if grpc > 0 and "Darwin SslStream-bound" not in text[tls:grpc]:
-            text = text[:grpc] + mac_prose + text[grpc:]
+        text, n_prose = prose_pat.subn(mac_prose, text, count=1)
+        if n_prose == 0:
+            # Ensure prose sits after macOS table when the old sentence was already edited.
+            grpc = text.find("\n## Unary gRPC", tls)
+            if grpc > 0 and "Darwin SslStream-bound" not in text[tls:grpc]:
+                text = text[:grpc] + mac_prose + text[grpc:]
 
     def ensure_mac_heading(anchor: str, following: str, heading: str, hdr: str, table: str) -> None:
         nonlocal text
@@ -851,27 +883,30 @@ def main() -> None:
         f"{mac_intro} Source: Actions [{rid_b_mac}]({run_url(rid_b_mac)}) (`compare-bodies`). Warmup 2s / measure 8s.",
         bodies_table(mac["bodies"], False),
     )
-    ensure_mac_heading(
-        "### Linux — POST 64 KiB request + 64 KiB response",
-        "### Windows — lossy / high-RTT (H2 HOL / H3 loss)",
-        "### macOS — POST 64 KiB request + 64 KiB response",
-        f"{mac_intro} Source: Actions [{rid_p_mac}]({run_url(rid_p_mac)}) (`compare-post`).",
-        post_table(mac["post"], False),
-    )
-    ensure_mac_heading(
-        "### Linux — lossy / high-RTT (H2 HOL / H3 loss)",
-        "### Architecture-sensitive",
-        "### macOS — lossy / high-RTT (H2 HOL / H3 loss)",
-        f"{mac_intro} Source: [{rid_l_mac}]({run_url(rid_l_mac)}) (`compare-lossy`; lossy H3 uses `quic-http3`, UDP drop-only).",
-        lossy_table(mac["lossy"], False),
-    )
-    ensure_mac_heading(
-        "#### Linux",
-        "Slow consumer is sleep-bound",
-        "#### macOS",
-        f"{mac_intro} Source: Actions [{rid_a_mac}]({run_url(rid_a_mac)}) (`compare-arch`).",
-        arch_table(mac["arch"], False),
-    )
+    if has_os(runs["post"], mac_folder):
+        ensure_mac_heading(
+            "### Linux — POST 64 KiB request + 64 KiB response",
+            "### Windows — lossy / high-RTT (H2 HOL / H3 loss)",
+            "### macOS — POST 64 KiB request + 64 KiB response",
+            f"{mac_intro} Source: Actions [{rid_p_mac}]({run_url(rid_p_mac)}) (`compare-post`).",
+            post_table(mac["post"], False),
+        )
+    if has_os(runs["lossy"], mac_folder):
+        ensure_mac_heading(
+            "### Linux — lossy / high-RTT (H2 HOL / H3 loss)",
+            "### Architecture-sensitive",
+            "### macOS — lossy / high-RTT (H2 HOL / H3 loss)",
+            f"{mac_intro} Source: [{rid_l_mac}]({run_url(rid_l_mac)}) (`compare-lossy`; lossy H3 uses `quic-http3`, UDP drop-only).",
+            lossy_table(mac["lossy"], False),
+        )
+    if has_os(runs["arch"], mac_folder):
+        ensure_mac_heading(
+            "#### Linux",
+            "Slow consumer is sleep-bound",
+            "#### macOS",
+            f"{mac_intro} Source: Actions [{rid_a_mac}]({run_url(rid_a_mac)}) (`compare-arch`).",
+            arch_table(mac["arch"], False),
+        )
 
     text = re.sub(r"\nH1-client rows[^\n]*\n", "\n", text)
     text = re.sub(

@@ -35,13 +35,13 @@ Do **not** run full `compare-product` on every develop PR. Thresholds change onl
 |------|------|------|------------|
 | Daily / develop PR | feature commits (advisory) | `compare-spot` ([`run-spot-matrix.ps1`](run-spot-matrix.ps1)) | minutes |
 | Milestone / investigation | before merge to main | `compare-terminate` or `compare-matrix` | ~1â2h |
-| Editions | after CLI/Plus changes | `compare-editions` + [`validate-edition-gates.ps1`](validate-edition-gates.ps1) | ~60 min |
-| Beta / stable publish | push to `beta`/`stable` | `compare-editions` + parallel `compare-spot` ([`run-spot-matrix.ps1`](run-spot-matrix.ps1)) | ~60 min wall |
+| Editions | after CLI/Plus changes | `compare-editions` on Linux + [`validate-edition-gates.ps1`](validate-edition-gates.ps1) | ~60 min |
+| Beta / stable publish | push to `beta`/`stable` | Linux `compare-editions` + parallel `compare-spot` ([`run-spot-matrix.ps1`](run-spot-matrix.ps1)) | ~60 min wall |
 | Pre-wiki smoke (required) | after Core / harness changes | **`compare-product-smoke`** Linux **2** comparison-group shards (`repeats=1`) before full product | ~30–60 min |
-| Release / wiki refresh | release SHA | `compare-product` (median of 3) via the [RPS suite](../../.github/workflows/rps-suite.yml): one job per wiki row on Win/Linux/macOS; paste unions the row CSVs | ~5h wall on a Free account (5 macOS slots) |
-| Unary gRPC | as needed | `compare-grpc` (H2 TLS and H2 TLS→h2c; one job per row on Win/Linux/macOS) | ~20–50 min |
-| WebSocket dual-TLS / RFC 8441 | as needed | `compare-ws-h1tls` / `compare-ws-h2` | ~15–40 min each |
-| Heavier wiki tables | as needed | `compare-bodies` / `post` / `lossy` / `arch` / `tls-cost`, each its own suite run | one row per job |
+| Release / wiki refresh | release SHA | `compare-product` and `compare-bodies` (median of 3) via the [RPS suite](../../.github/workflows/rps-suite.yml) on Win/Linux/macOS. Other suite modes are Linux only | ~5h wall on a Free account when macOS runs |
+| Unary gRPC | as needed | `compare-grpc` on Linux (H2 TLS and H2 TLS→h2c) | ~20–50 min |
+| WebSocket dual-TLS / RFC 8441 | as needed | `compare-ws-h1tls` / `compare-ws-h2` on Linux | ~15–40 min each |
+| Heavier wiki tables | as needed | `compare-bodies` on all three OS; `post` / `lossy` / `arch` / `tls-cost` on Linux | one row per job |
 
 ### One job per wiki row
 

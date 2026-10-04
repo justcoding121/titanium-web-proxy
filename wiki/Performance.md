@@ -880,19 +880,19 @@ CI cadence, shards, paste scripts, and gate floors for people refreshing these t
 |------|------|------|
 | Daily / per-PR | `compare-spot` | minutes |
 | Milestone | `compare-terminate` / `compare-matrix` | ~1–2h |
-| Editions | `compare-editions` | one job per OS (arms are compared with each other) |
+| Editions | `compare-editions` | Linux only; one job per wiki row (feature arm + its baseline) |
 | Pre-wiki smoke | `compare-product-smoke` (Linux, `repeats=1`) | ~30–60 min; required before full product |
 | Release / wiki | `compare-product` via [RPS suite](https://github.com/justcoding121/titanium-web-proxy/blob/develop/.github/workflows/rps-suite.yml) | one job per wiki row on Win/Linux/macOS |
-| Unary gRPC | `compare-grpc` | one job per row (H2 TLS and h2c) on Win/Linux/macOS |
-| WebSocket dual-TLS | `compare-ws-h1tls` | one row, three OS |
-| WebSocket RFC 8441 | `compare-ws-h2` | one row, three OS (nginx N/A) |
-| Heavier tables | `compare-bodies` / `post` / `lossy` / `arch` / `tls-cost` | one suite run each, one job per row |
+| Unary gRPC | `compare-grpc` | Linux only; paste leaves Win/macOS rows when those folders are absent |
+| WebSocket dual-TLS | `compare-ws-h1tls` | Linux only |
+| WebSocket RFC 8441 | `compare-ws-h2` | Linux only (nginx N/A) |
+| Heavier tables | `compare-bodies` on Win/Linux/macOS; `post` / `lossy` / `arch` / `tls-cost` / `compare-saturation` on Linux only | one suite run each, one job per row |
 
 See [PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/PERF-GATES.md).
 
 ### Arm shards (comparison groups)
 
-`--arm-shard` takes a comparison-group key (`h1c-h1c`, from `--print-groups`), not an `i/n` index, so a re-run measures the same row after a peer install flake. `i/n` remains for smoke modes. Paste unions `rps-csv-<os>-shard-*` (`paste-compare-product-wiki.ps1 -RunIds …`). Table “Source: Actions” may list several run URLs for one table — **do not mix SHAs**. A single-row leg allows **60** minutes of ramp and **75** minutes overall. Free GitHub accounts run **20** jobs at once, **5** of them macOS. Give a full suite a quiet window: do not push pull requests or start other macOS jobs while it runs. Re-run infrastructure failures only (`gh run rerun --failed`). A failed gate is a finding and is never re-rolled; publish the last attempt, never the best of several. The tables on this page are @ `0386b2aa`. HTTP/3 comparison groups are extra runs on that same SHA: suite prep listed groups before libmsquic was installed, so those rows were missing from the suite matrix. Saturation, editions, and both WebSocket modes are one job per OS on that same SHA. The historical v2 MITM note below the product tables stays @ `41f4adee` because those run ids are from that fix, not this re-measure.
+`--arm-shard` takes a comparison-group key (`h1c-h1c`, from `--print-groups`), not an `i/n` index, so a re-run measures the same row after a peer install flake. `i/n` remains for smoke modes. Paste unions `rps-csv-<os>-shard-*` (`paste-compare-product-wiki.ps1 -RunIds …`). Table “Source: Actions” may list several run URLs for one table — **do not mix SHAs**. A single-row leg allows **60** minutes of ramp and **75** minutes overall. Free GitHub accounts run **20** jobs at once, **5** of them macOS. Give a full suite a quiet window: do not push pull requests or start other macOS jobs while it runs. Re-run infrastructure failures only (`gh run rerun --failed`). A failed gate is a finding and is never re-rolled; publish the last attempt, never the best of several. The tables on this page are @ `0386b2aa`. HTTP/3 comparison groups are extra runs on that same SHA: suite prep listed groups before libmsquic was installed, so those rows were missing from the suite matrix. Saturation, editions, and both WebSocket modes on that SHA were one job per OS. `compare-product` and `compare-bodies` still run on Windows, Linux, and macOS. Every other RPS suite mode runs on Linux only. `compare-spot` on pull requests to beta and stable stays on all three OS. The historical v2 MITM note below the product tables stays @ `41f4adee` because those run ids are from that fix, not this re-measure.
 
 One wiki row = one GHA job’s Client×Origin cell set: TWP + YARP + nginx + HAProxy + Envoy (when the OS can run them) + TWP Lite + Full stay on the **same VM**. Shards split **rows**, not individual proxies — so **TWP÷YARP** and **Lite÷Reverse** remain same-job ratios. Do not compare **absolute** RPS across shards (different VMs).
 

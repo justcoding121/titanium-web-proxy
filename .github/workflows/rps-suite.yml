@@ -1,7 +1,10 @@
-# One job per wiki row for a single ramp mode, on all three OS.
+# One job per wiki row for a single ramp mode.
+# compare-product and compare-bodies run on Windows, Linux, and macOS. Every other mode
+# runs on Linux only; skipped Windows and macOS jobs must not fail the suite.
+# compare-spot on beta/stable pull requests is not this workflow.
 # Dispatch one run per mode (compare-product, compare-bodies, ...) so each table has one
 # Source URL and the paste scripts, which look arms up by name, never mix modes.
-# compare-saturation stays one job per OS (key "all"): saturation Block A compares proxy
+# compare-saturation stays one Linux job (key "all"): saturation Block A compares proxy
 # arms against origin-direct from the same job. compare-editions is one group per wiki row;
 # each group contains the feature arm and the baseline it is divided by.
 #
@@ -130,6 +133,7 @@ jobs:
   windows:
     name: ${{ inputs.mode }} / ${{ matrix.key }} / windows
     needs: prep
+    if: ${{ inputs.mode == 'compare-product' || inputs.mode == 'compare-bodies' }}
     strategy:
       fail-fast: false
       max-parallel: ${{ fromJSON(inputs.max_parallel_other) }}
@@ -145,6 +149,7 @@ jobs:
   macos:
     name: ${{ inputs.mode }} / ${{ matrix.key }} / macos
     needs: prep
+    if: ${{ inputs.mode == 'compare-product' || inputs.mode == 'compare-bodies' }}
     strategy:
       fail-fast: false
       max-parallel: ${{ fromJSON(inputs.max_parallel_mac) }}
@@ -176,7 +181,12 @@ jobs:
           $keys = @($env:KEYS_JSON | ConvertFrom-Json)
           $arts = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID/artifacts?per_page=100" --paginate --jq '.artifacts[] | select(.name | startswith("rps-status-")) | .name'
           $statusNames = @($arts | Where-Object { $_ })
-          $osLabels = [ordered]@{ linux = 'ubuntu-latest'; windows = 'windows-latest'; macos = 'macos-15' }
+          $threeOs = @('compare-product', 'compare-bodies') -contains $env:SUITE_MODE
+          $osLabels = [ordered]@{ linux = 'ubuntu-latest' }
+          if ($threeOs) {
+            $osLabels.windows = 'windows-latest'
+            $osLabels.macos = 'macos-15'
+          }
           $missing = @()
           foreach ($key in $keys) {
             $label = ($key -replace '/', '-')
@@ -185,6 +195,7 @@ jobs:
               if ($statusNames -notcontains $name) { $missing += $name }
             }
           }
+          $expected = if ($threeOs) { "$($keys.Count) x 3 OS" } else { "$($keys.Count) x Linux only" }
           $summary = @(
             "### RPS suite: $env:SUITE_MODE",
             "",
@@ -194,7 +205,7 @@ jobs:
             "| windows | $env:WINDOWS_RESULT |",
             "| macos | $env:MACOS_RESULT |",
             "",
-            "Expected rows: $($keys.Count) x 3 OS.",
+            "Expected rows: $expected.",
             "Status artifacts found: $($statusNames.Count)."
           )
           if ($missing) {
@@ -203,8 +214,10 @@ jobs:
             $summary += ($missing | ForEach-Object { "- $_" })
           }
           $summary -join "`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8
-          $osFailed = @($env:LINUX_RESULT, $env:WINDOWS_RESULT, $env:MACOS_RESULT) | Where-Object { $_ -ne 'success' }
+          $checked = @($env:LINUX_RESULT)
+          if ($threeOs) { $checked += @($env:WINDOWS_RESULT, $env:MACOS_RESULT) }
+          $osFailed = @($checked | Where-Object { $_ -ne 'success' })
           if ($missing -or $osFailed) {
             throw "Suite incomplete: $($missing.Count) status artifact(s) missing, OS results: linux=$env:LINUX_RESULT windows=$env:WINDOWS_RESULT macos=$env:MACOS_RESULT"
           }
-          Write-Host "Suite complete: $($keys.Count) rows x 3 OS"
+          Write-Host "Suite complete: $expected"
