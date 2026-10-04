@@ -350,33 +350,33 @@ Median of **3 repeats** on `macos-15` (Apple Silicon M1, 3-core / 7 GB). Bare re
 
 **Note:** `twp-reverse-http1` and other library rows use Core with **probe-tuned** settings (no logging, no Via header, probe-warmed certs). Edition rows use `titanium run -c twp.yaml` **product defaults** — prefer the ÷baseline ratio column over absolute RPS. Inspector GUI is not spawnable in the harness; session-path overhead is `twp-cli-intercept-http1` (route `RequestHeaderSet` transform). Pre-origin Plus middleware (CIDR/WAF/JWT/rate-limit/cache) runs on H1 terminate-lite without `SessionEventArgs`; a cache hit skips the origin. JWT caches successful bearer validations. CORS only adds response headers on the way out, so it stays on terminate-lite. Circuit breaker and idempotent retry have to see the request or the status code, so they stay on the session path and should land near the intercept row. Maintainer gate thresholds live under [Maintainer notes](#maintainer-notes).
 
-Median of **3** repeats. Linux rows in this paste were re-measured @ `8cf8b770` (Actions [37192183576](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37192183576)). Other edition rows stay @ `0386b2aa`. Windows cells were not re-measured after the terminate-lite cache fix. Warmup 2s / measure 8s; concurrency 8–64; sustain = median peak RPS among SLO-pass steps @ **c=64**. **RPS cells** show sustain; `<sub>` holds peak (when higher) plus `(MiB / CPU%)`. The Gate column is that script's floor.
+Median of **3** repeats. Linux rows in this paste were re-measured @ `8cf8b770` (Actions [37192183576](https://github.com/justcoding121/titanium-web-proxy/actions/runs/37192183576)). Other edition rows stay @ `0386b2aa`. Warmup 2s / measure 8s; concurrency 8–64; sustain = median peak RPS among SLO-pass steps @ **c=64**. **RPS cells** show sustain; `<sub>` holds peak (when higher) plus `(MiB / CPU%)`. The Gate column is that script's floor.
 
-| Arm | Win | Linux | Win÷ | Lin÷ | Gate |
-|---|---:|---:|---:|---:|---|
-| `twp-cli-reverse-http1` vs library | **26,229**<br><sub>(126 MiB / 47.2% CPU)</sub> | **48,005**<br><sub>(172 MiB / 48.5% CPU)</sub> | **1.01×** | **1.04×** | ≥ **0.50×** |
-| `twp-cli-reverse-http1-tls` vs library TLS | **20,885**<br><sub>(147 MiB / 46.5% CPU)</sub> | **35,819**<br><sub>(203 MiB / 48.7% CPU)</sub> | **0.99×** | **1.02×** | ≥ **0.50×** |
-| `twp-cli-reverse-http1-route` vs CLI | **26,081**<br><sub>(135 MiB / 46.6% CPU)</sub> | **47,759**<br><sub>(174 MiB / 48.4% CPU)</sub> | **0.99×** | **0.99×** | ≥ **0.50×** |
-| `twp-cli-plus-base-http1` vs CLI | **26,212**<br><sub>(136 MiB / 49.8% CPU)</sub> | **47,791**<br><sub>(174 MiB / 48.5% CPU)</sub> | **1.00×** | **1.00×** | ≥ **0.50×** |
-| `twp-cli-plus-cache-http1` (cold) vs CLI | **21,979**<br><sub>(143 MiB / 56.1% CPU)</sub> | **122,554**<br><sub>(169 MiB / 48.0% CPU)</sub> | **0.84×** | **1.80×** | ≥ **0.50×** |
-| `twp-cli-intercept-http1` vs CLI | **19,785**<br><sub>(143 MiB / 56.1% CPU)</sub> | **35,573**<br><sub>(183 MiB / 52.1% CPU)</sub> | **0.75×** | **0.74×** | ≥ **0.50×** |
-| `twp-cli-plus-waf-http1` vs CLI | **25,176**<br><sub>(137 MiB / 52.7% CPU)</sub> | **46,484**<br><sub>(179 MiB / 48.9% CPU)</sub> | **0.96×** | **0.97×** | ≥ **0.50×** |
-| `twp-cli-plus-cidr-http1` vs CLI | **25,358**<br><sub>(138 MiB / 48.7% CPU)</sub> | **46,646**<br><sub>(178 MiB / 48.9% CPU)</sub> | **0.97×** | **0.97×** | ≥ **0.50×** |
-| `twp-cli-plus-jwt-http1` vs CLI | **24,452**<br><sub>(156 MiB / 49.2% CPU)</sub> | **43,613**<br><sub>(199 MiB / 48.7% CPU)</sub> | **0.93×** | **0.91×** | ≥ **0.50×** |
-| `twp-cli-plus-ratelimit-http1` vs CLI | **25,149**<br><sub>(135 MiB / 48.0% CPU)</sub> | **46,620**<br><sub>(177 MiB / 49.1% CPU)</sub> | **0.96×** | **0.97×** | ≥ **0.50×** |
-| `twp-cli-plus-resilience-http1` vs CLI | **25,850**<br><sub>(147 MiB / 47.5% CPU)</sub> | **47,710**<br><sub>(181 MiB / 48.4% CPU)</sub> | **0.99×** | **0.99×** | ≥ **0.50×** |
-| `twp-cli-plus-discovery-file-http1` vs CLI | **26,007**<br><sub>(143 MiB / 50.4% CPU)</sub> | **47,630**<br><sub>(180 MiB / 48.5% CPU)</sub> | **0.99×** | **0.99×** | ≥ **0.50×** |
-| `twp-cli-plus-metrics-scrape-http1` vs CLI | **26,308**<br><sub>(133 MiB / 48.3% CPU)</sub> | **48,257**<br><sub>(183 MiB / 48.5% CPU)</sub> | **1.00×** | **1.01×** | ≥ **0.50×** |
-| `twp-cli-plus-cache-hit-http1` vs cache cold | **21,508**<br><sub>(139 MiB / 53.1% CPU)</sub> | **120,058**<br><sub>(169 MiB / 47.3% CPU)</sub> | **0.98×** | **0.98×** | ≥ **0.50×** |
-| `twp-cli-plus-cors-http1` vs CLI | *Not measured* | **31,203**<br><sub>(169 MiB / 51.0% CPU)</sub> | — | **0.92×** | ≥ **0.50×** |
-| `twp-cli-plus-circuit-http1` vs CLI | *Not measured* | **45,001**<br><sub>(243 MiB / 50.3% CPU)</sub> | — | **0.86×** | ≥ **0.50×** |
-| `twp-cli-plus-retry-http1` vs CLI | *Not measured* | **30,430**<br><sub>(177 MiB / 50.2% CPU)</sub> | — | **0.81×** | ≥ **0.50×** |
-| `twp-cli-static-http1` vs CLI | **40,478**<br><sub>(129 MiB / 51.9% CPU)</sub> | **80,449**<br><sub>(175 MiB / 50.3% CPU)</sub> | **1.54×** | **1.68×** | ≥ **0.50×** |
-| `twp-cli-logging-http1` vs CLI | **26,283**<br><sub>(132 MiB / 49.0% CPU)</sub> | **47,905**<br><sub>(175 MiB / 48.5% CPU)</sub> | **1.00×** | **1.00×** | ≥ **0.50×** |
-| `twp-cli-lb-leasttime-http1` vs route | **23,925**<br><sub>(146 MiB / 53.5% CPU)</sub> | **43,887**<br><sub>(197 MiB / 50.7% CPU)</sub> | **0.92×** | **0.92×** | ≥ **0.50×** |
-| `twp-cli-dialect-twp-http1` vs CLI | **26,366**<br><sub>(134 MiB / 47.3% CPU)</sub> | **47,368**<br><sub>(168 MiB / 48.3% CPU)</sub> | **1.01×** | **0.99×** | ≥ **0.50×** |
+| Arm | Linux | Lin÷ | Gate |
+|---|---:|---:|---|
+| `twp-cli-reverse-http1` vs library | **48,005**<br><sub>(172 MiB / 48.5% CPU)</sub> | **1.04×** | ≥ **0.50×** |
+| `twp-cli-reverse-http1-tls` vs library TLS | **35,819**<br><sub>(203 MiB / 48.7% CPU)</sub> | **1.02×** | ≥ **0.50×** |
+| `twp-cli-reverse-http1-route` vs CLI | **47,759**<br><sub>(174 MiB / 48.4% CPU)</sub> | **0.99×** | ≥ **0.50×** |
+| `twp-cli-plus-base-http1` vs CLI | **47,791**<br><sub>(174 MiB / 48.5% CPU)</sub> | **1.00×** | ≥ **0.50×** |
+| `twp-cli-plus-cache-http1` (cold) vs CLI | **122,554**<br><sub>(169 MiB / 48.0% CPU)</sub> | **1.80×** | ≥ **0.50×** |
+| `twp-cli-intercept-http1` vs CLI | **35,573**<br><sub>(183 MiB / 52.1% CPU)</sub> | **0.74×** | ≥ **0.50×** |
+| `twp-cli-plus-waf-http1` vs CLI | **46,484**<br><sub>(179 MiB / 48.9% CPU)</sub> | **0.97×** | ≥ **0.50×** |
+| `twp-cli-plus-cidr-http1` vs CLI | **46,646**<br><sub>(178 MiB / 48.9% CPU)</sub> | **0.97×** | ≥ **0.50×** |
+| `twp-cli-plus-jwt-http1` vs CLI | **43,613**<br><sub>(199 MiB / 48.7% CPU)</sub> | **0.91×** | ≥ **0.50×** |
+| `twp-cli-plus-ratelimit-http1` vs CLI | **46,620**<br><sub>(177 MiB / 49.1% CPU)</sub> | **0.97×** | ≥ **0.50×** |
+| `twp-cli-plus-resilience-http1` vs CLI | **47,710**<br><sub>(181 MiB / 48.4% CPU)</sub> | **0.99×** | ≥ **0.50×** |
+| `twp-cli-plus-discovery-file-http1` vs CLI | **47,630**<br><sub>(180 MiB / 48.5% CPU)</sub> | **0.99×** | ≥ **0.50×** |
+| `twp-cli-plus-metrics-scrape-http1` vs CLI | **48,257**<br><sub>(183 MiB / 48.5% CPU)</sub> | **1.01×** | ≥ **0.50×** |
+| `twp-cli-plus-cache-hit-http1` vs cache cold | **120,058**<br><sub>(169 MiB / 47.3% CPU)</sub> | **0.98×** | ≥ **0.50×** |
+| `twp-cli-plus-cors-http1` vs CLI | **31,203**<br><sub>(169 MiB / 51.0% CPU)</sub> | **0.92×** | ≥ **0.50×** |
+| `twp-cli-plus-circuit-http1` vs CLI | **45,001**<br><sub>(243 MiB / 50.3% CPU)</sub> | **0.86×** | ≥ **0.50×** |
+| `twp-cli-plus-retry-http1` vs CLI | **30,430**<br><sub>(177 MiB / 50.2% CPU)</sub> | **0.81×** | ≥ **0.50×** |
+| `twp-cli-static-http1` vs CLI | **80,449**<br><sub>(175 MiB / 50.3% CPU)</sub> | **1.68×** | ≥ **0.50×** |
+| `twp-cli-logging-http1` vs CLI | **47,905**<br><sub>(175 MiB / 48.5% CPU)</sub> | **1.00×** | ≥ **0.50×** |
+| `twp-cli-lb-leasttime-http1` vs route | **43,887**<br><sub>(197 MiB / 50.7% CPU)</sub> | **0.92×** | ≥ **0.50×** |
+| `twp-cli-dialect-twp-http1` vs CLI | **47,368**<br><sub>(168 MiB / 48.3% CPU)</sub> | **0.99×** | ≥ **0.50×** |
 
-`validate-edition-gates.ps1` floors are **0.50×**. Each ÷ column uses the two arms from the same job. Windows cells were not re-measured after the terminate-lite cache fix; CORS, circuit breaker, and idempotent retry have no Windows cell from this run. Circuit breaker and idempotent retry stay on the session path, so a ratio near intercept is expected. Laptop smoke ratios stay on [Performance Local Lab — Editions](Performance-Local-Lab#editions-cli--plus-stress).
+`validate-edition-gates.ps1` floors are **0.50×**. Each ÷ column uses the two arms from the same job. Circuit breaker and idempotent retry stay on the session path, so a ratio near intercept is expected. Laptop smoke ratios stay on [Performance Local Lab — Editions](Performance-Local-Lab#editions-cli--plus-stress).
 
 ## Heavier reverse workloads
 
