@@ -6,37 +6,37 @@ is **7.x**. This page is the cumulative guide for anyone still on 4.x: every bre
 observable-behavior change since then that still matters on today's defaults, with the rationale and
 the remedy if the new default does not fit your deployment. If you are upgrading from before 4.0,
 also read
-[Breaking changes: unified logging and timing](Home#breaking-changes-unified-logging-and-timing) on
+[Breaking changes: unified logging and timing](Home#user-content-breaking-changes-unified-logging-and-timing) on
 the Home page first.
 
 > **Quick triage:** if you just want the pre-5.0 posture back for TLS and the observe/enforce-capable
 > limits in one step, set `proxyServer.Profile = ProxyProfile.LegacyCompatible;` before `Start()`. It
 > does not restore every item below (some, like the certificate store relocation and the framing
 > fixes, are not modes you can dial back), but it covers the two broadest ones — see
-> [Policy profiles](#policy-profiles-and-observeenforce-modes-additive) below.
+> [Policy profiles](#user-content-policy-profiles-and-observeenforce-modes-additive) below.
 
 ## Contents
 
-- [TLS: legacy protocols now require explicit opt-in](#tls-legacy-protocols-now-require-explicit-opt-in)
-- [Certificate store relocated to a per-user protected folder](#certificate-store-relocated-to-a-per-user-protected-folder)
-- [Ambiguous HTTP/1 framing is now rejected](#ambiguous-http1-framing-is-now-rejected)
-- [Cumulative body budgets are now enforced end-to-end](#cumulative-body-budgets-are-now-enforced-end-to-end)
-- [WebSocket protocol violations now close the connection](#websocket-protocol-violations-now-close-the-connection)
-- [HTTP/2 CONTINUATION and reset abuse budgets](#http2-continuation-and-reset-abuse-budgets)
-- [HTTP/3 and QPACK behavior changes (experimental)](#http3-and-qpack-behavior-changes-experimental)
-- [`ProxyAuthorizationException.Headers` credentials are redacted](#proxyauthorizationexceptionheaders-credentials-are-redacted)
-- [Stacked `Content-Encoding` is now actually decoded](#stacked-content-encoding-is-now-actually-decoded)
-- [`HasBody` correctness fix for 204/304/1xx/CONNECT](#hasbody-correctness-fix-for-2043041xxconnect)
-- [Oversized/overflowing chunk sizes are now rejected](#oversizedoverflowing-chunk-sizes-are-now-rejected)
-- [Chunked HTTP/1.0 requests are now downgraded, not forwarded as-is](#chunked-http10-requests-are-now-downgraded-not-forwarded-as-is)
-- [New: client header read deadline (opt-in)](#new-client-header-read-deadline-opt-in)
-- [New: global/per-endpoint connection admission limits (opt-in)](#new-globalper-endpoint-connection-admission-limits-opt-in)
-- [New: outbound private-network destination blocking (opt-in)](#new-outbound-private-network-destination-blocking-opt-in)
-- [New: loopback-only destination blocking (opt-in)](#new-loopback-only-destination-blocking-opt-in)
-- [Policy profiles and observe/enforce modes (additive)](#policy-profiles-and-observeenforce-modes-additive)
-- [New: Happy Eyeballs (RFC 8305) address racing](#new-happy-eyeballs-rfc-8305-address-racing)
-- [Connection IDs are monotonic `long` counters, not `Guid`](#connection-ids-are-monotonic-long-counters-not-guid)
-- [Internal-only changes (no action needed)](#internal-only-changes-no-action-needed)
+- [TLS: legacy protocols now require explicit opt-in](#user-content-tls-legacy-protocols-now-require-explicit-opt-in)
+- [Certificate store relocated to a per-user protected folder](#user-content-certificate-store-relocated-to-a-per-user-protected-folder)
+- [Ambiguous HTTP/1 framing is now rejected](#user-content-ambiguous-http1-framing-is-now-rejected)
+- [Cumulative body budgets are now enforced end-to-end](#user-content-cumulative-body-budgets-are-now-enforced-end-to-end)
+- [WebSocket protocol violations now close the connection](#user-content-websocket-protocol-violations-now-close-the-connection)
+- [HTTP/2 CONTINUATION and reset abuse budgets](#user-content-http2-continuation-and-reset-abuse-budgets)
+- [HTTP/3 and QPACK behavior changes (experimental)](#user-content-http3-and-qpack-behavior-changes-experimental)
+- [`ProxyAuthorizationException.Headers` credentials are redacted](#user-content-proxyauthorizationexceptionheaders-credentials-are-redacted)
+- [Stacked `Content-Encoding` is now actually decoded](#user-content-stacked-content-encoding-is-now-actually-decoded)
+- [`HasBody` correctness fix for 204/304/1xx/CONNECT](#user-content-hasbody-correctness-fix-for-2043041xxconnect)
+- [Oversized/overflowing chunk sizes are now rejected](#user-content-oversizedoverflowing-chunk-sizes-are-now-rejected)
+- [Chunked HTTP/1.0 requests are now downgraded, not forwarded as-is](#user-content-chunked-http10-requests-are-now-downgraded-not-forwarded-as-is)
+- [New: client header read deadline (opt-in)](#user-content-new-client-header-read-deadline-opt-in)
+- [New: global/per-endpoint connection admission limits (opt-in)](#user-content-new-globalper-endpoint-connection-admission-limits-opt-in)
+- [New: outbound private-network destination blocking (opt-in)](#user-content-new-outbound-private-network-destination-blocking-opt-in)
+- [New: loopback-only destination blocking (opt-in)](#user-content-new-loopback-only-destination-blocking-opt-in)
+- [Policy profiles and observe/enforce modes (additive)](#user-content-policy-profiles-and-observeenforce-modes-additive)
+- [New: Happy Eyeballs (RFC 8305) address racing](#user-content-new-happy-eyeballs-rfc-8305-address-racing)
+- [Connection IDs are monotonic `long` counters, not `Guid`](#user-content-connection-ids-are-monotonic-long-counters-not-guid)
+- [Internal-only changes (no action needed)](#user-content-internal-only-changes-no-action-needed)
 
 ---
 
@@ -243,14 +243,14 @@ only affect you if you've already opted in:
 
 - **QPACK never blocks a stream:** the proxy advertises `SETTINGS_QPACK_BLOCKED_STREAMS = 0` (already
   the case, but the wiki previously described the opposite — see the corrected
-  [HTTP/3](HTTP-3#dynamic-table-mode-opt-in) page). A field section whose Required Insert Count is not
+  [HTTP/3](HTTP-3#user-content-dynamic-table-mode-opt-in) page). A field section whose Required Insert Count is not
   yet satisfied now immediately raises `QPACK_DECOMPRESSION_FAILED` and aborts the connection, rather
   than a peer being able to make a request stream wait indefinitely.
 - **Critical-stream closure is fatal:** an unexpected close of a critical unidirectional stream (e.g.
   the control stream) now raises `H3_CLOSED_CRITICAL_STREAM` per RFC 9114, instead of being tolerated.
 - **First control-stream frame must be SETTINGS:** enforced as `H3_MISSING_SETTINGS` otherwise.
 - **Cumulative body budgets** apply to H3 request/response bodies the same way as H1/H2 (see
-  [above](#cumulative-body-budgets-are-now-enforced-end-to-end)); a breach maps to
+  [above](#user-content-cumulative-body-budgets-are-now-enforced-end-to-end)); a breach maps to
   `Http3ErrorCode.ExcessiveLoad`.
 - **`BeforeRequest` runs on headers only (like HTTP/1.1 / HTTP/2):** native HTTP/3 previously buffered
   the entire request body before `BeforeRequest`. Handlers that read `Request.Body` in `BeforeRequest`
@@ -359,7 +359,7 @@ to reject the attack pattern.
 even to an origin that does not support chunked framing (chunked transfer coding requires HTTP/1.1+).
 
 **Now:** such a request is fully buffered (subject to the same `MaxBufferedBodyBytes` budget described
-[above](#cumulative-body-budgets-are-now-enforced-end-to-end)) and re-framed with `Content-Length`
+[above](#user-content-cumulative-body-budgets-are-now-enforced-end-to-end)) and re-framed with `Content-Length`
 before being forwarded to an HTTP/1.0-only origin.
 
 **Why:** forwarding chunked framing to a peer that doesn't support it is itself a framing hazard, not
@@ -428,7 +428,7 @@ items above without code changes to individual limits:
   `DecompressionRatio`, `HeaderLimits`, `AdmissionControl`, `Http2AbuseBudget`) to `PolicyMode.Observe`
   (record a metric on breach, but don't reject/close) or `PolicyMode.Disabled` (don't even check) —
   except framing validation, which has no dial and is covered by `AllowAmbiguousFraming` instead (see
-  [above](#ambiguous-http1-framing-is-now-rejected)).
+  [above](#user-content-ambiguous-http1-framing-is-now-rejected)).
 - Typed metrics are published on an `System.Diagnostics.Metrics.Meter` named `ProxyMetrics.MeterName`,
   so any OpenTelemetry-compatible exporter can observe policy breaches, connection admission/rejection,
   timeouts, pool outcomes, parser errors, auth rounds, and in-memory certificate cache occupancy

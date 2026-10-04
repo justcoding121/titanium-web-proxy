@@ -143,7 +143,7 @@ def main() -> None:
         "`validate-edition-gates.ps1` floors are **0.50×**. "
         "Each ÷ column uses the two arms from the same job. "
         "Circuit breaker and idempotent retry stay on the session path, so a ratio near intercept is expected. "
-        "Laptop smoke ratios stay on [Performance Local Lab — Editions](Performance-Local-Lab#editions-cli--plus-stress)."
+        "Laptop smoke ratios stay on [Performance Local Lab — Editions](Performance-Local-Lab#user-content-editions-cli--plus-stress)."
     )
     block2, n = re.subn(
         r"`validate-edition-gates\.ps1`[^\n]*",

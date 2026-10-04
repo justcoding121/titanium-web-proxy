@@ -6,7 +6,7 @@ Titanium targets low-overhead reverse proxying and HTTPS interception: connectio
 
 ## Practical reverse RPS (tiny requests)
 
-Common reverse wires with **tiny keep-alive GET (~56 B)**, plus WebSocket and unary gRPC — one chart per OS. How to read medals and workload shape: [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#why-this-comparison-is-fair).
+Common reverse wires with **tiny keep-alive GET (~56 B)**, plus WebSocket and unary gRPC — one chart per OS. How to read medals and workload shape: [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#user-content-why-this-comparison-is-fair).
 
 ### Windows
 
@@ -38,9 +38,9 @@ Typical reverse wires with **64 KB GET/POST** (plus 256 KB H1 terminate) — bod
 
 ## Heavier reverse workloads
 
-Larger bodies, POST, lossy links, TLS termination cost, and architecture-sensitive shapes (slow consumers, duplex, WebSocket H1 Upgrade). Full tables are on the [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#heavier-reverse-workloads).
+Larger bodies, POST, lossy links, TLS termination cost, and architecture-sensitive shapes (slow consumers, duplex, WebSocket H1 Upgrade). Full tables are on the [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#user-content-heavier-reverse-workloads).
 
-Additional real-world tables (wiki only, not plotted here): [Unary gRPC H2→h2c](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#unary-grpc-h2-tls--h2c), [WebSocket H1 TLS→H1 TLS](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#websocket-h1-tls--h1-tls), [WebSocket RFC 8441](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#websocket-h2-tls-8441--h1).
+Additional real-world tables (wiki only, not plotted here): [Unary gRPC H2→h2c](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#user-content-unary-grpc-h2-tls--h2c), [WebSocket H1 TLS→H1 TLS](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#user-content-websocket-h1-tls--h1-tls), [WebSocket RFC 8441](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance#user-content-websocket-h2-tls-8441--h1).
 
 ## Full measurements
 

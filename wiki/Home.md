@@ -21,31 +21,31 @@ Short catalog: [Features](Features) · full tables: [website Features](https://t
 ### Using Titanium
 
 - [Features](Features) — product highlights (points at the website)
-- [Getting started](#getting-started)
-- [Screenshots](#screenshots)
+- [Getting started](#user-content-getting-started)
+- [Screenshots](#user-content-screenshots)
 - [Performance](Performance) — measured throughput vs peers
 - [Security considerations](Security-Considerations)
-- [Protocol feature support](Protocol-Support) ([bridges](Protocol-Support#protocol-bridges))
+- [Protocol feature support](Protocol-Support) ([bridges](Protocol-Support#user-content-protocol-bridges))
 - [Migrating from 4.x](Migration-from-4.x)
 
 ### Library API (.NET)
 
-- [Endpoints](#endpoints)
-- [Decrypting HTTPS](#decrypting-https)
-- [Intercepting requests and responses](#intercepting-requests-and-responses)
-- [Modifying bodies](#modifying-bodies)
-- [Custom and redirected responses](#custom-and-redirected-responses)
-- [Streaming bodies](#streaming-bodies)
-- [HTTP/2](#http2)
-- [HTTP/3](#http3)
-- [Tunnel (CONNECT) interception](#tunnel-connect-interception)
-- [Upstream proxies](#upstream-proxies)
-- [Authentication](#authentication)
-- [Performance and pooling](#performance-and-pooling)
-- [Logging and diagnostics](#logging-and-diagnostics)
-- [Request timing](#request-timing)
-- [Supported frameworks](#supported-frameworks)
-- [Breaking changes: unified logging and timing](#breaking-changes-unified-logging-and-timing)
+- [Endpoints](#user-content-endpoints)
+- [Decrypting HTTPS](#user-content-decrypting-https)
+- [Intercepting requests and responses](#user-content-intercepting-requests-and-responses)
+- [Modifying bodies](#user-content-modifying-bodies)
+- [Custom and redirected responses](#user-content-custom-and-redirected-responses)
+- [Streaming bodies](#user-content-streaming-bodies)
+- [HTTP/2](#user-content-http2)
+- [HTTP/3](#user-content-http3)
+- [Tunnel (CONNECT) interception](#user-content-tunnel-connect-interception)
+- [Upstream proxies](#user-content-upstream-proxies)
+- [Authentication](#user-content-authentication)
+- [Performance and pooling](#user-content-performance-and-pooling)
+- [Logging and diagnostics](#user-content-logging-and-diagnostics)
+- [Request timing](#user-content-request-timing)
+- [Supported frameworks](#user-content-supported-frameworks)
+- [Breaking changes: unified logging and timing](#user-content-breaking-changes-unified-logging-and-timing)
 
 ### For contributors
 
@@ -133,7 +133,7 @@ Add one or more endpoints before calling `Start()`:
 
 - **`ExplicitProxyEndPoint`** — the client is configured to use the proxy (standard `HTTP_PROXY` / system proxy setup). Supports `CONNECT` tunneling.
 - **`TransparentProxyEndPoint`** — traffic is redirected to the proxy without the client knowing (e.g. via routing/NAT). Set `GenericCertificateName` for the server name to present.
-- **`SocksProxyEndPoint`** — SOCKS4/SOCKS5 endpoint. See [SOCKS endpoint](#socks-endpoint) for protocol handling details.
+- **`SocksProxyEndPoint`** — SOCKS4/SOCKS5 endpoint. See [SOCKS endpoint](#user-content-socks-endpoint) for protocol handling details.
 
 ```csharp
 proxyServer.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 8000));
@@ -192,7 +192,7 @@ Useful `CertificateManager` members:
 - `CertificateEngine` — `BouncyCastle` (default; distinct key per host), `BouncyCastleFast` (faster;
   **one shared key for all leaves**), or `DefaultWindows` (Windows only; also shared key).
 - `LeafCertificateKeyAlgorithm` — key algorithm for generated leaf certificates, `Rsa2048` (default)
-  or `EcdsaP256`. See [first-visit latency](#first-visit-latency-and-the-leaf-key-algorithm).
+  or `EcdsaP256`. See [first-visit latency](#user-content-first-visit-latency-and-the-leaf-key-algorithm).
 - `LeafRsaKeyPairBufferSize` — how many RSA-2048 leaf private keys to keep pre-generated (default `8`;
   `0` disables; max `256`). Process-wide; unused when leaves are ECDSA P-256.
 
@@ -229,7 +229,7 @@ proxyServer.ResourceLimits = ProxyResourceLimits.Default.WithCertificateCacheBou
     maxCertificateDiskCacheEntries: 50_000);
 ```
 
-The `twp.certificates.cached` observable gauge (see [Logging and diagnostics](#logging-and-diagnostics))
+The `twp.certificates.cached` observable gauge (see [Logging and diagnostics](#user-content-logging-and-diagnostics))
 reports live in-memory cache occupancy, so you can confirm the bound is holding instead of
 inferring it indirectly from process working set.
 
@@ -297,7 +297,7 @@ e.Respond(ProxyResults.Redirect("https://safe.example/", HttpStatusCode.MovedPer
 
 Legacy shortcuts still work: `e.Ok(html)`, `e.GenericResponse(...)`, `e.Redirect(url)`, and `e.Respond(response)`.
 
-When you supply a response after the server was already contacted, the original server body is drained so the connection can be reused; see [Draining bodies](Streaming-Bodies#draining-bodies).
+When you supply a response after the server was already contacted, the original server body is drained so the connection can be reused; see [Draining bodies](Streaming-Bodies#user-content-draining-bodies).
 
 See **[Synthetic Responses](Synthetic-Responses)** for the full guide (buffered vs streamed, all factory methods, and migration from legacy APIs).
 
@@ -334,13 +334,13 @@ HTTP/2 the same as over HTTP/1.x — see [Streaming Bodies](Streaming-Bodies). W
 `EnableRfc8441`. Not supported: HTTP/2 server push and `Upgrade: h2c` (prior-knowledge only). Explicit-proxy
 inbound h2c is not implemented. See
 [Protocol Feature Support](Protocol-Support) for the full breakdown, including
-[protocol bridges](Protocol-Support#protocol-bridges).
+[protocol bridges](Protocol-Support#user-content-protocol-bridges).
 
 ## HTTP/3
 
 HTTP/3 support is available as an opt-in feature. See the **[HTTP/3](HTTP-3)** page for setup,
 **CLI/Inspector packaging** (which RID zip to download, Alpine/K8s musl zips, `http3-deps`), Alt-Svc,
-and gaps. See also [Protocol Support — Protocol bridges](Protocol-Support#protocol-bridges) for every
+and gaps. See also [Protocol Support — Protocol bridges](Protocol-Support#user-content-protocol-bridges) for every
 client→origin direction (including TCP HTTP/1.1 ↔ HTTP/2 translation). Quick start:
 
 ```csharp
@@ -501,7 +501,7 @@ Honoured by the BouncyCastle engines; the Windows engine always issues RSA.
 Every exception the proxy catches — even one handled internally and never surfaced to your code — is
 reported through `ProxyServer.Logging`, a `Microsoft.Extensions.Logging`-based abstraction. This replaced
 the old `ExceptionFunc` callback; see
-[Breaking changes: unified logging and timing](#breaking-changes-unified-logging-and-timing) below if you
+[Breaking changes: unified logging and timing](#user-content-breaking-changes-unified-logging-and-timing) below if you
 are migrating.
 
 ```csharp
@@ -597,15 +597,15 @@ Current packages target **.NET 10** only. Older product lines also supported .NE
 ## Breaking changes: unified logging and timing
 
 - `ProxyServer.ExceptionFunc` and the `ExceptionHandler` delegate were removed. Use
-  [`ProxyServer.Logging`](#logging-and-diagnostics) instead — every exception the old callback would have
+  [`ProxyServer.Logging`](#user-content-logging-and-diagnostics) instead — every exception the old callback would have
   received is now reported through the logging gateway, classified by severity rather than delivered
   uniformly to a single callback.
 - `SessionEventArgsBase.TimeLine` (the free-form `Dictionary<string, DateTime>` of named milestones) was
-  removed. Use [`Timing`/`UpstreamConnectionTiming`/`ClientTlsTiming`](#request-timing) instead, which are
+  removed. Use [`Timing`/`UpstreamConnectionTiming`/`ClientTlsTiming`](#user-content-request-timing) instead, which are
   strongly typed and only allocated when `EnableRequestTimingCapture` is set.
 - `ClientConnectionId` / `ServerConnectionId` / `HttpRequestTiming.UpstreamConnectionId` changed from
   `Guid` to process-wide monotonic `long` counters (unbound server id is `0`, not `Guid.Empty`). See
-  [Connection IDs are monotonic `long` counters, not `Guid`](Migration-from-4.x#connection-ids-are-monotonic-long-counters-not-guid)
+  [Connection IDs are monotonic `long` counters, not `Guid`](Migration-from-4.x#user-content-connection-ids-are-monotonic-long-counters-not-guid)
   in the [migration from 4.x](Migration-from-4.x) guide.
 
 ## Migrating from 4.x
@@ -621,4 +621,4 @@ cumulative list, each with its rationale and remedy.
 Wondering whether a specific HTTP/1.x, HTTP/2, or HTTP/3 feature (trailers, interim 1xx responses, HPACK,
 QPACK, Alt-Svc, server push, protocol translation, ...) is supported? See the
 **[Protocol Feature Support](Protocol-Support)** page for a full Yes/No/Partial breakdown, including the
-[protocol bridge matrix](Protocol-Support#protocol-bridges).
+[protocol bridge matrix](Protocol-Support#user-content-protocol-bridges).
