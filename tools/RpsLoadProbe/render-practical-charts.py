@@ -398,6 +398,11 @@ def parse_wiki_practical(md: str) -> Dict[str, Dict[str, List[Optional[float]]]]
             in_arch_table = False
             arch_header = []
             continue
+        if line.startswith("#### macOS"):
+            arch_os = "macos"
+            in_arch_table = False
+            arch_header = []
+            continue
         if line.startswith("#### ") and arch_os is not None:
             arch_os = None
             in_arch_table = False
@@ -660,11 +665,15 @@ def plot_packed_product_bars(
     return ymax
 
 
-# One-row product legend in upper-right; keep right-side bars below it.
-# Legend box ~24% of axes height; leave ~6% gap so bar tops do not kiss the frame.
+# One-row product legend in upper-right. This first limit is conservative;
+# render_chart then drops one major y tick when the real legend box still clears.
 _LEGEND_HEIGHT_FRAC = 0.24
 _LEGEND_CLEARANCE_FRAC = 0.06
 _LEGEND_RIGHT_CLUSTERS = 5
+# Pixels between a bar top and the legend frame after that one-tick drop.
+_LEGEND_GAP_PX = 12
+# Share of the axis kept above the tallest bar so it does not meet the top spine.
+_TOP_HEADROOM_FRAC = 0.08
 
 
 def ylim_clearing_legend(
@@ -692,6 +701,91 @@ def ylim_clearing_legend(
     usable = 1.0 - _LEGEND_HEIGHT_FRAC - _LEGEND_CLEARANCE_FRAC
     needed = right_max / usable
     return max(base, needed)
+
+
+def _legend_gap_px(fig, ax) -> float:
+    """Smallest vertical gap (px) between a bar under the legend and the legend frame."""
+    renderer = fig.canvas.get_renderer()
+    legend = ax.get_legend()
+    if legend is None:
+        return 1e9
+    box = legend.get_window_extent(renderer)
+    worst = 1e9
+    for container in ax.containers:
+        for rect in container:
+            height = rect.get_height()
+            if not height or height <= 0:
+                continue
+            bar = rect.get_window_extent(renderer)
+            x_overlap = min(bar.x1, box.x1) - max(bar.x0, box.x0)
+            if x_overlap > 2:
+                worst = min(worst, box.y0 - bar.y1)
+    return worst
+
+
+def _tallest_bar(ax) -> float:
+    tallest = 0.0
+    for container in ax.containers:
+        for rect in container:
+            height = rect.get_height() or 0
+            if height > tallest:
+                tallest = float(height)
+    return tallest
+
+
+def lower_top_tick_one_step(fig, ax) -> None:
+    """Drop the highest y tick one step when bars still clear the legend and the frame.
+
+    The first ylim often rounds up to an extra grid line. Use the next-lower
+    labeled tick when the legend still has ``_LEGEND_GAP_PX`` of room and the
+    tallest bar keeps ``_TOP_HEADROOM_FRAC`` under the axis top.
+    """
+    from matplotlib.ticker import AutoLocator, MultipleLocator
+
+    fig.canvas.draw()
+    original = ax.get_ylim()[1]
+    ticks = [t for t in ax.get_yticks() if t > 1 and t <= original + 1e-6]
+    if len(ticks) < 2:
+        return
+    top = ticks[-1]
+    step = top - ticks[-2]
+    target = top - step
+    ax.yaxis.set_major_locator(MultipleLocator(step))
+
+    def gap_at(limit: float) -> float:
+        ax.set_ylim(0, limit)
+        fig.canvas.draw()
+        shown = [t for t in ax.get_yticks() if t > 1 and t <= limit + step * 1e-6]
+        if not shown or abs(shown[-1] - target) > step * 0.01:
+            return -1e9
+        return _legend_gap_px(fig, ax)
+
+    def restore() -> None:
+        ax.yaxis.set_major_locator(AutoLocator())
+        ax.set_ylim(0, original)
+
+    # Stay under the old top tick so that label is not drawn.
+    hi = top - step * 1e-4
+    tallest = _tallest_bar(ax)
+    floor = target
+    if tallest > 0 and _TOP_HEADROOM_FRAC < 1:
+        floor = max(floor, tallest / (1.0 - _TOP_HEADROOM_FRAC))
+    if floor >= hi or gap_at(hi) < _LEGEND_GAP_PX:
+        restore()
+        return
+    if gap_at(floor) >= _LEGEND_GAP_PX:
+        ax.set_ylim(0, floor)
+        return
+
+    lo = floor
+    best = hi
+    for _ in range(16):
+        mid = (lo + best) / 2.0
+        if gap_at(mid) >= _LEGEND_GAP_PX:
+            best = mid
+        else:
+            lo = mid
+    ax.set_ylim(0, best)
 
 
 def arm_sustain_c64(csv_path: Path, arm: str) -> Optional[float]:
@@ -967,6 +1061,7 @@ def render_chart(
         color="#444444",
     )
     fig.tight_layout(rect=(0, 0.06, 1, 1))
+    lower_top_tick_one_step(fig, ax)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, bbox_inches="tight")
     plt.close(fig)
