@@ -9614,6 +9614,19 @@ references:
   commentId: E:Titanium.Web.Proxy.ProxyServer.Http3ServerConnectionCountChanged
   fullName: Titanium.Web.Proxy.ProxyServer.Http3ServerConnectionCountChanged
   nameWithType: ProxyServer.Http3ServerConnectionCountChanged
+- uid: Titanium.Web.Proxy.ProxyServer.HttpResponseCacheFiller
+  name: HttpResponseCacheFiller
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_HttpResponseCacheFiller
+  commentId: P:Titanium.Web.Proxy.ProxyServer.HttpResponseCacheFiller
+  fullName: Titanium.Web.Proxy.ProxyServer.HttpResponseCacheFiller
+  nameWithType: ProxyServer.HttpResponseCacheFiller
+- uid: Titanium.Web.Proxy.ProxyServer.HttpResponseCacheFiller*
+  name: HttpResponseCacheFiller
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_HttpResponseCacheFiller_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.HttpResponseCacheFiller
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.HttpResponseCacheFiller
+  nameWithType: ProxyServer.HttpResponseCacheFiller
 - uid: Titanium.Web.Proxy.ProxyServer.IdleReadTimeoutSeconds
   name: IdleReadTimeoutSeconds
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_IdleReadTimeoutSeconds
@@ -9992,6 +10005,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.ResourceLimits
   nameWithType: ProxyServer.ResourceLimits
+- uid: Titanium.Web.Proxy.ProxyServer.ResponseHeaderContributor
+  name: ResponseHeaderContributor
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ResponseHeaderContributor
+  commentId: P:Titanium.Web.Proxy.ProxyServer.ResponseHeaderContributor
+  fullName: Titanium.Web.Proxy.ProxyServer.ResponseHeaderContributor
+  nameWithType: ProxyServer.ResponseHeaderContributor
+- uid: Titanium.Web.Proxy.ProxyServer.ResponseHeaderContributor*
+  name: ResponseHeaderContributor
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ResponseHeaderContributor_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.ResponseHeaderContributor
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.ResponseHeaderContributor
+  nameWithType: ProxyServer.ResponseHeaderContributor
 - uid: Titanium.Web.Proxy.ProxyServer.ResponseHeaderTimeoutSeconds
   name: ResponseHeaderTimeoutSeconds
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ResponseHeaderTimeoutSeconds
