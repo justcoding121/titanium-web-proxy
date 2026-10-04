@@ -1135,9 +1135,10 @@ public partial class ProxyServer
             try
             {
                 var readVt = source.ReadAsync(buf.AsMemory(), CancellationToken.None);
-                read = readVt.IsCompletedSuccessfully
-                    ? readVt.Result
-                    : await readVt.ConfigureAwait(false);
+                if (readVt.IsCompletedSuccessfully)
+                    read = readVt.Result;
+                else
+                    read = await readVt.ConfigureAwait(false);
             }
             catch (Exception readEx)
             {

@@ -158,6 +158,9 @@ public sealed class AutoResponderViewModel : INotifyPropertyChanged
         return false;
     }
 
+    public bool TryMatch(string url, out AutoResponderRule? matched)
+        => TryMatch(url, requestBody: null, out matched);
+
     private AutoResponderRule[] SnapshotRules()
     {
         lock (_rulesGate)
@@ -167,9 +170,6 @@ public sealed class AutoResponderViewModel : INotifyPropertyChanged
             return arr;
         }
     }
-
-    public bool TryMatch(string url, out AutoResponderRule? matched)
-        => TryMatch(url, requestBody: null, out matched);
 
     public bool TryRespond(SessionSnapshot session, out AutoResponderRule? matched)
         => TryMatch(session.Url, session.RequestBodyText, out matched);

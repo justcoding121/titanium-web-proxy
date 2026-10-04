@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy;
 ///     Signals that H1 terminate-lite cannot finish this exchange (typically a 1xx interim response)
 ///     and the caller should fall through to the full session path without treating it as a failure.
 /// </summary>
-internal sealed class H1TerminateLiteFallbackException : Exception
+internal sealed class H1TerminateLiteFallbackException : Exception // NOSONAR S3871 -- Internal control-flow signal for the terminate-lite fallback, not a public error contract.
 {
     public H1TerminateLiteFallbackException(string message) : base(message)
     {
@@ -211,7 +211,7 @@ public partial class ProxyServer
             if (response.StatusCode is >= 100 and <= 199)
             {
                 // Full session path has the interim 1xx loop; keep the origin connection for it.
-                closeConnection = false;
+                // closeConnection is already false, so the fallback catch releases the socket for reuse.
                 throw new H1TerminateLiteFallbackException(
                     "H1 terminate lite does not handle interim 1xx responses.");
             }
@@ -424,7 +424,7 @@ public partial class ProxyServer
             var response = http.Response;
             if (response.StatusCode is >= 100 and <= 199)
             {
-                closeConnection = false;
+                // closeConnection is already false, so the fallback catch releases the socket for reuse.
                 throw new H1TerminateLiteFallbackException(
                     "H1 terminate MITM lite does not handle interim 1xx responses.");
             }

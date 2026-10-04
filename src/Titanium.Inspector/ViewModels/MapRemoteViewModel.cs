@@ -157,6 +157,9 @@ public sealed class MapRemoteViewModel : INotifyPropertyChanged
         return false;
     }
 
+    public bool TryRewrite(string url, out string? rewritten, out MapRemoteRule? matched)
+        => TryRewrite(url, requestBody: null, out rewritten, out matched);
+
     private MapRemoteRule[] SnapshotRules()
     {
         lock (_rulesGate)
@@ -166,9 +169,6 @@ public sealed class MapRemoteViewModel : INotifyPropertyChanged
             return arr;
         }
     }
-
-    public bool TryRewrite(string url, out string? rewritten, out MapRemoteRule? matched)
-        => TryRewrite(url, requestBody: null, out rewritten, out matched);
 
     /// <summary>
     /// Rewrites <paramref name="url"/> using wildcard capture from <paramref name="matchPattern"/>

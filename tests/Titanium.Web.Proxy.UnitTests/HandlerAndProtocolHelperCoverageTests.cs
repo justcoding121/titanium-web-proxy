@@ -691,7 +691,7 @@ public class HandlerAndProtocolHelperCoverageTests
 
         var req = new Request { Method = "GET", HttpVersion = HttpHeader.Version11 };
         req.Headers.AddHeader("Connection", "close");
-        var writeMw = typeof(ProxyServer).GetMethod("WriteTerminateLiteMiddlewareResponseAsync", PrivateStatic)!;
+        var writeMw = typeof(ProxyServer).GetMethod("WriteTerminateLiteMiddlewareResponseAsync", PrivateInstance)!;
         var ctx = new ProxyMiddlewareContext
         {
             Session = new object(),
@@ -704,7 +704,7 @@ public class HandlerAndProtocolHelperCoverageTests
             var buf = new byte[2048];
             try { accepted.Receive(buf); } catch { /* ignore */ }
         });
-        await (Task)writeMw.Invoke(null, [clientStream, req, ctx, CancellationToken.None])!;
+        await (Task)writeMw.Invoke(proxy, [clientStream, req, ctx, CancellationToken.None])!;
         await drain;
         Assert.AreEqual(403, ctx.HandledStatusCode);
         Assert.IsTrue(ctx.IsHandled);

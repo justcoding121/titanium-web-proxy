@@ -111,7 +111,7 @@ public sealed class ScriptedInspectorPathPicker : IInspectorPathPicker
 internal readonly record struct StoragePickAttempt(bool DialogShown, string? Path)
 {
     public IReadOnlyList<string> Paths { get; init; } =
-        string.IsNullOrEmpty(Path) ? Array.Empty<string>() : [Path!];
+        string.IsNullOrEmpty(Path) ? Array.Empty<string>() : [Path];
 }
 
 internal static class InspectorPathPickerHelpers

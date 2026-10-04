@@ -1317,44 +1317,69 @@ internal sealed class Http2OriginConnection : IDisposable
         {
             var identifier = (payload[i] << 8) | payload[i + 1];
             var value = (int)BinaryPrimitives.ReadUInt32BigEndian(payload.Slice(i + 2, 4));
-
-            if (identifier == (int)Http2SettingsId.HeaderTableSize)
-                originSettings.UpdateHeaderTableSize(value);
-            else if (identifier == (int)Http2SettingsId.MaxFrameSize)
-            {
-                // RFC 7540 §6.5.2: values outside [16384, 16777215] are a connection-level PROTOCOL_ERROR.
-                if (value < 16384 || value > 16777215)
-                {
-                    Fail(new IOException(
-                        $"HTTP/2 protocol error: SETTINGS_MAX_FRAME_SIZE value {value} is out of range [16384, 16777215]."));
-                    return;
-                }
-
-                originSettings.MaxFrameSize = value;
-            }
-            else if (identifier == (int)Http2SettingsId.InitialWindowSize)
-            {
-                // RFC 7540 §6.5.2: values above 2^31-1 are a connection-level FLOW_CONTROL_ERROR.
-                // A wire value > 2^31-1 wraps to a negative int when cast; checking < 0 catches that.
-                if (value < 0)
-                {
-                    Fail(new IOException(
-                        $"HTTP/2 protocol error: SETTINGS_INITIAL_WINDOW_SIZE value exceeds the maximum of 2,147,483,647."));
-                    return;
-                }
-
-                if (sendFlow.OnInitialWindowSizeChanged(value))
-                {
-                    Fail(new IOException(
-                        "HTTP/2 protocol error: SETTINGS_INITIAL_WINDOW_SIZE drove a stream window above 2^31-1."));
-                    return;
-                }
-            }
-            else if (identifier == (int)Http2SettingsId.MaxConcurrentStreams)
-                originSettings.MaxConcurrentStreams = value;
-            else if (identifier == (int)Http2SettingsId.EnableConnectProtocol)
-                ApplyEnableConnectProtocolSetting(value);
+            if (!TryApplySetting(identifier, value))
+                return;
         }
+    }
+
+    /// <summary>Returns false when the setting is a connection error and the rest of the frame must be ignored.</summary>
+    private bool TryApplySetting(int identifier, int value)
+    {
+        if (identifier == (int)Http2SettingsId.HeaderTableSize)
+            originSettings.UpdateHeaderTableSize(value);
+        else if (identifier == (int)Http2SettingsId.MaxFrameSize)
+        {
+            if (!TryApplyMaxFrameSize(value))
+                return false;
+        }
+        else if (identifier == (int)Http2SettingsId.InitialWindowSize)
+        {
+            if (!TryApplyInitialWindowSize(value))
+                return false;
+        }
+        else if (identifier == (int)Http2SettingsId.MaxConcurrentStreams)
+            originSettings.MaxConcurrentStreams = value;
+        else if (identifier == (int)Http2SettingsId.EnableConnectProtocol)
+            ApplyEnableConnectProtocolSetting(value);
+
+        return true;
+    }
+
+    /// <summary>RFC 7540 §6.5.2: values outside [16384, 16777215] are a connection-level PROTOCOL_ERROR.</summary>
+    private bool TryApplyMaxFrameSize(int value)
+    {
+        if (value < 16384 || value > 16777215)
+        {
+            Fail(new IOException(
+                $"HTTP/2 protocol error: SETTINGS_MAX_FRAME_SIZE value {value} is out of range [16384, 16777215]."));
+            return false;
+        }
+
+        originSettings.MaxFrameSize = value;
+        return true;
+    }
+
+    /// <summary>
+    ///     RFC 7540 §6.5.2: values above 2^31-1 are a connection-level FLOW_CONTROL_ERROR.
+    ///     A wire value &gt; 2^31-1 wraps to a negative int when cast; checking &lt; 0 catches that.
+    /// </summary>
+    private bool TryApplyInitialWindowSize(int value)
+    {
+        if (value < 0)
+        {
+            Fail(new IOException(
+                "HTTP/2 protocol error: SETTINGS_INITIAL_WINDOW_SIZE value exceeds the maximum of 2,147,483,647."));
+            return false;
+        }
+
+        if (sendFlow.OnInitialWindowSizeChanged(value))
+        {
+            Fail(new IOException(
+                "HTTP/2 protocol error: SETTINGS_INITIAL_WINDOW_SIZE drove a stream window above 2^31-1."));
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>RFC 8441 §3: value MUST be 0 or 1; a sender MUST NOT send 0 after previously sending 1.</summary>

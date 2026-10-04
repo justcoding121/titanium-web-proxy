@@ -55,7 +55,7 @@ namespace Titanium.Web.Proxy.Http2
         int maxDecodedHeaderListBytes,
         ILogger logger,
         Action<int> removeAndFinalizeStream,
-        Func<Func<ValueTask>, ValueTask> lockedOutputWrite,
+        Func<Func<ValueTask>, ValueTask> lockedOutputWrite, // NOSONAR S1172 -- Kept so this dispatch stays argument-aligned with CopyHttp2FrameAsync.
         bool forceStaticHpackTable,
         Http2Settings localSettings, // NOSONAR S1172 -- retained for CopyHttp2FrameAsync call-site IL match.
         HeaderCollection headerDecodeScratch,

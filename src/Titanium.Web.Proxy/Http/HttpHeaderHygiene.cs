@@ -22,13 +22,10 @@ internal static class HttpHeaderHygiene
     {
         if (string.IsNullOrEmpty(value))
             return false;
-        foreach (var c in value)
-        {
-            if (c is '\0' or '\r' or '\n')
-                return true;
-        }
 
-        return false;
+        // IndexOfAny is vectorized and allocation-free. A LINQ Any() walk would box a delegate
+        // on a path that runs for every header written to an HTTP/1.1 wire.
+        return value.AsSpan().IndexOfAny('\0', '\r', '\n') >= 0;
     }
 
     public static void ThrowIfForbidden(ByteString name, ByteString value)
