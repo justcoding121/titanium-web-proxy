@@ -25,6 +25,7 @@ namespace Titanium.Web.Proxy.UnitTests;
 [TestClass]
 public class Http2BufferedSendOrderingTests
 {
+    private static readonly int[] ExpectedOriginHeaderStreamIds = [1, 3];
     private sealed record Frame(byte Type, byte Flags, int StreamId, byte[] Payload);
 
     private sealed class Capture : Http2.Hpack.IHeaderListener
@@ -175,7 +176,7 @@ public class Http2BufferedSendOrderingTests
             .Where(f => f.Type == (byte)Http2FrameType.Headers)
             .Select(f => f.StreamId)
             .ToArray();
-        CollectionAssert.AreEqual(new[] { 1, 3 }, streamOrder,
+        CollectionAssert.AreEqual(ExpectedOriginHeaderStreamIds, streamOrder,
             "Origin must see HEADERS in increasing stream-id order.");
 
         var frames = ParseFrames(origin.ToArray());

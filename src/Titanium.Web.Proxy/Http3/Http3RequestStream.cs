@@ -366,11 +366,12 @@ internal static class Http3RequestStream
                         var stub = new SessionEventArgs(server, endPoint, nullStream, null, stubCts);
                         stub.IsFastPath = true;
                         stub.CustomUpStreamProxy = fwd.CustomUpStreamProxy;
-                        stub.UpstreamHttpProtocol = mitmUnchangedH3H3
-                            ? UpstreamHttpProtocol.Http3
-                            : mitmUnchangedH3H2
-                                ? UpstreamHttpProtocol.Http2
-                                : UpstreamHttpProtocol.Http11;
+                        if (mitmUnchangedH3H3)
+                            stub.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;
+                        else if (mitmUnchangedH3H2)
+                            stub.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+                        else
+                            stub.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
                         return stub;
                     }
 
@@ -716,7 +717,7 @@ internal static class Http3RequestStream
                 try
                 {
                     if (!cts.IsCancellationRequested)
-                        cts.Cancel();
+                        await cts.CancelAsync().ConfigureAwait(false);
                 }
                 catch (ObjectDisposedException)
                 {

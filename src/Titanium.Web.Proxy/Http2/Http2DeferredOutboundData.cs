@@ -137,7 +137,7 @@ internal sealed class Http2DeferredOutboundData
     ///     <paramref name="onEndStreamSent" /> runs after the lock is released with the same stream id and
     ///     may remove the stream (which cancels this queue).
     /// </summary>
-    public bool TryDrain(Http2FlowController flow, Http2FrameWriter writer,
+    public bool TryDrain(Http2FlowController flow, Http2FrameWriter writer, // NOSONAR S3776 -- Drain holds the queue lock and must keep DATA frame order; splitting it risks a short-window reorder.
         Action<int>? onEndStreamSent = null, Action<int>? onEndStreamQueued = null)
     {
         var wrote = false;

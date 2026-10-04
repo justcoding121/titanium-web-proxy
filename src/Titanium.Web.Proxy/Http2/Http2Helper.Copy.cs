@@ -684,16 +684,13 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             if (length > 0)
                                 ArrayPool<byte>.Shared.Return(payloadRented);
-                            if (dataEndStream)
+                            // already RequestClosed; may now finalize if response half is done
+                            if (dataEndStream && compressedDataState.IsClosed)
                             {
-                                // already RequestClosed; may now finalize if response half is done
-                                if (compressedDataState.IsClosed)
-                                {
-                                    connectionState.OriginRelayPool?.ReleaseStream(dataStreamId);
-                                    connectionState.RemoveStream(dataStreamId);
-                                    ScheduleFinalize(compressedDataState, onAfterResponse, logger,
-                                        connectionState);
-                                }
+                                connectionState.OriginRelayPool?.ReleaseStream(dataStreamId);
+                                connectionState.RemoveStream(dataStreamId);
+                                ScheduleFinalize(compressedDataState, onAfterResponse, logger,
+                                    connectionState);
                             }
 
                             continue;
@@ -798,7 +795,7 @@ namespace Titanium.Web.Proxy.Http2
                                     if (ownedPayload)
                                         payloadRented = Array.Empty<byte>(); // already returned
                                     ReportException(logger, new ProxyHttpException(
-                                        "HTTP/2 deferred DATA queue exceeded its per-stream cap.", null, null));
+                                        DeferredDataQueueCapExceededMessage, null, null));
                                     await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(),
                                         new byte[9], peerStreamId != 0 ? peerStreamId : dataStreamId,
                                         Http2ErrorCode.EnhanceYourCalm, input));
@@ -842,7 +839,7 @@ namespace Titanium.Web.Proxy.Http2
                             {
                                 ArrayPool<byte>.Shared.Return(payloadRented);
                                 ReportException(logger, new ProxyHttpException(
-                                    "HTTP/2 deferred DATA queue exceeded its per-stream cap.", null, null));
+                                    DeferredDataQueueCapExceededMessage, null, null));
                                 await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(),
                                     new byte[9], peerStreamId != 0 ? peerStreamId : dataStreamId,
                                     Http2ErrorCode.EnhanceYourCalm, input));
@@ -863,7 +860,7 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             ArrayPool<byte>.Shared.Return(payloadRented);
                             ReportException(logger, new ProxyHttpException(
-                                "HTTP/2 deferred DATA queue exceeded its per-stream cap.", null, null));
+                                DeferredDataQueueCapExceededMessage, null, null));
                             await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(),
                                 new byte[9], peerStreamId != 0 ? peerStreamId : dataStreamId,
                                 Http2ErrorCode.EnhanceYourCalm, input));
@@ -1685,7 +1682,7 @@ namespace Titanium.Web.Proxy.Http2
                                 else if (queued == QueueSendDataResult.CapExceeded)
                                 {
                                     ReportException(logger, new ProxyHttpException(
-                                        "HTTP/2 deferred DATA queue exceeded its per-stream cap.", null, args));
+                                        DeferredDataQueueCapExceededMessage, null, args));
                                     await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(),
                                         new byte[9], streamId, Http2ErrorCode.EnhanceYourCalm, input));
                                     RemoveAndFinalizeStream(streamId);
@@ -2310,7 +2307,7 @@ namespace Titanium.Web.Proxy.Http2
                             || absorbState.ResponseClosed;
                         if (responseStillInFlight)
                         {
-                            sendPacket = false;
+                            // continue below skips the sendPacket check for this frame.
                             connectionState.ServerOutboundDeferred.CancelStream(streamId);
                             absorbState.RequestClosed = true;
                             if (absorbState.IsClosed)
@@ -2718,7 +2715,7 @@ namespace Titanium.Web.Proxy.Http2
                         async ValueTask RejectDeferredCapAsync()
                         {
                             ReportException(logger, new ProxyHttpException(
-                                "HTTP/2 deferred DATA queue exceeded its per-stream cap.", null, args));
+                                DeferredDataQueueCapExceededMessage, null, args));
                             await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(),
                                 new byte[9], streamId, Http2ErrorCode.EnhanceYourCalm, input));
                             // Cap overflow must drop the stream. Leaving it tracked stalls the peer

@@ -748,7 +748,6 @@ public partial class ProxyServer
             exchange.Response.StreamBodyWriter = null;
             // Drain and release origin resources; the replacement body is unrelated.
             await originStreamBody(Stream.Null, cancellationToken);
-            originStreamBody = null;
         }
 
         if (response.Locked)

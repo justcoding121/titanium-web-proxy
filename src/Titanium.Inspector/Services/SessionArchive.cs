@@ -235,7 +235,7 @@ public static class SessionArchive
     {
         try
         {
-            if (!TryReadHarRequest(entry, out var method, out var url, out var host, out var reqHeaders, out var reqBody, out var contentType, out var reqBytes))
+            if (!TryReadHarRequest(entry, out var request))
             {
                 return null;
             }
@@ -246,18 +246,18 @@ public static class SessionArchive
             var snap = new SessionSnapshot
             {
                 Id = id,
-                Method = method,
-                Url = url,
-                Host = host,
+                Method = request.Method,
+                Url = request.Url,
+                Host = request.Host,
                 StartedUtc = started,
                 StatusCode = status,
-                RequestHeadersText = reqHeaders,
+                RequestHeadersText = request.Headers,
                 ResponseHeadersText = respHeaders,
-                RequestBodyText = reqBody,
+                RequestBodyText = request.Body,
                 ResponseBodyText = respBody,
-                RequestBodyBytes = reqBytes,
+                RequestBodyBytes = request.BodyBytes,
                 ResponseBodyBytes = respBytes,
-                ContentType = contentType ?? respMime,
+                ContentType = request.ContentType ?? respMime,
                 DurationMs = durationMs,
                 TtfbMs = ttfbMs,
                 BodySize = respBytes?.LongLength ?? respBody?.Length,
@@ -386,6 +386,14 @@ public static class SessionArchive
             return;
         }
 
+        ApplyInspectorIdentity(ext, snap);
+        ApplyInspectorCapture(ext, snap);
+        ApplyInspectorFlags(ext, snap);
+        ApplyInspectorBodies(ext, snap);
+    }
+
+    private static void ApplyInspectorIdentity(JsonElement ext, SessionSnapshot snap)
+    {
         if (ext.TryGetProperty("id", out var idEl) && idEl.TryGetInt64(out var savedId) && savedId > 0)
         {
             snap.Id = savedId;
@@ -415,7 +423,10 @@ public static class SessionArchive
         {
             snap.ProcessName = pn.GetString();
         }
+    }
 
+    private static void ApplyInspectorCapture(JsonElement ext, SessionSnapshot snap)
+    {
         if (ext.TryGetProperty("sentBytes", out var sent) && sent.TryGetInt64(out var sentBytes))
         {
             snap.SentBytes = sentBytes;
@@ -447,7 +458,10 @@ public static class SessionArchive
         {
             snap.ResponseBodyOriginalSize = respOrig;
         }
+    }
 
+    private static void ApplyInspectorFlags(JsonElement ext, SessionSnapshot snap)
+    {
         snap.IsWebSocket = ReadBool(ext, "isWebSocket") ?? snap.IsWebSocket;
         snap.IsGrpc = ReadBool(ext, "isGrpc") ?? snap.IsGrpc;
         snap.IsTranscoded = ReadBool(ext, "isTranscoded") ?? snap.IsTranscoded;
@@ -468,7 +482,10 @@ public static class SessionArchive
         snap.UpstreamPath = ReadString(ext, "upstreamPath") ?? snap.UpstreamPath;
         snap.UpstreamContentType = ReadString(ext, "upstreamContentType") ?? snap.UpstreamContentType;
         snap.ProtobufDecodedText = ReadString(ext, "protobufDecodedText") ?? snap.ProtobufDecodedText;
+    }
 
+    private static void ApplyInspectorBodies(JsonElement ext, SessionSnapshot snap)
+    {
         // Prefer _inspector body payloads when present (lossless for Inspect).
         if (TryDecodeBase64(ext, "requestBodyBase64", out var reqBytes))
         {
@@ -539,7 +556,7 @@ public static class SessionArchive
         }
     }
 
-    private static IReadOnlyList<T>? DeserializeList<T>(JsonElement ext, string name)
+    private static List<T>? DeserializeList<T>(JsonElement ext, string name)
     {
         if (!ext.TryGetProperty(name, out var el) || el.ValueKind != JsonValueKind.Array)
         {
@@ -556,37 +573,33 @@ public static class SessionArchive
         }
     }
 
-    private static bool TryReadHarRequest(
-        JsonElement entry,
-        out string method,
-        out string url,
-        out string? host,
-        out string reqHeaders,
-        out string? reqBody,
-        out string? contentType,
-        out byte[]? reqBytes)
-    {
-        method = "GET";
-        url = "";
-        host = null;
-        reqHeaders = "";
-        reqBody = null;
-        contentType = null;
-        reqBytes = null;
+    private readonly record struct HarRequestFields(
+        string Method,
+        string Url,
+        string? Host,
+        string Headers,
+        string? Body,
+        string? ContentType,
+        byte[]? BodyBytes);
 
+    private static bool TryReadHarRequest(JsonElement entry, out HarRequestFields request)
+    {
+        request = new HarRequestFields("GET", "", null, "", null, null, null);
         if (!entry.TryGetProperty("request", out var req))
         {
             return false;
         }
 
-        method = req.TryGetProperty("method", out var m) ? m.GetString() ?? "GET" : "GET";
-        url = req.TryGetProperty("url", out var u) ? u.GetString() ?? "" : "";
+        var method = req.TryGetProperty("method", out var m) ? m.GetString() ?? "GET" : "GET";
+        var url = req.TryGetProperty("url", out var u) ? u.GetString() ?? "" : "";
+        string? host = null;
         if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
         {
             host = uri.Host;
         }
 
-        reqHeaders = FormatHarHeaders(req);
+        string? reqBody = null;
+        string? contentType = null;
         if (req.TryGetProperty("postData", out var post) && post.ValueKind == JsonValueKind.Object)
         {
             if (post.TryGetProperty("text", out var pt))
@@ -600,6 +613,7 @@ public static class SessionArchive
             }
         }
 
+        request = new HarRequestFields(method, url, host, FormatHarHeaders(req), reqBody, contentType, null);
         return true;
     }
 

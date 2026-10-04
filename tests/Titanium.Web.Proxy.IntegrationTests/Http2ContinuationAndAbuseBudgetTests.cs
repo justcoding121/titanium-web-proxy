@@ -24,6 +24,8 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Http2ContinuationAndAbuseBudgetTests
 {
+    private static readonly int[] StreamsWithinAckedCap = [1, 3];
+    private static readonly int[] StreamPastAckedCap = [5];
     private static TestServer sharedServer = null!;
 
     [ClassInitialize]
@@ -455,7 +457,7 @@ public class Http2ContinuationAndAbuseBudgetTests
             return null;
         }
 
-        var earlyRefusal = await WaitForRstAsync(new[] { 1, 3 }, TimeSpan.FromMilliseconds(400));
+        var earlyRefusal = await WaitForRstAsync(StreamsWithinAckedCap, TimeSpan.FromMilliseconds(400));
         Assert.IsNull(earlyRefusal,
             "Streams within the ACKed cap must not be refused because a later SETTINGS lowered the cap.");
 
@@ -463,7 +465,7 @@ public class Http2ContinuationAndAbuseBudgetTests
             Array.Empty<byte>());
         await OpenGetAsync(5);
 
-        var refused = await WaitForRstAsync(new[] { 5 }, TimeSpan.FromSeconds(3));
+        var refused = await WaitForRstAsync(StreamPastAckedCap, TimeSpan.FromSeconds(3));
         Assert.AreEqual(5, refused,
             "After the second SETTINGS is ACKed, a new stream past that cap must be REFUSED_STREAM.");
 

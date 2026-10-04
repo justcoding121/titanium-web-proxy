@@ -689,11 +689,12 @@ internal static partial class Http3OriginBridge
                     }
 
                     // Keep request upload live while copying the response (true duplex).
-                    var copyVt = CopyResponseAsync();
+                    // Each branch consumes its own ValueTask once. The no-upload path awaits
+                    // directly so it does not allocate the Task that WhenAll needs.
                     if (pendingUpload != null)
-                        await Task.WhenAll(pendingUpload, copyVt.AsTask());
+                        await Task.WhenAll(pendingUpload, CopyResponseAsync().AsTask());
                     else
-                        await copyVt;
+                        await CopyResponseAsync();
                 };
             }
             else if (uploadTask != null)

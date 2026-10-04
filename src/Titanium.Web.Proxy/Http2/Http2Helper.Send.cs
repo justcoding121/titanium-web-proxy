@@ -115,7 +115,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     Off-loop variant used by <see cref="SendBody"/>: may await flow-control credit because it
         ///     does not run on the shared frame reader.
         /// </summary>
-        private static async ValueTask QueueSendDataAsync(Http2ConnectionState connectionState, bool towardServer,
+        private static async ValueTask QueueSendDataAsync(Http2ConnectionState connectionState, bool towardServer, // NOSONAR S107 -- DATA send keeps frame fields explicit; a context object would allocate on this path.
             SemaphoreSlim writeLock, int streamId, ReadOnlyMemory<byte> data, bool endStream, int maxFrameSize,
             Http2FlowController flow, Stream output, CancellationToken cancellationToken)
         {
@@ -154,7 +154,7 @@ namespace Titanium.Web.Proxy.Http2
         ///         must reset the stream (silently dropping them would hang the peer).
         ///     </para>
         /// </summary>
-        private static QueueSendDataResult QueueSendData(Http2ConnectionState connectionState, bool towardServer,
+        private static QueueSendDataResult QueueSendData(Http2ConnectionState connectionState, bool towardServer, // NOSONAR S107, S3776 -- Per-frame DATA queue shares flow-control state; splitting or boxing the args would change the send path.
             SemaphoreSlim writeLock, int streamId, ReadOnlyMemory<byte> data, bool endStream, int maxFrameSize,
             Http2FlowController flow, Http2DeferredOutboundData deferred, Stream output)
         {
@@ -271,7 +271,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     would let this block overtake earlier-encoded HEADERS still queued on the dedicated writer,
         ///     and the peer's HPACK decoder would desynchronize (COMPRESSION_ERROR).
         /// </summary>
-        internal static void QueueSendTrailer(Http2ConnectionState connectionState, bool towardServer,
+        internal static void QueueSendTrailer(Http2ConnectionState connectionState, bool towardServer, // NOSONAR S107 -- Trailer encode keeps the same explicit frame fields as QueueSendHeader.
             SemaphoreSlim writeLock, Http2Settings settings, Http2FrameHeader frameHeader,
             byte[] frameHeaderBuffer, int streamId, HeaderCollection trailingHeaders, bool endStream, Stream output)
         {
@@ -433,7 +433,7 @@ namespace Titanium.Web.Proxy.Http2
                 hasPriority, data, maxFrameSize, output);
         }
 
-        private static async ValueTask WriteHeaderBlockMultiAsync(Http2FrameHeader frameHeader,
+        private static async ValueTask WriteHeaderBlockMultiAsync(Http2FrameHeader frameHeader, // NOSONAR S107 -- CONTINUATION writer keeps the same explicit frame fields as WriteHeaderBlockAsync.
             byte[] frameHeaderBuffer, int streamId, Http2FrameType type, bool endStream, bool hasPriority,
             ReadOnlyMemory<byte> data, int maxFrameSize, Stream output)
         {
@@ -878,7 +878,7 @@ namespace Titanium.Web.Proxy.Http2
             writer.EnqueueRented(rented, total);
         }
 
-        private static ValueTask AsValueTask(Task task) => new(task);
+        private static ValueTask AsValueTask(Task task) => new(task); // NOSONAR S1144 -- Reflection test seam for the completed-task ValueTask wrapper.
 
         /// <summary>
         ///     Writes two buffers back-to-back without an async state machine when both complete synchronously.
@@ -954,7 +954,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     HTTP/2 frames the body with DATA/END_STREAM (Transfer-Encoding is never used over h2), so the
         ///     chunked header is always stripped regardless of which shape applies.
         /// </summary>
-        internal static async Task EmitSyntheticResponseAsync(SessionEventArgs args, int streamId,
+        internal static async Task EmitSyntheticResponseAsync(SessionEventArgs args, int streamId, // NOSONAR S107 -- Synthetic response keeps the caller’s frame buffers explicit.
             Http2ConnectionState connectionState, Stream clientStream, CancellationToken cancellationToken,
             Func<SessionEventArgs, Task>? onAfterResponse = null, ILogger? logger = null,
             ReadOnlyMemory<byte>? wireBody = null)
@@ -1075,7 +1075,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     Emits HEADERS + DATA from an already-buffered wire body without requiring
         ///     <see cref="RequestResponseBase.Body"/> (coalesce path for unread MITM lite / reverse).
         /// </summary>
-        private static async Task EmitBufferedSyntheticResponseAsync(Response response, int streamId,
+        private static async Task EmitBufferedSyntheticResponseAsync(Response response, int streamId, // NOSONAR S107 -- Buffered synthetic emit keeps the caller’s frame buffers explicit.
             Http2ConnectionState connectionState, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
             Stream clientStream, ReadOnlyMemory<byte> wireBody, CancellationToken cancellationToken)
         {

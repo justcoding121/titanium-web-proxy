@@ -117,7 +117,7 @@ public class LiveSessionUpdateUxTests
     }
 
     [TestMethod]
-    public void SessionUpdated_BeforeBatchedCapture_DoesNotDuplicateGridRow()
+    public async Task SessionUpdated_BeforeBatchedCapture_DoesNotDuplicateGridRow()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-dup-race-" + Guid.NewGuid().ToString("N") + ".json");
         try
@@ -155,7 +155,7 @@ public class LiveSessionUpdateUxTests
             var deadline = DateTime.UtcNow.AddSeconds(2);
             while (vm.Sessions.Count == 0 && DateTime.UtcNow < deadline)
             {
-                Thread.Sleep(20);
+                await Task.Delay(20);
             }
 
             Assert.AreEqual(1, vm.Sessions.Count);

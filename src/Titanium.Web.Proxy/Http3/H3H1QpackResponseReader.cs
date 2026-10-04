@@ -42,23 +42,15 @@ internal static class H3H1QpackResponseReader
         var isChunked = false;
         var connectionClose = false;
 
-        while (reader.TryConsumeHeaderLineFromBuffer(out var emptyLine, out var lineBytes))
-        {
-            if (emptyLine)
-                return Finish(builder, contentLength, isChunked, connectionClose);
-            ConsumeLine(lineBytes, builder, ref contentLength, ref isChunked, ref connectionClose,
-                alsoPopulate);
-        }
+        if (TryFinishFromBuffer(reader, builder, ref contentLength, ref isChunked, ref connectionClose,
+                alsoPopulate, out var buffered))
+            return buffered;
 
         while (true)
         {
-            while (reader.TryConsumeHeaderLineFromBuffer(out var emptyLine, out var lineBytes))
-            {
-                if (emptyLine)
-                    return Finish(builder, contentLength, isChunked, connectionClose);
-                ConsumeLine(lineBytes, builder, ref contentLength, ref isChunked, ref connectionClose,
-                    alsoPopulate);
-            }
+            if (TryFinishFromBuffer(reader, builder, ref contentLength, ref isChunked, ref connectionClose,
+                    alsoPopulate, out buffered))
+                return buffered;
 
             // Prefer byte-buffer fill + TryConsume on the hot path. When the buffer is full without
             // an LF (or EOF leaves a partial line), fall back to ReadLine spanning (cold path).
@@ -79,6 +71,31 @@ internal static class H3H1QpackResponseReader
             ConsumeLine(tmpLine, builder, ref contentLength, ref isChunked, ref connectionClose,
                 alsoPopulate);
         }
+    }
+
+    private static bool TryFinishFromBuffer(
+        HttpStream reader,
+        QpackEncoder.ResponseBlockBuilder builder,
+        ref long contentLength,
+        ref bool isChunked,
+        ref bool connectionClose,
+        HeaderCollection? alsoPopulate,
+        out Result? result)
+    {
+        while (reader.TryConsumeHeaderLineFromBuffer(out var emptyLine, out var lineBytes))
+        {
+            if (emptyLine)
+            {
+                result = Finish(builder, contentLength, isChunked, connectionClose);
+                return true;
+            }
+
+            ConsumeLine(lineBytes, builder, ref contentLength, ref isChunked, ref connectionClose,
+                alsoPopulate);
+        }
+
+        result = null;
+        return false;
     }
 
     private static Result Finish(
