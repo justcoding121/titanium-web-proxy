@@ -1,7 +1,9 @@
 # Validate compare-editions medians at c=64 against edition ratio gates.
 # Prefer SLO-passing c=64 rows. When an arm ran but missed p99 SLO at c=64, still compute the
 # ratio from that c=64 row so failures are real ratio misses — not "missing arm data".
-# Truly absent CSV arms still FAIL as missing.
+# Truly absent CSV arms still FAIL as missing on a full compare-editions CSV.
+# -AllowPartial (sharded suite legs) skips a pair unless both arms are in that CSV.
+# The shared CLI baseline would otherwise fail every feature pair that this shard did not run.
 # Non-YARP edition floors are 0.50 (runner noise on Plus/CLI feature arms).
 param(
     [Parameter(Mandatory)] [string] $CsvPath,
@@ -21,7 +23,8 @@ param(
     [double] $StaticGate = 0.50,
     [double] $LoggingGate = 0.50,
     [double] $LbLeastTimeGate = 0.50,
-    [double] $DialectTwpGate = 0.50
+    [double] $DialectTwpGate = 0.50,
+    [switch] $AllowPartial
 )
 
 $ErrorActionPreference = 'Stop'
@@ -157,6 +160,10 @@ Write-Host "Edition gates @ c=64 ($([IO.Path]::GetFileName($CsvPath)))" -Foregro
 foreach ($p in $pairs) {
     $numPresent = $present.Contains([string]$p.Num)
     $denPresent = $present.Contains([string]$p.Den)
+    if ($AllowPartial -and (-not $numPresent -or -not $denPresent)) {
+        Write-Host ("SKIP {0}: shard CSV does not contain both arms" -f $p.Label)
+        continue
+    }
     if (-not $numPresent -and -not $denPresent) {
         Write-Host ("SKIP {0}: neither arm in this CSV" -f $p.Label)
         continue

@@ -962,7 +962,7 @@ jobs:
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
             Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $csv) { throw 'No CSV found for edition gate validation' }
-          pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath $csv.FullName
+          pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath $csv.FullName -AllowPartial
 
       - name: Validate compare-product gates
         id: gate-product
