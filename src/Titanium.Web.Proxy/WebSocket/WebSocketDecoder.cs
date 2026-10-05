@@ -144,6 +144,15 @@ public class WebSocketDecoder
                         $"{maxFramePayloadBytes:N0} bytes.",
                         size > int.MaxValue ? (ushort)1002 : (ushort)1009);
 
+                // Only data frames may skip buffering. A control frame (payload must be <= 125) or a
+                // reserved opcode with an oversize length is a protocol error in every mode, and raw
+                // relay would bypass the validation the buffered path applies.
+                if (opCode != WebsocketOpCode.Continuation && opCode != WebsocketOpCode.Text &&
+                    opCode != WebsocketOpCode.Binary)
+                    throw new WebSocketProtocolException(
+                        $"WebSocket frame with opcode {(int)opCode} declared a payload of {size:N0} bytes.",
+                        1002);
+
                 var frameWire = (long)idx + (masked ? 4 : 0) + size;
                 var takeNow = (int)Math.Min(data1.Length, frameWire);
                 var rawNow = decodeBuffer.Slice(0, takeNow).ToArray();

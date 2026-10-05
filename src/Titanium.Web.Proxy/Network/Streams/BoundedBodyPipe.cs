@@ -8,6 +8,22 @@ using System.Threading.Tasks;
 namespace Titanium.Web.Proxy.Network.Streams;
 
 /// <summary>
+///     Observes the consumer side of a <see cref="BoundedBodyPipe"/>. Used to return HTTP/2
+///     stream flow-control credit as the client actually reads.
+/// </summary>
+internal interface IBodyConsumptionSink
+{
+    /// <summary>Body bytes just copied out of the pipe, on the consumer thread.</summary>
+    void OnBytesConsumed(int bytes);
+
+    /// <summary>
+    ///     Once, after the reader is completed (success or failure), so the sink can flush any
+    ///     credit still owed after a short final read.
+    /// </summary>
+    void OnReadCompleted();
+}
+
+/// <summary>
 ///     A bounded, cancellation-aware pipe wrapping <see cref="System.IO.Pipelines.Pipe"/>
 ///     for streaming HTTP body bytes between producer and consumer tasks. Enforces a
 ///     configurable maximum total byte count; once exceeded the writer is faulted with
@@ -21,16 +37,10 @@ internal sealed class BoundedBodyPipe : IDisposable
     private bool disposed;
 
     /// <summary>
-    ///     Invoked on the consumer thread with the number of body bytes just copied out of the pipe.
-    ///     Used to return HTTP/2 stream flow-control credit as the client actually reads.
+    ///     Optional observer of the consumer side. An interface (not delegates) so attaching it costs no
+    ///     per-request closure allocation on the HTTP/2 origin path.
     /// </summary>
-    internal Action<int>? OnBytesConsumed { get; set; }
-
-    /// <summary>
-    ///     Invoked once after the reader is completed (success or failure), so the caller can flush
-    ///     any credit still owed for padding or a short final read.
-    /// </summary>
-    internal Action? OnReadCompleted { get; set; }
+    internal IBodyConsumptionSink? ConsumptionSink { get; set; }
 
     /// <summary>
     ///     Initializes a new <see cref="BoundedBodyPipe"/> with the given byte limit.
@@ -157,7 +167,7 @@ internal sealed class BoundedBodyPipe : IDisposable
                     {
                         await destination.WriteAsync(segment, cancellationToken).ConfigureAwait(false);
                         if (segment.Length > 0)
-                            OnBytesConsumed?.Invoke(segment.Length);
+                            ConsumptionSink?.OnBytesConsumed(segment.Length);
                     }
 
                     pipe.Reader.AdvanceTo(buffer.End);
@@ -174,7 +184,7 @@ internal sealed class BoundedBodyPipe : IDisposable
         finally
         {
             await pipe.Reader.CompleteAsync().ConfigureAwait(false);
-            OnReadCompleted?.Invoke();
+            ConsumptionSink?.OnReadCompleted();
         }
     }
 
@@ -204,14 +214,14 @@ internal sealed class BoundedBodyPipe : IDisposable
             buffer.Slice(0, toCopy).CopyTo(destination.Span.Slice(offset, toCopy));
             offset += toCopy;
             if (toCopy > 0)
-                OnBytesConsumed?.Invoke(toCopy);
+                ConsumptionSink?.OnBytesConsumed(toCopy);
             pipe.Reader.AdvanceTo(buffer.GetPosition(toCopy));
             if (result.IsCompleted && offset < destination.Length)
                 break;
         }
 
         await pipe.Reader.CompleteAsync().ConfigureAwait(false);
-        OnReadCompleted?.Invoke();
+        ConsumptionSink?.OnReadCompleted();
         return offset;
     }
 

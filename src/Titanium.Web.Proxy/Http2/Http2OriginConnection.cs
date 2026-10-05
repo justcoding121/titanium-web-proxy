@@ -404,9 +404,7 @@ internal sealed class Http2OriginConnection : IDisposable
                     throw new Http2OriginGoAwayException(
                         $"The origin sent GOAWAY before stream {streamId} could be opened; it was never processed.");
 
-                var creditStreamId = streamId;
-                pending.OnBodyBytesConsumed = bytes => OnOriginBodyConsumed(creditStreamId, pending, bytes);
-                pending.OnBodyReadComplete = () => OnOriginBodyReadComplete(creditStreamId, pending);
+                pending.AttachCredit(this, streamId);
                 RegisterOpenedStream(streamId, pending);
                 sendFlow.RegisterStream(streamId);
                 streamOpened = true;
@@ -945,6 +943,13 @@ internal sealed class Http2OriginConnection : IDisposable
             FlushOriginStreamCredit(streamId, pending, force: false);
     }
 
+    private void ReturnOriginStreamCredit(int streamId, PendingStream pending, int bytes)
+    {
+        var pendingCredit = Interlocked.Add(ref pending.UnflushedStreamCredit, bytes);
+        if (pendingCredit >= Http2Helper.ReceiveCreditBatchThreshold)
+            FlushOriginStreamCredit(streamId, pending, force: false);
+    }
+
     private void OnOriginBodyReadComplete(int streamId, PendingStream pending)
     {
         var rest = Interlocked.Exchange(ref pending.StreamCreditOwed, 0);
@@ -1269,7 +1274,17 @@ internal sealed class Http2OriginConnection : IDisposable
                                         }
 
                                         if (accepted && length > 0)
-                                            Interlocked.Add(ref pendingData.StreamCreditOwed, length);
+                                        {
+                                            // Only real body bytes wait on the consumer. Padding (and the pad
+                                            // length byte) never reach the pipe, so a padded or all-padding
+                                            // stream must get that credit back now or it would stall at the
+                                            // stream window with nothing for the consumer to read.
+                                            var dataBytes = bodyData.Length;
+                                            if (dataBytes > 0)
+                                                Interlocked.Add(ref pendingData.StreamCreditOwed, dataBytes);
+                                            if (length > dataBytes)
+                                                ReturnOriginStreamCredit(streamId, pendingData, length - dataBytes);
+                                        }
                                     }
                                 }
                                 else
@@ -1882,7 +1897,7 @@ internal sealed class Http2OriginConnection : IDisposable
             "Origin socket writes must go through Http2FrameWriter; mixed writes corrupt the HTTP/2 byte stream.");
     }
 
-    private sealed class PendingStream : IDisposable
+    private sealed class PendingStream : IDisposable, IBodyConsumptionSink
     {
         /// <summary>
         ///     Known Content-Length bodies ≤ 64 KiB are filled here on the ReadLoop (no <see cref="BoundedBodyPipe" />).
@@ -1941,8 +1956,24 @@ internal sealed class Http2OriginConnection : IDisposable
         /// <summary>Stream credit consumed by the reader and not yet flushed.</summary>
         internal int UnflushedStreamCredit;
 
-        internal Action<int>? OnBodyBytesConsumed;
-        internal Action? OnBodyReadComplete;
+        private Http2OriginConnection? creditOwner;
+        private int creditStreamId;
+
+        /// <summary>
+        ///     Two field stores, no allocation: this runs for every request, including the tiny-GET path
+        ///     that never creates a body pipe.
+        /// </summary>
+        internal void AttachCredit(Http2OriginConnection owner, int streamId)
+        {
+            creditOwner = owner;
+            creditStreamId = streamId;
+        }
+
+        void IBodyConsumptionSink.OnBytesConsumed(int bytes) =>
+            creditOwner?.OnOriginBodyConsumed(creditStreamId, this, bytes);
+
+        void IBodyConsumptionSink.OnReadCompleted() =>
+            creditOwner?.OnOriginBodyReadComplete(creditStreamId, this);
 
         internal PendingStream()
             : this(createInterimChannel: true)
@@ -2033,8 +2064,8 @@ internal sealed class Http2OriginConnection : IDisposable
             // Known length: overrun is a protocol error. Unknown length: no cumulative cap.
             // Backpressure is off so ReadLoop never waits on the consumer.
             var created = new BoundedBodyPipe(contentLength > 0 ? contentLength : 0, applyBackpressure: false);
-            created.OnBytesConsumed = OnBodyBytesConsumed;
-            created.OnReadCompleted = OnBodyReadComplete;
+            if (creditOwner != null)
+                created.ConsumptionSink = this;
             var prior = Interlocked.CompareExchange(ref bodyPipe, created, null);
             if (prior != null)
             {

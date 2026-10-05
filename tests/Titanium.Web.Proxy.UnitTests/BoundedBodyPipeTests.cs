@@ -21,12 +21,23 @@ public class BoundedBodyPipeTests
         pipe.CompleteWriter();
         Assert.AreEqual(chunk.Length, pipe.TotalWritten);
 
-        var consumed = 0;
-        pipe.OnBytesConsumed = n => consumed += n;
+        var sink = new CountingSink();
+        pipe.ConsumptionSink = sink;
         using var destination = new MemoryStream();
         await pipe.CopyToAsync(destination);
-        Assert.AreEqual(chunk.Length, consumed);
+        Assert.AreEqual(chunk.Length, sink.Consumed);
+        Assert.AreEqual(1, sink.Completed);
         Assert.AreEqual(chunk.Length, destination.Length);
+    }
+
+    private sealed class CountingSink : IBodyConsumptionSink
+    {
+        internal int Consumed;
+        internal int Completed;
+
+        public void OnBytesConsumed(int bytes) => Consumed += bytes;
+
+        public void OnReadCompleted() => Completed++;
     }
 
     [TestMethod]

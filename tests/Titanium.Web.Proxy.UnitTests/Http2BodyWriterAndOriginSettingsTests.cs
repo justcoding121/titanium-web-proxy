@@ -283,7 +283,7 @@ public class Http2BodyWriterAndOriginSettingsTests
         using var origin = await CreateOriginConnectionShellAsync();
         var pendingType = typeof(Http2OriginConnection).GetNestedType("PendingStream", BindingFlags.NonPublic)!;
         var pending = Activator.CreateInstance(pendingType, BindingFlags.Instance | BindingFlags.NonPublic,
-            null, [1024L], null)!;
+            null, [], null)!;
         RegisterOpenedStream(origin, 1, pending);
 
         var process = GetProcessHeaderBlock(origin);
@@ -312,7 +312,7 @@ public class Http2BodyWriterAndOriginSettingsTests
         using var origin = await CreateOriginConnectionShellAsync();
         var pendingType = typeof(Http2OriginConnection).GetNestedType("PendingStream", BindingFlags.NonPublic)!;
         var pending = Activator.CreateInstance(pendingType, BindingFlags.Instance | BindingFlags.NonPublic,
-            null, [1024L, false], null)!;
+            null, [false], null)!;
         Assert.IsNull(pendingType.GetField("InterimChannel", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!
             .GetValue(pending));
 
@@ -340,7 +340,7 @@ public class Http2BodyWriterAndOriginSettingsTests
         using var origin = await CreateOriginConnectionShellAsync();
         var pendingType = typeof(Http2OriginConnection).GetNestedType("PendingStream", BindingFlags.NonPublic)!;
         var pending = Activator.CreateInstance(pendingType, BindingFlags.Instance | BindingFlags.NonPublic,
-            null, [1024L], null)!;
+            null, [], null)!;
         RegisterOpenedStream(origin, 3, pending);
 
         var process = GetProcessHeaderBlock(origin);
@@ -477,9 +477,9 @@ public class Http2BodyWriterAndOriginSettingsTests
             default, HttpHeader.Version20, null, null, "h2-origin");
 
         var ctor = typeof(Http2OriginConnection).GetConstructor(PrivateInstance, null,
-            [typeof(TcpServerConnection), typeof(Microsoft.Extensions.Logging.ILogger), typeof(long),
+            [typeof(TcpServerConnection), typeof(Microsoft.Extensions.Logging.ILogger),
                 typeof(ProxyResourceLimits)], null)!;
-        return (Http2OriginConnection)ctor.Invoke([serverConn, NullLogger.Instance, 1024L * 1024L,
+        return (Http2OriginConnection)ctor.Invoke([serverConn, NullLogger.Instance,
             ProxyResourceLimits.Default])!;
     }
 }

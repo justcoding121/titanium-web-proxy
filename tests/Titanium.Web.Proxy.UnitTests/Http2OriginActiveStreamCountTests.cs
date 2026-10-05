@@ -32,13 +32,13 @@ public class Http2OriginActiveStreamCountTests
 
         var pendingType = typeof(Http2OriginConnection).GetNestedType("PendingStream", BindingFlags.NonPublic)!;
         var pending = Activator.CreateInstance(pendingType, PrivateInstance, binder: null,
-            args: [0L], culture: null)!;
+            args: [], culture: null)!;
 
         InvokeRegister(connection, 1, pending);
         Assert.AreEqual(1, connection.ActiveStreamCount);
 
         InvokeRegister(connection, 3, Activator.CreateInstance(pendingType, PrivateInstance, binder: null,
-            args: [0L], culture: null)!);
+            args: [], culture: null)!);
         Assert.AreEqual(2, connection.ActiveStreamCount);
 
         Assert.IsTrue(InvokeTryUnregister(connection, 1));
@@ -159,9 +159,9 @@ public class Http2OriginActiveStreamCountTests
             default, HttpHeader.Version20, null, null, "h2-origin");
 
         var ctor = typeof(Http2OriginConnection).GetConstructor(PrivateInstance, null,
-            [typeof(TcpServerConnection), typeof(Microsoft.Extensions.Logging.ILogger), typeof(long),
+            [typeof(TcpServerConnection), typeof(Microsoft.Extensions.Logging.ILogger),
                 typeof(ProxyResourceLimits)], null)!;
-        return (Http2OriginConnection)ctor.Invoke([serverConn, NullLogger.Instance, 1024L * 1024L,
+        return (Http2OriginConnection)ctor.Invoke([serverConn, NullLogger.Instance,
             ProxyResourceLimits.Default])!;
     }
 }
