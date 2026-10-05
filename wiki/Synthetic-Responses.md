@@ -4,11 +4,11 @@ Answer the client directly from a handler without contacting the origin, or repl
 
 This page covers:
 
-- [When to synthesize](#when-to-synthesize)
-- [Buffered responses](#buffered-responses)
-- [Streamed responses](#streamed-responses)
-- [Migration from legacy APIs](#migration-from-legacy-apis)
-- [Common pitfalls](#common-pitfalls)
+- [When to synthesize](#user-content-when-to-synthesize)
+- [Buffered responses](#user-content-buffered-responses)
+- [Streamed responses](#user-content-streamed-responses)
+- [Migration from legacy APIs](#user-content-migration-from-legacy-apis)
+- [Common pitfalls](#user-content-common-pitfalls)
 
 For modifying an origin response in place (chunk-by-chunk edits), see [Streaming Bodies](Streaming-Bodies).
 
@@ -109,7 +109,7 @@ e.Respond(ProxyResults.Stream(
     writeBody: async (stream, ct) => { /* write exactly contentLength bytes */ }));
 ```
 
-See [Streaming Bodies — Generate a body as a stream](Streaming-Bodies#generate-a-body-as-a-stream) for framing details (Content-Length vs chunked / HTTP/2 DATA frames).
+See [Streaming Bodies — Generate a body as a stream](Streaming-Bodies#user-content-generate-a-body-as-a-stream) for framing details (Content-Length vs chunked / HTTP/2 DATA frames).
 
 ### Range request limitation
 

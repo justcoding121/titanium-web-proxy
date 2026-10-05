@@ -4,9 +4,9 @@ By default Titanium relays request and response bodies as they flow, and only bu
 
 This page covers three related capabilities that avoid buffering:
 
-- [Modify a body as it streams](#modify-a-body-as-it-streams) — `OnRequestBodyWrite` / `OnResponseBodyWrite`
-- [Generate a body as a stream](#generate-a-body-as-a-stream) — `RespondStreaming`
-- [Draining bodies](#draining-bodies) — `DrainServerBodyAsync` / `DrainClientBodyAsync`
+- [Modify a body as it streams](#user-content-modify-a-body-as-it-streams) — `OnRequestBodyWrite` / `OnResponseBodyWrite`
+- [Generate a body as a stream](#user-content-generate-a-body-as-a-stream) — `RespondStreaming`
+- [Draining bodies](#user-content-draining-bodies) — `DrainServerBodyAsync` / `DrainClientBodyAsync`
 
 ---
 

@@ -9,7 +9,7 @@ path — so you don't assume coverage you don't actually have.
 ## WebSocket frame validation only applies where the proxy decodes frames
 
 The reserved-opcode rejection, pre-buffer frame-size validation, and RFC 6455-conformant close
-handling described in [Protocol Support](Protocol-Support#websocket-safety) only run when the proxy
+handling described in [Protocol Support](Protocol-Support#user-content-websocket-safety) only run when the proxy
 is actually parsing WebSocket frames — i.e. the connection was decrypted (`decryptSsl: true`, or plain
 HTTP) and the WebSocket upgrade was intercepted by `WebSocketInterceptRelay`. Two paths bypass all of
 this by construction, not by omission:
@@ -19,7 +19,7 @@ this by construction, not by omission:
   or otherwise.
 - **Non-HTTP relay** on a `SocksProxyEndPoint`: traffic that doesn't look like HTTP at the start of the
   connection is relayed transparently to the SOCKS-negotiated destination with no HTTP or WebSocket
-  parsing at all (see [SOCKS endpoint](Home#socks-endpoint)).
+  parsing at all (see [SOCKS endpoint](Home#user-content-socks-endpoint)).
 
 If you need the WebSocket protections, make sure the traffic in question is actually being decrypted
 and intercepted, not relayed opaquely.
@@ -28,7 +28,7 @@ and intercepted, not relayed opaquely.
 
 `MaxBufferedBodyBytes` (and its HTTP/2/HTTP/3 equivalents) now cumulatively bounds every
 *whole-body-buffering* code path — see
-[Cumulative body budgets](Migration-from-4.x#cumulative-body-budgets-are-now-enforced-end-to-end).
+[Cumulative body budgets](Migration-from-4.x#user-content-cumulative-body-budgets-are-now-enforced-end-to-end).
 It does **not** bound:
 
 - **The streaming hooks** (`OnRequestBodyWrite`/`OnResponseBodyWrite`, see
@@ -43,7 +43,7 @@ It does **not** bound:
   family (see `PolicyFamily.cs`) but is not yet wired to numeric enforcement at every header-reading
   call site; only the HTTP/2 decoded-header-list cap (`MaxDecodedHeaderListBytes`) and the client
   header *read deadline* (a time bound, not a byte bound — see
-  [New: client header read deadline](Migration-from-4.x#new-client-header-read-deadline-opt-in)) are
+  [New: client header read deadline](Migration-from-4.x#user-content-new-client-header-read-deadline-opt-in)) are
   actually enforced today.
 
 Treat memory-exhaustion protection as scoped to the specific mechanism you're using, and prefer the
@@ -63,7 +63,7 @@ of how thoroughly it's been hardened here.
 
 Moving the certificate store to a per-user folder and no longer passing the real PFX password on the
 `certutil.exe` command line (see
-[Certificate store relocated](Migration-from-4.x#certificate-store-relocated-to-a-per-user-protected-folder))
+[Certificate store relocated](Migration-from-4.x#user-content-certificate-store-relocated-to-a-per-user-protected-folder))
 raises the bar from *"any local user or process on the machine can read the CA private key"* to *"any
 process running as the same OS user account can."* That second bar is not, and cannot be, eliminated
 by this proxy: a MITM TLS proxy must hold a CA private key somewhere accessible to itself at runtime in

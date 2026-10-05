@@ -55,48 +55,61 @@ public sealed class SessionStreamBuffer
         await foreach (var snapshot in _channel.Reader.ReadAllAsync())
         {
             batch.Add(snapshot);
-            var deadline = Environment.TickCount64 + _batchWindowMs;
-            while (batch.Count < _batchMax && _channel.Reader.TryRead(out var more))
-            {
-                batch.Add(more);
-            }
-
-            // Wait briefly for more arrivals when the channel is momentarily empty.
-            while (batch.Count < _batchMax && Environment.TickCount64 < deadline)
-            {
-                var remaining = (int)(deadline - Environment.TickCount64);
-                if (remaining <= 0)
-                {
-                    break;
-                }
-
-                using var delayCts = new CancellationTokenSource(remaining);
-                try
-                {
-                    if (await _channel.Reader.WaitToReadAsync(delayCts.Token).ConfigureAwait(false))
-                    {
-                        while (batch.Count < _batchMax && _channel.Reader.TryRead(out var more))
-                        {
-                            batch.Add(more);
-                        }
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-            }
-
+            await CoalesceBatchAsync(batch).ConfigureAwait(false);
             SessionsBatchAdded?.Invoke(batch.ToList());
-            if (SessionAdded is { } singleHandler)
+            RaiseSessionAdded(batch);
+            batch.Clear();
+        }
+    }
+
+    private async Task CoalesceBatchAsync(List<SessionSnapshot> batch)
+    {
+        var deadline = Environment.TickCount64 + _batchWindowMs;
+        while (batch.Count < _batchMax && _channel.Reader.TryRead(out var more))
+        {
+            batch.Add(more);
+        }
+
+        // Wait briefly for more arrivals when the channel is momentarily empty.
+        while (batch.Count < _batchMax && Environment.TickCount64 < deadline)
+        {
+            var remaining = (int)(deadline - Environment.TickCount64);
+            if (remaining <= 0)
             {
-                foreach (var s in batch)
-                {
-                    singleHandler(s);
-                }
+                break;
             }
 
-            batch.Clear();
+            using var delayCts = new CancellationTokenSource(remaining);
+            try
+            {
+                if (await _channel.Reader.WaitToReadAsync(delayCts.Token).ConfigureAwait(false))
+                {
+                    DrainAvailable(batch);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+    }
+
+    private void DrainAvailable(List<SessionSnapshot> batch)
+    {
+        while (batch.Count < _batchMax && _channel.Reader.TryRead(out var more))
+        {
+            batch.Add(more);
+        }
+    }
+
+    private void RaiseSessionAdded(List<SessionSnapshot> batch)
+    {
+        // One subscriber list for the whole batch. Re-reading the event per row would drop
+        // the tail for a handler that unsubscribes on the first snapshot.
+        if (SessionAdded is { } handler) // NOSONAR S3264 -- Invoke the captured delegate so the batch shares one list.
+        {
+            foreach (var snapshot in batch)
+                handler(snapshot);
         }
     }
 }

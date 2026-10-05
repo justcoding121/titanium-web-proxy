@@ -147,14 +147,12 @@ public sealed class SessionStore : IDisposable
             {
                 var prevId = _pinnedSessionId;
                 _pinnedSessionId = value;
-                if (prevId is long oldId && oldId != value && _byId.TryGetValue(oldId, out previous))
+                // Drop RAM bodies for the previous selection when the file already exists.
+                if (prevId is long oldId && oldId != value && _byId.TryGetValue(oldId, out previous)
+                    && previous.BodiesOnDisk)
                 {
-                    // Drop RAM bodies for the previous selection when the file already exists.
-                    if (previous.BodiesOnDisk)
-                    {
-                        ClearBodyFields(previous);
-                        RecalcInMemoryBodyBytesLocked();
-                    }
+                    ClearBodyFields(previous);
+                    RecalcInMemoryBodyBytesLocked();
                 }
 
                 if (value is long newId && _byId.TryGetValue(newId, out next))
@@ -338,7 +336,8 @@ public sealed class SessionStore : IDisposable
     public async Task EnsureBodiesLoadedAsync(SessionSnapshot snapshot, CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (_disk is null)
+        var disk = _disk;
+        if (disk is null)
         {
             return;
         }
@@ -355,48 +354,20 @@ public sealed class SessionStore : IDisposable
         }
 
         // Fast path: file already gone and nothing pending — do not wait ~1s.
-        if (!_disk.FileExists(snapshot.Id) && Volatile.Read(ref _pendingSpills) == 0)
+        if (!disk.FileExists(snapshot.Id) && Volatile.Read(ref _pendingSpills) == 0)
         {
             snapshot.BodiesMissingFromDisk = true;
             return;
         }
 
-        // Under heavy capture, the spill writer may still be draining thousands of HARs.
-        // Keep waiting while work is queued; only mark missing once the channel is idle
-        // and the file is still absent (bounded by ct / ~2 minutes).
-        var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(2);
-        while (DateTime.UtcNow < deadline)
+        if (await WaitForSpilledBodyAsync(snapshot, disk, ct).ConfigureAwait(false))
         {
-            ct.ThrowIfCancellationRequested();
-            lock (_gate)
-            {
-                if (HasInMemoryBodies(snapshot))
-                {
-                    snapshot.BodiesMissingFromDisk = false;
-                    return;
-                }
-
-                if (_disk.TryLoad(snapshot))
-                {
-                    // Keep BodiesOnDisk=true so deselect can unload without rewriting the file.
-                    snapshot.BodiesMissingFromDisk = false;
-                    RecalcInMemoryBodyBytesLocked();
-                    return;
-                }
-            }
-
-            if (Volatile.Read(ref _pendingSpills) == 0 && !_disk.FileExists(snapshot.Id))
-            {
-                snapshot.BodiesMissingFromDisk = true;
-                return;
-            }
-
-            await Task.Delay(25, ct).ConfigureAwait(false);
+            return;
         }
 
         if (!HasInMemoryBodies(snapshot) &&
             Volatile.Read(ref _pendingSpills) == 0 &&
-            !_disk.FileExists(snapshot.Id))
+            !disk.FileExists(snapshot.Id))
         {
             snapshot.BodiesMissingFromDisk = true;
         }
@@ -409,6 +380,48 @@ public sealed class SessionStore : IDisposable
             ct.ThrowIfCancellationRequested();
             await EnsureBodiesLoadedAsync(snap, ct).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    ///     Under heavy capture, the spill writer may still be draining thousands of HARs.
+    ///     Keep waiting while work is queued; only mark missing once the channel is idle
+    ///     and the file is still absent (bounded by ct / ~2 minutes).
+    ///     Returns true when the caller should stop (body loaded or marked missing).
+    /// </summary>
+    private async Task<bool> WaitForSpilledBodyAsync(
+        SessionSnapshot snapshot, SessionBodyDiskCache disk, CancellationToken ct)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(2);
+        while (DateTime.UtcNow < deadline)
+        {
+            ct.ThrowIfCancellationRequested();
+            lock (_gate)
+            {
+                if (HasInMemoryBodies(snapshot))
+                {
+                    snapshot.BodiesMissingFromDisk = false;
+                    return true;
+                }
+
+                if (disk.TryLoad(snapshot))
+                {
+                    // Keep BodiesOnDisk=true so deselect can unload without rewriting the file.
+                    snapshot.BodiesMissingFromDisk = false;
+                    RecalcInMemoryBodyBytesLocked();
+                    return true;
+                }
+            }
+
+            if (Volatile.Read(ref _pendingSpills) == 0 && !disk.FileExists(snapshot.Id))
+            {
+                snapshot.BodiesMissingFromDisk = true;
+                return true;
+            }
+
+            await Task.Delay(25, ct).ConfigureAwait(false);
+        }
+
+        return false;
     }
 
     /// <summary>

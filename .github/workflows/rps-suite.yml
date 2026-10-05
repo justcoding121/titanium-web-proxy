@@ -1,8 +1,14 @@
-# One job per wiki row for a single ramp mode, on all three OS.
+# One job per wiki row for a single ramp mode.
+# Every mode runs on Windows, Linux, and macOS except compare-editions, which is Linux only.
+# Skipped Windows and macOS jobs on editions must not fail the suite.
+# compare-product on Windows and macOS drops twp-mitm-* arms. Linux keeps them in the same
+# job as that row's reverse peers so Lite÷Reverse stays same-VM.
+# compare-spot on beta/stable pull requests is not this workflow.
 # Dispatch one run per mode (compare-product, compare-bodies, ...) so each table has one
 # Source URL and the paste scripts, which look arms up by name, never mix modes.
-# compare-saturation and compare-editions stay one job per OS (key "all"): saturation Block A
-# compares proxy arms against origin-direct from the same job.
+# compare-saturation stays one job per OS (key "all"): saturation Block A compares proxy
+# arms against origin-direct from the same job. compare-editions is one group per wiki row;
+# each group contains the feature arm and the baseline it is divided by.
 #
 # Free-plan account limits: 20 concurrent jobs, 5 of them macOS. This workflow caps each OS
 # matrix itself; runs of different modes still queue together against the account limit.
@@ -41,6 +47,11 @@ on:
         description: 'Concurrent Windows or Linux legs'
         required: true
         default: '15'
+      only_keys:
+        description: 'Comma-separated group keys (empty = every group for the mode)'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -66,10 +77,11 @@ jobs:
         shell: pwsh
         env:
           SUITE_MODE: ${{ inputs.mode }}
+          ONLY_KEYS: ${{ inputs.only_keys }}
         run: |
           $ErrorActionPreference = 'Stop'
-          # These modes compare arms that must share a job, so they stay unsharded.
-          $unsharded = @('compare-saturation', 'compare-editions')
+          # Saturation compares proxy arms against origin-direct from the same job.
+          $unsharded = @('compare-saturation')
           if ($unsharded -contains $env:SUITE_MODE) {
             $keys = @('all')
           }
@@ -86,6 +98,15 @@ jobs:
             if ($groups.Count -gt 256) { throw "$($groups.Count) groups exceeds the 256-job matrix limit" }
             # Longest rows first so the slowest work starts in the first wave.
             $keys = @($groups | Sort-Object Arms -Descending | Select-Object -ExpandProperty Key)
+          }
+          if (-not [string]::IsNullOrWhiteSpace($env:ONLY_KEYS)) {
+            $want = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+            foreach ($part in $env:ONLY_KEYS.Split(',')) {
+              $trimmed = $part.Trim()
+              if ($trimmed) { [void]$want.Add($trimmed) }
+            }
+            $keys = @($keys | Where-Object { $want.Contains($_) })
+            if ($keys.Count -eq 0) { throw "only_keys matched no groups: $($env:ONLY_KEYS)" }
           }
           Write-Host ("{0}: {1} group(s): {2}" -f $env:SUITE_MODE, $keys.Count, ($keys -join ', '))
           # Piping a one-element array into ConvertTo-Json unwraps it to a JSON string.
@@ -114,6 +135,7 @@ jobs:
   windows:
     name: ${{ inputs.mode }} / ${{ matrix.key }} / windows
     needs: prep
+    if: ${{ inputs.mode != 'compare-editions' }}
     strategy:
       fail-fast: false
       max-parallel: ${{ fromJSON(inputs.max_parallel_other) }}
@@ -125,10 +147,12 @@ jobs:
       runner_os: windows-latest
       arm_shard: ${{ matrix.key }}
       repeats: ${{ inputs.repeats }}
+      arm_excludes: ${{ inputs.mode == 'compare-product' && 'twp-mitm-' || '' }}
 
   macos:
     name: ${{ inputs.mode }} / ${{ matrix.key }} / macos
     needs: prep
+    if: ${{ inputs.mode != 'compare-editions' }}
     strategy:
       fail-fast: false
       max-parallel: ${{ fromJSON(inputs.max_parallel_mac) }}
@@ -140,6 +164,7 @@ jobs:
       runner_os: macos-15
       arm_shard: ${{ matrix.key }}
       repeats: ${{ inputs.repeats }}
+      arm_excludes: ${{ inputs.mode == 'compare-product' && 'twp-mitm-' || '' }}
 
   aggregate:
     name: aggregate ${{ inputs.mode }}
@@ -150,6 +175,7 @@ jobs:
       - name: Check every row on every OS
         shell: pwsh
         env:
+          GH_TOKEN: ${{ github.token }}
           SUITE_MODE: ${{ inputs.mode }}
           KEYS_JSON: ${{ needs.prep.outputs.keys }}
           LINUX_RESULT: ${{ needs.linux.result }}
@@ -159,8 +185,14 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $keys = @($env:KEYS_JSON | ConvertFrom-Json)
           $arts = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID/artifacts?per_page=100" --paginate --jq '.artifacts[] | select(.name | startswith("rps-status-")) | .name'
+          if ($LASTEXITCODE -ne 0) { throw "Could not list status artifacts (gh exit $LASTEXITCODE)" }
           $statusNames = @($arts | Where-Object { $_ })
-          $osLabels = [ordered]@{ linux = 'ubuntu-latest'; windows = 'windows-latest'; macos = 'macos-15' }
+          $linuxOnly = $env:SUITE_MODE -eq 'compare-editions'
+          $osLabels = [ordered]@{ linux = 'ubuntu-latest' }
+          if (-not $linuxOnly) {
+            $osLabels.windows = 'windows-latest'
+            $osLabels.macos = 'macos-15'
+          }
           $missing = @()
           foreach ($key in $keys) {
             $label = ($key -replace '/', '-')
@@ -169,6 +201,7 @@ jobs:
               if ($statusNames -notcontains $name) { $missing += $name }
             }
           }
+          $expected = if ($linuxOnly) { "$($keys.Count) x Linux only" } else { "$($keys.Count) x 3 OS" }
           $summary = @(
             "### RPS suite: $env:SUITE_MODE",
             "",
@@ -178,7 +211,7 @@ jobs:
             "| windows | $env:WINDOWS_RESULT |",
             "| macos | $env:MACOS_RESULT |",
             "",
-            "Expected rows: $($keys.Count) x 3 OS.",
+            "Expected rows: $expected.",
             "Status artifacts found: $($statusNames.Count)."
           )
           if ($missing) {
@@ -187,8 +220,10 @@ jobs:
             $summary += ($missing | ForEach-Object { "- $_" })
           }
           $summary -join "`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8
-          $osFailed = @($env:LINUX_RESULT, $env:WINDOWS_RESULT, $env:MACOS_RESULT) | Where-Object { $_ -ne 'success' }
+          $checked = @($env:LINUX_RESULT)
+          if (-not $linuxOnly) { $checked += @($env:WINDOWS_RESULT, $env:MACOS_RESULT) }
+          $osFailed = @($checked | Where-Object { $_ -ne 'success' })
           if ($missing -or $osFailed) {
             throw "Suite incomplete: $($missing.Count) status artifact(s) missing, OS results: linux=$env:LINUX_RESULT windows=$env:WINDOWS_RESULT macos=$env:MACOS_RESULT"
           }
-          Write-Host "Suite complete: $($keys.Count) rows x 3 OS"
+          Write-Host "Suite complete: $expected"

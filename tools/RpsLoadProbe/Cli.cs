@@ -47,6 +47,7 @@ internal static class Cli
         var stopOnSloFail = true;
         (int Index, int Count)? armShard = null;
         string? armNameContains = null;
+        string? armNameExcludes = null;
         var printArms = false;
         var printGroups = false;
         string? armGroupKey = null;
@@ -170,6 +171,11 @@ internal static class Cli
                     if (armNameContains.Length == 0)
                         return Fail("--arm-contains must be a non-empty substring");
                     break;
+                case "--arm-excludes":
+                    armNameExcludes = RequireValue(args, ref i, "--arm-excludes").Trim();
+                    if (armNameExcludes.Length == 0)
+                        return Fail("--arm-excludes must be a non-empty substring");
+                    break;
                 case "--method":
                     method = RequireValue(args, ref i, "--method").ToUpperInvariant();
                     if (method is not ("GET" or "POST"))
@@ -273,7 +279,7 @@ internal static class Cli
                     originHttpsExtraPorts, nginxPath, haproxyPath, envoyPath, maxCachedConnections, cts.Token, workload),
                 "serve" => RunServe(modeText, nginxPath, haproxyPath, envoyPath, maxCachedConnections, cts.Token, workload),
                 "ramp" => RunRamp(modeText, nginxPath, haproxyPath, envoyPath, resultsDir, concurrency, warmupSec, durationSec,
-                    maxCachedConnections, repeats, workload, stopOnSloFail, armShard, armGroupKey, armNameContains, printArms, printGroups, cts.Token),
+                    maxCachedConnections, repeats, workload, stopOnSloFail, armShard, armGroupKey, armNameContains, armNameExcludes, printArms, printGroups, cts.Token),
                 _ => Fail("Required: --serve | --serve-origin | --serve-proxy | --ramp")
             };
         }
@@ -327,7 +333,7 @@ internal static class Cli
     private static int RunRamp(string? modeText, string? nginxPath, string? haproxyPath, string? envoyPath,
         string? resultsDir, List<int> concurrency, int warmupSec, int durationSec, int? maxCachedConnections,
         int repeats, WorkloadOptions workload, bool stopOnSloFail, (int Index, int Count)? armShard,
-        string? armGroupKey, string? armNameContains, bool printArms, bool printGroups, CancellationToken ct)
+        string? armGroupKey, string? armNameContains, string? armNameExcludes, bool printArms, bool printGroups, CancellationToken ct)
     {
         if (modeText == null || !TryParseMode(modeText, out var mode))
             return Fail("Required: --ramp --mode <see --help>");
@@ -347,6 +353,7 @@ internal static class Cli
             ArmShard = armShard,
             ArmGroupKey = armGroupKey,
             ArmNameContains = armNameContains,
+            ArmNameExcludes = armNameExcludes,
             ConcurrencySteps = concurrency.Count > 0
                 ? concurrency.ToArray()
                 : [8, 16, 24, 32, 48, 64, 128, 256, 512],
@@ -747,6 +754,15 @@ internal static class Cli
             case "twp-cli-plus-cache-hit-http1":
                 mode = ProbeMode.TwpCliPlusCacheHitHttp1;
                 return true;
+            case "twp-cli-plus-cors-http1":
+                mode = ProbeMode.TwpCliPlusCorsHttp1;
+                return true;
+            case "twp-cli-plus-circuit-http1":
+                mode = ProbeMode.TwpCliPlusCircuitHttp1;
+                return true;
+            case "twp-cli-plus-retry-http1":
+                mode = ProbeMode.TwpCliPlusRetryHttp1;
+                return true;
             case "twp-cli-static-http1":
                 mode = ProbeMode.TwpCliStaticHttp1;
                 return true;
@@ -922,6 +938,7 @@ internal static class Cli
               --arm-shard i/n|all|KEY Exclusive comparison-group (wiki-row) partition; all = no split;
                                       KEY (e.g. h1c-h1c, h3-h3-body64k) runs exactly one wiki row
               --arm-contains TEXT     Keep only arms whose name contains TEXT (surgical re-run);
+              --arm-excludes TEXT     Drop arms whose name matches TEXT (same comma/$ syntax);
                                       comma-separated alternatives, trailing $ = name ends with
               --max-cached-connections N   Override ProxyServer.MaxCachedConnections for TWP arms
               --method GET|POST       Default GET (compare-post sets POST per arm)

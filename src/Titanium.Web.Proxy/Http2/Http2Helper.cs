@@ -46,6 +46,8 @@ namespace Titanium.Web.Proxy.Http2
 
         private static readonly byte[] ConnectMethodBytes = "CONNECT"u8.ToArray();
         private const string SyntheticResponseFailedMessage = "HTTP/2 synthetic response failed";
+        private const string DeferredDataQueueCapExceededMessage =
+            "HTTP/2 deferred DATA queue exceeded its per-stream cap.";
 
         /// <summary>
         ///     Connection-level WINDOW_UPDATE increment matching Chrome/Edge (0xEF0001). Grows the peer's

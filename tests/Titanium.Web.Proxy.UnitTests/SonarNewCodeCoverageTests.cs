@@ -1741,7 +1741,7 @@ public class SonarNewCodeCoverageTests
         var clientStream = new HttpClientStream(proxy, clientConn, new NetworkStream(clientSock, ownsSocket: false),
             proxy.BufferPool, CancellationToken.None);
 
-        var writeMw = typeof(ProxyServer).GetMethod("WriteTerminateLiteMiddlewareResponseAsync", PrivateStatic)!;
+        var writeMw = typeof(ProxyServer).GetMethod("WriteTerminateLiteMiddlewareResponseAsync", PrivateInstance)!;
         var ctx = new ProxyMiddlewareContext
         {
             Session = new object(),
@@ -1755,16 +1755,16 @@ public class SonarNewCodeCoverageTests
             var buf = new byte[1024];
             try { accepted.Receive(buf); } catch { /* ignore */ }
         });
-        await (Task)writeMw.Invoke(null, [clientStream, req, ctx, CancellationToken.None])!;
+        await (Task)writeMw.Invoke(proxy, [clientStream, req, ctx, CancellationToken.None])!;
         await drain;
 
-        var tryMw = typeof(ProxyServer).GetMethod("TryRunTerminateLiteMiddlewareAsync", PrivateStatic)!;
+        var tryMw = typeof(ProxyServer).GetMethod("TryRunTerminateLiteMiddlewareAsync", PrivateInstance)!;
         var handled = new HandleAllMiddleware();
-        var keep = await (Task<bool?>)tryMw.Invoke(null,
+        var keep = await (Task<bool?>)tryMw.Invoke(proxy,
             [ep, clientStream, req, new IProxyMiddleware[] { handled }, CancellationToken.None])!;
         Assert.IsNotNull(keep);
 
-        var passthrough = await (Task<bool?>)tryMw.Invoke(null,
+        var passthrough = await (Task<bool?>)tryMw.Invoke(proxy,
             [ep, clientStream, req, Array.Empty<IProxyMiddleware>(), CancellationToken.None])!;
         Assert.IsNull(passthrough);
 

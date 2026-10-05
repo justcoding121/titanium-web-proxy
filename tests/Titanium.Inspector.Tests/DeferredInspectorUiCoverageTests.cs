@@ -11,6 +11,7 @@ namespace Titanium.Inspector.Tests;
 [TestClass]
 public class DeferredInspectorUiCoverageTests
 {
+    private static readonly int[] DeferredUiOrder = [1, 2];
     [TestMethod]
     public async Task DeferredUi_PresentsOnTheNextLiveTurn_AndPostsWhileTheAppIsUp()
     {
@@ -39,7 +40,7 @@ public class DeferredInspectorUiCoverageTests
             {
                 // StatusText presents a stashed queue once the dispatcher is live.
                 _ = vm.StatusText;
-                CollectionAssert.AreEqual(new[] { 1, 2 }, order);
+                CollectionAssert.AreEqual(DeferredUiOrder, order);
 
                 var inline = 0;
                 vm.QueueLiveUi(() => inline++);

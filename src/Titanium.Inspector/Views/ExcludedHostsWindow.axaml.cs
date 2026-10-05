@@ -10,7 +10,6 @@ namespace Titanium.Inspector.Views;
 public partial class ExcludedHostsWindow : Window
 {
     private readonly SettingsService _settings;
-    private readonly bool _readOnly;
     private readonly Action? _onSaved;
     private readonly InterceptionService? _interception;
     private bool _saved;
@@ -27,7 +26,6 @@ public partial class ExcludedHostsWindow : Window
         InterceptionService? interception = null)
     {
         _settings = settings;
-        _readOnly = readOnly;
         _onSaved = onSaved;
         _interception = interception;
         InitializeComponent();

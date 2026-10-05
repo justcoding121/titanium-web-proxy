@@ -603,15 +603,13 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        foreach (var snapshot in batch)
+        // SessionUpdated may have raced ahead of this batched capture add and already
+        // inserted the row; never append the same snapshot twice.
+        foreach (var snapshot in batch.Where(snapshot =>
+                     SessionSearch.Matches(snapshot, SearchQuery, bodyMatcher: null) &&
+                     Sessions.IndexOf(snapshot) < 0))
         {
-            // SessionUpdated may have raced ahead of this batched capture add and already
-            // inserted the row; never append the same snapshot twice.
-            if (SessionSearch.Matches(snapshot, SearchQuery, bodyMatcher: null) &&
-                Sessions.IndexOf(snapshot) < 0)
-            {
-                Sessions.Add(snapshot);
-            }
+            Sessions.Add(snapshot);
         }
 
         RefreshSessionCountText();
@@ -820,15 +818,7 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        var removeCount = 0;
-        foreach (var session in Sessions)
-        {
-            if (ids.Contains(session.Id))
-            {
-                removeCount++;
-            }
-        }
-
+        var removeCount = Sessions.Count(session => ids.Contains(session.Id));
         if (removeCount == 0)
         {
             return;
@@ -842,16 +832,7 @@ public sealed partial class MainWindowViewModel
 
         if (removeCount >= BulkGridEditThreshold && removeCount * 2 >= Sessions.Count)
         {
-            var keep = new List<SessionSnapshot>(Sessions.Count - removeCount);
-            foreach (var session in Sessions)
-            {
-                if (!ids.Contains(session.Id))
-                {
-                    keep.Add(session);
-                }
-            }
-
-            ReplaceVisibleSessions(keep);
+            ReplaceVisibleSessions(Sessions.Where(session => !ids.Contains(session.Id)).ToList());
             return;
         }
 

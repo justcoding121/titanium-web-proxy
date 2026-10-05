@@ -1605,6 +1605,39 @@ These are also included in <a class="xref" href="Titanium.Web.Proxy.ProxyServer.
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_HttpResponseCacheFiller.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.HttpResponseCacheFiller%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1507">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_ProxyServer_HttpResponseCacheFiller_" data-uid="Titanium.Web.Proxy.ProxyServer.HttpResponseCacheFiller*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_HttpResponseCacheFiller" data-uid="Titanium.Web.Proxy.ProxyServer.HttpResponseCacheFiller">HttpResponseCacheFiller</h4>
+  <div class="markdown level1 summary"><p>Fills the GET/HEAD response cache from a session that is already on the interception path.
+Does not subscribe <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BeforeResponse">BeforeResponse</a> or <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_AfterResponse">AfterResponse</a>, so it does
+not turn <a class="xref" href="Titanium.Web.Proxy.Models.ProxyEndPoint.html">NeedsHttpInterception(ProxyEndPoint)</a> on.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Action&lt;SessionEventArgs&gt;? HttpResponseCacheFiller { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.action-1">Action</a>&lt;<a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html">SessionEventArgs</a>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_IdleReadTimeoutSeconds.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.IdleReadTimeoutSeconds%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
@@ -2523,6 +2556,38 @@ and should usually be kept in sync with <a class="xref" href="Titanium.Web.Proxy
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ResponseHeaderContributor.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ResponseHeaderContributor%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1513">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_ProxyServer_ResponseHeaderContributor_" data-uid="Titanium.Web.Proxy.ProxyServer.ResponseHeaderContributor*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ResponseHeaderContributor" data-uid="Titanium.Web.Proxy.ProxyServer.ResponseHeaderContributor">ResponseHeaderContributor</h4>
+  <div class="markdown level1 summary"><p>Adds response headers on the way to the client without subscribing <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BeforeResponse">BeforeResponse</a>.
+Plus CORS uses this so a listener can stay on H1 terminate-lite.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Action&lt;Response&gt;? ResponseHeaderContributor { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.action-1">Action</a>&lt;<a class="xref" href="Titanium.Web.Proxy.Http.Response.html">Response</a>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ResponseHeaderTimeoutSeconds.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ResponseHeaderTimeoutSeconds%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
@@ -2812,7 +2877,7 @@ accumulation; the 1-second connection disposal delay already prefers peer-first 
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ThreadPoolWorkerThread.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1535">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1548">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_ThreadPoolWorkerThread_" data-uid="Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ThreadPoolWorkerThread" data-uid="Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread">ThreadPoolWorkerThread</h4>

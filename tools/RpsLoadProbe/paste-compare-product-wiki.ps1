@@ -26,7 +26,7 @@ function Median([double[]]$vals) {
 function Get-ArmMetrics([string]$CsvPath, [string]$Arm) {
     $rows = @(Import-Csv $CsvPath | Where-Object { $_.arm -eq $Arm })
     if ($rows.Count -eq 0) { return $null }
-    $sustains = @(); $peaks = @(); $rss = @(); $cpu = @()
+    $sustains = @(); $peaks = @(); $rss = @(); $cpu = @(); $bytes = @()
     $sawC64 = $false
     for ($i = 0; $i + $Steps -le $rows.Count; $i += $Steps) {
         $chunk = $rows[$i..($i + $Steps - 1)]
@@ -36,6 +36,7 @@ function Get-ArmMetrics([string]$CsvPath, [string]$Arm) {
             $peaks += [double]$c64Ok.rps
             $rss += [double]$c64Ok.proxy_rss_peak_bytes
             $cpu += [double]$c64Ok.proxy_cpu_avg_pct
+            $bytes += (Get-PayloadBytes $c64Ok)
             $sawC64 = $true
             continue
         }
@@ -46,6 +47,7 @@ function Get-ArmMetrics([string]$CsvPath, [string]$Arm) {
             $peaks += [double]$c64Any.rps
             $rss += [double]$c64Any.proxy_rss_peak_bytes
             $cpu += [double]$c64Any.proxy_cpu_avg_pct
+            $bytes += (Get-PayloadBytes $c64Any)
         }
     }
     if ($sustains.Count -gt 0) {
@@ -54,6 +56,7 @@ function Get-ArmMetrics([string]$CsvPath, [string]$Arm) {
             Peak = Median $peaks
             Rss = Median $rss
             Cpu = Median $cpu
+            Bytes = Median $bytes
         }
     }
     # Misaligned repeats (missing c=64 in a pass): use any SLO-pass c=64 rows.
@@ -62,11 +65,13 @@ function Get-ArmMetrics([string]$CsvPath, [string]$Arm) {
         $s = @($okAny | ForEach-Object { [double]$_.rps })
         $r = @($okAny | ForEach-Object { [double]$_.proxy_rss_peak_bytes })
         $c = @($okAny | ForEach-Object { [double]$_.proxy_cpu_avg_pct })
+        $b = @($okAny | ForEach-Object { Get-PayloadBytes $_ })
         return @{
             Sustain = Median $s
             Peak = Median $s
             Rss = Median $r
             Cpu = Median $c
+            Bytes = Median $b
         }
     }
     if (-not $sawC64 -or $peaks.Count -eq 0) { return $null }
@@ -75,7 +80,42 @@ function Get-ArmMetrics([string]$CsvPath, [string]$Arm) {
         Peak = Median $peaks
         Rss = Median $rss
         Cpu = Median $cpu
+        Bytes = Median $bytes
     }
+}
+
+function Get-PayloadBytes($row) {
+    $resp = 0.0; $req = 0.0
+    if ($row.PSObject.Properties.Name -contains 'response_bytes' -and $row.response_bytes) {
+        $resp = [double]$row.response_bytes
+    }
+    if ($row.PSObject.Properties.Name -contains 'request_bytes' -and $row.request_bytes) {
+        $req = [double]$row.request_bytes
+    }
+    return $resp + $req
+}
+
+function Get-LogicalCpus([string]$OsFolder) {
+    if ($OsFolder -eq 'macos-15') { return 3 }
+    return 4
+}
+
+function Format-CostSuffix($metrics, [int]$Cpus) {
+    if (-not $metrics -or -not $metrics.Sustain -or $metrics.Sustain -le 0) { return '' }
+    $parts = @()
+    $payload = 0.0
+    if ($metrics.ContainsKey('Bytes') -and $metrics.Bytes) { $payload = [double]$metrics.Bytes }
+    $inv = [cultureinfo]::InvariantCulture
+    if ($payload -ge 1024) {
+        $mib = $metrics.Sustain * $payload / 1MB
+        $parts += $mib.ToString('N0', $inv) + ' MiB/s'
+    }
+    if ($metrics.Cpu -ge 0.05) {
+        $us = $metrics.Cpu * $Cpus / 100.0 / $metrics.Sustain * 1000000
+        $parts += ($us.ToString('N1', $inv) + ' µs CPU/req')
+    }
+    if ($parts.Count -eq 0) { return '' }
+    return ' · ' + ($parts -join ' · ')
 }
 
 function Get-MedianMetrics([string]$OsFolder, [string]$Arm) {
@@ -112,7 +152,7 @@ function Get-MedianMetrics([string]$OsFolder, [string]$Arm) {
     return $best
 }
 
-function Format-RpsCell($metrics, [switch]$Medal) {
+function Format-RpsCell($metrics, [switch]$Medal, [int]$Cpus = 4) {
     if (-not $metrics) { return '*Not measured*' }
     $sustain = [int][math]::Round($metrics.Sustain, 0)
     $peak = [int][math]::Round($metrics.Peak, 0)
@@ -121,11 +161,12 @@ function Format-RpsCell($metrics, [switch]$Medal) {
     $prefix = if ($Medal) { "$goldMedal " } else { '' }
     $inv = [cultureinfo]::InvariantCulture
     $sustainText = $sustain.ToString('N0', $inv)
+    $cost = Format-CostSuffix $metrics $Cpus
     if ($peak -gt $sustain) {
         $peakText = $peak.ToString('N0', $inv)
-        $sub = "peak $peakText · $mb MiB / $cpu% CPU"
+        $sub = "peak $peakText · $mb MiB / $cpu% CPU$cost"
     } else {
-        $sub = "$mb MiB / $cpu% CPU"
+        $sub = "$mb MiB / $cpu% CPU$cost"
     }
     return ("{0}**{1}**<br><sub>({2})</sub>" -f $prefix, $sustainText, $sub)
 }
@@ -201,7 +242,7 @@ function Format-TerminatePeerCell(
     }
     $arm = $w[$PeerKey]
     if ($arm) {
-        return Format-RpsCell $metrics -Medal:$Medal
+        return Format-RpsCell $metrics -Medal:$Medal -Cpus:(Get-LogicalCpus $OsFolder)
     }
     $reason = Get-PeerImpossibleReason $w $PeerKey $arm
     return Format-Impossible $reason
@@ -242,20 +283,47 @@ function Emit-ReverseTable([string]$OsFolder) {
                     @{ Expression = { $_.M.Cpu }; Ascending = $true } |
                 Select-Object -First 1
         ).K
+        $cpus = Get-LogicalCpus $OsFolder
         if ($omitNative) {
             Write-Output ("| {0} | {1} | {2} | {3} | {4} |" -f $w.C, $w.O,
-                (Format-RpsCell $twp -Medal:($best -eq 'twp')),
+                (Format-RpsCell $twp -Medal:($best -eq 'twp') -Cpus:$cpus),
                 (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx')),
-                (Format-RpsCell $yarp -Medal:($best -eq 'yarp')))
+                (Format-RpsCell $yarp -Medal:($best -eq 'yarp') -Cpus:$cpus))
         } else {
             Write-Output ("| {0} | {1} | {2} | {3} | {4} | {5} | {6} |" -f $w.C, $w.O,
-                (Format-RpsCell $twp -Medal:($best -eq 'twp')),
+                (Format-RpsCell $twp -Medal:($best -eq 'twp') -Cpus:$cpus),
                 (Format-TerminatePeerCell $OsFolder $w 'Nginx' $nginx -Medal:($best -eq 'nginx')),
                 (Format-TerminatePeerCell $OsFolder $w 'Haproxy' $haproxy -Medal:($best -eq 'haproxy')),
                 (Format-TerminatePeerCell $OsFolder $w 'Envoy' $envoy -Medal:($best -eq 'envoy')),
-                (Format-RpsCell $yarp -Medal:($best -eq 'yarp')))
+                (Format-RpsCell $yarp -Medal:($best -eq 'yarp') -Cpus:$cpus))
         }
     }
+}
+
+function Get-OsArmNames([string]$OsFolder) {
+    $names = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($runId in $RunIds) {
+        $dir = Join-Path $ResultsRoot $runId
+        $csvs = @(Get-ChildItem `
+            "$dir/rps-csv-$OsFolder/*.csv", `
+            "$dir/rps-csv-$OsFolder-*/*.csv", `
+            "$dir/$OsFolder/*.csv", `
+            "$dir/*.csv" `
+            -ErrorAction SilentlyContinue |
+            Where-Object {
+                if ($OsFolder -ne 'macos-15') { $true }
+                else {
+                    $p = $_.FullName.ToLowerInvariant().Replace('\', '/')
+                    $p -notmatch 'macos-15-intel'
+                }
+            })
+        foreach ($csv in $csvs) {
+            foreach ($row in @(Import-Csv $csv.FullName)) {
+                if ($row.arm) { [void]$names.Add([string]$row.arm) }
+            }
+        }
+    }
+    return $names
 }
 
 function Emit-MitmTable([string]$OsFolder) {
@@ -285,17 +353,33 @@ function Emit-SinkRedirect {
     foreach ($line in (& $Block)) { [void]$script:EmitSink.Add([string]$line) }
 }
 
+function Emit-MitmOrKeep([string]$OsFolder) {
+    # Published MITM is Linux only. Windows and macOS product jobs never run twp-mitm-*.
+    if ($OsFolder -ne 'ubuntu-latest') {
+        Write-Output 'DROP'
+        return
+    }
+    $names = Get-OsArmNames $OsFolder
+    $hasReverse = @($names | Where-Object { $_ -like 'twp-reverse-*' -or $_ -like 'yarp-reverse-*' }).Count -gt 0
+    $hasMitm = @($names | Where-Object { $_.StartsWith('twp-mitm-') }).Count -gt 0
+    if ($hasReverse -and -not $hasMitm) {
+        Write-Output 'KEEP'
+        return
+    }
+    Emit-MitmTable $OsFolder
+}
+
 Emit-SinkRedirect { Emit-ReverseTable 'windows-latest' }
 Out '---WIN_MITM---'
-Emit-SinkRedirect { Emit-MitmTable 'windows-latest' }
+Emit-SinkRedirect { Emit-MitmOrKeep 'windows-latest' }
 Out '---LIN_REVERSE---'
 Emit-SinkRedirect { Emit-ReverseTable 'ubuntu-latest' }
 Out '---LIN_MITM---'
-Emit-SinkRedirect { Emit-MitmTable 'ubuntu-latest' }
+Emit-SinkRedirect { Emit-MitmOrKeep 'ubuntu-latest' }
 Out '---MAC_REVERSE---'
 Emit-SinkRedirect { Emit-ReverseTable 'macos-15' }
 Out '---MAC_MITM---'
-Emit-SinkRedirect { Emit-MitmTable 'macos-15' }
+Emit-SinkRedirect { Emit-MitmOrKeep 'macos-15' }
 
 $text = ($lines -join "`n") + "`n"
 if ($OutFile) {

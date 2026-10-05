@@ -133,6 +133,15 @@ internal sealed class Http3Frame
     }
 
     /// <summary>
+    ///     Writes a zero-payload frame (used for GOAWAY and some SETTINGS without parameters).
+    /// </summary>
+    public static ValueTask WriteAsync(
+        Stream stream,
+        ulong frameType,
+        CancellationToken cancellationToken)
+        => WriteAsync(stream, frameType, ReadOnlyMemory<byte>.Empty, cancellationToken);
+
+    /// <summary>
     ///     Copies the frame into <paramref name="scratch"/> and does not release it until the
     ///     <see cref="QuicStream"/> write has been consumed. Sync completion calls <c>GetResult</c>
     ///     before release so MsQuic cannot still hold the memory (the e781b009 ArrayPool bug).
@@ -239,15 +248,6 @@ internal sealed class Http3Frame
             ArrayPool<byte>.Shared.Return(rented);
         }
     }
-
-    /// <summary>
-    ///     Writes a zero-payload frame (used for GOAWAY and some SETTINGS without parameters).
-    /// </summary>
-    public static ValueTask WriteAsync(
-        Stream stream,
-        ulong frameType,
-        CancellationToken cancellationToken)
-        => WriteAsync(stream, frameType, ReadOnlyMemory<byte>.Empty, cancellationToken);
 
     /// <summary>
     ///     Writes HEADERS then DATA as a single stream write when the combined frames fit a modest

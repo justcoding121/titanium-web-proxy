@@ -261,6 +261,10 @@ internal sealed class HaproxyHost : IDisposable
 global
     nbthread {Environment.ProcessorCount}
     maxconn 4096
+    # Match Titanium's 64 KiB HTTP/2 window and 16 KiB frames. Default tune.bufsize is 16 KiB
+    # and flow-controls a large body down to that buffer.
+    tune.bufsize 65536
+    tune.h2.initial-window-size 65536
 
 defaults
     mode http

@@ -81,6 +81,9 @@ internal sealed class TitaniumCliHost : IDisposable
         PlusDiscoveryFile,
         PlusMetricsScrape,
         PlusCacheHit,
+        PlusCors,
+        PlusCircuit,
+        PlusRetry,
         StaticFiles,
         Logging,
         LbLeastTime,
@@ -90,7 +93,8 @@ internal sealed class TitaniumCliHost : IDisposable
     public static bool NeedsPlusDll(CliArmKind kind) => kind is
         CliArmKind.PlusBase or CliArmKind.PlusCache or CliArmKind.PlusWaf or CliArmKind.PlusCidr
         or CliArmKind.PlusJwt or CliArmKind.PlusRateLimit or CliArmKind.PlusResilience
-        or CliArmKind.PlusDiscoveryFile or CliArmKind.PlusMetricsScrape or CliArmKind.PlusCacheHit;
+        or CliArmKind.PlusDiscoveryFile or CliArmKind.PlusMetricsScrape or CliArmKind.PlusCacheHit
+        or CliArmKind.PlusCors or CliArmKind.PlusCircuit or CliArmKind.PlusRetry;
 
     public static bool NeedsControlPlane(CliArmKind kind) => NeedsPlusDll(kind);
 
@@ -542,6 +546,28 @@ internal sealed class TitaniumCliHost : IDisposable
                 AppendPlus(sb, controlPlanePort, new Dictionary<string, string>
                 {
                     ["cache.enable"] = "true"
+                }, dashboardPort);
+                break;
+            case CliArmKind.PlusCors:
+                AppendForwardHostListener(sb, listenPort, originPort, decryptSsl: false);
+                AppendPlus(sb, controlPlanePort, new Dictionary<string, string>
+                {
+                    ["cors.enabled"] = "true",
+                    ["cors.allowOrigin"] = "*"
+                }, dashboardPort);
+                break;
+            case CliArmKind.PlusCircuit:
+                AppendForwardHostListener(sb, listenPort, originPort, decryptSsl: false);
+                AppendPlus(sb, controlPlanePort, new Dictionary<string, string>
+                {
+                    ["resilience.circuit.enabled"] = "true"
+                }, dashboardPort);
+                break;
+            case CliArmKind.PlusRetry:
+                AppendForwardHostListener(sb, listenPort, originPort, decryptSsl: false);
+                AppendPlus(sb, controlPlanePort, new Dictionary<string, string>
+                {
+                    ["resilience.retry.idempotentAttempts"] = "1"
                 }, dashboardPort);
                 break;
             case CliArmKind.PlusWaf:

@@ -48,6 +48,12 @@ public sealed class ProxyMiddlewareContext
 
     public string? HandledBody { get; set; }
 
+    /// <summary>
+    /// Raw response body for a handled terminate-lite reply. When set, the lite writer uses these
+    /// bytes instead of encoding <see cref="HandledBody"/>.
+    /// </summary>
+    public byte[]? HandledBodyBytes { get; set; }
+
     public List<KeyValuePair<string, string>>? HandledHeaders { get; set; }
 }
 

@@ -204,4 +204,52 @@ internal static class ComparisonGroup
 
         return map;
     }
+
+    /// <summary>
+    /// Editions wiki rows. The baseline arm is listed in every row that divides by it so a shard
+    /// never ratios a feature from one VM against a CLI baseline from another.
+    /// </summary>
+    private static readonly (string Key, string[] ArmNames)[] EditionGroups =
+    [
+        ("edition-cli-h1", ["twp-cli-reverse-http1", "twp-reverse-http1"]),
+        ("edition-cli-tls", ["twp-cli-reverse-http1-tls", "twp-reverse-http1-tls"]),
+        ("edition-route", ["twp-cli-reverse-http1-route", "twp-cli-reverse-http1"]),
+        ("edition-plus-base", ["twp-cli-plus-base-http1", "twp-cli-reverse-http1"]),
+        // Cold, hit, and the CLI baseline share one job so both ratios are same-VM.
+        // Re-measure this group after the other Plus shards.
+        ("edition-plus-cache", ["twp-cli-plus-cache-http1", "twp-cli-plus-cache-hit-http1", "twp-cli-reverse-http1"]),
+        ("edition-intercept", ["twp-cli-intercept-http1", "twp-cli-reverse-http1"]),
+        ("edition-plus-waf", ["twp-cli-plus-waf-http1", "twp-cli-reverse-http1"]),
+        ("edition-plus-cidr", ["twp-cli-plus-cidr-http1", "twp-cli-reverse-http1"]),
+        ("edition-plus-jwt", ["twp-cli-plus-jwt-http1", "twp-cli-reverse-http1"]),
+        ("edition-plus-ratelimit", ["twp-cli-plus-ratelimit-http1", "twp-cli-reverse-http1"]),
+        ("edition-plus-resilience", ["twp-cli-plus-resilience-http1", "twp-cli-reverse-http1"]),
+        ("edition-plus-discovery", ["twp-cli-plus-discovery-file-http1", "twp-cli-reverse-http1"]),
+        ("edition-plus-metrics", ["twp-cli-plus-metrics-scrape-http1", "twp-cli-reverse-http1"]),
+        ("edition-static", ["twp-cli-static-http1", "twp-cli-reverse-http1"]),
+        ("edition-logging", ["twp-cli-logging-http1", "twp-cli-reverse-http1"]),
+        ("edition-leasttime", ["twp-cli-lb-leasttime-http1", "twp-cli-reverse-http1-route"]),
+        ("edition-dialect", ["twp-cli-dialect-twp-http1", "twp-cli-reverse-http1"]),
+        ("edition-plus-cors", ["twp-cli-plus-cors-http1", "twp-cli-reverse-http1"]),
+        ("edition-plus-circuit", ["twp-cli-plus-circuit-http1", "twp-cli-reverse-http1"]),
+        ("edition-plus-retry", ["twp-cli-plus-retry-http1", "twp-cli-reverse-http1"]),
+    ];
+
+    public static IReadOnlyList<(string Key, int ArmCount)> ListEditionGroups() =>
+        EditionGroups.Select(g => (g.Key, g.ArmNames.Length)).ToList();
+
+    public static bool TryEditionArms(string groupKey, out string[] armNames)
+    {
+        foreach (var group in EditionGroups)
+        {
+            if (string.Equals(group.Key, groupKey, StringComparison.OrdinalIgnoreCase))
+            {
+                armNames = group.ArmNames;
+                return true;
+            }
+        }
+
+        armNames = [];
+        return false;
+    }
 }

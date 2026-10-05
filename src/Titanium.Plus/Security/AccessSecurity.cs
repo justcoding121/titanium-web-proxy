@@ -95,18 +95,16 @@ public sealed class AccessSecurity
         var cors = new CorsMiddleware(origin, methods, headers, creds, maxAge);
         context.Middleware!.Add(cors);
 
-        // Inject ACAO on successful proxied responses when session path is used.
+        // Inject ACAO on the way out. A BeforeResponse subscription would disable terminate-lite.
         if (context.ProxyServer is Titanium.Web.Proxy.ProxyServer proxy)
         {
-            proxy.BeforeResponse += (_, e) =>
+            proxy.ResponseHeaderContributor = response =>
             {
                 foreach (var h in cors.BuildResponseHeaders())
                 {
-                    e.HttpClient.Response.Headers.RemoveHeader(h.Name);
-                    e.HttpClient.Response.Headers.AddHeader(h);
+                    response.Headers.RemoveHeader(h.Name);
+                    response.Headers.AddHeader(h);
                 }
-
-                return Task.CompletedTask;
             };
         }
 

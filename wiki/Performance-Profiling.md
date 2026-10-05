@@ -4,21 +4,21 @@ How the throughput hotspots behind the numbers on the [Performance](Performance)
 
 ## Contents
 
-- [The measurement harness](#the-measurement-harness)
-- [Controlling measurement noise](#controlling-measurement-noise)
-- [Laptop result tables](#laptop-result-tables)
-- [Technique 1: concurrency sweep as a shape test](#technique-1-concurrency-sweep-as-a-shape-test)
-- [Memory (RSS) — H2→H1 vs H1 / H3](#memory-rss--h2h1-vs-h1--h3)
-- [Technique 2: async dumps — find where requests wait](#technique-2-async-dumps--find-where-requests-wait)
-- [Technique 3: per-stage latency decomposition](#technique-3-per-stage-latency-decomposition)
-- [Technique 4: CPU sampling](#technique-4-cpu-sampling)
-- [Technique 5: reference-source comparison](#technique-5-reference-source-comparison)
-- [nginx portable takeaways](#nginx-portable-takeaways)
-- [TWP vs YARP IO model](#twp-vs-yarp-io-model)
-- [Case studies: symptom → tool → root cause → fix](#case-studies-symptom--tool--root-cause--fix)
-- [Linux C# limit ledger](#linux-c-limit-ledger)
-- [Guardrails while optimizing](#guardrails-while-optimizing)
-- [Checklist](#checklist)
+- [The measurement harness](#user-content-the-measurement-harness)
+- [Controlling measurement noise](#user-content-controlling-measurement-noise)
+- [Laptop result tables](#user-content-laptop-result-tables)
+- [Technique 1: concurrency sweep as a shape test](#user-content-technique-1-concurrency-sweep-as-a-shape-test)
+- [Memory (RSS) — H2→H1 vs H1 / H3](#user-content-memory-rss--h2h1-vs-h1--h3)
+- [Technique 2: async dumps — find where requests wait](#user-content-technique-2-async-dumps--find-where-requests-wait)
+- [Technique 3: per-stage latency decomposition](#user-content-technique-3-per-stage-latency-decomposition)
+- [Technique 4: CPU sampling](#user-content-technique-4-cpu-sampling)
+- [Technique 5: reference-source comparison](#user-content-technique-5-reference-source-comparison)
+- [nginx portable takeaways](#user-content-nginx-portable-takeaways)
+- [TWP vs YARP IO model](#user-content-twp-vs-yarp-io-model)
+- [Case studies: symptom → tool → root cause → fix](#user-content-case-studies-symptom--tool--root-cause--fix)
+- [Linux C# limit ledger](#user-content-linux-c-limit-ledger)
+- [Guardrails while optimizing](#user-content-guardrails-while-optimizing)
+- [Checklist](#user-content-checklist)
 
 ## The measurement harness
 
@@ -92,7 +92,7 @@ dotnet-gcdump collect -p <proxy PID>
 
 **Keep / revert for new lites:** cool-measure Memory + ÷YARP RPS; revert the lite if Memory is no better (within noise) **or** RPS regresses. Bag tracker is RPS-neutral retention — keep regardless.
 
-**Residual after bag + lite + `ClientSyntheticStreams`** (GHA `compare-saturation` @ `571b6fba` — [32724323848](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32724323848); same numbers in [Saturation control](Performance#saturation-control) Blocks B/C):
+**Residual after bag + lite + `ClientSyntheticStreams`** (GHA `compare-saturation` @ `571b6fba` — [32724323848](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32724323848); same numbers in [Saturation control](Performance#user-content-saturation-control) Blocks B/C):
 
 | Arm | OS | TWP RSS | YARP RSS | ÷YARP |
 |---|---|---:|---:|---:|
@@ -180,11 +180,11 @@ Dig through nginx `src/http` (proxy + upstream keepalive), `src/event`, and `src
 | nginx idea | Where | TWP analogue | Now? |
 |---|---|---|---|
 | Upstream keepalive cache (`keepalive N` → `max_cached`) | `ngx_http_upstream_keepalive_module.c` | `MaxCachedConnections` / `MaxCachedConnectionsPerHost` (already have) | **Done** — no further cut |
-| `proxy_buffering` on/off (buffer vs non-buffered upstream→client) | `ngx_http_upstream.c` (`u->buffering`, non-buffered handlers) | Sequential half-duplex session vs duplex pumps (`StreamCopier`-style / WebSocket dual copy / bridge body channels) | **Already shaped** — see [TWP vs YARP IO model](#twp-vs-yarp-io-model); no new toggle |
+| `proxy_buffering` on/off (buffer vs non-buffered upstream→client) | `ngx_http_upstream.c` (`u->buffering`, non-buffered handlers) | Sequential half-duplex session vs duplex pumps (`StreamCopier`-style / WebSocket dual copy / bridge body channels) | **Already shaped** — see [TWP vs YARP IO model](#user-content-twp-vs-yarp-io-model); no new toggle |
 | Write coalesce + `sendfile` / `writev` chain | `ngx_output_chain.c`, `ngx_writev_chain.c` (“coalesce the neighbouring bufs”) | `Http2FrameWriter` coalesce budget (already have); H1 is already buffered `HttpStream` writes | **Done** for H2; H1 not a syscall-storm residual |
 | `worker_processes` + `accept_mutex` | `nginx.c` / `ngx_event_accept.c` | N/A — native multi-process fan-out; TWP is one managed process + thread pool | **N/A** — do not fake workers for RSS/RPS games |
 
-**Concrete managed cut worth trying now:** **N/A** for new session-lites. Portable lessons are already landed or process-model only. Decode-time H2 session skip was **reverted**; the Windows Memory audit then found and **kept** the `syntheticStreams` registry leak fix (see [Memory (RSS)](#memory-rss--h2h1-vs-h1--h3)). Next dig is residual native RSS / MsQuic after GHA re-measure.
+**Concrete managed cut worth trying now:** **N/A** for new session-lites. Portable lessons are already landed or process-model only. Decode-time H2 session skip was **reverted**; the Windows Memory audit then found and **kept** the `syntheticStreams` registry leak fix (see [Memory (RSS)](#user-content-memory-rss--h2h1-vs-h1--h3)). Next dig is residual native RSS / MsQuic after GHA re-measure.
 
 ## Technique 2: async dumps — find where requests wait
 
@@ -201,7 +201,7 @@ Read the histogram of parked continuations. In the bridge investigation, hundred
 
 ## Technique 3: per-stage latency decomposition
 
-When internal work looks fast but clients still see high latency, decompose the request path. TWP already captures per-request milestones when `EnableRequestTimingCapture` is set (see [Request timing](Home#request-timing)); RpsLoadProbe has an opt-in collector that aggregates them under load:
+When internal work looks fast but clients still see high latency, decompose the request path. TWP already captures per-request milestones when `EnableRequestTimingCapture` is set (see [Request timing](Home#user-content-request-timing)); RpsLoadProbe has an opt-in collector that aggregates them under load:
 
 ```powershell
 # any non-empty value enables; a path (length > 1) writes reports to that file
@@ -234,7 +234,7 @@ This is a *confirmation* tool more than a discovery tool here: it confirmed the 
 When a comparable managed reverse peer is faster, read its source to answer **named hypotheses** — not to port its architecture. Two examples from this pass:
 
 - *"Does the reference .NET server stack tune `MAX_CONCURRENT_STREAMS` dynamically?"* No — it opens additional origin connections when the stream limit is hit. TWP replicated the behavior within its own design (`Http2OriginRelayPool`).
-- *"Is `System.IO.Pipelines` the advantage?"* No — TWP's buffered `HttpStream` already amortizes socket reads to one syscall per buffer drain; the memcpy `ReadOnlySequence` would remove costs ~0.02% of a request, and the TLS decrypt copy exists in both models (`SslStream` cannot produce a `ReadOnlySequence`; the reference .NET server stack copies decrypted bytes into its Pipe too). Measured support: H1 arms at parity, and TWP's c=1 latency *lower* than the managed reverse peer's. The layering difference is real; it is not why the tiny-GET tables look the way they do — see [TWP vs YARP IO model](#twp-vs-yarp-io-model).
+- *"Is `System.IO.Pipelines` the advantage?"* No — TWP's buffered `HttpStream` already amortizes socket reads to one syscall per buffer drain; the memcpy `ReadOnlySequence` would remove costs ~0.02% of a request, and the TLS decrypt copy exists in both models (`SslStream` cannot produce a `ReadOnlySequence`; the reference .NET server stack copies decrypted bytes into its Pipe too). Measured support: H1 arms at parity, and TWP's c=1 latency *lower* than the managed reverse peer's. The layering difference is real; it is not why the tiny-GET tables look the way they do — see [TWP vs YARP IO model](#user-content-twp-vs-yarp-io-model).
 - *"When does the managed reverse peer open another origin H2 connection?"* [`ForwarderHttpClientFactory`](https://github.com/microsoft/reverse-proxy) sets `EnableMultipleHttp2Connections = true` by default — SocketsHttpHandler grows sessions under stream pressure. TWP's `PoolGrowActiveStreamThreshold` is the analogous dial (lowered 16→4 after profiling).
 
 ## TWP vs YARP IO model
@@ -259,7 +259,7 @@ YARP inherits better *insurance* for slow consumers, protocol-edge bridging, and
 
 Remaining YARP-led cells in this pass (H2 POST at c=32, some 256 KiB bodies, lossy H1) were named as multiplex/shared-writer, copy/syscall/coalesce, or buffer-vs-delay — not "we lack pipelines." nginx still leads both on Linux H1; if there is a hard ceiling it is managed C# vs native, not TWP vs pipes.
 
-The [architecture-sensitive](Performance-Local-Lab#architecture-sensitive) laptop table (and CI medians on [Performance](Performance#architecture-sensitive)) is `compare-arch`. **Duplex H2 is TWP-led on published CI @ `062f4e72`:** Win sustain **2,236** vs YARP **25**, Linux **2,741** vs **199** (see [Performance § Architecture-sensitive](Performance#architecture-sensitive)). Older note @ `1f2d0eee` (Win ≈ **0.63×** / Linux ≈ **0.31×**) is **stale** — deferred DATA / compressed-relay fixes flipped the cell. Do **not** port Kestrel/`StreamCopier` for this row; keep concurrent compressed frame relays. Early-response H2→H1 and WebSocket dual-copy remain TWP strengths.
+The [architecture-sensitive](Performance-Local-Lab#user-content-architecture-sensitive) laptop table (and CI medians on [Performance](Performance#user-content-architecture-sensitive)) is `compare-arch`. **Duplex H2 is TWP-led on published CI @ `062f4e72`:** Win sustain **2,236** vs YARP **25**, Linux **2,741** vs **199** (see [Performance § Architecture-sensitive](Performance#user-content-architecture-sensitive)). Older note @ `1f2d0eee` (Win ≈ **0.63×** / Linux ≈ **0.31×**) is **stale** — deferred DATA / compressed-relay fixes flipped the cell. Do **not** port Kestrel/`StreamCopier` for this row; keep concurrent compressed frame relays. Early-response H2→H1 and WebSocket dual-copy remain TWP strengths.
 
 ## Case studies: symptom → tool → root cause → fix
 
@@ -310,7 +310,7 @@ The [architecture-sensitive](Performance-Local-Lab#architecture-sensitive) lapto
 | H2→H1 64 KiB ~0.87× YARP (tiny-GET already parity)                                | Cool pair + code compare vs Kestrel/YARP                                                                       | Streamed path stripped Content-Length then empty END_STREAM DATA; pump wrote 8 KiB fills → 8 DATA frames + trailer; `HttpStream` double-buffered socket→8 KiB→dest; QueueDataFrame + 32 KiB flatten                                                                                                                                            | Keep CL + END_STREAM on last DATA; `HttpStream` large-read bypass; in-place DATA framing (flatten **kept**); skip LimitedStream/Via on known-CL fast path; raise flatten budget to **288 KiB**. Cool 64 KiB ≈ **1.13×**; 256 KiB ≈ **0.89×**. Dropping flatten alone still ~0.65×                                                                                                                                                                                                              |
 | H2 POST cool ~0.88× / 256 KiB H2→H1 ~0.90×                                        | Shape c=1 vs c=32 + YARP `StreamCopier` (64 KiB) compare                                                       | c=1 TWP **leads** POST (~1.2×); c=32 loses when YARP healthy — multiplex tax (frame-loop copy + shared client writer). Extra body memcpy / coalesce experiments                                                                                                                                                                                | **Kept:** ArrayPool request-body channel + `TryReserve` on `CopyFromAsync`. **Do not:** reserve >1 frame before enqueue; slice control frames into coalesced DATA; drop flatten                                                                                                                                                                                                                                                                                                                |
 | H3 early-response Win CI ~0.76× (Linux already ~1.02×)                            | Cool A/B (`fix-early-tls/`) + origin/YARP duplex compare                                                      | `ForwardOverTcpAsync` wrote the full request body before `ReceiveResponse` while the probe origin overlaps after 8 KiB (YARP `StreamCopier` same). H3+MsQuic amplifies the serialization on Windows                                                                                                                                           | Overlap streamed upload with `ReceiveResponse`; fold remaining upload into `StreamBodyWriter` via `Task.WhenAll`. Cool mean ≈ **1.21×** YARP. Do **not** re-land Http3Frame coalesce 256→16 KiB (hurt POST)                                                                                                                                                                                                                                                                                   |
-| Duplex H2 was YARP-led @ `1f2d0eee` (~0.63×/0.31×); **superseded** @ `062f4e72` (TWP leads) | CI medians on [Performance](Performance#architecture-sensitive); older [32688089789](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32688089789) | Concurrent compressed-relay both ways already; deferred DATA / empty-body hardening recovered sustain | **No Kestrel/`StreamCopier` port.** Keep published TWP-led ratios; treat the `1f2d0eee` YARP-led note as historical only. |
+| Duplex H2 was YARP-led @ `1f2d0eee` (~0.63×/0.31×); **superseded** @ `062f4e72` (TWP leads) | CI medians on [Performance](Performance#user-content-architecture-sensitive); older [32688089789](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32688089789) | Concurrent compressed-relay both ways already; deferred DATA / empty-body hardening recovered sustain | **No Kestrel/`StreamCopier` port.** Keep published TWP-led ratios; treat the `1f2d0eee` YARP-led note as historical only. |
 | H3→H1 64 KiB GET Win CI ~0.56× / Linux ~0.82×                                      | Cool A/B (`h3-64k-rebaseline/`) + CI re-measure                                                                  | Cool mean ≈ **1.13×** (3118/2688 & 3488/3181); stale CI was pre-`StreamBodyWriter`                                                                                                                        | No library change. Publishable [32611185635](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32611185635) @ `cd276c83`: Win ≈ **1.15×** (3,752 / 3,269), Linux ≈ **1.25×** (5,295 / 4,247). Next body gap: Win H1 TLS 256 KiB ≈ **0.85×**                                                                                                                                                                                                                                      |
 | H1 TLS→H1 256 KiB Win CI ~0.85×                                                   | Cool A/B + shape (`h1-256k-cool/`) + YARP StreamCopier compare                                                 | Cool c=1 ≈ **0.83×** (per-request); `CopyBytesToStream` FillBuffer’d **8 KiB** forever — H2 large-read bypass never ran on H1 known-CL copy                                                                                                                                    | Rent **64 KiB** + `ReadAsync` when parser window empty (`HttpStream.CopyBytesToStream`, `106e73b9`). Cool c=1 ≈ **1.16×**, c=32 ≈ **1.09×**. Publishable [32614286032](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32614286032): Win ≈ **1.12×** (2,617 / 2,347).                                                                                                                                                                                                        |
 | H1 TLS new-conn Win CI ~0.84x (Linux TWP leads)                                   | Cool A/B + Kestrel SocketConnectionListener / ConnectionDispatcher + bare ceiling                             | Nested SslStream + ClientHello peek + ECDSA + Task.Run + BeginAccept APM + per-accept linger/timeouts + RetryPolicy closures; **lite path forwarded `Connection: close` to origin** → no origin pool under NC                                                                                                                                 | Peek/unwrap/RSA/no-keepalive; abortive SO_LINGER(0) on close; AcceptAsync; CTS pool; session-lite; WaitForData-before-SslStream; 8 KiB rent. AcceptIOQueue **no win**. Bare NC `Connection: close` response-skip fixed. **Strip hop-by-hop Connection before origin write** on H1 terminate lite. Publishable [32625349927](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32625349927) @ `13059143`: Win NC ≈ **1.01×**, Linux NC ≈ **1.01×** YARP (nginx 1st on Linux NC — TWP 2nd). |

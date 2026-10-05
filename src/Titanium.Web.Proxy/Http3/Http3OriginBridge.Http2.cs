@@ -57,6 +57,30 @@ internal static partial class Http3OriginBridge
         if (request.Authority.Length == 0 && !string.IsNullOrEmpty(request.Host))
             request.Authority = request.Host.GetByteString();
 
+        try
+        {
+            // Origin resolution stays inside the restore so a throw cannot leave the
+            // request stamped as HTTP/2.
+            var origin = ResolveFastHttp2Origin(fwd, request, server);
+            var target = new Http2OriginTarget(
+                origin.Host, origin.Port, origin.ConnectHost, origin.ConnectPort, origin.PoolKey);
+            var exchange = await SendHttp2OriginFastWithGoAwayRetryAsync(
+                server, logger, fwd, target, coldOpenSessionFactory, cancellationToken);
+
+            StampForwardedHttp2Response(fwd, request, exchange);
+        }
+        finally
+        {
+            request.HttpVersion = clientHttpVersion;
+        }
+    }
+
+    private readonly record struct FastHttp2Origin(
+        string Host, int Port, string PoolKey, string? ConnectHost, int? ConnectPort);
+
+    private static FastHttp2Origin ResolveFastHttp2Origin(
+        H3H2FastForward fwd, Request request, ProxyServer server)
+    {
         string? connectHost = null;
         int? connectPort = null;
         if (fwd.ProxyEndPoint is TransparentBaseProxyEndPoint transparent
@@ -66,75 +90,65 @@ internal static partial class Http3OriginBridge
             connectPort = transparent.ForwardPort;
         }
 
-        string host;
-        int port;
-        string poolKey;
         if (fwd.ProxyEndPoint is TransparentBaseProxyEndPoint fastEp
             && fastEp.CachedH2OriginPoolKey != null
             && request.Authority.Equals(fastEp.CachedH2OriginAuthority))
         {
-            host = fastEp.CachedH2OriginHost!;
-            port = fastEp.CachedH2OriginPort;
-            poolKey = fastEp.CachedH2OriginPoolKey;
+            return new FastHttp2Origin(
+                fastEp.CachedH2OriginHost!, fastEp.CachedH2OriginPort, fastEp.CachedH2OriginPoolKey,
+                connectHost, connectPort);
         }
-        else
+
+        var (host, port) = ResolveH2OriginAuthority(request);
+        var poolKey = Http2OriginConnectionPool.BuildPoolKey(
+            server, fwd.ProxyEndPoint, fwd.CustomUpStreamProxy, fwd.UpStreamEndPoint,
+            host, port, connectHost, connectPort);
+        if (fwd.ProxyEndPoint is TransparentBaseProxyEndPoint cacheEp)
         {
-            (host, port) = ResolveH2OriginAuthority(request);
-            poolKey = Http2OriginConnectionPool.BuildPoolKey(
-                server, fwd.ProxyEndPoint, fwd.CustomUpStreamProxy, fwd.UpStreamEndPoint,
-                host, port, connectHost, connectPort);
-            if (fwd.ProxyEndPoint is TransparentBaseProxyEndPoint cacheEp)
+            cacheEp.CachedH2OriginAuthority = request.Authority;
+            cacheEp.CachedH2OriginHost = host;
+            cacheEp.CachedH2OriginPort = port;
+            cacheEp.CachedH2OriginPoolKey = poolKey;
+        }
+
+        return new FastHttp2Origin(host, port, poolKey, connectHost, connectPort);
+    }
+
+    private static void StampForwardedHttp2Response(
+        H3H2FastForward fwd, Request request, Http2OriginExchange exchange)
+    {
+        var response = exchange.Response;
+        response.HttpVersion = HttpHeader.Version30;
+        response.RequestMethod = request.Method;
+        if (response.StreamBodyWriter == null)
+        {
+            response.IsBodyRead = true;
+            response.ContentLength = exchange.Body.Length;
+            // Interception-off: skip response.Body — emit via Preencoded HEADERS+DATA.
+            if (fwd.PreencodedQpackHeaders == null)
+                fwd.PreencodedQpackHeaders = QpackEncoder.EncodeResponse(response, context: null);
+            fwd.PreencodedBody = exchange.Body;
+            fwd.PreencodedBodyLength = exchange.Body.Length;
+            // MITM unchanged-lite seeds Response before the call. Stamp Body onto the
+            // exchange Response (which replaces that seed) so BeforeResponse /
+            // FinishMitm fallback can read it — match Tcp ForwardOverTcpFastAsync.
+            // Reverse (Response null) keeps skip-Body coalesce.
+            if (fwd.Response != null)
             {
-                cacheEp.CachedH2OriginAuthority = request.Authority;
-                cacheEp.CachedH2OriginHost = host;
-                cacheEp.CachedH2OriginPort = port;
-                cacheEp.CachedH2OriginPoolKey = poolKey;
+                response.Body = exchange.Body;
+                response.BodyIsWireEncoded = true;
+                response.IsBodyReceived = true;
             }
         }
+        // else: leave StreamBodyWriter + IsBodyRead alone so SendResponseAsync streams DATA.
 
-        try
+        if (exchange.TrailingHeaders != null && !response.HasTrailingHeaders)
         {
-            var target = new Http2OriginTarget(host, port, connectHost, connectPort, poolKey);
-            var exchange = await SendHttp2OriginFastWithGoAwayRetryAsync(
-                server, logger, fwd, target, coldOpenSessionFactory, cancellationToken);
-
-            var response = exchange.Response;
-            response.HttpVersion = HttpHeader.Version30;
-            response.RequestMethod = request.Method;
-            if (response.StreamBodyWriter == null)
-            {
-                response.IsBodyRead = true;
-                response.ContentLength = exchange.Body.Length;
-                // Interception-off: skip response.Body — emit via Preencoded HEADERS+DATA.
-                if (fwd.PreencodedQpackHeaders == null)
-                    fwd.PreencodedQpackHeaders = QpackEncoder.EncodeResponse(response, context: null);
-                fwd.PreencodedBody = exchange.Body;
-                fwd.PreencodedBodyLength = exchange.Body.Length;
-                // MITM unchanged-lite seeds Response before the call. Stamp Body onto the
-                // exchange Response (which replaces that seed) so BeforeResponse /
-                // FinishMitm fallback can read it — match Tcp ForwardOverTcpFastAsync.
-                // Reverse (Response null) keeps skip-Body coalesce.
-                if (fwd.Response != null)
-                {
-                    response.Body = exchange.Body;
-                    response.BodyIsWireEncoded = true;
-                    response.IsBodyReceived = true;
-                }
-            }
-            // else: leave StreamBodyWriter + IsBodyRead alone so SendResponseAsync streams DATA.
-
-            if (exchange.TrailingHeaders != null && !response.HasTrailingHeaders)
-            {
-                foreach (var header in exchange.TrailingHeaders)
-                    response.TrailingHeaders.AddHeader(header);
-            }
-
-            fwd.Response = response;
+            foreach (var header in exchange.TrailingHeaders)
+                response.TrailingHeaders.AddHeader(header);
         }
-        finally
-        {
-            request.HttpVersion = clientHttpVersion;
-        }
+
+        fwd.Response = response;
     }
 
     private static async Task<Http2OriginExchange> SendHttp2OriginFastWithGoAwayRetryAsync(

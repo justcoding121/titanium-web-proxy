@@ -52,7 +52,7 @@ $runUrl = "https://github.com/justcoding121/titanium-web-proxy/actions/runs/$Pri
 $productLine = "- Product refresh: ``compare-product`` @ ``$HeadSha`` $em [$PrimaryRunId]($runUrl). Heavier/saturation/tls:"
 $wiki = [regex]::Replace($wiki, '- Product refresh:.*', [System.Text.RegularExpressions.MatchEvaluator]{ $productLine }, 1)
 
-$tinyGetNote = "Product 5${mul}5 is **~56-byte JSON keep-alive GET**; H2/H3 same-protocol cells are mostly header work with a tiny body (Titanium best case) $em see [Why this comparison is fair](#why-this-comparison-is-fair)."
+$tinyGetNote = "Product 5${mul}5 is **~56-byte JSON keep-alive GET**; H2/H3 same-protocol cells are mostly header work with a tiny body (Titanium best case) $em see [Why this comparison is fair](#user-content-why-this-comparison-is-fair)."
 
 $winRevHeader = "Median of **3 repeats** on ``windows-latest`` (4 vCPU / 16 GiB). Bare reverse 5${mul}5 @ ``$HeadSha`` $em ``compare-product`` [$PrimaryRunId]($runUrl). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP${div}peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as ``<br><sub>(MiB / CPU%)</sub>``. nginx terminate peers use ``keepalive 256`` + streaming buffers. **HAProxy / Envoy are Linux-only peers** (no official Windows port). Laptop High-perf / cool-paired numbers stay on the [local lab](Performance-Local-Lab). $tinyGetNote"
 
@@ -89,7 +89,7 @@ $wiki = [regex]::Replace($wiki, $productHdrPattern, {
 
 # Allow optional intro lines between section heading and ### Reverse (Windows has a Client/Origin blurb).
 $wiki = [regex]::Replace($wiki,
-    "(?ms)(^## Windows .+? Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?\n(?:.*?\r?\n)*?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
+    "(?ms)(^## Windows .+? Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?\n(?:.*?\r?\n)*?### Reverse\r?\n\r?\n).*?(?=\r?\n## Linux)",
     [System.Text.RegularExpressions.MatchEvaluator]{
         param($m)
         $loadGen = "**Load generators:** Reverse inbound H3 arms use **``dotnet-httpclient``** (``http_version=3.0``, ``RequestVersionExact``). nginx/Windows is same-OS only (no QUIC). HAProxy/Envoy are Linux-only terminate peers."
@@ -97,12 +97,10 @@ $wiki = [regex]::Replace($wiki,
     },
     1)
 
-$wiki = [regex]::Replace($wiki,
-    '(?s)(### MITM \(TWP only\)\r?\n\r?\n).*?(?=\r?\n## Linux)',
-    [System.Text.RegularExpressions.MatchEvaluator]{
-        param($m) $m.Groups[1].Value + $mitmNote + "`n`n" + $winMitm + "`n"
-    },
-    1)
+# Published MITM is Linux only. A Windows reverse paste stops at ## Linux, which drops any MITM subsection.
+if ($winMitm -and $winMitm -ne 'DROP' -and $winMitm -ne 'KEEP') {
+    Write-Host 'WIN_MITM ignored: MITM tables are Linux only'
+}
 
 $wiki = [regex]::Replace($wiki,
     "(?ms)(^## Linux .+? Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?\n(?:.*?\r?\n)*?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
@@ -117,12 +115,14 @@ $idx = $linuxHdrMatch.Index
 $head = $wiki.Substring(0, $idx)
 $tail = $wiki.Substring($idx)
 
+if ($linMitm -ne 'KEEP') {
 $tail = [regex]::Replace($tail,
     "(?s)(### MITM \(TWP only\)\r?\n\r?\n).*?$afterLinuxLookahead",
     [System.Text.RegularExpressions.MatchEvaluator]{
         param($m) $m.Groups[1].Value + $mitmNote + "`n`n" + $linMitm + "`n"
     },
     1)
+}
 
 $macBlock = @(
     $macHdrNew
@@ -133,34 +133,21 @@ $macBlock = @(
     ''
     $macRev
     ''
-    '### MITM (TWP only)'
-    ''
-    $mitmNote
-    ''
-    $macMitm
-    ''
 ) -join "`n"
 
 $macHdrMatch = [regex]::Match($tail, '(?m)^## macOS .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?$')
 if ($macHdrMatch.Success) {
     $tail = [regex]::Replace($tail,
-        "(?ms)(^## macOS .+? Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?\n(?:.*?\r?\n)*?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
+        "(?ms)(^## macOS .+? Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?\n(?:.*?\r?\n)*?### Reverse\r?\n\r?\n).*?$afterMacLookahead",
         [System.Text.RegularExpressions.MatchEvaluator]{
             param($m) $m.Groups[1].Value + $macRevHeader + "`n`n" + $macRev + "`n"
         },
         1)
     $macHdrMatch2 = [regex]::Match($tail, '(?m)^## macOS .+ Titanium vs nginx(?: vs HAProxy vs Envoy)? vs YARP\r?$')
     if (-not $macHdrMatch2.Success) { throw "Missing wiki heading: macOS product section after reverse paste" }
-    $macIdx = $macHdrMatch2.Index
-    $macHead = $tail.Substring(0, $macIdx)
-    $macTail = $tail.Substring($macIdx)
-    $macTail = [regex]::Replace($macTail,
-        "(?s)(### MITM \(TWP only\)\r?\n\r?\n).*?$afterMacLookahead",
-        [System.Text.RegularExpressions.MatchEvaluator]{
-            param($m) $m.Groups[1].Value + $mitmNote + "`n`n" + $macMitm + "`n"
-        },
-        1)
-    $tail = $macHead + $macTail
+    if ($macMitm -and $macMitm -ne 'DROP' -and $macMitm -ne 'KEEP') {
+        Write-Host 'MAC_MITM ignored: MITM tables are Linux only'
+    }
 }
 else {
     # Insert macOS after Linux product tables and before Editions / Heavier.

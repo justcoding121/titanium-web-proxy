@@ -5,7 +5,8 @@ param(
     [Parameter(Mandatory)][string] $ResultsDir,
     [Parameter(Mandatory)][string] $Mode,
     [string] $ArmShard = 'all',
-    [int] $Repeats = 1
+    [int] $Repeats = 1,
+    [string] $ArmExcludes = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -14,6 +15,9 @@ $probeDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $probeArgs = @('run', '--no-build', '-c', 'Release', '--', '--ramp', '--mode', $Mode, '--print-arms')
 if ($ArmShard -and $ArmShard -ne 'all') {
     $probeArgs += @('--arm-shard', $ArmShard)
+}
+if ($ArmExcludes) {
+    $probeArgs += @('--arm-excludes', $ArmExcludes)
 }
 
 Push-Location $probeDir
@@ -25,6 +29,10 @@ finally {
 }
 
 if ($expected.Count -eq 0) {
+    if ($ArmExcludes) {
+        Write-Host "No arms after exclude '$ArmExcludes' for mode $Mode shard '$ArmShard' - skip OK."
+        return
+    }
     throw "No arms resolved for mode $Mode shard '$ArmShard'. A row with no runnable arms is a failure."
 }
 
