@@ -345,8 +345,10 @@ internal static class ServerConfigApplier
             ParsePolicyMode(policy.HeaderLimits, current[PolicyFamily.HeaderLimits]),
             ParsePolicyMode(policy.AdmissionControl, current[PolicyFamily.AdmissionControl]),
             ParsePolicyMode(policy.Http2AbuseBudget, current[PolicyFamily.Http2AbuseBudget]),
-            ParsePolicyMode(policy.Http2RelayValidation, current[PolicyFamily.Http2RelayValidation]),
-            webSocketFrameBudget: ParsePolicyMode(policy.WebSocketFrameBudget, current[PolicyFamily.WebSocketFrameBudget]));
+            ParsePolicyMode(policy.Http2RelayValidation, current[PolicyFamily.Http2RelayValidation]))
+            .With(
+                PolicyFamily.WebSocketFrameBudget,
+                ParsePolicyMode(policy.WebSocketFrameBudget, current[PolicyFamily.WebSocketFrameBudget]));
 
         if (policy.AllowAmbiguousFraming == true)
         {

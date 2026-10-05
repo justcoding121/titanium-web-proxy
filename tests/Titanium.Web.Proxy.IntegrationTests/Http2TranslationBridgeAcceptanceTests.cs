@@ -692,9 +692,9 @@ public class Http2TranslationBridgeAcceptanceTests
             if (size == 0) break;
             i = lineEnd + 2;
             if (i + size > raw.Length) break;
-            result.Append(raw.Substring(i, size));
+            result.Append(raw, i, size);
             i += size;
-            if (i + 2 <= raw.Length && raw.Substring(i, 2) == "\r\n")
+            if (i + 2 <= raw.Length && string.CompareOrdinal(raw, i, "\r\n", 0, 2) == 0)
                 i += 2;
         }
 
