@@ -123,7 +123,14 @@ public static class SessionInspectors
         }
     }
 
-    public static byte[]? TryDecompress(byte[]? body, string? contentEncoding)
+    /// <param name="body">Captured (possibly compressed) bytes.</param>
+    /// <param name="contentEncoding">Content-Encoding header value.</param>
+    /// <param name="maxOutputBytes">
+    ///     Upper bound on the decompressed size. The Inspect panel decodes on the UI thread, so a small
+    ///     compressed body (decompression bomb) must not be allowed to expand without limit.
+    ///     Output beyond the bound is dropped; the default keeps the historical unbounded behavior.
+    /// </param>
+    public static byte[]? TryDecompress(byte[]? body, string? contentEncoding, int maxOutputBytes = int.MaxValue)
     {
         if (body is null || body.Length == 0 || string.IsNullOrEmpty(contentEncoding))
         {
@@ -148,13 +155,38 @@ public static class SessionInspectors
             using (codec)
             using (var output = new MemoryStream())
             {
-                codec.CopyTo(output);
+                if (maxOutputBytes == int.MaxValue)
+                {
+                    codec.CopyTo(output);
+                }
+                else
+                {
+                    CopyBounded(codec, output, maxOutputBytes);
+                }
+
                 return output.ToArray();
             }
         }
         catch
         {
             return body;
+        }
+    }
+
+    private static void CopyBounded(Stream source, Stream destination, int maxBytes)
+    {
+        var buffer = new byte[16 * 1024];
+        var remaining = maxBytes;
+        while (remaining > 0)
+        {
+            var read = source.Read(buffer, 0, Math.Min(buffer.Length, remaining));
+            if (read <= 0)
+            {
+                return;
+            }
+
+            destination.Write(buffer, 0, read);
+            remaining -= read;
         }
     }
 
@@ -205,7 +237,7 @@ public static class SessionInspectors
 
         var headers = ParseHeaderBlock(headersText);
         headers.TryGetValue("Content-Encoding", out var encoding);
-        var bytes = TryDecompress(bodyBytes, encoding);
+        var bytes = TryDecompress(bodyBytes, encoding, InspectorBodyLimits.MaxBodyBytes);
         if (bytes is { Length: > 0 })
         {
             return Encoding.UTF8.GetString(bytes);
@@ -218,8 +250,9 @@ public static class SessionInspectors
     {
         var headers = ParseHeaderBlock(headersText);
         headers.TryGetValue("Content-Encoding", out var encoding);
-        var bytes = TryDecompress(bodyBytes, encoding);
-        var hex = ToHex(bytes);
+        // Hex shows only the first MaxHexBytes; decode one byte more so ToHex still appends its "…".
+        var bytes = TryDecompress(bodyBytes, encoding, InspectorBodyLimits.MaxHexBytes + 1);
+        var hex = ToHex(bytes, InspectorBodyLimits.MaxHexBytes);
         return string.IsNullOrEmpty(hex) ? "(empty)" : hex;
     }
 }

@@ -228,13 +228,22 @@ public sealed partial class MainWindowViewModel
     }
     private async Task DiffSessionsAsync()
     {
-        if (!TryBuildSessionDiff(out var diff))
+        var selection = ResolveFilterSelection();
+        if (selection.Count != 2)
         {
             StatusText = "Select exactly two sessions to diff";
             return;
         }
 
-        SessionDiffText = diff.Text;
+        // Comparing two multi-MB bodies is CPU-bound: keep it off the UI thread when a UI exists.
+        var left = selection[0];
+        var right = selection[1];
+        var diff = Application.Current is null
+            ? SessionDiff.Compare(left, right)
+            : await Task.Run(() => SessionDiff.Compare(left, right), CancellationToken.None);
+
+        // The clipboard gets the full report; the on-screen TextBox is bounded (layout cost).
+        SessionDiffText = InspectorDisplayText.ForTextBox(diff.Text);
         await CopyTextToClipboardAsync(diff.Text).ConfigureAwait(false);
         ShowSessionDetails = true;
         SelectedOuterPaneIndex = 0;
