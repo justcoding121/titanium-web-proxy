@@ -339,7 +339,7 @@ public class InterceptionBodyCaptureAndTrustBgCoverageTests
 
         var throttle = typeof(InterceptionService).GetMethod("OnResponseBodyWriteThrottle", PrivateInstance)!;
         var tee = typeof(InterceptionService).GetMethod("TeeResponseChunk", PrivateInstance)!;
-        var shouldBuffer = typeof(InterceptionService).GetMethod("ShouldBufferBody", PrivateInstance)!;
+        var shouldBuffer = typeof(InterceptionService).GetMethod("ShouldBufferBody", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
 
         // Body already read → early return (no tee).
         session.HttpClient.Response.IsBodyRead = true;
@@ -375,6 +375,6 @@ public class InterceptionBodyCaptureAndTrustBgCoverageTests
 
         session.HttpClient.Request.Headers.AddHeader("Upgrade", "websocket");
         Assert.IsTrue(session.HttpClient.Request.UpgradeToWebSocket);
-        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
+        Assert.IsFalse((bool)shouldBuffer.Invoke(null, [session.HttpClient.Request, session])!);
     }
 }

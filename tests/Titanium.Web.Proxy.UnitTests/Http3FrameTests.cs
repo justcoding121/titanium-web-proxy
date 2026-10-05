@@ -57,7 +57,7 @@ public class Http3FrameTests
     {
         await using var ms = new MemoryStream();
         var header = new byte[16];
-        var written = Http3VarInt.Write(header, (ulong)Http3FrameType.Data);
+        var written = Http3VarInt.Write(header, Http3FrameType.Data);
         written += Http3VarInt.Write(header.AsSpan(written), (ulong)Http3Frame.DefaultMaxPayloadBytes + 1);
         ms.Write(header, 0, written);
         ms.Position = 0;

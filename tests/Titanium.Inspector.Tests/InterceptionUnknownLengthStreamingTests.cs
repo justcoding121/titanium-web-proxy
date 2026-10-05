@@ -57,41 +57,41 @@ public class InterceptionUnknownLengthStreamingTests
         using var _c = cts;
         using var _s = session;
         using var interception = new InterceptionService(new RecordingSystemProxyController()) { UseInMemoryTrustState = true };
-        var shouldBuffer = typeof(InterceptionService).GetMethod("ShouldBufferBody", PrivateInstance)!;
+        var shouldBuffer = typeof(InterceptionService).GetMethod("ShouldBufferBody", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
 
         const int abortBudget = 32 * 1024 * 1024;
         session.MaxBufferedBodyBytes = abortBudget;
 
         // Known length within the budget is buffered, request and JSON response alike.
         session.HttpClient.Request.ContentLength = 100;
-        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
+        Assert.IsTrue((bool)shouldBuffer.Invoke(null, [session.HttpClient.Request, session])!);
         session.HttpClient.Response.ContentType = "application/json";
         session.HttpClient.Response.ContentLength = 100;
-        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
+        Assert.IsTrue((bool)shouldBuffer.Invoke(null, [session.HttpClient.Response, session])!);
 
         // Known length past the abort budget is relayed, not buffered.
         session.HttpClient.Request.ContentLength = abortBudget + 1L;
-        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
+        Assert.IsFalse((bool)shouldBuffer.Invoke(null, [session.HttpClient.Request, session])!);
         session.HttpClient.Response.ContentLength = abortBudget + 1L;
-        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
+        Assert.IsFalse((bool)shouldBuffer.Invoke(null, [session.HttpClient.Response, session])!);
 
         // Unknown length is never buffered, including a git push pack and a git clone pack result.
         session.HttpClient.Request.RequestUriString = "https://github.com/org/repo.git/git-receive-pack";
         session.HttpClient.Request.ContentType = "application/x-git-receive-pack-request";
         session.HttpClient.Request.ContentLength = -1;
-        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
+        Assert.IsFalse((bool)shouldBuffer.Invoke(null, [session.HttpClient.Request, session])!);
 
         session.HttpClient.Response.ContentType = "application/x-git-upload-pack-result";
         session.HttpClient.Response.ContentLength = -1;
-        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
+        Assert.IsFalse((bool)shouldBuffer.Invoke(null, [session.HttpClient.Response, session])!);
 
         session.HttpClient.Response.ContentType = "text/event-stream";
-        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
+        Assert.IsFalse((bool)shouldBuffer.Invoke(null, [session.HttpClient.Response, session])!);
 
         // Chunked JSON is the same rule: no declared length, so it is streamed.
         session.HttpClient.Response.ContentType = "application/json";
         session.HttpClient.Response.IsChunked = true;
-        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
+        Assert.IsFalse((bool)shouldBuffer.Invoke(null, [session.HttpClient.Response, session])!);
     }
 
     [TestMethod]

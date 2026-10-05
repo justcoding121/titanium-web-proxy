@@ -254,7 +254,7 @@ public partial class ProxyServer
                                     remotePort, connectHost, connectPort);
                                 if (!seedOffered && retainedConnectionTask != null)
                                 {
-                                    await OfferRetainedHttp2OriginSeedAsync(args, poolKey, remoteHostName, remotePort,
+                                    await OfferRetainedHttp2OriginSeedAsync(poolKey, remoteHostName, remotePort,
                                         connectHost, connectPort, retainedConnectionTask, cancellationToken);
                                     retainedConnectionTask = null;
                                     seedOffered = true;
@@ -289,7 +289,7 @@ public partial class ProxyServer
                                 remotePort, connectHost, connectPort);
                             if (!seedOffered && retainedConnectionTask != null)
                             {
-                                await OfferRetainedHttp2OriginSeedAsync(args, poolKey, remoteHostName, remotePort,
+                                await OfferRetainedHttp2OriginSeedAsync(poolKey, remoteHostName, remotePort,
                                     connectHost, connectPort, retainedConnectionTask, cancellationToken);
                                 retainedConnectionTask = null;
                                 seedOffered = true;
@@ -352,7 +352,7 @@ public partial class ProxyServer
     ///     Offers the negotiation-retained TCP seed (when ALPN/h2c is valid) into the shared origin pool
     ///     as an established <see cref="Http2OriginConnection" />. Releases invalid seeds.
     /// </summary>
-    private async Task OfferRetainedHttp2OriginSeedAsync(SessionEventArgs args, string poolKey, // NOSONAR S107 -- Parameters kept explicit to avoid allocating options bags on hot bridge/pool paths.
+    private async Task OfferRetainedHttp2OriginSeedAsync(string poolKey, // NOSONAR S107 -- Parameters kept explicit to avoid allocating options bags on hot bridge/pool paths.
         string remoteHostName, int remotePort, string? connectHost, int? connectPort, // NOSONAR S1172 -- retained for call-site / overload symmetry with exchange path
         Task<TcpServerConnection?> retainedConnectionTask, CancellationToken cancellationToken)
     {
@@ -694,7 +694,7 @@ public partial class ProxyServer
             {
                 if (ClientCannotReceiveChunked(args))
                 {
-                    var streamBody = response.StreamBodyWriter!;
+                    var streamBody = response.StreamBodyWriter;
                     response.StreamBodyWriter = null;
                     fastBody = await BufferUnknownLengthForHttp10Async(args, streamBody, cancellationToken);
                     response.ContentLength = fastBody.Length;
@@ -709,7 +709,7 @@ public partial class ProxyServer
                     var buffered = new MemoryStream();
                     var streamBody = response.StreamBodyWriter;
                     response.StreamBodyWriter = null;
-                    await streamBody!(buffered, cancellationToken);
+                    await streamBody(buffered, cancellationToken);
                     fastBody = buffered.ToArray();
                     response.ContentLength = fastBody.Length;
                     await clientStream.WriteResponseWithWireBodyAsync(response, fastBody, cancellationToken);
@@ -821,7 +821,7 @@ public partial class ProxyServer
         {
             if (ClientCannotReceiveChunked(args))
             {
-                var streamBody = response.StreamBodyWriter!;
+                var streamBody = response.StreamBodyWriter;
                 response.StreamBodyWriter = null;
                 body = await BufferUnknownLengthForHttp10Async(args, streamBody, cancellationToken);
                 response.ContentLength = body.Length;
@@ -834,7 +834,7 @@ public partial class ProxyServer
                 var buffered = new MemoryStream();
                 var streamBody = response.StreamBodyWriter;
                 response.StreamBodyWriter = null;
-                await streamBody!(buffered, cancellationToken);
+                await streamBody(buffered, cancellationToken);
                 body = buffered.ToArray();
                 response.ContentLength = body.Length;
                 response.Body = body;

@@ -1664,7 +1664,7 @@ public sealed class InterceptionService : IDisposable
         {
             // Buffer when safe. GraphQL tools must NOT force GetRequestBody past the skip
             // (huge POST would RST HTTP/2 with ENHANCE_YOUR_CALM).
-            if (e.HttpClient.Request.HasBody && ShouldBufferBody(e.HttpClient.Request, e, isRequest: true))
+            if (e.HttpClient.Request.HasBody && ShouldBufferBody(e.HttpClient.Request, e))
             {
                 e.HttpClient.Request.KeepBody = true;
                 await e.GetRequestBody(CancellationToken.None);
@@ -1759,7 +1759,7 @@ public sealed class InterceptionService : IDisposable
     {
         try
         {
-            if (e.HttpClient.Response.HasBody && ShouldBufferBody(e.HttpClient.Response, e, isRequest: false))
+            if (e.HttpClient.Response.HasBody && ShouldBufferBody(e.HttpClient.Response, e))
             {
                 e.HttpClient.Response.KeepBody = true;
                 await e.GetResponseBody(CancellationToken.None);
@@ -2488,6 +2488,15 @@ public sealed class InterceptionService : IDisposable
             return;
         }
 
+        ApplyFiniteUnbufferedResponseBody(snap, resp);
+    }
+
+    /// <summary>
+    ///     Known-length (or empty) response that was not buffered: either too large to capture, or
+    ///     a body we chose to buffer but never read. Neither is previewed.
+    /// </summary>
+    private static void ApplyFiniteUnbufferedResponseBody(SessionSnapshot snap, Response resp)
+    {
         if (resp.HasBody && resp.ContentLength > InspectorBodyLimits.MaxMapLocalFileBytes)
         {
             snap.ResponseBodyCapture = BodyCaptureState.NotCaptured;
@@ -2610,11 +2619,8 @@ public sealed class InterceptionService : IDisposable
     ///     body-write tee instead. Known lengths within the budget are buffered (decompressed) as before;
     ///     a non-positive budget means "unbounded" and always buffers. WebSocket upgrades are never buffered.
     /// </summary>
-    private bool ShouldBufferBody(RequestResponseBase message, SessionEventArgs session, bool isRequest)
-    {
-        _ = isRequest;
-        return session.CanBufferBody(message);
-    }
+    private static bool ShouldBufferBody(RequestResponseBase message, SessionEventArgs session) =>
+        session.CanBufferBody(message);
 
     public void Dispose() => EnsureShutdown();
 }
