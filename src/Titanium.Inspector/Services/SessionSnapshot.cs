@@ -203,14 +203,14 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         set => SetField(ref _responseBodyOriginalSize, value);
     }
 
-    /// <summary>True while an SSE-style response stream is still open.</summary>
+    /// <summary>True while an unknown-length response stream (SSE, chunked) is still open.</summary>
     public bool ResponseBodyStreamOpen
     {
         get => _responseBodyStreamOpen;
         set => SetField(ref _responseBodyStreamOpen, value);
     }
 
-    /// <summary>In-flight SSE tee buffer (not spilled; cleared when finalized).</summary>
+    /// <summary>In-flight response tee buffer of wire bytes (not spilled; cleared when finalized).</summary>
     internal MemoryStream? ResponseTeeStream { get; set; }
 
     /// <summary>Bytes seen on the response wire while teeing (may exceed preview).</summary>
@@ -218,6 +218,21 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
 
     /// <summary>UTC ticks of last coalesced SessionUpdated from the tee.</summary>
     internal long LastTeeUiUtcTicks { get; set; }
+
+    /// <summary>Response <c>Content-Encoding</c>, used to decode the tee preview.</summary>
+    internal string? ResponseContentEncoding { get; set; }
+
+    /// <summary>In-flight request tee buffer of wire bytes (unknown-length uploads).</summary>
+    internal MemoryStream? RequestTeeStream { get; set; }
+
+    /// <summary>Bytes seen on the request wire while teeing (may exceed preview).</summary>
+    internal long RequestBytesSeen { get; set; }
+
+    /// <summary>UTC ticks of last coalesced SessionUpdated from the request tee.</summary>
+    internal long LastRequestTeeUiUtcTicks { get; set; }
+
+    /// <summary>Request <c>Content-Encoding</c>, used to decode the tee preview.</summary>
+    internal string? RequestContentEncoding { get; set; }
 
     public int ProcessId
     {

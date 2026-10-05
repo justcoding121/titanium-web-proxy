@@ -347,15 +347,30 @@ public class InterceptionCaptureCoverageTests
         session.MaxBufferedBodyBytes = 0;
         Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
         session.MaxBufferedBodyBytes = 1024;
+        // Unknown length can exceed the abort budget at any point: never buffered, whatever it is.
         session.HttpClient.Request.ContentLength = -1;
-        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
+        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
 
-        // SSE responses must not buffer; finite chunked JSON still does.
-        session.HttpClient.Response.ContentType = "text/event-stream";
-        session.HttpClient.Response.ContentLength = -1;
-        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
-        session.HttpClient.Response.ContentType = "application/json";
+        foreach (var contentType in new[] { "text/event-stream", "application/json", "application/octet-stream", "application/x-anything" })
+        {
+            session.HttpClient.Response.ContentType = contentType;
+            session.HttpClient.Response.ContentLength = -1;
+            Assert.IsFalse(
+                (bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!,
+                contentType);
+        }
+
+        // Known length within the budget is buffered; above it is not.
+        session.HttpClient.Response.ContentLength = 1024;
         Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
+        session.HttpClient.Response.ContentLength = 1025;
+        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
+
+        // No budget (<= 0): nothing can abort, so unknown length buffers too.
+        session.MaxBufferedBodyBytes = 0;
+        session.HttpClient.Response.ContentLength = -1;
+        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
+        session.MaxBufferedBodyBytes = 1024;
 
         var throttleReq = typeof(InterceptionService).GetMethod("OnRequestBodyWriteThrottle", flags)!;
         var throttleResp = typeof(InterceptionService).GetMethod("OnResponseBodyWriteThrottle", flags)!;

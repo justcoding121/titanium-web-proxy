@@ -116,7 +116,7 @@ public sealed partial class MainWindowViewModel
             ComposerHeaders = selected.RequestHeadersText ?? "";
             ComposerBody = selected.RequestBodyText ?? "";
             ComposerBodyFilePath = null;
-            StatusText = selected.RequestBodyCapture is BodyCaptureState.Truncated or BodyCaptureState.NotCaptured
+            StatusText = selected.RequestBodyCapture is BodyCaptureState.Truncated or BodyCaptureState.NotCaptured or BodyCaptureState.Streaming
                 ? "Composer loaded (request body was truncated or not fully captured)"
                 : "Composer loaded from selected session";
         }, _statusRevertCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
@@ -180,7 +180,7 @@ public sealed partial class MainWindowViewModel
             ComposerHeaders = selected.RequestHeadersText ?? "";
             ComposerBody = selected.RequestBodyText ?? "";
             ComposerBodyFilePath = null;
-            StatusText = selected.RequestBodyCapture is BodyCaptureState.Truncated or BodyCaptureState.NotCaptured
+            StatusText = selected.RequestBodyCapture is BodyCaptureState.Truncated or BodyCaptureState.NotCaptured or BodyCaptureState.Streaming
                 ? "Composer loaded (request body was truncated or not fully captured)"
                 : "Composer loaded from selected session";
         }, StatusCancelToken).ConfigureAwait(false);

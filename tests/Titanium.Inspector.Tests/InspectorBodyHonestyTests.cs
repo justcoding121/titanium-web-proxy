@@ -242,6 +242,71 @@ public class InspectorBodyHonestyTests
         Assert.IsTrue(InspectorBodyLimits.LooksLikeSseContentType("text/event-stream; charset=utf-8"));
     }
 
+    private static byte[] Compress(byte[] data, string encoding)
+    {
+        using var ms = new MemoryStream();
+        using (Stream z = encoding switch
+               {
+                   "gzip" => new System.IO.Compression.GZipStream(ms, System.IO.Compression.CompressionLevel.Fastest, leaveOpen: true),
+                   "br" => new System.IO.Compression.BrotliStream(ms, System.IO.Compression.CompressionLevel.Fastest, leaveOpen: true),
+                   "deflate" => new System.IO.Compression.ZLibStream(ms, System.IO.Compression.CompressionLevel.Fastest, leaveOpen: true),
+                   _ => throw new ArgumentException(encoding),
+               })
+        {
+            z.Write(data);
+        }
+
+        return ms.ToArray();
+    }
+
+    [TestMethod]
+    [DataRow("gzip")]
+    [DataRow("br")]
+    [DataRow("deflate")]
+    public void DecodeCapturedPrefix_DecodesKnownEncodings(string encoding)
+    {
+        var plain = Encoding.UTF8.GetBytes("{\"hello\":\"world\"}");
+        var decoded = InspectorBodyLimits.DecodeCapturedPrefix(Compress(plain, encoding), encoding);
+        CollectionAssert.AreEqual(plain, decoded);
+    }
+
+    [TestMethod]
+    public void DecodeCapturedPrefix_PassThroughAndStacked()
+    {
+        var plain = "abc"u8.ToArray();
+        Assert.AreSame(plain, InspectorBodyLimits.DecodeCapturedPrefix(plain, null));
+        Assert.AreSame(plain, InspectorBodyLimits.DecodeCapturedPrefix(plain, "identity"));
+
+        // Unknown encoding: bytes are returned as received.
+        Assert.AreSame(plain, InspectorBodyLimits.DecodeCapturedPrefix(plain, "x-custom"));
+
+        // Applied in order "deflate, gzip" => undo gzip first, then deflate.
+        var stacked = Compress(Compress(plain, "deflate"), "gzip");
+        CollectionAssert.AreEqual(plain, InspectorBodyLimits.DecodeCapturedPrefix(stacked, "deflate, gzip"));
+    }
+
+    [TestMethod]
+    public void DecodeCapturedPrefix_TruncatedWireKeepsDecodedPrefix_AndCapsOutput()
+    {
+        var plain = new byte[InspectorBodyLimits.MaxBodyBytes + 4096];
+        new Random(7).NextBytes(plain.AsSpan(0, plain.Length / 2));
+        var gz = Compress(plain, "gzip");
+
+        // Cut the stream mid-way (tee reached its cap): decoded prefix must still surface.
+        var cut = gz.AsSpan(0, gz.Length / 2).ToArray();
+        var partial = InspectorBodyLimits.DecodeCapturedPrefix(cut, "gzip");
+        Assert.IsTrue(partial.Length > 0);
+        Assert.IsTrue(partial.AsSpan().SequenceEqual(plain.AsSpan(0, partial.Length)));
+
+        // Decompressed size above the preview cap is capped.
+        var full = InspectorBodyLimits.DecodeCapturedPrefix(gz, "gzip");
+        Assert.AreEqual(InspectorBodyLimits.MaxBodyBytes, full.Length);
+
+        // Garbage that claims gzip: returned unchanged rather than lost.
+        var junk = "not gzip at all"u8.ToArray();
+        Assert.AreSame(junk, InspectorBodyLimits.DecodeCapturedPrefix(junk, "gzip"));
+    }
+
     [TestMethod]
     public void TryPrettyPrint_Xml_DisablesExternalEntities()
     {
