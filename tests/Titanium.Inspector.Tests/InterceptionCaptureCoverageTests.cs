@@ -183,7 +183,7 @@ public class InterceptionCaptureCoverageTests
         var req = new Request { RequestUriString = "https://host.test/x" };
         Assert.AreEqual("host.test", (string?)tryHost.Invoke(null, [req]));
 
-        var shouldBuffer = typeof(InterceptionService).GetMethod("ShouldBufferBody", flags)!;
+        var shouldBuffer = typeof(InterceptionService).GetMethod("ShouldBufferBody", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
         Assert.IsNotNull(shouldBuffer);
 
         var eval = typeof(InterceptionService).GetMethod("EvaluateUnixTrustSuccess", flags)!;
@@ -338,24 +338,39 @@ public class InterceptionCaptureCoverageTests
         Assert.IsTrue(previewSnap.IsGrpc);
         Assert.IsNotNull(previewSnap.WebSocketFrames);
 
-        var shouldBuffer = typeof(InterceptionService).GetMethod("ShouldBufferBody", flags)!;
+        var shouldBuffer = typeof(InterceptionService).GetMethod("ShouldBufferBody", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
         // Clear WebSocket upgrade so buffering checks are not skipped as endless streams.
         session.HttpClient.Request.Headers.RemoveHeader("Upgrade");
         session.MaxBufferedBodyBytes = 10;
         session.HttpClient.Request.ContentLength = 100;
-        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
+        Assert.IsFalse((bool)shouldBuffer.Invoke(null, [session.HttpClient.Request, session])!);
         session.MaxBufferedBodyBytes = 0;
-        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
+        Assert.IsTrue((bool)shouldBuffer.Invoke(null, [session.HttpClient.Request, session])!);
         session.MaxBufferedBodyBytes = 1024;
+        // Unknown length can exceed the abort budget at any point: never buffered, whatever it is.
         session.HttpClient.Request.ContentLength = -1;
-        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
+        Assert.IsFalse((bool)shouldBuffer.Invoke(null, [session.HttpClient.Request, session])!);
 
-        // SSE responses must not buffer; finite chunked JSON still does.
-        session.HttpClient.Response.ContentType = "text/event-stream";
+        foreach (var contentType in new[] { "text/event-stream", "application/json", "application/octet-stream", "application/x-anything" })
+        {
+            session.HttpClient.Response.ContentType = contentType;
+            session.HttpClient.Response.ContentLength = -1;
+            Assert.IsFalse(
+                (bool)shouldBuffer.Invoke(null, [session.HttpClient.Response, session])!,
+                contentType);
+        }
+
+        // Known length within the budget is buffered; above it is not.
+        session.HttpClient.Response.ContentLength = 1024;
+        Assert.IsTrue((bool)shouldBuffer.Invoke(null, [session.HttpClient.Response, session])!);
+        session.HttpClient.Response.ContentLength = 1025;
+        Assert.IsFalse((bool)shouldBuffer.Invoke(null, [session.HttpClient.Response, session])!);
+
+        // No budget (<= 0): nothing can abort, so unknown length buffers too.
+        session.MaxBufferedBodyBytes = 0;
         session.HttpClient.Response.ContentLength = -1;
-        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
-        session.HttpClient.Response.ContentType = "application/json";
-        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
+        Assert.IsTrue((bool)shouldBuffer.Invoke(null, [session.HttpClient.Response, session])!);
+        session.MaxBufferedBodyBytes = 1024;
 
         var throttleReq = typeof(InterceptionService).GetMethod("OnRequestBodyWriteThrottle", flags)!;
         var throttleResp = typeof(InterceptionService).GetMethod("OnResponseBodyWriteThrottle", flags)!;

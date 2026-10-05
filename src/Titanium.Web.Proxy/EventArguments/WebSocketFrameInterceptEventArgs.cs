@@ -97,3 +97,32 @@ public class WebSocketFrameInterceptEventArgs : ProxyEventArgsBase
         Action = WebSocketFrameInterceptAction.Replace;
     }
 }
+
+/// <summary>
+///     Metadata for a WebSocket frame that exceeded the payload limit under
+///     <see cref="Options.PolicyMode.Observe"/>. The payload itself is not included.
+/// </summary>
+public sealed class WebSocketFrameElidedEventArgs : ProxyEventArgsBase
+{
+    internal WebSocketFrameElidedEventArgs(ProxyServer server, TcpClientConnection clientConnection,
+        SessionEventArgs session, WebSocketFrameDirection direction, WebsocketOpCode opCode, bool isFinal,
+        long declaredPayloadLength)
+        : base(server, clientConnection)
+    {
+        Session = session;
+        Direction = direction;
+        OpCode = opCode;
+        IsFinal = isFinal;
+        DeclaredPayloadLength = declaredPayloadLength;
+    }
+
+    public SessionEventArgs Session { get; }
+
+    public WebSocketFrameDirection Direction { get; }
+
+    public WebsocketOpCode OpCode { get; }
+
+    public bool IsFinal { get; }
+
+    public long DeclaredPayloadLength { get; }
+}

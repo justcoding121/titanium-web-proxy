@@ -79,9 +79,9 @@ public class SonarNewCodeCoverageTests
             default, HttpHeader.Version20, null, null, "h2-origin");
 
         var ctor = typeof(Http2OriginConnection).GetConstructor(PrivateInstance, null,
-            [typeof(TcpServerConnection), typeof(Microsoft.Extensions.Logging.ILogger), typeof(long),
+            [typeof(TcpServerConnection), typeof(Microsoft.Extensions.Logging.ILogger),
                 typeof(ProxyResourceLimits)], null)!;
-        return (Http2OriginConnection)ctor.Invoke([serverConn, NullLogger.Instance, 1024L * 1024L,
+        return (Http2OriginConnection)ctor.Invoke([serverConn, NullLogger.Instance,
             ProxyResourceLimits.Default])!;
     }
 
@@ -653,7 +653,7 @@ public class SonarNewCodeCoverageTests
         using var connection = await CreateShellAsync(proxy);
         var pendingType = typeof(Http2OriginConnection).GetNestedType("PendingStream", BindingFlags.NonPublic)!;
         object Pending() => Activator.CreateInstance(pendingType, PrivateInstance, binder: null,
-            args: [0L], culture: null)!;
+            args: [], culture: null)!;
 
         var register = typeof(Http2OriginConnection).GetMethod("RegisterOpenedStream", PrivateInstance)!;
         var tryGet = typeof(Http2OriginConnection).GetMethod("TryGetStream", PrivateInstance)!;
@@ -1380,7 +1380,7 @@ public class SonarNewCodeCoverageTests
         using var proxy = new ProxyServer(false, false, false);
         using var connection = await CreateShellAsync(proxy);
         var pendingType = typeof(Http2OriginConnection).GetNestedType("PendingStream", BindingFlags.NonPublic)!;
-        var pending = Activator.CreateInstance(pendingType, PrivateInstance, binder: null, args: [0L], culture: null)!;
+        var pending = Activator.CreateInstance(pendingType, PrivateInstance, binder: null, args: [], culture: null)!;
         var tunnel = pendingType.GetMethod("CreateTunnel", BindingFlags.NonPublic | BindingFlags.Static)!
             .Invoke(null, null)!;
 

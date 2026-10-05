@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Logging;
+using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy;
@@ -28,15 +29,19 @@ internal static class WebSocketInterceptRelay
             (b, o, c) => session.OnDataReceived(b, o, c));
 
         var maxFramePayloadBytes = session.MaxWebSocketFramePayloadBytes ?? session.Server.MaxWebSocketFramePayloadBytes;
+        var frameBudget = session.Server.PolicyModes[PolicyFamily.WebSocketFrameBudget];
+        var relayOversize = frameBudget == PolicyMode.Observe;
+        if (frameBudget == PolicyMode.Disabled)
+            maxFramePayloadBytes = int.MaxValue;
 
         var clientToServer = RelayDirectionAsync(clientStream, serverStream, bufferPool,
-            WebSocketFrameDirection.ClientToServer, maxFramePayloadBytes, session,
+            WebSocketFrameDirection.ClientToServer, maxFramePayloadBytes, relayOversize, session,
             serverWriteLock, cancellationTokenSource,
             onRead: (b, o, c) => { /* observational reads are implied by frames; wire bytes fire on write */ },
             onWrite: (b, o, c) => session.OnDataSent(b, o, c));
 
         var serverToClient = RelayDirectionAsync(serverStream, clientStream, bufferPool,
-            WebSocketFrameDirection.ServerToClient, maxFramePayloadBytes, session,
+            WebSocketFrameDirection.ServerToClient, maxFramePayloadBytes, relayOversize, session,
             clientWriteLock, cancellationTokenSource,
             onRead: (_, _, _) => { },
             onWrite: (b, o, c) => session.OnDataReceived(b, o, c));
@@ -128,12 +133,12 @@ internal static class WebSocketInterceptRelay
     ///     conformant Close for the frame/fragmentation violation that ended it.
     /// </returns>
     private static async Task<ushort?> RelayDirectionAsync(Stream source, Stream destination, IBufferPool bufferPool, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
-        WebSocketFrameDirection direction, long maxFramePayloadBytes, SessionEventArgs session,
+        WebSocketFrameDirection direction, long maxFramePayloadBytes, bool relayOversizeFrames, SessionEventArgs session,
         SemaphoreSlim writeLock, CancellationTokenSource cancellationTokenSource,
         Action<byte[], int, int> onRead, Action<byte[], int, int> onWrite)
     {
         var cancellationToken = cancellationTokenSource.Token;
-        var decoder = new WebSocketDecoder(bufferPool, maxFramePayloadBytes);
+        var decoder = new WebSocketDecoder(bufferPool, maxFramePayloadBytes, relayOversizeFrames);
         var messageTracker = new WebSocketMessageTracker();
         var buffer = bufferPool.GetBuffer();
         try
@@ -150,6 +155,45 @@ internal static class WebSocketInterceptRelay
                 {
                     foreach (var frame in decoder.Decode(buffer, 0, read))
                     {
+                        if (frame.RelayRaw)
+                        {
+                            if (frame.IsOversizeNotice)
+                            {
+                                ProxyMetrics.PolicyBreach(PolicyFamily.WebSocketFrameBudget, PolicyMode.Observe);
+                                messageTracker.OnFrame(frame, out _, out var oversizeFragmentationError);
+                                if (oversizeFragmentationError)
+                                {
+                                    messageTracker.Reset();
+                                    return 1002;
+                                }
+
+                                if (session.HasWebSocketFrameElidedHandler)
+                                {
+                                    await session.InvokeWebSocketFrameElided(new WebSocketFrameElidedEventArgs(
+                                        session.Server, session.ClientConnection, session, direction, frame.OpCode,
+                                        frame.IsFinal, frame.DeclaredPayloadLength)).ConfigureAwait(false);
+                                }
+                            }
+
+                            await writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+                            try
+                            {
+                                await destination.WriteAsync(frame.Data, cancellationToken).ConfigureAwait(false);
+                                await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
+                                if (frame.Data.Length > 0)
+                                {
+                                    var raw = frame.Data.ToArray();
+                                    onWrite(raw, 0, raw.Length);
+                                }
+                            }
+                            finally
+                            {
+                                writeLock.Release();
+                            }
+
+                            continue;
+                        }
+
                         if (!ValidateWebSocketFrame(frame, out var closeCode))
                         {
                             // RFC 6455 §7.2: a protocol error requires closing the connection.

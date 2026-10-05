@@ -218,8 +218,7 @@ internal static partial class Http3OriginBridge
                         null, sessionArgs);
                 }
 
-                return await Http2OriginConnection.CreateAsync(tcp, logger,
-                    fwd.MaxBufferedBodyBytes, ct, server.ResourceLimits);
+                return await Http2OriginConnection.CreateAsync(tcp, logger, ct, server.ResourceLimits);
             }
             finally
             {
@@ -346,6 +345,13 @@ internal static partial class Http3OriginBridge
         }
     }
 
+    /// <summary>
+    ///     Buffers an H3 request body only when a reader was installed and the streaming pump was not.
+    ///     Normal interception installs <see cref="SessionEventArgs.Http3RequestBodyPump"/> in
+    ///     <c>Http3RequestStream</c>, and the TCP bridge prefers that pump, so this fallback is the
+    ///     leftover whole-body path. It goes through <c>GetRequestBody</c>, which is bounded by
+    ///     <c>MaxBufferedBodyBytes</c>.
+    /// </summary>
     private static async Task EnsureHttp3BufferedBodyAsync(
         SessionEventArgs sessionArgs, CancellationToken cancellationToken)
     {
@@ -479,9 +485,7 @@ internal static partial class Http3OriginBridge
                     null, sessionArgs);
             }
 
-            return await Http2OriginConnection.CreateAsync(tcp, logger,
-                sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes, ct,
-                server.ResourceLimits);
+            return await Http2OriginConnection.CreateAsync(tcp, logger, ct, server.ResourceLimits);
         }, cancellationToken);
     }
 

@@ -12,9 +12,15 @@ namespace Titanium.Web.Proxy.Options;
 public enum PolicyFamily
 {
     /// <summary>
-    ///     Cumulative whole-body buffering limits (<c>MaxBufferedBodyBytes</c> and the
-    ///     <see cref="ProxyResourceLimits.MaxEncodedBodyBytes" />/<see cref="ProxyResourceLimits.MaxDecodedBodyBytes" />
-    ///     pair) enforced via <see cref="Network.Streams.BoundedWriteStream" /> across H1, H2 and H3.
+    ///     Cumulative whole-body buffering limits (<c>MaxBufferedBodyBytes</c>) enforced via
+    ///     <see cref="Network.Streams.BoundedWriteStream" /> when a caller materializes a body.
+    ///     Streaming relays do not consult this family.
+    ///     <para>
+    ///         <see cref="ProxyResourceLimits.MaxEncodedBodyBytes" /> and
+    ///         <see cref="ProxyResourceLimits.MaxDecodedBodyBytes" /> are reserved. They are accepted
+    ///         by option plumbing and are not enforced on a live read path; the enforced whole-body
+    ///         budget is <c>MaxBufferedBodyBytes</c>.
+    ///     </para>
     /// </summary>
     BodyBudget,
 
@@ -98,5 +104,24 @@ public enum PolicyFamily
     ///         refuses to replay non-idempotent methods and rejects bare CR/LF/NUL in header values.
     ///     </para>
     /// </summary>
-    Http1ReplaySafety
+    Http1ReplaySafety,
+
+    /// <summary>
+    ///     Per-frame WebSocket payload limit (<c>MaxWebSocketFramePayloadBytes</c>) applied only when
+    ///     <c>BeforeWebSocketFrame</c> is subscribed. Raw relay is unaffected.
+    ///     <para>
+    ///         <see cref="PolicyMode.Enforce"/> (default on every profile) closes the connection with
+    ///         status 1009 before the payload is buffered.
+    ///     </para>
+    ///     <para>
+    ///         <see cref="PolicyMode.Observe"/> relays an oversize frame without materializing it and
+    ///         raises <c>SessionEventArgs.WebSocketFrameElided</c>. Frame hooks are not invoked for
+    ///         that payload, so a content filter must stay on <see cref="PolicyMode.Enforce"/>.
+    ///     </para>
+    ///     <para>
+    ///         <see cref="PolicyMode.Disabled"/> skips the check and will buffer the frame, up to the
+    ///         decoder's structural <see cref="int.MaxValue"/> bound.
+    ///     </para>
+    /// </summary>
+    WebSocketFrameBudget
 }

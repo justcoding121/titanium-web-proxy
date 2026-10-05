@@ -8,6 +8,22 @@ using System.Threading.Tasks;
 namespace Titanium.Web.Proxy.Network.Streams;
 
 /// <summary>
+///     Observes the consumer side of a <see cref="BoundedBodyPipe"/>. Used to return HTTP/2
+///     stream flow-control credit as the client actually reads.
+/// </summary>
+internal interface IBodyConsumptionSink
+{
+    /// <summary>Body bytes just copied out of the pipe, on the consumer thread.</summary>
+    void OnBytesConsumed(int bytes);
+
+    /// <summary>
+    ///     Once, after the reader is completed (success or failure), so the sink can flush any
+    ///     credit still owed after a short final read.
+    /// </summary>
+    void OnReadCompleted();
+}
+
+/// <summary>
 ///     A bounded, cancellation-aware pipe wrapping <see cref="System.IO.Pipelines.Pipe"/>
 ///     for streaming HTTP body bytes between producer and consumer tasks. Enforces a
 ///     configurable maximum total byte count; once exceeded the writer is faulted with
@@ -21,18 +37,48 @@ internal sealed class BoundedBodyPipe : IDisposable
     private bool disposed;
 
     /// <summary>
+    ///     Optional observer of the consumer side. An interface (not delegates) so attaching it costs no
+    ///     per-request closure allocation on the HTTP/2 origin path.
+    /// </summary>
+    internal IBodyConsumptionSink? ConsumptionSink { get; set; }
+
+    /// <summary>
     ///     Initializes a new <see cref="BoundedBodyPipe"/> with the given byte limit.
     ///     <paramref name="maxBytes"/> of 0 means unlimited.
     /// </summary>
-    internal BoundedBodyPipe(long maxBytes = 0)
+    /// <param name="applyBackpressure">
+    ///     When <see langword="false"/>, <c>WriteAsync</c> never waits for a reader. Origin response
+    ///     pipes use this so the shared HTTP/2 read loop cannot stall sibling streams. Memory is then
+    ///     bounded by receive flow control, not by a pause threshold.
+    /// </param>
+    internal BoundedBodyPipe(long maxBytes = 0, bool applyBackpressure = true)
     {
         this.maxBytes = maxBytes;
-        // For unlimited pipes, disable backpressure (pauseWriterThreshold: 0) so that WriteAsync
-        // never blocks waiting for a reader. For bounded pipes, cap backpressure at 512 KB or the
-        // byte limit, whichever is smaller, to give callers early cancellation feedback.
+        // pauseWriterThreshold 0 still pauses once the pipe holds data (unconsumed >= 0). Origin
+        // response pipes pass applyBackpressure: false and use a threshold the stream window cannot
+        // reach, so ReadLoop's WriteAsync completes synchronously.
+        long pause;
+        long resume;
+        if (!applyBackpressure)
+        {
+            pause = long.MaxValue;
+            resume = long.MaxValue - 1;
+        }
+        else if (maxBytes > 0)
+        {
+            pause = Math.Min(maxBytes, 512 * 1024);
+            resume = Math.Min(maxBytes / 2, 256 * 1024);
+            if (resume >= pause) resume = Math.Max(0, pause - 1);
+        }
+        else
+        {
+            pause = 0;
+            resume = 0;
+        }
+
         pipe = new Pipe(new PipeOptions(
-            pauseWriterThreshold: maxBytes > 0 ? Math.Min(maxBytes, 512 * 1024) : 0,
-            resumeWriterThreshold: maxBytes > 0 ? Math.Min(maxBytes, 256 * 1024) : 0,
+            pauseWriterThreshold: pause,
+            resumeWriterThreshold: resume,
             useSynchronizationContext: false));
     }
 
@@ -109,8 +155,37 @@ internal sealed class BoundedBodyPipe : IDisposable
     /// </summary>
     internal async Task CopyToAsync(Stream destination, CancellationToken cancellationToken = default)
     {
-        await pipe.Reader.CopyToAsync(destination, cancellationToken);
-        await pipe.Reader.CompleteAsync();
+        try
+        {
+            while (true)
+            {
+                var result = await pipe.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                var buffer = result.Buffer;
+                if (buffer.Length > 0)
+                {
+                    foreach (var segment in buffer)
+                    {
+                        await destination.WriteAsync(segment, cancellationToken).ConfigureAwait(false);
+                        if (segment.Length > 0)
+                            ConsumptionSink?.OnBytesConsumed(segment.Length);
+                    }
+
+                    pipe.Reader.AdvanceTo(buffer.End);
+                }
+                else
+                {
+                    pipe.Reader.AdvanceTo(buffer.Start);
+                }
+
+                if (result.IsCompleted || result.IsCanceled)
+                    break;
+            }
+        }
+        finally
+        {
+            await pipe.Reader.CompleteAsync().ConfigureAwait(false);
+            ConsumptionSink?.OnReadCompleted();
+        }
     }
 
     /// <summary>
@@ -138,12 +213,15 @@ internal sealed class BoundedBodyPipe : IDisposable
             var toCopy = (int)Math.Min(buffer.Length, destination.Length - offset);
             buffer.Slice(0, toCopy).CopyTo(destination.Span.Slice(offset, toCopy));
             offset += toCopy;
+            if (toCopy > 0)
+                ConsumptionSink?.OnBytesConsumed(toCopy);
             pipe.Reader.AdvanceTo(buffer.GetPosition(toCopy));
             if (result.IsCompleted && offset < destination.Length)
                 break;
         }
 
         await pipe.Reader.CompleteAsync().ConfigureAwait(false);
+        ConsumptionSink?.OnReadCompleted();
         return offset;
     }
 

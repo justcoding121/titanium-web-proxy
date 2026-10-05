@@ -303,6 +303,70 @@ public class WebSocketDecoderTests
     ///     Hand-builds a raw WebSocket frame (RFC 6455 section 5.2) with the given opcode/payload, choosing
     ///     the 7-bit/16-bit/64-bit length encoding automatically based on the payload size.
     /// </summary>
+    [TestMethod]
+    public void Decode_ObserveOversize_YieldsRawWireAndDoesNotThrow()
+    {
+        var decoder = new WebSocketDecoder(new FakeBufferPool(8192), maxFramePayloadBytes: 8, relayOversizeFrames: true);
+        var payload = new byte[20];
+        for (var i = 0; i < payload.Length; i++) payload[i] = (byte)i;
+        var raw = BuildFrame(WebsocketOpCode.Binary, payload);
+
+        var frames = decoder.Decode(raw, 0, raw.Length).ToList();
+
+        Assert.AreEqual(1, frames.Count);
+        Assert.IsTrue(frames[0].RelayRaw);
+        Assert.IsTrue(frames[0].IsOversizeNotice);
+        Assert.AreEqual(20, frames[0].DeclaredPayloadLength);
+        CollectionAssert.AreEqual(raw, frames[0].Data.ToArray());
+    }
+
+    [TestMethod]
+    public void Decode_ObserveOversizeControlFrame_StillThrows1002()
+    {
+        var decoder = new WebSocketDecoder(new FakeBufferPool(8192), maxFramePayloadBytes: 8, relayOversizeFrames: true);
+        var raw = BuildFrame(WebsocketOpCode.Ping, new byte[200]);
+        var ex = Assert.ThrowsExactly<WebSocketProtocolException>(() => decoder.Decode(raw, 0, raw.Length).ToList());
+        Assert.AreEqual((ushort)1002, ex.CloseCode);
+    }
+
+    [TestMethod]
+    public void Decode_ObserveOversize_SplitAcrossReads_RelaysEveryByteInOrderThenResumes()
+    {
+        var decoder = new WebSocketDecoder(new FakeBufferPool(8192), maxFramePayloadBytes: 8, relayOversizeFrames: true);
+        var payload = new byte[300];
+        for (var i = 0; i < payload.Length; i++) payload[i] = (byte)i;
+        var big = BuildFrame(WebsocketOpCode.Binary, payload);
+        var small = BuildFrame(WebsocketOpCode.Text, Encoding.UTF8.GetBytes("ok"));
+        var wire = big.Concat(small).ToArray();
+
+        var relayed = new List<byte>();
+        var decoded = new List<WebSocketFrame>();
+        const int chunk = 37;
+        for (var offset = 0; offset < wire.Length; offset += chunk)
+        {
+            var count = Math.Min(chunk, wire.Length - offset);
+            var slice = wire.AsSpan(offset, count).ToArray();
+            foreach (var frame in decoder.Decode(slice, 0, slice.Length))
+            {
+                if (frame.RelayRaw) relayed.AddRange(frame.Data.ToArray());
+                else decoded.Add(frame);
+            }
+        }
+
+        CollectionAssert.AreEqual(big, relayed);
+        Assert.AreEqual(1, decoded.Count);
+        Assert.AreEqual("ok", Encoding.UTF8.GetString(decoded[0].Data.ToArray()));
+    }
+
+    [TestMethod]
+    public void Decode_EnforceOversize_StillThrows1009()
+    {
+        var decoder = CreateDecoder(maxFramePayloadBytes: 8);
+        var raw = BuildFrame(WebsocketOpCode.Binary, new byte[20]);
+        var ex = Assert.ThrowsExactly<WebSocketProtocolException>(() => decoder.Decode(raw, 0, raw.Length).ToList());
+        Assert.AreEqual((ushort)1009, ex.CloseCode);
+    }
+
     private static byte[] BuildFrame(WebsocketOpCode opCode, byte[] payload, bool mask = false, bool fin = true,
         uint maskKey = 0x11223344)
     {

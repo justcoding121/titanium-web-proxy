@@ -106,10 +106,11 @@ public sealed class SessionStreamBuffer
     {
         // One subscriber list for the whole batch. Re-reading the event per row would drop
         // the tail for a handler that unsubscribes on the first snapshot.
-        if (SessionAdded is { } handler) // NOSONAR S3264 -- Invoke the captured delegate so the batch shares one list.
-        {
-            foreach (var snapshot in batch)
-                handler(snapshot);
-        }
+        var handler = SessionAdded;
+        if (handler is null)
+            return;
+
+        foreach (var snapshot in batch)
+            handler.Invoke(snapshot);
     }
 }

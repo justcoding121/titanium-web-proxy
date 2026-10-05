@@ -254,7 +254,7 @@ internal static partial class Http3OriginBridge
                 }
             }
 
-            var maxPayload = sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes;
+            var maxPayload = Http3Frame.DefaultMaxPayloadBytes;
 
             // Stream large / unknown-length bodies as DATA arrives (TTFB on big HTML). Tiny known-CL
             // must materialize first: H1 WriteResponseAsync + StreamBodyWriter emits a header-only
@@ -666,7 +666,7 @@ internal static partial class Http3OriginBridge
                     // Verbatim origin→client frame copy, or MITM capture when clientStream is null.
                     // Tiny GET: coalesce HEADERS+DATA into one Quic write (origin probe sends both).
                     const int relayCoalesceMaxBytes = 16 * 1024;
-                    var maxPayload = Math.Max(fwd.MaxBufferedBodyBytes, server.MaxDecodedHeaderListBytes);
+                    var maxPayload = Math.Max(Http3Frame.DefaultMaxPayloadBytes, server.MaxDecodedHeaderListBytes);
                     var captureForMitm = clientStream is null;
                     var sawFinalHeaders = false;
                     while (true)
