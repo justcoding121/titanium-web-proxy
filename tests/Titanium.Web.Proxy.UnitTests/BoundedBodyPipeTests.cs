@@ -12,6 +12,24 @@ namespace Titanium.Web.Proxy.UnitTests;
 public class BoundedBodyPipeTests
 {
     [TestMethod]
+    [Timeout(5_000)]
+    public async Task WriteAsync_WithoutBackpressure_DoesNotWaitForAReader()
+    {
+        using var pipe = new BoundedBodyPipe(maxBytes: 2 * 1024 * 1024, applyBackpressure: false);
+        var chunk = new byte[1024 * 1024];
+        await pipe.WriteAsync(chunk);
+        pipe.CompleteWriter();
+        Assert.AreEqual(chunk.Length, pipe.TotalWritten);
+
+        var consumed = 0;
+        pipe.OnBytesConsumed = n => consumed += n;
+        using var destination = new MemoryStream();
+        await pipe.CopyToAsync(destination);
+        Assert.AreEqual(chunk.Length, consumed);
+        Assert.AreEqual(chunk.Length, destination.Length);
+    }
+
+    [TestMethod]
     public void Properties_ExposeReaderWriterAndTotalWritten()
     {
         using var pipe = new BoundedBodyPipe(maxBytes: 64);

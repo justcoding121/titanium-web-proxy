@@ -53,6 +53,22 @@ public class Http3FrameTests
     }
 
     [TestMethod]
+    public async Task ReadAsync_DefaultLimit_RejectsHostileDeclaredLengthBeforeAllocating()
+    {
+        await using var ms = new MemoryStream();
+        var header = new byte[16];
+        var written = Http3VarInt.Write(header, (ulong)Http3FrameType.Data);
+        written += Http3VarInt.Write(header.AsSpan(written), (ulong)Http3Frame.DefaultMaxPayloadBytes + 1);
+        ms.Write(header, 0, written);
+        ms.Position = 0;
+
+        var ex = await Assert.ThrowsExactlyAsync<Http3ConnectionException>(
+            () => Http3Frame.ReadAsync(ms, maxPayloadBytes: 0, CancellationToken.None).AsTask());
+
+        Assert.AreEqual(Http3ErrorCode.ExcessiveLoad, ex.ErrorCode);
+    }
+
+    [TestMethod]
     public async Task ReadAsync_OversizedPayload_ThrowsExcessiveLoad()
     {
         await using var ms = new MemoryStream();

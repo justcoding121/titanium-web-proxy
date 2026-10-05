@@ -15,7 +15,9 @@ using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network.Streams;
 using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy;
 
@@ -82,8 +84,7 @@ public partial class ProxyServer
         {
             var tcp = await EstablishHttp2OriginTcpConnectionAsync(openSession, remoteHostName, remotePort,
                 connectHost, connectPort, ct);
-            return await Http2OriginConnection.CreateAsync(tcp, logger,
-                openSession.MaxBufferedBodyBytes ?? MaxBufferedBodyBytes, ct, ResourceLimits);
+            return await Http2OriginConnection.CreateAsync(tcp, logger, ct, ResourceLimits);
         };
 
         try
@@ -391,7 +392,7 @@ public partial class ProxyServer
         try
         {
             var created = await Http2OriginConnection.CreateAsync(seedConnection, logger,
-                args.MaxBufferedBodyBytes ?? MaxBufferedBodyBytes, cancellationToken, ResourceLimits);
+                cancellationToken, ResourceLimits);
             Http2OriginConnectionPool.Offer(poolKey, created);
         }
         catch (Exception ex)
@@ -691,16 +692,34 @@ public partial class ProxyServer
             }
             else if (response.ContentLength < 0 && !response.IsChunked)
             {
-                var buffered = new MemoryStream();
-                var streamBody = response.StreamBodyWriter;
-                response.StreamBodyWriter = null;
-                await streamBody(buffered, cancellationToken);
-                fastBody = buffered.ToArray();
-                response.ContentLength = fastBody.Length;
-                await clientStream.WriteResponseWithWireBodyAsync(response, fastBody, cancellationToken);
-                response.IsBodyReceived = true;
-                response.IsBodySent = true;
-                return;
+                if (ClientCannotReceiveChunked(args))
+                {
+                    var streamBody = response.StreamBodyWriter!;
+                    response.StreamBodyWriter = null;
+                    fastBody = await BufferUnknownLengthForHttp10Async(args, streamBody, cancellationToken);
+                    response.ContentLength = fastBody.Length;
+                    await clientStream.WriteResponseWithWireBodyAsync(response, fastBody, cancellationToken);
+                    response.IsBodyReceived = true;
+                    response.IsBodySent = true;
+                    return;
+                }
+
+                if (exchange.OriginBodyComplete)
+                {
+                    var buffered = new MemoryStream();
+                    var streamBody = response.StreamBodyWriter;
+                    response.StreamBodyWriter = null;
+                    await streamBody!(buffered, cancellationToken);
+                    fastBody = buffered.ToArray();
+                    response.ContentLength = fastBody.Length;
+                    await clientStream.WriteResponseWithWireBodyAsync(response, fastBody, cancellationToken);
+                    response.IsBodyReceived = true;
+                    response.IsBodySent = true;
+                    return;
+                }
+
+                // Still open (SSE, chunked upload result, any long-lived body). Send headers now.
+                response.IsChunked = true;
             }
 
             await clientStream.WriteResponseAsync(response, cancellationToken);
@@ -800,18 +819,31 @@ public partial class ProxyServer
         }
         else if (response.ContentLength < 0 && !response.IsChunked)
         {
-            // The h2 origin sent no content-length (END_STREAM delimits its body). Buffer it here -
-            // the BoundedBodyPipe behind StreamBodyWriter already enforces MaxBufferedBodyBytes - so
-            // the HTTP/1.1 client keeps the Content-Length framing this bridge has always produced.
-            // Origin responses that do carry a content-length still stream straight through below.
-            var buffered = new MemoryStream();
-            var streamBody = response.StreamBodyWriter;
-            response.StreamBodyWriter = null;
-            await streamBody(buffered, cancellationToken);
-            body = buffered.ToArray();
-            response.ContentLength = body.Length;
-            response.Body = body;
-            response.BodyIsWireEncoded = true;
+            if (ClientCannotReceiveChunked(args))
+            {
+                var streamBody = response.StreamBodyWriter!;
+                response.StreamBodyWriter = null;
+                body = await BufferUnknownLengthForHttp10Async(args, streamBody, cancellationToken);
+                response.ContentLength = body.Length;
+                response.Body = body;
+                response.BodyIsWireEncoded = true;
+            }
+            else if (exchange.OriginBodyComplete)
+            {
+                // Origin already finished. Drain (bounded by the stream window) and keep Content-Length.
+                var buffered = new MemoryStream();
+                var streamBody = response.StreamBodyWriter;
+                response.StreamBodyWriter = null;
+                await streamBody!(buffered, cancellationToken);
+                body = buffered.ToArray();
+                response.ContentLength = body.Length;
+                response.Body = body;
+                response.BodyIsWireEncoded = true;
+            }
+            else
+            {
+                response.IsChunked = true;
+            }
         }
 
         await clientStream.WriteResponseAsync(response, cancellationToken);
@@ -832,6 +864,34 @@ public partial class ProxyServer
 
         response.IsBodyReceived = true;
         response.IsBodySent = true;
+    }
+
+    private static bool ClientCannotReceiveChunked(SessionEventArgs args) =>
+        args.HttpClient.Request.HttpVersion == HttpHeader.Version10;
+
+    /// <summary>
+    ///     HTTP/1.0 has no chunked framing, so an unknown-length origin body has to be buffered.
+    ///     The buffer uses the session body budget and <see cref="PolicyFamily.BodyBudget"/>, same as
+    ///     every other whole-body path.
+    /// </summary>
+    private async Task<byte[]> BufferUnknownLengthForHttp10Async(SessionEventArgs args,
+        Func<Stream, CancellationToken, Task> streamBody, CancellationToken cancellationToken)
+    {
+        var limit = args.MaxBufferedBodyBytes ?? MaxBufferedBodyBytes;
+        var mode = PolicyModes[PolicyFamily.BodyBudget];
+        using var buffered = new MemoryStream();
+        Stream target = limit > 0 ? new BoundedWriteStream(buffered, limit, mode) : buffered;
+        try
+        {
+            await streamBody(target, cancellationToken);
+        }
+        finally
+        {
+            if (!ReferenceEquals(target, buffered))
+                await target.DisposeAsync();
+        }
+
+        return buffered.ToArray();
     }
 
     private async Task RunHttp11ToHttp2WebSocketTunnelAsync(SessionEventArgs args,

@@ -86,7 +86,7 @@ Use **Tools → Composer / Breakpoints / AutoResponder / Scripts…** to open th
 - **Headers** — request/response headers, cookies, query (labeled sections). **Copy headers** copies the dump.
 - **Body** — request and response as `=== Request ===` / `=== Response ===`. **Pretty** / **Raw** toggles JSON, XML, and HTML source indent (Pretty runs when the Body tab is selected). Images show a bitmap preview instead of mojibake. Banners explain truncated, not-captured, or streaming bodies. **Save request…** / **Save response…** write the **captured** bytes (incomplete when truncated).
 - **Hex** — labeled hex dump (first 4 KB of the captured preview).
-- **WS Frames** — shown for WebSocket sessions; live frames when available (direction, opcode, payload preview)
+- **WS Frames** — shown for WebSocket sessions; live frames when available (direction, opcode, payload preview). A single frame larger than 16 MiB is relayed and listed as "payload not captured" instead of closing the connection.
 - **SSE** — shown for `text/event-stream` responses; Inspector does **not** buffer SSE in `BeforeResponse` (events stream to the client; a 2 MiB preview may fill while open)
 - **Protobuf** — wire-format field dump for gRPC and gRPC-JSON-transcoded upstream frames (field number, wire type, value). MVP does **not** require a `.protoset` / descriptor set; the optional settings field `ProtobufDescriptorSetPath` is stored for a future typed decode. Until then, the Protobuf tab always shows the JSON wire dump.
 

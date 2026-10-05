@@ -303,6 +303,32 @@ public class WebSocketDecoderTests
     ///     Hand-builds a raw WebSocket frame (RFC 6455 section 5.2) with the given opcode/payload, choosing
     ///     the 7-bit/16-bit/64-bit length encoding automatically based on the payload size.
     /// </summary>
+    [TestMethod]
+    public void Decode_ObserveOversize_YieldsRawWireAndDoesNotThrow()
+    {
+        var decoder = new WebSocketDecoder(new FakeBufferPool(8192), maxFramePayloadBytes: 8, relayOversizeFrames: true);
+        var payload = new byte[20];
+        for (var i = 0; i < payload.Length; i++) payload[i] = (byte)i;
+        var raw = BuildFrame(WebsocketOpCode.Binary, payload);
+
+        var frames = decoder.Decode(raw, 0, raw.Length).ToList();
+
+        Assert.AreEqual(1, frames.Count);
+        Assert.IsTrue(frames[0].RelayRaw);
+        Assert.IsTrue(frames[0].IsOversizeNotice);
+        Assert.AreEqual(20, frames[0].DeclaredPayloadLength);
+        CollectionAssert.AreEqual(raw, frames[0].Data.ToArray());
+    }
+
+    [TestMethod]
+    public void Decode_EnforceOversize_StillThrows1009()
+    {
+        var decoder = CreateDecoder(maxFramePayloadBytes: 8);
+        var raw = BuildFrame(WebsocketOpCode.Binary, new byte[20]);
+        var ex = Assert.ThrowsExactly<WebSocketProtocolException>(() => decoder.Decode(raw, 0, raw.Length).ToList());
+        Assert.AreEqual((ushort)1009, ex.CloseCode);
+    }
+
     private static byte[] BuildFrame(WebsocketOpCode opCode, byte[] payload, bool mask = false, bool fin = true,
         uint maskKey = 0x11223344)
     {

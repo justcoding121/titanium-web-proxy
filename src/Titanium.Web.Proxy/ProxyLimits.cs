@@ -40,7 +40,7 @@ public static class ProxyLimits
     /// Reference value only - see the type-level remarks. Matches the current default of
     /// <c>ProxyServer.MaxBufferedBodyBytes</c>: maximum buffered request or response body size for
     /// proxied exchanges where full buffering is required (body mutation, authentication retry,
-    /// etc.).
+    /// etc.). Streaming relays are not counted against this value.
     /// Default: 4 MiB.
     /// </summary>
     public static readonly long DefaultMaxBufferedBodyBytes = 4L * 1024 * 1024;

@@ -755,18 +755,23 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     Maximum bytes the proxy will buffer for a single request or response body when
-    ///     body buffering is required (body-read hooks, authentication retry, etc.). Bodies
-    ///     larger than this limit are rejected with 413 (upstream request) or connection teardown
-    ///     (upstream response). Set to 0 to disable the limit (not recommended).
-    ///     Default: 4,194,304 (4 MiB).
+    ///     whole-body buffering is required (<c>GetRequestBody</c> / <c>GetResponseBody</c>,
+    ///     authentication retry, and other paths that materialize the body). Bodies larger than
+    ///     this limit are rejected with 413 (upstream request) or connection teardown (upstream
+    ///     response). Streaming relays (H1, H2, and H3, including bridges) are not counted against
+    ///     this budget: they are bounded by protocol flow control. Set to 0 to disable the limit
+    ///     (not recommended). Default: 4,194,304 (4 MiB).
     /// </summary>
     public int MaxBufferedBodyBytes { get; set; } = 4 * 1024 * 1024;
 
     /// <summary>
     ///     Maximum WebSocket frame payload size in bytes that the proxy will accept during
     ///     frame-level interception (i.e. when <c>BeforeWebSocketFrame</c> has at least one
-    ///     subscriber). Frames whose decoded payload exceeds this limit cause the WebSocket
-    ///     connection to be closed with Close code 1009 (Message Too Big).
+    ///     subscriber). Frames whose decoded payload exceeds this limit are handled by
+    ///     <see cref="Options.PolicyFamily.WebSocketFrameBudget"/>. <see cref="Options.PolicyMode.Enforce"/>
+    ///     (the default) closes the connection with Close code 1009 (Message Too Big) before the
+    ///     payload is buffered. <see cref="Options.PolicyMode.Observe"/> relays the frame unbuffered
+    ///     and raises <c>WebSocketFrameElided</c> instead of invoking <c>BeforeWebSocketFrame</c>.
     ///     Raw-relay sessions (no <c>BeforeWebSocketFrame</c> subscriber) bypass this check
     ///     entirely and pass all frames through unvalidated.
     ///     Default: 16,777,216 (16 MiB).

@@ -18,6 +18,14 @@ internal sealed class Http3Frame
 {
     private byte[]? rentedPayload;
 
+    /// <summary>
+    ///     Default per-frame payload cap used when a caller passes <c>maxPayloadBytes: 0</c>.
+    ///     Independent of <c>ProxyServer.MaxBufferedBodyBytes</c>: that budget bounds whole-body
+    ///     buffering, not a single HTTP/3 DATA frame. 4 MiB covers legitimate frames without
+    ///     renting an attacker-chosen length.
+    /// </summary>
+    internal const long DefaultMaxPayloadBytes = 4 * 1024 * 1024;
+
     public ulong Type { get; }
     public ReadOnlyMemory<byte> Payload { get; }
 
@@ -55,9 +63,12 @@ internal sealed class Http3Frame
         var payloadLength = await Http3VarInt.ReadAsync(stream, cancellationToken)
             ?? throw new Http3ConnectionException(Http3ErrorCode.FrameError, "Unexpected end of stream reading frame length.");
 
-        if (maxPayloadBytes > 0 && (long)payloadLength > maxPayloadBytes)
+        // 0 means "use the dedicated frame limit", not unlimited. A hostile peer picks
+        // payloadLength; checking before the int cast is what stops the rent.
+        var limit = maxPayloadBytes > 0 ? maxPayloadBytes : DefaultMaxPayloadBytes;
+        if (payloadLength > (ulong)limit || payloadLength > int.MaxValue)
             throw new Http3ConnectionException(Http3ErrorCode.ExcessiveLoad,
-                $"HTTP/3 frame payload {payloadLength} bytes exceeds limit {maxPayloadBytes}.");
+                $"HTTP/3 frame payload {payloadLength} bytes exceeds limit {limit}.");
 
         if (payloadLength == 0)
             return new Http3Frame(frameType.Value, ReadOnlyMemory<byte>.Empty, null);

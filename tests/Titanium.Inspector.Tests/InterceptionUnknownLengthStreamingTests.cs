@@ -50,6 +50,51 @@ public class InterceptionUnknownLengthStreamingTests
     }
 
     [TestMethod]
+    public void ShouldBufferBody_BuffersOnlyKnownLengthWithinTheAbortBudget()
+    {
+        var (proxy, session, cts) = CreateSession();
+        using var _p = proxy;
+        using var _c = cts;
+        using var _s = session;
+        using var interception = new InterceptionService(new RecordingSystemProxyController()) { UseInMemoryTrustState = true };
+        var shouldBuffer = typeof(InterceptionService).GetMethod("ShouldBufferBody", PrivateInstance)!;
+
+        const int abortBudget = 32 * 1024 * 1024;
+        session.MaxBufferedBodyBytes = abortBudget;
+
+        // Known length within the budget is buffered, request and JSON response alike.
+        session.HttpClient.Request.ContentLength = 100;
+        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
+        session.HttpClient.Response.ContentType = "application/json";
+        session.HttpClient.Response.ContentLength = 100;
+        Assert.IsTrue((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
+
+        // Known length past the abort budget is relayed, not buffered.
+        session.HttpClient.Request.ContentLength = abortBudget + 1L;
+        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
+        session.HttpClient.Response.ContentLength = abortBudget + 1L;
+        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
+
+        // Unknown length is never buffered, including a git push pack and a git clone pack result.
+        session.HttpClient.Request.RequestUriString = "https://github.com/org/repo.git/git-receive-pack";
+        session.HttpClient.Request.ContentType = "application/x-git-receive-pack-request";
+        session.HttpClient.Request.ContentLength = -1;
+        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Request, session, true])!);
+
+        session.HttpClient.Response.ContentType = "application/x-git-upload-pack-result";
+        session.HttpClient.Response.ContentLength = -1;
+        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
+
+        session.HttpClient.Response.ContentType = "text/event-stream";
+        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
+
+        // Chunked JSON is the same rule: no declared length, so it is streamed.
+        session.HttpClient.Response.ContentType = "application/json";
+        session.HttpClient.Response.IsChunked = true;
+        Assert.IsFalse((bool)shouldBuffer.Invoke(interception, [session.HttpClient.Response, session, false])!);
+    }
+
+    [TestMethod]
     public void ApplyResponseBodyCapture_UnknownLengthUnread_IsStreamingRegardlessOfContentType()
     {
         var apply = typeof(InterceptionService).GetMethod("ApplyResponseBodyCapture", PrivateStatic)!;

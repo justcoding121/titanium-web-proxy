@@ -65,7 +65,6 @@ internal sealed class Http2OriginConnection : IDisposable
     private Stream stream;
     private Http2FrameWriter? frameWriter;
     private readonly ILogger logger;
-    private readonly long maxBufferedBodyBytes;
     private readonly ProxyResourceLimits resourceLimits;
     private readonly SemaphoreSlim writeLock = new(1, 1);
     private readonly Http2FlowController sendFlow = new();
@@ -99,14 +98,13 @@ internal sealed class Http2OriginConnection : IDisposable
     private Http2FrameHeader? encodeFrameHeader;
     private readonly byte[] encodeFrameHeaderBuffer = new byte[9];
 
-    private Http2OriginConnection(TcpServerConnection connection, ILogger logger, long maxBufferedBodyBytes,
+    private Http2OriginConnection(TcpServerConnection connection, ILogger logger,
         ProxyResourceLimits resourceLimits)
     {
         this.connection = connection;
         socket = connection.Stream;
         stream = socket;
         this.logger = logger;
-        this.maxBufferedBodyBytes = maxBufferedBodyBytes;
         this.resourceLimits = resourceLimits;
     }
 
@@ -312,10 +310,12 @@ internal sealed class Http2OriginConnection : IDisposable
     ///     <see cref="SendAsync" /> always has a real <c>MAX_CONCURRENT_STREAMS</c>/frame-size budget to honor.
     /// </summary>
     internal static async Task<Http2OriginConnection> CreateAsync(TcpServerConnection connection,
-        ILogger logger, long maxBufferedBodyBytes, CancellationToken cancellationToken,
+        ILogger logger, CancellationToken cancellationToken,
         ProxyResourceLimits? resourceLimits = null)
     {
-        var instance = new Http2OriginConnection(connection, logger, maxBufferedBodyBytes,
+        // Streaming bodies are bounded by HTTP/2 flow control (stream window × concurrent streams),
+        // not by MaxBufferedBodyBytes. That budget applies only where the library buffers a whole body.
+        var instance = new Http2OriginConnection(connection, logger,
             resourceLimits ?? ProxyResourceLimits.Default);
 
         var preface = Http2Helper.ConnectionPreface;
@@ -370,7 +370,7 @@ internal sealed class Http2OriginConnection : IDisposable
 
         // Allocate InterimChannel only when the caller will drain 1xx (on1xx != null). Passthrough
         // bridges wait on HeadersReceived instead — avoids per-request Channel/segment Gen0.
-        var pending = new PendingStream(maxBufferedBodyBytes, createInterimChannel: on1xx != null);
+        var pending = new PendingStream(createInterimChannel: on1xx != null);
         var streamId = 0;
         var streamOpened = false;
         var bodyHandedOff = false;
@@ -404,6 +404,9 @@ internal sealed class Http2OriginConnection : IDisposable
                     throw new Http2OriginGoAwayException(
                         $"The origin sent GOAWAY before stream {streamId} could be opened; it was never processed.");
 
+                var creditStreamId = streamId;
+                pending.OnBodyBytesConsumed = bytes => OnOriginBodyConsumed(creditStreamId, pending, bytes);
+                pending.OnBodyReadComplete = () => OnOriginBodyReadComplete(creditStreamId, pending);
                 RegisterOpenedStream(streamId, pending);
                 sendFlow.RegisterStream(streamId);
                 streamOpened = true;
@@ -635,7 +638,7 @@ internal sealed class Http2OriginConnection : IDisposable
                     response.TrailingHeaders.AddHeader(header);
             }
 
-            return new Http2OriginExchange(response, Array.Empty<byte>(), trailers);
+            return new Http2OriginExchange(response, Array.Empty<byte>(), trailers, pending.IsInboundComplete);
         }
         finally
         {
@@ -903,6 +906,68 @@ internal sealed class Http2OriginConnection : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Connection-level credit only. Stream credit for piped bodies is granted from the consumer
+    ///     (<see cref="OnOriginBodyConsumed"/>) so a slow client cannot grow the pipe past the stream window.
+    /// </summary>
+    private Task FlushConnectionReceiveCreditAsync()
+    {
+        if (pendingConnectionReceiveCredit <= 0)
+            return Task.CompletedTask;
+
+        var connectionBytes = pendingConnectionReceiveCredit;
+        pendingConnectionReceiveCredit = 0;
+        Http2Helper.EnqueueWindowUpdate(Writer, 0, connectionBytes);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    ///     Returns stream-window credit for body bytes the consumer has copied out. Single consumer per
+    ///     stream; the batch threshold matches <see cref="Http2Helper.ReceiveCreditBatchThreshold"/>.
+    ///     Worst-case buffered bytes are <c>MaxConcurrentStreamsPerConnection</c> (default 1000) times the
+    ///     768 KiB stream window.
+    /// </summary>
+    private void OnOriginBodyConsumed(int streamId, PendingStream pending, int bytes)
+    {
+        if (bytes <= 0) return;
+
+        var owedAfter = Interlocked.Add(ref pending.StreamCreditOwed, -bytes);
+        var grant = bytes;
+        if (owedAfter < 0)
+        {
+            grant = bytes + owedAfter;
+            Interlocked.Add(ref pending.StreamCreditOwed, -owedAfter);
+        }
+
+        if (grant <= 0) return;
+        var pendingCredit = Interlocked.Add(ref pending.UnflushedStreamCredit, grant);
+        if (pendingCredit >= Http2Helper.ReceiveCreditBatchThreshold)
+            FlushOriginStreamCredit(streamId, pending, force: false);
+    }
+
+    private void OnOriginBodyReadComplete(int streamId, PendingStream pending)
+    {
+        var rest = Interlocked.Exchange(ref pending.StreamCreditOwed, 0);
+        if (rest > 0)
+            Interlocked.Add(ref pending.UnflushedStreamCredit, rest);
+        FlushOriginStreamCredit(streamId, pending, force: true);
+    }
+
+    private void FlushOriginStreamCredit(int streamId, PendingStream pending, bool force)
+    {
+        while (true)
+        {
+            var amount = Volatile.Read(ref pending.UnflushedStreamCredit);
+            if (amount <= 0) return;
+            if (!force && amount < Http2Helper.ReceiveCreditBatchThreshold) return;
+            if (Interlocked.CompareExchange(ref pending.UnflushedStreamCredit, 0, amount) != amount)
+                continue;
+            if (StreamTableContains(streamId))
+                Http2Helper.EnqueueWindowUpdate(Writer, streamId, amount);
+            return;
+        }
+    }
+
     private async Task ReadLoopAsync(CancellationToken cancellationToken) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var frameHeaderBuffer = new byte[9];
@@ -1116,6 +1181,7 @@ internal sealed class Http2OriginConnection : IDisposable
                     case Http2FrameType.Data:
                         {
                             byte[]? rented = null;
+                            var withholdStreamCredit = false;
                             try
                             {
                                 if (TryGetStream(streamId, out var pendingData))
@@ -1163,12 +1229,15 @@ internal sealed class Http2OriginConnection : IDisposable
                                     }
                                     else
                                     {
-                                        // Copy out of intake before Advance so BodyPipe may hold the memory
-                                        // if a rare backpressured write yields.
+                                        // Piped bodies: never block this loop (pause threshold is 0) and do not
+                                        // return stream credit until the consumer reads. Connection credit stays
+                                        // on receipt so one slow stream cannot shrink the connection window.
+                                        withholdStreamCredit = true;
                                         rented = ArrayPool<byte>.Shared.Rent(length);
                                         payloadSpan.CopyTo(rented);
                                         intake.Advance(length);
                                         var bodyData = StripDataFramingMemory(rented, length, flags);
+                                        var accepted = bodyData.IsEmpty;
                                         if (!bodyData.IsEmpty)
                                         {
                                             try
@@ -1181,9 +1250,12 @@ internal sealed class Http2OriginConnection : IDisposable
                                                 }
                                                 else
                                                 {
-                                                    // Preserve per-stream DATA order; unlimited pipes complete sync.
+                                                    // Known-CL overrun is the only reason this awaits; unknown-length
+                                                    // pipes have no pause threshold and complete synchronously.
                                                     await writeVt.ConfigureAwait(false);
                                                 }
+
+                                                accepted = true;
                                             }
                                             catch (BodySizeLimitExceededException)
                                             {
@@ -1195,6 +1267,9 @@ internal sealed class Http2OriginConnection : IDisposable
                                                 // Writer already completed (cancelled or stream failed); ignore stale frames.
                                             }
                                         }
+
+                                        if (accepted && length > 0)
+                                            Interlocked.Add(ref pendingData.StreamCreditOwed, length);
                                     }
                                 }
                                 else
@@ -1208,7 +1283,16 @@ internal sealed class Http2OriginConnection : IDisposable
                                     ArrayPool<byte>.Shared.Return(rented);
                             }
 
-                            if ((flags & Http2FrameFlag.EndStream) != 0)
+                            if (withholdStreamCredit)
+                            {
+                                if (length > 0)
+                                    pendingConnectionReceiveCredit += length;
+                                if (pendingConnectionReceiveCredit >= Http2Helper.ReceiveCreditBatchThreshold)
+                                    await FlushConnectionReceiveCreditAsync().ConfigureAwait(false);
+                                if ((flags & Http2FrameFlag.EndStream) != 0)
+                                    CompleteStream(streamId);
+                            }
+                            else if ((flags & Http2FrameFlag.EndStream) != 0)
                             {
                                 // Tiny-GET hot path: END_STREAM closes the stream — skip stream
                                 // WINDOW_UPDATE and do not force-flush connection credit (was one
@@ -1807,7 +1891,6 @@ internal sealed class Http2OriginConnection : IDisposable
         internal const int InlineBodyThresholdBytes = 64 * 1024;
 
         private BoundedBodyPipe? bodyPipe;
-        private readonly long maxBodyBytes;
         private byte[]? inlineBody;
         private int inlineWritten;
         private int inboundComplete;
@@ -1852,21 +1935,28 @@ internal sealed class Http2OriginConnection : IDisposable
         internal Response? Response;
         internal HeaderCollection? TrailingHeaders;
 
-        internal PendingStream(long maxBodyBytes)
-            : this(maxBodyBytes, createInterimChannel: true)
+        /// <summary>On-wire DATA bytes read but not yet returned as stream WINDOW_UPDATE.</summary>
+        internal int StreamCreditOwed;
+
+        /// <summary>Stream credit consumed by the reader and not yet flushed.</summary>
+        internal int UnflushedStreamCredit;
+
+        internal Action<int>? OnBodyBytesConsumed;
+        internal Action? OnBodyReadComplete;
+
+        internal PendingStream()
+            : this(createInterimChannel: true)
         {
         }
 
-        /// <param name="maxBodyBytes">Max buffered body bytes for <see cref="EnsureBodyPipe" />.</param>
         /// <param name="createInterimChannel">
         ///     When <see langword="true"/>, allocate the 1xx relay channel. Tests and interception paths
         ///     that expect 1xx use this; <see cref="SendAsync" /> passes <see langword="false"/> when
         ///     <c>on1xx</c> is null.
         /// </param>
-        internal PendingStream(long maxBodyBytes, bool createInterimChannel)
+        internal PendingStream(bool createInterimChannel)
         {
             IsTunnel = false;
-            this.maxBodyBytes = maxBodyBytes;
             // BodyPipe is lazy: probe tiny-GET uses InlineBody; streaming / unknown CL creates on demand.
             if (createInterimChannel)
             {
@@ -1875,10 +1965,9 @@ internal sealed class Http2OriginConnection : IDisposable
             }
         }
 
-        private PendingStream(bool isTunnel)
+        private PendingStream(TunnelMarker _)
         {
-            IsTunnel = isTunnel;
-            maxBodyBytes = 0;
+            IsTunnel = true;
             // Tunnel streams never buffer a finite HTTP body; BodyPipe unused.
             TunnelDataChannel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(256)
             {
@@ -1888,7 +1977,9 @@ internal sealed class Http2OriginConnection : IDisposable
             });
         }
 
-        internal static PendingStream CreateTunnel() => new(true);
+        internal static PendingStream CreateTunnel() => new(new TunnelMarker());
+
+        private readonly struct TunnelMarker;
 
         /// <summary>
         ///     When Content-Length is known and ≤ <see cref="InlineBodyThresholdBytes"/>, allocate a
@@ -1938,7 +2029,12 @@ internal sealed class Http2OriginConnection : IDisposable
             var existing = bodyPipe;
             if (existing != null) return existing;
 
-            var created = new BoundedBodyPipe(maxBodyBytes);
+            var contentLength = Response?.ContentLength ?? -1;
+            // Known length: overrun is a protocol error. Unknown length: no cumulative cap.
+            // Backpressure is off so ReadLoop never waits on the consumer.
+            var created = new BoundedBodyPipe(contentLength > 0 ? contentLength : 0, applyBackpressure: false);
+            created.OnBytesConsumed = OnBodyBytesConsumed;
+            created.OnReadCompleted = OnBodyReadComplete;
             var prior = Interlocked.CompareExchange(ref bodyPipe, created, null);
             if (prior != null)
             {
@@ -2034,11 +2130,13 @@ internal sealed class Http2OriginConnection : IDisposable
 /// <summary>The fully materialized result of one <see cref="Http2OriginConnection.SendAsync" /> exchange.</summary>
 internal sealed class Http2OriginExchange
 {
-    internal Http2OriginExchange(Response response, byte[] body, HeaderCollection? trailingHeaders)
+    internal Http2OriginExchange(Response response, byte[] body, HeaderCollection? trailingHeaders,
+        bool originBodyComplete = true)
     {
         Response = response;
         Body = body;
         TrailingHeaders = trailingHeaders;
+        OriginBodyComplete = originBodyComplete;
     }
 
     internal Response Response { get; }
@@ -2046,6 +2144,12 @@ internal sealed class Http2OriginExchange
     internal byte[] Body { get; }
 
     internal HeaderCollection? TrailingHeaders { get; }
+
+    /// <summary>
+    ///     True when the origin had already finished the body before the caller started delivering it.
+    ///     Unknown-length responses that are still open must be framed as chunked instead of buffered.
+    /// </summary>
+    internal bool OriginBodyComplete { get; }
 }
 
 /// <summary>

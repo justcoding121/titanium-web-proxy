@@ -272,3 +272,14 @@ Titanium.Web.Proxy.ProxyServer.ResponseHeaderContributor.get -> System.Action<Ti
 Titanium.Web.Proxy.ProxyServer.ResponseHeaderContributor.set -> void
 Titanium.Web.Proxy.ProxyServer.ShouldBypassDecryptForLearnedHost(string? host) -> bool
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.LastEnterpriseRootsStep.get -> string?
+*REMOVED*static Titanium.Web.Proxy.Options.ProxyPolicyModes.Create(Titanium.Web.Proxy.Options.PolicyMode bodyBudget, Titanium.Web.Proxy.Options.PolicyMode decompressionRatio, Titanium.Web.Proxy.Options.PolicyMode headerLimits, Titanium.Web.Proxy.Options.PolicyMode admissionControl, Titanium.Web.Proxy.Options.PolicyMode http2AbuseBudget, Titanium.Web.Proxy.Options.PolicyMode http2RelayValidation = Titanium.Web.Proxy.Options.PolicyMode.Disabled, Titanium.Web.Proxy.Options.PolicyMode http1ReplaySafety = Titanium.Web.Proxy.Options.PolicyMode.Observe) -> Titanium.Web.Proxy.Options.ProxyPolicyModes!
+static Titanium.Web.Proxy.Options.ProxyPolicyModes.Create(Titanium.Web.Proxy.Options.PolicyMode bodyBudget, Titanium.Web.Proxy.Options.PolicyMode decompressionRatio, Titanium.Web.Proxy.Options.PolicyMode headerLimits, Titanium.Web.Proxy.Options.PolicyMode admissionControl, Titanium.Web.Proxy.Options.PolicyMode http2AbuseBudget, Titanium.Web.Proxy.Options.PolicyMode http2RelayValidation = Titanium.Web.Proxy.Options.PolicyMode.Disabled, Titanium.Web.Proxy.Options.PolicyMode http1ReplaySafety = Titanium.Web.Proxy.Options.PolicyMode.Observe, Titanium.Web.Proxy.Options.PolicyMode webSocketFrameBudget = Titanium.Web.Proxy.Options.PolicyMode.Enforce) -> Titanium.Web.Proxy.Options.ProxyPolicyModes!
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.CanBufferBody(Titanium.Web.Proxy.Http.RequestResponseBase! message) -> bool
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketFrameElided -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs!>?
+Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs
+Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.DeclaredPayloadLength.get -> long
+Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.Direction.get -> Titanium.Web.Proxy.EventArguments.WebSocketFrameDirection
+Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.IsFinal.get -> bool
+Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.OpCode.get -> Titanium.Web.Proxy.WebsocketOpCode
+Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.Session.get -> Titanium.Web.Proxy.EventArguments.SessionEventArgs!
+Titanium.Web.Proxy.Options.PolicyFamily.WebSocketFrameBudget = 7 -> Titanium.Web.Proxy.Options.PolicyFamily

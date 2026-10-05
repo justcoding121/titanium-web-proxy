@@ -255,6 +255,10 @@ public sealed class InterceptionService : IDisposable
         // normal browsing (images, JS bundles) and RST'd the H2 stream. 32 MiB still bounds
         // memory while covering typical inspected payloads.
         _proxy.MaxBufferedBodyBytes = 32 * 1024 * 1024;
+        // Observing must not close an application that sends one large WebSocket frame.
+        _proxy.PolicyModes = _proxy.PolicyModes.With(
+            Titanium.Web.Proxy.Options.PolicyFamily.WebSocketFrameBudget,
+            Titanium.Web.Proxy.Options.PolicyMode.Observe);
         ApplyHttpProtocols();
         _proxy.BeforeRequest += OnBeforeRequest;
         _proxy.BeforeResponse += OnBeforeResponse;
@@ -2126,6 +2130,13 @@ public sealed class InterceptionService : IDisposable
             SessionUpdated?.Invoke(this, snap);
             return Task.CompletedTask;
         };
+        e.WebSocketFrameElided += (_, args) =>
+        {
+            var direction = args.Direction == WebSocketFrameDirection.ClientToServer ? "Client" : "Server";
+            live.Append(snap, ProtocolFrameInspectors.ElidedFrame(direction, args.OpCode.ToString(), args.DeclaredPayloadLength));
+            SessionUpdated?.Invoke(this, snap);
+            return Task.CompletedTask;
+        };
     }
 
     private async Task OnRequestBodyWriteThrottle(object sender, BeforeBodyWriteEventArgs e)
@@ -2601,19 +2612,8 @@ public sealed class InterceptionService : IDisposable
     /// </summary>
     private bool ShouldBufferBody(RequestResponseBase message, SessionEventArgs session, bool isRequest)
     {
-        if (session.HttpClient.Request.UpgradeToWebSocket)
-        {
-            return false;
-        }
-
-        var limit = session.MaxBufferedBodyBytes ?? _proxy?.MaxBufferedBodyBytes ?? (4 * 1024 * 1024);
-        if (limit <= 0)
-        {
-            return true;
-        }
-
-        var contentLength = message.ContentLength;
-        return contentLength >= 0 && contentLength <= limit;
+        _ = isRequest;
+        return session.CanBufferBody(message);
     }
 
     public void Dispose() => EnsureShutdown();

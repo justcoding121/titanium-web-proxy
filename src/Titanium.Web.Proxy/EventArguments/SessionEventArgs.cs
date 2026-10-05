@@ -229,6 +229,14 @@ public class SessionEventArgs : SessionEventArgsBase
     public event AsyncEventHandler<WebSocketFrameInterceptEventArgs>? BeforeWebSocketFrame; // NOSONAR S3264 -- Public extension event invoked by the WebSocket relay.
 
     /// <summary>
+    ///     Fired when <see cref="Options.PolicyFamily.WebSocketFrameBudget"/> is
+    ///     <see cref="Options.PolicyMode.Observe"/> and a frame exceeds
+    ///     <c>MaxWebSocketFramePayloadBytes</c>. The payload is relayed unbuffered and is not passed
+    ///     to <see cref="BeforeWebSocketFrame"/>.
+    /// </summary>
+    public event AsyncEventHandler<WebSocketFrameElidedEventArgs>? WebSocketFrameElided; // NOSONAR S3264 -- Invoked by the WebSocket relay in Observe mode.
+
+    /// <summary>
     ///     Inject frames toward the remote server (client→server direction, masked).
     ///     Available only while an intercepted WebSocket relay is active.
     /// </summary>
@@ -241,6 +249,13 @@ public class SessionEventArgs : SessionEventArgsBase
     public WebSocketFrameWriter? WebSocketClientWriter { get; internal set; }
 
     internal bool HasWebSocketFrameInterceptHandler => BeforeWebSocketFrame != null;
+
+    internal bool HasWebSocketFrameElidedHandler => WebSocketFrameElided != null;
+
+    internal Task InvokeWebSocketFrameElided(WebSocketFrameElidedEventArgs args) =>
+        WebSocketFrameElided != null
+            ? WebSocketFrameElided.InvokeAsync(Server, args, Logger)
+            : Task.CompletedTask;
 
     internal Task InvokeBeforeWebSocketFrame(WebSocketFrameInterceptEventArgs args)
     {
@@ -577,6 +592,26 @@ public class SessionEventArgs : SessionEventArgsBase
         {
             BufferPool.ReturnBuffer(buffer);
         }
+    }
+
+    /// <summary>
+    ///     Whether the proxy can buffer <paramref name="message"/> without exceeding the effective
+    ///     <see cref="MaxBufferedBodyBytes"/> budget. Unknown-length bodies (chunked, HTTP/2 or HTTP/3
+    ///     without Content-Length, server-sent events) return <see langword="false"/>: they must be
+    ///     relayed, not accumulated. A non-positive budget means unbounded and returns
+    ///     <see langword="true"/>. WebSocket upgrades are never buffered.
+    /// </summary>
+    public bool CanBufferBody(RequestResponseBase message)
+    {
+        if (HttpClient.Request.UpgradeToWebSocket)
+            return false;
+
+        var limit = MaxBufferedBodyBytes ?? Server.MaxBufferedBodyBytes;
+        if (limit <= 0)
+            return true;
+
+        var contentLength = message.ContentLength;
+        return contentLength >= 0 && contentLength <= limit;
     }
 
     /// <summary>

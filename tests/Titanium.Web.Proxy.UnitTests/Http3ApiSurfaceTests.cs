@@ -1,5 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Options;
 
 #pragma warning disable TWP001 // Experimental HTTP/3 API — test intentionally exercises this surface
 
@@ -18,6 +19,16 @@ public class SessionEventArgsOverridePropertyTests
     {
         using var proxy = new ProxyServer();
         Assert.IsFalse(proxy.EnableHttp3);
+    }
+
+    [TestMethod]
+    public void ProxyServer_BodyBudgetAndWebSocketFrameBudget_KeepShippedDefaults()
+    {
+        using var proxy = new ProxyServer();
+        Assert.AreEqual(4 * 1024 * 1024, proxy.MaxBufferedBodyBytes);
+        Assert.AreEqual(16 * 1024 * 1024, proxy.MaxWebSocketFramePayloadBytes);
+        Assert.AreEqual(PolicyMode.Enforce, proxy.PolicyModes[PolicyFamily.WebSocketFrameBudget]);
+        Assert.AreEqual(PolicyMode.Enforce, proxy.PolicyModes[PolicyFamily.BodyBudget]);
     }
 
     [TestMethod]
