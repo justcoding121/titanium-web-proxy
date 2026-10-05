@@ -115,9 +115,15 @@ connections.</p>
       </tr>
       <tr>
         <td id="Titanium_Web_Proxy_Options_PolicyFamily_BodyBudget">BodyBudget</td>
-        <td><p>Cumulative whole-body buffering limits (<code>MaxBufferedBodyBytes</code> and the
-<a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxEncodedBodyBytes">MaxEncodedBodyBytes</a>/<a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxDecodedBodyBytes">MaxDecodedBodyBytes</a>
-pair) enforced via <span class="xref">Titanium.Web.Proxy.Network.Streams.BoundedWriteStream</span> across H1, H2 and H3.</p>
+        <td><p>Cumulative whole-body buffering limits (<code>MaxBufferedBodyBytes</code>) enforced via
+<span class="xref">Titanium.Web.Proxy.Network.Streams.BoundedWriteStream</span> when a caller materializes a body.
+Streaming relays do not consult this family.</p>
+<p>
+    <a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxEncodedBodyBytes">MaxEncodedBodyBytes</a> and
+    <a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxDecodedBodyBytes">MaxDecodedBodyBytes</a> are reserved. They are accepted
+    by option plumbing and are not enforced on a live read path; the enforced whole-body
+    budget is <code>MaxBufferedBodyBytes</code>.
+</p>
 </td>
       </tr>
       <tr>
@@ -193,6 +199,25 @@ without corrupting connection state.</p>
     <a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html#Titanium_Web_Proxy_Options_PolicyMode_Enforce">Enforce</a> (default on <a class="xref" href="Titanium.Web.Proxy.Options.ProxyProfile.html#Titanium_Web_Proxy_Options_ProxyProfile_PublicFacing">PublicFacing</a>
     and <a class="xref" href="Titanium.Web.Proxy.Options.ProxyPolicyModes.html#Titanium_Web_Proxy_Options_ProxyPolicyModes_AllEnforce">AllEnforce</a>) decodes and sends
     <code>GOAWAY(PROTOCOL_ERROR)</code> on violations.
+</p>
+</td>
+      </tr>
+      <tr>
+        <td id="Titanium_Web_Proxy_Options_PolicyFamily_WebSocketFrameBudget">WebSocketFrameBudget</td>
+        <td><p>Per-frame WebSocket payload limit (<code>MaxWebSocketFramePayloadBytes</code>) applied only when
+<code>BeforeWebSocketFrame</code> is subscribed. Raw relay is unaffected.</p>
+<p>
+    <a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html#Titanium_Web_Proxy_Options_PolicyMode_Enforce">Enforce</a> (default on every profile) closes the connection with
+    status 1009 before the payload is buffered.
+</p>
+<p>
+    <a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html#Titanium_Web_Proxy_Options_PolicyMode_Observe">Observe</a> relays an oversize frame without materializing it and
+    raises <code>SessionEventArgs.WebSocketFrameElided</code>. Frame hooks are not invoked for
+    that payload, so a content filter must stay on <a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html#Titanium_Web_Proxy_Options_PolicyMode_Enforce">Enforce</a>.
+</p>
+<p>
+    <a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html#Titanium_Web_Proxy_Options_PolicyMode_Disabled">Disabled</a> skips the check and will buffer the frame, up to the
+    decoder's structural <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32.maxvalue">MaxValue</a> bound.
 </p>
 </td>
       </tr>

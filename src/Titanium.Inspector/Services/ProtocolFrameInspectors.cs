@@ -90,6 +90,14 @@ public static class ProtocolFrameInspectors
             PayloadPreview = Preview(data, opcode.Equals("Binary", StringComparison.OrdinalIgnoreCase) ? 2 : 1),
         };
 
+    public static WebSocketFrameSnapshot ElidedFrame(string direction, string opcode, long declaredLength) =>
+        new()
+        {
+            Direction = direction,
+            Opcode = opcode,
+            PayloadPreview = $"{opcode} frame, {declaredLength:N0} bytes, payload not captured",
+        };
+
     private static string OpcodeName(int opcode) => opcode switch
     {
         0 => "Continuation",

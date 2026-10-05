@@ -170,8 +170,8 @@ public static class SessionDiff
                 continue;
             }
 
-            var later = IndexOf(rightLines, leftLines[i], j + 1);
-            if (later >= 0 && later - j <= 8)
+            var later = IndexOf(rightLines, leftLines[i], j + 1, MaxLookahead);
+            if (later >= 0)
             {
                 while (j < later)
                 {
@@ -182,8 +182,8 @@ public static class SessionDiff
                 continue;
             }
 
-            var laterLeft = IndexOf(leftLines, rightLines[j], i + 1);
-            if (laterLeft >= 0 && laterLeft - i <= 8)
+            var laterLeft = IndexOf(leftLines, rightLines[j], i + 1, MaxLookahead);
+            if (laterLeft >= 0)
             {
                 while (i < laterLeft)
                 {
@@ -233,9 +233,18 @@ public static class SessionDiff
             .ToList();
     }
 
-    private static int IndexOf(List<string> lines, string value, int start)
+    /// <summary>
+    ///     Lines a match may be ahead of the cursor to still count as an insert/delete. The search is
+    ///     bounded to this window (not the rest of the body), keeping the diff linear on large bodies
+    ///     where it used to be quadratic and could freeze the UI thread.
+    /// </summary>
+    private const int MaxLookahead = 8;
+
+    /// <summary>First index in <c>[start, cursor + maxAhead]</c> equal to <paramref name="value" />, else -1.</summary>
+    private static int IndexOf(List<string> lines, string value, int start, int maxAhead)
     {
-        for (var i = start; i < lines.Count; i++)
+        var end = Math.Min(lines.Count, start - 1 + maxAhead + 1);
+        for (var i = start; i < end; i++)
         {
             if (string.Equals(lines[i], value, StringComparison.Ordinal))
             {

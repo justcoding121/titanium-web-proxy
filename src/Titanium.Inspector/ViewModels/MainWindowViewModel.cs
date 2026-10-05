@@ -732,7 +732,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
                 if (ReferenceEquals(SelectedSession, snap))
                 {
                     UpdateWsFramesVisibility();
-                    RefreshSelectedInspectors();
+                    RefreshSelectedInspectorsCoalesced(snap);
                 }
             });
         _interception.DecryptFailureBypassLearned += (_, entry) =>
@@ -2824,9 +2824,55 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             _selected.ResponseHeadersText,
             _selected.RequestBodyBytes,
             _selected.ResponseBodyBytes);
-        SelectedFrames = BuildSelectedFramesText(_selected);
-        SelectedSseEvents = BuildSelectedSseText(_selected);
-        SelectedProtobufDecoded = BuildSelectedProtobufText(_selected);
+        SelectedFrames = InspectorDisplayText.ForTextBox(BuildSelectedFramesText(_selected));
+        SelectedSseEvents = InspectorDisplayText.ForTextBox(BuildSelectedSseText(_selected));
+        SelectedProtobufDecoded = InspectorDisplayText.ForTextBox(BuildSelectedProtobufText(_selected));
+    }
+
+    private long _lastSelectedRefreshTicks;
+    private bool _selectedRefreshPending;
+
+    /// <summary>
+    ///     Live-update refresh of the selected session. A chatty WebSocket (one update per frame) or a
+    ///     streaming body would otherwise rebuild every Inspect text box on the UI thread per event;
+    ///     coalesce to <see cref="InspectorBodyLimits.TeeUiCoalesceMs" /> with a trailing refresh so
+    ///     the final state is always shown. Selection changes still refresh immediately, and without a
+    ///     running Avalonia application (unit tests) the refresh stays synchronous.
+    /// </summary>
+    private void RefreshSelectedInspectorsCoalesced(SessionSnapshot snap)
+    {
+        if (Application.Current is null)
+        {
+            RefreshSelectedInspectors();
+            return;
+        }
+
+        var interval = TimeSpan.FromMilliseconds(InspectorBodyLimits.TeeUiCoalesceMs);
+        if (_lastSelectedRefreshTicks == 0 || System.Diagnostics.Stopwatch.GetElapsedTime(_lastSelectedRefreshTicks) >= interval)
+        {
+            _lastSelectedRefreshTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+            RefreshSelectedInspectors();
+            return;
+        }
+
+        if (_selectedRefreshPending)
+        {
+            return;
+        }
+
+        _selectedRefreshPending = true;
+        var remaining = interval - System.Diagnostics.Stopwatch.GetElapsedTime(_lastSelectedRefreshTicks);
+        DispatcherTimer.RunOnce(
+            () =>
+            {
+                _selectedRefreshPending = false;
+                if (ReferenceEquals(SelectedSession, snap))
+                {
+                    _lastSelectedRefreshTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+                    RefreshSelectedInspectors();
+                }
+            },
+            remaining > TimeSpan.Zero ? remaining : TimeSpan.FromMilliseconds(1));
     }
 
     private static string BuildSelectedHeadersText(SessionSnapshot selected)

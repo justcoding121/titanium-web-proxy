@@ -18,11 +18,22 @@ internal sealed class Http2DeferredOutboundData
     internal const int MaxFramesPerStream = 4;
 
     /// <summary>
-    /// Hard cap: RST if more DATA arrives while already deferred. Sized for a 256 KiB body under
-    /// tight connection-window pressure (peers may emit ~1 KiB DATA frames, not only 16 KiB),
-    /// plus END_STREAM / burst margin for early-response duplex and slow-consumer backpressure.
+    ///     Node backstop. The memory bound is <see cref="HardMaxDeferredBytesPerStream"/>. Tiny frames
+    ///     are coalesced so a peer that sends 1-byte DATA cannot hit this by frame count alone.
     /// </summary>
-    internal const int HardMaxFramesPerStream = 256;
+    internal const int HardMaxFramesPerStream = 4096;
+
+    /// <summary>
+    ///     Bytes of parked DATA allowed per stream before <c>RST_STREAM(ENHANCE_YOUR_CALM)</c>.
+    ///     Matches the previous worst case of 256 full-size (16 KiB) frames, plus one frame of margin,
+    ///     so a slow client is not failed sooner than before. Receive credit stays granted on receipt:
+    ///     the queue is drained on the peer's write leg, and reclaiming stream credit from that leg
+    ///     would take the other direction's write lock. Flow control on the send window is what stops
+    ///     a healthy peer; this cap is the bound if that peer keeps sending anyway.
+    /// </summary>
+    internal const int HardMaxDeferredBytesPerStream = (4 * 1024 * 1024) + (16 * 1024);
+
+    private const int CoalesceTarget = 16 * 1024;
 
     private readonly object gate = new();
     // LinkedList so a partial drain can AddFirst the remainder without reordering later frames.
@@ -96,7 +107,31 @@ internal sealed class Http2DeferredOutboundData
                 roundRobinOrder.Add(streamId);
             }
 
-            if (q.Count >= HardMaxFramesPerStream)
+            if (!endStream && q.Count > 0)
+            {
+                var lastNode = q.Last!;
+                var last = lastNode.Value;
+                if (!last.EndStream
+                    && last.PayloadLength > 0
+                    && last.PayloadLength < CoalesceTarget
+                    && payloadLength > 0
+                    && last.PayloadLength + payloadLength <= CoalesceTarget)
+                {
+                    var combined = last.PayloadLength + payloadLength;
+                    var merged = ArrayPool<byte>.Shared.Rent(combined);
+                    last.Rented.AsSpan(last.Offset, last.PayloadLength).CopyTo(merged);
+                    rented.AsSpan(offset, payloadLength).CopyTo(merged.AsSpan(last.PayloadLength));
+                    ArrayPool<byte>.Shared.Return(last.Rented);
+                    ArrayPool<byte>.Shared.Return(rented);
+                    lastNode.Value = new PendingFrame(merged, 0, combined, endStream: false);
+                    return true;
+                }
+            }
+
+            var queuedBytes = 0;
+            foreach (var pending in q)
+                queuedBytes += pending.PayloadLength;
+            if (queuedBytes + payloadLength > HardMaxDeferredBytesPerStream || q.Count >= HardMaxFramesPerStream)
                 return false;
 
             q.AddLast(new PendingFrame(rented, offset, payloadLength, endStream));

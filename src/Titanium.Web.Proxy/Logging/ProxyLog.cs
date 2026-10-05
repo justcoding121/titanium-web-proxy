@@ -125,7 +125,7 @@ internal static class ProxyLog
     {
         if (!logger.IsEnabled(LogLevel.Information)) return;
         logger.LogInformation(
-            "Starting with profile {Profile} (body={Body}, decompressionRatio={DecompressionRatio}, headerLimits={HeaderLimits}, admission={Admission}, http2AbuseBudget={Http2AbuseBudget}, http2RelayValidation={Http2RelayValidation}, allowAmbiguousFraming={AllowAmbiguousFraming}).",
+            "Starting with profile {Profile} (body={Body}, decompressionRatio={DecompressionRatio}, headerLimits={HeaderLimits}, admission={Admission}, http2AbuseBudget={Http2AbuseBudget}, http2RelayValidation={Http2RelayValidation}, webSocketFrameBudget={WebSocketFrameBudget}, allowAmbiguousFraming={AllowAmbiguousFraming}).",
             profile,
             policyModes[Options.PolicyFamily.BodyBudget],
             policyModes[Options.PolicyFamily.DecompressionRatio],
@@ -133,6 +133,7 @@ internal static class ProxyLog
             policyModes[Options.PolicyFamily.AdmissionControl],
             policyModes[Options.PolicyFamily.Http2AbuseBudget],
             policyModes[Options.PolicyFamily.Http2RelayValidation],
+            policyModes[Options.PolicyFamily.WebSocketFrameBudget],
             policyModes.AllowAmbiguousFraming);
     }
 

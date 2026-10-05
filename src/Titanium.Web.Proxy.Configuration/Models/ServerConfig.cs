@@ -213,6 +213,8 @@ public sealed class PolicyModesConfig
 
     public string? Http2RelayValidation { get; set; }
 
+    public string? WebSocketFrameBudget { get; set; }
+
     public bool? AllowAmbiguousFraming { get; set; }
 }
 

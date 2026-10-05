@@ -296,7 +296,7 @@ public sealed partial class MainWindowViewModel
 
         BodyCaptureHint = BuildBodyCaptureHint(_selected);
         HexCaptureHint = BuildHexCaptureHint(_selected);
-        SelectedBody = BuildSelectedBodyText(_selected);
+        SelectedBody = InspectorDisplayText.ForTextBox(BuildSelectedBodyText(_selected));
         UpdateBodyPreviewImage(_selected);
         NotifySaveBodyCanExecute();
     }

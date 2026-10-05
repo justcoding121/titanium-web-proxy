@@ -255,6 +255,10 @@ public sealed class InterceptionService : IDisposable
         // normal browsing (images, JS bundles) and RST'd the H2 stream. 32 MiB still bounds
         // memory while covering typical inspected payloads.
         _proxy.MaxBufferedBodyBytes = 32 * 1024 * 1024;
+        // Observing must not close an application that sends one large WebSocket frame.
+        _proxy.PolicyModes = _proxy.PolicyModes.With(
+            Titanium.Web.Proxy.Options.PolicyFamily.WebSocketFrameBudget,
+            Titanium.Web.Proxy.Options.PolicyMode.Observe);
         ApplyHttpProtocols();
         _proxy.BeforeRequest += OnBeforeRequest;
         _proxy.BeforeResponse += OnBeforeResponse;
@@ -1660,7 +1664,7 @@ public sealed class InterceptionService : IDisposable
         {
             // Buffer when safe. GraphQL tools must NOT force GetRequestBody past the skip
             // (huge POST would RST HTTP/2 with ENHANCE_YOUR_CALM).
-            if (e.HttpClient.Request.HasBody && ShouldBufferBody(e.HttpClient.Request, e, isRequest: true))
+            if (e.HttpClient.Request.HasBody && ShouldBufferBody(e.HttpClient.Request, e))
             {
                 e.HttpClient.Request.KeepBody = true;
                 await e.GetRequestBody(CancellationToken.None);
@@ -1755,7 +1759,7 @@ public sealed class InterceptionService : IDisposable
     {
         try
         {
-            if (e.HttpClient.Response.HasBody && ShouldBufferBody(e.HttpClient.Response, e, isRequest: false))
+            if (e.HttpClient.Response.HasBody && ShouldBufferBody(e.HttpClient.Response, e))
             {
                 e.HttpClient.Response.KeepBody = true;
                 await e.GetResponseBody(CancellationToken.None);
@@ -1806,6 +1810,7 @@ public sealed class InterceptionService : IDisposable
     {
         if (_live.TryGetValue(e.HttpClient, out var snap))
         {
+            FinalizeStreamingRequestBody(snap);
             FinalizeStreamingBody(snap);
             ApplyTiming(snap, e.Timing, snap.StartedUtc);
             SessionUpdated?.Invoke(this, snap);
@@ -2072,18 +2077,33 @@ public sealed class InterceptionService : IDisposable
             snap.SseEvents = SseEventParser.Parse(snap.ResponseBodyText);
         }
 
-        if (snap.IsGrpc && !snap.IsTranscoded && bodyBytes is { Length: > 0 })
-        {
-            snap.GrpcFrames = ProtocolFrameInspectors.ParseGrpcFrames(bodyBytes);
-            snap.ProtobufDecodedText = ProtobufMessageDecoder.DecodeWireFormat(bodyBytes);
-        }
+        ApplyResponseBodyViews(snap, bodyBytes);
 
         if (snap.IsTranscoded && snap.UpstreamResponseBodyBytes is { Length: > 0 })
         {
             snap.ProtobufDecodedText = ProtobufMessageDecoder.DecodeWireFormat(snap.UpstreamResponseBodyBytes);
         }
+    }
 
-        if (snap.IsMultipart && bodyBytes is { Length: > 0 })
+    /// <summary>
+    ///     Structured views (gRPC frames, protobuf, multipart) derived from the response body preview.
+    ///     Runs when the body was buffered, and again once a streamed body's preview is final,
+    ///     so unknown-length gRPC / multipart responses keep their decoded views.
+    /// </summary>
+    private static void ApplyResponseBodyViews(SessionSnapshot snap, byte[]? bodyBytes)
+    {
+        if (bodyBytes is not { Length: > 0 })
+        {
+            return;
+        }
+
+        if (snap.IsGrpc && !snap.IsTranscoded)
+        {
+            snap.GrpcFrames = ProtocolFrameInspectors.ParseGrpcFrames(bodyBytes);
+            snap.ProtobufDecodedText = ProtobufMessageDecoder.DecodeWireFormat(bodyBytes);
+        }
+
+        if (snap.IsMultipart)
         {
             snap.MultipartParts = ProtocolFrameInspectors.ParseMultipart(snap.ContentType, bodyBytes);
         }
@@ -2110,6 +2130,13 @@ public sealed class InterceptionService : IDisposable
             SessionUpdated?.Invoke(this, snap);
             return Task.CompletedTask;
         };
+        e.WebSocketFrameElided += (_, args) =>
+        {
+            var direction = args.Direction == WebSocketFrameDirection.ClientToServer ? "Client" : "Server";
+            live.Append(snap, ProtocolFrameInspectors.ElidedFrame(direction, args.OpCode.ToString(), args.DeclaredPayloadLength));
+            SessionUpdated?.Invoke(this, snap);
+            return Task.CompletedTask;
+        };
     }
 
     private async Task OnRequestBodyWriteThrottle(object sender, BeforeBodyWriteEventArgs e)
@@ -2123,6 +2150,16 @@ public sealed class InterceptionService : IDisposable
                 await Task.Delay(delay, _processResolveCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
             }
         }
+
+        // Preview tee for unknown-length uploads that were relayed instead of buffered.
+        if (e.Session.HttpClient.Request.IsBodyRead
+            || !_live.TryGetValue(e.Session.HttpClient, out var snap)
+            || snap.RequestBodyCapture != BodyCaptureState.Streaming)
+        {
+            return;
+        }
+
+        TeeRequestChunk(snap, e);
     }
 
     private async Task OnResponseBodyWriteThrottle(object sender, BeforeBodyWriteEventArgs e)
@@ -2137,7 +2174,7 @@ public sealed class InterceptionService : IDisposable
             }
         }
 
-        // Preview tee only for streamed SSE (not buffered). Do not tee NotCaptured huge downloads.
+        // Preview tee only for relayed unknown-length bodies (not buffered). Do not tee NotCaptured huge downloads.
         if (e.Session.HttpClient.Response.IsBodyRead)
         {
             return;
@@ -2208,7 +2245,7 @@ public sealed class InterceptionService : IDisposable
             return;
         }
 
-        var bytes = tee.ToArray();
+        var bytes = InspectorBodyLimits.DecodeCapturedPrefix(tee.ToArray(), snap.ResponseContentEncoding);
         snap.ResponseBodyBytes = bytes;
         snap.ResponseBodyText = InspectorBodyLimits.TruncateText(Encoding.UTF8.GetString(bytes));
         if (snap.IsServerSentEvents)
@@ -2229,14 +2266,23 @@ public sealed class InterceptionService : IDisposable
         PublishTeePreview(snap);
         snap.ResponseBodyStreamOpen = false;
         var captured = snap.ResponseBodyBytes?.LongLength ?? 0;
-        if (snap.ResponseBytesSeen > captured && captured >= MaxBodyBytes)
+        var seen = snap.ResponseBytesSeen;
+        // Seen counts wire bytes; captured is the (possibly decoded) preview. Either the wire
+        // exceeded the tee cap, or decoding hit the preview cap.
+        if (seen > MaxBodyBytes || (captured >= MaxBodyBytes && captured != seen))
         {
             snap.ResponseBodyCapture = BodyCaptureState.Truncated;
         }
-        else if (captured > 0 && snap.ResponseBytesSeen <= MaxBodyBytes)
+        else if (captured > 0)
         {
             snap.ResponseBodyCapture = BodyCaptureState.Complete;
         }
+        else if (seen == 0 && !snap.IsServerSentEvents)
+        {
+            snap.ResponseBodyCapture = BodyCaptureState.None;
+        }
+
+        ApplyResponseBodyViews(snap, snap.ResponseBodyBytes);
 
         snap.ResponseBodyOriginalSize = snap.ResponseBytesSeen > 0
             ? snap.ResponseBytesSeen
@@ -2250,6 +2296,92 @@ public sealed class InterceptionService : IDisposable
 
         snap.ResponseTeeStream?.Dispose();
         snap.ResponseTeeStream = null;
+    }
+
+    private void TeeRequestChunk(SessionSnapshot snap, BeforeBodyWriteEventArgs e)
+    {
+        var chunk = e.BodyBytes;
+        var len = chunk?.Length ?? 0;
+        if (len > 0)
+        {
+            snap.RequestBytesSeen += len;
+            snap.RequestBodyOriginalSize = snap.RequestBytesSeen;
+
+            var tee = snap.RequestTeeStream;
+            if (tee is null)
+            {
+                tee = new MemoryStream(Math.Min(MaxBodyBytes, Math.Max(len, 4096)));
+                snap.RequestTeeStream = tee;
+            }
+
+            if (tee.Length < MaxBodyBytes)
+            {
+                var toWrite = (int)Math.Min(len, MaxBodyBytes - tee.Length);
+                tee.Write(chunk!, 0, toWrite);
+            }
+        }
+
+        if (e.IsLastChunk)
+        {
+            FinalizeStreamingRequestBody(snap);
+            SyncHttpBodySize(snap);
+            SessionUpdated?.Invoke(this, snap);
+            return;
+        }
+
+        var now = DateTime.UtcNow.Ticks;
+        var last = snap.LastRequestTeeUiUtcTicks;
+        if (last != 0 && (now - last) < TimeSpan.FromMilliseconds(InspectorBodyLimits.TeeUiCoalesceMs).Ticks)
+        {
+            return;
+        }
+
+        snap.LastRequestTeeUiUtcTicks = now;
+        PublishRequestTeePreview(snap);
+        SessionUpdated?.Invoke(this, snap);
+    }
+
+    private static void PublishRequestTeePreview(SessionSnapshot snap)
+    {
+        var tee = snap.RequestTeeStream;
+        if (tee is null || tee.Length == 0)
+        {
+            return;
+        }
+
+        var bytes = InspectorBodyLimits.DecodeCapturedPrefix(tee.ToArray(), snap.RequestContentEncoding);
+        snap.RequestBodyBytes = bytes;
+        snap.RequestBodyText = InspectorBodyLimits.TruncateText(Encoding.UTF8.GetString(bytes));
+    }
+
+    private static void FinalizeStreamingRequestBody(SessionSnapshot snap)
+    {
+        if (snap.RequestBodyCapture == BodyCaptureState.Streaming)
+        {
+            PublishRequestTeePreview(snap);
+            var captured = snap.RequestBodyBytes?.LongLength ?? 0;
+            var seen = snap.RequestBytesSeen;
+            if (seen > MaxBodyBytes || (captured >= MaxBodyBytes && captured != seen))
+            {
+                snap.RequestBodyCapture = BodyCaptureState.Truncated;
+            }
+            else if (captured > 0)
+            {
+                snap.RequestBodyCapture = BodyCaptureState.Complete;
+            }
+            else
+            {
+                snap.RequestBodyCapture = BodyCaptureState.None;
+            }
+
+            if (seen > 0)
+            {
+                snap.RequestBodyOriginalSize = seen;
+            }
+        }
+
+        snap.RequestTeeStream?.Dispose();
+        snap.RequestTeeStream = null;
     }
 
     private static void ApplyRequestBodyCapture(SessionSnapshot snap, Request req, byte[]? originalBody)
@@ -2266,6 +2398,15 @@ public sealed class InterceptionService : IDisposable
         if (!req.HasBody)
         {
             snap.RequestBodyCapture = BodyCaptureState.None;
+            return;
+        }
+
+        if (!req.IsBodyRead && req.ContentLength < 0)
+        {
+            // Unknown length (chunked / H2 without Content-Length) is relayed, not buffered;
+            // a bounded preview is teed from the body-write hook.
+            snap.RequestBodyCapture = BodyCaptureState.Streaming;
+            snap.RequestContentEncoding = req.ContentEncoding;
             return;
         }
 
@@ -2340,12 +2481,22 @@ public sealed class InterceptionService : IDisposable
             return;
         }
 
-        if (isSse)
+        // Unknown length is never buffered (see ShouldBufferBody): relay + bounded preview tee.
+        if (isSse || (resp.HasBody && !resp.IsBodyRead && resp.ContentLength < 0))
         {
-            ApplyStreamingResponseBody(snap);
+            ApplyStreamingResponseBody(snap, resp);
             return;
         }
 
+        ApplyFiniteUnbufferedResponseBody(snap, resp);
+    }
+
+    /// <summary>
+    ///     Known-length (or empty) response that was not buffered: either too large to capture, or
+    ///     a body we chose to buffer but never read. Neither is previewed.
+    /// </summary>
+    private static void ApplyFiniteUnbufferedResponseBody(SessionSnapshot snap, Response resp)
+    {
         if (resp.HasBody && resp.ContentLength > InspectorBodyLimits.MaxMapLocalFileBytes)
         {
             snap.ResponseBodyCapture = BodyCaptureState.NotCaptured;
@@ -2377,8 +2528,9 @@ public sealed class InterceptionService : IDisposable
         snap.ResponseBodyStreamOpen = false;
     }
 
-    private static void ApplyStreamingResponseBody(SessionSnapshot snap)
+    private static void ApplyStreamingResponseBody(SessionSnapshot snap, Response resp)
     {
+        snap.ResponseContentEncoding = resp.ContentEncoding;
         snap.ResponseBodyCapture = BodyCaptureState.Streaming;
         snap.ResponseBodyStreamOpen = true;
         snap.BodySize = snap.ResponseBytesSeen > 0 ? snap.ResponseBytesSeen : null;
@@ -2459,43 +2611,16 @@ public sealed class InterceptionService : IDisposable
     }
 
     /// <summary>
-    ///     Whole-body buffering for the session grid must not run when Content-Length already
-    ///     exceeds <see cref="ProxyServer.MaxBufferedBodyBytes" /> - that path RSTs HTTP/2 streams
-    ///     with ENHANCE_YOUR_CALM and breaks the browser download. SSE and WebSocket upgrades are
-    ///     never buffered (relay + optional 2 MiB tee). Finite unknown-length (chunked) bodies still
-    ///     buffer up to the limit so gzip JSON can be inspected.
+    ///     Whole-body buffering for the session grid is only safe when the size is known up front.
+    ///     <see cref="ProxyServer.MaxBufferedBodyBytes" /> is a hard abort budget: exceeding it RSTs
+    ///     HTTP/2 streams (ENHANCE_YOUR_CALM) or drops the connection. A body with no declared length
+    ///     (chunked, H2 without Content-Length, close-delimited, SSE) can exceed it at any point
+    ///     regardless of what it is, so it is relayed untouched and previewed through the bounded
+    ///     body-write tee instead. Known lengths within the budget are buffered (decompressed) as before;
+    ///     a non-positive budget means "unbounded" and always buffers. WebSocket upgrades are never buffered.
     /// </summary>
-    private bool ShouldBufferBody(RequestResponseBase message, SessionEventArgs session, bool isRequest)
-    {
-        if (LooksLikeEndlessStream(message, session, isRequest))
-        {
-            return false;
-        }
-
-        var limit = session.MaxBufferedBodyBytes ?? _proxy?.MaxBufferedBodyBytes ?? (4 * 1024 * 1024);
-        if (limit <= 0)
-        {
-            return true;
-        }
-
-        var contentLength = message.ContentLength;
-        return contentLength < 0 || contentLength <= limit;
-    }
-
-    private static bool LooksLikeEndlessStream(RequestResponseBase message, SessionEventArgs session, bool isRequest)
-    {
-        if (session.HttpClient.Request.UpgradeToWebSocket)
-        {
-            return true;
-        }
-
-        if (!isRequest && InspectorBodyLimits.LooksLikeSseContentType(message.ContentType))
-        {
-            return true;
-        }
-
-        return false;
-    }
+    private static bool ShouldBufferBody(RequestResponseBase message, SessionEventArgs session) =>
+        session.CanBufferBody(message);
 
     public void Dispose() => EnsureShutdown();
 }

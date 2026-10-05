@@ -54,7 +54,12 @@ public sealed class ProxyPolicyModes
     /// <summary>Returns the mode selected for <paramref name="family" />.</summary>
     public PolicyMode this[PolicyFamily family] => modes[family];
 
-    /// <summary>Builds a snapshot with an explicit mode for every family. <see cref="AllowAmbiguousFraming" /> starts <see langword="false" />.</summary>
+    /// <summary>
+    ///     Builds a snapshot with an explicit mode for the first seven families.
+    ///     <see cref="PolicyFamily.WebSocketFrameBudget" /> starts at <see cref="PolicyMode.Enforce" /> (use
+    ///     <see cref="With" /> to change it) so this shipped signature stays binary-compatible.
+    ///     <see cref="AllowAmbiguousFraming" /> starts <see langword="false" />.
+    /// </summary>
     public static ProxyPolicyModes Create(
         PolicyMode bodyBudget,
         PolicyMode decompressionRatio,
@@ -72,7 +77,8 @@ public sealed class ProxyPolicyModes
             [PolicyFamily.AdmissionControl] = admissionControl,
             [PolicyFamily.Http2AbuseBudget] = http2AbuseBudget,
             [PolicyFamily.Http2RelayValidation] = http2RelayValidation,
-            [PolicyFamily.Http1ReplaySafety] = http1ReplaySafety
+            [PolicyFamily.Http1ReplaySafety] = http1ReplaySafety,
+            [PolicyFamily.WebSocketFrameBudget] = PolicyMode.Enforce
         };
         return new ProxyPolicyModes(dict, false);
     }

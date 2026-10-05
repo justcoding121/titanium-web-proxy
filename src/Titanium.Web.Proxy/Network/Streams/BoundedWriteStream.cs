@@ -19,8 +19,8 @@ namespace Titanium.Web.Proxy.Network.Streams;
 ///         and native HTTP/2 client-facing body interception in <c>Http2Helper</c>. Both only bound an
 ///         individual chunk or DATA frame - per the hardening plan, "per-frame limits are not cumulative
 ///         limits" - so an attacker sending many small chunks/frames could otherwise accumulate an
-///         unbounded in-memory body. <see cref="Network.Streams.BoundedBodyPipe" /> already solves the
-///         same problem for the HTTP/2-to-origin body-streaming path; this type gives the whole-body
+///         unbounded in-memory body. Origin response pipes bound a known Content-Length and use HTTP/2
+///         stream flow control for unknown-length bodies; this type gives the whole-body
 ///         MemoryStream paths the same cumulative guarantee without adopting a full pipe.
 ///     </para>
 /// </summary>

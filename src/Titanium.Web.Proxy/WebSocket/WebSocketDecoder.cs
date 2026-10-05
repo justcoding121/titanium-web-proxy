@@ -20,6 +20,11 @@ public class WebSocketDecoder
     private long bufferLength;
 
     private readonly long maxFramePayloadBytes;
+    private readonly bool relayOversizeFrames;
+    private long rawForwardRemaining;
+    private WebsocketOpCode rawOpCode;
+    private bool rawIsFinal;
+    private long rawDeclaredLength;
 
     /// <param name="bufferPool">Sizes the initial internal reassembly buffer.</param>
     /// <param name="maxFramePayloadBytes">
@@ -28,10 +33,16 @@ public class WebSocketDecoder
     ///     structural <see cref="int.MaxValue" /> bound below still applies) so existing call sites that
     ///     do not have a policy limit to enforce keep their previous behavior.
     /// </param>
-    internal WebSocketDecoder(IBufferPool bufferPool, long maxFramePayloadBytes = long.MaxValue)
+    /// <param name="relayOversizeFrames">
+    ///     When <see langword="true"/> (Observe mode), a frame over the limit is yielded as raw wire
+    ///     slices instead of throwing. Enforce mode leaves this <see langword="false"/>.
+    /// </param>
+    internal WebSocketDecoder(IBufferPool bufferPool, long maxFramePayloadBytes = long.MaxValue,
+        bool relayOversizeFrames = false)
     {
         buffer = new byte[bufferPool.BufferSize];
         this.maxFramePayloadBytes = maxFramePayloadBytes;
+        this.relayOversizeFrames = relayOversizeFrames;
     }
 
     /// <summary>
@@ -57,6 +68,24 @@ public class WebSocketDecoder
 
         while (true)
         {
+            if (rawForwardRemaining > 0)
+            {
+                if (decodeBuffer.Length == 0) break;
+                var rawTake = (int)Math.Min(decodeBuffer.Length, rawForwardRemaining);
+                var rawSlice = decodeBuffer.Slice(0, rawTake).ToArray();
+                rawForwardRemaining -= rawTake;
+                decodeBuffer = decodeBuffer.Slice(rawTake);
+                yield return new WebSocketFrame
+                {
+                    RelayRaw = true,
+                    OpCode = rawOpCode,
+                    IsFinal = rawIsFinal,
+                    DeclaredPayloadLength = rawDeclaredLength,
+                    Data = rawSlice
+                };
+                continue;
+            }
+
             var data1 = decodeBuffer.Span;
             if (!IsDataEnough(data1)) break;
 
@@ -93,7 +122,7 @@ public class WebSocketDecoder
                     // WebSocketFrame.Data is ultimately sliced with a 32-bit length (below), so a
                     // structurally valid but oversized 64-bit length can never be honored regardless of
                     // any configured limit.
-                    if (size > int.MaxValue)
+                    if (size > int.MaxValue && !relayOversizeFrames)
                         throw new WebSocketProtocolException(
                             $"WebSocket frame declared a payload length of {size:N0} bytes, which exceeds " +
                             $"the maximum of {int.MaxValue:N0} bytes this decoder can buffer.",
@@ -107,11 +136,42 @@ public class WebSocketDecoder
             // without an upper bound to accumulate a frame that has not fully arrived yet. Checking here,
             // rather than after the frame is fully reassembled, is what keeps an attacker who declares an
             // oversized length and trickles bytes in slowly from forcing unbounded allocation.
-            if (size > maxFramePayloadBytes)
-                throw new WebSocketProtocolException(
-                    $"WebSocket frame payload of {size:N0} bytes exceeds the configured limit of " +
-                    $"{maxFramePayloadBytes:N0} bytes.",
-                    1009);
+            if (size > maxFramePayloadBytes || size > int.MaxValue)
+            {
+                if (!relayOversizeFrames)
+                    throw new WebSocketProtocolException(
+                        $"WebSocket frame payload of {size:N0} bytes exceeds the configured limit of " +
+                        $"{maxFramePayloadBytes:N0} bytes.",
+                        size > int.MaxValue ? (ushort)1002 : (ushort)1009);
+
+                // Only data frames may skip buffering. A control frame (payload must be <= 125) or a
+                // reserved opcode with an oversize length is a protocol error in every mode, and raw
+                // relay would bypass the validation the buffered path applies.
+                if (opCode != WebsocketOpCode.Continuation && opCode != WebsocketOpCode.Text &&
+                    opCode != WebsocketOpCode.Binary)
+                    throw new WebSocketProtocolException(
+                        $"WebSocket frame with opcode {(int)opCode} declared a payload of {size:N0} bytes.",
+                        1002);
+
+                var frameWire = (long)idx + (masked ? 4 : 0) + size;
+                var takeNow = (int)Math.Min(data1.Length, frameWire);
+                var rawNow = decodeBuffer.Slice(0, takeNow).ToArray();
+                rawForwardRemaining = frameWire - takeNow;
+                rawOpCode = opCode;
+                rawIsFinal = isFinal;
+                rawDeclaredLength = size;
+                decodeBuffer = decodeBuffer.Slice(takeNow);
+                yield return new WebSocketFrame
+                {
+                    RelayRaw = true,
+                    IsOversizeNotice = true,
+                    OpCode = opCode,
+                    IsFinal = isFinal,
+                    DeclaredPayloadLength = size,
+                    Data = rawNow
+                };
+                continue;
+            }
 
             // The completeness check must also account for the 4-byte masking key (present right before
             // the payload whenever the mask bit is set) - otherwise, once just enough bytes have arrived

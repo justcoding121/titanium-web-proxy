@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -268,8 +269,10 @@ public class Http2TranslationBridgeAcceptanceTests
             $"Expected an HTTP/1.1 200 response, got: '{statusLine}'.");
 
         var sawReceivedLengthHeader = false;
+        var chunked = false;
         string? line;
         while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
+        {
             if (line.StartsWith("X-Received-Length:", StringComparison.OrdinalIgnoreCase))
             {
                 sawReceivedLengthHeader = true;
@@ -277,9 +280,18 @@ public class Http2TranslationBridgeAcceptanceTests
                     $"The origin must have received the full {bodyBytes.Length}-byte body: '{line}'.");
             }
 
+            if (line.StartsWith("Transfer-Encoding:", StringComparison.OrdinalIgnoreCase)
+                && line.Contains("chunked", StringComparison.OrdinalIgnoreCase))
+                chunked = true;
+        }
+
         Assert.IsTrue(sawReceivedLengthHeader, "Expected to see the X-Received-Length response header.");
 
+        // A short unknown-length origin body may already be complete (Content-Length) or still open
+        // (chunked) depending on scheduling. Either framing is correct; the body bytes are the check.
         var responseBody = await reader.ReadToEndAsync();
+        if (chunked)
+            responseBody = DecodeChunkedAscii(responseBody);
         Assert.AreEqual("large-body-received", responseBody);
         Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised: {exceptionCapture.LastException}");
     }
@@ -662,5 +674,30 @@ public class Http2TranslationBridgeAcceptanceTests
         }
 
         return (body.ToArray(), sawShort, dataFrames);
+    }
+
+    private static string DecodeChunkedAscii(string raw)
+    {
+        var result = new StringBuilder();
+        var i = 0;
+        while (i < raw.Length)
+        {
+            var lineEnd = raw.IndexOf("\r\n", i, StringComparison.Ordinal);
+            if (lineEnd < 0) break;
+            var sizeText = raw.Substring(i, lineEnd - i);
+            var semi = sizeText.IndexOf(';');
+            if (semi >= 0) sizeText = sizeText.Substring(0, semi);
+            if (!int.TryParse(sizeText, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var size) || size < 0)
+                break;
+            if (size == 0) break;
+            i = lineEnd + 2;
+            if (i + size > raw.Length) break;
+            result.Append(raw, i, size);
+            i += size;
+            if (i + 2 <= raw.Length && string.CompareOrdinal(raw, i, "\r\n", 0, 2) == 0)
+                i += 2;
+        }
+
+        return result.ToString();
     }
 }

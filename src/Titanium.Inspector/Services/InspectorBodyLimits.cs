@@ -19,7 +19,7 @@ public enum BodyCaptureState
     /// <summary>Known huge Content-Length — not buffered (download must not stall).</summary>
     NotCaptured = 3,
 
-    /// <summary>Endless / SSE-style stream — relayed; preview may fill asynchronously.</summary>
+    /// <summary>Unknown-length body (chunked / close-delimited / SSE) — relayed; bounded preview fills asynchronously.</summary>
     Streaming = 4,
 }
 
@@ -83,6 +83,97 @@ public static class InspectorBodyLimits
     public static bool LooksLikeSseContentType(string? contentType) =>
         !string.IsNullOrEmpty(contentType)
         && contentType.Contains("text/event-stream", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    ///     Best-effort decode of a captured wire prefix per <c>Content-Encoding</c> (gzip, deflate, br).
+    ///     Used for streamed (unknown-length) bodies, which are relayed without the library's
+    ///     decompressing buffer. Truncated input is tolerated: whatever decodes is returned, capped
+    ///     at <see cref="MaxBodyBytes" />. Unknown or undecodable encodings return the input unchanged.
+    /// </summary>
+    public static byte[] DecodeCapturedPrefix(byte[] wire, string? contentEncoding)
+    {
+        if (wire.Length == 0 || string.IsNullOrWhiteSpace(contentEncoding))
+        {
+            return wire;
+        }
+
+        // Content-Encoding lists encodings in the order they were applied; undo in reverse.
+        var tokens = contentEncoding.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var current = wire;
+        for (var i = tokens.Length - 1; i >= 0; i--)
+        {
+            var next = TryDecodeOne(current, tokens[i]);
+            if (next is null)
+            {
+                return current;
+            }
+
+            current = next;
+        }
+
+        return current;
+    }
+
+    private static byte[]? TryDecodeOne(byte[] input, string encoding)
+    {
+        if (encoding.Equals("identity", StringComparison.OrdinalIgnoreCase))
+        {
+            return input;
+        }
+
+        if (encoding.Equals("gzip", StringComparison.OrdinalIgnoreCase)
+            || encoding.Equals("x-gzip", StringComparison.OrdinalIgnoreCase))
+        {
+            return ReadDecoded(() => new System.IO.Compression.GZipStream(
+                new MemoryStream(input), System.IO.Compression.CompressionMode.Decompress));
+        }
+
+        if (encoding.Equals("br", StringComparison.OrdinalIgnoreCase))
+        {
+            return ReadDecoded(() => new System.IO.Compression.BrotliStream(
+                new MemoryStream(input), System.IO.Compression.CompressionMode.Decompress));
+        }
+
+        if (encoding.Equals("deflate", StringComparison.OrdinalIgnoreCase))
+        {
+            // RFC 9110 says zlib-wrapped, but some servers send raw deflate.
+            return ReadDecoded(() => new System.IO.Compression.ZLibStream(
+                       new MemoryStream(input), System.IO.Compression.CompressionMode.Decompress))
+                   ?? ReadDecoded(() => new System.IO.Compression.DeflateStream(
+                       new MemoryStream(input), System.IO.Compression.CompressionMode.Decompress));
+        }
+
+        return null;
+    }
+
+    private static byte[]? ReadDecoded(Func<Stream> open)
+    {
+        try
+        {
+            using var stream = open();
+            using var output = new MemoryStream();
+            var buffer = new byte[16 * 1024];
+            try
+            {
+                int n;
+                while (output.Length < MaxBodyBytes
+                       && (n = stream.Read(buffer, 0, (int)Math.Min(buffer.Length, MaxBodyBytes - output.Length))) > 0)
+                {
+                    output.Write(buffer, 0, n);
+                }
+            }
+            catch (Exception ex) when (ex is InvalidDataException or IOException)
+            {
+                // Truncated tee prefix (or corrupt data): keep what decoded so far.
+            }
+
+            return output.Length > 0 ? output.ToArray() : null;
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException)
+        {
+            return null;
+        }
+    }
 
     public static string FormatCaptureBanner(
         BodyCaptureState state,

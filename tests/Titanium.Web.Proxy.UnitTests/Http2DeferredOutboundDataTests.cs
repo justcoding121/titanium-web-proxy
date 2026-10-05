@@ -147,14 +147,16 @@ public class Http2DeferredOutboundDataTests
     public void TryEnqueue_HardCap_Rejects()
     {
         var deferred = new Http2DeferredOutboundData();
-        for (var i = 0; i < Http2DeferredOutboundData.HardMaxFramesPerStream; i++)
+        const int frame = 16 * 1024;
+        var fit = Http2DeferredOutboundData.HardMaxDeferredBytesPerStream / frame;
+        for (var i = 0; i < fit; i++)
         {
-            var buf = ArrayPool<byte>.Shared.Rent(8);
-            Assert.IsTrue(deferred.TryEnqueue(7, buf, 0, 8, endStream: false));
+            var buf = ArrayPool<byte>.Shared.Rent(frame);
+            Assert.IsTrue(deferred.TryEnqueue(7, buf, 0, frame, endStream: false), $"frame {i} should fit");
         }
 
-        var overflow = ArrayPool<byte>.Shared.Rent(8);
-        Assert.IsFalse(deferred.TryEnqueue(7, overflow, 0, 8, endStream: false));
+        var overflow = ArrayPool<byte>.Shared.Rent(frame);
+        Assert.IsFalse(deferred.TryEnqueue(7, overflow, 0, frame, endStream: false));
         ArrayPool<byte>.Shared.Return(overflow);
         deferred.CancelStream(7);
     }
@@ -288,8 +290,8 @@ public class Http2DeferredOutboundDataTests
 
         for (var i = 0; i < Http2DeferredOutboundData.MaxFramesPerStream; i++)
         {
-            var buf = ArrayPool<byte>.Shared.Rent(1);
-            Assert.IsTrue(deferred.TryEnqueue(3, buf, 0, 1, endStream: false));
+            var buf = ArrayPool<byte>.Shared.Rent(16 * 1024);
+            Assert.IsTrue(deferred.TryEnqueue(3, buf, 0, 16 * 1024, endStream: false));
         }
 
         Assert.IsTrue(deferred.ShouldThrottleReceiveCredit(3));
@@ -354,6 +356,21 @@ public class Http2DeferredOutboundDataTests
         var bytes = ms.ToArray();
         Assert.IsTrue(bytes.Length >= 13);
         Assert.AreEqual(3, ReadStreamId(bytes, 5));
+    }
+
+    [TestMethod]
+    public void TryEnqueue_TinyFrames_CoalesceUnderTheByteBudget()
+    {
+        var deferred = new Http2DeferredOutboundData();
+        for (var i = 0; i < 300; i++)
+        {
+            var buf = ArrayPool<byte>.Shared.Rent(1);
+            buf[0] = 0x7;
+            Assert.IsTrue(deferred.TryEnqueue(1, buf, 0, 1, endStream: false));
+        }
+
+        Assert.AreEqual(1, deferred.PendingCount(1));
+        deferred.CancelStream(1);
     }
 
     private static int ReadStreamId(byte[] buf, int offset) =>
