@@ -23,11 +23,21 @@ namespace Titanium.Web.Proxy.Http2;
 internal sealed class Http2ConnectionState
 {
     public Http2ConnectionState(long connectionId, CancellationTokenSource cancellationTokenSource,
-        int maxPooledStreamStates = 256)
+        int maxPooledStreamStates = 256, int maxDeferredBytesPerStream = 0, int windowUpdateTimeoutSeconds = 0)
     {
         ConnectionId = connectionId;
         CancellationTokenSource = cancellationTokenSource;
         StreamStatePool = new Http2StreamStatePool(maxPooledStreamStates);
+        var window = windowUpdateTimeoutSeconds > 0
+            ? TimeSpan.FromSeconds(windowUpdateTimeoutSeconds)
+            : (TimeSpan?)null;
+        ClientSendFlow = new Http2FlowController(window);
+        ServerSendFlow = new Http2FlowController(window);
+        var deferred = maxDeferredBytesPerStream > 0
+            ? maxDeferredBytesPerStream
+            : Http2DeferredOutboundData.HardMaxDeferredBytesPerStream;
+        ClientOutboundDeferred = new Http2DeferredOutboundData(deferred);
+        ServerOutboundDeferred = new Http2DeferredOutboundData(deferred);
     }
 
     public long ConnectionId { get; }
@@ -44,25 +54,25 @@ internal sealed class Http2ConnectionState
     ///     Governs writes toward the client (used by the server->client relay task; fed by WINDOW_UPDATE/
     ///     SETTINGS_INITIAL_WINDOW_SIZE frames read from the client on the client->server relay task).
     /// </summary>
-    public Http2FlowController ClientSendFlow { get; } = new();
+    public Http2FlowController ClientSendFlow { get; }
 
     /// <summary>
     ///     Governs writes toward the server (used by the client->server relay task; fed by WINDOW_UPDATE/
     ///     SETTINGS_INITIAL_WINDOW_SIZE frames read from the server on the server->client relay task).
     /// </summary>
-    public Http2FlowController ServerSendFlow { get; } = new();
+    public Http2FlowController ServerSendFlow { get; }
 
     /// <summary>
     ///     Outbound DATA toward the client that is waiting for <see cref="ClientSendFlow" /> credit.
     ///     Drained when the client→server relay reads WINDOW_UPDATE.
     /// </summary>
-    public Http2DeferredOutboundData ClientOutboundDeferred { get; } = new();
+    public Http2DeferredOutboundData ClientOutboundDeferred { get; }
 
     /// <summary>
     ///     Outbound DATA toward the server that is waiting for <see cref="ServerSendFlow" /> credit.
     ///     Drained when the server→client relay reads WINDOW_UPDATE.
     /// </summary>
-    public Http2DeferredOutboundData ServerOutboundDeferred { get; } = new();
+    public Http2DeferredOutboundData ServerOutboundDeferred { get; }
 
     /// <summary>All currently open (or draining) streams, keyed by the stream id used identically on both legs.</summary>
     public ConcurrentDictionary<int, Http2StreamState> Streams { get; } = new();

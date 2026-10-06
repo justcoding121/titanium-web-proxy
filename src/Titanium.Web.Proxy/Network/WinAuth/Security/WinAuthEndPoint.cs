@@ -24,7 +24,7 @@ internal class WinAuthEndPoint
     /// <param name="data"></param>
     /// <returns></returns>
     internal static byte[]? AcquireInitialSecurityToken(string hostname, string authScheme, InternalDataStore data,
-        int attributes, WinAuthCredentials? credentials = null)
+        int attributes, WinAuthCredentials? credentials = null, int maxTokenBytes = 0)
     {
         if (!RunTime.IsWindows) return null;
 
@@ -33,7 +33,7 @@ internal class WinAuthEndPoint
         // null for initial call
         var serverToken = new SecurityBufferDescription();
 
-        var clientToken = new SecurityBufferDescription(MaximumTokenSize);
+        var clientToken = new SecurityBufferDescription(maxTokenBytes > 0 ? maxTokenBytes : MaximumTokenSize);
         MarshaledAuthIdentity? authIdentity = null;
         var state = new State();
         var stateStored = false;
@@ -203,7 +203,7 @@ internal class WinAuthEndPoint
     /// <param name="data"></param>
     /// <returns></returns>
     internal static byte[]? AcquireFinalSecurityToken(string hostname, byte[] serverChallenge, InternalDataStore data,
-        int attributes)
+        int attributes, int maxTokenBytes = 0)
     {
         if (!RunTime.IsWindows) return null;
 
@@ -212,7 +212,7 @@ internal class WinAuthEndPoint
         // user server challenge
         var serverToken = new SecurityBufferDescription(serverChallenge);
 
-        var clientToken = new SecurityBufferDescription(MaximumTokenSize);
+        var clientToken = new SecurityBufferDescription(maxTokenBytes > 0 ? maxTokenBytes : MaximumTokenSize);
         var state = data.GetAs<State>(AuthStateKey);
         var shouldDisposeState = false;
 

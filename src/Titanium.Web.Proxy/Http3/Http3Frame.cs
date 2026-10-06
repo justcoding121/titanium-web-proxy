@@ -5,6 +5,8 @@ using System.IO;
 using System.Net.Quic;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Logging;
+using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.Http3;
 
@@ -25,6 +27,15 @@ internal sealed class Http3Frame
     ///     renting an attacker-chosen length.
     /// </summary>
     internal const long DefaultMaxPayloadBytes = 4 * 1024 * 1024;
+
+    /// <summary>
+    ///     Declared lengths above this are rented as data arrives, starting at this size, so a peer
+    ///     that advertises a huge length and sends nothing cannot reserve the full cap up front.
+    /// </summary>
+    internal const int ProgressiveRentChunkBytes = 256 * 1024;
+
+    /// <summary>Last payload rent size on the progressive path. Tests read this; production does not branch on it.</summary>
+    internal static int TestLastRentBytes;
 
     public ulong Type { get; }
     public ReadOnlyMemory<byte> Payload { get; }
@@ -47,6 +58,12 @@ internal sealed class Http3Frame
             ArrayPool<byte>.Shared.Return(buffer);
     }
 
+    internal readonly struct FrameHeader
+    {
+        public ulong Type { get; init; }
+        public long Length { get; init; }
+    }
+
     /// <summary>
     ///     Reads one HTTP/3 frame from <paramref name="stream" />.
     ///     Returns <see langword="null" /> when the stream is cleanly closed (end-of-data).
@@ -57,37 +74,116 @@ internal sealed class Http3Frame
         long maxPayloadBytes,
         CancellationToken cancellationToken)
     {
-        var frameType = await Http3VarInt.ReadAsync(stream, cancellationToken);
+        var header = await ReadFrameHeaderAsync(stream, cancellationToken).ConfigureAwait(false);
+        if (header is null) return null;
+        return await ReadPayloadAfterHeaderAsync(stream, header.Value, maxPayloadBytes, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>Reads the type and length varints. Null on a clean end of stream before the type.</summary>
+    internal static async ValueTask<FrameHeader?> ReadFrameHeaderAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        var frameType = await Http3VarInt.ReadAsync(stream, cancellationToken).ConfigureAwait(false);
         if (frameType is null) return null;
 
-        var payloadLength = await Http3VarInt.ReadAsync(stream, cancellationToken)
+        var payloadLength = await Http3VarInt.ReadAsync(stream, cancellationToken).ConfigureAwait(false)
             ?? throw new Http3ConnectionException(Http3ErrorCode.FrameError, "Unexpected end of stream reading frame length.");
+        if (payloadLength > long.MaxValue)
+            throw new Http3ConnectionException(Http3ErrorCode.FrameError, "HTTP/3 frame length does not fit.");
+        return new FrameHeader { Type = frameType.Value, Length = (long)payloadLength };
+    }
 
-        // 0 means "use the dedicated frame limit", not unlimited. A hostile peer picks
-        // payloadLength; checking before the int cast is what stops the rent.
+    /// <summary>Reads a payload whose header was already consumed. Enforces <paramref name="maxPayloadBytes"/>.</summary>
+    internal static ValueTask<Http3Frame> ReadPayloadAfterHeaderAsync(
+        Stream stream, FrameHeader header, long maxPayloadBytes, CancellationToken cancellationToken)
+    {
         var limit = maxPayloadBytes > 0 ? maxPayloadBytes : DefaultMaxPayloadBytes;
-        if (payloadLength > (ulong)limit || payloadLength > int.MaxValue)
+        if ((ulong)header.Length > (ulong)limit || header.Length > int.MaxValue)
+        {
+            ProxyLog.LimitExceeded(ProxyDiagnostics.Logger, LimitId.Http3FramePayload, PolicyMode.Enforce,
+                header.Length, limit, "HTTP/3 stream reset");
             throw new Http3ConnectionException(Http3ErrorCode.ExcessiveLoad,
-                $"HTTP/3 frame payload {payloadLength} bytes exceeds limit {limit}.");
+                $"HTTP/3 frame payload {header.Length} bytes exceeds limit {limit}.");
+        }
+        if (header.Length == 0)
+            return new ValueTask<Http3Frame>(new Http3Frame(header.Type, ReadOnlyMemory<byte>.Empty, null));
+        return ReadPayloadBytesAsync(stream, header.Type, (int)header.Length, cancellationToken);
+    }
 
-        if (payloadLength == 0)
-            return new Http3Frame(frameType.Value, ReadOnlyMemory<byte>.Empty, null);
+    /// <summary>
+    ///     Copies a DATA payload in slices without renting the declared length. Used by the no-hook
+    ///     relay so a frame larger than the whole-frame cap can still stream.
+    /// </summary>
+    internal static async ValueTask CopyPayloadAsync(
+        Stream stream, long length, int sliceBytes,
+        Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask> consume,
+        CancellationToken cancellationToken)
+    {
+        if (length < 0)
+            throw new Http3ConnectionException(Http3ErrorCode.FrameError, "HTTP/3 frame length is negative.");
+        if (length == 0) return;
+        var slice = sliceBytes > 0 ? sliceBytes : 16 * 1024;
+        var buffer = ArrayPool<byte>.Shared.Rent(slice);
+        try
+        {
+            var remaining = length;
+            while (remaining > 0)
+            {
+                var n = (int)Math.Min(slice, remaining);
+                var filled = 0;
+                while (filled < n)
+                {
+                    var read = await stream.ReadAsync(buffer.AsMemory(filled, n - filled), cancellationToken)
+                        .ConfigureAwait(false);
+                    if (read == 0)
+                        throw new Http3ConnectionException(Http3ErrorCode.FrameError,
+                            $"Unexpected end of stream reading frame payload (expected {length}).");
+                    filled += read;
+                }
 
-        var length = (int)payloadLength;
-        var rented = ArrayPool<byte>.Shared.Rent(length);
+                await consume(buffer.AsMemory(0, n), cancellationToken).ConfigureAwait(false);
+                remaining -= n;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static async ValueTask<Http3Frame> ReadPayloadBytesAsync(
+        Stream stream, ulong frameType, int length, CancellationToken cancellationToken)
+    {
+        // Small frames keep the single rent. Larger declared lengths grow as bytes arrive.
+        var initial = length <= ProgressiveRentChunkBytes ? length : ProgressiveRentChunkBytes;
+        var rented = ArrayPool<byte>.Shared.Rent(initial);
+        if (length > ProgressiveRentChunkBytes)
+            TestLastRentBytes = initial;
+        var capacity = initial;
         try
         {
             var offset = 0;
             while (offset < length)
             {
-                var read = await stream.ReadAsync(rented.AsMemory(offset, length - offset), cancellationToken);
+                if (offset == capacity)
+                {
+                    var next = Math.Min(length, capacity * 2);
+                    var bigger = ArrayPool<byte>.Shared.Rent(next);
+                    Buffer.BlockCopy(rented, 0, bigger, 0, offset);
+                    ArrayPool<byte>.Shared.Return(rented);
+                    rented = bigger;
+                    capacity = next;
+                }
+
+                var read = await stream.ReadAsync(rented.AsMemory(offset, Math.Min(capacity, length) - offset),
+                    cancellationToken).ConfigureAwait(false);
                 if (read == 0)
                     throw new Http3ConnectionException(Http3ErrorCode.FrameError,
-                        $"Unexpected end of stream reading frame payload (expected {payloadLength}, got {offset}).");
+                        $"Unexpected end of stream reading frame payload (expected {length}, got {offset}).");
                 offset += read;
             }
 
-            return new Http3Frame(frameType.Value, rented.AsMemory(0, length), rented);
+            return new Http3Frame(frameType, rented.AsMemory(0, length), rented);
         }
         catch
         {

@@ -44,7 +44,7 @@ titanium test -c twp.yaml
 titanium run -c twp.yaml
 ```
 
-`titanium run` stays in the foreground (Ctrl+C to stop). To start at boot: `titanium service install -c twp.yaml` — see [CLI — service](/docs/cli#service). More YAML: [Configuration](/docs/configuration).
+`titanium run` stays in the foreground (Ctrl+C to stop). To start at boot: `titanium service install -c twp.yaml` — see [CLI — service](/docs/cli#service). More YAML: [Configuration](/docs/configuration). When a request fails, the Error log names the limit and the key: [Limits](/docs/limits) and [troubleshooting](/docs/troubleshooting).
 
 ## Inspect traffic (Inspector)
 

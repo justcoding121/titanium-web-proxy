@@ -58,6 +58,7 @@ internal static class ReverseProxySessionDispatch
         session.UpstreamConnectHost = destination.Address;
         session.UpstreamConnectPort = port;
         session.UpstreamDestinationId = destination.Id;
+        StreamDestinationDispatch.ApplyRouteLimits(route, session);
 
         if (options.LoadBalancer is LoadBalancer lb)
         {

@@ -1,0 +1,747 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://titaniumproxy.com/twp.schema.json",
+  "title": "Titanium Web Proxy configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "certificates": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "acmeDirectory": {
+          "type": "string"
+        },
+        "acmeDomain": {
+          "type": "string"
+        },
+        "acmeEmail": {
+          "type": "string"
+        },
+        "certificatePath": {
+          "type": "string"
+        },
+        "privateKeyPath": {
+          "type": "string"
+        }
+      }
+    },
+    "clusters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "affinityCookie": {
+            "type": "string"
+          },
+          "affinityHeader": {
+            "type": "string"
+          },
+          "algorithm": {
+            "type": "string"
+          },
+          "destinations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "port": {
+                  "type": "integer"
+                },
+                "useDestinationHost": {
+                  "type": "boolean"
+                },
+                "useHttps": {
+                  "type": "boolean"
+                },
+                "weight": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "listeners": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "decryptSsl": {
+            "type": "boolean"
+          },
+          "enableHttp2": {
+            "type": "boolean"
+          },
+          "enableHttp3": {
+            "type": "boolean"
+          },
+          "forwardHost": {
+            "type": "string"
+          },
+          "forwardPort": {
+            "type": "integer"
+          },
+          "genericCertificateName": {
+            "type": "string"
+          },
+          "handshakeTimeoutSeconds": {
+            "type": "integer"
+          },
+          "host": {
+            "type": "string"
+          },
+          "idleTimeoutSeconds": {
+            "type": "integer"
+          },
+          "maxCachedConnections": {
+            "type": "integer"
+          },
+          "maxConcurrentClients": {
+            "type": "integer"
+          },
+          "maxInboundBidirectionalStreams": {
+            "type": "integer"
+          },
+          "maxInboundUnidirectionalStreams": {
+            "type": "integer"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enableConsole": {
+          "type": "boolean"
+        },
+        "enableConsoleColors": {
+          "type": "boolean"
+        },
+        "enableFile": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "filePath": {
+          "type": "string"
+        },
+        "maxFileSizeBytes": {
+          "type": "integer"
+        },
+        "maxRolledFiles": {
+          "type": "integer"
+        },
+        "minimumLevel": {
+          "type": "string"
+        },
+        "queueCapacity": {
+          "type": "integer"
+        }
+      }
+    },
+    "plus": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "controlPlane": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dashboardPort": {
+              "type": "integer"
+            },
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer"
+            },
+            "sharedSecret": {
+              "type": "string"
+            }
+          }
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "routes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "clusterId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "limits": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "idleTimeoutSeconds": {
+                "type": "integer"
+              },
+              "maxBufferedBodyBytes": {
+                "type": "integer"
+              },
+              "maxWebSocketFramePayloadBytes": {
+                "type": "integer"
+              },
+              "requestTimeoutSeconds": {
+                "type": "integer"
+              }
+            }
+          },
+          "match": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "headers": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "host": {
+                "type": "string"
+              },
+              "method": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "pathKind": {
+                "type": "string"
+              },
+              "query": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "order": {
+            "type": "integer"
+          },
+          "transforms": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "type": "string"
+                },
+                "parameters": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemaVersion": {
+      "type": "string"
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "accessLog": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "sampleRate": {
+              "type": "number"
+            }
+          }
+        },
+        "blockLoopbackDestinations": {
+          "type": "boolean"
+        },
+        "blockPrivateNetworkDestinations": {
+          "type": "boolean"
+        },
+        "certificateManager": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "certificateCacheTimeOutMinutes": {
+              "type": "integer"
+            },
+            "certificateEngine": {
+              "type": "string"
+            },
+            "certificateGraceDays": {
+              "type": "integer"
+            },
+            "certificateValidDays": {
+              "type": "integer"
+            },
+            "disableWildCardCertificates": {
+              "type": "boolean"
+            },
+            "leafCertificateKeyAlgorithm": {
+              "type": "string"
+            },
+            "overwritePfxFile": {
+              "type": "boolean"
+            },
+            "pfxFilePath": {
+              "type": "string"
+            },
+            "pfxPassword": {
+              "type": "string"
+            },
+            "rootCertificateIssuerName": {
+              "type": "string"
+            },
+            "rootCertificateName": {
+              "type": "string"
+            },
+            "saveFakeCertificates": {
+              "type": "boolean"
+            }
+          }
+        },
+        "checkCertificateRevocation": {
+          "type": "string"
+        },
+        "compatibilityMode100Continue": {
+          "type": "boolean"
+        },
+        "decryptFailureBypassMaxEntries": {
+          "type": "integer"
+        },
+        "decryptFailureBypassThreshold": {
+          "type": "integer"
+        },
+        "decryptFailureBypassTtlMinutes": {
+          "type": "integer"
+        },
+        "decryptOnlyHosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "decryptSkipHosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dnsServerEndPoint": {
+          "type": "string"
+        },
+        "enable100ContinueBehaviour": {
+          "type": "boolean"
+        },
+        "enableDecryptFailureBypass": {
+          "type": "boolean"
+        },
+        "enableHttp2": {
+          "type": "boolean"
+        },
+        "enableHttp3": {
+          "type": "boolean"
+        },
+        "enableHttpsSvcbDnsDiscovery": {
+          "type": "boolean"
+        },
+        "enableQpackDynamicTable": {
+          "type": "boolean"
+        },
+        "enableRfc8441": {
+          "type": "boolean"
+        },
+        "enableWinAuth": {
+          "type": "boolean"
+        },
+        "ignoreServerCertificateErrors": {
+          "type": "boolean"
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "connectionPoolingEnabled": {
+              "type": "boolean"
+            },
+            "http2WindowUpdateTimeoutSeconds": {
+              "type": "integer"
+            },
+            "maxAuthChallengeRounds": {
+              "type": "integer"
+            },
+            "maxBufferedBodyBytes": {
+              "type": "integer"
+            },
+            "maxCachedConnectionsPerHost": {
+              "type": "integer"
+            },
+            "maxCertificateCacheEntries": {
+              "type": "integer"
+            },
+            "maxCertificateDiskCacheEntries": {
+              "type": "integer"
+            },
+            "maxConcurrentClients": {
+              "type": "integer"
+            },
+            "maxConcurrentStreamsPerConnection": {
+              "type": "integer"
+            },
+            "maxDecodedBodyBytes": {
+              "type": "integer"
+            },
+            "maxDecodedHeaderListBytes": {
+              "type": "integer"
+            },
+            "maxDecompressionRatio": {
+              "type": "number"
+            },
+            "maxDeferredOutboundBytesPerStream": {
+              "type": "integer"
+            },
+            "maxEncodedBodyBytes": {
+              "type": "integer"
+            },
+            "maxHeaderAggregateBytes": {
+              "type": "integer"
+            },
+            "maxHeaderCount": {
+              "type": "integer"
+            },
+            "maxHeaderLineBytes": {
+              "type": "integer"
+            },
+            "maxHttp2CompressedHeaderBlockBytes": {
+              "type": "integer"
+            },
+            "maxHttp3FramePayloadBytes": {
+              "type": "integer"
+            },
+            "maxInterimResponses": {
+              "type": "integer"
+            },
+            "maxOpenHeaderBlockDurationSeconds": {
+              "type": "integer"
+            },
+            "maxOpenHeaderBlockFrames": {
+              "type": "integer"
+            },
+            "maxOriginHttp2ConnectionsPerAuthority": {
+              "type": "integer"
+            },
+            "maxPeerInitiatedIncompleteStreamResets": {
+              "type": "integer"
+            },
+            "maxTrailerHeaderBlockBytes": {
+              "type": "integer"
+            },
+            "maxTrailerHeaderCount": {
+              "type": "integer"
+            },
+            "maxUpstreamProxyAuthenticationAttempts": {
+              "type": "integer"
+            },
+            "maxWebSocketFramePayloadBytes": {
+              "type": "integer"
+            },
+            "maxWinAuthTokenBytes": {
+              "type": "integer"
+            }
+          }
+        },
+        "originHttpVersionPolicy": {
+          "type": "string"
+        },
+        "policyModes": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "admissionControl": {
+              "type": "string"
+            },
+            "allowAmbiguousFraming": {
+              "type": "boolean"
+            },
+            "bodyBudget": {
+              "type": "string"
+            },
+            "decompressionRatio": {
+              "type": "string"
+            },
+            "headerLimits": {
+              "type": "string"
+            },
+            "http1ReplaySafety": {
+              "type": "string"
+            },
+            "http2AbuseBudget": {
+              "type": "string"
+            },
+            "http2RelayValidation": {
+              "type": "string"
+            },
+            "webSocketFrameBudget": {
+              "type": "string"
+            }
+          }
+        },
+        "pooling": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enableConnectionPool": {
+              "type": "boolean"
+            },
+            "enableIpv6UnreachableSoftSkip": {
+              "type": "boolean"
+            },
+            "enableTcpKeepAlive": {
+              "type": "boolean"
+            },
+            "enableTcpServerConnectionPrefetch": {
+              "type": "boolean"
+            },
+            "listenerBackLog": {
+              "type": "integer"
+            },
+            "maxCachedConnections": {
+              "type": "integer"
+            },
+            "maxConcurrentClientConnections": {
+              "type": "integer"
+            },
+            "maxConcurrentHttp11HttpsOriginCreates": {
+              "type": "integer"
+            },
+            "noDelay": {
+              "type": "boolean"
+            },
+            "reuseSocket": {
+              "type": "boolean"
+            },
+            "tcpTimeWaitSeconds": {
+              "type": "integer"
+            },
+            "threadPoolWorkerThread": {
+              "type": "integer"
+            }
+          }
+        },
+        "profile": {
+          "type": "string"
+        },
+        "proxyAuthenticationRealm": {
+          "type": "string"
+        },
+        "proxyLoopback": {
+          "type": "boolean"
+        },
+        "systemProxyBypassHosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "timeouts": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "clientHeaderTimeoutSeconds": {
+              "type": "integer"
+            },
+            "connectTimeOutSeconds": {
+              "type": "integer"
+            },
+            "connectionTimeOutSeconds": {
+              "type": "integer"
+            },
+            "idleReadTimeoutSeconds": {
+              "type": "integer"
+            },
+            "idleWriteTimeoutSeconds": {
+              "type": "integer"
+            },
+            "networkFailureRetryAttempts": {
+              "type": "integer"
+            },
+            "requestTimeoutSeconds": {
+              "type": "integer"
+            },
+            "responseHeaderTimeoutSeconds": {
+              "type": "integer"
+            }
+          }
+        },
+        "tls": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "supportedServerSslProtocols": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "supportedSslProtocols": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "upstream": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "forwardToUpstreamGateway": {
+              "type": "boolean"
+            },
+            "httpProxy": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "bypassLocalhost": {
+                  "type": "boolean"
+                },
+                "hostName": {
+                  "type": "string"
+                },
+                "nextHop": {
+                  "type": "object"
+                },
+                "password": {
+                  "type": "string"
+                },
+                "port": {
+                  "type": "integer"
+                },
+                "proxyDnsRequests": {
+                  "type": "boolean"
+                },
+                "proxyType": {
+                  "type": "string"
+                },
+                "useDefaultCredentials": {
+                  "type": "boolean"
+                },
+                "userName": {
+                  "type": "string"
+                }
+              }
+            },
+            "httpsProxy": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "bypassLocalhost": {
+                  "type": "boolean"
+                },
+                "hostName": {
+                  "type": "string"
+                },
+                "nextHop": {
+                  "type": "object"
+                },
+                "password": {
+                  "type": "string"
+                },
+                "port": {
+                  "type": "integer"
+                },
+                "proxyDnsRequests": {
+                  "type": "boolean"
+                },
+                "proxyType": {
+                  "type": "string"
+                },
+                "useDefaultCredentials": {
+                  "type": "boolean"
+                },
+                "userName": {
+                  "type": "string"
+                }
+              }
+            },
+            "upStreamEndPoint": {
+              "type": "string"
+            },
+            "upStreamEndPointIPv4": {
+              "type": "string"
+            },
+            "upStreamEndPointIPv6": {
+              "type": "string"
+            },
+            "upstreamProxyConfigurationScript": {
+              "type": "string"
+            }
+          }
+        },
+        "viaHeaderPseudonym": {
+          "type": "string"
+        }
+      }
+    },
+    "staticFiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enableBrotli": {
+          "type": "boolean"
+        },
+        "enableGzip": {
+          "type": "boolean"
+        },
+        "root": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

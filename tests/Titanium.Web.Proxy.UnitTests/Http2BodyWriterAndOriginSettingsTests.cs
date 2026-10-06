@@ -478,8 +478,8 @@ public class Http2BodyWriterAndOriginSettingsTests
 
         var ctor = typeof(Http2OriginConnection).GetConstructor(PrivateInstance, null,
             [typeof(TcpServerConnection), typeof(Microsoft.Extensions.Logging.ILogger),
-                typeof(ProxyResourceLimits)], null)!;
+                typeof(ProxyResourceLimits), typeof(int)], null)!;
         return (Http2OriginConnection)ctor.Invoke([serverConn, NullLogger.Instance,
-            ProxyResourceLimits.Default])!;
+            ProxyResourceLimits.Default, 64 * 1024])!;
     }
 }

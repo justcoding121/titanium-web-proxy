@@ -85,7 +85,8 @@ public partial class ProxyServer
                     HttpVersion = requestLine.Version
                 };
 
-                await HeaderParser.ReadHeaders(clientStream, connectRequest.Headers, cancellationToken);
+                await HeaderParser.ReadHeaders(clientStream, connectRequest.Headers, cancellationToken,
+                    clientStream.HeaderBudget(isRequest: true));
 
                 connectArgs = new TunnelConnectSessionEventArgs(this, endPoint, connectRequest, clientStream,
                     cancellationTokenSource);
@@ -721,6 +722,25 @@ public partial class ProxyServer
             // User TerminateSession / linked cancellation: expected, do not wrap or elevate to Error.
             closeServerConnection = true;
             ProxyDiagnostics.ReportException(logger, "Client session cancelled", e);
+        }
+        catch (HeaderLimitsExceededException)
+        {
+            closeServerConnection = true;
+            var rejected = new Response
+            {
+                HttpVersion = HttpHeader.Version11,
+                StatusCode = (int)HttpStatusCode.RequestHeaderFieldsTooLarge,
+                StatusDescription = "Request Header Fields Too Large"
+            };
+            rejected.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionClose);
+            try
+            {
+                await clientStream.WriteResponseAsync(rejected, CancellationToken.None);
+            }
+            catch (Exception writeEx) when (writeEx is IOException or OperationCanceledException)
+            {
+                // The client is already gone. The limit was logged at the parser.
+            }
         }
         catch (Exception e)
         {

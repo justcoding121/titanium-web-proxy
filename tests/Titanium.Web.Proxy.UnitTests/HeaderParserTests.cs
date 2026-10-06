@@ -7,6 +7,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
@@ -138,6 +139,55 @@ public class HeaderParserTests
         var header = headers.GetFirstHeader("X-Long");
         Assert.IsNotNull(header);
         Assert.AreEqual(new string('a', 40), header.Value);
+    }
+
+    [TestMethod]
+    public async Task ReadHeaders_CountBreach_Throws_AtLimitPasses_ObservePasses()
+    {
+        var enforce = new HeaderBlockBudget(1, 100_000, PolicyMode.Enforce, isRequest: true);
+        var breached = await Assert.ThrowsExactlyAsync<HeaderLimitsExceededException>(() =>
+            HeaderParser.ReadHeaders(
+                new ScriptedLineReader(dataAvailable: true, "A: 1", "B: 2", ""),
+                new HeaderCollection(), CancellationToken.None, enforce).AsTask());
+        Assert.IsTrue(breached.IsRequest);
+        Assert.IsTrue(breached.IsCount);
+
+        var headers = new HeaderCollection();
+        await HeaderParser.ReadHeaders(
+            new ScriptedLineReader(dataAvailable: true, "A: 1", ""),
+            headers, CancellationToken.None, enforce);
+        Assert.AreEqual(1, headers.HeaderCount());
+
+        var observed = new HeaderCollection();
+        await HeaderParser.ReadHeaders(
+            new ScriptedLineReader(dataAvailable: false, "A: 1", "B: 2", null),
+            observed, CancellationToken.None,
+            new HeaderBlockBudget(1, 100_000, PolicyMode.Observe, isRequest: true));
+        Assert.AreEqual(2, observed.HeaderCount());
+
+        var disabled = new HeaderCollection();
+        await HeaderParser.ReadHeaders(
+            new ScriptedLineReader(dataAvailable: true, "Connection: keep-alive", "A: 1", ""),
+            disabled, CancellationToken.None);
+        Assert.AreSame(KnownHeaders.ConnectionKeepAlive.String,
+            disabled.GetFirstHeader(KnownHeaders.Connection)!.Value);
+    }
+
+    [TestMethod]
+    public async Task TryReadHeadersAsync_AggregateBreach_Is502ForResponses_RaisedLimitPasses()
+    {
+        var tight = new HeaderBlockBudget(100, 5, PolicyMode.Enforce, isRequest: false);
+        using var stream = CreateHttpStream(Encoding.ASCII.GetBytes("A: b\r\n\r\n"));
+        var breached = await Assert.ThrowsExactlyAsync<HeaderLimitsExceededException>(() =>
+            HeaderParser.TryReadHeadersAsync(stream, new HeaderCollection(), CancellationToken.None, tight).AsTask());
+        Assert.IsFalse(breached.IsRequest);
+        Assert.IsFalse(breached.IsCount);
+
+        var raised = new HeaderBlockBudget(100, 64 * 1024, PolicyMode.Enforce, isRequest: true);
+        using var ok = CreateHttpStream(Encoding.ASCII.GetBytes("A: b\r\nHost: example\r\n\r\n"));
+        var headers = new HeaderCollection();
+        Assert.IsTrue(await HeaderParser.TryReadHeadersAsync(ok, headers, CancellationToken.None, raised));
+        Assert.AreEqual("example", headers.GetFirstHeader(KnownHeaders.Host)!.Value);
     }
 
     private static HttpStream CreateHttpStream(byte[] payload) =>

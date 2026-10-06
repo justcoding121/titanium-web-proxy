@@ -15,6 +15,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Streams;
 using Titanium.Web.Proxy.Network.Tcp;
@@ -132,7 +133,7 @@ public partial class ProxyServer
                                 preparedRequest.IsHttps = true;
 
                             if (!await HeaderParser.TryReadHeadersAsync(clientStream, preparedRequest.Headers,
-                                    headerDeadline.Token))
+                                    headerDeadline.Token, clientStream.HeaderBudget(isRequest: true)))
                             {
                                 ThrowIfHeaderDeadlineTimedOut(headerDeadline);
                                 return;
@@ -218,13 +219,24 @@ public partial class ProxyServer
                         // (skipped when preparedRequest already filled them above).
                         if (!headersAlreadyRead
                             && !await HeaderParser.TryReadHeadersAsync(clientStream, args.HttpClient.Request.Headers,
-                                headerDeadline.Token))
+                                headerDeadline.Token, clientStream.HeaderBudget(isRequest: true)))
                         {
                             args.Dispose();
                             args = null;
                             ThrowIfHeaderDeadlineTimedOut(headerDeadline);
                             return;
                         }
+                    }
+                    catch (HeaderLimitsExceededException)
+                    {
+                        var rejected = new GenericResponse(HttpStatusCode.RequestHeaderFieldsTooLarge)
+                        {
+                            HttpVersion = HttpHeader.Version11
+                        };
+                        rejected.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionClose);
+                        await clientStream.WriteResponseAsync(rejected, cancellationToken);
+                        args?.Dispose();
+                        return;
                     }
                     catch (OperationCanceledException ex)
                     {
@@ -358,6 +370,8 @@ public partial class ProxyServer
                             // breach (which can only close the connection - see the catch-all further
                             // down and DowngradeChunkedFramingForHttp10OriginIfNeeded's caller) this one
                             // can still produce a normal 413 to the client.
+                            ProxyLog.LimitExceeded(logger, LimitId.BufferedBody, PolicyMode.Enforce,
+                                MaxBufferedBodyBytes, MaxBufferedBodyBytes, "413");
                             ProxyDiagnostics.ReportCaught(logger,
                                 "Request body size limit exceeded in BeforeRequest; returning 413", bodyLimitEx);
                             args.HttpClient.Response = new GenericResponse(System.Net.HttpStatusCode.RequestEntityTooLarge)
@@ -440,6 +454,8 @@ public partial class ProxyServer
                                 {
                                     // Still request-side and still nothing sent to the origin yet, same
                                     // as the BeforeRequest breach above.
+                                    ProxyLog.LimitExceeded(logger, LimitId.BufferedBody, PolicyMode.Enforce,
+                                        MaxBufferedBodyBytes, MaxBufferedBodyBytes, "413");
                                     ProxyDiagnostics.ReportCaught(logger,
                                         "Request body size limit exceeded buffering for WinAuth; returning 413",
                                         bodyLimitEx);
@@ -634,6 +650,19 @@ public partial class ProxyServer
                                 await TcpConnectionFactory.Release(connection);
                                 connection = null;
                             }
+                        }
+                        catch (HeaderLimitsExceededException)
+                        {
+                            closeServerConnection = true;
+                            if (!args.IsClientResponseCommitted && !args.HttpClient.Response.Locked)
+                            {
+                                args.GenericResponse("Bad Gateway", HttpStatusCode.BadGateway,
+                                    closeServerConnection: true);
+                                await args.ClientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                                args.IsClientResponseCommitted = true;
+                            }
+
+                            return;
                         }
                         catch (ProxyTimeoutException timeoutEx)
                         {

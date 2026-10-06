@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.Logging;
+using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Http;
@@ -56,7 +58,9 @@ internal static class ChunkedTrailerHelper
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <exception cref="ProxyHttpException">The trailer block is malformed, or exceeds the count/size bounds above.</exception>
     internal static async ValueTask ReadTrailingHeaders(ILineStream reader, HeaderCollection into,
-        List<string>? rawLines, CancellationToken cancellationToken = default)
+        List<string>? rawLines, CancellationToken cancellationToken = default,
+        int maxTrailerHeaderCount = MaxTrailerHeaderCount,
+        int maxTrailerHeaderBlockBytes = MaxTrailerHeaderBlockSize)
     {
         var count = 0;
         var totalSize = 0;
@@ -66,15 +70,23 @@ internal static class ChunkedTrailerHelper
             var line = await reader.ReadLineAsync(cancellationToken);
             if (string.IsNullOrEmpty(line)) break;
             count++;
-            if (count > MaxTrailerHeaderCount)
+            if (count > maxTrailerHeaderCount)
+            {
+                ProxyLog.LimitExceeded(ProxyDiagnostics.Logger, LimitId.TrailerHeaderCount, PolicyMode.Enforce,
+                    count, maxTrailerHeaderCount, "connection closed");
                 throw new ProxyHttpException(
-                    $"Chunked trailer has too many header lines (> {MaxTrailerHeaderCount}).", null, null);
+                    $"Chunked trailer has too many header lines (> {maxTrailerHeaderCount}).", null, null);
+            }
 
             totalSize += line.Length;
-            if (totalSize > MaxTrailerHeaderBlockSize)
+            if (totalSize > maxTrailerHeaderBlockBytes)
+            {
+                ProxyLog.LimitExceeded(ProxyDiagnostics.Logger, LimitId.TrailerHeaderBlock, PolicyMode.Enforce,
+                    totalSize, maxTrailerHeaderBlockBytes, "connection closed");
                 throw new ProxyHttpException(
-                    $"Chunked trailer exceeds the maximum allowed size of {MaxTrailerHeaderBlockSize} bytes.",
+                    $"Chunked trailer exceeds the maximum allowed size of {maxTrailerHeaderBlockBytes} bytes.",
                     null, null);
+            }
 
             var colonIndex = line.IndexOf(':');
             if (colonIndex == -1)

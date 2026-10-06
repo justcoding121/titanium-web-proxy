@@ -261,3 +261,15 @@ Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.ResponseHeadersT
 Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.ResponseHeadersToSet.get -> System.Collections.Generic.Dictionary<string!, string!>!
 Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.TransformRequestContext() -> void
 virtual Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareDelegate.Invoke(Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext! context, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Limits.get -> Titanium.Web.Proxy.Abstractions.Routing.RouteLimits?
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Limits.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteLimits
+Titanium.Web.Proxy.Abstractions.Routing.RouteLimits.IdleTimeoutSeconds.get -> int?
+Titanium.Web.Proxy.Abstractions.Routing.RouteLimits.IdleTimeoutSeconds.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteLimits.MaxBufferedBodyBytes.get -> int?
+Titanium.Web.Proxy.Abstractions.Routing.RouteLimits.MaxBufferedBodyBytes.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteLimits.MaxWebSocketFramePayloadBytes.get -> int?
+Titanium.Web.Proxy.Abstractions.Routing.RouteLimits.MaxWebSocketFramePayloadBytes.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteLimits.RequestTimeoutSeconds.get -> int?
+Titanium.Web.Proxy.Abstractions.Routing.RouteLimits.RequestTimeoutSeconds.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteLimits.RouteLimits() -> void

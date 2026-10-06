@@ -373,3 +373,40 @@ Titanium.Web.Proxy.Configuration.Parsers.JsonReverseProxyDocument
 Titanium.Web.Proxy.Configuration.Parsers.SiteFileReader
 Titanium.Web.Proxy.Configuration.TwpConfigLoader
 Titanium.Web.Proxy.Configuration.TwpConfigValidator
+static Titanium.Web.Proxy.Configuration.TwpConfigSchema.Generate() -> string!
+Titanium.Web.Proxy.Configuration.TwpConfigSchema
+static Titanium.Web.Proxy.Configuration.TwpConfigValidator.CollectWarnings(Titanium.Web.Proxy.Configuration.Models.TwpConfig! config) -> System.Collections.Generic.IReadOnlyList<string!>!
+static Titanium.Web.Proxy.Configuration.UnknownConfigKeyScanner.Scan(string! text, bool yaml) -> System.Collections.Generic.IReadOnlyList<string!>!
+Titanium.Web.Proxy.Configuration.UnknownConfigKeyScanner
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.Http2WindowUpdateTimeoutSeconds.get -> int?
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.Http2WindowUpdateTimeoutSeconds.set -> void
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.MaxAuthChallengeRounds.get -> int?
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.MaxAuthChallengeRounds.set -> void
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.MaxDeferredOutboundBytesPerStream.get -> int?
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.MaxDeferredOutboundBytesPerStream.set -> void
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.MaxHttp2CompressedHeaderBlockBytes.get -> int?
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.MaxHttp2CompressedHeaderBlockBytes.set -> void
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.MaxHttp3FramePayloadBytes.get -> long?
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.MaxHttp3FramePayloadBytes.set -> void
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.MaxInterimResponses.get -> int?
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.MaxInterimResponses.set -> void
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.MaxTrailerHeaderBlockBytes.get -> int?
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.MaxTrailerHeaderBlockBytes.set -> void
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.MaxTrailerHeaderCount.get -> int?
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.MaxTrailerHeaderCount.set -> void
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.MaxUpstreamProxyAuthenticationAttempts.get -> int?
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.MaxUpstreamProxyAuthenticationAttempts.set -> void
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.MaxWinAuthTokenBytes.get -> int?
+Titanium.Web.Proxy.Configuration.Models.LimitsConfig.MaxWinAuthTokenBytes.set -> void
+Titanium.Web.Proxy.Configuration.Models.PolicyModesConfig.Http1ReplaySafety.get -> string?
+Titanium.Web.Proxy.Configuration.Models.PolicyModesConfig.Http1ReplaySafety.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.DecryptFailureBypassMaxEntries.get -> int?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.DecryptFailureBypassMaxEntries.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.DecryptFailureBypassThreshold.get -> int?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.DecryptFailureBypassThreshold.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.DecryptFailureBypassTtlMinutes.get -> int?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.DecryptFailureBypassTtlMinutes.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableDecryptFailureBypass.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableDecryptFailureBypass.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ProxyAuthenticationRealm.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ProxyAuthenticationRealm.set -> void

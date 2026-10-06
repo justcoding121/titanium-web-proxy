@@ -48,7 +48,8 @@ public partial class ProxyServer
                 upgradeResponse.StatusCode = httpStatus.StatusCode;
                 upgradeResponse.StatusDescription = httpStatus.Description;
 
-                await HeaderParser.ReadHeaders(serverConnection.Stream, upgradeResponse.Headers, idleDeadline.Token);
+                await HeaderParser.ReadHeaders(serverConnection.Stream, upgradeResponse.Headers, idleDeadline.Token,
+                    serverConnection.Stream.HeaderBudget(isRequest: false));
             }
             catch (OperationCanceledException ex)
             {

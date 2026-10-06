@@ -22,6 +22,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.ProxySocket;
 
 namespace Titanium.Web.Proxy.Network.Tcp;
@@ -31,7 +32,6 @@ namespace Titanium.Web.Proxy.Network.Tcp;
 /// </summary>
 internal class TcpConnectionFactory : IDisposable
 {
-    private const int MaximumUpstreamProxyAuthenticationAttempts = 5;
 
     /// <summary>
     ///     Maximum number of upstream CONNECT rejection body bytes retained for diagnostics.
@@ -1315,6 +1315,7 @@ internal class TcpConnectionFactory : IDisposable
 
         var authenticationData = new InternalDataStore();
         var authenticationAttempts = 0;
+        var maxAuthAttempts = proxyServer.ResourceLimits.MaxUpstreamProxyAuthenticationAttempts;
 
         while (true)
         {
@@ -1325,7 +1326,7 @@ internal class TcpConnectionFactory : IDisposable
                              ?? throw new IOException(
                                  "Upstream proxy closed the connection before sending a CONNECT response.");
             var headers = new HeaderCollection();
-            await HeaderParser.ReadHeaders(stream, headers, cancellationToken);
+            await HeaderParser.ReadHeaders(stream, headers, cancellationToken, stream.HeaderBudget(isRequest: false));
 
             if (httpStatus.StatusCode == (int)HttpStatusCode.OK ||
                 httpStatus.Description.EqualsIgnoreCase("Connection Established"))
@@ -1333,9 +1334,13 @@ internal class TcpConnectionFactory : IDisposable
 
             var bodyPreview = await DrainUpstreamProxyResponseBody(stream, headers, cancellationToken);
 
+            if (authenticationAttempts >= maxAuthAttempts)
+                ProxyLog.LimitExceeded(proxyServer.Logger, LimitId.UpstreamProxyAuthAttempts, PolicyMode.Enforce,
+                    authenticationAttempts, maxAuthAttempts, "407");
+
             if (httpStatus.StatusCode != (int)HttpStatusCode.ProxyAuthenticationRequired ||
                 !proxy.UseDefaultCredentials ||
-                authenticationAttempts >= MaximumUpstreamProxyAuthenticationAttempts ||
+                authenticationAttempts >= maxAuthAttempts ||
                 !TryGetUpstreamProxyAuthenticationChallenge(headers, out var scheme, out var challenge))
             {
                 throw CreateUpstreamProxyConnectException(httpStatus, headers, bodyPreview);

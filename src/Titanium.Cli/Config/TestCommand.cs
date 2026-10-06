@@ -13,6 +13,7 @@ internal static class TestCommand
             return Task.FromResult(PrintHelp());
         }
 
+        var strict = args.Any(a => string.Equals(a, "--strict", StringComparison.OrdinalIgnoreCase));
         var configPath = RunCommand.ParseConfigPath(args);
         var loaded = ConfigLoader.Load(configPath);
         var errors = TwpConfigValidator.Validate(loaded.Config);
@@ -26,6 +27,13 @@ internal static class TestCommand
             return Task.FromResult(1);
         }
 
+        foreach (var warning in loaded.UnknownKeys)
+            AsyncConsole.WriteError("warning: " + warning);
+        foreach (var warning in TwpConfigValidator.CollectWarnings(loaded.Config))
+            AsyncConsole.WriteError("warning: " + warning);
+        if (strict && loaded.UnknownKeys.Count > 0)
+            return Task.FromResult(1);
+
         var needsSession = RunCommand.ConfigNeedsSessionPath(loaded.Config);
         AsyncConsole.WriteLine($"Config OK: {configPath}");
         AsyncConsole.WriteLine($"Routes: {loaded.Config.Routes.Count}, Clusters: {loaded.Config.Clusters.Count}, Listeners: {loaded.Config.Listeners.Count}");
@@ -37,9 +45,10 @@ internal static class TestCommand
     internal static int PrintHelp()
     {
         AsyncConsole.WriteLine("""
-            titanium test -c <config>
+            titanium test -c <config> [--strict]
 
               -c, --config   Path to twp.yaml / .json / .twp / .conf (required).
+              --strict       Exit 1 when the file contains unknown keys.
 
             Validates the config without opening listeners or serving traffic.
             """);

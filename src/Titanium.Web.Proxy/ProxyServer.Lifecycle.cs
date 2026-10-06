@@ -103,6 +103,24 @@ public partial class ProxyServer : IDisposable
 
         // Name only, per the plan's rollout section - never hosts, URLs or secrets.
         ProxyLog.EffectiveProfileAtStartup(logger, profile, policyModes);
+        if (ResourceLimits.MaxDecompressionRatio is { } ratio &&
+            ratio != ProxyResourceLimits.Default.MaxDecompressionRatio)
+        {
+            ProxyLog.ReservedLimit(logger, "server.limits.maxDecompressionRatio", ratio,
+                "Body expansion is bounded by maxBufferedBodyBytes.");
+        }
+
+        if (ResourceLimits.MaxEncodedBodyBytes is { } encoded)
+        {
+            ProxyLog.ReservedLimit(logger, "server.limits.maxEncodedBodyBytes", encoded,
+                "The enforced whole-body budget is maxBufferedBodyBytes.");
+        }
+
+        if (ResourceLimits.MaxDecodedBodyBytes is { } decoded)
+        {
+            ProxyLog.ReservedLimit(logger, "server.limits.maxDecodedBodyBytes", decoded,
+                "The enforced whole-body budget is maxBufferedBodyBytes.");
+        }
 
         _ = CertificateManager.ClearIdleCertificates();
 

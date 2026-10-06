@@ -118,5 +118,12 @@ public sealed class ProxyPolicyModes
         return new ProxyPolicyModes(new Dictionary<PolicyFamily, PolicyMode>(modes), true);
     }
 
+    /// <summary>
+    ///     Returns a snapshot identical to this one with <see cref="AllowAmbiguousFraming"/> set explicitly.
+    ///     A partial config overlay uses this so an omitted flag does not clear a value set by the profile.
+    /// </summary>
+    public ProxyPolicyModes WithAllowAmbiguousFraming(bool enabled) =>
+        new(new Dictionary<PolicyFamily, PolicyMode>(modes), enabled);
+
     internal IReadOnlyDictionary<PolicyFamily, PolicyMode> AsReadOnlyDictionary() => modes;
 }

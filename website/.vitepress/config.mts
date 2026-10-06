@@ -68,6 +68,8 @@ export default defineConfig({
             { text: 'Streaming bodies', link: '/docs/streaming-bodies' },
             { text: 'gRPC-JSON transcoding', link: '/docs/grpc-json-transcoding' },
             { text: 'Security', link: '/docs/security' },
+            { text: 'Limits and escape hatches', link: '/docs/limits' },
+            { text: 'Why did my request fail', link: '/docs/troubleshooting' },
           ],
         },
       ],

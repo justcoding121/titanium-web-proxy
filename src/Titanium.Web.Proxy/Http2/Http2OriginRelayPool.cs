@@ -267,9 +267,10 @@ internal sealed class Http2OriginRelayPool : IAsyncDisposable
         }
     }
 
-    private static OriginLeg CreateLeg(TcpServerConnection connection, SemaphoreSlim writeLock, bool ownsWriteLock)
+    private OriginLeg CreateLeg(TcpServerConnection connection, SemaphoreSlim writeLock, bool ownsWriteLock)
     {
-        return new OriginLeg(connection, new Http2FrameWriter(connection.Stream, writeLock), writeLock, ownsWriteLock);
+        return new OriginLeg(connection, new Http2FrameWriter(connection.Stream, writeLock), writeLock, ownsWriteLock,
+            resourceLimits.MaxDeferredOutboundBytesPerStream, resourceLimits.Http2WindowUpdateTimeoutSeconds);
     }
 
     private static async Task DisposeLegAsync(OriginLeg leg)
@@ -304,7 +305,7 @@ internal sealed class Http2OriginRelayPool : IAsyncDisposable
     internal sealed class OriginLeg
     {
         public OriginLeg(TcpServerConnection connection, Http2FrameWriter writer, SemaphoreSlim writeLock,
-            bool ownsWriteLock)
+            bool ownsWriteLock, int maxDeferredBytesPerStream = 0, int windowUpdateTimeoutSeconds = 0)
         {
             Connection = connection;
             Writer = writer;
@@ -312,8 +313,12 @@ internal sealed class Http2OriginRelayPool : IAsyncDisposable
             WriteLock = writeLock;
             OwnsWriteLock = ownsWriteLock;
             NextStreamId = 1;
-            SendFlow = new Http2FlowController();
-            OutboundDeferred = new Http2DeferredOutboundData();
+            SendFlow = new Http2FlowController(windowUpdateTimeoutSeconds > 0
+                ? TimeSpan.FromSeconds(windowUpdateTimeoutSeconds)
+                : null);
+            OutboundDeferred = new Http2DeferredOutboundData(maxDeferredBytesPerStream > 0
+                ? maxDeferredBytesPerStream
+                : Http2DeferredOutboundData.HardMaxDeferredBytesPerStream);
         }
 
         public TcpServerConnection Connection { get; }

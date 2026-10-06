@@ -31,8 +31,6 @@ namespace Titanium.Web.Proxy.Http2
 {
     internal partial class Http2Helper
     {
-        private const int MaxHeaderBlockBytes = 256 * 1024;
-
         private static readonly HashSet<string> ForbiddenConnectionSpecificHeaders = new(StringComparer.OrdinalIgnoreCase)
         {
             "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade"
@@ -69,6 +67,7 @@ namespace Titanium.Web.Proxy.Http2
             bool forceStaticHpackForMitmUnchangedRelay = false)
         {
             resourceLimits ??= ProxyResourceLimits.Default;
+            var maxHeaderBlockBytes = resourceLimits.MaxHttp2CompressedHeaderBlockBytes;
             var cancellationTokenSource = connectionState.CancellationTokenSource;
 
             // Same-protocol H2↔H2 (not NullOrigin / RFC 8441): compressed-relay topology.
@@ -1225,8 +1224,10 @@ namespace Titanium.Web.Proxy.Http2
                         return;
                     }
 
-                    if (pendingHeaderBlock.Length + length > MaxHeaderBlockBytes)
+                    if (pendingHeaderBlock.Length + length > maxHeaderBlockBytes)
                     {
+                        ProxyLog.LimitExceeded(logger, LimitId.Http2CompressedHeaderBlock, PolicyMode.Enforce,
+                            pendingHeaderBlock.Length + length, maxHeaderBlockBytes, "GOAWAY");
                         ReportException(logger, new ProxyHttpException(
                             "HTTP/2 header block exceeded the maximum allowed compressed size.", null,
                             pendingHeaderArgs));
@@ -1589,6 +1590,8 @@ namespace Titanium.Web.Proxy.Http2
 
                             if (bodyBudgetBreached && bodyBudgetMode == PolicyMode.Enforce)
                             {
+                                ProxyLog.LimitExceeded(logger, LimitId.BufferedBody, PolicyMode.Enforce,
+                                    data.Length + length, maxBufferedBodyBytes, "RST_STREAM");
                                 // Intentional policy enforcement, not a proxy defect — Debug only.
                                 ProxyDiagnostics.ReportBenign(logger,
                                     $"HTTP/2 {(isClient ? "request" : "response")} body exceeded the configured " +
