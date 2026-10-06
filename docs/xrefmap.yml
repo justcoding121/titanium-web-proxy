@@ -8222,6 +8222,22 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllObservedExceptDisabled
   nameWithType: ProxyPolicyModes.WithAllObservedExceptDisabled
+- uid: Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllowAmbiguousFraming(System.Boolean)
+  name: WithAllowAmbiguousFraming(bool)
+  href: api/Titanium.Web.Proxy.Options.ProxyPolicyModes.html#Titanium_Web_Proxy_Options_ProxyPolicyModes_WithAllowAmbiguousFraming_System_Boolean_
+  commentId: M:Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllowAmbiguousFraming(System.Boolean)
+  name.vb: WithAllowAmbiguousFraming(Boolean)
+  fullName: Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllowAmbiguousFraming(bool)
+  fullName.vb: Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllowAmbiguousFraming(Boolean)
+  nameWithType: ProxyPolicyModes.WithAllowAmbiguousFraming(bool)
+  nameWithType.vb: ProxyPolicyModes.WithAllowAmbiguousFraming(Boolean)
+- uid: Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllowAmbiguousFraming*
+  name: WithAllowAmbiguousFraming
+  href: api/Titanium.Web.Proxy.Options.ProxyPolicyModes.html#Titanium_Web_Proxy_Options_ProxyPolicyModes_WithAllowAmbiguousFraming_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllowAmbiguousFraming
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllowAmbiguousFraming
+  nameWithType: ProxyPolicyModes.WithAllowAmbiguousFraming
 - uid: Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllowAmbiguousFramingEnabled
   name: WithAllowAmbiguousFramingEnabled()
   href: api/Titanium.Web.Proxy.Options.ProxyPolicyModes.html#Titanium_Web_Proxy_Options_ProxyPolicyModes_WithAllowAmbiguousFramingEnabled
@@ -8495,6 +8511,32 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.Default
   nameWithType: ProxyResourceLimits.Default
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.Http2WindowUpdateTimeoutSeconds
+  name: Http2WindowUpdateTimeoutSeconds
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_Http2WindowUpdateTimeoutSeconds
+  commentId: P:Titanium.Web.Proxy.Options.ProxyResourceLimits.Http2WindowUpdateTimeoutSeconds
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.Http2WindowUpdateTimeoutSeconds
+  nameWithType: ProxyResourceLimits.Http2WindowUpdateTimeoutSeconds
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.Http2WindowUpdateTimeoutSeconds*
+  name: Http2WindowUpdateTimeoutSeconds
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_Http2WindowUpdateTimeoutSeconds_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.Http2WindowUpdateTimeoutSeconds
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.Http2WindowUpdateTimeoutSeconds
+  nameWithType: ProxyResourceLimits.Http2WindowUpdateTimeoutSeconds
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxAuthChallengeRounds
+  name: MaxAuthChallengeRounds
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxAuthChallengeRounds
+  commentId: P:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxAuthChallengeRounds
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxAuthChallengeRounds
+  nameWithType: ProxyResourceLimits.MaxAuthChallengeRounds
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxAuthChallengeRounds*
+  name: MaxAuthChallengeRounds
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxAuthChallengeRounds_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxAuthChallengeRounds
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxAuthChallengeRounds
+  nameWithType: ProxyResourceLimits.MaxAuthChallengeRounds
 - uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCachedConnectionsPerHost
   name: MaxCachedConnectionsPerHost
   href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxCachedConnectionsPerHost
@@ -8586,6 +8628,25 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDecompressionRatio
   nameWithType: ProxyResourceLimits.MaxDecompressionRatio
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDeferredOutboundBytesCeiling
+  name: MaxDeferredOutboundBytesCeiling
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxDeferredOutboundBytesCeiling
+  commentId: F:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDeferredOutboundBytesCeiling
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDeferredOutboundBytesCeiling
+  nameWithType: ProxyResourceLimits.MaxDeferredOutboundBytesCeiling
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDeferredOutboundBytesPerStream
+  name: MaxDeferredOutboundBytesPerStream
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxDeferredOutboundBytesPerStream
+  commentId: P:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDeferredOutboundBytesPerStream
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDeferredOutboundBytesPerStream
+  nameWithType: ProxyResourceLimits.MaxDeferredOutboundBytesPerStream
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDeferredOutboundBytesPerStream*
+  name: MaxDeferredOutboundBytesPerStream
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxDeferredOutboundBytesPerStream_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDeferredOutboundBytesPerStream
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDeferredOutboundBytesPerStream
+  nameWithType: ProxyResourceLimits.MaxDeferredOutboundBytesPerStream
 - uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxEncodedBodyBytes
   name: MaxEncodedBodyBytes
   href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxEncodedBodyBytes
@@ -8638,6 +8699,51 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHeaderLineBytes
   nameWithType: ProxyResourceLimits.MaxHeaderLineBytes
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHttp2CompressedHeaderBlockBytes
+  name: MaxHttp2CompressedHeaderBlockBytes
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxHttp2CompressedHeaderBlockBytes
+  commentId: P:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHttp2CompressedHeaderBlockBytes
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHttp2CompressedHeaderBlockBytes
+  nameWithType: ProxyResourceLimits.MaxHttp2CompressedHeaderBlockBytes
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHttp2CompressedHeaderBlockBytes*
+  name: MaxHttp2CompressedHeaderBlockBytes
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxHttp2CompressedHeaderBlockBytes_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHttp2CompressedHeaderBlockBytes
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHttp2CompressedHeaderBlockBytes
+  nameWithType: ProxyResourceLimits.MaxHttp2CompressedHeaderBlockBytes
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHttp3FramePayloadBytes
+  name: MaxHttp3FramePayloadBytes
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxHttp3FramePayloadBytes
+  commentId: P:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHttp3FramePayloadBytes
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHttp3FramePayloadBytes
+  nameWithType: ProxyResourceLimits.MaxHttp3FramePayloadBytes
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHttp3FramePayloadBytes*
+  name: MaxHttp3FramePayloadBytes
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxHttp3FramePayloadBytes_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHttp3FramePayloadBytes
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHttp3FramePayloadBytes
+  nameWithType: ProxyResourceLimits.MaxHttp3FramePayloadBytes
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHttp3FramePayloadCeiling
+  name: MaxHttp3FramePayloadCeiling
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxHttp3FramePayloadCeiling
+  commentId: F:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHttp3FramePayloadCeiling
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHttp3FramePayloadCeiling
+  nameWithType: ProxyResourceLimits.MaxHttp3FramePayloadCeiling
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxInterimResponses
+  name: MaxInterimResponses
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxInterimResponses
+  commentId: P:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxInterimResponses
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxInterimResponses
+  nameWithType: ProxyResourceLimits.MaxInterimResponses
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxInterimResponses*
+  name: MaxInterimResponses
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxInterimResponses_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxInterimResponses
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxInterimResponses
+  nameWithType: ProxyResourceLimits.MaxInterimResponses
 - uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxOpenHeaderBlockDuration
   name: MaxOpenHeaderBlockDuration
   href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxOpenHeaderBlockDuration
@@ -8690,6 +8796,74 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxPeerInitiatedIncompleteStreamResets
   nameWithType: ProxyResourceLimits.MaxPeerInitiatedIncompleteStreamResets
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxTrailerHeaderBlockBytes
+  name: MaxTrailerHeaderBlockBytes
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxTrailerHeaderBlockBytes
+  commentId: P:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxTrailerHeaderBlockBytes
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxTrailerHeaderBlockBytes
+  nameWithType: ProxyResourceLimits.MaxTrailerHeaderBlockBytes
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxTrailerHeaderBlockBytes*
+  name: MaxTrailerHeaderBlockBytes
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxTrailerHeaderBlockBytes_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxTrailerHeaderBlockBytes
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxTrailerHeaderBlockBytes
+  nameWithType: ProxyResourceLimits.MaxTrailerHeaderBlockBytes
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxTrailerHeaderCount
+  name: MaxTrailerHeaderCount
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxTrailerHeaderCount
+  commentId: P:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxTrailerHeaderCount
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxTrailerHeaderCount
+  nameWithType: ProxyResourceLimits.MaxTrailerHeaderCount
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxTrailerHeaderCount*
+  name: MaxTrailerHeaderCount
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxTrailerHeaderCount_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxTrailerHeaderCount
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxTrailerHeaderCount
+  nameWithType: ProxyResourceLimits.MaxTrailerHeaderCount
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxUpstreamProxyAuthenticationAttempts
+  name: MaxUpstreamProxyAuthenticationAttempts
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxUpstreamProxyAuthenticationAttempts
+  commentId: P:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxUpstreamProxyAuthenticationAttempts
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxUpstreamProxyAuthenticationAttempts
+  nameWithType: ProxyResourceLimits.MaxUpstreamProxyAuthenticationAttempts
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxUpstreamProxyAuthenticationAttempts*
+  name: MaxUpstreamProxyAuthenticationAttempts
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxUpstreamProxyAuthenticationAttempts_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxUpstreamProxyAuthenticationAttempts
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxUpstreamProxyAuthenticationAttempts
+  nameWithType: ProxyResourceLimits.MaxUpstreamProxyAuthenticationAttempts
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxWinAuthTokenBytes
+  name: MaxWinAuthTokenBytes
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxWinAuthTokenBytes
+  commentId: P:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxWinAuthTokenBytes
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxWinAuthTokenBytes
+  nameWithType: ProxyResourceLimits.MaxWinAuthTokenBytes
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxWinAuthTokenBytes*
+  name: MaxWinAuthTokenBytes
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxWinAuthTokenBytes_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxWinAuthTokenBytes
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxWinAuthTokenBytes
+  nameWithType: ProxyResourceLimits.MaxWinAuthTokenBytes
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithAuthenticationBounds(System.Int32,System.Int32,System.Int32)
+  name: WithAuthenticationBounds(int, int, int)
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithAuthenticationBounds_System_Int32_System_Int32_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Options.ProxyResourceLimits.WithAuthenticationBounds(System.Int32,System.Int32,System.Int32)
+  name.vb: WithAuthenticationBounds(Integer, Integer, Integer)
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithAuthenticationBounds(int, int, int)
+  fullName.vb: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithAuthenticationBounds(Integer, Integer, Integer)
+  nameWithType: ProxyResourceLimits.WithAuthenticationBounds(int, int, int)
+  nameWithType.vb: ProxyResourceLimits.WithAuthenticationBounds(Integer, Integer, Integer)
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithAuthenticationBounds*
+  name: WithAuthenticationBounds
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithAuthenticationBounds_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.WithAuthenticationBounds
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithAuthenticationBounds
+  nameWithType: ProxyResourceLimits.WithAuthenticationBounds
 - uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithCertificateCacheBounds(System.Nullable{System.Int32},System.Nullable{System.Int32})
   name: WithCertificateCacheBounds(int?, int?)
   href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithCertificateCacheBounds_System_Nullable_System_Int32__System_Nullable_System_Int32__
@@ -8706,6 +8880,22 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithCertificateCacheBounds
   nameWithType: ProxyResourceLimits.WithCertificateCacheBounds
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithHttp2WindowUpdateTimeoutSeconds(System.Int32)
+  name: WithHttp2WindowUpdateTimeoutSeconds(int)
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithHttp2WindowUpdateTimeoutSeconds_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Options.ProxyResourceLimits.WithHttp2WindowUpdateTimeoutSeconds(System.Int32)
+  name.vb: WithHttp2WindowUpdateTimeoutSeconds(Integer)
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithHttp2WindowUpdateTimeoutSeconds(int)
+  fullName.vb: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithHttp2WindowUpdateTimeoutSeconds(Integer)
+  nameWithType: ProxyResourceLimits.WithHttp2WindowUpdateTimeoutSeconds(int)
+  nameWithType.vb: ProxyResourceLimits.WithHttp2WindowUpdateTimeoutSeconds(Integer)
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithHttp2WindowUpdateTimeoutSeconds*
+  name: WithHttp2WindowUpdateTimeoutSeconds
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithHttp2WindowUpdateTimeoutSeconds_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.WithHttp2WindowUpdateTimeoutSeconds
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithHttp2WindowUpdateTimeoutSeconds
+  nameWithType: ProxyResourceLimits.WithHttp2WindowUpdateTimeoutSeconds
 - uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxConcurrentStreamsPerConnection(System.Int32)
   name: WithMaxConcurrentStreamsPerConnection(int)
   href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithMaxConcurrentStreamsPerConnection_System_Int32_
@@ -8722,6 +8912,70 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxConcurrentStreamsPerConnection
   nameWithType: ProxyResourceLimits.WithMaxConcurrentStreamsPerConnection
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxDeferredOutboundBytesPerStream(System.Int32)
+  name: WithMaxDeferredOutboundBytesPerStream(int)
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithMaxDeferredOutboundBytesPerStream_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxDeferredOutboundBytesPerStream(System.Int32)
+  name.vb: WithMaxDeferredOutboundBytesPerStream(Integer)
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxDeferredOutboundBytesPerStream(int)
+  fullName.vb: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxDeferredOutboundBytesPerStream(Integer)
+  nameWithType: ProxyResourceLimits.WithMaxDeferredOutboundBytesPerStream(int)
+  nameWithType.vb: ProxyResourceLimits.WithMaxDeferredOutboundBytesPerStream(Integer)
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxDeferredOutboundBytesPerStream*
+  name: WithMaxDeferredOutboundBytesPerStream
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithMaxDeferredOutboundBytesPerStream_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxDeferredOutboundBytesPerStream
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxDeferredOutboundBytesPerStream
+  nameWithType: ProxyResourceLimits.WithMaxDeferredOutboundBytesPerStream
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxHttp2CompressedHeaderBlockBytes(System.Int32)
+  name: WithMaxHttp2CompressedHeaderBlockBytes(int)
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithMaxHttp2CompressedHeaderBlockBytes_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxHttp2CompressedHeaderBlockBytes(System.Int32)
+  name.vb: WithMaxHttp2CompressedHeaderBlockBytes(Integer)
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxHttp2CompressedHeaderBlockBytes(int)
+  fullName.vb: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxHttp2CompressedHeaderBlockBytes(Integer)
+  nameWithType: ProxyResourceLimits.WithMaxHttp2CompressedHeaderBlockBytes(int)
+  nameWithType.vb: ProxyResourceLimits.WithMaxHttp2CompressedHeaderBlockBytes(Integer)
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxHttp2CompressedHeaderBlockBytes*
+  name: WithMaxHttp2CompressedHeaderBlockBytes
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithMaxHttp2CompressedHeaderBlockBytes_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxHttp2CompressedHeaderBlockBytes
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxHttp2CompressedHeaderBlockBytes
+  nameWithType: ProxyResourceLimits.WithMaxHttp2CompressedHeaderBlockBytes
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxHttp3FramePayloadBytes(System.Int64)
+  name: WithMaxHttp3FramePayloadBytes(long)
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithMaxHttp3FramePayloadBytes_System_Int64_
+  commentId: M:Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxHttp3FramePayloadBytes(System.Int64)
+  name.vb: WithMaxHttp3FramePayloadBytes(Long)
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxHttp3FramePayloadBytes(long)
+  fullName.vb: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxHttp3FramePayloadBytes(Long)
+  nameWithType: ProxyResourceLimits.WithMaxHttp3FramePayloadBytes(long)
+  nameWithType.vb: ProxyResourceLimits.WithMaxHttp3FramePayloadBytes(Long)
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxHttp3FramePayloadBytes*
+  name: WithMaxHttp3FramePayloadBytes
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithMaxHttp3FramePayloadBytes_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxHttp3FramePayloadBytes
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxHttp3FramePayloadBytes
+  nameWithType: ProxyResourceLimits.WithMaxHttp3FramePayloadBytes
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxInterimResponses(System.Int32)
+  name: WithMaxInterimResponses(int)
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithMaxInterimResponses_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxInterimResponses(System.Int32)
+  name.vb: WithMaxInterimResponses(Integer)
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxInterimResponses(int)
+  fullName.vb: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxInterimResponses(Integer)
+  nameWithType: ProxyResourceLimits.WithMaxInterimResponses(int)
+  nameWithType.vb: ProxyResourceLimits.WithMaxInterimResponses(Integer)
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxInterimResponses*
+  name: WithMaxInterimResponses
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithMaxInterimResponses_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxInterimResponses
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxInterimResponses
+  nameWithType: ProxyResourceLimits.WithMaxInterimResponses
 - uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxOriginHttp2ConnectionsPerAuthority(System.Int32)
   name: WithMaxOriginHttp2ConnectionsPerAuthority(int)
   href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithMaxOriginHttp2ConnectionsPerAuthority_System_Int32_
@@ -8738,6 +8992,22 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxOriginHttp2ConnectionsPerAuthority
   nameWithType: ProxyResourceLimits.WithMaxOriginHttp2ConnectionsPerAuthority
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithTrailerHeaderBounds(System.Int32,System.Int32)
+  name: WithTrailerHeaderBounds(int, int)
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithTrailerHeaderBounds_System_Int32_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Options.ProxyResourceLimits.WithTrailerHeaderBounds(System.Int32,System.Int32)
+  name.vb: WithTrailerHeaderBounds(Integer, Integer)
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithTrailerHeaderBounds(int, int)
+  fullName.vb: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithTrailerHeaderBounds(Integer, Integer)
+  nameWithType: ProxyResourceLimits.WithTrailerHeaderBounds(int, int)
+  nameWithType.vb: ProxyResourceLimits.WithTrailerHeaderBounds(Integer, Integer)
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithTrailerHeaderBounds*
+  name: WithTrailerHeaderBounds
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithTrailerHeaderBounds_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.WithTrailerHeaderBounds
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithTrailerHeaderBounds
+  nameWithType: ProxyResourceLimits.WithTrailerHeaderBounds
 - uid: Titanium.Web.Proxy.Options.ProxyTimeoutOptions
   name: ProxyTimeoutOptions
   href: api/Titanium.Web.Proxy.Options.ProxyTimeoutOptions.html
