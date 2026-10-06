@@ -416,14 +416,14 @@ public sealed class ProxyResourceLimits
     public ProxyResourceLimits WithMaxHttp3FramePayloadBytes(long maxHttp3FramePayloadBytes)
     {
         RequireInRange(maxHttp3FramePayloadBytes, MaxHttp3FramePayloadCeiling, nameof(maxHttp3FramePayloadBytes));
-        return Copy(maxHttp3FramePayloadBytes: maxHttp3FramePayloadBytes);
+        return Copy(new HatchOverrides { MaxHttp3FramePayloadBytes = maxHttp3FramePayloadBytes });
     }
 
     /// <summary>Returns a copy with <see cref="MaxDeferredOutboundBytesPerStream"/> replaced.</summary>
     public ProxyResourceLimits WithMaxDeferredOutboundBytesPerStream(int maxDeferredOutboundBytesPerStream)
     {
         RequireInRange(maxDeferredOutboundBytesPerStream, MaxDeferredOutboundBytesCeiling, nameof(maxDeferredOutboundBytesPerStream));
-        return Copy(maxDeferredOutboundBytesPerStream: maxDeferredOutboundBytesPerStream);
+        return Copy(new HatchOverrides { MaxDeferredOutboundBytesPerStream = maxDeferredOutboundBytesPerStream });
     }
 
     /// <summary>Returns a copy with trailer header bounds replaced.</summary>
@@ -431,21 +431,25 @@ public sealed class ProxyResourceLimits
     {
         RequireInRange(maxTrailerHeaderCount, 10_000, nameof(maxTrailerHeaderCount));
         RequireInRange(maxTrailerHeaderBlockBytes, 1024 * 1024, nameof(maxTrailerHeaderBlockBytes));
-        return Copy(maxTrailerHeaderCount: maxTrailerHeaderCount, maxTrailerHeaderBlockBytes: maxTrailerHeaderBlockBytes);
+        return Copy(new HatchOverrides
+        {
+            MaxTrailerHeaderCount = maxTrailerHeaderCount,
+            MaxTrailerHeaderBlockBytes = maxTrailerHeaderBlockBytes
+        });
     }
 
     /// <summary>Returns a copy with <see cref="MaxHttp2CompressedHeaderBlockBytes"/> replaced.</summary>
     public ProxyResourceLimits WithMaxHttp2CompressedHeaderBlockBytes(int maxHttp2CompressedHeaderBlockBytes)
     {
         RequireInRange(maxHttp2CompressedHeaderBlockBytes, 16 * 1024 * 1024, nameof(maxHttp2CompressedHeaderBlockBytes));
-        return Copy(maxHttp2CompressedHeaderBlockBytes: maxHttp2CompressedHeaderBlockBytes);
+        return Copy(new HatchOverrides { MaxHttp2CompressedHeaderBlockBytes = maxHttp2CompressedHeaderBlockBytes });
     }
 
     /// <summary>Returns a copy with <see cref="MaxInterimResponses"/> replaced.</summary>
     public ProxyResourceLimits WithMaxInterimResponses(int maxInterimResponses)
     {
         RequireInRange(maxInterimResponses, 100, nameof(maxInterimResponses));
-        return Copy(maxInterimResponses: maxInterimResponses);
+        return Copy(new HatchOverrides { MaxInterimResponses = maxInterimResponses });
     }
 
     /// <summary>Returns a copy with authentication bounds replaced.</summary>
@@ -455,30 +459,36 @@ public sealed class ProxyResourceLimits
         RequireInRange(maxAuthChallengeRounds, 20, nameof(maxAuthChallengeRounds));
         RequireInRange(maxUpstreamProxyAuthenticationAttempts, 20, nameof(maxUpstreamProxyAuthenticationAttempts));
         RequireInRange(maxWinAuthTokenBytes, 1024 * 1024, nameof(maxWinAuthTokenBytes));
-        return Copy(
-            maxAuthChallengeRounds: maxAuthChallengeRounds,
-            maxUpstreamProxyAuthenticationAttempts: maxUpstreamProxyAuthenticationAttempts,
-            maxWinAuthTokenBytes: maxWinAuthTokenBytes);
+        return Copy(new HatchOverrides
+        {
+            MaxAuthChallengeRounds = maxAuthChallengeRounds,
+            MaxUpstreamProxyAuthenticationAttempts = maxUpstreamProxyAuthenticationAttempts,
+            MaxWinAuthTokenBytes = maxWinAuthTokenBytes
+        });
     }
 
     /// <summary>Returns a copy with <see cref="Http2WindowUpdateTimeoutSeconds"/> replaced.</summary>
     public ProxyResourceLimits WithHttp2WindowUpdateTimeoutSeconds(int http2WindowUpdateTimeoutSeconds)
     {
         RequireInRange(http2WindowUpdateTimeoutSeconds, 3600, nameof(http2WindowUpdateTimeoutSeconds));
-        return Copy(http2WindowUpdateTimeoutSeconds: http2WindowUpdateTimeoutSeconds);
+        return Copy(new HatchOverrides { Http2WindowUpdateTimeoutSeconds = http2WindowUpdateTimeoutSeconds });
     }
 
-    private ProxyResourceLimits Copy(
-        long? maxHttp3FramePayloadBytes = null,
-        int? maxDeferredOutboundBytesPerStream = null,
-        int? maxTrailerHeaderCount = null,
-        int? maxTrailerHeaderBlockBytes = null,
-        int? maxHttp2CompressedHeaderBlockBytes = null,
-        int? maxInterimResponses = null,
-        int? maxAuthChallengeRounds = null,
-        int? maxUpstreamProxyAuthenticationAttempts = null,
-        int? maxWinAuthTokenBytes = null,
-        int? http2WindowUpdateTimeoutSeconds = null) =>
+    private readonly struct HatchOverrides
+    {
+        internal long? MaxHttp3FramePayloadBytes { get; init; }
+        internal int? MaxDeferredOutboundBytesPerStream { get; init; }
+        internal int? MaxTrailerHeaderCount { get; init; }
+        internal int? MaxTrailerHeaderBlockBytes { get; init; }
+        internal int? MaxHttp2CompressedHeaderBlockBytes { get; init; }
+        internal int? MaxInterimResponses { get; init; }
+        internal int? MaxAuthChallengeRounds { get; init; }
+        internal int? MaxUpstreamProxyAuthenticationAttempts { get; init; }
+        internal int? MaxWinAuthTokenBytes { get; init; }
+        internal int? Http2WindowUpdateTimeoutSeconds { get; init; }
+    }
+
+    private ProxyResourceLimits Copy(HatchOverrides over = default) =>
         new()
         {
             MaxHeaderLineBytes = MaxHeaderLineBytes,
@@ -497,16 +507,16 @@ public sealed class ProxyResourceLimits
             MaxOriginHttp2ConnectionsPerAuthority = MaxOriginHttp2ConnectionsPerAuthority,
             MaxCertificateCacheEntries = MaxCertificateCacheEntries,
             MaxCertificateDiskCacheEntries = MaxCertificateDiskCacheEntries,
-            MaxHttp3FramePayloadBytes = maxHttp3FramePayloadBytes ?? MaxHttp3FramePayloadBytes,
-            MaxDeferredOutboundBytesPerStream = maxDeferredOutboundBytesPerStream ?? MaxDeferredOutboundBytesPerStream,
-            MaxTrailerHeaderCount = maxTrailerHeaderCount ?? MaxTrailerHeaderCount,
-            MaxTrailerHeaderBlockBytes = maxTrailerHeaderBlockBytes ?? MaxTrailerHeaderBlockBytes,
-            MaxHttp2CompressedHeaderBlockBytes = maxHttp2CompressedHeaderBlockBytes ?? MaxHttp2CompressedHeaderBlockBytes,
-            MaxInterimResponses = maxInterimResponses ?? MaxInterimResponses,
-            MaxAuthChallengeRounds = maxAuthChallengeRounds ?? MaxAuthChallengeRounds,
-            MaxUpstreamProxyAuthenticationAttempts = maxUpstreamProxyAuthenticationAttempts ?? MaxUpstreamProxyAuthenticationAttempts,
-            MaxWinAuthTokenBytes = maxWinAuthTokenBytes ?? MaxWinAuthTokenBytes,
-            Http2WindowUpdateTimeoutSeconds = http2WindowUpdateTimeoutSeconds ?? Http2WindowUpdateTimeoutSeconds
+            MaxHttp3FramePayloadBytes = over.MaxHttp3FramePayloadBytes ?? MaxHttp3FramePayloadBytes,
+            MaxDeferredOutboundBytesPerStream = over.MaxDeferredOutboundBytesPerStream ?? MaxDeferredOutboundBytesPerStream,
+            MaxTrailerHeaderCount = over.MaxTrailerHeaderCount ?? MaxTrailerHeaderCount,
+            MaxTrailerHeaderBlockBytes = over.MaxTrailerHeaderBlockBytes ?? MaxTrailerHeaderBlockBytes,
+            MaxHttp2CompressedHeaderBlockBytes = over.MaxHttp2CompressedHeaderBlockBytes ?? MaxHttp2CompressedHeaderBlockBytes,
+            MaxInterimResponses = over.MaxInterimResponses ?? MaxInterimResponses,
+            MaxAuthChallengeRounds = over.MaxAuthChallengeRounds ?? MaxAuthChallengeRounds,
+            MaxUpstreamProxyAuthenticationAttempts = over.MaxUpstreamProxyAuthenticationAttempts ?? MaxUpstreamProxyAuthenticationAttempts,
+            MaxWinAuthTokenBytes = over.MaxWinAuthTokenBytes ?? MaxWinAuthTokenBytes,
+            Http2WindowUpdateTimeoutSeconds = over.Http2WindowUpdateTimeoutSeconds ?? Http2WindowUpdateTimeoutSeconds
         };
 
     private static void RequireInRange(long value, long ceiling, string paramName)

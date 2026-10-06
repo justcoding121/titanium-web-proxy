@@ -67,6 +67,9 @@ internal readonly struct LimitEntry
 /// <summary>Single source of truth for limit names, CLI keys, and log hints.</summary>
 internal static class LimitCatalog
 {
+    private const string HeaderLimitsKey = "headerLimits";
+    private const string AdmissionControlKey = "admissionControl";
+
     private static readonly LimitEntry[] Entries = Build();
 
     internal static LimitEntry Get(LimitId id) => Entries[(int)id];
@@ -83,44 +86,44 @@ internal static class LimitCatalog
         Add(Row(LimitId.BufferedBody, "MaxBufferedBodyBytes", "server.limits.maxBufferedBodyBytes",
             "buffered body", "bodyBudget", PolicyFamily.BodyBudget));
         Add(Row(LimitId.HeaderCount, "MaxHeaderCount", "server.limits.maxHeaderCount",
-            "header count", "headerLimits", PolicyFamily.HeaderLimits));
+            "header count", HeaderLimitsKey, PolicyFamily.HeaderLimits));
         Add(Row(LimitId.HeaderAggregate, "MaxHeaderAggregateBytes", "server.limits.maxHeaderAggregateBytes",
-            "header block size", "headerLimits", PolicyFamily.HeaderLimits));
+            "header block size", HeaderLimitsKey, PolicyFamily.HeaderLimits));
         Add(Row(LimitId.HeaderLine, "MaxHeaderLineBytes", "server.limits.maxHeaderLineBytes",
-            "header line", "headerLimits", PolicyFamily.HeaderLimits));
+            "header line", HeaderLimitsKey, PolicyFamily.HeaderLimits));
         Add(Row(LimitId.Http3FramePayload, "MaxHttp3FramePayloadBytes", "server.limits.maxHttp3FramePayloadBytes",
             "HTTP/3 frame payload", "bodyBudget", PolicyFamily.BodyBudget));
         Add(Row(LimitId.DeferredOutboundBytes, "MaxDeferredOutboundBytesPerStream",
             "server.limits.maxDeferredOutboundBytesPerStream",
             "HTTP/2 deferred DATA", "bodyBudget", PolicyFamily.BodyBudget));
         Add(Row(LimitId.DecodedHeaderList, "MaxDecodedHeaderListBytes", "server.limits.maxDecodedHeaderListBytes",
-            "decoded header list", "headerLimits", PolicyFamily.HeaderLimits));
+            "decoded header list", HeaderLimitsKey, PolicyFamily.HeaderLimits));
         Add(Row(LimitId.TrailerHeaderCount, "MaxTrailerHeaderCount", "server.limits.maxTrailerHeaderCount",
-            "trailer header count", "headerLimits", PolicyFamily.HeaderLimits));
+            "trailer header count", HeaderLimitsKey, PolicyFamily.HeaderLimits));
         Add(Row(LimitId.TrailerHeaderBlock, "MaxTrailerHeaderBlockBytes", "server.limits.maxTrailerHeaderBlockBytes",
-            "trailer header block", "headerLimits", PolicyFamily.HeaderLimits));
+            "trailer header block", HeaderLimitsKey, PolicyFamily.HeaderLimits));
         Add(Row(LimitId.Http2CompressedHeaderBlock, "MaxHttp2CompressedHeaderBlockBytes",
             "server.limits.maxHttp2CompressedHeaderBlockBytes",
-            "compressed header block", "headerLimits", PolicyFamily.HeaderLimits));
+            "compressed header block", HeaderLimitsKey, PolicyFamily.HeaderLimits));
         Add(Row(LimitId.InterimResponses, "MaxInterimResponses", "server.limits.maxInterimResponses",
-            "interim responses", "headerLimits", PolicyFamily.HeaderLimits));
+            "interim responses", HeaderLimitsKey, PolicyFamily.HeaderLimits));
         Add(Row(LimitId.AuthChallengeRounds, "MaxAuthChallengeRounds", "server.limits.maxAuthChallengeRounds",
-            "authentication challenge rounds", "admissionControl", PolicyFamily.AdmissionControl));
+            "authentication challenge rounds", AdmissionControlKey, PolicyFamily.AdmissionControl));
         Add(Row(LimitId.UpstreamProxyAuthAttempts, "MaxUpstreamProxyAuthenticationAttempts",
             "server.limits.maxUpstreamProxyAuthenticationAttempts",
-            "upstream proxy authentication attempts", "admissionControl", PolicyFamily.AdmissionControl));
+            "upstream proxy authentication attempts", AdmissionControlKey, PolicyFamily.AdmissionControl));
         Add(Row(LimitId.WinAuthToken, "MaxWinAuthTokenBytes", "server.limits.maxWinAuthTokenBytes",
-            "Windows authentication token", "admissionControl", PolicyFamily.AdmissionControl));
+            "Windows authentication token", AdmissionControlKey, PolicyFamily.AdmissionControl));
         Add(Row(LimitId.Http2WindowUpdate, "Http2WindowUpdateTimeoutSeconds",
             "server.limits.http2WindowUpdateTimeoutSeconds",
             "HTTP/2 flow-control wait", "http2AbuseBudget", PolicyFamily.Http2AbuseBudget));
         Add(Row(LimitId.UpgradeHandshakeHeaders, "MaxHeaderCount", "server.limits.maxHeaderCount",
-            "upgrade handshake headers", "headerLimits", PolicyFamily.HeaderLimits));
+            "upgrade handshake headers", HeaderLimitsKey, PolicyFamily.HeaderLimits));
         Add(Row(LimitId.AdmissionGlobal, "MaxConcurrentClientConnections",
             "server.pooling.maxConcurrentClientConnections",
-            "client connections", "admissionControl", PolicyFamily.AdmissionControl));
+            "client connections", AdmissionControlKey, PolicyFamily.AdmissionControl));
         Add(Row(LimitId.AdmissionEndpoint, "MaxConcurrentClients", "server.limits.maxConcurrentClients",
-            "endpoint client connections", "admissionControl", PolicyFamily.AdmissionControl));
+            "endpoint client connections", AdmissionControlKey, PolicyFamily.AdmissionControl));
         Add(Timeout(LimitId.TimeoutConnect, "ConnectTimeOutSeconds", "server.timeouts.connectTimeOutSeconds",
             "connect"));
         Add(Timeout(LimitId.TimeoutResponseHeader, "ResponseHeaderTimeoutSeconds",

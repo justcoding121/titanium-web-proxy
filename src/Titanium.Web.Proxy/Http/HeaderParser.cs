@@ -27,6 +27,20 @@ internal readonly struct HeaderBlockBudget
 
 }
 
+internal readonly struct HeaderScan
+{
+    internal HeaderScan(int count, long aggregate, bool observed)
+    {
+        Count = count;
+        Aggregate = aggregate;
+        Observed = observed;
+    }
+
+    internal int Count { get; }
+    internal long Aggregate { get; }
+    internal bool Observed { get; }
+}
+
 internal static class HeaderParser
 {
     internal static ValueTask ReadHeaders(ILineStream reader, HeaderCollection headerCollection,
@@ -42,7 +56,7 @@ internal static class HeaderParser
             var lineVt = reader.ReadLineAsync(cancellationToken);
             if (!lineVt.IsCompletedSuccessfully)
                 return ReadHeadersContinueAsync(reader, headerCollection, lineVt, hasPending: true,
-                    cancellationToken, budget, count, aggregate, observed);
+                    cancellationToken, budget, new HeaderScan(count, aggregate, observed));
 
             var buffered = lineVt.Result;
             if (string.IsNullOrEmpty(buffered)) return default;
@@ -51,13 +65,16 @@ internal static class HeaderParser
         }
 
         return ReadHeadersContinueAsync(reader, headerCollection, default, hasPending: false,
-            cancellationToken, budget, count, aggregate, observed);
+            cancellationToken, budget, new HeaderScan(count, aggregate, observed));
     }
 
     private static async ValueTask ReadHeadersContinueAsync(ILineStream reader,
         HeaderCollection headerCollection, ValueTask<string?> pendingLine, bool hasPending,
-        CancellationToken cancellationToken, HeaderBlockBudget budget, int count, long aggregate, bool observed)
+        CancellationToken cancellationToken, HeaderBlockBudget budget, HeaderScan scan)
     {
+        var count = scan.Count;
+        var aggregate = scan.Aggregate;
+        var observed = scan.Observed;
         if (hasPending)
         {
             var pending = await pendingLine;
@@ -95,15 +112,18 @@ internal static class HeaderParser
 
         // Incomplete line or empty buffer — fall through to the string path (handles multi-fill lines).
         return TryReadHeadersContinueAsync(reader, headerCollection, default, hasPending: false,
-            cancellationToken, budget, count, aggregate, observed);
+            cancellationToken, budget, new HeaderScan(count, aggregate, observed));
     }
 
     private static async ValueTask<bool> TryReadHeadersContinueAsync(HttpStream reader,
         HeaderCollection headerCollection,
         ValueTask<(string? Line, bool Cancelled)> pendingLine,
         bool hasPending,
-        CancellationToken cancellationToken, HeaderBlockBudget budget, int count, long aggregate, bool observed)
+        CancellationToken cancellationToken, HeaderBlockBudget budget, HeaderScan scan)
     {
+        var count = scan.Count;
+        var aggregate = scan.Aggregate;
+        var observed = scan.Observed;
         if (hasPending)
         {
             var (pending, cancelled) = await pendingLine;

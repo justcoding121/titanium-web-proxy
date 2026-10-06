@@ -301,3 +301,9 @@ Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxHttp3FramePayloadBytes(lon
 Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxInterimResponses(int maxInterimResponses) -> Titanium.Web.Proxy.Options.ProxyResourceLimits!
 Titanium.Web.Proxy.Options.ProxyResourceLimits.WithTrailerHeaderBounds(int maxTrailerHeaderCount, int maxTrailerHeaderBlockBytes) -> Titanium.Web.Proxy.Options.ProxyResourceLimits!
 Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllowAmbiguousFraming(bool enabled) -> Titanium.Web.Proxy.Options.ProxyPolicyModes!
+Titanium.Web.Proxy.Http.HeaderLimitsExceededException
+Titanium.Web.Proxy.Http.HeaderLimitsExceededException.HeaderLimitsExceededException(bool isCount, long observed, long limit, bool isRequest) -> void
+Titanium.Web.Proxy.Http.HeaderLimitsExceededException.IsCount.get -> bool
+Titanium.Web.Proxy.Http.HeaderLimitsExceededException.IsRequest.get -> bool
+Titanium.Web.Proxy.Http.HeaderLimitsExceededException.Limit.get -> long
+Titanium.Web.Proxy.Http.HeaderLimitsExceededException.Observed.get -> long

@@ -1334,9 +1334,7 @@ internal class TcpConnectionFactory : IDisposable
 
             var bodyPreview = await DrainUpstreamProxyResponseBody(stream, headers, cancellationToken);
 
-            if (authenticationAttempts >= maxAuthAttempts)
-                ProxyLog.LimitExceeded(proxyServer.Logger, LimitId.UpstreamProxyAuthAttempts, PolicyMode.Enforce,
-                    authenticationAttempts, maxAuthAttempts, "407");
+            NoteUpstreamAuthCap(proxyServer, authenticationAttempts, maxAuthAttempts);
 
             if (httpStatus.StatusCode != (int)HttpStatusCode.ProxyAuthenticationRequired ||
                 !proxy.UseDefaultCredentials ||
@@ -1366,6 +1364,13 @@ internal class TcpConnectionFactory : IDisposable
                 KnownHeaders.ConnectionKeepAlive.String);
             authenticationAttempts++;
         }
+    }
+
+    private static void NoteUpstreamAuthCap(ProxyServer proxyServer, int authenticationAttempts, int maxAuthAttempts)
+    {
+        if (authenticationAttempts >= maxAuthAttempts)
+            ProxyLog.LimitExceeded(proxyServer.Logger, LimitId.UpstreamProxyAuthAttempts, PolicyMode.Enforce,
+                authenticationAttempts, maxAuthAttempts, "407");
     }
 
     private static bool TryGetUpstreamProxyAuthenticationChallenge(HeaderCollection headers, out string? scheme,

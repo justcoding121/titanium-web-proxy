@@ -8,6 +8,9 @@ namespace Titanium.Web.Proxy.Configuration;
 /// </summary>
 public static class TwpConfigSchema
 {
+    private const string ObjectType = "object";
+    private const string StringType = "string";
+
     public static string Generate()
     {
         var root = new JsonObject
@@ -15,7 +18,7 @@ public static class TwpConfigSchema
             ["$schema"] = "https://json-schema.org/draft/2020-12/schema",
             ["$id"] = "https://titaniumproxy.com/twp.schema.json",
             ["title"] = "Titanium Web Proxy configuration",
-            ["type"] = "object",
+            ["type"] = ObjectType,
             ["additionalProperties"] = false,
             ["properties"] = PropertiesOf(typeof(Models.TwpConfig), []),
         };
@@ -35,11 +38,11 @@ public static class TwpConfigSchema
         return props;
     }
 
-    private static JsonNode SchemaFor(Type type, HashSet<Type> stack)
+    private static JsonObject SchemaFor(Type type, HashSet<Type> stack)
     {
         type = Nullable.GetUnderlyingType(type) ?? type;
         if (type == typeof(string))
-            return new JsonObject { ["type"] = "string" };
+            return new JsonObject { ["type"] = StringType };
         if (type == typeof(bool))
             return new JsonObject { ["type"] = "boolean" };
         if (type == typeof(int) || type == typeof(long) || type == typeof(short))
@@ -47,13 +50,13 @@ public static class TwpConfigSchema
         if (type == typeof(double) || type == typeof(float) || type == typeof(decimal))
             return new JsonObject { ["type"] = "number" };
         if (type.IsEnum)
-            return new JsonObject { ["type"] = "string" };
+            return new JsonObject { ["type"] = StringType };
 
         if (IsDictionary(type))
             return new JsonObject
             {
-                ["type"] = "object",
-                ["additionalProperties"] = new JsonObject { ["type"] = "string" },
+                ["type"] = ObjectType,
+                ["additionalProperties"] = new JsonObject { ["type"] = StringType },
             };
 
         var item = ItemType(type);
@@ -61,16 +64,16 @@ public static class TwpConfigSchema
             return new JsonObject { ["type"] = "array", ["items"] = SchemaFor(item, stack) };
 
         if (!type.IsClass)
-            return new JsonObject { ["type"] = "string" };
+            return new JsonObject { ["type"] = StringType };
 
         if (!stack.Add(type))
-            return new JsonObject { ["type"] = "object" };
+            return new JsonObject { ["type"] = ObjectType };
 
         try
         {
             return new JsonObject
             {
-                ["type"] = "object",
+                ["type"] = ObjectType,
                 ["additionalProperties"] = false,
                 ["properties"] = PropertiesOf(type, stack),
             };

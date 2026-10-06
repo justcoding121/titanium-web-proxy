@@ -52,6 +52,16 @@ public partial class ProxyServer : IDisposable
     ///     Whether or not clear any system proxy settings which is pointing to our own endpoint (causing a cycle).
     ///     E.g due to ungracious proxy shutdown before.
     /// </param>
+    private static bool DecompressionRatioDiffersFromDefault(double configured)
+    {
+        if (ProxyResourceLimits.Default.MaxDecompressionRatio is not double expected)
+            return true;
+
+        // 200 is exactly representable. A range check avoids an exact floating-point equality.
+        var delta = configured - expected;
+        return delta > 0d || delta < 0d;
+    }
+
     public void Start(bool changeSystemProxySettings = true) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         if (ProxyRunning) throw new InvalidOperationException("Proxy is already running.");
@@ -104,7 +114,7 @@ public partial class ProxyServer : IDisposable
         // Name only, per the plan's rollout section - never hosts, URLs or secrets.
         ProxyLog.EffectiveProfileAtStartup(logger, profile, policyModes);
         if (ResourceLimits.MaxDecompressionRatio is { } ratio &&
-            ratio != ProxyResourceLimits.Default.MaxDecompressionRatio)
+            DecompressionRatioDiffersFromDefault(ratio))
         {
             ProxyLog.ReservedLimit(logger, "server.limits.maxDecompressionRatio", ratio,
                 "Body expansion is bounded by maxBufferedBodyBytes.");

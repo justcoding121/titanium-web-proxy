@@ -39,31 +39,49 @@ public static class UnknownConfigKeyScanner
         if (element.ValueKind != JsonValueKind.Object) return;
         var props = Properties(type);
         foreach (var property in element.EnumerateObject())
-        {
-            var childPath = path.Length == 0 ? property.Name : path + "." + property.Name;
-            if (!props.TryGetValue(property.Name, out var clr))
-            {
-                var suggestion = Suggest(property.Name, props.Keys);
-                var hinted = path.Length == 0 ? suggestion : path + "." + suggestion;
-                found.Add(suggestion is null
-                    ? $"Unknown key '{childPath}'."
-                    : $"Unknown key '{childPath}'. Did you mean '{hinted}'?");
-                continue;
-            }
+            Visit(property, path, props, found);
+    }
 
-            var next = Nullable.GetUnderlyingType(clr) ?? clr;
-            if (property.Value.ValueKind == JsonValueKind.Object && !IsDictionary(next))
-                Walk(property.Value, next, childPath, found);
-            else if (property.Value.ValueKind == JsonValueKind.Array)
-            {
-                var item = ItemType(next);
-                if (item != null && !IsDictionary(item))
-                {
-                    foreach (var entry in property.Value.EnumerateArray())
-                        Walk(entry, item, childPath, found);
-                }
-            }
+    private static void Visit(JsonProperty property, string path, Dictionary<string, Type> props, List<string> found)
+    {
+        var childPath = path.Length == 0 ? property.Name : path + "." + property.Name;
+        if (!props.TryGetValue(property.Name, out var clr))
+        {
+            found.Add(UnknownKeyMessage(property.Name, childPath, path, props.Keys));
+            return;
         }
+
+        VisitKnown(property.Value, clr, childPath, found);
+    }
+
+    private static string UnknownKeyMessage(string name, string childPath, string path, IEnumerable<string> keys)
+    {
+        var suggestion = Suggest(name, keys);
+        if (suggestion is null)
+            return $"Unknown key '{childPath}'.";
+
+        var hinted = path.Length == 0 ? suggestion : path + "." + suggestion;
+        return $"Unknown key '{childPath}'. Did you mean '{hinted}'?";
+    }
+
+    private static void VisitKnown(JsonElement value, Type clr, string childPath, List<string> found)
+    {
+        var next = Nullable.GetUnderlyingType(clr) ?? clr;
+        if (value.ValueKind == JsonValueKind.Object && !IsDictionary(next))
+        {
+            Walk(value, next, childPath, found);
+            return;
+        }
+
+        if (value.ValueKind != JsonValueKind.Array)
+            return;
+
+        var item = ItemType(next);
+        if (item == null || IsDictionary(item))
+            return;
+
+        foreach (var entry in value.EnumerateArray())
+            Walk(entry, item, childPath, found);
     }
 
     private static Dictionary<string, Type> Properties(Type type)
