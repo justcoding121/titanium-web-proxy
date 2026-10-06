@@ -149,7 +149,7 @@ public class MenuActionsHeadlessTests
             await fx.WaitUntilAsync(
                 () => fx.ViewModel.StatusText.Contains("Windows 8", StringComparison.OrdinalIgnoreCase)
                       || fx.ViewModel.StatusText.Contains("Store app", StringComparison.OrdinalIgnoreCase)
-                      || fx.ViewModel.StatusText.Contains("Allow Store apps dialog closed", StringComparison.Ordinal),
+                      || fx.ViewModel.StatusText.Contains("Store apps unchanged", StringComparison.Ordinal),
                 TimeSpan.FromSeconds(8));
 
             fx.Dialogs.RotateRootCaResult = true;

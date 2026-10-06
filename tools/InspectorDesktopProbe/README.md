@@ -39,7 +39,7 @@ dotnet run --project tools/InspectorDesktopProbe -- all
 | `proxy` | System proxy checkbox → WinINET/gsettings/scutil → Edge/Chrome/Firefox (and Safari on macOS) HTTPS **without** `--proxy-server` |
 | `cert` | Install/Remove CA menus; **Decrypt HTTPS auto-off** after remove |
 | `firefox` | Trust CA in Firefox + system-proxy capture |
-| `loopback` | Allow Store apps dialog (Win8+) |
+| `loopback` | Allow Store apps dialog (Win8+): intro, proxy warning, Apply status, Clear |
 | `exclusions` | Excluded hosts dialog |
 | `pac` | PAC replace confirm cancel/accept when PAC is active |
 | `machine-trust` | Machine CA trust (`status` / `install` / `remove` / `run` / `curl-check` / `clean`); Core-only, no Avalonia. Aliases: `install-system`, `remove-system`. Flag: `run --no-system-proxy` |

@@ -974,8 +974,52 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             return;
         }
 
-        await AwaitCancellableAsync(LoopbackExemptWindow.ShowAsync(owner));
-        StatusText = "Allow Store apps dialog closed";
+        var result = await AwaitDialogAsync(LoopbackExemptWindow.ShowAsync(owner, CreateLoopbackExemptSession()));
+        StatusText = result.StatusText;
+    }
+
+    private LoopbackExemptSession CreateLoopbackExemptSession() => new()
+    {
+        Readiness = ReadLoopbackCaptureReadiness,
+        RefreshRunningAppsAsync = RefreshStoreAppsAfterLoopbackChangeAsync,
+    };
+
+    private LoopbackCaptureReadiness ReadLoopbackCaptureReadiness()
+    {
+        if (!_interception.IsRunning)
+            return LoopbackCaptureReadiness.ProxyStopped;
+        if (!_interception.SystemProxyEnabled)
+            return LoopbackCaptureReadiness.SystemProxyOff;
+        return LoopbackCaptureReadiness.Ready;
+    }
+
+    /// <summary>
+    /// One off/on cycle of the system proxy after the Store-app allow list changes.
+    /// Runs off the UI thread. Does nothing when System proxy is already off.
+    /// </summary>
+    private async Task<bool> RefreshStoreAppsAfterLoopbackChangeAsync()
+    {
+        if (!_interception.SystemProxyEnabled || !_interception.IsRunning)
+            return false;
+
+        var ok = await RunOffUiAsync(
+            () => _interception.NudgeSystemProxy(
+                stillWanted: () => _systemProxy && _interception.IsRunning),
+            CancellationToken.None).ConfigureAwait(true);
+
+        if (!_interception.SystemProxyEnabled && _systemProxy)
+        {
+            await MarshalToUiAsync(() =>
+            {
+                SetSystemProxyCore(false);
+                SetOutcomeStatus(
+                    FormatSystemProxyFailureStatus(true, _interception.LastSystemProxyError),
+                    StatusSeverity.Error,
+                    toastImportant: true);
+            }, CancellationToken.None).ConfigureAwait(true);
+        }
+
+        return ok && _interception.SystemProxyEnabled;
     }
 
     private async Task OpenSessionRetentionAsync()

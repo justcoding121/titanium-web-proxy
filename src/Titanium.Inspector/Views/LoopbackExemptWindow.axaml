@@ -3,11 +3,13 @@
         xmlns:svc="using:Titanium.Inspector.Services"
         x:Class="Titanium.Inspector.Views.LoopbackExemptWindow" AutomationProperties.AutomationId="LoopbackExemptWindow"
         Title="Allow Store apps to use this proxy"
-        Width="640" Height="520"
+        Width="640" Height="560"
         WindowStartupLocation="CenterOwner">
   <DockPanel Margin="12">
-    <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,8"
-               Text="Windows Store / UWP apps are blocked from localhost by default. Check apps that should use Inspector, then Apply. Clear all removes every allow entry." />
+    <TextBlock x:Name="IntroText" DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,8"
+               AutomationProperties.AutomationId="LoopbackIntro" />
+    <TextBlock x:Name="ProxyWarningText" DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,8"
+               IsVisible="False" AutomationProperties.AutomationId="LoopbackProxyWarning" />
     <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
         <Button x:Name="CheckAllButton"
