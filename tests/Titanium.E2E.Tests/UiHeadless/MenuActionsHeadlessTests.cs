@@ -275,6 +275,12 @@ public class MenuActionsHeadlessTests
                 () => fx.ViewModel.StatusText.Contains("retention", StringComparison.OrdinalIgnoreCase),
                 TimeSpan.FromSeconds(10));
 
+            // Status-bar session count opens the same dialog.
+            await ClickMenuAndDismissDialogAsync(fx, "SessionCountLink", "RetentionCancel");
+            await fx.WaitUntilAsync(
+                () => fx.ViewModel.StatusText.Contains("retention", StringComparison.OrdinalIgnoreCase),
+                TimeSpan.FromSeconds(10));
+
             await ClickMenuAndDismissDialogAsync(fx, "MenuHttpsDecryptHosts", "ExcludedHostsCancel");
             await fx.WaitUntilAsync(
                 () => fx.ViewModel.StatusText.Contains("Excluded hosts", StringComparison.OrdinalIgnoreCase),
