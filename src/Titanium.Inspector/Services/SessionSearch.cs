@@ -3,8 +3,8 @@ using System.Text.RegularExpressions;
 namespace Titanium.Inspector.Services;
 
 /// <summary>
-/// Session search/filter syntax. A bare word matches URL, host, process name, method (exact),
-/// or status code (exact). Prefixes limit the match to one field:
+/// Session search/filter syntax. A bare word matches URL, host, process name, process ID (exact),
+/// method (exact), or status code (exact). Prefixes limit the match to one field:
 /// method:, status: (exact or 2xx–5xx), host:, url:, body:, process:, pid:, protocol:, content-type:,
 /// is:ws|grpc|tunnel|multipart|error, hide:tunnel|image|static
 /// </summary>
@@ -345,8 +345,9 @@ public static class SessionSearch
         (s.ProcessId > 0 && s.ProcessId.ToString().Equals(value, StringComparison.Ordinal));
 
     /// <summary>
-    /// Free-text match over identifying columns. Process name only — not PID or
-    /// <see cref="SessionSnapshot.ProcessDisplay"/>, which would treat port-like numbers as hits.
+    /// Free-text match over identifying columns. Process matches by name, or by exact PID —
+    /// never by substring of <see cref="SessionSnapshot.ProcessDisplay"/> (<c>chrome:4430</c>),
+    /// which would treat port-like numbers as hits.
     /// </summary>
     private static bool MatchBareText(SessionSnapshot s, string value)
     {
@@ -362,6 +363,12 @@ public static class SessionSearch
 
         if (!string.IsNullOrEmpty(s.ProcessName) &&
             s.ProcessName.Contains(value, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (s.ProcessId > 0 &&
+            s.ProcessId.ToString().Equals(value, StringComparison.Ordinal))
         {
             return true;
         }

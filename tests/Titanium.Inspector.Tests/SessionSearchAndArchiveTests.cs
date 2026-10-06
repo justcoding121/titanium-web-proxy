@@ -144,10 +144,15 @@ public class SessionSearchAndArchiveTests
         Assert.IsFalse(SessionSearch.Matches(processOnly, "404"));
         Assert.IsFalse(SessionSearch.Matches(processOnly, "2xx"));
 
-        // PID and ProcessDisplay (chrome:4242, widget:4430, msedge:42) must not match bare numbers.
-        Assert.IsFalse(SessionSearch.Matches(processOnly, "4242"));
+        // A bare number matches the PID only when equal; never as a substring of the PID or of
+        // ProcessDisplay (chrome:4242, widget:4430, msedge:42).
+        Assert.IsTrue(SessionSearch.Matches(processOnly, "4242"));
+        Assert.IsTrue(SessionSearch.Matches(statusAndMethod, "42"));
+        Assert.IsFalse(SessionSearch.Matches(processOnly, "42"));
         Assert.IsFalse(SessionSearch.Matches(portLikePid, "443"));
-        Assert.IsFalse(SessionSearch.Matches(statusAndMethod, "42"));
+        Assert.IsFalse(SessionSearch.Matches(portLikePid, "4430x"));
+        Assert.IsFalse(SessionSearch.Matches(statusAndMethod, "4"));
+        Assert.IsTrue(SessionSearch.Matches(portLikePid, "4430"));
         Assert.IsTrue(SessionSearch.Matches(statusAndMethod, "pid:42"));
         Assert.IsTrue(SessionSearch.Matches(statusAndMethod, "process:42"));
         Assert.IsFalse(SessionSearch.Matches(processOnly, "pid:42"));

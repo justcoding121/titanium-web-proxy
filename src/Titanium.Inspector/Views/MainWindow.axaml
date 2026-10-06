@@ -143,7 +143,7 @@
         <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarSearchFilters">
           <TextBox MinWidth="160" Width="320" MaxWidth="420" Margin="0,0,12,6"
                    Watermark="Search URL, host, process… (or method:GET status:4xx)"
-                   ToolTip.Tip="Bare text searches URL, host, process name, method, and status. Prefixes limit to one field: method: status: host: url: process: pid: protocol: content-type: body: is:ws|grpc|tunnel|error hide:tunnel|image. body: also searches bodies spilled to disk."
+                   ToolTip.Tip="Bare text searches URL, host, process name, exact process ID, method, and status. Prefixes limit to one field: method: status: host: url: process: pid: protocol: content-type: body: is:ws|grpc|tunnel|error hide:tunnel|image. body: also searches bodies spilled to disk."
                    Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
           <CheckBox Content="Hide CONNECT" IsChecked="{Binding HideTunnelsFilter}"
                     VerticalAlignment="Center" Margin="0,0,12,6"
