@@ -52,16 +52,6 @@ public partial class ProxyServer : IDisposable
     ///     Whether or not clear any system proxy settings which is pointing to our own endpoint (causing a cycle).
     ///     E.g due to ungracious proxy shutdown before.
     /// </param>
-    private static bool DecompressionRatioDiffersFromDefault(double configured)
-    {
-        if (ProxyResourceLimits.Default.MaxDecompressionRatio is not double expected)
-            return true;
-
-        // 200 is exactly representable. A range check avoids an exact floating-point equality.
-        var delta = configured - expected;
-        return delta > 0d || delta < 0d;
-    }
-
     public void Start(bool changeSystemProxySettings = true) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         if (ProxyRunning) throw new InvalidOperationException("Proxy is already running.");
@@ -479,5 +469,13 @@ public partial class ProxyServer : IDisposable
         {
             // A misbehaving sink must never prevent proxy disposal from completing.
         }
+    }
+
+    private static bool DecompressionRatioDiffersFromDefault(double configured)
+    {
+        if (ProxyResourceLimits.Default.MaxDecompressionRatio is not double expected)
+            return true;
+
+        return Math.Abs(configured - expected) > 1e-6;
     }
 }

@@ -35,13 +35,7 @@ internal sealed class Http3Frame
     internal const int ProgressiveRentChunkBytes = 256 * 1024;
 
     /// <summary>Last payload rent size on the progressive path. Tests read this; production does not branch on it.</summary>
-    private static int testLastRentBytes;
-
-    internal static int TestLastRentBytes
-    {
-        get => testLastRentBytes;
-        set => testLastRentBytes = value;
-    }
+    internal static int TestLastRentBytes { get; set; }
 
     public ulong Type { get; }
     public ReadOnlyMemory<byte> Payload { get; }
