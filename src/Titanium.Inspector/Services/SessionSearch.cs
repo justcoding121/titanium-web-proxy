@@ -3,8 +3,9 @@ using System.Text.RegularExpressions;
 namespace Titanium.Inspector.Services;
 
 /// <summary>
-/// Session search/filter syntax:
-/// method:, status: (exact or 2xx–5xx), host:, url:, body:, process:, content-type:,
+/// Session search/filter syntax. A bare word matches URL, host, process name, method (exact),
+/// or status code (exact). Prefixes limit the match to one field:
+/// method:, status: (exact or 2xx–5xx), host:, url:, body:, process:, pid:, protocol:, content-type:,
 /// is:ws|grpc|tunnel|multipart|error, hide:tunnel|image|static
 /// </summary>
 public static class SessionSearch
@@ -242,7 +243,8 @@ public static class SessionSearch
             }
             else
             {
-                list.Add(("url", groups[3].Value));
+                // Empty key is not a user prefix (those match [\w-]+), so text: stays an unknown key.
+                list.Add(("", groups[3].Value));
             }
         }
 
@@ -264,6 +266,11 @@ public static class SessionSearch
                       ((s.RequestBodyText?.Contains(token.Value, StringComparison.OrdinalIgnoreCase) == true) ||
                        (s.ResponseBodyText?.Contains(token.Value, StringComparison.OrdinalIgnoreCase) == true)),
             "process" => MatchProcess(s, token.Value),
+            "pid" => s.ProcessId > 0 &&
+                     s.ProcessId.ToString().Equals(token.Value, StringComparison.Ordinal),
+            "protocol" =>
+                s.Protocol?.Contains(token.Value, StringComparison.OrdinalIgnoreCase) == true,
+            "" => MatchBareText(s, token.Value),
             "content-type" or "contenttype" =>
                 s.ContentType?.Contains(token.Value, StringComparison.OrdinalIgnoreCase) == true,
             "is" => token.Value.ToLowerInvariant() switch
@@ -336,6 +343,36 @@ public static class SessionSearch
          s.ProcessName.Contains(value, StringComparison.OrdinalIgnoreCase)) ||
         s.ProcessDisplay.Contains(value, StringComparison.OrdinalIgnoreCase) ||
         (s.ProcessId > 0 && s.ProcessId.ToString().Equals(value, StringComparison.Ordinal));
+
+    /// <summary>
+    /// Free-text match over identifying columns. Process name only — not PID or
+    /// <see cref="SessionSnapshot.ProcessDisplay"/>, which would treat port-like numbers as hits.
+    /// </summary>
+    private static bool MatchBareText(SessionSnapshot s, string value)
+    {
+        if (s.Url.Contains(value, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (MatchHost(s, value))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrEmpty(s.ProcessName) &&
+            s.ProcessName.Contains(value, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (s.Method.Equals(value, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return s.StatusCode?.ToString() == value;
+    }
 
     internal static bool IsImageOrStatic(SessionSnapshot s)
     {

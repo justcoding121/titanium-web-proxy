@@ -87,6 +87,89 @@ public class SessionSearchAndArchiveTests
     }
 
     [TestMethod]
+    public void Filter_BareTextMatchesVisibleColumnsNotNumbersOrHiddenFields()
+    {
+        var processOnly = new SessionSnapshot
+        {
+            Id = 1,
+            Method = "POST",
+            Url = "https://cdn.other/v1/items",
+            Host = "api.example.com",
+            StatusCode = 201,
+            ProcessName = "chrome",
+            ProcessId = 4242,
+            Protocol = "h2",
+            ContentType = "application/json",
+        };
+        var urlOnly = new SessionSnapshot
+        {
+            Id = 2,
+            Method = "PUT",
+            Url = "https://cdn.other/chrome",
+            StatusCode = 200,
+            ProcessName = "firefox",
+            ProcessId = 99,
+            Protocol = "HTTP/1.1",
+        };
+        var statusAndMethod = new SessionSnapshot
+        {
+            Id = 3,
+            Method = "GET",
+            Url = "https://cdn.other/v1/other",
+            StatusCode = 404,
+            ProcessName = "msedge",
+            ProcessId = 42,
+            Protocol = "HTTP/1.1",
+        };
+        var portLikePid = new SessionSnapshot
+        {
+            Id = 4,
+            Method = "HEAD",
+            Url = "https://cdn.other/v1/other",
+            StatusCode = 204,
+            ProcessName = "widget",
+            ProcessId = 4430,
+            Protocol = "HTTP/1.1",
+        };
+
+        Assert.IsTrue(SessionSearch.Matches(processOnly, "chrome"));
+        Assert.IsTrue(SessionSearch.Matches(urlOnly, "chrome"));
+        Assert.IsFalse(SessionSearch.Matches(statusAndMethod, "chrome"));
+
+        Assert.IsTrue(SessionSearch.Matches(statusAndMethod, "GET"));
+        Assert.IsTrue(SessionSearch.Matches(statusAndMethod, "get"));
+        Assert.IsFalse(SessionSearch.Matches(processOnly, "GET"));
+
+        Assert.IsTrue(SessionSearch.Matches(statusAndMethod, "404"));
+        Assert.IsFalse(SessionSearch.Matches(processOnly, "404"));
+        Assert.IsFalse(SessionSearch.Matches(processOnly, "2xx"));
+
+        // PID and ProcessDisplay (chrome:4242, widget:4430, msedge:42) must not match bare numbers.
+        Assert.IsFalse(SessionSearch.Matches(processOnly, "4242"));
+        Assert.IsFalse(SessionSearch.Matches(portLikePid, "443"));
+        Assert.IsFalse(SessionSearch.Matches(statusAndMethod, "42"));
+        Assert.IsTrue(SessionSearch.Matches(statusAndMethod, "pid:42"));
+        Assert.IsTrue(SessionSearch.Matches(statusAndMethod, "process:42"));
+        Assert.IsFalse(SessionSearch.Matches(processOnly, "pid:42"));
+
+        Assert.IsFalse(SessionSearch.Matches(urlOnly, "process:chrome"));
+        Assert.IsFalse(SessionSearch.Matches(processOnly, "url:chrome"));
+
+        Assert.IsFalse(SessionSearch.Matches(processOnly, "json"));
+        Assert.IsTrue(SessionSearch.Matches(processOnly, "content-type:json"));
+
+        Assert.IsTrue(SessionSearch.Matches(processOnly, "protocol:h2"));
+        Assert.IsFalse(SessionSearch.Matches(processOnly, "h2"));
+        Assert.IsFalse(SessionSearch.Matches(urlOnly, "protocol:h2"));
+
+        Assert.IsTrue(SessionSearch.Matches(processOnly, "api.example"));
+
+        Assert.IsTrue(SessionSearch.Matches(processOnly, "chrome api"));
+        Assert.IsFalse(SessionSearch.Matches(processOnly, "chrome missing"));
+        Assert.IsFalse(SessionSearch.Matches(urlOnly, "chrome api"));
+    }
+
+    [TestMethod]
     public void Filter_HideTunnelAndImage()
     {
         var sessions = new[]
@@ -343,7 +426,7 @@ public class SessionSearchAndArchiveTests
         Assert.IsFalse(SessionSearch.Matches(s, "is:tunnel"));
         Assert.AreEqual(s.IsWebSocket, SessionSearch.Matches(s, "is:websocket"));
         Assert.IsTrue(SessionSearch.Matches(s, "is:unknownflag")); // unknown is: → true
-        Assert.IsTrue(SessionSearch.Matches(s, "api.example")); // bare token → url
+        Assert.IsTrue(SessionSearch.Matches(s, "api.example")); // bare token matches the URL
         Assert.IsTrue(SessionSearch.Matches(s, "weirdkey:api.example")); // unknown key → url contains value
 
         var ws = new SessionSnapshot { Url = "wss://x", IsWebSocket = true };

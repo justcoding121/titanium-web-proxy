@@ -142,8 +142,8 @@
         <!-- Search + filters: WrapPanel so chips stay visible when the window narrows. -->
         <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarSearchFilters">
           <TextBox MinWidth="160" Width="320" MaxWidth="420" Margin="0,0,12,6"
-                   Watermark="Search sessions… (e.g. method:GET host:api)"
-                   ToolTip.Tip="Advanced tokens: method: status: host: url: body: process: content-type: is:ws|grpc|tunnel|error hide:tunnel|image. Metadata search covers all listed sessions (including spilled). body: searches in-memory bodies only — sessions with bodies on disk are skipped until you inspect them."
+                   Watermark="Search URL, host, process… (or method:GET status:4xx)"
+                   ToolTip.Tip="Bare text searches URL, host, process name, method, and status. Prefixes limit to one field: method: status: host: url: process: pid: protocol: content-type: body: is:ws|grpc|tunnel|error hide:tunnel|image. body: also searches bodies spilled to disk."
                    Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
           <CheckBox Content="Hide CONNECT" IsChecked="{Binding HideTunnelsFilter}"
                     VerticalAlignment="Center" Margin="0,0,12,6"
