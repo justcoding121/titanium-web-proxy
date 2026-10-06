@@ -195,7 +195,7 @@ public static class SessionSearch
     {
         var searching = !string.IsNullOrWhiteSpace(searchQuery);
         var text = searching
-            ? $"Sessions: showing {visibleCount:N0} of {totalCount:N0}"
+            ? $"Sessions: showing {visibleCount:N0} of {totalCount:N0} (filtered)"
             : $"Sessions: {totalCount:N0}";
 
         var emptySearch = searching && visibleCount == 0 && totalCount > 0;
