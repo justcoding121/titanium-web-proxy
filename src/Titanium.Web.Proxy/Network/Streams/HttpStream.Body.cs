@@ -67,7 +67,8 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
             : requestResponse.ContentEncoding;
 
         Stream s = limitedStream = new LimitedStream(this, bufferPool, isChunked, contentLength,
-            requestResponse.TrailingHeaders);
+            requestResponse.TrailingHeaders, server.ResourceLimits.MaxTrailerHeaderCount,
+            server.ResourceLimits.MaxTrailerHeaderBlockBytes);
 
         if (transformation == TransformationMode.Uncompress && contentEncoding != null)
         {
@@ -227,7 +228,8 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
                 {
                     // discard the trailer block too - it belongs to a message we chose not to forward in full
                     await ChunkedTrailerHelper.ReadTrailingHeaders(this, new HeaderCollection(), null,
-                        cancellationToken);
+                        cancellationToken, server.ResourceLimits.MaxTrailerHeaderCount,
+                        server.ResourceLimits.MaxTrailerHeaderBlockBytes);
                     return;
                 }
 
@@ -263,7 +265,8 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
                         // line, populating requestResponse.TrailingHeaders (writeTerminator() below
                         // re-emits them for `writer`). See ChunkedTrailerHelper for why this is bounded.
                         await ChunkedTrailerHelper.ReadTrailingHeaders(this, requestResponse.TrailingHeaders,
-                            null, cancellationToken);
+                            null, cancellationToken, server.ResourceLimits.MaxTrailerHeaderCount,
+                            server.ResourceLimits.MaxTrailerHeaderBlockBytes);
                         await emit(Array.Empty<byte>(), true);
                         break;
                     }
@@ -388,7 +391,8 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
                 // to `writer` byte-for-byte below, rather than re-serializing the parsed HeaderCollection.
                 var rawTrailerLines = new List<string>();
                 await ChunkedTrailerHelper.ReadTrailingHeaders(this, requestResponse.TrailingHeaders,
-                    rawTrailerLines, cancellationToken);
+                    rawTrailerLines, cancellationToken, server.ResourceLimits.MaxTrailerHeaderCount,
+                    server.ResourceLimits.MaxTrailerHeaderBlockBytes);
 
                 await ChunkedTrailerHelper.WriteRawTrailingLinesAsync(writer, rawTrailerLines, cancellationToken);
 

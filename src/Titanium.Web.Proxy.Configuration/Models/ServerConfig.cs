@@ -25,6 +25,16 @@ public sealed class ServerConfig
 
     public bool? EnableWinAuth { get; set; }
 
+    public bool? EnableDecryptFailureBypass { get; set; }
+
+    public int? DecryptFailureBypassTtlMinutes { get; set; }
+
+    public int? DecryptFailureBypassMaxEntries { get; set; }
+
+    public int? DecryptFailureBypassThreshold { get; set; }
+
+    public string? ProxyAuthenticationRealm { get; set; }
+
     /// <summary>PreserveClientVersion or NormalizeToHttp11.</summary>
     public string? OriginHttpVersionPolicy { get; set; }
 
@@ -193,6 +203,26 @@ public sealed class LimitsConfig
     public int? MaxDecodedHeaderListBytes { get; set; }
 
     public int? MaxWebSocketFramePayloadBytes { get; set; }
+
+    public long? MaxHttp3FramePayloadBytes { get; set; }
+
+    public int? MaxDeferredOutboundBytesPerStream { get; set; }
+
+    public int? MaxTrailerHeaderCount { get; set; }
+
+    public int? MaxTrailerHeaderBlockBytes { get; set; }
+
+    public int? MaxHttp2CompressedHeaderBlockBytes { get; set; }
+
+    public int? MaxInterimResponses { get; set; }
+
+    public int? MaxAuthChallengeRounds { get; set; }
+
+    public int? MaxUpstreamProxyAuthenticationAttempts { get; set; }
+
+    public int? MaxWinAuthTokenBytes { get; set; }
+
+    public int? Http2WindowUpdateTimeoutSeconds { get; set; }
 }
 
 /// <summary>
@@ -214,6 +244,8 @@ public sealed class PolicyModesConfig
     public string? Http2RelayValidation { get; set; }
 
     public string? WebSocketFrameBudget { get; set; }
+
+    public string? Http1ReplaySafety { get; set; }
 
     public bool? AllowAmbiguousFraming { get; set; }
 }

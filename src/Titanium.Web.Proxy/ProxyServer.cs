@@ -440,7 +440,10 @@ public partial class ProxyServer : IDisposable
         }
 
         if (isActive && !wasActive)
+        {
+            ProxyLog.DecryptFailureBypassLearned(logger, host);
             RaiseDecryptFailureBypassChanged(host);
+        }
 
         return isActive;
     }
@@ -474,7 +477,10 @@ public partial class ProxyServer : IDisposable
         }
 
         if (isActive && !wasActive)
+        {
+            ProxyLog.DecryptFailureBypassLearned(logger, host);
             RaiseDecryptFailureBypassChanged(host);
+        }
 
         return isActive;
     }

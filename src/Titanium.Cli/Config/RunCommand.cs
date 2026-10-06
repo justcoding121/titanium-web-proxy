@@ -74,6 +74,8 @@ internal static class RunCommand
             return 1;
         }
 
+        WriteConfigWarnings(loaded);
+
         // When launched as a service, resolve relative paths against the config directory
         // (SCM / systemd / launchd cwd is typically System32 or /).
         var configDir = Path.GetDirectoryName(Path.GetFullPath(configPath));
@@ -291,6 +293,8 @@ internal static class RunCommand
         {
             throw new InvalidOperationException(string.Join("; ", errors));
         }
+
+        WriteConfigWarnings(loaded);
 
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
         if (loaded.Config.Clusters.Count > 0)
@@ -1040,5 +1044,13 @@ internal static class RunCommand
         }
 
         return config.Routes.Any(r => r.Transforms is { Count: > 0 });
+    }
+
+    private static void WriteConfigWarnings(LoadedConfig loaded)
+    {
+        foreach (var warning in loaded.UnknownKeys)
+            AsyncConsole.WriteError("warning: " + warning);
+        foreach (var warning in TwpConfigValidator.CollectWarnings(loaded.Config))
+            AsyncConsole.WriteError("warning: " + warning);
     }
 }

@@ -425,7 +425,7 @@ public partial class LoggingTests
         ProxyLog.ClientConnectionAdmissionRejected(capturing, endPoint, "global limit");
 
         Assert.AreEqual(1, capturing.Entries.Count);
-        Assert.AreEqual(LogLevel.Warning, capturing.Entries[0].Level);
+        Assert.AreEqual(LogLevel.Error, capturing.Entries[0].Level);
         StringAssert.Contains(capturing.Entries[0].Message, "127.0.0.1:8080");
         StringAssert.Contains(capturing.Entries[0].Message, "global limit");
     }
@@ -451,7 +451,7 @@ public partial class LoggingTests
     }
 
     [TestMethod]
-    public void ProxyLog_PolicyBreach_Enforce_LogsWarning_Observe_LogsDebug()
+    public void ProxyLog_PolicyBreach_Enforce_LogsError_Observe_LogsDebug()
     {
         var capturing = CreateTraceCapturingLogger();
 
@@ -459,7 +459,7 @@ public partial class LoggingTests
         ProxyLog.PolicyBreach(capturing, PolicyFamily.HeaderLimits, PolicyMode.Observe, "header exceeded");
 
         Assert.AreEqual(2, capturing.Entries.Count);
-        Assert.AreEqual(LogLevel.Warning, capturing.Entries[0].Level);
+        Assert.AreEqual(LogLevel.Error, capturing.Entries[0].Level);
         Assert.AreEqual(LogLevel.Debug, capturing.Entries[1].Level);
         StringAssert.Contains(capturing.Entries[0].Message, "BodyBudget");
         StringAssert.Contains(capturing.Entries[1].Message, "HeaderLimits");

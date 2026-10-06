@@ -18,6 +18,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended.Network;
 using SslExtensions = Titanium.Web.Proxy.Extensions.SslExtensions;
@@ -918,12 +919,20 @@ public partial class ProxyServer
             var upgradeResponseHeaders = new HeaderCollection();
             int upgradeHeaderBytes = 0;
             int upgradeHeaderCount = 0;
+            var maxUpgradeHeaders = ResourceLimits.MaxHeaderCount;
+            var maxUpgradeHeaderBytes = (int)Math.Min(int.MaxValue, ResourceLimits.MaxHeaderAggregateBytes);
             string? headerLine;
             while ((headerLine = await ReadLineAsync(connection.Stream, cancellationToken)) is { Length: > 0 })
             {
                 upgradeHeaderBytes += headerLine.Length + 2;
-                if (++upgradeHeaderCount > 100 || upgradeHeaderBytes > 64 * 1024)
+                if (++upgradeHeaderCount > maxUpgradeHeaders || upgradeHeaderBytes > maxUpgradeHeaderBytes)
+                {
+                    ProxyLog.LimitExceeded(logger, LimitId.UpgradeHandshakeHeaders, PolicyMode.Enforce,
+                        upgradeHeaderCount > maxUpgradeHeaders ? upgradeHeaderCount : upgradeHeaderBytes,
+                        upgradeHeaderCount > maxUpgradeHeaders ? maxUpgradeHeaders : maxUpgradeHeaderBytes,
+                        "upgrade failed");
                     throw new InvalidDataException("WebSocket upgrade response headers exceeded safety limits.");
+                }
 
                 int colon = headerLine.IndexOf(':');
                 if (colon <= 0) continue;

@@ -10,6 +10,7 @@ internal sealed class LoadedConfig
     public required TwpConfig Config { get; init; }
     public required string Path { get; init; }
     public required string Dialect { get; init; }
+    public IReadOnlyList<string> UnknownKeys { get; init; } = [];
 }
 
 internal static class ConfigLoader
@@ -68,11 +69,15 @@ internal static class ConfigLoader
             }
         }
 
+        var text = File.ReadAllText(path);
+        var yaml = ext.Equals(".yaml", StringComparison.OrdinalIgnoreCase) ||
+                   ext.Equals(".yml", StringComparison.OrdinalIgnoreCase);
         return new LoadedConfig
         {
             Path = path,
             Dialect = "twp-native",
-            Config = TwpConfigLoader.LoadFile(path),
+            Config = yaml ? TwpConfigLoader.LoadYaml(text) : TwpConfigLoader.LoadJson(text),
+            UnknownKeys = UnknownConfigKeyScanner.Scan(text, yaml),
         };
     }
 

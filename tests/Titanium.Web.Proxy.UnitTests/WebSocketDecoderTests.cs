@@ -367,6 +367,25 @@ public class WebSocketDecoderTests
         Assert.AreEqual((ushort)1009, ex.CloseCode);
     }
 
+    [TestMethod]
+    public void Decode_Rsv1_IsDropped_SoPermessageDeflateIsNotInflated()
+    {
+        // Today's decoder does not keep RSV bits, so a permessage-deflate opener is a normal
+        // data frame and message tracking reports it uncompressed. See websocket-large-messages.md.
+        var decoder = CreateDecoder();
+        var raw = BuildFrame(WebsocketOpCode.Text, Encoding.UTF8.GetBytes("hello"));
+        raw[0] |= 0x40;
+
+        var frames = decoder.Decode(raw, 0, raw.Length).ToList();
+
+        Assert.AreEqual(1, frames.Count);
+        Assert.AreEqual("hello", frames[0].GetText());
+        var tracker = new WebSocketMessageTracker();
+        tracker.OnFrame(frames[0], out var compressed, out var error);
+        Assert.IsFalse(compressed);
+        Assert.IsFalse(error);
+    }
+
     private static byte[] BuildFrame(WebsocketOpCode opCode, byte[] payload, bool mask = false, bool fin = true,
         uint maskKey = 0x11223344)
     {

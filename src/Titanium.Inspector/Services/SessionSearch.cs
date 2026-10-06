@@ -3,8 +3,9 @@ using System.Text.RegularExpressions;
 namespace Titanium.Inspector.Services;
 
 /// <summary>
-/// Session search/filter syntax:
-/// method:, status: (exact or 2xx–5xx), host:, url:, body:, process:, content-type:,
+/// Session search/filter syntax. A bare word matches URL, host, process name, process ID (exact),
+/// method (exact), or status code (exact). Prefixes limit the match to one field:
+/// method:, status: (exact or 2xx–5xx), host:, url:, body:, process:, pid:, protocol:, content-type:,
 /// is:ws|grpc|tunnel|multipart|error, hide:tunnel|image|static
 /// </summary>
 public static class SessionSearch
@@ -194,31 +195,41 @@ public static class SessionSearch
         DateTimeOffset? oldestStartedUtc)
     {
         var searching = !string.IsNullOrWhiteSpace(searchQuery);
+        var kept = FormatSessionCount(totalCount);
+        if (retentionEvictedTotal > 0)
+            kept += " most recent";
+
         var text = searching
-            ? $"Sessions: {visibleCount} / {totalCount}"
-            : $"Sessions: {totalCount}";
+            ? $"Sessions: {FormatSessionCount(visibleCount)} of {kept} match filter"
+            : $"Sessions: {kept}";
+
+        var emptySearch = searching && visibleCount == 0 && totalCount > 0;
 
         if (retentionEvictedTotal > 0 && oldestStartedUtc is { } oldest)
         {
+            // Retention dropped older sessions: the list is the most recent kept window.
             text += $" · since {oldest.ToLocalTime():HH:mm}";
         }
 
-        if (searching && visibleCount == 0 && totalCount > 0)
+        if (emptySearch)
             text += FormatEmptySearchRetentionHint(retentionEvictedTotal);
 
         return text;
     }
+
+    /// <summary>Compact round thousands (<c>10k</c>) so a retention cap is readable in the status bar.</summary>
+    private static string FormatSessionCount(int count) =>
+        count >= 1_000 && count % 1_000 == 0
+            ? $"{count / 1_000}k"
+            : count.ToString("N0");
 
     private static string FormatEmptySearchRetentionHint(int retentionEvictedTotal)
     {
         if (retentionEvictedTotal <= 0)
             return "";
 
-        var retention = retentionEvictedTotal == 1
-            ? "1 removed by retention"
-            : $"{retentionEvictedTotal} removed by retention";
-
-        return $" · no matches in current list · {retention}";
+        // Removed sessions are no longer searchable, so a zero-match result may not be the whole story.
+        return $" · {retentionEvictedTotal:N0} older removed by retention (not searched)";
     }
 
     private static List<(string Key, string Value)> Tokenize(string query)
@@ -232,7 +243,8 @@ public static class SessionSearch
             }
             else
             {
-                list.Add(("url", groups[3].Value));
+                // Empty key is not a user prefix (those match [\w-]+), so text: stays an unknown key.
+                list.Add(("", groups[3].Value));
             }
         }
 
@@ -254,6 +266,11 @@ public static class SessionSearch
                       ((s.RequestBodyText?.Contains(token.Value, StringComparison.OrdinalIgnoreCase) == true) ||
                        (s.ResponseBodyText?.Contains(token.Value, StringComparison.OrdinalIgnoreCase) == true)),
             "process" => MatchProcess(s, token.Value),
+            "pid" => s.ProcessId > 0 &&
+                     s.ProcessId.ToString().Equals(token.Value, StringComparison.Ordinal),
+            "protocol" =>
+                s.Protocol?.Contains(token.Value, StringComparison.OrdinalIgnoreCase) == true,
+            "" => MatchBareText(s, token.Value),
             "content-type" or "contenttype" =>
                 s.ContentType?.Contains(token.Value, StringComparison.OrdinalIgnoreCase) == true,
             "is" => token.Value.ToLowerInvariant() switch
@@ -326,6 +343,43 @@ public static class SessionSearch
          s.ProcessName.Contains(value, StringComparison.OrdinalIgnoreCase)) ||
         s.ProcessDisplay.Contains(value, StringComparison.OrdinalIgnoreCase) ||
         (s.ProcessId > 0 && s.ProcessId.ToString().Equals(value, StringComparison.Ordinal));
+
+    /// <summary>
+    /// Free-text match over identifying columns. Process matches by name, or by exact PID —
+    /// never by substring of <see cref="SessionSnapshot.ProcessDisplay"/> (<c>chrome:4430</c>),
+    /// which would treat port-like numbers as hits.
+    /// </summary>
+    private static bool MatchBareText(SessionSnapshot s, string value)
+    {
+        if (s.Url.Contains(value, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (MatchHost(s, value))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrEmpty(s.ProcessName) &&
+            s.ProcessName.Contains(value, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (s.ProcessId > 0 &&
+            s.ProcessId.ToString().Equals(value, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (s.Method.Equals(value, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return s.StatusCode?.ToString() == value;
+    }
 
     internal static bool IsImageOrStatic(SessionSnapshot s)
     {

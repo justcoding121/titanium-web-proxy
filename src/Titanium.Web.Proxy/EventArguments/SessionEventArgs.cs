@@ -514,7 +514,10 @@ public class SessionEventArgs : SessionEventArgsBase
                     if (contentLength > copyStream.ReadBytes)
                     {
                         var headers = new HeaderCollection();
-                        await HeaderParser.ReadHeaders(copyStream, headers, cancellationToken);
+                        await HeaderParser.ReadHeaders(copyStream, headers, cancellationToken,
+                            new HeaderBlockBudget(Server.ResourceLimits.MaxHeaderCount,
+                                Server.ResourceLimits.MaxHeaderAggregateBytes,
+                                Server.PolicyModes[PolicyFamily.HeaderLimits], isRequest: true));
                         OnMultipartRequestPartSent(boundary.Span, headers);
                     }
                 }

@@ -87,6 +87,10 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
     ///     When <see langword="false" />, skips the 8 KiB <see cref="IBufferPool" /> rent. Use for
     ///     HTTP/3 session placeholders backed by <see cref="Stream.Null" /> that never read the client stream.
     /// </param>
+    internal HeaderBlockBudget HeaderBudget(bool isRequest) =>
+        new(server.ResourceLimits.MaxHeaderCount, server.ResourceLimits.MaxHeaderAggregateBytes,
+            server.PolicyModes[PolicyFamily.HeaderLimits], isRequest);
+
     internal HttpStream(ProxyServer server, Stream baseStream, IBufferPool bufferPool,
         CancellationToken cancellationToken, bool leaveOpen = false, bool rentReadBuffer = true)
     {

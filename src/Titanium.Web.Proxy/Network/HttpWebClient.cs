@@ -403,7 +403,8 @@ public class HttpWebClient
         Response.StatusCode = httpStatus.Value.StatusCode;
         Response.StatusDescription = httpStatus.Value.Description;
 
-        var headersVt = HeaderParser.TryReadHeadersAsync(Connection.Stream, Response.Headers, cancellationToken);
+        var headersVt = HeaderParser.TryReadHeadersAsync(Connection.Stream, Response.Headers, cancellationToken,
+            Connection.Stream.HeaderBudget(isRequest: false));
         if (headersVt.IsCompletedSuccessfully)
         {
             if (!headersVt.Result)

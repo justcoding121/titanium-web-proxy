@@ -10,6 +10,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.Network.WinAuth.Security;
 using Titanium.Web.Proxy.Routing;
 
@@ -278,6 +279,8 @@ public partial class ProxyServer
     {
         args.Exception = ex;
         args.HttpClient.CloseServerConnection = true;
+        ProxyLog.LimitExceeded(logger, TimeoutLimitId(ex.Kind), PolicyMode.Enforce,
+            0, ex.Kind.ToString(), "504");
         ProxyDiagnostics.ReportBenign(logger, $"Proxy {ex.Kind} timeout", ex);
 
         // 504 only before any response bytes have been committed; afterward terminate without injecting HTTP.
@@ -300,6 +303,17 @@ public partial class ProxyServer
         if (!args.CancellationTokenSource.IsCancellationRequested)
             await args.CancellationTokenSource.CancelAsync();
     }
+
+    private static LimitId TimeoutLimitId(ProxyTimeoutKind kind) => kind switch
+    {
+        ProxyTimeoutKind.Connect => LimitId.TimeoutConnect,
+        ProxyTimeoutKind.ResponseHeader => LimitId.TimeoutResponseHeader,
+        ProxyTimeoutKind.IdleRead => LimitId.TimeoutIdleRead,
+        ProxyTimeoutKind.IdleWrite => LimitId.TimeoutIdleWrite,
+        ProxyTimeoutKind.Request => LimitId.TimeoutRequest,
+        ProxyTimeoutKind.ClientHeader => LimitId.TimeoutClientHeader,
+        _ => LimitId.TimeoutRequest
+    };
 
     /// <summary>
     ///     Decides whether a re-request must reuse the same server connection.

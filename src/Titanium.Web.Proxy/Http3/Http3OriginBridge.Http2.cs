@@ -218,7 +218,7 @@ internal static partial class Http3OriginBridge
                         null, sessionArgs);
                 }
 
-                return await Http2OriginConnection.CreateAsync(tcp, logger, ct, server.ResourceLimits);
+                return await Http2OriginConnection.CreateAsync(tcp, logger, ct, server.ResourceLimits, server.MaxDecodedHeaderListBytes);
             }
             finally
             {
@@ -485,7 +485,7 @@ internal static partial class Http3OriginBridge
                     null, sessionArgs);
             }
 
-            return await Http2OriginConnection.CreateAsync(tcp, logger, ct, server.ResourceLimits);
+            return await Http2OriginConnection.CreateAsync(tcp, logger, ct, server.ResourceLimits, server.MaxDecodedHeaderListBytes);
         }, cancellationToken);
     }
 

@@ -204,5 +204,7 @@ Unlike a typical YARP process recycle, Titanium keeps the process and in-flight 
 ## See also
 
 - [Configuration](/docs/configuration)
+- [Limits and escape hatches](/docs/limits)
+- [Why did my request fail](/docs/troubleshooting)
 - [Install](/docs/install)
 - [Download](/download)

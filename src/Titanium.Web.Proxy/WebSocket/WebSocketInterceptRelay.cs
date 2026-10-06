@@ -248,6 +248,9 @@ internal static class WebSocketInterceptRelay
                     // (declared length violates the reserved-bit rule, exceeds int.MaxValue, or exceeds
                     // the configured per-frame limit) - never forwarded, so nothing to unwind here beyond
                     // reporting the close code the caller should send.
+                    if (ex.CloseCode == 1009)
+                        ProxyLog.LimitExceeded(ProxyDiagnostics.Logger, LimitId.WebSocketFrame, PolicyMode.Enforce,
+                            0, 0, "1009");
                     ProxyMetrics.ParserError("websocket");
                     messageTracker.Reset();
                     return ex.CloseCode;

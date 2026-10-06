@@ -228,7 +228,9 @@ namespace Titanium.Web.Proxy.Http2
         {
             resourceLimits ??= ProxyResourceLimits.Default;
             var connectionState = new Http2ConnectionState(connectionId, cancellationTokenSource,
-                resourceLimits.MaxConcurrentStreamsPerConnection);
+                resourceLimits.MaxConcurrentStreamsPerConnection,
+                resourceLimits.MaxDeferredOutboundBytesPerStream,
+                resourceLimits.Http2WindowUpdateTimeoutSeconds);
 
             try
             {

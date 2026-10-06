@@ -111,9 +111,11 @@ internal static class ProxyLog
     internal static void ClientConnectionAdmissionRejected(ILogger logger, Models.ProxyEndPoint endPoint,
         string reason)
     {
-        if (!logger.IsEnabled(LogLevel.Warning)) return;
-        logger.LogWarning("Rejected a client connection on {Endpoint} ({Reason}).",
-            $"{endPoint.IpAddress}:{endPoint.Port}", reason);
+        var id = string.Equals(reason, "endpoint limit", StringComparison.Ordinal)
+            ? LimitId.AdmissionEndpoint
+            : LimitId.AdmissionGlobal;
+        LimitExceeded(logger, id, Options.PolicyMode.Enforce, 0, reason, "connection rejected",
+            $"{endPoint.IpAddress}:{endPoint.Port}");
     }
 
     /// <summary>
@@ -146,10 +148,72 @@ internal static class ProxyLog
     internal static void PolicyBreach(ILogger logger, Options.PolicyFamily family, Options.PolicyMode mode,
         string detail)
     {
-        var level = mode == Options.PolicyMode.Enforce ? LogLevel.Warning : LogLevel.Debug;
+        // Enforce rejects a request, so it must be visible at the default Error minimum level.
+        var level = mode == Options.PolicyMode.Enforce ? LogLevel.Error : LogLevel.Debug;
         if (!logger.IsEnabled(level)) return;
         logger.Log(level, "Policy family {Family} breached under {Mode}: {Detail}", family, mode, detail);
     }
+
+    /// <summary>
+    ///     A configured limit rejected or observed a request. Enforce logs at Error, Observe at Debug.
+    ///     The line names the property, the limit, the client-visible action, and the CLI key.
+    ///     Logged at most once per 10 seconds per <paramref name="id"/>; metrics count every call.
+    ///     Never pass URLs, header values, cookies, or bodies. <paramref name="host"/> is a host name only.
+    /// </summary>
+    internal static void LimitExceeded(ILogger logger, LimitId id, Options.PolicyMode mode,
+        long observed, object limit, string action, string? host = null)
+    {
+        var entry = LimitCatalog.Get(id);
+        if (entry.Family is { } family)
+            global::Titanium.Web.Proxy.Diagnostics.ProxyMetrics.PolicyBreach(family, mode);
+        global::Titanium.Web.Proxy.Diagnostics.ProxyMetrics.StreamRejected(entry.FamilyKey, LimitCatalog.Reason(id));
+
+        var suppressed = LimitLogThrottle.TryAcquire(id);
+        if (suppressed < 0) return;
+
+        var level = mode == Options.PolicyMode.Enforce ? LogLevel.Error : LogLevel.Debug;
+        if (!logger.IsEnabled(level)) return;
+
+        if (suppressed > 0)
+        {
+            logger.Log(level,
+                "{Family} ({Mode}): {What} exceeded {Property}={Limit}; observed {Observed}; client got {Action}. {Hint} ({Suppressed} similar events suppressed){HostSuffix}",
+                entry.FamilyKey, mode, entry.What, entry.Property, limit, observed, action, entry.Hint,
+                suppressed, FormatHostSuffix(host));
+            return;
+        }
+
+        logger.Log(level,
+            "{Family} ({Mode}): {What} exceeded {Property}={Limit}; observed {Observed}; client got {Action}. {Hint}{HostSuffix}",
+            entry.FamilyKey, mode, entry.What, entry.Property, limit, observed, action, entry.Hint,
+            FormatHostSuffix(host));
+    }
+
+    /// <summary>
+    ///     Decrypt-bypass learning changed later CONNECTs for this host to opaque tunnels.
+    ///     Warning, not Error: the current request was not failed. Host name only.
+    /// </summary>
+    internal static void DecryptFailureBypassLearned(ILogger logger, string host)
+    {
+        if (!logger.IsEnabled(LogLevel.Warning)) return;
+        logger.LogWarning(
+            "EnableDecryptFailureBypass learned {Host}; later CONNECTs tunnel opaque. Set server.enableDecryptFailureBypass to false to stop learning.",
+            host);
+    }
+
+    /// <summary>
+    ///     Warns when an operator set a limit the runtime still treats as reserved.
+    /// </summary>
+    internal static void ReservedLimit(ILogger logger, string cliKey, object value, string instead)
+    {
+        if (!logger.IsEnabled(LogLevel.Warning)) return;
+        logger.LogWarning(
+            "{CliKey}={Value} is reserved and not enforced. {Instead}",
+            cliKey, value, instead);
+    }
+
+    private static string FormatHostSuffix(string? host) =>
+        string.IsNullOrEmpty(host) ? string.Empty : " host " + host;
 
     internal static void Http2ProbeResult(ILogger logger, string connectTarget, bool fromCache, bool supported,
         Exception? failure)

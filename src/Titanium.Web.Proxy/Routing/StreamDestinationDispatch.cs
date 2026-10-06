@@ -2,6 +2,7 @@ using System;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Clusters;
+using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 
@@ -61,6 +62,25 @@ internal static class StreamDestinationDispatch
 
         poolKey = Clusters.DestinationPoolKeys.Create(destination.Id, "h2h3");
         return true;
+    }
+
+    /// <summary>
+    ///     Applies <see cref="RouteLimits"/> when the route declares them. A null block is one reference
+    ///     compare and does not touch the session.
+    /// </summary>
+    internal static void ApplyRouteLimits(RouteConfig route, SessionEventArgsBase session)
+    {
+        var limits = route.Limits;
+        if (limits is null || session is not SessionEventArgs args)
+            return;
+        if (limits.RequestTimeoutSeconds is int requestTimeout)
+            args.RequestTimeout = TimeSpan.FromSeconds(requestTimeout);
+        if (limits.IdleTimeoutSeconds is int idleTimeout)
+            args.IdleReadTimeout = TimeSpan.FromSeconds(idleTimeout);
+        if (limits.MaxBufferedBodyBytes is int body)
+            args.MaxBufferedBodyBytes = body;
+        if (limits.MaxWebSocketFramePayloadBytes is int frame)
+            args.MaxWebSocketFramePayloadBytes = frame;
     }
 
     /// <summary>

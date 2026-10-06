@@ -84,7 +84,7 @@ public partial class ProxyServer
         {
             var tcp = await EstablishHttp2OriginTcpConnectionAsync(openSession, remoteHostName, remotePort,
                 connectHost, connectPort, ct);
-            return await Http2OriginConnection.CreateAsync(tcp, logger, ct, ResourceLimits);
+            return await Http2OriginConnection.CreateAsync(tcp, logger, ct, ResourceLimits, MaxDecodedHeaderListBytes);
         };
 
         try
@@ -126,9 +126,26 @@ public partial class ProxyServer
                 {
                     try
                     {
-                        if (!await HeaderParser.TryReadHeadersAsync(clientStream, request.Headers, cancellationToken))
+                        try
+                        {
+                            if (!await HeaderParser.TryReadHeadersAsync(clientStream, request.Headers, cancellationToken,
+                                    clientStream.HeaderBudget(isRequest: true)))
+                            {
+                                closeConnection = true;
+                                return;
+                            }
+                        }
+                        catch (HeaderLimitsExceededException)
                         {
                             closeConnection = true;
+                            args.HttpClient.Response = new GenericResponse(HttpStatusCode.RequestHeaderFieldsTooLarge)
+                            {
+                                HttpVersion = HttpHeader.Version11
+                            };
+                            args.HttpClient.Response.Headers.AddHeader(KnownHeaders.Connection,
+                                KnownHeaders.ConnectionClose);
+                            await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                            args.IsClientResponseCommitted = true;
                             return;
                         }
 
@@ -392,7 +409,7 @@ public partial class ProxyServer
         try
         {
             var created = await Http2OriginConnection.CreateAsync(seedConnection, logger,
-                cancellationToken, ResourceLimits);
+                cancellationToken, ResourceLimits, MaxDecodedHeaderListBytes);
             Http2OriginConnectionPool.Offer(poolKey, created);
         }
         catch (Exception ex)
