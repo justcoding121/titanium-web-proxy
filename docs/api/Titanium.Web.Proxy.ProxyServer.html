@@ -3329,7 +3329,7 @@ effect immediately - whether the proxy is stopped (e.g. before using
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_Dispose.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.Dispose%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L384">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L394">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_Dispose_" data-uid="Titanium.Web.Proxy.ProxyServer.Dispose*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_Dispose" data-uid="Titanium.Web.Proxy.ProxyServer.Dispose">Dispose()</h4>
@@ -3345,7 +3345,7 @@ effect immediately - whether the proxy is stopped (e.g. before using
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_Dispose_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.Dispose(System.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L390">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L400">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_Dispose_" data-uid="Titanium.Web.Proxy.ProxyServer.Dispose*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_Dispose_System_Boolean_" data-uid="Titanium.Web.Proxy.ProxyServer.Dispose(System.Boolean)">Dispose(bool)</h4>
@@ -3892,20 +3892,11 @@ bypassed, returns <a href="https://learn.microsoft.com/dotnet/csharp/language-re
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_Start_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.Start(System.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L55">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L65">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_Start_" data-uid="Titanium.Web.Proxy.ProxyServer.Start*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_Start_System_Boolean_" data-uid="Titanium.Web.Proxy.ProxyServer.Start(System.Boolean)">Start(bool)</h4>
-  <div class="markdown level1 summary"><p>Start this proxy server instance.</p>
-<p>
-    Transactional: if any endpoint fails to start, every listener this call already
-    started is stopped, the system-upstream-proxy resolver (if this call created one) is
-    disposed, and <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ProxyRunning">ProxyRunning</a> is left <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">false</a> before the
-    exception propagates. A caller that catches the exception is left with an instance in
-    exactly the same state as before calling <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_Start_System_Boolean_">Start(bool)</a>, not a partially-bound
-    proxy with some endpoints silently listening.
-</p>
-</div>
+  <div class="markdown level1 summary"></div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
@@ -3924,9 +3915,7 @@ bypassed, returns <a href="https://learn.microsoft.com/dotnet/csharp/language-re
       <tr>
         <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
         <td><span class="parametername">changeSystemProxySettings</span></td>
-        <td><p>Whether or not clear any system proxy settings which is pointing to our own endpoint (causing a cycle).
-E.g due to ungracious proxy shutdown before.</p>
-</td>
+        <td></td>
       </tr>
     </tbody>
   </table>
@@ -3935,7 +3924,7 @@ E.g due to ungracious proxy shutdown before.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_Stop.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.Stop%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L284">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L294">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_Stop_" data-uid="Titanium.Web.Proxy.ProxyServer.Stop*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_Stop" data-uid="Titanium.Web.Proxy.ProxyServer.Stop">Stop()</h4>
@@ -3954,7 +3943,7 @@ factory itself stays usable for a subsequent Start (it is only disposed with the
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_StopAsync_System_Nullable_System_TimeSpan__.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.StopAsync(System.Nullable%7BSystem.TimeSpan%7D)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L297">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L307">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_StopAsync_" data-uid="Titanium.Web.Proxy.ProxyServer.StopAsync*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_StopAsync_System_Nullable_System_TimeSpan__" data-uid="Titanium.Web.Proxy.ProxyServer.StopAsync(System.Nullable{System.TimeSpan})">StopAsync(TimeSpan?)</h4>

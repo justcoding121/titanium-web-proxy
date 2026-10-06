@@ -3804,6 +3804,83 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Http.HeaderCollection.RemoveHeader
   nameWithType: HeaderCollection.RemoveHeader
+- uid: Titanium.Web.Proxy.Http.HeaderLimitsExceededException
+  name: HeaderLimitsExceededException
+  href: api/Titanium.Web.Proxy.Http.HeaderLimitsExceededException.html
+  commentId: T:Titanium.Web.Proxy.Http.HeaderLimitsExceededException
+  fullName: Titanium.Web.Proxy.Http.HeaderLimitsExceededException
+  nameWithType: HeaderLimitsExceededException
+- uid: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.#ctor(System.Boolean,System.Int64,System.Int64,System.Boolean)
+  name: HeaderLimitsExceededException(bool, long, long, bool)
+  href: api/Titanium.Web.Proxy.Http.HeaderLimitsExceededException.html#Titanium_Web_Proxy_Http_HeaderLimitsExceededException__ctor_System_Boolean_System_Int64_System_Int64_System_Boolean_
+  commentId: M:Titanium.Web.Proxy.Http.HeaderLimitsExceededException.#ctor(System.Boolean,System.Int64,System.Int64,System.Boolean)
+  name.vb: New(Boolean, Long, Long, Boolean)
+  fullName: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.HeaderLimitsExceededException(bool, long, long, bool)
+  fullName.vb: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.New(Boolean, Long, Long, Boolean)
+  nameWithType: HeaderLimitsExceededException.HeaderLimitsExceededException(bool, long, long, bool)
+  nameWithType.vb: HeaderLimitsExceededException.New(Boolean, Long, Long, Boolean)
+- uid: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.#ctor*
+  name: HeaderLimitsExceededException
+  href: api/Titanium.Web.Proxy.Http.HeaderLimitsExceededException.html#Titanium_Web_Proxy_Http_HeaderLimitsExceededException__ctor_
+  commentId: Overload:Titanium.Web.Proxy.Http.HeaderLimitsExceededException.#ctor
+  isSpec: "True"
+  name.vb: New
+  fullName: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.HeaderLimitsExceededException
+  fullName.vb: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.New
+  nameWithType: HeaderLimitsExceededException.HeaderLimitsExceededException
+  nameWithType.vb: HeaderLimitsExceededException.New
+- uid: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.IsCount
+  name: IsCount
+  href: api/Titanium.Web.Proxy.Http.HeaderLimitsExceededException.html#Titanium_Web_Proxy_Http_HeaderLimitsExceededException_IsCount
+  commentId: P:Titanium.Web.Proxy.Http.HeaderLimitsExceededException.IsCount
+  fullName: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.IsCount
+  nameWithType: HeaderLimitsExceededException.IsCount
+- uid: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.IsCount*
+  name: IsCount
+  href: api/Titanium.Web.Proxy.Http.HeaderLimitsExceededException.html#Titanium_Web_Proxy_Http_HeaderLimitsExceededException_IsCount_
+  commentId: Overload:Titanium.Web.Proxy.Http.HeaderLimitsExceededException.IsCount
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.IsCount
+  nameWithType: HeaderLimitsExceededException.IsCount
+- uid: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.IsRequest
+  name: IsRequest
+  href: api/Titanium.Web.Proxy.Http.HeaderLimitsExceededException.html#Titanium_Web_Proxy_Http_HeaderLimitsExceededException_IsRequest
+  commentId: P:Titanium.Web.Proxy.Http.HeaderLimitsExceededException.IsRequest
+  fullName: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.IsRequest
+  nameWithType: HeaderLimitsExceededException.IsRequest
+- uid: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.IsRequest*
+  name: IsRequest
+  href: api/Titanium.Web.Proxy.Http.HeaderLimitsExceededException.html#Titanium_Web_Proxy_Http_HeaderLimitsExceededException_IsRequest_
+  commentId: Overload:Titanium.Web.Proxy.Http.HeaderLimitsExceededException.IsRequest
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.IsRequest
+  nameWithType: HeaderLimitsExceededException.IsRequest
+- uid: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.Limit
+  name: Limit
+  href: api/Titanium.Web.Proxy.Http.HeaderLimitsExceededException.html#Titanium_Web_Proxy_Http_HeaderLimitsExceededException_Limit
+  commentId: P:Titanium.Web.Proxy.Http.HeaderLimitsExceededException.Limit
+  fullName: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.Limit
+  nameWithType: HeaderLimitsExceededException.Limit
+- uid: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.Limit*
+  name: Limit
+  href: api/Titanium.Web.Proxy.Http.HeaderLimitsExceededException.html#Titanium_Web_Proxy_Http_HeaderLimitsExceededException_Limit_
+  commentId: Overload:Titanium.Web.Proxy.Http.HeaderLimitsExceededException.Limit
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.Limit
+  nameWithType: HeaderLimitsExceededException.Limit
+- uid: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.Observed
+  name: Observed
+  href: api/Titanium.Web.Proxy.Http.HeaderLimitsExceededException.html#Titanium_Web_Proxy_Http_HeaderLimitsExceededException_Observed
+  commentId: P:Titanium.Web.Proxy.Http.HeaderLimitsExceededException.Observed
+  fullName: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.Observed
+  nameWithType: HeaderLimitsExceededException.Observed
+- uid: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.Observed*
+  name: Observed
+  href: api/Titanium.Web.Proxy.Http.HeaderLimitsExceededException.html#Titanium_Web_Proxy_Http_HeaderLimitsExceededException_Observed_
+  commentId: Overload:Titanium.Web.Proxy.Http.HeaderLimitsExceededException.Observed
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.HeaderLimitsExceededException.Observed
+  nameWithType: HeaderLimitsExceededException.Observed
 - uid: Titanium.Web.Proxy.Http.HttpWebClient
   name: HttpWebClient
   href: api/Titanium.Web.Proxy.Http.HttpWebClient.html
