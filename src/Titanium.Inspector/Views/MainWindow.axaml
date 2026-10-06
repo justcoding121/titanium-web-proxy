@@ -741,7 +741,6 @@
                 Background="Transparent" BorderThickness="0"
                 Command="{Binding OpenSessionRetentionCommand}"
                 Opacity="0.8"
-                ToolTip.Tip="Session retention: how many sessions Inspector keeps. Click to change."
                 AutomationProperties.AutomationId="SessionCountLink">
           <TextBlock Text="{Binding SessionCountText}" AutomationProperties.AutomationId="SessionCountText" />
         </Button>
@@ -750,7 +749,6 @@
                 Command="{Binding OpenExclusionSummaryCommand}"
                 IsVisible="{Binding HasExclusionSummary}"
                 Opacity="0.85" FontSize="11"
-                ToolTip.Tip="Hosts Inspector does not decrypt. OS bypass: skipped by the system proxy (traffic never reaches Inspector). Tunnel-only: reaches Inspector but is passed through encrypted. Learned: tunneled automatically after a decrypt failure. Click to edit."
                 AutomationProperties.AutomationId="ExclusionSummaryLink" />
       </Grid>
     </Grid>
