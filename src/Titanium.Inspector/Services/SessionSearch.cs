@@ -194,18 +194,20 @@ public static class SessionSearch
         DateTimeOffset? oldestStartedUtc)
     {
         var searching = !string.IsNullOrWhiteSpace(searchQuery);
+        var kept = FormatSessionCount(totalCount);
+        if (retentionEvictedTotal > 0)
+            kept += " most recent";
+
         var text = searching
-            ? $"Sessions: showing {visibleCount:N0} of {totalCount:N0} (filtered)"
-            : $"Sessions: {totalCount:N0}";
+            ? $"Sessions: {FormatSessionCount(visibleCount)} of {kept} match filter"
+            : $"Sessions: {kept}";
 
         var emptySearch = searching && visibleCount == 0 && totalCount > 0;
 
         if (retentionEvictedTotal > 0 && oldestStartedUtc is { } oldest)
         {
-            // Retention limit dropped older sessions: the list only covers "since <oldest kept>".
+            // Retention dropped older sessions: the list is the most recent kept window.
             text += $" · since {oldest.ToLocalTime():HH:mm}";
-            if (!emptySearch)
-                text += " (older removed by retention limit)";
         }
 
         if (emptySearch)
@@ -214,16 +216,19 @@ public static class SessionSearch
         return text;
     }
 
+    /// <summary>Compact round thousands (<c>10k</c>) so a retention cap is readable in the status bar.</summary>
+    private static string FormatSessionCount(int count) =>
+        count >= 1_000 && count % 1_000 == 0
+            ? $"{count / 1_000}k"
+            : count.ToString("N0");
+
     private static string FormatEmptySearchRetentionHint(int retentionEvictedTotal)
     {
         if (retentionEvictedTotal <= 0)
             return "";
 
-        var retention = retentionEvictedTotal == 1
-            ? "1 removed by retention"
-            : $"{retentionEvictedTotal} removed by retention";
-
-        return $" · no matches in current list · {retention}";
+        // Removed sessions are no longer searchable, so a zero-match result may not be the whole story.
+        return $" · {retentionEvictedTotal:N0} older removed by retention (not searched)";
     }
 
     private static List<(string Key, string Value)> Tokenize(string query)

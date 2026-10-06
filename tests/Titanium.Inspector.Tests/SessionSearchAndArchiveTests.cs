@@ -399,7 +399,7 @@ public class SessionSearchAndArchiveTests
             searchQuery: "body:needle",
             retentionEvictedTotal: 0,
             oldestStartedUtc: null);
-        Assert.AreEqual("Sessions: showing 0 of 10 (filtered)", withBody);
+        Assert.AreEqual("Sessions: 0 of 10 match filter", withBody);
 
         var oldest = new DateTimeOffset(2026, 9, 2, 19, 2, 0, TimeSpan.Zero);
         var withRetention = SessionSearch.BuildSessionCountText(
@@ -408,9 +408,23 @@ public class SessionSearchAndArchiveTests
             searchQuery: "host:missing",
             retentionEvictedTotal: 120,
             oldestStartedUtc: oldest);
-        StringAssert.Contains(withRetention, "Sessions: showing 0 of 50 (filtered)");
+        StringAssert.Contains(withRetention, "Sessions: 0 of 50 most recent match filter");
         StringAssert.Contains(withRetention, "since ");
-        StringAssert.Contains(withRetention, "no matches in current list · 120 removed by retention");
+        StringAssert.Contains(withRetention, "120 older removed by retention (not searched)");
+
+        var atDefaultCap = SessionSearch.BuildSessionCountText(
+            visibleCount: 25,
+            totalCount: 10_000,
+            searchQuery: "host:api",
+            retentionEvictedTotal: 40,
+            oldestStartedUtc: oldest);
+        Assert.AreEqual(
+            $"Sessions: 25 of 10k most recent match filter · since {oldest.ToLocalTime():HH:mm}",
+            atDefaultCap);
+
+        Assert.AreEqual(
+            $"Sessions: 10k most recent · since {oldest.ToLocalTime():HH:mm}",
+            SessionSearch.BuildSessionCountText(10_000, 10_000, null, 40, oldest));
     }
 
     [TestMethod]
