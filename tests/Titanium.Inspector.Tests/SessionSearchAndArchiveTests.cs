@@ -399,7 +399,7 @@ public class SessionSearchAndArchiveTests
             searchQuery: "body:needle",
             retentionEvictedTotal: 0,
             oldestStartedUtc: null);
-        Assert.AreEqual("Sessions: 0 / 10", withBody);
+        Assert.AreEqual("Sessions: showing 0 of 10", withBody);
 
         var oldest = new DateTimeOffset(2026, 9, 2, 19, 2, 0, TimeSpan.Zero);
         var withRetention = SessionSearch.BuildSessionCountText(
@@ -408,7 +408,7 @@ public class SessionSearchAndArchiveTests
             searchQuery: "host:missing",
             retentionEvictedTotal: 120,
             oldestStartedUtc: oldest);
-        StringAssert.Contains(withRetention, "Sessions: 0 / 50");
+        StringAssert.Contains(withRetention, "Sessions: showing 0 of 50");
         StringAssert.Contains(withRetention, "since ");
         StringAssert.Contains(withRetention, "no matches in current list · 120 removed by retention");
     }

@@ -195,15 +195,20 @@ public static class SessionSearch
     {
         var searching = !string.IsNullOrWhiteSpace(searchQuery);
         var text = searching
-            ? $"Sessions: {visibleCount} / {totalCount}"
-            : $"Sessions: {totalCount}";
+            ? $"Sessions: showing {visibleCount:N0} of {totalCount:N0}"
+            : $"Sessions: {totalCount:N0}";
+
+        var emptySearch = searching && visibleCount == 0 && totalCount > 0;
 
         if (retentionEvictedTotal > 0 && oldestStartedUtc is { } oldest)
         {
+            // Retention limit dropped older sessions: the list only covers "since <oldest kept>".
             text += $" · since {oldest.ToLocalTime():HH:mm}";
+            if (!emptySearch)
+                text += " (older removed by retention limit)";
         }
 
-        if (searching && visibleCount == 0 && totalCount > 0)
+        if (emptySearch)
             text += FormatEmptySearchRetentionHint(retentionEvictedTotal);
 
         return text;

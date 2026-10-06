@@ -96,7 +96,7 @@ public class SessionPipelineTests
             Assert.IsTrue(vm.HideTunnelsFilter);
             vm.ErrorsOnlyFilter = true;
             Assert.IsTrue(vm.SearchQuery.Contains("is:error", StringComparison.Ordinal));
-            Assert.AreEqual("Sessions: 0 / 1", vm.SessionCountText);
+            Assert.AreEqual("Sessions: showing 0 of 1", vm.SessionCountText);
 
             vm.ClearFiltersCommand.Execute(null);
             await Task.Delay(50);
@@ -180,7 +180,7 @@ public class SessionPipelineTests
             vm.SearchQuery = "body:alpha-body";
             Assert.AreEqual(1, vm.Sessions.Count);
             Assert.AreEqual(1, vm.Sessions[0].Id);
-            StringAssert.Contains(vm.SessionCountText, "Sessions: 1 / 2");
+            StringAssert.Contains(vm.SessionCountText, "Sessions: showing 1 of 2");
             Assert.IsFalse(vm.SessionCountText.Contains("in-memory only", StringComparison.Ordinal));
         }
         finally
@@ -235,7 +235,7 @@ public class SessionPipelineTests
             Assert.IsNull(registry.TryGet(1));
 
             vm.SearchQuery = "host:does-not-exist";
-            StringAssert.Contains(vm.SessionCountText, "Sessions: 0 / 2");
+            StringAssert.Contains(vm.SessionCountText, "Sessions: showing 0 of 2");
             StringAssert.Contains(vm.SessionCountText, "since ");
             StringAssert.Contains(vm.SessionCountText, "no matches in current list");
             StringAssert.Contains(vm.SessionCountText, "removed by retention");
