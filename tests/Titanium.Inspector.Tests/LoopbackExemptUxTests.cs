@@ -43,7 +43,10 @@ public class LoopbackExemptUxTests
         StringAssert.Contains(
             LoopbackExemptCopy.ClearedStatus(LoopbackCaptureReadiness.Ready, refreshed: true),
             "refreshed");
-        Assert.AreEqual("Store apps unchanged.", LoopbackExemptCopy.ClosedUnchanged);
+        var closed = new LoopbackExemptResult();
+        Assert.IsFalse(closed.Changed);
+        Assert.AreEqual(LoopbackExemptCopy.ClosedUnchanged, closed.StatusText);
+        StringAssert.Contains(closed.StatusText, "unchanged");
     }
 
     [TestMethod]

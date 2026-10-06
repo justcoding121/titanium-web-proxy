@@ -932,7 +932,6 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         SystemProxy = true;
     }
 
-    private Task AwaitCancellableAsync(Task task) => task.WaitAsync(StatusCancelToken);
     private Task<T> AwaitCancellableAsync<T>(Task<T> task) => task.WaitAsync(StatusCancelToken);
 
     /// <summary>
