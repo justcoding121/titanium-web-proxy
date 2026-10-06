@@ -149,7 +149,7 @@ public class MenuActionsHeadlessTests
             await fx.WaitUntilAsync(
                 () => fx.ViewModel.StatusText.Contains("Windows 8", StringComparison.OrdinalIgnoreCase)
                       || fx.ViewModel.StatusText.Contains("Store app", StringComparison.OrdinalIgnoreCase)
-                      || fx.ViewModel.StatusText.Contains("Allow Store apps dialog closed", StringComparison.Ordinal),
+                      || fx.ViewModel.StatusText.Contains("Store apps unchanged", StringComparison.Ordinal),
                 TimeSpan.FromSeconds(8));
 
             fx.Dialogs.RotateRootCaResult = true;
@@ -271,6 +271,12 @@ public class MenuActionsHeadlessTests
             });
 
             await ClickMenuAndDismissDialogAsync(fx, "MenuSessionRetention", "RetentionCancel");
+            await fx.WaitUntilAsync(
+                () => fx.ViewModel.StatusText.Contains("retention", StringComparison.OrdinalIgnoreCase),
+                TimeSpan.FromSeconds(10));
+
+            // Status-bar session count opens the same dialog.
+            await ClickMenuAndDismissDialogAsync(fx, "SessionCountLink", "RetentionCancel");
             await fx.WaitUntilAsync(
                 () => fx.ViewModel.StatusText.Contains("retention", StringComparison.OrdinalIgnoreCase),
                 TimeSpan.FromSeconds(10));

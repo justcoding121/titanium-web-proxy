@@ -12,6 +12,7 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http3.Qpack;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Streams;
@@ -268,6 +269,8 @@ internal static class Http3RequestStream
                 catch (BodySizeLimitExceededException)
                 {
                     // GetRequestBody() during BeforeRequest hit MaxBufferedBodyBytes.
+                    ProxyLog.LimitExceeded(server.Logger, LimitId.BufferedBody, PolicyMode.Enforce,
+                        server.MaxBufferedBodyBytes, server.MaxBufferedBodyBytes, "413");
                     await SendSimpleStatusResponseAsync(stream, 413, qpackContext, cancellationToken);
                     stream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.ExcessiveLoad);
                     streamState.RequestClosed = true;
@@ -1006,12 +1009,13 @@ internal static class Http3RequestStream
     {
         var body = new MemoryStream();
         var maxBufferedBodyBytes = sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes;
+        var maxFrame = server.ResourceLimits.MaxHttp3FramePayloadBytes;
         var boundedBody = new BoundedWriteStream(body, maxBufferedBodyBytes, server.PolicyModes[PolicyFamily.BodyBudget]);
         try
         {
             while (true)
             {
-                var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 0, ct);
+                var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: maxFrame, ct);
                 if (frame is null) break;
                 try
                 {
@@ -1087,25 +1091,28 @@ internal static class Http3RequestStream
 
         if (!hasHook)
         {
+            var maxFrame = server.ResourceLimits.MaxHttp3FramePayloadBytes;
             while (true)
             {
-                var frame = await Http3Frame.ReadAsync(clientStream, maxPayloadBytes: 0, ct);
-                if (frame is null) break;
+                var header = await Http3Frame.ReadFrameHeaderAsync(clientStream, ct);
+                if (header is null) break;
+                if (header.Value.Type == Http3FrameType.Data)
+                {
+                    if (header.Value.Length > 0)
+                        await Http3Frame.CopyPayloadAsync(clientStream, header.Value.Length, 16 * 1024, writeData, ct);
+                    continue;
+                }
+
+                var frame = await Http3Frame.ReadPayloadAfterHeaderAsync(clientStream, header.Value, maxFrame, ct);
                 try
                 {
-                    switch (frame.Type)
+                    if (frame.Type == Http3FrameType.Headers)
                     {
-                        case Http3FrameType.Data:
-                            if (frame.Payload.Length > 0)
-                                await writeData(frame.Payload, ct);
-                            break;
-                        case Http3FrameType.Headers:
-                            if (onTrailerFrame != null)
-                                await onTrailerFrame(frame.Payload, ct);
-                            var trailers = QpackDecoder.Decode(frame.Payload.Span);
-                            foreach (var (name, value) in trailers)
-                                request.TrailingHeaders.AddHeader(new HttpHeader(name, value));
-                            break;
+                        if (onTrailerFrame != null)
+                            await onTrailerFrame(frame.Payload, ct);
+                        var trailers = QpackDecoder.Decode(frame.Payload.Span);
+                        foreach (var (name, value) in trailers)
+                            request.TrailingHeaders.AddHeader(new HttpHeader(name, value));
                     }
                 }
                 finally
@@ -1116,10 +1123,11 @@ internal static class Http3RequestStream
         }
         else
         {
-            var current = await Http3Frame.ReadAsync(clientStream, maxPayloadBytes: 0, ct);
+            var maxFrame = server.ResourceLimits.MaxHttp3FramePayloadBytes;
+            var current = await Http3Frame.ReadAsync(clientStream, maxPayloadBytes: maxFrame, ct);
             while (current != null)
             {
-                var next = await Http3Frame.ReadAsync(clientStream, maxPayloadBytes: 0, ct);
+                var next = await Http3Frame.ReadAsync(clientStream, maxPayloadBytes: maxFrame, ct);
                 var isLast = next == null || next.Type == Http3FrameType.Headers;
 
                 try

@@ -86,6 +86,8 @@ Engine knobs live under `server:` ([reference](#server-reference)). Plus feature
 
 Match fields typically include host, path (`Exact` / `Prefix` / `Template`), method, headers, and query. Cluster algorithms include RoundRobin, Random, LeastRequests, and LeastTime; destinations support weight and sticky cookie/header. When any cluster uses `LeastTime`, the CLI automatically enables request timing capture so latency EWMA can drive selection.
 
+Optional `limits` on a route overrides that session only: `requestTimeoutSeconds`, `idleTimeoutSeconds`, `maxBufferedBodyBytes`, `maxWebSocketFramePayloadBytes`. Omit it and the server limits apply. Full key list: [Limits and escape hatches](/docs/limits).
+
 ### Route transforms
 
 Optional `transforms` on a route rewrite the upstream request (and can stage response header changes). Empty/absent transforms keep the reverse fast path. Supported kinds:
@@ -137,7 +139,7 @@ Use real paths and emails in your environment. Do not commit private keys. MITM 
 ```yaml
 logging:
   enabled: true
-  minimumLevel: "Error"
+  minimumLevel: "Error"   # Error shows limit rejections. Use Debug, or titanium run -v, for Observe lines.
   enableConsole: true
   enableConsoleColors: true
   enableFile: false
@@ -174,7 +176,7 @@ Null nested objects and null properties leave the library or profile default. Ap
 
 ```yaml
 server:
-  profile: PublicFacing   # Balanced | LegacyCompatible | PublicFacing
+  profile: Balanced   # Balanced | LegacyCompatible | PublicFacing. PublicFacing sets streams to 256, idle 60s, request 120s.
   enableHttp2: true
   enableHttp3: null
   enableRfc8441: false
@@ -222,24 +224,36 @@ server:
     maxDecodedBodyBytes: null
     maxDecompressionRatio: 200
     maxConcurrentClients: null
-    maxConcurrentStreamsPerConnection: 256
+    maxConcurrentStreamsPerConnection: 1000   # PublicFacing profile uses 256
     maxPeerInitiatedIncompleteStreamResets: 100
     maxOpenHeaderBlockFrames: 128
     maxOpenHeaderBlockDurationSeconds: 10
     connectionPoolingEnabled: true
     maxCachedConnectionsPerHost: 128
-    maxOriginHttp2ConnectionsPerAuthority: 8
+    maxOriginHttp2ConnectionsPerAuthority: 1
     maxCertificateCacheEntries: 1024
     maxCertificateDiskCacheEntries: null
     maxBufferedBodyBytes: 4194304
     maxDecodedHeaderListBytes: 65536
     maxWebSocketFramePayloadBytes: 16777216
+    maxHttp3FramePayloadBytes: 4194304
+    maxDeferredOutboundBytesPerStream: 4210688
+    maxTrailerHeaderCount: 100
+    maxTrailerHeaderBlockBytes: 16384
+    maxHttp2CompressedHeaderBlockBytes: 262144
+    maxInterimResponses: 20
+    maxAuthChallengeRounds: 3
+    maxUpstreamProxyAuthenticationAttempts: 5
+    maxWinAuthTokenBytes: 12288
+    http2WindowUpdateTimeoutSeconds: 60
   policyModes:
     bodyBudget: Enforce
     decompressionRatio: Enforce
     headerLimits: Enforce
     admissionControl: Enforce
     http2AbuseBudget: Enforce
+    webSocketFrameBudget: Enforce
+    http1ReplaySafety: Observe   # PublicFacing keeps Enforce unless you set this
     allowAmbiguousFraming: false
   tls:
     supportedSslProtocols: [Tls12, Tls13]
@@ -251,13 +265,18 @@ server:
       hostName: "proxy.example"
       port: 8080
       proxyType: Http
+      useDefaultCredentials: false
+      bypassLocalhost: false
+      proxyDnsRequests: false
+      nextHop: null
     httpsProxy: null
     upStreamEndPoint: null
     upStreamEndPointIPv4: null
     upStreamEndPointIPv6: null
   decryptSkipHosts: []      # present ⇒ Replace tunnel-only list (omit key to keep Merge factory defaults)
   decryptOnlyHosts: []      # when non-empty, only these hosts are decrypted (Replace with skip/only)
-  # Decrypt failure bypass (learned tunnel) is ProxyServer.EnableDecryptFailureBypass / Inspector only — not a twp.yaml key
+  # enableDecryptFailureBypass, decryptFailureBypassTtlMinutes, decryptFailureBypassMaxEntries,
+  # decryptFailureBypassThreshold, and proxyAuthenticationRealm are server keys. See Limits.
   systemProxyBypassHosts: null  # present ⇒ Replace OS bypass (omit ⇒ Merge identity defaults); SSO risk if removed
   proxyLoopback: true       # localhost via proxy when building SystemProxySettings from config
   certificateManager:
@@ -328,3 +347,9 @@ These cannot be set from YAML; wire them in Library / C# code:
 - `GetCustomUpStreamProxyFunc`, `CustomUpStreamProxyFailureFunc`
 - `ShouldInterceptHttp`
 - `BufferPool`, `Logging.LoggerFactory`, custom `CertificateStorage`
+
+## See also
+
+- [Limits and escape hatches](/docs/limits)
+- [Why did my request fail](/docs/troubleshooting)
+- [CLI](/docs/cli)

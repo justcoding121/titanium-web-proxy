@@ -603,6 +603,59 @@ public sealed class InterceptionService : IDisposable
         return SetSystemProxy(true, SystemProxySettings);
     }
 
+    /// <summary>
+    /// Turns the system proxy off, then back on, so clients drop a cached connection and open a new one.
+    /// Rewriting the same <c>ProxyEnable=1</c> value does not do that: packaged apps that already
+    /// failed to reach localhost keep their direct connection until <c>ProxyEnable</c> actually changes.
+    /// Must not run on the UI thread: the WinINET settings broadcast can deadlock Avalonia.
+    /// </summary>
+    /// <param name="stillWanted">
+    /// When this returns false after the proxy is turned off, it stays off (the user turned System proxy off).
+    /// </param>
+    /// <returns>True only when the system proxy is enabled again.</returns>
+    public bool NudgeSystemProxy(Func<bool>? stillWanted = null)
+    {
+        lock (_systemProxyGate)
+        {
+            LastSystemProxyError = null;
+            if (!_systemProxyEnabled)
+            {
+                return false;
+            }
+
+            if (stillWanted is not null && !stillWanted())
+            {
+                return false;
+            }
+
+            if (_proxy is null || _endPoint is null || !_proxy.ProxyRunning)
+            {
+                LastSystemProxyError = "Proxy is not running";
+                return false;
+            }
+
+            try
+            {
+                if (!TryDisableSystemProxyLocked())
+                {
+                    return false;
+                }
+
+                if (stillWanted is not null && !stillWanted())
+                {
+                    return false;
+                }
+
+                return TryEnableSystemProxyLocked(SystemProxySettings);
+            }
+            catch (Exception ex)
+            {
+                LastSystemProxyError = ex.Message;
+                return false;
+            }
+        }
+    }
+
     /// <summary>Install root CA and refresh <see cref="IsRootTrusted"/> from the store.</summary>
     /// <returns>True when the cert is present in the target Root store after install (or Unix SSL trust succeeded / needs Keychain confirm).</returns>
     /// <remarks>

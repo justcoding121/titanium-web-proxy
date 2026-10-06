@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Logging;
+using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.Http2;
 
@@ -36,6 +38,14 @@ internal sealed class Http2FlowController
     private int initialStreamWindow = InitialConnectionWindow;
     private TaskCompletionSource<bool> creditAvailable =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TimeSpan reservationTimeout;
+
+    internal Http2FlowController(TimeSpan? reservationTimeout = null)
+    {
+        this.reservationTimeout = reservationTimeout is { } configured && configured > TimeSpan.Zero
+            ? configured
+            : ReservationTimeout;
+    }
 
     /// <summary>RFC 7540 §6.9.2 default initial flow-control window size for both the connection and every stream.</summary>
     internal const int InitialConnectionWindow = 65535;
@@ -286,12 +296,14 @@ internal sealed class Http2FlowController
 
             try
             {
-                await wait.WaitAsync(ReservationTimeout, cancellationToken);
+                await wait.WaitAsync(reservationTimeout, cancellationToken);
             }
             catch (TimeoutException)
             {
+                ProxyLog.LimitExceeded(ProxyDiagnostics.Logger, LimitId.Http2WindowUpdate, PolicyMode.Enforce,
+                    (long)reservationTimeout.TotalSeconds, (long)reservationTimeout.TotalSeconds, "stream reset");
                 throw new TimeoutException(
-                    $"HTTP/2 flow-control reservation for stream {streamId} timed out after {ReservationTimeout} " +
+                    $"HTTP/2 flow-control reservation for stream {streamId} timed out after {reservationTimeout} " +
                     "waiting for WINDOW_UPDATE credit from the peer.");
             }
         }

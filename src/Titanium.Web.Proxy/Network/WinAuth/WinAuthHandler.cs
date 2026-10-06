@@ -25,10 +25,11 @@ internal static class WinAuthHandler
     /// <param name="credentials">Optional alternate credentials from <c>WinAuthCredentialsProvider</c>.</param>
     /// <returns></returns>
     internal static string GetInitialAuthToken(string serverHostname, string authScheme, InternalDataStore data,
-        WinAuthCredentials? credentials = null)
+        WinAuthCredentials? credentials = null, int maxTokenBytes = 0)
     {
         var tokenBytes = WinAuthEndPoint.AcquireInitialSecurityToken(serverHostname, authScheme, data,
-            IscReqConfidentiality | IscReqReplayDetect | IscReqSequenceDetect | IscReqConnection, credentials);
+            IscReqConfidentiality | IscReqReplayDetect | IscReqSequenceDetect | IscReqConnection, credentials,
+            maxTokenBytes);
         if (tokenBytes == null) throw new InvalidOperationException("Failed to acquire the initial authentication token.");
 
         return string.Concat(" ", Convert.ToBase64String(tokenBytes));
@@ -41,11 +42,13 @@ internal static class WinAuthHandler
     /// <param name="serverToken"></param>
     /// <param name="data"></param>
     /// <returns></returns>
-    internal static string GetFinalAuthToken(string serverHostname, string serverToken, InternalDataStore data)
+    internal static string GetFinalAuthToken(string serverHostname, string serverToken, InternalDataStore data,
+        int maxTokenBytes = 0)
     {
         var tokenBytes =
             WinAuthEndPoint.AcquireFinalSecurityToken(serverHostname, Convert.FromBase64String(serverToken),
-                data, IscReqConfidentiality | IscReqReplayDetect | IscReqSequenceDetect | IscReqConnection);
+                data, IscReqConfidentiality | IscReqReplayDetect | IscReqSequenceDetect | IscReqConnection,
+                maxTokenBytes);
         if (tokenBytes == null) throw new InvalidOperationException("Failed to acquire the final authentication token.");
 
         return string.Concat(" ", Convert.ToBase64String(tokenBytes));
@@ -54,9 +57,11 @@ internal static class WinAuthHandler
     /// <summary>
     ///     Get the initial authentication token for an upstream proxy using the current process identity.
     /// </summary>
-    internal static string GetInitialProxyAuthToken(string proxyHostname, string authScheme, InternalDataStore data)
+    internal static string GetInitialProxyAuthToken(string proxyHostname, string authScheme, InternalDataStore data,
+        int maxTokenBytes = 0)
     {
-        var tokenBytes = WinAuthEndPoint.AcquireInitialSecurityToken(proxyHostname, authScheme, data, 0);
+        var tokenBytes = WinAuthEndPoint.AcquireInitialSecurityToken(proxyHostname, authScheme, data, 0,
+            maxTokenBytes: maxTokenBytes);
         if (tokenBytes == null) throw new InvalidOperationException("Failed to acquire the initial proxy authentication token.");
 
         return string.Concat(" ", Convert.ToBase64String(tokenBytes));
@@ -65,10 +70,11 @@ internal static class WinAuthHandler
     /// <summary>
     ///     Get the response token for an upstream proxy challenge.
     /// </summary>
-    internal static string GetFinalProxyAuthToken(string proxyHostname, string serverToken, InternalDataStore data)
+    internal static string GetFinalProxyAuthToken(string proxyHostname, string serverToken, InternalDataStore data,
+        int maxTokenBytes = 0)
     {
         var tokenBytes = WinAuthEndPoint.AcquireFinalSecurityToken(proxyHostname,
-            Convert.FromBase64String(serverToken), data, 0);
+            Convert.FromBase64String(serverToken), data, 0, maxTokenBytes);
         if (tokenBytes == null) throw new InvalidOperationException("Failed to acquire the final proxy authentication token.");
 
         return string.Concat(" ", Convert.ToBase64String(tokenBytes));

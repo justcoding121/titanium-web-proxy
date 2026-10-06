@@ -17,6 +17,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Http3.Qpack;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Quic;
@@ -173,7 +174,7 @@ internal static partial class Http3OriginBridge
                 originStream.CompleteWrites();
             sessionArgs.Timing?.MarkRequestSent();
 
-            const int maxInterimResponses = 20;
+            var maxInterimResponses = server.ResourceLimits.MaxInterimResponses;
             int interimCount = 0;
 
             Http3Frame? responseHeadersFrame;
@@ -212,8 +213,12 @@ internal static partial class Http3OriginBridge
                     if (finalStatus is >= 100 and < 200)
                     {
                         if (++interimCount > maxInterimResponses)
+                        {
+                            ProxyLog.LimitExceeded(logger, LimitId.InterimResponses, PolicyMode.Enforce,
+                                interimCount, maxInterimResponses, "stream reset");
                             throw new Http3StreamException(Http3ErrorCode.InternalError,
                                 $"Origin sent more than {maxInterimResponses} interim responses.");
+                        }
 
                         if (onInterimResponse != null)
                         {
@@ -254,7 +259,7 @@ internal static partial class Http3OriginBridge
                 }
             }
 
-            var maxPayload = Http3Frame.DefaultMaxPayloadBytes;
+            var maxPayload = server.ResourceLimits.MaxHttp3FramePayloadBytes;
 
             // Stream large / unknown-length bodies as DATA arrives (TTFB on big HTML). Tiny known-CL
             // must materialize first: H1 WriteResponseAsync + StreamBodyWriter emits a header-only
@@ -367,8 +372,18 @@ internal static partial class Http3OriginBridge
                     {
                         while (true)
                         {
-                            var frame = await Http3Frame.ReadAsync(streamToClient, maxPayloadBytes: maxPayload, ct);
-                            if (frame == null) break;
+                            var header = await Http3Frame.ReadFrameHeaderAsync(streamToClient, ct);
+                            if (header is null) break;
+                            if (header.Value.Type == Http3FrameType.Data)
+                            {
+                                if (header.Value.Length > 0)
+                                    await Http3Frame.CopyPayloadAsync(streamToClient, header.Value.Length, 16 * 1024,
+                                        (slice, token) => clientBodyStream.WriteAsync(slice, token), ct);
+                                continue;
+                            }
+
+                            var frame = await Http3Frame.ReadPayloadAfterHeaderAsync(
+                                streamToClient, header.Value, maxPayload, ct);
                             try
                             {
                                 if (frame.Type == Http3FrameType.Headers)
@@ -381,10 +396,6 @@ internal static partial class Http3OriginBridge
 
                                     break;
                                 }
-                                if (frame.Type != Http3FrameType.Data || frame.Payload.Length == 0)
-                                    continue;
-
-                                await clientBodyStream.WriteAsync(frame.Payload, ct);
                             }
                             finally
                             {
@@ -666,7 +677,7 @@ internal static partial class Http3OriginBridge
                     // Verbatim origin→client frame copy, or MITM capture when clientStream is null.
                     // Tiny GET: coalesce HEADERS+DATA into one Quic write (origin probe sends both).
                     const int relayCoalesceMaxBytes = 16 * 1024;
-                    var maxPayload = Math.Max(Http3Frame.DefaultMaxPayloadBytes, server.MaxDecodedHeaderListBytes);
+                    var maxPayload = Math.Max(server.ResourceLimits.MaxHttp3FramePayloadBytes, server.MaxDecodedHeaderListBytes);
                     var captureForMitm = clientStream is null;
                     var sawFinalHeaders = false;
                     while (true)

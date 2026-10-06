@@ -172,6 +172,7 @@ public class AutomationIdCoverageHeadlessTests
         "StatusBusyProgress",
         "StatusBarPanel",
         "SessionCountText",
+        "SessionCountLink",
         "AutoResponderGraphQlOperation",
         "AutoResponderGraphQlFromSelected",
         "BreakpointGraphQlOperation",

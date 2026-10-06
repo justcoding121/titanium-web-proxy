@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Diagnostics;
+using Titanium.Web.Proxy.Logging;
+using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
@@ -15,15 +17,6 @@ namespace Titanium.Web.Proxy;
 
 public partial class ProxyServer
 {
-    /// <summary>
-    ///     Maximum number of NTLM/Kerberos/Negotiate challenge-response rounds the proxy will perform for a
-    ///     single request. The standard NTLM handshake completes in two rounds (initial token + challenge
-    ///     response). A cap of three rounds provides one extra margin for servers that re-challenge after
-    ///     the connection is marked authenticated (RFC-conformant but still bounded) while preventing an
-    ///     infinite retry loop when credentials are persistently rejected.
-    /// </summary>
-    private const int MaxAuthChallengeRounds = 3;
-
     /// <summary>Key used to store the per-request auth challenge round counter in <see cref="HttpClient.Data" />.</summary>
     private const string WinAuthRoundCountKey = "WinAuthRoundCount";
 
@@ -108,8 +101,12 @@ public partial class ProxyServer
             var currentRound = args.HttpClient.Data.TryGetValueAs(WinAuthRoundCountKey, out int storedRound)
                 ? storedRound
                 : 0;
-            if (currentRound >= MaxAuthChallengeRounds)
+            var maxAuthRounds = ResourceLimits.MaxAuthChallengeRounds;
+            var maxTokenBytes = ResourceLimits.MaxWinAuthTokenBytes;
+            if (currentRound >= maxAuthRounds)
             {
+                ProxyLog.LimitExceeded(logger, LimitId.AuthChallengeRounds, PolicyMode.Enforce,
+                    currentRound, maxAuthRounds, "401");
                 await RewriteUnauthorizedResponse(args);
                 return;
             }
@@ -143,7 +140,7 @@ public partial class ProxyServer
                     credentials = await WinAuthCredentialsProvider(args);
 
                 var clientToken = WinAuthHandler.GetInitialAuthToken(request.Host!, scheme, args.HttpClient.Data,
-                    credentials);
+                    credentials, maxTokenBytes);
 
                 var auth = string.Concat(scheme, clientToken);
 
@@ -161,7 +158,8 @@ public partial class ProxyServer
                     authHeader.Value.Length > x.Length + 1);
 
                 var serverToken = authHeader.Value.Substring(scheme.Length + 1);
-                var clientToken = WinAuthHandler.GetFinalAuthToken(request.Host!, serverToken, args.HttpClient.Data);
+                var clientToken = WinAuthHandler.GetFinalAuthToken(request.Host!, serverToken, args.HttpClient.Data,
+                    maxTokenBytes);
 
                 var auth = string.Concat(scheme, clientToken);
 
@@ -204,8 +202,11 @@ public partial class ProxyServer
         var currentRound407 = args.HttpClient.Data.TryGetValueAs(WinAuthRoundCountKey, out int stored407)
             ? stored407
             : 0;
-        if (currentRound407 >= MaxAuthChallengeRounds)
+        var maxAuthRounds = ResourceLimits.MaxAuthChallengeRounds;
+        if (currentRound407 >= maxAuthRounds)
         {
+            ProxyLog.LimitExceeded(logger, LimitId.AuthChallengeRounds, PolicyMode.Enforce,
+                currentRound407, maxAuthRounds, "407");
             await RewriteUnauthorizedResponse(args);
             return;
         }

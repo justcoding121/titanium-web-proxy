@@ -15,6 +15,8 @@ internal class LimitedStream : Stream
     private readonly IBufferPool bufferPool;
     private readonly bool isChunked;
     private readonly HeaderCollection? trailingHeaders;
+    private readonly int maxTrailerHeaderCount;
+    private readonly int maxTrailerHeaderBlockBytes;
     private long bytesRemaining;
 
     private bool readChunkTrail;
@@ -29,12 +31,15 @@ internal class LimitedStream : Stream
     ///     populate a request/response's trailing headers the same way the pass-through relay path does.
     /// </param>
     internal LimitedStream(IHttpStreamReader baseStream, IBufferPool bufferPool, bool isChunked,
-        long contentLength, HeaderCollection? trailingHeaders = null)
+        long contentLength, HeaderCollection? trailingHeaders = null,
+        int maxTrailerHeaderCount = 100, int maxTrailerHeaderBlockBytes = 16 * 1024)
     {
         baseReader = baseStream;
         this.bufferPool = bufferPool;
         this.isChunked = isChunked;
         this.trailingHeaders = trailingHeaders;
+        this.maxTrailerHeaderCount = maxTrailerHeaderCount;
+        this.maxTrailerHeaderBlockBytes = maxTrailerHeaderBlockBytes;
         if (isChunked)
             bytesRemaining = 0;
         else
@@ -92,7 +97,7 @@ internal class LimitedStream : Stream
             // reading only a single line here (as before) left any additional trailer lines unread on the
             // source, corrupting a pooled keep-alive connection's next message.
             await ChunkedTrailerHelper.ReadTrailingHeaders(baseReader, trailingHeaders ?? new HeaderCollection(),
-                null);
+                null, default, maxTrailerHeaderCount, maxTrailerHeaderBlockBytes);
         }
     }
 

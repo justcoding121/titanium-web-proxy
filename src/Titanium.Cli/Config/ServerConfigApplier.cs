@@ -38,6 +38,21 @@ internal static class ServerConfigApplier
         ApplyUpstream(proxy, server.Upstream);
         ApplyCertificateManager(proxy, server.CertificateManager);
         ApplyDecryptExclusions(proxy, server);
+        ApplyDecryptFailureBypass(proxy, server);
+        if (!string.IsNullOrWhiteSpace(server.ProxyAuthenticationRealm))
+            proxy.ProxyAuthenticationRealm = server.ProxyAuthenticationRealm;
+    }
+
+    private static void ApplyDecryptFailureBypass(ProxyServer proxy, ServerConfig server)
+    {
+        if (server.EnableDecryptFailureBypass is bool enabled)
+            proxy.EnableDecryptFailureBypass = enabled;
+        if (server.DecryptFailureBypassTtlMinutes is int minutes && minutes > 0)
+            proxy.DecryptFailureBypassTtl = TimeSpan.FromMinutes(minutes);
+        if (server.DecryptFailureBypassMaxEntries is int entries && entries > 0)
+            proxy.DecryptFailureBypassMaxEntries = entries;
+        if (server.DecryptFailureBypassThreshold is int threshold && threshold > 0)
+            proxy.DecryptFailureBypassThreshold = threshold;
     }
 
     /// <summary>
@@ -312,6 +327,22 @@ internal static class ServerConfigApplier
         built = built.WithCertificateCacheBounds(
             built.MaxCertificateCacheEntries,
             limits.MaxCertificateDiskCacheEntries ?? current.MaxCertificateDiskCacheEntries);
+        built = built.WithMaxHttp3FramePayloadBytes(
+            limits.MaxHttp3FramePayloadBytes ?? current.MaxHttp3FramePayloadBytes);
+        built = built.WithMaxDeferredOutboundBytesPerStream(
+            limits.MaxDeferredOutboundBytesPerStream ?? current.MaxDeferredOutboundBytesPerStream);
+        built = built.WithTrailerHeaderBounds(
+            limits.MaxTrailerHeaderCount ?? current.MaxTrailerHeaderCount,
+            limits.MaxTrailerHeaderBlockBytes ?? current.MaxTrailerHeaderBlockBytes);
+        built = built.WithMaxHttp2CompressedHeaderBlockBytes(
+            limits.MaxHttp2CompressedHeaderBlockBytes ?? current.MaxHttp2CompressedHeaderBlockBytes);
+        built = built.WithMaxInterimResponses(limits.MaxInterimResponses ?? current.MaxInterimResponses);
+        built = built.WithAuthenticationBounds(
+            limits.MaxAuthChallengeRounds ?? current.MaxAuthChallengeRounds,
+            limits.MaxUpstreamProxyAuthenticationAttempts ?? current.MaxUpstreamProxyAuthenticationAttempts,
+            limits.MaxWinAuthTokenBytes ?? current.MaxWinAuthTokenBytes);
+        built = built.WithHttp2WindowUpdateTimeoutSeconds(
+            limits.Http2WindowUpdateTimeoutSeconds ?? current.Http2WindowUpdateTimeoutSeconds);
 
         proxy.ResourceLimits = built;
 
@@ -338,22 +369,25 @@ internal static class ServerConfigApplier
             return;
         }
 
-        var current = proxy.PolicyModes;
-        var modes = ProxyPolicyModes.Create(
-            ParsePolicyMode(policy.BodyBudget, current[PolicyFamily.BodyBudget]),
-            ParsePolicyMode(policy.DecompressionRatio, current[PolicyFamily.DecompressionRatio]),
-            ParsePolicyMode(policy.HeaderLimits, current[PolicyFamily.HeaderLimits]),
-            ParsePolicyMode(policy.AdmissionControl, current[PolicyFamily.AdmissionControl]),
-            ParsePolicyMode(policy.Http2AbuseBudget, current[PolicyFamily.Http2AbuseBudget]),
-            ParsePolicyMode(policy.Http2RelayValidation, current[PolicyFamily.Http2RelayValidation]))
-            .With(
-                PolicyFamily.WebSocketFrameBudget,
-                ParsePolicyMode(policy.WebSocketFrameBudget, current[PolicyFamily.WebSocketFrameBudget]));
-
-        if (policy.AllowAmbiguousFraming == true)
-        {
-            modes = modes.WithAllowAmbiguousFramingEnabled();
-        }
+        var modes = proxy.PolicyModes;
+        if (!string.IsNullOrWhiteSpace(policy.BodyBudget))
+            modes = modes.With(PolicyFamily.BodyBudget, ParsePolicyMode(policy.BodyBudget, modes[PolicyFamily.BodyBudget]));
+        if (!string.IsNullOrWhiteSpace(policy.DecompressionRatio))
+            modes = modes.With(PolicyFamily.DecompressionRatio, ParsePolicyMode(policy.DecompressionRatio, modes[PolicyFamily.DecompressionRatio]));
+        if (!string.IsNullOrWhiteSpace(policy.HeaderLimits))
+            modes = modes.With(PolicyFamily.HeaderLimits, ParsePolicyMode(policy.HeaderLimits, modes[PolicyFamily.HeaderLimits]));
+        if (!string.IsNullOrWhiteSpace(policy.AdmissionControl))
+            modes = modes.With(PolicyFamily.AdmissionControl, ParsePolicyMode(policy.AdmissionControl, modes[PolicyFamily.AdmissionControl]));
+        if (!string.IsNullOrWhiteSpace(policy.Http2AbuseBudget))
+            modes = modes.With(PolicyFamily.Http2AbuseBudget, ParsePolicyMode(policy.Http2AbuseBudget, modes[PolicyFamily.Http2AbuseBudget]));
+        if (!string.IsNullOrWhiteSpace(policy.Http2RelayValidation))
+            modes = modes.With(PolicyFamily.Http2RelayValidation, ParsePolicyMode(policy.Http2RelayValidation, modes[PolicyFamily.Http2RelayValidation]));
+        if (!string.IsNullOrWhiteSpace(policy.WebSocketFrameBudget))
+            modes = modes.With(PolicyFamily.WebSocketFrameBudget, ParsePolicyMode(policy.WebSocketFrameBudget, modes[PolicyFamily.WebSocketFrameBudget]));
+        if (!string.IsNullOrWhiteSpace(policy.Http1ReplaySafety))
+            modes = modes.With(PolicyFamily.Http1ReplaySafety, ParsePolicyMode(policy.Http1ReplaySafety, modes[PolicyFamily.Http1ReplaySafety]));
+        if (policy.AllowAmbiguousFraming is bool framing)
+            modes = modes.WithAllowAmbiguousFraming(framing);
 
         proxy.PolicyModes = modes;
     }

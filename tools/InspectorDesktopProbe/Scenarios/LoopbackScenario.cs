@@ -54,6 +54,26 @@ public static class LoopbackScenario
             () => !string.IsNullOrWhiteSpace(GetStatus(dialog)),
             TimeSpan.FromSeconds(30)).ConfigureAwait(true);
 
+        var intro = GetText(dialog, "LoopbackIntro");
+        if (!intro.Contains("fully quit", StringComparison.OrdinalIgnoreCase))
+        {
+            log.Step("loopback-intro", false, intro);
+            await CloseDialogAsync(harness, dialog).ConfigureAwait(true);
+            return 1;
+        }
+
+        log.Step("loopback-intro", true, intro);
+
+        var proxyOn = harness.ViewModel.SystemProxy && harness.Interception.IsRunning;
+        var warning = GetText(dialog, "LoopbackProxyWarning");
+        if (!proxyOn && string.IsNullOrWhiteSpace(warning))
+        {
+            log.Step("loopback-proxy-warning", false, "Expected a warning while System proxy is off");
+            await CloseDialogAsync(harness, dialog).ConfigureAwait(true);
+            return 1;
+        }
+
+        log.Step("loopback-proxy-warning", true, string.IsNullOrWhiteSpace(warning) ? "(hidden; system proxy on)" : warning);
         log.Info($"loopback status after load: {GetStatus(dialog)}");
 
         if (!await ClickTimedAsync(harness, dialog, log, "LoopbackCheckAll", "loopback-check-all",
@@ -69,6 +89,13 @@ public static class LoopbackScenario
                 ApplyTimeout).ConfigureAwait(true))
         {
             await CloseDialogAsync(harness, dialog).ConfigureAwait(true);
+            return 1;
+        }
+
+        if (!await WaitForCommitStatusAsync(dialog, ApplyTimeout).ConfigureAwait(true))
+        {
+            log.Step("loopback-apply-settled", false, $"Status did not settle: {GetStatus(dialog)}");
+            await TryClearAndCloseAsync(harness, dialog, log).ConfigureAwait(true);
             return 1;
         }
 
@@ -94,6 +121,13 @@ public static class LoopbackScenario
         if (!await ClickTimedAsync(harness, dialog, log, "LoopbackClear", "loopback-clear",
                 ApplyTimeout).ConfigureAwait(true))
         {
+            await CloseDialogAsync(harness, dialog).ConfigureAwait(true);
+            return 1;
+        }
+
+        if (!await WaitForCommitStatusAsync(dialog, ApplyTimeout).ConfigureAwait(true))
+        {
+            log.Step("loopback-clear-settled", false, $"Status did not settle: {GetStatus(dialog)}");
             await CloseDialogAsync(harness, dialog).ConfigureAwait(true);
             return 1;
         }
@@ -186,14 +220,16 @@ public static class LoopbackScenario
                 StringComparison.Ordinal));
     }
 
-    private static string GetStatus(Window? dialog)
+    private static string GetStatus(Window? dialog) => GetText(dialog, "LoopbackStatus");
+
+    private static string GetText(Window? dialog, string automationId)
     {
         if (dialog is null)
             return string.Empty;
         try
         {
             var robot = new ProbeUiRobot(dialog);
-            if (robot.TryFind<TextBlock>("LoopbackStatus", out var tb) && tb is not null)
+            if (robot.TryFind<TextBlock>(automationId, out var tb) && tb is not null)
                 return tb.Text ?? string.Empty;
         }
         catch
@@ -203,6 +239,16 @@ public static class LoopbackScenario
 
         return string.Empty;
     }
+
+    private static Task<bool> WaitForCommitStatusAsync(Window dialog, TimeSpan timeout) =>
+        WaitForAsync(() => IsCommitStatus(GetStatus(dialog)), timeout);
+
+    private static bool IsCommitStatus(string status) =>
+        status.Contains("Allowed", StringComparison.Ordinal) ||
+        status.Contains("already matches", StringComparison.OrdinalIgnoreCase) ||
+        status.Contains("cleared", StringComparison.OrdinalIgnoreCase) ||
+        status.Contains("Failed", StringComparison.OrdinalIgnoreCase) ||
+        status.Contains("Check one or more", StringComparison.OrdinalIgnoreCase);
 
     private static async Task<bool> WaitForAsync(Func<bool> condition, TimeSpan timeout)
     {

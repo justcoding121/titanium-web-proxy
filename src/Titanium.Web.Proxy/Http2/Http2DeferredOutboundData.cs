@@ -35,7 +35,15 @@ internal sealed class Http2DeferredOutboundData
 
     private const int CoalesceTarget = 16 * 1024;
 
+    private readonly int maxDeferredBytes;
     private readonly object gate = new();
+
+    internal Http2DeferredOutboundData(int maxDeferredBytesPerStream = HardMaxDeferredBytesPerStream)
+    {
+        maxDeferredBytes = maxDeferredBytesPerStream > 0
+            ? maxDeferredBytesPerStream
+            : HardMaxDeferredBytesPerStream;
+    }
     // LinkedList so a partial drain can AddFirst the remainder without reordering later frames.
     private readonly Dictionary<int, LinkedList<PendingFrame>> byStream = new();
     private readonly List<int> roundRobinOrder = new();
@@ -131,7 +139,7 @@ internal sealed class Http2DeferredOutboundData
             var queuedBytes = 0;
             foreach (var pending in q)
                 queuedBytes += pending.PayloadLength;
-            if (queuedBytes + payloadLength > HardMaxDeferredBytesPerStream || q.Count >= HardMaxFramesPerStream)
+            if (queuedBytes + payloadLength > maxDeferredBytes || q.Count >= HardMaxFramesPerStream)
                 return false;
 
             q.AddLast(new PendingFrame(rented, offset, payloadLength, endStream));

@@ -55,7 +55,10 @@ internal sealed class Http2OriginConnection : IDisposable
         "HTTP/2 protocol error: DATA padding length is the payload length or longer.";
 
     /// <summary>Maximum total header block (HEADERS + CONTINUATION fragments) we accept from origin before treating it as a protocol violation.</summary>
-    private const int MaxHeaderBlockBytes = 256 * 1024;
+    private readonly int maxCompressedHeaderBlockBytes;
+
+    /// <summary>Decoded header list cap for the origin HPACK decoder. Read once per connection.</summary>
+    private readonly int maxDecodedHeaderListBytes;
 
     /// <summary>Retire the connection before odd client stream ids wrap (RFC 7540 §5.1.1).</summary>
     private const int StreamIdExhaustionThreshold = int.MaxValue - 10_000;
@@ -67,7 +70,7 @@ internal sealed class Http2OriginConnection : IDisposable
     private readonly ILogger logger;
     private readonly ProxyResourceLimits resourceLimits;
     private readonly SemaphoreSlim writeLock = new(1, 1);
-    private readonly Http2FlowController sendFlow = new();
+    private readonly Http2FlowController sendFlow;
     private readonly Http2Settings originSettings = new();
     // Client-initiated stream ids are odd (1,3,5,…). Index = streamId >> 1.
     // Volatile slot publishes replace ConcurrentDictionary on the origin ReadLoop / SendAsync path.
@@ -99,13 +102,16 @@ internal sealed class Http2OriginConnection : IDisposable
     private readonly byte[] encodeFrameHeaderBuffer = new byte[9];
 
     private Http2OriginConnection(TcpServerConnection connection, ILogger logger,
-        ProxyResourceLimits resourceLimits)
+        ProxyResourceLimits resourceLimits, int decodedHeaderListBytes)
     {
         this.connection = connection;
         socket = connection.Stream;
         stream = socket;
         this.logger = logger;
         this.resourceLimits = resourceLimits;
+        sendFlow = new Http2FlowController(TimeSpan.FromSeconds(resourceLimits.Http2WindowUpdateTimeoutSeconds));
+        maxCompressedHeaderBlockBytes = resourceLimits.MaxHttp2CompressedHeaderBlockBytes;
+        maxDecodedHeaderListBytes = decodedHeaderListBytes > 0 ? decodedHeaderListBytes : 64 * 1024;
     }
 
     /// <summary>True while this connection may still be leased for a new request.</summary>
@@ -311,12 +317,12 @@ internal sealed class Http2OriginConnection : IDisposable
     /// </summary>
     internal static async Task<Http2OriginConnection> CreateAsync(TcpServerConnection connection,
         ILogger logger, CancellationToken cancellationToken,
-        ProxyResourceLimits? resourceLimits = null)
+        ProxyResourceLimits? resourceLimits = null, int maxDecodedHeaderListBytes = 64 * 1024)
     {
         // Streaming bodies are bounded by HTTP/2 flow control (stream window × concurrent streams),
         // not by MaxBufferedBodyBytes. That budget applies only where the library buffers a whole body.
         var instance = new Http2OriginConnection(connection, logger,
-            resourceLimits ?? ProxyResourceLimits.Default);
+            resourceLimits ?? ProxyResourceLimits.Default, maxDecodedHeaderListBytes);
 
         var preface = Http2Helper.ConnectionPreface;
         connection.Http2SessionStarted = true;
@@ -1125,10 +1131,12 @@ internal sealed class Http2OriginConnection : IDisposable
                             headerBlockStreamId = streamId;
                             headerBlockEndStream = (flags & Http2FrameFlag.EndStream) != 0;
                             var data = StripHeadersFraming(payloadSpan, flags);
-                            if (data.Length > MaxHeaderBlockBytes)
+                            if (data.Length > maxCompressedHeaderBlockBytes)
                             {
+                                ProxyLog.LimitExceeded(logger, LimitId.Http2CompressedHeaderBlock, PolicyMode.Enforce,
+                                    data.Length, maxCompressedHeaderBlockBytes, "connection closed");
                                 Fail(new IOException(
-                                    $"HTTP/2 protocol error: origin header block exceeded {MaxHeaderBlockBytes} bytes."));
+                                    $"HTTP/2 protocol error: origin header block exceeded {maxCompressedHeaderBlockBytes} bytes."));
                                 return;
                             }
 
@@ -1164,10 +1172,12 @@ internal sealed class Http2OriginConnection : IDisposable
                             return;
                         }
 
-                        if (headerBlockBuffer.Length + length > MaxHeaderBlockBytes)
+                        if (headerBlockBuffer.Length + length > maxCompressedHeaderBlockBytes)
                         {
+                            ProxyLog.LimitExceeded(logger, LimitId.Http2CompressedHeaderBlock, PolicyMode.Enforce,
+                                headerBlockBuffer.Length + length, maxCompressedHeaderBlockBytes, "connection closed");
                             Fail(new IOException(
-                                $"HTTP/2 protocol error: origin CONTINUATION block exceeded {MaxHeaderBlockBytes} bytes."));
+                                $"HTTP/2 protocol error: origin CONTINUATION block exceeded {maxCompressedHeaderBlockBytes} bytes."));
                             return;
                         }
 
@@ -1607,9 +1617,18 @@ internal sealed class Http2OriginConnection : IDisposable
 
         try
         {
-            decoder ??= new Decoder(8192, 4096);
+            decoder ??= new Decoder(maxDecodedHeaderListBytes, 4096);
             decoder.Decode(compressed, headerCollector);
-            decoder.EndHeaderBlock();
+            if (decoder.EndHeaderBlock())
+            {
+                // Truncation keeps the dynamic table consistent (indexed entries are still inserted).
+                // Fail only this stream so siblings on the connection stay healthy.
+                ProxyLog.LimitExceeded(logger, LimitId.DecodedHeaderList, PolicyMode.Enforce,
+                    maxDecodedHeaderListBytes + 1L, maxDecodedHeaderListBytes, "502");
+                FailStream(streamId, new ProxyHttpException(
+                    "Origin HTTP/2 header list exceeded maxDecodedHeaderListBytes.", null, null));
+                return;
+            }
         }
         catch (Exception ex)
         {

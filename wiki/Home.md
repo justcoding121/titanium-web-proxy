@@ -25,6 +25,8 @@ Short catalog: [Features](Features) · full tables: [website Features](https://t
 - [Screenshots](#user-content-screenshots)
 - [Performance](Performance) — measured throughput vs peers
 - [Security considerations](Security-Considerations)
+- [Limits and escape hatches](Limits-and-Escape-Hatches)
+- [Why did my request fail](Troubleshooting)
 - [Protocol feature support](Protocol-Support) ([bridges](Protocol-Support#user-content-protocol-bridges))
 - [Migrating from 4.x](Migration-from-4.x)
 
@@ -451,7 +453,7 @@ QUIC endpoint is visible without extra config.
 | `EnableIpv6UnreachableSoftSkip` | `true` | disable for strict IPv6 preference | After one IPv6 `NetworkUnreachable`-class Happy Eyeballs failure, skip IPv6 addresses for 5 minutes (filter after address-family interleave). |
 | `MaxCachedConnections` | `128` | raise for high fan-out **per origin** | Live knob on `ProxyServer`. Cap is **per upstream host**, not process-wide. No upper clamp — set `512`/`1024` on large hosts. Keep in sync with `ResourceLimits.MaxCachedConnectionsPerHost` when you replace the snapshot. |
 | `ProxyEndPoint.MaxCachedConnections` | `null` (use server) | deeper pool for one reverse EP | Optional per-endpoint override applied when that EP owns the session. |
-| `ResourceLimits.MaxConcurrentStreamsPerConnection` | `256` | raise for heavy H2 fan-in | Replace via `ProxyResourceLimits.Create(...)` — validated positive only, no max ceiling. |
+| `ResourceLimits.MaxConcurrentStreamsPerConnection` | `1000` | PublicFacing uses `256`; raise further for heavy H2 fan-in | Replace via `ProxyResourceLimits.Create(...)` — validated positive only, no max ceiling. |
 | `ForwardCleartext` (transparent) | `false` | `true` for TLS-terminating reverse proxy | With `DecryptSsl`, terminate client TLS and open **cleartext** TCP to `ForwardHost`/`ForwardPort`. For H2 clients, also set `UpstreamHttpProtocol.Http11` + `AllowHttpProtocolTranslation`. |
 | `EnableTcpServerConnectionPrefetch` | `true` | — | Overlaps origin connect with client work. |
 | `NoDelay` | `true` | — | Disables Nagle. |

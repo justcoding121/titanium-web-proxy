@@ -158,6 +158,10 @@ internal static class ProxyDiagnostics
         {
             OperationCanceledException => true,
             ObjectDisposedException => true,
+            // Policy rejections inherit IOException. They must stay visible at Error; a client
+            // disconnect is still the plain IOException arm below.
+            Titanium.Web.Proxy.Network.Streams.BodySizeLimitExceededException => false,
+            Titanium.Web.Proxy.Http2.Http2HeaderListTooLargeException => false,
             System.IO.IOException => true,
             System.Net.Sockets.SocketException => true,
             // Browser/OS clients routinely abort MITM handshakes (speculative CONNECT, idle tab

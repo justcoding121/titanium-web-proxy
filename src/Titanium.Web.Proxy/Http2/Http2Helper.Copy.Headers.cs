@@ -129,6 +129,8 @@ namespace Titanium.Web.Proxy.Http2
             catch (Http2HeaderListTooLargeException ex)
             {
                 // Policy rejection (not a structural HPACK error) - hpack.Decoder state is intact.
+                ProxyLog.LimitExceeded(logger, LimitId.DecodedHeaderList, PolicyMode.Enforce,
+                    maxDecodedHeaderListBytes, maxDecodedHeaderListBytes, "RST_STREAM");
                 ReportException(logger, new ProxyHttpException(
                     "HTTP/2 header list too large: " + ex.Message, ex, sessionArgs));
                 await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,

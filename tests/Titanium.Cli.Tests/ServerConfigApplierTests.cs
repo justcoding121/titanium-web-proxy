@@ -1,4 +1,5 @@
 using System.Net;
+using System.Reflection;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -388,5 +389,78 @@ public class ServerConfigApplierTests
         ServerConfigApplier.ApplyIgnoreServerCertificateErrorsAfterListeners(
             proxy, new ServerConfig { IgnoreServerCertificateErrors = false });
         Assert.IsFalse(proxy.IgnoreServerCertificateErrors);
+    }
+
+    [TestMethod]
+    public void PartialLimitsOverlay_PreservesEveryResourceLimitProperty()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        proxy.Profile = ProxyProfile.PublicFacing;
+        var before = proxy.ResourceLimits;
+
+        ServerConfigApplier.Apply(proxy, new ServerConfig
+        {
+            Limits = new LimitsConfig { MaxHeaderCount = 400 },
+        });
+
+        Assert.AreEqual(400, proxy.ResourceLimits.MaxHeaderCount);
+        foreach (var property in typeof(ProxyResourceLimits).GetProperties(BindingFlags.Instance | BindingFlags.Public))
+        {
+            if (property.GetMethod is null || property.GetIndexParameters().Length > 0)
+                continue;
+            if (property.Name == nameof(ProxyResourceLimits.MaxHeaderCount))
+                continue;
+            Assert.AreEqual(property.GetValue(before), property.GetValue(proxy.ResourceLimits), property.Name);
+        }
+    }
+
+    [TestMethod]
+    public void PartialPolicyModes_UnderPublicFacing_KeepsHttp1ReplaySafetyEnforce()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        proxy.Profile = ProxyProfile.PublicFacing;
+        Assert.AreEqual(PolicyMode.Enforce, proxy.PolicyModes[PolicyFamily.Http1ReplaySafety]);
+
+        ServerConfigApplier.Apply(proxy, new ServerConfig
+        {
+            PolicyModes = new PolicyModesConfig { BodyBudget = "Observe" },
+        });
+
+        Assert.AreEqual(PolicyMode.Observe, proxy.PolicyModes[PolicyFamily.BodyBudget]);
+        Assert.AreEqual(PolicyMode.Enforce, proxy.PolicyModes[PolicyFamily.Http1ReplaySafety]);
+        Assert.IsFalse(proxy.PolicyModes.AllowAmbiguousFraming);
+        foreach (PolicyFamily family in Enum.GetValues<PolicyFamily>())
+        {
+            if (family == PolicyFamily.BodyBudget)
+                continue;
+            Assert.AreEqual(PolicyMode.Enforce, proxy.PolicyModes[family], family.ToString());
+        }
+    }
+
+    [TestMethod]
+    public void ProfileThenExplicitOverride_OnLoadAndOnReload()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        ServerConfigApplier.Apply(proxy, new ServerConfig
+        {
+            Profile = "PublicFacing",
+            Limits = new LimitsConfig { MaxConcurrentStreamsPerConnection = 1000 },
+            Timeouts = new TimeoutsConfig { RequestTimeoutSeconds = 5 },
+        });
+
+        Assert.IsTrue(proxy.BlockPrivateNetworkDestinations);
+        Assert.AreEqual(1000, proxy.ResourceLimits.MaxConcurrentStreamsPerConnection);
+        Assert.AreEqual(5, proxy.RequestTimeoutSeconds);
+        Assert.AreEqual(PolicyMode.Enforce, proxy.PolicyModes[PolicyFamily.Http1ReplaySafety]);
+
+        ServerConfigApplier.Apply(proxy, new ServerConfig
+        {
+            Timeouts = new TimeoutsConfig { IdleReadTimeoutSeconds = 9 },
+        });
+
+        Assert.AreEqual(1000, proxy.ResourceLimits.MaxConcurrentStreamsPerConnection);
+        Assert.AreEqual(9, proxy.IdleReadTimeoutSeconds);
+        Assert.AreEqual(5, proxy.RequestTimeoutSeconds);
+        Assert.IsTrue(proxy.BlockPrivateNetworkDestinations);
     }
 }

@@ -27,6 +27,20 @@ public sealed class RouteConfig
     public required RouteMatch Match { get; init; }
     public int Order { get; init; }
     public IReadOnlyList<TransformConfig>? Transforms { get; init; }
+
+    /// <summary>
+    ///     Optional per-route overrides. Null leaves the server limits unchanged (one null check).
+    /// </summary>
+    public RouteLimits? Limits { get; init; }
+}
+
+/// <summary>Per-route timeout and body/WebSocket caps applied to a matched session.</summary>
+public sealed class RouteLimits
+{
+    public int? RequestTimeoutSeconds { get; init; }
+    public int? IdleTimeoutSeconds { get; init; }
+    public int? MaxBufferedBodyBytes { get; init; }
+    public int? MaxWebSocketFramePayloadBytes { get; init; }
 }
 
 /// <summary>Request/response rewrite descriptor.</summary>
