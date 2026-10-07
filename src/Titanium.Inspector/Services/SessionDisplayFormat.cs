@@ -90,6 +90,63 @@ public static class SessionDisplayFormat
         return url;
     }
 
+    /// <summary>
+    /// Started column text in local time: <c>HH:mm:ss</c> when the session began today, otherwise with the
+    /// date (<c>Oct 6, 14:05:03</c>) so a capture left running past midnight is not misread.
+    /// </summary>
+    public static string FormatStarted(DateTimeOffset startedUtc, DateTimeOffset nowUtc)
+    {
+        var started = startedUtc.ToLocalTime();
+        return started.Date == nowUtc.ToLocalTime().Date
+            ? started.ToString("HH:mm:ss", CultureInfo.CurrentCulture)
+            : started.ToString("MMM d, HH:mm:ss", CultureInfo.CurrentCulture);
+    }
+
+    /// <summary>Full local date-time for the Started tooltip.</summary>
+    public static string FormatStartedFull(DateTimeOffset startedUtc) =>
+        startedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
+
+    /// <summary>Media type without parameters (<c>application/json; charset=utf-8</c> -&gt; <c>application/json</c>).</summary>
+    public static string FormatContentType(string? contentType)
+    {
+        if (string.IsNullOrWhiteSpace(contentType))
+        {
+            return "";
+        }
+
+        var semicolon = contentType.IndexOf(';', StringComparison.Ordinal);
+        return (semicolon >= 0 ? contentType[..semicolon] : contentType).Trim();
+    }
+
+    /// <summary>
+    /// Lowercase URL scheme (<c>https</c>, <c>wss</c>, …). Empty for CONNECT targets (<c>host:443</c>),
+    /// relative URLs, and anything without <c>scheme://</c>.
+    /// </summary>
+    public static string GetScheme(string? url)
+    {
+        if (string.IsNullOrEmpty(url))
+        {
+            return "";
+        }
+
+        var separator = url.IndexOf("://", StringComparison.Ordinal);
+        if (separator is <= 0 or > 16)
+        {
+            return "";
+        }
+
+        var scheme = url.AsSpan(0, separator);
+        foreach (var c in scheme)
+        {
+            if (!char.IsAsciiLetterOrDigit(c) && c is not ('+' or '-' or '.'))
+            {
+                return "";
+            }
+        }
+
+        return scheme.ToString().ToLowerInvariant();
+    }
+
     public static double RoundMs(double milliseconds) => Math.Round(milliseconds, 1);
 
     /// <summary>Compact body-size label: B below 1 KB, else KB / MB (1024-based).</summary>

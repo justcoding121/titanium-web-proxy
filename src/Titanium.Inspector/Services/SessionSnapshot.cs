@@ -178,6 +178,18 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     /// </summary>
     public string UrlDisplay => SessionDisplayFormat.FormatUrlForGrid(Url, Host);
 
+    /// <summary>Started column text (<see cref="StartedUtc"/> in local time).</summary>
+    public string StartedDisplay => SessionDisplayFormat.FormatStarted(StartedUtc, DateTimeOffset.UtcNow);
+
+    /// <summary>Full local date-time for the Started tooltip.</summary>
+    public string StartedFullDisplay => SessionDisplayFormat.FormatStartedFull(StartedUtc);
+
+    /// <summary>Scheme column text (<c>https</c>, <c>wss</c>, …); empty for CONNECT targets.</summary>
+    public string Scheme => SessionDisplayFormat.GetScheme(Url);
+
+    /// <summary>Content-Type column text without parameters; <see cref="ContentType"/> stays the raw value.</summary>
+    public string ContentTypeDisplay => SessionDisplayFormat.FormatContentType(ContentType);
+
     /// <summary>Grid display for <see cref="BodySize"/> (B / KB / MB).</summary>
     public string BodySizeDisplay => SessionDisplayFormat.FormatByteSize(BodySize);
 
@@ -325,6 +337,11 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         if (name is nameof(ProcessId) or nameof(ProcessName))
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ProcessDisplay)));
+        }
+
+        if (name is nameof(ContentType))
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ContentTypeDisplay)));
         }
 
         if (name is nameof(Host))
