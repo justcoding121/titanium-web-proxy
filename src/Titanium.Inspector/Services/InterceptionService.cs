@@ -1324,6 +1324,20 @@ public sealed class InterceptionService : IDisposable
         return _proxy.CertificateManager.ListSameCommonNameRootThumbprints(location, keepThumbprint: null);
     }
 
+    /// <summary>
+    ///     Read-only list of same-CN Root thumbprints that are NOT the current root: leftovers from earlier
+    ///     CA regenerations that only confuse chain building. Safe off the UI thread.
+    /// </summary>
+    public IReadOnlyList<string> ListStaleRootThumbprints(bool machineStore)
+    {
+        var current = RootCertificate?.Thumbprint;
+        if (_proxy is null || UseInMemoryTrustState || string.IsNullOrEmpty(current))
+            return Array.Empty<string>();
+
+        var location = machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser;
+        return _proxy.CertificateManager.ListSameCommonNameRootThumbprints(location, keepThumbprint: current);
+    }
+
     /// <summary>One Root Remove by thumbprint (CryptUI). Must run on a pumping UI thread.</summary>
     public void RemoveRootThumbprintOnUi(bool machineStore, string thumbprint)
     {

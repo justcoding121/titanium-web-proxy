@@ -249,6 +249,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         TrustFirefoxCaCommand = Cmd(TrustFirefoxCaAsync);
         UntrustCaCommand = Cmd(UntrustCaAsync);
         RotateCaCommand = Cmd(RotateCaAsync);
+        RemoveOldRootCasCommand = Cmd(RemoveOldRootCasAsync);
         ExportCaCommand = Cmd(ExportCaAsync);
         DeviceCaSetupCommand = Cmd(DeviceCaSetupAsync);
         OpenLoopbackExemptCommand = Cmd(OpenLoopbackExemptAsync);
@@ -1349,6 +1350,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public ICommand TrustFirefoxCaCommand { get; }
     public ICommand UntrustCaCommand { get; }
     public ICommand RotateCaCommand { get; }
+    public ICommand RemoveOldRootCasCommand { get; }
     public ICommand ExportCaCommand { get; }
     public ICommand DeviceCaSetupCommand { get; }
     public ICommand OpenLoopbackExemptCommand { get; }

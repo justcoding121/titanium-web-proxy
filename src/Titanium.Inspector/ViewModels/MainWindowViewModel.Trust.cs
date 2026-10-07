@@ -701,6 +701,54 @@ public sealed partial class MainWindowViewModel
         // Firefox prefs/HKCU only — serial background lane (never await certutil).
         _interception.ScheduleClearPendingFirefoxRootTrust();
     }
+    /// <summary>
+    ///     Removes Titanium root CAs left behind by earlier regenerations (same CN, not the current thumbprint).
+    ///     The current root stays installed and trusted.
+    /// </summary>
+    private async Task RemoveOldRootCasAsync()
+    {
+        if (!TryBeginTrustCommand())
+            return;
+
+        using var scope = InspectorUxTrace.Scope("RemoveOldRootCas");
+        try
+        {
+            const bool machineStore = false;
+            SetStatus("Looking for old Titanium root CAs…", StatusSeverity.Busy);
+            var stale = await RunOffUiAsync(
+                () => _interception.ListStaleRootThumbprints(machineStore),
+                StatusCancelToken);
+
+            if (stale.Count == 0)
+            {
+                SetOutcomeStatus("No old Titanium root CAs found", StatusSeverity.Success);
+                return;
+            }
+
+            for (var i = 0; i < stale.Count; i++)
+            {
+                SetStatus($"Removing old Titanium root CA {i + 1} of {stale.Count}…", StatusSeverity.Busy);
+                await Task.Yield();
+                _interception.RemoveRootThumbprintOnUi(machineStore, stale[i]);
+            }
+
+            var remaining = await RunOffUiAsync(
+                () => _interception.ListStaleRootThumbprints(machineStore),
+                StatusCancelToken);
+            var removed = stale.Count - remaining.Count;
+            SetOutcomeStatus(
+                remaining.Count == 0
+                    ? $"Removed {removed} old Titanium root CA(s)"
+                    : $"Removed {removed} of {stale.Count} old Titanium root CA(s); {remaining.Count} remain",
+                remaining.Count == 0 ? StatusSeverity.Success : StatusSeverity.Warning,
+                toastImportant: true);
+        }
+        finally
+        {
+            EndTrustCommand();
+        }
+    }
+
     private async Task RotateCaAsync()
     {
         if (!_interception.IsRunning)

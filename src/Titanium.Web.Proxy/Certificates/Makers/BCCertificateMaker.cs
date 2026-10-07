@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net;
 using System.Security.Cryptography;
@@ -75,7 +75,8 @@ internal class BcCertificateMaker : ICertificateMaker
         DateTime validTo, int keyStrength = 2048,
         string signatureAlgorithm = BcCertificateIssuer.Sha256WithRsa,
         AsymmetricKeyParameter? issuerPrivateKey = null,
-        CertificateKeyAlgorithm keyAlgorithm = CertificateKeyAlgorithm.Rsa2048)
+        CertificateKeyAlgorithm keyAlgorithm = CertificateKeyAlgorithm.Rsa2048,
+        byte[]? issuerKeyId = null)
     {
         // Generating Random Numbers
         var randomGenerator = new CryptoApiRandomGenerator();
@@ -126,6 +127,7 @@ internal class BcCertificateMaker : ICertificateMaker
             certificateGenerator.AddExtension(X509Extensions.BasicConstraints.Id, true, new BasicConstraints(true));
             certificateGenerator.AddExtension(X509Extensions.KeyUsage.Id, true,
                 new KeyUsage(KeyUsage.KeyCertSign | KeyUsage.CrlSign));
+            CertificateKeyIdentifiers.AddSubjectKeyIdentifier(certificateGenerator, subjectKeyPair.Public);
         }
         else
         {
@@ -134,6 +136,7 @@ internal class BcCertificateMaker : ICertificateMaker
                 ? KeyUsage.DigitalSignature
                 : KeyUsage.DigitalSignature | KeyUsage.KeyEncipherment;
             certificateGenerator.AddExtension(X509Extensions.KeyUsage.Id, false, new KeyUsage(leafUsage));
+            CertificateKeyIdentifiers.AddAuthorityKeyIdentifier(certificateGenerator, issuerKeyId);
         }
 
         var signatureFactory = new Asn1SignatureFactory(signatureAlgorithm,
@@ -252,7 +255,8 @@ internal class BcCertificateMaker : ICertificateMaker
         {
             return GenerateCertificate(hostName, subjectName, issuerDn, validFrom, validTo,
                 signatureAlgorithm: signatureAlgorithm, issuerPrivateKey: issuerPrivateKey,
-                keyAlgorithm: leafKeyAlgorithm);
+                keyAlgorithm: leafKeyAlgorithm,
+                issuerKeyId: CertificateKeyIdentifiers.TryGetSubjectKeyIdentifier(signingCertificate));
         }
     }
 
