@@ -932,7 +932,7 @@ internal class TcpConnectionFactory : IDisposable
                             }
                             catch (Exception attemptEx)
                             {
-                                ProxyDiagnostics.ReportBenign(proxyServer.Logger,
+                                ProxyDiagnostics.ReportExpected(proxyServer.Logger,
                                     "TcpConnectionFactory Happy Eyeballs address attempt failed", attemptEx);
                                 lastException = attemptEx;
                             }
@@ -957,7 +957,7 @@ internal class TcpConnectionFactory : IDisposable
                         {
                             Ipv6UnreachableSoftSkip.RecordAttemptFailure(attempt.Address, attempt.Error,
                                 proxyServer.EnableIpv6UnreachableSoftSkip);
-                            ProxyDiagnostics.ReportBenign(proxyServer.Logger,
+                            ProxyDiagnostics.ReportExpected(proxyServer.Logger,
                                 "TcpConnectionFactory Happy Eyeballs address attempt failed", attempt.Error);
                             lastException = attempt.Error;
                         }

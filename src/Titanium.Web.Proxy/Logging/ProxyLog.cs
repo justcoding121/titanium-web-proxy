@@ -98,8 +98,12 @@ internal static class ProxyLog
         // CONNECT tunnel, and the TLS handshake itself); this is Debug rather than Error because the
         // caller always also throws/propagates the failure, which is reported at its own boundary.
         if (!logger.IsEnabled(LogLevel.Debug)) return;
-        logger.LogDebug(ex, "[proxy<->origin] connection setup FAILED for '{Host}:{Port}': {Chain}",
+        // One summary line at Debug (DNS misses and refusals arrive by the hundred under load);
+        // the stack is kept at Trace.
+        logger.LogDebug("[proxy<->origin] connection setup FAILED for '{Host}:{Port}': {Chain}",
             host, port, Describe(ex));
+        if (logger.IsEnabled(LogLevel.Trace))
+            logger.LogTrace(ex, "[proxy<->origin] connection setup failure detail for '{Host}:{Port}'", host, port);
     }
 
     /// <summary>
@@ -213,33 +217,59 @@ internal static class ProxyLog
             host, failures);
     }
 
-    private static long clientHandshakeAbortLastTicks;
-    private static int clientHandshakeAbortSuppressed;
+    /// <summary>
+    ///     Per-host throttle so one pinning host retrying hundreds of times cannot hide the first abort
+    ///     of any other host. Bounded: the table is reset when it grows past <see cref="MaxHosts" />.
+    /// </summary>
+    internal static class HandshakeAbortThrottle
+    {
+        internal const int MaxHosts = 512;
+        internal static readonly long IntervalTicks = System.Diagnostics.Stopwatch.Frequency * 10;
+
+        private sealed class State
+        {
+            public long LastTicks;
+            public int Suppressed;
+        }
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, State> hosts =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Returns -1 when suppressed, otherwise the number of aborts suppressed since the last line.</summary>
+        internal static int TryAcquire(string host, long nowTicks)
+        {
+            if (hosts.Count > MaxHosts) hosts.Clear();
+
+            var state = hosts.GetOrAdd(host ?? string.Empty, static _ => new State());
+            lock (state)
+            {
+                if (state.LastTicks != 0 && nowTicks - state.LastTicks < IntervalTicks)
+                {
+                    state.Suppressed++;
+                    return -1;
+                }
+
+                state.LastTicks = nowTicks;
+                var suppressed = state.Suppressed;
+                state.Suppressed = 0;
+                return suppressed;
+            }
+        }
+
+        internal static void Reset() => hosts.Clear();
+    }
 
     /// <summary>
-    ///     One-line, throttled (at most once per 5 s; the rest are counted) record of an aborted client
+    ///     One-line, throttled (at most once per 10 s per host; the rest are counted) record of an aborted client
     ///     handshake. Replaces a multi-line stack per abort: a pinning client can retry hundreds of times.
     /// </summary>
     internal static void ClientHandshakeAborted(ILogger logger, string host, Exception error)
     {
         if (!logger.IsEnabled(LogLevel.Debug)) return;
 
-        var now = System.Diagnostics.Stopwatch.GetTimestamp();
-        var last = System.Threading.Interlocked.Read(ref clientHandshakeAbortLastTicks);
-        var interval = System.Diagnostics.Stopwatch.Frequency * 5;
-        if (last != 0 && now - last < interval)
-        {
-            System.Threading.Interlocked.Increment(ref clientHandshakeAbortSuppressed);
-            return;
-        }
+        var suppressed = HandshakeAbortThrottle.TryAcquire(host, System.Diagnostics.Stopwatch.GetTimestamp());
+        if (suppressed < 0) return;
 
-        if (System.Threading.Interlocked.CompareExchange(ref clientHandshakeAbortLastTicks, now, last) != last)
-        {
-            System.Threading.Interlocked.Increment(ref clientHandshakeAbortSuppressed);
-            return;
-        }
-
-        var suppressed = System.Threading.Interlocked.Exchange(ref clientHandshakeAbortSuppressed, 0);
         logger.LogDebug(
             "Client TLS handshake aborted for {Host}: {Reason}{Suppressed}",
             host, error.GetBaseException().Message,

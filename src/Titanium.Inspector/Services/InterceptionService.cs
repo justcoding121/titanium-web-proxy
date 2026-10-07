@@ -1651,6 +1651,10 @@ public sealed class InterceptionService : IDisposable
         var learnedBypass = !disableDecrypt && DecryptHttps && IsLearnedDecryptBypass(host);
         e.DecryptSsl = DecryptHttps && !disableDecrypt && !learnedBypass;
         e.AllowHttpProtocolTranslation = true;
+        // Opaque tunnels cannot show an error page after CONNECT 200 (the browser just sees a closed
+        // connection). Dial first so DNS/refused/timeout surface as a 502/504 CONNECT response; the
+        // dialed connection is reused for the tunnel, so no extra dial is paid.
+        e.EstablishServerConnectionBeforeResponse = !e.DecryptSsl;
         var opaqueReason = OpaqueTunnelReason.None;
         if (learnedBypass)
             opaqueReason = OpaqueTunnelReason.LearnedFailure;

@@ -27,6 +27,7 @@ public class Regression20261007LoggingTests
     public void HandshakeAbortStorm_LogsBoundedLines_OneLineNoStack()
     {
         // "Couldn't authenticate host 'api2.cursor.sh' ... Received an unexpected EOF" x12,851.
+        ProxyLog.HandshakeAbortThrottle.Reset();
         var log = new CapturingLogger();
         var eof = new IOException("Received an unexpected EOF or 0 bytes from the transport stream.");
 
@@ -123,6 +124,67 @@ public class Regression20261007LoggingTests
             Assert.IsFalse(log.HasLevel(LogLevel.Error), $"{name} must not log at Error");
             Assert.IsFalse(log.HasLevel(LogLevel.Warning), $"{name} must not log at Warning");
         }
+    }
+
+    [TestMethod]
+    [TestCategory("Regression-2026-10-07")]
+    public void ExpectedException_LogsOneDebugLineWithoutStack_StackOnlyAtTrace()
+    {
+        // "Client session cancelled" stacks were ~6.3 MB of a 9.6 MB log in the 100-tab replay.
+        var ex = new IOException("Unable to read data from the transport connection.",
+            new SocketException((int)SocketError.ConnectionReset));
+
+        var debug = new CapturingLogger { Minimum = LogLevel.Debug };
+        ProxyDiagnostics.ReportException(debug, "Client session cancelled", ex);
+        Assert.AreEqual(1, debug.Entries.Count);
+        Assert.AreEqual(LogLevel.Debug, debug.Entries[0].Level);
+        Assert.IsNull(debug.Entries[0].Exception, "no stack at Debug");
+        StringAssert.Contains(debug.Entries[0].Message, "Client session cancelled");
+        StringAssert.Contains(debug.Entries[0].Message, nameof(SocketException));
+
+        var trace = new CapturingLogger();
+        ProxyDiagnostics.ReportException(trace, "Client session cancelled", ex);
+        Assert.AreEqual(2, trace.Entries.Count);
+        Assert.AreSame(ex, trace.Entries[1].Exception);
+        Assert.AreEqual(LogLevel.Trace, trace.Entries[1].Level);
+    }
+
+    [TestMethod]
+    [TestCategory("Regression-2026-10-07")]
+    public void UnexpectedException_StillLoggedAtErrorWithStack()
+    {
+        var log = new CapturingLogger { Minimum = LogLevel.Debug };
+        var ex = new ProxyHttpException("HTTP/2 protocol error: bad frame", null, null);
+        ProxyDiagnostics.ReportException(log, ex.Message, ex);
+        Assert.AreSame(ex, log.Entries.Find(e => e.Level == LogLevel.Error).Exception);
+    }
+
+    [TestMethod]
+    [TestCategory("Regression-2026-10-07")]
+    public void HandshakeAbortThrottle_IsPerHost_OneHostCannotHideAnother()
+    {
+        ProxyLog.HandshakeAbortThrottle.Reset();
+        var t = 1_000L;
+        Assert.AreEqual(0, ProxyLog.HandshakeAbortThrottle.TryAcquire("a.example", t));
+        Assert.AreEqual(-1, ProxyLog.HandshakeAbortThrottle.TryAcquire("a.example", t + 1));
+        Assert.AreEqual(-1, ProxyLog.HandshakeAbortThrottle.TryAcquire("A.EXAMPLE", t + 2));
+        Assert.AreEqual(0, ProxyLog.HandshakeAbortThrottle.TryAcquire("b.example", t + 3),
+            "a different host logs its first abort immediately");
+        Assert.AreEqual(2, ProxyLog.HandshakeAbortThrottle.TryAcquire("a.example",
+            t + ProxyLog.HandshakeAbortThrottle.IntervalTicks + 1),
+            "after the window the suppressed count is reported");
+    }
+
+    [TestMethod]
+    public void HandshakeAbortThrottle_TableIsBounded()
+    {
+        ProxyLog.HandshakeAbortThrottle.Reset();
+        for (var i = 0; i < ProxyLog.HandshakeAbortThrottle.MaxHosts * 3; i++)
+            ProxyLog.HandshakeAbortThrottle.TryAcquire("h" + i, 1);
+
+        // Still functional after the bounded reset.
+        Assert.AreEqual(0, ProxyLog.HandshakeAbortThrottle.TryAcquire("fresh", 2));
+        ProxyLog.HandshakeAbortThrottle.Reset();
     }
 
     private sealed class CapturingLogger : ILogger

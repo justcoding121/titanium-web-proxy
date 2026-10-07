@@ -105,6 +105,7 @@ public partial class ProxyServer
                 }
 
                 var sendRawData = !decryptSsl;
+                var opaquePreDialed = false;
 
                 if (connectArgs.DenyConnect)
                 {
@@ -140,9 +141,11 @@ public partial class ProxyServer
 
                     try
                     {
+                        // An opaque tunnel owns its connection (closed on release), so never rent a pooled one.
                         var preConnection = await TcpConnectionFactory.GetServerConnection(this, connectArgs,
-                            true, null, false, false, cancellationToken);
+                            true, null, !decryptSsl, false, cancellationToken);
                         prefetchConnectionTask = Task.FromResult<TcpServerConnection?>(preConnection);
+                        opaquePreDialed = !decryptSsl;
                     }
                     catch (Exception ex)
                     {
@@ -492,7 +495,16 @@ public partial class ProxyServer
                     // create new connection to server.
                     // If we detected that client tunnel CONNECTs without SSL by checking for empty client hello then 
                     // this connection should not be HTTPS.
-                    var connection = (await TcpConnectionFactory.GetServerConnection(this, connectArgs,
+                    TcpServerConnection? connection = null;
+                    if (opaquePreDialed && prefetchConnectionTask != null)
+                    {
+                        // Reuse the connection already established for the pre-200 reachability check
+                        // instead of dialing the origin a second time.
+                        connection = await prefetchConnectionTask;
+                        prefetchConnectionTask = null;
+                    }
+
+                    connection ??= (await TcpConnectionFactory.GetServerConnection(this, connectArgs,
                         true, null,
                         true, false, cancellationToken))!;
 

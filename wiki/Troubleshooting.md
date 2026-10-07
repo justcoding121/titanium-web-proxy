@@ -27,4 +27,6 @@ PublicFacing's 60 s idle and 120 s request deadlines close SSE, gRPC streams, an
 
 A client that rejects the Titanium certificate (pinned apps, or a client that does not trust the root) is cut off after a few handshake failures per host (`ProxyServer.ClientHandshakeRejectThreshold` within `ProxyServer.ClientHandshakeRejectWindow`), and that host is tunnelled without decryption for the learned-bypass TTL. The log shows one Warning naming the host and one Debug line per abort. Install the root CA in the client to decrypt that host again.
 
+A CONNECT tunnel is answered with `200` before the origin is dialed, so an unreachable origin shows up in the browser as a closed connection. Set `EstablishServerConnectionBeforeResponse` in `BeforeTunnelConnectRequest` to dial first and answer `502`/`504` instead. The Inspector does this for opaque (non-decrypted) tunnels, and the dialed connection is reused for the tunnel. Expected failures (DNS miss, reset, cancel) log one Debug line; the stack is kept at Trace.
+
 If several `Titanium Root Certificate Authority` roots are in the trust store, new roots now carry a Subject Key Identifier and their leaves an Authority Key Identifier, so chains pick the right root. In the Inspector, **Remove old root CAs…** removes every one except the current root.

@@ -130,8 +130,7 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
     /// </summary>
     private static void ReportSuppressedFailure(Exception ex)
     {
-        ProxyDiagnostics.ReportBenign(ProxyDiagnostics.Logger,
-            "Suppressed a network stream read/write failure (expected when the remote endpoint closed or reset the connection).",
+        ProxyDiagnostics.ReportExpected(ProxyDiagnostics.Logger,"Suppressed a network stream read/write failure (expected when the remote endpoint closed or reset the connection).",
             ex);
     }
 
