@@ -46,7 +46,7 @@ public class CertificateKeyIdentifierTests
 
             using var chain = new X509Chain();
             chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
-            chain.ChainPolicy.CustomTrustStore.Add(new X509Certificate2(root.RawData));
+            chain.ChainPolicy.CustomTrustStore.Add(X509CertificateLoader.LoadCertificate(root.RawData));
             chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
             chain.ChainPolicy.VerificationFlags = X509VerificationFlags.NoFlag;
             Assert.IsTrue(chain.Build(leaf), $"{engine}/{algorithm}: " +
@@ -69,7 +69,7 @@ public class CertificateKeyIdentifierTests
         Assert.IsNull(legacyRoot.Extensions[SkiOid], "test precondition: legacy root has no SKI");
 
         // Round-trip through PFX so the private key is usable by the BouncyCastle issuer plumbing.
-        using var pfxRoot = new X509Certificate2(legacyRoot.Export(X509ContentType.Pfx, "x"), "x",
+        using var pfxRoot = X509CertificateLoader.LoadPkcs12(legacyRoot.Export(X509ContentType.Pfx, "x"), "x",
             X509KeyStorageFlags.Exportable);
 
         foreach (var engine in new[] { CertificateEngine.BouncyCastle, CertificateEngine.BouncyCastleFast })
@@ -85,7 +85,7 @@ public class CertificateKeyIdentifierTests
 
             using var chain = new X509Chain();
             chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
-            chain.ChainPolicy.CustomTrustStore.Add(new X509Certificate2(pfxRoot.RawData));
+            chain.ChainPolicy.CustomTrustStore.Add(X509CertificateLoader.LoadCertificate(pfxRoot.RawData));
             chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
             Assert.IsTrue(chain.Build(leaf), $"{engine}: " +
                 string.Join("; ", chain.ChainStatus.Select(s => s.StatusInformation)));
