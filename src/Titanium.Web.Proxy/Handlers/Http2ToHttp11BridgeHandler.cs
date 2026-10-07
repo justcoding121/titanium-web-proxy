@@ -548,7 +548,12 @@ public partial class ProxyServer
 
             sessionArgs.Timing?.MarkRequestSent();
 
-            await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
+            // Honour the response-header deadline (server-wide or per-session) so a stalled origin yields a 504
+            // instead of an unbounded wait; only paid for when a deadline is configured.
+            if (ResponseHeaderTimeoutSeconds > 0 || sessionArgs.ResponseHeaderTimeout.HasValue)
+                await ReceiveOriginResponseWithTimeout(sessionArgs, cancellationToken);
+            else
+                await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
             sessionArgs.Timing?.MarkResponseHeadersReceived();
 
             // The origin here is always HTTP/1.1 (see the GetServerConnection call above), so this
@@ -640,9 +645,12 @@ public partial class ProxyServer
 
                         if (offset != bodyBytes.Length)
                         {
-                            // Short read: do not pool — framing is ambiguous.
+                            // Short read: do not pool — framing is ambiguous. Nothing has reached the client
+                            // yet, so fail the exchange (clean 502 below) instead of rewriting the length and
+                            // presenting a truncated body as a complete response.
                             closeConnection = true;
-                            Array.Resize(ref bodyBytes, offset);
+                            throw new IOException(
+                                $"Origin response body ended after {offset} of {bodyBytes.Length} declared bytes.");
                         }
                     }
 
@@ -711,6 +719,11 @@ public partial class ProxyServer
                                     .ConfigureAwait(false);
                                 if (n > 0)
                                     remaining -= n;
+                                else
+                                    // Origin closed before the declared Content-Length: abort the stream
+                                    // (RST_STREAM via the round-trip catch) instead of ending it cleanly.
+                                    throw new IOException(
+                                        $"Origin response body ended with {remaining} declared bytes missing.");
                                 return n;
                             }, ct).ConfigureAwait(false);
                             return;

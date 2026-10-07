@@ -996,7 +996,26 @@ public partial class ProxyServer
                 args.OriginHttpVersionPolicy ?? OriginHttpVersionPolicy, cancellationToken);
             args.Timing?.MarkRequestSent();
 
-            await args.HttpClient.ReceiveResponse(cancellationToken);
+            // The fast path used to skip the response-header deadline entirely, so a stalled origin hung
+            // the client forever even with ResponseHeaderTimeoutSeconds set. Only pay for the deadline when
+            // one is configured (server-wide or per-session) so the default RPS path is unchanged.
+            if (ResponseHeaderTimeoutSeconds > 0 || args.ResponseHeaderTimeout.HasValue)
+            {
+                try
+                {
+                    await ReceiveOriginResponseWithTimeout(args, cancellationToken);
+                }
+                catch (ProxyTimeoutException ex)
+                {
+                    await HandleProxyTimeoutAsync(args, ex, cancellationToken);
+                    return;
+                }
+            }
+            else
+            {
+                await args.HttpClient.ReceiveResponse(cancellationToken);
+            }
+
             var fastResponse = args.HttpClient.Response;
             if (fastResponse.StatusCode is >= 100 and <= 199)
             {
@@ -1065,10 +1084,11 @@ public partial class ProxyServer
 
                         if (read != length)
                         {
-                            // Short CL read: do not return this socket to the pool (desync).
+                            // Short CL read: do not return this socket to the pool (desync). Keep the declared
+                            // Content-Length (never present a truncated body as complete) and write the partial
+                            // wire body: CloseServerConnection ends the client connection after this exchange, so
+                            // the client observes the premature end instead of a bogus "complete" response.
                             args.HttpClient.CloseServerConnection = true;
-                            if (fastResponse.ContentLength != read)
-                                fastResponse.ContentLength = read;
                         }
                         else if (serverStream.DataAvailable)
                         {
