@@ -41,10 +41,11 @@ public sealed partial class MainWindowViewModel
 
         _userRemovalDepth++;
         _suppressOpenSessionDetails = true;
+        long freed;
         try
         {
             // Store.Clear does not raise SessionsRemoved. One grid Clear is a single Reset.
-            _store.Clear();
+            freed = _store.Clear();
             Sessions.Clear();
         }
         finally
@@ -57,7 +58,10 @@ public sealed partial class MainWindowViewModel
         _interception.ResetSessionIdSequence();
         RefreshSessionCountText();
         NotifyFilterSelectionProperties();
-        SetOutcomeStatus("Sessions cleared", StatusSeverity.Success, toastImportant: true);
+        SetOutcomeStatus(
+            SessionRetentionWindow.FormatSessionsClearedStatus(freed),
+            StatusSeverity.Success,
+            toastImportant: true);
         return Task.CompletedTask;
     }
     private Task RemoveSelectedSessionsAsync()

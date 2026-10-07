@@ -27,6 +27,17 @@ public class CaptureSettingsParityTests
         Assert.AreEqual(
             "Maximum sessions: 'abc' is not a whole number greater than 0.",
             SessionRetentionWindow.FormatPositiveNumberError("Maximum sessions", "abc"));
+        Assert.AreEqual("Sessions cleared", SessionRetentionWindow.FormatSessionsClearedStatus(0));
+        Assert.AreEqual(
+            "Sessions cleared (freed 120 MB)",
+            SessionRetentionWindow.FormatSessionsClearedStatus(120L * 1024 * 1024));
+        Assert.AreEqual("No saved sessions on disk.", SessionRetentionWindow.FormatCacheUsage(default));
+        Assert.AreEqual(
+            "1 saved run, 120 MB on disk.",
+            SessionRetentionWindow.FormatCacheUsage(new SessionCacheStats(1, 120L * 1024 * 1024)));
+        StringAssert.Contains(
+            SessionRetentionWindow.FormatClearCacheConfirm(new SessionCacheStats(3, 120L * 1024 * 1024)),
+            "Delete 3 saved runs (120 MB)?");
     }
 
     [TestMethod]
