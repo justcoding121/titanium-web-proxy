@@ -1,5 +1,7 @@
 using System;
+using System.IO;
 using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Diagnostics;
@@ -280,7 +282,8 @@ public partial class ProxyServer
         args.Exception = ex;
         args.HttpClient.CloseServerConnection = true;
         ProxyLog.LimitExceeded(logger, TimeoutLimitId(ex.Kind), PolicyMode.Enforce,
-            0, ex.Kind.ToString(), "504");
+            (long)(ex.ObservedElapsed?.TotalMilliseconds ?? 0), FormatConfiguredLimit(ex), "504",
+            args.HttpClient.Request.Host);
         ProxyDiagnostics.ReportBenign(logger, $"Proxy {ex.Kind} timeout", ex);
 
         // 504 only before any response bytes have been committed; afterward terminate without injecting HTTP.
@@ -302,6 +305,75 @@ public partial class ProxyServer
 
         if (!args.CancellationTokenSource.IsCancellationRequested)
             await args.CancellationTokenSource.CancelAsync();
+    }
+
+    /// <summary>
+    ///     True when <paramref name="ex" /> is an origin-side transport failure that happened before any
+    ///     response byte was committed to the client, so a 502/504 can still be delivered. Never true once
+    ///     the client response is committed or locked (user-supplied), or when the client is already gone.
+    /// </summary>
+    internal static bool ShouldAnswerOriginFailure(SessionEventArgs args, Exception ex,
+        CancellationTokenSource cancellationTokenSource)
+    {
+        if (args.IsClientResponseCommitted || args.HttpClient.Response.Locked) return false;
+        if (cancellationTokenSource.IsCancellationRequested) return false;
+        return ex is SocketException
+            or RetryableServerConnectionException
+            or System.Security.Authentication.AuthenticationException
+            or IOException;
+    }
+
+    /// <summary>
+    ///     Best-effort 502 (or 504 for socket timeouts) with a short, non-sensitive explanation. Write
+    ///     failures (client already gone) are swallowed: the original exception still propagates.
+    /// </summary>
+    private async Task TryWriteOriginFailureResponseAsync(SessionEventArgs args, Exception ex,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var host = args.HttpClient.Request.Host ?? string.Empty;
+            var socketError = ex as SocketException;
+            var status = socketError?.SocketErrorCode == SocketError.TimedOut
+                ? HttpStatusCode.GatewayTimeout
+                : HttpStatusCode.BadGateway;
+            var reason = socketError?.SocketErrorCode switch
+            {
+                SocketError.HostNotFound or SocketError.NoData or SocketError.TryAgain =>
+                    "the host name could not be resolved",
+                SocketError.ConnectionRefused => "the connection was refused",
+                SocketError.TimedOut => "the connection timed out",
+                SocketError.NetworkUnreachable or SocketError.HostUnreachable => "the host is unreachable",
+                SocketError.ConnectionReset or SocketError.ConnectionAborted => "the connection was reset",
+                _ => ex is System.Security.Authentication.AuthenticationException
+                    ? "the TLS handshake with the origin failed"
+                    : "the origin closed the connection before sending a response"
+            };
+
+            args.GenericResponse(
+                $"{(int)status} {(status == HttpStatusCode.GatewayTimeout ? "Gateway Timeout" : "Bad Gateway")}: " +
+                $"could not get a response from '{WebUtility.HtmlEncode(host)}' ({reason}).",
+                status, closeServerConnection: true);
+            args.HttpClient.Response.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionClose);
+            await args.ClientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+            args.IsClientResponseCommitted = true;
+        }
+        catch (Exception writeEx)
+        {
+            ProxyDiagnostics.ReportBenign(logger, "Failed to write 502/504 after origin failure", writeEx);
+        }
+    }
+
+    /// <summary>
+    ///     Names the configured limit that elapsed (e.g. <c>20s</c>) so the log reads
+    ///     <c>ConnectTimeOutSeconds=20s; observed 20012</c> instead of echoing the timeout kind.
+    /// </summary>
+    internal static string FormatConfiguredLimit(ProxyTimeoutException ex)
+    {
+        if (ex.ConfiguredTimeout is not { } limit) return "unknown";
+        return limit.TotalSeconds >= 1
+            ? $"{limit.TotalSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}s"
+            : $"{(int)limit.TotalMilliseconds}ms";
     }
 
     private static LimitId TimeoutLimitId(ProxyTimeoutKind kind) => kind switch

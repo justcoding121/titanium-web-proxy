@@ -44,6 +44,14 @@ internal static class ProxyDiagnostics
     /// </summary>
     public static void ReportCaught(ILogger logger, string context, Exception exception)
     {
+        // Intermediate catches of failures already classified as expected (DNS miss, reset, cancel)
+        // would otherwise repeat a full stack at every layer the exception unwinds through.
+        if (logger.IsEnabled(LogLevel.Debug) && IsExpected(exception))
+        {
+            ReportExpected(logger, context, exception);
+            return;
+        }
+
         ReportBenign(logger, context, exception);
     }
 
@@ -66,11 +74,36 @@ internal static class ProxyDiagnostics
     {
         if (IsExpected(exception))
         {
-            ReportBenign(logger, context, exception);
+            ReportExpected(logger, context, exception);
             return;
         }
 
         ReportUnexpected(logger, context, exception);
+    }
+
+    /// <summary>
+    ///     Expected failures (client resets, cancellations, DNS misses, origin refusals) can arrive by
+    ///     the thousand under load. Debug gets a single summary line (exception type, message and root
+    ///     cause) so the log stays readable; the full exception with stack is kept at
+    ///     <see cref="LogLevel.Trace" /> for deep diagnosis.
+    /// </summary>
+    internal static void ReportExpected(ILogger logger, string context, Exception exception)
+    {
+        if (!logger.IsEnabled(LogLevel.Debug)) return;
+        logger.LogDebug("{Context} ({Summary})", context, Summarize(exception));
+        if (logger.IsEnabled(LogLevel.Trace))
+            logger.LogTrace(exception, ContextTemplate, context);
+    }
+
+    internal static string Summarize(Exception exception)
+    {
+        var root = exception;
+        while (root.InnerException != null) root = root.InnerException;
+
+        var text = exception.GetType().Name + ": " + exception.Message;
+        if (!ReferenceEquals(root, exception))
+            text += " -> " + root.GetType().Name + ": " + root.Message;
+        return text;
     }
 
     /// <summary>

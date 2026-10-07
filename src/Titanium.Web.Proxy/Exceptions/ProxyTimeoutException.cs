@@ -25,4 +25,10 @@ public class ProxyTimeoutException : ProxyException
     ///     Which configured timeout elapsed.
     /// </summary>
     public ProxyTimeoutKind Kind { get; }
+
+    /// <summary>The limit that elapsed (null when unknown); used so logs name the real configured value.</summary>
+    internal TimeSpan? ConfiguredTimeout { get; init; }
+
+    /// <summary>How long the operation actually ran before the limit fired (null when unknown).</summary>
+    internal TimeSpan? ObservedElapsed { get; init; }
 }

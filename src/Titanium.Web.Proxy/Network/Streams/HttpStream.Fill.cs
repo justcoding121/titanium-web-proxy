@@ -178,6 +178,7 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
                 else
                 {
                     ReportSuppressedFailure(ex);
+                    SuppressedReadFailure ??= ex;
                 }
             result = BufferFillResult.EndOfStream;
         }

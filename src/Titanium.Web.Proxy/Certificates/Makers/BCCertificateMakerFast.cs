@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net;
 using System.Security.Cryptography;
@@ -85,7 +85,8 @@ internal class BcCertificateMakerFast : ICertificateMaker
         X509Name issuerDn, DateTime validFrom,
         DateTime validTo, AsymmetricCipherKeyPair subjectKeyPair,
         string signatureAlgorithm = BcCertificateIssuer.Sha256WithRsa,
-        AsymmetricKeyParameter? issuerPrivateKey = null)
+        AsymmetricKeyParameter? issuerPrivateKey = null,
+        byte[]? issuerKeyId = null)
     {
         // Generating Random Numbers
         var randomGenerator = new CryptoApiRandomGenerator();
@@ -133,6 +134,7 @@ internal class BcCertificateMakerFast : ICertificateMaker
             certificateGenerator.AddExtension(X509Extensions.BasicConstraints.Id, true, new BasicConstraints(true));
             certificateGenerator.AddExtension(X509Extensions.KeyUsage.Id, true,
                 new KeyUsage(KeyUsage.KeyCertSign | KeyUsage.CrlSign));
+            CertificateKeyIdentifiers.AddSubjectKeyIdentifier(certificateGenerator, subjectKeyPair.Public);
         }
         else
         {
@@ -141,6 +143,7 @@ internal class BcCertificateMakerFast : ICertificateMaker
                 ? KeyUsage.DigitalSignature
                 : KeyUsage.DigitalSignature | KeyUsage.KeyEncipherment;
             certificateGenerator.AddExtension(X509Extensions.KeyUsage.Id, false, new KeyUsage(leafUsage));
+            CertificateKeyIdentifiers.AddAuthorityKeyIdentifier(certificateGenerator, issuerKeyId);
         }
 
         var signatureFactory = new Asn1SignatureFactory(signatureAlgorithm,
@@ -262,7 +265,8 @@ internal class BcCertificateMakerFast : ICertificateMaker
         using (disposable)
         {
             return GenerateCertificate(hostName, subjectName, issuerDn, validFrom, validTo, leafKeyPair,
-                signatureAlgorithm, issuerPrivateKey);
+                signatureAlgorithm, issuerPrivateKey,
+                CertificateKeyIdentifiers.TryGetSubjectKeyIdentifier(signingCertificate));
         }
     }
 

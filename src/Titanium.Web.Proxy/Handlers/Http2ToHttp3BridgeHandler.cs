@@ -395,7 +395,7 @@ public partial class ProxyServer
                     if (!sessionArgs.HttpClient.Response.Locked)
                     {
                         // Headers not yet sent — answer with a clean 502.
-                        sessionArgs.GenericResponse($"Bad Gateway. {ex.Message}", HttpStatusCode.BadGateway);
+                        OriginFailureResponses.Apply(sessionArgs, ex);
                         await Http2Helper.EmitSyntheticResponseAsync(
                             sessionArgs, streamId, connectionState, clientStream, CancellationToken.None);
                     }

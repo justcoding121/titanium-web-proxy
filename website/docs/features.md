@@ -14,7 +14,7 @@ Desktop HTTP(S) debugger on Windows, macOS, and Linux. [Inspector guide](/docs/i
 | System proxy | One toggle for OS proxy on Windows, macOS, and Linux |
 | Trust that works | Firefox / NSS, Linux Chromium Snap/Flatpak, Windows Store apps; export CA for phones |
 | Automatic tunnel | When a server blocks the proxy (TLS fingerprinting or other reasons), we detect it and automatically tunnel that traffic |
-| Session grid | Method, status, host, URL, protocol, duration, TTFB, size, process |
+| Session grid | Method, status, host, URL, protocol, duration, TTFB, size, process; show or hide columns (plus Started, Scheme, Content-Type) from the header menu |
 | Inspect panes | Headers, Pretty/Raw body, Hex, WebSocket frames, SSE, Protobuf wire dump |
 | Rewrite toolkit | AutoResponder, Map Local, Map Remote, breakpoints, Composer |
 | GraphQL rules | Match AutoResponder / Map Remote / Breakpoints by `operationName` |

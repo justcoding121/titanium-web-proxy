@@ -59,6 +59,7 @@
         <MenuItem Header="Install root CA (current user)" Command="{Binding InstallCaCommand}" AutomationProperties.AutomationId="MenuInstallCa" />
         <MenuItem Header="Remove root CA (current user)" Command="{Binding UntrustCaCommand}" AutomationProperties.AutomationId="MenuRemoveCa" />
         <MenuItem Header="Clear and reinstall root CA…" Command="{Binding RotateCaCommand}" AutomationProperties.AutomationId="MenuRotateCa" />
+        <MenuItem Header="Remove old root CAs…" Command="{Binding RemoveOldRootCasCommand}" AutomationProperties.AutomationId="MenuRemoveOldRootCas" />
         <MenuItem Header="Export root CA…" Command="{Binding ExportCaCommand}" AutomationProperties.AutomationId="MenuExportCa" />
         <MenuItem Header="Trust CA in Firefox…" Command="{Binding TrustFirefoxCaCommand}"
                   AutomationProperties.AutomationId="MenuTrustFirefoxCa" />
@@ -85,6 +86,43 @@
                     IsChecked="{Binding ThemeModeIsAutomatic, Mode=OneWay}"
                     Command="{Binding SetThemeAutomaticCommand}"
                     AutomationProperties.AutomationId="MenuThemeAutomatic" />
+        </MenuItem>
+        <!-- Static items with constant CommandParameter: the macOS native menu clones MainMenu once and does not
+             follow ItemsSource. Check marks are synced from code (OneWayToggleVisualSync), not bound. -->
+        <MenuItem x:Name="MenuColumns" Header="_Columns" AutomationProperties.AutomationId="MenuColumns">
+          <MenuItem Header="Id" ToggleType="CheckBox" Command="{Binding ToggleGridColumnCommand}"
+                    CommandParameter="Id" AutomationProperties.AutomationId="MenuColumn_Id" />
+          <MenuItem Header="Method" ToggleType="CheckBox" Command="{Binding ToggleGridColumnCommand}"
+                    CommandParameter="Method" AutomationProperties.AutomationId="MenuColumn_Method" />
+          <MenuItem Header="Status" ToggleType="CheckBox" Command="{Binding ToggleGridColumnCommand}"
+                    CommandParameter="Status" AutomationProperties.AutomationId="MenuColumn_Status" />
+          <MenuItem Header="Host" ToggleType="CheckBox" IsChecked="True" IsEnabled="False"
+                    Command="{Binding ToggleGridColumnCommand}"
+                    CommandParameter="Host" AutomationProperties.AutomationId="MenuColumn_Host" />
+          <MenuItem Header="URL" ToggleType="CheckBox" IsChecked="True" IsEnabled="False"
+                    Command="{Binding ToggleGridColumnCommand}"
+                    CommandParameter="URL" AutomationProperties.AutomationId="MenuColumn_URL" />
+          <MenuItem Header="Protocol" ToggleType="CheckBox" Command="{Binding ToggleGridColumnCommand}"
+                    CommandParameter="Protocol" AutomationProperties.AutomationId="MenuColumn_Protocol" />
+          <MenuItem Header="Duration" ToggleType="CheckBox" Command="{Binding ToggleGridColumnCommand}"
+                    CommandParameter="Duration" AutomationProperties.AutomationId="MenuColumn_Duration" />
+          <MenuItem Header="Wait (TTFB)" ToggleType="CheckBox" Command="{Binding ToggleGridColumnCommand}"
+                    CommandParameter="TTFB" AutomationProperties.AutomationId="MenuColumn_TTFB" />
+          <MenuItem Header="Size" ToggleType="CheckBox" Command="{Binding ToggleGridColumnCommand}"
+                    CommandParameter="Size" AutomationProperties.AutomationId="MenuColumn_Size" />
+          <MenuItem Header="Process" ToggleType="CheckBox" Command="{Binding ToggleGridColumnCommand}"
+                    CommandParameter="Process" IsVisible="{Binding ShowProcessColumn}"
+                    AutomationProperties.AutomationId="MenuColumn_Process" />
+          <Separator />
+          <MenuItem Header="Started" ToggleType="CheckBox" Command="{Binding ToggleGridColumnCommand}"
+                    CommandParameter="Started" AutomationProperties.AutomationId="MenuColumn_Started" />
+          <MenuItem Header="Scheme" ToggleType="CheckBox" Command="{Binding ToggleGridColumnCommand}"
+                    CommandParameter="Scheme" AutomationProperties.AutomationId="MenuColumn_Scheme" />
+          <MenuItem Header="Content-Type" ToggleType="CheckBox" Command="{Binding ToggleGridColumnCommand}"
+                    CommandParameter="Content-Type" AutomationProperties.AutomationId="MenuColumn_ContentType" />
+          <Separator />
+          <MenuItem Header="Reset columns" Command="{Binding ResetGridColumnsCommand}"
+                    AutomationProperties.AutomationId="MenuColumnsReset" />
         </MenuItem>
         <Separator />
         <MenuItem Header="Session retention…" Command="{Binding OpenSessionRetentionCommand}"
@@ -298,7 +336,7 @@
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
-          <DataGridTemplateColumn Header="Host" Width="180" MinWidth="120" SortMemberPath="Host">
+          <DataGridTemplateColumn Header="Host" Width="210" MinWidth="120" SortMemberPath="Host">
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate x:DataType="svc:SessionSnapshot">
                 <TextBlock Text="{Binding Host}" VerticalAlignment="Center"
@@ -306,7 +344,19 @@
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
-          <DataGridTextColumn Header="URL" Binding="{Binding Url}" Width="320" MinWidth="160" />
+          <!-- Path + query: the Host column already shows the host. Tooltip and Ctrl+C keep the full URL. -->
+          <DataGridTemplateColumn Header="URL" Width="320" MinWidth="160" SortMemberPath="Url"
+                                  ClipboardContentBinding="{Binding Url}">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate x:DataType="svc:SessionSnapshot">
+                <!-- Transparent background keeps the tooltip hoverable when the text is empty (CONNECT). -->
+                <TextBlock Text="{Binding UrlDisplay}" VerticalAlignment="Center"
+                           HorizontalAlignment="Stretch" Background="Transparent"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip.Tip="{Binding Url}" />
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
           <DataGridTextColumn Header="Protocol" Binding="{Binding Protocol}" Width="130" MinWidth="120" />
           <DataGridTextColumn Header="Duration (ms)" Binding="{Binding DurationMs, StringFormat={}{0:0}}"
                               Width="120" MinWidth="120" SortMemberPath="DurationMs" />
@@ -315,6 +365,39 @@
           <DataGridTextColumn Header="Size" Binding="{Binding BodySizeDisplay}"
                               Width="80" MinWidth="70" SortMemberPath="BodySize" />
           <DataGridTextColumn Header="Process" Binding="{Binding ProcessDisplay}" Width="140" MinWidth="100" />
+          <!-- Optional columns (hidden until chosen from Options > Columns or the header menu). Appended last so
+               saved DisplayIndex values keep restoring unchanged. Keys: SessionGridColumnCatalog. -->
+          <DataGridTemplateColumn Header="Started" Width="110" MinWidth="80" IsVisible="False"
+                                  SortMemberPath="StartedUtc"
+                                  ClipboardContentBinding="{Binding StartedFullDisplay}">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate x:DataType="svc:SessionSnapshot">
+                <TextBlock Text="{Binding StartedDisplay}" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip.Tip="{Binding StartedFullDisplay}" />
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+          <DataGridTemplateColumn Header="Scheme" Width="70" MinWidth="55" IsVisible="False"
+                                  SortMemberPath="Scheme"
+                                  ClipboardContentBinding="{Binding Scheme}">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate x:DataType="svc:SessionSnapshot">
+                <TextBlock Text="{Binding Scheme}" VerticalAlignment="Center" />
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+          <DataGridTemplateColumn Header="Content-Type" Width="160" MinWidth="90" IsVisible="False"
+                                  SortMemberPath="ContentType"
+                                  ClipboardContentBinding="{Binding ContentType}">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate x:DataType="svc:SessionSnapshot">
+                <TextBlock Text="{Binding ContentTypeDisplay}" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip.Tip="{Binding ContentType}" />
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
         </DataGrid.Columns>
       </DataGrid>
       <GridSplitter Grid.Row="1" Grid.Column="1" Width="4" ResizeDirection="Columns"

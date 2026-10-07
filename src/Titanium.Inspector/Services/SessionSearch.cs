@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace Titanium.Inspector.Services;
@@ -192,7 +193,8 @@ public static class SessionSearch
         int totalCount,
         string? searchQuery,
         int retentionEvictedTotal,
-        DateTimeOffset? oldestStartedUtc)
+        DateTimeOffset? oldestStartedUtc,
+        DateTimeOffset? nowUtc = null)
     {
         var searching = !string.IsNullOrWhiteSpace(searchQuery);
         var kept = FormatSessionCount(totalCount);
@@ -209,13 +211,25 @@ public static class SessionSearch
         // capture window, whether or not retention has trimmed older rows yet.
         if (oldestStartedUtc is { } oldest)
         {
-            text += $" · since {oldest.ToLocalTime():HH:mm}";
+            text += $" · since {FormatSince(oldest, nowUtc ?? DateTimeOffset.UtcNow)}";
         }
 
         if (emptySearch)
             text += FormatEmptySearchRetentionHint(retentionEvictedTotal);
 
         return text;
+    }
+
+    /// <summary>
+    /// Local start time of the oldest kept session: <c>HH:mm</c> when it is today, otherwise with the
+    /// date (<c>Oct 6, 14:05</c>) so a capture left running past midnight is not misread as today.
+    /// </summary>
+    public static string FormatSince(DateTimeOffset oldestUtc, DateTimeOffset nowUtc)
+    {
+        var oldest = oldestUtc.ToLocalTime();
+        return oldest.Date == nowUtc.ToLocalTime().Date
+            ? oldest.ToString("HH:mm", CultureInfo.CurrentCulture)
+            : oldest.ToString("MMM d, HH:mm", CultureInfo.CurrentCulture);
     }
 
     /// <summary>Compact round thousands (<c>10k</c>) so a retention cap is readable in the status bar.</summary>

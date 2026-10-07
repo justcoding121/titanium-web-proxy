@@ -130,6 +130,16 @@ jobs:
           Start-Sleep -Seconds 5
         }
 
+    # Error-path hardening (origin 502/504, client-reject breaker, stale-connection replay, log signatures).
+    # No retry loop: these tests are deterministic and must never be masked by the flake retry above.
+    - name: Regression-2026-10-07 gate
+      shell: pwsh
+      run: |
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Regression-2026-10-07"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Regression-2026-10-07" --blame-hang --blame-hang-timeout 5m
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
     - name: Merge code coverage
       shell: pwsh
       run: .\.coverage\tools\dotnet-coverage merge "coverage\**\*.coverage" --output coverage/coverage.xml --output-format xml

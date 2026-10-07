@@ -165,6 +165,7 @@ public partial class ProxyServer
         TcpServerConnection? connection = null;
         SessionEventArgs? openSession = null;
         var closeConnection = false;
+        var truncatedByOrigin = false;
         try
         {
             if (poolKey != null)
@@ -262,9 +263,12 @@ public partial class ProxyServer
 
                     if (read != length)
                     {
+                        // The origin closed before the declared Content-Length. Never rewrite the length to
+                        // match what arrived: that would present a truncated body as a complete message. Send
+                        // what we have under the declared length and close the client connection so the
+                        // client sees the premature end.
                         closeConnection = true;
-                        if (response.ContentLength != read)
-                            response.ContentLength = read;
+                        truncatedByOrigin = true;
                     }
                     else
                     {
@@ -316,7 +320,8 @@ public partial class ProxyServer
                 closeConnection = true;
 
             // Client Connection: close (NC) → stop accept-loop KA (origin may stay pooled).
-            return response.KeepAlive && !clientRequestedClose;
+            // A body truncated by the origin must end the client connection too.
+            return response.KeepAlive && !clientRequestedClose && !truncatedByOrigin;
             }
             finally
             {
@@ -381,6 +386,7 @@ public partial class ProxyServer
         TcpServerConnection? connection = null;
         SessionEventArgs? openSession = null;
         var closeConnection = false;
+        var truncatedByOrigin = false;
         try
         {
             if (poolKey != null)
@@ -487,9 +493,11 @@ public partial class ProxyServer
 
                     if (read != length)
                     {
+                        // Origin closed before the declared Content-Length: keep the declared length (never
+                        // present a truncated body as complete), write the partial wire body and close the
+                        // client connection so the client sees the premature end.
                         closeConnection = true;
-                        if (response.ContentLength != read)
-                            response.ContentLength = read;
+                        truncatedByOrigin = true;
                     }
                     else
                     {
@@ -498,7 +506,7 @@ public partial class ProxyServer
                     }
 
                     ApplyResponseHeaderContributor(response);
-                    if (mayNeedBodyAfterWrite)
+                    if (mayNeedBodyAfterWrite && !truncatedByOrigin)
                     {
                         byte[] exact;
                         if (read == body.Length && poolKind == H1CoalescePoolKind.None)
@@ -549,7 +557,7 @@ public partial class ProxyServer
                 || (connection.Stream is HttpStream residual && residual.DataAvailable))
                 closeConnection = true;
 
-            return response.KeepAlive && !clientRequestedClose;
+            return response.KeepAlive && !clientRequestedClose && !truncatedByOrigin;
         }
         catch (RetryableServerConnectionException)
         {

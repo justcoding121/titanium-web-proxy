@@ -249,10 +249,25 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         TrustFirefoxCaCommand = Cmd(TrustFirefoxCaAsync);
         UntrustCaCommand = Cmd(UntrustCaAsync);
         RotateCaCommand = Cmd(RotateCaAsync);
+        RemoveOldRootCasCommand = Cmd(RemoveOldRootCasAsync);
         ExportCaCommand = Cmd(ExportCaAsync);
         DeviceCaSetupCommand = Cmd(DeviceCaSetupAsync);
         OpenLoopbackExemptCommand = Cmd(OpenLoopbackExemptAsync);
         OpenSessionRetentionCommand = Cmd(OpenSessionRetentionAsync);
+        ToggleGridColumnCommand = CmdWithParameter(parameter =>
+        {
+            if (parameter is string key && SessionGridColumnCatalog.Find(key) is { CanHide: true })
+            {
+                SetGridColumnVisible(key, !IsGridColumnVisible(key, platformAvailable: true));
+            }
+
+            return Task.CompletedTask;
+        }, parameter => parameter is string key && SessionGridColumnCatalog.Find(key) is { CanHide: true });
+        ResetGridColumnsCommand = Cmd(() =>
+        {
+            ResetGridColumns();
+            return Task.CompletedTask;
+        });
         OpenLoggingSettingsCommand = Cmd(OpenLoggingSettingsAsync);
         OpenAboutCommand = Cmd(OpenAboutAsync);
         OpenHttpsDecryptHostsCommand = Cmd(OpenExcludedHostsAsync);
@@ -1037,8 +1052,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             return;
         }
 
+        // ApplyOptions raises SessionsRemoved when the new limit evicts rows; that refreshes the count.
         _store.ApplyOptions(SessionStoreOptions.FromSettings(_settings.Current));
-        RefreshSessionCountText();
         StatusText = "Session retention applied";
     }
 
@@ -1153,6 +1168,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         _settings.ResetToFactoryDefaults();
         LoadFromSettings();
         NotifySettingsUiChanged();
+        GridColumnsChanged?.Invoke(null);
         // Defaults turn Decrypt off — bounce in case Avalonia left a OneWay CheckBox ticked.
         _ = SnapDecryptHttpsUiAsync();
         StatusText =
@@ -1349,10 +1365,17 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public ICommand TrustFirefoxCaCommand { get; }
     public ICommand UntrustCaCommand { get; }
     public ICommand RotateCaCommand { get; }
+    public ICommand RemoveOldRootCasCommand { get; }
     public ICommand ExportCaCommand { get; }
     public ICommand DeviceCaSetupCommand { get; }
     public ICommand OpenLoopbackExemptCommand { get; }
     public ICommand OpenSessionRetentionCommand { get; }
+
+    /// <summary>Show or hide one sessions-grid column; the parameter is its catalog key.</summary>
+    public ICommand ToggleGridColumnCommand { get; }
+
+    /// <summary>Restore the default columns (visibility, order, widths, sort).</summary>
+    public ICommand ResetGridColumnsCommand { get; }
     public ICommand OpenLoggingSettingsCommand { get; }
     public ICommand OpenAboutCommand { get; }
     public ICommand OpenHttpsDecryptHostsCommand { get; }
@@ -2578,8 +2601,49 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
 
     public void PersistSessionGridLayout(SessionGridLayoutDto layout)
     {
+        // The grid captures widths/order/sort only; column visibility is owned here.
+        layout.ColumnVisibility ??= _settings.Current.SessionGridLayout?.ColumnVisibility;
         _settings.Current.SessionGridLayout = layout;
         _settings.Save();
+    }
+
+    /// <summary>
+    /// Raised after the user shows/hides a column (argument is its key) or resets the grid columns
+    /// (argument is null). The window applies the change to the live grid.
+    /// </summary>
+    public event Action<string?>? GridColumnsChanged;
+
+    /// <summary>Effective visibility of a sessions-grid column (saved choice, else the default).</summary>
+    public bool IsGridColumnVisible(string key) => IsGridColumnVisible(key, ShowProcessColumn);
+
+    private bool IsGridColumnVisible(string key, bool platformAvailable) =>
+        SessionGridColumnCatalog.IsVisible(
+            key,
+            _settings.Current.SessionGridLayout?.ColumnVisibility,
+            platformAvailable);
+
+    /// <summary>Show or hide a column and persist the choice. False when the column cannot be hidden.</summary>
+    public bool SetGridColumnVisible(string key, bool visible)
+    {
+        if (SessionGridColumnCatalog.Find(key) is not { CanHide: true } info)
+        {
+            return false;
+        }
+
+        var layout = _settings.Current.SessionGridLayout ??= new SessionGridLayoutDto();
+        var overrides = SessionGridColumnCatalog.WithVisibility(layout.ColumnVisibility, info.Key, visible);
+        layout.ColumnVisibility = overrides.Count == 0 ? null : overrides;
+        _settings.Save();
+        GridColumnsChanged?.Invoke(info.Key);
+        return true;
+    }
+
+    /// <summary>Forget the saved columns (visibility, order, widths, sort) and restore the defaults.</summary>
+    public void ResetGridColumns()
+    {
+        _settings.Current.SessionGridLayout = null;
+        _settings.Save();
+        GridColumnsChanged?.Invoke(null);
     }
 
     private void LoadFromSettings()
@@ -3357,6 +3421,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     private RelayCommand Cmd(Func<Task> execute, Func<bool>? canExecute = null) =>
         new(execute, canExecute, ReportActionFailure);
 
+    private ParameterRelayCommand CmdWithParameter(Func<object?, Task> execute, Func<object?, bool>? canExecute = null) =>
+        new(execute, canExecute, ReportActionFailure);
+
     internal void ReportActionFailure(Exception ex)
     {
         if (ex is OperationCanceledException)
@@ -3404,6 +3471,38 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     }
 }
 
+
+/// <summary>Command that passes <c>CommandParameter</c> through (menu items sharing one command).</summary>
+internal sealed class ParameterRelayCommand(
+    Func<object?, Task> execute,
+    Func<object?, bool>? canExecute = null,
+    Action<Exception>? onError = null) : ICommand
+{
+    public bool CanExecute(object? parameter) => canExecute?.Invoke(parameter) ?? true;
+
+    public async void Execute(object? parameter)
+    {
+        try
+        {
+            await execute(parameter);
+        }
+        catch (Exception ex)
+        {
+            if (ex is OperationCanceledException)
+            {
+                return;
+            }
+
+            onError?.Invoke(ex);
+        }
+    }
+
+    public event EventHandler? CanExecuteChanged
+    {
+        add { }
+        remove { }
+    }
+}
 
 internal sealed class RelayCommand(Func<Task> execute, Func<bool>? canExecute = null, Action<Exception>? onError = null) : ICommand
 {

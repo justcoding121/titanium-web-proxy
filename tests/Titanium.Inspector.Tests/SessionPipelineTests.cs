@@ -89,20 +89,21 @@ public class SessionPipelineTests
             await tcs.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
             Assert.AreEqual("Pinned tip", vm.StatusText);
-            Assert.AreEqual("Sessions: 1", vm.SessionCountText);
+            // The oldest kept session's start time is always shown (HH:mm, or with the date if not today).
+            StringAssert.StartsWith(vm.SessionCountText, "Sessions: 1 · since ");
 
             vm.HideTunnelsFilter = true;
             Assert.IsTrue(vm.SearchQuery.Contains("hide:tunnel", StringComparison.Ordinal));
             Assert.IsTrue(vm.HideTunnelsFilter);
             vm.ErrorsOnlyFilter = true;
             Assert.IsTrue(vm.SearchQuery.Contains("is:error", StringComparison.Ordinal));
-            Assert.AreEqual("Sessions: 0 of 1 match filter", vm.SessionCountText);
+            StringAssert.StartsWith(vm.SessionCountText, "Sessions: 0 of 1 match filter · since ");
 
             vm.ClearFiltersCommand.Execute(null);
             await Task.Delay(50);
             Assert.AreEqual("", vm.SearchQuery);
             Assert.IsFalse(vm.HideTunnelsFilter);
-            Assert.AreEqual("Sessions: 1", vm.SessionCountText);
+            StringAssert.StartsWith(vm.SessionCountText, "Sessions: 1 · since ");
 
             vm.DeviceCaSetupCommand.Execute(null);
             await Task.Delay(50);
