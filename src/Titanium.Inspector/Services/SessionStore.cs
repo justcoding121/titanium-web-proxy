@@ -7,6 +7,8 @@ namespace Titanium.Inspector.Services;
 /// Captured sessions: in-memory list (headers/metadata; bodies unloaded), HAR archive on disk
 /// (per-run subfolders under the cache root), and two independent limits — MaxSessionsInMemory
 /// (drop rows from the list) and DiskCacheMaxBytes (delete oldest HAR files across runs).
+/// Empty run folders other than the current run are removed. The current run folder is created
+/// on the first spill.
 /// </summary>
 public sealed class SessionStore : IDisposable
 {
@@ -265,11 +267,13 @@ public sealed class SessionStore : IDisposable
     }
 
     /// <summary>
-    /// Drops every in-memory session and rotates the current-run HAR folder.
-    /// Does not raise <see cref="SessionsRemoved"/> — the caller clears the grid itself.
+    /// Drops every in-memory session and deletes the current-run HAR folder, including rows
+    /// already evicted from the list. Earlier runs stay on disk. Does not raise
+    /// <see cref="SessionsRemoved"/> — the caller clears the grid itself.
     /// Disk deletion continues in the background (<see cref="FlushDiskCleanupAsync"/>).
+    /// Returns tracked bytes queued for deletion.
     /// </summary>
-    public void Clear()
+    public long Clear()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         lock (_gate)
@@ -281,8 +285,45 @@ public sealed class SessionStore : IDisposable
             Interlocked.Increment(ref _spillEpoch);
         }
 
-        _disk?.AbandonCurrentRun();
+        return _disk?.AbandonCurrentRun() ?? 0;
     }
+
+    /// <summary>
+    /// Deletes every saved run, including the current one. In-flight spills are rejected via
+    /// the run generation. Rows stay in the list; spilled bodies are marked missing.
+    /// Deletion runs in the background (<see cref="FlushDiskCleanupAsync"/>).
+    /// Returns tracked bytes queued for deletion.
+    /// </summary>
+    public long ClearAllSavedRuns()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_disk is null)
+        {
+            return 0;
+        }
+
+        long freed;
+        List<long> spilled;
+        lock (_gate)
+        {
+            spilled = new List<long>();
+            foreach (var snap in _byId.Values)
+            {
+                if (snap.BodiesOnDisk)
+                {
+                    spilled.Add(snap.Id);
+                }
+            }
+
+            freed = _disk.ScheduleClearAllRuns();
+        }
+
+        MarkBodiesMissing(spilled);
+        return freed;
+    }
+
+    /// <summary>Run count and tracked bytes for the retention window. Zero when spill is off.</summary>
+    public SessionCacheStats GetCacheStats() => _disk?.GetCacheStats() ?? default;
 
     /// <summary>
     /// Inserts many sessions under one lock and enforces the memory cap once.

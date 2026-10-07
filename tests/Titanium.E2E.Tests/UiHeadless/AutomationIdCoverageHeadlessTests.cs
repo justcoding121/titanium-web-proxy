@@ -491,7 +491,9 @@ public class AutomationIdCoverageHeadlessTests
 
             var retention = new SessionRetentionWindow(settings);
             AssertHasAutomationId(retention, "RetentionCacheFolderPath");
+            AssertHasAutomationId(retention, "RetentionCacheUsage");
             AssertHasAutomationId(retention, "RetentionOpenCacheFolder");
+            AssertHasAutomationId(retention, "RetentionClearSavedCache");
 
             var logging = new LoggingSettingsWindow(settings, applyLogging: null);
             AssertHasAutomationId(logging, "LoggingOpenFolder");

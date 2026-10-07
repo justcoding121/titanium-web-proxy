@@ -1030,7 +1030,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             return;
         }
 
-        var saved = await AwaitCancellableAsync(SessionRetentionWindow.ShowAsync(owner, _settings));
+        var saved = await AwaitCancellableAsync(SessionRetentionWindow.ShowAsync(owner, _settings, _store));
         if (!saved)
         {
             StatusText = "Session retention cancelled";

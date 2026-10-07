@@ -133,6 +133,8 @@ public class InspectorBodyHonestyTests
         try
         {
             using var cache = new SessionBodyDiskCache(dir, maxBytes: 10_000_000, maxAge: TimeSpan.FromDays(1));
+            // The run folder is created on the first cache write; this test plants a file directly.
+            Directory.CreateDirectory(cache.RunDirectoryPath);
             File.WriteAllText(cache.PathFor(7), "{not-valid");
             Assert.IsFalse(cache.TryLoad(new SessionSnapshot { Id = 7 }));
         }

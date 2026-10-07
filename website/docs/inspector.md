@@ -94,7 +94,7 @@ Use **Tools → Composer / Breakpoints / AutoResponder / Scripts…** to open th
 
 **Body capture limits:** finite bodies with known `Content-Length` up to 32 MiB are buffered then previewed at 2 MiB (text view capped at 256 KiB). Larger known-length bodies are **not captured** so downloads are not stalled. Bodies with **no declared length** (chunked, HTTP/2 without `Content-Length`, SSE) are never buffered, whatever their content type: they are relayed untouched and the first 2 MiB is previewed live (decoded for gzip/deflate/br), so large downloads/uploads of unknown size (for example a `git clone`) are not aborted by the buffer limit. Size column shows the original length when known.
 
-Search for WebSocket traffic with `is:ws`. Search for gRPC with `is:grpc`, and for gRPC-JSON transcoded sessions with `is:transcoded` (client REST/JSON vs upstream gRPC faces appear in the Headers/Body inspect panes). Quick filters on the toolbar toggle `hide:tunnel`, `hide:image`, and `is:error` into the same search box. A word with no prefix matches the URL, host, process name, exact process ID, method, or exact status code. Prefixes limit the match to one field: `method:`, `status:` (exact or `2xx`–`5xx`), `host:`, `url:`, `process:`, `pid:`, `protocol:`, `content-type:`, and `body:` (including bodies spilled to disk). The status strip shows **Sessions: N** with no filter, and **Sessions: X of Y match filter** when a search or quick filter is active (X matching, Y currently kept). After the session retention limit has dropped older rows, Y is labeled **most recent** (round thousands as **10k**, e.g. `Sessions: 10k most recent · since 14:05`) and the strip adds **since HH:mm** — the start time of the oldest session still kept. If a filter matches nothing, it also shows how many older sessions retention removed, since those are no longer searched. Click the count to open **Session retention…** and change how many sessions are kept.
+Search for WebSocket traffic with `is:ws`. Search for gRPC with `is:grpc`, and for gRPC-JSON transcoded sessions with `is:transcoded` (client REST/JSON vs upstream gRPC faces appear in the Headers/Body inspect panes). Quick filters on the toolbar toggle `hide:tunnel`, `hide:image`, and `is:error` into the same search box. A word with no prefix matches the URL, host, process name, exact process ID, method, or exact status code. Prefixes limit the match to one field: `method:`, `status:` (exact or `2xx`–`5xx`), `host:`, `url:`, `process:`, `pid:`, `protocol:`, `content-type:`, and `body:` (including bodies spilled to disk). The status strip shows **Sessions: N** with no filter, and **Sessions: X of Y match filter** when a search or quick filter is active (X matching, Y currently kept). After the session retention limit has dropped older rows, Y is labeled **most recent** (round thousands as **10k**, e.g. `Sessions: 10k most recent · since 14:05`) and the strip adds **since HH:mm** — the start time of the oldest session still kept. If a filter matches nothing, it also shows how many older sessions retention removed, since those are no longer searched. Click the count to open **Session retention…** and change how many sessions are kept. What **Clear sessions** removes, and what stays on disk, is described in [Session retention and clearing](#session-retention-and-clearing).
 
 **Network throttle:** use the toolbar **Throttle** combo (`None`, `Slow 3G`, `Fast 3G`, `LTE`) to add latency and bandwidth shaping on body writes / WebSocket frames during capture. Off by default (`None`); the hot path skips delay work when no profile is enabled.
 
@@ -145,6 +145,21 @@ abort
 ```
 
 ## Advanced
+
+### Session retention and clearing
+
+**Options → Session retention…** sets how many sessions stay in the list and how much disk the saved HAR files may use. Each Inspector run writes into a timestamped folder under the session cache (local application data, `TitaniumInspector/session-cache`). The folder is created on the first captured session, so a run that captures nothing does not leave an empty folder.
+
+The list limit and the disk limit are separate:
+
+| Action | List | Current run on disk | Earlier runs on disk |
+|--------|------|---------------------|----------------------|
+| List is over **Maximum sessions to keep** | Oldest rows leave the list | Those rows stay as HAR files | Unchanged |
+| Over **Disk space for saved sessions** | Rows stay; missing bodies show a hint | Oldest HAR files go first, across every run | Same. An emptied run folder is deleted |
+| **Capture → Clear sessions** | Cleared | Deleted, including rows the list limit already hid | Kept, so you can import them from the cache folder |
+| **Clear saved session cache…** | Kept | Deleted after you confirm the run count and size | Deleted |
+
+**Clear sessions** does not ask for confirmation. The status line reports how much disk it freed. **Clear saved session cache…** is on the Session retention window, next to **Open cache folder**, and asks before it deletes. Sessions stay in the list, but their saved bodies are removed. New captures use a fresh run folder.
 
 ### Excluded hosts
 
