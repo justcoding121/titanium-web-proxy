@@ -4,7 +4,10 @@ namespace Titanium.Inspector.Services;
 /// <param name="Key">Stable layout key (matches <see cref="SessionGridLayout.GetColumnKey"/> for the XAML header).</param>
 /// <param name="MenuLabel">Text in the Columns menus.</param>
 /// <param name="DefaultVisible">Visible with no saved override (today's default grid).</param>
-/// <param name="CanHide">False for the row identity column (URL) so the grid is never empty.</param>
+/// <param name="CanHide">
+/// False for the request identity pair (Host and URL). URL shows only the path (empty for CONNECT tunnels) and
+/// Host shows the host, so hiding either would leave rows without a clear target.
+/// </param>
 /// <param name="PlatformGated">Shown only where the OS can supply the data (Process).</param>
 /// <param name="MenuAutomationId">AutomationId of the Options &gt; Columns menu item.</param>
 public sealed record SessionGridColumnInfo(
@@ -26,7 +29,7 @@ public static class SessionGridColumnCatalog
         new("Id", "Id", true, true, false, "MenuColumn_Id"),
         new("Method", "Method", true, true, false, "MenuColumn_Method"),
         new("Status", "Status", true, true, false, "MenuColumn_Status"),
-        new("Host", "Host", true, true, false, "MenuColumn_Host"),
+        new("Host", "Host", true, false, false, "MenuColumn_Host"),
         new("URL", "URL", true, false, false, "MenuColumn_URL"),
         new("Protocol", "Protocol", true, true, false, "MenuColumn_Protocol"),
         new("Duration", "Duration", true, true, false, "MenuColumn_Duration"),

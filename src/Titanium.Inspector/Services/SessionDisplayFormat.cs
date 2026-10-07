@@ -41,8 +41,8 @@ public static class SessionDisplayFormat
     /// <summary>
     /// URL column text. The Host column already shows the host, so an absolute http(s)/ws(s) URL on
     /// that host is shown as path + query (<c>/api/items?x=1</c>), with a non-default port kept as a
-    /// prefix (<c>:3000/api</c>) because Host has no port. A CONNECT target <c>host:443</c> shows
-    /// <c>:443</c>. Anything that does not match the Host (or has no Host) stays the full URL so no
+    /// prefix (<c>:3000/api</c>) because Host has no port. A CONNECT target <c>host:443</c> has no path,
+    /// so the cell is empty (the tooltip still shows <c>host:443</c>). Anything that does not match the Host (or has no Host) stays the full URL so no
     /// information is lost. The raw text is preserved; nothing is re-escaped.
     /// </summary>
     public static string FormatUrlForGrid(string? url, string? host)
@@ -84,7 +84,8 @@ public static class SessionDisplayFormat
             url[host.Length] == ':' &&
             url.AsSpan(host.Length + 1).IndexOfAnyExceptInRange('0', '9') < 0)
         {
-            return url[host.Length..];
+            // A tunnel has no path or query; host and port are already in the Host column and the tooltip.
+            return "";
         }
 
         return url;

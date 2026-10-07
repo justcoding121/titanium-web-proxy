@@ -53,16 +53,18 @@ public class SessionGridColumnTests
     [TestMethod]
     public void IsVisible_OverrideWinsOverDefault()
     {
-        var overrides = new Dictionary<string, bool> { ["Host"] = false, ["Scheme"] = true };
-        Assert.IsFalse(SessionGridColumnCatalog.IsVisible("Host", overrides, true));
+        var overrides = new Dictionary<string, bool> { ["Protocol"] = false, ["Scheme"] = true };
+        Assert.IsFalse(SessionGridColumnCatalog.IsVisible("Protocol", overrides, true));
         Assert.IsTrue(SessionGridColumnCatalog.IsVisible("Scheme", overrides, true));
     }
 
     [TestMethod]
-    public void IsVisible_UrlIsAlwaysVisible()
+    public void IsVisible_UrlAndHostAreAlwaysVisible()
     {
-        var overrides = new Dictionary<string, bool> { ["URL"] = false };
+        // Host + URL identify the request: URL shows only the path (empty for CONNECT) because Host shows the host.
+        var overrides = new Dictionary<string, bool> { ["URL"] = false, ["Host"] = false };
         Assert.IsTrue(SessionGridColumnCatalog.IsVisible("URL", overrides, true));
+        Assert.IsTrue(SessionGridColumnCatalog.IsVisible("Host", overrides, true));
     }
 
     [TestMethod]
@@ -91,19 +93,20 @@ public class SessionGridColumnTests
         var back = SessionGridColumnCatalog.WithVisibility(shown, "Started", false);
         Assert.AreEqual(0, back.Count);
 
-        var hiddenHost = SessionGridColumnCatalog.WithVisibility(back, "Host", false);
-        Assert.IsFalse(hiddenHost["Host"]);
-        Assert.AreEqual(0, SessionGridColumnCatalog.WithVisibility(hiddenHost, "Host", true).Count);
+        var hiddenProtocol = SessionGridColumnCatalog.WithVisibility(back, "Protocol", false);
+        Assert.IsFalse(hiddenProtocol["Protocol"]);
+        Assert.AreEqual(0, SessionGridColumnCatalog.WithVisibility(hiddenProtocol, "Protocol", true).Count);
     }
 
     [TestMethod]
-    public void WithVisibility_IgnoresUrlAndUnknownKeys_AndDoesNotMutateInput()
+    public void WithVisibility_IgnoresUrlHostAndUnknownKeys_AndDoesNotMutateInput()
     {
         var input = new Dictionary<string, bool> { ["Scheme"] = true };
         Assert.AreEqual(1, SessionGridColumnCatalog.WithVisibility(input, "URL", false).Count);
+        Assert.AreEqual(1, SessionGridColumnCatalog.WithVisibility(input, "Host", false).Count);
         Assert.AreEqual(1, SessionGridColumnCatalog.WithVisibility(input, "Nope", true).Count);
 
-        SessionGridColumnCatalog.WithVisibility(input, "Host", false);
+        SessionGridColumnCatalog.WithVisibility(input, "Protocol", false);
         Assert.AreEqual(1, input.Count);
     }
 
@@ -153,14 +156,14 @@ public class SessionGridColumnTests
         {
             SortColumnKey = "Id",
             SortDirection = ListSortDirection.Ascending,
-            ColumnVisibility = new Dictionary<string, bool> { ["Started"] = true, ["Host"] = false },
+            ColumnVisibility = new Dictionary<string, bool> { ["Started"] = true, ["Protocol"] = false },
         };
         svc.Save();
 
         var loaded = new SettingsService(temp.Path).Current.SessionGridLayout;
         Assert.IsNotNull(loaded?.ColumnVisibility);
         Assert.IsTrue(loaded!.ColumnVisibility!["Started"]);
-        Assert.IsFalse(loaded.ColumnVisibility["Host"]);
+        Assert.IsFalse(loaded.ColumnVisibility["Protocol"]);
     }
 
     [TestMethod]
@@ -187,8 +190,10 @@ public class SessionGridColumnTests
         fixture.Vm.GridColumnsChanged += _ => raised++;
 
         Assert.IsFalse(fixture.Vm.SetGridColumnVisible("URL", false));
+        Assert.IsFalse(fixture.Vm.SetGridColumnVisible("Host", false));
         Assert.IsFalse(fixture.Vm.SetGridColumnVisible("Nope", true));
         Assert.IsTrue(fixture.Vm.IsGridColumnVisible("URL"));
+        Assert.IsTrue(fixture.Vm.IsGridColumnVisible("Host"));
         Assert.AreEqual(0, raised);
     }
 
@@ -206,6 +211,7 @@ public class SessionGridColumnTests
         Assert.IsNull(fixture.Settings.Current.SessionGridLayout?.ColumnVisibility);
 
         Assert.IsFalse(command.CanExecute("URL"));
+        Assert.IsFalse(command.CanExecute("Host"));
         Assert.IsFalse(command.CanExecute(null));
     }
 

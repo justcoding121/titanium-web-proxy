@@ -51,10 +51,10 @@ public class SessionDisplayFormatTests
     }
 
     [TestMethod]
-    public void FormatUrlForGrid_TunnelShowsPortOnly()
+    public void FormatUrlForGrid_TunnelIsEmptyBecauseThereIsNoPath()
     {
-        Assert.AreEqual(":443", SessionDisplayFormat.FormatUrlForGrid("example.com:443", "example.com"));
-        Assert.AreEqual(":8443", SessionDisplayFormat.FormatUrlForGrid("Example.com:8443", "example.com"));
+        Assert.AreEqual("", SessionDisplayFormat.FormatUrlForGrid("example.com:443", "example.com"));
+        Assert.AreEqual("", SessionDisplayFormat.FormatUrlForGrid("Example.com:8443", "example.com"));
     }
 
     [TestMethod]

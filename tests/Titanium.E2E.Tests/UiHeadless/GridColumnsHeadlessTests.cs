@@ -96,10 +96,13 @@ public class GridColumnsHeadlessTests
             Assert.IsFalse(item.IsChecked);
             Assert.IsNull(fx.ViewModel.GetSessionGridLayout()?.ColumnVisibility);
 
-            // Original columns can be hidden too; URL cannot.
-            fx.Robot.Click("MenuColumn_Host");
-            Assert.IsFalse(Column(grid, "Host").IsVisible);
+            // Original columns can be hidden too; URL and Host (the request identity) cannot.
+            fx.Robot.Click("MenuColumn_Protocol");
+            Assert.IsFalse(Column(grid, "Protocol").IsVisible);
             Assert.IsFalse(fx.Robot.Find<MenuItem>("MenuColumn_URL").Command!.CanExecute("URL"));
+            Assert.IsFalse(fx.Robot.Find<MenuItem>("MenuColumn_Host").Command!.CanExecute("Host"));
+            fx.ViewModel.SetGridColumnVisible("Host", false);
+            Assert.IsTrue(Column(grid, "Host").IsVisible);
             fx.ViewModel.SetGridColumnVisible("URL", false);
             Assert.IsTrue(Column(grid, "URL").IsVisible);
         });
@@ -139,7 +142,7 @@ public class GridColumnsHeadlessTests
             var defaultMethodWidth = Column(grid, "Method").Width;
 
             fx.Robot.Click("MenuColumn_Started");
-            fx.Robot.Click("MenuColumn_Host");
+            fx.Robot.Click("MenuColumn_Protocol");
             Column(grid, "Method").Width = new DataGridLength(200);
             Column(grid, "Started").Sort(ListSortDirection.Descending);
             Pump();
@@ -151,7 +154,7 @@ public class GridColumnsHeadlessTests
             Assert.AreEqual(defaultMethodWidth.Value, Column(grid, "Method").Width.Value);
             Assert.IsNull(fx.ViewModel.GetSessionGridLayout());
             Assert.IsFalse(fx.Robot.Find<MenuItem>("MenuColumn_Started").IsChecked);
-            Assert.IsTrue(fx.Robot.Find<MenuItem>("MenuColumn_Host").IsChecked);
+            Assert.IsTrue(fx.Robot.Find<MenuItem>("MenuColumn_Protocol").IsChecked);
             Assert.IsTrue(IsSorted(Column(grid, "Id")));
             Assert.IsFalse(IsSorted(Column(grid, "Started")));
         });
@@ -249,6 +252,7 @@ public class GridColumnsHeadlessTests
             Assert.IsTrue(chooser.Single(i => (string)i.CommandParameter! == "Scheme").IsChecked);
             Assert.IsFalse(chooser.Single(i => (string)i.CommandParameter! == "Started").IsChecked);
             Assert.IsFalse(chooser.Single(i => (string)i.CommandParameter! == "URL").IsEnabled);
+            Assert.IsFalse(chooser.Single(i => (string)i.CommandParameter! == "Host").IsEnabled);
             Assert.AreEqual("Reset columns", items.Last().Header);
 
             chooser.Single(i => (string)i.CommandParameter! == "Started").Command!.Execute("Started");
