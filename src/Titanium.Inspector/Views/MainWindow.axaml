@@ -307,7 +307,17 @@
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
-          <DataGridTextColumn Header="URL" Binding="{Binding Url}" Width="320" MinWidth="160" />
+          <!-- Path + query: the Host column already shows the host. Tooltip and Ctrl+C keep the full URL. -->
+          <DataGridTemplateColumn Header="URL" Width="320" MinWidth="160" SortMemberPath="Url"
+                                  ClipboardContentBinding="{Binding Url}">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate x:DataType="svc:SessionSnapshot">
+                <TextBlock Text="{Binding UrlDisplay}" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip.Tip="{Binding Url}" />
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
           <DataGridTextColumn Header="Protocol" Binding="{Binding Protocol}" Width="130" MinWidth="120" />
           <DataGridTextColumn Header="Duration (ms)" Binding="{Binding DurationMs, StringFormat={}{0:0}}"
                               Width="120" MinWidth="120" SortMemberPath="DurationMs" />

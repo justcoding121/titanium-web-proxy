@@ -172,6 +172,12 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         set => SetField(ref _bodySize, value);
     }
 
+    /// <summary>
+    /// URL column text: path + query when the Host column already shows the host
+    /// (see <see cref="SessionDisplayFormat.FormatUrlForGrid"/>). <see cref="Url"/> stays the full URL.
+    /// </summary>
+    public string UrlDisplay => SessionDisplayFormat.FormatUrlForGrid(Url, Host);
+
     /// <summary>Grid display for <see cref="BodySize"/> (B / KB / MB).</summary>
     public string BodySizeDisplay => SessionDisplayFormat.FormatByteSize(BodySize);
 
@@ -319,6 +325,11 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         if (name is nameof(ProcessId) or nameof(ProcessName))
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ProcessDisplay)));
+        }
+
+        if (name is nameof(Host))
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UrlDisplay)));
         }
 
         if (name is nameof(BodySize))

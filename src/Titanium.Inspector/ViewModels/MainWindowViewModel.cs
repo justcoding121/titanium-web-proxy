@@ -1038,8 +1038,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             return;
         }
 
+        // ApplyOptions raises SessionsRemoved when the new limit evicts rows; that refreshes the count.
         _store.ApplyOptions(SessionStoreOptions.FromSettings(_settings.Current));
-        RefreshSessionCountText();
         StatusText = "Session retention applied";
     }
 

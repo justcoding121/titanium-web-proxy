@@ -620,6 +620,7 @@ public partial class MainWindow : Window
         {
             var tip = SessionGridLayout.GetColumnKey(header.Content) switch
             {
+                "URL" => "Path and query. The host is in the Host column; hover a row for the full URL.",
                 "Duration" => "Total request time from session start to complete (milliseconds).",
                 "TTFB" => "Time until first response byte (TTFB), in milliseconds.",
                 "Protocol" => "HTTP/1.1, HTTP/2, … between client and proxy.",
