@@ -40,3 +40,5 @@ A client that rejects the Titanium certificate (pinned apps, or a client that do
 If several `Titanium Root Certificate Authority` roots are in the trust store, new roots carry a Subject Key Identifier and their leaves an Authority Key Identifier, so chains pick the right root. In the Inspector, **Remove old root CAs…** removes every one except the current root.
 
 A CONNECT tunnel is answered with `200` before the origin is dialed, so an unreachable origin shows up in the browser as a closed connection. Set `EstablishServerConnectionBeforeResponse` in `BeforeTunnelConnectRequest` to dial first and answer `502`/`504` instead. The Inspector does this for opaque (non-decrypted) tunnels, and the dialed connection is reused for the tunnel.
+
+If an origin closes the connection before sending its declared `Content-Length` bytes, the proxy does not rewrite the response as complete. It closes the client connection (a 502 if no response byte was sent yet, or `RST_STREAM` on HTTP/2 once headers are out), so the browser reports a failed load instead of keeping a short body.

@@ -206,6 +206,44 @@ public class RotateRootCaTests
         }
     }
 
+    [TestMethod]
+    [TestCategory("Regression-2026-10-07")]
+    public async Task RemoveOldRootCas_WithNothingStale_KeepsCurrentRootAndReportsNone()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-oldroot-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            using var interception = new InterceptionService { UseInMemoryTrustState = true };
+            OverrideRootPfx(interception, Path.Combine(dir, "rootCert.pfx"));
+            await interception.StartAsync(IPAddress.Loopback, 0);
+            var before = interception.RootCertificate!.Thumbprint;
+
+            Assert.AreEqual(0, interception.ListStaleRootThumbprints(machineStore: false).Count,
+                "In-memory trust state must never enumerate or touch the real certificate stores.");
+
+            var settings = new SettingsService(Path.Combine(dir, "settings.json"));
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                new ScriptedInspectorDialogs());
+
+            await ExecuteUntilAsync(
+                vm.RemoveOldRootCasCommand,
+                () => !vm.IsStatusBusy && vm.StatusText.Contains("No old Titanium root CAs", StringComparison.OrdinalIgnoreCase));
+            Assert.AreEqual(before, interception.RootCertificate!.Thumbprint, "The current root must be untouched.");
+            interception.EnsureShutdown();
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { }
+        }
+    }
+
     private static void OverrideRootPfx(InterceptionService interception, string path)
     {
         var field = typeof(InterceptionService).GetField("_rootPfxPath",
