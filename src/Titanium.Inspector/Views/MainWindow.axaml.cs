@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     private bool _autoStartStarted;
     private bool _followLatest = true;
     private bool _programmaticScroll;
+    private bool _sessionsResetInFlight;
     private bool _scrollQueued;
     private bool _sessionGridLayoutApplied;
     private ScrollBar? _sessionsVScroll;
@@ -385,12 +386,20 @@ public partial class MainWindow : Window
         if (_sessionsVm is not null)
         {
             _sessionsVm.Sessions.CollectionChanged -= OnSessionsCollectionChanged;
+            if (_sessionsVm.Sessions is SessionListCollection oldList)
+            {
+                oldList.Replacing -= OnSessionsReplacing;
+            }
         }
 
         _sessionsVm = vm;
         if (_sessionsVm is not null)
         {
             _sessionsVm.Sessions.CollectionChanged += OnSessionsCollectionChanged;
+            if (_sessionsVm.Sessions is SessionListCollection newList)
+            {
+                newList.Replacing += OnSessionsReplacing;
+            }
         }
     }
 
@@ -433,20 +442,38 @@ public partial class MainWindow : Window
             edge, value, maximum, SessionListFollowLatest.DefaultThresholdPx);
         var allContentVisible = maximum <= 0;
 
+        // A list swap (filter added/cleared) makes the DataGrid reset its offset; that is not the user scrolling
+        // away, so it must not pause following.
         _followLatest = SessionListFollowLatest.UpdateFollowAfterScroll(
-            _followLatest, _programmaticScroll, userMovedOffset, isNearFollowEdge, allContentVisible);
+            _followLatest,
+            _programmaticScroll || _sessionsResetInFlight,
+            userMovedOffset,
+            isNearFollowEdge,
+            allContentVisible);
     }
+
+    private void OnSessionsReplacing() => _sessionsResetInFlight = true;
 
     private void OnSessionsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        if (e.Action == NotifyCollectionChangedAction.Reset)
+        {
+            // Also covers collections that raise Reset without the Replacing hook (Clear).
+            _sessionsResetInFlight = true;
+        }
+
         if (e.Action == NotifyCollectionChangedAction.Reset
             || (e.Action == NotifyCollectionChangedAction.Remove && _sessionsVm is { Sessions.Count: 0 }))
         {
-            // Clear vs filter: filter Reset is immediately followed by Adds on this turn.
+            // Runs after layout and after the scroll-to-latest below (Loaded outranks Background), once the
+            // DataGrid has settled on its new extent.
             Dispatcher.UIThread.Post(() =>
             {
-                if (SessionListFollowLatest.ShouldResumeFollowAfterReset(_sessionsVm?.Sessions.Count ?? 0))
+                _sessionsResetInFlight = false;
+                if (SessionListFollowLatest.ShouldResumeFollowAfterReset(_sessionsVm?.Sessions.Count ?? 0)
+                    || _sessionsVScroll is { Maximum: <= 0 })
                 {
+                    // Cleared, or the result fits on screen: nothing is hidden, so follow the live edge again.
                     _followLatest = true;
                 }
             }, DispatcherPriority.Background);
