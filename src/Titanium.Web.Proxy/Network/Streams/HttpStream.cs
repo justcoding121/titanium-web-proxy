@@ -67,6 +67,12 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
 
     public bool IsClosed { get; private set; }
 
+    /// <summary>
+    ///     First transport failure this stream swallowed (client reset, TLS alert). Null on the success path.
+    ///     Consulted once, after the first decrypted read, to tell a certificate rejection from a clean close.
+    /// </summary>
+    internal Exception? SuppressedReadFailure { get; private set; }
+
 
     private readonly bool ownsStreamBuffer;
 

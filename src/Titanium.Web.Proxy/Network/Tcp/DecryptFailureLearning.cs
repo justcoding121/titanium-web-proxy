@@ -34,6 +34,49 @@ internal static class DecryptFailureLearning
     }
 
     /// <summary>
+    ///     The failure is specifically the client refusing the proxy certificate (untrusted root / pinning),
+    ///     not a plain TCP reset. TLS 1.3 often surfaces this on the first decrypted read, after
+    ///     <c>AuthenticateAsServerAsync</c> has already returned.
+    /// </summary>
+    internal static bool IsClientCertificateRejection(Exception? error)
+    {
+        for (var e = error; e != null; e = e.InnerException)
+        {
+            if (e is AuthenticationException)
+                return true;
+
+            // Schannel: SEC_E_UNTRUSTED_ROOT, SEC_E_CERT_UNKNOWN, SEC_E_CERT_EXPIRED.
+            if (e is System.ComponentModel.Win32Exception win
+                && win.NativeErrorCode is -2146893019 or -2146893017 or -2146893016)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     The client side of the MITM TLS handshake ended with an abort/alert/EOF (the client did not accept
+    ///     the proxy certificate or hung up). Excludes cancellation and timeouts, which say more about
+    ///     proxy/machine load than about client trust.
+    /// </summary>
+    internal static bool IsClientHandshakeRejection(Exception? error)
+    {
+        for (var e = error; e != null; e = e.InnerException)
+        {
+            if (e is OperationCanceledException or TimeoutException or Exceptions.ProxyTimeoutException)
+                return false;
+        }
+
+        for (var e = error; e != null; e = e.InnerException)
+        {
+            if (e is AuthenticationException or System.IO.IOException)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     ///     MITM HTTPS 403/429 from the origin (not synthetic Ok/Respond/GenericResponse).
     /// </summary>
     internal static bool IsLearnableHttpBlock(SessionEventArgs args)

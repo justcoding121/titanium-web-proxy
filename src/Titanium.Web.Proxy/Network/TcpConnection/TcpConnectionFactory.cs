@@ -839,7 +839,11 @@ internal class TcpConnectionFactory : IDisposable
 
                             throw new ProxyTimeoutException(
                                 $"Timed out connecting to {hostname}:{port} after {effectiveTimeoutSecs}.",
-                                ProxyTimeoutKind.Connect);
+                                ProxyTimeoutKind.Connect)
+                            {
+                                ConfiguredTimeout = TimeSpan.FromMilliseconds(connectTimeoutMs),
+                                ObservedElapsed = TimeSpan.FromMilliseconds(connectTimeoutMs)
+                            };
                         }
                     }
                     else
@@ -856,7 +860,11 @@ internal class TcpConnectionFactory : IDisposable
                         {
                             throw new ProxyTimeoutException(
                                 $"Timed out connecting to {hostname}:{port} after {effectiveTimeoutSecs}.",
-                                ProxyTimeoutKind.Connect);
+                                ProxyTimeoutKind.Connect)
+                            {
+                                ConfiguredTimeout = TimeSpan.FromMilliseconds(connectTimeoutMs),
+                                ObservedElapsed = TimeSpan.FromMilliseconds(connectTimeoutMs)
+                            };
                         }
                         catch (OperationCanceledException oce)
                         {

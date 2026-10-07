@@ -666,7 +666,7 @@ public partial class ProxyServer
 
             if (!args.HttpClient.Response.Locked)
             {
-                args.GenericResponse($"Bad Gateway. {ex.Message}", HttpStatusCode.BadGateway);
+                OriginFailureResponses.Apply(args, ex);
                 await args.ClientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
             }
         }
@@ -989,7 +989,7 @@ public partial class ProxyServer
         {
             if (!args.HttpClient.Response.Locked)
             {
-                args.GenericResponse($"Bad Gateway. {ex.Message}", HttpStatusCode.BadGateway);
+                OriginFailureResponses.Apply(args, ex);
                 await args.ClientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
             }
 

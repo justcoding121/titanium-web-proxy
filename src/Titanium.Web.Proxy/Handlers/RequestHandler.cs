@@ -670,6 +670,18 @@ public partial class ProxyServer
                             closeServerConnection = true;
                             return;
                         }
+                        catch (Exception originEx) when (ShouldAnswerOriginFailure(args, originEx,
+                                                             cancellationTokenSource))
+                        {
+                            // Origin unreachable / dropped before any response byte reached the client:
+                            // answer 502/504 instead of silently closing the tunnel (browsers surface a silent
+                            // close as ERR_EMPTY_RESPONSE / ERR_CONNECTION_CLOSED, indistinguishable from a
+                            // proxy crash). The exception still propagates so ExceptionFunc / diagnostics are
+                            // unchanged; exception-only path, zero cost on successful sessions.
+                            closeServerConnection = true;
+                            await TryWriteOriginFailureResponseAsync(args, originEx, cancellationToken);
+                            throw;
+                        }
                         catch (Exception ex) when (ex is OperationCanceledException ||
                                                     requestDeadline.TryGetTimeoutException(ex, out _))
                         {

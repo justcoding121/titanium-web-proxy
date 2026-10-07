@@ -48,6 +48,8 @@ internal sealed class DeadlineRegistry
     private readonly object gate = new();
     private ProxyTimeoutKind? firedKind;
     private long firedTimestamp;
+    private TimeSpan? firedConfigured;
+    private TimeSpan? firedElapsed;
     private Deadline? passthrough0;
     private Deadline? passthrough1;
     private int passthroughInUse;
@@ -84,6 +86,8 @@ internal sealed class DeadlineRegistry
         {
             firedKind = null;
             firedTimestamp = 0;
+            firedConfigured = null;
+            firedElapsed = null;
         }
     }
 
@@ -107,7 +111,13 @@ internal sealed class DeadlineRegistry
         return false;
     }
 
-    private void Record(ProxyTimeoutKind kind, long timestamp)
+    internal (TimeSpan? Configured, TimeSpan? Elapsed) FiredDetail()
+    {
+        lock (gate)
+            return (firedConfigured, firedElapsed);
+    }
+
+    private void Record(ProxyTimeoutKind kind, long timestamp, TimeSpan? configured = null, TimeSpan? elapsed = null)
     {
         var firstRecordForThisRegistry = false;
         lock (gate)
@@ -117,6 +127,8 @@ internal sealed class DeadlineRegistry
                 firstRecordForThisRegistry = firedKind == null;
                 firedKind = kind;
                 firedTimestamp = timestamp;
+                firedConfigured = configured;
+                firedElapsed = elapsed;
             }
         }
 
@@ -140,6 +152,8 @@ internal sealed class DeadlineRegistry
         private CancellationToken parentToken;
         private readonly CancellationTokenSource? linkedCts;
         private bool disposed;
+        private readonly TimeSpan? configuredTimeout;
+        private readonly long startTimestamp;
 
         internal Deadline(DeadlineRegistry registry, CancellationToken parentToken, TimeSpan? timeout, // NOSONAR CA1068 -- Constructor mirrors Start parameter order.
             ProxyTimeoutKind kind, bool cachedPassthrough = false)
@@ -155,6 +169,8 @@ internal sealed class DeadlineRegistry
                 return;
             }
 
+            configuredTimeout = deadline;
+            startTimestamp = Stopwatch.GetTimestamp();
             linkedCts = CancellationTokenSource.CreateLinkedTokenSource(parentToken);
             linkedCts.CancelAfter(deadline);
             Token = linkedCts.Token;
@@ -199,18 +215,29 @@ internal sealed class DeadlineRegistry
         {
             if (IsTimedOut)
             {
-                registry.Record(Kind, Stopwatch.GetTimestamp());
+                var now = Stopwatch.GetTimestamp();
+                var elapsed = Stopwatch.GetElapsedTime(startTimestamp, now);
+                registry.Record(Kind, now, configuredTimeout, elapsed);
                 timeoutException =
                     new ProxyTimeoutException($"Proxy {Kind.ToString().ToLowerInvariant()} timeout elapsed.", Kind,
-                        original);
+                        original)
+                    {
+                        ConfiguredTimeout = configuredTimeout,
+                        ObservedElapsed = elapsed
+                    };
                 return true;
             }
 
             if (registry.TryGetFiredKind(out var kind))
             {
+                var (firedCfg, firedEl) = registry.FiredDetail();
                 timeoutException =
                     new ProxyTimeoutException($"Proxy {kind.ToString().ToLowerInvariant()} timeout elapsed.", kind,
-                        original);
+                        original)
+                    {
+                        ConfiguredTimeout = firedCfg,
+                        ObservedElapsed = firedEl
+                    };
                 return true;
             }
 

@@ -202,6 +202,51 @@ internal static class ProxyLog
     }
 
     /// <summary>
+    ///     A client kept aborting the MITM TLS handshake for this host (pinning / untrusted proxy root),
+    ///     so later CONNECTs tunnel opaque. Warning, not Error: the proxy behaved correctly.
+    /// </summary>
+    internal static void ClientRejectedCertificateBypassLearned(ILogger logger, string host, int failures)
+    {
+        if (!logger.IsEnabled(LogLevel.Warning)) return;
+        logger.LogWarning(
+            "Client rejected the proxy certificate for {Host} {Failures} times in a row (certificate pinning or untrusted proxy root); later CONNECTs tunnel opaque. Set server.enableDecryptFailureBypass to false to stop learning.",
+            host, failures);
+    }
+
+    private static long clientHandshakeAbortLastTicks;
+    private static int clientHandshakeAbortSuppressed;
+
+    /// <summary>
+    ///     One-line, throttled (at most once per 5 s; the rest are counted) record of an aborted client
+    ///     handshake. Replaces a multi-line stack per abort: a pinning client can retry hundreds of times.
+    /// </summary>
+    internal static void ClientHandshakeAborted(ILogger logger, string host, Exception error)
+    {
+        if (!logger.IsEnabled(LogLevel.Debug)) return;
+
+        var now = System.Diagnostics.Stopwatch.GetTimestamp();
+        var last = System.Threading.Interlocked.Read(ref clientHandshakeAbortLastTicks);
+        var interval = System.Diagnostics.Stopwatch.Frequency * 5;
+        if (last != 0 && now - last < interval)
+        {
+            System.Threading.Interlocked.Increment(ref clientHandshakeAbortSuppressed);
+            return;
+        }
+
+        if (System.Threading.Interlocked.CompareExchange(ref clientHandshakeAbortLastTicks, now, last) != last)
+        {
+            System.Threading.Interlocked.Increment(ref clientHandshakeAbortSuppressed);
+            return;
+        }
+
+        var suppressed = System.Threading.Interlocked.Exchange(ref clientHandshakeAbortSuppressed, 0);
+        logger.LogDebug(
+            "Client TLS handshake aborted for {Host}: {Reason}{Suppressed}",
+            host, error.GetBaseException().Message,
+            suppressed > 0 ? $" ({suppressed} similar aborts suppressed)" : string.Empty);
+    }
+
+    /// <summary>
     ///     Warns when an operator set a limit the runtime still treats as reserved.
     /// </summary>
     internal static void ReservedLimit(ILogger logger, string cliKey, object value, string instead)

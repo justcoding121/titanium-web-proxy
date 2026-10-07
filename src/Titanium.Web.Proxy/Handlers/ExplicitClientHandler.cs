@@ -409,9 +409,13 @@ public partial class ProxyServer
                         ProxyLog.BrowserHandshakeFailed(logger, connectHostname, e);
 
                         var certName = certificate?.GetNameInfo(X509NameType.SimpleName, false);
+                        TryRecordClientHandshakeReject(connectHostname, e);
                         throw new ProxyConnectException(
                             $"Couldn't authenticate host '{connectHostname}' with certificate '{certName}'.", e,
-                            connectArgs);
+                            connectArgs)
+                        {
+                            ClientHandshakeHost = connectHostname
+                        };
                     }
 
                     if (!sendRawData)
@@ -429,7 +433,33 @@ public partial class ProxyServer
                         connectTiming?.MarkHttp2ProbeCompleted();
                     }
 
+                    // First decrypted read. With TLS 1.3 the server side of the handshake can complete
+                    // before the client has validated our certificate, so a client that rejects the proxy
+                    // certificate (pinning / untrusted root) surfaces here as a failed read rather than as
+                    // a failed handshake. A readable request line is the real proof the client trusts us.
                     method = await HttpHelper.GetMethod(clientStream, BufferPool, cancellationToken);
+
+                    // HttpStream swallows the TLS alert, so this is not a thrown exception: the first read
+                    // comes back empty with the certificate failure stashed on the stream.
+                    if (method == KnownMethod.Invalid
+                        && Network.Tcp.DecryptFailureLearning.IsClientCertificateRejection(
+                            clientStream.SuppressedReadFailure))
+                    {
+                        var rejected = clientStream.SuppressedReadFailure!;
+                        TryRecordClientHandshakeReject(connectHostname, rejected);
+                        throw new ProxyConnectException(
+                            $"Client rejected the proxy certificate for '{connectHostname}'.",
+                            rejected, connectArgs)
+                        {
+                            ClientHandshakeHost = connectHostname
+                        };
+                    }
+
+                    // A readable request, or a clean close with no TLS alert, means the client accepted
+                    // the proxy certificate. A later reset is not proof either way, so it leaves the count.
+                    if (method != KnownMethod.Invalid || clientStream.SuppressedReadFailure == null)
+                        RecordClientHandshakeSuccess(connectHostname);
+
                     if (clientStream.IsClosed) return;
 
                     if (method == KnownMethod.Invalid)

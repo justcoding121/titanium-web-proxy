@@ -125,6 +125,7 @@ public partial class ProxyServer
 
                         await AwaitPendingClientHelloAsync(clientConnection);
                         await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
+                        RecordClientHandshakeSuccess(httpsHostName);
                         clientConnection.NegotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
                         // Store the negotiated protocol, not the enabled-protocols bitmask.
                         clientConnection.SslProtocol = sslStream.SslProtocol;
@@ -141,8 +142,12 @@ public partial class ProxyServer
                             cancellationToken);
                         var certName = certificate?.GetNameInfo(X509NameType.SimpleName, false);
                         var session = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
+                        TryRecordClientHandshakeReject(httpsHostName, e);
                         throw new ProxyConnectException(
-                            $"Couldn't authenticate host '{httpsHostName}' with certificate '{certName}'.", e, session);
+                            $"Couldn't authenticate host '{httpsHostName}' with certificate '{certName}'.", e, session)
+                        {
+                            ClientHandshakeHost = httpsHostName
+                        };
                     }
                 }
             }
@@ -310,6 +315,7 @@ public partial class ProxyServer
                             : SslExtensions.Http11ProtocolAsList;
 
                         await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
+                        RecordClientHandshakeSuccess(httpsHostName);
 
                         clientStream.Connection.NegotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
 
@@ -328,8 +334,12 @@ public partial class ProxyServer
 
                         var issuedCertName = certificate?.GetNameInfo(X509NameType.SimpleName, false);
                         var session = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
+                        TryRecordClientHandshakeReject(httpsHostName, e);
                         throw new ProxyConnectException(
-                            $"Couldn't authenticate host '{httpsHostName}' with certificate '{issuedCertName}'.", e, session);
+                            $"Couldn't authenticate host '{httpsHostName}' with certificate '{issuedCertName}'.", e, session)
+                        {
+                            ClientHandshakeHost = httpsHostName
+                        };
                     }
 
                     if (!fallThroughOpaque)

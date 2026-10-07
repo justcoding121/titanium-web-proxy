@@ -772,7 +772,7 @@ public partial class ProxyServer
                         // headers not sent yet - answer with a clean synthetic error response, matching how
                         // a normal forwarded request that fails to connect/negotiate is reported elsewhere
                         // (see the ProxyConnectException call sites in Http2NegotiationHandler).
-                        sessionArgs.GenericResponse($"Bad Gateway. {ex.Message}", HttpStatusCode.BadGateway);
+                        OriginFailureResponses.Apply(sessionArgs, ex);
                         await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, streamId, connectionState,
                             clientStream, CancellationToken.None);
                     }
@@ -1057,7 +1057,7 @@ public partial class ProxyServer
                 {
                     if (!sessionArgs.HttpClient.Response.Locked)
                     {
-                        sessionArgs.GenericResponse($"Bad Gateway. {ex.Message}", HttpStatusCode.BadGateway);
+                        OriginFailureResponses.Apply(sessionArgs, ex);
                         await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, ctx.StreamId,
                             ctx.ConnectionState, ctx.ClientStream, CancellationToken.None);
                     }

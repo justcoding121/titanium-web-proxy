@@ -24,6 +24,12 @@ public class ProxyConnectException : ProxyException
     }
 
     /// <summary>
+    ///     Set (to the CONNECT host) when this exception represents a failed client-side MITM TLS handshake,
+    ///     so diagnostics can log one throttled line instead of a stack per abort.
+    /// </summary>
+    internal string? ClientHandshakeHost { get; init; }
+
+    /// <summary>
     ///     Gets session info associated to the exception.
     /// </summary>
     /// <remarks>
