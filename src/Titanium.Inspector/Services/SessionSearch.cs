@@ -205,9 +205,10 @@ public static class SessionSearch
 
         var emptySearch = searching && visibleCount == 0 && totalCount > 0;
 
-        if (retentionEvictedTotal > 0 && oldestStartedUtc is { } oldest)
+        // Always show the oldest kept start time when the list is non-empty — that is the
+        // capture window, whether or not retention has trimmed older rows yet.
+        if (oldestStartedUtc is { } oldest)
         {
-            // Retention dropped older sessions: the list is the most recent kept window.
             text += $" · since {oldest.ToLocalTime():HH:mm}";
         }
 

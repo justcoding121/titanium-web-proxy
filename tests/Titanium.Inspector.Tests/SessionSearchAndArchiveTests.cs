@@ -481,6 +481,11 @@ public class SessionSearchAndArchiveTests
         Assert.AreEqual("Sessions: 3", SessionSearch.BuildSessionCountText(3, 3, null, 0, null));
         Assert.AreEqual("Sessions: 3", SessionSearch.BuildSessionCountText(3, 3, "", 0, null));
 
+        var oldest = new DateTimeOffset(2026, 9, 2, 19, 2, 0, TimeSpan.Zero);
+        Assert.AreEqual(
+            $"Sessions: 3 · since {oldest.ToLocalTime():HH:mm}",
+            SessionSearch.BuildSessionCountText(3, 3, null, 0, oldest));
+
         var withBody = SessionSearch.BuildSessionCountText(
             visibleCount: 0,
             totalCount: 10,
@@ -489,7 +494,6 @@ public class SessionSearchAndArchiveTests
             oldestStartedUtc: null);
         Assert.AreEqual("Sessions: 0 of 10 match filter", withBody);
 
-        var oldest = new DateTimeOffset(2026, 9, 2, 19, 2, 0, TimeSpan.Zero);
         var withRetention = SessionSearch.BuildSessionCountText(
             visibleCount: 0,
             totalCount: 50,

@@ -1038,6 +1038,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         }
 
         _store.ApplyOptions(SessionStoreOptions.FromSettings(_settings.Current));
+        RefreshSessionCountText();
         StatusText = "Session retention applied";
     }
 
