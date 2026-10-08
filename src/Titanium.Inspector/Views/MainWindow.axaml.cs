@@ -52,6 +52,22 @@ public partial class MainWindow : Window
         SessionsGrid.Loaded += OnSessionsGridLoaded;
         SessionsGrid.SelectionChanged += OnSessionsGridSelectionChanged;
         SessionsGrid.KeyDown += OnSessionsGridKeyDown;
+        // Under heavy proxy load the machine is CPU-saturated by worker threads (and browsers); the UI thread
+        // must win the scheduler or clicks stall for seconds even when its own work is small.
+        try
+        {
+            System.Threading.Thread.CurrentThread.Priority = System.Threading.ThreadPriority.AboveNormal;
+        }
+        catch
+        {
+            // Best effort: restricted environments may refuse priority changes.
+        }
+
+        // Capture-driven grid refreshes step aside while the user is interacting (see CaptureUiGovernor).
+        AddHandler(InputElement.PointerPressedEvent, OnUserInputForCaptureUi, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(InputElement.PointerMovedEvent, OnUserInputForCaptureUi, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(InputElement.PointerWheelChangedEvent, OnUserInputForCaptureUi, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(InputElement.KeyDownEvent, OnUserInputForCaptureUi, RoutingStrategies.Tunnel, handledEventsToo: true);
         SessionsGrid.AddHandler(
             InputElement.PointerPressedEvent,
             OnSessionsGridPointerPressed,
@@ -451,6 +467,8 @@ public partial class MainWindow : Window
             isNearFollowEdge,
             allContentVisible);
     }
+
+    private static void OnUserInputForCaptureUi(object? sender, RoutedEventArgs e) => CaptureUiGovernor.NoteUserInput();
 
     private void OnSessionsReplacing() => _sessionsResetInFlight = true;
 

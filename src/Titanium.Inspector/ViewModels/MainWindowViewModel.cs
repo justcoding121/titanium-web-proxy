@@ -736,20 +736,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
 
     private void WireSessionPipelineHandlers()
     {
-        _buffer.SessionsBatchAdded += batch => MarshalToUi(() => OnSessionsBatchAdded(batch));
+        // Capture adds/updates reach the grid through a paced, time-budgeted flush (see
+        // MainWindowViewModel.CaptureUiPump.cs) so a heavy capture can never saturate the UI thread.
+        _buffer.SessionsBatchAdded += EnqueueCapturedBatch;
         _store.SessionsRemoved += removed => MarshalToUi(() => OnSessionsRemoved(removed));
         _interception.SessionCaptured += (_, snap) => _buffer.Publish(snap);
-        _interception.SessionUpdated += (_, snap) =>
-            MarshalToUi(() =>
-            {
-                _store.NotifyUpdated(snap);
-                OnSessionUpdatedForFilter(snap);
-                if (ReferenceEquals(SelectedSession, snap))
-                {
-                    UpdateWsFramesVisibility();
-                    RefreshSelectedInspectorsCoalesced(snap);
-                }
-            });
+        _interception.SessionUpdated += (_, snap) => EnqueueCapturedUpdate(snap);
         _interception.DecryptFailureBypassLearned += (_, entry) =>
             MarshalToUi(() =>
             {

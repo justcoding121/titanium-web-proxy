@@ -62,7 +62,7 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         {
             if (!SetField(ref _opaqueReason, value))
                 return;
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(OpaqueReasonDisplay)));
+            RaiseChanged(nameof(OpaqueReasonDisplay));
         }
     }
 
@@ -283,7 +283,7 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     internal long AddSentBytes(long delta)
     {
         var total = Interlocked.Add(ref _sentBytes, delta);
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SentBytes)));
+        RaiseChanged(nameof(SentBytes));
         return total;
     }
 
@@ -293,7 +293,7 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     internal long AddReceivedBytes(long delta)
     {
         var total = Interlocked.Add(ref _receivedBytes, delta);
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ReceivedBytes)));
+        RaiseChanged(nameof(ReceivedBytes));
         return total;
     }
 
@@ -324,6 +324,59 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
+    private readonly object _dirtyGate = new();
+    private HashSet<string?>? _dirtyNames;
+    private int _dirtyQueued;
+
+    /// <summary>
+    /// Raises <see cref="PropertyChanged"/>. Proxy threads mutate snapshots that the grid binds to; each
+    /// raise there would marshal a binding update (and a cell re-layout) to the UI thread per property, per
+    /// row, per update. Off the UI thread the names are collected and raised together on the UI thread by
+    /// <see cref="SessionSnapshotNotifier"/>, at most once per name per flush.
+    /// </summary>
+    private void RaiseChanged(string? name)
+    {
+        if (!SessionSnapshotNotifier.ShouldDefer)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+            return;
+        }
+
+        lock (_dirtyGate)
+        {
+            (_dirtyNames ??= new HashSet<string?>()).Add(name);
+        }
+
+        if (Interlocked.Exchange(ref _dirtyQueued, 1) == 0)
+        {
+            SessionSnapshotNotifier.Enqueue(this);
+        }
+    }
+
+    /// <summary>Raises the deferred notifications; call on the UI thread.</summary>
+    internal void RaiseDeferredChanges()
+    {
+        string?[] names;
+        lock (_dirtyGate)
+        {
+            // Clear the queued flag under the gate so a concurrent setter either lands in this batch
+            // or re-enqueues the snapshot.
+            Volatile.Write(ref _dirtyQueued, 0);
+            if (_dirtyNames is null || _dirtyNames.Count == 0)
+            {
+                return;
+            }
+
+            names = _dirtyNames.ToArray();
+            _dirtyNames.Clear();
+        }
+
+        foreach (var name in names)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        }
+    }
+
     /// <returns>True when the value changed.</returns>
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? name = null)
     {
@@ -333,25 +386,25 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         }
 
         field = value;
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        RaiseChanged(name);
         if (name is nameof(ProcessId) or nameof(ProcessName))
         {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ProcessDisplay)));
+            RaiseChanged(nameof(ProcessDisplay));
         }
 
         if (name is nameof(ContentType))
         {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ContentTypeDisplay)));
+            RaiseChanged(nameof(ContentTypeDisplay));
         }
 
         if (name is nameof(Host))
         {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UrlDisplay)));
+            RaiseChanged(nameof(UrlDisplay));
         }
 
         if (name is nameof(BodySize))
         {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BodySizeDisplay)));
+            RaiseChanged(nameof(BodySizeDisplay));
         }
 
         return true;

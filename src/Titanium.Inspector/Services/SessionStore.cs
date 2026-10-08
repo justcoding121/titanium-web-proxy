@@ -22,6 +22,7 @@ public sealed class SessionStore : IDisposable
     private long _spillEpoch;
     private int _pendingSpills;
     private long _inMemoryBodyBytes;
+    private readonly Dictionary<long, long> _bytesById = new();
     private int _spilledCount;
     private long? _pinnedSessionId;
     private bool _disposed;
@@ -280,6 +281,7 @@ public sealed class SessionStore : IDisposable
         {
             _byId.Clear();
             _inMemoryBodyBytes = 0;
+            _bytesById.Clear();
             _spilledCount = 0;
             Sessions.Clear();
             Interlocked.Increment(ref _spillEpoch);
@@ -678,13 +680,13 @@ public sealed class SessionStore : IDisposable
     {
         if (_disk is null || _spillChannel is null)
         {
-            RecalcInMemoryBodyBytesLocked();
+            UpdateInMemoryBodyBytesLocked(snapshot);
             return;
         }
 
         if (!IsReadyToArchive(snapshot))
         {
-            RecalcInMemoryBodyBytesLocked();
+            UpdateInMemoryBodyBytesLocked(snapshot);
             return;
         }
 
@@ -700,12 +702,12 @@ public sealed class SessionStore : IDisposable
                 ClearBodyFields(snapshot);
             }
 
-            RecalcInMemoryBodyBytesLocked();
+            UpdateInMemoryBodyBytesLocked(snapshot);
             return;
         }
 
         QueueSpillLocked(snapshot);
-        RecalcInMemoryBodyBytesLocked();
+        UpdateInMemoryBodyBytesLocked(snapshot);
     }
 
     private void EnforceLimitsLocked(ref List<SessionSnapshot>? removed)
@@ -979,15 +981,36 @@ public sealed class SessionStore : IDisposable
         }
     }
 
+    /// <summary>Full O(n) rebuild; use only on rare paths (eviction, clear, selection change).</summary>
     private void RecalcInMemoryBodyBytesLocked()
     {
         long n = 0;
+        _bytesById.Clear();
         foreach (var s in _byId.Values)
         {
-            n += EstimateInMemoryBodyBytes(s);
+            var est = EstimateInMemoryBodyBytes(s);
+            _bytesById[s.Id] = est;
+            n += est;
         }
 
         _inMemoryBodyBytes = n;
+    }
+
+    /// <summary>
+    /// O(1) refresh for one session. The per-add/per-update hot path runs on the UI thread, so a
+    /// full recalculation over every retained session there made capture cost quadratic.
+    /// </summary>
+    private void UpdateInMemoryBodyBytesLocked(SessionSnapshot snapshot)
+    {
+        if (!_byId.ContainsKey(snapshot.Id))
+        {
+            return;
+        }
+
+        var est = EstimateInMemoryBodyBytes(snapshot);
+        _bytesById.TryGetValue(snapshot.Id, out var previous);
+        _bytesById[snapshot.Id] = est;
+        _inMemoryBodyBytes += est - previous;
     }
 
     private async Task SpillLoopAsync(CancellationToken ct)
