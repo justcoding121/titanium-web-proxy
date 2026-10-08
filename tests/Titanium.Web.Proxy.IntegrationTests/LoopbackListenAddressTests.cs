@@ -78,6 +78,46 @@ public class LoopbackListenAddressTests
         AssertSamePortLoopbackPair(origin.LocalEndPoints[0], origin.LocalEndPoints[1]);
     }
 
+    [TestMethod]
+    [Timeout(30_000)]
+    public void LoopbackQuic_Ipv4BindFails_ReleasesIpv6Listener()
+    {
+        if (!QuicListener.IsSupported)
+            Assert.Inconclusive("MsQuic / System.Net.Quic is not supported on this platform.");
+        if (!System.Net.Sockets.Socket.OSSupportsIPv6)
+            Assert.Inconclusive("Needs IPv6 loopback.");
+
+        // Hold the IPv4 side of a fixed port so the paired bind fails after ::1 was already bound.
+        using var blocker = new System.Net.Sockets.Socket(
+            System.Net.Sockets.AddressFamily.InterNetwork,
+            System.Net.Sockets.SocketType.Dgram,
+            System.Net.Sockets.ProtocolType.Udp)
+        {
+            ExclusiveAddressUse = true
+        };
+        blocker.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        var port = ((IPEndPoint)blocker.LocalEndPoint!).Port;
+
+        var endPoint = new TransparentQuicProxyEndPoint(IPAddress.Loopback, port);
+        using var proxy = CreateProxy();
+        proxy.AddEndPoint(endPoint);
+        Assert.ThrowsExactly<System.InvalidOperationException>(() => proxy.Start());
+
+        // Checked while the proxy is still alive: the failed Start itself must not leave ::1 bound.
+        var quic = (IQuicInboundEndPoint)endPoint;
+        Assert.IsNull(quic.QuicListener);
+        Assert.IsNull(quic.LoopbackV4QuicListener);
+
+        using var probe = new System.Net.Sockets.Socket(
+            System.Net.Sockets.AddressFamily.InterNetworkV6,
+            System.Net.Sockets.SocketType.Dgram,
+            System.Net.Sockets.ProtocolType.Udp)
+        {
+            ExclusiveAddressUse = true
+        };
+        probe.Bind(new IPEndPoint(IPAddress.IPv6Loopback, port));
+    }
+
     private static void AssertQuicFamilies(ProxyEndPoint endPoint)
     {
         using var proxy = CreateProxy();

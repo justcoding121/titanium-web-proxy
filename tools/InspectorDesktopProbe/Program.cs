@@ -94,6 +94,10 @@ internal static class Program
                 "chrome" => await ChromeScenario.RunAsync(harness, log).ConfigureAwait(true),
                 "proxy" => await ProxyScenario.RunAsync(harness, log, browser, timeout).ConfigureAwait(true),
                 "cert" => await CertScenario.RunAsync(harness, log, browser, timeout).ConfigureAwait(true),
+                "replay" => await ReplayScenario.RunAsync(
+                    harness, log,
+                    int.TryParse(GetOption(_args, "--minutes"), out var replayMinutes) ? replayMinutes : 12,
+                    GetOption(_args, "--log") ?? Path.Combine(Path.GetTempPath(), "twp-replay", "inspector.log")).ConfigureAwait(true),
                 "firefox" => await FirefoxScenario.RunAsync(harness, log, timeout).ConfigureAwait(true),
                 "loopback" => await LoopbackScenario.RunAsync(harness, log).ConfigureAwait(true),
                 "exclusions" => await ExclusionsScenario.RunAsync(harness, log).ConfigureAwait(true),

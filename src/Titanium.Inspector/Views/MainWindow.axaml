@@ -259,6 +259,7 @@
                 ItemsSource="{Binding Sessions}"
                 SelectedItem="{Binding SelectedSession}"
                 SelectionMode="Extended"
+                RowHeight="32"
                 IsReadOnly="True"
                 CanUserResizeColumns="True"
                 CanUserReorderColumns="True"

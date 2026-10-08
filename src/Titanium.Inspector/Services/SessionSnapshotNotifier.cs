@@ -19,7 +19,7 @@ internal static class SessionSnapshotNotifier
     private static int _scheduled;
     private static long _lastFlushTick;
 
-    internal static bool ShouldDefer => Application.Current is not null && !Dispatcher.UIThread.CheckAccess();
+    internal static bool ShouldDefer => CaptureUiGovernor.IsPacingActive && !Dispatcher.UIThread.CheckAccess();
 
     internal static void Enqueue(SessionSnapshot snapshot)
     {

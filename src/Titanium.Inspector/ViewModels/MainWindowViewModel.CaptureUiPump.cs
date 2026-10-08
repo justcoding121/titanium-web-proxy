@@ -40,7 +40,7 @@ public sealed partial class MainWindowViewModel
     /// <summary>Rows dropped because the grid fell more than <see cref="CaptureUiBacklogCap"/> behind.</summary>
     internal long CaptureUiRowsDropped => Interlocked.Read(ref _captureUiRowsDropped);
 
-    private bool CaptureUiIsSynchronous => Application.Current is null || Dispatcher.UIThread.CheckAccess();
+    private bool CaptureUiIsSynchronous => !CaptureUiGovernor.IsPacingActive || Dispatcher.UIThread.CheckAccess();
 
     private void EnqueueCapturedBatch(IReadOnlyList<SessionSnapshot> batch)
     {

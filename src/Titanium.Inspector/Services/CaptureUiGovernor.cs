@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 
 namespace Titanium.Inspector.Services;
@@ -20,6 +22,13 @@ internal static class CaptureUiGovernor
 
     /// <summary>Capture still reaches the grid at least this often while the user keeps interacting.</summary>
     internal const int MaxDeferralMs = 2000;
+
+    /// <summary>
+    /// Pacing needs a live UI dispatch loop, which only the desktop lifetime guarantees. Unit tests, headless
+    /// sessions and library hosts keep the immediate, synchronous behaviour.
+    /// </summary>
+    internal static bool IsPacingActive =>
+        Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime;
 
     private static int _intervalMs = MinIntervalMs;
     private static long _lastInputTick;
