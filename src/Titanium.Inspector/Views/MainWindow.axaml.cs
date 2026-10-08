@@ -37,6 +37,7 @@ public partial class MainWindow : Window
     private MainWindowViewModel? _statusVm;
     private MainWindowViewModel? _toggleSyncVm;
     private MainWindowViewModel? _gridColumnsVm;
+    private MainWindowViewModel? _inspectLayoutVm;
     private readonly Dictionary<string, DataGridLength> _defaultColumnWidths = new(StringComparer.Ordinal);
     private WindowNotificationManager? _notificationManager;
     private CancellationTokenSource? _attentionCts;
@@ -250,6 +251,7 @@ public partial class MainWindow : Window
         HookStatusAttention(DataContext as MainWindowViewModel);
         HookOneWayToggleVisualSync(DataContext as MainWindowViewModel);
         HookGridColumnsChanged(DataContext as MainWindowViewModel);
+        HookInspectHeadersLayout(DataContext as MainWindowViewModel);
         if (_notificationManager is not null && DataContext is MainWindowViewModel vm)
         {
             vm.AttachStatusNotifier(new AvaloniaStatusNotifier(() => _notificationManager));
@@ -258,6 +260,113 @@ public partial class MainWindow : Window
         ApplyColumnVisibility();
         ApplySessionGridLayoutIfNeeded();
         HookThemeVariantChanged();
+    }
+
+    private const int InspectHeadersRowIndex = 2;
+    private const int InspectBodyRowIndex = 4;
+
+    private void HookInspectHeadersLayout(MainWindowViewModel? vm)
+    {
+        if (_inspectLayoutVm is not null)
+        {
+            _inspectLayoutVm.PropertyChanged -= OnInspectHeadersLayoutChanged;
+        }
+
+        _inspectLayoutVm = vm;
+        if (vm is null)
+        {
+            return;
+        }
+
+        vm.PropertyChanged += OnInspectHeadersLayoutChanged;
+        ApplyInspectHeadersLayout();
+    }
+
+    private void OnInspectHeadersLayoutChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(MainWindowViewModel.InspectHeadersCollapsed)
+            or nameof(MainWindowViewModel.InspectHeadersStar)
+            or nameof(MainWindowViewModel.InspectBodyStar))
+        {
+            ApplyInspectHeadersLayout();
+        }
+    }
+
+    private void OnInspectHostSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.ApplyInspectPaneHeight(e.NewSize.Height);
+        }
+    }
+
+    private void OnInspectHeadersSplitterDragCompleted(object? sender, VectorEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm || sender is not GridSplitter splitter)
+        {
+            return;
+        }
+
+        if (splitter.Parent is not Grid grid)
+        {
+            return;
+        }
+
+        var headers = grid.RowDefinitions[InspectHeadersRowIndex];
+        var body = grid.RowDefinitions[InspectBodyRowIndex];
+        vm.CommitInspectHeadersRatio(DefinitionPixels(headers), DefinitionPixels(body));
+        ApplyInspectHeadersLayout();
+    }
+
+    private void OnInspectHeadersSplitterDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        vm.ResetInspectHeadersRatio();
+        e.Handled = true;
+    }
+
+    private void ApplyInspectHeadersLayout()
+    {
+        if (_inspectLayoutVm is null)
+        {
+            return;
+        }
+
+        ApplyInspectSplit(RequestInspectSplit, _inspectLayoutVm);
+        ApplyInspectSplit(ResponseInspectSplit, _inspectLayoutVm);
+    }
+
+    private static void ApplyInspectSplit(Grid grid, MainWindowViewModel vm)
+    {
+        var headers = grid.RowDefinitions[InspectHeadersRowIndex];
+        var body = grid.RowDefinitions[InspectBodyRowIndex];
+        if (vm.InspectHeadersCollapsed)
+        {
+            headers.MinHeight = 0;
+            headers.Height = new GridLength(0);
+            body.MinHeight = 120;
+            body.Height = new GridLength(1, GridUnitType.Star);
+            return;
+        }
+
+        headers.MinHeight = 72;
+        headers.Height = new GridLength(vm.InspectHeadersStar, GridUnitType.Star);
+        body.MinHeight = 120;
+        body.Height = new GridLength(vm.InspectBodyStar, GridUnitType.Star);
+    }
+
+    private static double DefinitionPixels(RowDefinition definition)
+    {
+        if (definition.Height.GridUnitType == GridUnitType.Pixel)
+        {
+            return definition.Height.Value;
+        }
+
+        return definition.ActualHeight;
     }
 
     /// <summary>

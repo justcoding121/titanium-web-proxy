@@ -2537,16 +2537,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         {
             if (SetField(ref _selectedInspectTabIndex, value))
             {
-                if (value is >= (int)InspectTab.RequestHeaders and <= (int)InspectTab.ResponseBody)
+                if (value is (int)InspectTab.Request or (int)InspectTab.Response)
                 {
                     _lastCoreInspectTab = value;
+                    RefreshSelectedInspectors();
                 }
 
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
-                if (value is (int)InspectTab.RequestBody or (int)InspectTab.ResponseBody)
-                {
-                    RefreshSelectedInspectors();
-                }
             }
         }
     }
@@ -2579,23 +2576,24 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     }
 
     /// <summary>
-    /// Compatibility index for tests: 0–7 Inspect, 8–12 Tools (Composer…Map Remote) when on tools.
+    /// Compatibility index for tests: 0–<see cref="InspectTabCount"/>-1 Inspect,
+    /// then Tools (Composer…Map Remote) when on tools.
     /// </summary>
     public int SelectedDetailTabIndex
     {
         get => SelectedPaneNavIndex == 0
             ? SelectedInspectTabIndex
-            : 8 + (SelectedPaneNavIndex - 1);
+            : InspectTabCount + (SelectedPaneNavIndex - 1);
         set
         {
-            if (value < 8)
+            if (value < InspectTabCount)
             {
                 SelectedPaneNavIndex = 0;
                 SelectedInspectTabIndex = Math.Clamp(value, 0, (int)InspectTab.Protobuf);
             }
             else
             {
-                SelectedPaneNavIndex = 1 + Math.Clamp(value - 8, 0, 4);
+                SelectedPaneNavIndex = 1 + Math.Clamp(value - InspectTabCount, 0, ToolsTabCount - 1);
             }
 
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
@@ -2720,6 +2718,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         Breakpoints.Enabled = s.BreakpointEnabled;
         Breakpoints.UrlFilter = string.IsNullOrEmpty(s.BreakpointUrlFilter) ? "*" : s.BreakpointUrlFilter;
         Breakpoints.GraphQlOperationName = s.BreakpointGraphQlOperationName ?? "";
+        ApplyInspectLayoutFromSettings();
     }
 
     private void NotifySettingsUiChanged()
@@ -2953,6 +2952,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         if (_selected is null)
         {
             SelectedRequestHeaders = SelectedResponseHeaders = SelectedRequestBody = SelectedResponseBody = SelectedFrames = "";
+            PublishHeaderCounts(null);
             RequestBodyCaptureHint = "";
             ResponseBodyCaptureHint = "";
             RequestBodyPreviewBitmap = null;
@@ -2966,6 +2966,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
 
         SelectedRequestHeaders = BuildSelectedRequestHeadersText(_selected);
         SelectedResponseHeaders = BuildSelectedResponseHeadersText(_selected);
+        PublishHeaderCounts(_selected);
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedOpaqueHint)));
         RefreshBodyInspector();
         SelectedFrames = InspectorDisplayText.ForTextBox(BuildSelectedFramesText(_selected));

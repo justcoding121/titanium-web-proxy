@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Titanium.Inspector.Services;
+using Titanium.Inspector.ViewModels;
 using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Inspector.DesktopProbe.Scenarios;
@@ -753,18 +754,12 @@ public static class ChromeScenario
             await harness.OnUiAsync(() =>
             {
                 harness.Robot.Click("TabOuterInspect");
-                harness.Robot.Click("TabReqHeaders");
-                if (harness.ViewModel.SelectedInspectTabIndex != 0)
-                    throw new InvalidOperationException("TabReqHeaders failed");
-                harness.Robot.Click("TabReqBody");
-                if (harness.ViewModel.SelectedInspectTabIndex != 1)
-                    throw new InvalidOperationException("TabReqBody failed");
-                harness.Robot.Click("TabRespHeaders");
-                if (harness.ViewModel.SelectedInspectTabIndex != 2)
-                    throw new InvalidOperationException("TabRespHeaders failed");
-                harness.Robot.Click("TabRespBody");
-                if (harness.ViewModel.SelectedInspectTabIndex != 3)
-                    throw new InvalidOperationException("TabRespBody failed");
+                harness.Robot.Click("TabRequest");
+                if (harness.ViewModel.SelectedInspectTabIndex != (int)InspectTab.Request)
+                    throw new InvalidOperationException("TabRequest failed");
+                harness.Robot.Click("TabResponse");
+                if (harness.ViewModel.SelectedInspectTabIndex != (int)InspectTab.Response)
+                    throw new InvalidOperationException("TabResponse failed");
                 harness.Robot.SetCheck("BodyHex", true);
                 if (!harness.ViewModel.BodyHexMode)
                     throw new InvalidOperationException("BodyHex failed");

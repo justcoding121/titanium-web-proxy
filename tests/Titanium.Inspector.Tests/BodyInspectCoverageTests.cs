@@ -156,12 +156,14 @@ public class BodyInspectCoverageTests
             StringAssert.Contains(vm.SelectedRequestHeaders, "=== Query ===");
             Assert.IsFalse(vm.SelectedRequestHeaders.Contains("=== Response ===", StringComparison.Ordinal));
             StringAssert.Contains(vm.SelectedResponseHeaders, "application/json");
+            Assert.AreEqual("Headers (2)", vm.RequestHeadersCaption);
+            Assert.AreEqual("Headers (1)", vm.ResponseHeadersCaption);
 
-            vm.SelectedInspectTabIndex = (int)InspectTab.RequestBody;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Request;
             StringAssert.Contains(vm.SelectedRequestBody, "req");
             Assert.IsFalse(vm.SelectedRequestBody.Contains("resp", StringComparison.Ordinal));
 
-            vm.SelectedInspectTabIndex = (int)InspectTab.ResponseBody;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Response;
             StringAssert.Contains(vm.SelectedResponseBody, "resp");
             Assert.IsFalse(vm.SelectedResponseBody.Contains("\"req\"", StringComparison.Ordinal));
 
@@ -188,10 +190,11 @@ public class BodyInspectCoverageTests
             };
             vm.SeedSession(requestOnly);
             vm.SelectedSession = requestOnly;
-            vm.SelectedInspectTabIndex = (int)InspectTab.RequestBody;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Request;
             StringAssert.Contains(vm.SelectedRequestBody, "ping");
             Assert.AreEqual("Waiting for response…", vm.SelectedResponseHeaders);
-            vm.SelectedInspectTabIndex = (int)InspectTab.ResponseBody;
+            Assert.AreEqual("Headers (0)", vm.ResponseHeadersCaption);
+            vm.SelectedInspectTabIndex = (int)InspectTab.Response;
             Assert.AreEqual("Waiting for response…", vm.SelectedResponseBody);
 
             // Once the session ended with no response, say so (and why) instead of "waiting".
@@ -199,7 +202,7 @@ public class BodyInspectCoverageTests
             requestOnly.FailureReason = "Connection reset by the server.";
             vm.SelectedSession = null;
             vm.SelectedSession = requestOnly;
-            vm.SelectedInspectTabIndex = (int)InspectTab.ResponseBody;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Response;
             Assert.AreEqual("No response received — Connection reset by the server.", vm.SelectedResponseBody);
             Assert.AreEqual(0.65, vm.ResponseBodyOpacity);
             Assert.IsTrue(vm.CanSaveRequestBody);
@@ -217,7 +220,7 @@ public class BodyInspectCoverageTests
             };
             vm.SeedSession(textOnly);
             vm.SelectedSession = textOnly;
-            vm.SelectedInspectTabIndex = (int)InspectTab.ResponseBody;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Response;
             vm.BodyHexMode = true;
             StringAssert.Contains(vm.SelectedResponseBody, "61 62 63");
             vm.BodyHexMode = false;
@@ -229,15 +232,15 @@ public class BodyInspectCoverageTests
             Assert.IsFalse(vm.ShowBodyModeToggles);
             Assert.IsFalse(vm.ShowRequestBodyCaptureHint);
             Assert.IsFalse(vm.ShowResponseBodyCaptureHint);
-            vm.SelectedInspectTabIndex = (int)InspectTab.ResponseBody;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Response;
             StringAssert.Contains(vm.SelectedResponseBody, "CONNECT tunnel");
 
             // A vanished contextual tab returns to the last core tab, not always tab 0.
             vm.SelectedSession = snap;
-            vm.SelectedInspectTabIndex = (int)InspectTab.ResponseHeaders;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Response;
             vm.SelectedInspectTabIndex = (int)InspectTab.Sse;
             vm.SelectedSession = requestOnly;
-            Assert.AreEqual((int)InspectTab.ResponseHeaders, vm.SelectedInspectTabIndex);
+            Assert.AreEqual((int)InspectTab.Response, vm.SelectedInspectTabIndex);
         }
         finally
         {
@@ -398,7 +401,7 @@ public class BodyInspectCoverageTests
             };
             vm.SeedSession(complete);
             vm.SelectedSession = complete;
-            vm.SelectedInspectTabIndex = (int)InspectTab.ResponseBody;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Response;
             vm.BodyPrettyMode = true;
             Assert.IsTrue(vm.CanSaveRequestBody);
             Assert.IsTrue(vm.CanSaveResponseBody);
@@ -638,6 +641,90 @@ public class BodyInspectCoverageTests
             vm.SelectedSession = streaming;
             vm.ApplyEditBodyCommand.Execute(null);
             StringAssert.Contains(vm.StatusText, "streaming");
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(dir))
+                    Directory.Delete(dir, true);
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+    }
+
+    [TestMethod]
+    public void InspectHeadersSplit_AutoCollapsesShortPane_AndRemembersUserChoice()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-inspect-split-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "settings.json");
+        try
+        {
+            var settings = new SettingsService(path);
+            settings.Current.AutoStartCapture = false;
+            settings.Save();
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                new ScriptedInspectorDialogs())
+            {
+                BindPort = 0,
+                BindAddress = "127.0.0.1",
+            };
+
+            Assert.IsFalse(vm.InspectHeadersCollapsed);
+            Assert.AreEqual(MainWindowViewModel.DefaultInspectHeadersRatio, vm.InspectHeadersRatio, 0.001);
+            Assert.IsNull(settings.Current.InspectHeadersCollapsed);
+
+            vm.ApplyInspectPaneHeight(400);
+            Assert.IsTrue(vm.InspectHeadersCollapsed);
+            Assert.IsNull(settings.Current.InspectHeadersCollapsed);
+
+            vm.ApplyInspectPaneHeight(800);
+            Assert.IsFalse(vm.InspectHeadersCollapsed);
+
+            vm.ApplyInspectPaneHeight(0);
+            Assert.IsFalse(vm.InspectHeadersCollapsed);
+
+            vm.ToggleInspectHeadersCollapsed();
+            Assert.IsTrue(vm.InspectHeadersCollapsed);
+            Assert.AreEqual(true, settings.Current.InspectHeadersCollapsed);
+
+            vm.ApplyInspectPaneHeight(900);
+            Assert.IsTrue(vm.InspectHeadersCollapsed);
+
+            vm.ToggleInspectHeadersCollapsed();
+            Assert.IsFalse(vm.InspectHeadersCollapsed);
+            Assert.AreEqual(false, new SettingsService(path).Current.InspectHeadersCollapsed);
+
+            vm.ApplyInspectPaneHeight(300);
+            Assert.IsFalse(vm.InspectHeadersCollapsed);
+
+            vm.CommitInspectHeadersRatio(100, 100);
+            Assert.AreEqual(0.5, vm.InspectHeadersRatio, 0.001);
+            Assert.AreEqual(0.5, new SettingsService(path).Current.InspectHeadersRatio, 0.001);
+
+            vm.ResetInspectHeadersRatio();
+            Assert.AreEqual(MainWindowViewModel.DefaultInspectHeadersRatio, vm.InspectHeadersRatio, 0.001);
+            Assert.AreEqual(
+                MainWindowViewModel.DefaultInspectHeadersRatio,
+                new SettingsService(path).Current.InspectHeadersRatio,
+                0.001);
+
+            vm.CommitInspectHeadersRatio(0, 0);
+            Assert.AreEqual(MainWindowViewModel.DefaultInspectHeadersRatio, vm.InspectHeadersRatio, 0.001);
         }
         finally
         {

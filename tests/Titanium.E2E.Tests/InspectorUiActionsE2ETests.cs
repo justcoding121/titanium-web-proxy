@@ -92,7 +92,7 @@ public class InspectorUiActionsE2ETests
         Assert.IsTrue(_vm.Sessions.Count > 0);
         _vm.SelectedSession = _vm.Sessions[0];
         Assert.IsFalse(string.IsNullOrWhiteSpace(_vm.SelectedRequestHeaders));
-        for (var i = 0; i < 13; i++)
+        for (var i = 0; i < MainWindowViewModel.InspectTabCount + MainWindowViewModel.ToolsTabCount; i++)
         {
             _vm.SelectedDetailTabIndex = i;
             Assert.AreEqual(i, _vm.SelectedDetailTabIndex);

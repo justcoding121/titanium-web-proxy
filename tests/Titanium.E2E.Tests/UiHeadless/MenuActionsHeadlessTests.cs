@@ -239,7 +239,7 @@ public class MenuActionsHeadlessTests
                 fx.ViewModel.SetSelectedSessions([fx.ViewModel.Sessions[0], fx.ViewModel.Sessions[1]]);
                 OpenSessionsContextMenu(fx);
                 fx.Robot.Click("CtxDiffSessions");
-                fx.Robot.Click("TabReqBody");
+                fx.Robot.Click("TabRequest");
                 fx.Robot.SetCheck("BodyPretty", false);
                 fx.Robot.Click("CopyReqHeaders");
             });

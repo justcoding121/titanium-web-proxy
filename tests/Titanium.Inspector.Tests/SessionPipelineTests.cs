@@ -594,14 +594,14 @@ public class SessionPipelineTests
             Assert.IsTrue(vm.ShowSessionDetails);
             Assert.AreEqual(1, vm.SelectedOuterPaneIndex);
             Assert.AreEqual(2, vm.SelectedToolsTabIndex);
-            Assert.AreEqual(10, vm.SelectedDetailTabIndex);
+            Assert.AreEqual(MainWindowViewModel.InspectTabCount + 2, vm.SelectedDetailTabIndex);
 
-            vm.SelectedDetailTabIndex = 9;
+            vm.SelectedDetailTabIndex = MainWindowViewModel.InspectTabCount + 1;
             Assert.AreEqual(1, vm.SelectedOuterPaneIndex);
             Assert.AreEqual(1, vm.SelectedToolsTabIndex);
-            vm.SelectedDetailTabIndex = (int)InspectTab.ResponseHeaders;
+            vm.SelectedDetailTabIndex = (int)InspectTab.Response;
             Assert.AreEqual(0, vm.SelectedOuterPaneIndex);
-            Assert.AreEqual((int)InspectTab.ResponseHeaders, vm.SelectedInspectTabIndex);
+            Assert.AreEqual((int)InspectTab.Response, vm.SelectedInspectTabIndex);
         }
         finally
         {

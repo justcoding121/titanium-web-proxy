@@ -419,6 +419,7 @@
         </DockPanel>
         <Grid ClipToBounds="True" MinWidth="160">
             <Grid IsVisible="{Binding ShowInspectPane}"
+                  SizeChanged="OnInspectHostSizeChanged"
                   AutomationProperties.AutomationId="TabInspectHost">
               <TextBlock Text="Select a session in the grid to inspect request and response headers and bodies."
                          Margin="12" TextWrapping="Wrap" Opacity="0.75"
@@ -428,100 +429,162 @@
                           AutomationProperties.AutomationId="InspectTabs"
                           IsVisible="{Binding HasSelectedSession}"
                           SelectedIndex="{Binding SelectedInspectTabIndex}">
-                <TabItem Header="Request Headers" ToolTip.Tip="Request headers, cookies, and query"
-                         AutomationProperties.AutomationId="TabReqHeaders">
-                  <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="{Binding SelectedOpaqueHint}" Margin="0,0,0,8"
+                <TabItem Header="Request" ToolTip.Tip="Request headers and body"
+                         AutomationProperties.AutomationId="TabRequest">
+                  <Grid x:Name="RequestInspectSplit" ClipToBounds="True">
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto"/>
+                      <RowDefinition Height="Auto"/>
+                      <RowDefinition Height="*" MinHeight="72"/>
+                      <RowDefinition Height="Auto"/>
+                      <RowDefinition Height="2*" MinHeight="120"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="{Binding SelectedOpaqueHint}" Margin="0,0,0,8"
                                TextWrapping="Wrap" Opacity="0.85" FontSize="12"
                                IsVisible="{Binding ShowSelectedOpaqueHint}"
                                AutomationProperties.AutomationId="SelectedOpaqueHint" />
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
-                      <Button Content="Copy headers" Command="{Binding CopyRequestHeadersCommand}"
+                    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,4">
+                      <Button Grid.Column="0" MinWidth="28" MinHeight="28" Padding="4,0"
+                              Content="{Binding InspectHeadersToggleGlyph}"
+                              ToolTip.Tip="{Binding InspectHeadersToggleTip}"
+                              Command="{Binding ToggleInspectHeadersCommand}"
+                              AutomationProperties.AutomationId="ToggleReqHeadersPane" />
+                      <TextBlock Grid.Column="1" Text="{Binding RequestHeadersCaption}"
+                                 VerticalAlignment="Center" Margin="8,0" FontWeight="SemiBold" />
+                      <Button Grid.Column="2" Content="Copy headers" Command="{Binding CopyRequestHeadersCommand}"
                               AutomationProperties.AutomationId="CopyReqHeaders" />
-                    </StackPanel>
-                    <TextBox IsReadOnly="True" Text="{Binding SelectedRequestHeaders}" AcceptsReturn="True" TextWrapping="Wrap"
-                             FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="ReqHeadersText" />
-                  </DockPanel>
-                </TabItem>
-                <TabItem Header="Request Body" ToolTip.Tip="Request body"
-                         AutomationProperties.AutomationId="TabReqBody">
-                  <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="{Binding RequestBodyCaptureHint}" Margin="0,0,0,8"
-                               TextWrapping="Wrap" Opacity="0.85" FontSize="12"
-                               IsVisible="{Binding ShowRequestBodyCaptureHint}"
-                               AutomationProperties.AutomationId="ReqBodyCaptureHint" />
-                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-                      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center"
-                                  IsVisible="{Binding ShowBodyModeToggles}">
-                        <Border Background="Transparent" ToolTip.Tip="{Binding BodyPrettyToolTip}">
-                          <CheckBox Content="Pretty" IsChecked="{Binding BodyPrettyMode}"
-                                    IsEnabled="{Binding BodyPrettyEnabled}"
-                                    AutomationProperties.AutomationId="BodyPretty" />
-                        </Border>
-                        <CheckBox Content="Hex" IsChecked="{Binding BodyHexMode}"
-                                  ToolTip.Tip="Show the body as a hex dump"
-                                  AutomationProperties.AutomationId="BodyHex" />
-                      </StackPanel>
-                      <Button Grid.Column="1" Content="Save request…" Command="{Binding SaveRequestBodyCommand}"
-                              IsEnabled="{Binding CanSaveRequestBody}"
-                              AutomationProperties.AutomationId="SaveRequestBody" />
                     </Grid>
-                    <Image DockPanel.Dock="Top" Source="{Binding RequestBodyPreviewBitmap}"
-                           MaxHeight="280" Stretch="Uniform" Margin="0,0,0,8"
-                           IsVisible="{Binding ShowRequestBodyPreviewImage}"
-                           AutomationProperties.AutomationId="ReqBodyPreviewImage" />
-                    <TextBox IsReadOnly="True" Text="{Binding SelectedRequestBody}" Opacity="{Binding RequestBodyOpacity}"
+                    <TextBox Grid.Row="2" IsReadOnly="True" Text="{Binding SelectedRequestHeaders}"
                              AcceptsReturn="True" TextWrapping="Wrap"
-                             FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="ReqBodyText" />
-                  </DockPanel>
+                             IsVisible="{Binding ShowInspectHeadersPane}"
+                             VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
+                             FontFamily="Consolas,Courier New,monospace"
+                             AutomationProperties.AutomationId="ReqHeadersText" />
+                    <GridSplitter Grid.Row="3" Height="6" HorizontalAlignment="Stretch"
+                                  ResizeDirection="Rows"
+                                  IsVisible="{Binding ShowInspectHeadersPane}"
+                                  DragCompleted="OnInspectHeadersSplitterDragCompleted"
+                                  DoubleTapped="OnInspectHeadersSplitterDoubleTapped"
+                                  ToolTip.Tip="Drag to resize. Double-click to reset."
+                                  AutomationProperties.AutomationId="ReqHeadersSplitter" />
+                    <Grid Grid.Row="4" RowDefinitions="Auto,Auto,*">
+                      <TextBlock Grid.Row="0" Text="{Binding RequestBodyCaptureHint}" Margin="0,0,0,8"
+                                 TextWrapping="Wrap" Opacity="0.85" FontSize="12"
+                                 IsVisible="{Binding ShowRequestBodyCaptureHint}"
+                                 AutomationProperties.AutomationId="ReqBodyCaptureHint" />
+                      <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center"
+                                    IsVisible="{Binding ShowBodyModeToggles}">
+                          <Border Background="Transparent" ToolTip.Tip="{Binding BodyPrettyToolTip}">
+                            <CheckBox Content="Pretty" IsChecked="{Binding BodyPrettyMode}"
+                                      IsEnabled="{Binding BodyPrettyEnabled}"
+                                      AutomationProperties.AutomationId="BodyPretty" />
+                          </Border>
+                          <CheckBox Content="Hex" IsChecked="{Binding BodyHexMode}"
+                                    ToolTip.Tip="Show the body as a hex dump"
+                                    AutomationProperties.AutomationId="BodyHex" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="Save request…" Command="{Binding SaveRequestBodyCommand}"
+                                IsEnabled="{Binding CanSaveRequestBody}"
+                                AutomationProperties.AutomationId="SaveRequestBody" />
+                      </Grid>
+                      <Grid Grid.Row="2">
+                        <Grid.RowDefinitions>
+                          <RowDefinition Height="{Binding RequestBodyImageRowHeight}"/>
+                          <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Image Grid.Row="0" Source="{Binding RequestBodyPreviewBitmap}"
+                               Stretch="Uniform" Margin="0,0,0,8"
+                               IsVisible="{Binding ShowRequestBodyPreviewImage}"
+                               AutomationProperties.AutomationId="ReqBodyPreviewImage" />
+                        <TextBox Grid.Row="1" IsReadOnly="True" Text="{Binding SelectedRequestBody}"
+                                 Opacity="{Binding RequestBodyOpacity}"
+                                 AcceptsReturn="True" TextWrapping="Wrap"
+                                 VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
+                                 FontFamily="Consolas,Courier New,monospace"
+                                 AutomationProperties.AutomationId="ReqBodyText" />
+                      </Grid>
+                    </Grid>
+                  </Grid>
                 </TabItem>
-                <TabItem Header="Response Headers" ToolTip.Tip="Response headers"
-                         AutomationProperties.AutomationId="TabRespHeaders">
-                  <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="{Binding SelectedOpaqueHint}" Margin="0,0,0,8"
+                <TabItem Header="Response" ToolTip.Tip="Response headers and body"
+                         AutomationProperties.AutomationId="TabResponse">
+                  <Grid x:Name="ResponseInspectSplit" ClipToBounds="True">
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto"/>
+                      <RowDefinition Height="Auto"/>
+                      <RowDefinition Height="*" MinHeight="72"/>
+                      <RowDefinition Height="Auto"/>
+                      <RowDefinition Height="2*" MinHeight="120"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="{Binding SelectedOpaqueHint}" Margin="0,0,0,8"
                                TextWrapping="Wrap" Opacity="0.85" FontSize="12"
                                IsVisible="{Binding ShowSelectedOpaqueHint}"
                                AutomationProperties.AutomationId="RespOpaqueHint" />
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
-                      <Button Content="Copy headers" Command="{Binding CopyResponseHeadersCommand}"
+                    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,4">
+                      <Button Grid.Column="0" MinWidth="28" MinHeight="28" Padding="4,0"
+                              Content="{Binding InspectHeadersToggleGlyph}"
+                              ToolTip.Tip="{Binding InspectHeadersToggleTip}"
+                              Command="{Binding ToggleInspectHeadersCommand}"
+                              AutomationProperties.AutomationId="ToggleRespHeadersPane" />
+                      <TextBlock Grid.Column="1" Text="{Binding ResponseHeadersCaption}"
+                                 VerticalAlignment="Center" Margin="8,0" FontWeight="SemiBold" />
+                      <Button Grid.Column="2" Content="Copy headers" Command="{Binding CopyResponseHeadersCommand}"
                               AutomationProperties.AutomationId="CopyRespHeaders" />
-                    </StackPanel>
-                    <TextBox IsReadOnly="True" Text="{Binding SelectedResponseHeaders}" Opacity="{Binding ResponseHeadersOpacity}"
-                             AcceptsReturn="True" TextWrapping="Wrap"
-                             FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="RespHeadersText" />
-                  </DockPanel>
-                </TabItem>
-                <TabItem Header="Response Body" ToolTip.Tip="Response body"
-                         AutomationProperties.AutomationId="TabRespBody">
-                  <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="{Binding ResponseBodyCaptureHint}" Margin="0,0,0,8"
-                               TextWrapping="Wrap" Opacity="0.85" FontSize="12"
-                               IsVisible="{Binding ShowResponseBodyCaptureHint}"
-                               AutomationProperties.AutomationId="RespBodyCaptureHint" />
-                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-                      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center"
-                                  IsVisible="{Binding ShowBodyModeToggles}">
-                        <Border Background="Transparent" ToolTip.Tip="{Binding BodyPrettyToolTip}">
-                          <CheckBox Content="Pretty" IsChecked="{Binding BodyPrettyMode}"
-                                    IsEnabled="{Binding BodyPrettyEnabled}"
-                                    AutomationProperties.AutomationId="RespBodyPretty" />
-                        </Border>
-                        <CheckBox Content="Hex" IsChecked="{Binding BodyHexMode}"
-                                  ToolTip.Tip="Show the body as a hex dump"
-                                  AutomationProperties.AutomationId="RespBodyHex" />
-                      </StackPanel>
-                      <Button Grid.Column="1" Content="Save response…" Command="{Binding SaveResponseBodyCommand}"
-                              IsEnabled="{Binding CanSaveResponseBody}"
-                              AutomationProperties.AutomationId="SaveResponseBody" />
                     </Grid>
-                    <Image DockPanel.Dock="Top" Source="{Binding ResponseBodyPreviewBitmap}"
-                           MaxHeight="280" Stretch="Uniform" Margin="0,0,0,8"
-                           IsVisible="{Binding ShowResponseBodyPreviewImage}"
-                           AutomationProperties.AutomationId="BodyPreviewImage" />
-                    <TextBox IsReadOnly="True" Text="{Binding SelectedResponseBody}" Opacity="{Binding ResponseBodyOpacity}"
+                    <TextBox Grid.Row="2" IsReadOnly="True" Text="{Binding SelectedResponseHeaders}"
+                             Opacity="{Binding ResponseHeadersOpacity}"
                              AcceptsReturn="True" TextWrapping="Wrap"
-                             FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="RespBodyText" />
-                  </DockPanel>
+                             IsVisible="{Binding ShowInspectHeadersPane}"
+                             VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
+                             FontFamily="Consolas,Courier New,monospace"
+                             AutomationProperties.AutomationId="RespHeadersText" />
+                    <GridSplitter Grid.Row="3" Height="6" HorizontalAlignment="Stretch"
+                                  ResizeDirection="Rows"
+                                  IsVisible="{Binding ShowInspectHeadersPane}"
+                                  DragCompleted="OnInspectHeadersSplitterDragCompleted"
+                                  DoubleTapped="OnInspectHeadersSplitterDoubleTapped"
+                                  ToolTip.Tip="Drag to resize. Double-click to reset."
+                                  AutomationProperties.AutomationId="RespHeadersSplitter" />
+                    <Grid Grid.Row="4" RowDefinitions="Auto,Auto,*">
+                      <TextBlock Grid.Row="0" Text="{Binding ResponseBodyCaptureHint}" Margin="0,0,0,8"
+                                 TextWrapping="Wrap" Opacity="0.85" FontSize="12"
+                                 IsVisible="{Binding ShowResponseBodyCaptureHint}"
+                                 AutomationProperties.AutomationId="RespBodyCaptureHint" />
+                      <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center"
+                                    IsVisible="{Binding ShowBodyModeToggles}">
+                          <Border Background="Transparent" ToolTip.Tip="{Binding BodyPrettyToolTip}">
+                            <CheckBox Content="Pretty" IsChecked="{Binding BodyPrettyMode}"
+                                      IsEnabled="{Binding BodyPrettyEnabled}"
+                                      AutomationProperties.AutomationId="RespBodyPretty" />
+                          </Border>
+                          <CheckBox Content="Hex" IsChecked="{Binding BodyHexMode}"
+                                    ToolTip.Tip="Show the body as a hex dump"
+                                    AutomationProperties.AutomationId="RespBodyHex" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="Save response…" Command="{Binding SaveResponseBodyCommand}"
+                                IsEnabled="{Binding CanSaveResponseBody}"
+                                AutomationProperties.AutomationId="SaveResponseBody" />
+                      </Grid>
+                      <Grid Grid.Row="2">
+                        <Grid.RowDefinitions>
+                          <RowDefinition Height="{Binding ResponseBodyImageRowHeight}"/>
+                          <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Image Grid.Row="0" Source="{Binding ResponseBodyPreviewBitmap}"
+                               Stretch="Uniform" Margin="0,0,0,8"
+                               IsVisible="{Binding ShowResponseBodyPreviewImage}"
+                               AutomationProperties.AutomationId="BodyPreviewImage" />
+                        <TextBox Grid.Row="1" IsReadOnly="True" Text="{Binding SelectedResponseBody}"
+                                 Opacity="{Binding ResponseBodyOpacity}"
+                                 AcceptsReturn="True" TextWrapping="Wrap"
+                                 VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
+                                 FontFamily="Consolas,Courier New,monospace"
+                                 AutomationProperties.AutomationId="RespBodyText" />
+                      </Grid>
+                    </Grid>
+                  </Grid>
                 </TabItem>
                 <TabItem Header="Diff" AutomationProperties.AutomationId="TabDiff"
                          IsVisible="{Binding CanShowSessionDiffTab}">

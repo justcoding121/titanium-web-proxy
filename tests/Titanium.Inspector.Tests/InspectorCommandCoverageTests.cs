@@ -273,9 +273,9 @@ public class InspectorCommandCoverageTests
             vm.SelectedInspectTabIndex = (int)InspectTab.Protobuf;
 
             vm.ShowSessionDetails = true;
-            vm.SelectedInspectTabIndex = (int)InspectTab.RequestBody;
-            vm.SelectedInspectTabIndex = (int)InspectTab.ResponseHeaders;
-            vm.SelectedInspectTabIndex = (int)InspectTab.ResponseBody;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Request;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Response;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Request;
 
             await ExecuteAsync(vm.ExportSelectedHarCommand);
             await ExecuteAsync(vm.ExportSelectedArchiveCommand);

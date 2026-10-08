@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text;
 using System.Windows.Input;
+using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Titanium.Inspector.Services;
 
@@ -36,6 +37,7 @@ public sealed partial class MainWindowViewModel
 
     public ICommand CopyRequestHeadersCommand { get; private set; } = null!;
     public ICommand CopyResponseHeadersCommand { get; private set; } = null!;
+    public ICommand ToggleInspectHeadersCommand { get; private set; } = null!;
     public ICommand SaveRequestBodyCommand { get; private set; } = null!;
     public ICommand SaveResponseBodyCommand { get; private set; } = null!;
     public ICommand LoadComposerBodyFileCommand { get; private set; } = null!;
@@ -122,7 +124,15 @@ public sealed partial class MainWindowViewModel
 
     public bool ShowRequestBodyPreviewImage => _requestBodyPreviewBitmap is not null;
 
+    /// <summary>About 40% of the body pane when a preview is showing; nothing otherwise.</summary>
+    public GridLength RequestBodyImageRowHeight =>
+        ShowRequestBodyPreviewImage ? new GridLength(2, GridUnitType.Star) : new GridLength(0);
+
     public bool ShowResponseBodyPreviewImage => _responseBodyPreviewBitmap is not null;
+
+    /// <summary>About 40% of the body pane when a preview is showing; nothing otherwise.</summary>
+    public GridLength ResponseBodyImageRowHeight =>
+        ShowResponseBodyPreviewImage ? new GridLength(2, GridUnitType.Star) : new GridLength(0);
 
     public bool CanSaveRequestBody =>
         _selected is not null
@@ -170,6 +180,11 @@ public sealed partial class MainWindowViewModel
             CopyInspectTextAsync(SelectedRequestHeaders, "Headers copied", "No headers to copy"));
         CopyResponseHeadersCommand = Cmd(() =>
             CopyInspectTextAsync(SelectedResponseHeaders, "Headers copied", "No headers to copy"));
+        ToggleInspectHeadersCommand = Cmd(() =>
+        {
+            ToggleInspectHeadersCollapsed();
+            return Task.CompletedTask;
+        });
         SaveRequestBodyCommand = Cmd(() => SaveBodyAsync(isRequest: true));
         SaveResponseBodyCommand = Cmd(() => SaveBodyAsync(isRequest: false));
         LoadComposerBodyFileCommand = Cmd(LoadComposerBodyFileAsync);
@@ -334,11 +349,11 @@ public sealed partial class MainWindowViewModel
         UpdateBodyPreviewImages(_selected);
         NotifySaveBodyCanExecute();
 
-        if (_selectedInspectTabIndex == (int)InspectTab.RequestBody)
+        if (_selectedInspectTabIndex == (int)InspectTab.Request)
         {
             SelectedRequestBody = InspectorDisplayText.ForTextBox(BuildSelectedBodyText(_selected, isRequest: true));
         }
-        else if (_selectedInspectTabIndex == (int)InspectTab.ResponseBody)
+        else if (_selectedInspectTabIndex == (int)InspectTab.Response)
         {
             SelectedResponseBody = InspectorDisplayText.ForTextBox(BuildSelectedBodyText(_selected, isRequest: false));
         }
@@ -658,6 +673,7 @@ public sealed partial class MainWindowViewModel
 
             previous?.Dispose();
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowRequestBodyPreviewImage)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RequestBodyImageRowHeight)));
             return;
         }
 
@@ -669,6 +685,7 @@ public sealed partial class MainWindowViewModel
 
         previousResponse?.Dispose();
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowResponseBodyPreviewImage)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ResponseBodyImageRowHeight)));
     }
 
     private string CaptureHint(bool isRequest) =>
@@ -695,7 +712,7 @@ public sealed partial class MainWindowViewModel
     }
 
     private bool IsSelectedBodyTab(bool isRequest) =>
-        _selectedInspectTabIndex == (isRequest ? (int)InspectTab.RequestBody : (int)InspectTab.ResponseBody);
+        _selectedInspectTabIndex == (isRequest ? (int)InspectTab.Request : (int)InspectTab.Response);
 
     private static bool BodiesMissing(SessionSnapshot selected) =>
         selected.BodiesMissingFromDisk

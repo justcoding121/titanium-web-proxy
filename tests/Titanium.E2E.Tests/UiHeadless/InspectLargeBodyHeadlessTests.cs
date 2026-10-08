@@ -48,7 +48,7 @@ public class InspectLargeBodyHeadlessTests
             fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
 
             var sw = Stopwatch.StartNew();
-            fx.Robot.Click("TabRespBody");
+            fx.Robot.Click("TabResponse");
             fx.Window.UpdateLayout();
             bodyMs = sw.ElapsedMilliseconds;
 

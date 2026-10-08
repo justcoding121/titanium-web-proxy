@@ -31,7 +31,7 @@ public class InspectorShellVisualTests
         await fx.DispatchAsync(() =>
         {
             SeedSession(fx, body: "hello-visual");
-            fx.Robot.Click("TabRespBody");
+            fx.Robot.Click("TabResponse");
             InspectorVisualAssert.AssertFramePainted(fx.Window.CaptureRenderedFrame());
         });
     }
@@ -45,7 +45,7 @@ public class InspectorShellVisualTests
         await fx.DispatchAsync(() =>
         {
             SeedSession(fx, headers: "Host: visual.test\nAccept: */*");
-            fx.Robot.Click("TabReqHeaders");
+            fx.Robot.Click("TabRequest");
             InspectorVisualAssert.AssertFramePainted(fx.Window.CaptureRenderedFrame());
         });
     }
@@ -59,7 +59,7 @@ public class InspectorShellVisualTests
         await fx.DispatchAsync(() =>
         {
             SeedSession(fx, body: "hex-bytes");
-            fx.Robot.Click("TabRespBody");
+            fx.Robot.Click("TabResponse");
             fx.Robot.SetCheck("BodyHex", true);
             InspectorVisualAssert.AssertFramePainted(fx.Window.CaptureRenderedFrame());
         });
