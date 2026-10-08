@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Quic;
 using System.Net.Security;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -47,7 +48,8 @@ public partial class ProxyServer
 
         try
         {
-            if (IsExactLoopback(endPoint.IpAddress))
+            // A host without IPv6 has no ::1 to bind, so keep the configured address alone.
+            if (IsExactLoopback(endPoint.IpAddress) && Socket.OSSupportsIPv6)
                 ListenLoopbackQuic(endPoint, cts);
             else
                 ListenSingleQuic(endPoint, cts);
