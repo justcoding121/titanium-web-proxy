@@ -42,7 +42,7 @@ public class InspectorAvaloniaHeadlessE2ETests
             Assert.IsFalse(vm.ShowWsFramesTab);
             Assert.AreEqual(0, vm.SelectedOuterPaneIndex);
 
-            for (var i = 0; i < 8; i++)
+            for (var i = 0; i < 13; i++)
             {
                 vm.SelectedDetailTabIndex = i;
                 Assert.AreEqual(i, vm.SelectedDetailTabIndex);
@@ -52,7 +52,7 @@ public class InspectorAvaloniaHeadlessE2ETests
             Assert.IsTrue(vm.ShowSessionDetails);
             Assert.AreEqual(1, vm.SelectedOuterPaneIndex);
             Assert.AreEqual(3, vm.SelectedToolsTabIndex);
-            Assert.AreEqual(7, vm.SelectedDetailTabIndex);
+            Assert.AreEqual(11, vm.SelectedDetailTabIndex);
 
             vm.SelectedSession = new SessionSnapshot
             {

@@ -251,7 +251,7 @@ public sealed partial class MainWindowViewModel
         await CopyTextToClipboardAsync(diff.Text).ConfigureAwait(false);
         ShowSessionDetails = true;
         SelectedOuterPaneIndex = 0;
-        SelectedInspectTabIndex = 3; // Diff tab
+        SelectedInspectTabIndex = (int)InspectTab.Diff;
         StatusText = diff.HasDifferences ? "Session Diff: differences found (copied)" : "Session Diff: identical (copied)";
     }
     /// <summary>Compares exactly two selected sessions (E2E / probe).</summary>

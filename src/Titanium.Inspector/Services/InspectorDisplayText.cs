@@ -67,7 +67,7 @@ public static class InspectorDisplayText
                 sb.Append(" (binary content, non-printable bytes shown as '.')");
             }
 
-            sb.Append(" — use Save body or the Hex tab for the full content");
+            sb.Append(" — use Save body or the Hex view for the full content");
         }
 
         return sb.ToString();

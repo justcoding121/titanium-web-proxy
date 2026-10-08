@@ -268,14 +268,14 @@ public class InspectorCommandCoverageTests
             };
             vm.SeedSession(proto);
             vm.SelectedSession = proto;
-            vm.SelectedInspectTabIndex = 4;
-            vm.SelectedInspectTabIndex = 5;
-            vm.SelectedInspectTabIndex = 6;
+            vm.SelectedInspectTabIndex = (int)InspectTab.WsFrames;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Sse;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Protobuf;
 
             vm.ShowSessionDetails = true;
-            vm.SelectedInspectTabIndex = 1;
-            vm.SelectedInspectTabIndex = 2;
-            vm.SelectedInspectTabIndex = 4;
+            vm.SelectedInspectTabIndex = (int)InspectTab.RequestBody;
+            vm.SelectedInspectTabIndex = (int)InspectTab.ResponseHeaders;
+            vm.SelectedInspectTabIndex = (int)InspectTab.ResponseBody;
 
             await ExecuteAsync(vm.ExportSelectedHarCommand);
             await ExecuteAsync(vm.ExportSelectedArchiveCommand);
@@ -417,30 +417,38 @@ public class InspectorCommandCoverageTests
         var flags = BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
         var vmType = typeof(MainWindowViewModel);
 
-        var headers = (string)vmType.GetMethod("BuildSelectedHeadersText", flags)!
-            .Invoke(null, [new SessionSnapshot
-            {
-                IsTunnel = true,
-                OpaqueReason = OpaqueTunnelReason.DecryptOff,
-                IsTranscoded = true,
-                Method = "POST",
-                Url = "https://api.test/v1?q=1",
-                ClientMethod = "POST",
-                ClientPathAndQuery = "/v1?q=1",
-                ClientContentType = "application/json",
-                UpstreamMethod = "POST",
-                UpstreamPath = "/pkg.Svc/Method",
-                UpstreamContentType = "application/grpc",
-                RequestHeadersText = "Cookie: a=1\r\nHost: api.test\r\n",
-                ResponseHeadersText = "Content-Type: application/json\r\n",
-            }])!;
-        StringAssert.Contains(headers, "=== Request ===");
-        StringAssert.Contains(headers, "=== Response ===");
-        StringAssert.Contains(headers, "gRPC-JSON");
-        StringAssert.Contains(headers, "=== Cookies ===");
-        StringAssert.Contains(headers, "=== Query ===");
+        var headerSnap = new SessionSnapshot
+        {
+            IsTunnel = true,
+            OpaqueReason = OpaqueTunnelReason.DecryptOff,
+            IsTranscoded = true,
+            Method = "POST",
+            Url = "https://api.test/v1?q=1",
+            ClientMethod = "POST",
+            ClientPathAndQuery = "/v1?q=1",
+            ClientContentType = "application/json",
+            UpstreamMethod = "POST",
+            UpstreamPath = "/pkg.Svc/Method",
+            UpstreamContentType = "application/grpc",
+            RequestHeadersText = "Cookie: a=1\r\nHost: api.test\r\n",
+            ResponseHeadersText = "Content-Type: application/json\r\n",
+            StatusCode = 200,
+        };
+        var requestHeaders = (string)vmType.GetMethod("BuildSelectedRequestHeadersText", flags)!
+            .Invoke(null, [headerSnap])!;
+        StringAssert.Contains(requestHeaders, "gRPC-JSON");
+        StringAssert.Contains(requestHeaders, "=== Cookies ===");
+        StringAssert.Contains(requestHeaders, "=== Query ===");
+        Assert.IsFalse(requestHeaders.Contains("=== Response ===", StringComparison.Ordinal));
 
-        var plainHeaders = (string)vmType.GetMethod("BuildSelectedHeadersText", flags)!
+        var responseHeaders = (string)vmType.GetMethod("BuildSelectedResponseHeadersText", flags)!
+            .Invoke(null, [headerSnap])!;
+        StringAssert.Contains(responseHeaders, "Content-Type");
+        Assert.AreEqual("No response yet",
+            (string)vmType.GetMethod("BuildSelectedResponseHeadersText", flags)!
+                .Invoke(null, [new SessionSnapshot()])!);
+
+        var plainHeaders = (string)vmType.GetMethod("BuildSelectedRequestHeadersText", flags)!
             .Invoke(null, [new SessionSnapshot
             {
                 RequestHeadersText = "Accept: */*\r\n",
@@ -537,7 +545,7 @@ public class InspectorCommandCoverageTests
                     ResponseBodyText = "{\"ok\":true}",
                     UpstreamRequestBodyBytes = [1, 2],
                     GrpcFrames = [new GrpcFrameSnapshot { Compressed = false, Length = 2, HexPreview = "0102" }],
-                }])!;
+                }, true])!;
             StringAssert.Contains(body, "Client (JSON/REST)");
             StringAssert.Contains(body, "Upstream gRPC frames");
         }

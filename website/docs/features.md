@@ -15,7 +15,7 @@ Desktop HTTP(S) debugger on Windows, macOS, and Linux. [Inspector guide](/docs/i
 | Trust that works | Firefox / NSS, Linux Chromium Snap/Flatpak, Windows Store apps; export CA for phones |
 | Automatic tunnel | When a server blocks the proxy (TLS fingerprinting or other reasons), we detect it and automatically tunnel that traffic |
 | Session grid | Method, status, host, URL, protocol, duration, TTFB, size, process; show or hide columns (plus Started, Scheme, Content-Type) from the header menu |
-| Inspect panes | Headers, Pretty/Raw body, Hex, WebSocket frames, SSE, Protobuf wire dump |
+| Inspect panes | Request and response headers and bodies (Pretty and Hex options), WebSocket frames, SSE, Protobuf wire dump |
 | Rewrite toolkit | AutoResponder, Map Local, Map Remote, breakpoints, Composer |
 | GraphQL rules | Match AutoResponder / Map Remote / Breakpoints by `operationName` |
 | HAR and share | Import/export HAR; copy as curl or fetch; Diff two sessions |

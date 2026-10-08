@@ -383,7 +383,7 @@ public class InspectorServiceE2ETests
             StringAssert.Contains(vm.SessionDiffText, "- one");
             StringAssert.Contains(vm.StatusText, "Session Diff");
             Assert.IsTrue(vm.CanShowSessionDiffTab);
-            Assert.AreEqual(3, vm.SelectedInspectTabIndex);
+            Assert.AreEqual((int)InspectTab.Diff, vm.SelectedInspectTabIndex);
         }
         finally
         {

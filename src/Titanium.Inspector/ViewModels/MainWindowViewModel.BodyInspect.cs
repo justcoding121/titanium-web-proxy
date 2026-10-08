@@ -10,19 +10,26 @@ public sealed partial class MainWindowViewModel
 {
     private const string ContentTypeHeaderName = "Content-Type";
     private const string EmptyBodyPlaceholder = "(empty)";
+    private const string NoRequestBodyPlaceholder = "No request body";
+    private const string NoResponseYetPlaceholder = "No response yet";
+    private const string PrettyPrintFailureHint = "Cannot pretty-print (body truncated or invalid)";
+    private const string ImageTooLargeHint = "Image too large to preview in Inspect";
 
     private bool _bodyPrettyMode = true;
-    private string _bodyCaptureHint = "";
-    private string _hexCaptureHint = "";
-    private Bitmap? _bodyPreviewBitmap;
+    private bool _bodyHexMode;
+    private string _requestBodyCaptureHint = "";
+    private string _responseBodyCaptureHint = "";
+    private Bitmap? _requestBodyPreviewBitmap;
+    private Bitmap? _responseBodyPreviewBitmap;
     private string? _composerBodyFilePath;
     private string _composerBodyFromFileHint = "";
-    private string? _cachedPrettyBody;
-    private long? _cachedPrettySessionId;
+    private string? _cachedBodyText;
+    private long? _cachedBodySessionId;
+    private int _cachedBodyKey = -1;
+    private int _cachedBodyStamp = -1;
 
-    public ICommand CopyHeadersCommand { get; private set; } = null!;
-    public ICommand SetBodyPrettyCommand { get; private set; } = null!;
-    public ICommand SetBodyRawCommand { get; private set; } = null!;
+    public ICommand CopyRequestHeadersCommand { get; private set; } = null!;
+    public ICommand CopyResponseHeadersCommand { get; private set; } = null!;
     public ICommand SaveRequestBodyCommand { get; private set; } = null!;
     public ICommand SaveResponseBodyCommand { get; private set; } = null!;
     public ICommand LoadComposerBodyFileCommand { get; private set; } = null!;
@@ -39,51 +46,74 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-    public string BodyCaptureHint
+    /// <summary>Byte view of the body tabs. Pretty stays as set and is restored when this is cleared.</summary>
+    public bool BodyHexMode
     {
-        get => _bodyCaptureHint;
-        private set
+        get => _bodyHexMode;
+        set
         {
-            if (SetField(ref _bodyCaptureHint, value))
-            {
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowBodyCaptureHint)));
-            }
-        }
-    }
-
-    public bool ShowBodyCaptureHint => !string.IsNullOrEmpty(_bodyCaptureHint);
-
-    public string HexCaptureHint
-    {
-        get => _hexCaptureHint;
-        private set
-        {
-            if (SetField(ref _hexCaptureHint, value))
-            {
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowHexCaptureHint)));
-            }
-        }
-    }
-
-    public bool ShowHexCaptureHint => !string.IsNullOrEmpty(_hexCaptureHint);
-
-    public Bitmap? BodyPreviewBitmap
-    {
-        get => _bodyPreviewBitmap;
-        private set
-        {
-            var previous = _bodyPreviewBitmap;
-            if (!SetField(ref _bodyPreviewBitmap, value))
+            if (!SetField(ref _bodyHexMode, value))
             {
                 return;
             }
 
-            previous?.Dispose();
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowBodyPreviewImage)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BodyPrettyEnabled)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BodyPrettyToolTip)));
+            if (_selected is not null)
+            {
+                RefreshBodyInspector();
+            }
         }
     }
 
-    public bool ShowBodyPreviewImage => _bodyPreviewBitmap is not null;
+    public bool BodyPrettyEnabled => !_bodyHexMode;
+
+    public string BodyPrettyToolTip =>
+        _bodyHexMode ? "Not applicable in hex view" : "Indent JSON, XML, and HTML";
+
+    public string RequestBodyCaptureHint
+    {
+        get => _requestBodyCaptureHint;
+        private set
+        {
+            if (SetField(ref _requestBodyCaptureHint, value))
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowRequestBodyCaptureHint)));
+            }
+        }
+    }
+
+    public bool ShowRequestBodyCaptureHint => !string.IsNullOrEmpty(_requestBodyCaptureHint);
+
+    public string ResponseBodyCaptureHint
+    {
+        get => _responseBodyCaptureHint;
+        private set
+        {
+            if (SetField(ref _responseBodyCaptureHint, value))
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowResponseBodyCaptureHint)));
+            }
+        }
+    }
+
+    public bool ShowResponseBodyCaptureHint => !string.IsNullOrEmpty(_responseBodyCaptureHint);
+
+    public Bitmap? RequestBodyPreviewBitmap
+    {
+        get => _requestBodyPreviewBitmap;
+        private set => SetPreviewBitmap(isRequest: true, value);
+    }
+
+    public Bitmap? ResponseBodyPreviewBitmap
+    {
+        get => _responseBodyPreviewBitmap;
+        private set => SetPreviewBitmap(isRequest: false, value);
+    }
+
+    public bool ShowRequestBodyPreviewImage => _requestBodyPreviewBitmap is not null;
+
+    public bool ShowResponseBodyPreviewImage => _responseBodyPreviewBitmap is not null;
 
     public bool CanSaveRequestBody =>
         _selected is not null
@@ -127,37 +157,30 @@ public sealed partial class MainWindowViewModel
 
     private void WireBodyInspectCommands()
     {
-        CopyHeadersCommand = Cmd(CopyHeadersAsync);
-        SetBodyPrettyCommand = Cmd(() =>
-        {
-            BodyPrettyMode = true;
-            return Task.CompletedTask;
-        });
-        SetBodyRawCommand = Cmd(() =>
-        {
-            BodyPrettyMode = false;
-            return Task.CompletedTask;
-        });
+        CopyRequestHeadersCommand = Cmd(() =>
+            CopyInspectTextAsync(SelectedRequestHeaders, "Headers copied", "No headers to copy"));
+        CopyResponseHeadersCommand = Cmd(() =>
+            CopyInspectTextAsync(SelectedResponseHeaders, "Headers copied", "No headers to copy"));
         SaveRequestBodyCommand = Cmd(() => SaveBodyAsync(isRequest: true));
         SaveResponseBodyCommand = Cmd(() => SaveBodyAsync(isRequest: false));
         LoadComposerBodyFileCommand = Cmd(LoadComposerBodyFileAsync);
     }
 
-    private Task CopyHeadersAsync()
+    private Task CopyInspectTextAsync(string text, string success, string empty)
     {
-        if (string.IsNullOrEmpty(SelectedHeaders))
+        if (string.IsNullOrEmpty(text))
         {
-            SetGuardStatus("No headers to copy");
+            SetGuardStatus(empty);
             return Task.CompletedTask;
         }
 
-        return CopyHeadersToClipboardAsync();
+        return CopyInspectTextToClipboardAsync(text, success);
     }
 
-    private async Task CopyHeadersToClipboardAsync()
+    private async Task CopyInspectTextToClipboardAsync(string text, string success)
     {
-        await CopyTextToClipboardAsync(SelectedHeaders).ConfigureAwait(false);
-        await MarshalToUiAsync(() => SetOutcomeStatus("Headers copied", StatusSeverity.Success), StatusCancelToken)
+        await CopyTextToClipboardAsync(text).ConfigureAwait(false);
+        await MarshalToUiAsync(() => SetOutcomeStatus(success, StatusSeverity.Success), StatusCancelToken)
             .ConfigureAwait(false);
     }
 
@@ -286,19 +309,29 @@ public sealed partial class MainWindowViewModel
     {
         if (_selected is null)
         {
-            SelectedBody = "";
-            BodyCaptureHint = "";
-            HexCaptureHint = "";
-            BodyPreviewBitmap = null;
+            SelectedRequestBody = "";
+            SelectedResponseBody = "";
+            RequestBodyCaptureHint = "";
+            ResponseBodyCaptureHint = "";
+            RequestBodyPreviewBitmap = null;
+            ResponseBodyPreviewBitmap = null;
             NotifySaveBodyCanExecute();
             return;
         }
 
-        BodyCaptureHint = BuildBodyCaptureHint(_selected);
-        HexCaptureHint = BuildHexCaptureHint(_selected);
-        SelectedBody = InspectorDisplayText.ForTextBox(BuildSelectedBodyText(_selected));
-        UpdateBodyPreviewImage(_selected);
+        RequestBodyCaptureHint = BuildSideCaptureHint(_selected, isRequest: true, _bodyHexMode);
+        ResponseBodyCaptureHint = BuildSideCaptureHint(_selected, isRequest: false, _bodyHexMode);
+        UpdateBodyPreviewImages(_selected);
         NotifySaveBodyCanExecute();
+
+        if (_selectedInspectTabIndex == (int)InspectTab.RequestBody)
+        {
+            SelectedRequestBody = InspectorDisplayText.ForTextBox(BuildSelectedBodyText(_selected, isRequest: true));
+        }
+        else if (_selectedInspectTabIndex == (int)InspectTab.ResponseBody)
+        {
+            SelectedResponseBody = InspectorDisplayText.ForTextBox(BuildSelectedBodyText(_selected, isRequest: false));
+        }
     }
 
     private void NotifySaveBodyCanExecute()
@@ -315,13 +348,9 @@ public sealed partial class MainWindowViewModel
     public const string TunnelWireSizeHint =
         "CONNECT tunnel — Size is encrypted traffic on the wire, not an HTTP message body";
 
-    private static string BuildBodyCaptureHint(SessionSnapshot selected)
+    private static string BuildSideCaptureHint(SessionSnapshot selected, bool isRequest, bool hex)
     {
-        if (selected.BodiesMissingFromDisk &&
-            selected.RequestBodyBytes is null &&
-            selected.ResponseBodyBytes is null &&
-            selected.RequestBodyText is null &&
-            selected.ResponseBodyText is null)
+        if (BodiesMissing(selected))
         {
             return BodiesMissingFromDiskHint;
         }
@@ -331,64 +360,29 @@ public sealed partial class MainWindowViewModel
             return TunnelWireSizeHint;
         }
 
-        var req = InspectorBodyLimits.FormatCaptureBanner(
-            selected.RequestBodyCapture,
-            selected.RequestBodyOriginalSize,
-            selected.RequestBodyBytes?.Length ?? selected.RequestBodyText?.Length ?? 0,
-            streamOpen: false,
-            forHex: false);
-        var resp = InspectorBodyLimits.FormatCaptureBanner(
-            selected.ResponseBodyCapture,
-            selected.ResponseBodyOriginalSize ?? selected.BodySize,
-            selected.ResponseBodyBytes?.Length ?? selected.ResponseBodyText?.Length ?? 0,
-            selected.ResponseBodyStreamOpen,
-            forHex: false);
-
-        if (string.IsNullOrEmpty(req) && string.IsNullOrEmpty(resp))
-        {
-            return "";
-        }
-
-        if (string.IsNullOrEmpty(req))
-        {
-            return "Response: " + resp;
-        }
-
-        if (string.IsNullOrEmpty(resp))
-        {
-            return "Request: " + req;
-        }
-
-        return "Request: " + req + " · Response: " + resp;
+        var capture = isRequest ? selected.RequestBodyCapture : selected.ResponseBodyCapture;
+        var original = isRequest
+            ? selected.RequestBodyOriginalSize
+            : selected.ResponseBodyOriginalSize ?? selected.BodySize;
+        var captured = isRequest
+            ? selected.RequestBodyBytes?.Length ?? selected.RequestBodyText?.Length ?? 0
+            : selected.ResponseBodyBytes?.Length ?? selected.ResponseBodyText?.Length ?? 0;
+        var streamOpen = !isRequest && selected.ResponseBodyStreamOpen;
+        return InspectorBodyLimits.FormatCaptureBanner(capture, original, captured, streamOpen, forHex: hex);
     }
 
-    private static string BuildHexCaptureHint(SessionSnapshot selected)
+    private void UpdateBodyPreviewImages(SessionSnapshot selected)
     {
-        var respBytes = selected.ResponseBodyBytes?.Length ?? 0;
-        var reqBytes = selected.RequestBodyBytes?.Length ?? 0;
-        var captured = Math.Max(respBytes, reqBytes);
-        if (captured <= 0)
-        {
-            return "";
-        }
-
-        return InspectorBodyLimits.FormatCaptureBanner(
-            selected.ResponseBodyCapture != BodyCaptureState.None
-                ? selected.ResponseBodyCapture
-                : selected.RequestBodyCapture,
-            selected.ResponseBodyOriginalSize ?? selected.RequestBodyOriginalSize ?? selected.BodySize,
-            captured,
-            selected.ResponseBodyStreamOpen,
-            forHex: true);
+        RequestBodyPreviewBitmap = TryCreatePreviewBitmap(selected, isRequest: true);
+        ResponseBodyPreviewBitmap = TryCreatePreviewBitmap(selected, isRequest: false);
     }
 
-    private void UpdateBodyPreviewImage(SessionSnapshot selected)
+    private Bitmap? TryCreatePreviewBitmap(SessionSnapshot selected, bool isRequest)
     {
-        if (!TryResolvePreviewImage(selected, out var bytes, out var contentType)
+        if (!TryResolveSidePreview(selected, isRequest, out var bytes, out var contentType)
             || !InspectorBodyLimits.IsImageContentType(contentType))
         {
-            BodyPreviewBitmap = null;
-            return;
+            return null;
         }
 
         try
@@ -400,51 +394,46 @@ public sealed partial class MainWindowViewModel
                 || (long)bitmap.PixelSize.Width * bitmap.PixelSize.Height > InspectorBodyLimits.MaxDecodedImagePixels)
             {
                 bitmap.Dispose();
-                BodyPreviewBitmap = null;
-                if (string.IsNullOrEmpty(BodyCaptureHint))
+                if (string.IsNullOrEmpty(CaptureHint(isRequest)))
                 {
-                    BodyCaptureHint = "Image too large to preview in Inspect";
+                    SetCaptureHint(isRequest, ImageTooLargeHint);
                 }
 
-                return;
+                return null;
             }
 
-            BodyPreviewBitmap = bitmap;
+            return bitmap;
         }
         catch
         {
-            BodyPreviewBitmap = null;
+            return null;
         }
     }
 
-    private static bool TryResolvePreviewImage(
-        SessionSnapshot selected, out byte[] bytes, out string? contentType)
+    private static bool TryResolveSidePreview(
+        SessionSnapshot selected, bool isRequest, out byte[] bytes, out string? contentType)
     {
         bytes = [];
         contentType = null;
+        if (isRequest)
+        {
+            if (LooksLikeImageHeaders(selected.RequestHeadersText)
+                && selected.RequestBodyBytes is { Length: > 0 } requestBytes)
+            {
+                bytes = requestBytes;
+                contentType = HeaderContentType(selected.RequestHeadersText);
+                return true;
+            }
+
+            return false;
+        }
+
         if ((InspectorBodyLimits.IsImageContentType(selected.ContentType)
                 || LooksLikeImageHeaders(selected.ResponseHeadersText))
             && selected.ResponseBodyBytes is { Length: > 0 } responseBytes)
         {
             bytes = responseBytes;
-            contentType = selected.ContentType;
-            if (SessionInspectors.ParseHeaderBlock(selected.ResponseHeadersText)
-                .TryGetValue(ContentTypeHeaderName, out var responseType))
-            {
-                contentType = responseType;
-            }
-
-            return true;
-        }
-
-        if (LooksLikeImageHeaders(selected.RequestHeadersText)
-            && selected.RequestBodyBytes is { Length: > 0 } requestBytes)
-        {
-            bytes = requestBytes;
-            contentType = SessionInspectors.ParseHeaderBlock(selected.RequestHeadersText)
-                .TryGetValue(ContentTypeHeaderName, out var requestType)
-                ? requestType
-                : contentType;
+            contentType = HeaderContentType(selected.ResponseHeadersText) ?? selected.ContentType;
             return true;
         }
 
@@ -458,13 +447,42 @@ public sealed partial class MainWindowViewModel
                && InspectorBodyLimits.IsImageContentType(ct);
     }
 
-    private static string BuildSelectedBodyTextCore(SessionSnapshot selected, bool pretty)
+    private string BuildSelectedBodyText(SessionSnapshot selected, bool isRequest)
     {
-        if (selected.BodiesMissingFromDisk &&
-            selected.RequestBodyBytes is null &&
-            selected.ResponseBodyBytes is null &&
-            selected.RequestBodyText is null &&
-            selected.ResponseBodyText is null)
+        var onTab = IsSelectedBodyTab(isRequest);
+        var pretty = _bodyPrettyMode && !_bodyHexMode && onTab;
+        var stamp = BodyStamp(selected, isRequest);
+        var key = BodyCacheKey(isRequest, pretty, _bodyHexMode);
+        if (_cachedBodySessionId == selected.Id
+            && _cachedBodyKey == key
+            && _cachedBodyStamp == stamp
+            && _cachedBodyText is not null)
+        {
+            if (pretty)
+            {
+                MaybeSetPrettyPrintFailureHint(selected, isRequest);
+            }
+
+            return _cachedBodyText;
+        }
+
+        var body = BuildSelectedBodyTextCore(selected, isRequest, pretty, _bodyHexMode);
+        if (pretty)
+        {
+            MaybeSetPrettyPrintFailureHint(selected, isRequest);
+        }
+
+        body = AppendTranscodePrefix(selected, body, isRequest, _bodyHexMode);
+        _cachedBodySessionId = selected.Id;
+        _cachedBodyKey = key;
+        _cachedBodyStamp = stamp;
+        _cachedBodyText = body;
+        return body;
+    }
+
+    private static string BuildSelectedBodyTextCore(SessionSnapshot selected, bool isRequest, bool pretty, bool hex)
+    {
+        if (BodiesMissing(selected))
         {
             return "(session data removed — disk cache limit reached)";
         }
@@ -474,27 +492,41 @@ public sealed partial class MainWindowViewModel
             return FormatTunnelBodyInspectText(selected);
         }
 
-        if (InspectorBodyLimits.IsImageContentType(selected.ContentType)
-            || LooksLikeImageHeaders(selected.ResponseHeadersText)
-            || LooksLikeImageHeaders(selected.RequestHeadersText))
+        var headers = isRequest ? selected.RequestHeadersText : selected.ResponseHeadersText;
+        var text = isRequest ? selected.RequestBodyText : selected.ResponseBodyText;
+        var bytes = isRequest ? selected.RequestBodyBytes : selected.ResponseBodyBytes;
+        if (hex && bytes is { Length: > 0 })
         {
-            return FormatImageBodyInspectText(selected);
+            return SessionInspectors.FormatHex(headers, bytes);
         }
 
-        var raw = SessionInspectors.FormatLabeledBody(
-            selected.RequestHeadersText,
-            selected.ResponseHeadersText,
-            selected.RequestBodyText,
-            selected.ResponseBodyText,
-            selected.RequestBodyBytes,
-            selected.ResponseBodyBytes);
+        if (SideIsImage(selected, isRequest))
+        {
+            return FormatImageBodyInspectText(selected, isRequest);
+        }
 
+        if (isRequest && RequestBodyAbsent(selected))
+        {
+            return NoRequestBodyPlaceholder;
+        }
+
+        if (!isRequest && ResponseNotStarted(selected))
+        {
+            return NoResponseYetPlaceholder;
+        }
+
+        if (hex)
+        {
+            return SessionInspectors.FormatHex(headers, bytes);
+        }
+
+        var raw = SessionInspectors.FormatBody(headers, text, bytes);
         if (!pretty)
         {
             return raw;
         }
 
-        return TryFormatPrettyBodyText(selected, raw);
+        return InspectorBodyLimits.TryPrettyPrint(text, ContentTypeFor(selected, isRequest)) ?? raw;
     }
 
     private static string FormatTunnelBodyInspectText(SessionSnapshot selected)
@@ -512,50 +544,175 @@ public sealed partial class MainWindowViewModel
         return sb.ToString();
     }
 
-    private static string FormatImageBodyInspectText(SessionSnapshot selected)
+    private static string FormatImageBodyInspectText(SessionSnapshot selected, bool isRequest)
     {
+        var bytes = isRequest ? selected.RequestBodyBytes : selected.ResponseBodyBytes;
+        if (bytes is not { Length: > 0 })
+        {
+            return isRequest
+                ? NoRequestBodyPlaceholder
+                : ResponseNotStarted(selected) ? NoResponseYetPlaceholder : EmptyBodyPlaceholder;
+        }
+
+        var size = SessionDisplayFormat.FormatByteSize(bytes.Length);
+        return isRequest
+            ? $"(image · {size})"
+            : $"(image · {size} — see preview above)";
+    }
+
+    private void MaybeSetPrettyPrintFailureHint(SessionSnapshot selected, bool isRequest)
+    {
+        var text = isRequest ? selected.RequestBodyText : selected.ResponseBodyText;
+        var capture = isRequest ? selected.RequestBodyCapture : selected.ResponseBodyCapture;
+        var ct = ContentTypeFor(selected, isRequest);
+        if (!InspectorBodyLimits.IsPrettyPrintableContentType(ct)
+            || InspectorBodyLimits.TryPrettyPrint(text, ct) is not null
+            || !(capture is BodyCaptureState.Truncated || !string.IsNullOrWhiteSpace(text)))
+        {
+            return;
+        }
+
+        var hint = CaptureHint(isRequest);
+        if (string.IsNullOrEmpty(hint))
+        {
+            SetCaptureHint(isRequest, PrettyPrintFailureHint);
+        }
+        else if (!hint.Contains("pretty-print", StringComparison.OrdinalIgnoreCase))
+        {
+            SetCaptureHint(isRequest, hint + " · " + PrettyPrintFailureHint);
+        }
+    }
+
+    private static string AppendTranscodePrefix(SessionSnapshot selected, string body, bool isRequest, bool hex)
+    {
+        if (!selected.IsTranscoded || hex)
+        {
+            return body;
+        }
+
         var sb = new StringBuilder();
-        sb.AppendLine("=== Request ===");
-        sb.AppendLine(selected.RequestBodyBytes is { Length: > 0 }
-            ? $"(image · {SessionDisplayFormat.FormatByteSize(selected.RequestBodyBytes.Length)})"
-            : EmptyBodyPlaceholder);
-        sb.AppendLine();
-        sb.AppendLine("=== Response ===");
-        sb.Append(selected.ResponseBodyBytes is { Length: > 0 }
-            ? $"(image · {SessionDisplayFormat.FormatByteSize(selected.ResponseBodyBytes.Length)} — see preview above)"
-            : EmptyBodyPlaceholder);
-        return sb.ToString();
+        sb.AppendLine(isRequest ? "=== Client (JSON/REST) ===" : "=== Client response (JSON) ===");
+        sb.AppendLine(string.IsNullOrEmpty(body) ? EmptyBodyPlaceholder : body);
+        var upstream = isRequest ? selected.UpstreamRequestBodyBytes : selected.UpstreamResponseBodyBytes;
+        if (upstream is { Length: > 0 })
+        {
+            sb.AppendLine();
+            sb.AppendLine("=== Upstream gRPC frames (see Hex view) ===");
+            if (selected.GrpcFrames is { Count: > 0 } frames)
+            {
+                foreach (var frame in frames)
+                {
+                    sb.Append("frame compressed=").Append(frame.Compressed)
+                        .Append(" len=").Append(frame.Length)
+                        .Append(" preview=").AppendLine(frame.HexPreview);
+                }
+            }
+        }
+
+        return sb.ToString().TrimEnd();
     }
 
-    private static string TryFormatPrettyBodyText(SessionSnapshot selected, string raw)
+    private void SetPreviewBitmap(bool isRequest, Bitmap? value)
     {
-        var reqCt = selected.ContentType;
-        if (SessionInspectors.ParseHeaderBlock(selected.RequestHeadersText)
-            .TryGetValue(ContentTypeHeaderName, out var requestCt))
+        if (isRequest)
         {
-            reqCt = requestCt;
+            var previous = _requestBodyPreviewBitmap;
+            if (!SetField(ref _requestBodyPreviewBitmap, value, nameof(RequestBodyPreviewBitmap)))
+            {
+                return;
+            }
+
+            previous?.Dispose();
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowRequestBodyPreviewImage)));
+            return;
         }
 
-        string? respCt = selected.ContentType;
-        if (SessionInspectors.ParseHeaderBlock(selected.ResponseHeadersText)
-            .TryGetValue(ContentTypeHeaderName, out var responseCt))
+        var previousResponse = _responseBodyPreviewBitmap;
+        if (!SetField(ref _responseBodyPreviewBitmap, value, nameof(ResponseBodyPreviewBitmap)))
         {
-            respCt = responseCt;
+            return;
         }
 
-        var reqPretty = InspectorBodyLimits.TryPrettyPrint(selected.RequestBodyText, reqCt);
-        var respPretty = InspectorBodyLimits.TryPrettyPrint(selected.ResponseBodyText, respCt);
-        if (reqPretty is null && respPretty is null)
-        {
-            return raw;
-        }
-
-        var prettySb = new StringBuilder();
-        prettySb.AppendLine("=== Request ===");
-        prettySb.AppendLine(reqPretty ?? selected.RequestBodyText ?? EmptyBodyPlaceholder);
-        prettySb.AppendLine();
-        prettySb.AppendLine("=== Response ===");
-        prettySb.Append(respPretty ?? selected.ResponseBodyText ?? EmptyBodyPlaceholder);
-        return prettySb.ToString();
+        previousResponse?.Dispose();
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowResponseBodyPreviewImage)));
     }
+
+    private string CaptureHint(bool isRequest) =>
+        isRequest ? _requestBodyCaptureHint : _responseBodyCaptureHint;
+
+    private void SetCaptureHint(bool isRequest, string value)
+    {
+        if (isRequest)
+        {
+            RequestBodyCaptureHint = value;
+        }
+        else
+        {
+            ResponseBodyCaptureHint = value;
+        }
+    }
+
+    private void ClearBodyInspectCache()
+    {
+        _cachedBodyText = null;
+        _cachedBodySessionId = null;
+        _cachedBodyKey = -1;
+        _cachedBodyStamp = -1;
+    }
+
+    private bool IsSelectedBodyTab(bool isRequest) =>
+        _selectedInspectTabIndex == (isRequest ? (int)InspectTab.RequestBody : (int)InspectTab.ResponseBody);
+
+    private static bool BodiesMissing(SessionSnapshot selected) =>
+        selected.BodiesMissingFromDisk
+        && selected.RequestBodyBytes is null
+        && selected.ResponseBodyBytes is null
+        && selected.RequestBodyText is null
+        && selected.ResponseBodyText is null;
+
+    private static bool RequestBodyAbsent(SessionSnapshot selected) =>
+        string.IsNullOrEmpty(selected.RequestBodyText)
+        && selected.RequestBodyBytes is null or { Length: 0 };
+
+    private static bool ResponseNotStarted(SessionSnapshot selected) =>
+        selected.StatusCode is null or 0
+        && string.IsNullOrEmpty(selected.ResponseHeadersText)
+        && string.IsNullOrEmpty(selected.ResponseBodyText)
+        && selected.ResponseBodyBytes is null or { Length: 0 }
+        && selected.ResponseBodyCapture == BodyCaptureState.None
+        && !selected.ResponseBodyStreamOpen;
+
+    private static bool SideIsImage(SessionSnapshot selected, bool isRequest) =>
+        isRequest
+            ? LooksLikeImageHeaders(selected.RequestHeadersText)
+            : InspectorBodyLimits.IsImageContentType(selected.ContentType)
+              || LooksLikeImageHeaders(selected.ResponseHeadersText);
+
+    private static string? ContentTypeFor(SessionSnapshot selected, bool isRequest)
+    {
+        var fromHeaders = HeaderContentType(isRequest ? selected.RequestHeadersText : selected.ResponseHeadersText);
+        if (!string.IsNullOrEmpty(fromHeaders))
+        {
+            return fromHeaders;
+        }
+
+        return isRequest ? null : selected.ContentType;
+    }
+
+    private static string? HeaderContentType(string? headersText)
+    {
+        var headers = SessionInspectors.ParseHeaderBlock(headersText);
+        return headers.TryGetValue(ContentTypeHeaderName, out var ct) ? ct : null;
+    }
+
+    private static int BodyStamp(SessionSnapshot selected, bool isRequest)
+    {
+        var text = isRequest ? selected.RequestBodyText : selected.ResponseBodyText;
+        var bytes = isRequest ? selected.RequestBodyBytes : selected.ResponseBodyBytes;
+        var capture = isRequest ? selected.RequestBodyCapture : selected.ResponseBodyCapture;
+        return HashCode.Combine(text?.Length ?? -1, bytes?.Length ?? -1, (int)capture, selected.BodiesMissingFromDisk);
+    }
+
+    private static int BodyCacheKey(bool isRequest, bool pretty, bool hex) =>
+        (isRequest ? 1 : 0) | (pretty ? 2 : 0) | (hex ? 4 : 0);
 }

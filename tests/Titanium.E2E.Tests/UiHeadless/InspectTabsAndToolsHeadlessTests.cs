@@ -1,6 +1,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.E2E.Tests.Harness;
 using Titanium.Inspector.Services;
+using Titanium.Inspector.ViewModels;
 
 namespace Titanium.E2E.Tests.UiHeadless;
 
@@ -9,7 +10,7 @@ public class InspectTabsAndToolsHeadlessTests
 {
     [TestMethod]
     [TestCategory("E2E-UI-Headless")]
-    public async Task InspectTabs_CycleHeadersBodyHex()
+    public async Task InspectTabs_CycleRequestAndResponseHeadersAndBodies()
     {
         await using var fx = new InspectorHeadlessFixture();
         await fx.StartAsync();
@@ -29,14 +30,20 @@ public class InspectTabsAndToolsHeadlessTests
             fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
             Assert.IsTrue(fx.ViewModel.ShowSessionDetails);
 
-            fx.Robot.Click("TabHeaders");
-            Assert.AreEqual(0, fx.ViewModel.SelectedInspectTabIndex);
+            fx.Robot.Click("TabReqHeaders");
+            Assert.AreEqual((int)InspectTab.RequestHeaders, fx.ViewModel.SelectedInspectTabIndex);
 
-            fx.Robot.Click("TabBody");
-            Assert.AreEqual(1, fx.ViewModel.SelectedInspectTabIndex);
+            fx.Robot.Click("TabReqBody");
+            Assert.AreEqual((int)InspectTab.RequestBody, fx.ViewModel.SelectedInspectTabIndex);
 
-            fx.Robot.Click("TabHex");
-            Assert.AreEqual(2, fx.ViewModel.SelectedInspectTabIndex);
+            fx.Robot.Click("TabRespHeaders");
+            Assert.AreEqual((int)InspectTab.ResponseHeaders, fx.ViewModel.SelectedInspectTabIndex);
+
+            fx.Robot.Click("TabRespBody");
+            Assert.AreEqual((int)InspectTab.ResponseBody, fx.ViewModel.SelectedInspectTabIndex);
+            fx.Robot.SetCheck("BodyHex", true);
+            Assert.IsTrue(fx.ViewModel.BodyHexMode);
+            Assert.IsFalse(fx.ViewModel.BodyPrettyEnabled);
         });
     }
 

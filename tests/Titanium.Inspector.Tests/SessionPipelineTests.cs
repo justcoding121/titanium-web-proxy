@@ -568,8 +568,7 @@ public class SessionPipelineTests
             Assert.IsTrue(vm.HasSelectedSession);
             Assert.IsFalse(vm.ShowInspectEmpty);
 
-            // Inspect tabs: 0 Headers, 1 Body, 2 Hex, 3 Diff, 4 WS, 5 SSE, 6 Protobuf
-            vm.SelectedInspectTabIndex = 4;
+            vm.SelectedInspectTabIndex = (int)InspectTab.WsFrames;
             vm.SelectedSession = new SessionSnapshot
             {
                 Id = 2,
@@ -595,14 +594,14 @@ public class SessionPipelineTests
             Assert.IsTrue(vm.ShowSessionDetails);
             Assert.AreEqual(1, vm.SelectedOuterPaneIndex);
             Assert.AreEqual(2, vm.SelectedToolsTabIndex);
-            Assert.AreEqual(6, vm.SelectedDetailTabIndex);
+            Assert.AreEqual(10, vm.SelectedDetailTabIndex);
 
-            vm.SelectedDetailTabIndex = 5;
+            vm.SelectedDetailTabIndex = 9;
             Assert.AreEqual(1, vm.SelectedOuterPaneIndex);
             Assert.AreEqual(1, vm.SelectedToolsTabIndex);
-            vm.SelectedDetailTabIndex = 2;
+            vm.SelectedDetailTabIndex = (int)InspectTab.ResponseHeaders;
             Assert.AreEqual(0, vm.SelectedOuterPaneIndex);
-            Assert.AreEqual(2, vm.SelectedInspectTabIndex);
+            Assert.AreEqual((int)InspectTab.ResponseHeaders, vm.SelectedInspectTabIndex);
         }
         finally
         {

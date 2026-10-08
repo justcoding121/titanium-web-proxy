@@ -753,15 +753,21 @@ public static class ChromeScenario
             await harness.OnUiAsync(() =>
             {
                 harness.Robot.Click("TabOuterInspect");
-                harness.Robot.Click("TabHeaders");
+                harness.Robot.Click("TabReqHeaders");
                 if (harness.ViewModel.SelectedInspectTabIndex != 0)
-                    throw new InvalidOperationException("TabHeaders failed");
-                harness.Robot.Click("TabBody");
+                    throw new InvalidOperationException("TabReqHeaders failed");
+                harness.Robot.Click("TabReqBody");
                 if (harness.ViewModel.SelectedInspectTabIndex != 1)
-                    throw new InvalidOperationException("TabBody failed");
-                harness.Robot.Click("TabHex");
+                    throw new InvalidOperationException("TabReqBody failed");
+                harness.Robot.Click("TabRespHeaders");
                 if (harness.ViewModel.SelectedInspectTabIndex != 2)
-                    throw new InvalidOperationException("TabHex failed");
+                    throw new InvalidOperationException("TabRespHeaders failed");
+                harness.Robot.Click("TabRespBody");
+                if (harness.ViewModel.SelectedInspectTabIndex != 3)
+                    throw new InvalidOperationException("TabRespBody failed");
+                harness.Robot.SetCheck("BodyHex", true);
+                if (!harness.ViewModel.BodyHexMode)
+                    throw new InvalidOperationException("BodyHex failed");
                 if (harness.ViewModel.ShowWsFramesTab)
                     harness.Robot.Click("TabFrames");
                 else

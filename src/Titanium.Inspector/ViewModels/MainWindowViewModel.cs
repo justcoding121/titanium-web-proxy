@@ -69,9 +69,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     /// <summary>When &gt; 0, <see cref="OnSessionsRemoved"/> skips retention accounting/status.</summary>
     private int _userRemovalDepth;
     private SessionSnapshot? _selected;
-    private string _selectedHeaders = "";
-    private string _selectedBody = "";
-    private string _selectedHex = "";
+    private string _selectedRequestHeaders = "";
+    private string _selectedResponseHeaders = "";
+    private string _selectedRequestBody = "";
+    private string _selectedResponseBody = "";
     private string _selectedFrames = "";
     private bool _capturing = true;
     private bool _systemProxy;
@@ -2370,14 +2371,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             }
             else
             {
-                SelectedBody = "";
-                SelectedHex = "";
+                SelectedRequestHeaders = "";
+                SelectedResponseHeaders = "";
+                SelectedRequestBody = "";
+                SelectedResponseBody = "";
                 SelectedFrames = "";
                 SelectedSseEvents = "";
                 SelectedProtobufDecoded = "";
-                BodyPreviewBitmap = null;
-                _cachedPrettyBody = null;
-                _cachedPrettySessionId = null;
+                RequestBodyPreviewBitmap = null;
+                ResponseBodyPreviewBitmap = null;
+                ClearBodyInspectCache();
             }
 
             if (value is not null && !_suppressOpenSessionDetails)
@@ -2404,9 +2407,48 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         }
     }
 
-    public string SelectedHeaders { get => _selectedHeaders; set => SetField(ref _selectedHeaders, value); }
-    public string SelectedBody { get => _selectedBody; set => SetField(ref _selectedBody, value); }
-    public string SelectedHex { get => _selectedHex; set => SetField(ref _selectedHex, value); }
+    public string SelectedRequestHeaders { get => _selectedRequestHeaders; set => SetField(ref _selectedRequestHeaders, value); }
+
+    public string SelectedResponseHeaders
+    {
+        get => _selectedResponseHeaders;
+        set
+        {
+            if (SetField(ref _selectedResponseHeaders, value))
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ResponseHeadersOpacity)));
+            }
+        }
+    }
+
+    public string SelectedRequestBody
+    {
+        get => _selectedRequestBody;
+        set
+        {
+            if (SetField(ref _selectedRequestBody, value))
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RequestBodyOpacity)));
+            }
+        }
+    }
+
+    public string SelectedResponseBody
+    {
+        get => _selectedResponseBody;
+        set
+        {
+            if (SetField(ref _selectedResponseBody, value))
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ResponseBodyOpacity)));
+            }
+        }
+    }
+
+    public double ResponseHeadersOpacity => _selectedResponseHeaders == NoResponseYetPlaceholder ? 0.65 : 1;
+    public double RequestBodyOpacity => _selectedRequestBody == NoRequestBodyPlaceholder ? 0.65 : 1;
+    public double ResponseBodyOpacity =>
+        _selectedResponseBody is NoRequestBodyPlaceholder or NoResponseYetPlaceholder ? 0.65 : 1;
     public string SelectedFrames { get => _selectedFrames; set => SetField(ref _selectedFrames, value); }
 
     /// <summary>Vertical pane nav: 0 Inspect, 1 Composer, 2 Breakpoints, 3 AutoResponder, 4 Scripts, 5 Map Remote.</summary>
@@ -2486,7 +2528,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         }
     }
 
-    /// <summary>Inspect tabs: 0 Headers, 1 Body, 2 Hex, 3 Diff, 4 WS Frames.</summary>
+    /// <summary>Inspect tabs. See <see cref="InspectTab"/>.</summary>
     public int SelectedInspectTabIndex
     {
         get => _selectedInspectTabIndex;
@@ -2495,7 +2537,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             if (SetField(ref _selectedInspectTabIndex, value))
             {
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
-                if (value == 1)
+                if (value is (int)InspectTab.RequestBody or (int)InspectTab.ResponseBody)
                 {
                     RefreshSelectedInspectors();
                 }
@@ -2531,23 +2573,23 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     }
 
     /// <summary>
-    /// Compatibility index for tests: 0–6 Inspect, 4–8 Tools (Composer…Map Remote) when on tools.
+    /// Compatibility index for tests: 0–7 Inspect, 8–12 Tools (Composer…Map Remote) when on tools.
     /// </summary>
     public int SelectedDetailTabIndex
     {
         get => SelectedPaneNavIndex == 0
             ? SelectedInspectTabIndex
-            : 4 + (SelectedPaneNavIndex - 1);
+            : 8 + (SelectedPaneNavIndex - 1);
         set
         {
-            if (value < 4)
+            if (value < 8)
             {
                 SelectedPaneNavIndex = 0;
-                SelectedInspectTabIndex = Math.Clamp(value, 0, 6);
+                SelectedInspectTabIndex = Math.Clamp(value, 0, (int)InspectTab.Protobuf);
             }
             else
             {
-                SelectedPaneNavIndex = 1 + Math.Clamp(value - 4, 0, 4);
+                SelectedPaneNavIndex = 1 + Math.Clamp(value - 8, 0, 4);
             }
 
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
@@ -2849,10 +2891,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         ShowProtobufTab = _selected?.IsGrpc == true ||
                           _selected?.IsTranscoded == true ||
                           !string.IsNullOrEmpty(_selected?.ProtobufDecodedText);
-        // Inspect tabs: 0 Headers, 1 Body, 2 Hex, 3 Diff, 4 WS, 5 SSE, 6 Protobuf
-        if ((!ShowWsFramesTab && SelectedInspectTabIndex == 4) ||
-            (!ShowSseTab && SelectedInspectTabIndex == 5) ||
-            (!ShowProtobufTab && SelectedInspectTabIndex == 6))
+        if ((!ShowWsFramesTab && SelectedInspectTabIndex == (int)InspectTab.WsFrames) ||
+            (!ShowSseTab && SelectedInspectTabIndex == (int)InspectTab.Sse) ||
+            (!ShowProtobufTab && SelectedInspectTabIndex == (int)InspectTab.Protobuf))
         {
             SelectedInspectTabIndex = 0;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
@@ -2904,26 +2945,22 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     {
         if (_selected is null)
         {
-            SelectedHeaders = SelectedBody = SelectedHex = SelectedFrames = "";
-            BodyCaptureHint = "";
-            HexCaptureHint = "";
-            BodyPreviewBitmap = null;
-            _cachedPrettyBody = null;
-            _cachedPrettySessionId = null;
+            SelectedRequestHeaders = SelectedResponseHeaders = SelectedRequestBody = SelectedResponseBody = SelectedFrames = "";
+            RequestBodyCaptureHint = "";
+            ResponseBodyCaptureHint = "";
+            RequestBodyPreviewBitmap = null;
+            ResponseBodyPreviewBitmap = null;
+            ClearBodyInspectCache();
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedOpaqueHint)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowSelectedOpaqueHint)));
             NotifySaveBodyCanExecute();
             return;
         }
 
-        SelectedHeaders = BuildSelectedHeadersText(_selected);
+        SelectedRequestHeaders = BuildSelectedRequestHeadersText(_selected);
+        SelectedResponseHeaders = BuildSelectedResponseHeadersText(_selected);
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedOpaqueHint)));
         RefreshBodyInspector();
-        SelectedHex = SessionInspectors.FormatLabeledHex(
-            _selected.RequestHeadersText,
-            _selected.ResponseHeadersText,
-            _selected.RequestBodyBytes,
-            _selected.ResponseBodyBytes);
         SelectedFrames = InspectorDisplayText.ForTextBox(BuildSelectedFramesText(_selected));
         SelectedSseEvents = InspectorDisplayText.ForTextBox(BuildSelectedSseText(_selected));
         SelectedProtobufDecoded = InspectorDisplayText.ForTextBox(BuildSelectedProtobufText(_selected));
@@ -2975,15 +3012,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             remaining > TimeSpan.Zero ? remaining : TimeSpan.FromMilliseconds(1));
     }
 
-    private static string BuildSelectedHeadersText(SessionSnapshot selected)
+    private static string BuildSelectedRequestHeadersText(SessionSnapshot selected)
     {
         var sb = new StringBuilder();
-        if (selected.IsTunnel && selected.OpaqueReason != OpaqueTunnelReason.None)
-        {
-            sb.AppendLine(selected.OpaqueReasonDisplay);
-            sb.AppendLine();
-        }
-
         if (selected.IsTranscoded)
         {
             sb.AppendLine("=== gRPC-JSON transcoded ===");
@@ -2998,18 +3029,25 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             sb.AppendLine();
         }
 
-        sb.AppendLine("=== Request ===");
-        sb.AppendLine(selected.RequestHeadersText);
-        if (!string.IsNullOrEmpty(selected.ResponseHeadersText))
-        {
-            sb.AppendLine("=== Response ===");
-            sb.AppendLine(selected.ResponseHeadersText);
-        }
-
+        sb.AppendLine(string.IsNullOrEmpty(selected.RequestHeadersText)
+            ? "(empty)"
+            : selected.RequestHeadersText);
         AppendNameValues(sb, "=== Cookies ===",
             SessionInspectors.ParseCookies(SessionInspectors.ParseHeaderBlock(selected.RequestHeadersText)));
         AppendNameValues(sb, "=== Query ===", SessionInspectors.ParseQuery(selected.Url));
         return sb.ToString();
+    }
+
+    private static string BuildSelectedResponseHeadersText(SessionSnapshot selected)
+    {
+        if (ResponseNotStarted(selected))
+        {
+            return "No response yet";
+        }
+
+        return string.IsNullOrEmpty(selected.ResponseHeadersText)
+            ? "(empty)"
+            : selected.ResponseHeadersText;
     }
 
     private static void AppendNameValues(
@@ -3020,87 +3058,6 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         sb.AppendLine(heading);
         foreach (var pair in values)
             sb.Append(pair.Key).Append('=').AppendLine(pair.Value);
-    }
-
-    private string BuildSelectedBodyText(SessionSnapshot selected)
-    {
-        if (_bodyPrettyMode
-            && _cachedPrettySessionId == selected.Id
-            && _cachedPrettyBody is not null
-            && SelectedInspectTabIndex == 1)
-        {
-            return AppendTranscodePrefix(selected, _cachedPrettyBody);
-        }
-
-        var prettyInspect = _bodyPrettyMode && SelectedInspectTabIndex == 1;
-        var body = BuildSelectedBodyTextCore(selected, prettyInspect);
-        if (prettyInspect)
-        {
-            MaybeSetPrettyPrintFailureHint(selected);
-            _cachedPrettySessionId = selected.Id;
-            _cachedPrettyBody = body;
-        }
-
-        return AppendTranscodePrefix(selected, body);
-    }
-
-    private void MaybeSetPrettyPrintFailureHint(SessionSnapshot selected)
-    {
-        var reqCt = SessionInspectors.ParseHeaderBlock(selected.RequestHeadersText)
-            .TryGetValue("Content-Type", out var rct) ? rct : null;
-        var respCt = selected.ContentType
-                     ?? (SessionInspectors.ParseHeaderBlock(selected.ResponseHeadersText)
-                         .TryGetValue("Content-Type", out var sct) ? sct : null);
-        if (!(InspectorBodyLimits.IsPrettyPrintableContentType(reqCt)
-              || InspectorBodyLimits.IsPrettyPrintableContentType(respCt))
-            || InspectorBodyLimits.TryPrettyPrint(selected.RequestBodyText, reqCt) is not null
-            || InspectorBodyLimits.TryPrettyPrint(selected.ResponseBodyText, respCt) is not null
-            || !(selected.RequestBodyCapture is BodyCaptureState.Truncated
-                 || selected.ResponseBodyCapture is BodyCaptureState.Truncated
-                 || !string.IsNullOrWhiteSpace(selected.RequestBodyText)
-                 || !string.IsNullOrWhiteSpace(selected.ResponseBodyText)))
-        {
-            return;
-        }
-
-        if (string.IsNullOrEmpty(BodyCaptureHint))
-        {
-            BodyCaptureHint = "Cannot pretty-print (body truncated or invalid)";
-        }
-        else if (!BodyCaptureHint.Contains("pretty-print", StringComparison.OrdinalIgnoreCase))
-        {
-            BodyCaptureHint += " · Cannot pretty-print (body truncated or invalid)";
-        }
-    }
-
-    private static string AppendTranscodePrefix(SessionSnapshot selected, string body)
-    {
-        if (!selected.IsTranscoded)
-            return body;
-
-        var prefix = new StringBuilder();
-        prefix.AppendLine("=== Client (JSON/REST) ===");
-        prefix.AppendLine(selected.RequestBodyText ?? "(empty)");
-        prefix.AppendLine();
-        prefix.AppendLine("=== Client response (JSON) ===");
-        prefix.AppendLine(selected.ResponseBodyText ?? "(empty)");
-        if (selected.UpstreamRequestBodyBytes is { Length: > 0 } ||
-            selected.UpstreamResponseBodyBytes is { Length: > 0 })
-        {
-            prefix.AppendLine();
-            prefix.AppendLine("=== Upstream gRPC frames (see Hex / frame preview) ===");
-            if (selected.GrpcFrames is { Count: > 0 } gf)
-            {
-                foreach (var f in gf)
-                    prefix.Append("frame compressed=").Append(f.Compressed)
-                        .Append(" len=").Append(f.Length)
-                        .Append(" preview=").AppendLine(f.HexPreview);
-            }
-        }
-
-        prefix.AppendLine();
-        prefix.Append(body);
-        return prefix.ToString();
     }
 
     private static string BuildSelectedFramesText(SessionSnapshot selected)

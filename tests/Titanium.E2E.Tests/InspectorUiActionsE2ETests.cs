@@ -91,8 +91,8 @@ public class InspectorUiActionsE2ETests
         await CaptureOneAsync("/ui-select");
         Assert.IsTrue(_vm.Sessions.Count > 0);
         _vm.SelectedSession = _vm.Sessions[0];
-        Assert.IsFalse(string.IsNullOrWhiteSpace(_vm.SelectedHeaders));
-        for (var i = 0; i < 8; i++)
+        Assert.IsFalse(string.IsNullOrWhiteSpace(_vm.SelectedRequestHeaders));
+        for (var i = 0; i < 13; i++)
         {
             _vm.SelectedDetailTabIndex = i;
             Assert.AreEqual(i, _vm.SelectedDetailTabIndex);
