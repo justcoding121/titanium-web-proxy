@@ -24,9 +24,12 @@ public class TestProxyServer : IDisposable
             return Task.CompletedTask;
         };
 
+        // 127.0.0.1, not 0.0.0.0. Clients already use localhost against an IPv4-only socket
+        // (a wildcard bind does not accept ::1). Loopback is the same reachability and does
+        // not raise the Windows inbound firewall prompt for testhost.exe.
         var explicitEndPoint = isReverseProxy
-            ? (ProxyEndPoint)new TransparentProxyEndPoint(IPAddress.Any, 0)
-            : new ExplicitProxyEndPoint(IPAddress.Any, 0);
+            ? (ProxyEndPoint)new TransparentProxyEndPoint(IPAddress.Loopback, 0)
+            : new ExplicitProxyEndPoint(IPAddress.Loopback, 0);
 
         ProxyServer.AddEndPoint(explicitEndPoint);
 
