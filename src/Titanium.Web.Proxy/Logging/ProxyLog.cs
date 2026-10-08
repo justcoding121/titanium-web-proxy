@@ -197,12 +197,12 @@ internal static class ProxyLog
     ///     Decrypt-bypass learning changed later CONNECTs for this host to opaque tunnels.
     ///     Warning, not Error: the current request was not failed. Host name only.
     /// </summary>
-    internal static void DecryptFailureBypassLearned(ILogger logger, string host)
+    internal static void DecryptFailureBypassLearned(ILogger logger, string host, string reason = "origin TLS failure")
     {
         if (!logger.IsEnabled(LogLevel.Warning)) return;
         logger.LogWarning(
-            "EnableDecryptFailureBypass learned {Host}; later CONNECTs tunnel opaque. Set server.enableDecryptFailureBypass to false to stop learning.",
-            host);
+            "EnableDecryptFailureBypass learned {Host} ({Reason}); later CONNECTs tunnel opaque. Set server.enableDecryptFailureBypass to false to stop learning.",
+            host, reason);
     }
 
     /// <summary>

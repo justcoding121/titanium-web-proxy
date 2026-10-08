@@ -1331,6 +1331,8 @@ public sealed class InterceptionService : IDisposable
     public IReadOnlyList<string> ListStaleRootThumbprints(bool machineStore)
     {
         var current = RootCertificate?.Thumbprint;
+        if (ListStaleRootsOverride is { } listOverride)
+            return listOverride(machineStore).Where(t => !IsCurrentRootThumbprint(t, current)).ToList();
         if (_proxy is null || UseInMemoryTrustState || string.IsNullOrEmpty(current))
             return Array.Empty<string>();
 
@@ -1338,9 +1340,24 @@ public sealed class InterceptionService : IDisposable
         return _proxy.CertificateManager.ListSameCommonNameRootThumbprints(location, keepThumbprint: current);
     }
 
+    /// <summary>Test seam: replaces the Root-store listing of stale thumbprints (never touches the OS store).</summary>
+    internal Func<bool, IReadOnlyList<string>>? ListStaleRootsOverride { get; set; }
+
+    /// <summary>Test seam: replaces the CryptUI Root removal of one thumbprint.</summary>
+    internal Action<bool, string>? RemoveRootOverride { get; set; }
+
+    private static bool IsCurrentRootThumbprint(string? candidate, string? current) =>
+        !string.IsNullOrEmpty(current) && string.Equals(candidate, current, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>One Root Remove by thumbprint (CryptUI). Must run on a pumping UI thread.</summary>
     public void RemoveRootThumbprintOnUi(bool machineStore, string thumbprint)
     {
+        if (RemoveRootOverride is { } removeOverride)
+        {
+            removeOverride(machineStore, thumbprint);
+            return;
+        }
+
         if (_proxy is null || UseInMemoryTrustState)
             return;
 

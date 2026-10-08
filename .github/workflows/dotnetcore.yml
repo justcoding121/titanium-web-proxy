@@ -139,6 +139,8 @@ jobs:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Regression-2026-10-07" --blame-hang --blame-hang-timeout 5m
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Regression-2026-10-07"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Merge code coverage
       shell: pwsh

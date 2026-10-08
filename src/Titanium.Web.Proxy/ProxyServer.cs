@@ -501,7 +501,8 @@ public partial class ProxyServer : IDisposable
 
         if (isActive && !wasActive)
         {
-            ProxyLog.DecryptFailureBypassLearned(logger, host);
+            ProxyLog.DecryptFailureBypassLearned(logger, host,
+                forceBypass ? "forced after a failed MITM handshake" : "origin TLS failure");
             RaiseDecryptFailureBypassChanged(host);
         }
 
@@ -538,7 +539,7 @@ public partial class ProxyServer : IDisposable
 
         if (isActive && !wasActive)
         {
-            ProxyLog.DecryptFailureBypassLearned(logger, host);
+            ProxyLog.DecryptFailureBypassLearned(logger, host, $"HTTP {statusCode} block");
             RaiseDecryptFailureBypassChanged(host);
         }
 

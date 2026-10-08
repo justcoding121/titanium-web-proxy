@@ -55,6 +55,75 @@ public class CertificateKeyIdentifierTests
         }
     }
 
+    /// <summary>
+    ///     A strict non-.NET verifier (OpenSSL) must accept the leaf: it follows the AKI to the root's SKI, so a
+    ///     mismatched or malformed key identifier would fail here even though X509Chain tolerates it.
+    /// </summary>
+    [TestMethod]
+    public void NewRootAndLeaf_VerifyWithOpenSsl_WhenAvailable()
+    {
+        var openssl = FindOpenSsl();
+        if (openssl == null)
+            Assert.Inconclusive("openssl not found on PATH.");
+
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ti-ossl-" + Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(dir);
+        try
+        {
+            foreach (var algorithm in new[] { CertificateKeyAlgorithm.Rsa2048, CertificateKeyAlgorithm.EcdsaP256 })
+            {
+                using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+                {
+                    CertificateEngine = CertificateEngine.BouncyCastleFast,
+                    LeafCertificateKeyAlgorithm = algorithm,
+                };
+                Assert.IsTrue(mgr.CreateRootCertificate(false));
+                using var leaf = mgr.CreateCertificate("openssl-test.example", false)!;
+
+                var rootPem = System.IO.Path.Combine(dir, algorithm + "-root.pem");
+                var leafPem = System.IO.Path.Combine(dir, algorithm + "-leaf.pem");
+                System.IO.File.WriteAllText(rootPem, mgr.RootCertificate!.ExportCertificatePem());
+                System.IO.File.WriteAllText(leafPem, leaf.ExportCertificatePem());
+
+                var psi = new System.Diagnostics.ProcessStartInfo(openssl, $"verify -CAfile \"{rootPem}\" \"{leafPem}\"")
+                {
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                };
+                using var process = System.Diagnostics.Process.Start(psi)!;
+                var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+                Assert.IsTrue(process.WaitForExit(30000), "openssl verify timed out");
+                Assert.AreEqual(0, process.ExitCode, $"{algorithm}: {output}");
+                StringAssert.Contains(output, "OK");
+            }
+        }
+        finally
+        {
+            try { System.IO.Directory.Delete(dir, true); } catch { /* best-effort */ }
+        }
+    }
+
+    private static string? FindOpenSsl()
+    {
+        var name = OperatingSystem.IsWindows() ? "openssl.exe" : "openssl";
+        foreach (var path in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+                     .Split(System.IO.Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            try
+            {
+                var candidate = System.IO.Path.Combine(path, name);
+                if (System.IO.File.Exists(candidate))
+                    return candidate;
+            }
+            catch (ArgumentException)
+            {
+            }
+        }
+
+        return null;
+    }
+
     [TestMethod]
     public void LeafUnderLegacyRootWithoutSki_HasNoAki_AndStillValidates()
     {
