@@ -106,6 +106,15 @@ public partial class ProxyServer
                 endPoint.LoopbackV4QuicListener = null;
                 endPoint.AssignPort(0);
             }
+            catch (Exception)
+            {
+                // Start() only rolls back listeners it has already published. A ::1 socket left
+                // assigned here would stay bound after the IPv4 bind fails.
+                DisposeQuicListener(v6);
+                endPoint.QuicListener = null;
+                endPoint.LoopbackV4QuicListener = null;
+                throw;
+            }
         }
     }
 
