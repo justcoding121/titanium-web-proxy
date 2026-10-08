@@ -195,6 +195,40 @@ public class BodyInspectCoverageTests
             Assert.AreEqual("No response yet", vm.SelectedResponseBody);
             Assert.IsTrue(vm.CanSaveRequestBody);
             Assert.IsFalse(vm.CanSaveResponseBody);
+            Assert.IsTrue(vm.ShowBodyModeToggles);
+
+            // Hex still works when only decoded text was kept (no raw bytes).
+            var textOnly = new SessionSnapshot
+            {
+                Id = 11,
+                Method = "GET",
+                StatusCode = 200,
+                Url = "https://sides.test/text",
+                ResponseBodyText = "abc",
+            };
+            vm.SeedSession(textOnly);
+            vm.SelectedSession = textOnly;
+            vm.SelectedInspectTabIndex = (int)InspectTab.ResponseBody;
+            vm.BodyHexMode = true;
+            StringAssert.Contains(vm.SelectedResponseBody, "61 62 63");
+            vm.BodyHexMode = false;
+
+            // Pretty/Hex are meaningless for CONNECT tunnels.
+            var tunnel = new SessionSnapshot { Id = 12, Method = "CONNECT", Url = "host:443", IsTunnel = true };
+            vm.SeedSession(tunnel);
+            vm.SelectedSession = tunnel;
+            Assert.IsFalse(vm.ShowBodyModeToggles);
+            Assert.IsFalse(vm.ShowRequestBodyCaptureHint);
+            Assert.IsFalse(vm.ShowResponseBodyCaptureHint);
+            vm.SelectedInspectTabIndex = (int)InspectTab.ResponseBody;
+            StringAssert.Contains(vm.SelectedResponseBody, "CONNECT tunnel");
+
+            // A vanished contextual tab returns to the last core tab, not always tab 0.
+            vm.SelectedSession = snap;
+            vm.SelectedInspectTabIndex = (int)InspectTab.ResponseHeaders;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Sse;
+            vm.SelectedSession = requestOnly;
+            Assert.AreEqual((int)InspectTab.ResponseHeaders, vm.SelectedInspectTabIndex);
         }
         finally
         {

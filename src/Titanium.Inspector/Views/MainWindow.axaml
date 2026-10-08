@@ -428,12 +428,6 @@
                           AutomationProperties.AutomationId="InspectTabs"
                           IsVisible="{Binding HasSelectedSession}"
                           SelectedIndex="{Binding SelectedInspectTabIndex}">
-                <TabControl.Styles>
-                  <Style Selector="TabItem">
-                    <Setter Property="FontSize" Value="12" />
-                    <Setter Property="Padding" Value="8,3" />
-                  </Style>
-                </TabControl.Styles>
                 <TabItem Header="Request Headers" ToolTip.Tip="Request headers, cookies, and query"
                          AutomationProperties.AutomationId="TabReqHeaders">
                   <DockPanel>
@@ -457,7 +451,8 @@
                                IsVisible="{Binding ShowRequestBodyCaptureHint}"
                                AutomationProperties.AutomationId="ReqBodyCaptureHint" />
                     <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-                      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center"
+                                  IsVisible="{Binding ShowBodyModeToggles}">
                         <Border Background="Transparent" ToolTip.Tip="{Binding BodyPrettyToolTip}">
                           <CheckBox Content="Pretty" IsChecked="{Binding BodyPrettyMode}"
                                     IsEnabled="{Binding BodyPrettyEnabled}"
@@ -504,7 +499,8 @@
                                IsVisible="{Binding ShowResponseBodyCaptureHint}"
                                AutomationProperties.AutomationId="RespBodyCaptureHint" />
                     <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-                      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center"
+                                  IsVisible="{Binding ShowBodyModeToggles}">
                         <Border Background="Transparent" ToolTip.Tip="{Binding BodyPrettyToolTip}">
                           <CheckBox Content="Pretty" IsChecked="{Binding BodyPrettyMode}"
                                     IsEnabled="{Binding BodyPrettyEnabled}"

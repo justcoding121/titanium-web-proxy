@@ -553,11 +553,12 @@ public class InspectorBodyHonestyTests
         };
 
         var banner = (string)hint.Invoke(null, [snap, false, false])!;
-        StringAssert.Contains(banner, "wire");
-        Assert.IsFalse(banner.Contains("(empty)", StringComparison.Ordinal));
+        // The body box carries the explanation; no separate banner above it.
+        Assert.AreEqual("", banner);
 
         var body = (string)core.Invoke(null, [snap, false, false, false])!;
         StringAssert.Contains(body, "CONNECT tunnel");
+        StringAssert.Contains(body, "wire");
         StringAssert.Contains(body, "no HTTP message body");
         StringAssert.Contains(body, "10 KB");
         Assert.IsFalse(body.Contains("(empty)", StringComparison.Ordinal));

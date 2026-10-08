@@ -116,6 +116,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     private string? _scriptOnResponse;
     private int _selectedOuterPaneIndex;
     private int _selectedInspectTabIndex;
+    private int _lastCoreInspectTab;
     private int _selectedToolsTabIndex;
     private int _selectedPaneNavIndex;
     private bool _showSessionDetails;
@@ -2536,6 +2537,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         {
             if (SetField(ref _selectedInspectTabIndex, value))
             {
+                if (value is >= (int)InspectTab.RequestHeaders and <= (int)InspectTab.ResponseBody)
+                {
+                    _lastCoreInspectTab = value;
+                }
+
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
                 if (value is (int)InspectTab.RequestBody or (int)InspectTab.ResponseBody)
                 {
@@ -2895,7 +2901,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             (!ShowSseTab && SelectedInspectTabIndex == (int)InspectTab.Sse) ||
             (!ShowProtobufTab && SelectedInspectTabIndex == (int)InspectTab.Protobuf))
         {
-            SelectedInspectTabIndex = 0;
+            // Contextual tab went away: return to the core tab the user was last on, not always tab 0.
+            SelectedInspectTabIndex = _lastCoreInspectTab;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
         }
     }

@@ -26,7 +26,11 @@ public sealed partial class MainWindowViewModel
     private string? _cachedBodyText;
     private long? _cachedBodySessionId;
     private int _cachedBodyKey = -1;
-    private int _cachedBodyStamp = -1;
+    private BodyStamp _cachedBodyStamp;
+
+    /// <summary>Inputs that change a rendered body. Compared by value so a stale cache is never reused.</summary>
+    private readonly record struct BodyStamp(
+        int TextLength, int BytesLength, int HeadersLength, BodyCaptureState Capture, bool Missing);
 
     public ICommand CopyRequestHeadersCommand { get; private set; } = null!;
     public ICommand CopyResponseHeadersCommand { get; private set; } = null!;
@@ -67,6 +71,9 @@ public sealed partial class MainWindowViewModel
     }
 
     public bool BodyPrettyEnabled => !_bodyHexMode;
+
+    /// <summary>Pretty and Hex only mean something for HTTP bodies, not for opaque CONNECT tunnels.</summary>
+    public bool ShowBodyModeToggles => _selected is { IsTunnel: false };
 
     public string BodyPrettyToolTip =>
         _bodyHexMode ? "Not applicable in hex view" : "Indent JSON, XML, and HTML";
@@ -307,6 +314,7 @@ public sealed partial class MainWindowViewModel
 
     private void RefreshBodyInspector()
     {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowBodyModeToggles)));
         if (_selected is null)
         {
             SelectedRequestBody = "";
@@ -344,10 +352,6 @@ public sealed partial class MainWindowViewModel
     public const string BodiesMissingFromDiskHint =
         "Saved session data removed — disk cache limit reached. Headers in the list are still available. Raise the limit under Options → Session retention…";
 
-    /// <summary>Shown for CONNECT rows: Size is encrypted wire traffic, not an HTTP body.</summary>
-    public const string TunnelWireSizeHint =
-        "CONNECT tunnel — Size is encrypted traffic on the wire, not an HTTP message body";
-
     private static string BuildSideCaptureHint(SessionSnapshot selected, bool isRequest, bool hex)
     {
         if (BodiesMissing(selected))
@@ -357,7 +361,8 @@ public sealed partial class MainWindowViewModel
 
         if (selected.IsTunnel)
         {
-            return TunnelWireSizeHint;
+            // The body box already explains the tunnel (FormatTunnelBodyInspectText); no banner needed.
+            return "";
         }
 
         var capture = isRequest ? selected.RequestBodyCapture : selected.ResponseBodyCapture;
@@ -451,7 +456,7 @@ public sealed partial class MainWindowViewModel
     {
         var onTab = IsSelectedBodyTab(isRequest);
         var pretty = _bodyPrettyMode && !_bodyHexMode && onTab;
-        var stamp = BodyStamp(selected, isRequest);
+        var stamp = StampFor(selected, isRequest);
         var key = BodyCacheKey(isRequest, pretty, _bodyHexMode);
         if (_cachedBodySessionId == selected.Id
             && _cachedBodyKey == key
@@ -495,9 +500,14 @@ public sealed partial class MainWindowViewModel
         var headers = isRequest ? selected.RequestHeadersText : selected.ResponseHeadersText;
         var text = isRequest ? selected.RequestBodyText : selected.ResponseBodyText;
         var bytes = isRequest ? selected.RequestBodyBytes : selected.ResponseBodyBytes;
-        if (hex && bytes is { Length: > 0 })
+        if (hex)
         {
-            return SessionInspectors.FormatHex(headers, bytes);
+            // Text-only captures (no raw bytes kept) still get a byte view of what is shown.
+            bytes ??= string.IsNullOrEmpty(text) ? null : Encoding.UTF8.GetBytes(text);
+            if (bytes is { Length: > 0 })
+            {
+                return SessionInspectors.FormatHex(headers, bytes);
+            }
         }
 
         if (SideIsImage(selected, isRequest))
@@ -517,7 +527,7 @@ public sealed partial class MainWindowViewModel
 
         if (hex)
         {
-            return SessionInspectors.FormatHex(headers, bytes);
+            return EmptyBodyPlaceholder;
         }
 
         var raw = SessionInspectors.FormatBody(headers, text, bytes);
@@ -657,7 +667,7 @@ public sealed partial class MainWindowViewModel
         _cachedBodyText = null;
         _cachedBodySessionId = null;
         _cachedBodyKey = -1;
-        _cachedBodyStamp = -1;
+        _cachedBodyStamp = default;
     }
 
     private bool IsSelectedBodyTab(bool isRequest) =>
@@ -705,12 +715,18 @@ public sealed partial class MainWindowViewModel
         return headers.TryGetValue(ContentTypeHeaderName, out var ct) ? ct : null;
     }
 
-    private static int BodyStamp(SessionSnapshot selected, bool isRequest)
+    private static BodyStamp StampFor(SessionSnapshot selected, bool isRequest)
     {
         var text = isRequest ? selected.RequestBodyText : selected.ResponseBodyText;
         var bytes = isRequest ? selected.RequestBodyBytes : selected.ResponseBodyBytes;
+        var headers = isRequest ? selected.RequestHeadersText : selected.ResponseHeadersText;
         var capture = isRequest ? selected.RequestBodyCapture : selected.ResponseBodyCapture;
-        return HashCode.Combine(text?.Length ?? -1, bytes?.Length ?? -1, (int)capture, selected.BodiesMissingFromDisk);
+        return new BodyStamp(
+            text?.Length ?? -1,
+            bytes?.Length ?? -1,
+            headers?.Length ?? -1,
+            capture,
+            selected.BodiesMissingFromDisk);
     }
 
     private static int BodyCacheKey(bool isRequest, bool pretty, bool hex) =>
