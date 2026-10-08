@@ -25,10 +25,13 @@ internal static class PlusLoader
             alc.Resolving += (_, name) =>
             {
                 var candidate = Path.Combine(AppContext.BaseDirectory, name.Name + ".dll");
-                return File.Exists(candidate) ? alc.LoadFromAssemblyPath(candidate) : null;
+                // Bytes, not LoadFromAssemblyPath: several CLI processes loading the same
+                // dependency (Google.Api.CommonProtos) via a memory-mapped path race on macOS
+                // and throw "An operation is not legal in the current state".
+                return File.Exists(candidate) ? LoadFromBytes(alc, candidate) : null;
             };
 
-            var asm = alc.LoadFromAssemblyPath(dllPath);
+            var asm = LoadFromBytes(alc, dllPath);
             foreach (var type in asm.GetExportedTypes())
             {
                 if (!typeof(ITitaniumPlusModule).IsAssignableFrom(type) || type.IsAbstract)
@@ -65,6 +68,22 @@ internal static class PlusLoader
         {
             warning = $"Failed to load Plus: {ex.Message}";
             return null;
+        }
+    }
+
+    private static Assembly LoadFromBytes(AssemblyLoadContext alc, string path)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                var bytes = File.ReadAllBytes(path);
+                return alc.LoadFromStream(new MemoryStream(bytes, writable: false));
+            }
+            catch (IOException) when (attempt < 3)
+            {
+                Thread.Sleep(50);
+            }
         }
     }
 }

@@ -502,14 +502,9 @@ public sealed partial class MainWindowViewModel
         var headers = isRequest ? selected.RequestHeadersText : selected.ResponseHeadersText;
         var text = isRequest ? selected.RequestBodyText : selected.ResponseBodyText;
         var bytes = isRequest ? selected.RequestBodyBytes : selected.ResponseBodyBytes;
-        if (hex)
+        if (TryFormatHexBody(headers, text, bytes, hex) is { } hexText)
         {
-            // Text-only captures (no raw bytes kept) still get a byte view of what is shown.
-            bytes ??= string.IsNullOrEmpty(text) ? null : Encoding.UTF8.GetBytes(text);
-            if (bytes is { Length: > 0 })
-            {
-                return SessionInspectors.FormatHex(headers, bytes);
-            }
+            return hexText;
         }
 
         if (SideIsImage(selected, isRequest))
@@ -541,6 +536,35 @@ public sealed partial class MainWindowViewModel
         return InspectorBodyLimits.TryPrettyPrint(text, ContentTypeFor(selected, isRequest)) ?? raw;
     }
 
+    /// <summary>
+    ///     Hex of a side that has bytes (raw, or UTF-8 of text-only captures). Null when hex is off
+    ///     or there is nothing to dump, so later placeholders (image, no body, no response) still apply.
+    /// </summary>
+    private static string? TryFormatHexBody(string? headers, string? text, byte[]? bytes, bool hex)
+    {
+        if (!hex)
+        {
+            return null;
+        }
+
+        if (bytes is not { Length: > 0 })
+        {
+            bytes = string.IsNullOrEmpty(text) ? null : Encoding.UTF8.GetBytes(text);
+        }
+
+        return bytes is { Length: > 0 } ? SessionInspectors.FormatHex(headers, bytes) : null;
+    }
+
+    private static string MissingImageBodyText(SessionSnapshot selected, bool isRequest)
+    {
+        if (isRequest)
+        {
+            return NoRequestBodyPlaceholder;
+        }
+
+        return ResponseNotStarted(selected) ? NoResponseText(selected) : EmptyBodyPlaceholder;
+    }
+
     private static string FormatTunnelBodyInspectText(SessionSnapshot selected)
     {
         var wire = selected.BodySize ?? selected.SentBytes + selected.ReceivedBytes;
@@ -561,9 +585,7 @@ public sealed partial class MainWindowViewModel
         var bytes = isRequest ? selected.RequestBodyBytes : selected.ResponseBodyBytes;
         if (bytes is not { Length: > 0 })
         {
-            return isRequest
-                ? NoRequestBodyPlaceholder
-                : ResponseNotStarted(selected) ? NoResponseText(selected) : EmptyBodyPlaceholder;
+            return MissingImageBodyText(selected, isRequest);
         }
 
         var size = SessionDisplayFormat.FormatByteSize(bytes.Length);
