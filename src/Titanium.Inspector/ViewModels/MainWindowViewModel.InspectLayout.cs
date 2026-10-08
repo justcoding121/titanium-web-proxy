@@ -199,15 +199,7 @@ public sealed partial class MainWindowViewModel
             return 0;
         }
 
-        var count = 0;
-        foreach (var line in text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (line.IndexOf(':') > 0)
-            {
-                count++;
-            }
-        }
-
-        return count;
+        return text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Count(line => line.IndexOf(':') > 0);
     }
 }

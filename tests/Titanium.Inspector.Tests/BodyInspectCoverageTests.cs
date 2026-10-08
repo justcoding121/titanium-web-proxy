@@ -700,14 +700,14 @@ public class BodyInspectCoverageTests
 
             vm.ToggleInspectHeadersCollapsed();
             Assert.IsTrue(vm.InspectHeadersCollapsed);
-            Assert.AreEqual(true, settings.Current.InspectHeadersCollapsed);
+            Assert.IsTrue(settings.Current.InspectHeadersCollapsed);
 
             vm.ApplyInspectPaneHeight(900);
             Assert.IsTrue(vm.InspectHeadersCollapsed);
 
             vm.ToggleInspectHeadersCollapsed();
             Assert.IsFalse(vm.InspectHeadersCollapsed);
-            Assert.AreEqual(false, new SettingsService(path).Current.InspectHeadersCollapsed);
+            Assert.IsFalse(new SettingsService(path).Current.InspectHeadersCollapsed);
 
             vm.ApplyInspectPaneHeight(300);
             Assert.IsFalse(vm.InspectHeadersCollapsed);
