@@ -25,13 +25,29 @@ internal static class PlusLoader
             alc.Resolving += (_, name) =>
             {
                 var candidate = Path.Combine(AppContext.BaseDirectory, name.Name + ".dll");
-                // Bytes, not LoadFromAssemblyPath: several CLI processes loading the same
-                // dependency (Google.Api.CommonProtos) via a memory-mapped path race on macOS
-                // and throw "An operation is not legal in the current state".
-                return File.Exists(candidate) ? LoadFromBytes(alc, candidate) : null;
+                if (!File.Exists(candidate))
+                {
+                    return null;
+                }
+
+                // LoadFromStream is illegal here: Resolving runs while this context is already
+                // loading, and the runtime answers "An operation is not legal in the current state".
+                // LoadFromAssemblyPath is the supported call. Retry the rare macOS race where
+                // several CLI processes map the same dependency at once.
+                for (var attempt = 0; ; attempt++)
+                {
+                    try
+                    {
+                        return alc.LoadFromAssemblyPath(candidate);
+                    }
+                    catch (Exception ex) when (attempt < 4 && IsTransientAssemblyLoad(ex))
+                    {
+                        Thread.Sleep(50 * (attempt + 1));
+                    }
+                }
             };
 
-            var asm = LoadFromBytes(alc, dllPath);
+            var asm = alc.LoadFromAssemblyPath(dllPath);
             foreach (var type in asm.GetExportedTypes())
             {
                 if (!typeof(ITitaniumPlusModule).IsAssignableFrom(type) || type.IsAbstract)
@@ -71,19 +87,16 @@ internal static class PlusLoader
         }
     }
 
-    private static Assembly LoadFromBytes(AssemblyLoadContext alc, string path)
+    private static bool IsTransientAssemblyLoad(Exception ex)
     {
-        for (var attempt = 0; ; attempt++)
+        for (var inner = ex; inner is not null; inner = inner.InnerException)
         {
-            try
+            if (inner.Message.Contains("not legal in the current state", StringComparison.Ordinal))
             {
-                var bytes = File.ReadAllBytes(path);
-                return alc.LoadFromStream(new MemoryStream(bytes, writable: false));
-            }
-            catch (IOException) when (attempt < 3)
-            {
-                Thread.Sleep(50);
+                return true;
             }
         }
+
+        return false;
     }
 }
