@@ -364,44 +364,66 @@ internal static partial class Http3OriginBridge
 
             var hasBodyWriteHook = server.HasOnResponseBodyWriteSubscribers;
 
+            // Wire-byte drain with no OnResponseBodyWrite hook. Shared by the unhooked emit path and by
+            // GetResponseBody (Http3RawBodyDrain): the origin body lives on this QUIC stream, so a
+            // BeforeResponse handler that buffers it must read it from here, not from an HTTP/1.x connection.
+            async Task DrainRawBodyAsync(Stream dest, CancellationToken ct)
+            {
+                while (true)
+                {
+                    var header = await Http3Frame.ReadFrameHeaderAsync(streamToClient, ct);
+                    if (header is null) break;
+                    if (header.Value.Type == Http3FrameType.Data)
+                    {
+                        if (header.Value.Length > 0)
+                            await Http3Frame.CopyPayloadAsync(streamToClient, header.Value.Length, 16 * 1024,
+                                (slice, token) => dest.WriteAsync(slice, token), ct);
+                        continue;
+                    }
+
+                    var frame = await Http3Frame.ReadPayloadAfterHeaderAsync(
+                        streamToClient, header.Value, maxPayload, ct);
+                    try
+                    {
+                        if (frame.Type == Http3FrameType.Headers)
+                        {
+                            foreach (var (n, v) in QpackDecoder.Decode(frame.Payload.Span))
+                            {
+                                if (!n.StartsWith(':'))
+                                    response.TrailingHeaders.AddHeader(new HttpHeader(n, v));
+                            }
+
+                            break;
+                        }
+                    }
+                    finally
+                    {
+                        frame.ReturnPayload();
+                    }
+                }
+            }
+
+            response.Http3RawBodyDrain = async (dest, ct) =>
+            {
+                try
+                {
+                    await DrainRawBodyAsync(dest, ct);
+                }
+                finally
+                {
+                    // Idempotent; the stream is fully consumed (or failed) either way.
+                    if (pendingHandoffRelease != null)
+                        await pendingHandoffRelease();
+                }
+            };
+
             response.StreamBodyWriter = async (clientBodyStream, ct) =>
             {
                 try
                 {
                     if (!hasBodyWriteHook)
                     {
-                        while (true)
-                        {
-                            var header = await Http3Frame.ReadFrameHeaderAsync(streamToClient, ct);
-                            if (header is null) break;
-                            if (header.Value.Type == Http3FrameType.Data)
-                            {
-                                if (header.Value.Length > 0)
-                                    await Http3Frame.CopyPayloadAsync(streamToClient, header.Value.Length, 16 * 1024,
-                                        (slice, token) => clientBodyStream.WriteAsync(slice, token), ct);
-                                continue;
-                            }
-
-                            var frame = await Http3Frame.ReadPayloadAfterHeaderAsync(
-                                streamToClient, header.Value, maxPayload, ct);
-                            try
-                            {
-                                if (frame.Type == Http3FrameType.Headers)
-                                {
-                                    foreach (var (n, v) in QpackDecoder.Decode(frame.Payload.Span))
-                                    {
-                                        if (!n.StartsWith(':'))
-                                            response.TrailingHeaders.AddHeader(new HttpHeader(n, v));
-                                    }
-
-                                    break;
-                                }
-                            }
-                            finally
-                            {
-                                frame.ReturnPayload();
-                            }
-                        }
+                        await DrainRawBodyAsync(clientBodyStream, ct);
                     }
                     else
                     {

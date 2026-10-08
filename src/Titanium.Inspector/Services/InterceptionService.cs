@@ -1850,7 +1850,17 @@ public sealed class InterceptionService : IDisposable
             if (e.HttpClient.Response.HasBody && ShouldBufferBody(e.HttpClient.Response, e))
             {
                 e.HttpClient.Response.KeepBody = true;
-                await e.GetResponseBody(CancellationToken.None);
+                try
+                {
+                    await e.GetResponseBody(CancellationToken.None);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // Body capture is best-effort: the row must still get its status / protocol / headers.
+                    InspectorUxTrace.Event("BeforeResponse.BodyBufferFailed",
+                        $"{e.HttpClient.Request.Url} ver={e.HttpClient.Request.HttpVersion}->{e.HttpClient.Response.HttpVersion} " +
+                        $"{ex.GetType().Name}: {ex.Message}");
+                }
             }
 
             SessionScriptHost.ApplyOnResponse(ScriptOnResponse, e);
@@ -1885,12 +1895,22 @@ public sealed class InterceptionService : IDisposable
                 ScheduleProcessResolve(snap, e.HttpClient.ProcessId);
             }
 
-            FillResponse(snap, e);
-            SessionUpdated?.Invoke(this, snap);
+            try
+            {
+                FillResponse(snap, e);
+            }
+            finally
+            {
+                // Publish whatever was filled (status, headers, protocol are set first) even if a later
+                // step throws, so the grid row never stays blank.
+                SessionUpdated?.Invoke(this, snap);
+            }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // ignore
+            InspectorUxTrace.Event("BeforeResponse.Failed",
+                $"{e.HttpClient.Request.Url} ver={e.HttpClient.Request.HttpVersion}->{e.HttpClient.Response.HttpVersion} " +
+                $"status={e.HttpClient.Response.StatusCode} {ex.GetType().Name}: {ex.Message}");
         }
     }
 
@@ -1920,7 +1940,7 @@ public sealed class InterceptionService : IDisposable
     private SessionSnapshot CreatePreviewSnapshot(SessionEventArgs e, bool assignId)
     {
         var req = e.HttpClient.Request;
-        var originalBody = req.IsBodyRead ? req.Body : null;
+        var originalBody = req.IsBodyRead && req.HasBody ? req.Body : null;
         var bodyBytes = InspectorBodyLimits.TruncateBytes(originalBody);
         var bodyText = bodyBytes is null ? null : InspectorBodyLimits.TruncateText(Encoding.UTF8.GetString(bodyBytes));
         GrpcJsonTranscodeSessionMark.TryGet(e.UserData, out var mark);
@@ -2132,7 +2152,10 @@ public sealed class InterceptionService : IDisposable
         snap.ResponseHeadersText = FormatHeaders(resp.Headers);
         snap.Protocol = SessionDisplayFormat.FormatClientServer(
             e.HttpClient.Request.HttpVersion, resp.HttpVersion);
-        var originalBody = resp.IsBodyRead ? resp.Body : null;
+        // Body throws BodyNotFoundException when the response has no body (204, Content-Length: 0, 304),
+        // even though such responses are marked IsBodyRead. That used to abort FillResponse and leave the
+        // row without status / origin protocol.
+        var originalBody = resp.IsBodyRead && resp.HasBody ? resp.Body : null;
         var bodyBytes = InspectorBodyLimits.TruncateBytes(originalBody);
         snap.ResponseBodyBytes = bodyBytes;
         snap.ResponseBodyText = bodyBytes is null ? null : InspectorBodyLimits.TruncateText(Encoding.UTF8.GetString(bodyBytes));
