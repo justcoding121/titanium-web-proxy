@@ -39,7 +39,16 @@ internal interface IQuicInboundEndPoint
 
     TimeSpan IdleTimeout { get; }
 
+    /// <summary>
+    ///     Primary inbound listener. For a loopback endpoint this is <c>::1</c>.
+    /// </summary>
     QuicListener? QuicListener { get; set; }
+
+    /// <summary>
+    ///     <c>127.0.0.1</c> listener paired with <see cref="QuicListener" /> when the endpoint
+    ///     address is loopback. <see langword="null" /> for a single-address listen.
+    /// </summary>
+    QuicListener? LoopbackV4QuicListener { get; set; }
 
     ConditionalWeakTable<QuicConnection, BeforeQuicAuthenticateEventArgs> PendingQuicAuthArgs { get; }
 

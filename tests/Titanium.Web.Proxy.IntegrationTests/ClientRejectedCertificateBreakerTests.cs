@@ -70,6 +70,64 @@ public class ClientRejectedCertificateBreakerTests
             "a completed handshake proves the client trusts the proxy root; the count must reset");
     }
 
+    /// <summary>
+    ///     Parity with the two <c>TransparentClientHandler</c> sites: a TLS client that hits a decrypting
+    ///     transparent endpoint directly (SNI only, no CONNECT) and aborts must be counted and learned too.
+    /// </summary>
+    [TestMethod]
+    [TestCategory("Regression-2026-10-07")]
+    [Timeout(60 * 1000)]
+    public async Task TransparentEndpoint_ClientReject_LearnsBypass()
+    {
+        using var proxy = new ProxyServer(false, false, false)
+        {
+            EnableDecryptFailureBypass = true,
+            ClientHandshakeRejectThreshold = 2
+        };
+        proxy.CertificateManager.RootCertificateName = TestCertificateAuthority.RootCertificateName;
+        proxy.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
+        proxy.CertificateManager.SaveFakeCertificates = false;
+        proxy.AddEndPoint(new Titanium.Web.Proxy.Models.TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
+        {
+            GenericCertificateName = "pinned-transparent.example.test"
+        });
+        proxy.Start();
+
+        const string host = "pinned-transparent.example.test";
+        var port = proxy.ProxyEndPoints[0].Port;
+
+        for (var i = 0; i < 2; i++)
+        {
+            Assert.IsFalse(proxy.ShouldBypassDecryptForLearnedHost(host), $"bypass before abort #{i + 1}");
+            using var client = new TcpClient();
+            await client.ConnectAsync(IPAddress.Loopback, port);
+            using var aborting = new CloseAfterFirstWriteStream(client.GetStream(), client.Client);
+            using var ssl = new SslStream(aborting, false, (_, _, _, _) => true);
+            try
+            {
+                await ssl.AuthenticateAsClientAsync(host).WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            catch (Exception ex) when (ex is IOException
+                                           or System.Security.Authentication.AuthenticationException
+                                           or ObjectDisposedException
+                                           or OperationCanceledException
+                                           or TimeoutException)
+            {
+            }
+
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (DateTime.UtcNow < deadline && proxy.ClientHandshakeRejects.Strikes(host) < i + 1
+                   && !proxy.ShouldBypassDecryptForLearnedHost(host))
+                await Task.Delay(20);
+        }
+
+        var until = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < until && !proxy.ShouldBypassDecryptForLearnedHost(host))
+            await Task.Delay(20);
+        Assert.IsTrue(proxy.ShouldBypassDecryptForLearnedHost(host),
+            "the transparent endpoint must learn the same client-reject bypass as the explicit endpoint");
+    }
+
     private static async Task<SslStream> ConnectTunnelAsync(int proxyPort, string host, TcpClient client)
     {
         await client.ConnectAsync(IPAddress.Loopback, proxyPort);

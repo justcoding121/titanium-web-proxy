@@ -501,7 +501,8 @@ public partial class ProxyServer : IDisposable
 
         if (isActive && !wasActive)
         {
-            ProxyLog.DecryptFailureBypassLearned(logger, host);
+            ProxyLog.DecryptFailureBypassLearned(logger, host,
+                forceBypass ? "forced after a failed MITM handshake" : "origin TLS failure");
             RaiseDecryptFailureBypassChanged(host);
         }
 
@@ -538,7 +539,7 @@ public partial class ProxyServer : IDisposable
 
         if (isActive && !wasActive)
         {
-            ProxyLog.DecryptFailureBypassLearned(logger, host);
+            ProxyLog.DecryptFailureBypassLearned(logger, host, $"HTTP {statusCode} block");
             RaiseDecryptFailureBypassChanged(host);
         }
 
@@ -2123,6 +2124,13 @@ public partial class ProxyServer : IDisposable
         endPoint.AcceptLoopCts?.Dispose();
         endPoint.AcceptLoopCts = null;
     }
+
+    /// <summary>
+    ///     How many times an ephemeral TCP+QUIC dual-listen may rebind. Windows UDP exclusion
+    ///     ranges are about 100 ports wide and the ephemeral allocator walks them in order, so a
+    ///     short retry stays inside the hole and the UDP bind fails with WSAEADDRINUSE.
+    /// </summary>
+    private const int MaxEphemeralDualListenAttempts = 128;
 
     /// <summary>
     ///     True when <paramref name="ex"/> (or an inner exception) is WSAEADDRINUSE / EADDRINUSE.

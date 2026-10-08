@@ -244,6 +244,55 @@ public class RotateRootCaTests
         }
     }
 
+    [TestMethod]
+    [TestCategory("Regression-2026-10-07")]
+    public async Task RemoveOldRootCas_RemovesOnlyStaleThumbprints_NeverTheCurrentRoot()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-oldroot2-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            using var interception = new InterceptionService { UseInMemoryTrustState = true };
+            OverrideRootPfx(interception, Path.Combine(dir, "rootCert.pfx"));
+            await interception.StartAsync(IPAddress.Loopback, 0);
+            var current = interception.RootCertificate!.Thumbprint;
+
+            var removed = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            var stale = new System.Collections.Generic.List<string> { "AAAA1111", "BBBB2222" };
+            // The fake store also (wrongly) lists the current root, as a race with Install could.
+            interception.ListStaleRootsOverride = _ =>
+                stale.Concat(new[] { current.ToLowerInvariant() }).ToArray();
+            interception.RemoveRootOverride = (_, thumbprint) =>
+            {
+                removed.Enqueue(thumbprint);
+                stale.Remove(thumbprint);
+            };
+
+            var settings = new SettingsService(Path.Combine(dir, "settings.json"));
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                new ScriptedInspectorDialogs());
+
+            await ExecuteUntilAsync(
+                vm.RemoveOldRootCasCommand,
+                () => !vm.IsStatusBusy && vm.StatusText.Contains("Removed 2 old", StringComparison.OrdinalIgnoreCase));
+
+            CollectionAssert.AreEquivalent(new[] { "AAAA1111", "BBBB2222" }, removed.ToArray());
+            CollectionAssert.DoesNotContain(removed.ToArray(), current);
+            Assert.AreEqual(current, interception.RootCertificate!.Thumbprint);
+            interception.EnsureShutdown();
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { }
+        }
+    }
+
     private static void OverrideRootPfx(InterceptionService interception, string path)
     {
         var field = typeof(InterceptionService).GetField("_rootPfxPath",

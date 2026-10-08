@@ -1181,18 +1181,24 @@ public sealed class CertificateManager : IDisposable
         var extras = new X509Certificate2Collection();
         System.Net.Security.SslCertificateTrust? trust = null;
 
-        if (rootCertificate != null && !IsSelfSigned(rootCertificate))
+        if (rootCertificate != null)
         {
-            extras.Add(rootCertificate);
-            // Offline Create has no path to a system trust anchor when the configured signer is
-            // an intermediate CA. Custom trust lets Create assemble leaf → intermediate.
+            // Pin this signer. A self-signed root that shares a subject with a different
+            // certificate already in the Windows store (the product-default
+            // "Titanium Root Certificate Authority") makes X509Chain.Build throw
+            // "An unknown chain building error occurred" instead of returning a partial chain.
+            // Custom trust keeps the chain on the certificate we just loaded or created.
             trust = System.Net.Security.SslCertificateTrust.CreateForX509Collection(
                 new X509Certificate2Collection(rootCertificate), sendTrustInHandshake: false);
-            // Windows SslStreamCertificateContext's constructor rebuilds the chain without
-            // ExtraStore/custom trust; when that OS build throws (rather than returning false),
-            // its own "add to Intermediate CA store" fallback never runs. Stage the intermediate
-            // first so the constructor's chain build can succeed.
-            StageIntermediateForOsChainBuild(rootCertificate);
+
+            if (!IsSelfSigned(rootCertificate))
+            {
+                extras.Add(rootCertificate);
+                // Offline Create has no path to a system trust anchor when the configured signer is
+                // an intermediate CA. Windows rebuilds the chain without ExtraStore; when that OS
+                // build throws, its own "add to Intermediate CA store" fallback never runs.
+                StageIntermediateForOsChainBuild(rootCertificate);
+            }
         }
 
         if (IntermediateCertificates != null)

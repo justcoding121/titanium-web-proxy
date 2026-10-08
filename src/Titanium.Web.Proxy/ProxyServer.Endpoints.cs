@@ -58,7 +58,6 @@ public partial class ProxyServer : IDisposable
         {
             var wantDualQuic = EnableHttp3 && endPoint is TransparentProxyEndPoint { EnableHttp3: true };
             var ephemeralDual = wantDualQuic && endPoint.Port == 0;
-            const int maxDualListenAttempts = 20;
             var dualAttempts = 0;
             while (true)
             {
@@ -79,7 +78,7 @@ public partial class ProxyServer : IDisposable
                     ListenQuic(dualListen);
                     break;
                 }
-                catch (Exception ex) when (ephemeralDual && dualAttempts < maxDualListenAttempts
+                catch (Exception ex) when (ephemeralDual && dualAttempts < MaxEphemeralDualListenAttempts
                                            && IsAddressAlreadyInUse(ex))
                 {
                     QuitListenQuic(dualListen);

@@ -27,7 +27,9 @@ public partial class ProxyServer
     private CancellationTokenSource? quicListenerCts;
 
     /// <summary>
-    ///     Starts a <see cref="QuicListener" /> for the given inbound QUIC endpoint.
+    ///     Starts inbound <see cref="QuicListener" />s for the endpoint.
+    ///     Loopback (<c>127.0.0.1</c> or <c>::1</c>) listens on both families at the same port.
+    ///     <see cref="IPAddress.Any" /> and <see cref="IPAddress.IPv6Any" /> stay on <c>::</c>.
     /// </summary>
     private void ListenQuic(IQuicInboundEndPoint endPoint)
     {
@@ -43,33 +45,15 @@ public partial class ProxyServer
 
         var cts = quicListenerCts!;
 
-        var listenEndPoint = new IPEndPoint(endPoint.IpAddress, endPoint.Port);
-        // HttpClient resolves "localhost" to ::1 first. An IPv4-only Loopback QuicListener never
-        // accepts that handshake (surfaces as ALPN failure). Dual-stack IPv6Any keeps the TCP port
-        // and accepts both families for reverse dual-listen / loopback scenarios.
-        if (IPAddress.IsLoopback(endPoint.IpAddress)
-            || endPoint.IpAddress.Equals(IPAddress.Any)
-            || endPoint.IpAddress.Equals(IPAddress.IPv6Any))
-        {
-            listenEndPoint = new IPEndPoint(IPAddress.IPv6Any, endPoint.Port);
-        }
-
-        var listenerOptions = new QuicListenerOptions
-        {
-            ListenEndPoint = listenEndPoint,
-            ApplicationProtocols = new List<SslApplicationProtocol>
-            {
-                SslApplicationProtocol.Http3
-            },
-            ConnectionOptionsCallback = (connection, clientHello, cancellationToken) =>
-                GetQuicServerConnectionOptionsAsync(endPoint, connection, clientHello, cancellationToken)
-        };
-
         try
         {
-            endPoint.QuicListener = QuicListener.ListenAsync(listenerOptions, cts.Token).AsTask()
-                .GetAwaiter().GetResult();
-            endPoint.AssignPort(endPoint.QuicListener.LocalEndPoint.Port);
+            if (IsExactLoopback(endPoint.IpAddress))
+                ListenLoopbackQuic(endPoint, cts);
+            else
+                ListenSingleQuic(endPoint, cts);
+
+            // Fire-and-forget: accept loops run until cts is cancelled.
+            _ = AcceptQuicConnectionsAsync(endPoint, cts.Token);
         }
         catch (Exception ex)
         {
@@ -77,20 +61,114 @@ public partial class ProxyServer
                 $"QUIC endpoint {endPoint.IpAddress}:{endPoint.Port} failed to start. " +
                 "Check inner exception for details.", ex);
         }
-
-        // Fire-and-forget: accept loop runs until cts is cancelled.
-        _ = AcceptQuicConnectionsAsync(endPoint, cts.Token);
     }
 
     /// <summary>
-    ///     Stops the <see cref="QuicListener" /> for the given endpoint.
+    ///     One listener. Wildcard addresses use dual-stack <see cref="IPAddress.IPv6Any" /> so a
+    ///     real all-interfaces proxy still accepts both families.
+    /// </summary>
+    private void ListenSingleQuic(IQuicInboundEndPoint endPoint, CancellationTokenSource cts)
+    {
+        var address = IsWildcard(endPoint.IpAddress) ? IPAddress.IPv6Any : endPoint.IpAddress;
+        var listener = BindQuicListener(endPoint, new IPEndPoint(address, endPoint.Port), cts.Token);
+        endPoint.QuicListener = listener;
+        endPoint.AssignPort(listener.LocalEndPoint.Port);
+    }
+
+    /// <summary>
+    ///     <c>::1</c> and <c>127.0.0.1</c> on the same port. HttpClient to <c>https://localhost</c>
+    ///     prefers <c>::1</c>; <c>QuicHttp3Client</c> to <see cref="IPAddress.Loopback" /> uses
+    ///     <c>127.0.0.1</c>. One family misses the other and surfaces as an ALPN failure.
+    ///     Bind <c>::1</c> first so an ephemeral port is chosen there, then bind IPv4 to that port.
+    ///     Dual-listen already has the TCP port and binds both to it.
+    /// </summary>
+    private void ListenLoopbackQuic(IQuicInboundEndPoint endPoint, CancellationTokenSource cts)
+    {
+        var ephemeral = endPoint.Port == 0;
+        const int maxAttempts = 20;
+        for (var attempt = 1; ; attempt++)
+        {
+            var v6 = BindQuicListener(
+                endPoint, new IPEndPoint(IPAddress.IPv6Loopback, endPoint.Port), cts.Token);
+            endPoint.QuicListener = v6;
+            var port = v6.LocalEndPoint.Port;
+            endPoint.AssignPort(port);
+            try
+            {
+                endPoint.LoopbackV4QuicListener = BindQuicListener(
+                    endPoint, new IPEndPoint(IPAddress.Loopback, port), cts.Token);
+                return;
+            }
+            catch (Exception ex) when (ephemeral && attempt < maxAttempts && IsAddressAlreadyInUse(ex))
+            {
+                DisposeQuicListener(v6);
+                endPoint.QuicListener = null;
+                endPoint.LoopbackV4QuicListener = null;
+                endPoint.AssignPort(0);
+            }
+            catch (Exception)
+            {
+                // Start() only rolls back listeners it has already published. A ::1 socket left
+                // assigned here would stay bound after the IPv4 bind fails.
+                DisposeQuicListener(v6);
+                endPoint.QuicListener = null;
+                endPoint.LoopbackV4QuicListener = null;
+                throw;
+            }
+        }
+    }
+
+    private QuicListener BindQuicListener(
+        IQuicInboundEndPoint endPoint, IPEndPoint listenEndPoint, CancellationToken cancellationToken)
+    {
+        var listenerOptions = new QuicListenerOptions
+        {
+            ListenEndPoint = listenEndPoint,
+            ApplicationProtocols = new List<SslApplicationProtocol>
+            {
+                SslApplicationProtocol.Http3
+            },
+            ConnectionOptionsCallback = (connection, clientHello, callbackToken) =>
+                GetQuicServerConnectionOptionsAsync(endPoint, connection, clientHello, callbackToken)
+        };
+
+        return QuicListener.ListenAsync(listenerOptions, cancellationToken).AsTask()
+            .GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    ///     Stops every <see cref="QuicListener" /> for the given endpoint.
     /// </summary>
     private static void QuitListenQuic(IQuicInboundEndPoint endPoint)
     {
-        var listener = endPoint.QuicListener;
+        var primary = endPoint.QuicListener;
+        var v4 = endPoint.LoopbackV4QuicListener;
         endPoint.QuicListener = null;
+        endPoint.LoopbackV4QuicListener = null;
+        try
+        {
+            DisposeQuicListener(primary);
+        }
+        finally
+        {
+            DisposeQuicListener(v4);
+        }
+    }
+
+    private static void DisposeQuicListener(QuicListener? listener)
+    {
         listener?.DisposeAsync().AsTask().GetAwaiter().GetResult();
     }
+
+    /// <summary>
+    ///     <c>127.0.0.1</c> and <c>::1</c> only. <see cref="IPAddress.IsLoopback" /> is true for all of
+    ///     127/8, which must stay on the address the caller configured.
+    /// </summary>
+    private static bool IsExactLoopback(IPAddress address) =>
+        IPAddress.Loopback.Equals(address) || IPAddress.IPv6Loopback.Equals(address);
+
+    private static bool IsWildcard(IPAddress address) =>
+        IPAddress.Any.Equals(address) || IPAddress.IPv6Any.Equals(address);
 
     /// <summary>
     ///     Builds <see cref="QuicServerConnectionOptions" /> for an inbound QUIC connection.
@@ -188,15 +266,34 @@ public partial class ProxyServer
     }
 
     /// <summary>
-    ///     Bounded accept loop for a QUIC endpoint.
+    ///     Accept loops for every listener on the endpoint (one, or both loopback families).
     /// </summary>
-    private async Task AcceptQuicConnectionsAsync(
+    private Task AcceptQuicConnectionsAsync(
         IQuicInboundEndPoint endPoint,
         CancellationToken cancellationToken)
     {
-        var listener = endPoint.QuicListener;
-        if (listener == null) return;
+        var primary = endPoint.QuicListener;
+        var v4 = endPoint.LoopbackV4QuicListener;
+        if (primary == null)
+            return v4 == null
+                ? Task.CompletedTask
+                : AcceptQuicListenerAsync(endPoint, v4, cancellationToken);
 
+        return v4 == null
+            ? AcceptQuicListenerAsync(endPoint, primary, cancellationToken)
+            : Task.WhenAll(
+                AcceptQuicListenerAsync(endPoint, primary, cancellationToken),
+                AcceptQuicListenerAsync(endPoint, v4, cancellationToken));
+    }
+
+    /// <summary>
+    ///     Bounded accept loop for one <see cref="QuicListener" />.
+    /// </summary>
+    private async Task AcceptQuicListenerAsync(
+        IQuicInboundEndPoint endPoint,
+        QuicListener listener,
+        CancellationToken cancellationToken)
+    {
         while (!cancellationToken.IsCancellationRequested)
         {
             QuicConnection connection;

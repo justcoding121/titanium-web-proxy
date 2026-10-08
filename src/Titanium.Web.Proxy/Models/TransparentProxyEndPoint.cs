@@ -109,6 +109,8 @@ public class TransparentProxyEndPoint : TransparentBaseProxyEndPoint, IQuicInbou
 
     internal QuicListener? QuicListener { get; set; }
 
+    internal QuicListener? LoopbackV4QuicListener { get; set; }
+
     internal ConditionalWeakTable<QuicConnection, BeforeQuicAuthenticateEventArgs> PendingQuicAuthArgs { get; } =
         new();
 
@@ -116,6 +118,12 @@ public class TransparentProxyEndPoint : TransparentBaseProxyEndPoint, IQuicInbou
     {
         get => QuicListener;
         set => QuicListener = value;
+    }
+
+    QuicListener? IQuicInboundEndPoint.LoopbackV4QuicListener
+    {
+        get => LoopbackV4QuicListener;
+        set => LoopbackV4QuicListener = value;
     }
 
     ConditionalWeakTable<QuicConnection, BeforeQuicAuthenticateEventArgs> IQuicInboundEndPoint.PendingQuicAuthArgs =>
