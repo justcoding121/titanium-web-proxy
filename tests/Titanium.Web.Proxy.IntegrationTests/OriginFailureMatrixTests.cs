@@ -65,7 +65,7 @@ public partial class OriginFailureMatrixTests
         using var response = await client.SendAsync(request);
 
         Assert.AreEqual(HttpStatusCode.BadGateway, response.StatusCode);
-        Assert.AreEqual(true, response.Headers.ConnectionClose, "a failed exchange must close the client connection");
+        Assert.IsTrue(response.Headers.ConnectionClose is true, "a failed exchange must close the client connection");
         var body = await response.Content.ReadAsStringAsync();
         Assert.IsFalse(string.IsNullOrWhiteSpace(body));
         StringAssert.DoesNotMatch(body, StackOrResolverText(),
