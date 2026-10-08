@@ -168,6 +168,12 @@ public partial class ProxyServer
 
         streamState.InboundRequestBodyChannel = requestBodyChannel;
 
+        // The round trip below starts running right away and may reach BeforeResponse before Http2Helper
+        // gets to its own Request.Locked assignment (it awaits the previous stream's dispatch first).
+        // GetResponseBody throws "You cannot read the response body before request is made to server"
+        // while the request is unlocked, so lock it here: BeforeRequest is done and headers are final.
+        sessionArgs.HttpClient.Request.Locked = true;
+
         // IsFastPath: no ContinueWith fault wrapper (same as H2→H1).
         Task bridgeTask;
         if (sessionArgs.IsFastPath)
