@@ -2446,10 +2446,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         }
     }
 
-    public double ResponseHeadersOpacity => _selectedResponseHeaders == NoResponseYetPlaceholder ? 0.65 : 1;
+    public double ResponseHeadersOpacity => IsNoResponseText(_selectedResponseHeaders) ? 0.65 : 1;
     public double RequestBodyOpacity => _selectedRequestBody == NoRequestBodyPlaceholder ? 0.65 : 1;
     public double ResponseBodyOpacity =>
-        _selectedResponseBody is NoRequestBodyPlaceholder or NoResponseYetPlaceholder ? 0.65 : 1;
+        _selectedResponseBody == NoRequestBodyPlaceholder || IsNoResponseText(_selectedResponseBody) ? 0.65 : 1;
     public string SelectedFrames { get => _selectedFrames; set => SetField(ref _selectedFrames, value); }
 
     /// <summary>Vertical pane nav: 0 Inspect, 1 Composer, 2 Breakpoints, 3 AutoResponder, 4 Scripts, 5 Map Remote.</summary>
@@ -3049,7 +3049,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     {
         if (ResponseNotStarted(selected))
         {
-            return "No response yet";
+            return NoResponseText(selected);
         }
 
         return string.IsNullOrEmpty(selected.ResponseHeadersText)

@@ -899,6 +899,7 @@ public sealed class SessionStore : IDisposable
             SentBytes = snap.SentBytes,
             DurationMs = snap.DurationMs,
             TtfbMs = snap.TtfbMs,
+            FailureReason = snap.FailureReason,
         };
 
     private List<SessionSnapshot> RemoveIdsLocked(HashSet<long> ids)

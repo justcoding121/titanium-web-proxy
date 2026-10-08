@@ -478,6 +478,7 @@ public sealed class InterceptionService : IDisposable
         _proxy.BeforeRequest -= OnBeforeRequest;
         _proxy.BeforeResponse -= OnBeforeResponse;
         _proxy.AfterResponse -= OnAfterResponse;
+        FinalizeInFlightSessions();
         _proxy.OnRequestBodyWrite -= OnRequestBodyWriteThrottle;
         _proxy.OnResponseBodyWrite -= OnResponseBodyWriteThrottle;
         _proxy.ServerCertificateValidationCallback -= OnServerCertValidation;
@@ -1920,12 +1921,88 @@ public sealed class InterceptionService : IDisposable
         {
             FinalizeStreamingRequestBody(snap);
             FinalizeStreamingBody(snap);
+            // Response/reason first, duration last: DurationMs is what marks the session as finished.
+            RecordMissingResponse(snap, e);
             ApplyTiming(snap, e.Timing, snap.StartedUtc);
             SessionUpdated?.Invoke(this, snap);
         }
 
         _live.TryRemove(e.HttpClient, out _);
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    ///     The session is over but BeforeResponse never filled a response (origin refused / reset, timeout,
+    ///     client gave up). Keep the proxy's synthetic 502/504 when it sent one; otherwise record why there
+    ///     is no response so Inspect does not claim the response is still on its way.
+    /// </summary>
+    private static void RecordMissingResponse(SessionSnapshot snap, SessionEventArgs e)
+    {
+        if (snap.IsTunnel || snap.StatusCode is > 0)
+        {
+            return;
+        }
+
+        try
+        {
+            if (e.HttpClient.Response is { StatusCode: >= 100 and <= 599 })
+            {
+                FillResponse(snap, e);
+            }
+        }
+        catch
+        {
+            // Fall through to the failure reason below.
+        }
+
+        if (snap.StatusCode is null or 0)
+        {
+            snap.FailureReason = DescribeNoResponse(e.Exception);
+        }
+    }
+
+    internal static string DescribeNoResponse(Exception? ex)
+    {
+        for (var inner = ex; inner is not null; inner = inner.InnerException)
+        {
+            switch (inner)
+            {
+                case Titanium.Web.Proxy.Exceptions.ProxyTimeoutException:
+                case TimeoutException:
+                    return "Timed out waiting for the server to respond.";
+                case System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.ConnectionRefused }:
+                    return "Connection refused by the server.";
+                case System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.ConnectionReset }:
+                    return "Connection reset by the server.";
+                case System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.HostNotFound }:
+                case System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.NoData }:
+                    return "Could not resolve the server host name.";
+                case System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.TimedOut }:
+                    return "Timed out connecting to the server.";
+                case OperationCanceledException:
+                    return "The request was cancelled before a response arrived (the client likely disconnected).";
+            }
+        }
+
+        return ex is null
+            ? "The connection closed before the server replied."
+            : $"The connection failed before a response arrived: {ex.GetBaseException().Message}";
+    }
+
+    /// <summary>Capture stopped while sessions were still waiting on the origin.</summary>
+    private void FinalizeInFlightSessions()
+    {
+        foreach (var snap in _live.Values)
+        {
+            if (snap.IsTunnel || snap.StatusCode is > 0 || snap.FailureReason is not null)
+            {
+                continue;
+            }
+
+            snap.FailureReason = "Capture was stopped before a response arrived.";
+            ApplyTiming(snap, null, snap.StartedUtc);
+            SessionUpdated?.Invoke(this, snap);
+        }
     }
 
     private Task OnServerCertValidation(object sender, CertificateValidationEventArgs e)

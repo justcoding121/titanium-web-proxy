@@ -7,6 +7,7 @@ namespace Titanium.Inspector.Services;
 public sealed class SessionSnapshot : INotifyPropertyChanged
 {
     private int? _statusCode;
+    private string? _failureReason;
     private string? _requestHeadersText;
     private string? _responseHeadersText;
     private string? _requestBodyText;
@@ -106,6 +107,16 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     {
         get => _statusCode;
         set => SetField(ref _statusCode, value);
+    }
+
+    /// <summary>
+    /// Why the session ended without any response (origin refused / reset, client gave up, capture stopped).
+    /// Null while the session is in flight or when a response (even a synthetic 502/504) was recorded.
+    /// </summary>
+    public string? FailureReason
+    {
+        get => _failureReason;
+        set => SetField(ref _failureReason, value);
     }
 
     public string? RequestHeadersText

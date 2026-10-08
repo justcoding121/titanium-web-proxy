@@ -190,9 +190,18 @@ public class BodyInspectCoverageTests
             vm.SelectedSession = requestOnly;
             vm.SelectedInspectTabIndex = (int)InspectTab.RequestBody;
             StringAssert.Contains(vm.SelectedRequestBody, "ping");
-            Assert.AreEqual("No response yet", vm.SelectedResponseHeaders);
+            Assert.AreEqual("Waiting for response…", vm.SelectedResponseHeaders);
             vm.SelectedInspectTabIndex = (int)InspectTab.ResponseBody;
-            Assert.AreEqual("No response yet", vm.SelectedResponseBody);
+            Assert.AreEqual("Waiting for response…", vm.SelectedResponseBody);
+
+            // Once the session ended with no response, say so (and why) instead of "waiting".
+            requestOnly.DurationMs = 30;
+            requestOnly.FailureReason = "Connection reset by the server.";
+            vm.SelectedSession = null;
+            vm.SelectedSession = requestOnly;
+            vm.SelectedInspectTabIndex = (int)InspectTab.ResponseBody;
+            Assert.AreEqual("No response received — Connection reset by the server.", vm.SelectedResponseBody);
+            Assert.AreEqual(0.65, vm.ResponseBodyOpacity);
             Assert.IsTrue(vm.CanSaveRequestBody);
             Assert.IsFalse(vm.CanSaveResponseBody);
             Assert.IsTrue(vm.ShowBodyModeToggles);
@@ -242,6 +251,26 @@ public class BodyInspectCoverageTests
                 // ignore
             }
         }
+    }
+
+    [TestMethod]
+    public void DescribeNoResponse_NamesTheFailure()
+    {
+        var describe = typeof(InterceptionService).GetMethod(
+            "DescribeNoResponse", BindingFlags.NonPublic | BindingFlags.Static)!;
+        string Run(Exception? ex) => (string)describe.Invoke(null, [ex])!;
+
+        StringAssert.Contains(Run(null), "closed before the server replied");
+        StringAssert.Contains(
+            Run(new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.ConnectionRefused)),
+            "refused");
+        StringAssert.Contains(
+            Run(new IOException("x", new System.Net.Sockets.SocketException(
+                (int)System.Net.Sockets.SocketError.ConnectionReset))),
+            "reset");
+        StringAssert.Contains(Run(new TimeoutException()), "Timed out");
+        StringAssert.Contains(Run(new OperationCanceledException()), "disconnected");
+        StringAssert.Contains(Run(new InvalidOperationException("boom")), "boom");
     }
 
     [TestMethod]

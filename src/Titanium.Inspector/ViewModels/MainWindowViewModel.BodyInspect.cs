@@ -11,7 +11,8 @@ public sealed partial class MainWindowViewModel
     private const string ContentTypeHeaderName = "Content-Type";
     private const string EmptyBodyPlaceholder = "(empty)";
     private const string NoRequestBodyPlaceholder = "No request body";
-    private const string NoResponseYetPlaceholder = "No response yet";
+    private const string WaitingForResponsePlaceholder = "Waiting for response…";
+    private const string NoResponseReceivedPrefix = "No response received";
     private const string PrettyPrintFailureHint = "Cannot pretty-print (body truncated or invalid)";
     private const string ImageTooLargeHint = "Image too large to preview in Inspect";
 
@@ -30,7 +31,8 @@ public sealed partial class MainWindowViewModel
 
     /// <summary>Inputs that change a rendered body. Compared by value so a stale cache is never reused.</summary>
     private readonly record struct BodyStamp(
-        int TextLength, int BytesLength, int HeadersLength, BodyCaptureState Capture, bool Missing);
+        int TextLength, int BytesLength, int HeadersLength, BodyCaptureState Capture, bool Missing,
+        bool Finished, string? Failure);
 
     public ICommand CopyRequestHeadersCommand { get; private set; } = null!;
     public ICommand CopyResponseHeadersCommand { get; private set; } = null!;
@@ -522,7 +524,7 @@ public sealed partial class MainWindowViewModel
 
         if (!isRequest && ResponseNotStarted(selected))
         {
-            return NoResponseYetPlaceholder;
+            return NoResponseText(selected);
         }
 
         if (hex)
@@ -561,7 +563,7 @@ public sealed partial class MainWindowViewModel
         {
             return isRequest
                 ? NoRequestBodyPlaceholder
-                : ResponseNotStarted(selected) ? NoResponseYetPlaceholder : EmptyBodyPlaceholder;
+                : ResponseNotStarted(selected) ? NoResponseText(selected) : EmptyBodyPlaceholder;
         }
 
         var size = SessionDisplayFormat.FormatByteSize(bytes.Length);
@@ -684,6 +686,28 @@ public sealed partial class MainWindowViewModel
         string.IsNullOrEmpty(selected.RequestBodyText)
         && selected.RequestBodyBytes is null or { Length: 0 };
 
+    /// <summary>
+    ///     Placeholder for a side with no response: "Waiting…" while the session is still in flight, a
+    ///     "No response received — reason" once it has ended without one (origin refused/reset, timeout,
+    ///     client gave up, capture stopped).
+    /// </summary>
+    internal static string NoResponseText(SessionSnapshot selected)
+    {
+        if (selected.DurationMs is null && string.IsNullOrEmpty(selected.FailureReason))
+        {
+            return WaitingForResponsePlaceholder;
+        }
+
+        return string.IsNullOrEmpty(selected.FailureReason)
+            ? NoResponseReceivedPrefix
+            : $"{NoResponseReceivedPrefix} — {selected.FailureReason}";
+    }
+
+    internal static bool IsNoResponseText(string? text) =>
+        text is not null
+        && (text == WaitingForResponsePlaceholder
+            || text.StartsWith(NoResponseReceivedPrefix, StringComparison.Ordinal));
+
     private static bool ResponseNotStarted(SessionSnapshot selected) =>
         selected.StatusCode is null or 0
         && string.IsNullOrEmpty(selected.ResponseHeadersText)
@@ -726,7 +750,9 @@ public sealed partial class MainWindowViewModel
             bytes?.Length ?? -1,
             headers?.Length ?? -1,
             capture,
-            selected.BodiesMissingFromDisk);
+            selected.BodiesMissingFromDisk,
+            selected.DurationMs is not null,
+            selected.FailureReason);
     }
 
     private static int BodyCacheKey(bool isRequest, bool pretty, bool hex) =>

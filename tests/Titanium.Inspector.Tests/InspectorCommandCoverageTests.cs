@@ -444,9 +444,19 @@ public class InspectorCommandCoverageTests
         var responseHeaders = (string)vmType.GetMethod("BuildSelectedResponseHeadersText", flags)!
             .Invoke(null, [headerSnap])!;
         StringAssert.Contains(responseHeaders, "Content-Type");
-        Assert.AreEqual("No response yet",
+        Assert.AreEqual("Waiting for response…",
             (string)vmType.GetMethod("BuildSelectedResponseHeadersText", flags)!
                 .Invoke(null, [new SessionSnapshot()])!);
+        Assert.AreEqual("No response received — Connection refused by the server.",
+            (string)vmType.GetMethod("BuildSelectedResponseHeadersText", flags)!
+                .Invoke(null, [new SessionSnapshot
+                {
+                    DurationMs = 12,
+                    FailureReason = "Connection refused by the server.",
+                }])!);
+        Assert.AreEqual("No response received",
+            (string)vmType.GetMethod("BuildSelectedResponseHeadersText", flags)!
+                .Invoke(null, [new SessionSnapshot { DurationMs = 12 }])!);
 
         var plainHeaders = (string)vmType.GetMethod("BuildSelectedRequestHeadersText", flags)!
             .Invoke(null, [new SessionSnapshot
