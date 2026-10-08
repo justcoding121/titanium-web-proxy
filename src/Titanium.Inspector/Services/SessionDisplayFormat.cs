@@ -55,27 +55,7 @@ public static class SessionDisplayFormat
         if (Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
             uri.Scheme is "http" or "https" or "ws" or "wss")
         {
-            if (!uri.Host.Equals(host, StringComparison.OrdinalIgnoreCase))
-            {
-                return url;
-            }
-
-            var authorityStart = url.IndexOf("://", StringComparison.Ordinal) + 3;
-            var tailStart = url.AsSpan(authorityStart).IndexOfAny('/', '?', '#');
-            var tail = tailStart < 0 ? "" : url[(authorityStart + tailStart)..];
-            var fragment = tail.IndexOf('#', StringComparison.Ordinal);
-            if (fragment >= 0)
-            {
-                tail = tail[..fragment];
-            }
-
-            if (tail.Length == 0 || tail[0] == '?')
-            {
-                tail = "/" + tail;
-            }
-
-            var port = uri.IsDefaultPort ? "" : ":" + uri.Port.ToString(CultureInfo.InvariantCulture);
-            return port + tail;
+            return FormatAbsoluteUrlForGrid(url, host, uri);
         }
 
         // CONNECT request target: host:port (no scheme).
@@ -89,6 +69,31 @@ public static class SessionDisplayFormat
         }
 
         return url;
+    }
+
+    private static string FormatAbsoluteUrlForGrid(string url, string host, Uri uri)
+    {
+        if (!uri.Host.Equals(host, StringComparison.OrdinalIgnoreCase))
+        {
+            return url;
+        }
+
+        var authorityStart = url.IndexOf("://", StringComparison.Ordinal) + 3;
+        var tailStart = url.AsSpan(authorityStart).IndexOfAny('/', '?', '#');
+        var tail = tailStart < 0 ? "" : url[(authorityStart + tailStart)..];
+        var fragment = tail.IndexOf('#', StringComparison.Ordinal);
+        if (fragment >= 0)
+        {
+            tail = tail[..fragment];
+        }
+
+        if (tail.Length == 0 || tail[0] == '?')
+        {
+            tail = "/" + tail;
+        }
+
+        var port = uri.IsDefaultPort ? "" : ":" + uri.Port.ToString(CultureInfo.InvariantCulture);
+        return port + tail;
     }
 
     /// <summary>

@@ -88,7 +88,7 @@ public partial class ProxyServer
     {
         var ephemeral = endPoint.Port == 0;
         const int maxAttempts = 20;
-        for (var attempt = 1; ; attempt++)
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
             var v6 = BindQuicListener(
                 endPoint, new IPEndPoint(IPAddress.IPv6Loopback, endPoint.Port), cts.Token);

@@ -41,7 +41,7 @@ internal static class SessionSnapshotNotifier
             return;
         }
 
-        _ = Task.Delay((int)wait).ContinueWith(static _ => Post(), TaskScheduler.Default);
+        _ = Task.Delay((int)wait, CancellationToken.None).ContinueWith(static _ => Post(), TaskScheduler.Default);
     }
 
     private static void Post() => Dispatcher.UIThread.Post(Flush, DispatcherPriority.Background);

@@ -40,7 +40,8 @@ public sealed partial class MainWindowViewModel
     /// <summary>Rows dropped because the grid fell more than <see cref="CaptureUiBacklogCap"/> behind.</summary>
     internal long CaptureUiRowsDropped => Interlocked.Read(ref _captureUiRowsDropped);
 
-    private bool CaptureUiIsSynchronous => !CaptureUiGovernor.IsPacingActive || Dispatcher.UIThread.CheckAccess();
+    private static bool CaptureUiIsSynchronous =>
+        !CaptureUiGovernor.IsPacingActive || Dispatcher.UIThread.CheckAccess();
 
     private void EnqueueCapturedBatch(IReadOnlyList<SessionSnapshot> batch)
     {
@@ -86,7 +87,8 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        _ = Task.Delay((int)wait).ContinueWith(
+        // CancellationToken.None: this delay is a pacing gap, not a cancellable operation.
+        _ = Task.Delay((int)wait, CancellationToken.None).ContinueWith(
             static (_, state) => ((MainWindowViewModel)state!).PostCaptureUiFlush(),
             this,
             TaskScheduler.Default);

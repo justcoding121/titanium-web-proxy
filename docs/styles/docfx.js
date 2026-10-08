@@ -286,7 +286,9 @@ $(function () {
               curHits.map(function (hit) {
                 var currentUrl = window.location.href;
                 var itemRawHref = relativeUrlToAbsoluteUrl(currentUrl, relHref + hit.href);
-                var itemHref = relHref + hit.href + "?q=" + query;
+                // Encode the query. The raw search-box text must not be written into the href.
+                var itemHref = relHref + hit.href;
+                if (query) { itemHref += "?q=" + encodeURIComponent(query); }
                 var itemTitle = hit.title;
                 var itemBrief = extractContentBrief(hit.summary || '');
 
@@ -914,8 +916,6 @@ $(function () {
         return;
       }
       event.preventDefault();
-      info.anchor.href = 'javascript:';
-      setTimeout(function () { return info.anchor.href = '#' + info.anchor.getAttribute('aria-controls'); });
       var tabIds = info.tabIds, group = info.group;
       var originalTop = info.anchor.getBoundingClientRect().top;
       if (group.independent) {

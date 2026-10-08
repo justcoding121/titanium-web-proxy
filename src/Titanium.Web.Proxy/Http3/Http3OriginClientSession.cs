@@ -130,7 +130,7 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
     {
         var level = ClassifyShutdownLevel(ex);
         if (_proxyServer.Logger.IsEnabled(level))
-            _proxyServer.Logger.Log(level, ex, message);
+            _proxyServer.Logger.Log(level, ex, "{Message}", message);
     }
 
     private async Task DisposeUnexpectedBidiStreamQuietlyAsync(QuicStream stream)

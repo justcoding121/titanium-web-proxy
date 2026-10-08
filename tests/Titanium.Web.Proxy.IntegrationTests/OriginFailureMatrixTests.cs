@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
@@ -20,8 +21,11 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// </summary>
 [TestClass]
 [DoNotParallelize]
-public class OriginFailureMatrixTests
+public partial class OriginFailureMatrixTests
 {
+    [GeneratedRegex("Exception|at Titanium|Socket")]
+    private static partial Regex StackOrResolverText();
+
     [TestMethod]
     [TestCategory("Regression-2026-10-07")]
     [Timeout(60 * 1000)]
@@ -61,10 +65,10 @@ public class OriginFailureMatrixTests
         using var response = await client.SendAsync(request);
 
         Assert.AreEqual(HttpStatusCode.BadGateway, response.StatusCode);
-        Assert.IsTrue(response.Headers.ConnectionClose == true, "a failed exchange must close the client connection");
+        Assert.AreEqual(true, response.Headers.ConnectionClose, "a failed exchange must close the client connection");
         var body = await response.Content.ReadAsStringAsync();
         Assert.IsFalse(string.IsNullOrWhiteSpace(body));
-        StringAssert.DoesNotMatch(body, new System.Text.RegularExpressions.Regex("Exception|at Titanium|Socket"),
+        StringAssert.DoesNotMatch(body, StackOrResolverText(),
             "the 502 body must stay generic (no stack or resolver text)");
 
         // -1: an idempotent GET is bounded: the first attempt, a silent fast-path re-dial (covers a pool of

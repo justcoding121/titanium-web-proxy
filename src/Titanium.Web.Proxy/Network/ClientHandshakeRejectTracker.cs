@@ -18,16 +18,11 @@ internal sealed class ClientHandshakeRejectTracker
 {
     private readonly ConcurrentDictionary<string, Entry> map = new(StringComparer.OrdinalIgnoreCase);
 
-    private int threshold = 5;
     private TimeSpan window = TimeSpan.FromMinutes(2);
     private int maxEntries = 256;
 
     /// <summary>Consecutive aborted handshakes required to trip. 0 or less disables tracking.</summary>
-    internal int Threshold
-    {
-        get => threshold;
-        set => threshold = value;
-    }
+    internal int Threshold { get; set; } = 5;
 
     /// <summary>Failures older than this no longer count toward the threshold.</summary>
     internal TimeSpan Window
@@ -59,7 +54,7 @@ internal sealed class ClientHandshakeRejectTracker
     /// </summary>
     internal bool RecordFailure(string? host, DateTime utcNow)
     {
-        var limit = threshold;
+        var limit = Threshold;
         if (limit <= 0 || string.IsNullOrWhiteSpace(host))
             return false;
 

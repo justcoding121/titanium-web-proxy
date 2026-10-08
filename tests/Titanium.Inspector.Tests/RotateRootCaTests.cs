@@ -13,6 +13,8 @@ namespace Titanium.Inspector.Tests;
 [TestClass]
 public class RotateRootCaTests
 {
+    private static readonly string[] RemovedRootThumbprints = ["AAAA1111", "BBBB2222"];
+
     [TestMethod]
     public async Task RotateCa_Cancel_DoesNotChangePfx()
     {
@@ -282,7 +284,7 @@ public class RotateRootCaTests
                 vm.RemoveOldRootCasCommand,
                 () => !vm.IsStatusBusy && vm.StatusText.Contains("Removed 2 old", StringComparison.OrdinalIgnoreCase));
 
-            CollectionAssert.AreEquivalent(new[] { "AAAA1111", "BBBB2222" }, removed.ToArray());
+            CollectionAssert.AreEquivalent(RemovedRootThumbprints, removed.ToArray());
             CollectionAssert.DoesNotContain(removed.ToArray(), current);
             Assert.AreEqual(current, interception.RootCertificate!.Thumbprint);
             interception.EnsureShutdown();

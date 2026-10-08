@@ -23,6 +23,8 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Http2BridgeOriginFailureTests
 {
+    private static readonly string[] StreamedPutChunks = ["ab", "cd"];
+
     private sealed record Outcome(string? Status, int BodyBytes, bool EndedCleanly, Http2ErrorCode? Rst);
 
     private static async Task<(ProxyServer Proxy, TestSuite Suite)> StartBridgeProxyAsync(Action<ProxyServer>? configure = null)
@@ -237,7 +239,7 @@ public class Http2BridgeOriginFailureTests
         Assert.AreEqual("200", (await ReadOutcomeAsync(raw, 1)).Status, "warm-up must succeed");
         await Task.Delay(300);
 
-        await SendRequestAsync(raw, 3, "PUT", new[] { "ab", "cd" }, declareLength: false);
+        await SendRequestAsync(raw, 3, "PUT", StreamedPutChunks, declareLength: false);
         var outcome = await ReadOutcomeAsync(raw, 3);
 
         Assert.AreEqual("502", outcome.Status);

@@ -3491,8 +3491,8 @@ internal sealed class ParameterRelayCommand(
 
     public event EventHandler? CanExecuteChanged
     {
-        add { }
-        remove { }
+        add => _ = value;
+        remove => _ = value;
     }
 }
 

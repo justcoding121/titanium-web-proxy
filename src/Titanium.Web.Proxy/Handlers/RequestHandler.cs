@@ -1082,17 +1082,12 @@ public partial class ProxyServer
                             read += n;
                         }
 
-                        if (read != length)
+                        // Short CL read, or extra bytes after a known-CL body: framing is ambiguous, so do not
+                        // return this socket to the pool. Keep the declared Content-Length (never present a
+                        // truncated body as complete). CloseServerConnection ends the client connection after
+                        // this exchange, so a short read is observed as a premature end.
+                        if (read != length || serverStream.DataAvailable)
                         {
-                            // Short CL read: do not return this socket to the pool (desync). Keep the declared
-                            // Content-Length (never present a truncated body as complete) and write the partial
-                            // wire body: CloseServerConnection ends the client connection after this exchange, so
-                            // the client observes the premature end instead of a bogus "complete" response.
-                            args.HttpClient.CloseServerConnection = true;
-                        }
-                        else if (serverStream.DataAvailable)
-                        {
-                            // Extra bytes after a known-CL body — framing is ambiguous.
                             args.HttpClient.CloseServerConnection = true;
                         }
 

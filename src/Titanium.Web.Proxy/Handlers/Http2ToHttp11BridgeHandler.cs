@@ -245,13 +245,13 @@ public partial class ProxyServer
         if (sessionArgs.IsFastPath)
         {
             bridgeTask = RunHttp2ToHttp11BridgeRoundTripAsync(sessionArgs, ctx.StreamId, ctx.ConnectionState,
-                ctx.ClientStream, remoteHostName, remotePort, connectHost, connectPort, ctx.CancellationToken,
+                ctx.ClientStream, new Http11BridgeOrigin(remoteHostName, remotePort, connectHost, connectPort),
                 streamState.Cancellation.Token, requestBodyChannel);
         }
         else
         {
             bridgeTask = RunHttp2ToHttp11BridgeRoundTripAsync(sessionArgs, ctx.StreamId, ctx.ConnectionState,
-                    ctx.ClientStream, remoteHostName, remotePort, connectHost, connectPort, ctx.CancellationToken,
+                    ctx.ClientStream, new Http11BridgeOrigin(remoteHostName, remotePort, connectHost, connectPort),
                     streamState.Cancellation.Token, requestBodyChannel)
                 .ContinueWith(t =>
                 {
@@ -276,17 +276,27 @@ public partial class ProxyServer
     ///     <see cref="TcpConnectionFactory" /> exactly like an HTTP/1.1 client's requests would), so multiple
     ///     concurrent streams on the same h2 client connection never contend on one shared origin connection.
     /// </summary>
+    /// <summary>Origin address for one h2-to-HTTP/1.1 bridge round trip.</summary>
+    private readonly record struct Http11BridgeOrigin(
+        string RemoteHostName, int RemotePort, string? ConnectHost, int? ConnectPort);
+
+    /// <summary>One attempt: origin address, optional streamed body, and whether a stale socket may be replayed.</summary>
+    private readonly record struct Http11BridgeAttempt(
+        Http11BridgeOrigin Origin,
+        Channel<(byte[] Buffer, int Length)>? RequestBodyChannel,
+        bool AllowReplay);
+
     private async Task RunHttp2ToHttp11BridgeRoundTripAsync(SessionEventArgs sessionArgs, int streamId,
-        Http2ConnectionState connectionState, System.IO.Stream clientStream, string remoteHostName, int remotePort,
-        string? connectHost, int? connectPort, CancellationToken connectionToken, CancellationToken streamToken, // NOSONAR S1172 -- connectionToken retained for call-site symmetry; streamToken drives cancellation
-        Channel<(byte[] Buffer, int Length)>? requestBodyChannel)
+        Http2ConnectionState connectionState, System.IO.Stream clientStream, Http11BridgeOrigin origin,
+        CancellationToken streamToken, Channel<(byte[] Buffer, int Length)>? requestBodyChannel)
     {
         // A reused (pooled keep-alive) origin connection may have been closed by the origin while idle; the
         // first attempt then fails with RetryableServerConnectionException before any response byte exists.
         // Replay once on a fresh connection (same single-replay rule the H1 path gets from RetryPolicy).
+        // Stream CTS is cancelled on RST_STREAM and when the connection tears down, so the connection token
+        // is not linked here (a linked source was one allocation per in-flight stream).
         var replay = await RunHttp2ToHttp11BridgeAttemptAsync(sessionArgs, streamId, connectionState, clientStream,
-            remoteHostName, remotePort, connectHost, connectPort, connectionToken, streamToken, requestBodyChannel,
-            allowReplay: true);
+            new Http11BridgeAttempt(origin, requestBodyChannel, AllowReplay: true), streamToken);
         if (!replay)
             return;
 
@@ -294,8 +304,7 @@ public partial class ProxyServer
             $"HTTP/2-to-HTTP/1.1 bridge replaying stream {streamId} on a fresh origin connection",
             new RetryableServerConnectionException("Reused origin connection was closed before a response."));
         await RunHttp2ToHttp11BridgeAttemptAsync(sessionArgs, streamId, connectionState, clientStream,
-            remoteHostName, remotePort, connectHost, connectPort, connectionToken, streamToken, requestBodyChannel,
-            allowReplay: false);
+            new Http11BridgeAttempt(origin, requestBodyChannel, AllowReplay: false), streamToken);
     }
 
     /// <summary>
@@ -316,10 +325,15 @@ public partial class ProxyServer
 
     /// <returns>True when the attempt failed on a reused connection and must be replayed once.</returns>
     private async Task<bool> RunHttp2ToHttp11BridgeAttemptAsync(SessionEventArgs sessionArgs, int streamId, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
-        Http2ConnectionState connectionState, System.IO.Stream clientStream, string remoteHostName, int remotePort,
-        string? connectHost, int? connectPort, CancellationToken connectionToken, CancellationToken streamToken,
-        Channel<(byte[] Buffer, int Length)>? requestBodyChannel, bool allowReplay)
+        Http2ConnectionState connectionState, System.IO.Stream clientStream, Http11BridgeAttempt attempt,
+        CancellationToken streamToken)
     {
+        var remoteHostName = attempt.Origin.RemoteHostName;
+        var remotePort = attempt.Origin.RemotePort;
+        var connectHost = attempt.Origin.ConnectHost;
+        var connectPort = attempt.Origin.ConnectPort;
+        var requestBodyChannel = attempt.RequestBodyChannel;
+        var allowReplay = attempt.AllowReplay;
         var replayRequested = false;
         var reusedConnection = false;
         // Stream CTS is cancelled on RST_STREAM and when the connection tears down (all streams
@@ -648,7 +662,6 @@ public partial class ProxyServer
                             // Short read: do not pool — framing is ambiguous. Nothing has reached the client
                             // yet, so fail the exchange (clean 502 below) instead of rewriting the length and
                             // presenting a truncated body as a complete response.
-                            closeConnection = true;
                             throw new IOException(
                                 $"Origin response body ended after {offset} of {bodyBytes.Length} declared bytes.");
                         }

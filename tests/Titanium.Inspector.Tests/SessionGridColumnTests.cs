@@ -13,6 +13,10 @@ public class SessionGridColumnTests
     private static readonly string[] DefaultVisibleKeys =
         ["Id", "Method", "Status", "Host", "URL", "Protocol", "Duration", "TTFB", "Size", "Process"];
 
+    private static readonly string[] OptionalColumnKeys = ["Started", "Scheme", "Content-Type"];
+
+    private static readonly string[] StartedColumn = ["Started"];
+
     [TestMethod]
     public void Catalog_DefaultVisibleColumns_MatchTodaysGrid()
     {
@@ -29,7 +33,7 @@ public class SessionGridColumnTests
     {
         var all = SessionGridColumnCatalog.All;
         CollectionAssert.AreEqual(
-            new[] { "Started", "Scheme", "Content-Type" },
+            OptionalColumnKeys,
             all.Skip(DefaultVisibleKeys.Length).Select(c => c.Key).ToArray());
         Assert.IsTrue(all.Skip(DefaultVisibleKeys.Length).All(c => !c.DefaultVisible && c.CanHide));
     }
@@ -176,7 +180,7 @@ public class SessionGridColumnTests
         Assert.IsFalse(fixture.Vm.IsGridColumnVisible("Started"));
         Assert.IsTrue(fixture.Vm.SetGridColumnVisible("Started", true));
         Assert.IsTrue(fixture.Vm.IsGridColumnVisible("Started"));
-        CollectionAssert.AreEqual(new[] { "Started" }, raised);
+        CollectionAssert.AreEqual(StartedColumn, raised);
 
         var reloaded = new SettingsService(fixture.Path).Current.SessionGridLayout;
         Assert.IsTrue(reloaded?.ColumnVisibility?["Started"]);

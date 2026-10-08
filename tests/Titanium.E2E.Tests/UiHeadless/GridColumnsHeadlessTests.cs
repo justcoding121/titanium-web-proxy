@@ -6,12 +6,15 @@ using Avalonia.VisualTree;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.E2E.Tests.Harness;
 using Titanium.Inspector.Services;
+using Titanium.Inspector.Views;
 
 namespace Titanium.E2E.Tests.UiHeadless;
 
 [TestClass]
 public class GridColumnsHeadlessTests
 {
+    private static readonly string[] OptionalColumnKeys = ["Started", "Scheme", "Content-Type"];
+
     private static readonly string[] OriginalColumnKeys =
         ["Id", "Method", "Status", "Host", "URL", "Protocol", "Duration", "TTFB", "Size", "Process"];
 
@@ -45,7 +48,7 @@ public class GridColumnsHeadlessTests
         {
             var grid = Grid(fx);
             CollectionAssert.AreEqual(ExpectedDefaultKeys(fx), VisibleKeysInDisplayOrder(grid));
-            foreach (var key in new[] { "Started", "Scheme", "Content-Type" })
+            foreach (var key in OptionalColumnKeys)
             {
                 Assert.IsFalse(Column(grid, key).IsVisible, key);
             }
@@ -240,7 +243,7 @@ public class GridColumnsHeadlessTests
         await fx.DispatchAsync(() =>
         {
             fx.Robot.Click("MenuColumn_Scheme");
-            var menu = fx.Window.BuildColumnChooserMenu(fx.ViewModel);
+            var menu = MainWindow.BuildColumnChooserMenu(fx.ViewModel);
 
             var items = menu.Items.OfType<MenuItem>().ToList();
             var chooser = items.Where(i => i.CommandParameter is string).ToList();

@@ -787,7 +787,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Header context menu: one check item per catalog column plus Reset columns.</summary>
-    public ContextMenu BuildColumnChooserMenu(MainWindowViewModel vm)
+    public static ContextMenu BuildColumnChooserMenu(MainWindowViewModel vm)
     {
         var menu = new ContextMenu();
         var optionalSectionStarted = false;
@@ -858,6 +858,27 @@ public partial class MainWindow : Window
             column.Width = new DataGridLength(width);
         }
 
+        RestoreSavedColumnOrder(byKey);
+
+        SessionGridLayout.ResolveSort(layout, out var sortKey, out var sortDirection);
+        var sortColumn = SessionsGrid.Columns.FirstOrDefault(c =>
+            string.Equals(SessionGridLayout.GetColumnKey(c.Header), sortKey, StringComparison.Ordinal));
+        if (sortColumn is { IsVisible: false } && !IsIdColumn(sortColumn))
+        {
+            // The saved sort column is hidden: nothing shows why rows are ordered that way.
+            ApplyDefaultSort();
+        }
+        else
+        {
+            sortColumn?.Sort(sortDirection);
+        }
+
+        SyncColumnMenuChecks();
+        ApplySessionColumnHeaderTips();
+    }
+
+    private void RestoreSavedColumnOrder(Dictionary<string, SessionGridColumnStateDto> byKey)
+    {
         foreach (var (column, state) in SessionsGrid.Columns
                      .Select(c => (Column: c, Key: SessionGridLayout.GetColumnKey(c.Header)))
                      .Where(x => x.Key is not null && byKey.ContainsKey(x.Key))
@@ -876,27 +897,11 @@ public partial class MainWindow : Window
                     column.DisplayIndex = state.DisplayIndex;
                 }
             }
-            catch
+            catch (Exception)
             {
-                // DisplayIndex can throw while the grid is still wiring columns.
+                // DisplayIndex throws while the grid is still wiring columns.
             }
         }
-
-        SessionGridLayout.ResolveSort(layout, out var sortKey, out var sortDirection);
-        var sortColumn = SessionsGrid.Columns.FirstOrDefault(c =>
-            string.Equals(SessionGridLayout.GetColumnKey(c.Header), sortKey, StringComparison.Ordinal));
-        if (sortColumn is { IsVisible: false } && !IsIdColumn(sortColumn))
-        {
-            // The saved sort column is hidden: nothing shows why rows are ordered that way.
-            ApplyDefaultSort();
-        }
-        else
-        {
-            sortColumn?.Sort(sortDirection);
-        }
-
-        SyncColumnMenuChecks();
-        ApplySessionColumnHeaderTips();
     }
 
     private void ApplySessionColumnHeaderTips()

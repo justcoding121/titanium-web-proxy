@@ -596,7 +596,7 @@ public sealed partial class MainWindowViewModel
         StatusText = "Map Remote rule updated";
         return Task.CompletedTask;
     }
-    private void OnSessionsBatchAdded(IReadOnlyList<SessionSnapshot> batch)
+    private void OnSessionsBatchAdded(List<SessionSnapshot> batch)
     {
         if (batch.Count == 0)
         {
