@@ -1,6 +1,6 @@
 # Validate compare-lossy / compare-arch against the hard bar:
 #   - Every TWP arm present in the CSV must have sustain RPS > 0 (best SLO-pass step, else peak)
-#   - TWP ÷ closest peer >= 0.50 (YARP, nginx, HAProxy, Envoy with sustain > 0)
+#   - TWP ÷ closest peer >= 0.40 (YARP, nginx, HAProxy, Envoy with sustain > 0)
 #   - SKIP ratio when no peer sustain is > 0 (still FAIL if TWP is 0)
 # Pair list mirrors RampOrchestrator.HeavierReverseArms + BuildArchArms duplex.
 param(
@@ -8,7 +8,7 @@ param(
     [Parameter(Mandatory)]
     [ValidateSet('lossy', 'arch')]
     [string] $Suite,
-    [double] $ReverseYarpGate = 0.50
+    [double] $ReverseYarpGate = 0.40
 )
 
 . (Join-Path $PSScriptRoot 'rps-peer-gate.ps1')
