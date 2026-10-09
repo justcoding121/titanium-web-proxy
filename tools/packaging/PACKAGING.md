@@ -94,7 +94,11 @@ Winget package IDs:
 - `justcoding121.TitaniumInspector` (prefer MSI when attached to the Release)
 - `justcoding121.TitaniumCli` (portable zip)
 
-Manifest stubs live in `tools/packaging/winget/`. Resubmit to `microsoft/winget-pkgs` only after the **first signed stable** with fresh SHA256s (do not resubmit unsigned `7.0.4`).
+Manifest stubs live in `tools/packaging/winget/` (they still name an older version; bump them to the release you submit). Resubmit to `microsoft/winget-pkgs` only after the **first signed stable** with fresh SHA256s (do not resubmit unsigned `7.0.4`).
+
+**Windows CLI zip is a single file.** The `win-x64` CLI is published with `PublishSingleFile`, so `titanium.exe` and `twp.exe` are self-contained. winget's portable install creates symlinks in `WinGet\Links`, and the .NET apphost does not follow a symlink to find `titanium.dll`; the old multi-file layout failed there with "titanium.dll does not exist". `release.yml` runs [`winget/test-links-symlink.ps1`](winget/test-links-symlink.ps1) after "Zip Cli" and blocks the release if either command fails through a symlink. Run the same script locally against a zip before a winget submission (needs an elevated shell or Developer Mode for symlinks).
+
+Limitations under winget: update with `winget upgrade`, not `titanium update` (the exe lives in the package folder, not where the symlink is). `AppContext.BaseDirectory` may resolve to the `Links` folder rather than the package folder, so a downloaded `Titanium.Plus.dll` may be placed there; this is documented, not redesigned.
 
 ### Chocolatey (Windows)
 

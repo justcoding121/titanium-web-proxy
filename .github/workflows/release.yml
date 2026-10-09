@@ -202,7 +202,14 @@ jobs:
           $ver = $env:RELEASE_VERSION
           if ([string]::IsNullOrWhiteSpace($ver)) { $ver = "0.0.0" }
           # Stamp InformationalVersion (e.g. 7.0.5-beta) while assembly Version stays numeric.
-          dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r $rid --self-contained true -o $out -p:Version=$ver
+          $publishArgs = @("-c", "Release", "-r", $rid, "--self-contained", "true", "-o", $out, "-p:Version=$ver")
+          if ($rid -eq "win-x64") {
+            # One exe, no titanium.dll beside it: the .NET apphost does not resolve symlinks, so the
+            # multi-file layout fails under winget (WinGet\Links\twp.exe -> titanium.dll not found).
+            $publishArgs += @("-p:PublishSingleFile=true", "-p:EnableCompressionInSingleFile=true")
+          }
+          dotnet publish src/Titanium.Cli/Titanium.Cli.csproj @publishArgs
+          if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed ($LASTEXITCODE)" }
           if (Test-Path "$out/titanium.exe") {
             Copy-Item "$out/titanium.exe" "$out/twp.exe"
           } elseif (Test-Path "$out/titanium") {
@@ -238,6 +245,12 @@ jobs:
             Push-Location $out
             try { zip -r "../../../Titanium.Cli-$rid.zip" . } finally { Pop-Location }
           }
+      - name: Winget symlink smoke (win-x64)
+        # winget portable installs create WinGet\Links symlinks to titanium.exe and twp.exe.
+        # A multi-file publish fails there; this gate runs before any GitHub Release is published.
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: ./tools/packaging/winget/test-links-symlink.ps1 -Zip "Titanium.Cli-win-x64.zip"
       - name: Sign and notarize CLI (macOS)
         if: startsWith(matrix.rid, 'osx-')
         env:
