@@ -185,11 +185,13 @@ public class BindEndpointUxTests
             Assert.IsFalse(interception.IsRunning);
             StringAssert.Contains(vm.StatusText, MainWindowViewModel.InvalidBindAddressMessage("::::"));
 
-            vm.BindAddress = "*";
+            // Recover on loopback. Starting on "*" binds 0.0.0.0 and raises the Windows
+            // Defender Firewall prompt for testhost.exe.
+            vm.BindAddress = "127.0.0.1";
             vm.StartCaptureCommand.Execute(null);
             await WaitUntil(() => interception.IsRunning &&
                 vm.EndpointStatusText.StartsWith("Proxy running", StringComparison.Ordinal));
-            Assert.AreEqual($"Proxy running on 0.0.0.0:{vm.BindPort}", vm.EndpointStatusText);
+            Assert.AreEqual($"Proxy running on 127.0.0.1:{vm.BindPort}", vm.EndpointStatusText);
 
             vm.EnsureShutdown();
         }
