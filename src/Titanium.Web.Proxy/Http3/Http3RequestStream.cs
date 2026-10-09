@@ -1099,7 +1099,7 @@ internal static class Http3RequestStream
                 if (header.Value.Type == Http3FrameType.Data)
                 {
                     if (header.Value.Length > 0)
-                        await Http3Frame.CopyPayloadAsync(clientStream, header.Value.Length, 16 * 1024, writeData, ct);
+                        await Http3Frame.CopyPayloadAsync(clientStream, header.Value.Length, Http3Frame.RelayUnitBytes, writeData, ct);
                     continue;
                 }
 

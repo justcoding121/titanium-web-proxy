@@ -406,8 +406,41 @@ public class SessionEventArgs : SessionEventArgsBase
 
         if (response.HttpVersion == HttpHeader.Version20)
             await ReadHttp2ResponseBodyAsync(response).ConfigureAwait(false);
+        else if (response.Http3RawBodyDrain != null)
+            await ReadHttp3ResponseBodyAsync(response, cancellationToken).ConfigureAwait(false);
         else
             await ReadHttp1ResponseBodyAsync(response, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Buffers a response whose body is still on the origin's QUIC stream (HTTP/3 origin). There is no
+    ///     <c>HttpClient.Connection</c> here, so the HTTP/1.x reader cannot be used. The body is kept as wire
+    ///     bytes (<see cref="RequestResponseBase.BodyIsWireEncoded"/>), matching the eager-buffer path in the
+    ///     HTTP/3 origin bridge; <see cref="GetResponseBody"/> then decompresses it. As with HTTP/1.x
+    ///     buffering, <c>OnResponseBodyWrite</c> is not applied to a body that BeforeResponse already read.
+    /// </summary>
+    private async Task ReadHttp3ResponseBodyAsync(Response response, CancellationToken cancellationToken)
+    {
+        var drain = response.Http3RawBodyDrain!;
+        response.Http3RawBodyDrain = null;
+
+        using var bodyStream = new MemoryStream();
+        var maxBufferedBodyBytes = MaxBufferedBodyBytes ?? Server.MaxBufferedBodyBytes;
+        Stream target = maxBufferedBodyBytes > 0
+            ? new BoundedWriteStream(bodyStream, maxBufferedBodyBytes, Server.PolicyModes[PolicyFamily.BodyBudget])
+            : bodyStream;
+
+        // On failure StreamBodyWriter stays set: the QUIC stream is already released, so a later emit
+        // fails loudly (stream reset) rather than sending a silently truncated body.
+        await drain(target, cancellationToken).ConfigureAwait(false);
+
+        var bodyBytes = bodyStream.ToArray();
+        response.Body = bodyBytes;
+        response.BodyIsWireEncoded = true;
+        response.ContentLength = bodyBytes.Length;
+        response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+        response.StreamBodyWriter = null;
+        MarkResponseBodyRead(response);
     }
 
     private static void MarkResponseBodyRead(Response response)

@@ -245,13 +245,13 @@ public partial class ProxyServer
         if (sessionArgs.IsFastPath)
         {
             bridgeTask = RunHttp2ToHttp11BridgeRoundTripAsync(sessionArgs, ctx.StreamId, ctx.ConnectionState,
-                ctx.ClientStream, remoteHostName, remotePort, connectHost, connectPort, ctx.CancellationToken,
+                ctx.ClientStream, new Http11BridgeOrigin(remoteHostName, remotePort, connectHost, connectPort),
                 streamState.Cancellation.Token, requestBodyChannel);
         }
         else
         {
             bridgeTask = RunHttp2ToHttp11BridgeRoundTripAsync(sessionArgs, ctx.StreamId, ctx.ConnectionState,
-                    ctx.ClientStream, remoteHostName, remotePort, connectHost, connectPort, ctx.CancellationToken,
+                    ctx.ClientStream, new Http11BridgeOrigin(remoteHostName, remotePort, connectHost, connectPort),
                     streamState.Cancellation.Token, requestBodyChannel)
                 .ContinueWith(t =>
                 {
@@ -276,11 +276,66 @@ public partial class ProxyServer
     ///     <see cref="TcpConnectionFactory" /> exactly like an HTTP/1.1 client's requests would), so multiple
     ///     concurrent streams on the same h2 client connection never contend on one shared origin connection.
     /// </summary>
-    private async Task RunHttp2ToHttp11BridgeRoundTripAsync(SessionEventArgs sessionArgs, int streamId, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
-        Http2ConnectionState connectionState, System.IO.Stream clientStream, string remoteHostName, int remotePort,
-        string? connectHost, int? connectPort, CancellationToken connectionToken, CancellationToken streamToken, // NOSONAR S1172 -- connectionToken retained for call-site symmetry; streamToken drives cancellation
+    /// <summary>Origin address for one h2-to-HTTP/1.1 bridge round trip.</summary>
+    private readonly record struct Http11BridgeOrigin(
+        string RemoteHostName, int RemotePort, string? ConnectHost, int? ConnectPort);
+
+    /// <summary>One attempt: origin address, optional streamed body, and whether a stale socket may be replayed.</summary>
+    private readonly record struct Http11BridgeAttempt(
+        Http11BridgeOrigin Origin,
+        Channel<(byte[] Buffer, int Length)>? RequestBodyChannel,
+        bool AllowReplay);
+
+    private async Task RunHttp2ToHttp11BridgeRoundTripAsync(SessionEventArgs sessionArgs, int streamId,
+        Http2ConnectionState connectionState, System.IO.Stream clientStream, Http11BridgeOrigin origin,
+        CancellationToken streamToken, Channel<(byte[] Buffer, int Length)>? requestBodyChannel)
+    {
+        // A reused (pooled keep-alive) origin connection may have been closed by the origin while idle; the
+        // first attempt then fails with RetryableServerConnectionException before any response byte exists.
+        // Replay once on a fresh connection (same single-replay rule the H1 path gets from RetryPolicy).
+        // Stream CTS is cancelled on RST_STREAM and when the connection tears down, so the connection token
+        // is not linked here (a linked source was one allocation per in-flight stream).
+        var replay = await RunHttp2ToHttp11BridgeAttemptAsync(sessionArgs, streamId, connectionState, clientStream,
+            new Http11BridgeAttempt(origin, requestBodyChannel, AllowReplay: true), streamToken);
+        if (!replay)
+            return;
+
+        ProxyDiagnostics.ReportCaught(logger,
+            $"HTTP/2-to-HTTP/1.1 bridge replaying stream {streamId} on a fresh origin connection",
+            new RetryableServerConnectionException("Reused origin connection was closed before a response."));
+        await RunHttp2ToHttp11BridgeAttemptAsync(sessionArgs, streamId, connectionState, clientStream,
+            new Http11BridgeAttempt(origin, requestBodyChannel, AllowReplay: false), streamToken);
+    }
+
+    /// <summary>
+    ///     Replay is only offered for bodiless idempotent requests: nothing was streamed from the client, no
+    ///     body has to be re-encoded, and re-sending cannot be applied twice by the origin.
+    /// </summary>
+    private static bool CanReplayBridgeRequest(SessionEventArgs sessionArgs,
         Channel<(byte[] Buffer, int Length)>? requestBodyChannel)
     {
+        var request = sessionArgs.HttpClient.Request;
+        return requestBodyChannel == null
+               && !request.HasBody
+               && !request.BodyAvailable
+               && Routing.StreamDestinationDispatch.IsIdempotentMethod(request.Method)
+               && !sessionArgs.HttpClient.Response.Locked
+               && sessionArgs.HttpClient.Response.StatusCode == 0;
+    }
+
+    /// <returns>True when the attempt failed on a reused connection and must be replayed once.</returns>
+    private async Task<bool> RunHttp2ToHttp11BridgeAttemptAsync(SessionEventArgs sessionArgs, int streamId, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+        Http2ConnectionState connectionState, System.IO.Stream clientStream, Http11BridgeAttempt attempt,
+        CancellationToken streamToken)
+    {
+        var remoteHostName = attempt.Origin.RemoteHostName;
+        var remotePort = attempt.Origin.RemotePort;
+        var connectHost = attempt.Origin.ConnectHost;
+        var connectPort = attempt.Origin.ConnectPort;
+        var requestBodyChannel = attempt.RequestBodyChannel;
+        var allowReplay = attempt.AllowReplay;
+        var replayRequested = false;
+        var reusedConnection = false;
         // Stream CTS is cancelled on RST_STREAM and when the connection tears down (all streams
         // cancelled in CopyHttp2FrameAsync). Skip CreateLinkedTokenSource — dumpheap on H2→H1 MITM
         // showed ~1 Linked2CancellationTokenSource per in-flight stream.
@@ -364,7 +419,10 @@ public partial class ProxyServer
             }
 
             // H3→H1 session-lite analogue: warm pool hit without SessionEventArgs factory work.
+            // The replay attempt must not rent another (possibly equally stale) pooled socket.
+            var isReplayAttempt = !allowReplay;
             if (poolKey != null
+                && !isReplayAttempt
                 && sessionArgs.IsFastPath
                 && TcpConnectionFactory.TryRentPooled(this, poolKey, SslExtensions.Http11ProtocolAsList,
                     out var pooled))
@@ -376,7 +434,8 @@ public partial class ProxyServer
                 var newConnection = await TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
                     HttpHeader.Version11, upstreamIsHttps, SslExtensions.Http11ProtocolAsList, false, sessionArgs,
                     sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint,
-                    customUpStreamProxy ?? (upstreamIsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy), false, false,
+                    customUpStreamProxy ?? (upstreamIsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy), isReplayAttempt,
+                    false,
                     cancellationToken, connectHost, connectPort,
                     createGate: upstreamIsHttps ? Http2ToHttp11HttpsOriginCreateGate : null,
                     precomputedCacheKey: poolKey)
@@ -396,6 +455,7 @@ public partial class ProxyServer
 
             sessionArgs.HttpClient.SetConnection(connection!);
             var firstUse = connection!.ClaimFirstUse();
+            reusedConnection = !firstUse;
             if (sessionArgs.Timing != null)
                 sessionArgs.Timing.MarkConnectionReady(connection.Id, !firstUse);
 
@@ -502,7 +562,12 @@ public partial class ProxyServer
 
             sessionArgs.Timing?.MarkRequestSent();
 
-            await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
+            // Honour the response-header deadline (server-wide or per-session) so a stalled origin yields a 504
+            // instead of an unbounded wait; only paid for when a deadline is configured.
+            if (ResponseHeaderTimeoutSeconds > 0 || sessionArgs.ResponseHeaderTimeout.HasValue)
+                await ReceiveOriginResponseWithTimeout(sessionArgs, cancellationToken);
+            else
+                await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
             sessionArgs.Timing?.MarkResponseHeadersReceived();
 
             // The origin here is always HTTP/1.1 (see the GetServerConnection call above), so this
@@ -594,9 +659,11 @@ public partial class ProxyServer
 
                         if (offset != bodyBytes.Length)
                         {
-                            // Short read: do not pool — framing is ambiguous.
-                            closeConnection = true;
-                            Array.Resize(ref bodyBytes, offset);
+                            // Short read: do not pool — framing is ambiguous. Nothing has reached the client
+                            // yet, so fail the exchange (clean 502 below) instead of rewriting the length and
+                            // presenting a truncated body as a complete response.
+                            throw new IOException(
+                                $"Origin response body ended after {offset} of {bodyBytes.Length} declared bytes.");
                         }
                     }
 
@@ -665,6 +732,11 @@ public partial class ProxyServer
                                     .ConfigureAwait(false);
                                 if (n > 0)
                                     remaining -= n;
+                                else
+                                    // Origin closed before the declared Content-Length: abort the stream
+                                    // (RST_STREAM via the round-trip catch) instead of ending it cleanly.
+                                    throw new IOException(
+                                        $"Origin response body ended with {remaining} declared bytes missing.");
                                 return n;
                             }, ct).ConfigureAwait(false);
                             return;
@@ -749,6 +821,15 @@ public partial class ProxyServer
             if (connection?.Stream is Helpers.HttpStream httpStream && httpStream.DataAvailable)
                 closeConnection = true;
         }
+        catch (Exception ex) when (allowReplay && reusedConnection
+                                   && ex is RetryableServerConnectionException
+                                   && !streamToken.IsCancellationRequested
+                                   && CanReplayBridgeRequest(sessionArgs, requestBodyChannel))
+        {
+            // Stale pooled keep-alive socket: nothing reached the client, replay once on a fresh connection.
+            closeConnection = true;
+            replayRequested = true;
+        }
         catch (Exception ex)
         {
             closeConnection = true;
@@ -772,7 +853,7 @@ public partial class ProxyServer
                         // headers not sent yet - answer with a clean synthetic error response, matching how
                         // a normal forwarded request that fails to connect/negotiate is reported elsewhere
                         // (see the ProxyConnectException call sites in Http2NegotiationHandler).
-                        sessionArgs.GenericResponse($"Bad Gateway. {ex.Message}", HttpStatusCode.BadGateway);
+                        OriginFailureResponses.Apply(sessionArgs, ex);
                         await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, streamId, connectionState,
                             clientStream, CancellationToken.None);
                     }
@@ -811,7 +892,8 @@ public partial class ProxyServer
             // once the whole (potentially long-lived, multiplexed) h2 connection itself ends.
             // Http2StreamState.FinalizedFlag (checked inside FinalizeStreamAsync) makes this race-safe
             // against RST_STREAM/GOAWAY teardown finalizing the very same stream first.
-            if (connectionState.TryTakeStream(streamId, out var finalStreamState))
+            // A pending replay defers finalization to the replay attempt.
+            if (!replayRequested && connectionState.TryTakeStream(streamId, out var finalStreamState))
             {
                 connectionState.ClientSendFlow.RemoveStream(streamId);
                 connectionState.ServerSendFlow.RemoveStream(streamId);
@@ -819,6 +901,8 @@ public partial class ProxyServer
                     args => OnAfterResponse(args), logger);
             }
         }
+
+        return replayRequested;
     }
 
     /// <summary>
@@ -1057,7 +1141,7 @@ public partial class ProxyServer
                 {
                     if (!sessionArgs.HttpClient.Response.Locked)
                     {
-                        sessionArgs.GenericResponse($"Bad Gateway. {ex.Message}", HttpStatusCode.BadGateway);
+                        OriginFailureResponses.Apply(sessionArgs, ex);
                         await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, ctx.StreamId,
                             ctx.ConnectionState, ctx.ClientStream, CancellationToken.None);
                     }

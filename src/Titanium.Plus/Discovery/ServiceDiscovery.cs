@@ -29,6 +29,9 @@ public sealed class ServiceDiscovery : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private FileSystemWatcher? _watcher;
 
+    /// <summary>0 idle, 1 apply scheduled, 2 another change arrived while one was scheduled.</summary>
+    private int _fileWatchState;
+
     public static ServiceDiscovery? TryStart(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
     {
         if (!options.TryGetValue("discovery.mode", out var mode) || string.IsNullOrWhiteSpace(mode))
@@ -109,27 +112,21 @@ public sealed class ServiceDiscovery : IDisposable
         {
             NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
         };
-        var gate = new object();
-        var pending = false;
+        // Dropping a change that arrives while one apply is scheduled loses the real write:
+        // macOS FSEvents fires once when WriteAllText truncates the file and again when the new bytes land.
         void OnChange(object _, FileSystemEventArgs __)
         {
-            lock (gate)
+            var previous = Interlocked.CompareExchange(ref _fileWatchState, 1, 0);
+            if (previous == 0)
             {
-                if (pending)
-                {
-                    return;
-                }
-
-                pending = true;
+                QueueDebouncedFileApply(context, full);
+                return;
             }
 
-            QueueDebouncedFileApply(context, full, () =>
+            if (previous == 1)
             {
-                lock (gate)
-                {
-                    pending = false;
-                }
-            });
+                Interlocked.CompareExchange(ref _fileWatchState, 2, 1);
+            }
         }
 
         _watcher.Changed += OnChange;
@@ -138,15 +135,25 @@ public sealed class ServiceDiscovery : IDisposable
         _watcher.EnableRaisingEvents = true;
     }
 
-    private void QueueDebouncedFileApply(
-        PlusActivationContext context, string full, Action clearPending)
+    private void QueueDebouncedFileApply(PlusActivationContext context, string full)
     {
         _ = Task.Run(async () =>
         {
             try
             {
-                await Task.Delay(200, _cts.Token);
-                await ApplyFileAsync(context, full, _cts.Token);
+                // Re-apply when a change landed during the wait or the read, so a truncate-then-write
+                // pair cannot leave the cluster on the previous file contents.
+                while (!_cts.IsCancellationRequested)
+                {
+                    await Task.Delay(200, _cts.Token);
+                    await ApplyFileAsync(context, full, _cts.Token);
+                    if (Interlocked.Exchange(ref _fileWatchState, 0) != 2)
+                    {
+                        return;
+                    }
+
+                    Interlocked.Exchange(ref _fileWatchState, 1);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -155,10 +162,7 @@ public sealed class ServiceDiscovery : IDisposable
             catch (Exception ex)
             {
                 PlusLog.Error(context, $"Plus Discovery: file apply failed: {ex.Message}");
-            }
-            finally
-            {
-                clearPending();
+                Interlocked.Exchange(ref _fileWatchState, 0);
             }
         }, _cts.Token);
     }

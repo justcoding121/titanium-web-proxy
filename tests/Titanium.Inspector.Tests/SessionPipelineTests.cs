@@ -89,20 +89,21 @@ public class SessionPipelineTests
             await tcs.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
             Assert.AreEqual("Pinned tip", vm.StatusText);
-            Assert.AreEqual("Sessions: 1", vm.SessionCountText);
+            // The oldest kept session's start time is always shown (HH:mm, or with the date if not today).
+            StringAssert.StartsWith(vm.SessionCountText, "Sessions: 1 · since ");
 
             vm.HideTunnelsFilter = true;
             Assert.IsTrue(vm.SearchQuery.Contains("hide:tunnel", StringComparison.Ordinal));
             Assert.IsTrue(vm.HideTunnelsFilter);
             vm.ErrorsOnlyFilter = true;
             Assert.IsTrue(vm.SearchQuery.Contains("is:error", StringComparison.Ordinal));
-            Assert.AreEqual("Sessions: 0 of 1 match filter", vm.SessionCountText);
+            StringAssert.StartsWith(vm.SessionCountText, "Sessions: 0 of 1 match filter · since ");
 
             vm.ClearFiltersCommand.Execute(null);
             await Task.Delay(50);
             Assert.AreEqual("", vm.SearchQuery);
             Assert.IsFalse(vm.HideTunnelsFilter);
-            Assert.AreEqual("Sessions: 1", vm.SessionCountText);
+            StringAssert.StartsWith(vm.SessionCountText, "Sessions: 1 · since ");
 
             vm.DeviceCaSetupCommand.Execute(null);
             await Task.Delay(50);
@@ -567,8 +568,7 @@ public class SessionPipelineTests
             Assert.IsTrue(vm.HasSelectedSession);
             Assert.IsFalse(vm.ShowInspectEmpty);
 
-            // Inspect tabs: 0 Headers, 1 Body, 2 Hex, 3 Diff, 4 WS, 5 SSE, 6 Protobuf
-            vm.SelectedInspectTabIndex = 4;
+            vm.SelectedInspectTabIndex = (int)InspectTab.WsFrames;
             vm.SelectedSession = new SessionSnapshot
             {
                 Id = 2,
@@ -594,14 +594,14 @@ public class SessionPipelineTests
             Assert.IsTrue(vm.ShowSessionDetails);
             Assert.AreEqual(1, vm.SelectedOuterPaneIndex);
             Assert.AreEqual(2, vm.SelectedToolsTabIndex);
-            Assert.AreEqual(6, vm.SelectedDetailTabIndex);
+            Assert.AreEqual(MainWindowViewModel.InspectTabCount + 2, vm.SelectedDetailTabIndex);
 
-            vm.SelectedDetailTabIndex = 5;
+            vm.SelectedDetailTabIndex = MainWindowViewModel.InspectTabCount + 1;
             Assert.AreEqual(1, vm.SelectedOuterPaneIndex);
             Assert.AreEqual(1, vm.SelectedToolsTabIndex);
-            vm.SelectedDetailTabIndex = 2;
+            vm.SelectedDetailTabIndex = (int)InspectTab.Response;
             Assert.AreEqual(0, vm.SelectedOuterPaneIndex);
-            Assert.AreEqual(2, vm.SelectedInspectTabIndex);
+            Assert.AreEqual((int)InspectTab.Response, vm.SelectedInspectTabIndex);
         }
         finally
         {

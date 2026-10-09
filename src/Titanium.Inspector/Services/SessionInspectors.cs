@@ -190,6 +190,14 @@ public static class SessionInspectors
         }
     }
 
+    /// <summary>Body text for one side. Uses stored text, or decompresses captured bytes.</summary>
+    public static string FormatBody(string? headersText, string? bodyText, byte[]? bodyBytes)
+        => ResolveBodyText(headersText, bodyText, bodyBytes);
+
+    /// <summary>Hex dump for one side (first <see cref="InspectorBodyLimits.MaxHexBytes"/>).</summary>
+    public static string FormatHex(string? headersText, byte[]? bodyBytes)
+        => ResolveHex(headersText, bodyBytes);
+
     /// <summary>
     /// Labeled request + response body text (same section style as Headers).
     /// </summary>
@@ -203,10 +211,10 @@ public static class SessionInspectors
     {
         var sb = new StringBuilder();
         sb.AppendLine("=== Request ===");
-        sb.AppendLine(ResolveBodyText(requestHeadersText, requestBodyText, requestBodyBytes));
+        sb.AppendLine(FormatBody(requestHeadersText, requestBodyText, requestBodyBytes));
         sb.AppendLine();
         sb.AppendLine("=== Response ===");
-        sb.Append(ResolveBodyText(responseHeadersText, responseBodyText, responseBodyBytes));
+        sb.Append(FormatBody(responseHeadersText, responseBodyText, responseBodyBytes));
         return sb.ToString();
     }
 
@@ -221,10 +229,10 @@ public static class SessionInspectors
     {
         var sb = new StringBuilder();
         sb.AppendLine("=== Request ===");
-        sb.AppendLine(ResolveHex(requestHeadersText, requestBodyBytes));
+        sb.AppendLine(FormatHex(requestHeadersText, requestBodyBytes));
         sb.AppendLine();
         sb.AppendLine("=== Response ===");
-        sb.Append(ResolveHex(responseHeadersText, responseBodyBytes));
+        sb.Append(FormatHex(responseHeadersText, responseBodyBytes));
         return sb.ToString();
     }
 

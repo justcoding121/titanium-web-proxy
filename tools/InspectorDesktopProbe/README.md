@@ -42,6 +42,7 @@ dotnet run --project tools/InspectorDesktopProbe -- all
 | `loopback` | Allow Store apps dialog (Win8+): intro, proxy warning, Apply status, Clear |
 | `exclusions` | Excluded hosts dialog |
 | `pac` | PAC replace confirm cancel/accept when PAC is active |
+| `replay` | Sustained-load UI responsiveness: starts capture, enables Decrypt HTTPS and system proxy, drives real-site, bad-host and flood workers (plus optional headless Edge/Chrome over news.google.com links), and samples Input/Normal-priority dispatcher latency. Options: `--minutes N`, `--log PATH`; env `TWP_REPLAY_FLOOD`, `TWP_REPLAY_BROWSE=1`, `TWP_REPLAY_BROWSERS`, `TWP_REPLAY_DEBUG=1`. Needs the manual Decrypt-traffic cert prompt. Excluded from `all` |
 | `machine-trust` | Machine CA trust (`status` / `install` / `remove` / `run` / `curl-check` / `clean`); Core-only, no Avalonia. Aliases: `install-system`, `remove-system`. Flag: `run --no-system-proxy` |
 | `all` | **`chrome` first**, then applicable OS scenarios (**excludes** `machine-trust`) |
 

@@ -1,49 +1,23 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Titanium.Web.Proxy.Network;
 
 namespace Titanium.E2E.Tests.Harness;
 
 /// <summary>
-/// Guards for tests that must open Windows CryptUI / interactive Root trust.
-/// CI and <c>TITANIUM_SKIP_ROOT_STORE_UI=1</c> always suppress Root Add/Remove — those
-/// environments must never run interactive trust or they hang on system dialogs.
+/// Guard for tests that would need Windows CryptUI / interactive Root trust. Automated runs have no one to
+/// answer those dialogs, so such tests are always inconclusive here; run the live walk with
+/// <c>dotnet run --project tools/InspectorDesktopProbe -- all</c> instead.
 /// </summary>
 internal static class RootStoreUiTestGuards
 {
     /// <summary>
-    ///     Inconclusive when Root-store UI cannot be shown (CI / skip env / still suppressed
-    ///     after clearing the in-process flag). Call before intentional interactive Install CA.
+    ///     E2E always runs unattended; tests that mutate machine-wide OS state (Root store, WinINET proxy)
+    ///     check this and skip.
     /// </summary>
-    public static void RequireInteractiveRootTrustAvailable()
-    {
-        if (IsAutomatedCiOrSkipEnv())
-        {
-            Assert.Inconclusive(
-                "Skipped: CI / TITANIUM_SKIP_ROOT_STORE_UI would hang on Windows Root CryptUI or certutil prompts");
-        }
+    public static bool IsAutomatedCiOrSkipEnv() => true;
 
-        // ModuleInitializer sets Suppress=true; clear it for this intentional interactive path.
-        CertificateManager.SuppressInteractiveRootStoreMutations = false;
-
-        if (CertificateManager.AreInteractiveRootStoreMutationsSuppressed)
-        {
-            Assert.Inconclusive(
-                "Skipped: Root-store UI remains suppressed (CI env still set); refusing interactive trust");
-        }
-    }
-
-    public static bool IsAutomatedCiOrSkipEnv() =>
-        IsTruthy("CI")
-        || IsTruthy("GITHUB_ACTIONS")
-        || IsTruthy("TF_BUILD")
-        || string.Equals(Environment.GetEnvironmentVariable("TITANIUM_SKIP_ROOT_STORE_UI"), "1",
-            StringComparison.Ordinal);
-
-    private static bool IsTruthy(string name)
-    {
-        var v = Environment.GetEnvironmentVariable(name);
-        return !string.IsNullOrEmpty(v)
-               && !string.Equals(v, "0", StringComparison.OrdinalIgnoreCase)
-               && !string.Equals(v, "false", StringComparison.OrdinalIgnoreCase);
-    }
+    /// <summary>Always inconclusive: interactive Root-store trust is never exercised from <c>dotnet test</c>.</summary>
+    public static void RequireInteractiveRootTrustAvailable() =>
+        Assert.Inconclusive(
+            "Skipped: interactive Root-store trust needs a person to answer OS dialogs. " +
+            "Use tools/InspectorDesktopProbe for the live walk.");
 }

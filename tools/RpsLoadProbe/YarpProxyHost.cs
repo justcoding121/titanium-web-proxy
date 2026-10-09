@@ -493,7 +493,8 @@ internal sealed class YarpProxyHost : IDisposable
     {
         try
         {
-            // MsQuic dual-listen uses IPv6Any for loopback endpoints — probe the same scope.
+            // Loopback endpoints now bind ::1 and 127.0.0.1. A free wildcard port is free on both,
+            // so this probe stays conservative.
             using var udp = new System.Net.Sockets.UdpClient(new IPEndPoint(IPAddress.IPv6Any, port));
             return true;
         }

@@ -96,10 +96,41 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            if (_proxyServer.Logger.IsEnabled(LogLevel.Debug))
-                _proxyServer.Logger.LogDebug(ex, "HTTP/3 origin AcceptInboundStreamAsync ended");
+            LogShutdown(ex, "HTTP/3 origin AcceptInboundStreamAsync ended");
             return null;
         }
+    }
+
+    /// <summary>
+    ///     Peer abort / idle / timeout / our own abort are the normal end of an origin session (every browsing
+    ///     pause produces them), so they log at Trace; anything else stays at Debug.
+    /// </summary>
+    internal static LogLevel ClassifyShutdownLevel(Exception ex)
+    {
+        for (var e = ex; e != null; e = e.InnerException)
+        {
+            if (e is OperationCanceledException) return LogLevel.Trace;
+            if (e is QuicException q)
+            {
+                if (q.QuicError is QuicError.ConnectionAborted or QuicError.ConnectionIdle
+                    or QuicError.ConnectionTimeout or QuicError.OperationAborted)
+                    return LogLevel.Trace;
+
+                // msquic reports a graceful shutdown as InternalError carrying QUIC_STATUS_SUCCESS.
+                if (q.QuicError == QuicError.InternalError
+                    && q.Message.Contains("QUIC_STATUS_SUCCESS", StringComparison.Ordinal))
+                    return LogLevel.Trace;
+            }
+        }
+
+        return LogLevel.Debug;
+    }
+
+    private void LogShutdown(Exception ex, string message)
+    {
+        var level = ClassifyShutdownLevel(ex);
+        if (_proxyServer.Logger.IsEnabled(level))
+            _proxyServer.Logger.Log(level, ex, "{Message}", message);
     }
 
     private async Task DisposeUnexpectedBidiStreamQuietlyAsync(QuicStream stream)
@@ -134,8 +165,7 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                if (_proxyServer.Logger.IsEnabled(LogLevel.Debug))
-                    _proxyServer.Logger.LogDebug(ex, "HTTP/3 origin inbound uni-stream drain ended");
+                LogShutdown(ex, "HTTP/3 origin inbound uni-stream drain ended");
             }
         }
     }

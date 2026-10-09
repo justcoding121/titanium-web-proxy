@@ -1,6 +1,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.E2E.Tests.Harness;
 using Titanium.Inspector.Services;
+using Titanium.Inspector.ViewModels;
 
 namespace Titanium.E2E.Tests.UiHeadless;
 
@@ -9,7 +10,7 @@ public class InspectTabsAndToolsHeadlessTests
 {
     [TestMethod]
     [TestCategory("E2E-UI-Headless")]
-    public async Task InspectTabs_CycleHeadersBodyHex()
+    public async Task InspectTabs_CycleRequestAndResponseHeadersAndBodies()
     {
         await using var fx = new InspectorHeadlessFixture();
         await fx.StartAsync();
@@ -28,15 +29,57 @@ public class InspectTabsAndToolsHeadlessTests
             });
             fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
             Assert.IsTrue(fx.ViewModel.ShowSessionDetails);
+            fx.Window.UpdateLayout();
+            Assert.IsFalse(fx.ViewModel.InspectHeadersCollapsed, "Default window keeps headers open");
+            Assert.IsTrue(fx.Robot.Find<Avalonia.Controls.TextBox>("ReqHeadersText").IsVisible);
 
-            fx.Robot.Click("TabHeaders");
-            Assert.AreEqual(0, fx.ViewModel.SelectedInspectTabIndex);
+            fx.Robot.Click("TabRequest");
+            Assert.AreEqual((int)InspectTab.Request, fx.ViewModel.SelectedInspectTabIndex);
+            Assert.IsTrue(fx.Robot.TryFind<Avalonia.Controls.Control>("ReqHeadersText", out _));
+            Assert.IsTrue(fx.Robot.TryFind<Avalonia.Controls.Control>("ReqBodyText", out _));
 
-            fx.Robot.Click("TabBody");
-            Assert.AreEqual(1, fx.ViewModel.SelectedInspectTabIndex);
+            fx.Robot.Click("TabResponse");
+            Assert.AreEqual((int)InspectTab.Response, fx.ViewModel.SelectedInspectTabIndex);
+            Assert.IsTrue(fx.Robot.TryFind<Avalonia.Controls.Control>("RespHeadersText", out _));
+            Assert.IsTrue(fx.Robot.TryFind<Avalonia.Controls.Control>("RespBodyText", out _));
+            fx.Robot.SetCheck("BodyHex", true);
+            Assert.IsTrue(fx.ViewModel.BodyHexMode);
+            Assert.IsFalse(fx.ViewModel.BodyPrettyEnabled);
+        });
+    }
 
-            fx.Robot.Click("TabHex");
-            Assert.AreEqual(2, fx.ViewModel.SelectedInspectTabIndex);
+    [TestMethod]
+    [TestCategory("E2E-UI-Headless")]
+    public async Task InspectHeadersSplit_CollapsesOnShortWindow_AndUserCanExpand()
+    {
+        await using var fx = new InspectorHeadlessFixture();
+        await fx.StartAsync(windowHeight: 480);
+        await fx.DispatchAsync(() =>
+        {
+            fx.ViewModel.Sessions.Add(new SessionSnapshot
+            {
+                Id = 8,
+                Method = "GET",
+                StatusCode = 200,
+                Host = "127.0.0.1",
+                Url = "http://127.0.0.1/inspect",
+                Protocol = "HTTP/1.1",
+                RequestHeadersText = "Host: 127.0.0.1\r\nAccept: */*\r\n",
+            });
+            fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
+            fx.Window.UpdateLayout();
+
+            var pane = fx.Robot.Find<Avalonia.Controls.Control>("TabInspectHost");
+            Assert.IsTrue(pane.Bounds.Height > 0, "Inspect pane was not measured");
+            Assert.IsTrue(
+                pane.Bounds.Height < MainWindowViewModel.ShortInspectPaneHeight,
+                $"Expected a short inspect pane, was {pane.Bounds.Height}");
+            Assert.IsTrue(fx.ViewModel.InspectHeadersCollapsed, "Short window collapses headers");
+            Assert.IsFalse(fx.Robot.Find<Avalonia.Controls.TextBox>("ReqHeadersText").IsVisible);
+
+            fx.Robot.Click("ToggleReqHeadersPane");
+            Assert.IsFalse(fx.ViewModel.InspectHeadersCollapsed, "User can expand headers on a short window");
+            Assert.IsTrue(fx.Robot.Find<Avalonia.Controls.TextBox>("ReqHeadersText").IsVisible);
         });
     }
 

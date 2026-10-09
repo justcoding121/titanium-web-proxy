@@ -988,7 +988,7 @@ jobs:
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
             Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $csv) { throw 'No CSV found for compare-product gate validation' }
-          # Same floors on all OS: MITM Lite÷Reverse >= 0.25, Full÷Reverse >= 0.25, reverse TWP÷closest peer >= 0.50.
+          # Same floors on all OS: MITM Lite÷Reverse >= 0.25, Full÷Reverse >= 0.25, reverse TWP÷closest peer >= 0.40.
           pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName
 
       - name: Validate heavier YARP gates (bodies)

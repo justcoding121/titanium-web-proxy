@@ -478,6 +478,7 @@ public sealed class InterceptionService : IDisposable
         _proxy.BeforeRequest -= OnBeforeRequest;
         _proxy.BeforeResponse -= OnBeforeResponse;
         _proxy.AfterResponse -= OnAfterResponse;
+        FinalizeInFlightSessions();
         _proxy.OnRequestBodyWrite -= OnRequestBodyWriteThrottle;
         _proxy.OnResponseBodyWrite -= OnResponseBodyWriteThrottle;
         _proxy.ServerCertificateValidationCallback -= OnServerCertValidation;
@@ -1324,9 +1325,40 @@ public sealed class InterceptionService : IDisposable
         return _proxy.CertificateManager.ListSameCommonNameRootThumbprints(location, keepThumbprint: null);
     }
 
+    /// <summary>
+    ///     Read-only list of same-CN Root thumbprints that are NOT the current root: leftovers from earlier
+    ///     CA regenerations that only confuse chain building. Safe off the UI thread.
+    /// </summary>
+    public IReadOnlyList<string> ListStaleRootThumbprints(bool machineStore)
+    {
+        var current = RootCertificate?.Thumbprint;
+        if (ListStaleRootsOverride is { } listOverride)
+            return listOverride(machineStore).Where(t => !IsCurrentRootThumbprint(t, current)).ToList();
+        if (_proxy is null || UseInMemoryTrustState || string.IsNullOrEmpty(current))
+            return Array.Empty<string>();
+
+        var location = machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser;
+        return _proxy.CertificateManager.ListSameCommonNameRootThumbprints(location, keepThumbprint: current);
+    }
+
+    /// <summary>Test seam: replaces the Root-store listing of stale thumbprints (never touches the OS store).</summary>
+    internal Func<bool, IReadOnlyList<string>>? ListStaleRootsOverride { get; set; }
+
+    /// <summary>Test seam: replaces the CryptUI Root removal of one thumbprint.</summary>
+    internal Action<bool, string>? RemoveRootOverride { get; set; }
+
+    private static bool IsCurrentRootThumbprint(string? candidate, string? current) =>
+        !string.IsNullOrEmpty(current) && string.Equals(candidate, current, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>One Root Remove by thumbprint (CryptUI). Must run on a pumping UI thread.</summary>
     public void RemoveRootThumbprintOnUi(bool machineStore, string thumbprint)
     {
+        if (RemoveRootOverride is { } removeOverride)
+        {
+            removeOverride(machineStore, thumbprint);
+            return;
+        }
+
         if (_proxy is null || UseInMemoryTrustState)
             return;
 
@@ -1637,6 +1669,10 @@ public sealed class InterceptionService : IDisposable
         var learnedBypass = !disableDecrypt && DecryptHttps && IsLearnedDecryptBypass(host);
         e.DecryptSsl = DecryptHttps && !disableDecrypt && !learnedBypass;
         e.AllowHttpProtocolTranslation = true;
+        // Opaque tunnels cannot show an error page after CONNECT 200 (the browser just sees a closed
+        // connection). Dial first so DNS/refused/timeout surface as a 502/504 CONNECT response; the
+        // dialed connection is reused for the tunnel, so no extra dial is paid.
+        e.EstablishServerConnectionBeforeResponse = !e.DecryptSsl;
         var opaqueReason = OpaqueTunnelReason.None;
         if (learnedBypass)
             opaqueReason = OpaqueTunnelReason.LearnedFailure;
@@ -1815,7 +1851,17 @@ public sealed class InterceptionService : IDisposable
             if (e.HttpClient.Response.HasBody && ShouldBufferBody(e.HttpClient.Response, e))
             {
                 e.HttpClient.Response.KeepBody = true;
-                await e.GetResponseBody(CancellationToken.None);
+                try
+                {
+                    await e.GetResponseBody(CancellationToken.None);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // Body capture is best-effort: the row must still get its status / protocol / headers.
+                    InspectorUxTrace.Event("BeforeResponse.BodyBufferFailed",
+                        $"{e.HttpClient.Request.Url} ver={e.HttpClient.Request.HttpVersion}->{e.HttpClient.Response.HttpVersion} " +
+                        $"{ex.GetType().Name}: {ex.Message}");
+                }
             }
 
             SessionScriptHost.ApplyOnResponse(ScriptOnResponse, e);
@@ -1850,12 +1896,22 @@ public sealed class InterceptionService : IDisposable
                 ScheduleProcessResolve(snap, e.HttpClient.ProcessId);
             }
 
-            FillResponse(snap, e);
-            SessionUpdated?.Invoke(this, snap);
+            try
+            {
+                FillResponse(snap, e);
+            }
+            finally
+            {
+                // Publish whatever was filled (status, headers, protocol are set first) even if a later
+                // step throws, so the grid row never stays blank.
+                SessionUpdated?.Invoke(this, snap);
+            }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // ignore
+            InspectorUxTrace.Event("BeforeResponse.Failed",
+                $"{e.HttpClient.Request.Url} ver={e.HttpClient.Request.HttpVersion}->{e.HttpClient.Response.HttpVersion} " +
+                $"status={e.HttpClient.Response.StatusCode} {ex.GetType().Name}: {ex.Message}");
         }
     }
 
@@ -1865,12 +1921,88 @@ public sealed class InterceptionService : IDisposable
         {
             FinalizeStreamingRequestBody(snap);
             FinalizeStreamingBody(snap);
+            // Response/reason first, duration last: DurationMs is what marks the session as finished.
+            RecordMissingResponse(snap, e);
             ApplyTiming(snap, e.Timing, snap.StartedUtc);
             SessionUpdated?.Invoke(this, snap);
         }
 
         _live.TryRemove(e.HttpClient, out _);
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    ///     The session is over but BeforeResponse never filled a response (origin refused / reset, timeout,
+    ///     client gave up). Keep the proxy's synthetic 502/504 when it sent one; otherwise record why there
+    ///     is no response so Inspect does not claim the response is still on its way.
+    /// </summary>
+    private static void RecordMissingResponse(SessionSnapshot snap, SessionEventArgs e)
+    {
+        if (snap.IsTunnel || snap.StatusCode is > 0)
+        {
+            return;
+        }
+
+        try
+        {
+            if (e.HttpClient.Response is { StatusCode: >= 100 and <= 599 })
+            {
+                FillResponse(snap, e);
+            }
+        }
+        catch
+        {
+            // Fall through to the failure reason below.
+        }
+
+        if (snap.StatusCode is null or 0)
+        {
+            snap.FailureReason = DescribeNoResponse(e.Exception);
+        }
+    }
+
+    internal static string DescribeNoResponse(Exception? ex)
+    {
+        for (var inner = ex; inner is not null; inner = inner.InnerException)
+        {
+            switch (inner)
+            {
+                case Titanium.Web.Proxy.Exceptions.ProxyTimeoutException:
+                case TimeoutException:
+                    return "Timed out waiting for the server to respond.";
+                case System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.ConnectionRefused }:
+                    return "Connection refused by the server.";
+                case System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.ConnectionReset }:
+                    return "Connection reset by the server.";
+                case System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.HostNotFound }:
+                case System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.NoData }:
+                    return "Could not resolve the server host name.";
+                case System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.TimedOut }:
+                    return "Timed out connecting to the server.";
+                case OperationCanceledException:
+                    return "The request was cancelled before a response arrived (the client likely disconnected).";
+            }
+        }
+
+        return ex is null
+            ? "The connection closed before the server replied."
+            : $"The connection failed before a response arrived: {ex.GetBaseException().Message}";
+    }
+
+    /// <summary>Capture stopped while sessions were still waiting on the origin.</summary>
+    private void FinalizeInFlightSessions()
+    {
+        foreach (var snap in _live.Values)
+        {
+            if (snap.IsTunnel || snap.StatusCode is > 0 || snap.FailureReason is not null)
+            {
+                continue;
+            }
+
+            snap.FailureReason = "Capture was stopped before a response arrived.";
+            ApplyTiming(snap, null, snap.StartedUtc);
+            SessionUpdated?.Invoke(this, snap);
+        }
     }
 
     private Task OnServerCertValidation(object sender, CertificateValidationEventArgs e)
@@ -1885,7 +2017,7 @@ public sealed class InterceptionService : IDisposable
     private SessionSnapshot CreatePreviewSnapshot(SessionEventArgs e, bool assignId)
     {
         var req = e.HttpClient.Request;
-        var originalBody = req.IsBodyRead ? req.Body : null;
+        var originalBody = req.IsBodyRead && req.HasBody ? req.Body : null;
         var bodyBytes = InspectorBodyLimits.TruncateBytes(originalBody);
         var bodyText = bodyBytes is null ? null : InspectorBodyLimits.TruncateText(Encoding.UTF8.GetString(bodyBytes));
         GrpcJsonTranscodeSessionMark.TryGet(e.UserData, out var mark);
@@ -2097,7 +2229,10 @@ public sealed class InterceptionService : IDisposable
         snap.ResponseHeadersText = FormatHeaders(resp.Headers);
         snap.Protocol = SessionDisplayFormat.FormatClientServer(
             e.HttpClient.Request.HttpVersion, resp.HttpVersion);
-        var originalBody = resp.IsBodyRead ? resp.Body : null;
+        // Body throws BodyNotFoundException when the response has no body (204, Content-Length: 0, 304),
+        // even though such responses are marked IsBodyRead. That used to abort FillResponse and leave the
+        // row without status / origin protocol.
+        var originalBody = resp.IsBodyRead && resp.HasBody ? resp.Body : null;
         var bodyBytes = InspectorBodyLimits.TruncateBytes(originalBody);
         snap.ResponseBodyBytes = bodyBytes;
         snap.ResponseBodyText = bodyBytes is null ? null : InspectorBodyLimits.TruncateText(Encoding.UTF8.GetString(bodyBytes));

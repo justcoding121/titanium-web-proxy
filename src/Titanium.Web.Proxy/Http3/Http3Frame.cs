@@ -37,6 +37,13 @@ internal sealed class Http3Frame
     /// <summary>Last payload rent size on the progressive path. Tests read this; production does not branch on it.</summary>
     internal static int TestLastRentBytes { get; set; }
 
+    /// <summary>
+    ///     Bytes per no-hook DATA relay step, and per streamed HTTP/3 to HTTP/1 origin body frame.
+    ///     A payload no larger than this is forwarded in one step. Only a larger payload is sliced.
+    ///     This is not the HEADERS+DATA coalesce threshold (that stays 16 KiB).
+    /// </summary>
+    internal const int RelayUnitBytes = 16 * 1024;
+
     public ulong Type { get; }
     public ReadOnlyMemory<byte> Payload { get; }
 
@@ -111,6 +118,16 @@ internal sealed class Http3Frame
     }
 
     /// <summary>
+    ///     True when a no-hook relay should stream this DATA payload in <see cref="RelayUnitBytes"/>
+    ///     slices. Capture paths and every non-DATA frame still take the whole frame, so headers,
+    ///     trailers and hooks stay under the frame cap.
+    /// </summary>
+    internal static bool StreamsPastFrameCap(ulong frameType, long length, long frameCap, bool captureWholeFrame)
+        => !captureWholeFrame
+           && frameType == Http3FrameType.Data
+           && length > (frameCap > 0 ? frameCap : DefaultMaxPayloadBytes);
+
+    /// <summary>
     ///     Copies a DATA payload in slices without renting the declared length. Used by the no-hook
     ///     relay so a frame larger than the whole-frame cap can still stream.
     /// </summary>
@@ -122,7 +139,7 @@ internal sealed class Http3Frame
         if (length < 0)
             throw new Http3ConnectionException(Http3ErrorCode.FrameError, "HTTP/3 frame length is negative.");
         if (length == 0) return;
-        var slice = sliceBytes > 0 ? sliceBytes : 16 * 1024;
+        var slice = sliceBytes > 0 ? sliceBytes : RelayUnitBytes;
         var buffer = ArrayPool<byte>.Shared.Rent(slice);
         try
         {

@@ -50,6 +50,15 @@ public class Response : RequestResponseBase
     internal Func<Stream, CancellationToken, Task>? StreamBodyWriter { get; set; }
 
     /// <summary>
+    ///     HTTP/3 origin responses only: drains the still-unread QUIC response body (wire bytes, no
+    ///     <c>OnResponseBodyWrite</c> hook) into the destination and releases the origin stream. It lets
+    ///     <c>SessionEventArgs.GetResponseBody</c> buffer a body that otherwise lives on the QUIC stream
+    ///     (there is no <c>HttpClient.Connection</c> to read from, unlike HTTP/1.x). Null once consumed
+    ///     or when the body is not backed by a live QUIC stream.
+    /// </summary>
+    internal Func<Stream, CancellationToken, Task>? Http3RawBodyDrain { get; set; }
+
+    /// <summary>
     ///     Clears wire state so this instance can carry the next keep-alive response.
     ///     Must zero <see cref="StatusCode"/> and drop <see cref="StreamBodyWriter"/> —
     ///     <c>ReceiveResponse</c> no-ops when StatusCode != 0, and a leftover writer hangs the next GET.
@@ -61,6 +70,7 @@ public class Response : RequestResponseBase
         StatusDescription = string.Empty;
         RequestMethod = string.Empty;
         StreamBodyWriter = null;
+        Http3RawBodyDrain = null;
     }
 
     /// <summary>

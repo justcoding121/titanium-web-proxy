@@ -16,6 +16,12 @@ public sealed class SessionGridLayoutDto
     public List<SessionGridColumnStateDto> Columns { get; set; } = new();
     public string? SortColumnKey { get; set; }
     public ListSortDirection? SortDirection { get; set; }
+
+    /// <summary>
+    /// Columns the user showed or hid, keyed like <see cref="SessionGridColumnStateDto.Key"/>. Only values that
+    /// differ from <see cref="SessionGridColumnCatalog"/> defaults are stored; null or missing means defaults.
+    /// </summary>
+    public Dictionary<string, bool>? ColumnVisibility { get; set; }
 }
 
 /// <summary>

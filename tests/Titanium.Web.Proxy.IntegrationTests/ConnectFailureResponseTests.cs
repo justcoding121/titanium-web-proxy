@@ -149,6 +149,106 @@ public class ConnectFailureResponseTests
             "Default behavior must still send CONNECT 200 without preconnect. Got: " + responseText);
     }
 
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    [TestCategory("Regression-2026-10-07")]
+    public async Task OpaqueTunnel_Preconnect_DnsOrRefusal_Returns502_NotBareClose()
+    {
+        // Replay finding: opaque (DecryptSsl=false) tunnels answered CONNECT 200 and then silently closed on
+        // DNS/refusal, which a browser reports as ERR_CONNECTION_CLOSED with no diagnosis.
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        var endPoint = (ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
+        endPoint.BeforeTunnelConnectRequest += async (_, e) =>
+        {
+            e.DecryptSsl = false;
+            e.EstablishServerConnectionBeforeResponse = !e.DecryptSsl;
+            await Task.CompletedTask;
+        };
+
+        foreach (var authority in new[] { "no-such-host.invalid.example:443", $"127.0.0.1:{GetRefusedPort()}" })
+        {
+            var responseText = await SendRawConnectAsync(proxy.ProxyEndPoints[0].Port, authority);
+            Assert.IsTrue(responseText.StartsWith("HTTP/1.1 502", StringComparison.Ordinal),
+                authority + ": " + responseText);
+        }
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    [TestCategory("Regression-2026-10-07")]
+    public async Task OpaqueTunnel_Preconnect_ReusesDialedConnection_AndRelaysBytes()
+    {
+        using var origin = new TcpListener(IPAddress.Loopback, 0);
+        origin.Start();
+        var originPort = ((IPEndPoint)origin.LocalEndpoint).Port;
+        var accepted = 0;
+        var echoed = 0;
+        var echo = Task.Run(async () =>
+        {
+            while (true)
+            {
+                TcpClient c;
+                try { c = await origin.AcceptTcpClientAsync(); }
+                catch { return; }
+
+                Interlocked.Increment(ref accepted);
+                _ = Task.Run(async () =>
+                {
+                    using var cc = c;
+                    var s = cc.GetStream();
+                    var buf = new byte[256];
+                    int n;
+                    while ((n = await s.ReadAsync(buf)) > 0)
+                    {
+                        Interlocked.Add(ref echoed, n);
+                        await s.WriteAsync(buf.AsMemory(0, n));
+                    }
+                });
+            }
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        var endPoint = (ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
+        endPoint.BeforeTunnelConnectRequest += async (_, e) =>
+        {
+            e.DecryptSsl = false;
+            e.EstablishServerConnectionBeforeResponse = true;
+            await Task.CompletedTask;
+        };
+
+        using var client = new TcpClient();
+        await client.ConnectAsync(IPAddress.Loopback, proxy.ProxyEndPoints[0].Port);
+        var stream = client.GetStream();
+        await stream.WriteAsync(Encoding.ASCII.GetBytes(
+            $"CONNECT 127.0.0.1:{originPort} HTTP/1.1\r\nHost: 127.0.0.1:{originPort}\r\n\r\n"));
+
+        var head = new byte[512];
+        using var rcts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+        var read = await stream.ReadAsync(head, rcts.Token);
+        Assert.IsTrue(Encoding.ASCII.GetString(head, 0, read).Contains(" 200 "));
+
+        // A real TLS ClientHello is relayed verbatim to the (reused) pre-dialed connection. The echo
+        // origin answers with the hello itself, so the handshake fails - only the relay matters here.
+        using var ssl = new System.Net.Security.SslStream(stream, false, (_, _, _, _) => true);
+        try
+        {
+            await ssl.AuthenticateAsClientAsync(new System.Net.Security.SslClientAuthenticationOptions
+            {
+                TargetHost = "localhost"
+            }, rcts.Token);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // expected: echo is not a TLS server
+        }
+
+        Assert.IsTrue(Volatile.Read(ref echoed) > 0, "ClientHello bytes must reach the origin");
+        Assert.AreEqual(1, Volatile.Read(ref accepted), "origin must be dialed exactly once");        origin.Stop();
+        await echo;
+    }
+
     private static int GetRefusedPort()
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);

@@ -505,6 +505,14 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
                 Available -= n;
                 remainingBytes -= n;
             }
+
+            // A declared length that the peer never delivered (origin closed or reset mid-body) must abort the
+            // exchange. Ending silently leaves the receiving side waiting for bytes that will never come
+            // (client hang until its own timeout) or lets the next pipelined message be read as body.
+            // count == long.MaxValue is the read-until-close sentinel, where EOF is the normal end.
+            if (remainingBytes > 0 && count != long.MaxValue)
+                throw new IOException(
+                    $"The connection ended {remainingBytes} bytes before the declared body length was reached.");
         }
         finally
         {

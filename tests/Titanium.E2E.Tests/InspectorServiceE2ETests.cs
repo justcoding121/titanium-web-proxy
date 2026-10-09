@@ -63,6 +63,54 @@ public class InspectorServiceE2ETests
 
     [TestMethod]
     [TestCategory("E2E")]
+    public async Task OriginUnreachable_SessionRecordsFailure_NotWaiting()
+    {
+        // A port nobody listens on: the origin connection is refused.
+        var probe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        probe.Start();
+        var deadPort = ((IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+
+        using var interception = new InterceptionService(new RecordingSystemProxyController());
+        SessionSnapshot? updated = null;
+        interception.SessionUpdated += (_, s) => updated = s;
+        await interception.StartAsync(IPAddress.Loopback, 0);
+
+        using var handler = new HttpClientHandler
+        {
+            Proxy = new WebProxy($"http://127.0.0.1:{interception.BoundPort}"),
+            UseProxy = true,
+        };
+        using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        try
+        {
+            using var response = await http.GetAsync($"http://127.0.0.1:{deadPort}/refused", cts.Token);
+            Assert.IsTrue((int)response.StatusCode >= 500, "client should see a gateway error");
+        }
+        catch (HttpRequestException)
+        {
+            // Connection closed with no response is also a valid proxy outcome.
+        }
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while ((updated?.DurationMs is null) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(50, cts.Token);
+        }
+
+        Assert.IsNotNull(updated, "session must be captured and finalized");
+        Assert.IsNotNull(updated!.DurationMs, "session must be finished");
+        // Either the synthetic gateway response is recorded, or the failure reason is - never neither.
+        var hasStatus = updated.StatusCode is >= 500;
+        var hasReason = !string.IsNullOrEmpty(updated.FailureReason);
+        Assert.IsTrue(hasStatus || hasReason,
+            $"finished session without response must say why (status={updated.StatusCode}, reason='{updated.FailureReason}')");
+        interception.EnsureShutdown();
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
     public async Task Mitm_HttpClient_DecryptsHttps_LocalOrigin()
     {
         using var origin = new HttpsEchoOrigin();
@@ -383,7 +431,7 @@ public class InspectorServiceE2ETests
             StringAssert.Contains(vm.SessionDiffText, "- one");
             StringAssert.Contains(vm.StatusText, "Session Diff");
             Assert.IsTrue(vm.CanShowSessionDiffTab);
-            Assert.AreEqual(3, vm.SelectedInspectTabIndex);
+            Assert.AreEqual((int)InspectTab.Diff, vm.SelectedInspectTabIndex);
         }
         finally
         {

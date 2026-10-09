@@ -5,6 +5,7 @@ using Avalonia.VisualTree;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.E2E.Tests.Harness;
 using Titanium.Inspector.Services;
+using Titanium.Inspector.ViewModels;
 using Titanium.Inspector.Views;
 
 namespace Titanium.E2E.Tests.UiHeadless;
@@ -52,6 +53,21 @@ public class AutomationIdCoverageHeadlessTests
         "MenuThemeLight",
         "MenuThemeDark",
         "MenuThemeAutomatic",
+        "MenuColumns",
+        "MenuColumn_Id",
+        "MenuColumn_Method",
+        "MenuColumn_Status",
+        "MenuColumn_Host",
+        "MenuColumn_URL",
+        "MenuColumn_Protocol",
+        "MenuColumn_Duration",
+        "MenuColumn_TTFB",
+        "MenuColumn_Size",
+        "MenuColumn_Process",
+        "MenuColumn_Started",
+        "MenuColumn_Scheme",
+        "MenuColumn_ContentType",
+        "MenuColumnsReset",
         "MenuSessionRetention",
         "MenuHttpsDecryptHosts",
         "MenuIgnoreServerCertErrors",
@@ -105,21 +121,30 @@ public class AutomationIdCoverageHeadlessTests
         "PaneNavMapRemote",
         "InspectEmptyHint",
         "InspectTabs",
-        "TabHeaders",
-        "HeadersText",
+        "TabRequest",
+        "ToggleReqHeadersPane",
+        "ReqHeadersSplitter",
+        "ReqHeadersText",
         "SelectedOpaqueHint",
-        "CopyHeaders",
-        "TabBody",
-        "BodyText",
-        "BodyCaptureHint",
+        "CopyReqHeaders",
+        "ReqBodyText",
+        "ReqBodyCaptureHint",
         "BodyPretty",
-        "BodyRaw",
+        "BodyHex",
         "SaveRequestBody",
+        "ReqBodyPreviewImage",
+        "TabResponse",
+        "ToggleRespHeadersPane",
+        "RespHeadersSplitter",
+        "RespHeadersText",
+        "RespOpaqueHint",
+        "CopyRespHeaders",
+        "RespBodyText",
+        "RespBodyCaptureHint",
+        "RespBodyPretty",
+        "RespBodyHex",
         "SaveResponseBody",
         "BodyPreviewImage",
-        "TabHex",
-        "HexText",
-        "HexCaptureHint",
         "TabDiff",
         "DiffText",
         "TabFrames",
@@ -332,7 +357,7 @@ public class AutomationIdCoverageHeadlessTests
             Assert.IsTrue(fx.ViewModel.ShowWsFramesTab);
 
             fx.Robot.Click("TabFrames");
-            Assert.AreEqual(4, fx.ViewModel.SelectedInspectTabIndex);
+            Assert.AreEqual((int)InspectTab.WsFrames, fx.ViewModel.SelectedInspectTabIndex);
 
             fx.Robot.Click("CloseDetailsButton");
             Assert.IsFalse(fx.ViewModel.ShowSessionDetails);
@@ -369,11 +394,11 @@ public class AutomationIdCoverageHeadlessTests
             Assert.IsTrue(fx.ViewModel.ShowProtobufTab);
 
             fx.Robot.Click("TabSse");
-            Assert.AreEqual(5, fx.ViewModel.SelectedInspectTabIndex);
+            Assert.AreEqual((int)InspectTab.Sse, fx.ViewModel.SelectedInspectTabIndex);
             StringAssert.Contains(fx.ViewModel.SelectedSseEvents, "hi");
 
             fx.Robot.Click("TabProtobuf");
-            Assert.AreEqual(6, fx.ViewModel.SelectedInspectTabIndex);
+            Assert.AreEqual((int)InspectTab.Protobuf, fx.ViewModel.SelectedInspectTabIndex);
             StringAssert.Contains(fx.ViewModel.SelectedProtobufDecoded, "ok");
 
             Assert.IsTrue(fx.Robot.TryFind<Avalonia.Controls.ComboBox>("ComboNetworkThrottle", out var combo) && combo is not null);

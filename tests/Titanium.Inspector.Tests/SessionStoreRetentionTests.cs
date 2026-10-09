@@ -665,7 +665,7 @@ public class SessionStoreRetentionTests
     public void BuildBodyCaptureHint_ExplainsDiskPrunedBody()
     {
         var hint = typeof(MainWindowViewModel).GetMethod(
-            "BuildBodyCaptureHint",
+            "BuildSideCaptureHint",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
         var snap = new SessionSnapshot
         {
@@ -674,7 +674,7 @@ public class SessionStoreRetentionTests
             ResponseBodyCapture = BodyCaptureState.Complete,
             BodySize = 12_000,
         };
-        var text = (string)hint.Invoke(null, [snap])!;
+        var text = (string)hint.Invoke(null, [snap, false, false])!;
         StringAssert.Contains(text, "disk cache limit");
         StringAssert.Contains(text, "Headers in the list are still available");
     }

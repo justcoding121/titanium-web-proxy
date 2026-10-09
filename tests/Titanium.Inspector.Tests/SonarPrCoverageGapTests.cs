@@ -226,12 +226,21 @@ public class SonarPrCoverageGapTests
             vm.SelectedSession = snap;
 
             Assert.IsTrue(vm.BodyPrettyMode);
+            Assert.IsTrue(vm.BodyPrettyEnabled);
             vm.BodyPrettyMode = false;
             Assert.IsFalse(vm.BodyPrettyMode);
-            await ExecuteAsync(vm.SetBodyPrettyCommand);
+            vm.BodyPrettyMode = true;
             Assert.IsTrue(vm.BodyPrettyMode);
-            await ExecuteAsync(vm.SetBodyRawCommand);
-            Assert.IsFalse(vm.BodyPrettyMode);
+            vm.BodyHexMode = true;
+            Assert.IsTrue(vm.BodyHexMode);
+            Assert.IsTrue(vm.BodyPrettyMode);
+            Assert.IsFalse(vm.BodyPrettyEnabled);
+            vm.BodyHexMode = true; // same-value setter arm
+            vm.BodyHexMode = false;
+            Assert.IsFalse(vm.BodyHexMode);
+            Assert.IsTrue(vm.BodyPrettyEnabled);
+            Assert.IsTrue(vm.BodyPrettyMode);
+            vm.BodyPrettyMode = false;
             vm.BodyPrettyMode = false; // same-value setter arm
 
             vm.ComposerBodyFilePath = bodyFile;

@@ -537,7 +537,7 @@ public class InspectorBodyHonestyTests
     public void TunnelInspect_ExplainsWireSizeNotHttpBody()
     {
         var hint = typeof(MainWindowViewModel).GetMethod(
-            "BuildBodyCaptureHint",
+            "BuildSideCaptureHint",
             BindingFlags.NonPublic | BindingFlags.Static)!;
         var core = typeof(MainWindowViewModel).GetMethod(
             "BuildSelectedBodyTextCore",
@@ -552,12 +552,13 @@ public class InspectorBodyHonestyTests
             ReceivedBytes = 6240,
         };
 
-        var banner = (string)hint.Invoke(null, [snap])!;
-        StringAssert.Contains(banner, "wire");
-        Assert.IsFalse(banner.Contains("(empty)", StringComparison.Ordinal));
+        var banner = (string)hint.Invoke(null, [snap, false, false])!;
+        // The body box carries the explanation; no separate banner above it.
+        Assert.AreEqual("", banner);
 
-        var body = (string)core.Invoke(null, [snap, false])!;
+        var body = (string)core.Invoke(null, [snap, false, false, false])!;
         StringAssert.Contains(body, "CONNECT tunnel");
+        StringAssert.Contains(body, "wire");
         StringAssert.Contains(body, "no HTTP message body");
         StringAssert.Contains(body, "10 KB");
         Assert.IsFalse(body.Contains("(empty)", StringComparison.Ordinal));

@@ -17,8 +17,7 @@ public class BodyInspectCoverageTests
     [TestMethod]
     public void BuildBodyAndHexCaptureHints_CoverAllBannerBranches()
     {
-        var bodyHint = typeof(MainWindowViewModel).GetMethod("BuildBodyCaptureHint", PrivateStatic)!;
-        var hexHint = typeof(MainWindowViewModel).GetMethod("BuildHexCaptureHint", PrivateStatic)!;
+        var bodyHint = typeof(MainWindowViewModel).GetMethod("BuildSideCaptureHint", PrivateStatic)!;
         var looksImage = typeof(MainWindowViewModel).GetMethod("LooksLikeImageHeaders", PrivateStatic)!;
         var core = typeof(MainWindowViewModel).GetMethod("BuildSelectedBodyTextCore", PrivateStatic)!;
 
@@ -31,8 +30,8 @@ public class BodyInspectCoverageTests
             RequestBodyCapture = BodyCaptureState.None,
             ResponseBodyCapture = BodyCaptureState.None,
         };
-        Assert.AreEqual("", (string)bodyHint.Invoke(null, [none])!);
-        Assert.AreEqual("", (string)hexHint.Invoke(null, [none])!);
+        Assert.AreEqual("", (string)bodyHint.Invoke(null, [none, true, false])!);
+        Assert.AreEqual("", (string)bodyHint.Invoke(null, [none, false, true])!);
 
         var respOnly = new SessionSnapshot
         {
@@ -41,8 +40,8 @@ public class BodyInspectCoverageTests
             ResponseBodyBytes = [1, 2, 3],
             ResponseBodyStreamOpen = false,
         };
-        StringAssert.StartsWith((string)bodyHint.Invoke(null, [respOnly])!, "Response:");
-        Assert.IsFalse(string.IsNullOrEmpty((string)hexHint.Invoke(null, [respOnly])!));
+        StringAssert.Contains((string)bodyHint.Invoke(null, [respOnly, false, false])!, "Showing first");
+        Assert.IsFalse(string.IsNullOrEmpty((string)bodyHint.Invoke(null, [respOnly, false, true])!));
 
         var reqOnly = new SessionSnapshot
         {
@@ -50,7 +49,7 @@ public class BodyInspectCoverageTests
             RequestBodyOriginalSize = InspectorBodyLimits.MaxMapLocalFileBytes,
             RequestBodyBytes = [9],
         };
-        StringAssert.StartsWith((string)bodyHint.Invoke(null, [reqOnly])!, "Request:");
+        StringAssert.Contains((string)bodyHint.Invoke(null, [reqOnly, true, false])!, "not captured");
 
         var both = new SessionSnapshot
         {
@@ -61,17 +60,19 @@ public class BodyInspectCoverageTests
             ResponseBodyBytes = [2, 3],
             BodySize = 10,
         };
-        StringAssert.Contains((string)bodyHint.Invoke(null, [both])!, "Request:");
-        StringAssert.Contains((string)bodyHint.Invoke(null, [both])!, "Response:");
+        StringAssert.Contains((string)bodyHint.Invoke(null, [both, true, false])!, "Streaming");
+        StringAssert.Contains((string)bodyHint.Invoke(null, [both, false, false])!, "Streaming");
 
         var image = new SessionSnapshot
         {
             ContentType = "image/png",
             RequestBodyBytes = [0x89, 0x50],
             ResponseBodyBytes = [0x89, 0x50],
+            RequestHeadersText = "Content-Type: image/png\r\n",
             ResponseHeadersText = "Content-Type: image/png\r\n",
         };
-        StringAssert.Contains((string)core.Invoke(null, [image, true])!, "image");
+        StringAssert.Contains((string)core.Invoke(null, [image, false, true, false])!, "image");
+        StringAssert.Contains((string)core.Invoke(null, [image, true, false, true])!, "89 50");
 
         var json = new SessionSnapshot
         {
@@ -81,8 +82,10 @@ public class BodyInspectCoverageTests
             RequestBodyText = "{\"a\":1}",
             ResponseBodyText = "{\"b\":2}",
         };
-        StringAssert.Contains((string)core.Invoke(null, [json, true])!, "Request");
-        StringAssert.Contains((string)core.Invoke(null, [json, false])!, "{");
+        var prettyReq = (string)core.Invoke(null, [json, true, true, false])!;
+        StringAssert.Contains(prettyReq, "\"a\"");
+        Assert.IsFalse(prettyReq.Contains("\"b\"", StringComparison.Ordinal));
+        StringAssert.Contains((string)core.Invoke(null, [json, false, false, false])!, "{");
 
         var truncatedBad = new SessionSnapshot
         {
@@ -91,7 +94,186 @@ public class BodyInspectCoverageTests
             ResponseBodyText = "{not-json",
             ResponseBodyCapture = BodyCaptureState.Truncated,
         };
-        Assert.IsFalse(string.IsNullOrEmpty((string)core.Invoke(null, [truncatedBad, true])!));
+        Assert.IsFalse(string.IsNullOrEmpty((string)core.Invoke(null, [truncatedBad, false, true, false])!));
+    }
+
+    [TestMethod]
+    public void BodyTabs_HexDisablesPretty_AndKeepsEachSideSeparate()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-body-sides-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var settings = new SettingsService(Path.Combine(dir, "settings.json"));
+            settings.Current.AutoStartCapture = false;
+            settings.Save();
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                new ScriptedInspectorDialogs())
+            {
+                BindPort = 0,
+                BindAddress = "127.0.0.1",
+            };
+
+            var snap = new SessionSnapshot
+            {
+                Id = 9,
+                Method = "POST",
+                StatusCode = 200,
+                Url = "https://sides.test/q?x=1",
+                RequestHeadersText = "Content-Type: application/json\r\nCookie: a=1\r\n",
+                ResponseHeadersText = "Content-Type: application/json\r\n",
+                RequestBodyText = "{\"req\":1}",
+                ResponseBodyText = "{\"resp\":2}",
+                RequestBodyBytes = Encoding.UTF8.GetBytes("{\"req\":1}"),
+                ResponseBodyBytes = Encoding.UTF8.GetBytes("{\"resp\":2}"),
+                RequestBodyCapture = BodyCaptureState.Complete,
+                ResponseBodyCapture = BodyCaptureState.Truncated,
+                ResponseBodyOriginalSize = 9000,
+            };
+            vm.SeedSession(snap);
+            vm.SelectedSession = snap;
+
+            Assert.IsTrue(vm.BodyPrettyMode);
+            Assert.IsFalse(vm.BodyHexMode);
+            Assert.IsTrue(vm.BodyPrettyEnabled);
+            Assert.IsTrue(vm.CanSaveRequestBody);
+            Assert.IsTrue(vm.CanSaveResponseBody);
+            Assert.IsFalse(vm.ShowRequestBodyCaptureHint);
+            Assert.IsTrue(vm.ShowResponseBodyCaptureHint);
+            Assert.IsFalse(vm.ResponseBodyCaptureHint.Contains("Request", StringComparison.Ordinal));
+
+            StringAssert.Contains(vm.SelectedRequestHeaders, "Cookie");
+            StringAssert.Contains(vm.SelectedRequestHeaders, "=== Query ===");
+            Assert.IsFalse(vm.SelectedRequestHeaders.Contains("=== Response ===", StringComparison.Ordinal));
+            StringAssert.Contains(vm.SelectedResponseHeaders, "application/json");
+            Assert.AreEqual("Headers (2)", vm.RequestHeadersCaption);
+            Assert.AreEqual("Headers (1)", vm.ResponseHeadersCaption);
+
+            vm.SelectedInspectTabIndex = (int)InspectTab.Request;
+            StringAssert.Contains(vm.SelectedRequestBody, "req");
+            Assert.IsFalse(vm.SelectedRequestBody.Contains("resp", StringComparison.Ordinal));
+
+            vm.SelectedInspectTabIndex = (int)InspectTab.Response;
+            StringAssert.Contains(vm.SelectedResponseBody, "resp");
+            Assert.IsFalse(vm.SelectedResponseBody.Contains("\"req\"", StringComparison.Ordinal));
+
+            vm.BodyHexMode = true;
+            Assert.IsTrue(vm.BodyPrettyMode);
+            Assert.IsFalse(vm.BodyPrettyEnabled);
+            Assert.AreEqual("Not applicable in hex view", vm.BodyPrettyToolTip);
+            StringAssert.Contains(vm.SelectedResponseBody, "72 65 73 70");
+            Assert.IsFalse(vm.SelectedResponseBody.Contains("72 65 71", StringComparison.Ordinal));
+
+            vm.BodyHexMode = false;
+            Assert.IsTrue(vm.BodyPrettyEnabled);
+            Assert.IsTrue(vm.BodyPrettyMode);
+            StringAssert.Contains(vm.SelectedResponseBody, "resp");
+
+            var requestOnly = new SessionSnapshot
+            {
+                Id = 10,
+                Method = "POST",
+                Url = "https://sides.test/only",
+                RequestBodyText = "ping",
+                RequestBodyBytes = Encoding.UTF8.GetBytes("ping"),
+                RequestBodyCapture = BodyCaptureState.Complete,
+            };
+            vm.SeedSession(requestOnly);
+            vm.SelectedSession = requestOnly;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Request;
+            StringAssert.Contains(vm.SelectedRequestBody, "ping");
+            Assert.AreEqual("Waiting for response…", vm.SelectedResponseHeaders);
+            Assert.AreEqual("Headers (0)", vm.ResponseHeadersCaption);
+            vm.SelectedInspectTabIndex = (int)InspectTab.Response;
+            Assert.AreEqual("Waiting for response…", vm.SelectedResponseBody);
+
+            // Once the session ended with no response, say so (and why) instead of "waiting".
+            requestOnly.DurationMs = 30;
+            requestOnly.FailureReason = "Connection reset by the server.";
+            vm.SelectedSession = null;
+            vm.SelectedSession = requestOnly;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Response;
+            Assert.AreEqual("No response received — Connection reset by the server.", vm.SelectedResponseBody);
+            Assert.AreEqual(0.65, vm.ResponseBodyOpacity);
+            Assert.IsTrue(vm.CanSaveRequestBody);
+            Assert.IsFalse(vm.CanSaveResponseBody);
+            Assert.IsTrue(vm.ShowBodyModeToggles);
+
+            // Hex still works when only decoded text was kept (no raw bytes).
+            var textOnly = new SessionSnapshot
+            {
+                Id = 11,
+                Method = "GET",
+                StatusCode = 200,
+                Url = "https://sides.test/text",
+                ResponseBodyText = "abc",
+            };
+            vm.SeedSession(textOnly);
+            vm.SelectedSession = textOnly;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Response;
+            vm.BodyHexMode = true;
+            StringAssert.Contains(vm.SelectedResponseBody, "61 62 63");
+            vm.BodyHexMode = false;
+
+            // Pretty/Hex are meaningless for CONNECT tunnels.
+            var tunnel = new SessionSnapshot { Id = 12, Method = "CONNECT", Url = "host:443", IsTunnel = true };
+            vm.SeedSession(tunnel);
+            vm.SelectedSession = tunnel;
+            Assert.IsFalse(vm.ShowBodyModeToggles);
+            Assert.IsFalse(vm.ShowRequestBodyCaptureHint);
+            Assert.IsFalse(vm.ShowResponseBodyCaptureHint);
+            vm.SelectedInspectTabIndex = (int)InspectTab.Response;
+            StringAssert.Contains(vm.SelectedResponseBody, "CONNECT tunnel");
+
+            // A vanished contextual tab returns to the last core tab, not always tab 0.
+            vm.SelectedSession = snap;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Response;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Sse;
+            vm.SelectedSession = requestOnly;
+            Assert.AreEqual((int)InspectTab.Response, vm.SelectedInspectTabIndex);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(dir))
+                    Directory.Delete(dir, true);
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+    }
+
+    [TestMethod]
+    public void DescribeNoResponse_NamesTheFailure()
+    {
+        var describe = typeof(InterceptionService).GetMethod(
+            "DescribeNoResponse", BindingFlags.NonPublic | BindingFlags.Static)!;
+        string Run(Exception? ex) => (string)describe.Invoke(null, [ex])!;
+
+        StringAssert.Contains(Run(null), "closed before the server replied");
+        StringAssert.Contains(
+            Run(new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.ConnectionRefused)),
+            "refused");
+        StringAssert.Contains(
+            Run(new IOException("x", new System.Net.Sockets.SocketException(
+                (int)System.Net.Sockets.SocketError.ConnectionReset))),
+            "reset");
+        StringAssert.Contains(Run(new TimeoutException()), "Timed out");
+        StringAssert.Contains(Run(new OperationCanceledException()), "disconnected");
+        StringAssert.Contains(Run(new InvalidOperationException("boom")), "boom");
     }
 
     [TestMethod]
@@ -135,7 +317,7 @@ public class BodyInspectCoverageTests
         }])!;
         Assert.AreEqual("", (string)proto.Invoke(null, [new SessionSnapshot()])!);
 
-        var plain = (string)prefix.Invoke(null, [new SessionSnapshot(), "body"])!;
+        var plain = (string)prefix.Invoke(null, [new SessionSnapshot(), "body", true, false])!;
         Assert.AreEqual("body", plain);
         var transcoded = new SessionSnapshot
         {
@@ -145,7 +327,8 @@ public class BodyInspectCoverageTests
             UpstreamRequestBodyBytes = [1],
             GrpcFrames = [new GrpcFrameSnapshot { Compressed = true, Length = 1, HexPreview = "aa" }],
         };
-        StringAssert.Contains((string)prefix.Invoke(null, [transcoded, "body"])!, "Client");
+        StringAssert.Contains((string)prefix.Invoke(null, [transcoded, "body", true, false])!, "Client");
+        Assert.AreEqual("body", (string)prefix.Invoke(null, [transcoded, "body", true, true])!);
     }
 
     [TestMethod]
@@ -218,11 +401,11 @@ public class BodyInspectCoverageTests
             };
             vm.SeedSession(complete);
             vm.SelectedSession = complete;
-            vm.SelectedInspectTabIndex = 1;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Response;
             vm.BodyPrettyMode = true;
             Assert.IsTrue(vm.CanSaveRequestBody);
             Assert.IsTrue(vm.CanSaveResponseBody);
-            Assert.IsTrue(vm.ShowBodyCaptureHint || !string.IsNullOrEmpty(vm.SelectedBody));
+            Assert.IsTrue(vm.ShowResponseBodyCaptureHint || !string.IsNullOrEmpty(vm.SelectedResponseBody));
 
             picker.SavePath = savePath;
             await ExecuteAsync(vm.SaveRequestBodyCommand);
@@ -262,7 +445,7 @@ public class BodyInspectCoverageTests
             };
             vm.SeedSession(bogusImage);
             vm.SelectedSession = bogusImage;
-            Assert.IsNull(vm.BodyPreviewBitmap);
+            Assert.IsNull(vm.ResponseBodyPreviewBitmap);
         }
         finally
         {
@@ -458,6 +641,90 @@ public class BodyInspectCoverageTests
             vm.SelectedSession = streaming;
             vm.ApplyEditBodyCommand.Execute(null);
             StringAssert.Contains(vm.StatusText, "streaming");
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(dir))
+                    Directory.Delete(dir, true);
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+    }
+
+    [TestMethod]
+    public void InspectHeadersSplit_AutoCollapsesShortPane_AndRemembersUserChoice()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-inspect-split-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "settings.json");
+        try
+        {
+            var settings = new SettingsService(path);
+            settings.Current.AutoStartCapture = false;
+            settings.Save();
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                new ScriptedInspectorDialogs())
+            {
+                BindPort = 0,
+                BindAddress = "127.0.0.1",
+            };
+
+            Assert.IsFalse(vm.InspectHeadersCollapsed);
+            Assert.AreEqual(MainWindowViewModel.DefaultInspectHeadersRatio, vm.InspectHeadersRatio, 0.001);
+            Assert.IsNull(settings.Current.InspectHeadersCollapsed);
+
+            vm.ApplyInspectPaneHeight(400);
+            Assert.IsTrue(vm.InspectHeadersCollapsed);
+            Assert.IsNull(settings.Current.InspectHeadersCollapsed);
+
+            vm.ApplyInspectPaneHeight(800);
+            Assert.IsFalse(vm.InspectHeadersCollapsed);
+
+            vm.ApplyInspectPaneHeight(0);
+            Assert.IsFalse(vm.InspectHeadersCollapsed);
+
+            vm.ToggleInspectHeadersCollapsed();
+            Assert.IsTrue(vm.InspectHeadersCollapsed);
+            Assert.IsTrue(settings.Current.InspectHeadersCollapsed);
+
+            vm.ApplyInspectPaneHeight(900);
+            Assert.IsTrue(vm.InspectHeadersCollapsed);
+
+            vm.ToggleInspectHeadersCollapsed();
+            Assert.IsFalse(vm.InspectHeadersCollapsed);
+            Assert.IsFalse(new SettingsService(path).Current.InspectHeadersCollapsed);
+
+            vm.ApplyInspectPaneHeight(300);
+            Assert.IsFalse(vm.InspectHeadersCollapsed);
+
+            vm.CommitInspectHeadersRatio(100, 100);
+            Assert.AreEqual(0.5, vm.InspectHeadersRatio, 0.001);
+            Assert.AreEqual(0.5, new SettingsService(path).Current.InspectHeadersRatio, 0.001);
+
+            vm.ResetInspectHeadersRatio();
+            Assert.AreEqual(MainWindowViewModel.DefaultInspectHeadersRatio, vm.InspectHeadersRatio, 0.001);
+            Assert.AreEqual(
+                MainWindowViewModel.DefaultInspectHeadersRatio,
+                new SettingsService(path).Current.InspectHeadersRatio,
+                0.001);
+
+            vm.CommitInspectHeadersRatio(0, 0);
+            Assert.AreEqual(MainWindowViewModel.DefaultInspectHeadersRatio, vm.InspectHeadersRatio, 0.001);
         }
         finally
         {

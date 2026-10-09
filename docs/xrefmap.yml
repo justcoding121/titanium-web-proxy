@@ -9553,6 +9553,32 @@ references:
   commentId: E:Titanium.Web.Proxy.ProxyServer.ClientConnectionCountChanged
   fullName: Titanium.Web.Proxy.ProxyServer.ClientConnectionCountChanged
   nameWithType: ProxyServer.ClientConnectionCountChanged
+- uid: Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectThreshold
+  name: ClientHandshakeRejectThreshold
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ClientHandshakeRejectThreshold
+  commentId: P:Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectThreshold
+  fullName: Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectThreshold
+  nameWithType: ProxyServer.ClientHandshakeRejectThreshold
+- uid: Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectThreshold*
+  name: ClientHandshakeRejectThreshold
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ClientHandshakeRejectThreshold_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectThreshold
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectThreshold
+  nameWithType: ProxyServer.ClientHandshakeRejectThreshold
+- uid: Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectWindow
+  name: ClientHandshakeRejectWindow
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ClientHandshakeRejectWindow
+  commentId: P:Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectWindow
+  fullName: Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectWindow
+  nameWithType: ProxyServer.ClientHandshakeRejectWindow
+- uid: Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectWindow*
+  name: ClientHandshakeRejectWindow
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ClientHandshakeRejectWindow_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectWindow
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectWindow
+  nameWithType: ProxyServer.ClientHandshakeRejectWindow
 - uid: Titanium.Web.Proxy.ProxyServer.ClientHeaderTimeoutSeconds
   name: ClientHeaderTimeoutSeconds
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ClientHeaderTimeoutSeconds

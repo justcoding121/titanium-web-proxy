@@ -268,7 +268,7 @@ internal static partial class Http3OriginBridge
                         IHttpStreamReader reader = originConnection.Stream;
                         using var limited = new LimitedStream(reader, server.BufferPool, originIsChunked,
                             originContentLength, trailingHeaders);
-                        const int frameBytes = 16 * 1024;
+                        const int frameBytes = Http3Frame.RelayUnitBytes;
                         var buffer = server.BufferPool.GetBuffer(frameBytes);
                         try
                         {

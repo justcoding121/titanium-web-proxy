@@ -130,6 +130,18 @@ jobs:
           Start-Sleep -Seconds 5
         }
 
+    # Error-path hardening (origin 502/504, client-reject breaker, stale-connection replay, log signatures).
+    # No retry loop: these tests are deterministic and must never be masked by the flake retry above.
+    - name: Regression-2026-10-07 gate
+      shell: pwsh
+      run: |
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Regression-2026-10-07"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Regression-2026-10-07" --blame-hang --blame-hang-timeout 5m
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Regression-2026-10-07"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
     - name: Merge code coverage
       shell: pwsh
       run: .\.coverage\tools\dotnet-coverage merge "coverage\**\*.coverage" --output coverage/coverage.xml --output-format xml
@@ -158,6 +170,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "git reset failed" }
           docfx .github/docfx.json
           if ($LASTEXITCODE -ne 0) { throw "docfx failed" }
+          # DocFX recopies its template script. Re-apply the two DOM-XSS fixes so a regen cannot
+          # put the raw search query or an aria-controls value back into an href.
+          $docfxJs = Join-Path (Get-Location) "docs/styles/docfx.js"
+          $js = [IO.File]::ReadAllText($docfxJs)
+          $nl = $(if ($js.Contains("`r`n")) { "`r`n" } else { "`n" })
+          $fixedHref = 'var itemHref = relHref + hit.href;' + $nl + '                if (query) { itemHref += "?q=" + encodeURIComponent(query); }'
+          $js = $js.Replace('var itemHref = relHref + hit.href + "?q=" + query;', $fixedHref)
+          $js = $js.Replace("info.anchor.href = 'javascript:';", "")
+          $js = $js.Replace("setTimeout(function () { return info.anchor.href = '#' + info.anchor.getAttribute('aria-controls'); });", "")
+          if ($js.Contains("href = 'javascript:'") -or $js.Contains('"?q=" + query')) { throw "docfx.js still has a DOM XSS sink" }
+          [IO.File]::WriteAllText($docfxJs, $js)
           git add -- docs
           if (-not (git status --porcelain -- docs)) {
             Write-Host "No documentation changes to publish."
