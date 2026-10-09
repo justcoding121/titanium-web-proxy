@@ -776,6 +776,16 @@ internal sealed class TwpProxyHost : IDisposable
         proxy.ViaHeaderPseudonym = string.Empty;
         // Saturation runs must not format or enqueue diagnostics on session threads.
         proxy.Logging.Enabled = false;
+        // Diagnosis only (never for publishable runs): TWP_H3_ERROR_LOG=<file> writes the proxy's own
+        // Warning-and-above log, so a stream reset the client reports as H3_INTERNAL_ERROR has a cause.
+        if (Environment.GetEnvironmentVariable("TWP_H3_ERROR_LOG") is { Length: > 0 } errorLog)
+        {
+            proxy.Logging.Enabled = true;
+            proxy.Logging.MinimumLevel = Microsoft.Extensions.Logging.LogLevel.Warning;
+            proxy.Logging.EnableConsole = false;
+            proxy.Logging.EnableFile = true;
+            proxy.Logging.FilePath = errorLog.Length > 1 ? errorLog : "h3-error.log";
+        }
         proxy.CertificateManager.SaveFakeCertificates = false;
         // Opt-in for compare-tls-cost handshake arms (child process via env).
         proxy.EnableRequestTimingCapture =

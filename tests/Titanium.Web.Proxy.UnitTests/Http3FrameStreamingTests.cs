@@ -79,6 +79,42 @@ public class Http3FrameStreamingTests
     }
 
     [TestMethod]
+    public void StreamsPastFrameCap_OnlyNoHookDataAboveTheCap()
+    {
+        const long cap = 4 * 1024 * 1024;
+        Assert.IsTrue(Http3Frame.StreamsPastFrameCap(Http3FrameType.Data, cap + 1, cap, captureWholeFrame: false));
+        Assert.IsFalse(Http3Frame.StreamsPastFrameCap(Http3FrameType.Data, cap, cap, captureWholeFrame: false));
+        Assert.IsFalse(Http3Frame.StreamsPastFrameCap(Http3FrameType.Data, cap + 1, cap, captureWholeFrame: true));
+        Assert.IsFalse(Http3Frame.StreamsPastFrameCap(Http3FrameType.Headers, cap + 1, cap, captureWholeFrame: false));
+    }
+
+    [TestMethod]
+    public async Task CopyPayload_RelayUnit_ForwardsAFittingFrameWhole_AndSlicesALargerOne()
+    {
+        var oneFrame = await SliceLengths(Http3Frame.RelayUnitBytes);
+        CollectionAssert.AreEqual(new[] { Http3Frame.RelayUnitBytes }, oneFrame);
+
+        var body = (256 * 1024);
+        var slices = await SliceLengths(body);
+        Assert.AreEqual(body / Http3Frame.RelayUnitBytes, slices.Length);
+        Assert.IsTrue(Array.TrueForAll(slices, n => n == Http3Frame.RelayUnitBytes));
+    }
+
+    private static async Task<int[]> SliceLengths(int length)
+    {
+        await using var stream = new MemoryStream(new byte[length]);
+        var sizes = new List<int>();
+        await Http3Frame.CopyPayloadAsync(stream, length, Http3Frame.RelayUnitBytes,
+            (slice, _) =>
+            {
+                sizes.Add(slice.Length);
+                return ValueTask.CompletedTask;
+            },
+            CancellationToken.None);
+        return sizes.ToArray();
+    }
+
+    [TestMethod]
     public async Task CopyPayload_Cancellation_ReturnsWithoutHanging()
     {
         await using var stream = new MemoryStream(new byte[64]);

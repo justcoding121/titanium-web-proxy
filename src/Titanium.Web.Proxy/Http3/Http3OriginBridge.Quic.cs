@@ -376,7 +376,7 @@ internal static partial class Http3OriginBridge
                     if (header.Value.Type == Http3FrameType.Data)
                     {
                         if (header.Value.Length > 0)
-                            await Http3Frame.CopyPayloadAsync(streamToClient, header.Value.Length, 16 * 1024,
+                                    await Http3Frame.CopyPayloadAsync(streamToClient, header.Value.Length, Http3Frame.RelayUnitBytes,
                                 (slice, token) => dest.WriteAsync(slice, token), ct);
                         continue;
                     }
@@ -702,12 +702,32 @@ internal static partial class Http3OriginBridge
                     var maxPayload = Math.Max(server.ResourceLimits.MaxHttp3FramePayloadBytes, server.MaxDecodedHeaderListBytes);
                     var captureForMitm = clientStream is null;
                     var sawFinalHeaders = false;
+                    var frameCap = server.ResourceLimits.MaxHttp3FramePayloadBytes;
                     while (true)
                     {
-                        var frame = await Http3Frame.ReadAsync(originStream, maxPayloadBytes: maxPayload,
-                            cancellationToken);
-                        if (frame == null)
+                        var header = await Http3Frame.ReadFrameHeaderAsync(originStream, cancellationToken);
+                        if (header is null)
                             break;
+
+                        // No-hook DATA above the cap streams in relay-unit slices. The session drain
+                        // already did this; the fast-forward path used to reject the same frame.
+                        if (Http3Frame.StreamsPastFrameCap(header.Value.Type, header.Value.Length, frameCap,
+                                captureForMitm))
+                        {
+                            if (!sawFinalHeaders)
+                                throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
+                                    "DATA frame received before response HEADERS.");
+                            if (header.Value.Length > 0)
+                                await Http3Frame.CopyPayloadAsync(originStream, header.Value.Length,
+                                    Http3Frame.RelayUnitBytes,
+                                    (slice, token) => Http3Frame.WriteAsync(clientStream!, Http3FrameType.Data,
+                                        slice, token),
+                                    cancellationToken);
+                            continue;
+                        }
+
+                        var frame = await Http3Frame.ReadPayloadAfterHeaderAsync(
+                            originStream, header.Value, maxPayload, cancellationToken);
                         try
                         {
                             if (frame.Type == Http3FrameType.Headers)
@@ -717,8 +737,28 @@ internal static partial class Http3OriginBridge
                                 if (!sawFinalHeaders)
                                 {
                                     var headersPayload = frame.Payload;
-                                    var next = await Http3Frame.ReadAsync(originStream,
-                                        maxPayloadBytes: maxPayload, cancellationToken);
+                                    var nextHeader = await Http3Frame.ReadFrameHeaderAsync(originStream,
+                                        cancellationToken);
+                                    if (nextHeader is { } streamed
+                                        && Http3Frame.StreamsPastFrameCap(streamed.Type, streamed.Length, frameCap,
+                                            captureForMitm))
+                                    {
+                                        await Http3Frame.WriteAsync(clientStream!, Http3FrameType.Headers,
+                                            headersPayload, cancellationToken);
+                                        if (streamed.Length > 0)
+                                            await Http3Frame.CopyPayloadAsync(originStream, streamed.Length,
+                                                Http3Frame.RelayUnitBytes,
+                                                (slice, token) => Http3Frame.WriteAsync(clientStream!,
+                                                    Http3FrameType.Data, slice, token),
+                                                cancellationToken);
+                                        sawFinalHeaders = true;
+                                        continue;
+                                    }
+
+                                    var next = nextHeader is { } present
+                                        ? await Http3Frame.ReadPayloadAfterHeaderAsync(
+                                            originStream, present, maxPayload, cancellationToken)
+                                        : null;
                                     if (next is { Type: Http3FrameType.Data }
                                         && headersPayload.Length + next.Payload.Length <= relayCoalesceMaxBytes)
                                     {
