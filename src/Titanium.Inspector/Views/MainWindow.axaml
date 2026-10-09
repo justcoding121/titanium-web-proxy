@@ -405,7 +405,7 @@
                     IsVisible="{Binding ShowSessionDetails}" />
       <DockPanel Grid.Row="1" Grid.Column="2" Margin="4,8,0,8"
                  IsVisible="{Binding ShowSessionDetails}"
-                 MinWidth="280"
+                 MinWidth="360"
                  ClipToBounds="True">
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4" LastChildFill="True">
           <Button DockPanel.Dock="Right"
@@ -435,9 +435,9 @@
                     <Grid.RowDefinitions>
                       <RowDefinition Height="Auto"/>
                       <RowDefinition Height="Auto"/>
-                      <RowDefinition Height="*" MinHeight="72"/>
+                      <RowDefinition Height="*" MinHeight="56"/>
                       <RowDefinition Height="Auto"/>
-                      <RowDefinition Height="2*" MinHeight="120"/>
+                      <RowDefinition Height="2*" MinHeight="96"/>
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Text="{Binding SelectedOpaqueHint}" Margin="0,0,0,8"
                                TextWrapping="Wrap" Opacity="0.85" FontSize="12"
@@ -513,9 +513,9 @@
                     <Grid.RowDefinitions>
                       <RowDefinition Height="Auto"/>
                       <RowDefinition Height="Auto"/>
-                      <RowDefinition Height="*" MinHeight="72"/>
+                      <RowDefinition Height="*" MinHeight="56"/>
                       <RowDefinition Height="Auto"/>
-                      <RowDefinition Height="2*" MinHeight="120"/>
+                      <RowDefinition Height="2*" MinHeight="96"/>
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Text="{Binding SelectedOpaqueHint}" Margin="0,0,0,8"
                                TextWrapping="Wrap" Opacity="0.85" FontSize="12"

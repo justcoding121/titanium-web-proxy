@@ -265,6 +265,11 @@ public partial class MainWindow : Window
     private const int InspectHeadersRowIndex = 2;
     private const int InspectBodyRowIndex = 4;
 
+    // Floors stay small on purpose: on a short window each box shrinks and scrolls inside itself
+    // instead of the pane clipping its bottom. Body keeps room for its toolbar plus a few lines.
+    private const double InspectHeadersMinHeight = 56;
+    private const double InspectBodyMinHeight = 96;
+
     private void HookInspectHeadersLayout(MainWindowViewModel? vm)
     {
         if (_inspectLayoutVm is not null)
@@ -348,14 +353,14 @@ public partial class MainWindow : Window
         {
             headers.MinHeight = 0;
             headers.Height = new GridLength(0);
-            body.MinHeight = 120;
+            body.MinHeight = InspectBodyMinHeight;
             body.Height = new GridLength(1, GridUnitType.Star);
             return;
         }
 
-        headers.MinHeight = 72;
+        headers.MinHeight = InspectHeadersMinHeight;
         headers.Height = new GridLength(vm.InspectHeadersStar, GridUnitType.Star);
-        body.MinHeight = 120;
+        body.MinHeight = InspectBodyMinHeight;
         body.Height = new GridLength(vm.InspectBodyStar, GridUnitType.Star);
     }
 

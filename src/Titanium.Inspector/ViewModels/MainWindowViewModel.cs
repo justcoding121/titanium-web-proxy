@@ -2211,7 +2211,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         _showSessionDetails ? new GridLength(_sessionDetailsWidth) : new GridLength(0);
 
     /// <summary>Min width for the content column when open; 0 when closed so only the rail remains.</summary>
-    public double SessionDetailsPaneMinWidth => _showSessionDetails ? 280 : 0;
+    /// <summary>
+    /// Floor for the open details column. Wide enough for Pretty, Hex, and Save request/response
+    /// on one line so the checkbox label is not covered by the button.
+    /// </summary>
+    public double SessionDetailsPaneMinWidth => _showSessionDetails ? 360 : 0;
 
     public string PaneContentTitle => SelectedPaneNavIndex switch
     {
