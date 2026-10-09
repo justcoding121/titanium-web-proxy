@@ -220,6 +220,79 @@ public class SessionSearchAndArchiveTests
     }
 
     [TestMethod]
+    public void Filter_LeadingMinusExcludesThatField()
+    {
+        var cursor = new SessionSnapshot
+        {
+            Id = 1, Method = "CONNECT", Host = "api2.cursor.sh", Url = "https://api2.cursor.sh/",
+            ProcessName = "Cursor", StatusCode = 200, IsTunnel = true,
+        };
+        var page = new SessionSnapshot
+        {
+            Id = 2, Method = "GET", Host = "example.com", Url = "https://example.com/cursor",
+            ProcessName = "chrome", StatusCode = 404,
+        };
+        var ok = new SessionSnapshot
+        {
+            Id = 3, Method = "GET", Host = "ok.test", Url = "https://ok.test/",
+            ProcessName = "chrome", StatusCode = 200,
+        };
+        var sessions = new[] { cursor, page, ok };
+
+        var hiddenHost = SessionSearch.Filter(sessions, "-host:cursor.sh").Select(s => s.Id).ToList();
+        CollectionAssert.AreEquivalent(new long[] { 2, 3 }, hiddenHost);
+        Assert.IsFalse(SessionSearch.Matches(cursor, "-process:Cursor"));
+        Assert.IsTrue(SessionSearch.Matches(page, "-process:Cursor"));
+
+        var combined = SessionSearch.Filter(sessions, "status:2xx -host:cursor.sh").Select(s => s.Id).ToList();
+        CollectionAssert.AreEquivalent(new long[] { 3 }, combined);
+
+        // The URL contains "cursor", so a URL fall-through would have hidden this row.
+        Assert.IsTrue(SessionSearch.Matches(page, "-notafield:cursor"));
+
+        // hide: already excludes; a leading minus must not invert it back.
+        Assert.IsFalse(SessionSearch.Matches(cursor, "-hide:tunnel"));
+        Assert.IsTrue(SessionSearch.Matches(page, "-hide:tunnel"));
+
+        // A bare -word excludes whatever the bare word matches (URL, host, process, ...).
+        var bare = SessionSearch.Filter(sessions, "-cursor").Select(s => s.Id).ToList();
+        CollectionAssert.AreEquivalent(new long[] { 3 }, bare);
+        Assert.IsTrue(SessionSearch.Matches(ok, "-cursor"));
+        Assert.IsFalse(SessionSearch.Matches(cursor, "-Cursor"));
+        // A lone minus is still just text, not an exclusion of nothing.
+        Assert.IsFalse(SessionSearch.Matches(ok, "-"));
+    }
+
+    [TestMethod]
+    public void NegatedBodyToken_UsesTheBodySearchPath()
+    {
+        Assert.IsTrue(SessionSearch.HasBodyToken("body:abc"));
+        Assert.IsTrue(SessionSearch.HasBodyToken("host:x -body:abc"));
+        Assert.IsFalse(SessionSearch.HasBodyToken("-host:abc"));
+
+        var withBody = new SessionSnapshot { Id = 1, Url = "https://a/", ResponseBodyText = "needle" };
+        var without = new SessionSnapshot { Id = 2, Url = "https://a/", ResponseBodyText = "other" };
+        Assert.IsFalse(SessionSearch.Matches(withBody, "-body:needle"));
+        Assert.IsTrue(SessionSearch.Matches(without, "-body:needle"));
+    }
+
+    [TestMethod]
+    public void NegatedTokens_AddRemoveAndClear_LeavePositiveKeysAlone()
+    {
+        Assert.IsTrue(SessionSearch.ContainsToken("-host:cursor.sh", "-host", "cursor.sh"));
+        Assert.IsFalse(SessionSearch.ContainsToken("-host:cursor.sh", "host", "cursor.sh"));
+
+        var added = SessionSearch.AddToken("status:2xx", "-host", "cursor.sh");
+        Assert.AreEqual("status:2xx -host:cursor.sh", added);
+        Assert.AreEqual(added, SessionSearch.AddToken(added, "-host", "cursor.sh"));
+
+        // Removing every host: token must not also remove -host:.
+        Assert.AreEqual("status:2xx -host:cursor.sh", SessionSearch.RemoveKeyedTokens("host:example.com " + added, "host"));
+        Assert.AreEqual("status:2xx", SessionSearch.RemoveToken(added, "-host", "cursor.sh"));
+        Assert.AreEqual("", SessionSearch.ClearFilters(added));
+    }
+
+    [TestMethod]
     public void SetKeyedToken_ReplacesExistingKey()
     {
         var set = SessionSearch.SetKeyedToken("method:GET host:old", "host", "example.com");

@@ -327,6 +327,37 @@ public sealed partial class MainWindowViewModel
         StatusText = $"Filtered by process:{process}";
         return Task.CompletedTask;
     }
+    private Task HideHostAsync()
+    {
+        var host = ResolveUnanimousFilterHost();
+        if (string.IsNullOrEmpty(host))
+        {
+            StatusText = "Hide host needs one shared host in the selection";
+            return Task.CompletedTask;
+        }
+
+        SearchQuery = SessionSearch.AddToken(SearchQuery, "-host", host);
+        StatusText = $"Hidden host:{host} · Clear filters to show";
+        return Task.CompletedTask;
+    }
+    private Task HideProcessAsync()
+    {
+        var process = ResolveUnanimousFilterProcess();
+        if (string.IsNullOrEmpty(process))
+        {
+            StatusText = "Hide process needs one shared process in the selection";
+            return Task.CompletedTask;
+        }
+
+        // Search tokens cannot contain spaces, so "Google Chrome" becomes -process:Google, which also hides
+        // other names containing "Google". Hiding more than the user pointed at must not be silent.
+        var token = process.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)[0];
+        SearchQuery = SessionSearch.AddToken(SearchQuery, "-process", process);
+        StatusText = token.Length < process.Length
+            ? $"Hidden process:{token} (shortened at the space; also hides other names containing it) · Clear filters to show"
+            : $"Hidden process:{process} · Clear filters to show";
+        return Task.CompletedTask;
+    }
     /// <summary>True when selection shares one non-empty host (single or multi-select).</summary>
     public bool CanFilterByHost => ResolveUnanimousFilterHost() is not null;
     /// <summary>True when at least one session is selected.</summary>

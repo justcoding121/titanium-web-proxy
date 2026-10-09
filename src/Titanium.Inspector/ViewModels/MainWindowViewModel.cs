@@ -286,7 +286,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         _diffSessionsCommand = Cmd(DiffSessionsAsync, () => CanDiffSessions);
         DiffSessionsCommand = _diffSessionsCommand;
         FilterByHostCommand = Cmd(FilterByHostAsync);
+        HideHostCommand = Cmd(HideHostAsync);
         FilterByProcessCommand = Cmd(FilterByProcessAsync);
+        HideProcessCommand = Cmd(HideProcessAsync);
         OpenExclusionSummaryCommand = Cmd(OpenExcludedHostsAsync);
         SendComposerCommand = Cmd(async () => await SendComposerAsync());
         AddAutoResponderRuleCommand = Cmd(AddAutoResponderRuleAsync);
@@ -1384,7 +1386,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public ICommand CopyAsFetchCommand { get; }
     public ICommand DiffSessionsCommand { get; }
     public ICommand FilterByHostCommand { get; }
+    public ICommand HideHostCommand { get; }
     public ICommand FilterByProcessCommand { get; }
+    public ICommand HideProcessCommand { get; }
     public ICommand SendComposerCommand { get; }
     public ICommand AddAutoResponderRuleCommand { get; }
     public ICommand DeleteAutoResponderRuleCommand { get; }

@@ -181,7 +181,7 @@
         <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarSearchFilters">
           <TextBox MinWidth="160" Width="320" MaxWidth="420" Margin="0,0,12,6"
                    Watermark="Search URL, host, process… (or method:GET status:4xx)"
-                   ToolTip.Tip="Bare text searches URL, host, process name, exact process ID, method, and status. Prefixes limit to one field: method: status: host: url: process: pid: protocol: content-type: body: is:ws|grpc|tunnel|error hide:tunnel|image. body: also searches bodies spilled to disk."
+                   ToolTip.Tip="Bare text searches URL, host, process name, exact process ID, method, and status. Prefixes limit to one field: method: status: host: url: process: pid: protocol: content-type: body: is:ws|grpc|tunnel|error hide:tunnel|image. body: also searches bodies spilled to disk. Prefix a field or a word with - to exclude it (e.g. -host:cursor.sh or -cursor)."
                    Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
           <CheckBox Content="Hide CONNECT" IsChecked="{Binding HideTunnelsFilter}"
                     VerticalAlignment="Center" Margin="0,0,12,6"
@@ -305,12 +305,21 @@
             <MenuItem Header="Filter by host" Command="{Binding FilterByHostCommand}"
                       IsVisible="{Binding CanFilterByHost}"
                       AutomationProperties.AutomationId="CtxFilterByHost" />
-            <MenuItem Header="Exclude host…" Command="{Binding ExcludeHostCommand}"
-                      IsVisible="{Binding CanExcludeHost}"
-                      AutomationProperties.AutomationId="CtxExcludeHost" />
+            <MenuItem Header="Hide host" Command="{Binding HideHostCommand}"
+                      IsVisible="{Binding CanFilterByHost}"
+                      AutomationProperties.AutomationId="CtxHideHost" />
             <MenuItem Header="Filter by process" Command="{Binding FilterByProcessCommand}"
                       IsVisible="{Binding CanFilterByProcess}"
                       AutomationProperties.AutomationId="CtxFilterByProcess" />
+            <MenuItem Header="Hide process" Command="{Binding HideProcessCommand}"
+                      IsVisible="{Binding CanFilterByProcess}"
+                      AutomationProperties.AutomationId="CtxHideProcess" />
+            <!-- Kept apart from Hide host: that only changes the list, this changes what Inspector decrypts. -->
+            <Separator IsVisible="{Binding CanExcludeHost}" />
+            <MenuItem Header="Exclude host…" Command="{Binding ExcludeHostCommand}"
+                      IsVisible="{Binding CanExcludeHost}"
+                      ToolTip.Tip="Stop decrypting this host's HTTPS. The rows stay in the list; use Hide host to remove them from view."
+                      AutomationProperties.AutomationId="CtxExcludeHost" />
             <Separator IsVisible="{Binding HasSelectedSessions}" />
             <MenuItem Header="Remove selected" Command="{Binding RemoveSelectedSessionsCommand}"
                       IsVisible="{Binding HasSelectedSessions}"

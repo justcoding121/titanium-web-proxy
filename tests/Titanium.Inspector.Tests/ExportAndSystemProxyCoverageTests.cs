@@ -420,6 +420,79 @@ public class ExportAndSystemProxyCoverageTests
         }
     }
 
+    [TestMethod]
+    public async Task HideHostAndProcess_AppendTokens_ClearFiltersResets()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-hide-filter-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception);
+
+            var snap = new SessionSnapshot
+            {
+                Id = 1,
+                Method = "CONNECT",
+                Url = "https://api2.cursor.sh/",
+                Host = "api2.cursor.sh",
+                ProcessName = "Cursor",
+                ProcessId = 42,
+            };
+            vm.SeedSession(snap);
+            vm.SelectedSession = snap;
+            vm.SetSelectedSessions([snap]);
+            vm.SearchQuery = "status:200";
+
+            await ExecuteAsync(vm.HideHostCommand);
+            Assert.AreEqual("status:200 -host:api2.cursor.sh", vm.SearchQuery);
+            StringAssert.Contains(vm.StatusText, "Hidden host:api2.cursor.sh");
+
+            await ExecuteAsync(vm.HideHostCommand);
+            Assert.AreEqual("status:200 -host:api2.cursor.sh", vm.SearchQuery);
+
+            await ExecuteAsync(vm.HideProcessCommand);
+            Assert.AreEqual("status:200 -host:api2.cursor.sh -process:Cursor", vm.SearchQuery);
+            StringAssert.Contains(vm.StatusText, "Hidden process:Cursor");
+
+            await ExecuteAsync(vm.ClearFiltersCommand);
+            Assert.AreEqual("", vm.SearchQuery);
+
+            // A name with a space cannot be one search token: say so instead of hiding more in silence.
+            var spaced = new SessionSnapshot
+            {
+                Id = 2,
+                Method = "GET",
+                Url = "https://example.com/",
+                Host = "example.com",
+                ProcessName = "Google Chrome",
+                ProcessId = 7,
+            };
+            vm.SeedSession(spaced);
+            vm.SelectedSession = spaced;
+            vm.SetSelectedSessions([spaced]);
+            await ExecuteAsync(vm.HideProcessCommand);
+            Assert.AreEqual("-process:Google", vm.SearchQuery);
+            StringAssert.Contains(vm.StatusText, "shortened");
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
     private static async Task ExecuteAsync(System.Windows.Input.ICommand command)
     {
         command.Execute(null);
