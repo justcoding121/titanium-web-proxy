@@ -278,6 +278,7 @@ public class DecryptFailureBypassProxyApiTests
         args.HttpClient.Request.Headers.AddHeader("Sec-Fetch-Dest", "document");
         args.HttpClient.Response.StatusCode = 403;
         args.HttpClient.Response.IsSynthetic = false;
+        args.HttpClient.Response.Headers.AddHeader("Server", "AkamaiGHost");
 
         Assert.IsTrue(proxy.TrySeamlessDecryptBypassRetry(args));
         Assert.IsTrue(args.HttpClient.Response.Locked);
@@ -309,6 +310,7 @@ public class DecryptFailureBypassProxyApiTests
         args.HttpClient.Request.IsHttps = true;
         args.HttpClient.Request.Headers.AddHeader("Sec-Fetch-Dest", "empty");
         args.HttpClient.Response.StatusCode = 429;
+        args.HttpClient.Response.Headers.AddHeader("x-hcom-origin-id", "wildcard-challenge-handler");
 
         Assert.IsFalse(proxy.TrySeamlessDecryptBypassRetry(args));
         Assert.IsFalse(args.HttpClient.Response.Locked);
@@ -317,5 +319,94 @@ public class DecryptFailureBypassProxyApiTests
         Assert.IsFalse(proxy.TrySeamlessDecryptBypassRetry(args));
         Assert.IsTrue(proxy.ShouldBypassDecryptForLearnedHost("www.expedia.com"));
         Assert.IsFalse(args.HttpClient.Response.Locked);
+    }
+
+    [TestMethod]
+    public void TrySeamlessDecryptBypassRetry_PlainForbiddenDocument_IsNotLearned()
+    {
+        using var proxy = new ProxyServer(false, false, false)
+        {
+            EnableDecryptFailureBypass = true,
+            DecryptFailureBypassThreshold = 2
+        };
+        var endPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false);
+        var connection = new QuicClientConnection(
+            proxy, new IPEndPoint(IPAddress.Loopback, 4433),
+            new IPEndPoint(IPAddress.Loopback, 12345));
+        var cts = new CancellationTokenSource();
+        var clientStream = new HttpClientStream(proxy, connection, Stream.Null, proxy.BufferPool, cts.Token);
+        var args = new SessionEventArgs(proxy, endPoint, clientStream, null, cts);
+
+        args.HttpClient.Request.Method = "GET";
+        args.HttpClient.Request.RequestUriString = "https://app.example.com/admin";
+        args.HttpClient.Request.IsHttps = true;
+        args.HttpClient.Request.Headers.AddHeader("Sec-Fetch-Dest", "document");
+        args.HttpClient.Response.StatusCode = 403;
+        args.HttpClient.Response.Headers.AddHeader("Content-Type", "text/html");
+
+        for (var i = 0; i < 3; i++)
+        {
+            Assert.IsFalse(proxy.TrySeamlessDecryptBypassRetry(args));
+            Assert.IsFalse(args.HttpClient.Response.Locked);
+        }
+
+        Assert.IsFalse(proxy.ShouldBypassDecryptForLearnedHost("app.example.com"));
+    }
+
+    private static Response ResponseWith(params (string Name, string Value)[] headers)
+    {
+        var response = new Response { StatusCode = 403 };
+        foreach (var (name, value) in headers)
+            response.Headers.AddHeader(name, value);
+        return response;
+    }
+
+    [TestMethod]
+    public void LooksLikeBotChallenge_RecognisesTheExpediaBlock()
+    {
+        // Headers captured from a TLS-fingerprint denial by www.expedia.com.
+        var response = ResponseWith(
+            ("Content-Type", "text/html; charset=utf-8"),
+            ("x-app-info", "captcha-pwa,cbe7b0dc85c3f8d162018fd56de8394fa4b7cb72"),
+            ("x-hcom-origin-id", "wildcard-challenge-handler"),
+            ("Server", "istio-envoy"),
+            ("x-akamai-reference-id", "0.258def75.1791568459.f0ef67"),
+            ("Set-Cookie", "_abck=AFE1F267~-1~YAAQ; Domain=.expedia.com; Path=/; Secure"),
+            ("Set-Cookie", "bm_sz=9393E7C0~YAAQ; Domain=.expedia.com; Path=/"));
+        Assert.IsTrue(DecryptFailureLearning.LooksLikeBotChallenge(response));
+    }
+
+    [TestMethod]
+    public void LooksLikeBotChallenge_EachSignalAloneIsEnough()
+    {
+        Assert.IsTrue(DecryptFailureLearning.LooksLikeBotChallenge(ResponseWith(("cf-mitigated", "challenge"))));
+        Assert.IsTrue(DecryptFailureLearning.LooksLikeBotChallenge(ResponseWith(("x-datadome", "protected"))));
+        Assert.IsTrue(DecryptFailureLearning.LooksLikeBotChallenge(ResponseWith(("x-amzn-waf-action", "captcha"))));
+        Assert.IsTrue(DecryptFailureLearning.LooksLikeBotChallenge(ResponseWith(("x-kpsdk-ct", "abc"))));
+        Assert.IsTrue(DecryptFailureLearning.LooksLikeBotChallenge(ResponseWith(("Server", "AkamaiGHost"))));
+        Assert.IsTrue(DecryptFailureLearning.LooksLikeBotChallenge(
+            ResponseWith(("Set-Cookie", "datadome=xyz; Max-Age=31536000"))));
+        Assert.IsTrue(DecryptFailureLearning.LooksLikeBotChallenge(
+            ResponseWith(("Set-Cookie", "incap_ses_123_456=abc; path=/"))));
+        Assert.IsTrue(DecryptFailureLearning.LooksLikeBotChallenge(
+            ResponseWith(("Set-Cookie", "_pxhd=abc; Path=/"))));
+        Assert.IsTrue(DecryptFailureLearning.LooksLikeBotChallenge(ResponseWith(("x-captcha-required", "1"))));
+    }
+
+    [TestMethod]
+    public void LooksLikeBotChallenge_IgnoresOrdinaryForbiddenAndRateLimitResponses()
+    {
+        Assert.IsFalse(DecryptFailureLearning.LooksLikeBotChallenge(ResponseWith()));
+        Assert.IsFalse(DecryptFailureLearning.LooksLikeBotChallenge(
+            ResponseWith(("Content-Type", "application/json"), ("Server", "nginx"))));
+        // API rate limit.
+        Assert.IsFalse(DecryptFailureLearning.LooksLikeBotChallenge(
+            ResponseWith(("Retry-After", "30"), ("X-RateLimit-Remaining", "0"))));
+        // Auth challenge, a CSP that allows a captcha widget, CORS lists, ordinary cookies.
+        Assert.IsFalse(DecryptFailureLearning.LooksLikeBotChallenge(ResponseWith(
+            ("WWW-Authenticate", "Basic realm=\"challenge\""),
+            ("Content-Security-Policy", "frame-src https://www.google.com/recaptcha/ https://challenges.cloudflare.com"),
+            ("Access-Control-Allow-Headers", "x-challenge-id"),
+            ("Set-Cookie", "session=abc; Path=/; HttpOnly"))));
     }
 }
