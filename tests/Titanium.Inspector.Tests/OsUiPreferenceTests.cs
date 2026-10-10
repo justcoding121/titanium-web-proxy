@@ -8,6 +8,8 @@ namespace Titanium.Inspector.Tests;
 [TestClass]
 public class OsUiPreferenceTests
 {
+    private static readonly string[] GermanDisplayCulture = ["de-DE"];
+
     [TestMethod]
     public void Language_WindowsUsesDisplayCulture_NotShellLanguage()
     {
@@ -20,7 +22,7 @@ public class OsUiPreferenceTests
             MacPreferred: "ja",
             LocaleConfLang: "sv_SE.UTF-8"));
 
-        CollectionAssert.AreEqual(new[] { "de-DE" }, tags.ToArray());
+        CollectionAssert.AreEqual(GermanDisplayCulture, tags.ToArray());
     }
 
     [TestMethod]

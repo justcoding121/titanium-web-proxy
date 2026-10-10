@@ -262,13 +262,12 @@ public sealed class LanguageService : INotifyPropertyChanged
             return true;
         }
 
-        foreach (var culture in Cultures)
+        var match = Cultures.FirstOrDefault(culture =>
+            culture.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (match is not null)
         {
-            if (culture.Equals(name, StringComparison.OrdinalIgnoreCase))
-            {
-                canonical = culture;
-                return true;
-            }
+            canonical = match;
+            return true;
         }
 
         canonical = English;
