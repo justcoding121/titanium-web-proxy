@@ -145,16 +145,8 @@ internal static class DecryptFailureLearning
     ///     </list>
     ///     A plain 403 or a rate-limit 429 (<c>Retry-After</c>) matches none of them.
     /// </summary>
-    internal static bool LooksLikeBotChallenge(Response response)
-    {
-        foreach (var header in response.Headers)
-        {
-            if (IsBotChallengeHeader(header.Name, header.Value))
-                return true;
-        }
-
-        return false;
-    }
+    internal static bool LooksLikeBotChallenge(Response response) =>
+        response.Headers.Any(header => IsBotChallengeHeader(header.Name, header.Value));
 
     private static bool IsBotChallengeHeader(string name, string value)
     {
