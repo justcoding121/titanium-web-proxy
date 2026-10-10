@@ -1,3 +1,4 @@
+using Titanium.Inspector.Localization;
 using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -20,6 +21,7 @@ public partial class SessionRetentionWindow : Window
         _settings = settings;
         _store = store;
         InitializeComponent();
+        LanguageService.AttachWindow(this);
         LoadFromSettings();
         SaveButton.Click += OnSave;
         CancelButton.Click += (_, _) => Close();

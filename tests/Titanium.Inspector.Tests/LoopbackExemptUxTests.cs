@@ -11,12 +11,12 @@ public class LoopbackExemptUxTests
     public void Copy_AppliedStatus_NamesRestart_AndRefreshOnlyWhenNudged()
     {
         var refreshed = LoopbackExemptCopy.AppliedStatus(2, LoopbackCaptureReadiness.Ready, refreshed: true);
-        StringAssert.Contains(refreshed, "Allowed 2 apps.");
+        StringAssert.Contains(refreshed, "Allowed: 2.");
         StringAssert.Contains(refreshed, "System proxy was refreshed");
         StringAssert.Contains(refreshed, "fully quit");
 
         var ready = LoopbackExemptCopy.AppliedStatus(1, LoopbackCaptureReadiness.Ready, refreshed: false);
-        StringAssert.Contains(ready, "Allowed 1 app.");
+        StringAssert.Contains(ready, "Allowed: 1.");
         StringAssert.Contains(ready, "Fully quit and reopen");
         Assert.IsFalse(ready.Contains("refreshed", StringComparison.OrdinalIgnoreCase));
 

@@ -1,5 +1,6 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="using:Titanium.Inspector.Localization"
              xmlns:conv="using:Titanium.Inspector.Converters"
              x:Class="Titanium.Inspector.App"
              Name="Titanium Inspector"
@@ -8,7 +9,7 @@
        replace the default "About Avalonia" item already pushed to AppKit. -->
   <NativeMenu.Menu>
     <NativeMenu>
-      <NativeMenuItem Header="About Titanium Inspector…" Click="OnMacAboutClick" />
+      <NativeMenuItem Header="{loc:Loc menu.about}" Click="OnMacAboutClick" />
     </NativeMenu>
   </NativeMenu.Menu>
   <Application.Resources>

@@ -14,7 +14,8 @@ internal static class DecompressionFactory
         return type switch
         {
             HttpCompression.Gzip => new GZipStream(stream, CompressionMode.Decompress, leaveOpen),
-            HttpCompression.Deflate => new DeflateStream(stream, CompressionMode.Decompress, leaveOpen),
+            // "deflate" is zlib-wrapped per RFC 9110 but many origins send bare deflate; accept both.
+            HttpCompression.Deflate => new AutoDeflateStream(stream, leaveOpen),
             // System.IO.Compression.BrotliStream (not BrotliSharpLib) is required here: its
             // ReadAsync is genuinely async (delegates to the underlying stream's ReadAsync).
             // BrotliSharpLib.BrotliStream has no real async support and falls back to the base

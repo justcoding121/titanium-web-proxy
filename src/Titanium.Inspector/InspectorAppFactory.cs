@@ -1,3 +1,4 @@
+using Titanium.Inspector.Localization;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.ViewModels;
 using Titanium.Inspector.Views;
@@ -13,6 +14,7 @@ public static class InspectorAppFactory
     public static (MainWindowViewModel ViewModel, MainWindow Window) CreateMainWindow(
         InspectorViewModelServices services)
     {
+        LanguageService.Apply(services.Settings.Current.UiLanguage);
         ThemeService.ApplyThemeMode(services.Settings.Current.ThemeMode);
         var vm = CreateViewModel(services);
         var window = new MainWindow { DataContext = vm };

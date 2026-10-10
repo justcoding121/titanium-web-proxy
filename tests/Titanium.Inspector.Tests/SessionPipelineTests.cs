@@ -542,6 +542,184 @@ public class SessionPipelineTests
     }
 
     [TestMethod]
+    public void HideTunnel_OnSelectedConnect_ClosesInspect_AndLaterSelectOpens()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-inspector-hide-connect-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+
+            var tunnel = new SessionSnapshot
+            {
+                Id = 1,
+                Method = "CONNECT",
+                Url = "https://tunnel.test/",
+                Host = "tunnel.test",
+                IsTunnel = true,
+            };
+            var get = new SessionSnapshot
+            {
+                Id = 2,
+                Method = "GET",
+                Url = "https://a.test/",
+                Host = "a.test",
+            };
+            vm.SeedSession(tunnel);
+            vm.SeedSession(get);
+            vm.SelectedSession = tunnel;
+            Assert.IsTrue(vm.ShowSessionDetails);
+            Assert.AreEqual(0, vm.SelectedPaneNavIndex);
+
+            vm.HideTunnelsFilter = true;
+
+            Assert.IsNull(vm.SelectedSession);
+            Assert.IsFalse(vm.ShowSessionDetails);
+            Assert.AreEqual(1, vm.Sessions.Count);
+
+            vm.SelectedSession = get;
+            Assert.IsTrue(vm.ShowSessionDetails);
+            Assert.AreSame(get, vm.SelectedSession);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
+    public void HideTunnel_WhileComposerOpen_LeavesToolsPane()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-inspector-hide-composer-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+
+            var tunnel = new SessionSnapshot
+            {
+                Id = 1,
+                Method = "CONNECT",
+                Url = "https://tunnel.test/",
+                Host = "tunnel.test",
+                IsTunnel = true,
+            };
+            vm.SeedSession(tunnel);
+            vm.SelectedSession = tunnel;
+            vm.SelectedPaneNavIndex = 1;
+            Assert.IsTrue(vm.ShowComposerPane);
+
+            vm.HideTunnelsFilter = true;
+
+            Assert.IsNull(vm.SelectedSession);
+            Assert.IsTrue(vm.ShowSessionDetails);
+            Assert.IsTrue(vm.ShowComposerPane);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
+    public void ClearFilters_AfterClosingDetails_DoesNotReopenPane()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-inspector-clear-filters-pane-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+
+            var snap = new SessionSnapshot { Id = 1, Method = "GET", Url = "https://a.test/", Host = "a.test" };
+            vm.SeedSession(snap);
+            vm.SelectedSession = snap;
+            vm.CloseSessionDetailsCommand.Execute(null);
+            Assert.IsFalse(vm.ShowSessionDetails);
+
+            vm.SearchQuery = "host:a.test";
+            vm.ClearFiltersCommand.Execute(null);
+
+            Assert.AreSame(snap, vm.SelectedSession);
+            Assert.IsFalse(vm.ShowSessionDetails);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
+    public void SelectedConnect_BecomesHiddenTunnel_ClosesInspectPane()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-inspector-connect-update-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+
+            var snap = new SessionSnapshot
+            {
+                Id = 1,
+                Method = "GET",
+                Url = "https://a.test/",
+                Host = "a.test",
+            };
+            vm.HideTunnelsFilter = true;
+            vm.SeedSession(snap);
+            vm.SelectedSession = snap;
+            Assert.IsTrue(vm.ShowSessionDetails);
+
+            snap.Method = "CONNECT";
+            snap.IsTunnel = true;
+            vm.ApplySessionUpdated(snap);
+
+            Assert.IsNull(vm.SelectedSession);
+            Assert.IsFalse(vm.ShowSessionDetails);
+            Assert.AreEqual(0, vm.Sessions.Count);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
     public void WsFramesTab_OnlyForWebSocket_AndToolsMenuOpensPane()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-inspector-ws-tools-" + Guid.NewGuid().ToString("N") + ".json");

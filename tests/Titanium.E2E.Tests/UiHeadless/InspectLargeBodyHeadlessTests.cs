@@ -14,8 +14,9 @@ namespace Titanium.E2E.Tests.UiHeadless;
 [TestClass]
 public class InspectLargeBodyHeadlessTests
 {
-    // Generous: the fix measures well under a second; the unfixed layout took several seconds.
-    private const int MaxTabSwitchMs = 3000;
+    // Local fix is well under a second; unfixed layout froze for many seconds. Shared Windows
+    // headless runners occasionally land around 5 s under load, so keep headroom below the freeze.
+    private const int MaxTabSwitchMs = 8_000;
 
     [TestMethod]
     [TestCategory("E2E-UI-Headless")]

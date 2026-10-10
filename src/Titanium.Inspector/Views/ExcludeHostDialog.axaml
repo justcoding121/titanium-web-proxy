@@ -1,20 +1,21 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="using:Titanium.Inspector.Localization"
         x:Class="Titanium.Inspector.Views.ExcludeHostDialog"
         AutomationProperties.AutomationId="ExcludeHostDialog"
-        Title="Exclude host"
+        Title="{loc:Loc window.excludeHost}"
         Width="440" Height="220"
         WindowStartupLocation="CenterOwner"
         CanResize="False">
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
-      <Button x:Name="SaveButton" Content="Exclude" MinWidth="88" AutomationProperties.AutomationId="ExcludeHostAdd" />
-      <Button x:Name="CancelButton" Content="Cancel" MinWidth="88" IsCancel="True" AutomationProperties.AutomationId="ExcludeHostCancel" />
+      <Button x:Name="SaveButton" Content="{loc:Loc exclude.action}" MinWidth="88" AutomationProperties.AutomationId="ExcludeHostAdd" />
+      <Button x:Name="CancelButton" Content="{loc:Loc common.cancel}" MinWidth="88" IsCancel="True" AutomationProperties.AutomationId="ExcludeHostCancel" />
     </StackPanel>
     <StackPanel Spacing="10">
       <TextBlock x:Name="HostLabel" FontWeight="SemiBold" />
       <TextBlock TextWrapping="Wrap" Opacity="0.9"
-                 Text="This host will still appear in the session list. Inspector will not try to read its HTTPS." />
+                 Text="{loc:Loc exclude.help}" />
       <CheckBox x:Name="WildcardParentCheck"
                 AutomationProperties.AutomationId="ExcludeHostWildcardParent" />
     </StackPanel>

@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Titanium.Inspector.Localization;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.ViewModels;
 using Titanium.Inspector.Views;
@@ -15,6 +16,7 @@ public partial class App : Application
     public override void OnFrameworkInitializationCompleted()
     {
         var settings = SettingsService.Load();
+        LanguageService.Apply(settings.Current.UiLanguage);
         ThemeService.ApplyThemeMode(settings.Current.ThemeMode);
         var sessions = new SessionRegistry(SessionStoreOptions.FromSettings(settings.Current));
         var buffer = new SessionStreamBuffer();

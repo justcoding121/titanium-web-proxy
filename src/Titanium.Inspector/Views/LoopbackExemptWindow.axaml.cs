@@ -1,3 +1,4 @@
+using Titanium.Inspector.Localization;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Titanium.Inspector.Services;
@@ -25,6 +26,7 @@ public partial class LoopbackExemptWindow : Window
     {
         _session = session;
         InitializeComponent();
+        LanguageService.AttachWindow(this);
         IntroText.Text = LoopbackExemptCopy.Intro;
         ExemptButton.Click += OnExempt;
         ClearButton.Click += OnClear;

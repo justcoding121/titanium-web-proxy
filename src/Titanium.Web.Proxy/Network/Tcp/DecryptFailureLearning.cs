@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using Titanium.Web.Proxy.EventArguments;
@@ -77,7 +78,10 @@ internal static class DecryptFailureLearning
     }
 
     /// <summary>
-    ///     MITM HTTPS 403/429 from the origin (not synthetic Ok/Respond/GenericResponse).
+    ///     MITM HTTPS 403/429 from the origin (not synthetic Ok/Respond/GenericResponse) that carries
+    ///     a bot-management / challenge marker (<see cref="LooksLikeBotChallenge" />). A bare 403 or 429
+    ///     is an ordinary answer (permission denied, expired login, API rate limit) and must not switch
+    ///     a whole host to an opaque tunnel.
     /// </summary>
     internal static bool IsLearnableHttpBlock(SessionEventArgs args)
     {
@@ -91,7 +95,109 @@ internal static class DecryptFailureLearning
         if (response.IsSynthetic)
             return false;
 
-        return response.StatusCode is 403 or 429;
+        return (response.StatusCode is 403 or 429) && LooksLikeBotChallenge(response);
+    }
+
+    private static readonly string[] BotChallengeHeaderNames =
+    [
+        "cf-mitigated", // Cloudflare: "challenge" when a managed challenge was served
+        "x-datadome", "x-datadome-response", "x-dd-b", // DataDome
+        "x-amzn-waf-action" // AWS WAF: captcha / challenge
+    ];
+
+    private static readonly string[] BotChallengeCookieNames =
+    [
+        "_abck", "bm_s", "bm_sz", "bm_sv", "ak_bmsc", // Akamai Bot Manager
+        "datadome", // DataDome
+        "reese84" // Imperva
+    ];
+
+    private static readonly string[] BotChallengeCookiePrefixes =
+    [
+        "incap_ses_", "visid_incap_", // Imperva / Incapsula
+        "_px" // HUMAN / PerimeterX
+    ];
+
+    /// <summary>
+    ///     Headers whose values legitimately mention "challenge" or "captcha" without the response being a
+    ///     bot challenge (auth schemes, CSP allow-lists for a captcha widget, CORS lists, ...).
+    /// </summary>
+    private static readonly string[] NonChallengeHeaderNames =
+    [
+        "content-security-policy", "content-security-policy-report-only", "permissions-policy", "link",
+        "report-to", "nel", "alt-svc", "www-authenticate", "proxy-authenticate", "location", "vary"
+    ];
+
+    /// <summary>
+    ///     Header-only check (the body is not read on this path) for a response that a bot-management product
+    ///     produced, which is what a TLS-fingerprint (JA3 / JA4 / Akamai) denial looks like when the proxy's
+    ///     own TLS stack is the reason for the block. Signals, any one of which is enough:
+    ///     <list type="bullet">
+    ///         <item><description>A vendor header: <c>cf-mitigated</c>, <c>x-datadome*</c>, <c>x-dd-b</c>,
+    ///         <c>x-amzn-waf-action</c>, <c>x-kpsdk-*</c> (Kasada).</description></item>
+    ///         <item><description><c>Server: AkamaiGHost</c>: the Akamai edge answered itself rather than
+    ///         forwarding an origin response.</description></item>
+    ///         <item><description>A bot-management cookie being set (<c>_abck</c>, <c>bm_sz</c>, <c>datadome</c>,
+    ///         <c>incap_ses_*</c>, <c>_px*</c>, ...).</description></item>
+    ///         <item><description>The word "captcha" or "challenge" in a header name or value, other than the
+    ///         headers in the skip list (an Expedia block carries
+    ///         <c>x-hcom-origin-id: wildcard-challenge-handler</c> and <c>x-app-info: captcha-pwa</c>).</description></item>
+    ///     </list>
+    ///     A plain 403 or a rate-limit 429 (<c>Retry-After</c>) matches none of them.
+    /// </summary>
+    internal static bool LooksLikeBotChallenge(Response response) =>
+        response.Headers.Any(header => IsBotChallengeHeader(header.Name, header.Value));
+
+    private static bool IsBotChallengeHeader(string name, string value)
+    {
+        if (name.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase))
+            return IsBotManagementCookie(value);
+
+        if (name.StartsWith("x-kpsdk-", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (BotChallengeHeaderNames.Any(vendor => name.Equals(vendor, StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        if (name.Equals("Server", StringComparison.OrdinalIgnoreCase)
+            && value.Contains("AkamaiGHost", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (IsNonChallengeHeader(name))
+            return false;
+
+        return MentionsChallenge(name) || MentionsChallenge(value);
+    }
+
+    private static bool IsNonChallengeHeader(string name)
+    {
+        if (name.StartsWith("Access-Control-", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return NonChallengeHeaderNames.Any(skip => name.Equals(skip, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool MentionsChallenge(string text) =>
+        text.Contains("captcha", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("challenge", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsBotManagementCookie(string setCookieValue)
+    {
+        var eq = setCookieValue.IndexOf('=');
+        if (eq <= 0)
+            return false;
+
+        var cookieName = setCookieValue.AsSpan(0, eq).Trim();
+
+        foreach (var known in BotChallengeCookieNames)
+            if (cookieName.Equals(known, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+        foreach (var prefix in BotChallengeCookiePrefixes)
+            if (cookieName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+        return false;
     }
 
     /// <summary>

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Http;
@@ -27,6 +28,106 @@ public class CompressionUtilChainTests
             decoder.CopyTo(decoded);
             CollectionAssert.AreEqual(plain, decoded.ToArray(), $"Failed for {kind}");
         }
+    }
+
+    private static byte[] Compress(byte[] plain, Func<Stream, Stream> encoder)
+    {
+        using var ms = new MemoryStream();
+        using (var e = encoder(ms))
+            e.Write(plain);
+        return ms.ToArray();
+    }
+
+    /// <summary>A forward-only stream with no length, like the proxy's body streams.</summary>
+    private sealed class ForwardOnlyStream(byte[] data) : Stream
+    {
+        private int pos;
+        public bool Disposed { get; private set; }
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            // Hand back at most one byte per call to exercise the two-byte sniff across reads.
+            if (pos >= data.Length || count == 0) return 0;
+            buffer[offset] = data[pos++];
+            return 1;
+        }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        protected override void Dispose(bool disposing) { Disposed = true; base.Dispose(disposing); }
+    }
+
+    [TestMethod]
+    public async Task Deflate_AcceptsBothZlibWrappedAndBareDeflate()
+    {
+        var plain = Encoding.UTF8.GetBytes(new string('x', 2000) + "-deflate-body");
+        var zlib = Compress(plain, s => new ZLibStream(s, CompressionMode.Compress, true));
+        var bare = Compress(plain, s => new DeflateStream(s, CompressionMode.Compress, true));
+
+        // A plain DeflateStream rejects the zlib form; that was the production failure.
+        Assert.ThrowsExactly<InvalidDataException>(() =>
+        {
+            using var d = new DeflateStream(new MemoryStream(zlib), CompressionMode.Decompress);
+            d.CopyTo(Stream.Null);
+        });
+
+        foreach (var (name, wire) in new[] { ("zlib", zlib), ("bare", bare) })
+        {
+            // Async path over a forward-only, one-byte-at-a-time source.
+            var source = new ForwardOnlyStream(wire);
+            await using (var decoder = DecompressionFactory.Create(HttpCompression.Deflate, source))
+            {
+                using var output = new MemoryStream();
+                await decoder.CopyToAsync(output);
+                CollectionAssert.AreEqual(plain, output.ToArray(), name + " (async)");
+            }
+
+            Assert.IsFalse(source.Disposed, "leaveOpen: true must leave the source open (" + name + ")");
+
+            // Sync path over a MemoryStream.
+            using var syncDecoder = DecompressionFactory.Create(HttpCompression.Deflate, new MemoryStream(wire));
+            using var syncOutput = new MemoryStream();
+            syncDecoder.CopyTo(syncOutput);
+            CollectionAssert.AreEqual(plain, syncOutput.ToArray(), name + " (sync)");
+        }
+    }
+
+    [TestMethod]
+    public async Task Deflate_EmptyBody_ReadsAsEmpty_AndOwnedSourceIsDisposed()
+    {
+        var source = new ForwardOnlyStream([]);
+        await using (var decoder = DecompressionFactory.Create(HttpCompression.Deflate, source, leaveOpen: false))
+        {
+            using var output = new MemoryStream();
+            await decoder.CopyToAsync(output);
+            Assert.AreEqual(0, output.Length);
+        }
+
+        Assert.IsTrue(source.Disposed, "leaveOpen: false must dispose the source");
+    }
+
+    [TestMethod]
+    public void Deflate_GarbageStillFails_AsInvalidData()
+    {
+        using var decoder = DecompressionFactory.Create(HttpCompression.Deflate,
+            new MemoryStream([0xFF, 0xFF, 0xFF, 0xFF, 0xFF]));
+        Assert.ThrowsExactly<InvalidDataException>(() => decoder.CopyTo(Stream.Null));
+    }
+
+    [TestMethod]
+    public void IsZLibHeader_RecognisesCommonHeadersOnly()
+    {
+        Assert.IsTrue(AutoDeflateStream.IsZLibHeader(0x78, 0x01));
+        Assert.IsTrue(AutoDeflateStream.IsZLibHeader(0x78, 0x9C));
+        Assert.IsTrue(AutoDeflateStream.IsZLibHeader(0x78, 0xDA));
+        Assert.IsFalse(AutoDeflateStream.IsZLibHeader(0x78, 0x9D)); // checksum not a multiple of 31
+        Assert.IsFalse(AutoDeflateStream.IsZLibHeader(0x79, 0x9C)); // method is not deflate
+        Assert.IsFalse(AutoDeflateStream.IsZLibHeader(0xFF, 0xFF));
     }
 
     [TestMethod]

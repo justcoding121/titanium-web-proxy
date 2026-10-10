@@ -1,3 +1,4 @@
+using Titanium.Inspector.Localization;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 
@@ -10,6 +11,7 @@ public partial class SimpleConfirmDialog : Window
     public SimpleConfirmDialog()
     {
         InitializeComponent();
+        LanguageService.AttachWindow(this);
         AcceptButton.Click += OnAccept;
         CancelButton.Click += OnCancel;
     }

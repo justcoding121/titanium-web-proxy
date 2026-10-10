@@ -7,7 +7,10 @@ namespace Titanium.Inspector.Services;
 /// Session search/filter syntax. A bare word matches URL, host, process name, process ID (exact),
 /// method (exact), or status code (exact). Prefixes limit the match to one field:
 /// method:, status: (exact or 2xx–5xx), host:, url:, body:, process:, pid:, protocol:, content-type:,
-/// is:ws|grpc|tunnel|multipart|error, hide:tunnel|image|static
+/// is:ws|grpc|tunnel|multipart|error, hide:tunnel|image|static.
+/// A leading <c>-</c> on a field prefix excludes rows that match it (<c>-host:cursor.sh</c>,
+/// <c>-process:Cursor</c>), and on a bare word excludes rows that word would match (<c>-cursor</c>).
+/// <c>hide:</c> is already an exclusion, so a minus in front of it is ignored.
 /// </summary>
 public static class SessionSearch
 {
@@ -170,6 +173,75 @@ public static class SessionSearch
         return string.IsNullOrEmpty(without) ? token : without + " " + token;
     }
 
+    /// <summary>
+    ///     Append <c>key:value</c> when that exact token is not already present.
+    ///     Other tokens, including the same key with a different value, stay as they are.
+    /// </summary>
+    public static string AddToken(string? query, string key, string value)
+    {
+        if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(value))
+        {
+            return query?.Trim() ?? "";
+        }
+
+        var trimmed = value.Trim();
+        if (trimmed.Contains(' ', StringComparison.Ordinal) ||
+            trimmed.Contains('\t', StringComparison.Ordinal))
+        {
+            trimmed = trimmed.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)[0];
+        }
+
+        var normalizedKey = key.Trim().ToLowerInvariant();
+        if (ContainsToken(query, normalizedKey, trimmed))
+        {
+            return query?.Trim() ?? "";
+        }
+
+        var token = $"{normalizedKey}:{trimmed}";
+        var q = query?.Trim() ?? "";
+        return string.IsNullOrEmpty(q) ? token : q + " " + token;
+    }
+
+    /// <summary>
+    ///     Tokens in the same order <see cref="Tokenize"/> uses to match.
+    ///     A keyed token is <c>key</c> + <c>value</c> (<c>-host</c> + <c>cursor.sh</c>).
+    ///     A bare word has an empty key (<c>""</c> + <c>-cursor</c>).
+    /// </summary>
+    public static IReadOnlyList<(string Key, string Value)> GetTokens(string? query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return [];
+        }
+
+        return Tokenize(query);
+    }
+
+    /// <summary>
+    ///     Drop every <c>-host:</c> and <c>-process:</c> token, then append the given lists.
+    ///     Other tokens (typed text, checkboxes, positive filters) stay in place.
+    ///     Blank or whitespace-only values are skipped; a value with spaces keeps its first word,
+    ///     matching <see cref="AddToken"/>.
+    /// </summary>
+    public static string ReplaceHideTokens(
+        string? query,
+        IEnumerable<string>? hosts,
+        IEnumerable<string>? processes)
+    {
+        var remainder = RemoveKeyedTokens(RemoveKeyedTokens(query, "-host"), "-process");
+        foreach (var host in hosts ?? [])
+        {
+            remainder = AddToken(remainder, "-host", host);
+        }
+
+        foreach (var process in processes ?? [])
+        {
+            remainder = AddToken(remainder, "-process", process);
+        }
+
+        return remainder;
+    }
+
     /// <summary>Clear the entire search/filter query.</summary>
     public static string ClearFilters(string? _) => "";
 
@@ -181,7 +253,8 @@ public static class SessionSearch
             return false;
         }
 
-        return Tokenize(query).Any(t => t.Key == "body");
+        // -body: needs the same on-disk body search as body:, or spilled bodies would never be excluded.
+        return Tokenize(query).Any(t => t.Key is "body" or "-body");
     }
 
     /// <summary>
@@ -266,29 +339,75 @@ public static class SessionSearch
         return list;
     }
 
+    /// <summary>Fields a leading <c>-</c> may invert. <c>hide:</c> is already an exclusion.</summary>
+    private static bool IsNegatableKey(string key) => key is
+        "method" or "status" or "host" or "url" or "body" or "process" or "pid" or
+        "protocol" or "content-type" or "contenttype" or "is";
+
     private static bool MatchToken(
         SessionSnapshot s,
         (string Key, string Value) token,
         Func<SessionSnapshot, string, bool>? bodyMatcher)
     {
-        return token.Key switch
+        var key = token.Key;
+        var negate = false;
+
+        // A bare -word excludes rows a bare word would match, the same as Google or Gmail search.
+        // Without this, typing -cursor would search for the literal text "-cursor" and empty the list.
+        if (key.Length == 0 && token.Value.Length > 1 && token.Value[0] == '-')
         {
-            "method" => s.Method.Equals(token.Value, StringComparison.OrdinalIgnoreCase),
-            "status" => MatchStatus(s.StatusCode, token.Value),
-            "host" => MatchHost(s, token.Value),
-            "url" => s.Url.Contains(token.Value, StringComparison.OrdinalIgnoreCase),
-            "body" => bodyMatcher?.Invoke(s, token.Value) ??
-                      ((s.RequestBodyText?.Contains(token.Value, StringComparison.OrdinalIgnoreCase) == true) ||
-                       (s.ResponseBodyText?.Contains(token.Value, StringComparison.OrdinalIgnoreCase) == true)),
-            "process" => MatchProcess(s, token.Value),
+            return !MatchBareText(s, token.Value[1..]);
+        }
+
+        if (key.Length > 1 && key[0] == '-')
+        {
+            var positive = key[1..];
+            if (positive == "hide")
+            {
+                // hide: already excludes. A second minus must not bring those rows back.
+                key = positive;
+            }
+            else if (IsNegatableKey(positive))
+            {
+                negate = true;
+                key = positive;
+            }
+            else
+            {
+                // An unknown -field: is not a URL search (that would keep only the rows the user
+                // meant to hide). Leave the row visible.
+                return true;
+            }
+        }
+
+        var matched = MatchKeyed(s, key, token.Value, bodyMatcher);
+        return negate ? !matched : matched;
+    }
+
+    private static bool MatchKeyed(
+        SessionSnapshot s,
+        string key,
+        string value,
+        Func<SessionSnapshot, string, bool>? bodyMatcher)
+    {
+        return key switch
+        {
+            "method" => s.Method.Equals(value, StringComparison.OrdinalIgnoreCase),
+            "status" => MatchStatus(s.StatusCode, value),
+            "host" => MatchHost(s, value),
+            "url" => s.Url.Contains(value, StringComparison.OrdinalIgnoreCase),
+            "body" => bodyMatcher?.Invoke(s, value) ??
+                      ((s.RequestBodyText?.Contains(value, StringComparison.OrdinalIgnoreCase) == true) ||
+                       (s.ResponseBodyText?.Contains(value, StringComparison.OrdinalIgnoreCase) == true)),
+            "process" => MatchProcess(s, value),
             "pid" => s.ProcessId > 0 &&
-                     s.ProcessId.ToString().Equals(token.Value, StringComparison.Ordinal),
+                     s.ProcessId.ToString().Equals(value, StringComparison.Ordinal),
             "protocol" =>
-                s.Protocol?.Contains(token.Value, StringComparison.OrdinalIgnoreCase) == true,
-            "" => MatchBareText(s, token.Value),
+                s.Protocol?.Contains(value, StringComparison.OrdinalIgnoreCase) == true,
+            "" => MatchBareText(s, value),
             "content-type" or "contenttype" =>
-                s.ContentType?.Contains(token.Value, StringComparison.OrdinalIgnoreCase) == true,
-            "is" => token.Value.ToLowerInvariant() switch
+                s.ContentType?.Contains(value, StringComparison.OrdinalIgnoreCase) == true,
+            "is" => value.ToLowerInvariant() switch
             {
                 "ws" or "websocket" => s.IsWebSocket,
                 "grpc" => s.IsGrpc,
@@ -297,17 +416,17 @@ public static class SessionSearch
                 "multipart" => s.IsMultipart,
                 "error" or "errors" => IsErrorStatus(s.StatusCode),
                 "opaque" or "encrypted" => s.IsTunnel && s.OpaqueReason != OpaqueTunnelReason.None,
-                _ when token.Value.StartsWith("opaque-reason:", StringComparison.OrdinalIgnoreCase) =>
-                    MatchOpaqueReason(s, token.Value["opaque-reason:".Length..]),
+                _ when value.StartsWith("opaque-reason:", StringComparison.OrdinalIgnoreCase) =>
+                    MatchOpaqueReason(s, value["opaque-reason:".Length..]),
                 _ => true,
             },
-            "hide" => token.Value.ToLowerInvariant() switch
+            "hide" => value.ToLowerInvariant() switch
             {
                 "tunnel" or "connect" => !s.IsTunnel,
                 "image" or "images" or "static" => !IsImageOrStatic(s),
                 _ => true,
             },
-            _ => s.Url.Contains(token.Value, StringComparison.OrdinalIgnoreCase),
+            _ => s.Url.Contains(value, StringComparison.OrdinalIgnoreCase),
         };
     }
 

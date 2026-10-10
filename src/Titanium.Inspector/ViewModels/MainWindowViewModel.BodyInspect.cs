@@ -3,6 +3,7 @@ using System.Text;
 using System.Windows.Input;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
+using Titanium.Inspector.Localization;
 using Titanium.Inspector.Services;
 
 namespace Titanium.Inspector.ViewModels;
@@ -10,9 +11,9 @@ namespace Titanium.Inspector.ViewModels;
 public sealed partial class MainWindowViewModel
 {
     private const string ContentTypeHeaderName = "Content-Type";
-    private const string EmptyBodyPlaceholder = "(empty)";
-    private const string NoRequestBodyPlaceholder = "No request body";
-    private const string WaitingForResponsePlaceholder = "Waiting for response…";
+    private static string EmptyBodyPlaceholder => LanguageService.Get("inspect.emptyBody");
+    private static string NoRequestBodyPlaceholder => LanguageService.Get("inspect.noRequestBody");
+    private static string WaitingForResponsePlaceholder => LanguageService.Get("inspect.waiting");
     private const string NoResponseReceivedPrefix = "No response received";
     private const string PrettyPrintFailureHint = "Cannot pretty-print (body truncated or invalid)";
     private const string ImageTooLargeHint = "Image too large to preview in Inspect";
@@ -80,7 +81,9 @@ public sealed partial class MainWindowViewModel
     public bool ShowBodyModeToggles => _selected is { IsTunnel: false };
 
     public string BodyPrettyToolTip =>
-        _bodyHexMode ? "Not applicable in hex view" : "Indent JSON, XML, and HTML";
+        _bodyHexMode
+            ? LanguageService.Get("inspect.prettyHexTip")
+            : LanguageService.Get("inspect.prettyTip");
 
     public string RequestBodyCaptureHint
     {

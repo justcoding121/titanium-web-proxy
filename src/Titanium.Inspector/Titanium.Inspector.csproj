@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <SignAssembly>false</SignAssembly>
-    <VersionPrefix>7.0.21</VersionPrefix>
+    <VersionPrefix>7.0.22</VersionPrefix>
     <Authors>Jehonathan Thomas</Authors>
     <Description>Titanium Inspector desktop traffic debugger (PolyForm Noncommercial).</Description>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
@@ -35,6 +35,8 @@
   </ItemGroup>
   <ItemGroup>
     <AvaloniaResource Include="Assets\app.ico" />
+    <!-- Culture suffixes (strings.en.json) would otherwise become satellite assemblies. -->
+    <EmbeddedResource Include="Localization\strings.*.json" WithCulture="false" />
     <None Include="LICENSE" Pack="true" PackagePath="" />
   </ItemGroup>
   <!-- Local macOS Debug/dotnet run: copy Homebrew MsQuic beside the apphost (Release zips use bundle-http3-native.ps1). -->

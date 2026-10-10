@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Net;
+using System.Net.Sockets;
 using System.Reflection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http3.Dns;
@@ -556,6 +557,30 @@ public class SvcbDnsResolverTests
             BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(resolver, backoffUntilUtc);
         typeof(UdpSvcbDnsResolver).GetField("_halfOpenProbeInFlight",
             BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(resolver, halfOpenInFlight);
+    }
+
+    [TestMethod]
+    public void SelectClientBindAddress_LoopbackOnly_NeverWildcard()
+    {
+        Assert.AreEqual(IPAddress.Loopback, UdpSvcbDnsResolver.SelectClientBindAddress(IPAddress.Loopback));
+        Assert.AreEqual(IPAddress.Loopback, UdpSvcbDnsResolver.SelectClientBindAddress(IPAddress.Parse("127.0.0.2")));
+        Assert.AreEqual(IPAddress.IPv6Loopback, UdpSvcbDnsResolver.SelectClientBindAddress(IPAddress.IPv6Loopback));
+        Assert.IsNull(UdpSvcbDnsResolver.SelectClientBindAddress(IPAddress.Parse("192.0.2.1")));
+        Assert.IsNull(UdpSvcbDnsResolver.SelectClientBindAddress(IPAddress.Parse("2001:db8::1")));
+        Assert.IsNull(UdpSvcbDnsResolver.SelectClientBindAddress(IPAddress.Any));
+        Assert.IsNull(UdpSvcbDnsResolver.SelectClientBindAddress(IPAddress.IPv6Any));
+    }
+
+    [TestMethod]
+    public void QuerySocket_LoopbackDns_BindsLoopback()
+    {
+        using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        var bind = UdpSvcbDnsResolver.SelectClientBindAddress(IPAddress.Loopback);
+        Assert.IsNotNull(bind);
+        socket.Bind(new IPEndPoint(bind, 0));
+        var local = (IPEndPoint)socket.LocalEndPoint!;
+        Assert.IsTrue(IPAddress.Loopback.Equals(local.Address), local.ToString());
+        Assert.IsFalse(IPAddress.Any.Equals(local.Address));
     }
 
     [TestMethod]

@@ -1,3 +1,4 @@
+using Titanium.Inspector.Localization;
 using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Inspector.Services;
@@ -5,127 +6,115 @@ namespace Titanium.Inspector.Services;
 /// <summary>Shared user-facing copy for root CA trust — always current-OS only.</summary>
 public static class OsTrustUxCopy
 {
-    public const string MacSslTrustWaitBody =
-        "Keychain Get Info can already show Always Trust even when SSL policies were not saved " +
-        "(Chrome and Inspector still treat the CA as untrusted).\n\n" +
-        "Force a save:\n" +
-        "1. Keychain Access → login → Certificates → double-click Titanium Root Certificate Authority\n" +
-        "2. Expand Trust\n" +
-        "3. Set When using this certificate to Use System Defaults, then change it to Always Trust again\n" +
-        "4. Close Get Info — you must get a password prompt; that writes the real SSL trust policies\n\n" +
-        "This window closes automatically when those policies are detected. " +
-        "If you already saved, click I’ve saved Always Trust.";
+    public static string MacSslTrustWaitBody => LanguageService.Get("trust.macWaitBody");
 
-    public const string MacSslTrustWaitStatusWaiting = "Waiting for the certificate in Keychain…";
-    public const string MacSslTrustWaitStatusInKeychain =
-        "Waiting for saved SSL policies (toggle Always Trust, close Get Info, enter password)…";
+    public static string MacSslTrustWaitStatusWaiting => LanguageService.Get("trust.macWaitStatus");
 
-    public const string MacSslTrustNotSavedYet =
-        "Always Trust display is not enough — toggle Use System Defaults → Always Trust, close Get Info, " +
-        "enter your password, then try Install root CA / Decrypt HTTPS again";
+    public static string MacSslTrustWaitStatusInKeychain => LanguageService.Get("trust.macWaitInKeychain");
 
-    public const string MacSslTrustWaitConfirmSaved = "I’ve saved Always Trust";
+    public static string MacSslTrustNotSavedYet => LanguageService.Get("trust.macNotSaved");
 
-    private const string ExportCaLabel = "Export CA";
+    public static string MacSslTrustWaitConfirmSaved => LanguageService.Get("trust.macConfirmSaved");
+
+    private static string ExportCaLabel => LanguageService.Get("trust.exportCa");
 
     /// <summary>Install-root confirm body for the OS this process is running on.</summary>
     public static string ConfirmInstallRootCaBody()
     {
         if (OperatingSystem.IsMacOS())
         {
-            return "Decrypt HTTPS requires trusting the Titanium Inspector root CA in Keychain Access (login keychain). Install now?";
+            return LanguageService.Get("trust.install.mac");
         }
 
         if (OperatingSystem.IsLinux())
         {
-            return "Decrypt HTTPS requires trusting the Titanium Inspector root CA in your user certificate store (NSS). Install now?";
+            return LanguageService.Get("trust.install.linux");
         }
 
         if (OperatingSystem.IsWindows())
         {
-            return "Decrypt HTTPS requires trusting the Titanium Inspector root CA in your current-user Trusted Root store. Install now?" +
-                   "\n\nWindows may show a Trusted Root Yes/No security dialog (not UAC) — choose Yes to trust the CA.";
+            return LanguageService.Get("trust.install.windows");
         }
 
-        return "Decrypt HTTPS requires trusting the Titanium Inspector root CA on this computer. Install now?";
+        return LanguageService.Get("trust.install.other");
     }
 
     public static string ConfirmRemoveRootCaBody()
     {
         if (OperatingSystem.IsMacOS())
-            return "Remove the Titanium Inspector root CA from Keychain? HTTPS decrypt will be turned off.";
+            return LanguageService.Get("trust.remove.mac");
         if (OperatingSystem.IsLinux())
-            return "Remove the Titanium Inspector root CA from your user certificate store (NSS)? HTTPS decrypt will be turned off.";
+            return LanguageService.Get("trust.remove.linux");
         if (OperatingSystem.IsWindows())
-            return "Remove the Titanium Inspector root CA from the current-user Trusted Root store? HTTPS decrypt will be turned off.";
-        return "Remove the Titanium Inspector root CA? HTTPS decrypt will be turned off.";
+            return LanguageService.Get("trust.remove.windows");
+        return LanguageService.Get("trust.remove.other");
     }
 
     public static string ConfirmElevateRootCaBody()
     {
         if (OperatingSystem.IsMacOS())
-            return "User-level trust failed or was insufficient. Continue to show a macOS admin password prompt? Cancel leaves certificate settings unchanged.";
+            return LanguageService.Get("trust.elevate.mac");
         if (OperatingSystem.IsLinux())
-            return "User-level trust failed or was insufficient. Continue to show a polkit admin prompt? Cancel leaves certificate settings unchanged.";
+            return LanguageService.Get("trust.elevate.linux");
         if (OperatingSystem.IsWindows())
-            return "User-level trust failed or was insufficient. Continue to show UAC? Cancel leaves certificate settings unchanged.";
-        return "User-level trust failed or was insufficient. Continue with an admin prompt? Cancel leaves certificate settings unchanged.";
+            return LanguageService.Get("trust.elevate.windows");
+        return LanguageService.Get("trust.elevate.other");
     }
 
     public static string TrustRecoveryAdminBody(string message)
     {
         if (OperatingSystem.IsMacOS())
-            return message + "\n\nContinue to show a macOS admin password prompt? Not now leaves certificate settings unchanged.";
+            return message + LanguageService.Get("trust.recovery.mac");
         if (OperatingSystem.IsLinux())
-            return message + "\n\nContinue to show a polkit admin prompt? Not now leaves certificate settings unchanged.";
+            return message + LanguageService.Get("trust.recovery.linux");
         if (OperatingSystem.IsWindows())
-            return message + "\n\nContinue to show UAC? Not now leaves certificate settings unchanged.";
-        return message + "\n\nContinue with an admin prompt? Not now leaves certificate settings unchanged.";
+            return message + LanguageService.Get("trust.recovery.windows");
+        return message + LanguageService.Get("trust.recovery.other");
     }
 
     public static string ExcludedHostsIntro()
     {
         if (OperatingSystem.IsMacOS())
-            return "OS bypass needs Capture → System proxy (uses macOS network proxy settings). Tunnel-only rules apply to every client that hits Inspector. Factory defaults are seeded into the lists below — edit freely or reset.";
+            return LanguageService.Get("trust.hosts.mac");
         if (OperatingSystem.IsLinux())
-            return "OS bypass needs Capture → System proxy (uses desktop / environment proxy settings). Tunnel-only rules apply to every client that hits Inspector. Factory defaults are seeded into the lists below — edit freely or reset.";
+            return LanguageService.Get("trust.hosts.linux");
         if (OperatingSystem.IsWindows())
-            return "OS bypass needs Capture → System proxy (uses WinINET). Tunnel-only rules apply to every client that hits Inspector. Factory defaults are seeded into the lists below — edit freely or reset.";
-        return "OS bypass needs Capture → System proxy. Tunnel-only rules apply to every client that hits Inspector. Factory defaults are seeded into the lists below — edit freely or reset.";
+            return LanguageService.Get("trust.hosts.windows");
+        return LanguageService.Get("trust.hosts.other");
     }
 
     public static string ProxyLocalhostTip()
     {
         if (OperatingSystem.IsMacOS())
-            return "When System proxy is on, send localhost through Inspector. Off adds localhost to the macOS proxy bypass list.";
+            return LanguageService.Get("trust.localhost.mac");
         if (OperatingSystem.IsLinux())
-            return "When System proxy is on, send localhost through Inspector. Off adds localhost to NO_PROXY.";
+            return LanguageService.Get("trust.localhost.linux");
         if (OperatingSystem.IsWindows())
-            return "When System proxy is on, send localhost through Inspector (WinINET <-loopback>). Off lets loopback skip the proxy.";
-        return "When System proxy is on, send localhost through Inspector.";
+            return LanguageService.Get("trust.localhost.windows");
+        return LanguageService.Get("trust.localhost.other");
     }
 
     public static string FormatStatus(CertificateOsTrustResult? result)
     {
         if (result is null)
-            return "Root CA is not trusted yet — try again, or Export CA";
+            return LanguageService.Get("trust.status.missing");
 
         return result.Kind switch
         {
             CertificateOsTrustKind.Cancelled =>
-                "Root CA install cancelled",
+                LanguageService.Get("trust.status.cancelled"),
             CertificateOsTrustKind.CertutilMissing =>
-                "Browser certificate tools are missing — install them, try again, or Export CA",
+                LanguageService.Get("trust.status.certutil"),
             CertificateOsTrustKind.HomebrewMissing =>
                 string.IsNullOrWhiteSpace(result.Message)
-                    ? "Homebrew is required to install certificate tools — Export CA to trust manually"
+                    ? LanguageService.Get("trust.status.homebrew")
                     : result.Message,
             CertificateOsTrustKind.MacNeedsManualTrustConfirm =>
-                "Set Always Trust for the Titanium Inspector root CA in Keychain Access",
+                LanguageService.Get("trust.status.macConfirm"),
             CertificateOsTrustKind.MacKeychainFailed =>
-                "Keychain trust failed — try again, or Export CA and trust it manually",
+                LanguageService.Get("trust.status.keychain"),
             _ => string.IsNullOrWhiteSpace(result.Message)
-                ? "Root CA is not trusted yet — try again, or Export CA"
+                ? LanguageService.Get("trust.status.missing")
                 : result.Message,
         };
     }
@@ -141,35 +130,33 @@ public static class OsTrustUxCopy
         return kind switch
         {
             CertificateOsTrustKind.MacNeedsManualTrustConfirm => (
-                "Confirm trust in Keychain",
+                LanguageService.Get("trust.fail.keychainTitle"),
                 detail ?? MacSslTrustWaitBody,
-                "Continue in Keychain Access",
+                LanguageService.Get("trust.fail.continueKeychain"),
                 ExportCaLabel,
                 360),
 
             CertificateOsTrustKind.CertutilMissing => (
-                "Certificate tools needed",
+                LanguageService.Get("trust.fail.toolsTitle"),
                 detail ??
                 (OperatingSystem.IsLinux()
-                    ? "Inspector needs certutil (NSS tools) to finish trusting the root CA."
-                    : "Inspector needs browser certificate tools to finish trusting the root CA."),
-                "Try again",
+                    ? LanguageService.Get("trust.fail.toolsLinux")
+                    : LanguageService.Get("trust.fail.toolsOther")),
+                LanguageService.Get("trust.fail.tryAgain"),
                 ExportCaLabel,
                 280),
 
             CertificateOsTrustKind.HomebrewMissing => (
-                "Certificate tools needed",
-                detail ??
-                "Homebrew is required to install certificate tools. Export the CA to trust it manually.",
+                LanguageService.Get("trust.fail.toolsTitle"),
+                detail ?? LanguageService.Get("trust.fail.homebrewBody"),
                 ExportCaLabel,
                 null,
                 260),
 
             _ => (
-                "Can't decrypt HTTPS yet",
-                detail ??
-                "The Titanium Inspector root CA is not trusted on this computer yet.",
-                "Try again",
+                LanguageService.Get("trust.fail.title"),
+                detail ?? LanguageService.Get("trust.fail.body"),
+                LanguageService.Get("trust.fail.tryAgain"),
                 ExportCaLabel,
                 260),
         };

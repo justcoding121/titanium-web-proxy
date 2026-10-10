@@ -255,6 +255,9 @@ public class SonarPrCoverageGapTests
             interception.ApplyUnixSslTrustOnUi(false); // Windows / in-memory early return
             Assert.IsFalse(interception.RemoveDecryptFailureBypass("never-added.example"));
             interception.ClearDecryptFailureBypass();
+
+            // Instance tip getter (Avalonia binding) must stay covered for the PR quality gate.
+            Assert.IsFalse(string.IsNullOrWhiteSpace(vm.ProxyLocalhostTip));
         }
         finally
         {

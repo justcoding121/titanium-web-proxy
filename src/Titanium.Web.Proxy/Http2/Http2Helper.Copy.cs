@@ -2524,6 +2524,18 @@ namespace Titanium.Web.Proxy.Http2
                                     leftAsWireEncoded = true;
                                 }
                             }
+                            catch (InvalidDataException ex)
+                            {
+                                // The origin's body does not match its Content-Encoding. This copy only feeds
+                                // inspection; the client still gets the wire bytes, so a malformed body must not
+                                // fail the stream, let alone tear down every multiplexed stream on the connection.
+                                leftAsWireEncoded = true;
+                                ProxyDiagnostics.ReportBenign(logger,
+                                    $"HTTP/2 body does not match Content-Encoding '{rr.ContentEncoding}' " +
+                                    $"({body.Length} bytes, starts {Convert.ToHexString(body.AsSpan(0, Math.Min(body.Length, 4)))}); " +
+                                    $"keeping wire bytes. Request: {args?.HttpClient.Request.Url ?? "(unknown)"}",
+                                    ex);
+                            }
                             finally
                             {
                                 for (var i = owned.Count - 1; i >= 0; i--)

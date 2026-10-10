@@ -80,8 +80,10 @@ public class Http1FramingSafetyTests
             return Task.CompletedTask;
         };
 
-        var client = new HttpContinueClient();
-        var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "hello");
+        // Short wait: under the deadlock the proxy never sends 100-continue, so the client must
+        // time out quickly. Happy-path tests use the longer default in HttpContinueClient.
+        var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "hello",
+            waitTimeoutMs: 500);
 
         Assert.IsNull(response, "Default mode with strict client must still time out (deadlock baseline).");
     }

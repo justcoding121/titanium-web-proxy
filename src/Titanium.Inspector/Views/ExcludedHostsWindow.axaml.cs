@@ -1,3 +1,4 @@
+using Titanium.Inspector.Localization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -29,6 +30,7 @@ public partial class ExcludedHostsWindow : Window
         _onSaved = onSaved;
         _interception = interception;
         InitializeComponent();
+        LanguageService.AttachWindow(this);
         Title = readOnly ? "Excluded hosts (view)" : "Excluded hosts";
         _settings.EnsureExclusionsSeeded();
         LoadFromSettings();

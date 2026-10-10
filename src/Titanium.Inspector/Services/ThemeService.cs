@@ -16,7 +16,7 @@ public static class ThemeService
         {
             ThemeMode.Light => ThemeVariant.Light,
             ThemeMode.Dark => ThemeVariant.Dark,
-            _ => ThemeVariant.Default,
+            _ => OsThemePreference.AutomaticVariant(),
         };
     }
 }

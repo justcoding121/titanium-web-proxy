@@ -1,3 +1,4 @@
+using Titanium.Inspector.Localization;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -22,6 +23,7 @@ public partial class LoggingSettingsWindow : Window
         _settings = settings;
         _applyLogging = applyLogging;
         InitializeComponent();
+        LanguageService.AttachWindow(this);
         LevelCombo.ItemsSource = Levels;
         LoadFromSettings();
         SaveButton.Click += OnSave;

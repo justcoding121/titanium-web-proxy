@@ -1,3 +1,4 @@
+using Titanium.Inspector.Localization;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Titanium.Inspector.Services;
@@ -14,6 +15,7 @@ public partial class AboutWindow : Window
     public AboutWindow()
     {
         InitializeComponent();
+        LanguageService.AttachWindow(this);
         VersionText.Text = $"Version {UpdateService.FormatAssemblyDisplayVersion()}";
         OkButton.Click += (_, _) => Close();
         LicenseLink.PointerPressed += (_, e) => OnLinkPressed(e, LicenseUrl);
