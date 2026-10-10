@@ -8,9 +8,10 @@ namespace Titanium.Inspector.Tests;
 
 [TestClass]
 [DoNotParallelize]
-public class LanguageCatalogTests
+public partial class LanguageCatalogTests
 {
-    private static readonly Regex Placeholder = new(@"\{(\d+)\}", RegexOptions.CultureInvariant);
+    [GeneratedRegex(@"\{(\d+)\}", RegexOptions.CultureInvariant)]
+    private static partial Regex Placeholder();
 
     [TestMethod]
     public void Resolve_MapsOsCulturesOntoTheCatalog()
@@ -70,8 +71,8 @@ public class LanguageCatalogTests
             foreach (var key in englishKeys)
             {
                 Assert.IsFalse(string.IsNullOrWhiteSpace(catalog[key]), culture + " " + key + " is empty.");
-                var expected = Placeholder.Matches(english[key]).Select(m => m.Value).OrderBy(v => v, StringComparer.Ordinal).ToArray();
-                var actual = Placeholder.Matches(catalog[key]).Select(m => m.Value).OrderBy(v => v, StringComparer.Ordinal).ToArray();
+                var expected = Placeholder().Matches(english[key]).Select(m => m.Value).OrderBy(v => v, StringComparer.Ordinal).ToArray();
+                var actual = Placeholder().Matches(catalog[key]).Select(m => m.Value).OrderBy(v => v, StringComparer.Ordinal).ToArray();
                 CollectionAssert.AreEqual(expected, actual, culture + " " + key + " placeholders differ.");
             }
         }

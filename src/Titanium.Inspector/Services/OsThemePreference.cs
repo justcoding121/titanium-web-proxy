@@ -181,7 +181,7 @@ internal static class OsThemePreference
             using var process = new Process();
             process.StartInfo = new ProcessStartInfo
             {
-                FileName = "gdbus",
+                FileName = "/usr/bin/gdbus",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,

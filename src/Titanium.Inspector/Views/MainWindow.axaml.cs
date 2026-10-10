@@ -141,7 +141,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private DataGridRow? PressedSessionRow(PointerPressedEventArgs e)
+    private static DataGridRow? PressedSessionRow(PointerPressedEventArgs e)
     {
         var source = e.Source as Control;
         return source?.FindAncestorOfType<DataGridRow>() ?? source as DataGridRow;

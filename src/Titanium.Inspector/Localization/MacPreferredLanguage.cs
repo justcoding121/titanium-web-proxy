@@ -39,7 +39,7 @@ internal static partial class MacPreferredLanguage
     private static string? ReadUtf8(IntPtr cfString)
     {
         var buffer = new byte[128];
-        unsafe
+        unsafe // NOSONAR S6640 - CFStringGetCString needs a pinned writable buffer
         {
             fixed (byte* pointer = buffer)
             {
@@ -73,5 +73,5 @@ internal static partial class MacPreferredLanguage
 
     [LibraryImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
     [return: MarshalAs(UnmanagedType.U1)]
-    private static unsafe partial bool CFStringGetCString(IntPtr theString, byte* buffer, nint bufferSize, uint encoding);
+    private static unsafe partial bool CFStringGetCString(IntPtr theString, byte* buffer, nint bufferSize, uint encoding); // NOSONAR S6640
 }

@@ -2032,7 +2032,15 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         }
     }
 
-    public string ProxyLocalhostTip => OsTrustUxCopy.ProxyLocalhostTip();
+    public string ProxyLocalhostTip
+    {
+        get
+        {
+            // Touch instance state so Avalonia {Binding} + PropertyChanged stay valid (CA1822 / S2325).
+            _ = _settings;
+            return OsTrustUxCopy.ProxyLocalhostTip();
+        }
+    }
 
     public bool AutoStartCapture
     {
