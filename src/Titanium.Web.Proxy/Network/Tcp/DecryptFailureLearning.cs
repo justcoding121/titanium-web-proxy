@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using Titanium.Web.Proxy.EventArguments;
@@ -144,39 +145,28 @@ internal static class DecryptFailureLearning
     ///     </list>
     ///     A plain 403 or a rate-limit 429 (<c>Retry-After</c>) matches none of them.
     /// </summary>
-    internal static bool LooksLikeBotChallenge(Response response)
+    internal static bool LooksLikeBotChallenge(Response response) =>
+        response.Headers.Any(header => IsBotChallengeHeader(header.Name, header.Value));
+
+    private static bool IsBotChallengeHeader(string name, string value)
     {
-        foreach (var header in response.Headers)
-        {
-            var name = header.Name;
-            var value = header.Value;
+        if (name.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase))
+            return IsBotManagementCookie(value);
 
-            if (name.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase))
-            {
-                if (IsBotManagementCookie(value))
-                    return true;
-                continue;
-            }
+        if (name.StartsWith("x-kpsdk-", StringComparison.OrdinalIgnoreCase))
+            return true;
 
-            if (name.StartsWith("x-kpsdk-", StringComparison.OrdinalIgnoreCase))
-                return true;
+        if (BotChallengeHeaderNames.Any(vendor => name.Equals(vendor, StringComparison.OrdinalIgnoreCase)))
+            return true;
 
-            foreach (var vendor in BotChallengeHeaderNames)
-                if (name.Equals(vendor, StringComparison.OrdinalIgnoreCase))
-                    return true;
+        if (name.Equals("Server", StringComparison.OrdinalIgnoreCase)
+            && value.Contains("AkamaiGHost", StringComparison.OrdinalIgnoreCase))
+            return true;
 
-            if (name.Equals("Server", StringComparison.OrdinalIgnoreCase)
-                && value.Contains("AkamaiGHost", StringComparison.OrdinalIgnoreCase))
-                return true;
+        if (IsNonChallengeHeader(name))
+            return false;
 
-            if (IsNonChallengeHeader(name))
-                continue;
-
-            if (MentionsChallenge(name) || MentionsChallenge(value))
-                return true;
-        }
-
-        return false;
+        return MentionsChallenge(name) || MentionsChallenge(value);
     }
 
     private static bool IsNonChallengeHeader(string name)
@@ -184,11 +174,7 @@ internal static class DecryptFailureLearning
         if (name.StartsWith("Access-Control-", StringComparison.OrdinalIgnoreCase))
             return true;
 
-        foreach (var skip in NonChallengeHeaderNames)
-            if (name.Equals(skip, StringComparison.OrdinalIgnoreCase))
-                return true;
-
-        return false;
+        return NonChallengeHeaderNames.Any(skip => name.Equals(skip, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool MentionsChallenge(string text) =>

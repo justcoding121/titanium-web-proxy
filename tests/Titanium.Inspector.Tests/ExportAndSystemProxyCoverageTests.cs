@@ -10,6 +10,9 @@ namespace Titanium.Inspector.Tests;
 [TestClass]
 public class ExportAndSystemProxyCoverageTests
 {
+    private static readonly string[] HiddenHostChipApi2Cursor = ["api2.cursor.sh"];
+    private static readonly string[] HiddenProcessChipCursor = ["Cursor"];
+
     [TestMethod]
     public async Task ExportCommands_CoverEmptyCancelAndSelectedPaths()
     {
@@ -467,8 +470,8 @@ public class ExportAndSystemProxyCoverageTests
             Assert.AreEqual("status:200 -host:api2.cursor.sh -process:Cursor", vm.SearchQuery);
             StringAssert.Contains(vm.StatusText, "Hidden process:Cursor");
             Assert.IsTrue(vm.HasHiddenChips);
-            CollectionAssert.AreEqual(new[] { "api2.cursor.sh" }, vm.HiddenHostChips.ToList());
-            CollectionAssert.AreEqual(new[] { "Cursor" }, vm.HiddenProcessChips.ToList());
+            CollectionAssert.AreEqual(HiddenHostChipApi2Cursor, vm.HiddenHostChips.ToList());
+            CollectionAssert.AreEqual(HiddenProcessChipCursor, vm.HiddenProcessChips.ToList());
             Assert.IsTrue(vm.ShowProcessChipPrefix);
 
             vm.RemoveHiddenHostCommand.Execute("api2.cursor.sh");
