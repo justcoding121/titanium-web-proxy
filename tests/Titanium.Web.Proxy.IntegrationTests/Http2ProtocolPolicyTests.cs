@@ -552,8 +552,12 @@ public class Http2ProtocolPolicyTests
 
         string? line;
         var sawOriginProtocolHeader = false;
+        var chunked = false;
         while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
         {
+            if (line.StartsWith("Transfer-Encoding:", StringComparison.OrdinalIgnoreCase)
+                && line.Contains("chunked", StringComparison.OrdinalIgnoreCase))
+                chunked = true;
             if (line.StartsWith("X-Origin-Protocol:", StringComparison.OrdinalIgnoreCase))
             {
                 sawOriginProtocolHeader = true;
@@ -564,7 +568,7 @@ public class Http2ProtocolPolicyTests
 
         Assert.IsTrue(sawOriginProtocolHeader, "Expected to see the X-Origin-Protocol response header.");
 
-        var body = await reader.ReadToEndAsync();
+        var body = await ReadDecodedBodyAsync(reader, chunked);
         Assert.AreEqual("h11-to-h2-bridge-ok", body);
         Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised on a successful bridge: {exceptionCapture.LastException}");
     }
@@ -614,12 +618,18 @@ public class Http2ProtocolPolicyTests
         Assert.IsTrue(statusLine != null && statusLine.StartsWith("HTTP/1.1 200"),
             $"Expected an HTTP/1.1 200 response, got: '{statusLine}'.");
 
-        while (!string.IsNullOrEmpty(await reader.ReadLineAsync()))
+        var chunked = false;
+        string? headerLine;
+        while (!string.IsNullOrEmpty(headerLine = await reader.ReadLineAsync()))
         {
-            // skip headers
+            if (headerLine.StartsWith("Transfer-Encoding:", StringComparison.OrdinalIgnoreCase)
+                && headerLine.Contains("chunked", StringComparison.OrdinalIgnoreCase))
+                chunked = true;
         }
 
-        var responseBody = await reader.ReadToEndAsync();
+        // A finished HTTP/2 body is chunked when END_STREAM lands after the client headers are
+        // written. Both framings are valid; compare the decoded body.
+        var responseBody = await ReadDecodedBodyAsync(reader, chunked);
         Assert.AreEqual($"echo:{requestBody}", responseBody);
         Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised on a successful bridge: {exceptionCapture.LastException}");
     }
@@ -935,8 +945,12 @@ public class Http2ProtocolPolicyTests
 
         string? line;
         var sawOriginProtocolHeader = false;
+        var chunked = false;
         while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
         {
+            if (line.StartsWith("Transfer-Encoding:", StringComparison.OrdinalIgnoreCase)
+                && line.Contains("chunked", StringComparison.OrdinalIgnoreCase))
+                chunked = true;
             if (line.StartsWith("X-Origin-Protocol:", StringComparison.OrdinalIgnoreCase))
             {
                 sawOriginProtocolHeader = true;
@@ -947,8 +961,52 @@ public class Http2ProtocolPolicyTests
 
         Assert.IsTrue(sawOriginProtocolHeader, "Expected to see the X-Origin-Protocol response header.");
 
-        var body = await reader.ReadToEndAsync();
+        var body = await ReadDecodedBodyAsync(reader, chunked);
         Assert.AreEqual("transparent-h11-to-h2-bridge-ok", body);
         Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised on a successful bridge: {exceptionCapture.LastException}");
+    }
+
+    /// <summary>
+    ///     Reads the entity body after the header block. Chunked responses (a finished HTTP/2 body whose
+    ///     END_STREAM arrives after the client headers are written) decode to the same bytes as a
+    ///     Content-Length body.
+    /// </summary>
+    private static async Task<string> ReadDecodedBodyAsync(StreamReader reader, bool chunked)
+    {
+        if (!chunked)
+            return await reader.ReadToEndAsync();
+
+        var body = new StringBuilder();
+        while (true)
+        {
+            var sizeLine = await reader.ReadLineAsync();
+            Assert.IsNotNull(sizeLine, "Chunked body ended before the zero chunk.");
+            var sizeText = sizeLine.Split(';')[0].Trim();
+            var size = Convert.ToInt32(sizeText, 16);
+            if (size == 0)
+            {
+                while (!string.IsNullOrEmpty(await reader.ReadLineAsync()))
+                {
+                    // trailers
+                }
+
+                break;
+            }
+
+            var buffer = new char[size];
+            var read = 0;
+            while (read < size)
+            {
+                var n = await reader.ReadAsync(buffer.AsMemory(read, size - read));
+                Assert.AreNotEqual(0, n, "Chunk ended before its declared length.");
+                read += n;
+            }
+
+            body.Append(buffer);
+            var afterChunk = await reader.ReadLineAsync();
+            Assert.AreEqual(string.Empty, afterChunk, "Expected CRLF after a chunk.");
+        }
+
+        return body.ToString();
     }
 }

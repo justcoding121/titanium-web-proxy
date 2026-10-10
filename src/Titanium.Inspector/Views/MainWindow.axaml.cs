@@ -29,12 +29,16 @@ public partial class MainWindow : Window
     private bool _autoStartStarted;
     private bool _followLatest = true;
     private bool _programmaticScroll;
+    private bool _sessionsResetInFlight;
     private bool _scrollQueued;
     private bool _sessionGridLayoutApplied;
     private ScrollBar? _sessionsVScroll;
     private MainWindowViewModel? _sessionsVm;
     private MainWindowViewModel? _statusVm;
     private MainWindowViewModel? _toggleSyncVm;
+    private MainWindowViewModel? _gridColumnsVm;
+    private MainWindowViewModel? _inspectLayoutVm;
+    private readonly Dictionary<string, DataGridLength> _defaultColumnWidths = new(StringComparer.Ordinal);
     private WindowNotificationManager? _notificationManager;
     private CancellationTokenSource? _attentionCts;
     private EventHandler? _themeVariantChangedHandler;
@@ -49,13 +53,34 @@ public partial class MainWindow : Window
         SessionsGrid.Loaded += OnSessionsGridLoaded;
         SessionsGrid.SelectionChanged += OnSessionsGridSelectionChanged;
         SessionsGrid.KeyDown += OnSessionsGridKeyDown;
+        // Under heavy proxy load the machine is CPU-saturated by worker threads (and browsers); the UI thread
+        // must win the scheduler or clicks stall for seconds even when its own work is small.
+        try
+        {
+            System.Threading.Thread.CurrentThread.Priority = System.Threading.ThreadPriority.AboveNormal;
+        }
+        catch
+        {
+            // Best effort: restricted environments may refuse priority changes.
+        }
+
+        // Capture-driven grid refreshes step aside while the user is interacting (see CaptureUiGovernor).
+        AddHandler(InputElement.PointerPressedEvent, OnUserInputForCaptureUi, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(InputElement.PointerMovedEvent, OnUserInputForCaptureUi, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(InputElement.PointerWheelChangedEvent, OnUserInputForCaptureUi, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(InputElement.KeyDownEvent, OnUserInputForCaptureUi, RoutingStrategies.Tunnel, handledEventsToo: true);
         SessionsGrid.AddHandler(
             InputElement.PointerPressedEvent,
             OnSessionsGridPointerPressed,
             RoutingStrategies.Tunnel);
+        SessionsGrid.AddHandler(
+            ContextRequestedEvent,
+            OnSessionsGridContextRequested,
+            RoutingStrategies.Tunnel);
         HookSessionsCollection(DataContext as MainWindowViewModel);
         HookStatusAttention(DataContext as MainWindowViewModel);
         HookOneWayToggleVisualSync(DataContext as MainWindowViewModel);
+        HookGridColumnsChanged(DataContext as MainWindowViewModel);
         HookThemeVariantChanged();
     }
 
@@ -87,7 +112,7 @@ public partial class MainWindow : Window
     private void OnSessionsGridLoaded(object? sender, RoutedEventArgs e)
     {
         AttachSessionsScroll();
-        ApplyProcessColumnVisibility();
+        ApplyColumnVisibility();
         ApplySessionGridLayoutIfNeeded();
         ApplySessionColumnHeaderTips();
     }
@@ -202,6 +227,7 @@ public partial class MainWindow : Window
         HookSessionsCollection(null);
         HookStatusAttention(null);
         HookOneWayToggleVisualSync(null);
+        HookGridColumnsChanged(null);
         HookThemeVariantChanged(unhook: true);
         _attentionCts?.Cancel();
         _attentionCts?.Dispose();
@@ -224,14 +250,128 @@ public partial class MainWindow : Window
         HookSessionsCollection(DataContext as MainWindowViewModel);
         HookStatusAttention(DataContext as MainWindowViewModel);
         HookOneWayToggleVisualSync(DataContext as MainWindowViewModel);
+        HookGridColumnsChanged(DataContext as MainWindowViewModel);
+        HookInspectHeadersLayout(DataContext as MainWindowViewModel);
         if (_notificationManager is not null && DataContext is MainWindowViewModel vm)
         {
             vm.AttachStatusNotifier(new AvaloniaStatusNotifier(() => _notificationManager));
         }
 
-        ApplyProcessColumnVisibility();
+        ApplyColumnVisibility();
         ApplySessionGridLayoutIfNeeded();
         HookThemeVariantChanged();
+    }
+
+    private const int InspectHeadersRowIndex = 2;
+    private const int InspectBodyRowIndex = 4;
+
+    // Floors stay small on purpose: on a short window each box shrinks and scrolls inside itself
+    // instead of the pane clipping its bottom. Body keeps room for its toolbar plus a few lines.
+    private const double InspectHeadersMinHeight = 56;
+    private const double InspectBodyMinHeight = 96;
+
+    private void HookInspectHeadersLayout(MainWindowViewModel? vm)
+    {
+        if (_inspectLayoutVm is not null)
+        {
+            _inspectLayoutVm.PropertyChanged -= OnInspectHeadersLayoutChanged;
+        }
+
+        _inspectLayoutVm = vm;
+        if (vm is null)
+        {
+            return;
+        }
+
+        vm.PropertyChanged += OnInspectHeadersLayoutChanged;
+        ApplyInspectHeadersLayout();
+    }
+
+    private void OnInspectHeadersLayoutChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(MainWindowViewModel.InspectHeadersCollapsed)
+            or nameof(MainWindowViewModel.InspectHeadersStar)
+            or nameof(MainWindowViewModel.InspectBodyStar))
+        {
+            ApplyInspectHeadersLayout();
+        }
+    }
+
+    private void OnInspectHostSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.ApplyInspectPaneHeight(e.NewSize.Height);
+        }
+    }
+
+    private void OnInspectHeadersSplitterDragCompleted(object? sender, VectorEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm || sender is not GridSplitter splitter)
+        {
+            return;
+        }
+
+        if (splitter.Parent is not Grid grid)
+        {
+            return;
+        }
+
+        var headers = grid.RowDefinitions[InspectHeadersRowIndex];
+        var body = grid.RowDefinitions[InspectBodyRowIndex];
+        vm.CommitInspectHeadersRatio(DefinitionPixels(headers), DefinitionPixels(body));
+        ApplyInspectHeadersLayout();
+    }
+
+    private void OnInspectHeadersSplitterDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        vm.ResetInspectHeadersRatio();
+        e.Handled = true;
+    }
+
+    private void ApplyInspectHeadersLayout()
+    {
+        if (_inspectLayoutVm is null)
+        {
+            return;
+        }
+
+        ApplyInspectSplit(RequestInspectSplit, _inspectLayoutVm);
+        ApplyInspectSplit(ResponseInspectSplit, _inspectLayoutVm);
+    }
+
+    private static void ApplyInspectSplit(Grid grid, MainWindowViewModel vm)
+    {
+        var headers = grid.RowDefinitions[InspectHeadersRowIndex];
+        var body = grid.RowDefinitions[InspectBodyRowIndex];
+        if (vm.InspectHeadersCollapsed)
+        {
+            headers.MinHeight = 0;
+            headers.Height = new GridLength(0);
+            body.MinHeight = InspectBodyMinHeight;
+            body.Height = new GridLength(1, GridUnitType.Star);
+            return;
+        }
+
+        headers.MinHeight = InspectHeadersMinHeight;
+        headers.Height = new GridLength(vm.InspectHeadersStar, GridUnitType.Star);
+        body.MinHeight = InspectBodyMinHeight;
+        body.Height = new GridLength(vm.InspectBodyStar, GridUnitType.Star);
+    }
+
+    private static double DefinitionPixels(RowDefinition definition)
+    {
+        if (definition.Height.GridUnitType == GridUnitType.Pixel)
+        {
+            return definition.Height.Value;
+        }
+
+        return definition.ActualHeight;
     }
 
     /// <summary>
@@ -376,12 +516,20 @@ public partial class MainWindow : Window
         if (_sessionsVm is not null)
         {
             _sessionsVm.Sessions.CollectionChanged -= OnSessionsCollectionChanged;
+            if (_sessionsVm.Sessions is SessionListCollection oldList)
+            {
+                oldList.Replacing -= OnSessionsReplacing;
+            }
         }
 
         _sessionsVm = vm;
         if (_sessionsVm is not null)
         {
             _sessionsVm.Sessions.CollectionChanged += OnSessionsCollectionChanged;
+            if (_sessionsVm.Sessions is SessionListCollection newList)
+            {
+                newList.Replacing += OnSessionsReplacing;
+            }
         }
     }
 
@@ -424,20 +572,40 @@ public partial class MainWindow : Window
             edge, value, maximum, SessionListFollowLatest.DefaultThresholdPx);
         var allContentVisible = maximum <= 0;
 
+        // A list swap (filter added/cleared) makes the DataGrid reset its offset; that is not the user scrolling
+        // away, so it must not pause following.
         _followLatest = SessionListFollowLatest.UpdateFollowAfterScroll(
-            _followLatest, _programmaticScroll, userMovedOffset, isNearFollowEdge, allContentVisible);
+            _followLatest,
+            _programmaticScroll || _sessionsResetInFlight,
+            userMovedOffset,
+            isNearFollowEdge,
+            allContentVisible);
     }
+
+    private static void OnUserInputForCaptureUi(object? sender, RoutedEventArgs e) => CaptureUiGovernor.NoteUserInput();
+
+    private void OnSessionsReplacing() => _sessionsResetInFlight = true;
 
     private void OnSessionsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        if (e.Action == NotifyCollectionChangedAction.Reset)
+        {
+            // Also covers collections that raise Reset without the Replacing hook (Clear).
+            _sessionsResetInFlight = true;
+        }
+
         if (e.Action == NotifyCollectionChangedAction.Reset
             || (e.Action == NotifyCollectionChangedAction.Remove && _sessionsVm is { Sessions.Count: 0 }))
         {
-            // Clear vs filter: filter Reset is immediately followed by Adds on this turn.
+            // Runs after layout and after the scroll-to-latest below (Loaded outranks Background), once the
+            // DataGrid has settled on its new extent.
             Dispatcher.UIThread.Post(() =>
             {
-                if (SessionListFollowLatest.ShouldResumeFollowAfterReset(_sessionsVm?.Sessions.Count ?? 0))
+                _sessionsResetInFlight = false;
+                if (SessionListFollowLatest.ShouldResumeFollowAfterReset(_sessionsVm?.Sessions.Count ?? 0)
+                    || _sessionsVScroll is { Maximum: <= 0 })
                 {
+                    // Cleared, or the result fits on screen: nothing is hidden, so follow the live edge again.
                     _followLatest = true;
                 }
             }, DispatcherPriority.Background);
@@ -537,18 +705,238 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ApplyProcessColumnVisibility()
+    /// <summary>Column visibility from the catalog defaults, saved choices, and the Process platform gate.</summary>
+    private void ApplyColumnVisibility()
     {
         if (DataContext is not MainWindowViewModel vm || SessionsGrid.Columns.Count == 0)
         {
             return;
         }
 
-        foreach (var column in SessionsGrid.Columns.Where(c =>
-                     string.Equals(SessionGridLayout.GetColumnKey(c.Header), "Process", StringComparison.Ordinal)))
+        foreach (var column in SessionsGrid.Columns)
         {
-            column.IsVisible = vm.ShowProcessColumn;
+            var key = SessionGridLayout.GetColumnKey(column.Header);
+            if (SessionGridColumnCatalog.Find(key) is not null)
+            {
+                column.IsVisible = vm.IsGridColumnVisible(key!);
+            }
         }
+    }
+
+    /// <summary>XAML widths, remembered once so Reset columns can restore them.</summary>
+    private void SnapshotDefaultColumnWidths()
+    {
+        if (_defaultColumnWidths.Count > 0)
+        {
+            return;
+        }
+
+        foreach (var column in SessionsGrid.Columns)
+        {
+            if (SessionGridLayout.GetColumnKey(column.Header) is { } key)
+            {
+                _defaultColumnWidths[key] = column.Width;
+            }
+        }
+    }
+
+    private DataGridColumn? FindGridColumn(string key) =>
+        SessionsGrid.Columns.FirstOrDefault(c =>
+            string.Equals(SessionGridLayout.GetColumnKey(c.Header), key, StringComparison.Ordinal));
+
+    private void HookGridColumnsChanged(MainWindowViewModel? vm)
+    {
+        if (_gridColumnsVm is not null)
+        {
+            _gridColumnsVm.GridColumnsChanged -= OnGridColumnsChanged;
+        }
+
+        _gridColumnsVm = vm;
+        if (vm is not null)
+        {
+            vm.GridColumnsChanged += OnGridColumnsChanged;
+        }
+    }
+
+    private void OnGridColumnsChanged(string? key)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            ApplyGridColumnsChange(key);
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(() => ApplyGridColumnsChange(key), DispatcherPriority.Input);
+        }
+    }
+
+    private void ApplyGridColumnsChange(string? key)
+    {
+        if (DataContext is not MainWindowViewModel || SessionsGrid.Columns.Count == 0)
+        {
+            return;
+        }
+
+        if (key is null)
+        {
+            ResetGridColumnsToDefaults();
+        }
+        else if (FindGridColumn(key) is { } column)
+        {
+            ApplyColumnVisibility();
+            if (!column.IsVisible)
+            {
+                FallBackToDefaultSortIfHiddenColumnSorted();
+            }
+        }
+
+        SyncColumnMenuChecks();
+        // Headers of newly shown columns are created lazily; give them their tooltips.
+        Dispatcher.UIThread.Post(ApplySessionColumnHeaderTips, DispatcherPriority.Background);
+    }
+
+    private void ResetGridColumnsToDefaults()
+    {
+        SnapshotDefaultColumnWidths();
+        ApplyColumnVisibility();
+        for (var index = 0; index < SessionsGrid.Columns.Count; index++)
+        {
+            var column = SessionsGrid.Columns[index];
+            if (SessionGridLayout.GetColumnKey(column.Header) is { } key
+                && _defaultColumnWidths.TryGetValue(key, out var width))
+            {
+                column.Width = width;
+            }
+
+            try
+            {
+                if (column.DisplayIndex != index)
+                {
+                    column.DisplayIndex = index;
+                }
+            }
+            catch
+            {
+                // DisplayIndex can throw while the grid is still wiring columns.
+            }
+        }
+
+        ApplyDefaultSort();
+    }
+
+    /// <summary>Id ascending (factory default). Clears first because <c>Sort</c> may add to an active sort.</summary>
+    private void ApplyDefaultSort()
+    {
+        SessionsGrid.CollectionView?.SortDescriptions.Clear();
+        SessionsGrid.Columns.FirstOrDefault(IsIdColumn)?.Sort(ListSortDirection.Ascending);
+    }
+
+    /// <summary>
+    /// A hidden column keeps sorting the rows with no header to show it. Id is exempt: hiding it must not
+    /// change the default order.
+    /// </summary>
+    private void FallBackToDefaultSortIfHiddenColumnSorted()
+    {
+        if (GetSortDescriptionMethod is null)
+        {
+            return;
+        }
+
+        try
+        {
+            foreach (var column in SessionsGrid.Columns)
+            {
+                if (!column.IsVisible
+                    && !IsIdColumn(column)
+                    && GetSortDescriptionMethod.Invoke(column, null) is DataGridSortDescription)
+                {
+                    ApplyDefaultSort();
+                    return;
+                }
+            }
+        }
+        catch
+        {
+            // keep the current sort
+        }
+    }
+
+    /// <summary>Options &gt; Columns check marks follow the effective visibility (OneWay binding would be severed).</summary>
+    private void SyncColumnMenuChecks()
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        foreach (var item in MenuColumns.Items.OfType<MenuItem>())
+        {
+            if (item.CommandParameter is string key)
+            {
+                OneWayToggleVisualSync.Apply(item, vm.IsGridColumnVisible(key));
+            }
+        }
+    }
+
+    /// <summary>Right-click on a column header: pick columns (rows keep their own menu).</summary>
+    private void OnSessionsGridContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm || e.Source is not Visual source)
+        {
+            return;
+        }
+
+        var header = source as DataGridColumnHeader ?? source.FindAncestorOfType<DataGridColumnHeader>();
+        var onHeaderStrip = header is not null
+            || source is DataGridColumnHeadersPresenter
+            || source.FindAncestorOfType<DataGridColumnHeadersPresenter>() is not null;
+        if (!onHeaderStrip)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        var menu = BuildColumnChooserMenu(vm);
+        menu.Open(header ?? (Control)SessionsGrid);
+    }
+
+    /// <summary>Header context menu: one check item per catalog column plus Reset columns.</summary>
+    public static ContextMenu BuildColumnChooserMenu(MainWindowViewModel vm)
+    {
+        var menu = new ContextMenu();
+        var optionalSectionStarted = false;
+        foreach (var info in SessionGridColumnCatalog.All)
+        {
+            if (info.PlatformGated && !vm.ShowProcessColumn)
+            {
+                continue;
+            }
+
+            if (!info.DefaultVisible && !optionalSectionStarted)
+            {
+                // Separate the original columns from the optional ones, like Options > Columns.
+                optionalSectionStarted = true;
+                menu.Items.Add(new Separator());
+            }
+
+            menu.Items.Add(new MenuItem
+            {
+                Header = info.MenuLabel,
+                ToggleType = MenuItemToggleType.CheckBox,
+                IsChecked = vm.IsGridColumnVisible(info.Key),
+                IsEnabled = info.CanHide,
+                Command = vm.ToggleGridColumnCommand,
+                CommandParameter = info.Key,
+            });
+        }
+
+        menu.Items.Add(new Separator());
+        menu.Items.Add(new MenuItem
+        {
+            Header = "Reset columns",
+            Command = vm.ResetGridColumnsCommand,
+        });
+        return menu;
     }
 
     private void ApplySessionGridLayoutIfNeeded()
@@ -561,7 +949,8 @@ public partial class MainWindow : Window
         }
 
         _sessionGridLayoutApplied = true;
-        ApplyProcessColumnVisibility();
+        SnapshotDefaultColumnWidths();
+        ApplyColumnVisibility();
         var layout = vm.GetSessionGridLayout();
         var byKey = SessionGridLayout.IndexByKey(layout?.Columns);
 
@@ -583,6 +972,27 @@ public partial class MainWindow : Window
             column.Width = new DataGridLength(width);
         }
 
+        RestoreSavedColumnOrder(byKey);
+
+        SessionGridLayout.ResolveSort(layout, out var sortKey, out var sortDirection);
+        var sortColumn = SessionsGrid.Columns.FirstOrDefault(c =>
+            string.Equals(SessionGridLayout.GetColumnKey(c.Header), sortKey, StringComparison.Ordinal));
+        if (sortColumn is { IsVisible: false } && !IsIdColumn(sortColumn))
+        {
+            // The saved sort column is hidden: nothing shows why rows are ordered that way.
+            ApplyDefaultSort();
+        }
+        else
+        {
+            sortColumn?.Sort(sortDirection);
+        }
+
+        SyncColumnMenuChecks();
+        ApplySessionColumnHeaderTips();
+    }
+
+    private void RestoreSavedColumnOrder(Dictionary<string, SessionGridColumnStateDto> byKey)
+    {
         foreach (var (column, state) in SessionsGrid.Columns
                      .Select(c => (Column: c, Key: SessionGridLayout.GetColumnKey(c.Header)))
                      .Where(x => x.Key is not null && byKey.ContainsKey(x.Key))
@@ -601,17 +1011,11 @@ public partial class MainWindow : Window
                     column.DisplayIndex = state.DisplayIndex;
                 }
             }
-            catch
+            catch (Exception)
             {
-                // DisplayIndex can throw while the grid is still wiring columns.
+                // DisplayIndex throws while the grid is still wiring columns.
             }
         }
-
-        SessionGridLayout.ResolveSort(layout, out var sortKey, out var sortDirection);
-        var sortColumn = SessionsGrid.Columns.FirstOrDefault(c =>
-            string.Equals(SessionGridLayout.GetColumnKey(c.Header), sortKey, StringComparison.Ordinal));
-        sortColumn?.Sort(sortDirection);
-        ApplySessionColumnHeaderTips();
     }
 
     private void ApplySessionColumnHeaderTips()
@@ -620,10 +1024,14 @@ public partial class MainWindow : Window
         {
             var tip = SessionGridLayout.GetColumnKey(header.Content) switch
             {
+                "URL" => "Path and query (empty for CONNECT tunnels). The host is in the Host column; hover a row for the full URL.",
                 "Duration" => "Total request time from session start to complete (milliseconds).",
                 "TTFB" => "Time until first response byte (TTFB), in milliseconds.",
                 "Protocol" => "HTTP/1.1, HTTP/2, … between client and proxy.",
                 "Size" => "Response body size (B below 1 KB, otherwise KB / MB).",
+                "Started" => "When the request started (local time). Hover a row for the full date and time.",
+                "Scheme" => "URL scheme (http, https, ws, wss). Empty for CONNECT tunnels.",
+                "Content-Type" => "Response media type, without charset and other parameters.",
                 _ => null,
             };
 
@@ -644,11 +1052,8 @@ public partial class MainWindow : Window
         var layout = new SessionGridLayoutDto();
         foreach (var column in SessionsGrid.Columns)
         {
-            if (!column.IsVisible)
-            {
-                continue;
-            }
-
+            // Hidden columns are persisted too, so width and position survive hide/show and restarts.
+            // Whether a column is shown is stored separately (ColumnVisibility).
             var key = SessionGridLayout.GetColumnKey(column.Header);
             if (key is null)
             {

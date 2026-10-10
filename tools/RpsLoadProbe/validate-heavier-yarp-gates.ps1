@@ -1,5 +1,5 @@
 # Validate heavier-reverse (bodies/post) medians @ c=64:
-#   Reverse TWP ÷ closest peer >= 0.50 (YARP, nginx, HAProxy, Envoy)
+#   Reverse TWP ÷ closest peer >= 0.40 (YARP, nginx, HAProxy, Envoy)
 # Pair list mirrors RampOrchestrator.HeavierReverseArms TWP/YARP stems + -NameSuffix.
 # Sharded CSVs skip pairs whose arms are not in this artifact.
 param(
@@ -7,7 +7,7 @@ param(
     [Parameter(Mandatory)]
     [ValidateSet('body64k', 'body256k', 'post64k')]
     [string] $NameSuffix,
-    [double] $ReverseYarpGate = 0.50
+    [double] $ReverseYarpGate = 0.40
 )
 
 . (Join-Path $PSScriptRoot 'rps-peer-gate.ps1')

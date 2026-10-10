@@ -357,6 +357,91 @@ public class Http2ToHttp3InspectorRegressionTests
         }
     }
 
+    /// <summary>
+    ///     The other tests only look at what the client receives, which hides a failing
+    ///     <c>GetResponseBody</c> (the proxy swallows handler exceptions and still streams the body). The
+    ///     Inspector lost the status / origin protocol of every H2→H3 response with a body because of that
+    ///     ("Connection is null": the H1 reader was used for a QUIC-backed body). Assert the handler itself
+    ///     sees the body, and the client still gets it afterwards.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    [DataRow(false, 64, false)]
+    [DataRow(true, 64, false)]
+    [DataRow(false, 150_000, false)]
+    [DataRow(true, 150_000, false)]
+    [DataRow(false, 6_000, true)]
+    [DataRow(true, 6_000, true)]
+    public async Task BeforeResponse_GetResponseBody_ReturnsOriginBody_AndClientStillReceivesIt(
+        bool warm, int size, bool gzipped)
+    {
+        RequireQuic();
+        var text = new string('b', size);
+        var wire = Encoding.UTF8.GetBytes(text);
+        var headers = Array.Empty<(string, string)>();
+        if (gzipped)
+        {
+            using var ms = new MemoryStream();
+            using (var gzip = new GZipStream(ms, CompressionLevel.Fastest, leaveOpen: true))
+                gzip.Write(wire);
+            wire = ms.ToArray();
+            headers = new[] { ("content-encoding", "gzip") };
+        }
+
+        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleRequest(_ => Task.FromResult(new QuicHttp3Response(200, string.Empty, wire, headers,
+            "text/plain", dataFrameSize: 8 * 1024)));
+
+        var suite = new TestSuite();
+        var proxy = suite.GetProxy();
+        AttachInspectorLikeHooks(proxy, readResponseBody: false);
+        string? seenByHandler = null;
+        Exception? handlerFailure = null;
+        Version? seenVersion = null;
+        proxy.BeforeResponse += async (_, e) =>
+        {
+            try
+            {
+                seenVersion = e.HttpClient.Response.HttpVersion;
+                seenByHandler = await e.GetResponseBodyAsString();
+            }
+            catch (Exception ex)
+            {
+                handlerFailure = ex;
+            }
+        };
+        RouteToHttp3(proxy, origin, warm);
+        using (suite)
+        using (var client = TestHelper.GetHttp2Client(proxy))
+        {
+            client.Timeout = TimeSpan.FromSeconds(20);
+            var response = await client.GetAsync($"https://localhost:{origin.Port}/body");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+
+            Assert.IsNull(handlerFailure, $"GetResponseBody threw: {handlerFailure}");
+            Assert.AreEqual(HttpVersion.Version30, seenVersion, "origin leg should be HTTP/3");
+            Assert.AreEqual(text, seenByHandler, "BeforeResponse must see the (decoded) origin body");
+
+            var delivered = response.Content.Headers.ContentEncoding.Contains("gzip")
+                ? Decode(bytes)
+                : Encoding.UTF8.GetString(bytes);
+            Assert.AreEqual(text, delivered, "client must still receive the full body");
+
+            // The origin stream must have been released: the connection keeps serving requests.
+            var again = await client.GetAsync($"https://localhost:{origin.Port}/again");
+            Assert.AreEqual(HttpStatusCode.OK, again.StatusCode);
+        }
+
+        static string Decode(byte[] data)
+        {
+            using var input = new MemoryStream(data);
+            using var gzip = new GZipStream(input, CompressionMode.Decompress);
+            using var reader = new StreamReader(gzip, Encoding.UTF8);
+            return reader.ReadToEnd();
+        }
+    }
+
     [TestMethod]
     [Timeout(60 * 1000)]
     [DataRow(false)]

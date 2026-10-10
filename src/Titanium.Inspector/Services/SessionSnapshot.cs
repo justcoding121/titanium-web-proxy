@@ -7,6 +7,7 @@ namespace Titanium.Inspector.Services;
 public sealed class SessionSnapshot : INotifyPropertyChanged
 {
     private int? _statusCode;
+    private string? _failureReason;
     private string? _requestHeadersText;
     private string? _responseHeadersText;
     private string? _requestBodyText;
@@ -62,7 +63,7 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         {
             if (!SetField(ref _opaqueReason, value))
                 return;
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(OpaqueReasonDisplay)));
+            RaiseChanged(nameof(OpaqueReasonDisplay));
         }
     }
 
@@ -106,6 +107,16 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     {
         get => _statusCode;
         set => SetField(ref _statusCode, value);
+    }
+
+    /// <summary>
+    /// Why the session ended without any response (origin refused / reset, client gave up, capture stopped).
+    /// Null while the session is in flight or when a response (even a synthetic 502/504) was recorded.
+    /// </summary>
+    public string? FailureReason
+    {
+        get => _failureReason;
+        set => SetField(ref _failureReason, value);
     }
 
     public string? RequestHeadersText
@@ -171,6 +182,24 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         get => _bodySize;
         set => SetField(ref _bodySize, value);
     }
+
+    /// <summary>
+    /// URL column text: path + query when the Host column already shows the host
+    /// (see <see cref="SessionDisplayFormat.FormatUrlForGrid"/>). <see cref="Url"/> stays the full URL.
+    /// </summary>
+    public string UrlDisplay => SessionDisplayFormat.FormatUrlForGrid(Url, Host);
+
+    /// <summary>Started column text (<see cref="StartedUtc"/> in local time).</summary>
+    public string StartedDisplay => SessionDisplayFormat.FormatStarted(StartedUtc, DateTimeOffset.UtcNow);
+
+    /// <summary>Full local date-time for the Started tooltip.</summary>
+    public string StartedFullDisplay => SessionDisplayFormat.FormatStartedFull(StartedUtc);
+
+    /// <summary>Scheme column text (<c>https</c>, <c>wss</c>, …); empty for CONNECT targets.</summary>
+    public string Scheme => SessionDisplayFormat.GetScheme(Url);
+
+    /// <summary>Content-Type column text without parameters; <see cref="ContentType"/> stays the raw value.</summary>
+    public string ContentTypeDisplay => SessionDisplayFormat.FormatContentType(ContentType);
 
     /// <summary>Grid display for <see cref="BodySize"/> (B / KB / MB).</summary>
     public string BodySizeDisplay => SessionDisplayFormat.FormatByteSize(BodySize);
@@ -265,7 +294,7 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     internal long AddSentBytes(long delta)
     {
         var total = Interlocked.Add(ref _sentBytes, delta);
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SentBytes)));
+        RaiseChanged(nameof(SentBytes));
         return total;
     }
 
@@ -275,7 +304,7 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     internal long AddReceivedBytes(long delta)
     {
         var total = Interlocked.Add(ref _receivedBytes, delta);
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ReceivedBytes)));
+        RaiseChanged(nameof(ReceivedBytes));
         return total;
     }
 
@@ -306,6 +335,59 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
+    private readonly object _dirtyGate = new();
+    private HashSet<string?>? _dirtyNames;
+    private int _dirtyQueued;
+
+    /// <summary>
+    /// Raises <see cref="PropertyChanged"/>. Proxy threads mutate snapshots that the grid binds to; each
+    /// raise there would marshal a binding update (and a cell re-layout) to the UI thread per property, per
+    /// row, per update. Off the UI thread the names are collected and raised together on the UI thread by
+    /// <see cref="SessionSnapshotNotifier"/>, at most once per name per flush.
+    /// </summary>
+    private void RaiseChanged(string? name)
+    {
+        if (!SessionSnapshotNotifier.ShouldDefer)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+            return;
+        }
+
+        lock (_dirtyGate)
+        {
+            (_dirtyNames ??= new HashSet<string?>()).Add(name);
+        }
+
+        if (Interlocked.Exchange(ref _dirtyQueued, 1) == 0)
+        {
+            SessionSnapshotNotifier.Enqueue(this);
+        }
+    }
+
+    /// <summary>Raises the deferred notifications; call on the UI thread.</summary>
+    internal void RaiseDeferredChanges()
+    {
+        string?[] names;
+        lock (_dirtyGate)
+        {
+            // Clear the queued flag under the gate so a concurrent setter either lands in this batch
+            // or re-enqueues the snapshot.
+            Volatile.Write(ref _dirtyQueued, 0);
+            if (_dirtyNames is null || _dirtyNames.Count == 0)
+            {
+                return;
+            }
+
+            names = _dirtyNames.ToArray();
+            _dirtyNames.Clear();
+        }
+
+        foreach (var name in names)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        }
+    }
+
     /// <returns>True when the value changed.</returns>
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? name = null)
     {
@@ -315,15 +397,25 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         }
 
         field = value;
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        RaiseChanged(name);
         if (name is nameof(ProcessId) or nameof(ProcessName))
         {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ProcessDisplay)));
+            RaiseChanged(nameof(ProcessDisplay));
+        }
+
+        if (name is nameof(ContentType))
+        {
+            RaiseChanged(nameof(ContentTypeDisplay));
+        }
+
+        if (name is nameof(Host))
+        {
+            RaiseChanged(nameof(UrlDisplay));
         }
 
         if (name is nameof(BodySize))
         {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BodySizeDisplay)));
+            RaiseChanged(nameof(BodySizeDisplay));
         }
 
         return true;

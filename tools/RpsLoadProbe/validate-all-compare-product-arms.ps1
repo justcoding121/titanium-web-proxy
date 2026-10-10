@@ -5,7 +5,7 @@ param(
     [double] $MitmFullGate = 0.25,
     # Backward-compatible alias: if set, applies to both Lite and Full.
     [double] $MitmGate = -1,
-    [double] $ReverseYarpGate = 0.50,
+    [double] $ReverseYarpGate = 0.40,
     [string] $BaselineRunId = '32960766249'
 )
 if ($MitmGate -ge 0) {

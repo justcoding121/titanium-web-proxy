@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Quic;
 using System.Net.Security;
+using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
@@ -22,7 +23,8 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers;
 internal sealed class QuicHttp3OriginServer : IAsyncDisposable
 {
     private readonly X509Certificate2 certificate;
-    private readonly QuicListener listener;
+    private readonly QuicListener v6Listener;
+    private readonly QuicListener v4Listener;
     private readonly CancellationTokenSource cts = new();
     private Func<QuicHttp3Request, Task<QuicHttp3Response>> handler =
         _ => Task.FromResult(new QuicHttp3Response(200, "ok"));
@@ -31,12 +33,54 @@ internal sealed class QuicHttp3OriginServer : IAsyncDisposable
     public QuicHttp3OriginServer(X509Certificate2 certificate)
     {
         this.certificate = certificate;
+        // HttpClient / the proxy resolve "localhost" to ::1 first, while QuicHttp3Client connects
+        // to 127.0.0.1. Both families, same port, no wildcard — a wildcard bind prompts the
+        // Windows firewall for testhost.exe.
+        const int maxAttempts = 20;
+        QuicListener? boundV6 = null;
+        QuicListener? boundV4 = null;
+        for (var attempt = 1; ; attempt++)
+        {
+            QuicListener? v6 = null;
+            try
+            {
+                v6 = Listen(new IPEndPoint(IPAddress.IPv6Loopback, 0));
+                var port = v6.LocalEndPoint.Port;
+                boundV4 = Listen(new IPEndPoint(IPAddress.Loopback, port));
+                boundV6 = v6;
+                break;
+            }
+            catch (Exception ex) when (attempt < maxAttempts && IsUdpAddressInUse(ex))
+            {
+                v6?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                boundV4?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                boundV4 = null;
+            }
+            catch
+            {
+                v6?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                boundV4?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                throw;
+            }
+        }
+
+        v6Listener = boundV6 ?? throw new InvalidOperationException("QUIC origin failed to bind ::1.");
+        v4Listener = boundV4 ?? throw new InvalidOperationException("QUIC origin failed to bind 127.0.0.1.");
+        _ = AcceptLoopAsync(v6Listener);
+        _ = AcceptLoopAsync(v4Listener);
+    }
+
+    public int Port => v6Listener.LocalEndPoint.Port;
+
+    /// <summary>Local endpoints of the ::1 and 127.0.0.1 listeners, in that order.</summary>
+    public IReadOnlyList<IPEndPoint> LocalEndPoints =>
+        new[] { v6Listener.LocalEndPoint, v4Listener.LocalEndPoint };
+
+    private QuicListener Listen(IPEndPoint endPoint)
+    {
         var options = new QuicListenerOptions
         {
-            // Dual-stack: QuicConnectionFactory connects via DnsEndPoint("localhost"), which may
-            // resolve to ::1 first. An IPv4-only Loopback listener never Accept()s those handshakes
-            // and surfaces as a misleading ALPN failure on the client.
-            ListenEndPoint = new IPEndPoint(IPAddress.IPv6Any, 0),
+            ListenEndPoint = endPoint,
             ApplicationProtocols = new List<SslApplicationProtocol> { SslApplicationProtocol.Http3 },
             ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new QuicServerConnectionOptions
             {
@@ -47,31 +91,41 @@ internal sealed class QuicHttp3OriginServer : IAsyncDisposable
                 MaxInboundUnidirectionalStreams = 3,
                 ServerAuthenticationOptions = new SslServerAuthenticationOptions
                 {
-                    ServerCertificate = this.certificate,
+                    ServerCertificate = certificate,
                     ApplicationProtocols = new List<SslApplicationProtocol> { SslApplicationProtocol.Http3 }
                 }
             })
         };
 
-        listener = QuicListener.ListenAsync(options).AsTask().GetAwaiter().GetResult();
-        _ = AcceptLoopAsync();
+        return QuicListener.ListenAsync(options).AsTask().GetAwaiter().GetResult();
     }
 
-    public int Port => listener.LocalEndPoint.Port;
+    private static bool IsUdpAddressInUse(Exception ex)
+    {
+        for (Exception? cur = ex; cur != null; cur = cur.InnerException)
+        {
+            if (cur is SocketException se &&
+                (se.SocketErrorCode == SocketError.AddressAlreadyInUse
+                 || se.NativeErrorCode is 10048 or 98))
+                return true;
+        }
+
+        return false;
+    }
 
     public int AcceptedConnectionCount => Volatile.Read(ref acceptedConnectionCount);
 
     public void HandleRequest(Func<QuicHttp3Request, Task<QuicHttp3Response>> requestHandler)
         => handler = requestHandler;
 
-    private async Task AcceptLoopAsync()
+    private async Task AcceptLoopAsync(QuicListener quicListener)
     {
         while (!cts.IsCancellationRequested)
         {
             QuicConnection connection;
             try
             {
-                connection = await listener.AcceptConnectionAsync(cts.Token);
+                connection = await quicListener.AcceptConnectionAsync(cts.Token);
             }
             catch
             {
@@ -198,7 +252,15 @@ internal sealed class QuicHttp3OriginServer : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         cts.Cancel();
-        await listener.DisposeAsync();
+        try
+        {
+            await v6Listener.DisposeAsync();
+        }
+        finally
+        {
+            await v4Listener.DisposeAsync();
+        }
+
         cts.Dispose();
         certificate.Dispose();
     }

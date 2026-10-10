@@ -59,12 +59,11 @@ public class GraphQlMatchingIntegrationTests
         using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
 
         using var miss = new StringContent("""{"operationName":"Other","query":"query Other { x }"}""", Encoding.UTF8, "application/json");
-        // Unresolvable host: missed AutoResponder fails fast rather than hanging DNS.
-        await Assert.ThrowsExactlyAsync<HttpRequestException>(async () =>
-        {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            _ = await http.PostAsync("http://127.0.0.1:9/graphql", miss, cts.Token);
-        });
+        // Refused origin: a missed AutoResponder fails fast (no hanging DNS). The proxy now answers an
+        // unreachable origin with 502 Bad Gateway instead of silently closing the connection.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        using var missResponse = await http.PostAsync("http://127.0.0.1:9/graphql", miss, cts.Token);
+        Assert.AreEqual(HttpStatusCode.BadGateway, missResponse.StatusCode);
 
         using var hit = new StringContent("""{"operationName":"GetUser","query":"query GetUser { user { id } }"}""", Encoding.UTF8, "application/json");
         using var cts2 = new CancellationTokenSource(TimeSpan.FromSeconds(10));

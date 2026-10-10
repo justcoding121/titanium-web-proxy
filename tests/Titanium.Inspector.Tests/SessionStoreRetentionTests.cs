@@ -665,7 +665,7 @@ public class SessionStoreRetentionTests
     public void BuildBodyCaptureHint_ExplainsDiskPrunedBody()
     {
         var hint = typeof(MainWindowViewModel).GetMethod(
-            "BuildBodyCaptureHint",
+            "BuildSideCaptureHint",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
         var snap = new SessionSnapshot
         {
@@ -674,10 +674,282 @@ public class SessionStoreRetentionTests
             ResponseBodyCapture = BodyCaptureState.Complete,
             BodySize = 12_000,
         };
-        var text = (string)hint.Invoke(null, [snap])!;
+        var text = (string)hint.Invoke(null, [snap, false, false])!;
         StringAssert.Contains(text, "disk cache limit");
         StringAssert.Contains(text, "Headers in the list are still available");
     }
+
+    [TestMethod]
+    public void RunFolder_IsNotCreated_UntilFirstWrite()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            var started = new DateTimeOffset(2021, 5, 5, 1, 2, 3, TimeSpan.Zero);
+            using var first = new SessionBodyDiskCache(dir, maxBytes: 8_000_000, maxAge: TimeSpan.FromDays(1), started);
+            using var second = new SessionBodyDiskCache(dir, maxBytes: 8_000_000, maxAge: TimeSpan.FromDays(1), started);
+            Assert.AreNotEqual(
+                Path.GetFullPath(first.RunDirectoryPath),
+                Path.GetFullPath(second.RunDirectoryPath));
+            Assert.IsFalse(Directory.Exists(first.RunDirectoryPath));
+            Assert.IsFalse(Directory.Exists(second.RunDirectoryPath));
+            Assert.AreEqual(0, CountChildDirectories(dir));
+
+            first.Write(MakeSession(1, 32));
+            Assert.IsTrue(Directory.Exists(first.RunDirectoryPath));
+            Assert.IsTrue(File.Exists(first.PathFor(1)));
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [TestMethod]
+    public void Startup_SweepsEmptyRunFolders_AndKeepsNonEmpty()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            var empty = Path.Combine(dir, "20190101-000000-000");
+            var kept = Path.Combine(dir, "20190202-000000-000");
+            Directory.CreateDirectory(empty);
+            Directory.CreateDirectory(kept);
+            File.WriteAllBytes(Path.Combine(kept, "4.har"), [1, 2, 3, 4]);
+
+            using var cache = new SessionBodyDiskCache(
+                dir,
+                maxBytes: 50_000_000,
+                maxAge: TimeSpan.FromDays(7),
+                new DateTimeOffset(2024, 6, 1, 0, 0, 0, TimeSpan.Zero));
+
+            Assert.IsFalse(Directory.Exists(empty));
+            Assert.IsTrue(File.Exists(Path.Combine(kept, "4.har")));
+            Assert.IsFalse(Directory.Exists(cache.RunDirectoryPath));
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [TestMethod]
+    public async Task Clear_DeletesEvictedRows_AndDoesNotLeaveEmptyRunFolder()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            using var store = new SessionStore(
+                new SessionStoreOptions
+                {
+                    MaxSessionsInMemory = 1,
+                    SpillBodiesToDisk = true,
+                    DiskCacheMaxBytes = 64L * 1024 * 1024,
+                },
+                dir);
+
+            store.Add(MakeSession(1, 64));
+            await store.FlushSpillAsync();
+            store.Add(MakeSession(2, 64));
+            await store.FlushSpillAsync();
+            Assert.IsNull(store.TryGet(1), "Memory cap evicts the oldest row");
+            Assert.IsTrue(HarExists(dir, 1));
+            Assert.IsTrue(HarExists(dir, 2));
+
+            var freed = store.Clear();
+            Assert.IsTrue(freed > 0);
+            Assert.AreEqual(0, store.Count);
+            await store.FlushDiskCleanupAsync();
+            Assert.IsFalse(HarExists(dir, 1));
+            Assert.IsFalse(HarExists(dir, 2));
+            Assert.AreEqual(0, CountChildDirectories(dir));
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [TestMethod]
+    public async Task Clear_LeavesPreviousRunFolders()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            string previous;
+            using (var first = new SessionStore(LargeStoreOptions(), dir))
+            {
+                first.Add(MakeSession(1, 64));
+                await first.FlushSpillAsync();
+                previous = first.DiskCacheRunDirectoryPath!;
+            }
+
+            using var second = new SessionStore(LargeStoreOptions(), dir);
+            second.Add(MakeSession(2, 64));
+            await second.FlushSpillAsync();
+            Assert.AreEqual(2, second.GetCacheStats().RunCount);
+
+            second.Clear();
+            await second.FlushDiskCleanupAsync();
+            Assert.IsTrue(File.Exists(Path.Combine(previous, "1.har")));
+            Assert.IsFalse(HarExists(dir, 2));
+            Assert.AreEqual(1, CountChildDirectories(dir));
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [TestMethod]
+    public async Task ApplyOptions_LowerDiskLimit_RemovesEmptiedOldRunFolder()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            string oldRun;
+            using (var old = new SessionBodyDiskCache(
+                dir,
+                maxBytes: 50_000_000,
+                maxAge: TimeSpan.FromDays(7),
+                new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero)))
+            {
+                old.Write(MakeSession(1, 400));
+                oldRun = old.RunDirectoryPath;
+            }
+
+            using var store = new SessionStore(LargeStoreOptions(), dir);
+            Assert.IsTrue(Directory.Exists(oldRun));
+            store.ApplyOptions(new SessionStoreOptions
+            {
+                MaxSessionsInMemory = 100,
+                SpillBodiesToDisk = true,
+                DiskCacheMaxBytes = 1,
+            });
+            await store.FlushDiskCleanupAsync();
+            Assert.IsFalse(Directory.Exists(oldRun));
+            Assert.AreEqual(0, CountChildDirectories(dir));
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [TestMethod]
+    public async Task Remove_SweepsEmptyRunFolders_AndKeepsNonEmptyOnes()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            using var store = new SessionStore(LargeStoreOptions(), dir);
+            store.Add(MakeSession(1, 64));
+            await store.FlushSpillAsync();
+
+            var empty = Path.Combine(dir, "19990101-000000-000");
+            var oldRun = Path.Combine(dir, "19990202-000000-000");
+            Directory.CreateDirectory(empty);
+            Directory.CreateDirectory(oldRun);
+            var oldHar = Path.Combine(oldRun, "9.har");
+            File.WriteAllText(oldHar, "{}");
+
+            store.Remove([1]);
+            await store.FlushDiskCleanupAsync();
+            Assert.IsFalse(HarExists(dir, 1));
+            Assert.IsFalse(Directory.Exists(empty));
+            Assert.IsTrue(File.Exists(oldHar));
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [TestMethod]
+    public async Task ClearAllSavedRuns_DeletesEveryRun_AndRejectsStaleSpill()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            string previous;
+            using (var older = new SessionBodyDiskCache(
+                dir,
+                maxBytes: 64L * 1024 * 1024,
+                maxAge: TimeSpan.FromDays(7),
+                new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero)))
+            {
+                older.Write(MakeSession(1, 64));
+                previous = older.RunDirectoryPath;
+            }
+
+            using var cache = new SessionBodyDiskCache(
+                dir,
+                maxBytes: 64L * 1024 * 1024,
+                maxAge: TimeSpan.FromDays(7),
+                new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero));
+            var generation = cache.CurrentGeneration;
+            cache.Write(MakeSession(2, 64), generation);
+            Assert.IsTrue(Directory.Exists(previous));
+            Assert.AreEqual(2, cache.GetCacheStats().RunCount);
+
+            var freed = cache.ScheduleClearAllRuns();
+            Assert.IsTrue(freed > 0);
+            Assert.AreNotEqual(generation, cache.CurrentGeneration);
+            Assert.AreEqual(0, cache.Write(MakeSession(2, 64), generation).Count);
+
+            await cache.FlushCleanupAsync();
+            Assert.IsFalse(Directory.Exists(previous));
+            Assert.IsFalse(Directory.EnumerateFiles(dir, "*.har", SearchOption.AllDirectories).Any());
+
+            cache.Write(MakeSession(3, 32), cache.CurrentGeneration);
+            Assert.IsTrue(File.Exists(cache.PathFor(3)));
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [TestMethod]
+    public async Task ClearAllSavedRuns_KeepsListRows_AndMarksBodiesMissing()
+    {
+        var dir = TempCacheDir();
+        try
+        {
+            using var store = new SessionStore(LargeStoreOptions(), dir);
+            store.Add(MakeSession(1, 64));
+            await store.FlushSpillAsync();
+            Assert.IsTrue(store.TryGet(1)!.BodiesOnDisk);
+
+            var freed = store.ClearAllSavedRuns();
+            Assert.IsTrue(freed > 0);
+            Assert.AreEqual(1, store.Count);
+            Assert.IsTrue(store.TryGet(1)!.BodiesMissingFromDisk);
+
+            await store.FlushDiskCleanupAsync();
+            Assert.IsFalse(Directory.EnumerateFiles(dir, "*.har", SearchOption.AllDirectories).Any());
+
+            store.Add(MakeSession(2, 32));
+            await store.FlushSpillAsync();
+            Assert.IsTrue(HarExists(dir, 2));
+            Assert.IsFalse(store.TryGet(2)!.BodiesMissingFromDisk);
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    private static SessionStoreOptions LargeStoreOptions() =>
+        new()
+        {
+            MaxSessionsInMemory = 100,
+            SpillBodiesToDisk = true,
+            DiskCacheMaxBytes = 64L * 1024 * 1024,
+        };
+
+    private static int CountChildDirectories(string root) =>
+        Directory.Exists(root) ? Directory.EnumerateDirectories(root).Count() : 0;
 
     private static string? FindHar(string root, long id) =>
         Directory.Exists(root)

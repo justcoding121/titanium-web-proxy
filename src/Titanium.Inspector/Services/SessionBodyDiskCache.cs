@@ -3,11 +3,15 @@ using System.Text.Json;
 
 namespace Titanium.Inspector.Services;
 
+/// <summary>Tracked HAR files under the session cache, for the retention window.</summary>
+public readonly record struct SessionCacheStats(int RunCount, long TotalBytes);
+
 /// <summary>
 /// On-disk session cache under a size budget. Each Inspector process run writes into a
 /// timestamped subfolder under the cache root (<c>{root}/{yyyyMMdd-HHmmss-fff}/{id}.har</c>)
-/// so restarted session ids never overwrite another run. Disk budget counts all runs and
-/// deletes oldest HAR files first (across folders).
+/// so restarted session ids never overwrite another run. The run folder is created on the
+/// first write. Disk budget counts all runs and deletes oldest HAR files first (across folders).
+/// Empty run folders other than the current run are removed.
 /// </summary>
 public sealed class SessionBodyDiskCache : IDisposable
 {
@@ -28,6 +32,8 @@ public sealed class SessionBodyDiskCache : IDisposable
         StringComparer.OrdinalIgnoreCase);
     private long _trackedBytes;
     private bool _disposed;
+    private static readonly object RunPathReserveGate = new();
+    private static readonly HashSet<string> ReservedRunPaths = new(StringComparer.OrdinalIgnoreCase);
 
     public SessionBodyDiskCache(string rootDirectory, long maxBytes, TimeSpan maxAge)
         : this(rootDirectory, maxBytes, maxAge, runStartedUtc: DateTimeOffset.UtcNow)
@@ -44,6 +50,7 @@ public sealed class SessionBodyDiskCache : IDisposable
         Directory.CreateDirectory(_rootDirectory);
         _runDirectory = CreateRunDirectory(_rootDirectory, runStartedUtc);
         RebuildIndexAndEnforceBudget();
+        SweepEmptyRunFolders();
     }
 
     /// <summary>Updates disk budget. Index updates return immediately; file deletes run in the background.</summary>
@@ -97,6 +104,63 @@ public sealed class SessionBodyDiskCache : IDisposable
 
     /// <summary>Alias for <see cref="RootDirectoryPath"/> (UI / options).</summary>
     public string DirectoryPath => _rootDirectory;
+
+    /// <summary>
+    /// Run count and tracked bytes. Run count includes indexed parents and on-disk run
+    /// folders that still contain a HAR. Bytes come from the size index.
+    /// </summary>
+    public SessionCacheStats GetCacheStats()
+    {
+        HashSet<string> runs;
+        long bytes;
+        lock (_gate)
+        {
+            bytes = _trackedBytes;
+            runs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var path in _index.Keys)
+            {
+                var dir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(dir))
+                {
+                    runs.Add(Path.GetFullPath(dir));
+                }
+            }
+        }
+
+        if (!Directory.Exists(_rootDirectory))
+        {
+            return new SessionCacheStats(runs.Count, bytes);
+        }
+
+        try
+        {
+            var rootFull = Path.GetFullPath(_rootDirectory);
+            if (Directory.EnumerateFiles(_rootDirectory, SessionFileSearchPattern).Any())
+            {
+                runs.Add(rootFull);
+            }
+
+            foreach (var sub in Directory.EnumerateDirectories(_rootDirectory))
+            {
+                var full = Path.GetFullPath(sub);
+                if (runs.Contains(full))
+                {
+                    continue;
+                }
+
+                if (Directory.EnumerateFiles(sub, SessionFileSearchPattern).Any())
+                {
+                    runs.Add(full);
+                }
+            }
+        }
+        catch
+        {
+            // Best-effort stats while a delete is in progress.
+        }
+
+        return new SessionCacheStats(runs.Count, bytes);
+    }
 
     public string PathFor(long sessionId) =>
         Path.Combine(_runDirectory, sessionId.ToString("D", CultureInfo.InvariantCulture) + ".har");
@@ -250,25 +314,29 @@ public sealed class SessionBodyDiskCache : IDisposable
     }
 
     /// <summary>
-    /// Drops the current run folder from the index and moves it aside. New writes use a fresh folder.
-    /// The moved folder is deleted on a background thread. Other run folders are left in place.
+    /// Drops the current run folder from the index and moves it aside. New writes use a fresh
+    /// folder path, created on the next write. The moved folder is deleted on a background thread.
+    /// Other run folders are left in place. Returns tracked bytes queued for deletion.
     /// </summary>
-    public void AbandonCurrentRun()
+    public long AbandonCurrentRun()
     {
         string old;
+        long freed;
         lock (_writeGate)
         {
             lock (_gate)
             {
                 old = _runDirectory;
                 Interlocked.Increment(ref _runGeneration);
+                var before = _trackedBytes;
                 RemoveIndexEntriesUnder(old);
+                freed = Math.Max(0, before - _trackedBytes);
                 _runDirectory = CreateRunDirectory(_rootDirectory, DateTimeOffset.UtcNow);
             }
 
             if (!Directory.Exists(old))
             {
-                return;
+                return freed;
             }
 
             var trash = Path.Combine(Path.GetTempPath(), "ti-discard-" + Guid.NewGuid().ToString("N"));
@@ -282,6 +350,32 @@ public sealed class SessionBodyDiskCache : IDisposable
                 QueueCleanup([old]);
             }
         }
+
+        return freed;
+    }
+
+    /// <summary>
+    /// Rotates the current run so in-flight spills are rejected, then deletes every run folder
+    /// on the cleanup queue. The replacement folder is not created until the next write.
+    /// Returns tracked bytes queued for deletion. Does not enumerate the cache on the caller thread.
+    /// </summary>
+    public long ScheduleClearAllRuns()
+    {
+        long freed;
+        lock (_writeGate)
+        {
+            lock (_gate)
+            {
+                freed = _trackedBytes;
+                Interlocked.Increment(ref _runGeneration);
+                _index.Clear();
+                _trackedBytes = 0;
+                _runDirectory = CreateRunDirectory(_rootDirectory, DateTimeOffset.UtcNow);
+            }
+        }
+
+        QueueFullWipe();
+        return freed;
     }
 
     /// <summary>Removes session files from the size index immediately and deletes them in the background.</summary>
@@ -406,7 +500,6 @@ public sealed class SessionBodyDiskCache : IDisposable
             }
         }
 
-        Directory.CreateDirectory(_runDirectory);
         lock (_gate)
         {
             _index.Clear();
@@ -636,16 +729,22 @@ public sealed class SessionBodyDiskCache : IDisposable
             return;
         }
 
-        try
+        for (var attempt = 0; attempt < 8; attempt++)
         {
-            if (Directory.Exists(full) && IsEmptyDirectory(full))
+            try
             {
+                if (!Directory.Exists(full) || !IsEmptyDirectory(full))
+                {
+                    return;
+                }
+
                 Directory.Delete(full, recursive: false);
+                return;
             }
-        }
-        catch
-        {
-            // Best-effort.
+            catch
+            {
+                Thread.Sleep(25 * (attempt + 1));
+            }
         }
     }
 
@@ -736,6 +835,103 @@ public sealed class SessionBodyDiskCache : IDisposable
         {
             TryDeletePathWithRetry(path);
         }
+
+        SweepEmptyRunFolders();
+    }
+
+    private void QueueFullWipe()
+    {
+        lock (_cleanupGate)
+        {
+            _cleanupTask = _cleanupTask.ContinueWith(
+                _ => RunFullWipe(),
+                CancellationToken.None,
+                TaskContinuationOptions.RunContinuationsAsynchronously,
+                TaskScheduler.Default);
+        }
+    }
+
+    /// <summary>
+    /// Deletes every run folder except whichever path is current at the moment of each delete,
+    /// so a second clear cannot lose the newest run to an older wipe.
+    /// </summary>
+    private void RunFullWipe()
+    {
+        LastCleanupThreadId = Environment.CurrentManagedThreadId;
+        if (!Directory.Exists(_rootDirectory))
+        {
+            return;
+        }
+
+        List<string> dirs;
+        try
+        {
+            dirs = Directory.EnumerateDirectories(_rootDirectory).ToList();
+        }
+        catch
+        {
+            return;
+        }
+
+        foreach (var sub in dirs)
+        {
+            if (IsCurrentRunDirectory(sub))
+            {
+                continue;
+            }
+
+            TryDeletePathWithRetry(sub);
+        }
+
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(_rootDirectory).ToList())
+            {
+                TryDeletePathWithRetry(file);
+            }
+        }
+        catch
+        {
+            // Best-effort.
+        }
+    }
+
+    private bool IsCurrentRunDirectory(string path)
+    {
+        lock (_writeGate)
+        {
+            return string.Equals(
+                Path.GetFullPath(path),
+                Path.GetFullPath(_runDirectory),
+                StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    /// <summary>Deletes empty subfolders except the current run and the cache root.</summary>
+    private void SweepEmptyRunFolders()
+    {
+        lock (_writeGate)
+        {
+            if (!Directory.Exists(_rootDirectory))
+            {
+                return;
+            }
+
+            List<string> subs;
+            try
+            {
+                subs = Directory.EnumerateDirectories(_rootDirectory).ToList();
+            }
+            catch
+            {
+                return;
+            }
+
+            foreach (var sub in subs)
+            {
+                TryDeleteEmptyRunFolder(sub);
+            }
+        }
     }
 
     private static void TryDeletePathWithRetry(string path)
@@ -783,17 +979,40 @@ public sealed class SessionBodyDiskCache : IDisposable
         }
     }
 
+    /// <summary>
+    /// Picks a unique run-folder path. The directory is created on the first write so a run
+    /// that captures nothing does not leave an empty folder. The name is reserved in-process
+    /// so two caches started in the same millisecond do not share a path before either exists.
+    /// </summary>
     internal static string CreateRunDirectory(string root, DateTimeOffset startedUtc)
     {
         var stamp = startedUtc.UtcDateTime.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture);
-        var path = Path.Combine(root, stamp);
-        // Extremely unlikely collision within the same millisecond.
-        if (Directory.Exists(path))
+        lock (RunPathReserveGate)
         {
-            path = Path.Combine(root, stamp + "-" + Guid.NewGuid().ToString("N")[..6]);
-        }
+            var path = Path.Combine(root, stamp);
+            if (TryReserveRunPath(path))
+            {
+                return path;
+            }
 
-        Directory.CreateDirectory(path);
-        return path;
+            for (var i = 0; i < 5; i++)
+            {
+                path = Path.Combine(root, stamp + "-" + Guid.NewGuid().ToString("N")[..6]);
+                if (TryReserveRunPath(path))
+                {
+                    return path;
+                }
+            }
+
+            path = Path.Combine(root, stamp + "-" + Guid.NewGuid().ToString("N"));
+            TryReserveRunPath(path);
+            return path;
+        }
+    }
+
+    private static bool TryReserveRunPath(string path)
+    {
+        var full = Path.GetFullPath(path);
+        return !Directory.Exists(full) && ReservedRunPaths.Add(full);
     }
 }

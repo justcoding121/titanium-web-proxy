@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace Titanium.Inspector.Services;
@@ -192,7 +193,8 @@ public static class SessionSearch
         int totalCount,
         string? searchQuery,
         int retentionEvictedTotal,
-        DateTimeOffset? oldestStartedUtc)
+        DateTimeOffset? oldestStartedUtc,
+        DateTimeOffset? nowUtc = null)
     {
         var searching = !string.IsNullOrWhiteSpace(searchQuery);
         var kept = FormatSessionCount(totalCount);
@@ -205,16 +207,29 @@ public static class SessionSearch
 
         var emptySearch = searching && visibleCount == 0 && totalCount > 0;
 
-        if (retentionEvictedTotal > 0 && oldestStartedUtc is { } oldest)
+        // Always show the oldest kept start time when the list is non-empty — that is the
+        // capture window, whether or not retention has trimmed older rows yet.
+        if (oldestStartedUtc is { } oldest)
         {
-            // Retention dropped older sessions: the list is the most recent kept window.
-            text += $" · since {oldest.ToLocalTime():HH:mm}";
+            text += $" · since {FormatSince(oldest, nowUtc ?? DateTimeOffset.UtcNow)}";
         }
 
         if (emptySearch)
             text += FormatEmptySearchRetentionHint(retentionEvictedTotal);
 
         return text;
+    }
+
+    /// <summary>
+    /// Local start time of the oldest kept session: <c>HH:mm</c> when it is today, otherwise with the
+    /// date (<c>Oct 6, 14:05</c>) so a capture left running past midnight is not misread as today.
+    /// </summary>
+    public static string FormatSince(DateTimeOffset oldestUtc, DateTimeOffset nowUtc)
+    {
+        var oldest = oldestUtc.ToLocalTime();
+        return oldest.Date == nowUtc.ToLocalTime().Date
+            ? oldest.ToString("HH:mm", CultureInfo.CurrentCulture)
+            : oldest.ToString("MMM d, HH:mm", CultureInfo.CurrentCulture);
     }
 
     /// <summary>Compact round thousands (<c>10k</c>) so a retention cap is readable in the status bar.</summary>

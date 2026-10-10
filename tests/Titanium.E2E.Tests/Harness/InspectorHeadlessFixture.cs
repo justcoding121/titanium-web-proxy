@@ -27,7 +27,7 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
     public RecordingSystemProxyController Proxy { get; } = new();
     public InterceptionService Interception { get; private set; } = null!;
 
-    public async Task StartAsync(bool visualSkia = false, bool useAvaloniaDialogs = false)
+    public async Task StartAsync(bool visualSkia = false, bool useAvaloniaDialogs = false, double windowHeight = 800)
     {
         // visualSkia retained for call-site clarity; session always uses Skia.
         _ = visualSkia;
@@ -62,7 +62,7 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
             }
 
             Window.Width = 1280;
-            Window.Height = 800;
+            Window.Height = windowHeight;
             Window.Show();
             Robot = new InspectorUiRobot(Window);
             Dispatcher.UIThread.RunJobs();

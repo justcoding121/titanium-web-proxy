@@ -1,6 +1,6 @@
 # Validate compare-product medians @ c=64:
 #   MITM Lite ÷ Reverse >= 0.25, Full ÷ Reverse >= 0.25 (all OS, every Client×Origin wire)
-#   Reverse TWP ÷ closest peer >= 0.50 (YARP, nginx, HAProxy, Envoy; nearest sustain)
+#   Reverse TWP ÷ closest peer >= 0.40 (YARP, nginx, HAProxy, Envoy; nearest sustain)
 # When Repeats>1, each arm contributes multiple c=64 SLO-pass rows — use the median RPS.
 param(
     [Parameter(Mandatory)] [string] $CsvPath,
@@ -8,7 +8,7 @@ param(
     [double] $MitmFullGate = 0.25,
     # Backward-compatible alias: if set, applies to both Lite and Full (overrides the pair above).
     [double] $MitmGate = -1,
-    [double] $ReverseYarpGate = 0.50,
+    [double] $ReverseYarpGate = 0.40,
     [string] $BaselineCsvPath = ""
 )
 

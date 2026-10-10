@@ -387,6 +387,66 @@ public partial class ProxyServer : IDisposable
     }
 
     /// <summary>
+    ///     Learns from clients that keep rejecting the MITM certificate: consecutive aborted client TLS
+    ///     handshakes for one host (no successful handshake in between) before the host is bypassed on
+    ///     later CONNECTs. Typical cause: certificate pinning, or a client that does not trust the proxy
+    ///     root. Only active while <see cref="EnableDecryptFailureBypass" /> is on. 0 disables. Default 5.
+    /// </summary>
+    public int ClientHandshakeRejectThreshold
+    {
+        get => ClientHandshakeRejects.Threshold;
+        set => ClientHandshakeRejects.Threshold = value;
+    }
+
+    /// <summary>
+    ///     Window in which <see cref="ClientHandshakeRejectThreshold" /> failures must occur. Default 2 minutes.
+    /// </summary>
+    public TimeSpan ClientHandshakeRejectWindow
+    {
+        get => ClientHandshakeRejects.Window;
+        set => ClientHandshakeRejects.Window = value;
+    }
+
+    internal Network.ClientHandshakeRejectTracker ClientHandshakeRejects { get; } = new();
+
+    /// <summary>
+    ///     Called after a client completed the MITM TLS handshake: proves the client trusts the proxy
+    ///     certificate, so earlier aborted handshakes for the host no longer count.
+    /// </summary>
+    internal void RecordClientHandshakeSuccess(string? host)
+    {
+        if (EnableDecryptFailureBypass)
+            ClientHandshakeRejects.RecordSuccess(host);
+    }
+
+    /// <summary>
+    ///     Called when the client aborted the MITM TLS handshake. When the host has now been rejected
+    ///     <see cref="ClientHandshakeRejectThreshold" /> times in a row, activates decrypt bypass so the
+    ///     client's retries stop hitting a handshake that can never succeed.
+    /// </summary>
+    internal bool TryRecordClientHandshakeReject(string? host, Exception error)
+    {
+        if (!EnableDecryptFailureBypass || string.IsNullOrWhiteSpace(host))
+            return false;
+
+        if (!Network.Tcp.DecryptFailureLearning.IsClientHandshakeRejection(error))
+            return false;
+
+        if (!ClientHandshakeRejects.RecordFailure(host, DateTime.UtcNow))
+            return false;
+
+        var wasActive = DecryptFailureBypassCache.IsBypassActive(host);
+        DecryptFailureBypassCache.MarkBypassed(host);
+        if (!wasActive)
+        {
+            ProxyLog.ClientRejectedCertificateBypassLearned(logger, host, ClientHandshakeRejects.Threshold);
+            RaiseDecryptFailureBypassChanged(host);
+        }
+
+        return true;
+    }
+
+    /// <summary>
     ///     Raised when a host becomes actively bypassed (threshold reached or same-CONNECT mark).
     ///     Handlers must not block; Inspector marshals to the UI thread.
     /// </summary>
@@ -441,7 +501,8 @@ public partial class ProxyServer : IDisposable
 
         if (isActive && !wasActive)
         {
-            ProxyLog.DecryptFailureBypassLearned(logger, host);
+            ProxyLog.DecryptFailureBypassLearned(logger, host,
+                forceBypass ? "forced after a failed MITM handshake" : "origin TLS failure");
             RaiseDecryptFailureBypassChanged(host);
         }
 
@@ -478,7 +539,7 @@ public partial class ProxyServer : IDisposable
 
         if (isActive && !wasActive)
         {
-            ProxyLog.DecryptFailureBypassLearned(logger, host);
+            ProxyLog.DecryptFailureBypassLearned(logger, host, $"HTTP {statusCode} block");
             RaiseDecryptFailureBypassChanged(host);
         }
 
@@ -2007,6 +2068,14 @@ public partial class ProxyServer : IDisposable
     private void OnException(HttpClientStream? clientStream, Exception exception)
     {
         _ = clientStream; // Reserved for attaching connection context to future diagnostics.
+        if (exception is Exceptions.ProxyConnectException { ClientHandshakeHost: { } handshakeHost } handshakeAbort
+            && handshakeAbort.InnerException != null
+            && Network.Tcp.DecryptFailureLearning.IsClientHandshakeRejection(handshakeAbort.InnerException))
+        {
+            ProxyLog.ClientHandshakeAborted(logger, handshakeHost, handshakeAbort.InnerException);
+            return;
+        }
+
         ProxyDiagnostics.ReportException(logger, "Unhandled exception in proxy", exception);
     }
 
@@ -2055,6 +2124,13 @@ public partial class ProxyServer : IDisposable
         endPoint.AcceptLoopCts?.Dispose();
         endPoint.AcceptLoopCts = null;
     }
+
+    /// <summary>
+    ///     How many times an ephemeral TCP+QUIC dual-listen may rebind. Windows UDP exclusion
+    ///     ranges are about 100 ports wide and the ephemeral allocator walks them in order, so a
+    ///     short retry stays inside the hole and the UDP bind fails with WSAEADDRINUSE.
+    /// </summary>
+    private const int MaxEphemeralDualListenAttempts = 128;
 
     /// <summary>
     ///     True when <paramref name="ex"/> (or an inner exception) is WSAEADDRINUSE / EADDRINUSE.

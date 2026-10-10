@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 Titanium.Web.Proxy.ClientProcessId
 static Titanium.Web.Proxy.ClientProcessId.IsSupported.get -> bool
 Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming
@@ -307,3 +307,7 @@ Titanium.Web.Proxy.Http.HeaderLimitsExceededException.IsCount.get -> bool
 Titanium.Web.Proxy.Http.HeaderLimitsExceededException.IsRequest.get -> bool
 Titanium.Web.Proxy.Http.HeaderLimitsExceededException.Limit.get -> long
 Titanium.Web.Proxy.Http.HeaderLimitsExceededException.Observed.get -> long
+Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectThreshold.get -> int
+Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectThreshold.set -> void
+Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectWindow.get -> System.TimeSpan
+Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectWindow.set -> void

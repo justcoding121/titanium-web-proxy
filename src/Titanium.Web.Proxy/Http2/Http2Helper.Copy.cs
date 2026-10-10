@@ -1132,6 +1132,13 @@ namespace Titanium.Web.Proxy.Http2
                         // once :authority / method / path are known (predicate evaluation below).
                         if (!httpInterceptionEnabled)
                             args.IsFastPath = true;
+                        // Origin HEADERS for a client-initiated stream we no longer track: the client reset it
+                        // (or it was finalized) while the origin was still answering. There is no request
+                        // behind this session (empty URL, HTTP version 0.0), so user BeforeResponse /
+                        // AfterResponse handlers must not see it. The block is still decoded (HPACK state is
+                        // connection-wide) and relayed exactly as on the interception-off path.
+                        else if (!isClient && existingStreamState == null && (streamId & 1) == 1)
+                            args.IsFastPath = true;
                         connectionState.RegisterStream(streamId, args);
                     }
 

@@ -122,10 +122,17 @@ public class TransparentQuicProxyEndPoint : TransparentBaseProxyEndPoint, IQuicI
     public bool AdvertiseToHttpClients { get; set; } = false;
 
     /// <summary>
-    ///     Internal: the underlying <see cref="QuicListener" /> instance. Set and cleared by
-    ///     <see cref="ProxyServer" /> on Start/Stop.
+    ///     Internal: the primary <see cref="QuicListener" />. For a loopback endpoint this is <c>::1</c>;
+    ///     <see cref="LoopbackV4QuicListener" /> is the paired <c>127.0.0.1</c> listener.
+    ///     Set and cleared by <see cref="ProxyServer" /> on Start/Stop.
     /// </summary>
     internal QuicListener? QuicListener { get; set; }
+
+    /// <summary>
+    ///     Internal: <c>127.0.0.1</c> listener used together with <see cref="QuicListener" /> when this
+    ///     endpoint is loopback. <see langword="null" /> otherwise.
+    /// </summary>
+    internal QuicListener? LoopbackV4QuicListener { get; set; }
 
     /// <summary>
     ///     Transient per-connection <see cref="BeforeQuicAuthenticateEventArgs" /> created in the
@@ -141,6 +148,12 @@ public class TransparentQuicProxyEndPoint : TransparentBaseProxyEndPoint, IQuicI
     {
         get => QuicListener;
         set => QuicListener = value;
+    }
+
+    QuicListener? IQuicInboundEndPoint.LoopbackV4QuicListener
+    {
+        get => LoopbackV4QuicListener;
+        set => LoopbackV4QuicListener = value;
     }
 
     ConditionalWeakTable<QuicConnection, BeforeQuicAuthenticateEventArgs> IQuicInboundEndPoint.PendingQuicAuthArgs =>

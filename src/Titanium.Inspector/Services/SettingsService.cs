@@ -151,6 +151,17 @@ public sealed class InspectorSettings
 
     /// <summary>Active network throttle profile name (<c>None</c>, <c>Slow 3G</c>, …).</summary>
     public string NetworkThrottleProfile { get; set; } = "None";
+
+    /// <summary>
+    /// When set, the user chose whether the Inspect headers pane is collapsed.
+    /// Null keeps the automatic rule (collapsed when the pane is shorter than 420px).
+    /// </summary>
+    public bool? InspectHeadersCollapsed { get; set; }
+
+    /// <summary>
+    /// Headers' share of the headers-plus-body split (about 0.12 to 0.70). 0 means the default, one third.
+    /// </summary>
+    public double InspectHeadersRatio { get; set; }
 }
 
 public sealed class SettingsService

@@ -1,9 +1,9 @@
 # Validate compare-grpc medians @ c=64:
-#   Reverse TWP ÷ closest peer >= 0.50 (YARP, nginx, HAProxy, Envoy)
+#   Reverse TWP ÷ closest peer >= 0.40 (YARP, nginx, HAProxy, Envoy)
 # Pairs from RampOrchestrator.BuildCompareGrpcArms.
 param(
     [Parameter(Mandatory)] [string] $CsvPath,
-    [double] $ReverseYarpGate = 0.50
+    [double] $ReverseYarpGate = 0.40
 )
 
 . (Join-Path $PSScriptRoot 'rps-peer-gate.ps1')

@@ -69,9 +69,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     /// <summary>When &gt; 0, <see cref="OnSessionsRemoved"/> skips retention accounting/status.</summary>
     private int _userRemovalDepth;
     private SessionSnapshot? _selected;
-    private string _selectedHeaders = "";
-    private string _selectedBody = "";
-    private string _selectedHex = "";
+    private string _selectedRequestHeaders = "";
+    private string _selectedResponseHeaders = "";
+    private string _selectedRequestBody = "";
+    private string _selectedResponseBody = "";
     private string _selectedFrames = "";
     private bool _capturing = true;
     private bool _systemProxy;
@@ -115,6 +116,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     private string? _scriptOnResponse;
     private int _selectedOuterPaneIndex;
     private int _selectedInspectTabIndex;
+    private int _lastCoreInspectTab;
     private int _selectedToolsTabIndex;
     private int _selectedPaneNavIndex;
     private bool _showSessionDetails;
@@ -249,10 +251,25 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         TrustFirefoxCaCommand = Cmd(TrustFirefoxCaAsync);
         UntrustCaCommand = Cmd(UntrustCaAsync);
         RotateCaCommand = Cmd(RotateCaAsync);
+        RemoveOldRootCasCommand = Cmd(RemoveOldRootCasAsync);
         ExportCaCommand = Cmd(ExportCaAsync);
         DeviceCaSetupCommand = Cmd(DeviceCaSetupAsync);
         OpenLoopbackExemptCommand = Cmd(OpenLoopbackExemptAsync);
         OpenSessionRetentionCommand = Cmd(OpenSessionRetentionAsync);
+        ToggleGridColumnCommand = CmdWithParameter(parameter =>
+        {
+            if (parameter is string key && SessionGridColumnCatalog.Find(key) is { CanHide: true })
+            {
+                SetGridColumnVisible(key, !IsGridColumnVisible(key, platformAvailable: true));
+            }
+
+            return Task.CompletedTask;
+        }, parameter => parameter is string key && SessionGridColumnCatalog.Find(key) is { CanHide: true });
+        ResetGridColumnsCommand = Cmd(() =>
+        {
+            ResetGridColumns();
+            return Task.CompletedTask;
+        });
         OpenLoggingSettingsCommand = Cmd(OpenLoggingSettingsAsync);
         OpenAboutCommand = Cmd(OpenAboutAsync);
         OpenHttpsDecryptHostsCommand = Cmd(OpenExcludedHostsAsync);
@@ -721,20 +738,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
 
     private void WireSessionPipelineHandlers()
     {
-        _buffer.SessionsBatchAdded += batch => MarshalToUi(() => OnSessionsBatchAdded(batch));
+        // Capture adds/updates reach the grid through a paced, time-budgeted flush (see
+        // MainWindowViewModel.CaptureUiPump.cs) so a heavy capture can never saturate the UI thread.
+        _buffer.SessionsBatchAdded += EnqueueCapturedBatch;
         _store.SessionsRemoved += removed => MarshalToUi(() => OnSessionsRemoved(removed));
         _interception.SessionCaptured += (_, snap) => _buffer.Publish(snap);
-        _interception.SessionUpdated += (_, snap) =>
-            MarshalToUi(() =>
-            {
-                _store.NotifyUpdated(snap);
-                OnSessionUpdatedForFilter(snap);
-                if (ReferenceEquals(SelectedSession, snap))
-                {
-                    UpdateWsFramesVisibility();
-                    RefreshSelectedInspectorsCoalesced(snap);
-                }
-            });
+        _interception.SessionUpdated += (_, snap) => EnqueueCapturedUpdate(snap);
         _interception.DecryptFailureBypassLearned += (_, entry) =>
             MarshalToUi(() =>
             {
@@ -1030,13 +1039,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             return;
         }
 
-        var saved = await AwaitCancellableAsync(SessionRetentionWindow.ShowAsync(owner, _settings));
+        var saved = await AwaitCancellableAsync(SessionRetentionWindow.ShowAsync(owner, _settings, _store));
         if (!saved)
         {
             StatusText = "Session retention cancelled";
             return;
         }
 
+        // ApplyOptions raises SessionsRemoved when the new limit evicts rows; that refreshes the count.
         _store.ApplyOptions(SessionStoreOptions.FromSettings(_settings.Current));
         StatusText = "Session retention applied";
     }
@@ -1152,6 +1162,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         _settings.ResetToFactoryDefaults();
         LoadFromSettings();
         NotifySettingsUiChanged();
+        GridColumnsChanged?.Invoke(null);
         // Defaults turn Decrypt off — bounce in case Avalonia left a OneWay CheckBox ticked.
         _ = SnapDecryptHttpsUiAsync();
         StatusText =
@@ -1348,10 +1359,17 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public ICommand TrustFirefoxCaCommand { get; }
     public ICommand UntrustCaCommand { get; }
     public ICommand RotateCaCommand { get; }
+    public ICommand RemoveOldRootCasCommand { get; }
     public ICommand ExportCaCommand { get; }
     public ICommand DeviceCaSetupCommand { get; }
     public ICommand OpenLoopbackExemptCommand { get; }
     public ICommand OpenSessionRetentionCommand { get; }
+
+    /// <summary>Show or hide one sessions-grid column; the parameter is its catalog key.</summary>
+    public ICommand ToggleGridColumnCommand { get; }
+
+    /// <summary>Restore the default columns (visibility, order, widths, sort).</summary>
+    public ICommand ResetGridColumnsCommand { get; }
     public ICommand OpenLoggingSettingsCommand { get; }
     public ICommand OpenAboutCommand { get; }
     public ICommand OpenHttpsDecryptHostsCommand { get; }
@@ -2193,7 +2211,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         _showSessionDetails ? new GridLength(_sessionDetailsWidth) : new GridLength(0);
 
     /// <summary>Min width for the content column when open; 0 when closed so only the rail remains.</summary>
-    public double SessionDetailsPaneMinWidth => _showSessionDetails ? 280 : 0;
+    /// <summary>
+    /// Floor for the open details column. Wide enough for Pretty, Hex, and Save request/response
+    /// on one line so the checkbox label is not covered by the button.
+    /// </summary>
+    public double SessionDetailsPaneMinWidth => _showSessionDetails ? 360 : 0;
 
     public string PaneContentTitle => SelectedPaneNavIndex switch
     {
@@ -2354,14 +2376,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             }
             else
             {
-                SelectedBody = "";
-                SelectedHex = "";
+                SelectedRequestHeaders = "";
+                SelectedResponseHeaders = "";
+                SelectedRequestBody = "";
+                SelectedResponseBody = "";
                 SelectedFrames = "";
                 SelectedSseEvents = "";
                 SelectedProtobufDecoded = "";
-                BodyPreviewBitmap = null;
-                _cachedPrettyBody = null;
-                _cachedPrettySessionId = null;
+                RequestBodyPreviewBitmap = null;
+                ResponseBodyPreviewBitmap = null;
+                ClearBodyInspectCache();
             }
 
             if (value is not null && !_suppressOpenSessionDetails)
@@ -2388,9 +2412,48 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         }
     }
 
-    public string SelectedHeaders { get => _selectedHeaders; set => SetField(ref _selectedHeaders, value); }
-    public string SelectedBody { get => _selectedBody; set => SetField(ref _selectedBody, value); }
-    public string SelectedHex { get => _selectedHex; set => SetField(ref _selectedHex, value); }
+    public string SelectedRequestHeaders { get => _selectedRequestHeaders; set => SetField(ref _selectedRequestHeaders, value); }
+
+    public string SelectedResponseHeaders
+    {
+        get => _selectedResponseHeaders;
+        set
+        {
+            if (SetField(ref _selectedResponseHeaders, value))
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ResponseHeadersOpacity)));
+            }
+        }
+    }
+
+    public string SelectedRequestBody
+    {
+        get => _selectedRequestBody;
+        set
+        {
+            if (SetField(ref _selectedRequestBody, value))
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RequestBodyOpacity)));
+            }
+        }
+    }
+
+    public string SelectedResponseBody
+    {
+        get => _selectedResponseBody;
+        set
+        {
+            if (SetField(ref _selectedResponseBody, value))
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ResponseBodyOpacity)));
+            }
+        }
+    }
+
+    public double ResponseHeadersOpacity => IsNoResponseText(_selectedResponseHeaders) ? 0.65 : 1;
+    public double RequestBodyOpacity => _selectedRequestBody == NoRequestBodyPlaceholder ? 0.65 : 1;
+    public double ResponseBodyOpacity =>
+        _selectedResponseBody == NoRequestBodyPlaceholder || IsNoResponseText(_selectedResponseBody) ? 0.65 : 1;
     public string SelectedFrames { get => _selectedFrames; set => SetField(ref _selectedFrames, value); }
 
     /// <summary>Vertical pane nav: 0 Inspect, 1 Composer, 2 Breakpoints, 3 AutoResponder, 4 Scripts, 5 Map Remote.</summary>
@@ -2470,7 +2533,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         }
     }
 
-    /// <summary>Inspect tabs: 0 Headers, 1 Body, 2 Hex, 3 Diff, 4 WS Frames.</summary>
+    /// <summary>Inspect tabs. See <see cref="InspectTab"/>.</summary>
     public int SelectedInspectTabIndex
     {
         get => _selectedInspectTabIndex;
@@ -2478,11 +2541,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         {
             if (SetField(ref _selectedInspectTabIndex, value))
             {
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
-                if (value == 1)
+                if (value is (int)InspectTab.Request or (int)InspectTab.Response)
                 {
+                    _lastCoreInspectTab = value;
                     RefreshSelectedInspectors();
                 }
+
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
             }
         }
     }
@@ -2515,23 +2580,24 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     }
 
     /// <summary>
-    /// Compatibility index for tests: 0–6 Inspect, 4–8 Tools (Composer…Map Remote) when on tools.
+    /// Compatibility index for tests: 0–<see cref="InspectTabCount"/>-1 Inspect,
+    /// then Tools (Composer…Map Remote) when on tools.
     /// </summary>
     public int SelectedDetailTabIndex
     {
         get => SelectedPaneNavIndex == 0
             ? SelectedInspectTabIndex
-            : 4 + (SelectedPaneNavIndex - 1);
+            : InspectTabCount + (SelectedPaneNavIndex - 1);
         set
         {
-            if (value < 4)
+            if (value < InspectTabCount)
             {
                 SelectedPaneNavIndex = 0;
-                SelectedInspectTabIndex = Math.Clamp(value, 0, 6);
+                SelectedInspectTabIndex = Math.Clamp(value, 0, (int)InspectTab.Protobuf);
             }
             else
             {
-                SelectedPaneNavIndex = 1 + Math.Clamp(value - 4, 0, 4);
+                SelectedPaneNavIndex = 1 + Math.Clamp(value - InspectTabCount, 0, ToolsTabCount - 1);
             }
 
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
@@ -2577,8 +2643,49 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
 
     public void PersistSessionGridLayout(SessionGridLayoutDto layout)
     {
+        // The grid captures widths/order/sort only; column visibility is owned here.
+        layout.ColumnVisibility ??= _settings.Current.SessionGridLayout?.ColumnVisibility;
         _settings.Current.SessionGridLayout = layout;
         _settings.Save();
+    }
+
+    /// <summary>
+    /// Raised after the user shows/hides a column (argument is its key) or resets the grid columns
+    /// (argument is null). The window applies the change to the live grid.
+    /// </summary>
+    public event Action<string?>? GridColumnsChanged;
+
+    /// <summary>Effective visibility of a sessions-grid column (saved choice, else the default).</summary>
+    public bool IsGridColumnVisible(string key) => IsGridColumnVisible(key, ShowProcessColumn);
+
+    private bool IsGridColumnVisible(string key, bool platformAvailable) =>
+        SessionGridColumnCatalog.IsVisible(
+            key,
+            _settings.Current.SessionGridLayout?.ColumnVisibility,
+            platformAvailable);
+
+    /// <summary>Show or hide a column and persist the choice. False when the column cannot be hidden.</summary>
+    public bool SetGridColumnVisible(string key, bool visible)
+    {
+        if (SessionGridColumnCatalog.Find(key) is not { CanHide: true } info)
+        {
+            return false;
+        }
+
+        var layout = _settings.Current.SessionGridLayout ??= new SessionGridLayoutDto();
+        var overrides = SessionGridColumnCatalog.WithVisibility(layout.ColumnVisibility, info.Key, visible);
+        layout.ColumnVisibility = overrides.Count == 0 ? null : overrides;
+        _settings.Save();
+        GridColumnsChanged?.Invoke(info.Key);
+        return true;
+    }
+
+    /// <summary>Forget the saved columns (visibility, order, widths, sort) and restore the defaults.</summary>
+    public void ResetGridColumns()
+    {
+        _settings.Current.SessionGridLayout = null;
+        _settings.Save();
+        GridColumnsChanged?.Invoke(null);
     }
 
     private void LoadFromSettings()
@@ -2615,6 +2722,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         Breakpoints.Enabled = s.BreakpointEnabled;
         Breakpoints.UrlFilter = string.IsNullOrEmpty(s.BreakpointUrlFilter) ? "*" : s.BreakpointUrlFilter;
         Breakpoints.GraphQlOperationName = s.BreakpointGraphQlOperationName ?? "";
+        ApplyInspectLayoutFromSettings();
     }
 
     private void NotifySettingsUiChanged()
@@ -2792,12 +2900,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         ShowProtobufTab = _selected?.IsGrpc == true ||
                           _selected?.IsTranscoded == true ||
                           !string.IsNullOrEmpty(_selected?.ProtobufDecodedText);
-        // Inspect tabs: 0 Headers, 1 Body, 2 Hex, 3 Diff, 4 WS, 5 SSE, 6 Protobuf
-        if ((!ShowWsFramesTab && SelectedInspectTabIndex == 4) ||
-            (!ShowSseTab && SelectedInspectTabIndex == 5) ||
-            (!ShowProtobufTab && SelectedInspectTabIndex == 6))
+        if ((!ShowWsFramesTab && SelectedInspectTabIndex == (int)InspectTab.WsFrames) ||
+            (!ShowSseTab && SelectedInspectTabIndex == (int)InspectTab.Sse) ||
+            (!ShowProtobufTab && SelectedInspectTabIndex == (int)InspectTab.Protobuf))
         {
-            SelectedInspectTabIndex = 0;
+            // Contextual tab went away: return to the core tab the user was last on, not always tab 0.
+            SelectedInspectTabIndex = _lastCoreInspectTab;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
         }
     }
@@ -2847,26 +2955,24 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     {
         if (_selected is null)
         {
-            SelectedHeaders = SelectedBody = SelectedHex = SelectedFrames = "";
-            BodyCaptureHint = "";
-            HexCaptureHint = "";
-            BodyPreviewBitmap = null;
-            _cachedPrettyBody = null;
-            _cachedPrettySessionId = null;
+            SelectedRequestHeaders = SelectedResponseHeaders = SelectedRequestBody = SelectedResponseBody = SelectedFrames = "";
+            PublishHeaderCounts(null);
+            RequestBodyCaptureHint = "";
+            ResponseBodyCaptureHint = "";
+            RequestBodyPreviewBitmap = null;
+            ResponseBodyPreviewBitmap = null;
+            ClearBodyInspectCache();
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedOpaqueHint)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowSelectedOpaqueHint)));
             NotifySaveBodyCanExecute();
             return;
         }
 
-        SelectedHeaders = BuildSelectedHeadersText(_selected);
+        SelectedRequestHeaders = BuildSelectedRequestHeadersText(_selected);
+        SelectedResponseHeaders = BuildSelectedResponseHeadersText(_selected);
+        PublishHeaderCounts(_selected);
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedOpaqueHint)));
         RefreshBodyInspector();
-        SelectedHex = SessionInspectors.FormatLabeledHex(
-            _selected.RequestHeadersText,
-            _selected.ResponseHeadersText,
-            _selected.RequestBodyBytes,
-            _selected.ResponseBodyBytes);
         SelectedFrames = InspectorDisplayText.ForTextBox(BuildSelectedFramesText(_selected));
         SelectedSseEvents = InspectorDisplayText.ForTextBox(BuildSelectedSseText(_selected));
         SelectedProtobufDecoded = InspectorDisplayText.ForTextBox(BuildSelectedProtobufText(_selected));
@@ -2918,15 +3024,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             remaining > TimeSpan.Zero ? remaining : TimeSpan.FromMilliseconds(1));
     }
 
-    private static string BuildSelectedHeadersText(SessionSnapshot selected)
+    private static string BuildSelectedRequestHeadersText(SessionSnapshot selected)
     {
         var sb = new StringBuilder();
-        if (selected.IsTunnel && selected.OpaqueReason != OpaqueTunnelReason.None)
-        {
-            sb.AppendLine(selected.OpaqueReasonDisplay);
-            sb.AppendLine();
-        }
-
         if (selected.IsTranscoded)
         {
             sb.AppendLine("=== gRPC-JSON transcoded ===");
@@ -2941,18 +3041,25 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             sb.AppendLine();
         }
 
-        sb.AppendLine("=== Request ===");
-        sb.AppendLine(selected.RequestHeadersText);
-        if (!string.IsNullOrEmpty(selected.ResponseHeadersText))
-        {
-            sb.AppendLine("=== Response ===");
-            sb.AppendLine(selected.ResponseHeadersText);
-        }
-
+        sb.AppendLine(string.IsNullOrEmpty(selected.RequestHeadersText)
+            ? "(empty)"
+            : selected.RequestHeadersText);
         AppendNameValues(sb, "=== Cookies ===",
             SessionInspectors.ParseCookies(SessionInspectors.ParseHeaderBlock(selected.RequestHeadersText)));
         AppendNameValues(sb, "=== Query ===", SessionInspectors.ParseQuery(selected.Url));
         return sb.ToString();
+    }
+
+    private static string BuildSelectedResponseHeadersText(SessionSnapshot selected)
+    {
+        if (ResponseNotStarted(selected))
+        {
+            return NoResponseText(selected);
+        }
+
+        return string.IsNullOrEmpty(selected.ResponseHeadersText)
+            ? "(empty)"
+            : selected.ResponseHeadersText;
     }
 
     private static void AppendNameValues(
@@ -2963,87 +3070,6 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         sb.AppendLine(heading);
         foreach (var pair in values)
             sb.Append(pair.Key).Append('=').AppendLine(pair.Value);
-    }
-
-    private string BuildSelectedBodyText(SessionSnapshot selected)
-    {
-        if (_bodyPrettyMode
-            && _cachedPrettySessionId == selected.Id
-            && _cachedPrettyBody is not null
-            && SelectedInspectTabIndex == 1)
-        {
-            return AppendTranscodePrefix(selected, _cachedPrettyBody);
-        }
-
-        var prettyInspect = _bodyPrettyMode && SelectedInspectTabIndex == 1;
-        var body = BuildSelectedBodyTextCore(selected, prettyInspect);
-        if (prettyInspect)
-        {
-            MaybeSetPrettyPrintFailureHint(selected);
-            _cachedPrettySessionId = selected.Id;
-            _cachedPrettyBody = body;
-        }
-
-        return AppendTranscodePrefix(selected, body);
-    }
-
-    private void MaybeSetPrettyPrintFailureHint(SessionSnapshot selected)
-    {
-        var reqCt = SessionInspectors.ParseHeaderBlock(selected.RequestHeadersText)
-            .TryGetValue("Content-Type", out var rct) ? rct : null;
-        var respCt = selected.ContentType
-                     ?? (SessionInspectors.ParseHeaderBlock(selected.ResponseHeadersText)
-                         .TryGetValue("Content-Type", out var sct) ? sct : null);
-        if (!(InspectorBodyLimits.IsPrettyPrintableContentType(reqCt)
-              || InspectorBodyLimits.IsPrettyPrintableContentType(respCt))
-            || InspectorBodyLimits.TryPrettyPrint(selected.RequestBodyText, reqCt) is not null
-            || InspectorBodyLimits.TryPrettyPrint(selected.ResponseBodyText, respCt) is not null
-            || !(selected.RequestBodyCapture is BodyCaptureState.Truncated
-                 || selected.ResponseBodyCapture is BodyCaptureState.Truncated
-                 || !string.IsNullOrWhiteSpace(selected.RequestBodyText)
-                 || !string.IsNullOrWhiteSpace(selected.ResponseBodyText)))
-        {
-            return;
-        }
-
-        if (string.IsNullOrEmpty(BodyCaptureHint))
-        {
-            BodyCaptureHint = "Cannot pretty-print (body truncated or invalid)";
-        }
-        else if (!BodyCaptureHint.Contains("pretty-print", StringComparison.OrdinalIgnoreCase))
-        {
-            BodyCaptureHint += " · Cannot pretty-print (body truncated or invalid)";
-        }
-    }
-
-    private static string AppendTranscodePrefix(SessionSnapshot selected, string body)
-    {
-        if (!selected.IsTranscoded)
-            return body;
-
-        var prefix = new StringBuilder();
-        prefix.AppendLine("=== Client (JSON/REST) ===");
-        prefix.AppendLine(selected.RequestBodyText ?? "(empty)");
-        prefix.AppendLine();
-        prefix.AppendLine("=== Client response (JSON) ===");
-        prefix.AppendLine(selected.ResponseBodyText ?? "(empty)");
-        if (selected.UpstreamRequestBodyBytes is { Length: > 0 } ||
-            selected.UpstreamResponseBodyBytes is { Length: > 0 })
-        {
-            prefix.AppendLine();
-            prefix.AppendLine("=== Upstream gRPC frames (see Hex / frame preview) ===");
-            if (selected.GrpcFrames is { Count: > 0 } gf)
-            {
-                foreach (var f in gf)
-                    prefix.Append("frame compressed=").Append(f.Compressed)
-                        .Append(" len=").Append(f.Length)
-                        .Append(" preview=").AppendLine(f.HexPreview);
-            }
-        }
-
-        prefix.AppendLine();
-        prefix.Append(body);
-        return prefix.ToString();
     }
 
     private static string BuildSelectedFramesText(SessionSnapshot selected)
@@ -3356,6 +3382,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     private RelayCommand Cmd(Func<Task> execute, Func<bool>? canExecute = null) =>
         new(execute, canExecute, ReportActionFailure);
 
+    private ParameterRelayCommand CmdWithParameter(Func<object?, Task> execute, Func<object?, bool>? canExecute = null) =>
+        new(execute, canExecute, ReportActionFailure);
+
     internal void ReportActionFailure(Exception ex)
     {
         if (ex is OperationCanceledException)
@@ -3403,6 +3432,38 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     }
 }
 
+
+/// <summary>Command that passes <c>CommandParameter</c> through (menu items sharing one command).</summary>
+internal sealed class ParameterRelayCommand(
+    Func<object?, Task> execute,
+    Func<object?, bool>? canExecute = null,
+    Action<Exception>? onError = null) : ICommand
+{
+    public bool CanExecute(object? parameter) => canExecute?.Invoke(parameter) ?? true;
+
+    public async void Execute(object? parameter)
+    {
+        try
+        {
+            await execute(parameter);
+        }
+        catch (Exception ex)
+        {
+            if (ex is OperationCanceledException)
+            {
+                return;
+            }
+
+            onError?.Invoke(ex);
+        }
+    }
+
+    public event EventHandler? CanExecuteChanged
+    {
+        add => _ = value;
+        remove => _ = value;
+    }
+}
 
 internal sealed class RelayCommand(Func<Task> execute, Func<bool>? canExecute = null, Action<Exception>? onError = null) : ICommand
 {

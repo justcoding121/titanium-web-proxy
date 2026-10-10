@@ -41,10 +41,11 @@ public sealed partial class MainWindowViewModel
 
         _userRemovalDepth++;
         _suppressOpenSessionDetails = true;
+        long freed;
         try
         {
             // Store.Clear does not raise SessionsRemoved. One grid Clear is a single Reset.
-            _store.Clear();
+            freed = _store.Clear();
             Sessions.Clear();
         }
         finally
@@ -57,7 +58,10 @@ public sealed partial class MainWindowViewModel
         _interception.ResetSessionIdSequence();
         RefreshSessionCountText();
         NotifyFilterSelectionProperties();
-        SetOutcomeStatus("Sessions cleared", StatusSeverity.Success, toastImportant: true);
+        SetOutcomeStatus(
+            SessionRetentionWindow.FormatSessionsClearedStatus(freed),
+            StatusSeverity.Success,
+            toastImportant: true);
         return Task.CompletedTask;
     }
     private Task RemoveSelectedSessionsAsync()
@@ -247,7 +251,7 @@ public sealed partial class MainWindowViewModel
         await CopyTextToClipboardAsync(diff.Text).ConfigureAwait(false);
         ShowSessionDetails = true;
         SelectedOuterPaneIndex = 0;
-        SelectedInspectTabIndex = 3; // Diff tab
+        SelectedInspectTabIndex = (int)InspectTab.Diff;
         StatusText = diff.HasDifferences ? "Session Diff: differences found (copied)" : "Session Diff: identical (copied)";
     }
     /// <summary>Compares exactly two selected sessions (E2E / probe).</summary>
@@ -592,7 +596,7 @@ public sealed partial class MainWindowViewModel
         StatusText = "Map Remote rule updated";
         return Task.CompletedTask;
     }
-    private void OnSessionsBatchAdded(IReadOnlyList<SessionSnapshot> batch)
+    private void OnSessionsBatchAdded(List<SessionSnapshot> batch)
     {
         if (batch.Count == 0)
         {

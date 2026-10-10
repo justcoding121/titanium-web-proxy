@@ -839,7 +839,11 @@ internal class TcpConnectionFactory : IDisposable
 
                             throw new ProxyTimeoutException(
                                 $"Timed out connecting to {hostname}:{port} after {effectiveTimeoutSecs}.",
-                                ProxyTimeoutKind.Connect);
+                                ProxyTimeoutKind.Connect)
+                            {
+                                ConfiguredTimeout = TimeSpan.FromMilliseconds(connectTimeoutMs),
+                                ObservedElapsed = TimeSpan.FromMilliseconds(connectTimeoutMs)
+                            };
                         }
                     }
                     else
@@ -856,7 +860,11 @@ internal class TcpConnectionFactory : IDisposable
                         {
                             throw new ProxyTimeoutException(
                                 $"Timed out connecting to {hostname}:{port} after {effectiveTimeoutSecs}.",
-                                ProxyTimeoutKind.Connect);
+                                ProxyTimeoutKind.Connect)
+                            {
+                                ConfiguredTimeout = TimeSpan.FromMilliseconds(connectTimeoutMs),
+                                ObservedElapsed = TimeSpan.FromMilliseconds(connectTimeoutMs)
+                            };
                         }
                         catch (OperationCanceledException oce)
                         {
@@ -924,7 +932,7 @@ internal class TcpConnectionFactory : IDisposable
                             }
                             catch (Exception attemptEx)
                             {
-                                ProxyDiagnostics.ReportBenign(proxyServer.Logger,
+                                ProxyDiagnostics.ReportExpected(proxyServer.Logger,
                                     "TcpConnectionFactory Happy Eyeballs address attempt failed", attemptEx);
                                 lastException = attemptEx;
                             }
@@ -949,7 +957,7 @@ internal class TcpConnectionFactory : IDisposable
                         {
                             Ipv6UnreachableSoftSkip.RecordAttemptFailure(attempt.Address, attempt.Error,
                                 proxyServer.EnableIpv6UnreachableSoftSkip);
-                            ProxyDiagnostics.ReportBenign(proxyServer.Logger,
+                            ProxyDiagnostics.ReportExpected(proxyServer.Logger,
                                 "TcpConnectionFactory Happy Eyeballs address attempt failed", attempt.Error);
                             lastException = attempt.Error;
                         }

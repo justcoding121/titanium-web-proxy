@@ -384,13 +384,21 @@ public class SessionListResponsivenessTests
             var har = Directory.EnumerateFiles(dir, "1.har", SearchOption.AllDirectories).Single();
             Assert.IsTrue(new FileInfo(har).Length > 100);
 
-            var caller = Environment.CurrentManagedThreadId;
-            store.ApplyOptions(new SessionStoreOptions
+            // A dedicated thread cannot share its id with a thread-pool worker, so a pool thread that
+            // happens to be the test's own continuation thread cannot make this assertion flaky.
+            var caller = 0;
+            var applier = new Thread(() =>
             {
-                MaxSessionsInMemory = 100,
-                SpillBodiesToDisk = true,
-                DiskCacheMaxBytes = 1,
+                caller = Environment.CurrentManagedThreadId;
+                store.ApplyOptions(new SessionStoreOptions
+                {
+                    MaxSessionsInMemory = 100,
+                    SpillBodiesToDisk = true,
+                    DiskCacheMaxBytes = 1,
+                });
             });
+            applier.Start();
+            applier.Join();
             Assert.IsNotNull(store.TryGet(1), "A lower disk budget keeps the list row");
             await store.FlushDiskCleanupAsync();
 

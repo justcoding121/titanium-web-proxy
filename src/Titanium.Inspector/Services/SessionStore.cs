@@ -7,6 +7,8 @@ namespace Titanium.Inspector.Services;
 /// Captured sessions: in-memory list (headers/metadata; bodies unloaded), HAR archive on disk
 /// (per-run subfolders under the cache root), and two independent limits — MaxSessionsInMemory
 /// (drop rows from the list) and DiskCacheMaxBytes (delete oldest HAR files across runs).
+/// Empty run folders other than the current run are removed. The current run folder is created
+/// on the first spill.
 /// </summary>
 public sealed class SessionStore : IDisposable
 {
@@ -20,6 +22,7 @@ public sealed class SessionStore : IDisposable
     private long _spillEpoch;
     private int _pendingSpills;
     private long _inMemoryBodyBytes;
+    private readonly Dictionary<long, long> _bytesById = new();
     private int _spilledCount;
     private long? _pinnedSessionId;
     private bool _disposed;
@@ -265,24 +268,64 @@ public sealed class SessionStore : IDisposable
     }
 
     /// <summary>
-    /// Drops every in-memory session and rotates the current-run HAR folder.
-    /// Does not raise <see cref="SessionsRemoved"/> — the caller clears the grid itself.
+    /// Drops every in-memory session and deletes the current-run HAR folder, including rows
+    /// already evicted from the list. Earlier runs stay on disk. Does not raise
+    /// <see cref="SessionsRemoved"/> — the caller clears the grid itself.
     /// Disk deletion continues in the background (<see cref="FlushDiskCleanupAsync"/>).
+    /// Returns tracked bytes queued for deletion.
     /// </summary>
-    public void Clear()
+    public long Clear()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         lock (_gate)
         {
             _byId.Clear();
             _inMemoryBodyBytes = 0;
+            _bytesById.Clear();
             _spilledCount = 0;
             Sessions.Clear();
             Interlocked.Increment(ref _spillEpoch);
         }
 
-        _disk?.AbandonCurrentRun();
+        return _disk?.AbandonCurrentRun() ?? 0;
     }
+
+    /// <summary>
+    /// Deletes every saved run, including the current one. In-flight spills are rejected via
+    /// the run generation. Rows stay in the list; spilled bodies are marked missing.
+    /// Deletion runs in the background (<see cref="FlushDiskCleanupAsync"/>).
+    /// Returns tracked bytes queued for deletion.
+    /// </summary>
+    public long ClearAllSavedRuns()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_disk is null)
+        {
+            return 0;
+        }
+
+        long freed;
+        List<long> spilled;
+        lock (_gate)
+        {
+            spilled = new List<long>();
+            foreach (var snap in _byId.Values)
+            {
+                if (snap.BodiesOnDisk)
+                {
+                    spilled.Add(snap.Id);
+                }
+            }
+
+            freed = _disk.ScheduleClearAllRuns();
+        }
+
+        MarkBodiesMissing(spilled);
+        return freed;
+    }
+
+    /// <summary>Run count and tracked bytes for the retention window. Zero when spill is off.</summary>
+    public SessionCacheStats GetCacheStats() => _disk?.GetCacheStats() ?? default;
 
     /// <summary>
     /// Inserts many sessions under one lock and enforces the memory cap once.
@@ -637,13 +680,13 @@ public sealed class SessionStore : IDisposable
     {
         if (_disk is null || _spillChannel is null)
         {
-            RecalcInMemoryBodyBytesLocked();
+            UpdateInMemoryBodyBytesLocked(snapshot);
             return;
         }
 
         if (!IsReadyToArchive(snapshot))
         {
-            RecalcInMemoryBodyBytesLocked();
+            UpdateInMemoryBodyBytesLocked(snapshot);
             return;
         }
 
@@ -659,12 +702,12 @@ public sealed class SessionStore : IDisposable
                 ClearBodyFields(snapshot);
             }
 
-            RecalcInMemoryBodyBytesLocked();
+            UpdateInMemoryBodyBytesLocked(snapshot);
             return;
         }
 
         QueueSpillLocked(snapshot);
-        RecalcInMemoryBodyBytesLocked();
+        UpdateInMemoryBodyBytesLocked(snapshot);
     }
 
     private void EnforceLimitsLocked(ref List<SessionSnapshot>? removed)
@@ -856,6 +899,7 @@ public sealed class SessionStore : IDisposable
             SentBytes = snap.SentBytes,
             DurationMs = snap.DurationMs,
             TtfbMs = snap.TtfbMs,
+            FailureReason = snap.FailureReason,
         };
 
     private List<SessionSnapshot> RemoveIdsLocked(HashSet<long> ids)
@@ -938,15 +982,36 @@ public sealed class SessionStore : IDisposable
         }
     }
 
+    /// <summary>Full O(n) rebuild; use only on rare paths (eviction, clear, selection change).</summary>
     private void RecalcInMemoryBodyBytesLocked()
     {
         long n = 0;
+        _bytesById.Clear();
         foreach (var s in _byId.Values)
         {
-            n += EstimateInMemoryBodyBytes(s);
+            var est = EstimateInMemoryBodyBytes(s);
+            _bytesById[s.Id] = est;
+            n += est;
         }
 
         _inMemoryBodyBytes = n;
+    }
+
+    /// <summary>
+    /// O(1) refresh for one session. The per-add/per-update hot path runs on the UI thread, so a
+    /// full recalculation over every retained session there made capture cost quadratic.
+    /// </summary>
+    private void UpdateInMemoryBodyBytesLocked(SessionSnapshot snapshot)
+    {
+        if (!_byId.ContainsKey(snapshot.Id))
+        {
+            return;
+        }
+
+        var est = EstimateInMemoryBodyBytes(snapshot);
+        _bytesById.TryGetValue(snapshot.Id, out var previous);
+        _bytesById[snapshot.Id] = est;
+        _inMemoryBodyBytes += est - previous;
     }
 
     private async Task SpillLoopAsync(CancellationToken ct)

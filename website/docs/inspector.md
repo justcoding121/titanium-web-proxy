@@ -79,22 +79,21 @@ chmod +x install-app.sh uninstall-app.sh TitaniumInspector
 
 A far-right **icon rail** (Inspect, Composer, Breakpoints, AutoResponder, Scripts, Map Remote) is always visible. Clicking an icon opens that tool’s content to the **left of the rail** and **pushes** the session grid; the grid scrolls horizontally when columns no longer fit. Click the same icon again (or ✕) to close the content pane; the rail stays. Tooltips show full names.
 
-Inspect keeps Headers / Body / Hex (and Diff / WS / SSE / Protobuf when relevant) as tabs inside the Inspect content. Selecting a session while a tool is open does **not** switch away from that tool. Tools change how **all** traffic is handled and do not require a selected session.
+Inspect keeps **Request** and **Response** tabs inside the Inspect content (and Diff, WS Frames, SSE, or Protobuf when that session uses them). Each tab shows that side's headers above its body, with a splitter between the two panes. Collapse the headers pane from its bar, or double-click the splitter to restore the default one-third / two-thirds split. On a short window the headers pane starts collapsed so the body keeps the space; expanding it is remembered. Selecting a session while a tool is open does **not** switch away from that tool. Tools change how **all** traffic is handled and do not require a selected session.
 
 Use **Tools → Composer / Breakpoints / AutoResponder / Scripts…** to open the matching icon. Opening content when it was closed from a session click lands on **Inspect**.
 
 ### Inspect (this session)
 
-- **Headers** — request/response headers, cookies, query (labeled sections). **Copy headers** copies the dump.
-- **Body** — request and response as `=== Request ===` / `=== Response ===`. **Pretty** / **Raw** toggles JSON, XML, and HTML source indent (Pretty runs when the Body tab is selected). Images show a bitmap preview instead of mojibake. Banners explain truncated, not-captured, or streaming bodies. **Save request…** / **Save response…** write the **captured** bytes (incomplete when truncated).
-- **Hex** — labeled hex dump (first 4 KB of the captured preview).
+- **Request** — request headers (including cookies and query) above the request body. gRPC-JSON transcoded sessions also show the client versus upstream summary in the headers. **Copy headers** copies the headers. **Pretty** is a checkbox (on by default) that indents JSON, XML, and HTML while this tab is selected. **Hex** is a checkbox that switches the body to a hex dump of the first 4 KB; Pretty is disabled while Hex is on, and its previous state returns when Hex is cleared. Images show a bitmap preview that uses about 40% of the body pane. A banner explains a truncated, not-captured, or streaming request body. **Save request…** writes the **captured** bytes (incomplete when truncated).
+- **Response** — response headers above the response body, with the same Pretty, Hex, image preview, and capture banner. **Copy headers** copies the response headers. **Save response…** writes the captured response bytes. A CONNECT tunnel's opaque-reason note appears at the top of both tabs. A session still waiting on the server shows "Waiting for response…"; one that ended without any response shows "No response received" with the reason (connection refused or reset, timeout, client disconnected, or capture stopped).
 - **WS Frames** — shown for WebSocket sessions; live frames when available (direction, opcode, payload preview). A single frame larger than 16 MiB is relayed and listed as "payload not captured" instead of closing the connection.
 - **SSE** — shown for `text/event-stream` responses; Inspector does **not** buffer SSE in `BeforeResponse` (events stream to the client; a 2 MiB preview may fill while open)
 - **Protobuf** — wire-format field dump for gRPC and gRPC-JSON-transcoded upstream frames (field number, wire type, value). MVP does **not** require a `.protoset` / descriptor set; the optional settings field `ProtobufDescriptorSetPath` is stored for a future typed decode. Until then, the Protobuf tab always shows the JSON wire dump.
 
 **Body capture limits:** finite bodies with known `Content-Length` up to 32 MiB are buffered then previewed at 2 MiB (text view capped at 256 KiB). Larger known-length bodies are **not captured** so downloads are not stalled. Bodies with **no declared length** (chunked, HTTP/2 without `Content-Length`, SSE) are never buffered, whatever their content type: they are relayed untouched and the first 2 MiB is previewed live (decoded for gzip/deflate/br), so large downloads/uploads of unknown size (for example a `git clone`) are not aborted by the buffer limit. Size column shows the original length when known.
 
-Search for WebSocket traffic with `is:ws`. Search for gRPC with `is:grpc`, and for gRPC-JSON transcoded sessions with `is:transcoded` (client REST/JSON vs upstream gRPC faces appear in the Headers/Body inspect panes). Quick filters on the toolbar toggle `hide:tunnel`, `hide:image`, and `is:error` into the same search box. A word with no prefix matches the URL, host, process name, exact process ID, method, or exact status code. Prefixes limit the match to one field: `method:`, `status:` (exact or `2xx`–`5xx`), `host:`, `url:`, `process:`, `pid:`, `protocol:`, `content-type:`, and `body:` (including bodies spilled to disk). The status strip shows **Sessions: N** with no filter, and **Sessions: X of Y match filter** when a search or quick filter is active (X matching, Y currently kept). After the session retention limit has dropped older rows, Y is labeled **most recent** (round thousands as **10k**, e.g. `Sessions: 10k most recent · since 14:05`) and the strip adds **since HH:mm** — the start time of the oldest session still kept. If a filter matches nothing, it also shows how many older sessions retention removed, since those are no longer searched. Click the count to open **Session retention…** and change how many sessions are kept.
+Search for WebSocket traffic with `is:ws`. Search for gRPC with `is:grpc`, and for gRPC-JSON transcoded sessions with `is:transcoded` (client REST/JSON vs upstream gRPC faces appear on the request and response inspect tabs). Quick filters on the toolbar toggle `hide:tunnel`, `hide:image`, and `is:error` into the same search box. A word with no prefix matches the URL, host, process name, exact process ID, method, or exact status code. Prefixes limit the match to one field: `method:`, `status:` (exact or `2xx`–`5xx`), `host:`, `url:`, `process:`, `pid:`, `protocol:`, `content-type:`, and `body:` (including bodies spilled to disk). The status strip shows **Sessions: N · since HH:mm** with no filter (the start time of the oldest session still kept; the date is added when that is not today, e.g. `since Oct 6, 14:05`), and **Sessions: X of Y match filter · since HH:mm** when a search or quick filter is active. After the session retention limit has dropped older rows, Y is labeled **most recent** (round thousands as **10k**, e.g. `Sessions: 10k most recent · since 14:05`). If a filter matches nothing, it also shows how many older sessions retention removed, since those are no longer searched. Click the count to open **Session retention…** and change how many sessions are kept. What **Clear sessions** removes, and what stays on disk, is described in [Session retention and clearing](#session-retention-and-clearing).
 
 **Network throttle:** use the toolbar **Throttle** combo (`None`, `Slow 3G`, `Fast 3G`, `LTE`) to add latency and bandwidth shaping on body writes / WebSocket frames during capture. Off by default (`None`); the hot path skips delay work when no profile is enabled.
 
@@ -146,6 +145,21 @@ abort
 
 ## Advanced
 
+### Session retention and clearing
+
+**Options → Session retention…** sets how many sessions stay in the list and how much disk the saved HAR files may use. Each Inspector run writes into a timestamped folder under the session cache (local application data, `TitaniumInspector/session-cache`). The folder is created on the first captured session, so a run that captures nothing does not leave an empty folder.
+
+The list limit and the disk limit are separate:
+
+| Action | List | Current run on disk | Earlier runs on disk |
+|--------|------|---------------------|----------------------|
+| List is over **Maximum sessions to keep** | Oldest rows leave the list | Those rows stay as HAR files | Unchanged |
+| Over **Disk space for saved sessions** | Rows stay; missing bodies show a hint | Oldest HAR files go first, across every run | Same. An emptied run folder is deleted |
+| **Capture → Clear sessions** | Cleared | Deleted, including rows the list limit already hid | Kept, so you can import them from the cache folder |
+| **Clear saved session cache…** | Kept | Deleted after you confirm the run count and size | Deleted |
+
+**Clear sessions** does not ask for confirmation. The status line reports how much disk it freed. **Clear saved session cache…** is on the Session retention window, next to **Open cache folder**, and asks before it deletes. Sessions stay in the list, but their saved bodies are removed. New captures use a fresh run folder.
+
 ### Excluded hosts
 
 **Options → Excluded hosts…** edits OS bypass, tunnel-only, and auto-tunnel learning. **Capture → Capture local traffic** controls whether loopback uses the system proxy (not a host list).
@@ -190,7 +204,7 @@ Notes:
 
 ## Other features
 
-- Session grid: method, status, host, URL, Protocol, duration, Wait (TTFB), size, process. Right-click menu: Replay, Load into Composer, Export selected HAR/archive, Copy URL, Copy as curl, Copy as fetch, Diff selected (exactly two sessions).
+- Session grid columns: by default Id, method, status, host, URL, Protocol, duration, Wait (TTFB), size and process. Right-click a column header (or use **Options > Columns**) to show or hide columns, including the optional **Started** (local time, hover for the full date), **Scheme** (`http`, `https`, `ws`, `wss`; empty for CONNECT tunnels) and **Content-Type** (media type without parameters; hover for the raw value) columns, which are hidden until you add them. **Host** and **URL** always stay visible (together they say where each request went), and **Process** appears only where the OS can supply it. Your choice is saved immediately and kept with the column widths and order; **Reset columns** restores the defaults. If you hide the column the grid is sorted by, the sort returns to Id ascending. The **URL** column shows the path and query because **Host** already shows the host (a non-default port stays as a prefix such as `:3000/api`, and a CONNECT tunnel has no path, so its URL cell is empty); hover a row for the full URL or `host:port`. Ctrl+C, **Copy URL**, and search still use the full URL. Row right-click menu: Replay, Load into Composer, Export selected HAR/archive, Copy URL, Copy as curl, Copy as fetch, Diff selected (exactly two sessions).
 - **Copy as curl / fetch:** with one session selected, generate a shell `curl` command or a JavaScript `fetch(...)` call from the request URL, method, headers, and body (CONNECT tunnels are skipped). The snippet is copied to the clipboard.
 - **Session Diff:** with exactly two sessions selected, compare method/URL/status/headers/bodies offline. The result opens on the Inspect **Diff** tab and is copied to the clipboard.
 - HAR / archive: Export all writes every captured session; Export selected writes the grid multi-selection. Import appends sessions from the file. Replay selected session.
