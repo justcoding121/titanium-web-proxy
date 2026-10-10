@@ -9,6 +9,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Titanium.Inspector.Localization;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.Views;
 using Titanium.Web.Proxy;
@@ -19,7 +20,7 @@ namespace Titanium.Inspector.ViewModels;
 public sealed partial class MainWindowViewModel
 {
     private const int BulkGridEditThreshold = 32;
-    private const string SearchingBodiesStatus = "Searching bodies…";
+    private static string SearchingBodiesStatus => LanguageService.Get("status.searchingBodies");
 
     private int _bodyFilterGeneration;
     private CancellationTokenSource? _bodyFilterCts;
@@ -325,6 +326,37 @@ public sealed partial class MainWindowViewModel
 
         SearchQuery = SessionSearch.SetKeyedToken(SearchQuery, "process", process);
         StatusText = $"Filtered by process:{process}";
+        return Task.CompletedTask;
+    }
+    private Task HideHostAsync()
+    {
+        var host = ResolveUnanimousFilterHost();
+        if (string.IsNullOrEmpty(host))
+        {
+            StatusText = "Hide host needs one shared host in the selection";
+            return Task.CompletedTask;
+        }
+
+        SearchQuery = SessionSearch.AddToken(SearchQuery, "-host", host);
+        StatusText = $"Hidden host:{host} · Clear filters to show";
+        return Task.CompletedTask;
+    }
+    private Task HideProcessAsync()
+    {
+        var process = ResolveUnanimousFilterProcess();
+        if (string.IsNullOrEmpty(process))
+        {
+            StatusText = "Hide process needs one shared process in the selection";
+            return Task.CompletedTask;
+        }
+
+        // Search tokens cannot contain spaces, so "Google Chrome" becomes -process:Google, which also hides
+        // other names containing "Google". Hiding more than the user pointed at must not be silent.
+        var token = process.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)[0];
+        SearchQuery = SessionSearch.AddToken(SearchQuery, "-process", process);
+        StatusText = token.Length < process.Length
+            ? $"Hidden process:{token} (shortened at the space; also hides other names containing it) · Clear filters to show"
+            : $"Hidden process:{process} · Clear filters to show";
         return Task.CompletedTask;
     }
     /// <summary>True when selection shares one non-empty host (single or multi-select).</summary>
@@ -678,12 +710,15 @@ public sealed partial class MainWindowViewModel
         }
         else if (index >= 0)
         {
-            if (ReferenceEquals(SelectedSession, snapshot))
+            RunWithGridEchoSuppress(() =>
             {
-                SelectedSession = null;
-            }
+                if (ReferenceEquals(SelectedSession, snapshot))
+                {
+                    ClearSelectionRemovedByFilter();
+                }
 
-            Sessions.RemoveAt(index);
+                Sessions.RemoveAt(index);
+            });
             RefreshSessionCountText();
         }
     }
@@ -765,6 +800,108 @@ public sealed partial class MainWindowViewModel
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HideImagesFilter)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ErrorsOnlyFilter)));
     }
+
+    /// <summary>Hosts hidden from the list (<c>-host:</c>), in query order. Display only.</summary>
+    public ObservableCollection<string> HiddenHostChips { get; } = new();
+
+    /// <summary>Processes hidden from the list (<c>-process:</c>), in query order. Display only.</summary>
+    public ObservableCollection<string> HiddenProcessChips { get; } = new();
+
+    /// <summary>True when at least one hide-host or hide-process chip should show.</summary>
+    public bool HasHiddenChips => HiddenHostChips.Count > 0 || HiddenProcessChips.Count > 0;
+
+    /// <summary>True when both chip kinds are present, so process chips need a "process" prefix.</summary>
+    public bool ShowProcessChipPrefix => HiddenHostChips.Count > 0 && HiddenProcessChips.Count > 0;
+
+    private void RefreshHiddenChips()
+    {
+        var hosts = new List<string>();
+        var processes = new List<string>();
+        foreach (var token in SessionSearch.GetTokens(SearchQuery))
+        {
+            if (token.Key == "-host")
+            {
+                hosts.Add(token.Value);
+            }
+            else if (token.Key == "-process")
+            {
+                processes.Add(token.Value);
+            }
+        }
+
+        ReplaceChipList(HiddenHostChips, hosts);
+        ReplaceChipList(HiddenProcessChips, processes);
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasHiddenChips)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowProcessChipPrefix)));
+    }
+
+    private static void ReplaceChipList(ObservableCollection<string> chips, List<string> next)
+    {
+        if (chips.Count == next.Count)
+        {
+            var same = true;
+            for (var i = 0; i < next.Count; i++)
+            {
+                if (!string.Equals(chips[i], next[i], StringComparison.Ordinal))
+                {
+                    same = false;
+                    break;
+                }
+            }
+
+            if (same)
+            {
+                return;
+            }
+        }
+
+        chips.Clear();
+        foreach (var value in next)
+        {
+            chips.Add(value);
+        }
+    }
+
+    private Task RemoveHiddenHostAsync(object? parameter)
+    {
+        if (parameter is string host && !string.IsNullOrWhiteSpace(host))
+        {
+            SearchQuery = SessionSearch.RemoveToken(SearchQuery, "-host", host);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task RemoveHiddenProcessAsync(object? parameter)
+    {
+        if (parameter is string process && !string.IsNullOrWhiteSpace(process))
+        {
+            SearchQuery = SessionSearch.RemoveToken(SearchQuery, "-process", process);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task OpenFiltersAsync()
+    {
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            StatusText = "Filters requires the main window";
+            return;
+        }
+
+        var applied = await SearchFiltersWindow.ShowAsync(owner, SearchQuery).ConfigureAwait(true);
+        if (applied is null)
+        {
+            return;
+        }
+
+        SearchQuery = applied;
+        StatusText = HasHiddenChips
+            ? "Filters applied · Clear filters to show hidden rows"
+            : "Filters applied";
+    }
     private void ApplyFilter()
     {
         if (SessionSearch.HasBodyToken(SearchQuery))
@@ -774,11 +911,14 @@ public sealed partial class MainWindowViewModel
         }
 
         CancelBodyFilter();
-        var previouslySelected = SelectedSession;
-        var detailsWereOpen = ShowSessionDetails;
-        var matched = SessionSearch.Filter(_all, SearchQuery, bodyMatcher: null).ToList();
-        ReplaceVisibleSessions(matched);
-        RestoreSelectionAfterFilter(previouslySelected, detailsWereOpen);
+        RunWithGridEchoSuppress(() =>
+        {
+            var previouslySelected = SelectedSession;
+            var detailsWereOpen = ShowSessionDetails;
+            var matched = SessionSearch.Filter(_all, SearchQuery, bodyMatcher: null).ToList();
+            ReplaceVisibleSessions(matched);
+            RestoreSelectionAfterFilter(previouslySelected, detailsWereOpen);
+        });
     }
 
     private void ReplaceVisibleSessions(IReadOnlyList<SessionSnapshot> matched)
@@ -820,7 +960,7 @@ public sealed partial class MainWindowViewModel
         }
         else if (previouslySelected is not null)
         {
-            SelectedSession = null;
+            ClearSelectionRemovedByFilter();
         }
     }
 
@@ -894,8 +1034,11 @@ public sealed partial class MainWindowViewModel
                 return;
             }
 
-            ReplaceVisibleSessions(matched);
-            RestoreSelectionAfterFilter(previouslySelected, detailsWereOpen);
+            RunWithGridEchoSuppress(() =>
+            {
+                ReplaceVisibleSessions(matched);
+                RestoreSelectionAfterFilter(previouslySelected, detailsWereOpen);
+            });
             RefreshSessionCountText();
             if (StatusText == SearchingBodiesStatus)
             {

@@ -1,12 +1,18 @@
+using Avalonia.Headless;
+using Avalonia.Interactivity;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.ViewModels;
+using Titanium.Inspector.Views;
 
 namespace Titanium.Inspector.Tests;
 
 [TestClass]
 public class ExportAndSystemProxyCoverageTests
 {
+    private static readonly string[] HiddenHostChipApi2Cursor = ["api2.cursor.sh"];
+    private static readonly string[] HiddenProcessChipCursor = ["Cursor"];
+
     [TestMethod]
     public async Task ExportCommands_CoverEmptyCancelAndSelectedPaths()
     {
@@ -418,6 +424,115 @@ public class ExportAndSystemProxyCoverageTests
                 File.Delete(path);
             }
         }
+    }
+
+    [TestMethod]
+    public async Task HideHostAndProcess_AppendTokens_ClearFiltersResets()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-hide-filter-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception);
+
+            var snap = new SessionSnapshot
+            {
+                Id = 1,
+                Method = "CONNECT",
+                Url = "https://api2.cursor.sh/",
+                Host = "api2.cursor.sh",
+                ProcessName = "Cursor",
+                ProcessId = 42,
+            };
+            vm.SeedSession(snap);
+            vm.SelectedSession = snap;
+            vm.SetSelectedSessions([snap]);
+            vm.SearchQuery = "status:200";
+
+            await ExecuteAsync(vm.HideHostCommand);
+            Assert.AreEqual("status:200 -host:api2.cursor.sh", vm.SearchQuery);
+            StringAssert.Contains(vm.StatusText, "Hidden host:api2.cursor.sh");
+
+            await ExecuteAsync(vm.HideHostCommand);
+            Assert.AreEqual("status:200 -host:api2.cursor.sh", vm.SearchQuery);
+
+            await ExecuteAsync(vm.HideProcessCommand);
+            Assert.AreEqual("status:200 -host:api2.cursor.sh -process:Cursor", vm.SearchQuery);
+            StringAssert.Contains(vm.StatusText, "Hidden process:Cursor");
+            Assert.IsTrue(vm.HasHiddenChips);
+            CollectionAssert.AreEqual(HiddenHostChipApi2Cursor, vm.HiddenHostChips.ToList());
+            CollectionAssert.AreEqual(HiddenProcessChipCursor, vm.HiddenProcessChips.ToList());
+            Assert.IsTrue(vm.ShowProcessChipPrefix);
+
+            vm.RemoveHiddenHostCommand.Execute("api2.cursor.sh");
+            Assert.AreEqual("status:200 -process:Cursor", vm.SearchQuery);
+            Assert.AreEqual(0, vm.HiddenHostChips.Count);
+            Assert.IsFalse(vm.ShowProcessChipPrefix);
+
+            await ExecuteAsync(vm.ClearFiltersCommand);
+            Assert.AreEqual("", vm.SearchQuery);
+            Assert.IsFalse(vm.HasHiddenChips);
+
+            // A name with a space cannot be one search token: say so instead of hiding more in silence.
+            var spaced = new SessionSnapshot
+            {
+                Id = 2,
+                Method = "GET",
+                Url = "https://example.com/",
+                Host = "example.com",
+                ProcessName = "Google Chrome",
+                ProcessId = 7,
+            };
+            vm.SeedSession(spaced);
+            vm.SelectedSession = spaced;
+            vm.SetSelectedSessions([spaced]);
+            await ExecuteAsync(vm.HideProcessCommand);
+            Assert.AreEqual("-process:Google", vm.SearchQuery);
+            StringAssert.Contains(vm.StatusText, "shortened");
+            Assert.AreEqual(1, vm.HiddenProcessChips.Count);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
+    public void SearchFiltersWindow_ApplyWritesSnapshot_CancelLeavesItNull()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(DeferredUiCoverageBootstrap));
+        session.Dispatch(() =>
+        {
+            var filters = new SearchFiltersWindow("login -host:cursor.sh hide:tunnel -process:Cursor");
+            Assert.IsNull(filters.AppliedQuery);
+            filters.ApplyButtonForTests.RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
+            Assert.AreEqual("login hide:tunnel -host:cursor.sh -process:Cursor", filters.AppliedQuery);
+
+            var pending = new SearchFiltersWindow("login");
+            pending.RemainderBoxForTests.Text = "status:200";
+            // A host typed but not yet added is included when Apply is clicked.
+            pending.HostAddBoxForTests.Text = "api2.cursor.sh";
+            pending.ApplyButtonForTests.RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
+            Assert.AreEqual("status:200 -host:api2.cursor.sh", pending.AppliedQuery);
+
+            var cancelled = new SearchFiltersWindow("login -host:keep.me");
+            cancelled.RemainderBoxForTests.Text = "changed";
+            cancelled.CancelButtonForTests.RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
+            Assert.IsNull(cancelled.AppliedQuery);
+        }, CancellationToken.None).GetAwaiter().GetResult();
     }
 
     private static async Task ExecuteAsync(System.Windows.Input.ICommand command)

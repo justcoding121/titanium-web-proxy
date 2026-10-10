@@ -343,6 +343,20 @@ public class MenuActionsHeadlessTests
                 OpenSessionsContextMenu(fx);
                 fx.Robot.Click("CtxFilterByProcess");
                 OpenSessionsContextMenu(fx);
+                var hideHost = fx.ViewModel.SelectedSession?.Host;
+                var hideProcess = fx.ViewModel.SelectedSession?.ProcessName;
+                fx.Robot.Click("CtxHideHost");
+                StringAssert.Contains(fx.ViewModel.SearchQuery, $"-host:{hideHost}");
+                // Hiding the only row empties the list, so clear the filters and reselect between steps.
+                fx.ViewModel.SearchQuery = "";
+                fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
+                OpenSessionsContextMenu(fx);
+                fx.Robot.Click("CtxHideProcess");
+                if (!string.IsNullOrWhiteSpace(hideProcess))
+                    StringAssert.Contains(fx.ViewModel.SearchQuery, "-process:" + hideProcess.Split(' ')[0]);
+                fx.ViewModel.SearchQuery = "";
+                fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
+                OpenSessionsContextMenu(fx);
                 fx.Robot.Click("CtxLoadComposer");
                 Assert.AreEqual(0, fx.ViewModel.SelectedToolsTabIndex);
                 OpenSessionsContextMenu(fx);

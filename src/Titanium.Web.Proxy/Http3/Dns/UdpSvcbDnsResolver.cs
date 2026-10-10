@@ -247,6 +247,24 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
     }
 
     /// <summary>
+    ///     Local address for the query socket, or <see langword="null"/> when the socket should stay
+    ///     unbound until <c>Connect</c>. Loopback resolvers use <c>127.0.0.1</c> / <c>::1</c>.
+    ///     A non-loopback resolver must not bind <see cref="IPAddress.Any"/> or
+    ///     <see cref="IPAddress.IPv6Any"/> — that listen prompts Windows Defender Firewall.
+    /// </summary>
+    internal static IPAddress? SelectClientBindAddress(IPAddress dnsServerAddress)
+    {
+        if (!IPAddress.IsLoopback(dnsServerAddress))
+        {
+            return null;
+        }
+
+        return dnsServerAddress.AddressFamily == AddressFamily.InterNetworkV6
+            ? IPAddress.IPv6Loopback
+            : IPAddress.Loopback;
+    }
+
+    /// <summary>
     ///     Sends a DNS UDP query and parses the response.
     ///     Returns <c>(result, false)</c> for a successful H3 record,
     ///     <c>(null, false)</c> for a definitive negative,
@@ -262,8 +280,15 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
         // Derive the socket address family from the configured DNS server endpoint.
         var addrFamily = _dnsServerEndPoint.AddressFamily;
         using var socket = new Socket(addrFamily, SocketType.Dgram, ProtocolType.Udp);
-        var bindAddr = addrFamily == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any;
-        socket.Bind(new IPEndPoint(bindAddr, 0));
+
+        // A wildcard bind (0.0.0.0 / ::) is an inbound listen. Windows Defender Firewall then
+        // prompts for the calling process, including testhost.exe during tests. Loopback resolvers
+        // bind 127.0.0.1 / ::1. Any other resolver stays unbound until Connect().
+        var bindAddress = SelectClientBindAddress(_dnsServerEndPoint.Address);
+        if (bindAddress != null)
+        {
+            socket.Bind(new IPEndPoint(bindAddress, 0));
+        }
 
         // Connect() on a UDP socket does not perform a handshake — it just filters the socket at the
         // kernel level so only datagrams from _dnsServerEndPoint are ever delivered to ReceiveAsync.

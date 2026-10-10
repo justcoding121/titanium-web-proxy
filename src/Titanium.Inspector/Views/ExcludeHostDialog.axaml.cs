@@ -1,3 +1,4 @@
+using Titanium.Inspector.Localization;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Titanium.Inspector.Services;
@@ -19,6 +20,7 @@ public partial class ExcludeHostDialog : Window
         _settings = settings;
         _hostname = hostname.Trim();
         InitializeComponent();
+        LanguageService.AttachWindow(this);
         HostLabel.Text = _hostname;
         var parent = ExtractParentDomain(_hostname);
         if (string.IsNullOrEmpty(parent))

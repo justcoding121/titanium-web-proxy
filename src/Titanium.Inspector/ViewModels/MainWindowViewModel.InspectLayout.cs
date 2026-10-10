@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Titanium.Inspector.Localization;
 using Titanium.Inspector.Services;
 
 namespace Titanium.Inspector.ViewModels;
@@ -36,7 +37,9 @@ public sealed partial class MainWindowViewModel
     public string InspectHeadersToggleGlyph => _inspectHeadersCollapsed ? "▸" : "▾";
 
     public string InspectHeadersToggleTip =>
-        _inspectHeadersCollapsed ? "Show headers" : "Hide headers";
+        _inspectHeadersCollapsed
+            ? LanguageService.Get("inspect.showHeaders")
+            : LanguageService.Get("inspect.hideHeaders");
 
     /// <summary>Star weight for the headers row while it is expanded.</summary>
     public double InspectHeadersStar => _inspectHeadersStar;
@@ -71,9 +74,11 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-    public string RequestHeadersCaption => $"Headers ({_selectedRequestHeaderCount})";
+    public string RequestHeadersCaption =>
+        LanguageService.Format("inspect.headers", _selectedRequestHeaderCount);
 
-    public string ResponseHeadersCaption => $"Headers ({_selectedResponseHeaderCount})";
+    public string ResponseHeadersCaption =>
+        LanguageService.Format("inspect.headers", _selectedResponseHeaderCount);
 
     public void ToggleInspectHeadersCollapsed() =>
         SetInspectHeadersCollapsed(!_inspectHeadersCollapsed, userChosen: true);

@@ -77,10 +77,14 @@ expecting the file relocation alone to isolate it.
 
 `ProxyServer.EnableDecryptFailureBypass` (off by default in the library; on by default in Inspector) tunnels
 later CONNECTs without decrypt after repeated **origin** TLS handshake failures under MITM, or after
-MITM HTTPS **403/429** (document navigations activate immediately and meta-refresh onto a new opaque
-CONNECT; other requests use the shared strike threshold; synthetic inspector/script responses are
-ignored). It does **not** detect JA3/Akamai by name — TLS failures look like ordinary
-`AuthenticationException`. False positives are possible; use a TTL/LRU-bounded session list and
+MITM HTTPS **403/429 that carry a bot-management marker** (document navigations activate immediately and
+meta-refresh onto a new opaque CONNECT; other requests use the shared strike threshold; synthetic
+inspector/script responses are ignored). A marker is a vendor header (`cf-mitigated`, `x-datadome*`,
+`x-amzn-waf-action`, `x-kpsdk-*`), `Server: AkamaiGHost`, a bot-management cookie (`_abck`, `bm_sz`,
+`datadome`, `incap_ses_*`, `_px*`, ...), or "captcha" / "challenge" in a header name or value (CSP, CORS,
+`WWW-Authenticate` and similar are skipped). A plain 403 or a `Retry-After` rate-limit 429 is never
+learned. The check reads headers only; it does **not** fingerprint JA3 itself — TLS failures look like
+ordinary `AuthenticationException`. False positives are possible; use a TTL/LRU-bounded session list and
 **Promote** known-bad hosts into permanent tunnel-only exclusions. Post-MITM conversion of the forged-cert
 session is impossible; seamless recovery relies on a new CONNECT. Learned hosts skip MITM prefetch.
 Embedded proxies should leave the flag off unless they need this behavior.

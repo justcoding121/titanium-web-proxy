@@ -122,6 +122,55 @@ public class ShellMenuToolbarHeadlessTests
 
     [TestMethod]
     [TestCategory("E2E-UI-Headless")]
+    public async Task HideConnect_ClosesInspect_ClearFilters_DoesNotReopenClosedPane()
+    {
+        await using var fx = new InspectorHeadlessFixture();
+        await fx.StartAsync();
+        await fx.DispatchAsync(() =>
+        {
+            var tunnel = new SessionSnapshot
+            {
+                Id = 1,
+                Method = "CONNECT",
+                Url = "https://tunnel.test/",
+                Host = "tunnel.test",
+                IsTunnel = true,
+            };
+            var get = new SessionSnapshot
+            {
+                Id = 2,
+                Method = "GET",
+                Url = "https://a.test/",
+                Host = "a.test",
+            };
+            fx.ViewModel.SeedSession(tunnel);
+            fx.ViewModel.SeedSession(get);
+            fx.ViewModel.SelectedSession = tunnel;
+            Assert.IsTrue(fx.ViewModel.ShowSessionDetails);
+
+            fx.ViewModel.HideTunnelsFilter = true;
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            Assert.IsNull(fx.ViewModel.SelectedSession);
+            Assert.IsFalse(fx.ViewModel.ShowSessionDetails);
+
+            fx.ViewModel.ClearFiltersCommand.Execute(null);
+            fx.ViewModel.SelectedSession = get;
+            fx.Robot.Click("CloseDetailsButton");
+            Assert.IsFalse(fx.ViewModel.ShowSessionDetails);
+            Assert.AreSame(get, fx.ViewModel.SelectedSession);
+
+            fx.ViewModel.SearchQuery = "host:a.test";
+            fx.ViewModel.ClearFiltersCommand.Execute(null);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            Assert.AreSame(get, fx.ViewModel.SelectedSession);
+            Assert.IsFalse(fx.ViewModel.ShowSessionDetails);
+        });
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Headless")]
     public async Task MenuRemoveSelected_And_DeleteKey_RemoveSessions()
     {
         await using var fx = new InspectorHeadlessFixture();
