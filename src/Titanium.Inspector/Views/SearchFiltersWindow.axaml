@@ -1,8 +1,9 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="using:Titanium.Inspector.Localization"
         x:Class="Titanium.Inspector.Views.SearchFiltersWindow"
         AutomationProperties.AutomationId="SearchFiltersWindow"
-        Title="Filters"
+        Title="{loc:Loc window.filters}"
         Width="560" Height="480"
         MinWidth="420" MinHeight="360"
         WindowStartupLocation="CenterOwner"
@@ -10,36 +11,36 @@
         ShowInTaskbar="False">
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
-      <Button x:Name="CancelButton" Content="Cancel" MinWidth="88" IsCancel="True"
+      <Button x:Name="CancelButton" Content="{loc:Loc common.cancel}" MinWidth="88" IsCancel="True"
               AutomationProperties.AutomationId="SearchFiltersCancel" />
-      <Button x:Name="ApplyButton" Content="Apply" MinWidth="88" IsDefault="True"
+      <Button x:Name="ApplyButton" Content="{loc:Loc common.apply}" MinWidth="88" IsDefault="True"
               AutomationProperties.AutomationId="SearchFiltersApply" />
     </StackPanel>
     <ScrollViewer>
       <StackPanel Spacing="14">
         <StackPanel Spacing="4">
-          <TextBlock FontWeight="SemiBold" Text="Search" />
+          <TextBlock FontWeight="SemiBold" Text="{loc:Loc filters.search}" />
           <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                     Text="Same search as the toolbar, with more room. Hidden hosts and processes are listed below, not in this box." />
-          <TextBox x:Name="RemainderBox" Watermark="URL, host, process, method:GET, status:4xx…"
+                     Text="{loc:Loc filters.searchHelp}" />
+          <TextBox x:Name="RemainderBox" Watermark="{loc:Loc filters.searchWatermark}"
                    AcceptsReturn="False"
                    AutomationProperties.AutomationId="SearchFiltersRemainder" />
         </StackPanel>
 
         <StackPanel Spacing="4">
-          <TextBlock FontWeight="SemiBold" Text="Hide from the list" />
+          <TextBlock FontWeight="SemiBold" Text="{loc:Loc filters.hideHeading}" />
           <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                     Text="Rows stay captured. This only hides them in the list. To stop decrypting HTTPS, use Exclude host…" />
+                     Text="{loc:Loc filters.hideHelp}" />
         </StackPanel>
 
         <StackPanel Spacing="6">
-          <TextBlock Text="Hosts" />
+          <TextBlock Text="{loc:Loc filters.hosts}" />
           <ItemsControl x:Name="HostList" AutomationProperties.AutomationId="SearchFiltersHostList">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,4">
                   <TextBlock Text="{Binding}" VerticalAlignment="Center" />
-                  <Button Content="Remove" Padding="8,2" MinWidth="0"
+                  <Button Content="{loc:Loc common.remove}" Padding="8,2" MinWidth="0"
                           Click="OnRemoveHost"
                           AutomationProperties.AutomationId="SearchFiltersRemoveHost" />
                 </StackPanel>
@@ -47,21 +48,21 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBox x:Name="HostAddBox" MinWidth="220" Watermark="Add a host to hide"
+            <TextBox x:Name="HostAddBox" MinWidth="220" Watermark="{loc:Loc filters.addHostWatermark}"
                      AutomationProperties.AutomationId="SearchFiltersHostAdd" />
-            <Button x:Name="HostAddButton" Content="Add host" MinWidth="88"
+            <Button x:Name="HostAddButton" Content="{loc:Loc filters.addHost}" MinWidth="88"
                     AutomationProperties.AutomationId="SearchFiltersAddHost" />
           </StackPanel>
         </StackPanel>
 
         <StackPanel Spacing="6">
-          <TextBlock Text="Processes" />
+          <TextBlock Text="{loc:Loc filters.processes}" />
           <ItemsControl x:Name="ProcessList" AutomationProperties.AutomationId="SearchFiltersProcessList">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,4">
                   <TextBlock Text="{Binding}" VerticalAlignment="Center" />
-                  <Button Content="Remove" Padding="8,2" MinWidth="0"
+                  <Button Content="{loc:Loc common.remove}" Padding="8,2" MinWidth="0"
                           Click="OnRemoveProcess"
                           AutomationProperties.AutomationId="SearchFiltersRemoveProcess" />
                 </StackPanel>
@@ -69,13 +70,13 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBox x:Name="ProcessAddBox" MinWidth="220" Watermark="Add a process to hide"
+            <TextBox x:Name="ProcessAddBox" MinWidth="220" Watermark="{loc:Loc filters.addProcessWatermark}"
                      AutomationProperties.AutomationId="SearchFiltersProcessAdd" />
-            <Button x:Name="ProcessAddButton" Content="Add process" MinWidth="88"
+            <Button x:Name="ProcessAddButton" Content="{loc:Loc filters.addProcess}" MinWidth="88"
                     AutomationProperties.AutomationId="SearchFiltersAddProcess" />
           </StackPanel>
           <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                     Text="A name with a space is shortened at the first word, which can also hide other names containing that word." />
+                     Text="{loc:Loc filters.processSpace}" />
         </StackPanel>
       </StackPanel>
     </ScrollViewer>

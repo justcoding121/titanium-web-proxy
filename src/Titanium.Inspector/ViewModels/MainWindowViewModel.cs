@@ -11,6 +11,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Titanium.Inspector.Localization;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.Views;
 using Titanium.Web.Proxy;
@@ -41,7 +42,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     private readonly RelayCommand _copyAsFetchCommand;
     private readonly RelayCommand _diffSessionsCommand;
     private string _sessionDiffText = "";
-    private const string StatusReady = "Ready";
+    private static string StatusReady => LanguageService.Get("status.ready");
     private const string StartProxyFirstStatus = "Start the proxy first";
     private const string SystemProxyRestoredStatus = "System proxy restored";
     private const string TrustingRootCaWindowsStatus =
@@ -126,6 +127,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     /// (filter restore / bulk removal — DataGrid may briefly re-select a neighbor row).
     /// </summary>
     private bool _suppressOpenSessionDetails;
+
+    /// <summary>
+    /// Holds open-on-select across a filter's grid reset and the deferred
+    /// <c>SelectedItem</c> write. A user pointer or key cancels it immediately.
+    /// </summary>
+    private int _echoSuppressDepth;
+
+    private int _echoSuppressTicket;
     private bool _showWsFramesTab;
     private bool _showSseTab;
     private bool _showProtobufTab;
@@ -196,6 +205,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         SetThemeAutomaticCommand = Cmd(() =>
         {
             SetThemeMode(ThemeMode.Automatic);
+            return Task.CompletedTask;
+        });
+        SetUiLanguageCommand = CmdWithParameter(parameter =>
+        {
+            SetUiLanguage(parameter as string ?? LanguageService.AutomaticSetting);
             return Task.CompletedTask;
         });
         ToggleCheckForUpdatesOnStartupCommand = Cmd(() =>
@@ -1241,8 +1255,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             if (!_decryptHttps)
                 return "";
             return _interception.IsRootTrusted
-                ? "CA trusted"
-                : "CA not trusted";
+                ? LanguageService.Get("trust.health.trusted")
+                : LanguageService.Get("trust.health.untrusted");
         }
     }
 
@@ -2018,7 +2032,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         }
     }
 
-    public static string ProxyLocalhostTip => OsTrustUxCopy.ProxyLocalhostTip();
+    public string ProxyLocalhostTip => OsTrustUxCopy.ProxyLocalhostTip();
 
     public bool AutoStartCapture
     {
@@ -2079,6 +2093,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public bool ThemeModeIsDark => _settings.Current.ThemeMode == ThemeMode.Dark;
 
     public bool ThemeModeIsAutomatic => _settings.Current.ThemeMode == ThemeMode.Automatic;
+
+    /// <summary><c>auto</c> or a shipped culture name. Radios bind this; it is not the resolved catalog.</summary>
+    public string UiLanguage =>
+        string.IsNullOrWhiteSpace(_settings.Current.UiLanguage)
+            ? LanguageService.AutomaticSetting
+            : _settings.Current.UiLanguage;
+
+    public ICommand SetUiLanguageCommand { get; }
 
     public bool CheckForUpdatesOnStartup
     {
@@ -2229,13 +2251,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
 
     public string PaneContentTitle => SelectedPaneNavIndex switch
     {
-        0 => "Inspect",
-        1 => "Composer",
-        2 => "Breakpoints",
-        3 => "AutoResponder",
-        4 => "Scripts",
-        5 => "Map Remote",
-        _ => "Inspect",
+        0 => LanguageService.Get("pane.inspect"),
+        1 => LanguageService.Get("pane.composer"),
+        2 => LanguageService.Get("pane.breakpoints"),
+        3 => LanguageService.Get("pane.autoResponder"),
+        4 => LanguageService.Get("pane.scripts"),
+        5 => LanguageService.Get("pane.mapRemote"),
+        _ => LanguageService.Get("pane.inspect"),
     };
 
     public bool IsInspectRailPressed => _showSessionDetails && SelectedPaneNavIndex == 0;
@@ -2399,7 +2421,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
                 ClearBodyInspectCache();
             }
 
-            if (value is not null && !_suppressOpenSessionDetails)
+            if (value is not null && !IsOpenSessionDetailsSuppressed)
             {
                 var openingPane = !ShowSessionDetails;
                 ShowSessionDetails = true;
@@ -2760,6 +2782,31 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         ThemeService.ApplyThemeMode(_settings.Current.ThemeMode);
     }
 
+    private void SetUiLanguage(string setting)
+    {
+        var normalized = string.IsNullOrWhiteSpace(setting)
+            ? LanguageService.AutomaticSetting
+            : setting;
+        if (string.Equals(_settings.Current.UiLanguage, normalized, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _settings.Current.UiLanguage = normalized;
+        _settings.Save();
+        LanguageService.Apply(normalized);
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UiLanguage)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ProxyLocalhostTip)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PaneContentTitle)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptTrustHealthText)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(InspectHeadersToggleTip)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RequestHeadersCaption)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ResponseHeadersCaption)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BodyPrettyToolTip)));
+        RefreshEndpointAndBindUi();
+        RefreshSelectedInspectors();
+    }
+
     private void SetThemeMode(ThemeMode mode)
     {
         if (_settings.Current.ThemeMode == mode)
@@ -2847,6 +2894,67 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         using (SuppressOpenSessionDetails())
         {
             SelectedSession = snap;
+        }
+    }
+
+    private bool IsOpenSessionDetailsSuppressed =>
+        _suppressOpenSessionDetails || _echoSuppressDepth > 0;
+
+    /// <summary>
+    /// A pointer or key on a session row cancels filter-echo suppression so that
+    /// selection still opens Inspect.
+    /// </summary>
+    public void NoteUserSessionSelectionGesture()
+    {
+        _echoSuppressTicket++;
+        _echoSuppressDepth = 0;
+    }
+
+    /// <summary>
+    /// Run a filter grid update without letting a selection echo open Inspect.
+    /// Unit tests (no <see cref="Application.Current"/>) release before return.
+    /// A live UI releases on the next dispatcher pass, after the deferred binding write.
+    /// </summary>
+    private void RunWithGridEchoSuppress(Action action)
+    {
+        _echoSuppressDepth++;
+        var ticket = _echoSuppressTicket;
+        try
+        {
+            action();
+        }
+        finally
+        {
+            void Release()
+            {
+                if (ticket != _echoSuppressTicket)
+                {
+                    return;
+                }
+
+                _echoSuppressDepth = Math.Max(0, _echoSuppressDepth - 1);
+            }
+
+            if (Application.Current is null)
+            {
+                Release();
+            }
+            else
+            {
+                Dispatcher.UIThread.Post(Release, DispatcherPriority.Background);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The selected row left the visible grid. Close Inspect; leave Composer and other tools open.
+    /// </summary>
+    private void ClearSelectionRemovedByFilter()
+    {
+        SelectedSession = null;
+        if (SelectedPaneNavIndex == 0)
+        {
+            ShowSessionDetails = false;
         }
     }
 
@@ -3269,9 +3377,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     private void RefreshEndpointAndBindUi()
     {
         EndpointStatusText = _interception.IsRunning
-            ? $"Proxy running on {FormatBindDisplay()}:{BindPort}"
-            : "Proxy stopped";
-        InterceptToggleText = _interception.IsRunning ? "Stop proxy" : "Start proxy";
+            ? LanguageService.Format("status.proxyRunning", $"{FormatBindDisplay()}:{BindPort}")
+            : LanguageService.Get("status.proxyStopped");
+        InterceptToggleText = _interception.IsRunning
+            ? LanguageService.Get("menu.stopProxy")
+            : LanguageService.Get("menu.startProxy");
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindFieldsEnabled)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsIntercepting)));
     }

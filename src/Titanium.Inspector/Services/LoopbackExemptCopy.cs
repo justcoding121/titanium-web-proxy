@@ -1,3 +1,5 @@
+using Titanium.Inspector.Localization;
+
 namespace Titanium.Inspector.Services;
 
 /// <summary>Whether Inspector can receive Store-app traffic right now.</summary>
@@ -37,20 +39,15 @@ public sealed class LoopbackExemptSession
 /// <summary>User-facing copy for Allow Store apps. Shared by the dialog and tests.</summary>
 public static class LoopbackExemptCopy
 {
-    public const string Intro =
-        "Windows Store / UWP apps are blocked from localhost by default. Check apps that should use Inspector, then Apply. " +
-        "Restart each app (fully quit it) after Apply. Inspector must be running with System proxy on. " +
-        "Clear all removes every allow entry.";
+    public static string Intro => LanguageService.Get("loopback.intro");
 
-    public const string ClosedUnchanged = "Store apps unchanged.";
+    public static string ClosedUnchanged => LanguageService.Get("loopback.closedUnchanged");
 
-    public const string ProxyStoppedWarning =
-        "Start the proxy and turn on System proxy. Store apps cannot be captured until both are on.";
+    public static string ProxyStoppedWarning => LanguageService.Get("loopback.proxyStopped");
 
-    public const string SystemProxyOffWarning =
-        "Turn on System proxy (Capture menu). The allow list only lets Store apps reach localhost; they still follow the system proxy.";
+    public static string SystemProxyOffWarning => LanguageService.Get("loopback.systemProxyOff");
 
-    public const string RefreshingStatus = "Refreshing system proxy so running apps reconnect…";
+    public static string RefreshingStatus => LanguageService.Get("loopback.refreshing");
 
     public static string? ProxyWarning(LoopbackCaptureReadiness readiness) => readiness switch
     {
@@ -74,26 +71,23 @@ public static class LoopbackExemptCopy
     }
 
     public static string UnchangedStatus(int count) =>
-        count == 1
-            ? "Allow list already matches this app."
-            : $"Allow list already matches these {count} apps.";
+        LanguageService.Format("loopback.unchangedCount", count);
 
     public static string AppliedStatus(int count, LoopbackCaptureReadiness readiness, bool refreshed)
     {
-        var allowed = count == 1 ? "Allowed 1 app." : $"Allowed {count} apps.";
+        var allowed = LanguageService.Format("loopback.allowed", count);
         if (refreshed)
         {
-            return allowed +
-                   " System proxy was refreshed so running apps reconnect. If traffic still does not appear, fully quit and reopen the app.";
+            return allowed + LanguageService.Get("loopback.allowedRefreshed");
         }
 
         return readiness switch
         {
             LoopbackCaptureReadiness.ProxyStopped =>
-                allowed + " Start the proxy and turn on System proxy, then fully quit and reopen the app.",
+                allowed + LanguageService.Get("loopback.allowedProxyStopped"),
             LoopbackCaptureReadiness.SystemProxyOff =>
-                allowed + " Turn on System proxy, then fully quit and reopen the app.",
-            _ => allowed + " Fully quit and reopen the app to capture traffic.",
+                allowed + LanguageService.Get("loopback.allowedSystemProxyOff"),
+            _ => allowed + LanguageService.Get("loopback.allowedReady"),
         };
     }
 
@@ -101,12 +95,12 @@ public static class LoopbackExemptCopy
     {
         if (refreshed)
         {
-            return "All loopback exemptions cleared. System proxy was refreshed so running apps reconnect.";
+            return LanguageService.Get("loopback.clearedRefreshed");
         }
 
         return readiness == LoopbackCaptureReadiness.Ready
-            ? "All loopback exemptions cleared. Fully quit and reopen any app that was using Inspector."
-            : "All loopback exemptions cleared.";
+            ? LanguageService.Get("loopback.clearedReady")
+            : LanguageService.Get("loopback.cleared");
     }
 
     private static HashSet<string> ToSet(IEnumerable<string> values) =>

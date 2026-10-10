@@ -1,3 +1,4 @@
+using Titanium.Inspector.Localization;
 using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -22,6 +23,7 @@ public partial class SearchFiltersWindow : Window
     public SearchFiltersWindow(string query)
     {
         InitializeComponent();
+        LanguageService.AttachWindow(this);
         HostList.ItemsSource = _hosts;
         ProcessList.ItemsSource = _processes;
         LoadSnapshot(query);

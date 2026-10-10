@@ -1,3 +1,4 @@
+using Titanium.Inspector.Localization;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using Titanium.Inspector.Services;
@@ -17,6 +18,7 @@ public partial class MacSslTrustWaitDialog : Window
     public MacSslTrustWaitDialog()
     {
         InitializeComponent();
+        LanguageService.AttachWindow(this);
         CancelButton.Click += (_, _) => CloseWith(MacSslTrustWaitResult.Cancelled);
         ConfirmSavedButton.Click += (_, _) => OnConfirmSavedClicked();
         Activated += (_, _) => TryVerifyOnFocus();

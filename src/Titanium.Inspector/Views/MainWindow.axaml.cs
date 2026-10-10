@@ -1,3 +1,4 @@
+using Titanium.Inspector.Localization;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Reflection;
@@ -46,6 +47,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        LanguageService.AttachWindow(this);
         MacOsNativeMenu.AttachIfMac(this, MainMenu);
         Closing += OnClosing;
         Opened += OnOpened;
@@ -117,10 +119,18 @@ public partial class MainWindow : Window
         ApplySessionColumnHeaderTips();
     }
 
+    private static bool IsSessionNavigationKey(Key key) =>
+        key is Key.Up or Key.Down or Key.Home or Key.End or Key.PageUp or Key.PageDown;
+
     private void OnSessionsGridKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key != Key.Delete || DataContext is not MainWindowViewModel vm)
         {
+            if (IsSessionNavigationKey(e.Key) && DataContext is MainWindowViewModel navigationVm)
+            {
+                navigationVm.NoteUserSessionSelectionGesture();
+            }
+
             return;
         }
 
@@ -131,16 +141,28 @@ public partial class MainWindow : Window
         }
     }
 
+    private DataGridRow? PressedSessionRow(PointerPressedEventArgs e)
+    {
+        var source = e.Source as Control;
+        return source?.FindAncestorOfType<DataGridRow>() ?? source as DataGridRow;
+    }
+
     private void OnSessionsGridPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (!e.GetCurrentPoint(SessionsGrid).Properties.IsRightButtonPressed)
+        var point = e.GetCurrentPoint(SessionsGrid);
+        if (point.Properties.IsLeftButtonPressed
+            && DataContext is MainWindowViewModel gestureVm
+            && PressedSessionRow(e) is not null)
+        {
+            gestureVm.NoteUserSessionSelectionGesture();
+        }
+
+        if (!point.Properties.IsRightButtonPressed)
         {
             return;
         }
 
-        var source = e.Source as Control;
-        var row = source?.FindAncestorOfType<DataGridRow>()
-            ?? (source as DataGridRow);
+        var row = PressedSessionRow(e);
         if (row?.DataContext is not SessionSnapshot snap)
         {
             return;

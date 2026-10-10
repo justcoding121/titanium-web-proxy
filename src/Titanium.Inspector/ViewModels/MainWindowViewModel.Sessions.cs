@@ -9,6 +9,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Titanium.Inspector.Localization;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.Views;
 using Titanium.Web.Proxy;
@@ -19,7 +20,7 @@ namespace Titanium.Inspector.ViewModels;
 public sealed partial class MainWindowViewModel
 {
     private const int BulkGridEditThreshold = 32;
-    private const string SearchingBodiesStatus = "Searching bodies…";
+    private static string SearchingBodiesStatus => LanguageService.Get("status.searchingBodies");
 
     private int _bodyFilterGeneration;
     private CancellationTokenSource? _bodyFilterCts;
@@ -709,12 +710,15 @@ public sealed partial class MainWindowViewModel
         }
         else if (index >= 0)
         {
-            if (ReferenceEquals(SelectedSession, snapshot))
+            RunWithGridEchoSuppress(() =>
             {
-                SelectedSession = null;
-            }
+                if (ReferenceEquals(SelectedSession, snapshot))
+                {
+                    ClearSelectionRemovedByFilter();
+                }
 
-            Sessions.RemoveAt(index);
+                Sessions.RemoveAt(index);
+            });
             RefreshSessionCountText();
         }
     }
@@ -907,11 +911,14 @@ public sealed partial class MainWindowViewModel
         }
 
         CancelBodyFilter();
-        var previouslySelected = SelectedSession;
-        var detailsWereOpen = ShowSessionDetails;
-        var matched = SessionSearch.Filter(_all, SearchQuery, bodyMatcher: null).ToList();
-        ReplaceVisibleSessions(matched);
-        RestoreSelectionAfterFilter(previouslySelected, detailsWereOpen);
+        RunWithGridEchoSuppress(() =>
+        {
+            var previouslySelected = SelectedSession;
+            var detailsWereOpen = ShowSessionDetails;
+            var matched = SessionSearch.Filter(_all, SearchQuery, bodyMatcher: null).ToList();
+            ReplaceVisibleSessions(matched);
+            RestoreSelectionAfterFilter(previouslySelected, detailsWereOpen);
+        });
     }
 
     private void ReplaceVisibleSessions(IReadOnlyList<SessionSnapshot> matched)
@@ -953,7 +960,7 @@ public sealed partial class MainWindowViewModel
         }
         else if (previouslySelected is not null)
         {
-            SelectedSession = null;
+            ClearSelectionRemovedByFilter();
         }
     }
 
@@ -1027,8 +1034,11 @@ public sealed partial class MainWindowViewModel
                 return;
             }
 
-            ReplaceVisibleSessions(matched);
-            RestoreSelectionAfterFilter(previouslySelected, detailsWereOpen);
+            RunWithGridEchoSuppress(() =>
+            {
+                ReplaceVisibleSessions(matched);
+                RestoreSelectionAfterFilter(previouslySelected, detailsWereOpen);
+            });
             RefreshSessionCountText();
             if (StatusText == SearchingBodiesStatus)
             {

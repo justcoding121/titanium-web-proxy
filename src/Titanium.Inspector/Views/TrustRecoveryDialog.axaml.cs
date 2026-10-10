@@ -1,3 +1,4 @@
+using Titanium.Inspector.Localization;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Titanium.Inspector.Services;
@@ -11,6 +12,7 @@ public partial class TrustRecoveryDialog : Window
     public TrustRecoveryDialog()
     {
         InitializeComponent();
+        LanguageService.AttachWindow(this);
         PrimaryButton.Click += (_, _) =>
         {
             _choice = TrustRecoveryChoice.Primary;

@@ -35,6 +35,8 @@
   </ItemGroup>
   <ItemGroup>
     <AvaloniaResource Include="Assets\app.ico" />
+    <!-- Culture suffixes (strings.en.json) would otherwise become satellite assemblies. -->
+    <EmbeddedResource Include="Localization\strings.*.json" WithCulture="false" />
     <None Include="LICENSE" Pack="true" PackagePath="" />
   </ItemGroup>
   <!-- Local macOS Debug/dotnet run: copy Homebrew MsQuic beside the apphost (Release zips use bundle-http3-native.ps1). -->

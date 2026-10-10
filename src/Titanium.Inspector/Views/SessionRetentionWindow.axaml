@@ -1,31 +1,32 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="using:Titanium.Inspector.Localization"
         x:Class="Titanium.Inspector.Views.SessionRetentionWindow"
         AutomationProperties.AutomationId="SessionRetentionWindow"
-        Title="Session retention"
+        Title="{loc:Loc window.retention}"
         Width="520" Height="460"
         WindowStartupLocation="CenterOwner"
         CanResize="False">
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
-      <Button x:Name="SaveButton" Content="Save" MinWidth="88" AutomationProperties.AutomationId="RetentionSave" />
-      <Button x:Name="CancelButton" Content="Cancel" MinWidth="88" IsCancel="True" AutomationProperties.AutomationId="RetentionCancel" />
+      <Button x:Name="SaveButton" Content="{loc:Loc common.save}" MinWidth="88" AutomationProperties.AutomationId="RetentionSave" />
+      <Button x:Name="CancelButton" Content="{loc:Loc common.cancel}" MinWidth="88" IsCancel="True" AutomationProperties.AutomationId="RetentionCancel" />
     </StackPanel>
     <TextBlock x:Name="StatusText" DockPanel.Dock="Bottom" Margin="0,8,0,0" TextWrapping="Wrap"
                Foreground="{DynamicResource InspectorErrorTextBrush}" AutomationProperties.AutomationId="RetentionStatus" />
     <ScrollViewer>
       <StackPanel Spacing="14">
         <StackPanel Spacing="4">
-          <TextBlock FontWeight="SemiBold" Text="Maximum sessions to keep" />
+          <TextBlock FontWeight="SemiBold" Text="{loc:Loc retention.max}" />
           <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                     Text="How many requests stay in the session list. When over this, the oldest rows leave the list but remain on disk until Clear sessions or the disk space limit removes them." />
+                     Text="{loc:Loc retention.maxHelp}" />
           <TextBox x:Name="MaxSessionsBox" Width="120" HorizontalAlignment="Left" Watermark="10000"
                    AutomationProperties.AutomationId="RetentionMaxSessions" />
         </StackPanel>
 
         <StackPanel Spacing="4">
-          <TextBlock FontWeight="SemiBold" Text="Cache folder" />
-          <TextBox x:Name="CacheFolderPathBox"
+          <TextBlock FontWeight="SemiBold" Text="{loc:Loc retention.cache}" />
+          <TextBox x:Name="CacheFolderPathBox" FlowDirection="LeftToRight"
                    IsReadOnly="True"
                    TextWrapping="Wrap"
                    AcceptsReturn="True"
@@ -37,22 +38,22 @@
                      AutomationProperties.AutomationId="RetentionCacheUsage" />
           <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
             <Button x:Name="OpenCacheFolderButton"
-                    Content="Open cache folder"
+                    Content="{loc:Loc retention.openCache}"
                     MinWidth="88"
                     AutomationProperties.AutomationId="RetentionOpenCacheFolder" />
             <Button x:Name="ClearSavedCacheButton"
-                    Content="Clear saved session cache…"
+                    Content="{loc:Loc retention.clearCache}"
                     MinWidth="88"
                     AutomationProperties.AutomationId="RetentionClearSavedCache" />
           </StackPanel>
         </StackPanel>
 
-        <Expander Header="Advanced" IsExpanded="True"
+        <Expander Header="{loc:Loc retention.advanced}" IsExpanded="True"
                   AutomationProperties.AutomationId="RetentionAdvanced">
           <StackPanel Spacing="4" Margin="0,8,0,0">
-            <TextBlock FontWeight="SemiBold" Text="Disk space for saved sessions (MB)" />
+            <TextBlock FontWeight="SemiBold" Text="{loc:Loc retention.disk}" />
             <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                       Text="Maximum space for all saved sessions on disk (all Inspector runs). Each run uses a timestamped subfolder; oldest HAR files are deleted first when over this. Empty run folders are removed." />
+                       Text="{loc:Loc retention.diskHelp}" />
             <TextBox x:Name="DiskCacheMaxMbBox" Width="120" HorizontalAlignment="Left" Watermark="2048"
                      AutomationProperties.AutomationId="RetentionDiskCacheMb" />
           </StackPanel>
