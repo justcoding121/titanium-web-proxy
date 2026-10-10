@@ -328,6 +328,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             SearchQuery = SessionSearch.ClearFilters(SearchQuery);
             return Task.CompletedTask;
         });
+        OpenFiltersCommand = Cmd(OpenFiltersAsync);
+        RemoveHiddenHostCommand = CmdWithParameter(RemoveHiddenHostAsync);
+        RemoveHiddenProcessCommand = CmdWithParameter(RemoveHiddenProcessAsync);
         WireBodyInspectCommands();
 
         WireEventHandlers();
@@ -1415,6 +1418,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public ICommand OpenToolsScriptsCommand { get; }
     public ICommand OpenToolsMapRemoteCommand { get; }
     public ICommand ClearFiltersCommand { get; }
+    public ICommand OpenFiltersCommand { get; }
+    public ICommand RemoveHiddenHostCommand { get; }
+    public ICommand RemoveHiddenProcessCommand { get; }
 
     public string BindAddress
     {
@@ -2305,6 +2311,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
                 ApplyFilter();
                 RefreshSessionCountText();
                 NotifyQuickFilterProperties();
+                RefreshHiddenChips();
             }
         }
     }

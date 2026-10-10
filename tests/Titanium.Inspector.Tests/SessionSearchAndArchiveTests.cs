@@ -293,6 +293,45 @@ public class SessionSearchAndArchiveTests
     }
 
     [TestMethod]
+    public void GetTokens_ReturnsKeyedAndBarePairsInOrder()
+    {
+        var tokens = SessionSearch.GetTokens("status:2xx -host:cursor.sh -cursor hide:tunnel");
+        Assert.AreEqual(4, tokens.Count);
+        Assert.AreEqual(("status", "2xx"), tokens[0]);
+        Assert.AreEqual(("-host", "cursor.sh"), tokens[1]);
+        Assert.AreEqual(("", "-cursor"), tokens[2]);
+        Assert.AreEqual(("hide", "tunnel"), tokens[3]);
+        Assert.AreEqual(0, SessionSearch.GetTokens("   ").Count);
+        Assert.AreEqual(0, SessionSearch.GetTokens(null).Count);
+    }
+
+    [TestMethod]
+    public void ReplaceHideTokens_KeepsRemainderAndRewritesHideLists()
+    {
+        var query = "login -host:old.example hide:tunnel -process:Cursor method:GET";
+        var replaced = SessionSearch.ReplaceHideTokens(
+            query,
+            ["api2.cursor.sh", "cursor.sh", "api2.cursor.sh"],
+            ["Cursor", "Google Chrome"]);
+
+        Assert.AreEqual(
+            "login hide:tunnel method:GET -host:api2.cursor.sh -host:cursor.sh -process:Cursor -process:Google",
+            replaced);
+        Assert.IsTrue(SessionSearch.ContainsToken(replaced, "-host", "cursor.sh"));
+        Assert.IsFalse(SessionSearch.ContainsToken(replaced, "-host", "old.example"));
+        Assert.IsTrue(SessionSearch.ContainsToken(replaced, "hide", "tunnel"));
+        Assert.IsTrue(SessionSearch.ContainsToken(replaced, "method", "GET"));
+
+        var cleared = SessionSearch.ReplaceHideTokens(replaced, [], []);
+        Assert.AreEqual("login hide:tunnel method:GET", cleared);
+
+        var tokens = SessionSearch.GetTokens(replaced);
+        var hosts = tokens.Where(t => t.Key == "-host").Select(t => t.Value);
+        var processes = tokens.Where(t => t.Key == "-process").Select(t => t.Value);
+        Assert.AreEqual(replaced, SessionSearch.ReplaceHideTokens(cleared, hosts, processes));
+    }
+
+    [TestMethod]
     public void SetKeyedToken_ReplacesExistingKey()
     {
         var set = SessionSearch.SetKeyedToken("method:GET host:old", "host", "example.com");

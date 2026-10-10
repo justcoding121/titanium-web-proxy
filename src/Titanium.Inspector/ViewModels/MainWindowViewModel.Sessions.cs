@@ -796,6 +796,108 @@ public sealed partial class MainWindowViewModel
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HideImagesFilter)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ErrorsOnlyFilter)));
     }
+
+    /// <summary>Hosts hidden from the list (<c>-host:</c>), in query order. Display only.</summary>
+    public ObservableCollection<string> HiddenHostChips { get; } = new();
+
+    /// <summary>Processes hidden from the list (<c>-process:</c>), in query order. Display only.</summary>
+    public ObservableCollection<string> HiddenProcessChips { get; } = new();
+
+    /// <summary>True when at least one hide-host or hide-process chip should show.</summary>
+    public bool HasHiddenChips => HiddenHostChips.Count > 0 || HiddenProcessChips.Count > 0;
+
+    /// <summary>True when both chip kinds are present, so process chips need a "process" prefix.</summary>
+    public bool ShowProcessChipPrefix => HiddenHostChips.Count > 0 && HiddenProcessChips.Count > 0;
+
+    private void RefreshHiddenChips()
+    {
+        var hosts = new List<string>();
+        var processes = new List<string>();
+        foreach (var token in SessionSearch.GetTokens(SearchQuery))
+        {
+            if (token.Key == "-host")
+            {
+                hosts.Add(token.Value);
+            }
+            else if (token.Key == "-process")
+            {
+                processes.Add(token.Value);
+            }
+        }
+
+        ReplaceChipList(HiddenHostChips, hosts);
+        ReplaceChipList(HiddenProcessChips, processes);
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasHiddenChips)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowProcessChipPrefix)));
+    }
+
+    private static void ReplaceChipList(ObservableCollection<string> chips, List<string> next)
+    {
+        if (chips.Count == next.Count)
+        {
+            var same = true;
+            for (var i = 0; i < next.Count; i++)
+            {
+                if (!string.Equals(chips[i], next[i], StringComparison.Ordinal))
+                {
+                    same = false;
+                    break;
+                }
+            }
+
+            if (same)
+            {
+                return;
+            }
+        }
+
+        chips.Clear();
+        foreach (var value in next)
+        {
+            chips.Add(value);
+        }
+    }
+
+    private Task RemoveHiddenHostAsync(object? parameter)
+    {
+        if (parameter is string host && !string.IsNullOrWhiteSpace(host))
+        {
+            SearchQuery = SessionSearch.RemoveToken(SearchQuery, "-host", host);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task RemoveHiddenProcessAsync(object? parameter)
+    {
+        if (parameter is string process && !string.IsNullOrWhiteSpace(process))
+        {
+            SearchQuery = SessionSearch.RemoveToken(SearchQuery, "-process", process);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task OpenFiltersAsync()
+    {
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            StatusText = "Filters requires the main window";
+            return;
+        }
+
+        var applied = await SearchFiltersWindow.ShowAsync(owner, SearchQuery).ConfigureAwait(true);
+        if (applied is null)
+        {
+            return;
+        }
+
+        SearchQuery = applied;
+        StatusText = HasHiddenChips
+            ? "Filters applied · Clear filters to show hidden rows"
+            : "Filters applied";
+    }
     private void ApplyFilter()
     {
         if (SessionSearch.HasBodyToken(SearchQuery))

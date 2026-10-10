@@ -82,6 +82,8 @@ public class AutomationIdCoverageHeadlessTests
         "MenuCheckForUpdates",
         "MenuAbout",
         "SearchBox",
+        "OpenFiltersButton",
+        "SearchHideChips",
         "HideTunnelsFilterCheck",
         "HideImagesFilterCheck",
         "ErrorsOnlyFilterCheck",
@@ -243,6 +245,7 @@ public class AutomationIdCoverageHeadlessTests
                 ProtobufDecodedText = "[{\"field\":1}]",
             });
             fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
+            fx.ViewModel.SearchQuery = "-host:id.test";
             fx.Robot.Click("MenuToolsComposer");
 
             // ContextMenu items are not in the visual tree until opened.

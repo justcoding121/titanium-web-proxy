@@ -202,6 +202,46 @@ public static class SessionSearch
         return string.IsNullOrEmpty(q) ? token : q + " " + token;
     }
 
+    /// <summary>
+    ///     Tokens in the same order <see cref="Tokenize"/> uses to match.
+    ///     A keyed token is <c>key</c> + <c>value</c> (<c>-host</c> + <c>cursor.sh</c>).
+    ///     A bare word has an empty key (<c>""</c> + <c>-cursor</c>).
+    /// </summary>
+    public static IReadOnlyList<(string Key, string Value)> GetTokens(string? query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return [];
+        }
+
+        return Tokenize(query);
+    }
+
+    /// <summary>
+    ///     Drop every <c>-host:</c> and <c>-process:</c> token, then append the given lists.
+    ///     Other tokens (typed text, checkboxes, positive filters) stay in place.
+    ///     Blank or whitespace-only values are skipped; a value with spaces keeps its first word,
+    ///     matching <see cref="AddToken"/>.
+    /// </summary>
+    public static string ReplaceHideTokens(
+        string? query,
+        IEnumerable<string>? hosts,
+        IEnumerable<string>? processes)
+    {
+        var remainder = RemoveKeyedTokens(RemoveKeyedTokens(query, "-host"), "-process");
+        foreach (var host in hosts ?? [])
+        {
+            remainder = AddToken(remainder, "-host", host);
+        }
+
+        foreach (var process in processes ?? [])
+        {
+            remainder = AddToken(remainder, "-process", process);
+        }
+
+        return remainder;
+    }
+
     /// <summary>Clear the entire search/filter query.</summary>
     public static string ClearFilters(string? _) => "";
 

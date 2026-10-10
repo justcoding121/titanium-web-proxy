@@ -19,7 +19,7 @@ Desktop HTTP(S) debugger on Windows, macOS, and Linux. [Inspector guide](/docs/i
 | Rewrite toolkit | AutoResponder, Map Local, Map Remote, breakpoints, Composer |
 | GraphQL rules | Match AutoResponder / Map Remote / Breakpoints by `operationName` |
 | HAR and share | Import/export HAR; copy as curl or fetch; Diff two sessions |
-| Search | `is:ws`, `is:grpc`, `process:`, `status:2xx`, `hide:tunnel`, and a leading `-` to hide one host or process (`-host:cursor.sh`); **Clear filters** resets it |
+| Search | `is:ws`, `is:grpc`, `process:`, `status:2xx`, `hide:tunnel`, and a leading `-` to hide one host or process (`-host:cursor.sh`, shown as a chip); **Filters** edits those hides with more room; **Clear filters** resets it |
 | Network throttle | Slow 3G / Fast 3G / LTE shaping on body writes and WebSocket frames |
 | Streaming-safe capture | Large known-length bodies are not buffered so downloads keep flowing |
 | Scripts | Line directives (`set-header`, `set-status`, `abort`) — not JavaScript or C# |

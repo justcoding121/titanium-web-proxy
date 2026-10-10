@@ -179,10 +179,14 @@
                   AutomationProperties.AutomationId="ToolbarPanel">
         <!-- Search + filters: WrapPanel so chips stay visible when the window narrows. -->
         <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarSearchFilters">
-          <TextBox MinWidth="160" Width="320" MaxWidth="420" Margin="0,0,12,6"
+          <TextBox MinWidth="200" MaxWidth="480" Width="320" Margin="0,0,12,6"
                    Watermark="Search URL, host, process… (or method:GET status:4xx)"
-                   ToolTip.Tip="Bare text searches URL, host, process name, exact process ID, method, and status. Prefixes limit to one field: method: status: host: url: process: pid: protocol: content-type: body: is:ws|grpc|tunnel|error hide:tunnel|image. body: also searches bodies spilled to disk. Prefix a field or a word with - to exclude it (e.g. -host:cursor.sh or -cursor)."
+                   ToolTip.Tip="Bare text searches URL, host, process name, exact process ID, method, and status. Prefixes limit to one field: method: status: host: url: process: pid: protocol: content-type: body: is:ws|grpc|tunnel|error hide:tunnel|image. body: also searches bodies spilled to disk. Prefix a field or a word with - to exclude it (e.g. -host:cursor.sh or -cursor). Filters edits hidden hosts and processes with more room."
                    Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
+          <Button Content="Filters" Command="{Binding OpenFiltersCommand}"
+                  VerticalAlignment="Center" Margin="0,0,12,6"
+                  ToolTip.Tip="Edit the search and hidden hosts or processes in a larger window"
+                  AutomationProperties.AutomationId="OpenFiltersButton" />
           <CheckBox Content="Hide CONNECT" IsChecked="{Binding HideTunnelsFilter}"
                     VerticalAlignment="Center" Margin="0,0,12,6"
                     ToolTip.Tip="Hide opaque HTTPS tunnels when Decrypt HTTPS is off"
@@ -196,6 +200,56 @@
           <Button Content="Clear filters" Command="{Binding ClearFiltersCommand}"
                   VerticalAlignment="Center" Margin="0,0,12,6"
                   AutomationProperties.AutomationId="ClearFiltersButton" />
+        </WrapPanel>
+        <WrapPanel Orientation="Horizontal" IsVisible="{Binding HasHiddenChips}"
+                   AutomationProperties.AutomationId="SearchHideChips">
+          <TextBlock Text="Hidden" VerticalAlignment="Center" Margin="0,0,8,6" Opacity="0.65" />
+          <ItemsControl ItemsSource="{Binding HiddenHostChips}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border CornerRadius="10" Padding="8,2" Margin="0,0,6,6"
+                        BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                        Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+                  <StackPanel Orientation="Horizontal" Spacing="4">
+                    <TextBlock Text="{Binding}" VerticalAlignment="Center" />
+                    <Button Content="×" Padding="4,0" MinWidth="0"
+                            Command="{Binding DataContext.RemoveHiddenHostCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            CommandParameter="{Binding}"
+                            AutomationProperties.AutomationId="SearchHideChipRemoveHost" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <ItemsControl ItemsSource="{Binding HiddenProcessChips}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border CornerRadius="10" Padding="8,2" Margin="0,0,6,6"
+                        BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                        Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+                  <StackPanel Orientation="Horizontal" Spacing="4">
+                    <TextBlock VerticalAlignment="Center" IsVisible="{Binding DataContext.ShowProcessChipPrefix, RelativeSource={RelativeSource AncestorType=Window}}"
+                               Text="process" Opacity="0.65" Margin="0,0,2,0" />
+                    <TextBlock Text="{Binding}" VerticalAlignment="Center" />
+                    <Button Content="×" Padding="4,0" MinWidth="0"
+                            Command="{Binding DataContext.RemoveHiddenProcessCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            CommandParameter="{Binding}"
+                            AutomationProperties.AutomationId="SearchHideChipRemoveProcess" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
         </WrapPanel>
         <!-- Capture toggles on their own wrapping row (separate from filters). -->
         <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarCaptureToggles">
