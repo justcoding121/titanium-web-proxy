@@ -2032,8 +2032,15 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         }
     }
 
-    // Avalonia {Binding} + PropertyChanged require an instance member even though the value is static.
-    public string ProxyLocalhostTip => OsTrustUxCopy.ProxyLocalhostTip(); // NOSONAR S2325 CA1822
+    public string ProxyLocalhostTip
+    {
+        get
+        {
+            // Touch instance state so Avalonia {Binding} + PropertyChanged stay valid (CA1822 / S2325).
+            _ = _settings;
+            return OsTrustUxCopy.ProxyLocalhostTip();
+        }
+    }
 
     public bool AutoStartCapture
     {
