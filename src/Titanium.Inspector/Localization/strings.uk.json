@@ -406,5 +406,17 @@
   "stats.event.tls": "Сертифікат сервера не був довіреним",
   "stats.event.opaque": "Розшифрування пропущено для цього з’єднання",
   "stats.eventAt": "+{0} мс",
-  "stats.eventFailure": "Збій: {0}"
+  "stats.eventFailure": "Збій: {0}",
+  "menu.runLog": "Журнал запуску…",
+  "runLog.empty": "Рівень Error, тож видно лише збої. Підвищте його в журналі.",
+  "runLog.follow": "Стежити",
+  "runLog.clear": "Очистити",
+  "runLog.filter": "Фільтр",
+  "runLog.all": "Усі",
+  "runLog.needsWindow": "Журналу запуску потрібне головне вікно",
+  "logging.fileSize": "Розмір файлу (МБ)",
+  "logging.rolledFiles": "Згорнуті файли",
+  "logging.memory": "Рядки журналу запуску",
+  "logging.levelCost": "Debug і Trace займають більше процесора. Використовуйте їх лише для діагностики.",
+  "logging.capsInvalid": "Розмір, згорнуті файли й рядки журналу мають бути числами."
 }

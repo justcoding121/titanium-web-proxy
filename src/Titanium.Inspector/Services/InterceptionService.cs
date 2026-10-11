@@ -28,6 +28,10 @@ public sealed class InterceptionService : IDisposable
     private long _nextId;
     private readonly ConcurrentDictionary<object, SessionSnapshot> _live = new();
     private readonly ConcurrentDictionary<object, SessionEventBuffer> _eventNotes = new();
+    private readonly RunLogRing _runLog = new(2000);
+
+    /// <summary>In-memory run log. The same instance is reused across logging rebuilds.</summary>
+    public RunLogRing RunLog => _runLog;
     private readonly ISystemProxyController _systemProxy;
     private ProxyServer? _proxy;
     private ExplicitProxyEndPoint? _endPoint;
@@ -480,6 +484,13 @@ public sealed class InterceptionService : IDisposable
 
         _proxy.Logging.EnableConsole = false;
         _proxy.Logging.EnableFile = s.LoggingEnableFile;
+        _proxy.Logging.MaxFileSizeBytes = Math.Max(1, s.LoggingMaxFileSizeMb) * 1024L * 1024L;
+        _proxy.Logging.MaxRolledFiles = Math.Max(0, s.LoggingMaxRolledFiles);
+        RunLog.SetCapacity(s.LoggingMemoryLines);
+        if (!_proxy.Logging.AdditionalLoggerProviders.Contains(RunLog))
+        {
+            _proxy.Logging.AdditionalLoggerProviders.Add(RunLog);
+        }
         EnsureRootPfxPath();
         var dir = Path.GetDirectoryName(_rootPfxPath!)!;
         var defaultLog = Path.Combine(dir, "logs", "titanium-inspector.log");

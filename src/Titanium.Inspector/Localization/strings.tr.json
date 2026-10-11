@@ -406,5 +406,17 @@
   "stats.event.tls": "Sunucu sertifikası güvenilir değildi",
   "stats.event.opaque": "Bu bağlantı için şifre çözme atlandı",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "Başarısız: {0}"
+  "stats.eventFailure": "Başarısız: {0}",
+  "menu.runLog": "Çalıştırma günlüğü…",
+  "runLog.empty": "Düzey Error olduğu için yalnız hatalar görünür. Daha fazlası için Günlükte yükseltin.",
+  "runLog.follow": "İzle",
+  "runLog.clear": "Temizle",
+  "runLog.filter": "Süz",
+  "runLog.all": "Tümü",
+  "runLog.needsWindow": "Çalıştırma günlüğü ana pencereyi gerektirir",
+  "logging.fileSize": "Dosya boyutu (MB)",
+  "logging.rolledFiles": "Döndürülen dosyalar",
+  "logging.memory": "Çalıştırma günlüğü satırları",
+  "logging.levelCost": "Debug ve Trace daha çok CPU kullanır. Yalnız tanı koyarken kullanın.",
+  "logging.capsInvalid": "Dosya boyutu, döndürülen dosyalar ve satırlar sayı olmalıdır."
 }

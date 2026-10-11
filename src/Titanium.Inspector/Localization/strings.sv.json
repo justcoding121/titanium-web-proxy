@@ -406,5 +406,17 @@
   "stats.event.tls": "Servercertifikatet var inte betrott",
   "stats.event.opaque": "Dekryptering hoppades över för den här anslutningen",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "Misslyckades: {0}"
+  "stats.eventFailure": "Misslyckades: {0}",
+  "menu.runLog": "Körningslogg…",
+  "runLog.empty": "Nivån är Error, så bara fel visas. Höj den under Loggning.",
+  "runLog.follow": "Följ",
+  "runLog.clear": "Rensa",
+  "runLog.filter": "Filter",
+  "runLog.all": "Alla",
+  "runLog.needsWindow": "Körningsloggen kräver huvudfönstret",
+  "logging.fileSize": "Filstorlek (MB)",
+  "logging.rolledFiles": "Rullade filer",
+  "logging.memory": "Rader i körningsloggen",
+  "logging.levelCost": "Debug och Trace använder mer CPU. Använd dem bara vid felsökning.",
+  "logging.capsInvalid": "Filstorlek, rullade filer och loggrader måste vara tal."
 }

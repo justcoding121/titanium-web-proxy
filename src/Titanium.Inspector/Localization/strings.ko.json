@@ -406,5 +406,17 @@
   "stats.event.tls": "서버 인증서를 신뢰할 수 없었습니다",
   "stats.event.opaque": "이 연결에서는 암호 해독을 건너뛰었습니다",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "실패: {0}"
+  "stats.eventFailure": "실패: {0}",
+  "menu.runLog": "실행 로그…",
+  "runLog.empty": "수준이 Error라서 실패만 보입니다. 로깅에서 높이면 더 보입니다.",
+  "runLog.follow": "따라가기",
+  "runLog.clear": "지우기",
+  "runLog.filter": "필터",
+  "runLog.all": "모두",
+  "runLog.needsWindow": "실행 로그에는 주 창이 필요합니다",
+  "logging.fileSize": "파일 크기(MB)",
+  "logging.rolledFiles": "롤링된 파일",
+  "logging.memory": "실행 로그 줄 수",
+  "logging.levelCost": "Debug와 Trace는 CPU를 더 씁니다. 진단할 때만 사용하세요.",
+  "logging.capsInvalid": "파일 크기, 롤링된 파일, 로그 줄 수는 숫자여야 합니다."
 }

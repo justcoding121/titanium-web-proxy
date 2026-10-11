@@ -406,5 +406,17 @@
   "stats.event.tls": "Certifikát serveru nebyl důvěryhodný",
   "stats.event.opaque": "U tohoto spojení bylo přeskočeno dešifrování",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "Selhalo: {0}"
+  "stats.eventFailure": "Selhalo: {0}",
+  "menu.runLog": "Protokol běhu…",
+  "runLog.empty": "Úroveň protokolu je Error, takže se zobrazují jen selhání. Zvyšte ji v Protokolování.",
+  "runLog.follow": "Sledovat",
+  "runLog.clear": "Vymazat",
+  "runLog.filter": "Filtr",
+  "runLog.all": "Vše",
+  "runLog.needsWindow": "Protokol běhu potřebuje hlavní okno",
+  "logging.fileSize": "Velikost souboru (MB)",
+  "logging.rolledFiles": "Odrolované soubory",
+  "logging.memory": "Řádky protokolu běhu",
+  "logging.levelCost": "Debug a Trace spotřebují více procesoru. Používejte je jen při diagnostice.",
+  "logging.capsInvalid": "Velikost souboru, odrolované soubory a řádky protokolu musí být čísla."
 }

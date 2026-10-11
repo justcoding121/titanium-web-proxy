@@ -406,5 +406,17 @@
   "stats.event.tls": "The server certificate was not trusted",
   "stats.event.opaque": "Decryption was skipped for this connection",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "Failed: {0}"
+  "stats.eventFailure": "Failed: {0}",
+  "menu.runLog": "Run log…",
+  "runLog.empty": "Log level is Error, so only failures appear. Raise it in Logging... to see more.",
+  "runLog.follow": "Follow",
+  "runLog.clear": "Clear",
+  "runLog.filter": "Filter",
+  "runLog.all": "All",
+  "runLog.needsWindow": "Run log requires the main window",
+  "logging.fileSize": "File size (MB)",
+  "logging.rolledFiles": "Rolled files",
+  "logging.memory": "Run log lines",
+  "logging.levelCost": "Debug and Trace use more CPU. Use them only while diagnosing.",
+  "logging.capsInvalid": "File size, rolled files, and run log lines must be numbers."
 }

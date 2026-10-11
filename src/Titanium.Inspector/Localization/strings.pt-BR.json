@@ -406,5 +406,17 @@
   "stats.event.tls": "O certificado do servidor não era confiável",
   "stats.event.opaque": "A descriptografia foi ignorada nesta conexão",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "Falhou: {0}"
+  "stats.eventFailure": "Falhou: {0}",
+  "menu.runLog": "Log de execução…",
+  "runLog.empty": "O nível é Error, então só falhas aparecem. Aumente em Registro para ver mais.",
+  "runLog.follow": "Seguir",
+  "runLog.clear": "Limpar",
+  "runLog.filter": "Filtrar",
+  "runLog.all": "Todos",
+  "runLog.needsWindow": "O log de execução precisa da janela principal",
+  "logging.fileSize": "Tamanho do arquivo (MB)",
+  "logging.rolledFiles": "Arquivos rolados",
+  "logging.memory": "Linhas do log de execução",
+  "logging.levelCost": "Debug e Trace usam mais CPU. Use-os só ao diagnosticar.",
+  "logging.capsInvalid": "Tamanho, arquivos rolados e linhas do log devem ser números."
 }

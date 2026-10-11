@@ -406,5 +406,17 @@
   "stats.event.tls": "Serversertifikatet var ikke klarert",
   "stats.event.opaque": "Dekryptering ble hoppet over for denne tilkoblingen",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "Mislyktes: {0}"
+  "stats.eventFailure": "Mislyktes: {0}",
+  "menu.runLog": "Kjørelogg…",
+  "runLog.empty": "Nivået er Error, så bare feil vises. Hev det under Logging.",
+  "runLog.follow": "Følg",
+  "runLog.clear": "Tøm",
+  "runLog.filter": "Filter",
+  "runLog.all": "Alle",
+  "runLog.needsWindow": "Kjøreloggen krever hovedvinduet",
+  "logging.fileSize": "Filstørrelse (MB)",
+  "logging.rolledFiles": "Rullede filer",
+  "logging.memory": "Linjer i kjøreloggen",
+  "logging.levelCost": "Debug og Trace bruker mer CPU. Bruk dem bare ved feilsøking.",
+  "logging.capsInvalid": "Filstørrelse, rullede filer og logglinjer må være tall."
 }

@@ -406,5 +406,17 @@
   "stats.event.tls": "אישור השרת לא היה מהימן",
   "stats.event.opaque": "הפענוח דולג עבור חיבור זה",
   "stats.eventAt": "+{0} אלפיות שנייה",
-  "stats.eventFailure": "נכשל: {0}"
+  "stats.eventFailure": "נכשל: {0}",
+  "menu.runLog": "יומן ריצה…",
+  "runLog.empty": "רמת היומן היא Error, ולכן מופיעים רק כשלים. העלו אותה ברישום.",
+  "runLog.follow": "מעקב",
+  "runLog.clear": "ניקוי",
+  "runLog.filter": "סינון",
+  "runLog.all": "הכול",
+  "runLog.needsWindow": "יומן הריצה דורש את החלון הראשי",
+  "logging.fileSize": "גודל קובץ (מ״ב)",
+  "logging.rolledFiles": "קבצים מסובבים",
+  "logging.memory": "שורות ביומן הריצה",
+  "logging.levelCost": "Debug ו-Trace משתמשים ביותר מעבד. השתמשו בהם רק לאבחון.",
+  "logging.capsInvalid": "גודל הקובץ, הקבצים המסובבים ושורות היומן חייבים להיות מספרים."
 }

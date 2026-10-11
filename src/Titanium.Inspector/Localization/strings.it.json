@@ -406,5 +406,17 @@
   "stats.event.tls": "Il certificato del server non era attendibile",
   "stats.event.opaque": "La decifratura è stata saltata per questa connessione",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "Non riuscito: {0}"
+  "stats.eventFailure": "Non riuscito: {0}",
+  "menu.runLog": "Registro di esecuzione…",
+  "runLog.empty": "Il livello è Error, quindi compaiono solo gli errori. Alzalo in Registrazione.",
+  "runLog.follow": "Segui",
+  "runLog.clear": "Cancella",
+  "runLog.filter": "Filtro",
+  "runLog.all": "Tutti",
+  "runLog.needsWindow": "Il registro di esecuzione richiede la finestra principale",
+  "logging.fileSize": "Dimensione file (MB)",
+  "logging.rolledFiles": "File ruotati",
+  "logging.memory": "Righe del registro",
+  "logging.levelCost": "Debug e Trace usano più CPU. Usali solo durante la diagnosi.",
+  "logging.capsInvalid": "Dimensione, file ruotati e righe del registro devono essere numeri."
 }

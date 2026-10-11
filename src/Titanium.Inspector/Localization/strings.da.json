@@ -406,5 +406,17 @@
   "stats.event.tls": "Servercertifikatet var ikke betroet",
   "stats.event.opaque": "Dekryptering blev sprunget over for denne forbindelse",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "Mislykkedes: {0}"
+  "stats.eventFailure": "Mislykkedes: {0}",
+  "menu.runLog": "Kørselslog…",
+  "runLog.empty": "Logniveauet er Error, så kun fejl vises. Hæv det under Logning for at se mere.",
+  "runLog.follow": "Følg",
+  "runLog.clear": "Ryd",
+  "runLog.filter": "Filter",
+  "runLog.all": "Alle",
+  "runLog.needsWindow": "Kørselsloggen kræver hovedvinduet",
+  "logging.fileSize": "Filstørrelse (MB)",
+  "logging.rolledFiles": "Rullede filer",
+  "logging.memory": "Linjer i kørselslog",
+  "logging.levelCost": "Debug og Trace bruger mere CPU. Brug dem kun under fejlfinding.",
+  "logging.capsInvalid": "Filstørrelse, rullede filer og loglinjer skal være tal."
 }

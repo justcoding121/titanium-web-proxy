@@ -406,5 +406,17 @@
   "stats.event.tls": "گواهی کارساز مورداعتماد نبود",
   "stats.event.opaque": "رمزگشایی برای این اتصال رد شد",
   "stats.eventAt": "+{0} میلی‌ثانیه",
-  "stats.eventFailure": "ناموفق: {0}"
+  "stats.eventFailure": "ناموفق: {0}",
+  "menu.runLog": "گزارش اجرا…",
+  "runLog.empty": "سطح Error است، پس فقط شکست‌ها دیده می‌شوند. آن را در گزارش‌گیری بالا ببرید.",
+  "runLog.follow": "پیگیری",
+  "runLog.clear": "پاک کردن",
+  "runLog.filter": "پالایه",
+  "runLog.all": "همه",
+  "runLog.needsWindow": "گزارش اجرا به پنجره اصلی نیاز دارد",
+  "logging.fileSize": "اندازه پرونده (مگابایت)",
+  "logging.rolledFiles": "پرونده‌های چرخیده",
+  "logging.memory": "خط‌های گزارش اجرا",
+  "logging.levelCost": "Debug و Trace پردازنده بیشتری می‌گیرند. فقط هنگام عیب‌یابی استفاده کنید.",
+  "logging.capsInvalid": "اندازه، پرونده‌های چرخیده و شمار خط‌ها باید عدد باشند."
 }

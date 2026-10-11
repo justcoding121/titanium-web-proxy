@@ -406,5 +406,17 @@
   "stats.event.tls": "El certificado del servidor no era de confianza",
   "stats.event.opaque": "El descifrado se omitió en esta conexión",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "Error: {0}"
+  "stats.eventFailure": "Error: {0}",
+  "menu.runLog": "Registro de ejecución…",
+  "runLog.empty": "El nivel es Error, así que solo aparecen fallos. Súbalo en Registro.",
+  "runLog.follow": "Seguir",
+  "runLog.clear": "Borrar",
+  "runLog.filter": "Filtrar",
+  "runLog.all": "Todos",
+  "runLog.needsWindow": "El registro de ejecución necesita la ventana principal",
+  "logging.fileSize": "Tamaño del archivo (MB)",
+  "logging.rolledFiles": "Archivos rotados",
+  "logging.memory": "Líneas del registro",
+  "logging.levelCost": "Debug y Trace usan más CPU. Úselos solo al diagnosticar.",
+  "logging.capsInvalid": "El tamaño, los archivos rotados y las líneas deben ser números."
 }

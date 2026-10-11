@@ -406,5 +406,17 @@
   "stats.event.tls": "ไม่เชื่อถือใบรับรองของเซิร์ฟเวอร์",
   "stats.event.opaque": "ข้ามการถอดรหัสสำหรับการเชื่อมต่อนี้",
   "stats.eventAt": "+{0} มิลลิวินาที",
-  "stats.eventFailure": "ล้มเหลว: {0}"
+  "stats.eventFailure": "ล้มเหลว: {0}",
+  "menu.runLog": "บันทึกการทำงาน…",
+  "runLog.empty": "ระดับคือ Error จึงแสดงเฉพาะความล้มเหลว เพิ่มระดับในการบันทึกเพื่อดูมากขึ้น",
+  "runLog.follow": "ติดตาม",
+  "runLog.clear": "ล้าง",
+  "runLog.filter": "กรอง",
+  "runLog.all": "ทั้งหมด",
+  "runLog.needsWindow": "บันทึกการทำงานต้องใช้หน้าต่างหลัก",
+  "logging.fileSize": "ขนาดไฟล์ (MB)",
+  "logging.rolledFiles": "ไฟล์ที่หมุนเวียน",
+  "logging.memory": "บรรทัดบันทึกการทำงาน",
+  "logging.levelCost": "Debug และ Trace ใช้ CPU มากกว่า ใช้เมื่อวินิจฉัยเท่านั้น",
+  "logging.capsInvalid": "ขนาดไฟล์ ไฟล์ที่หมุนเวียน และจำนวนบรรทัดต้องเป็นตัวเลข"
 }

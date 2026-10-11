@@ -406,5 +406,17 @@
   "stats.event.tls": "Το πιστοποιητικό του διακομιστή δεν ήταν αξιόπιστο",
   "stats.event.opaque": "Η αποκρυπτογράφηση παραλείφθηκε για αυτή τη σύνδεση",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "Απέτυχε: {0}"
+  "stats.eventFailure": "Απέτυχε: {0}",
+  "menu.runLog": "Αρχείο εκτέλεσης…",
+  "runLog.empty": "Το επίπεδο είναι Error, οπότε εμφανίζονται μόνο αποτυχίες. Αυξήστε το στην Καταγραφή.",
+  "runLog.follow": "Ακολούθηση",
+  "runLog.clear": "Εκκαθάριση",
+  "runLog.filter": "Φίλτρο",
+  "runLog.all": "Όλα",
+  "runLog.needsWindow": "Το αρχείο εκτέλεσης χρειάζεται το κύριο παράθυρο",
+  "logging.fileSize": "Μέγεθος αρχείου (MB)",
+  "logging.rolledFiles": "Κυλιόμενα αρχεία",
+  "logging.memory": "Γραμμές αρχείου εκτέλεσης",
+  "logging.levelCost": "Τα Debug και Trace χρησιμοποιούν περισσότερη CPU. Χρησιμοποιήστε τα μόνο στη διάγνωση.",
+  "logging.capsInvalid": "Το μέγεθος, τα κυλιόμενα αρχεία και οι γραμμές πρέπει να είναι αριθμοί."
 }

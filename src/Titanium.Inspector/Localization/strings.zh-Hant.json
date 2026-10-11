@@ -406,5 +406,17 @@
   "stats.event.tls": "伺服器憑證不受信任",
   "stats.event.opaque": "此連線已略過解密",
   "stats.eventAt": "+{0} 毫秒",
-  "stats.eventFailure": "失敗：{0}"
+  "stats.eventFailure": "失敗：{0}",
+  "menu.runLog": "執行紀錄…",
+  "runLog.empty": "紀錄層級為 Error，因此只顯示失敗。在「紀錄」中調高層級可看到更多。",
+  "runLog.follow": "跟隨",
+  "runLog.clear": "清除",
+  "runLog.filter": "篩選",
+  "runLog.all": "全部",
+  "runLog.needsWindow": "執行紀錄需要主視窗",
+  "logging.fileSize": "檔案大小（MB）",
+  "logging.rolledFiles": "輪替檔案數",
+  "logging.memory": "執行紀錄行數",
+  "logging.levelCost": "Debug 和 Trace 會使用更多 CPU。請只在診斷時使用。",
+  "logging.capsInvalid": "檔案大小、輪替檔案數和執行紀錄行數必須是數字。"
 }

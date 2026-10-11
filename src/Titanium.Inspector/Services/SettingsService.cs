@@ -75,6 +75,19 @@ public sealed class InspectorSettings
 #endif
     public string? LoggingFilePath { get; set; }
 
+    /// <summary>Rolling file size cap, in megabytes. The proxy default is 10.</summary>
+    public int LoggingMaxFileSizeMb { get; set; } = 10;
+
+    /// <summary>Rolled log files kept beside the active file. The proxy default is 5.</summary>
+    public int LoggingMaxRolledFiles { get; set; } = 5;
+
+    /// <summary>Lines kept in the Run log window.</summary>
+    public int LoggingMemoryLines { get; set; } = 2000;
+
+    public double RunLogWindowWidth { get; set; } = 720;
+
+    public double RunLogWindowHeight { get; set; } = 480;
+
     /// <summary>Accept upstream TLS that fails normal validation (lab / self-signed hosts). Off by default.</summary>
     public bool IgnoreServerCertificateErrors { get; set; }
 

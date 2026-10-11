@@ -406,5 +406,17 @@
   "stats.event.tls": "Certyfikat serwera nie był zaufany",
   "stats.event.opaque": "Odszyfrowanie zostało pominięte dla tego połączenia",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "Niepowodzenie: {0}"
+  "stats.eventFailure": "Niepowodzenie: {0}",
+  "menu.runLog": "Dziennik uruchomienia…",
+  "runLog.empty": "Poziom to Error, więc widać tylko błędy. Podnieś go w Rejestrowaniu.",
+  "runLog.follow": "Śledź",
+  "runLog.clear": "Wyczyść",
+  "runLog.filter": "Filtr",
+  "runLog.all": "Wszystkie",
+  "runLog.needsWindow": "Dziennik uruchomienia wymaga okna głównego",
+  "logging.fileSize": "Rozmiar pliku (MB)",
+  "logging.rolledFiles": "Zrolowane pliki",
+  "logging.memory": "Wiersze dziennika",
+  "logging.levelCost": "Debug i Trace zużywają więcej procesora. Używaj ich tylko przy diagnostyce.",
+  "logging.capsInvalid": "Rozmiar, zrolowane pliki i wiersze dziennika muszą być liczbami."
 }

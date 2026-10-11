@@ -301,6 +301,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             return Task.CompletedTask;
         });
         OpenLoggingSettingsCommand = Cmd(OpenLoggingSettingsAsync);
+        OpenRunLogCommand = Cmd(OpenRunLogAsync);
         OpenNetworkSettingsCommand = Cmd(OpenNetworkSettingsAsync);
         OpenAboutCommand = Cmd(OpenAboutAsync);
         OpenKeyboardShortcutsCommand = Cmd(OpenKeyboardShortcutsAsync);
@@ -1158,6 +1159,19 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         return true;
     }
 
+    private Task OpenRunLogAsync()
+    {
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            StatusText = LanguageService.Get("runLog.needsWindow");
+            return Task.CompletedTask;
+        }
+
+        RunLogWindow.Show(owner, _interception.RunLog, _settings, () => _ = OpenLoggingSettingsAsync());
+        return Task.CompletedTask;
+    }
+
     private async Task OpenLoggingSettingsAsync()
     {
         var owner = TryGetMainWindow();
@@ -1479,6 +1493,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     /// <summary>Restore the default columns (visibility, order, widths, sort).</summary>
     public ICommand ResetGridColumnsCommand { get; }
     public ICommand OpenLoggingSettingsCommand { get; }
+
+    public ICommand OpenRunLogCommand { get; }
     public ICommand OpenNetworkSettingsCommand { get; }
     public ICommand OpenAboutCommand { get; }
     public ICommand OpenKeyboardShortcutsCommand { get; }

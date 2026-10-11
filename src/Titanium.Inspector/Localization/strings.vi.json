@@ -406,5 +406,17 @@
   "stats.event.tls": "Chứng chỉ máy chủ không được tin cậy",
   "stats.event.opaque": "Đã bỏ qua giải mã cho kết nối này",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "Thất bại: {0}"
+  "stats.eventFailure": "Thất bại: {0}",
+  "menu.runLog": "Nhật ký chạy…",
+  "runLog.empty": "Mức là Error nên chỉ lỗi mới hiện. Hãy tăng mức trong Ghi nhật ký.",
+  "runLog.follow": "Theo dõi",
+  "runLog.clear": "Xóa",
+  "runLog.filter": "Lọc",
+  "runLog.all": "Tất cả",
+  "runLog.needsWindow": "Nhật ký chạy cần cửa sổ chính",
+  "logging.fileSize": "Kích thước tệp (MB)",
+  "logging.rolledFiles": "Tệp đã xoay",
+  "logging.memory": "Dòng nhật ký chạy",
+  "logging.levelCost": "Debug và Trace dùng nhiều CPU hơn. Chỉ dùng khi chẩn đoán.",
+  "logging.capsInvalid": "Kích thước, tệp đã xoay và số dòng phải là số."
 }

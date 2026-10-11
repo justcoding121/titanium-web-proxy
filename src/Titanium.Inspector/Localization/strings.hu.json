@@ -406,5 +406,17 @@
   "stats.event.tls": "A kiszolgáló tanúsítványa nem volt megbízható",
   "stats.event.opaque": "A visszafejtés ki lett hagyva ennél a kapcsolatnál",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "Sikertelen: {0}"
+  "stats.eventFailure": "Sikertelen: {0}",
+  "menu.runLog": "Futásnapló…",
+  "runLog.empty": "A szint Error, ezért csak a hibák látszanak. Emelje a Naplózásban.",
+  "runLog.follow": "Követés",
+  "runLog.clear": "Törlés",
+  "runLog.filter": "Szűrő",
+  "runLog.all": "Mind",
+  "runLog.needsWindow": "A futásnaplóhoz kell a főablak",
+  "logging.fileSize": "Fájlméret (MB)",
+  "logging.rolledFiles": "Görgetett fájlok",
+  "logging.memory": "Futásnapló sorai",
+  "logging.levelCost": "A Debug és a Trace több processzort használ. Csak hibakereséskor használja.",
+  "logging.capsInvalid": "A fájlméret, a görgetett fájlok és a sorok száma szám legyen."
 }

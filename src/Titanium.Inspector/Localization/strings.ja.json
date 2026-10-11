@@ -406,5 +406,17 @@
   "stats.event.tls": "サーバー証明書は信頼されていませんでした",
   "stats.event.opaque": "この接続では復号を省略しました",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "失敗: {0}"
+  "stats.eventFailure": "失敗: {0}",
+  "menu.runLog": "実行ログ…",
+  "runLog.empty": "レベルは Error のため、失敗だけが表示されます。ログで上げると増えます。",
+  "runLog.follow": "追従",
+  "runLog.clear": "消去",
+  "runLog.filter": "絞り込み",
+  "runLog.all": "すべて",
+  "runLog.needsWindow": "実行ログにはメイン ウィンドウが必要です",
+  "logging.fileSize": "ファイル サイズ (MB)",
+  "logging.rolledFiles": "ローテーションファイル",
+  "logging.memory": "実行ログの行数",
+  "logging.levelCost": "Debug と Trace は CPU を多く使います。診断中だけ使ってください。",
+  "logging.capsInvalid": "ファイル サイズ、ローテーション数、行数は数値である必要があります。"
 }

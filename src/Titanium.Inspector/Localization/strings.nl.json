@@ -406,5 +406,17 @@
   "stats.event.tls": "Het servercertificaat werd niet vertrouwd",
   "stats.event.opaque": "Ontsleuteling is overgeslagen voor deze verbinding",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "Mislukt: {0}"
+  "stats.eventFailure": "Mislukt: {0}",
+  "menu.runLog": "Uitvoeringslog…",
+  "runLog.empty": "Het logniveau is Error, dus alleen fouten verschijnen. Verhoog het in Logboek.",
+  "runLog.follow": "Volgen",
+  "runLog.clear": "Wissen",
+  "runLog.filter": "Filter",
+  "runLog.all": "Alles",
+  "runLog.needsWindow": "Het uitvoeringslog heeft het hoofdvenster nodig",
+  "logging.fileSize": "Bestandsgrootte (MB)",
+  "logging.rolledFiles": "Gerolde bestanden",
+  "logging.memory": "Regels in uitvoeringslog",
+  "logging.levelCost": "Debug en Trace gebruiken meer CPU. Gebruik ze alleen bij diagnose.",
+  "logging.capsInvalid": "Bestandsgrootte, gerolde bestanden en logregels moeten getallen zijn."
 }

@@ -406,5 +406,17 @@
   "stats.event.tls": "شهادة الخادم لم تكن موثوقة",
   "stats.event.opaque": "تم تخطي فك التشفير لهذا الاتصال",
   "stats.eventAt": "+{0} مللي ثانية",
-  "stats.eventFailure": "فشل: {0}"
+  "stats.eventFailure": "فشل: {0}",
+  "menu.runLog": "سجل التشغيل…",
+  "runLog.empty": "مستوى السجل هو خطأ، لذا تظهر الإخفاقات فقط. ارفعه في التسجيل لرؤية المزيد.",
+  "runLog.follow": "متابعة",
+  "runLog.clear": "مسح",
+  "runLog.filter": "تصفية",
+  "runLog.all": "الكل",
+  "runLog.needsWindow": "سجل التشغيل يحتاج النافذة الرئيسية",
+  "logging.fileSize": "حجم الملف (ميجابايت)",
+  "logging.rolledFiles": "الملفات المدورة",
+  "logging.memory": "أسطر سجل التشغيل",
+  "logging.levelCost": "التصحيح والتتبع يستهلكان معالجا أكثر. استخدمهما عند التشخيص فقط.",
+  "logging.capsInvalid": "حجم الملف والملفات المدورة وأسطر السجل يجب أن تكون أرقاما."
 }

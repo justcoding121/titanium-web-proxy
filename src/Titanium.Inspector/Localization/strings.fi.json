@@ -406,5 +406,17 @@
   "stats.event.tls": "Palvelimen varmennetta ei luotettu",
   "stats.event.opaque": "Salauksen purku ohitettiin tälle yhteydelle",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "Epäonnistui: {0}"
+  "stats.eventFailure": "Epäonnistui: {0}",
+  "menu.runLog": "Ajoloki…",
+  "runLog.empty": "Lokitaso on Error, joten vain virheet näkyvät. Nosta tasoa Lokituksessa.",
+  "runLog.follow": "Seuraa",
+  "runLog.clear": "Tyhjennä",
+  "runLog.filter": "Suodata",
+  "runLog.all": "Kaikki",
+  "runLog.needsWindow": "Ajoloki tarvitsee pääikkunan",
+  "logging.fileSize": "Tiedoston koko (Mt)",
+  "logging.rolledFiles": "Kierrätetyt tiedostot",
+  "logging.memory": "Ajolokin rivit",
+  "logging.levelCost": "Debug ja Trace käyttävät enemmän suoritinta. Käytä niitä vain vianmäärityksessä.",
+  "logging.capsInvalid": "Tiedoston koon, kierrätettyjen tiedostojen ja lokirivien on oltava numeroita."
 }

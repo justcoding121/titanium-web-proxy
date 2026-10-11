@@ -406,5 +406,17 @@
   "stats.event.tls": "Sertifikat server tidak dipercaya",
   "stats.event.opaque": "Dekripsi dilewati untuk koneksi ini",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "Gagal: {0}"
+  "stats.eventFailure": "Gagal: {0}",
+  "menu.runLog": "Log jalankan…",
+  "runLog.empty": "Tingkatnya Error, jadi hanya kegagalan yang muncul. Naikkan di Pencatatan.",
+  "runLog.follow": "Ikuti",
+  "runLog.clear": "Bersihkan",
+  "runLog.filter": "Filter",
+  "runLog.all": "Semua",
+  "runLog.needsWindow": "Log jalankan memerlukan jendela utama",
+  "logging.fileSize": "Ukuran berkas (MB)",
+  "logging.rolledFiles": "Berkas tergulung",
+  "logging.memory": "Baris log jalankan",
+  "logging.levelCost": "Debug dan Trace memakai lebih banyak CPU. Gunakan hanya saat mendiagnosis.",
+  "logging.capsInvalid": "Ukuran berkas, berkas tergulung, dan baris log harus berupa angka."
 }

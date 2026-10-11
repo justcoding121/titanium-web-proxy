@@ -406,5 +406,17 @@
   "stats.event.tls": "Сертификат сервера не был доверенным",
   "stats.event.opaque": "Расшифровка пропущена для этого соединения",
   "stats.eventAt": "+{0} мс",
-  "stats.eventFailure": "Сбой: {0}"
+  "stats.eventFailure": "Сбой: {0}",
+  "menu.runLog": "Журнал запуска…",
+  "runLog.empty": "Уровень Error, поэтому видны только сбои. Повысьте его в журнале.",
+  "runLog.follow": "Следовать",
+  "runLog.clear": "Очистить",
+  "runLog.filter": "Фильтр",
+  "runLog.all": "Все",
+  "runLog.needsWindow": "Журналу запуска нужно главное окно",
+  "logging.fileSize": "Размер файла (МБ)",
+  "logging.rolledFiles": "Свёрнутые файлы",
+  "logging.memory": "Строки журнала запуска",
+  "logging.levelCost": "Debug и Trace занимают больше процессора. Используйте их только при диагностике.",
+  "logging.capsInvalid": "Размер, свёрнутые файлы и строки журнала должны быть числами."
 }

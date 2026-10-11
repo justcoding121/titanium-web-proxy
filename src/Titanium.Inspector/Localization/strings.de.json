@@ -406,5 +406,17 @@
   "stats.event.tls": "Das Serverzertifikat war nicht vertrauenswürdig",
   "stats.event.opaque": "Die Entschlüsselung wurde für diese Verbindung übersprungen",
   "stats.eventAt": "+{0} ms",
-  "stats.eventFailure": "Fehlgeschlagen: {0}"
+  "stats.eventFailure": "Fehlgeschlagen: {0}",
+  "menu.runLog": "Laufprotokoll…",
+  "runLog.empty": "Die Stufe ist Error, daher erscheinen nur Fehler. Erhöhen Sie sie unter Protokollierung.",
+  "runLog.follow": "Folgen",
+  "runLog.clear": "Leeren",
+  "runLog.filter": "Filtern",
+  "runLog.all": "Alle",
+  "runLog.needsWindow": "Das Laufprotokoll braucht das Hauptfenster",
+  "logging.fileSize": "Dateigröße (MB)",
+  "logging.rolledFiles": "Gerollte Dateien",
+  "logging.memory": "Zeilen im Laufprotokoll",
+  "logging.levelCost": "Debug und Trace brauchen mehr CPU. Nur zur Diagnose verwenden.",
+  "logging.capsInvalid": "Dateigröße, gerollte Dateien und Protokollzeilen müssen Zahlen sein."
 }

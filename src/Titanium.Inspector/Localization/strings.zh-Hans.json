@@ -406,5 +406,17 @@
   "stats.event.tls": "服务器证书不受信任",
   "stats.event.opaque": "此连接已跳过解密",
   "stats.eventAt": "+{0} 毫秒",
-  "stats.eventFailure": "失败：{0}"
+  "stats.eventFailure": "失败：{0}",
+  "menu.runLog": "运行日志…",
+  "runLog.empty": "日志级别为 Error，因此只显示失败。在“日志”中调高级别可看到更多。",
+  "runLog.follow": "跟随",
+  "runLog.clear": "清除",
+  "runLog.filter": "筛选",
+  "runLog.all": "全部",
+  "runLog.needsWindow": "运行日志需要主窗口",
+  "logging.fileSize": "文件大小（MB）",
+  "logging.rolledFiles": "滚动文件数",
+  "logging.memory": "运行日志行数",
+  "logging.levelCost": "Debug 和 Trace 会占用更多 CPU。请只在诊断时使用。",
+  "logging.capsInvalid": "文件大小、滚动文件数和运行日志行数必须是数字。"
 }

@@ -406,5 +406,17 @@
   "stats.event.tls": "सर्वर प्रमाणपत्र विश्वसनीय नहीं था",
   "stats.event.opaque": "इस कनेक्शन के लिए डिक्रिप्शन छोड़ा गया",
   "stats.eventAt": "+{0} मि.से.",
-  "stats.eventFailure": "विफल: {0}"
+  "stats.eventFailure": "विफल: {0}",
+  "menu.runLog": "रन लॉग…",
+  "runLog.empty": "स्तर Error है, इसलिए केवल विफलताएँ दिखती हैं। अधिक देखने के लिए लॉगिंग में बढ़ाएँ।",
+  "runLog.follow": "अनुसरण",
+  "runLog.clear": "साफ़ करें",
+  "runLog.filter": "फ़िल्टर",
+  "runLog.all": "सभी",
+  "runLog.needsWindow": "रन लॉग के लिए मुख्य विंडो चाहिए",
+  "logging.fileSize": "फ़ाइल आकार (MB)",
+  "logging.rolledFiles": "रोल की गई फ़ाइलें",
+  "logging.memory": "रन लॉग पंक्तियाँ",
+  "logging.levelCost": "Debug और Trace अधिक CPU लेते हैं। इन्हें केवल निदान के समय उपयोग करें।",
+  "logging.capsInvalid": "फ़ाइल आकार, रोल की गई फ़ाइलें और लॉग पंक्तियाँ संख्याएँ होनी चाहिए।"
 }
