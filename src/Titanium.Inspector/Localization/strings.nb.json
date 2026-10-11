@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Økter",
   "shortcuts.window": "Vindu",
   "shortcuts.toggleCapture": "Slå opptak av eller på",
-  "shortcuts.focusSearch": "Fokuser søk"
+  "shortcuts.focusSearch": "Fokuser søk",
+  "menu.documentation": "Dokumentasjon",
+  "menu.reportIssue": "Rapporter et problem"
 }

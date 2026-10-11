@@ -371,5 +371,7 @@
   "shortcuts.sessions": "セッション",
   "shortcuts.window": "ウィンドウ",
   "shortcuts.toggleCapture": "キャプチャの切り替え",
-  "shortcuts.focusSearch": "検索に移動"
+  "shortcuts.focusSearch": "検索に移動",
+  "menu.documentation": "ドキュメント",
+  "menu.reportIssue": "問題を報告"
 }

@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Istunnot",
   "shortcuts.window": "Ikkuna",
   "shortcuts.toggleCapture": "Vaihda kaappaus",
-  "shortcuts.focusSearch": "Kohdista haku"
+  "shortcuts.focusSearch": "Kohdista haku",
+  "menu.documentation": "Ohjeet",
+  "menu.reportIssue": "Ilmoita ongelmasta"
 }

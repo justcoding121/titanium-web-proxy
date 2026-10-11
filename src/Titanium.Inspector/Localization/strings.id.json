@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Sesi",
   "shortcuts.window": "Jendela",
   "shortcuts.toggleCapture": "Aktifkan atau hentikan penangkapan",
-  "shortcuts.focusSearch": "Fokus ke pencarian"
+  "shortcuts.focusSearch": "Fokus ke pencarian",
+  "menu.documentation": "Dokumentasi",
+  "menu.reportIssue": "Laporkan masalah"
 }

@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Munkamenetek",
   "shortcuts.window": "Ablak",
   "shortcuts.toggleCapture": "Rögzítés ki- vagy bekapcsolása",
-  "shortcuts.focusSearch": "Keresés fókuszba"
+  "shortcuts.focusSearch": "Keresés fókuszba",
+  "menu.documentation": "Dokumentáció",
+  "menu.reportIssue": "Hiba bejelentése"
 }

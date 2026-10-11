@@ -371,5 +371,7 @@
   "shortcuts.sessions": "सत्र",
   "shortcuts.window": "विंडो",
   "shortcuts.toggleCapture": "कैप्चर चालू या बंद",
-  "shortcuts.focusSearch": "खोज पर जाएँ"
+  "shortcuts.focusSearch": "खोज पर जाएँ",
+  "menu.documentation": "दस्तावेज़",
+  "menu.reportIssue": "समस्या बताएँ"
 }

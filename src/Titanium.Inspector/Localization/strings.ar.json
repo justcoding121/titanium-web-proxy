@@ -371,5 +371,7 @@
   "shortcuts.sessions": "الجلسات",
   "shortcuts.window": "النافذة",
   "shortcuts.toggleCapture": "تبديل الالتقاط",
-  "shortcuts.focusSearch": "التركيز على البحث"
+  "shortcuts.focusSearch": "التركيز على البحث",
+  "menu.documentation": "الوثائق",
+  "menu.reportIssue": "الإبلاغ عن مشكلة"
 }

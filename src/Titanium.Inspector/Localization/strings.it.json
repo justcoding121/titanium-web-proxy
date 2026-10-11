@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Sessioni",
   "shortcuts.window": "Finestra",
   "shortcuts.toggleCapture": "Attiva o disattiva la cattura",
-  "shortcuts.focusSearch": "Vai alla ricerca"
+  "shortcuts.focusSearch": "Vai alla ricerca",
+  "menu.documentation": "Documentazione",
+  "menu.reportIssue": "Segnala un problema"
 }

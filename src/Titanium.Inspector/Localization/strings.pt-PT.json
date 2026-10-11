@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Sessões",
   "shortcuts.window": "Janela",
   "shortcuts.toggleCapture": "Alternar captura",
-  "shortcuts.focusSearch": "Focar a pesquisa"
+  "shortcuts.focusSearch": "Focar a pesquisa",
+  "menu.documentation": "Documentação",
+  "menu.reportIssue": "Comunicar um problema"
 }

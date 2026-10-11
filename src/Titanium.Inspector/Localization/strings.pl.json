@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Sesje",
   "shortcuts.window": "Okno",
   "shortcuts.toggleCapture": "Przełącz przechwytywanie",
-  "shortcuts.focusSearch": "Przejdź do wyszukiwania"
+  "shortcuts.focusSearch": "Przejdź do wyszukiwania",
+  "menu.documentation": "Dokumentacja",
+  "menu.reportIssue": "Zgłoś problem"
 }

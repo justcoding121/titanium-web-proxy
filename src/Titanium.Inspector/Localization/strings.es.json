@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Sesiones",
   "shortcuts.window": "Ventana",
   "shortcuts.toggleCapture": "Alternar captura",
-  "shortcuts.focusSearch": "Enfocar la búsqueda"
+  "shortcuts.focusSearch": "Enfocar la búsqueda",
+  "menu.documentation": "Documentación",
+  "menu.reportIssue": "Informar de un problema"
 }

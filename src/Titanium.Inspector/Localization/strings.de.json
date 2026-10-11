@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Sitzungen",
   "shortcuts.window": "Fenster",
   "shortcuts.toggleCapture": "Aufzeichnung umschalten",
-  "shortcuts.focusSearch": "Suche fokussieren"
+  "shortcuts.focusSearch": "Suche fokussieren",
+  "menu.documentation": "Dokumentation",
+  "menu.reportIssue": "Problem melden"
 }

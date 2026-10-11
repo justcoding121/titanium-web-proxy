@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Relace",
   "shortcuts.window": "Okno",
   "shortcuts.toggleCapture": "Přepnout zachytávání",
-  "shortcuts.focusSearch": "Zaměřit hledání"
+  "shortcuts.focusSearch": "Zaměřit hledání",
+  "menu.documentation": "Dokumentace",
+  "menu.reportIssue": "Nahlásit problém"
 }

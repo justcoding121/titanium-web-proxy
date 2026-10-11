@@ -371,5 +371,7 @@
   "shortcuts.sessions": "เซสชัน",
   "shortcuts.window": "หน้าต่าง",
   "shortcuts.toggleCapture": "สลับการจับ",
-  "shortcuts.focusSearch": "ไปที่ช่องค้นหา"
+  "shortcuts.focusSearch": "ไปที่ช่องค้นหา",
+  "menu.documentation": "เอกสาร",
+  "menu.reportIssue": "รายงานปัญหา"
 }

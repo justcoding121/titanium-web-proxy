@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Сеансы",
   "shortcuts.window": "Окно",
   "shortcuts.toggleCapture": "Переключить захват",
-  "shortcuts.focusSearch": "Перейти к поиску"
+  "shortcuts.focusSearch": "Перейти к поиску",
+  "menu.documentation": "Документация",
+  "menu.reportIssue": "Сообщить о проблеме"
 }

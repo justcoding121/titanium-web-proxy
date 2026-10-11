@@ -371,5 +371,7 @@
   "shortcuts.sessions": "세션",
   "shortcuts.window": "창",
   "shortcuts.toggleCapture": "캡처 전환",
-  "shortcuts.focusSearch": "검색으로 이동"
+  "shortcuts.focusSearch": "검색으로 이동",
+  "menu.documentation": "문서",
+  "menu.reportIssue": "문제 신고"
 }

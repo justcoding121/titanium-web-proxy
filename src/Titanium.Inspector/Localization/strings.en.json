@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Sessions",
   "shortcuts.window": "Window",
   "shortcuts.toggleCapture": "Toggle capturing",
-  "shortcuts.focusSearch": "Focus search"
+  "shortcuts.focusSearch": "Focus search",
+  "menu.documentation": "Documentation",
+  "menu.reportIssue": "Report an issue"
 }

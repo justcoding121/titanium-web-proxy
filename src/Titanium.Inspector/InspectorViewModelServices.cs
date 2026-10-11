@@ -11,4 +11,5 @@ public readonly record struct InspectorViewModelServices(
     InterceptionService? Interception = null,
     IInspectorDialogs? Dialogs = null,
     IInspectorPathPicker? PathPicker = null,
-    IStatusNotifier? StatusNotifier = null);
+    IStatusNotifier? StatusNotifier = null,
+    IExternalUriLauncher? UriLauncher = null);

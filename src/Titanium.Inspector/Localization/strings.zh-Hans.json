@@ -371,5 +371,7 @@
   "shortcuts.sessions": "会话",
   "shortcuts.window": "窗口",
   "shortcuts.toggleCapture": "切换捕获",
-  "shortcuts.focusSearch": "转到搜索"
+  "shortcuts.focusSearch": "转到搜索",
+  "menu.documentation": "文档",
+  "menu.reportIssue": "报告问题"
 }

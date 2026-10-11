@@ -371,5 +371,7 @@
   "shortcuts.sessions": "نشست‌ها",
   "shortcuts.window": "پنجره",
   "shortcuts.toggleCapture": "تغییر وضعیت ضبط",
-  "shortcuts.focusSearch": "تمرکز روی جستجو"
+  "shortcuts.focusSearch": "تمرکز روی جستجو",
+  "menu.documentation": "مستندات",
+  "menu.reportIssue": "گزارش مشکل"
 }

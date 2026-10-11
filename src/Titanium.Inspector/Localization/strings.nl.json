@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Sessies",
   "shortcuts.window": "Venster",
   "shortcuts.toggleCapture": "Opname in- of uitschakelen",
-  "shortcuts.focusSearch": "Zoeken focussen"
+  "shortcuts.focusSearch": "Zoeken focussen",
+  "menu.documentation": "Documentatie",
+  "menu.reportIssue": "Meld een probleem"
 }

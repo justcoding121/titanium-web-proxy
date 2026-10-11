@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Sessioner",
   "shortcuts.window": "Vindue",
   "shortcuts.toggleCapture": "Slå optagelse til eller fra",
-  "shortcuts.focusSearch": "Fokuser søgning"
+  "shortcuts.focusSearch": "Fokuser søgning",
+  "menu.documentation": "Dokumentation",
+  "menu.reportIssue": "Rapportér et problem"
 }

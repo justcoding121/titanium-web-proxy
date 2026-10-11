@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Сеанси",
   "shortcuts.window": "Вікно",
   "shortcuts.toggleCapture": "Перемкнути захоплення",
-  "shortcuts.focusSearch": "Перейти до пошуку"
+  "shortcuts.focusSearch": "Перейти до пошуку",
+  "menu.documentation": "Документація",
+  "menu.reportIssue": "Повідомити про проблему"
 }

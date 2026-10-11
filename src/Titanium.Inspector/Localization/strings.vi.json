@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Phiên",
   "shortcuts.window": "Cửa sổ",
   "shortcuts.toggleCapture": "Bật hoặc tắt ghi",
-  "shortcuts.focusSearch": "Đến ô tìm kiếm"
+  "shortcuts.focusSearch": "Đến ô tìm kiếm",
+  "menu.documentation": "Tài liệu",
+  "menu.reportIssue": "Báo cáo sự cố"
 }

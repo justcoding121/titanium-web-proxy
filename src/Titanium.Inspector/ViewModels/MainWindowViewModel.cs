@@ -31,6 +31,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     private readonly InterceptionService _interception;
     private readonly IInspectorDialogs _dialogs;
     private readonly IInspectorPathPicker _pathPicker;
+    private readonly IExternalUriLauncher _uriLauncher;
     private IStatusNotifier _statusNotifier;
     private readonly ObservableCollection<SessionSnapshot> _all;
     private readonly List<SessionSnapshot> _selectedSessions = new();
@@ -170,6 +171,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         _interception = services.Interception ?? new InterceptionService();
         _dialogs = services.Dialogs ?? new AvaloniaInspectorDialogs();
         _pathPicker = services.PathPicker ?? new AvaloniaInspectorPathPicker();
+        _uriLauncher = services.UriLauncher ?? new WindowUriLauncher(() =>
+        {
+            var owner = TryGetMainWindow();
+            return owner is null ? null : TopLevel.GetTopLevel(owner);
+        });
         _statusNotifier = services.StatusNotifier ?? NullStatusNotifier.Instance;
         Sessions = new SessionListCollection();
         Breakpoints = new BreakpointViewModel();
@@ -298,6 +304,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         OpenNetworkSettingsCommand = Cmd(OpenNetworkSettingsAsync);
         OpenAboutCommand = Cmd(OpenAboutAsync);
         OpenKeyboardShortcutsCommand = Cmd(OpenKeyboardShortcutsAsync);
+        OpenDocumentationCommand = Cmd(() => _uriLauncher.LaunchAsync(InspectorLinks.Documentation));
+        OpenReportIssueCommand = Cmd(() => _uriLauncher.LaunchAsync(InspectorLinks.ReportIssue));
         OpenHttpsDecryptHostsCommand = Cmd(OpenExcludedHostsAsync);
         ExcludeHostCommand = Cmd(ExcludeHostAsync);
         ResetSettingsCommand = Cmd(ResetSettingsAsync);
@@ -1472,6 +1480,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public ICommand OpenNetworkSettingsCommand { get; }
     public ICommand OpenAboutCommand { get; }
     public ICommand OpenKeyboardShortcutsCommand { get; }
+    public ICommand OpenDocumentationCommand { get; }
+    public ICommand OpenReportIssueCommand { get; }
     public ICommand OpenHttpsDecryptHostsCommand { get; }
     public ICommand ExcludeHostCommand { get; }
     public ICommand OpenExclusionSummaryCommand { get; }

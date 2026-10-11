@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Oturumlar",
   "shortcuts.window": "Pencere",
   "shortcuts.toggleCapture": "Yakalamayı aç veya kapat",
-  "shortcuts.focusSearch": "Aramaya git"
+  "shortcuts.focusSearch": "Aramaya git",
+  "menu.documentation": "Belgeler",
+  "menu.reportIssue": "Sorun bildir"
 }

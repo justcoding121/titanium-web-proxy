@@ -371,5 +371,7 @@
   "shortcuts.sessions": "工作階段",
   "shortcuts.window": "視窗",
   "shortcuts.toggleCapture": "切換擷取",
-  "shortcuts.focusSearch": "移至搜尋"
+  "shortcuts.focusSearch": "移至搜尋",
+  "menu.documentation": "文件",
+  "menu.reportIssue": "回報問題"
 }

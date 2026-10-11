@@ -73,7 +73,7 @@ chmod +x install-app.sh uninstall-app.sh TitaniumInspector
 
 ## Updates
 
-**Help → Keyboard shortcuts** lists the keys. F12 toggles capturing. Ctrl+F focuses search (Cmd on macOS). Ctrl+Shift+Delete clears sessions. R replays the selected session, and Delete removes the selected rows, only while the session list has focus and you are not typing in a text box. **Help → Update channel** — Stable (default) or Beta. **Help → Check for updates…** offers install only when there is a real change (newer build or channel switch). Accept downloads the package, closes Inspector, replaces the install, and relaunches.
+**Help → Documentation** opens the Inspector guide, and **Help → Report an issue** opens a new GitHub issue. **Help → Keyboard shortcuts** lists the keys. F12 toggles capturing. Ctrl+F focuses search (Cmd on macOS). Ctrl+Shift+Delete clears sessions. R replays the selected session, and Delete removes the selected rows, only while the session list has focus and you are not typing in a text box. **Help → Update channel** — Stable (default) or Beta. **Help → Check for updates…** offers install only when there is a real change (newer build or channel switch). Accept downloads the package, closes Inspector, replaces the install, and relaunches.
 
 ## Right pane: Inspect and tools
 

@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Περίοδοι λειτουργίας",
   "shortcuts.window": "Παράθυρο",
   "shortcuts.toggleCapture": "Εναλλαγή καταγραφής",
-  "shortcuts.focusSearch": "Εστίαση στην αναζήτηση"
+  "shortcuts.focusSearch": "Εστίαση στην αναζήτηση",
+  "menu.documentation": "Τεκμηρίωση",
+  "menu.reportIssue": "Αναφορά προβλήματος"
 }

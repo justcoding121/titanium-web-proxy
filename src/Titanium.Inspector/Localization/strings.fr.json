@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Sessions",
   "shortcuts.window": "Fenêtre",
   "shortcuts.toggleCapture": "Activer ou arrêter la capture",
-  "shortcuts.focusSearch": "Aller à la recherche"
+  "shortcuts.focusSearch": "Aller à la recherche",
+  "menu.documentation": "Documentation",
+  "menu.reportIssue": "Signaler un problème"
 }

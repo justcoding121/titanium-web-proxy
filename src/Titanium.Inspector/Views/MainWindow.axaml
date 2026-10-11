@@ -305,6 +305,10 @@
                     AutomationProperties.AutomationId="MenuUpdateChannelBeta" />
         </MenuItem>
         <Separator />
+        <MenuItem Header="{loc:Loc menu.documentation}" Command="{Binding OpenDocumentationCommand}"
+                  AutomationProperties.AutomationId="MenuDocumentation" />
+        <MenuItem Header="{loc:Loc menu.reportIssue}" Command="{Binding OpenReportIssueCommand}"
+                  AutomationProperties.AutomationId="MenuReportIssue" />
         <MenuItem Header="{loc:Loc menu.keyboardShortcuts}" Command="{Binding OpenKeyboardShortcutsCommand}"
                   AutomationProperties.AutomationId="MenuKeyboardShortcuts" />
         <MenuItem Header="{loc:Loc menu.about}" Command="{Binding OpenAboutCommand}"

@@ -371,5 +371,7 @@
   "shortcuts.sessions": "Sessioner",
   "shortcuts.window": "Fönster",
   "shortcuts.toggleCapture": "Växla inspelning",
-  "shortcuts.focusSearch": "Fokusera sökning"
+  "shortcuts.focusSearch": "Fokusera sökning",
+  "menu.documentation": "Dokumentation",
+  "menu.reportIssue": "Rapportera ett problem"
 }

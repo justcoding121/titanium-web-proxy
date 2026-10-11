@@ -371,5 +371,7 @@
   "shortcuts.sessions": "הפעלות",
   "shortcuts.window": "חלון",
   "shortcuts.toggleCapture": "החלף לכידה",
-  "shortcuts.focusSearch": "מיקוד בחיפוש"
+  "shortcuts.focusSearch": "מיקוד בחיפוש",
+  "menu.documentation": "תיעוד",
+  "menu.reportIssue": "דיווח על בעיה"
 }
