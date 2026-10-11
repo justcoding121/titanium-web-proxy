@@ -175,7 +175,7 @@ public class InterceptionCaptureCoverageTests
         StringAssert.Contains((string)formatHeaders.Invoke(null, [headers])!, "X-A");
 
         var snap = new SessionSnapshot { StartedUtc = DateTimeOffset.UtcNow.AddMilliseconds(-15) };
-        applyTiming.Invoke(null, [snap, null, snap.StartedUtc]);
+        applyTiming.Invoke(null, [snap, null, null, snap.StartedUtc]);
         Assert.IsTrue(snap.DurationMs >= 0);
         addTunnel.Invoke(null, [snap, 12, 7]);
         Assert.AreEqual(19L, snap.BodySize);
