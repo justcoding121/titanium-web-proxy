@@ -190,6 +190,12 @@ public sealed class InspectorSettings
     public bool ReuseServerConnections { get; set; } = true;
 
     /// <summary>
+    /// Hosts that receive automatic Windows authentication, one host or <c>*.suffix</c> per line.
+    /// Empty means off. Windows only; other systems keep the list but do not send credentials.
+    /// </summary>
+    public string WinAuthHosts { get; set; } = string.Empty;
+
+    /// <summary>
     /// When set, the user chose whether the Inspect headers pane is collapsed.
     /// Null keeps the automatic rule (collapsed when the pane is shorter than 420px).
     /// </summary>

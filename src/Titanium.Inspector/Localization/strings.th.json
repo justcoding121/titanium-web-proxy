@@ -418,5 +418,12 @@
   "logging.rolledFiles": "ไฟล์ที่หมุนเวียน",
   "logging.memory": "บรรทัดบันทึกการทำงาน",
   "logging.levelCost": "Debug และ Trace ใช้ CPU มากกว่า ใช้เมื่อวินิจฉัยเท่านั้น",
-  "logging.capsInvalid": "ขนาดไฟล์ ไฟล์ที่หมุนเวียน และจำนวนบรรทัดต้องเป็นตัวเลข"
+  "logging.capsInvalid": "ขนาดไฟล์ ไฟล์ที่หมุนเวียน และจำนวนบรรทัดต้องเป็นตัวเลข",
+  "network.winAuth": "การพิสูจน์ตัวตนของ Windows",
+  "network.winAuthWatermark": "intranet.example.com หรือ *.example.com",
+  "network.winAuthHelp": "ลงชื่อเข้าใช้ด้วยบัญชี Windows นี้ เฉพาะโฮสต์ที่คุณไว้ใจ เนื้อหาคำขอไปยังโฮสต์นั้นถูกเก็บไว้ได้ถึง 32 MB HTTP ธรรมดาเผยการจับมือ",
+  "network.winAuthTooMany": "ได้ไม่เกิน 200 โฮสต์",
+  "network.winAuthInvalid": "หนึ่งโฮสต์หรือ *.ส่วนท้ายต่อบรรทัด ไม่ใส่สกีม พาธ หรือพอร์ต",
+  "stats.event.winAuth": "ใช้การพิสูจน์ตัวตนของ Windows",
+  "stats.event.winAuthTooLarge": "การอัปโหลดใหญ่เกินกว่าการพิสูจน์ตัวตนของ Windows"
 }

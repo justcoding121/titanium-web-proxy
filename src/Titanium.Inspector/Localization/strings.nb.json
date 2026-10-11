@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Rullede filer",
   "logging.memory": "Linjer i kjøreloggen",
   "logging.levelCost": "Debug og Trace bruker mer CPU. Bruk dem bare ved feilsøking.",
-  "logging.capsInvalid": "Filstørrelse, rullede filer og logglinjer må være tall."
+  "logging.capsInvalid": "Filstørrelse, rullede filer og logglinjer må være tall.",
+  "network.winAuth": "Windows-godkjenning",
+  "network.winAuthWatermark": "intranet.example.com eller *.example.com",
+  "network.winAuthHelp": "Logger på med denne Windows-kontoen, bare for verter du stoler på. Forespørselstekster dit lagres opptil 32 MB. Vanlig HTTP viser håndtrykket.",
+  "network.winAuthTooMany": "Høyst 200 verter.",
+  "network.winAuthInvalid": "Én vert eller *.suffiks per linje. Ingen protokoll, sti eller port.",
+  "stats.event.winAuth": "Windows-godkjenning ble brukt",
+  "stats.event.winAuthTooLarge": "Opplastingen er for stor for Windows-godkjenning"
 }

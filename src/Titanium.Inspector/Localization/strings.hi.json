@@ -418,5 +418,12 @@
   "logging.rolledFiles": "रोल की गई फ़ाइलें",
   "logging.memory": "रन लॉग पंक्तियाँ",
   "logging.levelCost": "Debug और Trace अधिक CPU लेते हैं। इन्हें केवल निदान के समय उपयोग करें।",
-  "logging.capsInvalid": "फ़ाइल आकार, रोल की गई फ़ाइलें और लॉग पंक्तियाँ संख्याएँ होनी चाहिए।"
+  "logging.capsInvalid": "फ़ाइल आकार, रोल की गई फ़ाइलें और लॉग पंक्तियाँ संख्याएँ होनी चाहिए।",
+  "network.winAuth": "Windows प्रमाणीकरण",
+  "network.winAuthWatermark": "intranet.example.com या *.example.com",
+  "network.winAuthHelp": "इसी Windows खाते से केवल उन होस्ट पर साइन इन करता है जिन पर आप भरोसा करते हैं. उन अनुरोधों का मुख्य भाग 32 MB तक रखा जाता है. सादा HTTP हैंडशेक दिखा देता है.",
+  "network.winAuthTooMany": "अधिकतम 200 होस्ट.",
+  "network.winAuthInvalid": "हर पंक्ति में होस्ट या *.प्रत्यय. योजना, पथ या पोर्ट नहीं.",
+  "stats.event.winAuth": "Windows प्रमाणीकरण उपयोग हुआ",
+  "stats.event.winAuthTooLarge": "अपलोड Windows प्रमाणीकरण के लिए बहुत बड़ा है"
 }

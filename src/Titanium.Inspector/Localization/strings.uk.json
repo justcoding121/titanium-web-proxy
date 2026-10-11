@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Згорнуті файли",
   "logging.memory": "Рядки журналу запуску",
   "logging.levelCost": "Debug і Trace займають більше процесора. Використовуйте їх лише для діагностики.",
-  "logging.capsInvalid": "Розмір, згорнуті файли й рядки журналу мають бути числами."
+  "logging.capsInvalid": "Розмір, згорнуті файли й рядки журналу мають бути числами.",
+  "network.winAuth": "Автентифікація Windows",
+  "network.winAuthWatermark": "intranet.example.com або *.example.com",
+  "network.winAuthHelp": "Входить цим обліковим записом Windows лише на довірені вузли. Тіла запитів до них зберігаються до 32 МБ. Звичайний HTTP показує рукостискання.",
+  "network.winAuthTooMany": "Не більше ніж 200 вузлів.",
+  "network.winAuthInvalid": "Вузол або *.суфікс у кожному рядку. Без схеми, шляху й порту.",
+  "stats.event.winAuth": "Використано автентифікацію Windows",
+  "stats.event.winAuthTooLarge": "Надсилання завелике для автентифікації Windows"
 }

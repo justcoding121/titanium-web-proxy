@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Свёрнутые файлы",
   "logging.memory": "Строки журнала запуска",
   "logging.levelCost": "Debug и Trace занимают больше процессора. Используйте их только при диагностике.",
-  "logging.capsInvalid": "Размер, свёрнутые файлы и строки журнала должны быть числами."
+  "logging.capsInvalid": "Размер, свёрнутые файлы и строки журнала должны быть числами.",
+  "network.winAuth": "Проверка подлинности Windows",
+  "network.winAuthWatermark": "intranet.example.com или *.example.com",
+  "network.winAuthHelp": "Входит этой учетной записью Windows только на доверенные узлы. Тела запросов к ним хранятся до 32 МБ. Обычный HTTP показывает рукопожатие.",
+  "network.winAuthTooMany": "Не больше 200 узлов.",
+  "network.winAuthInvalid": "Узел или *.суффикс в каждой строке. Без схемы, пути и порта.",
+  "stats.event.winAuth": "Использована проверка подлинности Windows",
+  "stats.event.winAuthTooLarge": "Отправка слишком велика для проверки подлинности Windows"
 }

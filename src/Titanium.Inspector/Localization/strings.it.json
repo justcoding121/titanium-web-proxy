@@ -418,5 +418,12 @@
   "logging.rolledFiles": "File ruotati",
   "logging.memory": "Righe del registro",
   "logging.levelCost": "Debug e Trace usano più CPU. Usali solo durante la diagnosi.",
-  "logging.capsInvalid": "Dimensione, file ruotati e righe del registro devono essere numeri."
+  "logging.capsInvalid": "Dimensione, file ruotati e righe del registro devono essere numeri.",
+  "network.winAuth": "Autenticazione Windows",
+  "network.winAuthWatermark": "intranet.example.com o *.example.com",
+  "network.winAuthHelp": "Accede con questo account Windows, solo per gli host di cui ti fidi. I corpi verso di essi restano in memoria fino a 32 MB. HTTP in chiaro espone la negoziazione.",
+  "network.winAuthTooMany": "Al massimo 200 host.",
+  "network.winAuthInvalid": "Un host o *.suffisso per riga. Niente schema, percorso o porta.",
+  "stats.event.winAuth": "Autenticazione Windows usata",
+  "stats.event.winAuthTooLarge": "Caricamento troppo grande per l autenticazione Windows"
 }

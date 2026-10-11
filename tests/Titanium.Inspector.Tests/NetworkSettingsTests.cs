@@ -49,6 +49,7 @@ public class NetworkSettingsTests
         Assert.IsTrue(settings.Current.EnableHttp3);
         Assert.IsTrue(settings.Current.ReuseServerConnections);
         Assert.AreEqual(InspectorNetworkSettings.TlsDefault, settings.Current.OutboundTlsPreset);
+        Assert.AreEqual(string.Empty, settings.Current.WinAuthHosts);
         Assert.IsNull(InspectorNetworkSettings.FormatUpstreamUri(settings.Current));
 
         settings.Current.UpstreamProxyEnabled = true;

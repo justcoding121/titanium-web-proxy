@@ -418,5 +418,12 @@
   "logging.rolledFiles": "輪替檔案數",
   "logging.memory": "執行紀錄行數",
   "logging.levelCost": "Debug 和 Trace 會使用更多 CPU。請只在診斷時使用。",
-  "logging.capsInvalid": "檔案大小、輪替檔案數和執行紀錄行數必須是數字。"
+  "logging.capsInvalid": "檔案大小、輪替檔案數和執行紀錄行數必須是數字。",
+  "network.winAuth": "Windows 驗證",
+  "network.winAuthWatermark": "intranet.example.com 或 *.example.com",
+  "network.winAuthHelp": "只對你信任的主機使用這個 Windows 帳戶登入。送往這些主機的要求本文最多緩衝 32 MB。明文 HTTP 會暴露交握。",
+  "network.winAuthTooMany": "最多 200 個主機。",
+  "network.winAuthInvalid": "每行一個主機或 *.後綴。不要寫配置、路徑或連接埠。",
+  "stats.event.winAuth": "已使用 Windows 驗證",
+  "stats.event.winAuthTooLarge": "上傳內容對 Windows 驗證來說太大"
 }

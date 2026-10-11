@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Odrolované soubory",
   "logging.memory": "Řádky protokolu běhu",
   "logging.levelCost": "Debug a Trace spotřebují více procesoru. Používejte je jen při diagnostice.",
-  "logging.capsInvalid": "Velikost souboru, odrolované soubory a řádky protokolu musí být čísla."
+  "logging.capsInvalid": "Velikost souboru, odrolované soubory a řádky protokolu musí být čísla.",
+  "network.winAuth": "Ověření Windows",
+  "network.winAuthWatermark": "intranet.example.com nebo *.example.com",
+  "network.winAuthHelp": "Přihlásí se tímto účtem Windows, jen u hostitelů, kterým důvěřujete. Těla požadavků na ně se ukládají do 32 MB. Obyčejné HTTP odhalí navázání.",
+  "network.winAuthTooMany": "Nejvýše 200 hostitelů.",
+  "network.winAuthInvalid": "Na každém řádku hostitel nebo *.přípona. Bez schématu, cesty a portu.",
+  "stats.event.winAuth": "Použito ověření Windows",
+  "stats.event.winAuthTooLarge": "Nahrání je pro ověření Windows příliš velké"
 }

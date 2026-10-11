@@ -59,6 +59,14 @@ public class CustomSettingsReportTests
         settings.ReuseServerConnections = false;
         Assert.AreEqual(5, CustomSettingsReport.ListDeviations(settings).Count);
 
+        settings.WinAuthHosts = "corp.example";
+        CollectionAssert.Contains(
+            CustomSettingsReport.ListDeviations(settings).Select(item => item.TextKey).ToArray(),
+            "network.winAuth");
+        settings.WinAuthHosts = "  ";
+        Assert.IsFalse(CustomSettingsReport.ListDeviations(settings).Any(d => d.TextKey == "network.winAuth"));
+        settings.WinAuthHosts = "corp.example";
+
         CustomSettingsReport.RestoreDefaults(settings);
         Assert.AreEqual(0, CustomSettingsReport.ListDeviations(settings).Count);
         Assert.IsFalse(settings.UpstreamProxyEnabled);
@@ -68,6 +76,7 @@ public class CustomSettingsReportTests
         Assert.IsTrue(settings.EnableHttp3);
         Assert.AreEqual(InspectorNetworkSettings.TlsDefault, settings.OutboundTlsPreset);
         Assert.IsTrue(settings.ReuseServerConnections);
+        Assert.AreEqual(string.Empty, settings.WinAuthHosts);
         Assert.AreEqual(9000, settings.BindPort);
         Assert.AreEqual(ThemeMode.Dark, settings.ThemeMode);
     }

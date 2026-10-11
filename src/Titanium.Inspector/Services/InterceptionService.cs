@@ -177,6 +177,24 @@ public sealed class InterceptionService : IDisposable
     /// </summary>
     public bool ForceUncompressed { get; set; }
 
+    private string _winAuthHosts = string.Empty;
+    private WinAuthHostMatcher? _winAuthMatcher;
+
+    /// <summary>
+    /// Hosts that receive per-session Windows authentication. Empty leaves every request unchanged.
+    /// The server-wide <c>EnableWinAuth</c> flag stays false.
+    /// </summary>
+    public string WinAuthHosts
+    {
+        get => _winAuthHosts;
+        set
+        {
+            _winAuthHosts = value ?? string.Empty;
+            WinAuthHostList.TryCompile(_winAuthHosts, out var matcher, out _);
+            Volatile.Write(ref _winAuthMatcher, matcher);
+        }
+    }
+
     /// <summary>True when the running proxy currently allows HTTP/2.</summary>
     public bool Http2Enabled { get; private set; } = true;
 
@@ -1701,6 +1719,12 @@ public sealed class InterceptionService : IDisposable
     {
         var host = e.HttpClient.Request.RequestUri?.Host
                    ?? TryHost(e.HttpClient.Request);
+        if (MatchesWinAuthHost(host))
+        {
+            // NTLM and Negotiate are connection-bound and are not defined on HTTP/2.
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+        }
+
         var disableDecrypt = MitmBypass.ShouldDisableSslDecrypt(
             host,
             DecryptSkipHosts,
@@ -1893,6 +1917,11 @@ public sealed class InterceptionService : IDisposable
                 }
             }
 
+            if (!autoResponded)
+            {
+                TryEnableWindowsAuthentication(e);
+            }
+
             if (!Capturing)
             {
                 return;
@@ -1935,6 +1964,11 @@ public sealed class InterceptionService : IDisposable
             }
 
             SessionScriptHost.ApplyOnResponse(ScriptOnResponse, e);
+
+            if (e.EnableWinAuth && e.HttpClient.Response.StatusCode == (int)HttpStatusCode.RequestEntityTooLarge)
+            {
+                Note(e.HttpClient, "stats.event.winAuthTooLarge", failure: true);
+            }
 
             if (BreakpointOnResponse &&
                 Breakpoints is { Enabled: true } &&
@@ -2804,6 +2838,30 @@ public sealed class InterceptionService : IDisposable
         snap.ResponseBodyCapture = BodyCaptureState.Streaming;
         snap.ResponseBodyStreamOpen = true;
         snap.BodySize = snap.ResponseBytesSeen > 0 ? snap.ResponseBytesSeen : null;
+    }
+
+    private bool MatchesWinAuthHost(string? host)
+    {
+        var matcher = Volatile.Read(ref _winAuthMatcher);
+        return matcher is not null && matcher.Matches(host);
+    }
+
+    private void TryEnableWindowsAuthentication(SessionEventArgs e)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var host = TryHost(e.HttpClient.Request);
+        if (!MatchesWinAuthHost(host))
+        {
+            return;
+        }
+
+        e.EnableWinAuth = true;
+        e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+        Note(e.HttpClient, "stats.event.winAuth", failure: false);
     }
 
     private static string? TryHost(Request req)

@@ -418,5 +418,12 @@
   "logging.rolledFiles": "קבצים מסובבים",
   "logging.memory": "שורות ביומן הריצה",
   "logging.levelCost": "Debug ו-Trace משתמשים ביותר מעבד. השתמשו בהם רק לאבחון.",
-  "logging.capsInvalid": "גודל הקובץ, הקבצים המסובבים ושורות היומן חייבים להיות מספרים."
+  "logging.capsInvalid": "גודל הקובץ, הקבצים המסובבים ושורות היומן חייבים להיות מספרים.",
+  "network.winAuth": "אימות Windows",
+  "network.winAuthWatermark": "intranet.example.com או *.example.com",
+  "network.winAuthHelp": "מתחבר עם חשבון Windows זה, רק למארחים שאתם סומכים עליהם. גופי הבקשות אליהם נשמרים עד 32 MB. HTTP גלוי חושף את לחיצת היד.",
+  "network.winAuthTooMany": "לכל היותר 200 מארחים.",
+  "network.winAuthInvalid": "מארח או *.סיומת בכל שורה. בלי סכמה, נתיב או יציאה.",
+  "stats.event.winAuth": "נעשה שימוש באימות Windows",
+  "stats.event.winAuthTooLarge": "ההעלאה גדולה מדי לאימות Windows"
 }

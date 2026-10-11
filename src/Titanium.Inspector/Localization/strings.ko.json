@@ -418,5 +418,12 @@
   "logging.rolledFiles": "롤링된 파일",
   "logging.memory": "실행 로그 줄 수",
   "logging.levelCost": "Debug와 Trace는 CPU를 더 씁니다. 진단할 때만 사용하세요.",
-  "logging.capsInvalid": "파일 크기, 롤링된 파일, 로그 줄 수는 숫자여야 합니다."
+  "logging.capsInvalid": "파일 크기, 롤링된 파일, 로그 줄 수는 숫자여야 합니다.",
+  "network.winAuth": "Windows 인증",
+  "network.winAuthWatermark": "intranet.example.com 또는 *.example.com",
+  "network.winAuthHelp": "이 Windows 계정으로, 신뢰하는 호스트에만 로그인합니다. 그 요청 본문은 32 MB까지 보관됩니다. 일반 HTTP는 핸드셰이크를 드러냅니다.",
+  "network.winAuthTooMany": "호스트는 최대 200개입니다.",
+  "network.winAuthInvalid": "한 줄에 호스트 또는 *.접미사. 스킴, 경로, 포트는 안 됩니다.",
+  "stats.event.winAuth": "Windows 인증을 사용함",
+  "stats.event.winAuthTooLarge": "업로드가 Windows 인증에는 너무 큼"
 }

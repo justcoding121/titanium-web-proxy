@@ -25,6 +25,7 @@ public static class InspectorNetworkSettings
         interception.PreferHttp3 = settings.EnableHttp3;
         interception.OutboundTlsProtocols = MapOutboundTls(settings.OutboundTlsPreset);
         interception.ReuseServerConnections = settings.ReuseServerConnections;
+        interception.WinAuthHosts = settings.WinAuthHosts;
         interception.ApplyHttpProtocols();
     }
 
@@ -120,6 +121,7 @@ public static class InspectorNetworkSettings
         settings.EnableHttp3 = true;
         settings.OutboundTlsPreset = TlsDefault;
         settings.ReuseServerConnections = true;
+        settings.WinAuthHosts = string.Empty;
     }
 
     private static string NormalizeHost(string? host)

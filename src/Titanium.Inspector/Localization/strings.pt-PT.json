@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Ficheiros rodados",
   "logging.memory": "Linhas do registo",
   "logging.levelCost": "Debug e Trace usam mais CPU. Use-os só ao diagnosticar.",
-  "logging.capsInvalid": "Tamanho, ficheiros rodados e linhas do registo têm de ser números."
+  "logging.capsInvalid": "Tamanho, ficheiros rodados e linhas do registo têm de ser números.",
+  "network.winAuth": "Autenticação Windows",
+  "network.winAuthWatermark": "intranet.example.com ou *.example.com",
+  "network.winAuthHelp": "Entra com esta conta Windows, só em anfitriões de confiança. Os corpos para eles ficam em memória até 32 MB. HTTP em claro expõe o aperto de mão.",
+  "network.winAuthTooMany": "No máximo 200 anfitriões.",
+  "network.winAuthInvalid": "Um anfitrião ou *.sufixo por linha. Sem esquema, caminho ou porta.",
+  "stats.event.winAuth": "Autenticação Windows usada",
+  "stats.event.winAuthTooLarge": "Envio grande demais para a autenticação Windows"
 }

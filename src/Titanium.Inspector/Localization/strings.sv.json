@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Rullade filer",
   "logging.memory": "Rader i körningsloggen",
   "logging.levelCost": "Debug och Trace använder mer CPU. Använd dem bara vid felsökning.",
-  "logging.capsInvalid": "Filstorlek, rullade filer och loggrader måste vara tal."
+  "logging.capsInvalid": "Filstorlek, rullade filer och loggrader måste vara tal.",
+  "network.winAuth": "Windows-autentisering",
+  "network.winAuthWatermark": "intranet.example.com eller *.example.com",
+  "network.winAuthHelp": "Loggar in med det här Windows-kontot, bara för värdar du litar på. Begärandetexter dit buffras upp till 32 MB. Vanlig HTTP visar handskakningen.",
+  "network.winAuthTooMany": "Högst 200 värdar.",
+  "network.winAuthInvalid": "En värd eller *.suffix per rad. Inget schema, ingen sökväg, ingen port.",
+  "stats.event.winAuth": "Windows-autentisering användes",
+  "stats.event.winAuthTooLarge": "Uppladdningen är för stor för Windows-autentisering"
 }

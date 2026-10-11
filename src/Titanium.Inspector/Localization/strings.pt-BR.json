@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Arquivos rolados",
   "logging.memory": "Linhas do log de execução",
   "logging.levelCost": "Debug e Trace usam mais CPU. Use-os só ao diagnosticar.",
-  "logging.capsInvalid": "Tamanho, arquivos rolados e linhas do log devem ser números."
+  "logging.capsInvalid": "Tamanho, arquivos rolados e linhas do log devem ser números.",
+  "network.winAuth": "Autenticação do Windows",
+  "network.winAuthWatermark": "intranet.example.com ou *.example.com",
+  "network.winAuthHelp": "Entra com esta conta do Windows, só em hosts confiáveis. Os corpos para eles ficam na memória até 32 MB. HTTP sem cifra expõe o aperto de mão.",
+  "network.winAuthTooMany": "No máximo 200 hosts.",
+  "network.winAuthInvalid": "Um host ou *.sufixo por linha. Sem esquema, caminho ou porta.",
+  "stats.event.winAuth": "Autenticação do Windows usada",
+  "stats.event.winAuthTooLarge": "Envio grande demais para a autenticação do Windows"
 }

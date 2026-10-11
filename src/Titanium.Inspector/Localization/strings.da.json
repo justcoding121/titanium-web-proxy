@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Rullede filer",
   "logging.memory": "Linjer i kørselslog",
   "logging.levelCost": "Debug og Trace bruger mere CPU. Brug dem kun under fejlfinding.",
-  "logging.capsInvalid": "Filstørrelse, rullede filer og loglinjer skal være tal."
+  "logging.capsInvalid": "Filstørrelse, rullede filer og loglinjer skal være tal.",
+  "network.winAuth": "Windows-godkendelse",
+  "network.winAuthWatermark": "intranet.example.com eller *.example.com",
+  "network.winAuthHelp": "Logger ind med denne Windows-konto, kun for værter du stoler på. Forespørgselsbrødder til dem gemmes op til 32 MB. Almindelig HTTP afslører håndtrykket.",
+  "network.winAuthTooMany": "Højst 200 værter.",
+  "network.winAuthInvalid": "Skriv en vært eller *.suffiks på hver linje. Ingen protokol, sti eller port.",
+  "stats.event.winAuth": "Windows-godkendelse blev brugt",
+  "stats.event.winAuthTooLarge": "Upload er for stor til Windows-godkendelse"
 }

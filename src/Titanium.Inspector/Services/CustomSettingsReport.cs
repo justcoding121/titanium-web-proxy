@@ -39,6 +39,9 @@ public static class CustomSettingsReport
         if (!settings.ReuseServerConnections)
             items.Add(new Deviation(ReuseOff, null));
 
+        if (!string.IsNullOrWhiteSpace(settings.WinAuthHosts))
+            items.Add(new Deviation("network.winAuth", null));
+
         return items;
     }
 
@@ -53,5 +56,6 @@ public static class CustomSettingsReport
         settings.EnableHttp3 = true;
         settings.OutboundTlsPreset = InspectorNetworkSettings.TlsDefault;
         settings.ReuseServerConnections = true;
+        settings.WinAuthHosts = string.Empty;
     }
 }

@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Gerolde bestanden",
   "logging.memory": "Regels in uitvoeringslog",
   "logging.levelCost": "Debug en Trace gebruiken meer CPU. Gebruik ze alleen bij diagnose.",
-  "logging.capsInvalid": "Bestandsgrootte, gerolde bestanden en logregels moeten getallen zijn."
+  "logging.capsInvalid": "Bestandsgrootte, gerolde bestanden en logregels moeten getallen zijn.",
+  "network.winAuth": "Windows-verificatie",
+  "network.winAuthWatermark": "intranet.example.com of *.example.com",
+  "network.winAuthHelp": "Meldt aan met dit Windows-account, alleen voor hosts die u vertrouwt. Aanvraagteksten daarheen worden tot 32 MB bewaard. Gewoon HTTP toont de handshake.",
+  "network.winAuthTooMany": "Hoogstens 200 hosts.",
+  "network.winAuthInvalid": "Eén host of *.achtervoegsel per regel. Geen schema, pad of poort.",
+  "stats.event.winAuth": "Windows-verificatie gebruikt",
+  "stats.event.winAuthTooLarge": "Upload te groot voor Windows-verificatie"
 }

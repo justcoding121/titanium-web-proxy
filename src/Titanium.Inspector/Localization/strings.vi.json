@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Tệp đã xoay",
   "logging.memory": "Dòng nhật ký chạy",
   "logging.levelCost": "Debug và Trace dùng nhiều CPU hơn. Chỉ dùng khi chẩn đoán.",
-  "logging.capsInvalid": "Kích thước, tệp đã xoay và số dòng phải là số."
+  "logging.capsInvalid": "Kích thước, tệp đã xoay và số dòng phải là số.",
+  "network.winAuth": "Xác thực Windows",
+  "network.winAuthWatermark": "intranet.example.com hoặc *.example.com",
+  "network.winAuthHelp": "Đăng nhập bằng tài khoản Windows này, chỉ với máy chủ bạn tin. Thân yêu cầu tới đó được giữ đến 32 MB. HTTP thường để lộ bắt tay.",
+  "network.winAuthTooMany": "Tối đa 200 máy chủ.",
+  "network.winAuthInvalid": "Mỗi dòng một máy chủ hoặc *.hậu tố. Không có lược đồ, đường dẫn hay cổng.",
+  "stats.event.winAuth": "Đã dùng xác thực Windows",
+  "stats.event.winAuthTooLarge": "Tải lên quá lớn cho xác thực Windows"
 }

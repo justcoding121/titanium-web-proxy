@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Berkas tergulung",
   "logging.memory": "Baris log jalankan",
   "logging.levelCost": "Debug dan Trace memakai lebih banyak CPU. Gunakan hanya saat mendiagnosis.",
-  "logging.capsInvalid": "Ukuran berkas, berkas tergulung, dan baris log harus berupa angka."
+  "logging.capsInvalid": "Ukuran berkas, berkas tergulung, dan baris log harus berupa angka.",
+  "network.winAuth": "Autentikasi Windows",
+  "network.winAuthWatermark": "intranet.example.com atau *.example.com",
+  "network.winAuthHelp": "Masuk dengan akun Windows ini, hanya untuk host yang Anda percaya. Isi permintaan ke host itu disangga hingga 32 MB. HTTP biasa memperlihatkan jabat tangan.",
+  "network.winAuthTooMany": "Paling banyak 200 host.",
+  "network.winAuthInvalid": "Satu host atau *.akhiran per baris. Tanpa skema, jalur, atau port.",
+  "stats.event.winAuth": "Autentikasi Windows digunakan",
+  "stats.event.winAuthTooLarge": "Unggahan terlalu besar untuk autentikasi Windows"
 }

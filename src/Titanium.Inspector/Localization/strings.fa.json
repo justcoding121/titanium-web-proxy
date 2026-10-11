@@ -418,5 +418,12 @@
   "logging.rolledFiles": "پرونده‌های چرخیده",
   "logging.memory": "خط‌های گزارش اجرا",
   "logging.levelCost": "Debug و Trace پردازنده بیشتری می‌گیرند. فقط هنگام عیب‌یابی استفاده کنید.",
-  "logging.capsInvalid": "اندازه، پرونده‌های چرخیده و شمار خط‌ها باید عدد باشند."
+  "logging.capsInvalid": "اندازه، پرونده‌های چرخیده و شمار خط‌ها باید عدد باشند.",
+  "network.winAuth": "احراز هویت ویندوز",
+  "network.winAuthWatermark": "intranet.example.com یا *.example.com",
+  "network.winAuthHelp": "با همین حساب ویندوز وارد می‌شود، فقط برای میزبان‌هایی که به آن‌ها اعتماد دارید. بدنه درخواست‌ها تا ۳۲ مگابایت نگه داشته می‌شود. HTTP ساده دست‌دادن را آشکار می‌کند.",
+  "network.winAuthTooMany": "حداکثر ۲۰۰ میزبان.",
+  "network.winAuthInvalid": "در هر خط یک میزبان یا *.پسوند. بدون طرح، مسیر یا درگاه.",
+  "stats.event.winAuth": "احراز هویت ویندوز استفاده شد",
+  "stats.event.winAuthTooLarge": "بارگذاری برای احراز هویت ویندوز خیلی بزرگ است"
 }

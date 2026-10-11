@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Döndürülen dosyalar",
   "logging.memory": "Çalıştırma günlüğü satırları",
   "logging.levelCost": "Debug ve Trace daha çok CPU kullanır. Yalnız tanı koyarken kullanın.",
-  "logging.capsInvalid": "Dosya boyutu, döndürülen dosyalar ve satırlar sayı olmalıdır."
+  "logging.capsInvalid": "Dosya boyutu, döndürülen dosyalar ve satırlar sayı olmalıdır.",
+  "network.winAuth": "Windows kimlik doğrulaması",
+  "network.winAuthWatermark": "intranet.example.com veya *.example.com",
+  "network.winAuthHelp": "Bu Windows hesabıyla, yalnızca güvendiğiniz ana bilgisayarlara girer. Oralara giden gövdeler 32 MB'a kadar tutulur. Düz HTTP el sıkışmayı gösterir.",
+  "network.winAuthTooMany": "En çok 200 ana bilgisayar.",
+  "network.winAuthInvalid": "Her satırda bir ana bilgisayar veya *.sonek. Şema, yol veya bağlantı noktası yok.",
+  "stats.event.winAuth": "Windows kimlik doğrulaması kullanıldı",
+  "stats.event.winAuthTooLarge": "Yükleme Windows kimlik doğrulaması için çok büyük"
 }

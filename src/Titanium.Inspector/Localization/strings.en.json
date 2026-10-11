@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Rolled files",
   "logging.memory": "Run log lines",
   "logging.levelCost": "Debug and Trace use more CPU. Use them only while diagnosing.",
-  "logging.capsInvalid": "File size, rolled files, and run log lines must be numbers."
+  "logging.capsInvalid": "File size, rolled files, and run log lines must be numbers.",
+  "network.winAuth": "Windows authentication",
+  "network.winAuthWatermark": "intranet.example.com or *.example.com",
+  "network.winAuthHelp": "Signs in as this Windows account, only for hosts you list and trust. Request bodies to those hosts are buffered up to 32 MB. Plain HTTP exposes the handshake.",
+  "network.winAuthTooMany": "Use at most 200 hosts.",
+  "network.winAuthInvalid": "Use a host or *.suffix on each line. No scheme, path, or port.",
+  "stats.event.winAuth": "Windows authentication used",
+  "stats.event.winAuthTooLarge": "Upload too large for Windows authentication"
 }

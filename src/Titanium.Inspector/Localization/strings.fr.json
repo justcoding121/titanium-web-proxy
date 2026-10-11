@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Fichiers archives",
   "logging.memory": "Lignes du journal",
   "logging.levelCost": "Debug et Trace utilisent plus de processeur. Reservez-les au diagnostic.",
-  "logging.capsInvalid": "La taille, les fichiers archives et les lignes doivent etre des nombres."
+  "logging.capsInvalid": "La taille, les fichiers archives et les lignes doivent etre des nombres.",
+  "network.winAuth": "Authentification Windows",
+  "network.winAuthWatermark": "intranet.example.com ou *.example.com",
+  "network.winAuthHelp": "Se connecte avec ce compte Windows, seulement pour les hôtes de confiance. Les corps vers eux sont mis en mémoire jusqu a 32 Mo. Le HTTP en clair expose la negociation.",
+  "network.winAuthTooMany": "200 hôtes au plus.",
+  "network.winAuthInvalid": "Un hôte ou *.suffixe par ligne. Pas de schéma, de chemin ni de port.",
+  "stats.event.winAuth": "Authentification Windows utilisée",
+  "stats.event.winAuthTooLarge": "Envoi trop volumineux pour l authentification Windows"
 }

@@ -42,11 +42,13 @@ public partial class NetworkSettingsWindow : Window
             Http3Check.IsChecked = true;
             SelectTls(InspectorNetworkSettings.TlsDefault);
             ReuseCheck.IsChecked = true;
+            WinAuthBox.Text = string.Empty;
             StatusText.Text = string.Empty;
             UpdateFieldsEnabled();
             UpdateSummary();
             UpdateTlsWarning();
         };
+        WinAuthSection.IsVisible = OperatingSystem.IsWindows();
         var quic = InterceptionService.IsHttp3Supported;
         Http3Check.IsEnabled = quic;
         Http3UnavailableText.IsVisible = !quic;
@@ -83,6 +85,7 @@ public partial class NetworkSettingsWindow : Window
         Http3Check.IsChecked = s.EnableHttp3;
         SelectTls(s.OutboundTlsPreset);
         ReuseCheck.IsChecked = s.ReuseServerConnections;
+        WinAuthBox.Text = s.WinAuthHosts;
     }
 
     private void SelectTls(string? preset)
@@ -137,6 +140,13 @@ public partial class NetworkSettingsWindow : Window
             return;
         }
 
+        var winAuthError = WinAuthHostList.Validate(WinAuthBox.Text);
+        if (winAuthError is not null)
+        {
+            StatusText.Text = LanguageService.Get(winAuthError);
+            return;
+        }
+
         var s = _settings.Current;
         s.UpstreamProxyEnabled = enabled;
         s.UpstreamProxyHost = HostBox.Text?.Trim() ?? string.Empty;
@@ -145,6 +155,7 @@ public partial class NetworkSettingsWindow : Window
         s.EnableHttp3 = Http3Check.IsEnabled && Http3Check.IsChecked == true;
         s.OutboundTlsPreset = SelectedTlsPreset();
         s.ReuseServerConnections = ReuseCheck.IsChecked == true;
+        s.WinAuthHosts = WinAuthBox.Text?.Replace("\r\n", "\n", StringComparison.Ordinal) ?? string.Empty;
         _settings.Save();
         _saved = true;
         Close();

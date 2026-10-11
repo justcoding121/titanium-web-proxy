@@ -55,6 +55,13 @@
                    AutomationProperties.AutomationId="NetworkProtocolSummary" />
         <TextBlock Opacity="0.75" TextWrapping="Wrap" Text="{loc:Loc network.newConnections}" />
       </StackPanel>
+      <StackPanel x:Name="WinAuthSection" Spacing="4">
+        <TextBlock FontWeight="SemiBold" Text="{loc:Loc network.winAuth}" />
+        <TextBox x:Name="WinAuthBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="72"
+                 Watermark="{loc:Loc network.winAuthWatermark}"
+                 AutomationProperties.AutomationId="NetworkWinAuthHosts" />
+        <TextBlock Opacity="0.75" TextWrapping="Wrap" Text="{loc:Loc network.winAuthHelp}" />
+      </StackPanel>
       <Expander Header="{loc:Loc network.advanced}" IsExpanded="False"
                 AutomationProperties.AutomationId="NetworkAdvanced">
         <StackPanel Spacing="8" Margin="0,8,0,0">

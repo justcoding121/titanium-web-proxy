@@ -418,5 +418,12 @@
   "logging.rolledFiles": "滚动文件数",
   "logging.memory": "运行日志行数",
   "logging.levelCost": "Debug 和 Trace 会占用更多 CPU。请只在诊断时使用。",
-  "logging.capsInvalid": "文件大小、滚动文件数和运行日志行数必须是数字。"
+  "logging.capsInvalid": "文件大小、滚动文件数和运行日志行数必须是数字。",
+  "network.winAuth": "Windows 身份验证",
+  "network.winAuthWatermark": "intranet.example.com 或 *.example.com",
+  "network.winAuthHelp": "仅对你信任的主机使用此 Windows 帐户登录。发往这些主机的请求正文最多缓冲 32 MB。明文 HTTP 会暴露握手。",
+  "network.winAuthTooMany": "最多 200 个主机。",
+  "network.winAuthInvalid": "每行一个主机或 *.后缀。不要写方案、路径或端口。",
+  "stats.event.winAuth": "已使用 Windows 身份验证",
+  "stats.event.winAuthTooLarge": "上传内容对 Windows 身份验证来说太大"
 }

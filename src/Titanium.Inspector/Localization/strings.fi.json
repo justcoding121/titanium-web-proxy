@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Kierrätetyt tiedostot",
   "logging.memory": "Ajolokin rivit",
   "logging.levelCost": "Debug ja Trace käyttävät enemmän suoritinta. Käytä niitä vain vianmäärityksessä.",
-  "logging.capsInvalid": "Tiedoston koon, kierrätettyjen tiedostojen ja lokirivien on oltava numeroita."
+  "logging.capsInvalid": "Tiedoston koon, kierrätettyjen tiedostojen ja lokirivien on oltava numeroita.",
+  "network.winAuth": "Windows-todennus",
+  "network.winAuthWatermark": "intranet.example.com tai *.example.com",
+  "network.winAuthHelp": "Kirjautuu tällä Windows-tilillä vain luotetuille koneille. Niiden pyyntöjen rungot puskuroidaan 32 megatavuun asti. Salaamaton HTTP paljastaa kättelyn.",
+  "network.winAuthTooMany": "Enintään 200 konetta.",
+  "network.winAuthInvalid": "Yksi kone tai *.pääte rivillä. Ei skeemaa, polkua tai porttia.",
+  "stats.event.winAuth": "Windows-todennusta käytettiin",
+  "stats.event.winAuthTooLarge": "Lähetys on liian suuri Windows-todennukselle"
 }

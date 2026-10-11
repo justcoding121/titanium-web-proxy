@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Görgetett fájlok",
   "logging.memory": "Futásnapló sorai",
   "logging.levelCost": "A Debug és a Trace több processzort használ. Csak hibakereséskor használja.",
-  "logging.capsInvalid": "A fájlméret, a görgetett fájlok és a sorok száma szám legyen."
+  "logging.capsInvalid": "A fájlméret, a görgetett fájlok és a sorok száma szám legyen.",
+  "network.winAuth": "Windows-hitelesítés",
+  "network.winAuthWatermark": "intranet.example.com vagy *.example.com",
+  "network.winAuthHelp": "Ezzel a Windows-fiókkal jelentkezik be, csak a megbízható gépekre. Az oda küldött törzsek 32 MB-ig pufferelődnek. A sima HTTP felfedi a kézfogást.",
+  "network.winAuthTooMany": "Legfeljebb 200 gép.",
+  "network.winAuthInvalid": "Soronként egy gép vagy *.utótag. Séma, útvonal és port nélkül.",
+  "stats.event.winAuth": "Windows-hitelesítés történt",
+  "stats.event.winAuthTooLarge": "A feltöltés túl nagy a Windows-hitelesítéshez"
 }

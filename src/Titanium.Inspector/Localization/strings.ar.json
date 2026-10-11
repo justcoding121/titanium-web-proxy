@@ -418,5 +418,12 @@
   "logging.rolledFiles": "الملفات المدورة",
   "logging.memory": "أسطر سجل التشغيل",
   "logging.levelCost": "التصحيح والتتبع يستهلكان معالجا أكثر. استخدمهما عند التشخيص فقط.",
-  "logging.capsInvalid": "حجم الملف والملفات المدورة وأسطر السجل يجب أن تكون أرقاما."
+  "logging.capsInvalid": "حجم الملف والملفات المدورة وأسطر السجل يجب أن تكون أرقاما.",
+  "network.winAuth": "مصادقة Windows",
+  "network.winAuthWatermark": "intranet.example.com أو *.example.com",
+  "network.winAuthHelp": "يسجل الدخول بحساب Windows هذا، وللمضيفين الذين تثق بهم فقط. تُخزَّن أجسام الطلبات إلى تلك المضيفات حتى 32 ميغابايت. HTTP العادي يكشف المصافحة.",
+  "network.winAuthTooMany": "استخدم 200 مضيفا كحد أقصى.",
+  "network.winAuthInvalid": "اكتب مضيفا أو *.لاحقة في كل سطر. بلا مخطط أو مسار أو منفذ.",
+  "stats.event.winAuth": "استُخدمت مصادقة Windows",
+  "stats.event.winAuthTooLarge": "الرفع أكبر مما تسمح به مصادقة Windows"
 }

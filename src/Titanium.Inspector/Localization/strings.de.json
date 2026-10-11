@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Gerollte Dateien",
   "logging.memory": "Zeilen im Laufprotokoll",
   "logging.levelCost": "Debug und Trace brauchen mehr CPU. Nur zur Diagnose verwenden.",
-  "logging.capsInvalid": "Dateigröße, gerollte Dateien und Protokollzeilen müssen Zahlen sein."
+  "logging.capsInvalid": "Dateigröße, gerollte Dateien und Protokollzeilen müssen Zahlen sein.",
+  "network.winAuth": "Windows-Authentifizierung",
+  "network.winAuthWatermark": "intranet.example.com oder *.example.com",
+  "network.winAuthHelp": "Meldet sich mit diesem Windows-Konto an, nur bei Hosts, denen Sie vertrauen. Anfragetexte dorthin werden bis 32 MB gepuffert. Reines HTTP legt den Handshake offen.",
+  "network.winAuthTooMany": "Höchstens 200 Hosts.",
+  "network.winAuthInvalid": "Pro Zeile ein Host oder *.suffix. Kein Schema, Pfad oder Port.",
+  "stats.event.winAuth": "Windows-Authentifizierung verwendet",
+  "stats.event.winAuthTooLarge": "Upload zu groß für die Windows-Authentifizierung"
 }

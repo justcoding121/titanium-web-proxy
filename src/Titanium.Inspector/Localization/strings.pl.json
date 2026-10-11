@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Zrolowane pliki",
   "logging.memory": "Wiersze dziennika",
   "logging.levelCost": "Debug i Trace zużywają więcej procesora. Używaj ich tylko przy diagnostyce.",
-  "logging.capsInvalid": "Rozmiar, zrolowane pliki i wiersze dziennika muszą być liczbami."
+  "logging.capsInvalid": "Rozmiar, zrolowane pliki i wiersze dziennika muszą być liczbami.",
+  "network.winAuth": "Uwierzytelnianie Windows",
+  "network.winAuthWatermark": "intranet.example.com lub *.example.com",
+  "network.winAuthHelp": "Loguje się tym kontem Windows, tylko na zaufanych hostach. Treści żądań są trzymane do 32 MB. Zwykłe HTTP ujawnia uzgadnianie.",
+  "network.winAuthTooMany": "Najwyżej 200 hostów.",
+  "network.winAuthInvalid": "Host lub *.sufiks w każdej linii. Bez schematu, ścieżki i portu.",
+  "stats.event.winAuth": "Użyto uwierzytelniania Windows",
+  "stats.event.winAuthTooLarge": "Wysyłanie jest za duże dla uwierzytelniania Windows"
 }

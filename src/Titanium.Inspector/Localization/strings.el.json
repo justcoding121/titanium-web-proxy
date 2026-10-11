@@ -418,5 +418,12 @@
   "logging.rolledFiles": "Κυλιόμενα αρχεία",
   "logging.memory": "Γραμμές αρχείου εκτέλεσης",
   "logging.levelCost": "Τα Debug και Trace χρησιμοποιούν περισσότερη CPU. Χρησιμοποιήστε τα μόνο στη διάγνωση.",
-  "logging.capsInvalid": "Το μέγεθος, τα κυλιόμενα αρχεία και οι γραμμές πρέπει να είναι αριθμοί."
+  "logging.capsInvalid": "Το μέγεθος, τα κυλιόμενα αρχεία και οι γραμμές πρέπει να είναι αριθμοί.",
+  "network.winAuth": "Έλεγχος ταυτότητας Windows",
+  "network.winAuthWatermark": "intranet.example.com ή *.example.com",
+  "network.winAuthHelp": "Συνδέεται με αυτόν τον λογαριασμό Windows, μόνο για κεντρικούς που εμπιστεύεστε. Τα σώματα αιτημάτων αποθηκεύονται έως 32 MB. Το απλό HTTP αποκαλύπτει τη χειραψία.",
+  "network.winAuthTooMany": "Το πολύ 200 κεντρικοί.",
+  "network.winAuthInvalid": "Ένας κεντρικός ή *.κατάληξη ανά γραμμή. Χωρίς σχήμα, διαδρομή ή θύρα.",
+  "stats.event.winAuth": "Χρησιμοποιήθηκε έλεγχος ταυτότητας Windows",
+  "stats.event.winAuthTooLarge": "Η αποστολή είναι μεγάλη για τον έλεγχο ταυτότητας Windows"
 }
