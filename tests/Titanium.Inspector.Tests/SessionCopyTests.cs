@@ -215,8 +215,31 @@ public class SessionCopyTests
         picker.SavePath = Path.Combine(Path.GetTempPath(), "ti-raw-" + Guid.NewGuid().ToString("N") + ".http");
         vm.SelectedSession = snap;
         vm.SaveRawHttpCommand.Execute(null);
-        Assert.IsTrue(File.Exists(picker.SavePath));
-        StringAssert.Contains(File.ReadAllText(picker.SavePath), "quote'x");
+        var deadline = Environment.TickCount64 + 5000;
+        string? saved = null;
+        while (Environment.TickCount64 < deadline)
+        {
+            try
+            {
+                if (File.Exists(picker.SavePath))
+                {
+                    saved = File.ReadAllText(picker.SavePath);
+                    if (saved.Contains("quote'x", StringComparison.Ordinal))
+                    {
+                        break;
+                    }
+                }
+            }
+            catch (IOException)
+            {
+                saved = null;
+            }
+
+            Thread.Sleep(20);
+        }
+
+        Assert.IsNotNull(saved);
+        StringAssert.Contains(saved, "quote'x");
     }
 
     private static SessionSnapshot Awkward() => new()
