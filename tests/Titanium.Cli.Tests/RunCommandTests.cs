@@ -259,4 +259,35 @@ public class RunCommandTests
         };
         Assert.IsTrue(RunCommand.ConfigNeedsSessionPath(cfg));
     }
+
+    /// <summary>
+    /// Pins the CLI hot path: request timing stays off unless LeastTime load balancing asks for it.
+    /// Access-log timing is applied later by TryStartAccessLog, not here.
+    /// </summary>
+    [TestMethod]
+    public void ConfigureProxyFlags_LeavesTimingCaptureOff_UnlessLeastTime()
+    {
+        var plain = new TwpConfig
+        {
+            Listeners =
+            [
+                new ListenerConfig { Port = 8080, ForwardHost = "127.0.0.1", ForwardPort = 9 },
+            ],
+        };
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        Assert.IsFalse(proxy.EnableRequestTimingCapture);
+        RunCommand.ConfigureProxyFlags(proxy, plain, requiresSessionPath: false);
+        Assert.IsFalse(proxy.EnableRequestTimingCapture);
+
+        var accessLog = new TwpConfig
+        {
+            Server = new ServerConfig
+            {
+                AccessLog = new AccessLogConfig { Path = "access.ndjson" },
+            },
+        };
+        Assert.IsFalse(RunCommand.ConfigNeedsRequestTimingCapture(accessLog));
+        RunCommand.ConfigureProxyFlags(proxy, accessLog, requiresSessionPath: true);
+        Assert.IsFalse(proxy.EnableRequestTimingCapture);
+    }
 }

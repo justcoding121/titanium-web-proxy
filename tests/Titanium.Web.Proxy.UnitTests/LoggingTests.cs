@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
+using System.Reflection;
 using System.Net.Security;
 using System.Security.Authentication;
 using System.Text.RegularExpressions;
@@ -35,6 +37,45 @@ public partial class LoggingTests
         Assert.IsTrue(options.MaxFileSizeBytes > 0);
         Assert.IsTrue(options.MaxRolledFiles >= 0);
         Assert.IsTrue(options.QueueCapacity > 0);
+    }
+
+    /// <summary>
+    /// Pins the default sink list. An empty extra-provider hook must not add, remove, or reorder
+    /// these, or CLI and library logging (and the RPS probe, which runs with logging off) change.
+    /// </summary>
+    [TestMethod]
+    public void ApplyLoggingConfiguration_DefaultProviderList_IsConsoleThenFile()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+
+        var defaults = OwnedProviderTypes(proxy);
+        CollectionAssert.AreEqual(
+            new[] { nameof(ConsoleLoggerProvider) },
+            defaults);
+
+        proxy.Logging.EnableFile = true;
+        proxy.Logging.FilePath = Path.Combine(Path.GetTempPath(), "titanium-log-guard-" + Guid.NewGuid(), "proxy.log");
+        proxy.ApplyLoggingConfiguration();
+        CollectionAssert.AreEqual(
+            new[] { nameof(ConsoleLoggerProvider), nameof(RollingFileLoggerProvider) },
+            OwnedProviderTypes(proxy));
+
+        proxy.Logging.EnableConsole = false;
+        proxy.Logging.EnableFile = false;
+        proxy.ApplyLoggingConfiguration();
+        Assert.AreEqual(0, OwnedProviderTypes(proxy).Length);
+        Assert.IsFalse(proxy.Logger.IsEnabled(LogLevel.Critical));
+    }
+
+    private static string[] OwnedProviderTypes(ProxyServer proxy)
+    {
+        var factory = typeof(ProxyServer)
+            .GetField("activeLoggerFactory", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(proxy)!;
+        var providers = (System.Collections.IEnumerable)factory.GetType()
+            .GetProperty("Providers", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!
+            .GetValue(factory)!;
+        return providers.Cast<object>().Select(p => p.GetType().Name).ToArray();
     }
 
     [TestMethod]
