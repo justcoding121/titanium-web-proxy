@@ -322,5 +322,19 @@
   "status.proxyStopped": "代理已停止",
   "status.proxyRunning": "代理正在 {0} 上运行",
   "trust.health.trusted": "CA 已受信任",
-  "trust.health.untrusted": "CA 未受信任"
+  "trust.health.untrusted": "CA 未受信任",
+  "menu.network": "网络和协议…",
+  "network.appliesNextStart": "下次开始捕获时生效。",
+  "network.host": "主机",
+  "network.hostInvalid": "请输入主机名或 IP 地址。",
+  "network.hostRequired": "请输入主机。",
+  "network.none": "无",
+  "network.port": "端口",
+  "network.portInvalid": "请输入 1 到 65535 的端口。",
+  "network.proxy": "代理",
+  "network.reset": "恢复默认值",
+  "network.restartNow": "立即重新开始捕获",
+  "network.self": "该地址就是此 Inspector。请选择其他代理。",
+  "network.upstream": "上游代理",
+  "window.network": "网络和协议"
 }

@@ -322,5 +322,19 @@
   "status.proxyStopped": "Ο διαμεσολαβητής σταμάτησε",
   "status.proxyRunning": "Ο διαμεσολαβητής εκτελείται στο {0}",
   "trust.health.trusted": "Το CA είναι αξιόπιστο",
-  "trust.health.untrusted": "Το CA δεν είναι αξιόπιστο"
+  "trust.health.untrusted": "Το CA δεν είναι αξιόπιστο",
+  "menu.network": "Δίκτυο και πρωτόκολλα…",
+  "network.appliesNextStart": "Ισχύει την επόμενη φορά που ξεκινά η καταγραφή.",
+  "network.host": "Κόμβος",
+  "network.hostInvalid": "Εισαγάγετε όνομα κόμβου ή διεύθυνση IP.",
+  "network.hostRequired": "Εισαγάγετε έναν κόμβο.",
+  "network.none": "Κανένας",
+  "network.port": "Θύρα",
+  "network.portInvalid": "Εισαγάγετε θύρα από 1 έως 65535.",
+  "network.proxy": "Διαμεσολαβητής",
+  "network.reset": "Επαναφορά προεπιλογών",
+  "network.restartNow": "Επανεκκίνηση καταγραφής τώρα",
+  "network.self": "Αυτή η διεύθυνση είναι αυτό το Inspector. Επιλέξτε άλλον διαμεσολαβητή.",
+  "network.upstream": "Ανάντη διαμεσολαβητής",
+  "window.network": "Δίκτυο και πρωτόκολλα"
 }

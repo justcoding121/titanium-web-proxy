@@ -322,5 +322,19 @@
   "status.proxyStopped": "המתווך נעצר",
   "status.proxyRunning": "המתווך פועל על {0}",
   "trust.health.trusted": "CA מהימן",
-  "trust.health.untrusted": "CA לא מהימן"
+  "trust.health.untrusted": "CA לא מהימן",
+  "menu.network": "רשת ופרוטוקולים…",
+  "network.appliesNextStart": "חל בפעם הבאה שהלכידה מתחילה.",
+  "network.host": "מארח",
+  "network.hostInvalid": "הזן שם מארח או כתובת IP.",
+  "network.hostRequired": "הזן מארח.",
+  "network.none": "ללא",
+  "network.port": "יציאה",
+  "network.portInvalid": "הזן יציאה מ-1 עד 65535.",
+  "network.proxy": "פרוקסי",
+  "network.reset": "שחזור ברירת מחדל",
+  "network.restartNow": "הפעל מחדש את הלכידה",
+  "network.self": "הכתובת הזו היא Inspector זה. בחר פרוקסי אחר.",
+  "network.upstream": "פרוקסי במעלה הזרם",
+  "window.network": "רשת ופרוטוקולים"
 }

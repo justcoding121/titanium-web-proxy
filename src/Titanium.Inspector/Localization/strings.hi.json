@@ -322,5 +322,19 @@
   "status.proxyStopped": "प्रॉक्सी रुक गई",
   "status.proxyRunning": "प्रॉक्सी {0} पर चल रही है",
   "trust.health.trusted": "CA विश्वसनीय",
-  "trust.health.untrusted": "CA विश्वसनीय नहीं"
+  "trust.health.untrusted": "CA विश्वसनीय नहीं",
+  "menu.network": "नेटवर्क और प्रोटोकॉल…",
+  "network.appliesNextStart": "अगली बार कैप्चर शुरू होने पर लागू होगा।",
+  "network.host": "होस्ट",
+  "network.hostInvalid": "होस्ट नाम या IP पता दर्ज करें।",
+  "network.hostRequired": "होस्ट दर्ज करें।",
+  "network.none": "कोई नहीं",
+  "network.port": "पोर्ट",
+  "network.portInvalid": "1 से 65535 तक पोर्ट दर्ज करें।",
+  "network.proxy": "प्रॉक्सी",
+  "network.reset": "डिफ़ॉल्ट पर वापस जाएँ",
+  "network.restartNow": "कैप्चर अभी पुनः शुरू करें",
+  "network.self": "वह पता यही Inspector है। कोई दूसरा प्रॉक्सी चुनें।",
+  "network.upstream": "अपस्ट्रीम प्रॉक्सी",
+  "window.network": "नेटवर्क और प्रोटोकॉल"
 }

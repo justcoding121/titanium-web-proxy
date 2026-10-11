@@ -322,5 +322,19 @@
   "status.proxyStopped": "Proxy parado",
   "status.proxyRunning": "Proxy em execução em {0}",
   "trust.health.trusted": "CA fidedigna",
-  "trust.health.untrusted": "CA não fidedigna"
+  "trust.health.untrusted": "CA não fidedigna",
+  "menu.network": "Rede e protocolos…",
+  "network.appliesNextStart": "Aplica-se na próxima vez que a captura iniciar.",
+  "network.host": "Anfitrião",
+  "network.hostInvalid": "Introduza um nome de anfitrião ou endereço IP.",
+  "network.hostRequired": "Introduza um anfitrião.",
+  "network.none": "Nenhum",
+  "network.port": "Porta",
+  "network.portInvalid": "Introduza uma porta de 1 a 65535.",
+  "network.proxy": "Proxy",
+  "network.reset": "Repor predefinições",
+  "network.restartNow": "Reiniciar a captura agora",
+  "network.self": "Esse endereço é este Inspector. Escolha outro proxy.",
+  "network.upstream": "Proxy a montante",
+  "window.network": "Rede e protocolos"
 }

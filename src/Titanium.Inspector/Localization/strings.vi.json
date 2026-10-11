@@ -322,5 +322,19 @@
   "status.proxyStopped": "Proxy đã dừng",
   "status.proxyRunning": "Proxy đang chạy trên {0}",
   "trust.health.trusted": "CA được tin cậy",
-  "trust.health.untrusted": "CA chưa tin cậy"
+  "trust.health.untrusted": "CA chưa tin cậy",
+  "menu.network": "Mạng và giao thức…",
+  "network.appliesNextStart": "Có hiệu lực lần tới khi bắt đầu ghi.",
+  "network.host": "Máy chủ",
+  "network.hostInvalid": "Nhập tên máy chủ hoặc địa chỉ IP.",
+  "network.hostRequired": "Nhập máy chủ.",
+  "network.none": "Không",
+  "network.port": "Cổng",
+  "network.portInvalid": "Nhập cổng từ 1 đến 65535.",
+  "network.proxy": "Proxy",
+  "network.reset": "Đặt lại mặc định",
+  "network.restartNow": "Khởi động lại ghi ngay",
+  "network.self": "Địa chỉ đó là Inspector này. Hãy chọn proxy khác.",
+  "network.upstream": "Proxy thượng nguồn",
+  "window.network": "Mạng và giao thức"
 }

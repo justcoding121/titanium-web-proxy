@@ -285,6 +285,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             return Task.CompletedTask;
         });
         OpenLoggingSettingsCommand = Cmd(OpenLoggingSettingsAsync);
+        OpenNetworkSettingsCommand = Cmd(OpenNetworkSettingsAsync);
         OpenAboutCommand = Cmd(OpenAboutAsync);
         OpenHttpsDecryptHostsCommand = Cmd(OpenExcludedHostsAsync);
         ExcludeHostCommand = Cmd(ExcludeHostAsync);
@@ -1071,6 +1072,40 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     }
 
 
+    private async Task OpenNetworkSettingsAsync()
+    {
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            StatusText = "Network settings require the main window";
+            return;
+        }
+
+        var window = await AwaitCancellableAsync(NetworkSettingsWindow.ShowAsync(
+            owner,
+            _settings,
+            BindAddress,
+            BindPort,
+            _interception.IsRunning));
+        if (!window.Saved)
+        {
+            StatusText = "Network settings cancelled";
+            return;
+        }
+
+        InspectorNetworkSettings.ApplyTo(_interception, _settings.Current);
+        if (window.RestartCapture && _interception.IsRunning)
+        {
+            await StopCaptureCoreAsync("Restarting capture…");
+            await StartCaptureAsync();
+            return;
+        }
+
+        StatusText = _interception.IsRunning
+            ? "Network settings saved. Applies the next time capture starts."
+            : "Network settings saved";
+    }
+
     private async Task OpenLoggingSettingsAsync()
     {
         var owner = TryGetMainWindow();
@@ -1390,6 +1425,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     /// <summary>Restore the default columns (visibility, order, widths, sort).</summary>
     public ICommand ResetGridColumnsCommand { get; }
     public ICommand OpenLoggingSettingsCommand { get; }
+    public ICommand OpenNetworkSettingsCommand { get; }
     public ICommand OpenAboutCommand { get; }
     public ICommand OpenHttpsDecryptHostsCommand { get; }
     public ICommand ExcludeHostCommand { get; }
@@ -2755,6 +2791,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         ApplyExclusionSettingsFromSettings();
         _debugFileLogging = IsDebugFileLoggingEnabled(s);
         _interception.ConfigureLogging(s);
+        InspectorNetworkSettings.ApplyTo(_interception, s);
 
         AutoResponder.Enabled = s.AutoResponderEnabled;
         AutoResponder.LoadFromDtos(s.AutoResponderRules);
@@ -3298,6 +3335,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             _interception.AddViaHeader = _settings.Current.AddViaHeader;
             _interception.DecryptHttps = _decryptHttps;
             _interception.ConfigureLogging(_settings.Current);
+            InspectorNetworkSettings.ApplyTo(_interception, _settings.Current);
             SetStatus("Starting proxy…", StatusSeverity.Busy);
             var token = StatusCancelToken;
             // Listener start + first Root-store trust refresh can stall Crypt32 — keep off UI.

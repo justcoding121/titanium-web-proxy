@@ -322,5 +322,19 @@
   "status.proxyStopped": "Proxy arrêté",
   "status.proxyRunning": "Proxy actif sur {0}",
   "trust.health.trusted": "CA approuvée",
-  "trust.health.untrusted": "CA non approuvée"
+  "trust.health.untrusted": "CA non approuvée",
+  "menu.network": "Réseau et protocoles…",
+  "network.appliesNextStart": "Prend effet au prochain démarrage de la capture.",
+  "network.host": "Hôte",
+  "network.hostInvalid": "Saisissez un nom de machine ou une adresse IP.",
+  "network.hostRequired": "Saisissez un hôte.",
+  "network.none": "Aucun",
+  "network.port": "Port",
+  "network.portInvalid": "Saisissez un port de 1 à 65535.",
+  "network.proxy": "Proxy",
+  "network.reset": "Rétablir les valeurs par défaut",
+  "network.restartNow": "Redémarrer la capture",
+  "network.self": "Cette adresse est cet Inspector. Choisissez un autre proxy.",
+  "network.upstream": "Proxy en amont",
+  "window.network": "Réseau et protocoles"
 }

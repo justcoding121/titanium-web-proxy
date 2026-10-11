@@ -155,6 +155,15 @@ public sealed class InspectorSettings
     /// <summary>Active network throttle profile name (<c>None</c>, <c>Slow 3G</c>, …).</summary>
     public string NetworkThrottleProfile { get; set; } = "None";
 
+    /// <summary>When true, new capture sessions chain through <see cref="UpstreamProxyHost"/>.</summary>
+    public bool UpstreamProxyEnabled { get; set; }
+
+    /// <summary>Manual upstream HTTP proxy host. Ignored unless <see cref="UpstreamProxyEnabled"/>.</summary>
+    public string UpstreamProxyHost { get; set; } = string.Empty;
+
+    /// <summary>Manual upstream HTTP proxy port.</summary>
+    public int UpstreamProxyPort { get; set; } = InspectorNetworkSettings.DefaultUpstreamPort;
+
     /// <summary>
     /// When set, the user chose whether the Inspect headers pane is collapsed.
     /// Null keeps the automatic rule (collapsed when the pane is shorter than 420px).

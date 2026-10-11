@@ -322,5 +322,19 @@
   "status.proxyStopped": "Proksi berhenti",
   "status.proxyRunning": "Proksi berjalan di {0}",
   "trust.health.trusted": "CA dipercaya",
-  "trust.health.untrusted": "CA tidak dipercaya"
+  "trust.health.untrusted": "CA tidak dipercaya",
+  "menu.network": "Jaringan dan protokol…",
+  "network.appliesNextStart": "Berlaku saat penangkapan dimulai lagi.",
+  "network.host": "Host",
+  "network.hostInvalid": "Masukkan nama host atau alamat IP.",
+  "network.hostRequired": "Masukkan host.",
+  "network.none": "Tidak ada",
+  "network.port": "Port",
+  "network.portInvalid": "Masukkan port dari 1 sampai 65535.",
+  "network.proxy": "Proksi",
+  "network.reset": "Kembalikan bawaan",
+  "network.restartNow": "Mulai ulang penangkapan sekarang",
+  "network.self": "Alamat itu adalah Inspector ini. Pilih proksi lain.",
+  "network.upstream": "Proksi hulu",
+  "window.network": "Jaringan dan protokol"
 }

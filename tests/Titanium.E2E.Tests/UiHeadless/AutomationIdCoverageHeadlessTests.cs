@@ -76,6 +76,7 @@ public class AutomationIdCoverageHeadlessTests
         "MenuUpdateChannelStable",
         "MenuUpdateChannelBeta",
         "MenuCheckUpdatesOnStartup",
+        "MenuNetwork",
         "MenuLogging",
         "MenuResetSettings",
         "MenuHelp",

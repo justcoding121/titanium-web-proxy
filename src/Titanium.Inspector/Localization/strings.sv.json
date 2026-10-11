@@ -322,5 +322,19 @@
   "status.proxyStopped": "Proxy stoppad",
   "status.proxyRunning": "Proxy körs på {0}",
   "trust.health.trusted": "CA betrodd",
-  "trust.health.untrusted": "CA inte betrodd"
+  "trust.health.untrusted": "CA inte betrodd",
+  "menu.network": "Nätverk och protokoll…",
+  "network.appliesNextStart": "Gäller nästa gång inspelningen startar.",
+  "network.host": "Värd",
+  "network.hostInvalid": "Ange ett värdnamn eller en IP-adress.",
+  "network.hostRequired": "Ange en värd.",
+  "network.none": "Ingen",
+  "network.port": "Port",
+  "network.portInvalid": "Ange en port från 1 till 65535.",
+  "network.proxy": "Proxy",
+  "network.reset": "Återställ standard",
+  "network.restartNow": "Starta om inspelningen nu",
+  "network.self": "Den adressen är den här Inspector. Välj en annan proxy.",
+  "network.upstream": "Uppströmsproxy",
+  "window.network": "Nätverk och protokoll"
 }

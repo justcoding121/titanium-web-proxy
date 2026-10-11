@@ -322,5 +322,19 @@
   "status.proxyStopped": "Proxy beendet",
   "status.proxyRunning": "Proxy läuft auf {0}",
   "trust.health.trusted": "CA vertrauenswürdig",
-  "trust.health.untrusted": "CA nicht vertrauenswürdig"
+  "trust.health.untrusted": "CA nicht vertrauenswürdig",
+  "menu.network": "Netzwerk und Protokolle…",
+  "network.appliesNextStart": "Gilt beim nächsten Start der Aufzeichnung.",
+  "network.host": "Host",
+  "network.hostInvalid": "Geben Sie einen Hostnamen oder eine IP-Adresse ein.",
+  "network.hostRequired": "Geben Sie einen Host ein.",
+  "network.none": "Keiner",
+  "network.port": "Port",
+  "network.portInvalid": "Geben Sie einen Port von 1 bis 65535 ein.",
+  "network.proxy": "Proxy",
+  "network.reset": "Auf Standard zurücksetzen",
+  "network.restartNow": "Aufzeichnung jetzt neu starten",
+  "network.self": "Diese Adresse ist dieser Inspector. Wählen Sie einen anderen Proxy.",
+  "network.upstream": "Upstream-Proxy",
+  "window.network": "Netzwerk und Protokolle"
 }

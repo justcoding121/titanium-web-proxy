@@ -322,5 +322,19 @@
   "status.proxyStopped": "프록시 중지됨",
   "status.proxyRunning": "프록시가 {0}에서 실행 중",
   "trust.health.trusted": "CA 신뢰됨",
-  "trust.health.untrusted": "CA 신뢰되지 않음"
+  "trust.health.untrusted": "CA 신뢰되지 않음",
+  "menu.network": "네트워크 및 프로토콜…",
+  "network.appliesNextStart": "다음에 캡처를 시작할 때 적용됩니다.",
+  "network.host": "호스트",
+  "network.hostInvalid": "호스트 이름 또는 IP 주소를 입력하세요.",
+  "network.hostRequired": "호스트를 입력하세요.",
+  "network.none": "없음",
+  "network.port": "포트",
+  "network.portInvalid": "1에서 65535 사이의 포트를 입력하세요.",
+  "network.proxy": "프록시",
+  "network.reset": "기본값으로 되돌리기",
+  "network.restartNow": "지금 캡처 다시 시작",
+  "network.self": "그 주소는 이 Inspector입니다. 다른 프록시를 선택하세요.",
+  "network.upstream": "업스트림 프록시",
+  "window.network": "네트워크 및 프로토콜"
 }

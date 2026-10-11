@@ -322,5 +322,19 @@
   "status.proxyStopped": "Proxy pysäytetty",
   "status.proxyRunning": "Proxy käynnissä osoitteessa {0}",
   "trust.health.trusted": "CA luotettu",
-  "trust.health.untrusted": "CA ei luotettu"
+  "trust.health.untrusted": "CA ei luotettu",
+  "menu.network": "Verkko ja protokollat…",
+  "network.appliesNextStart": "Tulee voimaan, kun kaappaus käynnistyy seuraavan kerran.",
+  "network.host": "Isäntä",
+  "network.hostInvalid": "Anna isäntänimi tai IP-osoite.",
+  "network.hostRequired": "Anna isäntä.",
+  "network.none": "Ei mitään",
+  "network.port": "Portti",
+  "network.portInvalid": "Anna portti väliltä 1–65535.",
+  "network.proxy": "Välityspalvelin",
+  "network.reset": "Palauta oletukset",
+  "network.restartNow": "Käynnistä kaappaus uudelleen",
+  "network.self": "Tuo osoite on tämä Inspector. Valitse toinen välityspalvelin.",
+  "network.upstream": "Ylävirran välityspalvelin",
+  "window.network": "Verkko ja protokollat"
 }

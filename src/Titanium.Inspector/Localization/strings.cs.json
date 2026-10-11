@@ -322,5 +322,19 @@
   "status.proxyStopped": "Proxy zastaveno",
   "status.proxyRunning": "Proxy běží na {0}",
   "trust.health.trusted": "CA důvěryhodná",
-  "trust.health.untrusted": "CA není důvěryhodná"
+  "trust.health.untrusted": "CA není důvěryhodná",
+  "menu.network": "Síť a protokoly…",
+  "network.appliesNextStart": "Platí při příštím spuštění zachytávání.",
+  "network.host": "Hostitel",
+  "network.hostInvalid": "Zadejte název hostitele nebo IP adresu.",
+  "network.hostRequired": "Zadejte hostitele.",
+  "network.none": "Žádná",
+  "network.port": "Port",
+  "network.portInvalid": "Zadejte port od 1 do 65535.",
+  "network.proxy": "Proxy",
+  "network.reset": "Obnovit výchozí",
+  "network.restartNow": "Restartovat zachytávání",
+  "network.self": "Tato adresa je tento Inspector. Zvolte jinou proxy.",
+  "network.upstream": "Nadřazená proxy",
+  "window.network": "Síť a protokoly"
 }

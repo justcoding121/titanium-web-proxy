@@ -322,5 +322,19 @@
   "status.proxyStopped": "Proxy arrestato",
   "status.proxyRunning": "Proxy in esecuzione su {0}",
   "trust.health.trusted": "CA attendibile",
-  "trust.health.untrusted": "CA non attendibile"
+  "trust.health.untrusted": "CA non attendibile",
+  "menu.network": "Rete e protocolli…",
+  "network.appliesNextStart": "Si applica al prossimo avvio della cattura.",
+  "network.host": "Host",
+  "network.hostInvalid": "Inserisci un nome host o un indirizzo IP.",
+  "network.hostRequired": "Inserisci un host.",
+  "network.none": "Nessuno",
+  "network.port": "Porta",
+  "network.portInvalid": "Inserisci una porta da 1 a 65535.",
+  "network.proxy": "Proxy",
+  "network.reset": "Ripristina i valori predefiniti",
+  "network.restartNow": "Riavvia la cattura ora",
+  "network.self": "Questo indirizzo è questo Inspector. Scegli un altro proxy.",
+  "network.upstream": "Proxy upstream",
+  "window.network": "Rete e protocolli"
 }

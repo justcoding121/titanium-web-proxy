@@ -322,5 +322,19 @@
   "status.proxyStopped": "Proxy gestopt",
   "status.proxyRunning": "Proxy actief op {0}",
   "trust.health.trusted": "CA vertrouwd",
-  "trust.health.untrusted": "CA niet vertrouwd"
+  "trust.health.untrusted": "CA niet vertrouwd",
+  "menu.network": "Netwerk en protocollen…",
+  "network.appliesNextStart": "Geldt de volgende keer dat vastleggen start.",
+  "network.host": "Host",
+  "network.hostInvalid": "Voer een hostnaam of IP-adres in.",
+  "network.hostRequired": "Voer een host in.",
+  "network.none": "Geen",
+  "network.port": "Poort",
+  "network.portInvalid": "Voer een poort van 1 tot 65535 in.",
+  "network.proxy": "Proxy",
+  "network.reset": "Standaardwaarden herstellen",
+  "network.restartNow": "Vastleggen nu herstarten",
+  "network.self": "Dat adres is deze Inspector. Kies een andere proxy.",
+  "network.upstream": "Upstream-proxy",
+  "window.network": "Netwerk en protocollen"
 }

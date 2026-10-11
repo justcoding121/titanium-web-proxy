@@ -322,5 +322,19 @@
   "status.proxyStopped": "Proxyen er stoppet",
   "status.proxyRunning": "Proxyen kjører på {0}",
   "trust.health.trusted": "CA klarert",
-  "trust.health.untrusted": "CA ikke klarert"
+  "trust.health.untrusted": "CA ikke klarert",
+  "menu.network": "Nettverk og protokoller…",
+  "network.appliesNextStart": "Gjelder neste gang opptak starter.",
+  "network.host": "Vert",
+  "network.hostInvalid": "Skriv inn et vertsnavn eller en IP-adresse.",
+  "network.hostRequired": "Skriv inn en vert.",
+  "network.none": "Ingen",
+  "network.port": "Port",
+  "network.portInvalid": "Skriv inn en port fra 1 til 65535.",
+  "network.proxy": "Proxy",
+  "network.reset": "Tilbakestill til standard",
+  "network.restartNow": "Start opptak på nytt nå",
+  "network.self": "Den adressen er denne Inspector. Velg en annen proxy.",
+  "network.upstream": "Oppstrømsproxy",
+  "window.network": "Nettverk og protokoller"
 }

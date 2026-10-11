@@ -322,5 +322,19 @@
   "status.proxyStopped": "代理已停止",
   "status.proxyRunning": "代理正在 {0} 上執行",
   "trust.health.trusted": "CA 已受信任",
-  "trust.health.untrusted": "CA 未受信任"
+  "trust.health.untrusted": "CA 未受信任",
+  "menu.network": "網路和通訊協定…",
+  "network.appliesNextStart": "下次開始擷取時生效。",
+  "network.host": "主機",
+  "network.hostInvalid": "請輸入主機名稱或 IP 位址。",
+  "network.hostRequired": "請輸入主機。",
+  "network.none": "無",
+  "network.port": "連接埠",
+  "network.portInvalid": "請輸入 1 到 65535 的連接埠。",
+  "network.proxy": "代理",
+  "network.reset": "還原預設值",
+  "network.restartNow": "立即重新開始擷取",
+  "network.self": "該位址就是此 Inspector。請選擇其他代理。",
+  "network.upstream": "上游代理",
+  "window.network": "網路和通訊協定"
 }

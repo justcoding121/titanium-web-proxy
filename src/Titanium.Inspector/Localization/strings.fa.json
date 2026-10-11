@@ -322,5 +322,19 @@
   "status.proxyStopped": "پروکسی متوقف شد",
   "status.proxyRunning": "پروکسی روی {0} در حال اجراست",
   "trust.health.trusted": "CA مورد اعتماد است",
-  "trust.health.untrusted": "CA مورد اعتماد نیست"
+  "trust.health.untrusted": "CA مورد اعتماد نیست",
+  "menu.network": "شبکه و پروتکل‌ها…",
+  "network.appliesNextStart": "دفعه بعد که ضبط شروع شود اعمال می‌شود.",
+  "network.host": "میزبان",
+  "network.hostInvalid": "نام میزبان یا نشانی IP وارد کنید.",
+  "network.hostRequired": "یک میزبان وارد کنید.",
+  "network.none": "هیچ",
+  "network.port": "درگاه",
+  "network.portInvalid": "درگاهی از ۱ تا ۶۵۵۳۵ وارد کنید.",
+  "network.proxy": "پروکسی",
+  "network.reset": "بازگشت به پیش‌فرض",
+  "network.restartNow": "ضبط را اکنون دوباره شروع کن",
+  "network.self": "آن نشانی همین Inspector است. پروکسی دیگری انتخاب کنید.",
+  "network.upstream": "پروکسی بالادست",
+  "window.network": "شبکه و پروتکل‌ها"
 }

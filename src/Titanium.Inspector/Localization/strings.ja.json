@@ -322,5 +322,19 @@
   "status.proxyStopped": "プロキシは停止しています",
   "status.proxyRunning": "プロキシは {0} で実行中",
   "trust.health.trusted": "CA は信頼済み",
-  "trust.health.untrusted": "CA は未信頼"
+  "trust.health.untrusted": "CA は未信頼",
+  "menu.network": "ネットワークとプロトコル…",
+  "network.appliesNextStart": "次にキャプチャを開始したときに適用されます。",
+  "network.host": "ホスト",
+  "network.hostInvalid": "ホスト名または IP アドレスを入力してください。",
+  "network.hostRequired": "ホストを入力してください。",
+  "network.none": "なし",
+  "network.port": "ポート",
+  "network.portInvalid": "1 から 65535 のポートを入力してください。",
+  "network.proxy": "プロキシ",
+  "network.reset": "既定値に戻す",
+  "network.restartNow": "今すぐキャプチャを再開",
+  "network.self": "そのアドレスはこの Inspector です。別のプロキシを選んでください。",
+  "network.upstream": "上流プロキシ",
+  "window.network": "ネットワークとプロトコル"
 }

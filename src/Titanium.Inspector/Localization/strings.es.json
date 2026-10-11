@@ -322,5 +322,19 @@
   "status.proxyStopped": "Proxy detenido",
   "status.proxyRunning": "Proxy en ejecución en {0}",
   "trust.health.trusted": "CA de confianza",
-  "trust.health.untrusted": "CA sin confianza"
+  "trust.health.untrusted": "CA sin confianza",
+  "menu.network": "Red y protocolos…",
+  "network.appliesNextStart": "Se aplica la próxima vez que se inicie la captura.",
+  "network.host": "Host",
+  "network.hostInvalid": "Escriba un nombre de host o una dirección IP.",
+  "network.hostRequired": "Escriba un host.",
+  "network.none": "Ninguno",
+  "network.port": "Puerto",
+  "network.portInvalid": "Escriba un puerto del 1 al 65535.",
+  "network.proxy": "Proxy",
+  "network.reset": "Restablecer valores",
+  "network.restartNow": "Reiniciar la captura ahora",
+  "network.self": "Esa dirección es este Inspector. Elija otro proxy.",
+  "network.upstream": "Proxy de subida",
+  "window.network": "Red y protocolos"
 }

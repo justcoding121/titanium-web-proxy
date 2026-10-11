@@ -322,5 +322,19 @@
   "status.proxyStopped": "พร็อกซีหยุดแล้ว",
   "status.proxyRunning": "พร็อกซีกำลังทำงานที่ {0}",
   "trust.health.trusted": "CA ได้รับความเชื่อถือ",
-  "trust.health.untrusted": "CA ไม่ได้รับความเชื่อถือ"
+  "trust.health.untrusted": "CA ไม่ได้รับความเชื่อถือ",
+  "menu.network": "เครือข่ายและโพรโทคอล…",
+  "network.appliesNextStart": "มีผลเมื่อเริ่มจับทราฟฟิกครั้งถัดไป",
+  "network.host": "โฮสต์",
+  "network.hostInvalid": "ป้อนชื่อโฮสต์หรือที่อยู่ IP",
+  "network.hostRequired": "ป้อนโฮสต์",
+  "network.none": "ไม่มี",
+  "network.port": "พอร์ต",
+  "network.portInvalid": "ป้อนพอร์ตตั้งแต่ 1 ถึง 65535",
+  "network.proxy": "พร็อกซี",
+  "network.reset": "คืนค่าเริ่มต้น",
+  "network.restartNow": "เริ่มจับใหม่ตอนนี้",
+  "network.self": "ที่อยู่นั้นคือ Inspector นี้ เลือกพร็อกซีอื่น",
+  "network.upstream": "พร็อกซีต้นทาง",
+  "window.network": "เครือข่ายและโพรโทคอล"
 }

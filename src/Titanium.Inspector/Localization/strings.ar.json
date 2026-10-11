@@ -322,5 +322,19 @@
   "status.proxyStopped": "توقف الوكيل",
   "status.proxyRunning": "الوكيل يعمل على {0}",
   "trust.health.trusted": "CA موثوق",
-  "trust.health.untrusted": "CA غير موثوق"
+  "trust.health.untrusted": "CA غير موثوق",
+  "menu.network": "الشبكة والبروتوكولات…",
+  "network.appliesNextStart": "يُطبَّق عند بدء الالتقاط في المرة القادمة.",
+  "network.host": "المضيف",
+  "network.hostInvalid": "أدخل اسم مضيف أو عنوان IP.",
+  "network.hostRequired": "أدخل مضيفاً.",
+  "network.none": "بدون",
+  "network.port": "المنفذ",
+  "network.portInvalid": "أدخل منفذاً من 1 إلى 65535.",
+  "network.proxy": "وكيل",
+  "network.reset": "استعادة الافتراضي",
+  "network.restartNow": "إعادة بدء الالتقاط الآن",
+  "network.self": "هذا العنوان هو Inspector هذا. اختر وكيلاً آخر.",
+  "network.upstream": "وكيل أعلى",
+  "window.network": "الشبكة والبروتوكولات"
 }

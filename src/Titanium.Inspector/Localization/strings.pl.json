@@ -322,5 +322,19 @@
   "status.proxyStopped": "Proxy zatrzymane",
   "status.proxyRunning": "Proxy działa na {0}",
   "trust.health.trusted": "CA zaufany",
-  "trust.health.untrusted": "CA niezaufany"
+  "trust.health.untrusted": "CA niezaufany",
+  "menu.network": "Sieć i protokoły…",
+  "network.appliesNextStart": "Obowiązuje przy następnym uruchomieniu przechwytywania.",
+  "network.host": "Host",
+  "network.hostInvalid": "Podaj nazwę hosta lub adres IP.",
+  "network.hostRequired": "Podaj hosta.",
+  "network.none": "Brak",
+  "network.port": "Port",
+  "network.portInvalid": "Podaj port od 1 do 65535.",
+  "network.proxy": "Proxy",
+  "network.reset": "Przywróć domyślne",
+  "network.restartNow": "Uruchom przechwytywanie ponownie",
+  "network.self": "Ten adres to ten Inspector. Wybierz inne proxy.",
+  "network.upstream": "Proxy nadrzędne",
+  "window.network": "Sieć i protokoły"
 }

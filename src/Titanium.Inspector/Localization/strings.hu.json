@@ -322,5 +322,19 @@
   "status.proxyStopped": "A proxy leállt",
   "status.proxyRunning": "A proxy ezen fut: {0}",
   "trust.health.trusted": "CA megbízható",
-  "trust.health.untrusted": "CA nem megbízható"
+  "trust.health.untrusted": "CA nem megbízható",
+  "menu.network": "Hálózat és protokollok…",
+  "network.appliesNextStart": "A rögzítés következő indításakor lép életbe.",
+  "network.host": "Gazdagép",
+  "network.hostInvalid": "Adjon meg egy gazdagépnevet vagy IP-címet.",
+  "network.hostRequired": "Adjon meg egy gazdagépet.",
+  "network.none": "Nincs",
+  "network.port": "Port",
+  "network.portInvalid": "Adjon meg egy portot 1 és 65535 között.",
+  "network.proxy": "Proxy",
+  "network.reset": "Alapértelmezések visszaállítása",
+  "network.restartNow": "Rögzítés újraindítása",
+  "network.self": "Ez a cím ez az Inspector. Válasszon másik proxyt.",
+  "network.upstream": "Felfelé irányuló proxy",
+  "window.network": "Hálózat és protokollok"
 }

@@ -322,5 +322,19 @@
   "status.proxyStopped": "Прокси остановлен",
   "status.proxyRunning": "Прокси работает на {0}",
   "trust.health.trusted": "CA доверен",
-  "trust.health.untrusted": "CA не доверен"
+  "trust.health.untrusted": "CA не доверен",
+  "menu.network": "Сеть и протоколы…",
+  "network.appliesNextStart": "Применится при следующем запуске захвата.",
+  "network.host": "Хост",
+  "network.hostInvalid": "Введите имя хоста или IP-адрес.",
+  "network.hostRequired": "Введите хост.",
+  "network.none": "Нет",
+  "network.port": "Порт",
+  "network.portInvalid": "Введите порт от 1 до 65535.",
+  "network.proxy": "Прокси",
+  "network.reset": "Сбросить к значениям по умолчанию",
+  "network.restartNow": "Перезапустить захват",
+  "network.self": "Это адрес этого Inspector. Выберите другой прокси.",
+  "network.upstream": "Вышестоящий прокси",
+  "window.network": "Сеть и протоколы"
 }

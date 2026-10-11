@@ -322,5 +322,19 @@
   "status.proxyStopped": "Proxy parado",
   "status.proxyRunning": "Proxy em execução em {0}",
   "trust.health.trusted": "CA confiável",
-  "trust.health.untrusted": "CA não confiável"
+  "trust.health.untrusted": "CA não confiável",
+  "menu.network": "Rede e protocolos…",
+  "network.appliesNextStart": "Vale na próxima vez que a captura iniciar.",
+  "network.host": "Host",
+  "network.hostInvalid": "Informe um nome de host ou endereço IP.",
+  "network.hostRequired": "Informe um host.",
+  "network.none": "Nenhum",
+  "network.port": "Porta",
+  "network.portInvalid": "Informe uma porta de 1 a 65535.",
+  "network.proxy": "Proxy",
+  "network.reset": "Restaurar padrões",
+  "network.restartNow": "Reiniciar a captura agora",
+  "network.self": "Esse endereço é este Inspector. Escolha outro proxy.",
+  "network.upstream": "Proxy de saída",
+  "window.network": "Rede e protocolos"
 }

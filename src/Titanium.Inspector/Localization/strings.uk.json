@@ -322,5 +322,19 @@
   "status.proxyStopped": "Проксі зупинено",
   "status.proxyRunning": "Проксі працює на {0}",
   "trust.health.trusted": "CA довірений",
-  "trust.health.untrusted": "CA не довірений"
+  "trust.health.untrusted": "CA не довірений",
+  "menu.network": "Мережа і протоколи…",
+  "network.appliesNextStart": "Застосується під час наступного запуску захоплення.",
+  "network.host": "Хост",
+  "network.hostInvalid": "Введіть назву хоста або IP-адресу.",
+  "network.hostRequired": "Введіть хост.",
+  "network.none": "Немає",
+  "network.port": "Порт",
+  "network.portInvalid": "Введіть порт від 1 до 65535.",
+  "network.proxy": "Проксі",
+  "network.reset": "Відновити типові значення",
+  "network.restartNow": "Перезапустити захоплення",
+  "network.self": "Ця адреса — цей Inspector. Оберіть інший проксі.",
+  "network.upstream": "Вищий проксі",
+  "window.network": "Мережа і протоколи"
 }

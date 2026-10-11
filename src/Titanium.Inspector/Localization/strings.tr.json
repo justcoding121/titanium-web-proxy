@@ -322,5 +322,19 @@
   "status.proxyStopped": "Ara sunucu durduruldu",
   "status.proxyRunning": "Ara sunucu şurada çalışıyor: {0}",
   "trust.health.trusted": "CA güvenilir",
-  "trust.health.untrusted": "CA güvenilir değil"
+  "trust.health.untrusted": "CA güvenilir değil",
+  "menu.network": "Ağ ve protokoller…",
+  "network.appliesNextStart": "Yakalama bir sonraki başlatmada uygulanır.",
+  "network.host": "Ana bilgisayar",
+  "network.hostInvalid": "Bir ana bilgisayar adı veya IP adresi girin.",
+  "network.hostRequired": "Bir ana bilgisayar girin.",
+  "network.none": "Yok",
+  "network.port": "Bağlantı noktası",
+  "network.portInvalid": "1 ile 65535 arasında bir bağlantı noktası girin.",
+  "network.proxy": "Proxy",
+  "network.reset": "Varsayılanlara dön",
+  "network.restartNow": "Yakalamayı şimdi yeniden başlat",
+  "network.self": "Bu adres bu Inspector. Başka bir proxy seçin.",
+  "network.upstream": "Üst proxy",
+  "window.network": "Ağ ve protokoller"
 }

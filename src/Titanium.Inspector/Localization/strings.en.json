@@ -322,5 +322,19 @@
   "status.proxyStopped": "Proxy stopped",
   "status.proxyRunning": "Proxy running on {0}",
   "trust.health.trusted": "CA trusted",
-  "trust.health.untrusted": "CA not trusted"
+  "trust.health.untrusted": "CA not trusted",
+  "menu.network": "Network and protocols…",
+  "network.appliesNextStart": "Applies the next time capture starts.",
+  "network.host": "Host",
+  "network.hostInvalid": "Enter a host name or IP address.",
+  "network.hostRequired": "Enter a host.",
+  "network.none": "None",
+  "network.port": "Port",
+  "network.portInvalid": "Enter a port from 1 to 65535.",
+  "network.proxy": "Proxy",
+  "network.reset": "Reset to defaults",
+  "network.restartNow": "Restart capture now",
+  "network.self": "That address is this Inspector. Choose another proxy.",
+  "network.upstream": "Upstream proxy",
+  "window.network": "Network and protocols"
 }

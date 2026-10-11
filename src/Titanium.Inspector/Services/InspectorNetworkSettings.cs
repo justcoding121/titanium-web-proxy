@@ -1,0 +1,92 @@
+namespace Titanium.Inspector.Services;
+
+/// <summary>
+/// Upstream proxy address for Inspector. Applied when capture starts; a running proxy keeps
+/// the address it was started with.
+/// </summary>
+public static class InspectorNetworkSettings
+{
+    public const int DefaultUpstreamPort = 8080;
+
+    public const string HostRequired = "network.hostRequired";
+    public const string PortInvalid = "network.portInvalid";
+    public const string SelfLoop = "network.self";
+    public const string HostInvalid = "network.hostInvalid";
+
+    public static void ApplyTo(InterceptionService interception, InspectorSettings settings)
+    {
+        interception.UpstreamProxyAddress = FormatUpstreamUri(settings);
+    }
+
+    public static string? FormatUpstreamUri(InspectorSettings settings)
+    {
+        if (!settings.UpstreamProxyEnabled)
+        {
+            return null;
+        }
+
+        return FormatUpstreamUri(settings.UpstreamProxyHost, settings.UpstreamProxyPort);
+    }
+
+    public static string? FormatUpstreamUri(string? host, int port)
+    {
+        var normalized = NormalizeHost(host);
+        if (normalized.Length == 0 || port is < 1 or > 65535)
+        {
+            return null;
+        }
+
+        var authority = normalized.Contains(':') ? "[" + normalized + "]" : normalized;
+        return "http://" + authority + ":" + port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>Null when the draft is valid. Otherwise a localization key.</summary>
+    public static string? Validate(bool enabled, string? host, int port, string bindAddress, int bindPort)
+    {
+        if (!enabled)
+        {
+            return null;
+        }
+
+        var normalized = NormalizeHost(host);
+        if (normalized.Length == 0)
+        {
+            return HostRequired;
+        }
+
+        if (port is < 1 or > 65535)
+        {
+            return PortInvalid;
+        }
+
+        if (Uri.CheckHostName(normalized) == UriHostNameType.Unknown)
+        {
+            return HostInvalid;
+        }
+
+        if (port == bindPort && string.Equals(normalized, NormalizeHost(bindAddress), StringComparison.OrdinalIgnoreCase))
+        {
+            return SelfLoop;
+        }
+
+        return null;
+    }
+
+    public static void ResetUpstream(InspectorSettings settings)
+    {
+        settings.UpstreamProxyEnabled = false;
+        settings.UpstreamProxyHost = string.Empty;
+        settings.UpstreamProxyPort = DefaultUpstreamPort;
+    }
+
+    private static string NormalizeHost(string? host)
+    {
+        var value = host?.Trim() ?? string.Empty;
+        if (value.Length >= 2 && value[0] == '[' && value[^1] == ']')
+        {
+            value = value[1..^1];
+        }
+
+        return value;
+    }
+}
