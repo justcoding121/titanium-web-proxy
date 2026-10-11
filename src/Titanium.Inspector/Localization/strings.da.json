@@ -467,5 +467,12 @@
   "saz.tooLarge": "Denne SAZ-fil er for stor.",
   "saz.unsafe": "SAZ-metadataene er ikke sikre at læse.",
   "saz.empty": "Denne SAZ-fil har ingen sessioner.",
-  "saz.rejected": "Denne fil er ikke et SAZ-arkiv."
+  "saz.rejected": "Denne fil er ikke et SAZ-arkiv.",
+  "menu.timeline": "Tidslinje…",
+  "timeline.empty": "Ingen sessioner at vise.",
+  "timeline.capped": "Viser de nyeste {0} sessioner.",
+  "timeline.tunnel": "Tunnel",
+  "timeline.estimated": "Estimeret tid",
+  "timeline.inFlight": "I gang",
+  "timeline.needsWindow": "Tidslinjen kræver hovedvinduet."
 }

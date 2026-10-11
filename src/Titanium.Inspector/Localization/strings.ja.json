@@ -467,5 +467,12 @@
   "saz.tooLarge": "この SAZ ファイルは大きすぎます。",
   "saz.unsafe": "SAZ のメタデータは安全に読み取れません。",
   "saz.empty": "この SAZ ファイルにセッションはありません。",
-  "saz.rejected": "このファイルは SAZ アーカイブではありません。"
+  "saz.rejected": "このファイルは SAZ アーカイブではありません。",
+  "menu.timeline": "タイムライン…",
+  "timeline.empty": "描画するセッションがありません。",
+  "timeline.capped": "最新の {0} 件を表示しています。",
+  "timeline.tunnel": "トンネル",
+  "timeline.estimated": "推定時間",
+  "timeline.inFlight": "進行中",
+  "timeline.needsWindow": "タイムラインにはメイン ウィンドウが必要です。"
 }

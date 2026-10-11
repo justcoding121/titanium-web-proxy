@@ -467,5 +467,12 @@
   "saz.tooLarge": "Este ficheiro SAZ é demasiado grande.",
   "saz.unsafe": "Os metadados SAZ não são seguros para leitura.",
   "saz.empty": "Este ficheiro SAZ não tem sessões.",
-  "saz.rejected": "Este ficheiro não é um arquivo SAZ."
+  "saz.rejected": "Este ficheiro não é um arquivo SAZ.",
+  "menu.timeline": "Linha temporal…",
+  "timeline.empty": "Não há sessões para o gráfico.",
+  "timeline.capped": "A mostrar as {0} sessões mais recentes.",
+  "timeline.tunnel": "Túnel",
+  "timeline.estimated": "Tempo estimado",
+  "timeline.inFlight": "Em curso",
+  "timeline.needsWindow": "A linha temporal precisa da janela principal."
 }

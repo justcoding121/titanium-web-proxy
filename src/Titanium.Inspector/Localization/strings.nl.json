@@ -467,5 +467,12 @@
   "saz.tooLarge": "Dit SAZ-bestand is te groot.",
   "saz.unsafe": "De SAZ-metagegevens zijn niet veilig om te lezen.",
   "saz.empty": "Dit SAZ-bestand bevat geen sessies.",
-  "saz.rejected": "Dit bestand is geen SAZ-archief."
+  "saz.rejected": "Dit bestand is geen SAZ-archief.",
+  "menu.timeline": "Tijdlijn…",
+  "timeline.empty": "Geen sessies om te tekenen.",
+  "timeline.capped": "De nieuwste {0} sessies worden getoond.",
+  "timeline.tunnel": "Tunnel",
+  "timeline.estimated": "Geschatte tijd",
+  "timeline.inFlight": "Bezig",
+  "timeline.needsWindow": "De tijdlijn heeft het hoofdvenster nodig."
 }

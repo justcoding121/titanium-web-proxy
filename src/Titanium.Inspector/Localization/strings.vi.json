@@ -467,5 +467,12 @@
   "saz.tooLarge": "Tệp SAZ này quá lớn.",
   "saz.unsafe": "Siêu dữ liệu SAZ không an toàn để đọc.",
   "saz.empty": "Tệp SAZ này không có phiên.",
-  "saz.rejected": "Tệp này không phải tệp SAZ."
+  "saz.rejected": "Tệp này không phải tệp SAZ.",
+  "menu.timeline": "Dòng thời gian…",
+  "timeline.empty": "Không có phiên để vẽ.",
+  "timeline.capped": "Đang hiện {0} phiên mới nhất.",
+  "timeline.tunnel": "Đường hầm",
+  "timeline.estimated": "Thời gian ước tính",
+  "timeline.inFlight": "Đang chạy",
+  "timeline.needsWindow": "Dòng thời gian cần cửa sổ chính."
 }

@@ -314,6 +314,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         });
         OpenLoggingSettingsCommand = Cmd(OpenLoggingSettingsAsync);
         OpenRunLogCommand = Cmd(OpenRunLogAsync);
+        OpenTimelineCommand = Cmd(OpenTimeline);
         OpenNetworkSettingsCommand = Cmd(OpenNetworkSettingsAsync);
         OpenAboutCommand = Cmd(OpenAboutAsync);
         OpenKeyboardShortcutsCommand = Cmd(OpenKeyboardShortcutsAsync);
@@ -1205,6 +1206,30 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         return Task.CompletedTask;
     }
 
+    private Task OpenTimeline()
+    {
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            StatusText = LanguageService.Get("timeline.needsWindow");
+            return Task.CompletedTask;
+        }
+
+        TimelineWindow.Show(owner, _store, SelectTimelineSession);
+        return Task.CompletedTask;
+    }
+
+    private void SelectTimelineSession(long id)
+    {
+        var session = _store.TryGet(id);
+        if (session is null)
+        {
+            return;
+        }
+
+        SelectSessionWithoutOpeningDetails(session);
+    }
+
     private async Task OpenLoggingSettingsAsync()
     {
         var owner = TryGetMainWindow();
@@ -1537,6 +1562,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public ICommand OpenLoggingSettingsCommand { get; }
 
     public ICommand OpenRunLogCommand { get; }
+    public ICommand OpenTimelineCommand { get; }
     public ICommand OpenNetworkSettingsCommand { get; }
     public ICommand OpenAboutCommand { get; }
     public ICommand OpenKeyboardShortcutsCommand { get; }

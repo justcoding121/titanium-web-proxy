@@ -98,6 +98,29 @@ public sealed class SessionStore : IDisposable
         }
     }
 
+    /// <summary>Newest sessions, oldest of that window first. Empty when <paramref name="max"/> is below 1.</summary>
+    public SessionSnapshot[] CopyNewest(int max)
+    {
+        lock (_gate)
+        {
+            var count = Sessions.Count;
+            if (count == 0 || max < 1)
+            {
+                return [];
+            }
+
+            var take = Math.Min(count, max);
+            var start = count - take;
+            var copy = new SessionSnapshot[take];
+            for (var i = 0; i < take; i++)
+            {
+                copy[i] = Sessions[start + i];
+            }
+
+            return copy;
+        }
+    }
+
     public int SpilledCount
     {
         get

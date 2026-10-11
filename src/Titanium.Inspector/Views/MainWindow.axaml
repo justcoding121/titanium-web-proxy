@@ -88,6 +88,7 @@
         <MenuItem Header="{loc:Loc menu.scripts}" Command="{Binding OpenToolsScriptsCommand}" AutomationProperties.AutomationId="MenuToolsScripts" />
         <MenuItem Header="{loc:Loc menu.mapRemote}" Command="{Binding OpenToolsMapRemoteCommand}" AutomationProperties.AutomationId="MenuToolsMapRemote" />
         <Separator />
+        <MenuItem Header="{loc:Loc menu.timeline}" Command="{Binding OpenTimelineCommand}" AutomationProperties.AutomationId="MenuTimeline" />
         <MenuItem Header="{loc:Loc menu.runLog}" Command="{Binding OpenRunLogCommand}" AutomationProperties.AutomationId="MenuRunLog" />
       </MenuItem>
       <MenuItem Header="{loc:Loc menu.options}" AutomationProperties.AutomationId="MenuOptions">

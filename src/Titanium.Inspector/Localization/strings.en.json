@@ -467,5 +467,12 @@
   "saz.tooLarge": "This SAZ file is too large to import.",
   "saz.unsafe": "The SAZ metadata is not safe to read.",
   "saz.empty": "This SAZ file has no sessions.",
-  "saz.rejected": "This file is not a SAZ archive."
+  "saz.rejected": "This file is not a SAZ archive.",
+  "menu.timeline": "Timeline…",
+  "timeline.empty": "No sessions to chart.",
+  "timeline.capped": "Showing the newest {0} sessions.",
+  "timeline.tunnel": "Tunnel",
+  "timeline.estimated": "Estimated timing",
+  "timeline.inFlight": "In progress",
+  "timeline.needsWindow": "Timeline requires the main window."
 }

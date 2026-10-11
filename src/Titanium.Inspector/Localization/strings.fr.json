@@ -467,5 +467,12 @@
   "saz.tooLarge": "Ce fichier SAZ est trop volumineux.",
   "saz.unsafe": "Les métadonnées SAZ ne peuvent pas être lues en sécurité.",
   "saz.empty": "Ce fichier SAZ ne contient aucune session.",
-  "saz.rejected": "Ce fichier n’est pas une archive SAZ."
+  "saz.rejected": "Ce fichier n’est pas une archive SAZ.",
+  "menu.timeline": "Chronologie…",
+  "timeline.empty": "Aucune session à tracer.",
+  "timeline.capped": "Affichage des {0} sessions les plus récentes.",
+  "timeline.tunnel": "Tunnel",
+  "timeline.estimated": "Durée estimée",
+  "timeline.inFlight": "En cours",
+  "timeline.needsWindow": "La chronologie a besoin de la fenêtre principale."
 }

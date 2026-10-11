@@ -467,5 +467,12 @@
   "saz.tooLarge": "Diese SAZ-Datei ist zu groß.",
   "saz.unsafe": "Die SAZ-Metadaten sind nicht sicher lesbar.",
   "saz.empty": "Diese SAZ-Datei enthält keine Sitzungen.",
-  "saz.rejected": "Diese Datei ist kein SAZ-Archiv."
+  "saz.rejected": "Diese Datei ist kein SAZ-Archiv.",
+  "menu.timeline": "Zeitachse…",
+  "timeline.empty": "Keine Sitzungen zum Zeichnen.",
+  "timeline.capped": "Die neuesten {0} Sitzungen werden gezeigt.",
+  "timeline.tunnel": "Tunnel",
+  "timeline.estimated": "Geschätzte Zeit",
+  "timeline.inFlight": "In Bearbeitung",
+  "timeline.needsWindow": "Die Zeitachse braucht das Hauptfenster."
 }

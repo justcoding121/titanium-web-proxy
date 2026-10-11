@@ -467,5 +467,12 @@
   "saz.tooLarge": "ملف SAZ هذا أكبر من الحد المسموح.",
   "saz.unsafe": "بيانات SAZ الوصفية غير آمنة للقراءة.",
   "saz.empty": "ملف SAZ هذا لا يحتوي على جلسات.",
-  "saz.rejected": "هذا الملف ليس أرشيف SAZ."
+  "saz.rejected": "هذا الملف ليس أرشيف SAZ.",
+  "menu.timeline": "المخطط الزمني…",
+  "timeline.empty": "لا توجد جلسات للرسم.",
+  "timeline.capped": "عرض أحدث {0} جلسة.",
+  "timeline.tunnel": "نفق",
+  "timeline.estimated": "توقيت تقديري",
+  "timeline.inFlight": "قيد التقدم",
+  "timeline.needsWindow": "يحتاج المخطط الزمني إلى النافذة الرئيسية."
 }

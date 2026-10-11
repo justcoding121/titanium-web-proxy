@@ -214,6 +214,7 @@ public class AutomationIdCoverageHeadlessTests
         "MapRemoteAdd",
         "MenuToolsMapRemote",
         "MenuRunLog",
+        "MenuTimeline",
         "TabMapRemote",
         "AutoResponderUpdate",
         "AutoResponderDelete",

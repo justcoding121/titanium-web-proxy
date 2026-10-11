@@ -467,5 +467,12 @@
   "saz.tooLarge": "Ten plik SAZ jest za duży.",
   "saz.unsafe": "Metadane SAZ nie są bezpieczne do odczytu.",
   "saz.empty": "Ten plik SAZ nie zawiera sesji.",
-  "saz.rejected": "Ten plik nie jest archiwum SAZ."
+  "saz.rejected": "Ten plik nie jest archiwum SAZ.",
+  "menu.timeline": "Oś czasu…",
+  "timeline.empty": "Brak sesji do wykresu.",
+  "timeline.capped": "Pokazano najnowsze {0} sesji.",
+  "timeline.tunnel": "Tunel",
+  "timeline.estimated": "Szacowany czas",
+  "timeline.inFlight": "W toku",
+  "timeline.needsWindow": "Oś czasu wymaga okna głównego."
 }

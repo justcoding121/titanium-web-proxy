@@ -467,5 +467,12 @@
   "saz.tooLarge": "此 SAZ 文件太大。",
   "saz.unsafe": "SAZ 元数据无法安全读取。",
   "saz.empty": "此 SAZ 文件没有会话。",
-  "saz.rejected": "此文件不是 SAZ 存档。"
+  "saz.rejected": "此文件不是 SAZ 存档。",
+  "menu.timeline": "时间线…",
+  "timeline.empty": "没有可绘制的会话。",
+  "timeline.capped": "正在显示最新的 {0} 个会话。",
+  "timeline.tunnel": "隧道",
+  "timeline.estimated": "估算时间",
+  "timeline.inFlight": "进行中",
+  "timeline.needsWindow": "时间线需要主窗口。"
 }

@@ -467,5 +467,12 @@
   "saz.tooLarge": "이 SAZ 파일이 너무 큽니다.",
   "saz.unsafe": "SAZ 메타데이터를 안전하게 읽을 수 없습니다.",
   "saz.empty": "이 SAZ 파일에 세션이 없습니다.",
-  "saz.rejected": "이 파일은 SAZ 보관 파일이 아닙니다."
+  "saz.rejected": "이 파일은 SAZ 보관 파일이 아닙니다.",
+  "menu.timeline": "타임라인…",
+  "timeline.empty": "차트로 그릴 세션이 없습니다.",
+  "timeline.capped": "최신 세션 {0}개를 표시합니다.",
+  "timeline.tunnel": "터널",
+  "timeline.estimated": "추정 시간",
+  "timeline.inFlight": "진행 중",
+  "timeline.needsWindow": "타임라인에는 기본 창이 필요합니다."
 }

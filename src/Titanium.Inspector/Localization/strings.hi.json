@@ -467,5 +467,12 @@
   "saz.tooLarge": "यह SAZ फ़ाइल बहुत बड़ी है.",
   "saz.unsafe": "SAZ मेटाडेटा पढ़ना सुरक्षित नहीं है.",
   "saz.empty": "इस SAZ फ़ाइल में कोई सत्र नहीं है.",
-  "saz.rejected": "यह फ़ाइल SAZ संग्रह नहीं है."
+  "saz.rejected": "यह फ़ाइल SAZ संग्रह नहीं है.",
+  "menu.timeline": "समयरेखा…",
+  "timeline.empty": "चार्ट के लिए कोई सत्र नहीं है.",
+  "timeline.capped": "नवीनतम {0} सत्र दिखाए जा रहे हैं.",
+  "timeline.tunnel": "सुरंग",
+  "timeline.estimated": "अनुमानित समय",
+  "timeline.inFlight": "प्रगति पर",
+  "timeline.needsWindow": "समयरेखा के लिए मुख्य विंडो चाहिए."
 }

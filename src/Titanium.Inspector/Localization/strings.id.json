@@ -467,5 +467,12 @@
   "saz.tooLarge": "File SAZ ini terlalu besar.",
   "saz.unsafe": "Metadata SAZ tidak aman untuk dibaca.",
   "saz.empty": "File SAZ ini tidak berisi sesi.",
-  "saz.rejected": "File ini bukan arsip SAZ."
+  "saz.rejected": "File ini bukan arsip SAZ.",
+  "menu.timeline": "Linimasa…",
+  "timeline.empty": "Tidak ada sesi untuk digambar.",
+  "timeline.capped": "Menampilkan {0} sesi terbaru.",
+  "timeline.tunnel": "Tunnel",
+  "timeline.estimated": "Waktu perkiraan",
+  "timeline.inFlight": "Sedang berjalan",
+  "timeline.needsWindow": "Linimasa memerlukan jendela utama."
 }

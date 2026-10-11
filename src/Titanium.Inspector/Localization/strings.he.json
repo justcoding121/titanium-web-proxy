@@ -467,5 +467,12 @@
   "saz.tooLarge": "קובץ SAZ זה גדול מדי.",
   "saz.unsafe": "מטא-נתוני SAZ אינם בטוחים לקריאה.",
   "saz.empty": "בקובץ SAZ זה אין הפעלות.",
-  "saz.rejected": "קובץ זה אינו ארכיון SAZ."
+  "saz.rejected": "קובץ זה אינו ארכיון SAZ.",
+  "menu.timeline": "ציר זמן…",
+  "timeline.empty": "אין הפעלות להצגה.",
+  "timeline.capped": "מוצגות {0} ההפעלות החדשות ביותר.",
+  "timeline.tunnel": "מנהרה",
+  "timeline.estimated": "תזמון משוער",
+  "timeline.inFlight": "בתהליך",
+  "timeline.needsWindow": "ציר הזמן דורש את החלון הראשי."
 }

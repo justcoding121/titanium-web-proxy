@@ -467,5 +467,12 @@
   "saz.tooLarge": "Этот файл SAZ слишком большой.",
   "saz.unsafe": "Метаданные SAZ небезопасно читать.",
   "saz.empty": "В этом файле SAZ нет сеансов.",
-  "saz.rejected": "Этот файл не является архивом SAZ."
+  "saz.rejected": "Этот файл не является архивом SAZ.",
+  "menu.timeline": "Шкала времени…",
+  "timeline.empty": "Нет сеансов для диаграммы.",
+  "timeline.capped": "Показаны {0} последних сеансов.",
+  "timeline.tunnel": "Туннель",
+  "timeline.estimated": "Оценочное время",
+  "timeline.inFlight": "Выполняется",
+  "timeline.needsWindow": "Шкале времени нужно главное окно."
 }

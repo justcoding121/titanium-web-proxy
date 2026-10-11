@@ -467,5 +467,12 @@
   "saz.tooLarge": "Ez a SAZ fájl túl nagy.",
   "saz.unsafe": "A SAZ metaadatai nem olvashatók biztonságosan.",
   "saz.empty": "Ebben a SAZ fájlban nincs munkamenet.",
-  "saz.rejected": "Ez a fájl nem SAZ archívum."
+  "saz.rejected": "Ez a fájl nem SAZ archívum.",
+  "menu.timeline": "Idővonal…",
+  "timeline.empty": "Nincs megjeleníthető munkamenet.",
+  "timeline.capped": "A legújabb {0} munkamenet látható.",
+  "timeline.tunnel": "Alagút",
+  "timeline.estimated": "Becsült idő",
+  "timeline.inFlight": "Folyamatban",
+  "timeline.needsWindow": "Az idővonalhoz kell a főablak."
 }

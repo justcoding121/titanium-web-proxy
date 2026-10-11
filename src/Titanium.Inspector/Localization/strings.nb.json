@@ -467,5 +467,12 @@
   "saz.tooLarge": "Denne SAZ-filen er for stor.",
   "saz.unsafe": "SAZ-metadataene er ikke trygge å lese.",
   "saz.empty": "Denne SAZ-filen har ingen økter.",
-  "saz.rejected": "Denne filen er ikke et SAZ-arkiv."
+  "saz.rejected": "Denne filen er ikke et SAZ-arkiv.",
+  "menu.timeline": "Tidslinje…",
+  "timeline.empty": "Ingen økter å tegne.",
+  "timeline.capped": "Viser de {0} nyeste øktene.",
+  "timeline.tunnel": "Tunnel",
+  "timeline.estimated": "Estimert tid",
+  "timeline.inFlight": "Pågår",
+  "timeline.needsWindow": "Tidslinjen krever hovedvinduet."
 }

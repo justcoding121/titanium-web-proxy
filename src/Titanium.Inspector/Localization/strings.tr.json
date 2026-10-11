@@ -467,5 +467,12 @@
   "saz.tooLarge": "Bu SAZ dosyası çok büyük.",
   "saz.unsafe": "SAZ meta verilerini okumak güvenli değil.",
   "saz.empty": "Bu SAZ dosyasında oturum yok.",
-  "saz.rejected": "Bu dosya bir SAZ arşivi değil."
+  "saz.rejected": "Bu dosya bir SAZ arşivi değil.",
+  "menu.timeline": "Zaman çizelgesi…",
+  "timeline.empty": "Çizilecek oturum yok.",
+  "timeline.capped": "En yeni {0} oturum gösteriliyor.",
+  "timeline.tunnel": "Tünel",
+  "timeline.estimated": "Tahmini süre",
+  "timeline.inFlight": "Sürüyor",
+  "timeline.needsWindow": "Zaman çizelgesi ana pencereyi gerektirir."
 }

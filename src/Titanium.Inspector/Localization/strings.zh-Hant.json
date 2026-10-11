@@ -467,5 +467,12 @@
   "saz.tooLarge": "此 SAZ 檔案太大。",
   "saz.unsafe": "SAZ 中繼資料無法安全讀取。",
   "saz.empty": "此 SAZ 檔案沒有工作階段。",
-  "saz.rejected": "此檔案不是 SAZ 封存。"
+  "saz.rejected": "此檔案不是 SAZ 封存。",
+  "menu.timeline": "時間軸…",
+  "timeline.empty": "沒有可繪製的工作階段。",
+  "timeline.capped": "正在顯示最新的 {0} 個工作階段。",
+  "timeline.tunnel": "通道",
+  "timeline.estimated": "估計時間",
+  "timeline.inFlight": "進行中",
+  "timeline.needsWindow": "時間軸需要主視窗。"
 }

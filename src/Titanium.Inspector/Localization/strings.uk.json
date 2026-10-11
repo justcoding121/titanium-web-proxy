@@ -467,5 +467,12 @@
   "saz.tooLarge": "Цей файл SAZ завеликий.",
   "saz.unsafe": "Метадані SAZ небезпечно читати.",
   "saz.empty": "У цьому файлі SAZ немає сеансів.",
-  "saz.rejected": "Цей файл не є архівом SAZ."
+  "saz.rejected": "Цей файл не є архівом SAZ.",
+  "menu.timeline": "Шкала часу…",
+  "timeline.empty": "Немає сеансів для діаграми.",
+  "timeline.capped": "Показано {0} найновіших сеансів.",
+  "timeline.tunnel": "Тунель",
+  "timeline.estimated": "Оцінний час",
+  "timeline.inFlight": "Триває",
+  "timeline.needsWindow": "Шкала часу потребує головного вікна."
 }

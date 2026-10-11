@@ -467,5 +467,12 @@
   "saz.tooLarge": "این فایل SAZ خیلی بزرگ است.",
   "saz.unsafe": "فراداده SAZ برای خواندن امن نیست.",
   "saz.empty": "این فایل SAZ نشستی ندارد.",
-  "saz.rejected": "این فایل یک بایگانی SAZ نیست."
+  "saz.rejected": "این فایل یک بایگانی SAZ نیست.",
+  "menu.timeline": "خط زمانی…",
+  "timeline.empty": "جلسه‌ای برای نمودار نیست.",
+  "timeline.capped": "نمایش {0} جلسهٔ جدیدتر.",
+  "timeline.tunnel": "تونل",
+  "timeline.estimated": "زمان تخمینی",
+  "timeline.inFlight": "در حال انجام",
+  "timeline.needsWindow": "خط زمانی به پنجرهٔ اصلی نیاز دارد."
 }

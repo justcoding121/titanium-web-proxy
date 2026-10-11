@@ -467,5 +467,12 @@
   "saz.tooLarge": "ไฟล์ SAZ นี้ใหญ่เกินไป",
   "saz.unsafe": "ข้อมูลเมตาของ SAZ ไม่ปลอดภัยที่จะอ่าน",
   "saz.empty": "ไฟล์ SAZ นี้ไม่มีเซสชัน",
-  "saz.rejected": "ไฟล์นี้ไม่ใช่ไฟล์ SAZ"
+  "saz.rejected": "ไฟล์นี้ไม่ใช่ไฟล์ SAZ",
+  "menu.timeline": "เส้นเวลา…",
+  "timeline.empty": "ไม่มีเซสชันให้วาด",
+  "timeline.capped": "แสดง {0} เซสชันล่าสุด",
+  "timeline.tunnel": "ทันเนล",
+  "timeline.estimated": "เวลาโดยประมาณ",
+  "timeline.inFlight": "กำลังดำเนินการ",
+  "timeline.needsWindow": "เส้นเวลาต้องใช้หน้าต่างหลัก"
 }

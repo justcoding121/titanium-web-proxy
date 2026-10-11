@@ -467,5 +467,12 @@
   "saz.tooLarge": "Tämä SAZ-tiedosto on liian suuri.",
   "saz.unsafe": "SAZ-metatietoja ei ole turvallista lukea.",
   "saz.empty": "Tässä SAZ-tiedostossa ei ole istuntoja.",
-  "saz.rejected": "Tämä tiedosto ei ole SAZ-arkisto."
+  "saz.rejected": "Tämä tiedosto ei ole SAZ-arkisto.",
+  "menu.timeline": "Aikajana…",
+  "timeline.empty": "Ei istuntoja kaavioon.",
+  "timeline.capped": "Näytetään {0} uusinta istuntoa.",
+  "timeline.tunnel": "Tunneli",
+  "timeline.estimated": "Arvioitu ajoitus",
+  "timeline.inFlight": "Kesken",
+  "timeline.needsWindow": "Aikajana tarvitsee pääikkunan."
 }

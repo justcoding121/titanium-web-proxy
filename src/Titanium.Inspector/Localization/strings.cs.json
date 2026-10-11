@@ -467,5 +467,12 @@
   "saz.tooLarge": "Tento soubor SAZ je příliš velký.",
   "saz.unsafe": "Metadata SAZ nejsou bezpečná ke čtení.",
   "saz.empty": "Tento soubor SAZ neobsahuje relace.",
-  "saz.rejected": "Tento soubor není archiv SAZ."
+  "saz.rejected": "Tento soubor není archiv SAZ.",
+  "menu.timeline": "Časová osa…",
+  "timeline.empty": "Žádné relace k zobrazení.",
+  "timeline.capped": "Zobrazeno nejnovějších {0} relací.",
+  "timeline.tunnel": "Tunel",
+  "timeline.estimated": "Odhadované časy",
+  "timeline.inFlight": "Probíhá",
+  "timeline.needsWindow": "Časová osa vyžaduje hlavní okno."
 }
