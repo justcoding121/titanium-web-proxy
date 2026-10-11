@@ -354,5 +354,9 @@
   "network.tls12": "Tylko TLS 1.2",
   "network.tlsDefault": "Domyślnie (TLS 1.2 i 1.3)",
   "network.tlsLegacy": "Zezwól na stare TLS 1.0/1.1",
-  "network.tlsLegacyWarning": "Stare TLS jest niebezpieczne. System może je i tak odrzucić."
+  "network.tlsLegacyWarning": "Stare TLS jest niebezpieczne. System może je i tak odrzucić.",
+  "menu.disableCaching": "Wyłącz pamięć podręczną",
+  "menu.disableCachingTip": "Usuwa warunkowe nagłówki, aby każde żądanie było pełne.",
+  "menu.forceUncompressed": "Wymuś nieskompresowane odpowiedzi",
+  "menu.forceUncompressedTip": "Prosi serwery o nieskompresowaną treść."
 }

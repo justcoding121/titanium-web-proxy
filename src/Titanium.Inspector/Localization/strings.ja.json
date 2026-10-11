@@ -354,5 +354,9 @@
   "network.tls12": "TLS 1.2 のみ",
   "network.tlsDefault": "既定 (TLS 1.2 と 1.3)",
   "network.tlsLegacy": "古い TLS 1.0/1.1 を許可",
-  "network.tlsLegacyWarning": "古い TLS は安全ではありません。OS が拒否することもあります。"
+  "network.tlsLegacyWarning": "古い TLS は安全ではありません。OS が拒否することもあります。",
+  "menu.disableCaching": "キャッシュを無効にする",
+  "menu.disableCachingTip": "条件付きヘッダーを外し、毎回完全な取得にします。",
+  "menu.forceUncompressed": "非圧縮の応答を強制",
+  "menu.forceUncompressedTip": "サーバーに圧縮しない本文を求めます。"
 }

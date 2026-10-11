@@ -160,6 +160,18 @@ public sealed class InterceptionService : IDisposable
     /// <summary>When false, server connections are not reused.</summary>
     public bool ReuseServerConnections { get; set; } = true;
 
+    /// <summary>
+    /// When true, strip conditional cache headers and send <c>Cache-Control: no-cache</c>.
+    /// Session only; not stored in settings. Skips CONNECT, WebSocket, and range requests.
+    /// </summary>
+    public bool DisableCaching { get; set; }
+
+    /// <summary>
+    /// When true, send <c>Accept-Encoding: identity</c> and leave <c>grpc-accept-encoding</c> alone.
+    /// Session only; not stored in settings. Skips CONNECT, WebSocket, and range requests.
+    /// </summary>
+    public bool ForceUncompressed { get; set; }
+
     /// <summary>True when the running proxy currently allows HTTP/2.</summary>
     public bool Http2Enabled { get; private set; } = true;
 
@@ -1773,6 +1785,9 @@ public sealed class InterceptionService : IDisposable
                 e.HttpClient.Request.KeepBody = true;
                 await e.GetRequestBody(CancellationToken.None);
             }
+
+            // Before scripts so the grid snapshot and the server see the same headers.
+            RequestCaptureTweaks.Apply(e.HttpClient.Request, DisableCaching, ForceUncompressed);
 
             if (SessionScriptHost.ApplyOnRequest(ScriptOnRequest, e))
             {

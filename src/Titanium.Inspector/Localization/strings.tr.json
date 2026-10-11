@@ -354,5 +354,9 @@
   "network.tls12": "Yalnızca TLS 1.2",
   "network.tlsDefault": "Varsayılan (TLS 1.2 ve 1.3)",
   "network.tlsLegacy": "Eski TLS 1.0/1.1 izin ver",
-  "network.tlsLegacyWarning": "Eski TLS güvensizdir. İşletim sistemi yine de reddedebilir."
+  "network.tlsLegacyWarning": "Eski TLS güvensizdir. İşletim sistemi yine de reddedebilir.",
+  "menu.disableCaching": "Önbelleği kapat",
+  "menu.disableCachingTip": "Koşullu istek başlıklarını kaldırır, böylece her istek tam olur.",
+  "menu.forceUncompressed": "Sıkıştırılmamış yanıtları zorla",
+  "menu.forceUncompressedTip": "Sunuculardan sıkıştırılmamış gövde ister."
 }

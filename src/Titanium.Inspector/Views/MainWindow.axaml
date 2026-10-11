@@ -45,6 +45,17 @@
                   Command="{Binding ToggleDecryptHttpsCommand}"
                   AutomationProperties.AutomationId="MenuDecryptHttps" />
         <Separator />
+        <MenuItem Header="{loc:Loc menu.disableCaching}" ToggleType="CheckBox"
+                  IsChecked="{Binding DisableCaching, Mode=OneWay}"
+                  Command="{Binding ToggleDisableCachingCommand}"
+                  ToolTip.Tip="{loc:Loc menu.disableCachingTip}"
+                  AutomationProperties.AutomationId="MenuDisableCaching" />
+        <MenuItem Header="{loc:Loc menu.forceUncompressed}" ToggleType="CheckBox"
+                  IsChecked="{Binding ForceUncompressed, Mode=OneWay}"
+                  Command="{Binding ToggleForceUncompressedCommand}"
+                  ToolTip.Tip="{loc:Loc menu.forceUncompressedTip}"
+                  AutomationProperties.AutomationId="MenuForceUncompressed" />
+        <Separator />
         <MenuItem x:Name="MenuToggleSystemProxy" Header="{loc:Loc menu.systemProxy}" ToggleType="CheckBox"
                   IsChecked="{Binding SystemProxy, Mode=OneWay}"
                   Command="{Binding ToggleSystemProxyCommand}"

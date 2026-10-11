@@ -354,5 +354,9 @@
   "network.tls12": "Chỉ TLS 1.2",
   "network.tlsDefault": "Mặc định (TLS 1.2 và 1.3)",
   "network.tlsLegacy": "Cho phép TLS cũ 1.0/1.1",
-  "network.tlsLegacyWarning": "TLS cũ không an toàn. Hệ điều hành vẫn có thể từ chối."
+  "network.tlsLegacyWarning": "TLS cũ không an toàn. Hệ điều hành vẫn có thể từ chối.",
+  "menu.disableCaching": "Tắt bộ nhớ đệm",
+  "menu.disableCachingTip": "Xóa tiêu đề có điều kiện để mỗi yêu cầu là đầy đủ.",
+  "menu.forceUncompressed": "Buộc phản hồi không nén",
+  "menu.forceUncompressedTip": "Yêu cầu máy chủ gửi nội dung không nén."
 }

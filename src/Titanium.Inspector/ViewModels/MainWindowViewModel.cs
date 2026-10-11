@@ -241,6 +241,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             return Task.CompletedTask;
         });
         ToggleDecryptHttpsCommand = Cmd(ToggleDecryptHttpsAsync);
+        ToggleDisableCachingCommand = Cmd(() =>
+        {
+            DisableCaching = !DisableCaching;
+            return Task.CompletedTask;
+        });
+        ToggleForceUncompressedCommand = Cmd(() =>
+        {
+            ForceUncompressed = !ForceUncompressed;
+            return Task.CompletedTask;
+        });
         ToggleIgnoreServerCertificateErrorsCommand = Cmd(() =>
         {
             IgnoreServerCertificateErrors = !IgnoreServerCertificateErrors;
@@ -1403,6 +1413,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public ICommand ToggleAutoStartCaptureCommand { get; }
     public ICommand ToggleAutoSystemProxyOnStartCommand { get; }
     public ICommand ToggleDecryptHttpsCommand { get; }
+    public ICommand ToggleDisableCachingCommand { get; }
+    public ICommand ToggleForceUncompressedCommand { get; }
     public ICommand ToggleIgnoreServerCertificateErrorsCommand { get; }
     public ICommand ToggleAddViaHeaderCommand { get; }
     public ICommand ToggleProxyLocalhostCommand { get; }
@@ -2221,6 +2233,34 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     {
         DecryptHttps = !DecryptHttps;
         return Task.CompletedTask;
+    }
+
+    /// <summary>Session-only. Strips conditional cache headers. Not written to settings.</summary>
+    public bool DisableCaching
+    {
+        get => _interception.DisableCaching;
+        private set
+        {
+            if (_interception.DisableCaching == value)
+                return;
+
+            _interception.DisableCaching = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DisableCaching)));
+        }
+    }
+
+    /// <summary>Session-only. Sends Accept-Encoding: identity. Not written to settings.</summary>
+    public bool ForceUncompressed
+    {
+        get => _interception.ForceUncompressed;
+        private set
+        {
+            if (_interception.ForceUncompressed == value)
+                return;
+
+            _interception.ForceUncompressed = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ForceUncompressed)));
+        }
     }
 
     /// <summary>When true, accept upstream TLS certs that would otherwise fail validation.</summary>

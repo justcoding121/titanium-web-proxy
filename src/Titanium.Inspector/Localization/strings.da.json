@@ -354,5 +354,9 @@
   "network.tls12": "Kun TLS 1.2",
   "network.tlsDefault": "Standard (TLS 1.2 og 1.3)",
   "network.tlsLegacy": "Tillad ældre TLS 1.0/1.1",
-  "network.tlsLegacyWarning": "Ældre TLS er usikkert. Operativsystemet kan stadig afvise det."
+  "network.tlsLegacyWarning": "Ældre TLS er usikkert. Operativsystemet kan stadig afvise det.",
+  "menu.disableCaching": "Deaktiver cache",
+  "menu.disableCachingTip": "Fjerner betingede anmodningshoveder, så hver anmodning er fuld.",
+  "menu.forceUncompressed": "Gennemtving ukomprimerede svar",
+  "menu.forceUncompressedTip": "Beder servere om et ukomprimeret indhold."
 }

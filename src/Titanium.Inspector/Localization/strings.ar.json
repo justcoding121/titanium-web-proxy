@@ -354,5 +354,9 @@
   "network.tls12": "TLS 1.2 فقط",
   "network.tlsDefault": "الافتراضي (TLS 1.2 و 1.3)",
   "network.tlsLegacy": "السماح بـ TLS القديم 1.0/1.1",
-  "network.tlsLegacyWarning": "TLS القديم غير آمن. قد يرفضه نظام التشغيل."
+  "network.tlsLegacyWarning": "TLS القديم غير آمن. قد يرفضه نظام التشغيل.",
+  "menu.disableCaching": "تعطيل التخزين المؤقت",
+  "menu.disableCachingTip": "يزيل ترويسات الطلب الشرطية ليكون كل طلب كاملاً.",
+  "menu.forceUncompressed": "فرض استجابات غير مضغوطة",
+  "menu.forceUncompressedTip": "يطلب من الخوادم إرسال محتوى غير مضغوط."
 }

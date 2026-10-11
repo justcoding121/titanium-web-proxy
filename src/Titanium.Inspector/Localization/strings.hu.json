@@ -354,5 +354,9 @@
   "network.tls12": "Csak TLS 1.2",
   "network.tlsDefault": "Alapértelmezett (TLS 1.2 és 1.3)",
   "network.tlsLegacy": "Régi TLS 1.0/1.1 engedélyezése",
-  "network.tlsLegacyWarning": "A régi TLS nem biztonságos. A rendszer ettől még elutasíthatja."
+  "network.tlsLegacyWarning": "A régi TLS nem biztonságos. A rendszer ettől még elutasíthatja.",
+  "menu.disableCaching": "Gyorsítótár kikapcsolása",
+  "menu.disableCachingTip": "Eltávolítja a feltételes fejléceket, hogy minden kérés teljes legyen.",
+  "menu.forceUncompressed": "Tömörítetlen válaszok kényszerítése",
+  "menu.forceUncompressedTip": "A szerverektől tömörítetlen törzset kér."
 }

@@ -354,5 +354,9 @@
   "network.tls12": "Solo TLS 1.2",
   "network.tlsDefault": "Predefinito (TLS 1.2 e 1.3)",
   "network.tlsLegacy": "Consenti TLS legacy 1.0/1.1",
-  "network.tlsLegacyWarning": "Il TLS vecchio non è sicuro. Il sistema può comunque rifiutarlo."
+  "network.tlsLegacyWarning": "Il TLS vecchio non è sicuro. Il sistema può comunque rifiutarlo.",
+  "menu.disableCaching": "Disattiva cache",
+  "menu.disableCachingTip": "Rimuove le intestazioni condizionali così ogni richiesta è completa.",
+  "menu.forceUncompressed": "Forza risposte non compresse",
+  "menu.forceUncompressedTip": "Chiede ai server un corpo non compresso."
 }

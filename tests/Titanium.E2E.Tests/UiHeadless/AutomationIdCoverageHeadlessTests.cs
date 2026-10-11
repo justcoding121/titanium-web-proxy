@@ -34,6 +34,8 @@ public class AutomationIdCoverageHeadlessTests
         "AutoStartCaptureCheck",
         "AutoSystemProxyCheck",
         "MenuDecryptHttps",
+        "MenuDisableCaching",
+        "MenuForceUncompressed",
         "MenuToggleSystemProxy",
         "MenuProxyLocalhost",
         "MenuLoopbackExempt",

@@ -38,7 +38,7 @@ Toolbar **Port** is a number or `*`. Edit it only while the proxy is stopped.
 
 Invalid characters (for example `abc`) show a short message under the box — not a conversion exception. Empty is not an error. CLI `twp.yaml` uses a numeric `port` (`0` for ephemeral); Inspector `*` is the same idea.
 
-Capture menu options (**Capturing**, **Decrypt HTTPS**, **System proxy**, **Capture local traffic**, auto-start prefs) show a check when on. **Allow Store apps…** (Windows) sits with System proxy. Preferences such as **Session retention…**, **Excluded hosts…**, **Ignore insecure server certificates**, **Network and protocols…**, and **Logging…** live under **Options**. **Network and protocols…** can chain capture through an upstream HTTP proxy (used the next time capture starts) and can turn off HTTP/2, HTTP/3 to servers, outbound TLS versions, and connection reuse. Those protocol changes apply to new connections. Turning HTTP/2 off does not turn off HTTP/3.
+Capture menu options (**Capturing**, **Decrypt HTTPS**, **Disable caching**, **Force uncompressed responses**, **System proxy**, **Capture local traffic**, auto-start prefs) show a check when on. **Disable caching** and **Force uncompressed responses** last only for this run (off by default, not saved). They skip CONNECT, WebSocket, and range requests. **Allow Store apps…** (Windows) sits with System proxy. Preferences such as **Session retention…**, **Excluded hosts…**, **Ignore insecure server certificates**, **Network and protocols…**, and **Logging…** live under **Options**. **Network and protocols…** can chain capture through an upstream HTTP proxy (used the next time capture starts) and can turn off HTTP/2, HTTP/3 to servers, outbound TLS versions, and connection reuse. Those protocol changes apply to new connections. Turning HTTP/2 off does not turn off HTTP/3.
 
 **Allow Store apps…** lets packaged apps connect to Inspector on localhost. Apply saves that allow list immediately. Apps that are already running keep their current connections, so when System proxy is on, Apply turns it off and back on once so they open a new connection. Fully quit and reopen an app if its traffic still does not appear. The dialog warns when the proxy is stopped or System proxy is off: the allow list only removes the localhost block, and Store apps still follow the system proxy.
 
@@ -101,7 +101,7 @@ Search for WebSocket traffic with `is:ws`. Search for gRPC with `is:grpc`, and f
 
 Pipeline order on each request:
 
-**Scripts → AutoResponder → Map Remote → Breakpoints → origin**
+**Disable caching / Force uncompressed (when checked) → Scripts → AutoResponder → Map Remote → Breakpoints → origin**
 
 #### Composer
 

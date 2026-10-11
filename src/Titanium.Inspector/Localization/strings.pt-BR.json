@@ -354,5 +354,9 @@
   "network.tls12": "Somente TLS 1.2",
   "network.tlsDefault": "Padrão (TLS 1.2 e 1.3)",
   "network.tlsLegacy": "Permitir TLS antigo 1.0/1.1",
-  "network.tlsLegacyWarning": "TLS antigo é inseguro. O sistema ainda pode recusá-lo."
+  "network.tlsLegacyWarning": "TLS antigo é inseguro. O sistema ainda pode recusá-lo.",
+  "menu.disableCaching": "Desativar cache",
+  "menu.disableCachingTip": "Remove cabeçalhos condicionais para que cada pedido seja completo.",
+  "menu.forceUncompressed": "Forçar respostas sem compressão",
+  "menu.forceUncompressedTip": "Pede aos servidores um corpo sem compressão."
 }
