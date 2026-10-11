@@ -448,5 +448,10 @@
   "menu.removeMatching": "फ़िल्टर से मेल खाने वाली सभी हटाएँ",
   "cleanup.removeTitle": "सत्र हटाएँ",
   "cleanup.removeConfirm": "{0} सत्र हटाएँ, जिनमें से {1} वर्तमान फ़िल्टर से छिपे हैं?",
-  "cleanup.removeAccept": "हटाएँ"
+  "cleanup.removeAccept": "हटाएँ",
+  "ctx.copyAs": "इस रूप में कॉपी करें",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "पंक्तियाँ तालिका के रूप में",
+  "ctx.saveRaw": "सत्र को कच्चे HTTP पाठ के रूप में सहेजें"
 }

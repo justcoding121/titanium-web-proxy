@@ -448,5 +448,10 @@
   "menu.removeMatching": "Alles verwijderen dat aan het filter voldoet",
   "cleanup.removeTitle": "Sessies verwijderen",
   "cleanup.removeConfirm": "{0} sessies verwijderen, waarvan {1} verborgen door het huidige filter?",
-  "cleanup.removeAccept": "Verwijderen"
+  "cleanup.removeAccept": "Verwijderen",
+  "ctx.copyAs": "Kopiëren als",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "Rijen als tabel",
+  "ctx.saveRaw": "Sessie opslaan als ruwe HTTP-tekst"
 }

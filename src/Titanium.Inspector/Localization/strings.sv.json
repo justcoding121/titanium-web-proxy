@@ -448,5 +448,10 @@
   "menu.removeMatching": "Ta bort alla som matchar filtret",
   "cleanup.removeTitle": "Ta bort sessioner",
   "cleanup.removeConfirm": "Ta bort {0} sessioner, varav {1} döljs av det aktuella filtret?",
-  "cleanup.removeAccept": "Ta bort"
+  "cleanup.removeAccept": "Ta bort",
+  "ctx.copyAs": "Kopiera som",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "Rader som tabell",
+  "ctx.saveRaw": "Spara sessionen som rå HTTP-text"
 }

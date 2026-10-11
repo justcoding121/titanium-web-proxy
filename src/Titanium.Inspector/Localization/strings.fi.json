@@ -448,5 +448,10 @@
   "menu.removeMatching": "Poista kaikki suodinta vastaavat",
   "cleanup.removeTitle": "Poista istunnot",
   "cleanup.removeConfirm": "Poistetaanko {0} istuntoa, joista {1} on nykyisen suodattimen piilottamia?",
-  "cleanup.removeAccept": "Poista"
+  "cleanup.removeAccept": "Poista",
+  "ctx.copyAs": "Kopioi muodossa",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "Rivit taulukkona",
+  "ctx.saveRaw": "Tallenna istunto raakana HTTP-tekstinä"
 }

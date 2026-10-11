@@ -448,5 +448,10 @@
   "menu.removeMatching": "הסר את כל מה שתואם למסנן",
   "cleanup.removeTitle": "הסרת הפעלות",
   "cleanup.removeConfirm": "להסיר {0} הפעלות, כולל {1} המוסתרות על ידי המסנן הנוכחי?",
-  "cleanup.removeAccept": "הסר"
+  "cleanup.removeAccept": "הסר",
+  "ctx.copyAs": "העתק כ",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "שורות כטבלה",
+  "ctx.saveRaw": "שמור את ההפעלה כטקסט HTTP גולמי"
 }

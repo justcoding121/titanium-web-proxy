@@ -448,5 +448,10 @@
   "menu.removeMatching": "حذف همه موارد مطابق فیلتر",
   "cleanup.removeTitle": "حذف نشست‌ها",
   "cleanup.removeConfirm": "{0} نشست حذف شود، از جمله {1} مورد که فیلتر فعلی پنهان کرده است؟",
-  "cleanup.removeAccept": "حذف"
+  "cleanup.removeAccept": "حذف",
+  "ctx.copyAs": "کپی به صورت",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "ردیف‌ها به‌صورت جدول",
+  "ctx.saveRaw": "ذخیره نشست به‌صورت متن خام HTTP"
 }

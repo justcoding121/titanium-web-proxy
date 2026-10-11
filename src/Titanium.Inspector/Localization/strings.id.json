@@ -448,5 +448,10 @@
   "menu.removeMatching": "Hapus semua yang cocok dengan filter",
   "cleanup.removeTitle": "Hapus sesi",
   "cleanup.removeConfirm": "Hapus {0} sesi, termasuk {1} yang disembunyikan filter saat ini?",
-  "cleanup.removeAccept": "Hapus"
+  "cleanup.removeAccept": "Hapus",
+  "ctx.copyAs": "Salin sebagai",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "Baris sebagai tabel",
+  "ctx.saveRaw": "Simpan sesi sebagai teks HTTP mentah"
 }

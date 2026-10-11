@@ -448,5 +448,10 @@
   "menu.removeMatching": "刪除所有符合篩選的工作階段",
   "cleanup.removeTitle": "刪除工作階段",
   "cleanup.removeConfirm": "刪除 {0} 個工作階段，其中 {1} 個被目前的篩選隱藏？",
-  "cleanup.removeAccept": "刪除"
+  "cleanup.removeAccept": "刪除",
+  "ctx.copyAs": "複製為",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "多列表格",
+  "ctx.saveRaw": "將工作階段另存為原始 HTTP 文字"
 }

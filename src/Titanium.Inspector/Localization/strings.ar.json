@@ -448,5 +448,10 @@
   "menu.removeMatching": "إزالة كل ما يطابق عامل التصفية",
   "cleanup.removeTitle": "إزالة الجلسات",
   "cleanup.removeConfirm": "إزالة {0} جلسة، بما في ذلك {1} مخفية بعامل التصفية الحالي؟",
-  "cleanup.removeAccept": "إزالة"
+  "cleanup.removeAccept": "إزالة",
+  "ctx.copyAs": "نسخ كـ",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "صفوف كجدول",
+  "ctx.saveRaw": "حفظ الجلسة كنص HTTP خام"
 }

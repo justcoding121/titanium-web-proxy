@@ -448,5 +448,10 @@
   "menu.removeMatching": "Видалити всі, що відповідають фільтру",
   "cleanup.removeTitle": "Видалити сеанси",
   "cleanup.removeConfirm": "Видалити {0} сеансів, включно з {1}, які приховує поточний фільтр?",
-  "cleanup.removeAccept": "Видалити"
+  "cleanup.removeAccept": "Видалити",
+  "ctx.copyAs": "Копіювати як",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "Рядки як таблицю",
+  "ctx.saveRaw": "Зберегти сеанс як необроблений текст HTTP"
 }

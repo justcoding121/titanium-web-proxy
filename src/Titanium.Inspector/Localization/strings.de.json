@@ -448,5 +448,10 @@
   "menu.removeMatching": "Alle passenden Filter entfernen",
   "cleanup.removeTitle": "Sitzungen entfernen",
   "cleanup.removeConfirm": "{0} Sitzungen entfernen, davon {1} vom aktuellen Filter verdeckt?",
-  "cleanup.removeAccept": "Entfernen"
+  "cleanup.removeAccept": "Entfernen",
+  "ctx.copyAs": "Kopieren als",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "Zeilen als Tabelle",
+  "ctx.saveRaw": "Sitzung als rohen HTTP-Text speichern"
 }

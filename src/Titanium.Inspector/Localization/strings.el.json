@@ -448,5 +448,10 @@
   "menu.removeMatching": "Αφαίρεση όλων που ταιριάζουν στο φίλτρο",
   "cleanup.removeTitle": "Αφαίρεση συνεδριών",
   "cleanup.removeConfirm": "Αφαίρεση {0} συνεδριών, από τις οποίες {1} είναι κρυμμένες από το τρέχον φίλτρο;",
-  "cleanup.removeAccept": "Αφαίρεση"
+  "cleanup.removeAccept": "Αφαίρεση",
+  "ctx.copyAs": "Αντιγραφή ως",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "Γραμμές ως πίνακας",
+  "ctx.saveRaw": "Αποθήκευση συνεδρίας ως ακατέργαστο κείμενο HTTP"
 }

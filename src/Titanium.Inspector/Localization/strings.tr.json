@@ -448,5 +448,10 @@
   "menu.removeMatching": "Filtreyle eşleşenlerin tümünü kaldır",
   "cleanup.removeTitle": "Oturumları kaldır",
   "cleanup.removeConfirm": "Geçerli filtrenin gizlediği {1} oturum dahil {0} oturum kaldırılsın mı?",
-  "cleanup.removeAccept": "Kaldır"
+  "cleanup.removeAccept": "Kaldır",
+  "ctx.copyAs": "Farklı kopyala",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "Satırlar tablo olarak",
+  "ctx.saveRaw": "Oturumu ham HTTP metni olarak kaydet"
 }

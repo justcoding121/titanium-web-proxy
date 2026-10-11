@@ -448,5 +448,10 @@
   "menu.removeMatching": "Remover tudo que corresponde ao filtro",
   "cleanup.removeTitle": "Remover sessões",
   "cleanup.removeConfirm": "Remover {0} sessões, incluindo {1} ocultas pelo filtro atual?",
-  "cleanup.removeAccept": "Remover"
+  "cleanup.removeAccept": "Remover",
+  "ctx.copyAs": "Copiar como",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "Linhas como tabela",
+  "ctx.saveRaw": "Salvar a sessão como texto HTTP bruto"
 }

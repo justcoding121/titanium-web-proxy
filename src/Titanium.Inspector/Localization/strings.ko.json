@@ -448,5 +448,10 @@
   "menu.removeMatching": "필터와 일치하는 항목 모두 제거",
   "cleanup.removeTitle": "세션 제거",
   "cleanup.removeConfirm": "세션 {0}개를 제거합니다. 그중 {1}개는 현재 필터에 가려져 있습니다. 계속할까요?",
-  "cleanup.removeAccept": "제거"
+  "cleanup.removeAccept": "제거",
+  "ctx.copyAs": "다른 형식으로 복사",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "행을 표로",
+  "ctx.saveRaw": "세션을 원시 HTTP 텍스트로 저장"
 }

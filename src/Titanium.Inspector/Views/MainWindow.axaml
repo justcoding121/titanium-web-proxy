@@ -516,6 +516,9 @@
             <MenuItem Header="{loc:Loc ctx.saveResponse}" Command="{Binding SaveResponseBodyCommand}"
                       IsVisible="{Binding CanSaveResponseBody}"
                       AutomationProperties.AutomationId="CtxSaveResponseBody" />
+            <MenuItem Header="{loc:Loc ctx.saveRaw}" Command="{Binding SaveRawHttpCommand}"
+                      IsVisible="{Binding CanSaveRawHttp}"
+                      AutomationProperties.AutomationId="CtxSaveRawHttp" />
             <Separator IsVisible="{Binding HasSingleSelectedSession}" />
             <MenuItem Header="{loc:Loc menu.exportSelectedHar}" Command="{Binding ExportSelectedHarCommand}"
                       IsVisible="{Binding HasSelectedSessions}"
@@ -533,6 +536,15 @@
             <MenuItem Header="{loc:Loc ctx.copyFetch}" Command="{Binding CopyAsFetchCommand}"
                       IsVisible="{Binding CanCopyAsCurl}"
                       AutomationProperties.AutomationId="CtxCopyAsFetch" />
+            <MenuItem Header="{loc:Loc ctx.copyAs}" IsVisible="{Binding CanCopyAsTable}"
+                      AutomationProperties.AutomationId="CtxCopyAs">
+              <MenuItem Header="{loc:Loc ctx.copyPowerShell}" Command="{Binding CopyAsPowerShellCommand}"
+                        AutomationProperties.AutomationId="CtxCopyAsPowerShell" />
+              <MenuItem Header="{loc:Loc ctx.copyPython}" Command="{Binding CopyAsPythonCommand}"
+                        AutomationProperties.AutomationId="CtxCopyAsPython" />
+              <MenuItem Header="{loc:Loc ctx.copyTable}" Command="{Binding CopyAsTableCommand}"
+                        AutomationProperties.AutomationId="CtxCopyAsTable" />
+            </MenuItem>
             <MenuItem Header="{loc:Loc ctx.diff}" Command="{Binding DiffSessionsCommand}"
                       IsVisible="{Binding CanDiffSessions}"
                       AutomationProperties.AutomationId="CtxDiffSessions" />

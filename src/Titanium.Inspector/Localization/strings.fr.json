@@ -448,5 +448,10 @@
   "menu.removeMatching": "Retirer tout ce qui correspond au filtre",
   "cleanup.removeTitle": "Retirer les sessions",
   "cleanup.removeConfirm": "Retirer {0} sessions, dont {1} masquées par le filtre actuel ?",
-  "cleanup.removeAccept": "Retirer"
+  "cleanup.removeAccept": "Retirer",
+  "ctx.copyAs": "Copier en tant que",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "Lignes en tableau",
+  "ctx.saveRaw": "Enregistrer la session en texte HTTP brut"
 }

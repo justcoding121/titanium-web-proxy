@@ -448,5 +448,10 @@
   "menu.removeMatching": "删除所有符合筛选的会话",
   "cleanup.removeTitle": "删除会话",
   "cleanup.removeConfirm": "删除 {0} 个会话，其中 {1} 个被当前筛选隐藏？",
-  "cleanup.removeAccept": "删除"
+  "cleanup.removeAccept": "删除",
+  "ctx.copyAs": "复制为",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "多行表格",
+  "ctx.saveRaw": "将会话另存为原始 HTTP 文本"
 }

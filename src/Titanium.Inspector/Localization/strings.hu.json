@@ -448,5 +448,10 @@
   "menu.removeMatching": "Az összes szűrésnek megfelelő törlése",
   "cleanup.removeTitle": "Munkamenetek törlése",
   "cleanup.removeConfirm": "{0} munkamenet törlése, ebből {1} a jelenlegi szűrő miatt rejtett?",
-  "cleanup.removeAccept": "Törlés"
+  "cleanup.removeAccept": "Törlés",
+  "ctx.copyAs": "Másolás mint",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "Sorok táblázatként",
+  "ctx.saveRaw": "Munkamenet mentése nyers HTTP szövegként"
 }

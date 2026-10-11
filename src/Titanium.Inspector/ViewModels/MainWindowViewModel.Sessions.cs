@@ -324,6 +324,82 @@ public sealed partial class MainWindowViewModel
         await CopyTextToClipboardAsync(fetch).ConfigureAwait(false);
         StatusText = "Copied as fetch";
     }
+    private async Task CopyAsPowerShellAsync()
+    {
+        if (!TryBuildCopyAsPowerShell(out var text))
+        {
+            StatusText = "Select one session with a URL to copy as PowerShell";
+            return;
+        }
+
+        await CopyTextToClipboardAsync(text).ConfigureAwait(false);
+        StatusText = "Copied as PowerShell";
+    }
+    private async Task CopyAsPythonAsync()
+    {
+        if (!TryBuildCopyAsPython(out var text))
+        {
+            StatusText = "Select one session with a URL to copy as Python";
+            return;
+        }
+
+        await CopyTextToClipboardAsync(text).ConfigureAwait(false);
+        StatusText = "Copied as Python";
+    }
+    private async Task CopyAsTableAsync()
+    {
+        if (!TryBuildRowsAsTable(out var text, out var written, out var truncated))
+        {
+            StatusText = "No sessions to copy as a table";
+            return;
+        }
+
+        await CopyTextToClipboardAsync(text).ConfigureAwait(false);
+        StatusText = truncated
+            ? $"Copied {written.ToString(System.Globalization.CultureInfo.InvariantCulture)} rows (list was longer)"
+            : written == 1 ? "Copied 1 row as a table" : $"Copied {written.ToString(System.Globalization.CultureInfo.InvariantCulture)} rows as a table";
+    }
+    private async Task SaveRawHttpAsync()
+    {
+        var session = SelectedSession;
+        if (session is null)
+        {
+            StatusText = "Select a session to save";
+            return;
+        }
+
+        var path = await _pathPicker.PickSavePathAsync(
+            "Save session as raw HTTP text",
+            $"session-{session.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)}.http",
+            "HTTP text",
+            "*.http").ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        FileStream? har = null;
+        try
+        {
+            if (session.BodiesOnDisk)
+            {
+                _store.TryOpenSpilledHar(session, out har);
+            }
+
+            await using var output = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
+            var result = SessionRawHttp.Write(session, output, har);
+            StatusText = result.Truncated
+                ? "Saved raw HTTP text (a body was cut at 32 MB)"
+                : "Saved raw HTTP text";
+        }
+        finally
+        {
+            if (har is not null)
+            {
+                await har.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+    }
     private async Task DiffSessionsAsync()
     {
         var selection = ResolveFilterSelection();
@@ -385,6 +461,52 @@ public sealed partial class MainWindowViewModel
         }
 
         fetch = SessionRequestCodegen.ToFetch(session);
+        return true;
+    }
+    /// <summary>Builds a PowerShell request for the single selected session (tests / probe).</summary>
+    public bool TryBuildCopyAsPowerShell(out string text)
+    {
+        text = "";
+        var session = ResolveSingleCopySession();
+        if (session is null || !SessionRequestCodegen.CanGenerate(session))
+        {
+            return false;
+        }
+
+        text = SessionRequestCodegen.ToPowerShell(session);
+        return true;
+    }
+    /// <summary>Builds a Python requests call for the single selected session (tests / probe).</summary>
+    public bool TryBuildCopyAsPython(out string text)
+    {
+        text = "";
+        var session = ResolveSingleCopySession();
+        if (session is null || !SessionRequestCodegen.CanGenerate(session))
+        {
+            return false;
+        }
+
+        text = SessionRequestCodegen.ToPython(session);
+        return true;
+    }
+    /// <summary>Builds a spreadsheet table for the selection, or the visible rows when nothing is selected.</summary>
+    public bool TryBuildRowsAsTable(out string text, out int written, out bool truncated)
+    {
+        text = "";
+        written = 0;
+        truncated = false;
+        var rows = ResolveFilterSelection();
+        if (rows.Count == 0)
+        {
+            rows = Sessions.ToList();
+        }
+
+        if (rows.Count == 0)
+        {
+            return false;
+        }
+
+        text = SessionRequestCodegen.ToTable(rows, out written, out truncated);
         return true;
     }
     private static async Task CopyTextToClipboardAsync(string text)
@@ -653,6 +775,8 @@ public sealed partial class MainWindowViewModel
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSingleSelectedSession)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCopyUrl)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCopyAsCurl)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCopyAsTable)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanSaveRawHttp)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanDiffSessions)));
         RaiseSessionCommandCanExecuteChanged();
     }
@@ -666,6 +790,10 @@ public sealed partial class MainWindowViewModel
         _exportSelectedArchiveCommand.RaiseCanExecuteChanged();
         _copyAsCurlCommand.RaiseCanExecuteChanged();
         _copyAsFetchCommand.RaiseCanExecuteChanged();
+        _copyAsPowerShellCommand.RaiseCanExecuteChanged();
+        _copyAsPythonCommand.RaiseCanExecuteChanged();
+        _copyAsTableCommand.RaiseCanExecuteChanged();
+        _saveRawHttpCommand.RaiseCanExecuteChanged();
         _diffSessionsCommand.RaiseCanExecuteChanged();
     }
     private List<string> ResolveCopyUrls() =>

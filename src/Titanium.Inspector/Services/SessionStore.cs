@@ -219,6 +219,21 @@ public sealed class SessionStore : IDisposable
         }
     }
 
+    /// <summary>
+    /// Opens the spilled HAR for <paramref name="snapshot"/> when its bodies are on disk.
+    /// The caller owns the stream. Returns false when the file is not written yet.
+    /// </summary>
+    public bool TryOpenSpilledHar(SessionSnapshot snapshot, out FileStream? stream)
+    {
+        stream = null;
+        if (!snapshot.BodiesOnDisk || _disk is null)
+        {
+            return false;
+        }
+
+        return _disk.TryOpenRead(snapshot.Id, out stream);
+    }
+
     public void NotifyUpdated(SessionSnapshot snapshot)
     {
         // Same shutdown race as Add — do not crash Avalonia's dispatcher.

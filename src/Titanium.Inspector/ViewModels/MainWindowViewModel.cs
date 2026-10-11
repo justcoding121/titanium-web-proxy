@@ -43,6 +43,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     private readonly RelayCommand _exportSelectedArchiveCommand;
     private readonly RelayCommand _copyAsCurlCommand;
     private readonly RelayCommand _copyAsFetchCommand;
+    private readonly RelayCommand _copyAsPowerShellCommand;
+    private readonly RelayCommand _copyAsPythonCommand;
+    private readonly RelayCommand _copyAsTableCommand;
+    private readonly RelayCommand _saveRawHttpCommand;
     private readonly RelayCommand _diffSessionsCommand;
     private string _sessionDiffText = "";
     private static string StatusReady => LanguageService.Get("status.ready");
@@ -325,6 +329,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         CopyAsCurlCommand = _copyAsCurlCommand;
         _copyAsFetchCommand = Cmd(CopyAsFetchAsync, () => CanCopyAsCurl);
         CopyAsFetchCommand = _copyAsFetchCommand;
+        _copyAsPowerShellCommand = Cmd(CopyAsPowerShellAsync, () => CanCopyAsCurl);
+        CopyAsPowerShellCommand = _copyAsPowerShellCommand;
+        _copyAsPythonCommand = Cmd(CopyAsPythonAsync, () => CanCopyAsCurl);
+        CopyAsPythonCommand = _copyAsPythonCommand;
+        _copyAsTableCommand = Cmd(CopyAsTableAsync, () => CanCopyAsTable);
+        CopyAsTableCommand = _copyAsTableCommand;
+        _saveRawHttpCommand = Cmd(SaveRawHttpAsync, () => CanSaveRawHttp);
+        SaveRawHttpCommand = _saveRawHttpCommand;
         _diffSessionsCommand = Cmd(DiffSessionsAsync, () => CanDiffSessions);
         DiffSessionsCommand = _diffSessionsCommand;
         FilterByHostCommand = Cmd(FilterByHostAsync);
@@ -1402,6 +1414,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         }
     }
 
+    /// <summary>True when the grid or the selection has rows to copy as a table.</summary>
+    public bool CanCopyAsTable => Sessions.Count > 0 || HasSelectedSessions;
+
+    /// <summary>True when one session can be saved as raw HTTP text.</summary>
+    public bool CanSaveRawHttp => SelectedSession is not null;
+
 
     /// <summary>Last Session Diff text (Inspect Diff tab / probe).</summary>
     public string SessionDiffText
@@ -1526,6 +1544,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public ICommand CopyUrlCommand { get; }
     public ICommand CopyAsCurlCommand { get; }
     public ICommand CopyAsFetchCommand { get; }
+    public ICommand CopyAsPowerShellCommand { get; }
+    public ICommand CopyAsPythonCommand { get; }
+    public ICommand CopyAsTableCommand { get; }
+    public ICommand SaveRawHttpCommand { get; }
     public ICommand DiffSessionsCommand { get; }
     public ICommand FilterByHostCommand { get; }
     public ICommand FilterByStatusCommand { get; }

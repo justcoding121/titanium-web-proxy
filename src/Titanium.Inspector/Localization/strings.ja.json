@@ -448,5 +448,10 @@
   "menu.removeMatching": "フィルタに一致する行をすべて削除",
   "cleanup.removeTitle": "セッションを削除",
   "cleanup.removeConfirm": "セッション {0} 件を削除します。うち {1} 件は現在のフィルタで隠れています。よろしいですか？",
-  "cleanup.removeAccept": "削除"
+  "cleanup.removeAccept": "削除",
+  "ctx.copyAs": "形式を指定してコピー",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "行を表として",
+  "ctx.saveRaw": "セッションを生の HTTP テキストとして保存"
 }

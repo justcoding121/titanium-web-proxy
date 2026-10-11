@@ -448,5 +448,10 @@
   "menu.removeMatching": "Удалить все, что подходит под фильтр",
   "cleanup.removeTitle": "Удалить сеансы",
   "cleanup.removeConfirm": "Удалить {0} сеансов, включая {1} скрытых текущим фильтром?",
-  "cleanup.removeAccept": "Удалить"
+  "cleanup.removeAccept": "Удалить",
+  "ctx.copyAs": "Копировать как",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "Строки как таблицу",
+  "ctx.saveRaw": "Сохранить сеанс как необработанный текст HTTP"
 }

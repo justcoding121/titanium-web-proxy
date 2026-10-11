@@ -448,5 +448,10 @@
   "menu.removeMatching": "Odebrat vše odpovídající filtru",
   "cleanup.removeTitle": "Odebrat relace",
   "cleanup.removeConfirm": "Odebrat {0} relací, včetně {1} skrytých aktuálním filtrem?",
-  "cleanup.removeAccept": "Odebrat"
+  "cleanup.removeAccept": "Odebrat",
+  "ctx.copyAs": "Kopírovat jako",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "Řádky jako tabulku",
+  "ctx.saveRaw": "Uložit relaci jako surový HTTP text"
 }

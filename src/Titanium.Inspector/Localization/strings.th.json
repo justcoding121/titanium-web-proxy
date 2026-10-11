@@ -448,5 +448,10 @@
   "menu.removeMatching": "ลบทั้งหมดที่ตรงกับตัวกรอง",
   "cleanup.removeTitle": "ลบเซสชัน",
   "cleanup.removeConfirm": "ลบ {0} เซสชัน รวม {1} รายการที่ตัวกรองปัจจุบันซ่อนไว้?",
-  "cleanup.removeAccept": "ลบ"
+  "cleanup.removeAccept": "ลบ",
+  "ctx.copyAs": "คัดลอกเป็น",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "แถวเป็นตาราง",
+  "ctx.saveRaw": "บันทึกเซสชันเป็นข้อความ HTTP ดิบ"
 }

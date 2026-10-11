@@ -167,6 +167,20 @@ public sealed class SessionBodyDiskCache : IDisposable
 
     public bool FileExists(long sessionId) => File.Exists(PathFor(sessionId));
 
+    /// <summary>Opens the spilled HAR for reading. The caller owns the stream.</summary>
+    public bool TryOpenRead(long sessionId, out FileStream? stream)
+    {
+        stream = null;
+        var path = PathFor(sessionId);
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+
+        stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        return true;
+    }
+
     /// <summary>Writes a single-entry HAR into the current run folder; may prune older files under budget.</summary>
     public IReadOnlyList<long> Write(SessionSnapshot snapshot) =>
         Write(snapshot, expectedGeneration: null);

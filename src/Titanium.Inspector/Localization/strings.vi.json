@@ -448,5 +448,10 @@
   "menu.removeMatching": "Xóa mọi mục khớp bộ lọc",
   "cleanup.removeTitle": "Xóa phiên",
   "cleanup.removeConfirm": "Xóa {0} phiên, gồm {1} phiên đang bị bộ lọc hiện tại ẩn?",
-  "cleanup.removeAccept": "Xóa"
+  "cleanup.removeAccept": "Xóa",
+  "ctx.copyAs": "Sao chép dưới dạng",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "Hàng dạng bảng",
+  "ctx.saveRaw": "Lưu phiên dưới dạng văn bản HTTP thô"
 }

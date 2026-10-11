@@ -448,5 +448,10 @@
   "menu.removeMatching": "Fjern alle som samsvarer med filteret",
   "cleanup.removeTitle": "Fjern økter",
   "cleanup.removeConfirm": "Fjerne {0} økter, inkludert {1} som er skjult av gjeldende filter?",
-  "cleanup.removeAccept": "Fjern"
+  "cleanup.removeAccept": "Fjern",
+  "ctx.copyAs": "Kopier som",
+  "ctx.copyPowerShell": "PowerShell",
+  "ctx.copyPython": "Python requests",
+  "ctx.copyTable": "Rader som tabell",
+  "ctx.saveRaw": "Lagre økten som rå HTTP-tekst"
 }
