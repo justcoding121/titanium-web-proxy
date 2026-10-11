@@ -899,6 +899,17 @@ public sealed class SessionStore : IDisposable
             SentBytes = snap.SentBytes,
             DurationMs = snap.DurationMs,
             TtfbMs = snap.TtfbMs,
+            BlockedMs = snap.BlockedMs,
+            DnsMs = snap.DnsMs,
+            ConnectMs = snap.ConnectMs,
+            TlsMs = snap.TlsMs,
+            SendMs = snap.SendMs,
+            WaitMs = snap.WaitMs,
+            ReceiveMs = snap.ReceiveMs,
+            ConnectionReused = snap.ConnectionReused,
+            TimingEstimated = snap.TimingEstimated,
+            TimingRecorded = snap.TimingRecorded,
+            TimingAttempts = snap.TimingAttempts,
             FailureReason = snap.FailureReason,
         };
 

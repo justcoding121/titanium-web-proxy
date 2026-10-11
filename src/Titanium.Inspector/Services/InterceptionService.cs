@@ -1953,7 +1953,7 @@ public sealed class InterceptionService : IDisposable
             FinalizeStreamingBody(snap);
             // Response/reason first, duration last: DurationMs is what marks the session as finished.
             RecordMissingResponse(snap, e);
-            ApplyTiming(snap, e.Timing, snap.StartedUtc);
+            ApplyTiming(snap, e.Timing, e.UpstreamConnectionTiming, snap.StartedUtc);
             SessionUpdated?.Invoke(this, snap);
         }
 
@@ -2030,7 +2030,7 @@ public sealed class InterceptionService : IDisposable
             }
 
             snap.FailureReason = "Capture was stopped before a response arrived.";
-            ApplyTiming(snap, null, snap.StartedUtc);
+            ApplyTiming(snap, null, null, snap.StartedUtc);
             SessionUpdated?.Invoke(this, snap);
         }
     }
@@ -2269,7 +2269,7 @@ public sealed class InterceptionService : IDisposable
         ApplyResponseBodyCapture(snap, resp, e.HttpClient.Request, originalBody);
         SyncHttpBodySize(snap);
 
-        ApplyTiming(snap, e.Timing, snap.StartedUtc);
+        ApplyTiming(snap, e.Timing, e.UpstreamConnectionTiming, snap.StartedUtc);
 
         if (GrpcJsonTranscodeSessionMark.TryGet(e.UserData, out var mark) && mark is not null)
         {
@@ -2773,7 +2773,7 @@ public sealed class InterceptionService : IDisposable
         snap.ResponseHeadersText = FormatHeaders(resp.Headers);
         snap.Protocol = SessionDisplayFormat.FormatClientServer(
             e.HttpClient.Request.HttpVersion, resp.HttpVersion);
-        ApplyTiming(snap, e.Timing, snap.StartedUtc);
+        ApplyTiming(snap, e.Timing, e.UpstreamConnectionTiming, snap.StartedUtc);
         snap.TtfbMs ??= snap.DurationMs;
         snap.BodySize ??= 0;
     }
@@ -2800,7 +2800,11 @@ public sealed class InterceptionService : IDisposable
         snap.BodySize = snap.SentBytes + snap.ReceivedBytes;
     }
 
-    private static void ApplyTiming(SessionSnapshot snap, HttpRequestTiming? timing, DateTimeOffset startedUtc)
+    private static void ApplyTiming(
+        SessionSnapshot snap,
+        HttpRequestTiming? timing,
+        UpstreamConnectionTiming? connection,
+        DateTimeOffset startedUtc)
     {
         if (timing is not null)
         {
@@ -2810,12 +2814,30 @@ public sealed class InterceptionService : IDisposable
                 snap.TtfbMs = SessionDisplayFormat.RoundMs(ttfb.TotalMilliseconds);
             }
 
+            if (!snap.IsTunnel)
+            {
+                var phases = HarTimingMap.Map(timing, connection);
+                snap.BlockedMs = PhaseOrNull(phases.BlockedMs);
+                snap.DnsMs = PhaseOrNull(phases.DnsMs);
+                snap.ConnectMs = PhaseOrNull(phases.ConnectMs);
+                snap.TlsMs = PhaseOrNull(phases.SslMs);
+                snap.SendMs = PhaseOrNull(phases.SendMs);
+                snap.WaitMs = PhaseOrNull(phases.WaitMs);
+                snap.ReceiveMs = PhaseOrNull(phases.ReceiveMs);
+                snap.ConnectionReused = phases.Reused;
+                snap.TimingAttempts = timing.AttemptCount;
+                snap.TimingRecorded = true;
+                snap.TimingEstimated = false;
+            }
+
             return;
         }
 
         snap.DurationMs = SessionDisplayFormat.RoundMs(
             Math.Max(0, (DateTimeOffset.UtcNow - startedUtc).TotalMilliseconds));
     }
+
+    private static double? PhaseOrNull(double milliseconds) => milliseconds < 0 ? null : milliseconds;
 
     private static string FormatHeaders(HeaderCollection headers)
     {

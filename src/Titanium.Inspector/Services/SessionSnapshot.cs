@@ -320,6 +320,32 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         set => SetField(ref _ttfbMs, value);
     }
 
+    /// <summary>HAR phases in milliseconds. Null means the phase does not apply. Not notified per property.</summary>
+    public double? BlockedMs { get; set; }
+
+    public double? DnsMs { get; set; }
+
+    public double? ConnectMs { get; set; }
+
+    public double? TlsMs { get; set; }
+
+    public double? SendMs { get; set; }
+
+    public double? WaitMs { get; set; }
+
+    public double? ReceiveMs { get; set; }
+
+    public bool ConnectionReused { get; set; }
+
+    /// <summary>True when phases were guessed by an older HAR file. The grid Duration and TTFB are still set.</summary>
+    public bool TimingEstimated { get; set; }
+
+    /// <summary>True when <see cref="HarTimingMap"/> filled the phase fields for this session.</summary>
+    public bool TimingRecorded { get; set; }
+
+    /// <summary>Upstream attempts. Above one means earlier attempts were folded into <see cref="BlockedMs"/>.</summary>
+    public int TimingAttempts { get; set; }
+
     public string ProcessDisplay
     {
         get
