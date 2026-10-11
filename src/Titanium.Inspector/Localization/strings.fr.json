@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "Ignoré. Utilisez des codes, Nxx ou une plage comme 500-599. 32 termes au plus.",
   "filter.statusTooMany": "32 termes et 128 caractères au plus.",
-  "ctx.filterStatus": "Filtrer selon cet état"
+  "ctx.filterStatus": "Filtrer selon cet état",
+  "ctx.mark": "Marquer",
+  "ctx.markRed": "Rouge",
+  "ctx.markOrange": "Orange",
+  "ctx.markYellow": "Jaune",
+  "ctx.markGreen": "Vert",
+  "ctx.markBlue": "Bleu",
+  "ctx.markPurple": "Violet",
+  "ctx.markClear": "Effacer",
+  "ctx.comment": "Commentaire…",
+  "comment.title": "Commentaire",
+  "comment.save": "Enregistrer",
+  "menu.col.comment": "Commentaire"
 }

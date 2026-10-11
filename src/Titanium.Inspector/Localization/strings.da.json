@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "Ignoreret. Brug koder, Nxx eller intervaller som 500-599. Højst 32 led.",
   "filter.statusTooMany": "Højst 32 led og 128 tegn.",
-  "ctx.filterStatus": "Filtrér efter denne status"
+  "ctx.filterStatus": "Filtrér efter denne status",
+  "ctx.mark": "Markér",
+  "ctx.markRed": "Rød",
+  "ctx.markOrange": "Orange",
+  "ctx.markYellow": "Gul",
+  "ctx.markGreen": "Grøn",
+  "ctx.markBlue": "Blå",
+  "ctx.markPurple": "Lilla",
+  "ctx.markClear": "Ryd",
+  "ctx.comment": "Kommentar…",
+  "comment.title": "Kommentar",
+  "comment.save": "Gem",
+  "menu.col.comment": "Kommentar"
 }

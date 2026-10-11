@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "Пропущено. Вкажіть коди, Nxx або діапазон, наприклад 500-599. Не більше 32 умов.",
   "filter.statusTooMany": "Не більше 32 умов і 128 символів.",
-  "ctx.filterStatus": "Фільтр за цим станом"
+  "ctx.filterStatus": "Фільтр за цим станом",
+  "ctx.mark": "Позначка",
+  "ctx.markRed": "Червоний",
+  "ctx.markOrange": "Помаранчевий",
+  "ctx.markYellow": "Жовтий",
+  "ctx.markGreen": "Зелений",
+  "ctx.markBlue": "Синій",
+  "ctx.markPurple": "Фіолетовий",
+  "ctx.markClear": "Зняти",
+  "ctx.comment": "Коментар…",
+  "comment.title": "Коментар",
+  "comment.save": "Зберегти",
+  "menu.col.comment": "Коментар"
 }

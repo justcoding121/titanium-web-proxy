@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "Yok sayıldı. Kod, Nxx veya 500-599 gibi bir aralık kullanın. En fazla 32 terim.",
   "filter.statusTooMany": "En fazla 32 terim ve 128 karakter.",
-  "ctx.filterStatus": "Bu duruma göre süz"
+  "ctx.filterStatus": "Bu duruma göre süz",
+  "ctx.mark": "İşaretle",
+  "ctx.markRed": "Kırmızı",
+  "ctx.markOrange": "Turuncu",
+  "ctx.markYellow": "Sarı",
+  "ctx.markGreen": "Yeşil",
+  "ctx.markBlue": "Mavi",
+  "ctx.markPurple": "Mor",
+  "ctx.markClear": "Temizle",
+  "ctx.comment": "Yorum…",
+  "comment.title": "Yorum",
+  "comment.save": "Kaydet",
+  "menu.col.comment": "Yorum"
 }

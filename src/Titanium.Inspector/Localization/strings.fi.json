@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "Ohitettu. Käytä koodeja, Nxx-muotoa tai väliä, esimerkiksi 500-599. Enintään 32 ehtoa.",
   "filter.statusTooMany": "Enintään 32 ehtoa ja 128 merkkiä.",
-  "ctx.filterStatus": "Suodata tämän tilan mukaan"
+  "ctx.filterStatus": "Suodata tämän tilan mukaan",
+  "ctx.mark": "Merkitse",
+  "ctx.markRed": "Punainen",
+  "ctx.markOrange": "Oranssi",
+  "ctx.markYellow": "Keltainen",
+  "ctx.markGreen": "Vihreä",
+  "ctx.markBlue": "Sininen",
+  "ctx.markPurple": "Violetti",
+  "ctx.markClear": "Tyhjennä",
+  "ctx.comment": "Kommentti…",
+  "comment.title": "Kommentti",
+  "comment.save": "Tallenna",
+  "menu.col.comment": "Kommentti"
 }

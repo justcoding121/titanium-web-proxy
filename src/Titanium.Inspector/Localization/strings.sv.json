@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "Ignorerat. Använd koder, Nxx eller intervall som 500-599. Högst 32 termer.",
   "filter.statusTooMany": "Högst 32 termer och 128 tecken.",
-  "ctx.filterStatus": "Filtrera efter denna status"
+  "ctx.filterStatus": "Filtrera efter denna status",
+  "ctx.mark": "Markera",
+  "ctx.markRed": "Röd",
+  "ctx.markOrange": "Orange",
+  "ctx.markYellow": "Gul",
+  "ctx.markGreen": "Grön",
+  "ctx.markBlue": "Blå",
+  "ctx.markPurple": "Lila",
+  "ctx.markClear": "Rensa",
+  "ctx.comment": "Kommentar…",
+  "comment.title": "Kommentar",
+  "comment.save": "Spara",
+  "menu.col.comment": "Kommentar"
 }

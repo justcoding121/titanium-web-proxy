@@ -127,6 +127,11 @@ public class SessionStoreCloneGuardTests
             return OpaqueTunnelReason.UserSkipList;
         }
 
+        if (type == typeof(SessionMark))
+        {
+            return SessionMark.Red;
+        }
+
         if (type == typeof(IReadOnlyList<SessionEventNote>))
         {
             return new SessionEventNote[] { new(12, "stats.event.retry", false) };

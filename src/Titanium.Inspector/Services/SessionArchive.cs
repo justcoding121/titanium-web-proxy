@@ -206,7 +206,7 @@ public static class SessionArchive
             content["encoding"] = contentEncoding;
         }
 
-        return new JsonObject
+        var entry = new JsonObject
         {
             ["startedDateTime"] = s.StartedUtc.UtcDateTime.ToString("o"),
             ["time"] = duration,
@@ -236,6 +236,13 @@ public static class SessionArchive
             ["cache"] = new JsonObject(),
             ["_inspector"] = BuildInspectorExtension(s),
         };
+
+        if (!string.IsNullOrEmpty(s.Comment))
+        {
+            entry["comment"] = s.Comment;
+        }
+
+        return entry;
     }
 
     public static SessionSnapshot? FromHarEntry(JsonElement entry, long id)
@@ -270,6 +277,11 @@ public static class SessionArchive
                 BodySize = respBytes?.LongLength ?? respBody?.Length,
                 Protocol = "HAR",
             };
+
+            if (entry.TryGetProperty("comment", out var comment) && comment.ValueKind == JsonValueKind.String)
+            {
+                snap.Comment = comment.GetString();
+            }
 
             ApplyInspectorExtension(entry, snap);
             if (!HasTimingExtension(entry) && snap.DurationMs is not null)
@@ -423,6 +435,11 @@ public static class SessionArchive
             node["events"] = notes;
         }
 
+        if (s.Mark != SessionMark.None)
+        {
+            node["mark"] = s.Mark.ToString();
+        }
+
         return node;
     }
 
@@ -434,6 +451,13 @@ public static class SessionArchive
         }
 
         ApplyInspectorIdentity(ext, snap);
+        if (ext.TryGetProperty("mark", out var markEl) &&
+            markEl.ValueKind == JsonValueKind.String &&
+            Enum.TryParse<SessionMark>(markEl.GetString(), ignoreCase: true, out var mark))
+        {
+            snap.Mark = mark;
+        }
+
         ApplyInspectorTiming(ext, snap);
         ApplyInspectorEvents(ext, snap);
         ApplyInspectorCapture(ext, snap);

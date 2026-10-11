@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "Đã bỏ qua. Dùng mã, Nxx hoặc khoảng như 500-599. Tối đa 32 mục.",
   "filter.statusTooMany": "Tối đa 32 mục và 128 ký tự.",
-  "ctx.filterStatus": "Lọc theo trạng thái này"
+  "ctx.filterStatus": "Lọc theo trạng thái này",
+  "ctx.mark": "Đánh dấu",
+  "ctx.markRed": "Đỏ",
+  "ctx.markOrange": "Cam",
+  "ctx.markYellow": "Vàng",
+  "ctx.markGreen": "Xanh lá",
+  "ctx.markBlue": "Xanh dương",
+  "ctx.markPurple": "Tím",
+  "ctx.markClear": "Xóa",
+  "ctx.comment": "Ghi chú…",
+  "comment.title": "Ghi chú",
+  "comment.save": "Lưu",
+  "menu.col.comment": "Ghi chú"
 }

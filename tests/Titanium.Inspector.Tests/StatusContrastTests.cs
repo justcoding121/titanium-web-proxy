@@ -27,6 +27,7 @@ public class StatusContrastTests
         "StatusFeedbackErrorBrush",
         "InspectorLinkBrush",
         "InspectorErrorTextBrush",
+        "SessionMarkPurpleBrush",
     ];
 
     [TestMethod]

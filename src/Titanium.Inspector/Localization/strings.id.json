@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "Diabaikan. Gunakan kode, Nxx, atau rentang seperti 500-599. Paling banyak 32 istilah.",
   "filter.statusTooMany": "Paling banyak 32 istilah dan 128 karakter.",
-  "ctx.filterStatus": "Saring menurut status ini"
+  "ctx.filterStatus": "Saring menurut status ini",
+  "ctx.mark": "Tandai",
+  "ctx.markRed": "Merah",
+  "ctx.markOrange": "Oranye",
+  "ctx.markYellow": "Kuning",
+  "ctx.markGreen": "Hijau",
+  "ctx.markBlue": "Biru",
+  "ctx.markPurple": "Ungu",
+  "ctx.markClear": "Hapus",
+  "ctx.comment": "Komentar…",
+  "comment.title": "Komentar",
+  "comment.save": "Simpan",
+  "menu.col.comment": "Komentar"
 }

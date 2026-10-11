@@ -342,7 +342,7 @@ public static class SessionSearch
     /// <summary>Fields a leading <c>-</c> may invert. <c>hide:</c> is already an exclusion.</summary>
     private static bool IsNegatableKey(string key) => key is
         "method" or "status" or "host" or "url" or "body" or "process" or "pid" or
-        "protocol" or "content-type" or "contenttype" or "is";
+        "protocol" or "content-type" or "contenttype" or "is" or "mark" or "comment";
 
     private static bool MatchToken(
         SessionSnapshot s,
@@ -394,6 +394,8 @@ public static class SessionSearch
         {
             "method" => s.Method.Equals(value, StringComparison.OrdinalIgnoreCase),
             "status" => MatchStatus(s.StatusCode, value),
+            "mark" => MatchMark(s.Mark, value),
+            "comment" => s.Comment?.Contains(value, StringComparison.OrdinalIgnoreCase) == true,
             "host" => MatchHost(s, value),
             "url" => s.Url.Contains(value, StringComparison.OrdinalIgnoreCase),
             "body" => bodyMatcher?.Invoke(s, value) ??
@@ -432,6 +434,17 @@ public static class SessionSearch
 
     private static bool MatchStatus(int? statusCode, string value) =>
         StatusFilter.Matches(statusCode, value);
+
+    private static bool MatchMark(SessionMark mark, string value)
+    {
+        if (value.Equals("none", StringComparison.OrdinalIgnoreCase))
+        {
+            return mark == SessionMark.None;
+        }
+
+        return mark != SessionMark.None &&
+               mark.ToString().Equals(value, StringComparison.OrdinalIgnoreCase);
+    }
 
     private static bool IsErrorStatus(int? statusCode) =>
         statusCode is >= 400 and <= 599;

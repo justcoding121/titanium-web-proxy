@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "Ignorert. Bruk koder, Nxx eller områder som 500-599. Høyst 32 ledd.",
   "filter.statusTooMany": "Høyst 32 ledd og 128 tegn.",
-  "ctx.filterStatus": "Filtrer etter denne statusen"
+  "ctx.filterStatus": "Filtrer etter denne statusen",
+  "ctx.mark": "Merk",
+  "ctx.markRed": "Rød",
+  "ctx.markOrange": "Oransje",
+  "ctx.markYellow": "Gul",
+  "ctx.markGreen": "Grønn",
+  "ctx.markBlue": "Blå",
+  "ctx.markPurple": "Lilla",
+  "ctx.markClear": "Tøm",
+  "ctx.comment": "Kommentar…",
+  "comment.title": "Kommentar",
+  "comment.save": "Lagre",
+  "menu.col.comment": "Kommentar"
 }

@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "ข้ามแล้ว ใช้รหัส, Nxx หรือช่วงเช่น 500-599 ได้ไม่เกิน 32 รายการ",
   "filter.statusTooMany": "ได้ไม่เกิน 32 รายการ และ 128 อักขระ",
-  "ctx.filterStatus": "กรองตามสถานะนี้"
+  "ctx.filterStatus": "กรองตามสถานะนี้",
+  "ctx.mark": "ทำเครื่องหมาย",
+  "ctx.markRed": "แดง",
+  "ctx.markOrange": "ส้ม",
+  "ctx.markYellow": "เหลือง",
+  "ctx.markGreen": "เขียว",
+  "ctx.markBlue": "น้ำเงิน",
+  "ctx.markPurple": "ม่วง",
+  "ctx.markClear": "ล้าง",
+  "ctx.comment": "ความคิดเห็น…",
+  "comment.title": "ความคิดเห็น",
+  "comment.save": "บันทึก",
+  "menu.col.comment": "ความคิดเห็น"
 }

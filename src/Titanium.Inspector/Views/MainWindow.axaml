@@ -261,6 +261,8 @@
                     CommandParameter="Scheme" AutomationProperties.AutomationId="MenuColumn_Scheme" />
           <MenuItem Header="{loc:Loc menu.col.contentType}" ToggleType="CheckBox" Command="{Binding ToggleGridColumnCommand}"
                     CommandParameter="Content-Type" AutomationProperties.AutomationId="MenuColumn_ContentType" />
+          <MenuItem Header="{loc:Loc menu.col.comment}" ToggleType="CheckBox" Command="{Binding ToggleGridColumnCommand}"
+                    CommandParameter="Comment" AutomationProperties.AutomationId="MenuColumn_Comment" />
           <Separator />
           <MenuItem Header="{loc:Loc menu.resetColumns}" Command="{Binding ResetGridColumnsCommand}"
                     AutomationProperties.AutomationId="MenuColumnsReset" />
@@ -538,6 +540,25 @@
             <MenuItem Header="{loc:Loc ctx.filterStatus}" Command="{Binding FilterByStatusCommand}"
                       IsVisible="{Binding CanFilterByStatus}"
                       AutomationProperties.AutomationId="CtxFilterByStatus" />
+            <MenuItem Header="{loc:Loc ctx.mark}" AutomationProperties.AutomationId="CtxMark">
+              <MenuItem Header="{loc:Loc ctx.markRed}" Command="{Binding SetMarkCommand}" CommandParameter="Red"
+                        AutomationProperties.AutomationId="CtxMarkRed" />
+              <MenuItem Header="{loc:Loc ctx.markOrange}" Command="{Binding SetMarkCommand}" CommandParameter="Orange"
+                        AutomationProperties.AutomationId="CtxMarkOrange" />
+              <MenuItem Header="{loc:Loc ctx.markYellow}" Command="{Binding SetMarkCommand}" CommandParameter="Yellow"
+                        AutomationProperties.AutomationId="CtxMarkYellow" />
+              <MenuItem Header="{loc:Loc ctx.markGreen}" Command="{Binding SetMarkCommand}" CommandParameter="Green"
+                        AutomationProperties.AutomationId="CtxMarkGreen" />
+              <MenuItem Header="{loc:Loc ctx.markBlue}" Command="{Binding SetMarkCommand}" CommandParameter="Blue"
+                        AutomationProperties.AutomationId="CtxMarkBlue" />
+              <MenuItem Header="{loc:Loc ctx.markPurple}" Command="{Binding SetMarkCommand}" CommandParameter="Purple"
+                        AutomationProperties.AutomationId="CtxMarkPurple" />
+              <MenuItem Header="{loc:Loc ctx.markClear}" Command="{Binding SetMarkCommand}" CommandParameter="None"
+                        AutomationProperties.AutomationId="CtxMarkClear" />
+            </MenuItem>
+            <MenuItem Header="{loc:Loc ctx.comment}" Command="{Binding CommentCommand}"
+                      IsVisible="{Binding HasSelectedSessions}"
+                      AutomationProperties.AutomationId="CtxComment" />
             <MenuItem Header="{loc:Loc ctx.hideHost}" Command="{Binding HideHostCommand}"
                       IsVisible="{Binding CanFilterByHost}"
                       AutomationProperties.AutomationId="CtxHideHost" />
@@ -641,7 +662,39 @@
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
+          <DataGridTextColumn Width="160" MinWidth="80" IsVisible="False"
+                              Binding="{Binding Comment}" SortMemberPath="Comment">
+            <DataGridTextColumn.Header>
+              <TextBlock Tag="Comment" Text="{loc:Loc menu.col.comment}" />
+            </DataGridTextColumn.Header>
+          </DataGridTextColumn>
         </DataGrid.Columns>
+        <DataGrid.Styles>
+          <Style Selector="DataGridRow.mark-red">
+            <Setter Property="BorderBrush" Value="{DynamicResource SessionStatusServerErrorBrush}" />
+            <Setter Property="BorderThickness" Value="4,0,0,0" />
+          </Style>
+          <Style Selector="DataGridRow.mark-orange">
+            <Setter Property="BorderBrush" Value="{DynamicResource StatusFeedbackWarningBrush}" />
+            <Setter Property="BorderThickness" Value="4,0,0,0" />
+          </Style>
+          <Style Selector="DataGridRow.mark-yellow">
+            <Setter Property="BorderBrush" Value="{DynamicResource SessionStatusClientErrorBrush}" />
+            <Setter Property="BorderThickness" Value="4,0,0,0" />
+          </Style>
+          <Style Selector="DataGridRow.mark-green">
+            <Setter Property="BorderBrush" Value="{DynamicResource SessionStatusSuccessBrush}" />
+            <Setter Property="BorderThickness" Value="4,0,0,0" />
+          </Style>
+          <Style Selector="DataGridRow.mark-blue">
+            <Setter Property="BorderBrush" Value="{DynamicResource SessionStatusRedirectBrush}" />
+            <Setter Property="BorderThickness" Value="4,0,0,0" />
+          </Style>
+          <Style Selector="DataGridRow.mark-purple">
+            <Setter Property="BorderBrush" Value="{DynamicResource SessionMarkPurpleBrush}" />
+            <Setter Property="BorderThickness" Value="4,0,0,0" />
+          </Style>
+        </DataGrid.Styles>
       </DataGrid>
       <GridSplitter Grid.Row="1" Grid.Column="1" Width="4" ResizeDirection="Columns"
                     IsVisible="{Binding ShowSessionDetails}" />

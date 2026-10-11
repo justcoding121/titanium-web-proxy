@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "Пропущено. Укажите коды, Nxx или диапазон, например 500-599. Не больше 32 условий.",
   "filter.statusTooMany": "Не больше 32 условий и 128 символов.",
-  "ctx.filterStatus": "Фильтр по этому статусу"
+  "ctx.filterStatus": "Фильтр по этому статусу",
+  "ctx.mark": "Метка",
+  "ctx.markRed": "Красный",
+  "ctx.markOrange": "Оранжевый",
+  "ctx.markYellow": "Жёлтый",
+  "ctx.markGreen": "Зелёный",
+  "ctx.markBlue": "Синий",
+  "ctx.markPurple": "Фиолетовый",
+  "ctx.markClear": "Снять",
+  "ctx.comment": "Комментарий…",
+  "comment.title": "Комментарий",
+  "comment.save": "Сохранить",
+  "menu.col.comment": "Комментарий"
 }

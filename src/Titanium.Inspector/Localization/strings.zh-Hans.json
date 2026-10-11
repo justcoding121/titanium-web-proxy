@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "已忽略。请使用代码、Nxx 或 500-599 这样的范围。最多 32 项。",
   "filter.statusTooMany": "最多 32 项、128 个字符。",
-  "ctx.filterStatus": "按此状态筛选"
+  "ctx.filterStatus": "按此状态筛选",
+  "ctx.mark": "标记",
+  "ctx.markRed": "红",
+  "ctx.markOrange": "橙",
+  "ctx.markYellow": "黄",
+  "ctx.markGreen": "绿",
+  "ctx.markBlue": "蓝",
+  "ctx.markPurple": "紫",
+  "ctx.markClear": "清除",
+  "ctx.comment": "注释…",
+  "comment.title": "注释",
+  "comment.save": "保存",
+  "menu.col.comment": "注释"
 }

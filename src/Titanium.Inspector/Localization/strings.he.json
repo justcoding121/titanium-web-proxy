@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "התעלמות. השתמשו בקודים, ב-Nxx או בטווח כגון 500-599. לכל היותר 32 תנאים.",
   "filter.statusTooMany": "לכל היותר 32 תנאים ו-128 תווים.",
-  "ctx.filterStatus": "סנן לפי מצב זה"
+  "ctx.filterStatus": "סנן לפי מצב זה",
+  "ctx.mark": "סימון",
+  "ctx.markRed": "אדום",
+  "ctx.markOrange": "כתום",
+  "ctx.markYellow": "צהוב",
+  "ctx.markGreen": "ירוק",
+  "ctx.markBlue": "כחול",
+  "ctx.markPurple": "סגול",
+  "ctx.markClear": "ניקוי",
+  "ctx.comment": "הערה…",
+  "comment.title": "הערה",
+  "comment.save": "שמירה",
+  "menu.col.comment": "הערה"
 }

@@ -8,6 +8,8 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
 {
     private int? _statusCode;
     private string? _failureReason;
+    private SessionMark _mark;
+    private string? _comment;
     private string? _requestHeadersText;
     private string? _responseHeadersText;
     private string? _requestBodyText;
@@ -117,6 +119,32 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     {
         get => _failureReason;
         set => SetField(ref _failureReason, value);
+    }
+
+    public const int CommentMaxLength = 2000;
+
+    /// <summary>User mark. None leaves the row style unchanged.</summary>
+    public SessionMark Mark
+    {
+        get => _mark;
+        set => SetField(ref _mark, value);
+    }
+
+    /// <summary>User comment, capped at <see cref="CommentMaxLength"/> characters.</summary>
+    public string? Comment
+    {
+        get => _comment;
+        set => SetField(ref _comment, CapComment(value));
+    }
+
+    private static string? CapComment(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.IsNullOrEmpty(value) ? null : value;
+        }
+
+        return value.Length <= CommentMaxLength ? value : value[..CommentMaxLength];
     }
 
     public string? RequestHeadersText

@@ -72,6 +72,9 @@ public interface IInspectorDialogs
         string version,
         string channelDisplay,
         UpdateOfferKind offerKind = UpdateOfferKind.Upgrade);
+
+    /// <summary>Edit a session comment. Null means the user cancelled. Empty clears the comment.</summary>
+    Task<string?> PromptCommentAsync(Window? owner, string? current, int maxLength);
 }
 
 /// <summary>Avalonia modal dialogs.</summary>
@@ -278,6 +281,9 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
             cancel: "Later",
             height: 240);
     }
+
+    public Task<string?> PromptCommentAsync(Window? owner, string? current, int maxLength) =>
+        CommentPrompt.ShowAsync(owner, current, maxLength);
 }
 
 /// <summary>Scripted answers for unit / E2E-UI tests (no real windows).</summary>
@@ -436,4 +442,15 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
     }
 
     public UpdateOfferKind LastInstallUpdateOfferKind { get; private set; }
+
+    /// <summary>Next comment prompt result. Null cancels.</summary>
+    public string? CommentResult { get; set; }
+
+    public int CommentCalls { get; private set; }
+
+    public Task<string?> PromptCommentAsync(Window? owner, string? current, int maxLength)
+    {
+        CommentCalls++;
+        return Task.FromResult(CommentResult);
+    }
 }

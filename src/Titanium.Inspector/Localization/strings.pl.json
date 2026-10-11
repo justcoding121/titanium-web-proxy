@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "Pominięto. Użyj kodów, Nxx albo zakresu, na przykład 500-599. Najwyżej 32 pozycje.",
   "filter.statusTooMany": "Najwyżej 32 pozycje i 128 znaków.",
-  "ctx.filterStatus": "Filtruj według tego statusu"
+  "ctx.filterStatus": "Filtruj według tego statusu",
+  "ctx.mark": "Oznacz",
+  "ctx.markRed": "Czerwony",
+  "ctx.markOrange": "Pomarańczowy",
+  "ctx.markYellow": "Żółty",
+  "ctx.markGreen": "Zielony",
+  "ctx.markBlue": "Niebieski",
+  "ctx.markPurple": "Fioletowy",
+  "ctx.markClear": "Wyczyść",
+  "ctx.comment": "Komentarz…",
+  "comment.title": "Komentarz",
+  "comment.save": "Zapisz",
+  "menu.col.comment": "Komentarz"
 }

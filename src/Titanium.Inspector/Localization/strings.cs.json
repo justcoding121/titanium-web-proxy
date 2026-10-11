@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "Ignorováno. Použijte kódy, Nxx nebo rozsah, například 500-599. Nejvýše 32 položek.",
   "filter.statusTooMany": "Nejvýše 32 položek a 128 znaků.",
-  "ctx.filterStatus": "Filtrovat podle tohoto stavu"
+  "ctx.filterStatus": "Filtrovat podle tohoto stavu",
+  "ctx.mark": "Označit",
+  "ctx.markRed": "Červená",
+  "ctx.markOrange": "Oranžová",
+  "ctx.markYellow": "Žlutá",
+  "ctx.markGreen": "Zelená",
+  "ctx.markBlue": "Modrá",
+  "ctx.markPurple": "Fialová",
+  "ctx.markClear": "Vymazat",
+  "ctx.comment": "Komentář…",
+  "comment.title": "Komentář",
+  "comment.save": "Uložit",
+  "menu.col.comment": "Komentář"
 }

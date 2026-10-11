@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Reflection;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Notifications;
@@ -54,6 +55,8 @@ public partial class MainWindow : Window
         Opened += OnOpened;
         DataContextChanged += OnDataContextChanged;
         SessionsGrid.Loaded += OnSessionsGridLoaded;
+        SessionsGrid.LoadingRow += (_, e) => ApplySessionMark(e.Row);
+        SessionsGrid.UnloadingRow += (_, e) => ClearSessionMark(e.Row);
         SessionsGrid.SelectionChanged += OnSessionsGridSelectionChanged;
         SessionsGrid.KeyDown += OnSessionsGridKeyDown;
         // Under heavy proxy load the machine is CPU-saturated by worker threads (and browsers); the UI thread
@@ -320,6 +323,7 @@ public partial class MainWindow : Window
         HookStatusAttention(DataContext as MainWindowViewModel);
         HookOneWayToggleVisualSync(DataContext as MainWindowViewModel);
         HookGridColumnsChanged(DataContext as MainWindowViewModel);
+        HookSessionAnnotations(DataContext as MainWindowViewModel);
         HookInspectHeadersLayout(DataContext as MainWindowViewModel);
         if (_notificationManager is not null && DataContext is MainWindowViewModel vm)
         {
@@ -772,6 +776,63 @@ public partial class MainWindow : Window
         {
             return SessionListFollowEdge.Bottom;
         }
+    }
+
+    private MainWindowViewModel? _annotationsVm;
+
+    private void HookSessionAnnotations(MainWindowViewModel? vm)
+    {
+        if (_annotationsVm is not null)
+        {
+            _annotationsVm.SessionAnnotationsChanged -= OnSessionAnnotationsChanged;
+        }
+
+        _annotationsVm = vm;
+        if (vm is not null)
+        {
+            vm.SessionAnnotationsChanged += OnSessionAnnotationsChanged;
+        }
+    }
+
+    private void OnSessionAnnotationsChanged(object? sender, EventArgs e)
+    {
+        foreach (var row in SessionsGrid.GetVisualDescendants().OfType<DataGridRow>())
+        {
+            ApplySessionMark(row);
+        }
+    }
+
+    private static readonly string[] MarkClasses = ["mark-red", "mark-orange", "mark-yellow", "mark-green", "mark-blue", "mark-purple"];
+
+    private static void ClearSessionMark(DataGridRow row)
+    {
+        foreach (var name in MarkClasses)
+        {
+            row.Classes.Remove(name);
+        }
+    }
+
+    private static void ApplySessionMark(DataGridRow row)
+    {
+        ClearSessionMark(row);
+        if (row.DataContext is not SessionSnapshot snap)
+        {
+            AutomationProperties.SetHelpText(row, null);
+            ToolTip.SetTip(row, null);
+            return;
+        }
+
+        if (snap.Mark != SessionMark.None)
+        {
+            row.Classes.Add("mark-" + snap.Mark.ToString().ToLowerInvariant());
+            AutomationProperties.SetHelpText(row, snap.Mark.ToString());
+        }
+        else
+        {
+            AutomationProperties.SetHelpText(row, null);
+        }
+
+        ToolTip.SetTip(row, string.IsNullOrEmpty(snap.Comment) ? null : snap.Comment);
     }
 
     /// <summary>Column visibility from the catalog defaults, saved choices, and the Process platform gate.</summary>

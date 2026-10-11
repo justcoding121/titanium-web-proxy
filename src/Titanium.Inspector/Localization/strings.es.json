@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "Ignorado. Use códigos, Nxx o rangos como 500-599. Como máximo 32 términos.",
   "filter.statusTooMany": "Como máximo 32 términos y 128 caracteres.",
-  "ctx.filterStatus": "Filtrar por este estado"
+  "ctx.filterStatus": "Filtrar por este estado",
+  "ctx.mark": "Marcar",
+  "ctx.markRed": "Rojo",
+  "ctx.markOrange": "Naranja",
+  "ctx.markYellow": "Amarillo",
+  "ctx.markGreen": "Verde",
+  "ctx.markBlue": "Azul",
+  "ctx.markPurple": "Morado",
+  "ctx.markClear": "Quitar",
+  "ctx.comment": "Comentario…",
+  "comment.title": "Comentario",
+  "comment.save": "Guardar",
+  "menu.col.comment": "Comentario"
 }

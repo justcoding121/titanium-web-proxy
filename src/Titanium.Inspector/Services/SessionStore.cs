@@ -912,6 +912,8 @@ public sealed class SessionStore : IDisposable
             TimingAttempts = snap.TimingAttempts,
             Events = snap.Events is { Count: > 0 } events ? events.ToArray() : null,
             FailureReason = snap.FailureReason,
+            Mark = snap.Mark,
+            Comment = snap.Comment,
         };
 
     private List<SessionSnapshot> RemoveIdsLocked(HashSet<long> ids)

@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "已忽略。請使用代碼、Nxx 或 500-599 這類範圍。最多 32 項。",
   "filter.statusTooMany": "最多 32 項、128 個字元。",
-  "ctx.filterStatus": "依此狀態篩選"
+  "ctx.filterStatus": "依此狀態篩選",
+  "ctx.mark": "標記",
+  "ctx.markRed": "紅",
+  "ctx.markOrange": "橙",
+  "ctx.markYellow": "黃",
+  "ctx.markGreen": "綠",
+  "ctx.markBlue": "藍",
+  "ctx.markPurple": "紫",
+  "ctx.markClear": "清除",
+  "ctx.comment": "註解…",
+  "comment.title": "註解",
+  "comment.save": "儲存",
+  "menu.col.comment": "註解"
 }

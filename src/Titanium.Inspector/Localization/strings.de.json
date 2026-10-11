@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "Ignoriert. Codes, Nxx oder Bereiche wie 500-599. Höchstens 32 Einträge.",
   "filter.statusTooMany": "Höchstens 32 Einträge und 128 Zeichen.",
-  "ctx.filterStatus": "Nach diesem Status filtern"
+  "ctx.filterStatus": "Nach diesem Status filtern",
+  "ctx.mark": "Markieren",
+  "ctx.markRed": "Rot",
+  "ctx.markOrange": "Orange",
+  "ctx.markYellow": "Gelb",
+  "ctx.markGreen": "Grün",
+  "ctx.markBlue": "Blau",
+  "ctx.markPurple": "Violett",
+  "ctx.markClear": "Löschen",
+  "ctx.comment": "Kommentar…",
+  "comment.title": "Kommentar",
+  "comment.save": "Speichern",
+  "menu.col.comment": "Kommentar"
 }

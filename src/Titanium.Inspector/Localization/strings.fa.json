@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "نادیده گرفته شد. از کد، Nxx یا بازه‌ای مانند 500-599 استفاده کنید. حداکثر ۳۲ مورد.",
   "filter.statusTooMany": "حداکثر ۳۲ مورد و ۱۲۸ نویسه.",
-  "ctx.filterStatus": "پالایش بر اساس این وضعیت"
+  "ctx.filterStatus": "پالایش بر اساس این وضعیت",
+  "ctx.mark": "نشان",
+  "ctx.markRed": "قرمز",
+  "ctx.markOrange": "نارنجی",
+  "ctx.markYellow": "زرد",
+  "ctx.markGreen": "سبز",
+  "ctx.markBlue": "آبی",
+  "ctx.markPurple": "بنفش",
+  "ctx.markClear": "پاک کردن",
+  "ctx.comment": "نظر…",
+  "comment.title": "نظر",
+  "comment.save": "ذخیره",
+  "menu.col.comment": "نظر"
 }

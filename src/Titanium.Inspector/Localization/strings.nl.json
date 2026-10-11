@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "Genegeerd. Gebruik codes, Nxx of een bereik zoals 500-599. Hoogstens 32 termen.",
   "filter.statusTooMany": "Hoogstens 32 termen en 128 tekens.",
-  "ctx.filterStatus": "Filter op deze status"
+  "ctx.filterStatus": "Filter op deze status",
+  "ctx.mark": "Markeren",
+  "ctx.markRed": "Rood",
+  "ctx.markOrange": "Oranje",
+  "ctx.markYellow": "Geel",
+  "ctx.markGreen": "Groen",
+  "ctx.markBlue": "Blauw",
+  "ctx.markPurple": "Paars",
+  "ctx.markClear": "Wissen",
+  "ctx.comment": "Opmerking…",
+  "comment.title": "Opmerking",
+  "comment.save": "Opslaan",
+  "menu.col.comment": "Opmerking"
 }

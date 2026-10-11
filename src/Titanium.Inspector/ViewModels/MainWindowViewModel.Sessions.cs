@@ -328,6 +328,54 @@ public sealed partial class MainWindowViewModel
         StatusText = $"Filtered by status:{code.Value}";
         return Task.CompletedTask;
     }
+
+    /// <summary>Raised after a mark or comment changes so realized grid rows can restyle without a per-row binding.</summary>
+    public event EventHandler? SessionAnnotationsChanged;
+
+    private void SetMark(object? parameter)
+    {
+        var selection = ResolveFilterSelection();
+        if (selection.Count == 0)
+        {
+            return;
+        }
+
+        var name = parameter as string;
+        var mark = string.IsNullOrEmpty(name) || name.Equals("None", StringComparison.OrdinalIgnoreCase)
+            ? SessionMark.None
+            : Enum.Parse<SessionMark>(name, ignoreCase: true);
+        foreach (var session in selection)
+        {
+            session.Mark = mark;
+        }
+
+        SessionAnnotationsChanged?.Invoke(this, EventArgs.Empty);
+        ApplyFilter();
+    }
+
+    private async Task CommentAsync()
+    {
+        var selection = ResolveFilterSelection();
+        if (selection.Count == 0)
+        {
+            return;
+        }
+
+        var current = selection.Count == 1 ? selection[0].Comment : null;
+        var text = await _dialogs.PromptCommentAsync(TryGetMainWindow(), current, SessionSnapshot.CommentMaxLength);
+        if (text is null)
+        {
+            return;
+        }
+
+        foreach (var session in selection)
+        {
+            session.Comment = text;
+        }
+
+        SessionAnnotationsChanged?.Invoke(this, EventArgs.Empty);
+        ApplyFilter();
+    }
     private Task FilterByProcessAsync()
     {
         var process = ResolveUnanimousFilterProcess();

@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "無視しました。コード、Nxx、または 500-599 のような範囲を使ってください。最大 32 項です。",
   "filter.statusTooMany": "最大 32 項、128 文字です。",
-  "ctx.filterStatus": "このステータスで絞り込む"
+  "ctx.filterStatus": "このステータスで絞り込む",
+  "ctx.mark": "マーク",
+  "ctx.markRed": "赤",
+  "ctx.markOrange": "オレンジ",
+  "ctx.markYellow": "黄",
+  "ctx.markGreen": "緑",
+  "ctx.markBlue": "青",
+  "ctx.markPurple": "紫",
+  "ctx.markClear": "クリア",
+  "ctx.comment": "コメント…",
+  "comment.title": "コメント",
+  "comment.save": "保存",
+  "menu.col.comment": "コメント"
 }

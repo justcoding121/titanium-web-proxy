@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "무시했습니다. 코드, Nxx 또는 500-599 같은 범위를 쓰세요. 최대 32개입니다.",
   "filter.statusTooMany": "최대 32개, 128자입니다.",
-  "ctx.filterStatus": "이 상태로 거르기"
+  "ctx.filterStatus": "이 상태로 거르기",
+  "ctx.mark": "표시",
+  "ctx.markRed": "빨강",
+  "ctx.markOrange": "주황",
+  "ctx.markYellow": "노랑",
+  "ctx.markGreen": "초록",
+  "ctx.markBlue": "파랑",
+  "ctx.markPurple": "보라",
+  "ctx.markClear": "지우기",
+  "ctx.comment": "주석…",
+  "comment.title": "주석",
+  "comment.save": "저장",
+  "menu.col.comment": "주석"
 }

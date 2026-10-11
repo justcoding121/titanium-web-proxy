@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "Αγνοήθηκε. Χρησιμοποιήστε κωδικούς, Nxx ή εύρη όπως 500-599. Το πολύ 32 όροι.",
   "filter.statusTooMany": "Το πολύ 32 όροι και 128 χαρακτήρες.",
-  "ctx.filterStatus": "Φιλτράρισμα κατά αυτή την κατάσταση"
+  "ctx.filterStatus": "Φιλτράρισμα κατά αυτή την κατάσταση",
+  "ctx.mark": "Σήμανση",
+  "ctx.markRed": "Κόκκινο",
+  "ctx.markOrange": "Πορτοκαλί",
+  "ctx.markYellow": "Κίτρινο",
+  "ctx.markGreen": "Πράσινο",
+  "ctx.markBlue": "Μπλε",
+  "ctx.markPurple": "Μωβ",
+  "ctx.markClear": "Καθαρισμός",
+  "ctx.comment": "Σχόλιο…",
+  "comment.title": "Σχόλιο",
+  "comment.save": "Αποθήκευση",
+  "menu.col.comment": "Σχόλιο"
 }

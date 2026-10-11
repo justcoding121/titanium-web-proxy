@@ -431,5 +431,17 @@
   "filter.statusFree": "304, 401, 500-599",
   "filter.statusInvalid": "अनदेखा। कोड, Nxx, या 500-599 जैसा परिसर लिखें। अधिक से अधिक 32 पद।",
   "filter.statusTooMany": "अधिक से अधिक 32 पद और 128 वर्ण।",
-  "ctx.filterStatus": "इस स्थिति से छाँटें"
+  "ctx.filterStatus": "इस स्थिति से छाँटें",
+  "ctx.mark": "चिह्न",
+  "ctx.markRed": "लाल",
+  "ctx.markOrange": "नारंगी",
+  "ctx.markYellow": "पीला",
+  "ctx.markGreen": "हरा",
+  "ctx.markBlue": "नीला",
+  "ctx.markPurple": "बैंगनी",
+  "ctx.markClear": "साफ़",
+  "ctx.comment": "टिप्पणी…",
+  "comment.title": "टिप्पणी",
+  "comment.save": "सहेजें",
+  "menu.col.comment": "टिप्पणी"
 }

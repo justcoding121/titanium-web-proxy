@@ -238,6 +238,8 @@ public sealed class SessionBodyDiskCache : IDisposable
         snapshot.ProtobufDecodedText = loaded.ProtobufDecodedText;
         snapshot.WebSocketFrames ??= loaded.WebSocketFrames;
         snapshot.SseEvents ??= loaded.SseEvents;
+        snapshot.Mark = loaded.Mark;
+        snapshot.Comment = loaded.Comment;
         return true;
     }
 
