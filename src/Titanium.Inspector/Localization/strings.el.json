@@ -396,5 +396,15 @@
   "stats.slowestSession": "Πιο αργή: {0} ms",
   "stats.truncated": "Πρώτες {0} συνεδρίες",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "Άλλες {0}"
+  "stats.statusOther": "Άλλες {0}",
+  "stats.event.cache": "Η προσωρινή αποθήκευση απενεργοποιήθηκε για αυτό το αίτημα",
+  "stats.event.uncompressed": "Η συμπίεση απενεργοποιήθηκε για αυτό το αίτημα",
+  "stats.event.script": "Μια δέσμη ενεργειών άλλαξε αυτό το αίτημα",
+  "stats.event.rule": "Ένας κανόνας άλλαξε αυτό το αίτημα",
+  "stats.event.breakpoint": "Ένα σημείο διακοπής πάγωσε αυτό το αίτημα",
+  "stats.event.retry": "Το αίτημα στάλθηκε ξανά",
+  "stats.event.tls": "Το πιστοποιητικό του διακομιστή δεν ήταν αξιόπιστο",
+  "stats.event.opaque": "Η αποκρυπτογράφηση παραλείφθηκε για αυτή τη σύνδεση",
+  "stats.eventAt": "+{0} ms",
+  "stats.eventFailure": "Απέτυχε: {0}"
 }

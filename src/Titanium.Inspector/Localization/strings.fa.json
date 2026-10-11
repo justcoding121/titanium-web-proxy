@@ -396,5 +396,15 @@
   "stats.slowestSession": "کندترین: {0} میلی‌ثانیه",
   "stats.truncated": "{0} نشست نخست",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "سایر {0}"
+  "stats.statusOther": "سایر {0}",
+  "stats.event.cache": "حافظه نهان برای این درخواست خاموش شد",
+  "stats.event.uncompressed": "فشرده‌سازی برای این درخواست خاموش شد",
+  "stats.event.script": "یک کدنوشته این درخواست را تغییر داد",
+  "stats.event.rule": "یک قاعده این درخواست را تغییر داد",
+  "stats.event.breakpoint": "یک نقطه توقف این درخواست را متوقف کرد",
+  "stats.event.retry": "درخواست دوباره فرستاده شد",
+  "stats.event.tls": "گواهی کارساز مورداعتماد نبود",
+  "stats.event.opaque": "رمزگشایی برای این اتصال رد شد",
+  "stats.eventAt": "+{0} میلی‌ثانیه",
+  "stats.eventFailure": "ناموفق: {0}"
 }

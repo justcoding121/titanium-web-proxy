@@ -67,6 +67,12 @@ public static class SessionScriptHost
         }
     }
 
+    public static bool HasEffect(string? script)
+    {
+        var result = Interpret(script);
+        return result.Abort || result.StatusCode is not null || result.Headers.Count > 0;
+    }
+
     public static bool ApplyOnRequest(string? script, SessionEventArgs e)
     {
         var result = Interpret(script);

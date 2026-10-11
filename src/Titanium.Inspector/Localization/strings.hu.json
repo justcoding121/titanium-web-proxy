@@ -396,5 +396,15 @@
   "stats.slowestSession": "Leglassabb: {0} ms",
   "stats.truncated": "Első {0} munkamenet",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "Egyéb {0}"
+  "stats.statusOther": "Egyéb {0}",
+  "stats.event.cache": "A gyorsítótár ki lett kapcsolva ennél a kérésnél",
+  "stats.event.uncompressed": "A tömörítés ki lett kapcsolva ennél a kérésnél",
+  "stats.event.script": "Egy parancsfájl módosította ezt a kérést",
+  "stats.event.rule": "Egy szabály módosította ezt a kérést",
+  "stats.event.breakpoint": "Egy töréspont megállította ezt a kérést",
+  "stats.event.retry": "A kérés újra el lett küldve",
+  "stats.event.tls": "A kiszolgáló tanúsítványa nem volt megbízható",
+  "stats.event.opaque": "A visszafejtés ki lett hagyva ennél a kapcsolatnál",
+  "stats.eventAt": "+{0} ms",
+  "stats.eventFailure": "Sikertelen: {0}"
 }

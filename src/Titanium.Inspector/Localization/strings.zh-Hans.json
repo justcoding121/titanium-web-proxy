@@ -396,5 +396,15 @@
   "stats.slowestSession": "最慢：{0} 毫秒",
   "stats.truncated": "前 {0} 个会话",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "其他 {0}"
+  "stats.statusOther": "其他 {0}",
+  "stats.event.cache": "此请求已禁用缓存",
+  "stats.event.uncompressed": "此请求已关闭压缩",
+  "stats.event.script": "脚本更改了此请求",
+  "stats.event.rule": "规则更改了此请求",
+  "stats.event.breakpoint": "断点暂停了此请求",
+  "stats.event.retry": "请求已再次发送",
+  "stats.event.tls": "服务器证书不受信任",
+  "stats.event.opaque": "此连接已跳过解密",
+  "stats.eventAt": "+{0} 毫秒",
+  "stats.eventFailure": "失败：{0}"
 }

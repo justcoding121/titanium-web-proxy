@@ -396,5 +396,15 @@
   "stats.slowestSession": "Nejpomalejší: {0} ms",
   "stats.truncated": "Prvních {0} relací",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "Jiné {0}"
+  "stats.statusOther": "Jiné {0}",
+  "stats.event.cache": "U tohoto požadavku byla vypnuta mezipaměť",
+  "stats.event.uncompressed": "U tohoto požadavku byla vypnuta komprese",
+  "stats.event.script": "Skript změnil tento požadavek",
+  "stats.event.rule": "Pravidlo změnilo tento požadavek",
+  "stats.event.breakpoint": "Bod přerušení pozastavil tento požadavek",
+  "stats.event.retry": "Požadavek byl odeslán znovu",
+  "stats.event.tls": "Certifikát serveru nebyl důvěryhodný",
+  "stats.event.opaque": "U tohoto spojení bylo přeskočeno dešifrování",
+  "stats.eventAt": "+{0} ms",
+  "stats.eventFailure": "Selhalo: {0}"
 }

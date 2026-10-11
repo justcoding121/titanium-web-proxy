@@ -396,5 +396,15 @@
   "stats.slowestSession": "האיטית ביותר: {0} אלפיות שנייה",
   "stats.truncated": "{0} הפעלות ראשונות",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "אחר {0}"
+  "stats.statusOther": "אחר {0}",
+  "stats.event.cache": "המטמון כובה עבור בקשה זו",
+  "stats.event.uncompressed": "הדחיסה כובתה עבור בקשה זו",
+  "stats.event.script": "סקריפט שינה בקשה זו",
+  "stats.event.rule": "כלל שינה בקשה זו",
+  "stats.event.breakpoint": "נקודת עצירה הקפיאה בקשה זו",
+  "stats.event.retry": "הבקשה נשלחה שוב",
+  "stats.event.tls": "אישור השרת לא היה מהימן",
+  "stats.event.opaque": "הפענוח דולג עבור חיבור זה",
+  "stats.eventAt": "+{0} אלפיות שנייה",
+  "stats.eventFailure": "נכשל: {0}"
 }

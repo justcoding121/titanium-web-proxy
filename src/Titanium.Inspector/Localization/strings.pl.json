@@ -396,5 +396,15 @@
   "stats.slowestSession": "Najwolniejsza: {0} ms",
   "stats.truncated": "Pierwsze {0} sesji",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "Inne {0}"
+  "stats.statusOther": "Inne {0}",
+  "stats.event.cache": "Pamięć podręczna została wyłączona dla tego żądania",
+  "stats.event.uncompressed": "Kompresja została wyłączona dla tego żądania",
+  "stats.event.rule": "Reguła zmieniła to żądanie",
+  "stats.event.script": "Skrypt zmienił to żądanie",
+  "stats.event.breakpoint": "Punkt przerwania wstrzymał to żądanie",
+  "stats.event.retry": "Żądanie zostało wysłane ponownie",
+  "stats.event.tls": "Certyfikat serwera nie był zaufany",
+  "stats.event.opaque": "Odszyfrowanie zostało pominięte dla tego połączenia",
+  "stats.eventAt": "+{0} ms",
+  "stats.eventFailure": "Niepowodzenie: {0}"
 }

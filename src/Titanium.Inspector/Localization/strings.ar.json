@@ -396,5 +396,15 @@
   "stats.slowestSession": "الأبطأ: {0} مللي ثانية",
   "stats.truncated": "أول {0} جلسات",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "أخرى {0}"
+  "stats.statusOther": "أخرى {0}",
+  "stats.event.cache": "تم تعطيل التخزين المؤقت لهذا الطلب",
+  "stats.event.uncompressed": "تم إيقاف الضغط لهذا الطلب",
+  "stats.event.script": "غيّر برنامج نصي هذا الطلب",
+  "stats.event.rule": "غيّرت قاعدة هذا الطلب",
+  "stats.event.breakpoint": "أوقفت نقطة توقف هذا الطلب مؤقتا",
+  "stats.event.retry": "أُعيد إرسال الطلب",
+  "stats.event.tls": "شهادة الخادم لم تكن موثوقة",
+  "stats.event.opaque": "تم تخطي فك التشفير لهذا الاتصال",
+  "stats.eventAt": "+{0} مللي ثانية",
+  "stats.eventFailure": "فشل: {0}"
 }

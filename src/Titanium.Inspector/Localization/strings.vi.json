@@ -396,5 +396,15 @@
   "stats.slowestSession": "Chậm nhất: {0} ms",
   "stats.truncated": "{0} phiên đầu",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "Khác {0}"
+  "stats.statusOther": "Khác {0}",
+  "stats.event.cache": "Đã tắt bộ nhớ đệm cho yêu cầu này",
+  "stats.event.uncompressed": "Đã tắt nén cho yêu cầu này",
+  "stats.event.script": "Một tập lệnh đã đổi yêu cầu này",
+  "stats.event.rule": "Một quy tắc đã đổi yêu cầu này",
+  "stats.event.breakpoint": "Một điểm ngắt đã tạm dừng yêu cầu này",
+  "stats.event.retry": "Yêu cầu đã được gửi lại",
+  "stats.event.tls": "Chứng chỉ máy chủ không được tin cậy",
+  "stats.event.opaque": "Đã bỏ qua giải mã cho kết nối này",
+  "stats.eventAt": "+{0} ms",
+  "stats.eventFailure": "Thất bại: {0}"
 }

@@ -910,6 +910,7 @@ public sealed class SessionStore : IDisposable
             TimingEstimated = snap.TimingEstimated,
             TimingRecorded = snap.TimingRecorded,
             TimingAttempts = snap.TimingAttempts,
+            Events = snap.Events is { Count: > 0 } events ? events.ToArray() : null,
             FailureReason = snap.FailureReason,
         };
 

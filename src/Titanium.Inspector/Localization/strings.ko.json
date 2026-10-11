@@ -396,5 +396,15 @@
   "stats.slowestSession": "가장 느림: {0} ms",
   "stats.truncated": "처음 {0}개 세션",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "기타 {0}"
+  "stats.statusOther": "기타 {0}",
+  "stats.event.cache": "이 요청의 캐시가 꺼졌습니다",
+  "stats.event.uncompressed": "이 요청의 압축이 꺼졌습니다",
+  "stats.event.script": "스크립트가 이 요청을 바꿨습니다",
+  "stats.event.rule": "규칙이 이 요청을 바꿨습니다",
+  "stats.event.breakpoint": "중단점이 이 요청을 일시 중지했습니다",
+  "stats.event.retry": "요청이 다시 전송되었습니다",
+  "stats.event.tls": "서버 인증서를 신뢰할 수 없었습니다",
+  "stats.event.opaque": "이 연결에서는 암호 해독을 건너뛰었습니다",
+  "stats.eventAt": "+{0} ms",
+  "stats.eventFailure": "실패: {0}"
 }

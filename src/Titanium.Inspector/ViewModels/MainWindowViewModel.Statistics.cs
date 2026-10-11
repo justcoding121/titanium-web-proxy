@@ -7,6 +7,18 @@ using Titanium.Inspector.Services;
 namespace Titanium.Inspector.ViewModels;
 
 /// <summary>One Statistics legend row. Built only while the Statistics tab is selected.</summary>
+/// <summary>One Statistics event line. Built only while the Statistics tab is selected.</summary>
+public sealed class StatisticsEventRow
+{
+    public string TimeText { get; init; } = "";
+
+    public string Text { get; init; } = "";
+
+    public bool IsFailure { get; init; }
+
+    public bool ShowPlain => !IsFailure;
+}
+
 public sealed class StatisticsPhaseRow
 {
     public string Label { get; init; } = "";
@@ -31,7 +43,9 @@ public sealed partial class MainWindowViewModel
     private string _statisticsCopyText = "";
     private string _statisticsBarName = "";
     private bool _showStatisticsBar;
+    private bool _showStatisticsEvents;
     private IReadOnlyList<StatisticsPhaseRow> _statisticsPhases = [];
+    private IReadOnlyList<StatisticsEventRow> _statisticsEvents = [];
 
     public ICommand CopyStatisticsCommand => _copyStatisticsCommand ??= Cmd(CopyStatisticsAsync);
 
@@ -61,6 +75,18 @@ public sealed partial class MainWindowViewModel
         private set => SetField(ref _statisticsPhases, value);
     }
 
+    public IReadOnlyList<StatisticsEventRow> StatisticsEvents
+    {
+        get => _statisticsEvents;
+        private set => SetField(ref _statisticsEvents, value);
+    }
+
+    public bool ShowStatisticsEvents
+    {
+        get => _showStatisticsEvents;
+        private set => SetField(ref _showStatisticsEvents, value);
+    }
+
     private void RefreshStatisticsIfVisible()
     {
         if (_selectedInspectTabIndex != (int)InspectTab.Statistics)
@@ -68,8 +94,15 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        var model = SessionStatistics.Build(StatisticsSelection());
-        ApplyStatistics(model);
+        var selection = StatisticsSelection();
+        var model = SessionStatistics.Build(selection);
+        IReadOnlyList<SessionEventNote>? events = null;
+        if (selection.Count == 1)
+        {
+            events = selection[0].Events;
+        }
+
+        ApplyStatistics(model, events);
     }
 
     private IReadOnlyList<SessionSnapshot> StatisticsSelection()
@@ -87,12 +120,13 @@ public sealed partial class MainWindowViewModel
         return _selectedSessions;
     }
 
-    private void ApplyStatistics(SessionStatistics.Model model)
+    private void ApplyStatistics(SessionStatistics.Model model, IReadOnlyList<SessionEventNote>? events)
     {
         var summary = new StringBuilder();
         var copy = new StringBuilder();
         IReadOnlyList<StatisticsPhaseRow> rows = [];
         var barName = "";
+        var eventRows = BuildEventRows(events);
 
         switch (model.Kind)
         {
@@ -116,11 +150,40 @@ public sealed partial class MainWindowViewModel
             AppendLine(copy, row.Label + "  " + row.MillisecondsText);
         }
 
+        foreach (var row in eventRows)
+        {
+            AppendLine(copy, row.TimeText + "  " + row.Text);
+        }
+
         StatisticsSummary = summary.ToString().TrimEnd();
         _statisticsCopyText = copy.ToString().TrimEnd();
         StatisticsPhases = rows;
         ShowStatisticsBar = rows.Count > 0 && rows.Any(row => row.BarWidth > 0);
         StatisticsBarName = barName;
+        StatisticsEvents = eventRows;
+        ShowStatisticsEvents = eventRows.Count > 0;
+    }
+
+    private static IReadOnlyList<StatisticsEventRow> BuildEventRows(IReadOnlyList<SessionEventNote>? events)
+    {
+        if (events is null || events.Count == 0)
+        {
+            return [];
+        }
+
+        var rows = new List<StatisticsEventRow>(Math.Min(events.Count, SessionEventBuffer.Cap));
+        foreach (var note in events.Take(SessionEventBuffer.Cap))
+        {
+            var sentence = LanguageService.Get(note.Key);
+            rows.Add(new StatisticsEventRow
+            {
+                TimeText = LanguageService.Format("stats.eventAt", FormatMs(note.OffsetMs)),
+                Text = note.Failure ? LanguageService.Format("stats.eventFailure", sentence) : sentence,
+                IsFailure = note.Failure,
+            });
+        }
+
+        return rows;
     }
 
     private static void AppendPhaseSummary(

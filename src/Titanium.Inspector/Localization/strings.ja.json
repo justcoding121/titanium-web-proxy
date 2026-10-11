@@ -396,5 +396,15 @@
   "stats.slowestSession": "最も遅い: {0} ms",
   "stats.truncated": "最初の {0} セッション",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "その他 {0}"
+  "stats.statusOther": "その他 {0}",
+  "stats.event.cache": "この要求ではキャッシュを無効にしました",
+  "stats.event.uncompressed": "この要求では圧縮をオフにしました",
+  "stats.event.script": "スクリプトがこの要求を変更しました",
+  "stats.event.rule": "ルールがこの要求を変更しました",
+  "stats.event.breakpoint": "ブレークポイントがこの要求を一時停止しました",
+  "stats.event.retry": "要求が再送されました",
+  "stats.event.tls": "サーバー証明書は信頼されていませんでした",
+  "stats.event.opaque": "この接続では復号を省略しました",
+  "stats.eventAt": "+{0} ms",
+  "stats.eventFailure": "失敗: {0}"
 }

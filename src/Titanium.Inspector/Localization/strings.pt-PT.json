@@ -396,5 +396,15 @@
   "stats.slowestSession": "Mais lenta: {0} ms",
   "stats.truncated": "Primeiras {0} sessões",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "Outros {0}"
+  "stats.statusOther": "Outros {0}",
+  "stats.event.cache": "A cache foi desativada para este pedido",
+  "stats.event.uncompressed": "A compressão foi desativada para este pedido",
+  "stats.event.script": "Um script alterou este pedido",
+  "stats.event.rule": "Uma regra alterou este pedido",
+  "stats.event.breakpoint": "Um ponto de interrupção pausou este pedido",
+  "stats.event.retry": "O pedido foi enviado outra vez",
+  "stats.event.tls": "O certificado do servidor não era de confiança",
+  "stats.event.opaque": "A desencriptação foi ignorada nesta ligação",
+  "stats.eventAt": "+{0} ms",
+  "stats.eventFailure": "Falhou: {0}"
 }

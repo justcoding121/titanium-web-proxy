@@ -343,6 +343,12 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     /// <summary>True when <see cref="HarTimingMap"/> filled the phase fields for this session.</summary>
     public bool TimingRecorded { get; set; }
 
+    /// <summary>
+    /// Decision notes frozen once at completion. Null when nothing unusual happened.
+    /// The list is a copy; callers do not mutate it.
+    /// </summary>
+    public IReadOnlyList<SessionEventNote>? Events { get; set; }
+
     /// <summary>Upstream attempts. Above one means earlier attempts were folded into <see cref="BlockedMs"/>.</summary>
     public int TimingAttempts { get; set; }
 

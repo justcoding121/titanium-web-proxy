@@ -396,5 +396,15 @@
   "stats.slowestSession": "Långsammaste: {0} ms",
   "stats.truncated": "Första {0} sessionerna",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "Övriga {0}"
+  "stats.statusOther": "Övriga {0}",
+  "stats.event.cache": "Cache stängdes av för den här begäran",
+  "stats.event.uncompressed": "Komprimering stängdes av för den här begäran",
+  "stats.event.script": "Ett skript ändrade den här begäran",
+  "stats.event.rule": "En regel ändrade den här begäran",
+  "stats.event.breakpoint": "En brytpunkt pausade den här begäran",
+  "stats.event.retry": "Begäran skickades igen",
+  "stats.event.tls": "Servercertifikatet var inte betrott",
+  "stats.event.opaque": "Dekryptering hoppades över för den här anslutningen",
+  "stats.eventAt": "+{0} ms",
+  "stats.eventFailure": "Misslyckades: {0}"
 }

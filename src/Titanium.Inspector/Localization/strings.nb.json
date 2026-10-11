@@ -396,5 +396,15 @@
   "stats.slowestSession": "Tregeste: {0} ms",
   "stats.truncated": "Første {0} økter",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "Andre {0}"
+  "stats.statusOther": "Andre {0}",
+  "stats.event.cache": "Hurtigbuffer ble slått av for denne forespørselen",
+  "stats.event.uncompressed": "Komprimering ble slått av for denne forespørselen",
+  "stats.event.script": "Et skript endret denne forespørselen",
+  "stats.event.rule": "En regel endret denne forespørselen",
+  "stats.event.breakpoint": "Et brytepunkt satte denne forespørselen på pause",
+  "stats.event.retry": "Forespørselen ble sendt på nytt",
+  "stats.event.tls": "Serversertifikatet var ikke klarert",
+  "stats.event.opaque": "Dekryptering ble hoppet over for denne tilkoblingen",
+  "stats.eventAt": "+{0} ms",
+  "stats.eventFailure": "Mislyktes: {0}"
 }

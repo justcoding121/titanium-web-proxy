@@ -396,5 +396,15 @@
   "stats.slowestSession": "सबसे धीमा: {0} मि.से.",
   "stats.truncated": "पहले {0} सत्र",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "अन्य {0}"
+  "stats.statusOther": "अन्य {0}",
+  "stats.event.cache": "इस अनुरोध के लिए कैश बंद किया गया",
+  "stats.event.uncompressed": "इस अनुरोध के लिए संपीड़न बंद किया गया",
+  "stats.event.script": "एक स्क्रिप्ट ने यह अनुरोध बदला",
+  "stats.event.rule": "एक नियम ने यह अनुरोध बदला",
+  "stats.event.breakpoint": "एक ब्रेकपॉइंट ने यह अनुरोध रोका",
+  "stats.event.retry": "अनुरोध फिर भेजा गया",
+  "stats.event.tls": "सर्वर प्रमाणपत्र विश्वसनीय नहीं था",
+  "stats.event.opaque": "इस कनेक्शन के लिए डिक्रिप्शन छोड़ा गया",
+  "stats.eventAt": "+{0} मि.से.",
+  "stats.eventFailure": "विफल: {0}"
 }

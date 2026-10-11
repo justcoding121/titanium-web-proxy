@@ -396,5 +396,15 @@
   "stats.slowestSession": "Найповільніший: {0} мс",
   "stats.truncated": "Перші {0} сеансів",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "Інші {0}"
+  "stats.statusOther": "Інші {0}",
+  "stats.event.cache": "Кеш вимкнено для цього запиту",
+  "stats.event.uncompressed": "Стиснення вимкнено для цього запиту",
+  "stats.event.script": "Скрипт змінив цей запит",
+  "stats.event.rule": "Правило змінило цей запит",
+  "stats.event.breakpoint": "Точка зупину призупинила цей запит",
+  "stats.event.retry": "Запит надіслано знову",
+  "stats.event.tls": "Сертифікат сервера не був довіреним",
+  "stats.event.opaque": "Розшифрування пропущено для цього з’єднання",
+  "stats.eventAt": "+{0} мс",
+  "stats.eventFailure": "Збій: {0}"
 }

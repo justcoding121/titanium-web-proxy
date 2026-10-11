@@ -396,5 +396,15 @@
   "stats.slowestSession": "La più lenta: {0} ms",
   "stats.truncated": "Prime {0} sessioni",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "Altro {0}"
+  "stats.statusOther": "Altro {0}",
+  "stats.event.cache": "La cache è stata disattivata per questa richiesta",
+  "stats.event.uncompressed": "La compressione è stata disattivata per questa richiesta",
+  "stats.event.script": "Uno script ha modificato questa richiesta",
+  "stats.event.rule": "Una regola ha modificato questa richiesta",
+  "stats.event.breakpoint": "Un punto di interruzione ha messo in pausa questa richiesta",
+  "stats.event.retry": "La richiesta è stata inviata di nuovo",
+  "stats.event.tls": "Il certificato del server non era attendibile",
+  "stats.event.opaque": "La decifratura è stata saltata per questa connessione",
+  "stats.eventAt": "+{0} ms",
+  "stats.eventFailure": "Non riuscito: {0}"
 }

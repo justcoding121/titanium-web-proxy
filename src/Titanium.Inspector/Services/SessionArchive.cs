@@ -407,6 +407,22 @@ public static class SessionArchive
             };
         }
 
+        if (s.Events is { Count: > 0 } events)
+        {
+            var notes = new JsonArray();
+            foreach (var note in events.Take(SessionEventBuffer.Cap))
+            {
+                notes.Add(new JsonObject
+                {
+                    ["ms"] = note.OffsetMs,
+                    ["key"] = note.Key,
+                    ["failure"] = note.Failure,
+                });
+            }
+
+            node["events"] = notes;
+        }
+
         return node;
     }
 
@@ -419,6 +435,7 @@ public static class SessionArchive
 
         ApplyInspectorIdentity(ext, snap);
         ApplyInspectorTiming(ext, snap);
+        ApplyInspectorEvents(ext, snap);
         ApplyInspectorCapture(ext, snap);
         ApplyInspectorFlags(ext, snap);
         ApplyInspectorBodies(ext, snap);
@@ -430,6 +447,45 @@ public static class SessionArchive
             && ext.ValueKind == JsonValueKind.Object
             && ext.TryGetProperty("timing", out var timing)
             && timing.ValueKind == JsonValueKind.Object;
+    }
+
+    private static void ApplyInspectorEvents(JsonElement ext, SessionSnapshot snap)
+    {
+        if (!ext.TryGetProperty("events", out var events) || events.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        var notes = new List<SessionEventNote>();
+        foreach (var item in events.EnumerateArray())
+        {
+            if (notes.Count >= SessionEventBuffer.Cap || item.ValueKind != JsonValueKind.Object)
+            {
+                if (notes.Count >= SessionEventBuffer.Cap)
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            var key = item.TryGetProperty("key", out var keyEl) ? keyEl.GetString() : null;
+            if (string.IsNullOrEmpty(key))
+            {
+                continue;
+            }
+
+            var milliseconds = 0d;
+            if (item.TryGetProperty("ms", out var msEl) && msEl.TryGetDouble(out var value))
+            {
+                milliseconds = Math.Max(0, value);
+            }
+
+            var failure = item.TryGetProperty("failure", out var failureEl) && failureEl.ValueKind == JsonValueKind.True;
+            notes.Add(new SessionEventNote(milliseconds, key, failure));
+        }
+
+        snap.Events = notes.Count == 0 ? null : notes;
     }
 
     private static void ApplyInspectorTiming(JsonElement ext, SessionSnapshot snap)

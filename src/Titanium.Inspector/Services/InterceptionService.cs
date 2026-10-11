@@ -27,6 +27,7 @@ public sealed class InterceptionService : IDisposable
 
     private long _nextId;
     private readonly ConcurrentDictionary<object, SessionSnapshot> _live = new();
+    private readonly ConcurrentDictionary<object, SessionEventBuffer> _eventNotes = new();
     private readonly ISystemProxyController _systemProxy;
     private ProxyServer? _proxy;
     private ExplicitProxyEndPoint? _endPoint;
@@ -1716,6 +1717,11 @@ public sealed class InterceptionService : IDisposable
             // Opaque HTTPS (DecryptHttps=false) never hits BeforeRequest - publish CONNECT here
             // so the session list matches Fiddler when decryption is off.
             var snap = CreateTunnelSnapshot(e, opaqueReason);
+            if (opaqueReason != OpaqueTunnelReason.None)
+            {
+                Note(e.HttpClient, "stats.event.opaque", failure: false);
+            }
+
             AttachTunnelByteCounters(e, snap);
             _live[e.HttpClient] = snap;
             SessionCaptured?.Invoke(this, snap);
@@ -1739,6 +1745,7 @@ public sealed class InterceptionService : IDisposable
         try
         {
             ApplyConnectCompletion(snap, e);
+            PublishEvents(snap, e.HttpClient);
             SessionUpdated?.Invoke(this, snap);
         }
         catch
@@ -1787,7 +1794,21 @@ public sealed class InterceptionService : IDisposable
             }
 
             // Before scripts so the grid snapshot and the server see the same headers.
-            RequestCaptureTweaks.Apply(e.HttpClient.Request, DisableCaching, ForceUncompressed);
+            var tweaks = RequestCaptureTweaks.Apply(e.HttpClient.Request, DisableCaching, ForceUncompressed);
+            if (tweaks.HasFlag(RequestTweakChange.Caching))
+            {
+                Note(e.HttpClient, "stats.event.cache", failure: false);
+            }
+
+            if (tweaks.HasFlag(RequestTweakChange.Encoding))
+            {
+                Note(e.HttpClient, "stats.event.uncompressed", failure: false);
+            }
+
+            if (SessionScriptHost.HasEffect(ScriptOnRequest))
+            {
+                Note(e.HttpClient, "stats.event.script", failure: false);
+            }
 
             if (SessionScriptHost.ApplyOnRequest(ScriptOnRequest, e))
             {
@@ -1829,6 +1850,7 @@ public sealed class InterceptionService : IDisposable
                 }
 
                 autoResponded = true;
+                Note(e.HttpClient, "stats.event.rule", failure: false);
             }
 
             // Map Remote: rewrite URL before origin (only when not already answered).
@@ -1838,6 +1860,7 @@ public sealed class InterceptionService : IDisposable
                 !string.IsNullOrEmpty(rewritten))
             {
                 e.HttpClient.Request.Url = rewritten;
+                Note(e.HttpClient, "stats.event.rule", failure: false);
             }
 
             if (Breakpoints is { Enabled: true } &&
@@ -1845,6 +1868,7 @@ public sealed class InterceptionService : IDisposable
                  GraphQlOperationMatcher.MatchesOperation(requestBody, Breakpoints.GraphQlOperationName)) &&
                 Breakpoints.TryEnter(CreatePreviewSnapshot(e, assignId: false), out var hit))
             {
+                Note(e.HttpClient, "stats.event.breakpoint", failure: false);
                 var action = await hit.WaitAsync(CancellationToken.None);
                 if (action == BreakpointAction.Abort)
                 {
@@ -1894,12 +1918,18 @@ public sealed class InterceptionService : IDisposable
                 }
             }
 
+            if (SessionScriptHost.HasEffect(ScriptOnResponse))
+            {
+                Note(e.HttpClient, "stats.event.script", failure: false);
+            }
+
             SessionScriptHost.ApplyOnResponse(ScriptOnResponse, e);
 
             if (BreakpointOnResponse &&
                 Breakpoints is { Enabled: true } &&
                 Breakpoints.TryEnter(CreatePreviewSnapshot(e, assignId: false), out var hit))
             {
+                Note(e.HttpClient, "stats.event.breakpoint", failure: false);
                 var action = await hit.WaitAsync(CancellationToken.None);
                 if (action == BreakpointAction.Abort)
                 {
@@ -1954,6 +1984,12 @@ public sealed class InterceptionService : IDisposable
             // Response/reason first, duration last: DurationMs is what marks the session as finished.
             RecordMissingResponse(snap, e);
             ApplyTiming(snap, e.Timing, e.UpstreamConnectionTiming, snap.StartedUtc);
+            if (e.Timing?.AttemptCount > 1)
+            {
+                Note(e.HttpClient, "stats.event.retry", failure: false);
+            }
+
+            PublishEvents(snap, e.HttpClient);
             SessionUpdated?.Invoke(this, snap);
         }
 
@@ -2041,6 +2077,11 @@ public sealed class InterceptionService : IDisposable
         // Accept valid public chains; optionally ignore all errors when the user opts in.
         e.IsValid = IgnoreServerCertificateErrors
                     || e.SslPolicyErrors == SslPolicyErrors.None;
+        if (e.SslPolicyErrors != SslPolicyErrors.None)
+        {
+            Note(e.Session.HttpClient, "stats.event.tls", failure: true);
+        }
+
         return Task.CompletedTask;
     }
 
@@ -2798,6 +2839,23 @@ public sealed class InterceptionService : IDisposable
 
         // BodySize is UI-only best-effort; concurrent writers both compute a valid total.
         snap.BodySize = snap.SentBytes + snap.ReceivedBytes;
+    }
+
+    private void Note(object key, string localizationKey, bool failure)
+    {
+        var buffer = _eventNotes.GetOrAdd(key, static _ => new SessionEventBuffer());
+        buffer.Add(localizationKey, failure);
+    }
+
+    private void PublishEvents(SessionSnapshot snap, object key)
+    {
+        if (!_eventNotes.TryRemove(key, out var buffer))
+        {
+            return;
+        }
+
+        var notes = buffer.Freeze(snap.StartedUtc);
+        snap.Events = notes.Count == 0 ? null : notes;
     }
 
     private static void ApplyTiming(

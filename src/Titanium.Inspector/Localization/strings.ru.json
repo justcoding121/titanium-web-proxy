@@ -396,5 +396,15 @@
   "stats.slowestSession": "Самый медленный: {0} мс",
   "stats.truncated": "Первые {0} сеансов",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "Другие {0}"
+  "stats.statusOther": "Другие {0}",
+  "stats.event.cache": "Кэш отключён для этого запроса",
+  "stats.event.uncompressed": "Сжатие выключено для этого запроса",
+  "stats.event.script": "Скрипт изменил этот запрос",
+  "stats.event.rule": "Правило изменило этот запрос",
+  "stats.event.breakpoint": "Точка останова приостановила этот запрос",
+  "stats.event.retry": "Запрос отправлен снова",
+  "stats.event.tls": "Сертификат сервера не был доверенным",
+  "stats.event.opaque": "Расшифровка пропущена для этого соединения",
+  "stats.eventAt": "+{0} мс",
+  "stats.eventFailure": "Сбой: {0}"
 }

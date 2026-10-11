@@ -396,5 +396,15 @@
   "stats.slowestSession": "最慢：{0} 毫秒",
   "stats.truncated": "前 {0} 個工作階段",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "其他 {0}"
+  "stats.statusOther": "其他 {0}",
+  "stats.event.cache": "此要求已停用快取",
+  "stats.event.uncompressed": "此要求已關閉壓縮",
+  "stats.event.script": "指令碼變更了此要求",
+  "stats.event.rule": "規則變更了此要求",
+  "stats.event.breakpoint": "中斷點暫停了此要求",
+  "stats.event.retry": "要求已再次傳送",
+  "stats.event.tls": "伺服器憑證不受信任",
+  "stats.event.opaque": "此連線已略過解密",
+  "stats.eventAt": "+{0} 毫秒",
+  "stats.eventFailure": "失敗：{0}"
 }

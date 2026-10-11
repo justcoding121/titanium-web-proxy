@@ -396,5 +396,15 @@
   "stats.slowestSession": "Hitain: {0} ms",
   "stats.truncated": "Ensimmäiset {0} istuntoa",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "Muut {0}"
+  "stats.statusOther": "Muut {0}",
+  "stats.event.cache": "Välimuisti poistettiin käytöstä tälle pyynnölle",
+  "stats.event.uncompressed": "Pakkaus poistettiin tältä pyynnöltä",
+  "stats.event.script": "Komentosarja muutti tätä pyyntöä",
+  "stats.event.rule": "Sääntö muutti tätä pyyntöä",
+  "stats.event.breakpoint": "Keskeytyskohta pysäytti tämän pyynnön",
+  "stats.event.retry": "Pyyntö lähetettiin uudelleen",
+  "stats.event.tls": "Palvelimen varmennetta ei luotettu",
+  "stats.event.opaque": "Salauksen purku ohitettiin tälle yhteydelle",
+  "stats.eventAt": "+{0} ms",
+  "stats.eventFailure": "Epäonnistui: {0}"
 }

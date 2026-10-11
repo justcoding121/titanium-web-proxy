@@ -396,5 +396,15 @@
   "stats.slowestSession": "Langzaamste: {0} ms",
   "stats.truncated": "Eerste {0} sessies",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "Overig {0}"
+  "stats.statusOther": "Overig {0}",
+  "stats.event.cache": "Caching is uitgeschakeld voor dit verzoek",
+  "stats.event.uncompressed": "Compressie is uitgezet voor dit verzoek",
+  "stats.event.script": "Een script heeft dit verzoek gewijzigd",
+  "stats.event.rule": "Een regel heeft dit verzoek gewijzigd",
+  "stats.event.breakpoint": "Een breekpunt heeft dit verzoek gepauzeerd",
+  "stats.event.retry": "Het verzoek is opnieuw verzonden",
+  "stats.event.tls": "Het servercertificaat werd niet vertrouwd",
+  "stats.event.opaque": "Ontsleuteling is overgeslagen voor deze verbinding",
+  "stats.eventAt": "+{0} ms",
+  "stats.eventFailure": "Mislukt: {0}"
 }

@@ -396,5 +396,15 @@
   "stats.slowestSession": "Langsamste: {0} ms",
   "stats.truncated": "Erste {0} Sitzungen",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "Andere {0}"
+  "stats.statusOther": "Andere {0}",
+  "stats.event.cache": "Zwischenspeichern wurde für diese Anfrage ausgeschaltet",
+  "stats.event.uncompressed": "Komprimierung wurde für diese Anfrage ausgeschaltet",
+  "stats.event.script": "Ein Skript hat diese Anfrage geändert",
+  "stats.event.rule": "Eine Regel hat diese Anfrage geändert",
+  "stats.event.breakpoint": "Ein Haltepunkt hat diese Anfrage angehalten",
+  "stats.event.retry": "Die Anfrage wurde erneut gesendet",
+  "stats.event.tls": "Das Serverzertifikat war nicht vertrauenswürdig",
+  "stats.event.opaque": "Die Entschlüsselung wurde für diese Verbindung übersprungen",
+  "stats.eventAt": "+{0} ms",
+  "stats.eventFailure": "Fehlgeschlagen: {0}"
 }

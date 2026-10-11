@@ -396,5 +396,15 @@
   "stats.slowestSession": "ช้าที่สุด: {0} มิลลิวินาที",
   "stats.truncated": "{0} เซสชันแรก",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "อื่น ๆ {0}"
+  "stats.statusOther": "อื่น ๆ {0}",
+  "stats.event.cache": "ปิดแคชสำหรับคำขอนี้",
+  "stats.event.uncompressed": "ปิดการบีบอัดสำหรับคำขอนี้",
+  "stats.event.script": "สคริปต์เปลี่ยนคำขอนี้",
+  "stats.event.rule": "กฎเปลี่ยนคำขอนี้",
+  "stats.event.breakpoint": "เบรกพอยต์หยุดคำขอนี้ชั่วคราว",
+  "stats.event.retry": "ส่งคำขออีกครั้ง",
+  "stats.event.tls": "ไม่เชื่อถือใบรับรองของเซิร์ฟเวอร์",
+  "stats.event.opaque": "ข้ามการถอดรหัสสำหรับการเชื่อมต่อนี้",
+  "stats.eventAt": "+{0} มิลลิวินาที",
+  "stats.eventFailure": "ล้มเหลว: {0}"
 }

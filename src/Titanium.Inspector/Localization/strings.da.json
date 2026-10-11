@@ -396,5 +396,15 @@
   "stats.slowestSession": "Langsomste: {0} ms",
   "stats.truncated": "Første {0} sessioner",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "Andre {0}"
+  "stats.statusOther": "Andre {0}",
+  "stats.event.cache": "Cache blev slået fra for denne anmodning",
+  "stats.event.uncompressed": "Komprimering blev slået fra for denne anmodning",
+  "stats.event.script": "Et script ændrede denne anmodning",
+  "stats.event.rule": "En regel ændrede denne anmodning",
+  "stats.event.breakpoint": "Et breakpoint satte denne anmodning på pause",
+  "stats.event.retry": "Anmodningen blev sendt igen",
+  "stats.event.tls": "Servercertifikatet var ikke betroet",
+  "stats.event.opaque": "Dekryptering blev sprunget over for denne forbindelse",
+  "stats.eventAt": "+{0} ms",
+  "stats.eventFailure": "Mislykkedes: {0}"
 }

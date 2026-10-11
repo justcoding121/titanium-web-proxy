@@ -396,5 +396,15 @@
   "stats.slowestSession": "En yavaş: {0} ms",
   "stats.truncated": "İlk {0} oturum",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "Diğer {0}"
+  "stats.statusOther": "Diğer {0}",
+  "stats.event.cache": "Bu istek için önbellek kapatıldı",
+  "stats.event.uncompressed": "Bu istek için sıkıştırma kapatıldı",
+  "stats.event.script": "Bir betik bu isteği değiştirdi",
+  "stats.event.rule": "Bir kural bu isteği değiştirdi",
+  "stats.event.breakpoint": "Bir kesme noktası bu isteği duraklattı",
+  "stats.event.retry": "İstek yeniden gönderildi",
+  "stats.event.tls": "Sunucu sertifikası güvenilir değildi",
+  "stats.event.opaque": "Bu bağlantı için şifre çözme atlandı",
+  "stats.eventAt": "+{0} ms",
+  "stats.eventFailure": "Başarısız: {0}"
 }

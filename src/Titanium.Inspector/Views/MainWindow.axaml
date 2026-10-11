@@ -868,6 +868,21 @@
                           </DataTemplate>
                         </ItemsControl.ItemTemplate>
                       </ItemsControl>
+                      <ItemsControl ItemsSource="{Binding StatisticsEvents}"
+                                    IsVisible="{Binding ShowStatisticsEvents}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:StatisticsEventRow">
+                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,2">
+                              <TextBlock Text="{Binding TimeText}" MinWidth="72" Opacity="0.75" />
+                              <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
+                                         Foreground="{DynamicResource InspectorErrorTextBrush}"
+                                         IsVisible="{Binding IsFailure}" />
+                              <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
+                                         IsVisible="{Binding ShowPlain}" />
+                            </StackPanel>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
                       <Button Content="{loc:Loc stats.copy}" Command="{Binding CopyStatisticsCommand}"
                               HorizontalAlignment="Left"
                               AutomationProperties.AutomationId="StatisticsCopy" />

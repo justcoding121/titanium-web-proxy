@@ -396,5 +396,15 @@
   "stats.slowestSession": "Paling lambat: {0} ms",
   "stats.truncated": "{0} sesi pertama",
   "stats.status": "{0}xx {1}",
-  "stats.statusOther": "Lainnya {0}"
+  "stats.statusOther": "Lainnya {0}",
+  "stats.event.cache": "Cache dimatikan untuk permintaan ini",
+  "stats.event.uncompressed": "Kompresi dimatikan untuk permintaan ini",
+  "stats.event.script": "Skrip mengubah permintaan ini",
+  "stats.event.rule": "Aturan mengubah permintaan ini",
+  "stats.event.breakpoint": "Breakpoint menjeda permintaan ini",
+  "stats.event.retry": "Permintaan dikirim lagi",
+  "stats.event.tls": "Sertifikat server tidak dipercaya",
+  "stats.event.opaque": "Dekripsi dilewati untuk koneksi ini",
+  "stats.eventAt": "+{0} ms",
+  "stats.eventFailure": "Gagal: {0}"
 }
