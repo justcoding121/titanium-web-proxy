@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "همان اتصال",
   "ctx.findRelatedReferer": "همان Referer",
   "ctx.findRelatedRedirect": "زنجیره تغییر مسیر",
-  "filter.relatedChip": "مرتبط ({0}، نما)"
+  "filter.relatedChip": "مرتبط ({0}، نما)",
+  "menu.alwaysOnTop": "همیشه در بالا",
+  "menu.alwaysOnTopTip": "پنجره اصلی را بالای پنجره‌های دیگر نگه می‌دارد. برخی میزکارهای Wayland این را نادیده می‌گیرند."
 }

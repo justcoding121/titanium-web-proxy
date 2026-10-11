@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "Stejné připojení",
   "ctx.findRelatedReferer": "Stejný Referer",
   "ctx.findRelatedRedirect": "Řetězec přesměrování",
-  "filter.relatedChip": "Související ({0}, snímek)"
+  "filter.relatedChip": "Související ({0}, snímek)",
+  "menu.alwaysOnTop": "Vždy navrchu",
+  "menu.alwaysOnTopTip": "Ponechat hlavní okno nad ostatními. Některé plochy Wayland to ignorují."
 }

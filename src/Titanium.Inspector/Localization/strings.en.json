@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "Same connection",
   "ctx.findRelatedReferer": "Same Referer",
   "ctx.findRelatedRedirect": "Redirect chain",
-  "filter.relatedChip": "Related ({0}, snapshot)"
+  "filter.relatedChip": "Related ({0}, snapshot)",
+  "menu.alwaysOnTop": "Always on top",
+  "menu.alwaysOnTopTip": "Keep the main window above other windows. Some Wayland desktops ignore this."
 }

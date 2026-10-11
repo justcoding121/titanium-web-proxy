@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "同じ接続",
   "ctx.findRelatedReferer": "同じ Referer",
   "ctx.findRelatedRedirect": "リダイレクトの連鎖",
-  "filter.relatedChip": "関連 ({0}、その時点)"
+  "filter.relatedChip": "関連 ({0}、その時点)",
+  "menu.alwaysOnTop": "常に手前に表示",
+  "menu.alwaysOnTopTip": "メイン ウィンドウを他のウィンドウより手前に保ちます。一部の Wayland デスクトップはこれを無視します。"
 }

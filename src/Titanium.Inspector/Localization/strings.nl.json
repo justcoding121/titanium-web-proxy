@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "Dezelfde verbinding",
   "ctx.findRelatedReferer": "Dezelfde Referer",
   "ctx.findRelatedRedirect": "Omleidingsketen",
-  "filter.relatedChip": "Gerelateerd ({0}, momentopname)"
+  "filter.relatedChip": "Gerelateerd ({0}, momentopname)",
+  "menu.alwaysOnTop": "Altijd op voorgrond",
+  "menu.alwaysOnTopTip": "Houd het hoofdvenster boven andere vensters. Sommige Wayland-bureaubladen negeren dit."
 }

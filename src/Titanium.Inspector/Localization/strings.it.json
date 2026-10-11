@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "Stessa connessione",
   "ctx.findRelatedReferer": "Stesso Referer",
   "ctx.findRelatedRedirect": "Catena di reindirizzamento",
-  "filter.relatedChip": "Correlate ({0}, istantanea)"
+  "filter.relatedChip": "Correlate ({0}, istantanea)",
+  "menu.alwaysOnTop": "Sempre in primo piano",
+  "menu.alwaysOnTopTip": "Tiene la finestra principale sopra le altre. Alcuni desktop Wayland lo ignorano."
 }

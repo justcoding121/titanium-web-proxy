@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "Azonos kapcsolat",
   "ctx.findRelatedReferer": "Azonos Referer",
   "ctx.findRelatedRedirect": "Átirányítási lánc",
-  "filter.relatedChip": "Kapcsolódó ({0}, pillanatkép)"
+  "filter.relatedChip": "Kapcsolódó ({0}, pillanatkép)",
+  "menu.alwaysOnTop": "Mindig felül",
+  "menu.alwaysOnTopTip": "A főablak a többiek felett marad. Egyes Wayland asztalok figyelmen kívül hagyják."
 }

@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "Gleiche Verbindung",
   "ctx.findRelatedReferer": "Gleicher Referer",
   "ctx.findRelatedRedirect": "Weiterleitungskette",
-  "filter.relatedChip": "Zugehörig ({0}, Momentaufnahme)"
+  "filter.relatedChip": "Zugehörig ({0}, Momentaufnahme)",
+  "menu.alwaysOnTop": "Immer im Vordergrund",
+  "menu.alwaysOnTopTip": "Das Hauptfenster über anderen Fenstern halten. Manche Wayland-Oberflächen ignorieren das."
 }

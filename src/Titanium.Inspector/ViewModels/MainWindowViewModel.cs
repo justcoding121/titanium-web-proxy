@@ -89,6 +89,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     private bool _debugFileLogging;
     /// <summary>Prefs as loaded from disk — used for auto-start so MenuItem binding cannot clobber before Opened.</summary>
     private bool _launchAutoStartCapture = true;
+    private bool _alwaysOnTop;
     private bool _launchAutoSystemProxyOnStart = true;
     private bool _decryptHttps;
     private bool _decryptHttpsBusy;
@@ -320,6 +321,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         OpenHttpsDecryptHostsCommand = Cmd(OpenExcludedHostsAsync);
         ExcludeHostCommand = Cmd(ExcludeHostAsync);
         ResetSettingsCommand = Cmd(ResetSettingsAsync);
+        ToggleAlwaysOnTopCommand = Cmd(() =>
+        {
+            AlwaysOnTop = !AlwaysOnTop;
+            return Task.CompletedTask;
+        });
         ResetCustomSettingsCommand = Cmd(ResetCustomSettingsAsync);
         ReplayCommand = Cmd(async () => await ReplaySelectedAsync());
         LoadFromSelectedCommand = Cmd(LoadFromSelectedAsync);
@@ -1538,6 +1544,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public ICommand ExcludeHostCommand { get; }
     public ICommand OpenExclusionSummaryCommand { get; }
     public ICommand ResetSettingsCommand { get; }
+    public ICommand ToggleAlwaysOnTopCommand { get; }
     public ICommand ResetCustomSettingsCommand { get; }
     public ICommand ReplayCommand { get; }
     public ICommand LoadFromSelectedCommand { get; }
@@ -2968,6 +2975,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     private void LoadFromSettings()
     {
         var s = _settings.Current;
+        // Before any child setter that calls PersistSettings, so a reset is not copied back.
+        _alwaysOnTop = s.AlwaysOnTop;
         BindAddress = s.BindAddress;
         BindPort = s.BindPort is >= 0 and <= 65535 ? s.BindPort : 8866;
         _launchAutoStartCapture = _autoStartCapture = s.AutoStartCapture;
@@ -3001,7 +3010,39 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         Breakpoints.UrlFilter = string.IsNullOrEmpty(s.BreakpointUrlFilter) ? "*" : s.BreakpointUrlFilter;
         Breakpoints.GraphQlOperationName = s.BreakpointGraphQlOperationName ?? "";
         ApplyInspectLayoutFromSettings();
+        ApplyAlwaysOnTop();
         RefreshCustomSettings();
+    }
+
+    /// <summary>Applies <see cref="AlwaysOnTop"/> to the main window only. Dialogs are left alone.</summary>
+    public void ApplyAlwaysOnTop()
+    {
+        if (TryGetMainWindow() is { } window)
+        {
+            ApplyAlwaysOnTop(window);
+        }
+    }
+
+    /// <summary>Applies the saved flag to <paramref name="window"/>. Call this from the main window only.</summary>
+    public void ApplyAlwaysOnTop(Window window) => window.Topmost = _alwaysOnTop;
+
+    /// <summary>Keep the main window above other windows. Saved immediately.</summary>
+    public bool AlwaysOnTop
+    {
+        get => _alwaysOnTop;
+        set
+        {
+            if (_alwaysOnTop == value)
+            {
+                return;
+            }
+
+            _alwaysOnTop = value;
+            _settings.Current.AlwaysOnTop = value;
+            _settings.Save();
+            ApplyAlwaysOnTop();
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AlwaysOnTop)));
+        }
     }
 
     private void NotifySettingsUiChanged()
@@ -3025,6 +3066,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThemeModeIsLight)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThemeModeIsDark)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThemeModeIsAutomatic)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AlwaysOnTop)));
         ThemeService.ApplyThemeMode(_settings.Current.ThemeMode);
     }
 
@@ -3103,6 +3145,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         s.BindAddress = BindAddress;
         s.BindPort = BindPort;
         s.AutoStartCapture = AutoStartCapture;
+        s.AlwaysOnTop = AlwaysOnTop;
         s.AutoSystemProxyOnStart = AutoSystemProxyOnStart;
         s.DecryptHttps = DecryptHttps;
         s.ProxyLoopback = _interception.ProxyLoopback;

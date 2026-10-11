@@ -330,6 +330,11 @@ public partial class MainWindow : Window
             vm.AttachStatusNotifier(new AvaloniaStatusNotifier(() => _notificationManager));
         }
 
+        if (DataContext is MainWindowViewModel alwaysOnTop)
+        {
+            alwaysOnTop.ApplyAlwaysOnTop(this);
+        }
+
         ApplyColumnVisibility();
         ApplySessionGridLayoutIfNeeded();
         HookThemeVariantChanged();

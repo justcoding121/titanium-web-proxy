@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "Cùng kết nối",
   "ctx.findRelatedReferer": "Cùng Referer",
   "ctx.findRelatedRedirect": "Chuỗi chuyển hướng",
-  "filter.relatedChip": "Liên quan ({0}, ảnh tại thời điểm)"
+  "filter.relatedChip": "Liên quan ({0}, ảnh tại thời điểm)",
+  "menu.alwaysOnTop": "Luôn ở trên",
+  "menu.alwaysOnTopTip": "Giữ cửa sổ chính phía trên các cửa sổ khác. Một số máy tính Wayland bỏ qua mục này."
 }

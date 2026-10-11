@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "То же соединение",
   "ctx.findRelatedReferer": "Тот же Referer",
   "ctx.findRelatedRedirect": "Цепочка перенаправлений",
-  "filter.relatedChip": "Связанные ({0}, снимок)"
+  "filter.relatedChip": "Связанные ({0}, снимок)",
+  "menu.alwaysOnTop": "Поверх остальных",
+  "menu.alwaysOnTopTip": "Держит главное окно над другими. Некоторые среды Wayland это игнорируют."
 }

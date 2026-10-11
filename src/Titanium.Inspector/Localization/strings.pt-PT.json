@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "A mesma ligação",
   "ctx.findRelatedReferer": "O mesmo Referer",
   "ctx.findRelatedRedirect": "Cadeia de redirecionamento",
-  "filter.relatedChip": "Relacionadas ({0}, instantâneo)"
+  "filter.relatedChip": "Relacionadas ({0}, instantâneo)",
+  "menu.alwaysOnTop": "Sempre visível",
+  "menu.alwaysOnTopTip": "Mantém a janela principal sobre as outras. Alguns ambientes Wayland ignoram isto."
 }

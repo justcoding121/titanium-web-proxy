@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "การเชื่อมต่อเดียวกัน",
   "ctx.findRelatedReferer": "Referer เดียวกัน",
   "ctx.findRelatedRedirect": "สายการเปลี่ยนทาง",
-  "filter.relatedChip": "ที่เกี่ยวข้อง ({0}, ภาพขณะนั้น)"
+  "filter.relatedChip": "ที่เกี่ยวข้อง ({0}, ภาพขณะนั้น)",
+  "menu.alwaysOnTop": "อยู่บนสุดเสมอ",
+  "menu.alwaysOnTopTip": "ให้หน้าต่างหลักอยู่เหนือหน้าต่างอื่น เดสก์ท็อป Wayland บางตัวจะไม่สนใจตัวเลือกนี้"
 }

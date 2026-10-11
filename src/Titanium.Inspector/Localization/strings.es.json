@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "Misma conexión",
   "ctx.findRelatedReferer": "Mismo Referer",
   "ctx.findRelatedRedirect": "Cadena de redirección",
-  "filter.relatedChip": "Relacionadas ({0}, instantánea)"
+  "filter.relatedChip": "Relacionadas ({0}, instantánea)",
+  "menu.alwaysOnTop": "Siempre visible",
+  "menu.alwaysOnTopTip": "Mantiene la ventana principal sobre las demás. Algunos escritorios Wayland lo ignoran."
 }

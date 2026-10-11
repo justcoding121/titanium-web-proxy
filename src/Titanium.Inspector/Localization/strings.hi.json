@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "वही कनेक्शन",
   "ctx.findRelatedReferer": "वही Referer",
   "ctx.findRelatedRedirect": "पुनर्निर्देशन श्रृंखला",
-  "filter.relatedChip": "संबंधित ({0}, स्नैपशॉट)"
+  "filter.relatedChip": "संबंधित ({0}, स्नैपशॉट)",
+  "menu.alwaysOnTop": "हमेशा ऊपर",
+  "menu.alwaysOnTopTip": "मुख्य विंडो को दूसरी विंडो के ऊपर रखता है। कुछ Wayland डेस्कटॉप इसे अनदेखा करते हैं."
 }

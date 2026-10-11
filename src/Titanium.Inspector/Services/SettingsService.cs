@@ -112,6 +112,9 @@ public sealed class InspectorSettings
     /// <summary>UI language: <c>auto</c> follows the OS UI language, or a shipped culture name such as <c>de</c>.</summary>
     public string UiLanguage { get; set; } = "auto";
 
+    /// <summary>Keep the main window above other windows. Some desktops ignore this.</summary>
+    public bool AlwaysOnTop { get; set; }
+
     /// <summary>Session grid column widths, order, and sort across launches.</summary>
     public SessionGridLayoutDto? SessionGridLayout { get; set; }
 

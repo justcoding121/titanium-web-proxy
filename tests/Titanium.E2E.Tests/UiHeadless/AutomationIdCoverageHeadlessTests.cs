@@ -85,6 +85,7 @@ public class AutomationIdCoverageHeadlessTests
         "MenuCheckUpdatesOnStartup",
         "MenuNetwork",
         "MenuLogging",
+        "MenuAlwaysOnTop",
         "MenuResetSettings",
         "MenuHelp",
         "MenuCheckForUpdates",

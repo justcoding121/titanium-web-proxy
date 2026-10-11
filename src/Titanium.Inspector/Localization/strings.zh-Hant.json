@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "相同連線",
   "ctx.findRelatedReferer": "相同 Referer",
   "ctx.findRelatedRedirect": "重新導向鏈",
-  "filter.relatedChip": "相關（{0}，當時的快照）"
+  "filter.relatedChip": "相關（{0}，當時的快照）",
+  "menu.alwaysOnTop": "總是在最上層",
+  "menu.alwaysOnTopTip": "讓主視窗保持在其他視窗之上。有些 Wayland 桌面會忽略這項設定。"
 }

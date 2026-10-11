@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "نفس الاتصال",
   "ctx.findRelatedReferer": "نفس المُحيل",
   "ctx.findRelatedRedirect": "سلسلة إعادة التوجيه",
-  "filter.relatedChip": "مرتبط ({0}، لقطة)"
+  "filter.relatedChip": "مرتبط ({0}، لقطة)",
+  "menu.alwaysOnTop": "دائمًا في المقدمة",
+  "menu.alwaysOnTopTip": "إبقاء النافذة الرئيسية فوق النوافذ الأخرى. تتجاهل بعض أسطح Wayland هذا الخيار."
 }

@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "אותו חיבור",
   "ctx.findRelatedReferer": "אותו Referer",
   "ctx.findRelatedRedirect": "שרשרת הפניות",
-  "filter.relatedChip": "קשורות ({0}, צילום)"
+  "filter.relatedChip": "קשורות ({0}, צילום)",
+  "menu.alwaysOnTop": "תמיד בחזית",
+  "menu.alwaysOnTopTip": "שומר את החלון הראשי מעל חלונות אחרים. חלק משולחנות Wayland מתעלמים מכך."
 }

@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "같은 연결",
   "ctx.findRelatedReferer": "같은 Referer",
   "ctx.findRelatedRedirect": "리디렉션 체인",
-  "filter.relatedChip": "관련 ({0}, 스냅샷)"
+  "filter.relatedChip": "관련 ({0}, 스냅샷)",
+  "menu.alwaysOnTop": "항상 위",
+  "menu.alwaysOnTopTip": "기본 창을 다른 창 위에 둡니다. 일부 Wayland 데스크톱은 이를 무시합니다."
 }

@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "Samme tilkobling",
   "ctx.findRelatedReferer": "Samme Referer",
   "ctx.findRelatedRedirect": "Omdirigeringskjede",
-  "filter.relatedChip": "Relaterte ({0}, øyeblikksbilde)"
+  "filter.relatedChip": "Relaterte ({0}, øyeblikksbilde)",
+  "menu.alwaysOnTop": "Alltid øverst",
+  "menu.alwaysOnTopTip": "Hold hovedvinduet over andre vinduer. Noen Wayland-skrivebord ignorerer dette."
 }

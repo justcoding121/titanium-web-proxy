@@ -289,6 +289,11 @@
                   AutomationProperties.AutomationId="MenuNetwork" />
         <MenuItem Header="{loc:Loc menu.logging}" Command="{Binding OpenLoggingSettingsCommand}"
                   AutomationProperties.AutomationId="MenuLogging" />
+        <MenuItem Header="{loc:Loc menu.alwaysOnTop}" ToggleType="CheckBox"
+                  IsChecked="{Binding AlwaysOnTop, Mode=OneWay}"
+                  Command="{Binding ToggleAlwaysOnTopCommand}"
+                  ToolTip.Tip="{loc:Loc menu.alwaysOnTopTip}"
+                  AutomationProperties.AutomationId="MenuAlwaysOnTop" />
         <Separator />
         <MenuItem Header="{loc:Loc menu.resetSettings}" Command="{Binding ResetSettingsCommand}"
                   AutomationProperties.AutomationId="MenuResetSettings" />

@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "Aynı bağlantı",
   "ctx.findRelatedReferer": "Aynı Referer",
   "ctx.findRelatedRedirect": "Yönlendirme zinciri",
-  "filter.relatedChip": "İlgili ({0}, anlık görüntü)"
+  "filter.relatedChip": "İlgili ({0}, anlık görüntü)",
+  "menu.alwaysOnTop": "Her zaman üstte",
+  "menu.alwaysOnTopTip": "Ana pencereyi diğer pencerelerin üzerinde tutar. Bazı Wayland masaüstleri bunu yok sayar."
 }

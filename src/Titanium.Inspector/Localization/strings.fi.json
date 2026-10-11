@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "Sama yhteys",
   "ctx.findRelatedReferer": "Sama Referer",
   "ctx.findRelatedRedirect": "Uudelleenohjausketju",
-  "filter.relatedChip": "Liittyvät ({0}, tilanne)"
+  "filter.relatedChip": "Liittyvät ({0}, tilanne)",
+  "menu.alwaysOnTop": "Aina päällimmäisenä",
+  "menu.alwaysOnTopTip": "Pidä pääikkuna muiden ikkunoiden päällä. Jotkin Wayland-työpöydät jättävät tämän huomiotta."
 }

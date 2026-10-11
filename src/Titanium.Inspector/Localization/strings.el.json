@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "Ίδια σύνδεση",
   "ctx.findRelatedReferer": "Ίδιο Referer",
   "ctx.findRelatedRedirect": "Αλυσίδα ανακατεύθυνσης",
-  "filter.relatedChip": "Σχετικά ({0}, στιγμιότυπο)"
+  "filter.relatedChip": "Σχετικά ({0}, στιγμιότυπο)",
+  "menu.alwaysOnTop": "Πάντα από πάνω",
+  "menu.alwaysOnTopTip": "Κρατά το κύριο παράθυρο πάνω από τα άλλα. Ορισμένες επιφάνειες Wayland το αγνοούν."
 }

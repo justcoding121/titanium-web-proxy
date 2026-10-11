@@ -459,5 +459,7 @@
   "ctx.findRelatedConnection": "To samo połączenie",
   "ctx.findRelatedReferer": "Ten sam Referer",
   "ctx.findRelatedRedirect": "Łańcuch przekierowań",
-  "filter.relatedChip": "Powiązane ({0}, migawka)"
+  "filter.relatedChip": "Powiązane ({0}, migawka)",
+  "menu.alwaysOnTop": "Zawsze na wierzchu",
+  "menu.alwaysOnTopTip": "Utrzymuje główne okno nad innymi. Niektóre pulpity Wayland to ignorują."
 }
