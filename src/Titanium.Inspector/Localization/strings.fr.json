@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "Chaîne de redirection",
   "filter.relatedChip": "Liées ({0}, instantané)",
   "menu.alwaysOnTop": "Toujours au premier plan",
-  "menu.alwaysOnTopTip": "Garde la fenêtre principale au-dessus des autres. Certains bureaux Wayland ignorent ce choix."
+  "menu.alwaysOnTopTip": "Garde la fenêtre principale au-dessus des autres. Certains bureaux Wayland ignorent ce choix.",
+  "menu.importSaz": "Importer un SAZ (Fiddler)…",
+  "saz.encrypted": "Cette archive SAZ est chiffrée. Seuls les fichiers non protégés peuvent être importés.",
+  "saz.tooLarge": "Ce fichier SAZ est trop volumineux.",
+  "saz.unsafe": "Les métadonnées SAZ ne peuvent pas être lues en sécurité.",
+  "saz.empty": "Ce fichier SAZ ne contient aucune session.",
+  "saz.rejected": "Ce fichier n’est pas une archive SAZ."
 }

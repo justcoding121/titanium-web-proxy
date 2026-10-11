@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "Rantai pengalihan",
   "filter.relatedChip": "Terkait ({0}, cuplikan)",
   "menu.alwaysOnTop": "Selalu di atas",
-  "menu.alwaysOnTopTip": "Jaga jendela utama di atas jendela lain. Beberapa desktop Wayland mengabaikan ini."
+  "menu.alwaysOnTopTip": "Jaga jendela utama di atas jendela lain. Beberapa desktop Wayland mengabaikan ini.",
+  "menu.importSaz": "Impor SAZ (Fiddler)…",
+  "saz.encrypted": "Arsip SAZ ini terenkripsi. Hanya file yang tidak dilindungi yang dapat diimpor.",
+  "saz.tooLarge": "File SAZ ini terlalu besar.",
+  "saz.unsafe": "Metadata SAZ tidak aman untuk dibaca.",
+  "saz.empty": "File SAZ ini tidak berisi sesi.",
+  "saz.rejected": "File ini bukan arsip SAZ."
 }

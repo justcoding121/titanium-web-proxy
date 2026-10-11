@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "पुनर्निर्देशन श्रृंखला",
   "filter.relatedChip": "संबंधित ({0}, स्नैपशॉट)",
   "menu.alwaysOnTop": "हमेशा ऊपर",
-  "menu.alwaysOnTopTip": "मुख्य विंडो को दूसरी विंडो के ऊपर रखता है। कुछ Wayland डेस्कटॉप इसे अनदेखा करते हैं."
+  "menu.alwaysOnTopTip": "मुख्य विंडो को दूसरी विंडो के ऊपर रखता है। कुछ Wayland डेस्कटॉप इसे अनदेखा करते हैं.",
+  "menu.importSaz": "SAZ आयात करें (Fiddler)…",
+  "saz.encrypted": "यह SAZ संग्रह एन्क्रिप्टेड है. केवल असुरक्षित फ़ाइलें आयात हो सकती हैं.",
+  "saz.tooLarge": "यह SAZ फ़ाइल बहुत बड़ी है.",
+  "saz.unsafe": "SAZ मेटाडेटा पढ़ना सुरक्षित नहीं है.",
+  "saz.empty": "इस SAZ फ़ाइल में कोई सत्र नहीं है.",
+  "saz.rejected": "यह फ़ाइल SAZ संग्रह नहीं है."
 }

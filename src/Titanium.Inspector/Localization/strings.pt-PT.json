@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "Cadeia de redirecionamento",
   "filter.relatedChip": "Relacionadas ({0}, instantâneo)",
   "menu.alwaysOnTop": "Sempre visível",
-  "menu.alwaysOnTopTip": "Mantém a janela principal sobre as outras. Alguns ambientes Wayland ignoram isto."
+  "menu.alwaysOnTopTip": "Mantém a janela principal sobre as outras. Alguns ambientes Wayland ignoram isto.",
+  "menu.importSaz": "Importar SAZ (Fiddler)…",
+  "saz.encrypted": "Este ficheiro SAZ está encriptado. Só é possível importar ficheiros sem proteção.",
+  "saz.tooLarge": "Este ficheiro SAZ é demasiado grande.",
+  "saz.unsafe": "Os metadados SAZ não são seguros para leitura.",
+  "saz.empty": "Este ficheiro SAZ não tem sessões.",
+  "saz.rejected": "Este ficheiro não é um arquivo SAZ."
 }

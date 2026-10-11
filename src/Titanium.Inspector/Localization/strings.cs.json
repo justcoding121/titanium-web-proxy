@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "Řetězec přesměrování",
   "filter.relatedChip": "Související ({0}, snímek)",
   "menu.alwaysOnTop": "Vždy navrchu",
-  "menu.alwaysOnTopTip": "Ponechat hlavní okno nad ostatními. Některé plochy Wayland to ignorují."
+  "menu.alwaysOnTopTip": "Ponechat hlavní okno nad ostatními. Některé plochy Wayland to ignorují.",
+  "menu.importSaz": "Importovat SAZ (Fiddler)…",
+  "saz.encrypted": "Tento archiv SAZ je šifrovaný. Importovat lze jen nechráněné soubory.",
+  "saz.tooLarge": "Tento soubor SAZ je příliš velký.",
+  "saz.unsafe": "Metadata SAZ nejsou bezpečná ke čtení.",
+  "saz.empty": "Tento soubor SAZ neobsahuje relace.",
+  "saz.rejected": "Tento soubor není archiv SAZ."
 }

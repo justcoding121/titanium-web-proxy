@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "Ланцюжок перенаправлень",
   "filter.relatedChip": "Пов’язані ({0}, знімок)",
   "menu.alwaysOnTop": "Завжди зверху",
-  "menu.alwaysOnTopTip": "Тримає головне вікно над іншими. Деякі середовища Wayland це ігнорують."
+  "menu.alwaysOnTopTip": "Тримає головне вікно над іншими. Деякі середовища Wayland це ігнорують.",
+  "menu.importSaz": "Імпорт SAZ (Fiddler)…",
+  "saz.encrypted": "Цей архів SAZ зашифровано. Можна імпортувати лише незахищені файли.",
+  "saz.tooLarge": "Цей файл SAZ завеликий.",
+  "saz.unsafe": "Метадані SAZ небезпечно читати.",
+  "saz.empty": "У цьому файлі SAZ немає сеансів.",
+  "saz.rejected": "Цей файл не є архівом SAZ."
 }

@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "リダイレクトの連鎖",
   "filter.relatedChip": "関連 ({0}、その時点)",
   "menu.alwaysOnTop": "常に手前に表示",
-  "menu.alwaysOnTopTip": "メイン ウィンドウを他のウィンドウより手前に保ちます。一部の Wayland デスクトップはこれを無視します。"
+  "menu.alwaysOnTopTip": "メイン ウィンドウを他のウィンドウより手前に保ちます。一部の Wayland デスクトップはこれを無視します。",
+  "menu.importSaz": "SAZ をインポート (Fiddler)…",
+  "saz.encrypted": "この SAZ アーカイブは暗号化されています。保護されていないファイルだけをインポートできます。",
+  "saz.tooLarge": "この SAZ ファイルは大きすぎます。",
+  "saz.unsafe": "SAZ のメタデータは安全に読み取れません。",
+  "saz.empty": "この SAZ ファイルにセッションはありません。",
+  "saz.rejected": "このファイルは SAZ アーカイブではありません。"
 }

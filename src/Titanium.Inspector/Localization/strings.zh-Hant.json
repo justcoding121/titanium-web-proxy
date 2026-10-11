@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "重新導向鏈",
   "filter.relatedChip": "相關（{0}，當時的快照）",
   "menu.alwaysOnTop": "總是在最上層",
-  "menu.alwaysOnTopTip": "讓主視窗保持在其他視窗之上。有些 Wayland 桌面會忽略這項設定。"
+  "menu.alwaysOnTopTip": "讓主視窗保持在其他視窗之上。有些 Wayland 桌面會忽略這項設定。",
+  "menu.importSaz": "匯入 SAZ (Fiddler)…",
+  "saz.encrypted": "此 SAZ 封存已加密。只能匯入未受保護的檔案。",
+  "saz.tooLarge": "此 SAZ 檔案太大。",
+  "saz.unsafe": "SAZ 中繼資料無法安全讀取。",
+  "saz.empty": "此 SAZ 檔案沒有工作階段。",
+  "saz.rejected": "此檔案不是 SAZ 封存。"
 }

@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "שרשרת הפניות",
   "filter.relatedChip": "קשורות ({0}, צילום)",
   "menu.alwaysOnTop": "תמיד בחזית",
-  "menu.alwaysOnTopTip": "שומר את החלון הראשי מעל חלונות אחרים. חלק משולחנות Wayland מתעלמים מכך."
+  "menu.alwaysOnTopTip": "שומר את החלון הראשי מעל חלונות אחרים. חלק משולחנות Wayland מתעלמים מכך.",
+  "menu.importSaz": "ייבוא SAZ ‏(Fiddler)…",
+  "saz.encrypted": "ארכיון SAZ זה מוצפן. אפשר לייבא רק קבצים לא מוגנים.",
+  "saz.tooLarge": "קובץ SAZ זה גדול מדי.",
+  "saz.unsafe": "מטא-נתוני SAZ אינם בטוחים לקריאה.",
+  "saz.empty": "בקובץ SAZ זה אין הפעלות.",
+  "saz.rejected": "קובץ זה אינו ארכיון SAZ."
 }

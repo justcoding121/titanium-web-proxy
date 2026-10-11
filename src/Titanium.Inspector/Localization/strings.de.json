@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "Weiterleitungskette",
   "filter.relatedChip": "Zugehörig ({0}, Momentaufnahme)",
   "menu.alwaysOnTop": "Immer im Vordergrund",
-  "menu.alwaysOnTopTip": "Das Hauptfenster über anderen Fenstern halten. Manche Wayland-Oberflächen ignorieren das."
+  "menu.alwaysOnTopTip": "Das Hauptfenster über anderen Fenstern halten. Manche Wayland-Oberflächen ignorieren das.",
+  "menu.importSaz": "SAZ importieren (Fiddler)…",
+  "saz.encrypted": "Dieses SAZ-Archiv ist verschlüsselt. Es lassen sich nur ungeschützte Dateien importieren.",
+  "saz.tooLarge": "Diese SAZ-Datei ist zu groß.",
+  "saz.unsafe": "Die SAZ-Metadaten sind nicht sicher lesbar.",
+  "saz.empty": "Diese SAZ-Datei enthält keine Sitzungen.",
+  "saz.rejected": "Diese Datei ist kein SAZ-Archiv."
 }

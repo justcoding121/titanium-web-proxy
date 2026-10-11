@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "سلسلة إعادة التوجيه",
   "filter.relatedChip": "مرتبط ({0}، لقطة)",
   "menu.alwaysOnTop": "دائمًا في المقدمة",
-  "menu.alwaysOnTopTip": "إبقاء النافذة الرئيسية فوق النوافذ الأخرى. تتجاهل بعض أسطح Wayland هذا الخيار."
+  "menu.alwaysOnTopTip": "إبقاء النافذة الرئيسية فوق النوافذ الأخرى. تتجاهل بعض أسطح Wayland هذا الخيار.",
+  "menu.importSaz": "استيراد SAZ (Fiddler)…",
+  "saz.encrypted": "أرشيف SAZ هذا مشفّر. يمكن للاستيراد قراءة الملفات غير المحمية فقط.",
+  "saz.tooLarge": "ملف SAZ هذا أكبر من الحد المسموح.",
+  "saz.unsafe": "بيانات SAZ الوصفية غير آمنة للقراءة.",
+  "saz.empty": "ملف SAZ هذا لا يحتوي على جلسات.",
+  "saz.rejected": "هذا الملف ليس أرشيف SAZ."
 }

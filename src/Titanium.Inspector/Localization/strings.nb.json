@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "Omdirigeringskjede",
   "filter.relatedChip": "Relaterte ({0}, øyeblikksbilde)",
   "menu.alwaysOnTop": "Alltid øverst",
-  "menu.alwaysOnTopTip": "Hold hovedvinduet over andre vinduer. Noen Wayland-skrivebord ignorerer dette."
+  "menu.alwaysOnTopTip": "Hold hovedvinduet over andre vinduer. Noen Wayland-skrivebord ignorerer dette.",
+  "menu.importSaz": "Importer SAZ (Fiddler)…",
+  "saz.encrypted": "Dette SAZ-arkivet er kryptert. Bare ubeskyttede filer kan importeres.",
+  "saz.tooLarge": "Denne SAZ-filen er for stor.",
+  "saz.unsafe": "SAZ-metadataene er ikke trygge å lese.",
+  "saz.empty": "Denne SAZ-filen har ingen økter.",
+  "saz.rejected": "Denne filen er ikke et SAZ-arkiv."
 }

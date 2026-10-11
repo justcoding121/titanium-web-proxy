@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "สายการเปลี่ยนทาง",
   "filter.relatedChip": "ที่เกี่ยวข้อง ({0}, ภาพขณะนั้น)",
   "menu.alwaysOnTop": "อยู่บนสุดเสมอ",
-  "menu.alwaysOnTopTip": "ให้หน้าต่างหลักอยู่เหนือหน้าต่างอื่น เดสก์ท็อป Wayland บางตัวจะไม่สนใจตัวเลือกนี้"
+  "menu.alwaysOnTopTip": "ให้หน้าต่างหลักอยู่เหนือหน้าต่างอื่น เดสก์ท็อป Wayland บางตัวจะไม่สนใจตัวเลือกนี้",
+  "menu.importSaz": "นำเข้า SAZ (Fiddler)…",
+  "saz.encrypted": "ไฟล์ SAZ นี้ถูกเข้ารหัส นำเข้าได้เฉพาะไฟล์ที่ไม่มีการป้องกัน",
+  "saz.tooLarge": "ไฟล์ SAZ นี้ใหญ่เกินไป",
+  "saz.unsafe": "ข้อมูลเมตาของ SAZ ไม่ปลอดภัยที่จะอ่าน",
+  "saz.empty": "ไฟล์ SAZ นี้ไม่มีเซสชัน",
+  "saz.rejected": "ไฟล์นี้ไม่ใช่ไฟล์ SAZ"
 }

@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "Redirect chain",
   "filter.relatedChip": "Related ({0}, snapshot)",
   "menu.alwaysOnTop": "Always on top",
-  "menu.alwaysOnTopTip": "Keep the main window above other windows. Some Wayland desktops ignore this."
+  "menu.alwaysOnTopTip": "Keep the main window above other windows. Some Wayland desktops ignore this.",
+  "menu.importSaz": "Import SAZ (Fiddler)…",
+  "saz.encrypted": "This SAZ archive is encrypted. Inspector can import only unprotected SAZ files.",
+  "saz.tooLarge": "This SAZ file is too large to import.",
+  "saz.unsafe": "The SAZ metadata is not safe to read.",
+  "saz.empty": "This SAZ file has no sessions.",
+  "saz.rejected": "This file is not a SAZ archive."
 }

@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "Chuỗi chuyển hướng",
   "filter.relatedChip": "Liên quan ({0}, ảnh tại thời điểm)",
   "menu.alwaysOnTop": "Luôn ở trên",
-  "menu.alwaysOnTopTip": "Giữ cửa sổ chính phía trên các cửa sổ khác. Một số máy tính Wayland bỏ qua mục này."
+  "menu.alwaysOnTopTip": "Giữ cửa sổ chính phía trên các cửa sổ khác. Một số máy tính Wayland bỏ qua mục này.",
+  "menu.importSaz": "Nhập SAZ (Fiddler)…",
+  "saz.encrypted": "Tệp SAZ này được mã hóa. Chỉ nhập được tệp không có mật khẩu.",
+  "saz.tooLarge": "Tệp SAZ này quá lớn.",
+  "saz.unsafe": "Siêu dữ liệu SAZ không an toàn để đọc.",
+  "saz.empty": "Tệp SAZ này không có phiên.",
+  "saz.rejected": "Tệp này không phải tệp SAZ."
 }

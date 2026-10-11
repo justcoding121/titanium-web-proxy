@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "Yönlendirme zinciri",
   "filter.relatedChip": "İlgili ({0}, anlık görüntü)",
   "menu.alwaysOnTop": "Her zaman üstte",
-  "menu.alwaysOnTopTip": "Ana pencereyi diğer pencerelerin üzerinde tutar. Bazı Wayland masaüstleri bunu yok sayar."
+  "menu.alwaysOnTopTip": "Ana pencereyi diğer pencerelerin üzerinde tutar. Bazı Wayland masaüstleri bunu yok sayar.",
+  "menu.importSaz": "SAZ içe aktar (Fiddler)…",
+  "saz.encrypted": "Bu SAZ arşivi şifreli. Yalnızca korumasız dosyalar içe aktarılabilir.",
+  "saz.tooLarge": "Bu SAZ dosyası çok büyük.",
+  "saz.unsafe": "SAZ meta verilerini okumak güvenli değil.",
+  "saz.empty": "Bu SAZ dosyasında oturum yok.",
+  "saz.rejected": "Bu dosya bir SAZ arşivi değil."
 }

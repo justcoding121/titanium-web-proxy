@@ -18,6 +18,7 @@
         <MenuItem Header="{loc:Loc menu.exportAllArchive}" Command="{Binding ExportArchiveCommand}" AutomationProperties.AutomationId="MenuExportArchive" />
         <MenuItem Header="{loc:Loc menu.exportSelectedArchive}" Command="{Binding ExportSelectedArchiveCommand}" AutomationProperties.AutomationId="MenuExportSelectedArchive" />
         <MenuItem Header="{loc:Loc menu.importArchive}" Command="{Binding ImportArchiveCommand}" AutomationProperties.AutomationId="MenuImportArchive" />
+        <MenuItem Header="{loc:Loc menu.importSaz}" Command="{Binding ImportSazCommand}" AutomationProperties.AutomationId="MenuImportSaz" />
         <Separator />
         <MenuItem Header="{loc:Loc menu.exit}" Command="{Binding ExitCommand}" AutomationProperties.AutomationId="MenuExit" />
       </MenuItem>

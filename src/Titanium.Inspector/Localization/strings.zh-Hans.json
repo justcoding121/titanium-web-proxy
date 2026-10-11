@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "重定向链",
   "filter.relatedChip": "相关（{0}，当时的快照）",
   "menu.alwaysOnTop": "总在最前",
-  "menu.alwaysOnTopTip": "让主窗口保持在其他窗口之上。有些 Wayland 桌面会忽略此项。"
+  "menu.alwaysOnTopTip": "让主窗口保持在其他窗口之上。有些 Wayland 桌面会忽略此项。",
+  "menu.importSaz": "导入 SAZ (Fiddler)…",
+  "saz.encrypted": "此 SAZ 存档已加密。只能导入未加保护的文件。",
+  "saz.tooLarge": "此 SAZ 文件太大。",
+  "saz.unsafe": "SAZ 元数据无法安全读取。",
+  "saz.empty": "此 SAZ 文件没有会话。",
+  "saz.rejected": "此文件不是 SAZ 存档。"
 }

@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "زنجیره تغییر مسیر",
   "filter.relatedChip": "مرتبط ({0}، نما)",
   "menu.alwaysOnTop": "همیشه در بالا",
-  "menu.alwaysOnTopTip": "پنجره اصلی را بالای پنجره‌های دیگر نگه می‌دارد. برخی میزکارهای Wayland این را نادیده می‌گیرند."
+  "menu.alwaysOnTopTip": "پنجره اصلی را بالای پنجره‌های دیگر نگه می‌دارد. برخی میزکارهای Wayland این را نادیده می‌گیرند.",
+  "menu.importSaz": "وارد کردن SAZ (Fiddler)…",
+  "saz.encrypted": "این بایگانی SAZ رمزگذاری شده است. فقط فایل‌های بدون محافظت وارد می‌شوند.",
+  "saz.tooLarge": "این فایل SAZ خیلی بزرگ است.",
+  "saz.unsafe": "فراداده SAZ برای خواندن امن نیست.",
+  "saz.empty": "این فایل SAZ نشستی ندارد.",
+  "saz.rejected": "این فایل یک بایگانی SAZ نیست."
 }

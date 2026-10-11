@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "Átirányítási lánc",
   "filter.relatedChip": "Kapcsolódó ({0}, pillanatkép)",
   "menu.alwaysOnTop": "Mindig felül",
-  "menu.alwaysOnTopTip": "A főablak a többiek felett marad. Egyes Wayland asztalok figyelmen kívül hagyják."
+  "menu.alwaysOnTopTip": "A főablak a többiek felett marad. Egyes Wayland asztalok figyelmen kívül hagyják.",
+  "menu.importSaz": "SAZ importálása (Fiddler)…",
+  "saz.encrypted": "Ez a SAZ archívum titkosított. Csak nem védett fájl importálható.",
+  "saz.tooLarge": "Ez a SAZ fájl túl nagy.",
+  "saz.unsafe": "A SAZ metaadatai nem olvashatók biztonságosan.",
+  "saz.empty": "Ebben a SAZ fájlban nincs munkamenet.",
+  "saz.rejected": "Ez a fájl nem SAZ archívum."
 }

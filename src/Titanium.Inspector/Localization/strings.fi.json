@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "Uudelleenohjausketju",
   "filter.relatedChip": "Liittyvät ({0}, tilanne)",
   "menu.alwaysOnTop": "Aina päällimmäisenä",
-  "menu.alwaysOnTopTip": "Pidä pääikkuna muiden ikkunoiden päällä. Jotkin Wayland-työpöydät jättävät tämän huomiotta."
+  "menu.alwaysOnTopTip": "Pidä pääikkuna muiden ikkunoiden päällä. Jotkin Wayland-työpöydät jättävät tämän huomiotta.",
+  "menu.importSaz": "Tuo SAZ (Fiddler)…",
+  "saz.encrypted": "Tämä SAZ-arkisto on salattu. Vain suojaamattomia tiedostoja voi tuoda.",
+  "saz.tooLarge": "Tämä SAZ-tiedosto on liian suuri.",
+  "saz.unsafe": "SAZ-metatietoja ei ole turvallista lukea.",
+  "saz.empty": "Tässä SAZ-tiedostossa ei ole istuntoja.",
+  "saz.rejected": "Tämä tiedosto ei ole SAZ-arkisto."
 }

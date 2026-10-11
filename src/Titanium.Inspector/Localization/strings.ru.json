@@ -461,5 +461,11 @@
   "ctx.findRelatedRedirect": "Цепочка перенаправлений",
   "filter.relatedChip": "Связанные ({0}, снимок)",
   "menu.alwaysOnTop": "Поверх остальных",
-  "menu.alwaysOnTopTip": "Держит главное окно над другими. Некоторые среды Wayland это игнорируют."
+  "menu.alwaysOnTopTip": "Держит главное окно над другими. Некоторые среды Wayland это игнорируют.",
+  "menu.importSaz": "Импорт SAZ (Fiddler)…",
+  "saz.encrypted": "Этот архив SAZ зашифрован. Можно импортировать только незащищенные файлы.",
+  "saz.tooLarge": "Этот файл SAZ слишком большой.",
+  "saz.unsafe": "Метаданные SAZ небезопасно читать.",
+  "saz.empty": "В этом файле SAZ нет сеансов.",
+  "saz.rejected": "Этот файл не является архивом SAZ."
 }
