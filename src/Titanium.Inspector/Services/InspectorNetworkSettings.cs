@@ -1,3 +1,5 @@
+using System.Security.Authentication;
+
 namespace Titanium.Inspector.Services;
 
 /// <summary>
@@ -7,6 +9,9 @@ namespace Titanium.Inspector.Services;
 public static class InspectorNetworkSettings
 {
     public const int DefaultUpstreamPort = 8080;
+    public const string TlsDefault = "Default";
+    public const string Tls12 = "Tls12";
+    public const string TlsLegacy = "Legacy";
 
     public const string HostRequired = "network.hostRequired";
     public const string PortInvalid = "network.portInvalid";
@@ -16,6 +21,40 @@ public static class InspectorNetworkSettings
     public static void ApplyTo(InterceptionService interception, InspectorSettings settings)
     {
         interception.UpstreamProxyAddress = FormatUpstreamUri(settings);
+        interception.PreferHttp2 = settings.EnableHttp2;
+        interception.PreferHttp3 = settings.EnableHttp3;
+        interception.OutboundTlsProtocols = MapOutboundTls(settings.OutboundTlsPreset);
+        interception.ReuseServerConnections = settings.ReuseServerConnections;
+        interception.ApplyHttpProtocols();
+    }
+
+    public static string ProtocolSummaryKey(bool http2, bool http3) => (http2, http3) switch
+    {
+        (false, false) => "network.summaryH1",
+        (true, false) => "network.summaryH2",
+        (false, true) => "network.summaryH3",
+        _ => "network.summaryBoth",
+    };
+
+    /// <summary>
+    /// Outbound mask only. <see cref="SslProtocols.None"/> keeps the engine default (TLS 1.2 and 1.3).
+    /// Never applied to browser-facing TLS.
+    /// </summary>
+    public static SslProtocols MapOutboundTls(string? preset)
+    {
+        if (string.Equals(preset, Tls12, StringComparison.OrdinalIgnoreCase))
+        {
+            return SslProtocols.Tls12;
+        }
+
+        if (string.Equals(preset, TlsLegacy, StringComparison.OrdinalIgnoreCase))
+        {
+#pragma warning disable SYSLIB0039
+            return SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Tls13;
+#pragma warning restore SYSLIB0039
+        }
+
+        return SslProtocols.None;
     }
 
     public static string? FormatUpstreamUri(InspectorSettings settings)
@@ -72,11 +111,15 @@ public static class InspectorNetworkSettings
         return null;
     }
 
-    public static void ResetUpstream(InspectorSettings settings)
+    public static void ResetToDefaults(InspectorSettings settings)
     {
         settings.UpstreamProxyEnabled = false;
         settings.UpstreamProxyHost = string.Empty;
         settings.UpstreamProxyPort = DefaultUpstreamPort;
+        settings.EnableHttp2 = true;
+        settings.EnableHttp3 = true;
+        settings.OutboundTlsPreset = TlsDefault;
+        settings.ReuseServerConnections = true;
     }
 
     private static string NormalizeHost(string? host)

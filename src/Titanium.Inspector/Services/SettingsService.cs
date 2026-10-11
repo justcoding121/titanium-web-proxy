@@ -164,6 +164,18 @@ public sealed class InspectorSettings
     /// <summary>Manual upstream HTTP proxy port.</summary>
     public int UpstreamProxyPort { get; set; } = InspectorNetworkSettings.DefaultUpstreamPort;
 
+    /// <summary>Offer HTTP/2 on new connections. On by default, matching the engine.</summary>
+    public bool EnableHttp2 { get; set; } = true;
+
+    /// <summary>Offer HTTP/3 from Inspector to servers when this computer supports QUIC.</summary>
+    public bool EnableHttp3 { get; set; } = true;
+
+    /// <summary><c>Default</c>, <c>Tls12</c>, or <c>Legacy</c>. Outbound to servers only.</summary>
+    public string OutboundTlsPreset { get; set; } = InspectorNetworkSettings.TlsDefault;
+
+    /// <summary>Keep server connections and reuse them. On by default.</summary>
+    public bool ReuseServerConnections { get; set; } = true;
+
     /// <summary>
     /// When set, the user chose whether the Inspect headers pane is collapsed.
     /// Null keeps the automatic rule (collapsed when the pane is shorter than 420px).

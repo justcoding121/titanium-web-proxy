@@ -40,6 +40,38 @@
         <CheckBox x:Name="RestartCheck" Content="{loc:Loc network.restartNow}"
                   AutomationProperties.AutomationId="NetworkRestartCapture" />
       </StackPanel>
+      <StackPanel Spacing="4">
+        <TextBlock FontWeight="SemiBold" Text="{loc:Loc network.protocols}" />
+        <CheckBox x:Name="Http2Check" Content="{loc:Loc network.http2}"
+                  AutomationProperties.AutomationId="NetworkHttp2" />
+        <TextBlock Opacity="0.75" TextWrapping="Wrap" Text="{loc:Loc network.http2Help}" />
+        <CheckBox x:Name="Http3Check" Content="{loc:Loc network.http3}"
+                  AutomationProperties.AutomationId="NetworkHttp3" />
+        <TextBlock Opacity="0.75" TextWrapping="Wrap" Text="{loc:Loc network.http3Help}" />
+        <TextBlock x:Name="Http3UnavailableText" Opacity="0.75" TextWrapping="Wrap"
+                   Text="{loc:Loc network.http3Unavailable}"
+                   AutomationProperties.AutomationId="NetworkHttp3Unavailable" />
+        <TextBlock x:Name="SummaryText" TextWrapping="Wrap"
+                   AutomationProperties.AutomationId="NetworkProtocolSummary" />
+        <TextBlock Opacity="0.75" TextWrapping="Wrap" Text="{loc:Loc network.newConnections}" />
+      </StackPanel>
+      <Expander Header="{loc:Loc network.advanced}" IsExpanded="False"
+                AutomationProperties.AutomationId="NetworkAdvanced">
+        <StackPanel Spacing="8" Margin="0,8,0,0">
+          <TextBlock FontWeight="SemiBold" Text="{loc:Loc network.tls}" />
+          <ComboBox x:Name="TlsCombo" HorizontalAlignment="Left" MinWidth="220"
+                    AutomationProperties.AutomationId="NetworkTls">
+            <ComboBoxItem Tag="Default" Content="{loc:Loc network.tlsDefault}" />
+            <ComboBoxItem Tag="Tls12" Content="{loc:Loc network.tls12}" />
+            <ComboBoxItem Tag="Legacy" Content="{loc:Loc network.tlsLegacy}" />
+          </ComboBox>
+          <TextBlock x:Name="TlsLegacyWarning" Opacity="0.75" TextWrapping="Wrap"
+                     Text="{loc:Loc network.tlsLegacyWarning}"
+                     AutomationProperties.AutomationId="NetworkTlsLegacyWarning" />
+          <CheckBox x:Name="ReuseCheck" Content="{loc:Loc network.reuse}"
+                    AutomationProperties.AutomationId="NetworkReuseConnections" />
+        </StackPanel>
+      </Expander>
     </StackPanel>
   </DockPanel>
 </Window>

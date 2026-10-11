@@ -27,6 +27,9 @@ public partial class NetworkSettingsWindow : Window
         RestartCheck.IsVisible = captureRunning;
         NoneRadio.IsCheckedChanged += (_, _) => UpdateFieldsEnabled();
         ProxyRadio.IsCheckedChanged += (_, _) => UpdateFieldsEnabled();
+        Http2Check.IsCheckedChanged += (_, _) => UpdateSummary();
+        Http3Check.IsCheckedChanged += (_, _) => UpdateSummary();
+        TlsCombo.SelectionChanged += (_, _) => UpdateTlsWarning();
         SaveButton.Click += OnSave;
         CancelButton.Click += (_, _) => Close();
         ResetButton.Click += (_, _) =>
@@ -35,10 +38,21 @@ public partial class NetworkSettingsWindow : Window
             HostBox.Text = string.Empty;
             PortBox.Text = InspectorNetworkSettings.DefaultUpstreamPort.ToString(
                 System.Globalization.CultureInfo.InvariantCulture);
+            Http2Check.IsChecked = true;
+            Http3Check.IsChecked = true;
+            SelectTls(InspectorNetworkSettings.TlsDefault);
+            ReuseCheck.IsChecked = true;
             StatusText.Text = string.Empty;
             UpdateFieldsEnabled();
+            UpdateSummary();
+            UpdateTlsWarning();
         };
+        var quic = InterceptionService.IsHttp3Supported;
+        Http3Check.IsEnabled = quic;
+        Http3UnavailableText.IsVisible = !quic;
         UpdateFieldsEnabled();
+        UpdateSummary();
+        UpdateTlsWarning();
     }
 
     public bool Saved => _saved;
@@ -65,7 +79,40 @@ public partial class NetworkSettingsWindow : Window
         ProxyRadio.IsChecked = enabled;
         HostBox.Text = s.UpstreamProxyHost;
         PortBox.Text = s.UpstreamProxyPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        Http2Check.IsChecked = s.EnableHttp2;
+        Http3Check.IsChecked = s.EnableHttp3;
+        SelectTls(s.OutboundTlsPreset);
+        ReuseCheck.IsChecked = s.ReuseServerConnections;
     }
+
+    private void SelectTls(string? preset)
+    {
+        var wanted = string.IsNullOrWhiteSpace(preset) ? InspectorNetworkSettings.TlsDefault : preset;
+        foreach (var item in TlsCombo.Items)
+        {
+            if (item is ComboBoxItem combo && string.Equals(combo.Tag as string, wanted, StringComparison.OrdinalIgnoreCase))
+            {
+                TlsCombo.SelectedItem = combo;
+                return;
+            }
+        }
+
+        TlsCombo.SelectedIndex = 0;
+    }
+
+    private string SelectedTlsPreset() =>
+        (TlsCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? InspectorNetworkSettings.TlsDefault;
+
+    private void UpdateSummary()
+    {
+        var http3 = Http3Check.IsChecked == true && Http3Check.IsEnabled;
+        SummaryText.Text = LanguageService.Get(
+            InspectorNetworkSettings.ProtocolSummaryKey(Http2Check.IsChecked == true, http3));
+    }
+
+    private void UpdateTlsWarning() =>
+        TlsLegacyWarning.IsVisible = string.Equals(
+            SelectedTlsPreset(), InspectorNetworkSettings.TlsLegacy, StringComparison.OrdinalIgnoreCase);
 
     private void UpdateFieldsEnabled()
     {
@@ -94,6 +141,10 @@ public partial class NetworkSettingsWindow : Window
         s.UpstreamProxyEnabled = enabled;
         s.UpstreamProxyHost = HostBox.Text?.Trim() ?? string.Empty;
         s.UpstreamProxyPort = enabled ? port : (port is >= 1 and <= 65535 ? port : InspectorNetworkSettings.DefaultUpstreamPort);
+        s.EnableHttp2 = Http2Check.IsChecked == true;
+        s.EnableHttp3 = Http3Check.IsEnabled && Http3Check.IsChecked == true;
+        s.OutboundTlsPreset = SelectedTlsPreset();
+        s.ReuseServerConnections = ReuseCheck.IsChecked == true;
         _settings.Save();
         _saved = true;
         Close();

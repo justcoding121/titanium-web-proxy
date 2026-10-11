@@ -148,6 +148,18 @@ public sealed class InterceptionService : IDisposable
     /// <summary>True when a Firefox profiles.ini is present on this machine.</summary>
     public static bool IsFirefoxProfilePresent => FirefoxCertificateTrust.IsFirefoxProfilePresent();
 
+    /// <summary>HTTP/2 for new connections. Applied by <see cref="ApplyHttpProtocols"/>.</summary>
+    public bool PreferHttp2 { get; set; } = true;
+
+    /// <summary>HTTP/3 toward servers for new connections. Applied by <see cref="ApplyHttpProtocols"/>.</summary>
+    public bool PreferHttp3 { get; set; } = true;
+
+    /// <summary>Outbound TLS mask. <see cref="System.Security.Authentication.SslProtocols.None"/> keeps the engine default.</summary>
+    public System.Security.Authentication.SslProtocols OutboundTlsProtocols { get; set; }
+
+    /// <summary>When false, server connections are not reused.</summary>
+    public bool ReuseServerConnections { get; set; } = true;
+
     /// <summary>True when the running proxy currently allows HTTP/2.</summary>
     public bool Http2Enabled { get; private set; } = true;
 
@@ -312,22 +324,25 @@ public sealed class InterceptionService : IDisposable
     }
 
     /// <summary>
-    /// Enable HTTP/2 and HTTP/3 (when MsQuic is available). Safe while capturing: new connections
-    /// pick up the change; in-flight sessions keep the protocol they already negotiated.
-    /// Inspector is an explicit TCP proxy, so HTTP/3 here is origin-side only.
+    /// Apply HTTP/2, HTTP/3, outbound TLS, and connection reuse. Safe while capturing: new
+    /// connections pick up the change; in-flight sessions keep the protocol they already negotiated.
+    /// Inspector is an explicit TCP proxy, so HTTP/3 here is origin-side only. HTTP/2 off does not
+    /// disable HTTP/3.
     /// </summary>
     public void ApplyHttpProtocols()
     {
         if (_proxy is null)
         {
-            Http2Enabled = true;
-            Http3Enabled = IsHttp3Supported;
+            Http2Enabled = PreferHttp2;
+            Http3Enabled = PreferHttp3 && IsHttp3Supported;
             return;
         }
 
-        _proxy.EnableHttp2 = true;
+        _proxy.EnableHttp2 = PreferHttp2;
         Http2Enabled = _proxy.EnableHttp2;
-        Http3Enabled = _proxy.SetHttp3Enabled(true);
+        Http3Enabled = _proxy.SetHttp3Enabled(PreferHttp3);
+        _proxy.EnableConnectionPool = ReuseServerConnections;
+        _proxy.SupportedServerSslProtocols = OutboundTlsProtocols;
     }
 
     /// <summary>Apply or refresh logging from Inspector settings (safe while running).</summary>

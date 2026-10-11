@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
+using System.Security.Authentication;
 using System.Text;
 using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -43,6 +45,10 @@ public class NetworkSettingsTests
         Assert.IsFalse(settings.Current.UpstreamProxyEnabled);
         Assert.AreEqual(string.Empty, settings.Current.UpstreamProxyHost);
         Assert.AreEqual(InspectorNetworkSettings.DefaultUpstreamPort, settings.Current.UpstreamProxyPort);
+        Assert.IsTrue(settings.Current.EnableHttp2);
+        Assert.IsTrue(settings.Current.EnableHttp3);
+        Assert.IsTrue(settings.Current.ReuseServerConnections);
+        Assert.AreEqual(InspectorNetworkSettings.TlsDefault, settings.Current.OutboundTlsPreset);
         Assert.IsNull(InspectorNetworkSettings.FormatUpstreamUri(settings.Current));
 
         settings.Current.UpstreamProxyEnabled = true;
@@ -62,6 +68,81 @@ public class NetworkSettingsTests
         using var doc = JsonDocument.Parse(json);
         Assert.IsFalse(doc.RootElement.GetProperty("upstreamProxyEnabled").GetBoolean());
     }
+
+    [TestMethod]
+    public void TlsPreset_MapsOutboundOnly()
+    {
+        Assert.AreEqual(SslProtocols.None, InspectorNetworkSettings.MapOutboundTls("Default"));
+        Assert.AreEqual(SslProtocols.Tls12, InspectorNetworkSettings.MapOutboundTls("tls12"));
+        var legacy = InspectorNetworkSettings.MapOutboundTls("Legacy");
+        Assert.IsTrue(legacy.HasFlag(SslProtocols.Tls12));
+        Assert.IsTrue(legacy.HasFlag(SslProtocols.Tls13));
+#pragma warning disable SYSLIB0039
+        Assert.IsTrue(legacy.HasFlag(SslProtocols.Tls));
+        Assert.IsTrue(legacy.HasFlag(SslProtocols.Tls11));
+#pragma warning restore SYSLIB0039
+        Assert.AreEqual("network.summaryH1", InspectorNetworkSettings.ProtocolSummaryKey(false, false));
+        Assert.AreEqual("network.summaryH3", InspectorNetworkSettings.ProtocolSummaryKey(false, true));
+        Assert.AreEqual("network.summaryBoth", InspectorNetworkSettings.ProtocolSummaryKey(true, true));
+    }
+
+    [TestMethod]
+    public async Task ProtocolToggles_ReachProxyServer_AndHttp3OffStaysTcp()
+    {
+        using var origin = new TcpListener(IPAddress.Loopback, 0);
+        origin.Start();
+        var originPort = ((IPEndPoint)origin.LocalEndpoint).Port;
+        var originSaw = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = Task.Run(() => ServeOnce(origin, originSaw, "proto-ok"));
+
+        using var interception = new InterceptionService(new RecordingSystemProxyController());
+        interception.PreferHttp2 = false;
+        interception.PreferHttp3 = false;
+        interception.ReuseServerConnections = false;
+        interception.OutboundTlsProtocols = SslProtocols.Tls12;
+        await interception.StartAsync(IPAddress.Loopback, 0);
+        var proxy = ProxyOf(interception);
+        Assert.IsFalse(proxy.EnableHttp2);
+#pragma warning disable TWP001
+        Assert.IsFalse(proxy.EnableHttp3);
+#pragma warning restore TWP001
+        Assert.IsFalse(proxy.EnableConnectionPool);
+        Assert.AreEqual(SslProtocols.Tls12, proxy.SupportedServerSslProtocols);
+        Assert.AreEqual(SslProtocols.Tls12 | SslProtocols.Tls13, proxy.SupportedSslProtocols);
+
+        proxy.Http3OriginCapabilityCache.Set($"127.0.0.1:{originPort}", originPort);
+        SessionSnapshot? seen = null;
+        interception.SessionCaptured += (_, snap) => seen = snap;
+        using var handler = new HttpClientHandler
+        {
+            Proxy = new WebProxy($"http://127.0.0.1:{interception.BoundPort}"),
+            UseProxy = true,
+        };
+        using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
+        Assert.AreEqual("proto-ok", await http.GetStringAsync($"http://127.0.0.1:{originPort}/plain"));
+        Assert.IsNotNull(seen);
+        StringAssert.Contains(seen!.Protocol, "h1.1");
+        Assert.IsFalse(seen.Protocol.Contains("h3", StringComparison.Ordinal));
+
+        interception.PreferHttp2 = true;
+        interception.PreferHttp3 = true;
+        interception.ReuseServerConnections = true;
+        interception.OutboundTlsProtocols = SslProtocols.None;
+        interception.ApplyHttpProtocols();
+        Assert.IsTrue(proxy.EnableHttp2);
+#pragma warning disable TWP001
+        Assert.AreEqual(InterceptionService.IsHttp3Supported, proxy.EnableHttp3);
+#pragma warning restore TWP001
+        Assert.IsTrue(proxy.EnableConnectionPool);
+        Assert.AreEqual(SslProtocols.None, proxy.SupportedServerSslProtocols);
+        interception.Stop();
+        origin.Stop();
+    }
+
+    private static Titanium.Web.Proxy.ProxyServer ProxyOf(InterceptionService interception) =>
+        (Titanium.Web.Proxy.ProxyServer)typeof(InterceptionService)
+            .GetField("_proxy", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(interception)!;
 
     [TestMethod]
     public async Task OpenNetworkSettings_WithoutWindow_DoesNotChangeUpstream()
