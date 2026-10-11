@@ -17,18 +17,19 @@
       <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
           <SolidColorBrush x:Key="SessionStatusSuccessBrush" Color="#0A5F0A" />
-          <SolidColorBrush x:Key="SessionStatusRedirectBrush" Color="#0078D4" />
-          <SolidColorBrush x:Key="SessionStatusClientErrorBrush" Color="#9A6700" />
-          <SolidColorBrush x:Key="SessionStatusServerErrorBrush" Color="#C42B1C" />
-          <SolidColorBrush x:Key="SessionStatusMutedBrush" Color="#6B6B6B" />
-          <SolidColorBrush x:Key="StatusFeedbackNeutralBrush" Color="#6B6B6B" />
-          <SolidColorBrush x:Key="StatusFeedbackBusyBrush" Color="#0078D4" />
+          <SolidColorBrush x:Key="SessionStatusRedirectBrush" Color="#005A9E" />
+          <SolidColorBrush x:Key="SessionStatusClientErrorBrush" Color="#7A5200" />
+          <SolidColorBrush x:Key="SessionStatusServerErrorBrush" Color="#A4262C" />
+          <SolidColorBrush x:Key="SessionStatusMutedBrush" Color="#595959" />
+          <SolidColorBrush x:Key="StatusFeedbackNeutralBrush" Color="#595959" />
+          <SolidColorBrush x:Key="StatusFeedbackBusyBrush" Color="#005A9E" />
           <SolidColorBrush x:Key="StatusFeedbackSuccessBrush" Color="#0A5F0A" />
-          <SolidColorBrush x:Key="StatusFeedbackWarningBrush" Color="#9A6700" />
-          <SolidColorBrush x:Key="StatusFeedbackErrorBrush" Color="#C42B1C" />
-          <SolidColorBrush x:Key="InspectorLinkBrush" Color="#0066CC" />
-          <SolidColorBrush x:Key="InspectorErrorTextBrush" Color="#C0392B" />
-          <SolidColorBrush x:Key="SessionGridSelectionBrush" Color="#90C0E0" />
+          <SolidColorBrush x:Key="StatusFeedbackWarningBrush" Color="#7A5200" />
+          <SolidColorBrush x:Key="StatusFeedbackErrorBrush" Color="#A4262C" />
+          <SolidColorBrush x:Key="InspectorLinkBrush" Color="#0058A8" />
+          <SolidColorBrush x:Key="InspectorErrorTextBrush" Color="#A4262C" />
+          <x:String x:Key="SessionStatusBaseFontWeight">SemiBold</x:String>
+          <SolidColorBrush x:Key="SessionGridSelectionBrush" Color="#CCE4F7" />
           <SolidColorBrush x:Key="SessionGridSelectionForegroundBrush" Color="#000000" />
           <SolidColorBrush x:Key="SessionGridHoverBrush" Color="#F3F3F3" />
         </ResourceDictionary>
@@ -37,15 +38,16 @@
           <SolidColorBrush x:Key="SessionStatusRedirectBrush" Color="#4CC2FF" />
           <SolidColorBrush x:Key="SessionStatusClientErrorBrush" Color="#FCE100" />
           <SolidColorBrush x:Key="SessionStatusServerErrorBrush" Color="#FF99A4" />
-          <SolidColorBrush x:Key="SessionStatusMutedBrush" Color="#A0A0A0" />
-          <SolidColorBrush x:Key="StatusFeedbackNeutralBrush" Color="#A0A0A0" />
+          <SolidColorBrush x:Key="SessionStatusMutedBrush" Color="#B4B4B4" />
+          <SolidColorBrush x:Key="StatusFeedbackNeutralBrush" Color="#B4B4B4" />
           <SolidColorBrush x:Key="StatusFeedbackBusyBrush" Color="#4CC2FF" />
           <SolidColorBrush x:Key="StatusFeedbackSuccessBrush" Color="#8ADB7A" />
           <SolidColorBrush x:Key="StatusFeedbackWarningBrush" Color="#E8B96A" />
           <SolidColorBrush x:Key="StatusFeedbackErrorBrush" Color="#FF99A4" />
           <SolidColorBrush x:Key="InspectorLinkBrush" Color="#4CC2FF" />
           <SolidColorBrush x:Key="InspectorErrorTextBrush" Color="#FF99A4" />
-          <SolidColorBrush x:Key="SessionGridSelectionBrush" Color="#2B5A8A" />
+          <x:String x:Key="SessionStatusBaseFontWeight">Normal</x:String>
+          <SolidColorBrush x:Key="SessionGridSelectionBrush" Color="#1F4268" />
           <SolidColorBrush x:Key="SessionGridSelectionForegroundBrush" Color="#FFFFFF" />
           <SolidColorBrush x:Key="SessionGridHoverBrush" Color="#2A2D2E" />
           <!-- Accent Start-proxy label must stay dark on light cyan Accent (#4CC2FF). -->
