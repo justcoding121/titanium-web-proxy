@@ -443,5 +443,10 @@
   "ctx.comment": "Megjegyzés…",
   "comment.title": "Megjegyzés",
   "comment.save": "Mentés",
-  "menu.col.comment": "Megjegyzés"
+  "menu.col.comment": "Megjegyzés",
+  "menu.keepOnly": "Csak a kijelöltek maradjanak",
+  "menu.removeMatching": "Az összes szűrésnek megfelelő törlése",
+  "cleanup.removeTitle": "Munkamenetek törlése",
+  "cleanup.removeConfirm": "{0} munkamenet törlése, ebből {1} a jelenlegi szűrő miatt rejtett?",
+  "cleanup.removeAccept": "Törlés"
 }

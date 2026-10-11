@@ -37,6 +37,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     private readonly List<SessionSnapshot> _selectedSessions = new();
     private readonly RelayCommand _clearSessionsCommand;
     private readonly RelayCommand _removeSelectedSessionsCommand;
+    private readonly RelayCommand _keepOnlySelectedCommand;
+    private readonly RelayCommand _removeMatchingCommand;
     private readonly RelayCommand _exportSelectedHarCommand;
     private readonly RelayCommand _exportSelectedArchiveCommand;
     private readonly RelayCommand _copyAsCurlCommand;
@@ -276,6 +278,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         ClearSessionsCommand = _clearSessionsCommand;
         _removeSelectedSessionsCommand = Cmd(RemoveSelectedSessionsAsync, () => HasSelectedSessions);
         RemoveSelectedSessionsCommand = _removeSelectedSessionsCommand;
+        _keepOnlySelectedCommand = Cmd(KeepOnlySelectedAsync, () => CanKeepOnlySelected);
+        KeepOnlySelectedCommand = _keepOnlySelectedCommand;
+        _removeMatchingCommand = Cmd(RemoveMatchingFilterAsync, () => Sessions.Count > 0);
+        RemoveMatchingFilterCommand = _removeMatchingCommand;
         ToggleSystemProxyCommand = Cmd(ToggleSystemProxyAsync);
         InstallCaCommand = Cmd(InstallCaAsync);
         TrustFirefoxCaCommand = Cmd(TrustFirefoxCaAsync);
@@ -1483,6 +1489,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public ICommand ToggleProxyLocalhostCommand { get; }
     public ICommand ClearSessionsCommand { get; }
     public ICommand RemoveSelectedSessionsCommand { get; }
+    public ICommand KeepOnlySelectedCommand { get; }
+    public ICommand RemoveMatchingFilterCommand { get; }
     public ICommand ToggleSystemProxyCommand { get; }
     public ICommand InstallCaCommand { get; }
     public ICommand TrustFirefoxCaCommand { get; }

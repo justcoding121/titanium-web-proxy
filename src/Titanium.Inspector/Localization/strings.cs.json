@@ -443,5 +443,10 @@
   "ctx.comment": "Komentář…",
   "comment.title": "Komentář",
   "comment.save": "Uložit",
-  "menu.col.comment": "Komentář"
+  "menu.col.comment": "Komentář",
+  "menu.keepOnly": "Ponechat jen vybrané",
+  "menu.removeMatching": "Odebrat vše odpovídající filtru",
+  "cleanup.removeTitle": "Odebrat relace",
+  "cleanup.removeConfirm": "Odebrat {0} relací, včetně {1} skrytých aktuálním filtrem?",
+  "cleanup.removeAccept": "Odebrat"
 }

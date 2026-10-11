@@ -31,6 +31,8 @@
                   AutomationProperties.AutomationId="MenuToggleCapturing" />
         <MenuItem x:Name="MenuClearSessions" Header="{loc:Loc menu.clearSessions}" Command="{Binding ClearSessionsCommand}" AutomationProperties.AutomationId="MenuClearSessions" />
         <MenuItem x:Name="MenuRemoveSelected" Header="{loc:Loc menu.removeSelected}" Command="{Binding RemoveSelectedSessionsCommand}" AutomationProperties.AutomationId="MenuRemoveSelected" />
+        <MenuItem Header="{loc:Loc menu.keepOnly}" Command="{Binding KeepOnlySelectedCommand}" AutomationProperties.AutomationId="MenuKeepOnlySelected" />
+        <MenuItem Header="{loc:Loc menu.removeMatching}" Command="{Binding RemoveMatchingFilterCommand}" AutomationProperties.AutomationId="MenuRemoveMatching" />
         <Separator />
         <MenuItem Header="{loc:Loc menu.autoStartCapture}" ToggleType="CheckBox"
                   IsChecked="{Binding AutoStartCapture, Mode=OneWay}"
@@ -578,6 +580,10 @@
             <MenuItem Header="{loc:Loc menu.removeSelected}" Command="{Binding RemoveSelectedSessionsCommand}"
                       IsVisible="{Binding HasSelectedSessions}"
                       AutomationProperties.AutomationId="CtxRemoveSelected" />
+            <MenuItem Header="{loc:Loc menu.keepOnly}" Command="{Binding KeepOnlySelectedCommand}"
+                      AutomationProperties.AutomationId="CtxKeepOnlySelected" />
+            <MenuItem Header="{loc:Loc menu.removeMatching}" Command="{Binding RemoveMatchingFilterCommand}"
+                      AutomationProperties.AutomationId="CtxRemoveMatching" />
           </ContextMenu>
         </DataGrid.ContextMenu>
         <DataGrid.Columns>

@@ -443,5 +443,10 @@
   "ctx.comment": "Kommentar…",
   "comment.title": "Kommentar",
   "comment.save": "Lagre",
-  "menu.col.comment": "Kommentar"
+  "menu.col.comment": "Kommentar",
+  "menu.keepOnly": "Behold bare valgte",
+  "menu.removeMatching": "Fjern alle som samsvarer med filteret",
+  "cleanup.removeTitle": "Fjern økter",
+  "cleanup.removeConfirm": "Fjerne {0} økter, inkludert {1} som er skjult av gjeldende filter?",
+  "cleanup.removeAccept": "Fjern"
 }

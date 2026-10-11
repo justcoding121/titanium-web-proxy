@@ -443,5 +443,10 @@
   "ctx.comment": "نظر…",
   "comment.title": "نظر",
   "comment.save": "ذخیره",
-  "menu.col.comment": "نظر"
+  "menu.col.comment": "نظر",
+  "menu.keepOnly": "فقط موارد انتخاب‌شده بماند",
+  "menu.removeMatching": "حذف همه موارد مطابق فیلتر",
+  "cleanup.removeTitle": "حذف نشست‌ها",
+  "cleanup.removeConfirm": "{0} نشست حذف شود، از جمله {1} مورد که فیلتر فعلی پنهان کرده است؟",
+  "cleanup.removeAccept": "حذف"
 }

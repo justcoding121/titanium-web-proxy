@@ -443,5 +443,10 @@
   "ctx.comment": "Комментарий…",
   "comment.title": "Комментарий",
   "comment.save": "Сохранить",
-  "menu.col.comment": "Комментарий"
+  "menu.col.comment": "Комментарий",
+  "menu.keepOnly": "Оставить только выбранные",
+  "menu.removeMatching": "Удалить все, что подходит под фильтр",
+  "cleanup.removeTitle": "Удалить сеансы",
+  "cleanup.removeConfirm": "Удалить {0} сеансов, включая {1} скрытых текущим фильтром?",
+  "cleanup.removeAccept": "Удалить"
 }

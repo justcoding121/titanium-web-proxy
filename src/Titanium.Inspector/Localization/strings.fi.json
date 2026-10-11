@@ -443,5 +443,10 @@
   "ctx.comment": "Kommentti…",
   "comment.title": "Kommentti",
   "comment.save": "Tallenna",
-  "menu.col.comment": "Kommentti"
+  "menu.col.comment": "Kommentti",
+  "menu.keepOnly": "Säilytä vain valitut",
+  "menu.removeMatching": "Poista kaikki suodinta vastaavat",
+  "cleanup.removeTitle": "Poista istunnot",
+  "cleanup.removeConfirm": "Poistetaanko {0} istuntoa, joista {1} on nykyisen suodattimen piilottamia?",
+  "cleanup.removeAccept": "Poista"
 }

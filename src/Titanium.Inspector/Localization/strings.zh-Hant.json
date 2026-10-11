@@ -443,5 +443,10 @@
   "ctx.comment": "註解…",
   "comment.title": "註解",
   "comment.save": "儲存",
-  "menu.col.comment": "註解"
+  "menu.col.comment": "註解",
+  "menu.keepOnly": "只保留所選",
+  "menu.removeMatching": "刪除所有符合篩選的工作階段",
+  "cleanup.removeTitle": "刪除工作階段",
+  "cleanup.removeConfirm": "刪除 {0} 個工作階段，其中 {1} 個被目前的篩選隱藏？",
+  "cleanup.removeAccept": "刪除"
 }

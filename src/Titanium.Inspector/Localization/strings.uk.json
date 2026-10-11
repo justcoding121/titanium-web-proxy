@@ -443,5 +443,10 @@
   "ctx.comment": "Коментар…",
   "comment.title": "Коментар",
   "comment.save": "Зберегти",
-  "menu.col.comment": "Коментар"
+  "menu.col.comment": "Коментар",
+  "menu.keepOnly": "Залишити лише вибрані",
+  "menu.removeMatching": "Видалити всі, що відповідають фільтру",
+  "cleanup.removeTitle": "Видалити сеанси",
+  "cleanup.removeConfirm": "Видалити {0} сеансів, включно з {1}, які приховує поточний фільтр?",
+  "cleanup.removeAccept": "Видалити"
 }

@@ -443,5 +443,10 @@
   "ctx.comment": "ความคิดเห็น…",
   "comment.title": "ความคิดเห็น",
   "comment.save": "บันทึก",
-  "menu.col.comment": "ความคิดเห็น"
+  "menu.col.comment": "ความคิดเห็น",
+  "menu.keepOnly": "เก็บเฉพาะที่เลือก",
+  "menu.removeMatching": "ลบทั้งหมดที่ตรงกับตัวกรอง",
+  "cleanup.removeTitle": "ลบเซสชัน",
+  "cleanup.removeConfirm": "ลบ {0} เซสชัน รวม {1} รายการที่ตัวกรองปัจจุบันซ่อนไว้?",
+  "cleanup.removeAccept": "ลบ"
 }

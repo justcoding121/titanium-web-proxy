@@ -443,5 +443,10 @@
   "ctx.comment": "تعليق…",
   "comment.title": "تعليق",
   "comment.save": "حفظ",
-  "menu.col.comment": "تعليق"
+  "menu.col.comment": "تعليق",
+  "menu.keepOnly": "إبقاء المحدد فقط",
+  "menu.removeMatching": "إزالة كل ما يطابق عامل التصفية",
+  "cleanup.removeTitle": "إزالة الجلسات",
+  "cleanup.removeConfirm": "إزالة {0} جلسة، بما في ذلك {1} مخفية بعامل التصفية الحالي؟",
+  "cleanup.removeAccept": "إزالة"
 }

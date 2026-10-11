@@ -443,5 +443,10 @@
   "ctx.comment": "Komentar…",
   "comment.title": "Komentar",
   "comment.save": "Simpan",
-  "menu.col.comment": "Komentar"
+  "menu.col.comment": "Komentar",
+  "menu.keepOnly": "Pertahankan hanya yang dipilih",
+  "menu.removeMatching": "Hapus semua yang cocok dengan filter",
+  "cleanup.removeTitle": "Hapus sesi",
+  "cleanup.removeConfirm": "Hapus {0} sesi, termasuk {1} yang disembunyikan filter saat ini?",
+  "cleanup.removeAccept": "Hapus"
 }

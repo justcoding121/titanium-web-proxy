@@ -443,5 +443,10 @@
   "ctx.comment": "टिप्पणी…",
   "comment.title": "टिप्पणी",
   "comment.save": "सहेजें",
-  "menu.col.comment": "टिप्पणी"
+  "menu.col.comment": "टिप्पणी",
+  "menu.keepOnly": "केवल चयनित रखें",
+  "menu.removeMatching": "फ़िल्टर से मेल खाने वाली सभी हटाएँ",
+  "cleanup.removeTitle": "सत्र हटाएँ",
+  "cleanup.removeConfirm": "{0} सत्र हटाएँ, जिनमें से {1} वर्तमान फ़िल्टर से छिपे हैं?",
+  "cleanup.removeAccept": "हटाएँ"
 }

@@ -443,5 +443,10 @@
   "ctx.comment": "Kommentar…",
   "comment.title": "Kommentar",
   "comment.save": "Speichern",
-  "menu.col.comment": "Kommentar"
+  "menu.col.comment": "Kommentar",
+  "menu.keepOnly": "Nur Auswahl behalten",
+  "menu.removeMatching": "Alle passenden Filter entfernen",
+  "cleanup.removeTitle": "Sitzungen entfernen",
+  "cleanup.removeConfirm": "{0} Sitzungen entfernen, davon {1} vom aktuellen Filter verdeckt?",
+  "cleanup.removeAccept": "Entfernen"
 }

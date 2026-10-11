@@ -443,5 +443,10 @@
   "ctx.comment": "Σχόλιο…",
   "comment.title": "Σχόλιο",
   "comment.save": "Αποθήκευση",
-  "menu.col.comment": "Σχόλιο"
+  "menu.col.comment": "Σχόλιο",
+  "menu.keepOnly": "Διατήρηση μόνο των επιλεγμένων",
+  "menu.removeMatching": "Αφαίρεση όλων που ταιριάζουν στο φίλτρο",
+  "cleanup.removeTitle": "Αφαίρεση συνεδριών",
+  "cleanup.removeConfirm": "Αφαίρεση {0} συνεδριών, από τις οποίες {1} είναι κρυμμένες από το τρέχον φίλτρο;",
+  "cleanup.removeAccept": "Αφαίρεση"
 }

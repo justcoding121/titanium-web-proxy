@@ -443,5 +443,10 @@
   "ctx.comment": "Kommentar…",
   "comment.title": "Kommentar",
   "comment.save": "Gem",
-  "menu.col.comment": "Kommentar"
+  "menu.col.comment": "Kommentar",
+  "menu.keepOnly": "Behold kun valgte",
+  "menu.removeMatching": "Fjern alle der matcher filteret",
+  "cleanup.removeTitle": "Fjern sessioner",
+  "cleanup.removeConfirm": "Fjern {0} sessioner, heraf {1} skjult af det aktuelle filter?",
+  "cleanup.removeAccept": "Fjern"
 }

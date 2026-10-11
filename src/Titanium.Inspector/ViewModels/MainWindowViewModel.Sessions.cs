@@ -104,6 +104,99 @@ public sealed partial class MainWindowViewModel
             toastImportant: true);
         return Task.CompletedTask;
     }
+
+    private bool CanKeepOnlySelected =>
+        HasSelectedSessions && ResolveFilterSelection().Count < _all.Count;
+
+    private async Task KeepOnlySelectedAsync()
+    {
+        var keep = ResolveFilterSelection().Select(s => s.Id).ToHashSet();
+        if (keep.Count == 0 || keep.Count >= _all.Count)
+        {
+            return;
+        }
+
+        var visible = Sessions.Select(s => s.Id).ToHashSet();
+        var remove = new List<long>();
+        var hidden = 0;
+        foreach (var session in _all)
+        {
+            if (keep.Contains(session.Id))
+            {
+                continue;
+            }
+
+            remove.Add(session.Id);
+            if (!visible.Contains(session.Id))
+            {
+                hidden++;
+            }
+        }
+
+        if (!await _dialogs.ConfirmRemoveSessionsAsync(TryGetMainWindow(), remove.Count, hidden).ConfigureAwait(true))
+        {
+            return;
+        }
+
+        RemoveCapturedIds(remove);
+    }
+
+    private async Task RemoveMatchingFilterAsync()
+    {
+        var remove = Sessions.Select(s => s.Id).ToList();
+        if (remove.Count == 0)
+        {
+            return;
+        }
+
+        var visible = remove.ToHashSet();
+        var hidden = 0;
+        foreach (var session in _all)
+        {
+            if (!visible.Contains(session.Id) && SessionSearch.Matches(session, SearchQuery))
+            {
+                hidden++;
+                remove.Add(session.Id);
+            }
+        }
+
+        if (!await _dialogs.ConfirmRemoveSessionsAsync(TryGetMainWindow(), remove.Count, hidden).ConfigureAwait(true))
+        {
+            return;
+        }
+
+        RemoveCapturedIds(remove);
+    }
+
+    private void RemoveCapturedIds(List<long> remove)
+    {
+        var ids = remove.ToHashSet();
+        _selectedSessions.RemoveAll(s => ids.Contains(s.Id));
+        if (SelectedSession is not null && ids.Contains(SelectedSession.Id))
+        {
+            SelectedSession = null;
+            ShowSessionDetails = false;
+        }
+
+        _userRemovalDepth++;
+        _suppressOpenSessionDetails = true;
+        try
+        {
+            _store.Remove(ids);
+        }
+        finally
+        {
+            _suppressOpenSessionDetails = false;
+            _userRemovalDepth--;
+        }
+
+        RefreshSessionCountText();
+        NotifyFilterSelectionProperties();
+        SetOutcomeStatus(
+            ids.Count == 1 ? "Removed 1 session" : $"Removed {ids.Count} sessions",
+            StatusSeverity.Success,
+            toastImportant: true);
+    }
     private async Task LoadFromSelectedAsync()
     {
         var selected = SelectedSession;
@@ -567,6 +660,8 @@ public sealed partial class MainWindowViewModel
     {
         _clearSessionsCommand.RaiseCanExecuteChanged();
         _removeSelectedSessionsCommand.RaiseCanExecuteChanged();
+        _keepOnlySelectedCommand.RaiseCanExecuteChanged();
+        _removeMatchingCommand.RaiseCanExecuteChanged();
         _exportSelectedHarCommand.RaiseCanExecuteChanged();
         _exportSelectedArchiveCommand.RaiseCanExecuteChanged();
         _copyAsCurlCommand.RaiseCanExecuteChanged();

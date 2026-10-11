@@ -443,5 +443,10 @@
   "ctx.comment": "Yorum…",
   "comment.title": "Yorum",
   "comment.save": "Kaydet",
-  "menu.col.comment": "Yorum"
+  "menu.col.comment": "Yorum",
+  "menu.keepOnly": "Yalnızca seçilenleri tut",
+  "menu.removeMatching": "Filtreyle eşleşenlerin tümünü kaldır",
+  "cleanup.removeTitle": "Oturumları kaldır",
+  "cleanup.removeConfirm": "Geçerli filtrenin gizlediği {1} oturum dahil {0} oturum kaldırılsın mı?",
+  "cleanup.removeAccept": "Kaldır"
 }

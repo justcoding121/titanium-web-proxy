@@ -443,5 +443,10 @@
   "ctx.comment": "Komentarz…",
   "comment.title": "Komentarz",
   "comment.save": "Zapisz",
-  "menu.col.comment": "Komentarz"
+  "menu.col.comment": "Komentarz",
+  "menu.keepOnly": "Zostaw tylko zaznaczone",
+  "menu.removeMatching": "Usuń wszystkie pasujące do filtra",
+  "cleanup.removeTitle": "Usuń sesje",
+  "cleanup.removeConfirm": "Usunąć {0} sesji, w tym {1} ukrytych przez bieżący filtr?",
+  "cleanup.removeAccept": "Usuń"
 }

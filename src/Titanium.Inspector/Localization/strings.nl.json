@@ -443,5 +443,10 @@
   "ctx.comment": "Opmerking…",
   "comment.title": "Opmerking",
   "comment.save": "Opslaan",
-  "menu.col.comment": "Opmerking"
+  "menu.col.comment": "Opmerking",
+  "menu.keepOnly": "Alleen selectie behouden",
+  "menu.removeMatching": "Alles verwijderen dat aan het filter voldoet",
+  "cleanup.removeTitle": "Sessies verwijderen",
+  "cleanup.removeConfirm": "{0} sessies verwijderen, waarvan {1} verborgen door het huidige filter?",
+  "cleanup.removeAccept": "Verwijderen"
 }

@@ -443,5 +443,10 @@
   "ctx.comment": "주석…",
   "comment.title": "주석",
   "comment.save": "저장",
-  "menu.col.comment": "주석"
+  "menu.col.comment": "주석",
+  "menu.keepOnly": "선택한 항목만 유지",
+  "menu.removeMatching": "필터와 일치하는 항목 모두 제거",
+  "cleanup.removeTitle": "세션 제거",
+  "cleanup.removeConfirm": "세션 {0}개를 제거합니다. 그중 {1}개는 현재 필터에 가려져 있습니다. 계속할까요?",
+  "cleanup.removeAccept": "제거"
 }

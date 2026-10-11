@@ -443,5 +443,10 @@
   "ctx.comment": "Ghi chú…",
   "comment.title": "Ghi chú",
   "comment.save": "Lưu",
-  "menu.col.comment": "Ghi chú"
+  "menu.col.comment": "Ghi chú",
+  "menu.keepOnly": "Chỉ giữ mục đã chọn",
+  "menu.removeMatching": "Xóa mọi mục khớp bộ lọc",
+  "cleanup.removeTitle": "Xóa phiên",
+  "cleanup.removeConfirm": "Xóa {0} phiên, gồm {1} phiên đang bị bộ lọc hiện tại ẩn?",
+  "cleanup.removeAccept": "Xóa"
 }

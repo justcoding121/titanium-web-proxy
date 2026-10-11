@@ -443,5 +443,10 @@
   "ctx.comment": "注释…",
   "comment.title": "注释",
   "comment.save": "保存",
-  "menu.col.comment": "注释"
+  "menu.col.comment": "注释",
+  "menu.keepOnly": "只保留所选",
+  "menu.removeMatching": "删除所有符合筛选的会话",
+  "cleanup.removeTitle": "删除会话",
+  "cleanup.removeConfirm": "删除 {0} 个会话，其中 {1} 个被当前筛选隐藏？",
+  "cleanup.removeAccept": "删除"
 }

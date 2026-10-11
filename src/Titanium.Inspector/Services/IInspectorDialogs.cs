@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Titanium.Inspector.Localization;
 using Titanium.Inspector.Views;
 using Titanium.Web.Proxy.Network;
 
@@ -75,6 +76,12 @@ public interface IInspectorDialogs
 
     /// <summary>Edit a session comment. Null means the user cancelled. Empty clears the comment.</summary>
     Task<string?> PromptCommentAsync(Window? owner, string? current, int maxLength);
+
+    /// <summary>
+    /// Confirm removing <paramref name="removeCount"/> sessions, of which <paramref name="hiddenCount"/>
+    /// are not in the current filter. False cancels.
+    /// </summary>
+    Task<bool> ConfirmRemoveSessionsAsync(Window? owner, int removeCount, int hiddenCount);
 }
 
 /// <summary>Avalonia modal dialogs.</summary>
@@ -284,6 +291,14 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
 
     public Task<string?> PromptCommentAsync(Window? owner, string? current, int maxLength) =>
         CommentPrompt.ShowAsync(owner, current, maxLength);
+
+    public Task<bool> ConfirmRemoveSessionsAsync(Window? owner, int removeCount, int hiddenCount) =>
+        SimpleConfirmDialog.ShowAsync(
+            owner,
+            LanguageService.Get("cleanup.removeTitle"),
+            LanguageService.Format("cleanup.removeConfirm", removeCount, hiddenCount),
+            accept: LanguageService.Get("cleanup.removeAccept"),
+            cancel: LanguageService.Get("common.cancel"));
 }
 
 /// <summary>Scripted answers for unit / E2E-UI tests (no real windows).</summary>
@@ -452,5 +467,21 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
     {
         CommentCalls++;
         return Task.FromResult(CommentResult);
+    }
+
+    public bool RemoveSessionsResult { get; set; }
+
+    public int RemoveSessionsCalls { get; private set; }
+
+    public int LastRemoveCount { get; private set; }
+
+    public int LastHiddenCount { get; private set; }
+
+    public Task<bool> ConfirmRemoveSessionsAsync(Window? owner, int removeCount, int hiddenCount)
+    {
+        RemoveSessionsCalls++;
+        LastRemoveCount = removeCount;
+        LastHiddenCount = hiddenCount;
+        return Task.FromResult(RemoveSessionsResult);
     }
 }

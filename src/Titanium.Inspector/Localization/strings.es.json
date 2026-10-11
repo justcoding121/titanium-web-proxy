@@ -443,5 +443,10 @@
   "ctx.comment": "Comentario…",
   "comment.title": "Comentario",
   "comment.save": "Guardar",
-  "menu.col.comment": "Comentario"
+  "menu.col.comment": "Comentario",
+  "menu.keepOnly": "Conservar solo la selección",
+  "menu.removeMatching": "Quitar todo lo que coincide con el filtro",
+  "cleanup.removeTitle": "Quitar sesiones",
+  "cleanup.removeConfirm": "¿Quitar {0} sesiones, incluidas {1} ocultas por el filtro actual?",
+  "cleanup.removeAccept": "Quitar"
 }

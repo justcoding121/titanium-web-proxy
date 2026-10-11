@@ -443,5 +443,10 @@
   "ctx.comment": "Kommentar…",
   "comment.title": "Kommentar",
   "comment.save": "Spara",
-  "menu.col.comment": "Kommentar"
+  "menu.col.comment": "Kommentar",
+  "menu.keepOnly": "Behåll bara markerade",
+  "menu.removeMatching": "Ta bort alla som matchar filtret",
+  "cleanup.removeTitle": "Ta bort sessioner",
+  "cleanup.removeConfirm": "Ta bort {0} sessioner, varav {1} döljs av det aktuella filtret?",
+  "cleanup.removeAccept": "Ta bort"
 }

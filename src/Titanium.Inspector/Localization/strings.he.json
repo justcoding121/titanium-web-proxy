@@ -443,5 +443,10 @@
   "ctx.comment": "הערה…",
   "comment.title": "הערה",
   "comment.save": "שמירה",
-  "menu.col.comment": "הערה"
+  "menu.col.comment": "הערה",
+  "menu.keepOnly": "השאר רק את הבחירה",
+  "menu.removeMatching": "הסר את כל מה שתואם למסנן",
+  "cleanup.removeTitle": "הסרת הפעלות",
+  "cleanup.removeConfirm": "להסיר {0} הפעלות, כולל {1} המוסתרות על ידי המסנן הנוכחי?",
+  "cleanup.removeAccept": "הסר"
 }

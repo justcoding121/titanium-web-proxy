@@ -158,7 +158,7 @@ The list limit and the disk limit are separate:
 | **Capture → Clear sessions** | Cleared | Deleted, including rows the list limit already hid | Kept, so you can import them from the cache folder |
 | **Clear saved session cache…** | Kept | Deleted after you confirm the run count and size | Deleted |
 
-**Clear sessions** does not ask for confirmation. The status line reports how much disk it freed. **Clear saved session cache…** is on the Session retention window, next to **Open cache folder**, and asks before it deletes. Sessions stay in the list, but their saved bodies are removed. New captures use a fresh run folder.
+**Keep only selected** and **Remove all matching filter** ask first. The question says how many sessions will go and how many of those are hidden by the current filter. The rows are chosen when you confirm, so a filter change while the question is open does not change the set. **Clear sessions** does not ask for confirmation. The status line reports how much disk it freed. **Clear saved session cache…** is on the Session retention window, next to **Open cache folder**, and asks before it deletes. Sessions stay in the list, but their saved bodies are removed. New captures use a fresh run folder.
 
 ### Excluded hosts
 
