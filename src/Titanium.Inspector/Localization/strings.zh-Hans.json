@@ -358,5 +358,12 @@
   "menu.disableCaching": "禁用缓存",
   "menu.disableCachingTip": "移除条件请求标头，使每次请求都是完整获取。",
   "menu.forceUncompressed": "强制未压缩响应",
-  "menu.forceUncompressedTip": "要求服务器发送未压缩的正文。"
+  "menu.forceUncompressedTip": "要求服务器发送未压缩的正文。",
+  "custom.settings": "自定义设置 ({0})",
+  "custom.upstream": "上游代理",
+  "custom.http2Off": "HTTP/2 已关闭",
+  "custom.http3Off": "到服务器的 HTTP/3 已关闭",
+  "custom.reuseOff": "不复用服务器连接",
+  "custom.resetDone": "已恢复自定义设置。",
+  "custom.upstreamNextStart": "已恢复自定义设置。上游代理在下次开始捕获时生效。"
 }

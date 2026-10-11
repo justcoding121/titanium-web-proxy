@@ -358,5 +358,12 @@
   "menu.disableCaching": "Disable caching",
   "menu.disableCachingTip": "Removes conditional request headers so every request is a full fetch.",
   "menu.forceUncompressed": "Force uncompressed responses",
-  "menu.forceUncompressedTip": "Asks servers to send an uncompressed body."
+  "menu.forceUncompressedTip": "Asks servers to send an uncompressed body.",
+  "custom.settings": "Custom settings ({0})",
+  "custom.upstream": "Upstream proxy",
+  "custom.http2Off": "HTTP/2 off",
+  "custom.http3Off": "HTTP/3 to servers off",
+  "custom.reuseOff": "Server connections are not reused",
+  "custom.resetDone": "Custom settings restored.",
+  "custom.upstreamNextStart": "Custom settings restored. The upstream proxy applies the next time capture starts."
 }

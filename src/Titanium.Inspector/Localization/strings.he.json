@@ -358,5 +358,12 @@
   "menu.disableCaching": "השבת מטמון",
   "menu.disableCachingTip": "מסיר כותרות מותנות כדי שכל בקשה תהיה מלאה.",
   "menu.forceUncompressed": "כפה תגובות לא דחוסות",
-  "menu.forceUncompressedTip": "מבקש מהשרתים גוף לא דחוס."
+  "menu.forceUncompressedTip": "מבקש מהשרתים גוף לא דחוס.",
+  "custom.settings": "הגדרות מותאמות ({0})",
+  "custom.upstream": "מתווך במעלה הזרם",
+  "custom.http2Off": "HTTP/2 כבוי",
+  "custom.http3Off": "HTTP/3 לשרתים כבוי",
+  "custom.reuseOff": "חיבורי השרת אינם בשימוש חוזר",
+  "custom.resetDone": "ההגדרות המותאמות שוחזרו.",
+  "custom.upstreamNextStart": "ההגדרות המותאמות שוחזרו. המתווך במעלה הזרם יחול בהפעלת הלכידה הבאה."
 }

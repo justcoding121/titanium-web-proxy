@@ -358,5 +358,12 @@
   "menu.disableCaching": "Inaktivera cache",
   "menu.disableCachingTip": "Tar bort villkorliga rubriker så att varje begäran är fullständig.",
   "menu.forceUncompressed": "Tvinga okomprimerade svar",
-  "menu.forceUncompressedTip": "Ber servrar skicka en okomprimerad kropp."
+  "menu.forceUncompressedTip": "Ber servrar skicka en okomprimerad kropp.",
+  "custom.settings": "Anpassade inställningar ({0})",
+  "custom.upstream": "Uppströmsproxy",
+  "custom.http2Off": "HTTP/2 av",
+  "custom.http3Off": "HTTP/3 till servrar av",
+  "custom.reuseOff": "Serveranslutningar återanvänds inte",
+  "custom.resetDone": "Anpassade inställningar återställda.",
+  "custom.upstreamNextStart": "Anpassade inställningar återställda. Uppströmsproxyn gäller nästa gång inspelningen startar."
 }

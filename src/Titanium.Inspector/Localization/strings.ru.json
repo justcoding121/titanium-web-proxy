@@ -358,5 +358,12 @@
   "menu.disableCaching": "Отключить кэш",
   "menu.disableCachingTip": "Удаляет условные заголовки, чтобы каждый запрос был полным.",
   "menu.forceUncompressed": "Принудительно без сжатия",
-  "menu.forceUncompressedTip": "Просит серверы отправить несжатое тело."
+  "menu.forceUncompressedTip": "Просит серверы отправить несжатое тело.",
+  "custom.settings": "Свои параметры ({0})",
+  "custom.upstream": "Вышестоящий прокси",
+  "custom.http2Off": "HTTP/2 выключен",
+  "custom.http3Off": "HTTP/3 к серверам выключен",
+  "custom.reuseOff": "Соединения с сервером не переиспользуются",
+  "custom.resetDone": "Свои параметры восстановлены.",
+  "custom.upstreamNextStart": "Свои параметры восстановлены. Вышестоящий прокси применится при следующем запуске захвата."
 }

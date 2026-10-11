@@ -358,5 +358,12 @@
   "menu.disableCaching": "Deaktiver hurtigbuffer",
   "menu.disableCachingTip": "Fjerner betingede overskrifter slik at hver forespørsel er full.",
   "menu.forceUncompressed": "Tving ukomprimerte svar",
-  "menu.forceUncompressedTip": "Ber tjenere sende et ukomprimert innhold."
+  "menu.forceUncompressedTip": "Ber tjenere sende et ukomprimert innhold.",
+  "custom.settings": "Egendefinerte innstillinger ({0})",
+  "custom.upstream": "Oppstrømsproxy",
+  "custom.http2Off": "HTTP/2 av",
+  "custom.http3Off": "HTTP/3 til tjenere av",
+  "custom.reuseOff": "Tjenerforbindelser brukes ikke om igjen",
+  "custom.resetDone": "Egendefinerte innstillinger gjenopprettet.",
+  "custom.upstreamNextStart": "Egendefinerte innstillinger gjenopprettet. Oppstrømsproxyen gjelder neste gang opptak startes."
 }

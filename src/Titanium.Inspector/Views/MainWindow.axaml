@@ -1130,7 +1130,7 @@
           </Button>
         </StackPanel>
       </Border>
-      <Grid Grid.Row="2" Grid.ColumnSpan="4" Margin="8" ColumnDefinitions="Auto,*,Auto,Auto"
+      <Grid Grid.Row="2" Grid.ColumnSpan="4" Margin="8" ColumnDefinitions="Auto,*,Auto,Auto,Auto"
             x:Name="StatusBarPanel" AutomationProperties.AutomationId="StatusBarPanel">
         <ProgressBar Grid.Column="0" Width="72" Height="4" Margin="0,0,8,0"
                      IsIndeterminate="True" VerticalAlignment="Center"
@@ -1148,7 +1148,31 @@
                 AutomationProperties.AutomationId="SessionCountLink">
           <TextBlock Text="{Binding SessionCountText}" AutomationProperties.AutomationId="SessionCountText" />
         </Button>
-        <Button Grid.Column="3" Content="{Binding ExclusionSummaryText}" Margin="8,0,0,0"
+        <Button Grid.Column="3" Content="{Binding CustomSettingsLabel}" Margin="8,0,0,0"
+                VerticalAlignment="Center" Padding="4,0" Background="Transparent" BorderThickness="0"
+                IsVisible="{Binding HasCustomSettings}"
+                Opacity="0.85" FontSize="11"
+                ToolTip.Tip="{Binding CustomSettingsDetail}"
+                AutomationProperties.AutomationId="CustomSettingsLink">
+          <Button.Flyout>
+            <Flyout Placement="Top">
+              <StackPanel MinWidth="220" MaxWidth="360">
+                <ItemsControl ItemsSource="{Binding CustomSettingLines}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,0,0,4" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Content="{loc:Loc network.reset}"
+                        HorizontalAlignment="Left" Margin="0,8,0,0"
+                        Command="{Binding ResetCustomSettingsCommand}"
+                        AutomationProperties.AutomationId="CustomSettingsReset" />
+              </StackPanel>
+            </Flyout>
+          </Button.Flyout>
+        </Button>
+        <Button Grid.Column="4" Content="{Binding ExclusionSummaryText}" Margin="8,0,0,0"
                 VerticalAlignment="Center" Padding="4,0" Background="Transparent" BorderThickness="0"
                 Command="{Binding OpenExclusionSummaryCommand}"
                 IsVisible="{Binding HasExclusionSummary}"

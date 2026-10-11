@@ -358,5 +358,12 @@
   "menu.disableCaching": "Poista välimuisti käytöstä",
   "menu.disableCachingTip": "Poistaa ehdolliset otsikot, jotta jokainen pyyntö on täydellinen.",
   "menu.forceUncompressed": "Pakota pakkaamattomat vastaukset",
-  "menu.forceUncompressedTip": "Pyytää palvelimia lähettämään pakkaamattoman sisällön."
+  "menu.forceUncompressedTip": "Pyytää palvelimia lähettämään pakkaamattoman sisällön.",
+  "custom.settings": "Omat asetukset ({0})",
+  "custom.upstream": "Ylävirran välityspalvelin",
+  "custom.http2Off": "HTTP/2 pois",
+  "custom.http3Off": "HTTP/3 palvelimille pois",
+  "custom.reuseOff": "Palvelinyhteyksiä ei käytetä uudelleen",
+  "custom.resetDone": "Omat asetukset palautettu.",
+  "custom.upstreamNextStart": "Omat asetukset palautettu. Ylävirran välityspalvelin tulee voimaan seuraavan kaappauksen alkaessa."
 }

@@ -358,5 +358,12 @@
   "menu.disableCaching": "Nonaktifkan cache",
   "menu.disableCachingTip": "Menghapus header bersyarat agar setiap permintaan utuh.",
   "menu.forceUncompressed": "Paksa respons tanpa kompresi",
-  "menu.forceUncompressedTip": "Meminta server mengirim isi tanpa kompresi."
+  "menu.forceUncompressedTip": "Meminta server mengirim isi tanpa kompresi.",
+  "custom.settings": "Setelan khusus ({0})",
+  "custom.upstream": "Proksi hulu",
+  "custom.http2Off": "HTTP/2 mati",
+  "custom.http3Off": "HTTP/3 ke server mati",
+  "custom.reuseOff": "Koneksi server tidak dipakai ulang",
+  "custom.resetDone": "Setelan khusus dipulihkan.",
+  "custom.upstreamNextStart": "Setelan khusus dipulihkan. Proksi hulu berlaku saat penangkapan berikutnya dimulai."
 }

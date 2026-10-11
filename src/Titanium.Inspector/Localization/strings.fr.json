@@ -358,5 +358,12 @@
   "menu.disableCaching": "Désactiver le cache",
   "menu.disableCachingTip": "Retire les en-têtes conditionnels pour que chaque requête soit complète.",
   "menu.forceUncompressed": "Forcer les réponses non compressées",
-  "menu.forceUncompressedTip": "Demande aux serveurs un corps non compressé."
+  "menu.forceUncompressedTip": "Demande aux serveurs un corps non compressé.",
+  "custom.settings": "Paramètres personnalisés ({0})",
+  "custom.upstream": "Proxy amont",
+  "custom.http2Off": "HTTP/2 désactivé",
+  "custom.http3Off": "HTTP/3 vers les serveurs désactivé",
+  "custom.reuseOff": "Les connexions serveur ne sont pas réutilisées",
+  "custom.resetDone": "Paramètres personnalisés rétablis.",
+  "custom.upstreamNextStart": "Paramètres personnalisés rétablis. Le proxy amont s applique au prochain démarrage de la capture."
 }

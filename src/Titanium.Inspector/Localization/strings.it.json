@@ -358,5 +358,12 @@
   "menu.disableCaching": "Disattiva cache",
   "menu.disableCachingTip": "Rimuove le intestazioni condizionali così ogni richiesta è completa.",
   "menu.forceUncompressed": "Forza risposte non compresse",
-  "menu.forceUncompressedTip": "Chiede ai server un corpo non compresso."
+  "menu.forceUncompressedTip": "Chiede ai server un corpo non compresso.",
+  "custom.settings": "Impostazioni personalizzate ({0})",
+  "custom.upstream": "Proxy a monte",
+  "custom.http2Off": "HTTP/2 disattivato",
+  "custom.http3Off": "HTTP/3 verso i server disattivato",
+  "custom.reuseOff": "Le connessioni al server non vengono riutilizzate",
+  "custom.resetDone": "Impostazioni personalizzate ripristinate.",
+  "custom.upstreamNextStart": "Impostazioni personalizzate ripristinate. Il proxy a monte si applica al prossimo avvio della cattura."
 }

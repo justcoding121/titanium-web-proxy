@@ -358,5 +358,12 @@
   "menu.disableCaching": "Wyłącz pamięć podręczną",
   "menu.disableCachingTip": "Usuwa warunkowe nagłówki, aby każde żądanie było pełne.",
   "menu.forceUncompressed": "Wymuś nieskompresowane odpowiedzi",
-  "menu.forceUncompressedTip": "Prosi serwery o nieskompresowaną treść."
+  "menu.forceUncompressedTip": "Prosi serwery o nieskompresowaną treść.",
+  "custom.settings": "Ustawienia niestandardowe ({0})",
+  "custom.upstream": "Serwer proxy nadrzędny",
+  "custom.http2Off": "HTTP/2 wyłączone",
+  "custom.http3Off": "HTTP/3 do serwerów wyłączone",
+  "custom.reuseOff": "Połączenia z serwerem nie są używane ponownie",
+  "custom.resetDone": "Ustawienia niestandardowe przywrócone.",
+  "custom.upstreamNextStart": "Ustawienia niestandardowe przywrócone. Serwer proxy nadrzędny zadziała przy następnym uruchomieniu przechwytywania."
 }

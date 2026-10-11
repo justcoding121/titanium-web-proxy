@@ -358,5 +358,12 @@
   "menu.disableCaching": "停用快取",
   "menu.disableCachingTip": "移除條件式要求標頭，使每次要求都是完整取得。",
   "menu.forceUncompressed": "強制未壓縮回應",
-  "menu.forceUncompressedTip": "要求伺服器傳送未壓縮的本文。"
+  "menu.forceUncompressedTip": "要求伺服器傳送未壓縮的本文。",
+  "custom.settings": "自訂設定 ({0})",
+  "custom.upstream": "上游代理",
+  "custom.http2Off": "HTTP/2 已關閉",
+  "custom.http3Off": "到伺服器的 HTTP/3 已關閉",
+  "custom.reuseOff": "不重複使用伺服器連線",
+  "custom.resetDone": "已還原自訂設定。",
+  "custom.upstreamNextStart": "已還原自訂設定。上游代理會在下次開始擷取時生效。"
 }

@@ -358,5 +358,12 @@
   "menu.disableCaching": "تعطيل التخزين المؤقت",
   "menu.disableCachingTip": "يزيل ترويسات الطلب الشرطية ليكون كل طلب كاملاً.",
   "menu.forceUncompressed": "فرض استجابات غير مضغوطة",
-  "menu.forceUncompressedTip": "يطلب من الخوادم إرسال محتوى غير مضغوط."
+  "menu.forceUncompressedTip": "يطلب من الخوادم إرسال محتوى غير مضغوط.",
+  "custom.settings": "إعدادات مخصصة ({0})",
+  "custom.upstream": "وكيل علوي",
+  "custom.http2Off": "HTTP/2 متوقف",
+  "custom.http3Off": "HTTP/3 إلى الخوادم متوقف",
+  "custom.reuseOff": "لا يعاد استخدام اتصالات الخادم",
+  "custom.resetDone": "تمت استعادة الإعدادات المخصصة.",
+  "custom.upstreamNextStart": "تمت استعادة الإعدادات المخصصة. يُطبق الوكيل العلوي عند بدء الالتقاط التالي."
 }

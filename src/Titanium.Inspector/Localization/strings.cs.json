@@ -358,5 +358,12 @@
   "menu.disableCaching": "Zakázat mezipaměť",
   "menu.disableCachingTip": "Odebere podmíněné hlavičky, aby každý požadavek byl úplný.",
   "menu.forceUncompressed": "Vynutit nekomprimované odpovědi",
-  "menu.forceUncompressedTip": "Žádá servery o nekomprimované tělo."
+  "menu.forceUncompressedTip": "Žádá servery o nekomprimované tělo.",
+  "custom.settings": "Vlastní nastavení ({0})",
+  "custom.upstream": "Nadřazená proxy",
+  "custom.http2Off": "HTTP/2 vypnuto",
+  "custom.http3Off": "HTTP/3 k serverům vypnuto",
+  "custom.reuseOff": "Spojení se servery se nepoužívají znovu",
+  "custom.resetDone": "Vlastní nastavení obnoveno.",
+  "custom.upstreamNextStart": "Vlastní nastavení obnoveno. Nadřazená proxy se použije při příštím spuštění zachytávání."
 }

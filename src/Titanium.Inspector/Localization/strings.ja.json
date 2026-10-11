@@ -358,5 +358,12 @@
   "menu.disableCaching": "キャッシュを無効にする",
   "menu.disableCachingTip": "条件付きヘッダーを外し、毎回完全な取得にします。",
   "menu.forceUncompressed": "非圧縮の応答を強制",
-  "menu.forceUncompressedTip": "サーバーに圧縮しない本文を求めます。"
+  "menu.forceUncompressedTip": "サーバーに圧縮しない本文を求めます。",
+  "custom.settings": "カスタム設定 ({0})",
+  "custom.upstream": "上流プロキシ",
+  "custom.http2Off": "HTTP/2 オフ",
+  "custom.http3Off": "サーバーへの HTTP/3 オフ",
+  "custom.reuseOff": "サーバー接続を再利用しない",
+  "custom.resetDone": "カスタム設定を元に戻しました。",
+  "custom.upstreamNextStart": "カスタム設定を元に戻しました。上流プロキシは次にキャプチャを開始したときに適用されます。"
 }

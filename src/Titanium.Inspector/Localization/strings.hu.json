@@ -358,5 +358,12 @@
   "menu.disableCaching": "Gyorsítótár kikapcsolása",
   "menu.disableCachingTip": "Eltávolítja a feltételes fejléceket, hogy minden kérés teljes legyen.",
   "menu.forceUncompressed": "Tömörítetlen válaszok kényszerítése",
-  "menu.forceUncompressedTip": "A szerverektől tömörítetlen törzset kér."
+  "menu.forceUncompressedTip": "A szerverektől tömörítetlen törzset kér.",
+  "custom.settings": "Egyéni beállítások ({0})",
+  "custom.upstream": "Felfelé irányuló proxy",
+  "custom.http2Off": "HTTP/2 ki",
+  "custom.http3Off": "HTTP/3 a kiszolgálók felé ki",
+  "custom.reuseOff": "A kiszolgálókapcsolatok nem használódnak újra",
+  "custom.resetDone": "Az egyéni beállítások visszaállítva.",
+  "custom.upstreamNextStart": "Az egyéni beállítások visszaállítva. A felfelé irányuló proxy a következő rögzítés indításakor lép életbe."
 }

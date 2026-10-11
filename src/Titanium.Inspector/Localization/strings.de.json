@@ -358,5 +358,12 @@
   "menu.disableCaching": "Zwischenspeichern deaktivieren",
   "menu.disableCachingTip": "Entfernt bedingte Anfrageheader, damit jede Anfrage vollständig ist.",
   "menu.forceUncompressed": "Unkomprimierte Antworten erzwingen",
-  "menu.forceUncompressedTip": "Fordert Server auf, einen unkomprimierten Inhalt zu senden."
+  "menu.forceUncompressedTip": "Fordert Server auf, einen unkomprimierten Inhalt zu senden.",
+  "custom.settings": "Eigene Einstellungen ({0})",
+  "custom.upstream": "Upstream-Proxy",
+  "custom.http2Off": "HTTP/2 aus",
+  "custom.http3Off": "HTTP/3 zu Servern aus",
+  "custom.reuseOff": "Serververbindungen werden nicht wiederverwendet",
+  "custom.resetDone": "Eigene Einstellungen wiederhergestellt.",
+  "custom.upstreamNextStart": "Eigene Einstellungen wiederhergestellt. Der Upstream-Proxy gilt beim nächsten Start der Aufzeichnung."
 }

@@ -358,5 +358,12 @@
   "menu.disableCaching": "Desativar cache",
   "menu.disableCachingTip": "Remove cabeçalhos condicionais para que cada pedido seja completo.",
   "menu.forceUncompressed": "Forçar respostas sem compressão",
-  "menu.forceUncompressedTip": "Pede aos servidores um corpo sem compressão."
+  "menu.forceUncompressedTip": "Pede aos servidores um corpo sem compressão.",
+  "custom.settings": "Definições personalizadas ({0})",
+  "custom.upstream": "Proxy a montante",
+  "custom.http2Off": "HTTP/2 desligado",
+  "custom.http3Off": "HTTP/3 para servidores desligado",
+  "custom.reuseOff": "As ligações ao servidor não são reutilizadas",
+  "custom.resetDone": "Definições personalizadas restauradas.",
+  "custom.upstreamNextStart": "Definições personalizadas restauradas. O proxy a montante aplica-se no próximo início da captura."
 }

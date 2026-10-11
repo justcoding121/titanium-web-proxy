@@ -358,5 +358,12 @@
   "menu.disableCaching": "Cache uitschakelen",
   "menu.disableCachingTip": "Verwijdert voorwaardelijke aanvraagheaders zodat elke aanvraag volledig is.",
   "menu.forceUncompressed": "Ongecomprimeerde antwoorden afdwingen",
-  "menu.forceUncompressedTip": "Vraagt servers om een ongecomprimeerde inhoud."
+  "menu.forceUncompressedTip": "Vraagt servers om een ongecomprimeerde inhoud.",
+  "custom.settings": "Aangepaste instellingen ({0})",
+  "custom.upstream": "Upstream-proxy",
+  "custom.http2Off": "HTTP/2 uit",
+  "custom.http3Off": "HTTP/3 naar servers uit",
+  "custom.reuseOff": "Serververbindingen worden niet hergebruikt",
+  "custom.resetDone": "Aangepaste instellingen hersteld.",
+  "custom.upstreamNextStart": "Aangepaste instellingen hersteld. De upstream-proxy geldt bij de volgende start van de opname."
 }

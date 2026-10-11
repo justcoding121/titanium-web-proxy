@@ -358,5 +358,12 @@
   "menu.disableCaching": "ปิดแคช",
   "menu.disableCachingTip": "ลบส่วนหัวแบบมีเงื่อนไขเพื่อให้ทุกคำขอเป็นข้อมูลเต็ม",
   "menu.forceUncompressed": "บังคับการตอบกลับที่ไม่บีบอัด",
-  "menu.forceUncompressedTip": "ขอให้เซิร์ฟเวอร์ส่งเนื้อหาที่ไม่บีบอัด"
+  "menu.forceUncompressedTip": "ขอให้เซิร์ฟเวอร์ส่งเนื้อหาที่ไม่บีบอัด",
+  "custom.settings": "การตั้งค่าที่กำหนดเอง ({0})",
+  "custom.upstream": "พร็อกซีต้นทาง",
+  "custom.http2Off": "ปิด HTTP/2",
+  "custom.http3Off": "ปิด HTTP/3 ไปยังเซิร์ฟเวอร์",
+  "custom.reuseOff": "ไม่ใช้การเชื่อมต่อเซิร์ฟเวอร์ซ้ำ",
+  "custom.resetDone": "คืนค่าการตั้งค่าที่กำหนดเองแล้ว",
+  "custom.upstreamNextStart": "คืนค่าการตั้งค่าที่กำหนดเองแล้ว พร็อกซีต้นทางจะมีผลเมื่อเริ่มจับทราฟฟิกครั้งถัดไป"
 }

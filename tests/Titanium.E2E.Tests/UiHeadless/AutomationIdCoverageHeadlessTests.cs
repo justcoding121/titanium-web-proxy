@@ -205,6 +205,7 @@ public class AutomationIdCoverageHeadlessTests
         "StatusBarPanel",
         "SessionCountText",
         "SessionCountLink",
+        "CustomSettingsLink",
         "AutoResponderGraphQlOperation",
         "AutoResponderGraphQlFromSelected",
         "BreakpointGraphQlOperation",

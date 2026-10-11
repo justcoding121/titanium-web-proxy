@@ -358,5 +358,12 @@
   "menu.disableCaching": "Tắt bộ nhớ đệm",
   "menu.disableCachingTip": "Xóa tiêu đề có điều kiện để mỗi yêu cầu là đầy đủ.",
   "menu.forceUncompressed": "Buộc phản hồi không nén",
-  "menu.forceUncompressedTip": "Yêu cầu máy chủ gửi nội dung không nén."
+  "menu.forceUncompressedTip": "Yêu cầu máy chủ gửi nội dung không nén.",
+  "custom.settings": "Cài đặt tùy chỉnh ({0})",
+  "custom.upstream": "Proxy thượng nguồn",
+  "custom.http2Off": "Tắt HTTP/2",
+  "custom.http3Off": "Tắt HTTP/3 tới máy chủ",
+  "custom.reuseOff": "Không dùng lại kết nối máy chủ",
+  "custom.resetDone": "Đã khôi phục cài đặt tùy chỉnh.",
+  "custom.upstreamNextStart": "Đã khôi phục cài đặt tùy chỉnh. Proxy thượng nguồn có hiệu lực lần bắt đầu ghi tiếp theo."
 }

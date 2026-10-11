@@ -358,5 +358,12 @@
   "menu.disableCaching": "Вимкнути кеш",
   "menu.disableCachingTip": "Видаляє умовні заголовки, щоб кожен запит був повним.",
   "menu.forceUncompressed": "Примусово без стиснення",
-  "menu.forceUncompressedTip": "Просить сервери надіслати нестиснене тіло."
+  "menu.forceUncompressedTip": "Просить сервери надіслати нестиснене тіло.",
+  "custom.settings": "Власні параметри ({0})",
+  "custom.upstream": "Вихідний проксі",
+  "custom.http2Off": "HTTP/2 вимкнено",
+  "custom.http3Off": "HTTP/3 до серверів вимкнено",
+  "custom.reuseOff": "З’єднання з сервером не використовуються повторно",
+  "custom.resetDone": "Власні параметри відновлено.",
+  "custom.upstreamNextStart": "Власні параметри відновлено. Вихідний проксі застосується під час наступного запуску захоплення."
 }

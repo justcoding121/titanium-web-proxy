@@ -358,5 +358,12 @@
   "menu.disableCaching": "कैश बंद करें",
   "menu.disableCachingTip": "सशर्त अनुरोध शीर्ष हटाता है ताकि हर अनुरोध पूरा हो.",
   "menu.forceUncompressed": "असम्पीडित प्रतिक्रियाएँ बाध्य करें",
-  "menu.forceUncompressedTip": "सर्वर से असम्पीडित सामग्री माँगता है."
+  "menu.forceUncompressedTip": "सर्वर से असम्पीडित सामग्री माँगता है.",
+  "custom.settings": "कस्टम सेटिंग ({0})",
+  "custom.upstream": "अपस्ट्रीम प्रॉक्सी",
+  "custom.http2Off": "HTTP/2 बंद",
+  "custom.http3Off": "सर्वरों पर HTTP/3 बंद",
+  "custom.reuseOff": "सर्वर कनेक्शन दोबारा नहीं इस्तेमाल होते",
+  "custom.resetDone": "कस्टम सेटिंग वापस आ गईं.",
+  "custom.upstreamNextStart": "कस्टम सेटिंग वापस आ गईं. अपस्ट्रीम प्रॉक्सी अगली कैप्चर शुरुआत पर लागू होगी."
 }

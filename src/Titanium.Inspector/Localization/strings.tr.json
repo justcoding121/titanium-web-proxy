@@ -358,5 +358,12 @@
   "menu.disableCaching": "Önbelleği kapat",
   "menu.disableCachingTip": "Koşullu istek başlıklarını kaldırır, böylece her istek tam olur.",
   "menu.forceUncompressed": "Sıkıştırılmamış yanıtları zorla",
-  "menu.forceUncompressedTip": "Sunuculardan sıkıştırılmamış gövde ister."
+  "menu.forceUncompressedTip": "Sunuculardan sıkıştırılmamış gövde ister.",
+  "custom.settings": "Özel ayarlar ({0})",
+  "custom.upstream": "Yukarı akış proxy",
+  "custom.http2Off": "HTTP/2 kapalı",
+  "custom.http3Off": "Sunuculara HTTP/3 kapalı",
+  "custom.reuseOff": "Sunucu bağlantıları yeniden kullanılmıyor",
+  "custom.resetDone": "Özel ayarlar geri yüklendi.",
+  "custom.upstreamNextStart": "Özel ayarlar geri yüklendi. Yukarı akış proxy, yakalama bir sonraki kez başlayınca uygulanır."
 }

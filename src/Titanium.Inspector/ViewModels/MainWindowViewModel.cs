@@ -300,6 +300,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         OpenHttpsDecryptHostsCommand = Cmd(OpenExcludedHostsAsync);
         ExcludeHostCommand = Cmd(ExcludeHostAsync);
         ResetSettingsCommand = Cmd(ResetSettingsAsync);
+        ResetCustomSettingsCommand = Cmd(ResetCustomSettingsAsync);
         ReplayCommand = Cmd(async () => await ReplaySelectedAsync());
         LoadFromSelectedCommand = Cmd(LoadFromSelectedAsync);
         LoadIntoComposerCommand = Cmd(LoadIntoComposerAsync);
@@ -1104,6 +1105,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         }
 
         InspectorNetworkSettings.ApplyTo(_interception, _settings.Current);
+        RefreshCustomSettings();
         if (window.RestartCapture && _interception.IsRunning)
         {
             await StopCaptureCoreAsync("Restarting capture…");
@@ -1443,6 +1445,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public ICommand ExcludeHostCommand { get; }
     public ICommand OpenExclusionSummaryCommand { get; }
     public ICommand ResetSettingsCommand { get; }
+    public ICommand ResetCustomSettingsCommand { get; }
     public ICommand ReplayCommand { get; }
     public ICommand LoadFromSelectedCommand { get; }
     public ICommand LoadIntoComposerCommand { get; }
@@ -2754,6 +2757,59 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         private set => SetField(ref _sessionCountText, value);
     }
 
+    /// <summary>Translated lines for network settings that differ from factory defaults.</summary>
+    public IReadOnlyList<string> CustomSettingLines => _customSettingLines;
+
+    /// <summary>Status-strip label. Empty when <see cref="HasCustomSettings"/> is false.</summary>
+    public string CustomSettingsLabel => _customSettingsLabel;
+
+    /// <summary>Same lines as the flyout, for the hover tip.</summary>
+    public string CustomSettingsDetail => _customSettingsDetail;
+
+    /// <summary>True when at least one tracked network setting differs from its default.</summary>
+    public bool HasCustomSettings => _hasCustomSettings;
+
+    private IReadOnlyList<string> _customSettingLines = [];
+    private string _customSettingsLabel = "";
+    private string _customSettingsDetail = "";
+    private bool _hasCustomSettings;
+
+    private void RefreshCustomSettings()
+    {
+        var deviations = CustomSettingsReport.ListDeviations(_settings.Current);
+        _customSettingLines = deviations
+            .Select(item => item.Suffix is null
+                ? LanguageService.Get(item.TextKey)
+                : LanguageService.Get(item.TextKey) + " " + item.Suffix)
+            .ToArray();
+        _customSettingsDetail = string.Join(Environment.NewLine, _customSettingLines);
+        _hasCustomSettings = _customSettingLines.Count > 0;
+        _customSettingsLabel = _hasCustomSettings
+            ? string.Format(
+                CultureInfo.InvariantCulture,
+                LanguageService.Get("custom.settings"),
+                _customSettingLines.Count)
+            : "";
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CustomSettingLines)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CustomSettingsLabel)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CustomSettingsDetail)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasCustomSettings)));
+    }
+
+    private Task ResetCustomSettingsAsync()
+    {
+        var upstreamWasOn = _settings.Current.UpstreamProxyEnabled;
+        var captureRunning = _interception.IsRunning;
+        CustomSettingsReport.RestoreDefaults(_settings.Current);
+        _settings.Save();
+        InspectorNetworkSettings.ApplyTo(_interception, _settings.Current);
+        RefreshCustomSettings();
+        StatusText = upstreamWasOn && captureRunning
+            ? LanguageService.Get("custom.upstreamNextStart")
+            : LanguageService.Get("custom.resetDone");
+        return Task.CompletedTask;
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public SessionGridLayoutDto? GetSessionGridLayout() => _settings.Current.SessionGridLayout;
@@ -2841,6 +2897,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         Breakpoints.UrlFilter = string.IsNullOrEmpty(s.BreakpointUrlFilter) ? "*" : s.BreakpointUrlFilter;
         Breakpoints.GraphQlOperationName = s.BreakpointGraphQlOperationName ?? "";
         ApplyInspectLayoutFromSettings();
+        RefreshCustomSettings();
     }
 
     private void NotifySettingsUiChanged()
@@ -2890,6 +2947,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BodyPrettyToolTip)));
         RefreshEndpointAndBindUi();
         RefreshSelectedInspectors();
+        RefreshCustomSettings();
     }
 
     private void SetThemeMode(ThemeMode mode)

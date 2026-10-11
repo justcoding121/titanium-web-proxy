@@ -358,5 +358,12 @@
   "menu.disableCaching": "Deaktiver cache",
   "menu.disableCachingTip": "Fjerner betingede anmodningshoveder, så hver anmodning er fuld.",
   "menu.forceUncompressed": "Gennemtving ukomprimerede svar",
-  "menu.forceUncompressedTip": "Beder servere om et ukomprimeret indhold."
+  "menu.forceUncompressedTip": "Beder servere om et ukomprimeret indhold.",
+  "custom.settings": "Brugerdefinerede indstillinger ({0})",
+  "custom.upstream": "Opstrømsproxy",
+  "custom.http2Off": "HTTP/2 fra",
+  "custom.http3Off": "HTTP/3 til servere fra",
+  "custom.reuseOff": "Serverforbindelser genbruges ikke",
+  "custom.resetDone": "Brugerdefinerede indstillinger gendannet.",
+  "custom.upstreamNextStart": "Brugerdefinerede indstillinger gendannet. Opstrømsproxyen gælder næste gang optagelse starter."
 }

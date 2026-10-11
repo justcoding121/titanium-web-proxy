@@ -358,5 +358,12 @@
   "menu.disableCaching": "Desactivar caché",
   "menu.disableCachingTip": "Quita las cabeceras condicionales para que cada petición sea completa.",
   "menu.forceUncompressed": "Forzar respuestas sin comprimir",
-  "menu.forceUncompressedTip": "Pide a los servidores un cuerpo sin comprimir."
+  "menu.forceUncompressedTip": "Pide a los servidores un cuerpo sin comprimir.",
+  "custom.settings": "Ajustes personalizados ({0})",
+  "custom.upstream": "Proxy de subida",
+  "custom.http2Off": "HTTP/2 desactivado",
+  "custom.http3Off": "HTTP/3 hacia servidores desactivado",
+  "custom.reuseOff": "No se reutilizan las conexiones al servidor",
+  "custom.resetDone": "Ajustes personalizados restaurados.",
+  "custom.upstreamNextStart": "Ajustes personalizados restaurados. El proxy de subida se aplica la próxima vez que se inicie la captura."
 }
