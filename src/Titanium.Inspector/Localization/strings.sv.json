@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "Högst 200 värdar.",
   "network.winAuthInvalid": "En värd eller *.suffix per rad. Inget schema, ingen sökväg, ingen port.",
   "stats.event.winAuth": "Windows-autentisering användes",
-  "stats.event.winAuthTooLarge": "Uppladdningen är för stor för Windows-autentisering"
+  "stats.event.winAuthTooLarge": "Uppladdningen är för stor för Windows-autentisering",
+  "toolbar.status": "Status",
+  "toolbar.statusTip": "Filtrera efter statuskod. En status:-token, till exempel 2xx,304 eller 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "Ignorerat. Använd koder, Nxx eller intervall som 500-599. Högst 32 termer.",
+  "filter.statusTooMany": "Högst 32 termer och 128 tecken.",
+  "ctx.filterStatus": "Filtrera efter denna status"
 }

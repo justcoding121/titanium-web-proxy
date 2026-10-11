@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "ホストは 200 件までです。",
   "network.winAuthInvalid": "1 行にホストか *.接尾辞。スキーム、パス、ポートは書けません。",
   "stats.event.winAuth": "Windows 認証を使いました",
-  "stats.event.winAuthTooLarge": "アップロードが Windows 認証には大きすぎます"
+  "stats.event.winAuthTooLarge": "アップロードが Windows 認証には大きすぎます",
+  "toolbar.status": "ステータス",
+  "toolbar.statusTip": "ステータスコードで絞り込みます。status: トークンは一つです。例: 2xx,304 または 500-599。",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "無視しました。コード、Nxx、または 500-599 のような範囲を使ってください。最大 32 項です。",
+  "filter.statusTooMany": "最大 32 項、128 文字です。",
+  "ctx.filterStatus": "このステータスで絞り込む"
 }

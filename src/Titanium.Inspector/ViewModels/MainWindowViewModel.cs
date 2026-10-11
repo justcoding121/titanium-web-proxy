@@ -322,6 +322,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         _diffSessionsCommand = Cmd(DiffSessionsAsync, () => CanDiffSessions);
         DiffSessionsCommand = _diffSessionsCommand;
         FilterByHostCommand = Cmd(FilterByHostAsync);
+        FilterByStatusCommand = Cmd(FilterByStatusAsync);
         HideHostCommand = Cmd(HideHostAsync);
         FilterByProcessCommand = Cmd(FilterByProcessAsync);
         HideProcessCommand = Cmd(HideProcessAsync);
@@ -1513,6 +1514,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public ICommand CopyAsFetchCommand { get; }
     public ICommand DiffSessionsCommand { get; }
     public ICommand FilterByHostCommand { get; }
+    public ICommand FilterByStatusCommand { get; }
     public ICommand HideHostCommand { get; }
     public ICommand FilterByProcessCommand { get; }
     public ICommand HideProcessCommand { get; }

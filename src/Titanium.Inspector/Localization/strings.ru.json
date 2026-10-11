@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "Не больше 200 узлов.",
   "network.winAuthInvalid": "Узел или *.суффикс в каждой строке. Без схемы, пути и порта.",
   "stats.event.winAuth": "Использована проверка подлинности Windows",
-  "stats.event.winAuthTooLarge": "Отправка слишком велика для проверки подлинности Windows"
+  "stats.event.winAuthTooLarge": "Отправка слишком велика для проверки подлинности Windows",
+  "toolbar.status": "Статус",
+  "toolbar.statusTip": "Фильтр по коду состояния. Один токен status:, например 2xx,304 или 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "Пропущено. Укажите коды, Nxx или диапазон, например 500-599. Не больше 32 условий.",
+  "filter.statusTooMany": "Не больше 32 условий и 128 символов.",
+  "ctx.filterStatus": "Фильтр по этому статусу"
 }

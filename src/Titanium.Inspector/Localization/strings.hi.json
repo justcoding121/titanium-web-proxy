@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "अधिकतम 200 होस्ट.",
   "network.winAuthInvalid": "हर पंक्ति में होस्ट या *.प्रत्यय. योजना, पथ या पोर्ट नहीं.",
   "stats.event.winAuth": "Windows प्रमाणीकरण उपयोग हुआ",
-  "stats.event.winAuthTooLarge": "अपलोड Windows प्रमाणीकरण के लिए बहुत बड़ा है"
+  "stats.event.winAuthTooLarge": "अपलोड Windows प्रमाणीकरण के लिए बहुत बड़ा है",
+  "toolbar.status": "स्थिति",
+  "toolbar.statusTip": "स्थिति कोड से छाँटें। एक status: टोकन, जैसे 2xx,304 या 500-599।",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "अनदेखा। कोड, Nxx, या 500-599 जैसा परिसर लिखें। अधिक से अधिक 32 पद।",
+  "filter.statusTooMany": "अधिक से अधिक 32 पद और 128 वर्ण।",
+  "ctx.filterStatus": "इस स्थिति से छाँटें"
 }

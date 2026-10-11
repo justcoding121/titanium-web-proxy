@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "Najwyżej 200 hostów.",
   "network.winAuthInvalid": "Host lub *.sufiks w każdej linii. Bez schematu, ścieżki i portu.",
   "stats.event.winAuth": "Użyto uwierzytelniania Windows",
-  "stats.event.winAuthTooLarge": "Wysyłanie jest za duże dla uwierzytelniania Windows"
+  "stats.event.winAuthTooLarge": "Wysyłanie jest za duże dla uwierzytelniania Windows",
+  "toolbar.status": "Status",
+  "toolbar.statusTip": "Filtruj według kodu stanu. Jeden token status:, na przykład 2xx,304 lub 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "Pominięto. Użyj kodów, Nxx albo zakresu, na przykład 500-599. Najwyżej 32 pozycje.",
+  "filter.statusTooMany": "Najwyżej 32 pozycje i 128 znaków.",
+  "ctx.filterStatus": "Filtruj według tego statusu"
 }

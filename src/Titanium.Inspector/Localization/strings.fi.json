@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "Enintään 200 konetta.",
   "network.winAuthInvalid": "Yksi kone tai *.pääte rivillä. Ei skeemaa, polkua tai porttia.",
   "stats.event.winAuth": "Windows-todennusta käytettiin",
-  "stats.event.winAuthTooLarge": "Lähetys on liian suuri Windows-todennukselle"
+  "stats.event.winAuthTooLarge": "Lähetys on liian suuri Windows-todennukselle",
+  "toolbar.status": "Tila",
+  "toolbar.statusTip": "Suodata tilakoodin mukaan. Yksi status:-tunnus, esimerkiksi 2xx,304 tai 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "Ohitettu. Käytä koodeja, Nxx-muotoa tai väliä, esimerkiksi 500-599. Enintään 32 ehtoa.",
+  "filter.statusTooMany": "Enintään 32 ehtoa ja 128 merkkiä.",
+  "ctx.filterStatus": "Suodata tämän tilan mukaan"
 }

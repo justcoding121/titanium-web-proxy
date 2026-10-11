@@ -115,6 +115,8 @@ public class AutomationIdCoverageHeadlessTests
         "CtxCopyAsFetch",
         "CtxDiffSessions",
         "CtxFilterByHost",
+        "CtxFilterByStatus",
+        "StatusFilterButton",
         "CtxHideHost",
         "CtxExcludeHost",
         "CtxFilterByProcess",

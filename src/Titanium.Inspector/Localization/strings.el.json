@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "Το πολύ 200 κεντρικοί.",
   "network.winAuthInvalid": "Ένας κεντρικός ή *.κατάληξη ανά γραμμή. Χωρίς σχήμα, διαδρομή ή θύρα.",
   "stats.event.winAuth": "Χρησιμοποιήθηκε έλεγχος ταυτότητας Windows",
-  "stats.event.winAuthTooLarge": "Η αποστολή είναι μεγάλη για τον έλεγχο ταυτότητας Windows"
+  "stats.event.winAuthTooLarge": "Η αποστολή είναι μεγάλη για τον έλεγχο ταυτότητας Windows",
+  "toolbar.status": "Κατάσταση",
+  "toolbar.statusTip": "Φιλτράρισμα κατά κωδικό κατάστασης. Ένα διακριτικό status:, για παράδειγμα 2xx,304 ή 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "Αγνοήθηκε. Χρησιμοποιήστε κωδικούς, Nxx ή εύρη όπως 500-599. Το πολύ 32 όροι.",
+  "filter.statusTooMany": "Το πολύ 32 όροι και 128 χαρακτήρες.",
+  "ctx.filterStatus": "Φιλτράρισμα κατά αυτή την κατάσταση"
 }

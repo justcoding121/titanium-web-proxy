@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "No máximo 200 anfitriões.",
   "network.winAuthInvalid": "Um anfitrião ou *.sufixo por linha. Sem esquema, caminho ou porta.",
   "stats.event.winAuth": "Autenticação Windows usada",
-  "stats.event.winAuthTooLarge": "Envio grande demais para a autenticação Windows"
+  "stats.event.winAuthTooLarge": "Envio grande demais para a autenticação Windows",
+  "toolbar.status": "Estado",
+  "toolbar.statusTip": "Filtrar por código de estado. Um token status:, por exemplo 2xx,304 ou 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "Ignorado. Use códigos, Nxx ou intervalos como 500-599. No máximo 32 termos.",
+  "filter.statusTooMany": "No máximo 32 termos e 128 caracteres.",
+  "ctx.filterStatus": "Filtrar por este estado"
 }

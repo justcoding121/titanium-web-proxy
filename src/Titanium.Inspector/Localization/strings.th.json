@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "ได้ไม่เกิน 200 โฮสต์",
   "network.winAuthInvalid": "หนึ่งโฮสต์หรือ *.ส่วนท้ายต่อบรรทัด ไม่ใส่สกีม พาธ หรือพอร์ต",
   "stats.event.winAuth": "ใช้การพิสูจน์ตัวตนของ Windows",
-  "stats.event.winAuthTooLarge": "การอัปโหลดใหญ่เกินกว่าการพิสูจน์ตัวตนของ Windows"
+  "stats.event.winAuthTooLarge": "การอัปโหลดใหญ่เกินกว่าการพิสูจน์ตัวตนของ Windows",
+  "toolbar.status": "สถานะ",
+  "toolbar.statusTip": "กรองตามรหัสสถานะ โทเคน status: เดียว เช่น 2xx,304 หรือ 500-599",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "ข้ามแล้ว ใช้รหัส, Nxx หรือช่วงเช่น 500-599 ได้ไม่เกิน 32 รายการ",
+  "filter.statusTooMany": "ได้ไม่เกิน 32 รายการ และ 128 อักขระ",
+  "ctx.filterStatus": "กรองตามสถานะนี้"
 }

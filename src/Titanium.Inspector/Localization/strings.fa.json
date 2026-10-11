@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "حداکثر ۲۰۰ میزبان.",
   "network.winAuthInvalid": "در هر خط یک میزبان یا *.پسوند. بدون طرح، مسیر یا درگاه.",
   "stats.event.winAuth": "احراز هویت ویندوز استفاده شد",
-  "stats.event.winAuthTooLarge": "بارگذاری برای احراز هویت ویندوز خیلی بزرگ است"
+  "stats.event.winAuthTooLarge": "بارگذاری برای احراز هویت ویندوز خیلی بزرگ است",
+  "toolbar.status": "وضعیت",
+  "toolbar.statusTip": "پالایش بر اساس کد وضعیت. یک نشانه status:، برای مثال 2xx,304 یا 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "نادیده گرفته شد. از کد، Nxx یا بازه‌ای مانند 500-599 استفاده کنید. حداکثر ۳۲ مورد.",
+  "filter.statusTooMany": "حداکثر ۳۲ مورد و ۱۲۸ نویسه.",
+  "ctx.filterStatus": "پالایش بر اساس این وضعیت"
 }

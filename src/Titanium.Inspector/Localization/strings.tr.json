@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "En çok 200 ana bilgisayar.",
   "network.winAuthInvalid": "Her satırda bir ana bilgisayar veya *.sonek. Şema, yol veya bağlantı noktası yok.",
   "stats.event.winAuth": "Windows kimlik doğrulaması kullanıldı",
-  "stats.event.winAuthTooLarge": "Yükleme Windows kimlik doğrulaması için çok büyük"
+  "stats.event.winAuthTooLarge": "Yükleme Windows kimlik doğrulaması için çok büyük",
+  "toolbar.status": "Durum",
+  "toolbar.statusTip": "Durum koduna göre süzün. Tek bir status: belirteci, örneğin 2xx,304 veya 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "Yok sayıldı. Kod, Nxx veya 500-599 gibi bir aralık kullanın. En fazla 32 terim.",
+  "filter.statusTooMany": "En fazla 32 terim ve 128 karakter.",
+  "ctx.filterStatus": "Bu duruma göre süz"
 }

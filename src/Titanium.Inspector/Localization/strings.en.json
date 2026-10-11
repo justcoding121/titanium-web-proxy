@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "Use at most 200 hosts.",
   "network.winAuthInvalid": "Use a host or *.suffix on each line. No scheme, path, or port.",
   "stats.event.winAuth": "Windows authentication used",
-  "stats.event.winAuthTooLarge": "Upload too large for Windows authentication"
+  "stats.event.winAuthTooLarge": "Upload too large for Windows authentication",
+  "toolbar.status": "Status",
+  "toolbar.statusTip": "Filter by status code. One status: token, for example 2xx,304 or 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "Ignored. Use codes, Nxx, or ranges such as 500-599. At most 32 terms.",
+  "filter.statusTooMany": "Use at most 32 terms and 128 characters.",
+  "ctx.filterStatus": "Filter by this status"
 }

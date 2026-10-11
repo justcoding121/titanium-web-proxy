@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "Tối đa 200 máy chủ.",
   "network.winAuthInvalid": "Mỗi dòng một máy chủ hoặc *.hậu tố. Không có lược đồ, đường dẫn hay cổng.",
   "stats.event.winAuth": "Đã dùng xác thực Windows",
-  "stats.event.winAuthTooLarge": "Tải lên quá lớn cho xác thực Windows"
+  "stats.event.winAuthTooLarge": "Tải lên quá lớn cho xác thực Windows",
+  "toolbar.status": "Trạng thái",
+  "toolbar.statusTip": "Lọc theo mã trạng thái. Một token status:, ví dụ 2xx,304 hoặc 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "Đã bỏ qua. Dùng mã, Nxx hoặc khoảng như 500-599. Tối đa 32 mục.",
+  "filter.statusTooMany": "Tối đa 32 mục và 128 ký tự.",
+  "ctx.filterStatus": "Lọc theo trạng thái này"
 }

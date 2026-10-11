@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "最多 200 个主机。",
   "network.winAuthInvalid": "每行一个主机或 *.后缀。不要写方案、路径或端口。",
   "stats.event.winAuth": "已使用 Windows 身份验证",
-  "stats.event.winAuthTooLarge": "上传内容对 Windows 身份验证来说太大"
+  "stats.event.winAuthTooLarge": "上传内容对 Windows 身份验证来说太大",
+  "toolbar.status": "状态",
+  "toolbar.statusTip": "按状态码筛选。只写入一个 status: 标记，例如 2xx,304 或 500-599。",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "已忽略。请使用代码、Nxx 或 500-599 这样的范围。最多 32 项。",
+  "filter.statusTooMany": "最多 32 项、128 个字符。",
+  "ctx.filterStatus": "按此状态筛选"
 }

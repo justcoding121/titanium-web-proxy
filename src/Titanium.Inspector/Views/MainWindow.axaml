@@ -346,6 +346,31 @@
           <CheckBox Content="{loc:Loc toolbar.errorsOnly}" IsChecked="{Binding ErrorsOnlyFilter}"
                     VerticalAlignment="Center" Margin="0,0,12,6"
                     AutomationProperties.AutomationId="ErrorsOnlyFilterCheck" />
+          <Button Content="{loc:Loc toolbar.status}"
+                  VerticalAlignment="Center" Margin="0,0,12,6"
+                  ToolTip.Tip="{loc:Loc toolbar.statusTip}"
+                  AutomationProperties.AutomationId="StatusFilterButton">
+            <Button.Flyout>
+              <Flyout Placement="Bottom">
+                <StackPanel Spacing="6" Width="240">
+                  <CheckBox Content="2xx" IsChecked="{Binding StatusClass2xx}"
+                            AutomationProperties.AutomationId="StatusFilter2xx" />
+                  <CheckBox Content="3xx" IsChecked="{Binding StatusClass3xx}"
+                            AutomationProperties.AutomationId="StatusFilter3xx" />
+                  <CheckBox Content="4xx" IsChecked="{Binding StatusClass4xx}"
+                            AutomationProperties.AutomationId="StatusFilter4xx" />
+                  <CheckBox Content="5xx" IsChecked="{Binding StatusClass5xx}"
+                            AutomationProperties.AutomationId="StatusFilter5xx" />
+                  <TextBox Text="{Binding StatusFreeText}"
+                           Watermark="{loc:Loc filter.statusFree}"
+                           AutomationProperties.AutomationId="StatusFilterFree" />
+                  <TextBlock Text="{Binding StatusFilterError}" TextWrapping="Wrap"
+                             IsVisible="{Binding HasStatusFilterError}"
+                             AutomationProperties.AutomationId="StatusFilterError" />
+                </StackPanel>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
           <Button Content="{loc:Loc toolbar.clearFilters}" Command="{Binding ClearFiltersCommand}"
                   VerticalAlignment="Center" Margin="0,0,12,6"
                   AutomationProperties.AutomationId="ClearFiltersButton" />
@@ -510,6 +535,9 @@
             <MenuItem Header="{loc:Loc ctx.filterHost}" Command="{Binding FilterByHostCommand}"
                       IsVisible="{Binding CanFilterByHost}"
                       AutomationProperties.AutomationId="CtxFilterByHost" />
+            <MenuItem Header="{loc:Loc ctx.filterStatus}" Command="{Binding FilterByStatusCommand}"
+                      IsVisible="{Binding CanFilterByStatus}"
+                      AutomationProperties.AutomationId="CtxFilterByStatus" />
             <MenuItem Header="{loc:Loc ctx.hideHost}" Command="{Binding HideHostCommand}"
                       IsVisible="{Binding CanFilterByHost}"
                       AutomationProperties.AutomationId="CtxHideHost" />

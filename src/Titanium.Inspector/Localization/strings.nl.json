@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "Hoogstens 200 hosts.",
   "network.winAuthInvalid": "Eén host of *.achtervoegsel per regel. Geen schema, pad of poort.",
   "stats.event.winAuth": "Windows-verificatie gebruikt",
-  "stats.event.winAuthTooLarge": "Upload te groot voor Windows-verificatie"
+  "stats.event.winAuthTooLarge": "Upload te groot voor Windows-verificatie",
+  "toolbar.status": "Status",
+  "toolbar.statusTip": "Filter op statuscode. Eén status:-token, bijvoorbeeld 2xx,304 of 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "Genegeerd. Gebruik codes, Nxx of een bereik zoals 500-599. Hoogstens 32 termen.",
+  "filter.statusTooMany": "Hoogstens 32 termen en 128 tekens.",
+  "ctx.filterStatus": "Filter op deze status"
 }

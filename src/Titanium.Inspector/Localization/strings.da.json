@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "Højst 200 værter.",
   "network.winAuthInvalid": "Skriv en vært eller *.suffiks på hver linje. Ingen protokol, sti eller port.",
   "stats.event.winAuth": "Windows-godkendelse blev brugt",
-  "stats.event.winAuthTooLarge": "Upload er for stor til Windows-godkendelse"
+  "stats.event.winAuthTooLarge": "Upload er for stor til Windows-godkendelse",
+  "toolbar.status": "Status",
+  "toolbar.statusTip": "Filtrér efter statuskode. Ét status:-token, for eksempel 2xx,304 eller 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "Ignoreret. Brug koder, Nxx eller intervaller som 500-599. Højst 32 led.",
+  "filter.statusTooMany": "Højst 32 led og 128 tegn.",
+  "ctx.filterStatus": "Filtrér efter denne status"
 }

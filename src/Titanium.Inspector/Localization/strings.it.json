@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "Al massimo 200 host.",
   "network.winAuthInvalid": "Un host o *.suffisso per riga. Niente schema, percorso o porta.",
   "stats.event.winAuth": "Autenticazione Windows usata",
-  "stats.event.winAuthTooLarge": "Caricamento troppo grande per l autenticazione Windows"
+  "stats.event.winAuthTooLarge": "Caricamento troppo grande per l autenticazione Windows",
+  "toolbar.status": "Stato",
+  "toolbar.statusTip": "Filtra per codice di stato. Un solo token status:, ad esempio 2xx,304 o 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "Ignorato. Usare codici, Nxx o intervalli come 500-599. Al massimo 32 termini.",
+  "filter.statusTooMany": "Al massimo 32 termini e 128 caratteri.",
+  "ctx.filterStatus": "Filtra per questo stato"
 }

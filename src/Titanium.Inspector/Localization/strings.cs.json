@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "Nejvýše 200 hostitelů.",
   "network.winAuthInvalid": "Na každém řádku hostitel nebo *.přípona. Bez schématu, cesty a portu.",
   "stats.event.winAuth": "Použito ověření Windows",
-  "stats.event.winAuthTooLarge": "Nahrání je pro ověření Windows příliš velké"
+  "stats.event.winAuthTooLarge": "Nahrání je pro ověření Windows příliš velké",
+  "toolbar.status": "Stav",
+  "toolbar.statusTip": "Filtrovat podle stavového kódu. Jeden token status:, například 2xx,304 nebo 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "Ignorováno. Použijte kódy, Nxx nebo rozsah, například 500-599. Nejvýše 32 položek.",
+  "filter.statusTooMany": "Nejvýše 32 položek a 128 znaků.",
+  "ctx.filterStatus": "Filtrovat podle tohoto stavu"
 }

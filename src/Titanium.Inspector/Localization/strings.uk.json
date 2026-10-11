@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "Не більше ніж 200 вузлів.",
   "network.winAuthInvalid": "Вузол або *.суфікс у кожному рядку. Без схеми, шляху й порту.",
   "stats.event.winAuth": "Використано автентифікацію Windows",
-  "stats.event.winAuthTooLarge": "Надсилання завелике для автентифікації Windows"
+  "stats.event.winAuthTooLarge": "Надсилання завелике для автентифікації Windows",
+  "toolbar.status": "Стан",
+  "toolbar.statusTip": "Фільтр за кодом стану. Один токен status:, наприклад 2xx,304 або 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "Пропущено. Вкажіть коди, Nxx або діапазон, наприклад 500-599. Не більше 32 умов.",
+  "filter.statusTooMany": "Не більше 32 умов і 128 символів.",
+  "ctx.filterStatus": "Фільтр за цим станом"
 }

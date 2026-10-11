@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "לכל היותר 200 מארחים.",
   "network.winAuthInvalid": "מארח או *.סיומת בכל שורה. בלי סכמה, נתיב או יציאה.",
   "stats.event.winAuth": "נעשה שימוש באימות Windows",
-  "stats.event.winAuthTooLarge": "ההעלאה גדולה מדי לאימות Windows"
+  "stats.event.winAuthTooLarge": "ההעלאה גדולה מדי לאימות Windows",
+  "toolbar.status": "מצב",
+  "toolbar.statusTip": "סינון לפי קוד מצב. אסימון status: אחד, למשל 2xx,304 או 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "התעלמות. השתמשו בקודים, ב-Nxx או בטווח כגון 500-599. לכל היותר 32 תנאים.",
+  "filter.statusTooMany": "לכל היותר 32 תנאים ו-128 תווים.",
+  "ctx.filterStatus": "סנן לפי מצב זה"
 }

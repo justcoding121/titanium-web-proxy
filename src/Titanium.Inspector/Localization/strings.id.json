@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "Paling banyak 200 host.",
   "network.winAuthInvalid": "Satu host atau *.akhiran per baris. Tanpa skema, jalur, atau port.",
   "stats.event.winAuth": "Autentikasi Windows digunakan",
-  "stats.event.winAuthTooLarge": "Unggahan terlalu besar untuk autentikasi Windows"
+  "stats.event.winAuthTooLarge": "Unggahan terlalu besar untuk autentikasi Windows",
+  "toolbar.status": "Status",
+  "toolbar.statusTip": "Saring menurut kode status. Satu token status:, misalnya 2xx,304 atau 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "Diabaikan. Gunakan kode, Nxx, atau rentang seperti 500-599. Paling banyak 32 istilah.",
+  "filter.statusTooMany": "Paling banyak 32 istilah dan 128 karakter.",
+  "ctx.filterStatus": "Saring menurut status ini"
 }

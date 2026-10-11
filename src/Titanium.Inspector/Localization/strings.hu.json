@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "Legfeljebb 200 gép.",
   "network.winAuthInvalid": "Soronként egy gép vagy *.utótag. Séma, útvonal és port nélkül.",
   "stats.event.winAuth": "Windows-hitelesítés történt",
-  "stats.event.winAuthTooLarge": "A feltöltés túl nagy a Windows-hitelesítéshez"
+  "stats.event.winAuthTooLarge": "A feltöltés túl nagy a Windows-hitelesítéshez",
+  "toolbar.status": "Állapot",
+  "toolbar.statusTip": "Szűrés állapotkód szerint. Egy status: token, például 2xx,304 vagy 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "Mellőzve. Kódokat, Nxx-et vagy tartományt használjon, például 500-599. Legfeljebb 32 elem.",
+  "filter.statusTooMany": "Legfeljebb 32 elem és 128 karakter.",
+  "ctx.filterStatus": "Szűrés erre az állapotra"
 }

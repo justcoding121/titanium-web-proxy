@@ -6,7 +6,7 @@ namespace Titanium.Inspector.Services;
 /// <summary>
 /// Session search/filter syntax. A bare word matches URL, host, process name, process ID (exact),
 /// method (exact), or status code (exact). Prefixes limit the match to one field:
-/// method:, status: (exact or 2xx–5xx), host:, url:, body:, process:, pid:, protocol:, content-type:,
+/// method:, status: (exact, Nxx, comma list, or range), host:, url:, body:, process:, pid:, protocol:, content-type:,
 /// is:ws|grpc|tunnel|multipart|error, hide:tunnel|image|static.
 /// A leading <c>-</c> on a field prefix excludes rows that match it (<c>-host:cursor.sh</c>,
 /// <c>-process:Cursor</c>), and on a bare word excludes rows that word would match (<c>-cursor</c>).
@@ -430,27 +430,8 @@ public static class SessionSearch
         };
     }
 
-    private static bool MatchStatus(int? statusCode, string value)
-    {
-        var v = value.ToLowerInvariant();
-        if (v is "2xx" or "3xx" or "4xx" or "5xx")
-        {
-            if (statusCode is null)
-            {
-                return false;
-            }
-
-            var hundreds = statusCode.Value / 100;
-            return v[0] - '0' == hundreds;
-        }
-
-        if (v is "error" or "errors")
-        {
-            return IsErrorStatus(statusCode);
-        }
-
-        return statusCode?.ToString() == value;
-    }
+    private static bool MatchStatus(int? statusCode, string value) =>
+        StatusFilter.Matches(statusCode, value);
 
     private static bool IsErrorStatus(int? statusCode) =>
         statusCode is >= 400 and <= 599;

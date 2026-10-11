@@ -315,6 +315,19 @@ public sealed partial class MainWindowViewModel
         StatusText = $"Filtered by host:{host}";
         return Task.CompletedTask;
     }
+    private Task FilterByStatusAsync()
+    {
+        var code = ResolveUnanimousStatus();
+        if (code is null)
+        {
+            StatusText = "Filter by status needs one shared status code in the selection";
+            return Task.CompletedTask;
+        }
+
+        SearchQuery = SessionSearch.SetKeyedToken(SearchQuery, "status", code.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        StatusText = $"Filtered by status:{code.Value}";
+        return Task.CompletedTask;
+    }
     private Task FilterByProcessAsync()
     {
         var process = ResolveUnanimousFilterProcess();
@@ -361,6 +374,9 @@ public sealed partial class MainWindowViewModel
     }
     /// <summary>True when selection shares one non-empty host (single or multi-select).</summary>
     public bool CanFilterByHost => ResolveUnanimousFilterHost() is not null;
+
+    /// <summary>True when selection shares one HTTP status code.</summary>
+    public bool CanFilterByStatus => ResolveUnanimousStatus() is not null;
     /// <summary>True when at least one session is selected.</summary>
     public bool HasSelectedSessions => ResolveFilterSelection().Count > 0;
     /// <summary>True when exactly one session is selected (Replay / Composer).</summary>
@@ -397,6 +413,34 @@ public sealed partial class MainWindowViewModel
         }
 
         return host;
+    }
+    private int? ResolveUnanimousStatus()
+    {
+        var selection = ResolveFilterSelection();
+        if (selection.Count == 0)
+        {
+            return null;
+        }
+
+        int? code = null;
+        foreach (var session in selection)
+        {
+            if (session.StatusCode is not (>= 100 and <= 599))
+            {
+                return null;
+            }
+
+            if (code is null)
+            {
+                code = session.StatusCode;
+            }
+            else if (code != session.StatusCode)
+            {
+                return null;
+            }
+        }
+
+        return code;
     }
     private string? ResolveUnanimousFilterProcess()
     {
@@ -461,6 +505,7 @@ public sealed partial class MainWindowViewModel
     private void NotifyFilterSelectionProperties()
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanFilterByHost)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanFilterByStatus)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanExcludeHost)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanFilterByProcess)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSelectedSessions)));
@@ -799,6 +844,7 @@ public sealed partial class MainWindowViewModel
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HideTunnelsFilter)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HideImagesFilter)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ErrorsOnlyFilter)));
+        NotifyStatusChrome(resetFreeText: !_statusWrite);
     }
 
     /// <summary>Hosts hidden from the list (<c>-host:</c>), in query order. Display only.</summary>

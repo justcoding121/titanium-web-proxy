@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "200 hôtes au plus.",
   "network.winAuthInvalid": "Un hôte ou *.suffixe par ligne. Pas de schéma, de chemin ni de port.",
   "stats.event.winAuth": "Authentification Windows utilisée",
-  "stats.event.winAuthTooLarge": "Envoi trop volumineux pour l authentification Windows"
+  "stats.event.winAuthTooLarge": "Envoi trop volumineux pour l authentification Windows",
+  "toolbar.status": "État",
+  "toolbar.statusTip": "Filtrer par code d’état. Un seul jeton status:, par exemple 2xx,304 ou 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "Ignoré. Utilisez des codes, Nxx ou une plage comme 500-599. 32 termes au plus.",
+  "filter.statusTooMany": "32 termes et 128 caractères au plus.",
+  "ctx.filterStatus": "Filtrer selon cet état"
 }

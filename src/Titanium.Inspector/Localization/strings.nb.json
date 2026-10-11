@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "Høyst 200 verter.",
   "network.winAuthInvalid": "Én vert eller *.suffiks per linje. Ingen protokoll, sti eller port.",
   "stats.event.winAuth": "Windows-godkjenning ble brukt",
-  "stats.event.winAuthTooLarge": "Opplastingen er for stor for Windows-godkjenning"
+  "stats.event.winAuthTooLarge": "Opplastingen er for stor for Windows-godkjenning",
+  "toolbar.status": "Status",
+  "toolbar.statusTip": "Filtrer etter statuskode. Ett status:-token, for eksempel 2xx,304 eller 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "Ignorert. Bruk koder, Nxx eller områder som 500-599. Høyst 32 ledd.",
+  "filter.statusTooMany": "Høyst 32 ledd og 128 tegn.",
+  "ctx.filterStatus": "Filtrer etter denne statusen"
 }

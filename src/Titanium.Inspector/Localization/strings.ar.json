@@ -425,5 +425,11 @@
   "network.winAuthTooMany": "استخدم 200 مضيفا كحد أقصى.",
   "network.winAuthInvalid": "اكتب مضيفا أو *.لاحقة في كل سطر. بلا مخطط أو مسار أو منفذ.",
   "stats.event.winAuth": "استُخدمت مصادقة Windows",
-  "stats.event.winAuthTooLarge": "الرفع أكبر مما تسمح به مصادقة Windows"
+  "stats.event.winAuthTooLarge": "الرفع أكبر مما تسمح به مصادقة Windows",
+  "toolbar.status": "الحالة",
+  "toolbar.statusTip": "تصفية حسب رمز الحالة. رمز status: واحد، مثل 2xx,304 أو 500-599.",
+  "filter.statusFree": "304, 401, 500-599",
+  "filter.statusInvalid": "تم التجاهل. استخدم رموزًا أو Nxx أو نطاقًا مثل 500-599. 32 حدًا على الأكثر.",
+  "filter.statusTooMany": "استخدم 32 حدًا و128 حرفًا على الأكثر.",
+  "ctx.filterStatus": "تصفية حسب هذه الحالة"
 }
