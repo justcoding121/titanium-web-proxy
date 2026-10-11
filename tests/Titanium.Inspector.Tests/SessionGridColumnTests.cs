@@ -13,7 +13,7 @@ public class SessionGridColumnTests
     private static readonly string[] DefaultVisibleKeys =
         ["Id", "Method", "Status", "Host", "URL", "Protocol", "Duration", "TTFB", "Size", "Process"];
 
-    private static readonly string[] OptionalColumnKeys = ["Started", "Scheme", "Content-Type"];
+    private static readonly string[] OptionalColumnKeys = ["Started", "Scheme", "Content-Type", "Comment"];
 
     private static readonly string[] StartedColumn = ["Started"];
 
