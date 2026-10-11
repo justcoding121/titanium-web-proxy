@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 ke server mati",
   "custom.reuseOff": "Koneksi server tidak dipakai ulang",
   "custom.resetDone": "Setelan khusus dipulihkan.",
-  "custom.upstreamNextStart": "Setelan khusus dipulihkan. Proksi hulu berlaku saat penangkapan berikutnya dimulai."
+  "custom.upstreamNextStart": "Setelan khusus dipulihkan. Proksi hulu berlaku saat penangkapan berikutnya dimulai.",
+  "menu.keyboardShortcuts": "Pintasan keyboard",
+  "shortcuts.capture": "Penangkapan",
+  "shortcuts.sessions": "Sesi",
+  "shortcuts.window": "Jendela",
+  "shortcuts.toggleCapture": "Aktifkan atau hentikan penangkapan",
+  "shortcuts.focusSearch": "Fokus ke pencarian"
 }

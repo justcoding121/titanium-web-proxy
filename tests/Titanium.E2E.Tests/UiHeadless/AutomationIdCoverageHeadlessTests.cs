@@ -83,6 +83,7 @@ public class AutomationIdCoverageHeadlessTests
         "MenuResetSettings",
         "MenuHelp",
         "MenuCheckForUpdates",
+        "MenuKeyboardShortcuts",
         "MenuAbout",
         "SearchBox",
         "OpenFiltersButton",

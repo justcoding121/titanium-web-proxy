@@ -365,5 +365,11 @@
   "custom.http3Off": "Sunuculara HTTP/3 kapalı",
   "custom.reuseOff": "Sunucu bağlantıları yeniden kullanılmıyor",
   "custom.resetDone": "Özel ayarlar geri yüklendi.",
-  "custom.upstreamNextStart": "Özel ayarlar geri yüklendi. Yukarı akış proxy, yakalama bir sonraki kez başlayınca uygulanır."
+  "custom.upstreamNextStart": "Özel ayarlar geri yüklendi. Yukarı akış proxy, yakalama bir sonraki kez başlayınca uygulanır.",
+  "menu.keyboardShortcuts": "Klavye kısayolları",
+  "shortcuts.capture": "Yakalama",
+  "shortcuts.sessions": "Oturumlar",
+  "shortcuts.window": "Pencere",
+  "shortcuts.toggleCapture": "Yakalamayı aç veya kapat",
+  "shortcuts.focusSearch": "Aramaya git"
 }

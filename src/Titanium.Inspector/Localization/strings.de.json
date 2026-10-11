@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 zu Servern aus",
   "custom.reuseOff": "Serververbindungen werden nicht wiederverwendet",
   "custom.resetDone": "Eigene Einstellungen wiederhergestellt.",
-  "custom.upstreamNextStart": "Eigene Einstellungen wiederhergestellt. Der Upstream-Proxy gilt beim nächsten Start der Aufzeichnung."
+  "custom.upstreamNextStart": "Eigene Einstellungen wiederhergestellt. Der Upstream-Proxy gilt beim nächsten Start der Aufzeichnung.",
+  "menu.keyboardShortcuts": "Tastaturkurzbefehle",
+  "shortcuts.capture": "Aufzeichnung",
+  "shortcuts.sessions": "Sitzungen",
+  "shortcuts.window": "Fenster",
+  "shortcuts.toggleCapture": "Aufzeichnung umschalten",
+  "shortcuts.focusSearch": "Suche fokussieren"
 }

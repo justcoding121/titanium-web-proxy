@@ -48,6 +48,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         LanguageService.AttachWindow(this);
+        ApplyShortcutGestures();
         MacOsNativeMenu.AttachIfMac(this, MainMenu);
         Closing += OnClosing;
         Opened += OnOpened;
@@ -71,6 +72,7 @@ public partial class MainWindow : Window
         AddHandler(InputElement.PointerMovedEvent, OnUserInputForCaptureUi, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(InputElement.PointerWheelChangedEvent, OnUserInputForCaptureUi, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(InputElement.KeyDownEvent, OnUserInputForCaptureUi, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(InputElement.KeyDownEvent, OnShortcutKeyDown, RoutingStrategies.Tunnel);
         SessionsGrid.AddHandler(
             InputElement.PointerPressedEvent,
             OnSessionsGridPointerPressed,
@@ -119,12 +121,57 @@ public partial class MainWindow : Window
         ApplySessionColumnHeaderTips();
     }
 
+    private void ApplyShortcutGestures()
+    {
+        var macOs = OperatingSystem.IsMacOS();
+        var platform = InspectorShortcuts.PlatformModifier(macOs);
+        MenuToggleCapturing.InputGesture = new KeyGesture(Key.F12);
+        MenuClearSessions.InputGesture = new KeyGesture(Key.Delete, platform | KeyModifiers.Shift);
+        MenuRemoveSelected.InputGesture = new KeyGesture(Key.Delete);
+    }
+
+    private void OnShortcutKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        var action = InspectorShortcuts.Match(
+            e.Key,
+            e.KeyModifiers,
+            SessionsGrid.IsKeyboardFocusWithin,
+            IsTextInput(e.Source as Control),
+            OperatingSystem.IsMacOS());
+        if (action == ShortcutAction.None)
+            return;
+
+        if (action == ShortcutAction.FocusSearch)
+        {
+            SearchBox.Focus();
+            e.Handled = true;
+            return;
+        }
+
+        if (vm.TryHandleShortcut(action))
+            e.Handled = true;
+    }
+
+    private static bool IsTextInput(Control? source)
+    {
+        for (var current = source; current is not null; current = current.Parent as Control)
+        {
+            if (current is TextBox)
+                return true;
+        }
+
+        return false;
+    }
+
     private static bool IsSessionNavigationKey(Key key) =>
         key is Key.Up or Key.Down or Key.Home or Key.End or Key.PageUp or Key.PageDown;
 
     private void OnSessionsGridKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Delete || DataContext is not MainWindowViewModel vm)
+        if (e.Key != Key.Delete || e.KeyModifiers != KeyModifiers.None || DataContext is not MainWindowViewModel vm)
         {
             if (IsSessionNavigationKey(e.Key) && DataContext is MainWindowViewModel navigationVm)
             {

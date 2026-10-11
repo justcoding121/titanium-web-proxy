@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 a kiszolgálók felé ki",
   "custom.reuseOff": "A kiszolgálókapcsolatok nem használódnak újra",
   "custom.resetDone": "Az egyéni beállítások visszaállítva.",
-  "custom.upstreamNextStart": "Az egyéni beállítások visszaállítva. A felfelé irányuló proxy a következő rögzítés indításakor lép életbe."
+  "custom.upstreamNextStart": "Az egyéni beállítások visszaállítva. A felfelé irányuló proxy a következő rögzítés indításakor lép életbe.",
+  "menu.keyboardShortcuts": "Billentyűparancsok",
+  "shortcuts.capture": "Rögzítés",
+  "shortcuts.sessions": "Munkamenetek",
+  "shortcuts.window": "Ablak",
+  "shortcuts.toggleCapture": "Rögzítés ki- vagy bekapcsolása",
+  "shortcuts.focusSearch": "Keresés fókuszba"
 }

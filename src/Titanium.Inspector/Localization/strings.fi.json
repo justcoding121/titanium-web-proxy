@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 palvelimille pois",
   "custom.reuseOff": "Palvelinyhteyksiä ei käytetä uudelleen",
   "custom.resetDone": "Omat asetukset palautettu.",
-  "custom.upstreamNextStart": "Omat asetukset palautettu. Ylävirran välityspalvelin tulee voimaan seuraavan kaappauksen alkaessa."
+  "custom.upstreamNextStart": "Omat asetukset palautettu. Ylävirran välityspalvelin tulee voimaan seuraavan kaappauksen alkaessa.",
+  "menu.keyboardShortcuts": "Pikanäppäimet",
+  "shortcuts.capture": "Kaappaus",
+  "shortcuts.sessions": "Istunnot",
+  "shortcuts.window": "Ikkuna",
+  "shortcuts.toggleCapture": "Vaihda kaappaus",
+  "shortcuts.focusSearch": "Kohdista haku"
 }

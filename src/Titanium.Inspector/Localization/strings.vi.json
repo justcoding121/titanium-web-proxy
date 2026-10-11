@@ -365,5 +365,11 @@
   "custom.http3Off": "Tắt HTTP/3 tới máy chủ",
   "custom.reuseOff": "Không dùng lại kết nối máy chủ",
   "custom.resetDone": "Đã khôi phục cài đặt tùy chỉnh.",
-  "custom.upstreamNextStart": "Đã khôi phục cài đặt tùy chỉnh. Proxy thượng nguồn có hiệu lực lần bắt đầu ghi tiếp theo."
+  "custom.upstreamNextStart": "Đã khôi phục cài đặt tùy chỉnh. Proxy thượng nguồn có hiệu lực lần bắt đầu ghi tiếp theo.",
+  "menu.keyboardShortcuts": "Phím tắt",
+  "shortcuts.capture": "Ghi",
+  "shortcuts.sessions": "Phiên",
+  "shortcuts.window": "Cửa sổ",
+  "shortcuts.toggleCapture": "Bật hoặc tắt ghi",
+  "shortcuts.focusSearch": "Đến ô tìm kiếm"
 }

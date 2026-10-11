@@ -365,5 +365,11 @@
   "custom.http3Off": "到伺服器的 HTTP/3 已關閉",
   "custom.reuseOff": "不重複使用伺服器連線",
   "custom.resetDone": "已還原自訂設定。",
-  "custom.upstreamNextStart": "已還原自訂設定。上游代理會在下次開始擷取時生效。"
+  "custom.upstreamNextStart": "已還原自訂設定。上游代理會在下次開始擷取時生效。",
+  "menu.keyboardShortcuts": "鍵盤快速鍵",
+  "shortcuts.capture": "擷取",
+  "shortcuts.sessions": "工作階段",
+  "shortcuts.window": "視窗",
+  "shortcuts.toggleCapture": "切換擷取",
+  "shortcuts.focusSearch": "移至搜尋"
 }

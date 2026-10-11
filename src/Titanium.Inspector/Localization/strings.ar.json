@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 إلى الخوادم متوقف",
   "custom.reuseOff": "لا يعاد استخدام اتصالات الخادم",
   "custom.resetDone": "تمت استعادة الإعدادات المخصصة.",
-  "custom.upstreamNextStart": "تمت استعادة الإعدادات المخصصة. يُطبق الوكيل العلوي عند بدء الالتقاط التالي."
+  "custom.upstreamNextStart": "تمت استعادة الإعدادات المخصصة. يُطبق الوكيل العلوي عند بدء الالتقاط التالي.",
+  "menu.keyboardShortcuts": "اختصارات لوحة المفاتيح",
+  "shortcuts.capture": "الالتقاط",
+  "shortcuts.sessions": "الجلسات",
+  "shortcuts.window": "النافذة",
+  "shortcuts.toggleCapture": "تبديل الالتقاط",
+  "shortcuts.focusSearch": "التركيز على البحث"
 }

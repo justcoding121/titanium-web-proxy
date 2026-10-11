@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 til tjenere av",
   "custom.reuseOff": "Tjenerforbindelser brukes ikke om igjen",
   "custom.resetDone": "Egendefinerte innstillinger gjenopprettet.",
-  "custom.upstreamNextStart": "Egendefinerte innstillinger gjenopprettet. Oppstrømsproxyen gjelder neste gang opptak startes."
+  "custom.upstreamNextStart": "Egendefinerte innstillinger gjenopprettet. Oppstrømsproxyen gjelder neste gang opptak startes.",
+  "menu.keyboardShortcuts": "Tastatursnarveier",
+  "shortcuts.capture": "Opptak",
+  "shortcuts.sessions": "Økter",
+  "shortcuts.window": "Vindu",
+  "shortcuts.toggleCapture": "Slå opptak av eller på",
+  "shortcuts.focusSearch": "Fokuser søk"
 }

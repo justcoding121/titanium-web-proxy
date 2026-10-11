@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 k serverům vypnuto",
   "custom.reuseOff": "Spojení se servery se nepoužívají znovu",
   "custom.resetDone": "Vlastní nastavení obnoveno.",
-  "custom.upstreamNextStart": "Vlastní nastavení obnoveno. Nadřazená proxy se použije při příštím spuštění zachytávání."
+  "custom.upstreamNextStart": "Vlastní nastavení obnoveno. Nadřazená proxy se použije při příštím spuštění zachytávání.",
+  "menu.keyboardShortcuts": "Klávesové zkratky",
+  "shortcuts.capture": "Zachytávání",
+  "shortcuts.sessions": "Relace",
+  "shortcuts.window": "Okno",
+  "shortcuts.toggleCapture": "Přepnout zachytávání",
+  "shortcuts.focusSearch": "Zaměřit hledání"
 }

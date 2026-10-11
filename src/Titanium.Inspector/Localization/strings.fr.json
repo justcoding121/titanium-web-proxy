@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 vers les serveurs désactivé",
   "custom.reuseOff": "Les connexions serveur ne sont pas réutilisées",
   "custom.resetDone": "Paramètres personnalisés rétablis.",
-  "custom.upstreamNextStart": "Paramètres personnalisés rétablis. Le proxy amont s applique au prochain démarrage de la capture."
+  "custom.upstreamNextStart": "Paramètres personnalisés rétablis. Le proxy amont s applique au prochain démarrage de la capture.",
+  "menu.keyboardShortcuts": "Raccourcis clavier",
+  "shortcuts.capture": "Capture",
+  "shortcuts.sessions": "Sessions",
+  "shortcuts.window": "Fenêtre",
+  "shortcuts.toggleCapture": "Activer ou arrêter la capture",
+  "shortcuts.focusSearch": "Aller à la recherche"
 }

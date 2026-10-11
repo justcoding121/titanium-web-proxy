@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 til servere fra",
   "custom.reuseOff": "Serverforbindelser genbruges ikke",
   "custom.resetDone": "Brugerdefinerede indstillinger gendannet.",
-  "custom.upstreamNextStart": "Brugerdefinerede indstillinger gendannet. Opstrømsproxyen gælder næste gang optagelse starter."
+  "custom.upstreamNextStart": "Brugerdefinerede indstillinger gendannet. Opstrømsproxyen gælder næste gang optagelse starter.",
+  "menu.keyboardShortcuts": "Tastaturgenveje",
+  "shortcuts.capture": "Optagelse",
+  "shortcuts.sessions": "Sessioner",
+  "shortcuts.window": "Vindue",
+  "shortcuts.toggleCapture": "Slå optagelse til eller fra",
+  "shortcuts.focusSearch": "Fokuser søgning"
 }

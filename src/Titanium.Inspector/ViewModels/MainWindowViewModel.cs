@@ -297,6 +297,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         OpenLoggingSettingsCommand = Cmd(OpenLoggingSettingsAsync);
         OpenNetworkSettingsCommand = Cmd(OpenNetworkSettingsAsync);
         OpenAboutCommand = Cmd(OpenAboutAsync);
+        OpenKeyboardShortcutsCommand = Cmd(OpenKeyboardShortcutsAsync);
         OpenHttpsDecryptHostsCommand = Cmd(OpenExcludedHostsAsync);
         ExcludeHostCommand = Cmd(ExcludeHostAsync);
         ResetSettingsCommand = Cmd(ResetSettingsAsync);
@@ -1118,6 +1119,35 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             : "Network settings saved";
     }
 
+    private async Task OpenKeyboardShortcutsAsync()
+    {
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            StatusText = "Keyboard shortcuts require the main window";
+            return;
+        }
+
+        await KeyboardShortcutsWindow.ShowAsync(owner);
+    }
+
+    public bool TryHandleShortcut(ShortcutAction action)
+    {
+        ICommand? command = action switch
+        {
+            ShortcutAction.ToggleCapture => ToggleCapturingCommand,
+            ShortcutAction.ClearSessions => ClearSessionsCommand,
+            ShortcutAction.RemoveSelected => RemoveSelectedSessionsCommand,
+            ShortcutAction.Replay => HasSingleSelectedSession ? ReplayCommand : null,
+            _ => null,
+        };
+        if (command is null || !command.CanExecute(null))
+            return false;
+
+        command.Execute(null);
+        return true;
+    }
+
     private async Task OpenLoggingSettingsAsync()
     {
         var owner = TryGetMainWindow();
@@ -1441,6 +1471,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public ICommand OpenLoggingSettingsCommand { get; }
     public ICommand OpenNetworkSettingsCommand { get; }
     public ICommand OpenAboutCommand { get; }
+    public ICommand OpenKeyboardShortcutsCommand { get; }
     public ICommand OpenHttpsDecryptHostsCommand { get; }
     public ICommand ExcludeHostCommand { get; }
     public ICommand OpenExclusionSummaryCommand { get; }

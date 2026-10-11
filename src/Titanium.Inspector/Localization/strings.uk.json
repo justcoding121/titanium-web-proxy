@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 до серверів вимкнено",
   "custom.reuseOff": "З’єднання з сервером не використовуються повторно",
   "custom.resetDone": "Власні параметри відновлено.",
-  "custom.upstreamNextStart": "Власні параметри відновлено. Вихідний проксі застосується під час наступного запуску захоплення."
+  "custom.upstreamNextStart": "Власні параметри відновлено. Вихідний проксі застосується під час наступного запуску захоплення.",
+  "menu.keyboardShortcuts": "Сполучення клавіш",
+  "shortcuts.capture": "Захоплення",
+  "shortcuts.sessions": "Сеанси",
+  "shortcuts.window": "Вікно",
+  "shortcuts.toggleCapture": "Перемкнути захоплення",
+  "shortcuts.focusSearch": "Перейти до пошуку"
 }

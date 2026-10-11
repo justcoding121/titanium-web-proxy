@@ -365,5 +365,11 @@
   "custom.http3Off": "ปิด HTTP/3 ไปยังเซิร์ฟเวอร์",
   "custom.reuseOff": "ไม่ใช้การเชื่อมต่อเซิร์ฟเวอร์ซ้ำ",
   "custom.resetDone": "คืนค่าการตั้งค่าที่กำหนดเองแล้ว",
-  "custom.upstreamNextStart": "คืนค่าการตั้งค่าที่กำหนดเองแล้ว พร็อกซีต้นทางจะมีผลเมื่อเริ่มจับทราฟฟิกครั้งถัดไป"
+  "custom.upstreamNextStart": "คืนค่าการตั้งค่าที่กำหนดเองแล้ว พร็อกซีต้นทางจะมีผลเมื่อเริ่มจับทราฟฟิกครั้งถัดไป",
+  "menu.keyboardShortcuts": "แป้นพิมพ์ลัด",
+  "shortcuts.capture": "การจับ",
+  "shortcuts.sessions": "เซสชัน",
+  "shortcuts.window": "หน้าต่าง",
+  "shortcuts.toggleCapture": "สลับการจับ",
+  "shortcuts.focusSearch": "ไปที่ช่องค้นหา"
 }

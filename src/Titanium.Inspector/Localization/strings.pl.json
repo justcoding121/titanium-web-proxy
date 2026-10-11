@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 do serwerów wyłączone",
   "custom.reuseOff": "Połączenia z serwerem nie są używane ponownie",
   "custom.resetDone": "Ustawienia niestandardowe przywrócone.",
-  "custom.upstreamNextStart": "Ustawienia niestandardowe przywrócone. Serwer proxy nadrzędny zadziała przy następnym uruchomieniu przechwytywania."
+  "custom.upstreamNextStart": "Ustawienia niestandardowe przywrócone. Serwer proxy nadrzędny zadziała przy następnym uruchomieniu przechwytywania.",
+  "menu.keyboardShortcuts": "Skróty klawiszowe",
+  "shortcuts.capture": "Przechwytywanie",
+  "shortcuts.sessions": "Sesje",
+  "shortcuts.window": "Okno",
+  "shortcuts.toggleCapture": "Przełącz przechwytywanie",
+  "shortcuts.focusSearch": "Przejdź do wyszukiwania"
 }

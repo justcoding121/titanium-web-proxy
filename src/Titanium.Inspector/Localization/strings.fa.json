@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 به سرورها خاموش",
   "custom.reuseOff": "اتصال‌های سرور دوباره استفاده نمی‌شوند",
   "custom.resetDone": "تنظیمات سفارشی بازگردانده شد.",
-  "custom.upstreamNextStart": "تنظیمات سفارشی بازگردانده شد. پروکسی بالادست در شروع بعدی ضبط اعمال می‌شود."
+  "custom.upstreamNextStart": "تنظیمات سفارشی بازگردانده شد. پروکسی بالادست در شروع بعدی ضبط اعمال می‌شود.",
+  "menu.keyboardShortcuts": "میانبرهای صفحه کلید",
+  "shortcuts.capture": "ضبط",
+  "shortcuts.sessions": "نشست‌ها",
+  "shortcuts.window": "پنجره",
+  "shortcuts.toggleCapture": "تغییر وضعیت ضبط",
+  "shortcuts.focusSearch": "تمرکز روی جستجو"
 }

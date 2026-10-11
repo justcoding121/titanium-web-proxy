@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 к серверам выключен",
   "custom.reuseOff": "Соединения с сервером не переиспользуются",
   "custom.resetDone": "Свои параметры восстановлены.",
-  "custom.upstreamNextStart": "Свои параметры восстановлены. Вышестоящий прокси применится при следующем запуске захвата."
+  "custom.upstreamNextStart": "Свои параметры восстановлены. Вышестоящий прокси применится при следующем запуске захвата.",
+  "menu.keyboardShortcuts": "Сочетания клавиш",
+  "shortcuts.capture": "Захват",
+  "shortcuts.sessions": "Сеансы",
+  "shortcuts.window": "Окно",
+  "shortcuts.toggleCapture": "Переключить захват",
+  "shortcuts.focusSearch": "Перейти к поиску"
 }

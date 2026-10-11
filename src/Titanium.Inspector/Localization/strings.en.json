@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 to servers off",
   "custom.reuseOff": "Server connections are not reused",
   "custom.resetDone": "Custom settings restored.",
-  "custom.upstreamNextStart": "Custom settings restored. The upstream proxy applies the next time capture starts."
+  "custom.upstreamNextStart": "Custom settings restored. The upstream proxy applies the next time capture starts.",
+  "menu.keyboardShortcuts": "Keyboard shortcuts",
+  "shortcuts.capture": "Capture",
+  "shortcuts.sessions": "Sessions",
+  "shortcuts.window": "Window",
+  "shortcuts.toggleCapture": "Toggle capturing",
+  "shortcuts.focusSearch": "Focus search"
 }

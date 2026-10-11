@@ -25,12 +25,12 @@
         <MenuItem Header="{loc:Loc menu.startProxy}" Command="{Binding StartCaptureCommand}" AutomationProperties.AutomationId="MenuStartCapture" />
         <MenuItem Header="{loc:Loc menu.stopProxy}" Command="{Binding StopCaptureCommand}" AutomationProperties.AutomationId="MenuStopCapture" />
         <!-- Mode=OneWay + Command: Avalonia MenuItem CheckBox TwoWay can write false during init and persist it. -->
-        <MenuItem Header="{loc:Loc menu.capturing}" ToggleType="CheckBox"
+        <MenuItem x:Name="MenuToggleCapturing" Header="{loc:Loc menu.capturing}" ToggleType="CheckBox"
                   IsChecked="{Binding Capturing, Mode=OneWay}"
                   Command="{Binding ToggleCapturingCommand}"
                   AutomationProperties.AutomationId="MenuToggleCapturing" />
-        <MenuItem Header="{loc:Loc menu.clearSessions}" Command="{Binding ClearSessionsCommand}" AutomationProperties.AutomationId="MenuClearSessions" />
-        <MenuItem Header="{loc:Loc menu.removeSelected}" Command="{Binding RemoveSelectedSessionsCommand}" AutomationProperties.AutomationId="MenuRemoveSelected" />
+        <MenuItem x:Name="MenuClearSessions" Header="{loc:Loc menu.clearSessions}" Command="{Binding ClearSessionsCommand}" AutomationProperties.AutomationId="MenuClearSessions" />
+        <MenuItem x:Name="MenuRemoveSelected" Header="{loc:Loc menu.removeSelected}" Command="{Binding RemoveSelectedSessionsCommand}" AutomationProperties.AutomationId="MenuRemoveSelected" />
         <Separator />
         <MenuItem Header="{loc:Loc menu.autoStartCapture}" ToggleType="CheckBox"
                   IsChecked="{Binding AutoStartCapture, Mode=OneWay}"
@@ -305,6 +305,8 @@
                     AutomationProperties.AutomationId="MenuUpdateChannelBeta" />
         </MenuItem>
         <Separator />
+        <MenuItem Header="{loc:Loc menu.keyboardShortcuts}" Command="{Binding OpenKeyboardShortcutsCommand}"
+                  AutomationProperties.AutomationId="MenuKeyboardShortcuts" />
         <MenuItem Header="{loc:Loc menu.about}" Command="{Binding OpenAboutCommand}"
                   AutomationProperties.AutomationId="MenuAbout" />
       </MenuItem>
@@ -320,7 +322,7 @@
                   AutomationProperties.AutomationId="ToolbarPanel">
         <!-- Search + filters: WrapPanel so chips stay visible when the window narrows. -->
         <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarSearchFilters">
-          <TextBox MinWidth="200" MaxWidth="480" Width="320" Margin="0,0,12,6"
+          <TextBox x:Name="SearchBox" MinWidth="200" MaxWidth="480" Width="320" Margin="0,0,12,6"
                    Watermark="{loc:Loc toolbar.searchWatermark}"
                    ToolTip.Tip="{loc:Loc toolbar.searchTip}"
                    Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />

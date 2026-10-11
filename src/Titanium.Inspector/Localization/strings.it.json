@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 verso i server disattivato",
   "custom.reuseOff": "Le connessioni al server non vengono riutilizzate",
   "custom.resetDone": "Impostazioni personalizzate ripristinate.",
-  "custom.upstreamNextStart": "Impostazioni personalizzate ripristinate. Il proxy a monte si applica al prossimo avvio della cattura."
+  "custom.upstreamNextStart": "Impostazioni personalizzate ripristinate. Il proxy a monte si applica al prossimo avvio della cattura.",
+  "menu.keyboardShortcuts": "Scorciatoie da tastiera",
+  "shortcuts.capture": "Cattura",
+  "shortcuts.sessions": "Sessioni",
+  "shortcuts.window": "Finestra",
+  "shortcuts.toggleCapture": "Attiva o disattiva la cattura",
+  "shortcuts.focusSearch": "Vai alla ricerca"
 }

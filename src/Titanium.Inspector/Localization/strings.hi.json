@@ -365,5 +365,11 @@
   "custom.http3Off": "सर्वरों पर HTTP/3 बंद",
   "custom.reuseOff": "सर्वर कनेक्शन दोबारा नहीं इस्तेमाल होते",
   "custom.resetDone": "कस्टम सेटिंग वापस आ गईं.",
-  "custom.upstreamNextStart": "कस्टम सेटिंग वापस आ गईं. अपस्ट्रीम प्रॉक्सी अगली कैप्चर शुरुआत पर लागू होगी."
+  "custom.upstreamNextStart": "कस्टम सेटिंग वापस आ गईं. अपस्ट्रीम प्रॉक्सी अगली कैप्चर शुरुआत पर लागू होगी.",
+  "menu.keyboardShortcuts": "कीबोर्ड शॉर्टकट",
+  "shortcuts.capture": "कैप्चर",
+  "shortcuts.sessions": "सत्र",
+  "shortcuts.window": "विंडो",
+  "shortcuts.toggleCapture": "कैप्चर चालू या बंद",
+  "shortcuts.focusSearch": "खोज पर जाएँ"
 }

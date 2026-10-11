@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 hacia servidores desactivado",
   "custom.reuseOff": "No se reutilizan las conexiones al servidor",
   "custom.resetDone": "Ajustes personalizados restaurados.",
-  "custom.upstreamNextStart": "Ajustes personalizados restaurados. El proxy de subida se aplica la próxima vez que se inicie la captura."
+  "custom.upstreamNextStart": "Ajustes personalizados restaurados. El proxy de subida se aplica la próxima vez que se inicie la captura.",
+  "menu.keyboardShortcuts": "Atajos de teclado",
+  "shortcuts.capture": "Captura",
+  "shortcuts.sessions": "Sesiones",
+  "shortcuts.window": "Ventana",
+  "shortcuts.toggleCapture": "Alternar captura",
+  "shortcuts.focusSearch": "Enfocar la búsqueda"
 }

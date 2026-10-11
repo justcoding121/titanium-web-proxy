@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 para servidores desligado",
   "custom.reuseOff": "As ligações ao servidor não são reutilizadas",
   "custom.resetDone": "Definições personalizadas restauradas.",
-  "custom.upstreamNextStart": "Definições personalizadas restauradas. O proxy a montante aplica-se no próximo início da captura."
+  "custom.upstreamNextStart": "Definições personalizadas restauradas. O proxy a montante aplica-se no próximo início da captura.",
+  "menu.keyboardShortcuts": "Atalhos de teclado",
+  "shortcuts.capture": "Captura",
+  "shortcuts.sessions": "Sessões",
+  "shortcuts.window": "Janela",
+  "shortcuts.toggleCapture": "Alternar captura",
+  "shortcuts.focusSearch": "Focar a pesquisa"
 }

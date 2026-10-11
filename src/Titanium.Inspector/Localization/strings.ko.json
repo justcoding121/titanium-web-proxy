@@ -365,5 +365,11 @@
   "custom.http3Off": "서버로의 HTTP/3 끔",
   "custom.reuseOff": "서버 연결을 다시 사용하지 않음",
   "custom.resetDone": "사용자 설정을 복원했습니다.",
-  "custom.upstreamNextStart": "사용자 설정을 복원했습니다. 업스트림 프록시는 다음 캡처 시작 때 적용됩니다."
+  "custom.upstreamNextStart": "사용자 설정을 복원했습니다. 업스트림 프록시는 다음 캡처 시작 때 적용됩니다.",
+  "menu.keyboardShortcuts": "키보드 바로 가기",
+  "shortcuts.capture": "캡처",
+  "shortcuts.sessions": "세션",
+  "shortcuts.window": "창",
+  "shortcuts.toggleCapture": "캡처 전환",
+  "shortcuts.focusSearch": "검색으로 이동"
 }

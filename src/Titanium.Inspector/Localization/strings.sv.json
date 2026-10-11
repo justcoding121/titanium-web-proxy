@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 till servrar av",
   "custom.reuseOff": "Serveranslutningar återanvänds inte",
   "custom.resetDone": "Anpassade inställningar återställda.",
-  "custom.upstreamNextStart": "Anpassade inställningar återställda. Uppströmsproxyn gäller nästa gång inspelningen startar."
+  "custom.upstreamNextStart": "Anpassade inställningar återställda. Uppströmsproxyn gäller nästa gång inspelningen startar.",
+  "menu.keyboardShortcuts": "Kortkommandon",
+  "shortcuts.capture": "Inspelning",
+  "shortcuts.sessions": "Sessioner",
+  "shortcuts.window": "Fönster",
+  "shortcuts.toggleCapture": "Växla inspelning",
+  "shortcuts.focusSearch": "Fokusera sökning"
 }

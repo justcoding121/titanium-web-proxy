@@ -365,5 +365,11 @@
   "custom.http3Off": "HTTP/3 לשרתים כבוי",
   "custom.reuseOff": "חיבורי השרת אינם בשימוש חוזר",
   "custom.resetDone": "ההגדרות המותאמות שוחזרו.",
-  "custom.upstreamNextStart": "ההגדרות המותאמות שוחזרו. המתווך במעלה הזרם יחול בהפעלת הלכידה הבאה."
+  "custom.upstreamNextStart": "ההגדרות המותאמות שוחזרו. המתווך במעלה הזרם יחול בהפעלת הלכידה הבאה.",
+  "menu.keyboardShortcuts": "קיצורי מקשים",
+  "shortcuts.capture": "לכידה",
+  "shortcuts.sessions": "הפעלות",
+  "shortcuts.window": "חלון",
+  "shortcuts.toggleCapture": "החלף לכידה",
+  "shortcuts.focusSearch": "מיקוד בחיפוש"
 }
