@@ -414,6 +414,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         {
             UpdateWsFramesVisibility();
             RefreshSelectedInspectors();
+            RefreshStatisticsIfVisible();
         }
     }
 
@@ -423,6 +424,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         _selectedSessions.Clear();
         _selectedSessions.AddRange(selected);
         NotifyFilterSelectionProperties();
+        RefreshStatisticsIfVisible();
     }
 
     /// <summary>True when the store has at least one session (Clear sessions).</summary>
@@ -2570,6 +2572,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             {
                 RefreshSelectedInspectors();
             }
+
+            RefreshStatisticsIfVisible();
         }
     }
 
@@ -2708,6 +2712,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
                     RefreshSelectedInspectors();
                 }
 
+                RefreshStatisticsIfVisible();
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
             }
         }
@@ -2754,7 +2759,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             if (value < InspectTabCount)
             {
                 SelectedPaneNavIndex = 0;
-                SelectedInspectTabIndex = Math.Clamp(value, 0, (int)InspectTab.Protobuf);
+                SelectedInspectTabIndex = Math.Clamp(value, 0, (int)InspectTab.Statistics);
             }
             else
             {
@@ -2989,6 +2994,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         RefreshEndpointAndBindUi();
         RefreshSelectedInspectors();
         RefreshCustomSettings();
+        RefreshStatisticsIfVisible();
     }
 
     private void SetThemeMode(ThemeMode mode)

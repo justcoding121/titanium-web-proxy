@@ -641,6 +641,7 @@
               <TabControl x:Name="InspectTabs"
                           AutomationProperties.AutomationId="InspectTabs"
                           IsVisible="{Binding HasSelectedSession}"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
                           SelectedIndex="{Binding SelectedInspectTabIndex}">
                 <TabItem Header="{loc:Loc inspect.request}" ToolTip.Tip="{loc:Loc inspect.requestTip}"
                          AutomationProperties.AutomationId="TabRequest">
@@ -828,6 +829,50 @@
                          IsVisible="{Binding ShowProtobufTab}">
                   <TextBox IsReadOnly="True" Text="{Binding SelectedProtobufDecoded}" AcceptsReturn="True" TextWrapping="Wrap"
                            FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="ProtobufText" />
+                </TabItem>
+                <TabItem Header="{loc:Loc inspect.statistics}" AutomationProperties.AutomationId="TabStatistics">
+                  <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="12" Spacing="8">
+                      <TextBlock Text="{Binding StatisticsSummary}" TextWrapping="Wrap"
+                                 AutomationProperties.AutomationId="StatisticsSummary" />
+                      <ItemsControl ItemsSource="{Binding StatisticsPhases}"
+                                    IsVisible="{Binding ShowStatisticsBar}"
+                                    AutomationProperties.AutomationId="StatisticsBar"
+                                    AutomationProperties.Name="{Binding StatisticsBarName}">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="1" />
+                          </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:StatisticsPhaseRow">
+                            <Border Width="{Binding BarWidth}" Height="12" Opacity="{Binding Opacity}"
+                                    Background="{DynamicResource SystemControlForegroundBaseHighBrush}"
+                                    ToolTip.Tip="{Binding ToolTip}" />
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <ItemsControl ItemsSource="{Binding StatisticsPhases}"
+                                    IsVisible="{Binding ShowStatisticsBar}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:StatisticsPhaseRow">
+                            <Grid ColumnDefinitions="168,*,72" Margin="0,2,0,2">
+                              <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
+                              <Border Grid.Column="1" Height="8" HorizontalAlignment="Left"
+                                      Width="{Binding BarWidth}" Opacity="{Binding Opacity}"
+                                      Background="{DynamicResource SystemControlForegroundBaseHighBrush}"
+                                      VerticalAlignment="Center" ToolTip.Tip="{Binding ToolTip}" />
+                              <TextBlock Grid.Column="2" Text="{Binding MillisecondsText}"
+                                         HorizontalAlignment="Right" VerticalAlignment="Center" />
+                            </Grid>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <Button Content="{loc:Loc stats.copy}" Command="{Binding CopyStatisticsCommand}"
+                              HorizontalAlignment="Left"
+                              AutomationProperties.AutomationId="StatisticsCopy" />
+                    </StackPanel>
+                  </ScrollViewer>
                 </TabItem>
               </TabControl>
             </Grid>
