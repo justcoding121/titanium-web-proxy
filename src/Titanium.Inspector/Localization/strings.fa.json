@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "ردیف‌ها به‌صورت جدول",
-  "ctx.saveRaw": "ذخیره نشست به‌صورت متن خام HTTP"
+  "ctx.saveRaw": "ذخیره نشست به‌صورت متن خام HTTP",
+  "ctx.findRelated": "یافتن مرتبط",
+  "ctx.findRelatedUrl": "همان نشانی",
+  "ctx.findRelatedConnection": "همان اتصال",
+  "ctx.findRelatedReferer": "همان Referer",
+  "ctx.findRelatedRedirect": "زنجیره تغییر مسیر",
+  "filter.relatedChip": "مرتبط ({0}، نما)"
 }

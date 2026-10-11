@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "Wiersze jako tabelę",
-  "ctx.saveRaw": "Zapisz sesję jako surowy tekst HTTP"
+  "ctx.saveRaw": "Zapisz sesję jako surowy tekst HTTP",
+  "ctx.findRelated": "Znajdź powiązane",
+  "ctx.findRelatedUrl": "Ten sam adres URL",
+  "ctx.findRelatedConnection": "To samo połączenie",
+  "ctx.findRelatedReferer": "Ten sam Referer",
+  "ctx.findRelatedRedirect": "Łańcuch przekierowań",
+  "filter.relatedChip": "Powiązane ({0}, migawka)"
 }

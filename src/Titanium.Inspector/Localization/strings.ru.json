@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "Строки как таблицу",
-  "ctx.saveRaw": "Сохранить сеанс как необработанный текст HTTP"
+  "ctx.saveRaw": "Сохранить сеанс как необработанный текст HTTP",
+  "ctx.findRelated": "Найти связанные",
+  "ctx.findRelatedUrl": "Тот же URL",
+  "ctx.findRelatedConnection": "То же соединение",
+  "ctx.findRelatedReferer": "Тот же Referer",
+  "ctx.findRelatedRedirect": "Цепочка перенаправлений",
+  "filter.relatedChip": "Связанные ({0}, снимок)"
 }

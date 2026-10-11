@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "多行表格",
-  "ctx.saveRaw": "将会话另存为原始 HTTP 文本"
+  "ctx.saveRaw": "将会话另存为原始 HTTP 文本",
+  "ctx.findRelated": "查找相关会话",
+  "ctx.findRelatedUrl": "相同 URL",
+  "ctx.findRelatedConnection": "相同连接",
+  "ctx.findRelatedReferer": "相同 Referer",
+  "ctx.findRelatedRedirect": "重定向链",
+  "filter.relatedChip": "相关（{0}，当时的快照）"
 }

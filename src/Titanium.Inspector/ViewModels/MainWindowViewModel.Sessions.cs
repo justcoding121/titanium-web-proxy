@@ -517,6 +517,46 @@ public sealed partial class MainWindowViewModel
             await clipboard.SetTextAsync(text).ConfigureAwait(false);
         }
     }
+    private async Task FindRelatedAsync(string? kind)
+    {
+        var selection = ResolveFilterSelection();
+        if (selection.Count != 1 || string.IsNullOrEmpty(kind))
+        {
+            StatusText = "Select one session to find related rows";
+            return;
+        }
+
+        var seed = selection[0];
+        var all = _all.ToList();
+        var result = all.Count > 300
+            ? await Task.Run(() => ResolveRelation(kind, all, seed)).ConfigureAwait(true)
+            : ResolveRelation(kind, all, seed);
+        if (result.Ids.Length == 0)
+        {
+            StatusText = kind == "connection" && seed.ConnectionId <= 0
+                ? "This session has no connection id"
+                : "No related sessions";
+            return;
+        }
+
+        SearchQuery = SessionSearch.SetKeyedToken(
+            SearchQuery,
+            "ids",
+            string.Join(',', result.Ids));
+        StatusText = result.Capped
+            ? "Showing 500 related sessions (list was longer)"
+            : $"Showing {result.Ids.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)} related sessions";
+    }
+
+    private static RelationResult ResolveRelation(string kind, List<SessionSnapshot> all, SessionSnapshot seed) =>
+        kind switch
+        {
+            "connection" => SessionRelations.SameConnection(all, seed),
+            "referer" => SessionRelations.SameReferer(all, seed),
+            "redirect" => SessionRelations.RedirectChain(all, seed),
+            _ => SessionRelations.SameUrl(all, seed),
+        };
+
     private Task FilterByHostAsync()
     {
         var host = ResolveUnanimousFilterHost();
@@ -1127,6 +1167,15 @@ public sealed partial class MainWindowViewModel
     /// <summary>True when at least one hide-host or hide-process chip should show.</summary>
     public bool HasHiddenChips => HiddenHostChips.Count > 0 || HiddenProcessChips.Count > 0;
 
+    private string _relatedChipText = "";
+
+    /// <summary>Shown while an <c>ids:</c> token is active. The set is the moment Find related ran.</summary>
+    public string RelatedChipText => _relatedChipText;
+
+    public bool HasRelatedChip => _relatedChipText.Length > 0;
+
+    public bool HasFilterChips => HasHiddenChips || HasRelatedChip;
+
     /// <summary>True when both chip kinds are present, so process chips need a "process" prefix.</summary>
     public bool ShowProcessChipPrefix => HiddenHostChips.Count > 0 && HiddenProcessChips.Count > 0;
 
@@ -1148,7 +1197,36 @@ public sealed partial class MainWindowViewModel
 
         ReplaceChipList(HiddenHostChips, hosts);
         ReplaceChipList(HiddenProcessChips, processes);
+        var related = "";
+        foreach (var token in SessionSearch.GetTokens(SearchQuery))
+        {
+            if (token.Key == "ids")
+            {
+                var count = 0;
+                foreach (var part in token.Value.Split(','))
+                {
+                    if (long.TryParse(part, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _))
+                    {
+                        count++;
+                    }
+                }
+
+                if (count > 0)
+                {
+                    related = LanguageService.Format("filter.relatedChip", count);
+                }
+            }
+        }
+
+        if (!string.Equals(_relatedChipText, related, StringComparison.Ordinal))
+        {
+            _relatedChipText = related;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RelatedChipText)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasRelatedChip)));
+        }
+
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasHiddenChips)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasFilterChips)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowProcessChipPrefix)));
     }
 

@@ -125,6 +125,7 @@ public class AutomationIdCoverageHeadlessTests
         "CtxFilterByStatus",
         "CtxMark",
         "CtxComment",
+        "CtxFindRelated",
         "StatusFilterButton",
         "CtxHideHost",
         "CtxExcludeHost",

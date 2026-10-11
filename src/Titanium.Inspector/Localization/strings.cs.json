@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "Řádky jako tabulku",
-  "ctx.saveRaw": "Uložit relaci jako surový HTTP text"
+  "ctx.saveRaw": "Uložit relaci jako surový HTTP text",
+  "ctx.findRelated": "Najít související",
+  "ctx.findRelatedUrl": "Stejná adresa URL",
+  "ctx.findRelatedConnection": "Stejné připojení",
+  "ctx.findRelatedReferer": "Stejný Referer",
+  "ctx.findRelatedRedirect": "Řetězec přesměrování",
+  "filter.relatedChip": "Související ({0}, snímek)"
 }

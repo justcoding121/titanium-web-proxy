@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "Rivit taulukkona",
-  "ctx.saveRaw": "Tallenna istunto raakana HTTP-tekstinä"
+  "ctx.saveRaw": "Tallenna istunto raakana HTTP-tekstinä",
+  "ctx.findRelated": "Etsi liittyvät",
+  "ctx.findRelatedUrl": "Sama URL",
+  "ctx.findRelatedConnection": "Sama yhteys",
+  "ctx.findRelatedReferer": "Sama Referer",
+  "ctx.findRelatedRedirect": "Uudelleenohjausketju",
+  "filter.relatedChip": "Liittyvät ({0}, tilanne)"
 }

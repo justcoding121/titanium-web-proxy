@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "पंक्तियाँ तालिका के रूप में",
-  "ctx.saveRaw": "सत्र को कच्चे HTTP पाठ के रूप में सहेजें"
+  "ctx.saveRaw": "सत्र को कच्चे HTTP पाठ के रूप में सहेजें",
+  "ctx.findRelated": "संबंधित खोजें",
+  "ctx.findRelatedUrl": "वही URL",
+  "ctx.findRelatedConnection": "वही कनेक्शन",
+  "ctx.findRelatedReferer": "वही Referer",
+  "ctx.findRelatedRedirect": "पुनर्निर्देशन श्रृंखला",
+  "filter.relatedChip": "संबंधित ({0}, स्नैपशॉट)"
 }

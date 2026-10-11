@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "Baris sebagai tabel",
-  "ctx.saveRaw": "Simpan sesi sebagai teks HTTP mentah"
+  "ctx.saveRaw": "Simpan sesi sebagai teks HTTP mentah",
+  "ctx.findRelated": "Cari yang terkait",
+  "ctx.findRelatedUrl": "URL yang sama",
+  "ctx.findRelatedConnection": "Koneksi yang sama",
+  "ctx.findRelatedReferer": "Referer yang sama",
+  "ctx.findRelatedRedirect": "Rantai pengalihan",
+  "filter.relatedChip": "Terkait ({0}, cuplikan)"
 }

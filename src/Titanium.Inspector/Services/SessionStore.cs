@@ -869,6 +869,7 @@ public sealed class SessionStore : IDisposable
         new()
         {
             Id = snap.Id,
+            ConnectionId = snap.ConnectionId,
             Method = snap.Method,
             Url = snap.Url,
             StartedUtc = snap.StartedUtc,

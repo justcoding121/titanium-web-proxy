@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "Rader som tabell",
-  "ctx.saveRaw": "Spara sessionen som rå HTTP-text"
+  "ctx.saveRaw": "Spara sessionen som rå HTTP-text",
+  "ctx.findRelated": "Hitta relaterade",
+  "ctx.findRelatedUrl": "Samma URL",
+  "ctx.findRelatedConnection": "Samma anslutning",
+  "ctx.findRelatedReferer": "Samma Referer",
+  "ctx.findRelatedRedirect": "Omdirigeringskedja",
+  "filter.relatedChip": "Relaterade ({0}, ögonblicksbild)"
 }

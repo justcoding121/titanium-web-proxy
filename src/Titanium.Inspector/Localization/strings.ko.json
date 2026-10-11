@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "행을 표로",
-  "ctx.saveRaw": "세션을 원시 HTTP 텍스트로 저장"
+  "ctx.saveRaw": "세션을 원시 HTTP 텍스트로 저장",
+  "ctx.findRelated": "관련 항목 찾기",
+  "ctx.findRelatedUrl": "같은 URL",
+  "ctx.findRelatedConnection": "같은 연결",
+  "ctx.findRelatedReferer": "같은 Referer",
+  "ctx.findRelatedRedirect": "리디렉션 체인",
+  "filter.relatedChip": "관련 ({0}, 스냅샷)"
 }

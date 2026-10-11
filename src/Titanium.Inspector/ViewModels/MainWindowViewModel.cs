@@ -347,6 +347,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             return Task.CompletedTask;
         });
         CommentCommand = Cmd(CommentAsync);
+        FindRelatedCommand = CmdWithParameter(parameter => FindRelatedAsync(parameter as string));
         HideHostCommand = Cmd(HideHostAsync);
         FilterByProcessCommand = Cmd(FilterByProcessAsync);
         HideProcessCommand = Cmd(HideProcessAsync);
@@ -1553,6 +1554,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public ICommand FilterByStatusCommand { get; }
     public ICommand SetMarkCommand { get; }
     public ICommand CommentCommand { get; }
+    public ICommand FindRelatedCommand { get; }
     public ICommand HideHostCommand { get; }
     public ICommand FilterByProcessCommand { get; }
     public ICommand HideProcessCommand { get; }

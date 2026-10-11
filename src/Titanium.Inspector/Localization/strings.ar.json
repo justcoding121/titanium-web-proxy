@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "صفوف كجدول",
-  "ctx.saveRaw": "حفظ الجلسة كنص HTTP خام"
+  "ctx.saveRaw": "حفظ الجلسة كنص HTTP خام",
+  "ctx.findRelated": "بحث عن المرتبط",
+  "ctx.findRelatedUrl": "نفس العنوان",
+  "ctx.findRelatedConnection": "نفس الاتصال",
+  "ctx.findRelatedReferer": "نفس المُحيل",
+  "ctx.findRelatedRedirect": "سلسلة إعادة التوجيه",
+  "filter.relatedChip": "مرتبط ({0}، لقطة)"
 }

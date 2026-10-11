@@ -1805,6 +1805,7 @@ public sealed class InterceptionService : IDisposable
         return new SessionSnapshot
         {
             Id = NextSessionId(),
+            ConnectionId = e.ClientConnectionId,
             Method = "CONNECT",
             Url = req.RequestUriString ?? req.Url ?? "",
             Host = TryHost(req),
@@ -2141,6 +2142,7 @@ public sealed class InterceptionService : IDisposable
         var snap = new SessionSnapshot
         {
             Id = assignId ? NextSessionId() : 0,
+            ConnectionId = e.ClientConnectionId,
             Method = mark?.ClientMethod ?? req.Method ?? "GET",
             Url = BuildDisplayUrl(req, mark),
             Host = TryHost(req),

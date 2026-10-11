@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "行を表として",
-  "ctx.saveRaw": "セッションを生の HTTP テキストとして保存"
+  "ctx.saveRaw": "セッションを生の HTTP テキストとして保存",
+  "ctx.findRelated": "関連を検索",
+  "ctx.findRelatedUrl": "同じ URL",
+  "ctx.findRelatedConnection": "同じ接続",
+  "ctx.findRelatedReferer": "同じ Referer",
+  "ctx.findRelatedRedirect": "リダイレクトの連鎖",
+  "filter.relatedChip": "関連 ({0}、その時点)"
 }

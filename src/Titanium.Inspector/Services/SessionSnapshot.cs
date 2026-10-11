@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Serialization;
 
 namespace Titanium.Inspector.Services;
 
@@ -35,6 +36,13 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     private OpaqueTunnelReason _opaqueReason;
 
     public long Id { get; set; }
+
+    /// <summary>
+    /// Client connection id for this process only. Counters restart at 1, so the value is not
+    /// written to HAR or archives and is cleared on import.
+    /// </summary>
+    [JsonIgnore]
+    public long ConnectionId { get; set; }
     public string Method { get; set; } = "GET";
     public string Url { get; set; } = "";
     public DateTimeOffset StartedUtc { get; set; } = DateTimeOffset.UtcNow;

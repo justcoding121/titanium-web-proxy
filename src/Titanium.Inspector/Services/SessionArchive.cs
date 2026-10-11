@@ -347,6 +347,7 @@ public static class SessionArchive
             var snap = JsonSerializer.Deserialize<SessionSnapshot>(stream);
             if (snap is not null)
             {
+                snap.ConnectionId = 0;
                 list.Add(snap);
             }
         }

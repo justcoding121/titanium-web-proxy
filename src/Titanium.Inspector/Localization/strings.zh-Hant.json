@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "多列表格",
-  "ctx.saveRaw": "將工作階段另存為原始 HTTP 文字"
+  "ctx.saveRaw": "將工作階段另存為原始 HTTP 文字",
+  "ctx.findRelated": "尋找相關工作階段",
+  "ctx.findRelatedUrl": "相同 URL",
+  "ctx.findRelatedConnection": "相同連線",
+  "ctx.findRelatedReferer": "相同 Referer",
+  "ctx.findRelatedRedirect": "重新導向鏈",
+  "filter.relatedChip": "相關（{0}，當時的快照）"
 }

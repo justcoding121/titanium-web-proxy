@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "แถวเป็นตาราง",
-  "ctx.saveRaw": "บันทึกเซสชันเป็นข้อความ HTTP ดิบ"
+  "ctx.saveRaw": "บันทึกเซสชันเป็นข้อความ HTTP ดิบ",
+  "ctx.findRelated": "ค้นหาที่เกี่ยวข้อง",
+  "ctx.findRelatedUrl": "URL เดียวกัน",
+  "ctx.findRelatedConnection": "การเชื่อมต่อเดียวกัน",
+  "ctx.findRelatedReferer": "Referer เดียวกัน",
+  "ctx.findRelatedRedirect": "สายการเปลี่ยนทาง",
+  "filter.relatedChip": "ที่เกี่ยวข้อง ({0}, ภาพขณะนั้น)"
 }

@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "Sorok táblázatként",
-  "ctx.saveRaw": "Munkamenet mentése nyers HTTP szövegként"
+  "ctx.saveRaw": "Munkamenet mentése nyers HTTP szövegként",
+  "ctx.findRelated": "Kapcsolódók keresése",
+  "ctx.findRelatedUrl": "Azonos URL",
+  "ctx.findRelatedConnection": "Azonos kapcsolat",
+  "ctx.findRelatedReferer": "Azonos Referer",
+  "ctx.findRelatedRedirect": "Átirányítási lánc",
+  "filter.relatedChip": "Kapcsolódó ({0}, pillanatkép)"
 }

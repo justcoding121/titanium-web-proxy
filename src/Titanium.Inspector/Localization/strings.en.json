@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "Rows as table",
-  "ctx.saveRaw": "Save session as raw HTTP text"
+  "ctx.saveRaw": "Save session as raw HTTP text",
+  "ctx.findRelated": "Find related",
+  "ctx.findRelatedUrl": "Same URL",
+  "ctx.findRelatedConnection": "Same connection",
+  "ctx.findRelatedReferer": "Same Referer",
+  "ctx.findRelatedRedirect": "Redirect chain",
+  "filter.relatedChip": "Related ({0}, snapshot)"
 }

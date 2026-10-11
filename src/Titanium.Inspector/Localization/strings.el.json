@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "Γραμμές ως πίνακας",
-  "ctx.saveRaw": "Αποθήκευση συνεδρίας ως ακατέργαστο κείμενο HTTP"
+  "ctx.saveRaw": "Αποθήκευση συνεδρίας ως ακατέργαστο κείμενο HTTP",
+  "ctx.findRelated": "Εύρεση σχετικών",
+  "ctx.findRelatedUrl": "Ίδιο URL",
+  "ctx.findRelatedConnection": "Ίδια σύνδεση",
+  "ctx.findRelatedReferer": "Ίδιο Referer",
+  "ctx.findRelatedRedirect": "Αλυσίδα ανακατεύθυνσης",
+  "filter.relatedChip": "Σχετικά ({0}, στιγμιότυπο)"
 }

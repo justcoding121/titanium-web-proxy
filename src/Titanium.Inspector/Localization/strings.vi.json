@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "Hàng dạng bảng",
-  "ctx.saveRaw": "Lưu phiên dưới dạng văn bản HTTP thô"
+  "ctx.saveRaw": "Lưu phiên dưới dạng văn bản HTTP thô",
+  "ctx.findRelated": "Tìm phiên liên quan",
+  "ctx.findRelatedUrl": "Cùng URL",
+  "ctx.findRelatedConnection": "Cùng kết nối",
+  "ctx.findRelatedReferer": "Cùng Referer",
+  "ctx.findRelatedRedirect": "Chuỗi chuyển hướng",
+  "filter.relatedChip": "Liên quan ({0}, ảnh tại thời điểm)"
 }

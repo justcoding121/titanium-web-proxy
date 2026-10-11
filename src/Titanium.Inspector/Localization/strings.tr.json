@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "Satırlar tablo olarak",
-  "ctx.saveRaw": "Oturumu ham HTTP metni olarak kaydet"
+  "ctx.saveRaw": "Oturumu ham HTTP metni olarak kaydet",
+  "ctx.findRelated": "İlgili olanları bul",
+  "ctx.findRelatedUrl": "Aynı URL",
+  "ctx.findRelatedConnection": "Aynı bağlantı",
+  "ctx.findRelatedReferer": "Aynı Referer",
+  "ctx.findRelatedRedirect": "Yönlendirme zinciri",
+  "filter.relatedChip": "İlgili ({0}, anlık görüntü)"
 }

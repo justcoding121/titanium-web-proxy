@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "שורות כטבלה",
-  "ctx.saveRaw": "שמור את ההפעלה כטקסט HTTP גולמי"
+  "ctx.saveRaw": "שמור את ההפעלה כטקסט HTTP גולמי",
+  "ctx.findRelated": "מצא קשורות",
+  "ctx.findRelatedUrl": "אותה כתובת",
+  "ctx.findRelatedConnection": "אותו חיבור",
+  "ctx.findRelatedReferer": "אותו Referer",
+  "ctx.findRelatedRedirect": "שרשרת הפניות",
+  "filter.relatedChip": "קשורות ({0}, צילום)"
 }

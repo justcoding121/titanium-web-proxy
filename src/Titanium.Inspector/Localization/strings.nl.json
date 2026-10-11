@@ -453,5 +453,11 @@
   "ctx.copyPowerShell": "PowerShell",
   "ctx.copyPython": "Python requests",
   "ctx.copyTable": "Rijen als tabel",
-  "ctx.saveRaw": "Sessie opslaan als ruwe HTTP-tekst"
+  "ctx.saveRaw": "Sessie opslaan als ruwe HTTP-tekst",
+  "ctx.findRelated": "Gerelateerde zoeken",
+  "ctx.findRelatedUrl": "Dezelfde URL",
+  "ctx.findRelatedConnection": "Dezelfde verbinding",
+  "ctx.findRelatedReferer": "Dezelfde Referer",
+  "ctx.findRelatedRedirect": "Omleidingsketen",
+  "filter.relatedChip": "Gerelateerd ({0}, momentopname)"
 }

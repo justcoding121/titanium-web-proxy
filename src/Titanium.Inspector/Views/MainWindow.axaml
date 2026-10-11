@@ -379,9 +379,15 @@
                   VerticalAlignment="Center" Margin="0,0,12,6"
                   AutomationProperties.AutomationId="ClearFiltersButton" />
         </WrapPanel>
-        <WrapPanel Orientation="Horizontal" IsVisible="{Binding HasHiddenChips}"
+        <WrapPanel Orientation="Horizontal" IsVisible="{Binding HasFilterChips}"
                    AutomationProperties.AutomationId="SearchHideChips">
-          <TextBlock Text="{loc:Loc toolbar.hidden}" VerticalAlignment="Center" Margin="0,0,8,6" Opacity="0.65" />
+          <TextBlock Text="{loc:Loc toolbar.hidden}" VerticalAlignment="Center" Margin="0,0,8,6" Opacity="0.65"
+                     IsVisible="{Binding HasHiddenChips}" />
+          <Border IsVisible="{Binding HasRelatedChip}" CornerRadius="10" Padding="8,2" Margin="0,0,6,6"
+                  BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                  Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+            <TextBlock Text="{Binding RelatedChipText}" VerticalAlignment="Center" />
+          </Border>
           <ItemsControl ItemsSource="{Binding HiddenHostChips}">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
@@ -573,6 +579,17 @@
             <MenuItem Header="{loc:Loc ctx.comment}" Command="{Binding CommentCommand}"
                       IsVisible="{Binding HasSelectedSessions}"
                       AutomationProperties.AutomationId="CtxComment" />
+            <MenuItem Header="{loc:Loc ctx.findRelated}" IsVisible="{Binding HasSingleSelectedSession}"
+                      AutomationProperties.AutomationId="CtxFindRelated">
+              <MenuItem Header="{loc:Loc ctx.findRelatedUrl}" Command="{Binding FindRelatedCommand}"
+                        CommandParameter="url" />
+              <MenuItem Header="{loc:Loc ctx.findRelatedConnection}" Command="{Binding FindRelatedCommand}"
+                        CommandParameter="connection" />
+              <MenuItem Header="{loc:Loc ctx.findRelatedReferer}" Command="{Binding FindRelatedCommand}"
+                        CommandParameter="referer" />
+              <MenuItem Header="{loc:Loc ctx.findRelatedRedirect}" Command="{Binding FindRelatedCommand}"
+                        CommandParameter="redirect" />
+            </MenuItem>
             <MenuItem Header="{loc:Loc ctx.hideHost}" Command="{Binding HideHostCommand}"
                       IsVisible="{Binding CanFilterByHost}"
                       AutomationProperties.AutomationId="CtxHideHost" />

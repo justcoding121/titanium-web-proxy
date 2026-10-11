@@ -6,7 +6,7 @@ namespace Titanium.Inspector.Services;
 /// <summary>
 /// Session search/filter syntax. A bare word matches URL, host, process name, process ID (exact),
 /// method (exact), or status code (exact). Prefixes limit the match to one field:
-/// method:, status: (exact, Nxx, comma list, or range), host:, url:, body:, process:, pid:, protocol:, content-type:,
+/// method:, status: (exact, Nxx, comma list, or range), host:, url:, body:, process:, pid:, protocol:, content-type:, ids:,
 /// is:ws|grpc|tunnel|multipart|error, hide:tunnel|image|static.
 /// A leading <c>-</c> on a field prefix excludes rows that match it (<c>-host:cursor.sh</c>,
 /// <c>-process:Cursor</c>), and on a bare word excludes rows that word would match (<c>-cursor</c>).
@@ -342,7 +342,7 @@ public static class SessionSearch
     /// <summary>Fields a leading <c>-</c> may invert. <c>hide:</c> is already an exclusion.</summary>
     private static bool IsNegatableKey(string key) => key is
         "method" or "status" or "host" or "url" or "body" or "process" or "pid" or
-        "protocol" or "content-type" or "contenttype" or "is" or "mark" or "comment";
+        "protocol" or "content-type" or "contenttype" or "is" or "mark" or "comment" or "ids";
 
     private static bool MatchToken(
         SessionSnapshot s,
@@ -422,6 +422,7 @@ public static class SessionSearch
                     MatchOpaqueReason(s, value["opaque-reason:".Length..]),
                 _ => true,
             },
+            "ids" => MatchIds(s.Id, value),
             "hide" => value.ToLowerInvariant() switch
             {
                 "tunnel" or "connect" => !s.IsTunnel,
@@ -552,5 +553,39 @@ public static class SessionSearch
             "learned" or "auto" => s.OpaqueReason == OpaqueTunnelReason.LearnedFailure,
             _ => s.OpaqueReason.ToString().Equals(reasonToken, StringComparison.OrdinalIgnoreCase),
         };
+    }
+
+    private static readonly object IdsCacheGate = new();
+    private static string? IdsCacheValue;
+    private static HashSet<long>? IdsCacheSet;
+
+    /// <summary>
+    /// <c>ids:</c> is a comma list parsed once per distinct value. Later rows of the same query
+    /// hit the set instead of splitting the text again.
+    /// </summary>
+    private static bool MatchIds(long id, string value)
+    {
+        HashSet<long> set;
+        lock (IdsCacheGate)
+        {
+            if (IdsCacheSet is null || !string.Equals(IdsCacheValue, value, StringComparison.Ordinal))
+            {
+                var parsed = new HashSet<long>();
+                foreach (var part in value.Split(','))
+                {
+                    if (long.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedId))
+                    {
+                        parsed.Add(parsedId);
+                    }
+                }
+
+                IdsCacheValue = value;
+                IdsCacheSet = parsed;
+            }
+
+            set = IdsCacheSet;
+        }
+
+        return set.Contains(id);
     }
 }
