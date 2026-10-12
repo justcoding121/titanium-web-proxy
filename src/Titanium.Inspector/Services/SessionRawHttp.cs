@@ -277,7 +277,7 @@ internal static class HarBodyCopy
         {
             try
             {
-                return ReadValue(destination, maxBytes, parent, property, _capture: true, out _);
+                return ReadValue(destination, maxBytes, parent, property, out _);
             }
             catch (EndOfStreamException)
             {
@@ -290,7 +290,7 @@ internal static class HarBodyCopy
             encoding = null;
             try
             {
-                return ReadValue(destination, maxBytes, "content", "text", _capture: true, out encoding);
+                return ReadValue(destination, maxBytes, "content", "text", out encoding);
             }
             catch (EndOfStreamException)
             {
@@ -303,7 +303,6 @@ internal static class HarBodyCopy
             long maxBytes,
             string wantedParent,
             string wantedProperty,
-            bool _capture,
             out string? contentEncoding)
         {
             contentEncoding = null;
@@ -468,7 +467,7 @@ internal static class HarBodyCopy
 
             while (true)
             {
-                truncated |= ReadValue(body, maxBytes, wantedParent, wantedProperty, true, out var nested);
+                truncated |= ReadValue(body, maxBytes, wantedParent, wantedProperty, out var nested);
                 if (nested is not null)
                 {
                     contentEncoding = nested;

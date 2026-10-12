@@ -1976,7 +1976,7 @@ public sealed class InterceptionService : IDisposable
         }
     }
 
-    private async Task TryBufferResponseBodyAsync(SessionEventArgs e)
+    private static async Task TryBufferResponseBodyAsync(SessionEventArgs e)
     {
         if (!e.HttpClient.Response.HasBody || !ShouldBufferBody(e.HttpClient.Response, e))
         {

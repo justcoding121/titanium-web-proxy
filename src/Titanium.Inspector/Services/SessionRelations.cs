@@ -94,14 +94,11 @@ public static class SessionRelations
 
     private static RelationResult Pack(SessionSnapshot seed, IEnumerable<SessionSnapshot> others)
     {
-        var ids = new List<long>();
-        foreach (var session in others.Where(s => s.Id != seed.Id))
-        {
-            if (!ids.Contains(session.Id))
-            {
-                ids.Add(session.Id);
-            }
-        }
+        var ids = others
+            .Where(s => s.Id != seed.Id)
+            .Select(s => s.Id)
+            .Distinct()
+            .ToList();
 
         if (ids.Count == 0)
         {
