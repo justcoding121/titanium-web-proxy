@@ -26,7 +26,7 @@ public sealed class RunLogRing : ILoggerProvider
             SingleWriter = false,
             FullMode = BoundedChannelFullMode.Wait,
         });
-        _ = Task.Run(WriteLoop);
+        _ = Task.Run(WriteLoop, _stop.Token);
     }
 
     public int Capacity
@@ -92,8 +92,17 @@ public sealed class RunLogRing : ILoggerProvider
 
     public void Dispose()
     {
-        _stop.Cancel();
+        try
+        {
+            _stop.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+
         _channel.Writer.TryComplete();
+        _stop.Dispose();
     }
 
     private void Enqueue(string line)

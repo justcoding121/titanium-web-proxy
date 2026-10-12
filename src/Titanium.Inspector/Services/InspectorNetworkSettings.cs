@@ -51,7 +51,7 @@ public static class InspectorNetworkSettings
         if (string.Equals(preset, TlsLegacy, StringComparison.OrdinalIgnoreCase))
         {
 #pragma warning disable SYSLIB0039
-            return SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Tls13;
+            return SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Tls13; // NOSONAR S4423 -- intentional Legacy preset for migration; UI warns and OS may still refuse
 #pragma warning restore SYSLIB0039
         }
 

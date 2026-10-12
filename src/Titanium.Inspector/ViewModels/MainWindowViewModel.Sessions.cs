@@ -529,7 +529,7 @@ public sealed partial class MainWindowViewModel
         var seed = selection[0];
         var all = _all.ToList();
         var result = all.Count > 300
-            ? await Task.Run(() => ResolveRelation(kind, all, seed)).ConfigureAwait(true)
+            ? await Task.Run(() => ResolveRelation(kind, all, seed), StatusCancelToken).ConfigureAwait(true)
             : ResolveRelation(kind, all, seed);
         if (result.Ids.Length == 0)
         {
@@ -1621,7 +1621,7 @@ public sealed partial class MainWindowViewModel
             {
                 using var stream = File.OpenRead(path);
                 return SazImport.Read(stream, start);
-            }).ConfigureAwait(false);
+            }, StatusCancelToken).ConfigureAwait(false);
             if (result.Status != SazImportStatus.Ok)
             {
                 var key = result.Status switch
