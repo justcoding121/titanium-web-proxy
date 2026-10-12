@@ -241,6 +241,7 @@
   "toolbar.portTip": "* ou vide = port choisi par le système (le port réel apparaît après le démarrage). Sinon 1–65535.",
   "toolbar.listeningTip": "Le proxy est à l’écoute",
   "toolbar.trustHealthTip": "État d’approbation de la CA racine pour Déchiffrer HTTPS. Installez ou approuvez la CA si l’indication est non approuvée.",
+  "chip.host": "hôte",
   "chip.process": "Processus",
   "inspect.request": "Requête",
   "inspect.requestTip": "En-têtes et corps de la requête",

@@ -241,6 +241,7 @@
   "toolbar.portTip": "* o vacío = puerto elegido por el sistema (el puerto real aparece después de iniciar). En caso contrario, 1–65535.",
   "toolbar.listeningTip": "El proxy está escuchando",
   "toolbar.trustHealthTip": "Estado de confianza de la CA raíz para Descifrar HTTPS. Instale la CA o confíe en ella si indica sin confianza.",
+  "chip.host": "host",
   "chip.process": "Proceso",
   "inspect.request": "Solicitud",
   "inspect.requestTip": "Encabezados y cuerpo de la solicitud",

@@ -241,6 +241,7 @@
   "toolbar.portTip": "* atau kosong = port yang dipilih OS (port sebenarnya muncul setelah mulai). Selain itu 1–65535.",
   "toolbar.listeningTip": "Proksi sedang mendengarkan",
   "toolbar.trustHealthTip": "Status kepercayaan CA akar untuk Dekripsi HTTPS. Pasang atau percayai CA jika statusnya CA tidak dipercaya.",
+  "chip.host": "host",
   "chip.process": "proses",
   "inspect.request": "Permintaan",
   "inspect.requestTip": "Header dan isi permintaan",

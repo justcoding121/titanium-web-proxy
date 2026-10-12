@@ -241,6 +241,7 @@
   "toolbar.portTip": "* או ריק = יציאה שנבחרה על ידי מערכת ההפעלה (היציאה האמיתית מופיעה אחרי ההפעלה). אחרת 1–65535.",
   "toolbar.listeningTip": "המתווך מאזין",
   "toolbar.trustHealthTip": "מצב האמון ב-CA השורש עבור פענוח HTTPS. התקינו או תנו אמון ב-CA אם מוצג לא מהימן.",
+  "chip.host": "מארח",
   "chip.process": "תהליך",
   "inspect.request": "בקשה",
   "inspect.requestTip": "כותרות וגוף הבקשה",

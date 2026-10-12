@@ -254,6 +254,7 @@
   "toolbar.portTip": "* or empty = OS-chosen port (the real port appears after start). Otherwise 1–65535.",
   "toolbar.listeningTip": "Proxy is listening",
   "toolbar.trustHealthTip": "Root CA trust state for Decrypt HTTPS. Install or trust the CA if this says not trusted.",
+  "chip.host": "host",
   "chip.process": "process",
   "inspect.request": "Request",
   "inspect.requestTip": "Request headers and body",

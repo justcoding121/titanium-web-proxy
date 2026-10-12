@@ -241,6 +241,7 @@
   "toolbar.portTip": "* أو فارغ = منفذ يختاره نظام التشغيل (يظهر المنفذ الفعلي بعد البدء). خلاف ذلك 1–65535.",
   "toolbar.listeningTip": "الوكيل يستمع",
   "toolbar.trustHealthTip": "حالة ثقة CA الجذر لفك تشفير HTTPS. ثبّت CA أو امنحه الثقة إذا ظهرت عبارة غير موثوق.",
+  "chip.host": "المضيف",
   "chip.process": "عملية",
   "inspect.request": "الطلب",
   "inspect.requestTip": "ترويسات الطلب وجسمه",

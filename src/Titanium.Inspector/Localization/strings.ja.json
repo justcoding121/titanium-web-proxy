@@ -241,6 +241,7 @@
   "toolbar.portTip": "* または空 = OS が選ぶポート（実際のポートは開始後に表示されます）。それ以外は 1–65535。",
   "toolbar.listeningTip": "プロキシは待機中です",
   "toolbar.trustHealthTip": "HTTPS を復号するためのルート CA の信頼状態です。未信頼と表示されたら、CA をインストールするか信頼してください。",
+  "chip.host": "ホスト",
   "chip.process": "プロセス",
   "inspect.request": "リクエスト",
   "inspect.requestTip": "リクエストのヘッダーと本文",

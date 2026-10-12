@@ -1239,7 +1239,7 @@ public sealed partial class MainWindowViewModel
 
     public bool HasFilterChips => HasHiddenChips || HasRelatedChip;
 
-    /// <summary>True when both chip kinds are present, so process chips need a "process" prefix.</summary>
+    /// <summary>True when both chip kinds are present, so each chip shows a host or process prefix.</summary>
     public bool ShowProcessChipPrefix => HiddenHostChips.Count > 0 && HiddenProcessChips.Count > 0;
 
     private void RefreshHiddenChips()

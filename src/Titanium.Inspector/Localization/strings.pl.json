@@ -241,6 +241,7 @@
   "toolbar.portTip": "* lub puste = port wybrany przez system (rzeczywisty port pojawia się po uruchomieniu). W przeciwnym razie 1–65535.",
   "toolbar.listeningTip": "Proxy nasłuchuje",
   "toolbar.trustHealthTip": "Stan zaufania głównego CA dla odszyfrowywania HTTPS. Zainstaluj CA lub zaufaj mu, jeśli widać niezaufany.",
+  "chip.host": "host",
   "chip.process": "Proces",
   "inspect.request": "Żądanie",
   "inspect.requestTip": "Nagłówki i treść żądania",

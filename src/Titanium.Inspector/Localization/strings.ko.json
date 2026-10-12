@@ -241,6 +241,7 @@
   "toolbar.portTip": "* 또는 비어 있음 = OS가 선택한 포트(실제 포트는 시작 후에 나타납니다). 그렇지 않으면 1–65535.",
   "toolbar.listeningTip": "프록시가 수신 중입니다",
   "toolbar.trustHealthTip": "HTTPS 복호화를 위한 루트 CA 신뢰 상태입니다. 신뢰되지 않음으로 표시되면 CA를 설치하거나 신뢰하세요.",
+  "chip.host": "호스트",
   "chip.process": "프로세스",
   "inspect.request": "요청",
   "inspect.requestTip": "요청 헤더와 본문",

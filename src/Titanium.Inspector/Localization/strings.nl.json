@@ -241,6 +241,7 @@
   "toolbar.portTip": "* of leeg = door het systeem gekozen poort (de echte poort verschijnt na het starten). Anders 1–65535.",
   "toolbar.listeningTip": "Proxy luistert",
   "toolbar.trustHealthTip": "Vertrouwensstatus van de basis-CA voor HTTPS ontsleutelen. Installeer de CA of vertrouw deze als hier niet vertrouwd staat.",
+  "chip.host": "host",
   "chip.process": "Proces",
   "inspect.request": "Aanvraag",
   "inspect.requestTip": "Headervelden en inhoud van de aanvraag",

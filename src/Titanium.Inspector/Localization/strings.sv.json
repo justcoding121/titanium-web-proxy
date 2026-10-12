@@ -241,6 +241,7 @@
   "toolbar.portTip": "* eller tomt = port som operativsystemet väljer (den riktiga porten visas efter start). Annars 1–65535.",
   "toolbar.listeningTip": "Proxyn lyssnar",
   "toolbar.trustHealthTip": "Förtroendestatus för rot-CA för Dekryptera HTTPS. Installera eller lita på CA om det står CA inte betrodd.",
+  "chip.host": "värd",
   "chip.process": "process",
   "inspect.request": "Förfrågan",
   "inspect.requestTip": "Förfrågans rubriker och innehåll",

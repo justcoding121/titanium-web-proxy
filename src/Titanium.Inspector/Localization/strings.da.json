@@ -241,6 +241,7 @@
   "toolbar.portTip": "* eller tom = port valgt af styresystemet (den rigtige port vises efter start). Ellers 1–65535.",
   "toolbar.listeningTip": "Proxyen lytter",
   "toolbar.trustHealthTip": "Tillidsstatus for rod-CA til Dekrypter HTTPS. Installer eller hav tillid til CA, hvis her står CA ikke betroet.",
+  "chip.host": "vært",
   "chip.process": "proces",
   "inspect.request": "Anmodning",
   "inspect.requestTip": "Anmodningens headere og brødtekst",

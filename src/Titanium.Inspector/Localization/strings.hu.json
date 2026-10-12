@@ -241,6 +241,7 @@
   "toolbar.portTip": "* vagy üres = az operációs rendszer által választott port (a tényleges port az indítás után jelenik meg). Egyébként 1–65535.",
   "toolbar.listeningTip": "A proxy figyel",
   "toolbar.trustHealthTip": "A gyökér CA megbízhatósági állapota a HTTPS visszafejtése funkcióhoz. Ha az látható, hogy a CA nem megbízható, telepítse, vagy jelölje megbízhatónak.",
+  "chip.host": "gazdagép",
   "chip.process": "folyamat",
   "inspect.request": "Kérés",
   "inspect.requestTip": "A kérés fejlécei és törzse",

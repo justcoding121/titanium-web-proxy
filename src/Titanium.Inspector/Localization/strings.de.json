@@ -241,6 +241,7 @@
   "toolbar.portTip": "* oder leer = vom Betriebssystem gewählter Port (der tatsächliche Port erscheint nach dem Start). Sonst 1–65535.",
   "toolbar.listeningTip": "Proxy lauscht",
   "toolbar.trustHealthTip": "Vertrauensstatus der Stamm-CA für HTTPS entschlüsseln. Installieren Sie die CA oder vertrauen Sie ihr, wenn hier nicht vertrauenswürdig steht.",
+  "chip.host": "Host",
   "chip.process": "Prozess",
   "inspect.request": "Anfrage",
   "inspect.requestTip": "Header und Inhalt der Anfrage",

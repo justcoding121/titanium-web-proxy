@@ -241,6 +241,7 @@
   "toolbar.portTip": "* hoặc để trống = cổng do hệ điều hành chọn (cổng thật hiện sau khi khởi động). Ngược lại 1–65535.",
   "toolbar.listeningTip": "Proxy đang lắng nghe",
   "toolbar.trustHealthTip": "Trạng thái tin cậy CA gốc cho Giải mã HTTPS. Hãy cài hoặc tin cậy CA nếu trạng thái là CA chưa tin cậy.",
+  "chip.host": "máy chủ",
   "chip.process": "tiến trình",
   "inspect.request": "Yêu cầu",
   "inspect.requestTip": "Tiêu đề và nội dung yêu cầu",

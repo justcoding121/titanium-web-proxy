@@ -241,6 +241,7 @@
   "toolbar.portTip": "* ou vazio = porta escolhida pelo sistema (a porta real aparece após o início). Caso contrário, 1–65535.",
   "toolbar.listeningTip": "O proxy está escutando",
   "toolbar.trustHealthTip": "Estado de confiança da CA raiz para Descriptografar HTTPS. Instale ou confie na CA se indicar não confiável.",
+  "chip.host": "host",
   "chip.process": "Processo",
   "inspect.request": "Requisição",
   "inspect.requestTip": "Cabeçalhos e corpo da requisição",

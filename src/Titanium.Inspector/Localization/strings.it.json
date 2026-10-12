@@ -241,6 +241,7 @@
   "toolbar.portTip": "* o vuoto = porta scelta dal sistema (la porta reale compare dopo l’avvio). Altrimenti 1–65535.",
   "toolbar.listeningTip": "Il proxy è in ascolto",
   "toolbar.trustHealthTip": "Stato di attendibilità della CA radice per Decifra HTTPS. Installa la CA o considerala attendibile se indica non attendibile.",
+  "chip.host": "host",
   "chip.process": "Processo",
   "inspect.request": "Richiesta",
   "inspect.requestTip": "Intestazioni e corpo della richiesta",

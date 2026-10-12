@@ -241,6 +241,7 @@
   "toolbar.portTip": "* nebo prázdné = port zvolený systémem (skutečný port se zobrazí po spuštění). Jinak 1–65535.",
   "toolbar.listeningTip": "Proxy naslouchá",
   "toolbar.trustHealthTip": "Stav důvěry kořenové CA pro Dešifrovat HTTPS. Nainstalujte CA nebo jí důvěřujte, pokud je zde uvedeno, že CA není důvěryhodná.",
+  "chip.host": "hostitel",
   "chip.process": "proces",
   "inspect.request": "Požadavek",
   "inspect.requestTip": "Hlavičky a tělo požadavku",

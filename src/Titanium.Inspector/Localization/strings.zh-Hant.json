@@ -241,6 +241,7 @@
   "toolbar.portTip": "* 或空 = 作業系統選擇的連接埠（實際連接埠會在啟動後出現）。否則為 1–65535。",
   "toolbar.listeningTip": "代理正在聆聽",
   "toolbar.trustHealthTip": "解密 HTTPS 的根 CA 信任狀態。若顯示未受信任，請安裝或信任該 CA。",
+  "chip.host": "主機",
   "chip.process": "處理程序",
   "inspect.request": "要求",
   "inspect.requestTip": "要求標頭與本文",

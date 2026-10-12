@@ -416,6 +416,8 @@
                         BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
                         Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
                   <StackPanel Orientation="Horizontal" Spacing="4">
+                    <TextBlock VerticalAlignment="Center" IsVisible="{Binding DataContext.ShowProcessChipPrefix, RelativeSource={RelativeSource AncestorType=Window}}"
+                               Text="{loc:Loc chip.host}" Opacity="0.65" Margin="0,0,2,0" />
                     <TextBlock Text="{Binding}" VerticalAlignment="Center" />
                     <Button Content="×" Padding="4,0" MinWidth="0"
                             Command="{Binding DataContext.RemoveHiddenHostCommand, RelativeSource={RelativeSource AncestorType=Window}}"

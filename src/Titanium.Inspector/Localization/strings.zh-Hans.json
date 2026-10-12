@@ -241,6 +241,7 @@
   "toolbar.portTip": "* 或空 = 操作系统选择的端口（实际端口在启动后显示）。否则为 1–65535。",
   "toolbar.listeningTip": "代理正在侦听",
   "toolbar.trustHealthTip": "解密 HTTPS 的根 CA 信任状态。若显示未受信任，请安装或信任该 CA。",
+  "chip.host": "主机",
   "chip.process": "进程",
   "inspect.request": "请求",
   "inspect.requestTip": "请求标头和正文",

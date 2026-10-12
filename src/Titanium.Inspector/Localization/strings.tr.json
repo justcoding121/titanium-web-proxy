@@ -241,6 +241,7 @@
   "toolbar.portTip": "* veya boş = işletim sisteminin seçtiği bağlantı noktası (gerçek bağlantı noktası başladıktan sonra görünür). Aksi halde 1–65535.",
   "toolbar.listeningTip": "Ara sunucu dinliyor",
   "toolbar.trustHealthTip": "HTTPS şifresini çöz için kök CA güven durumu. CA güvenilir değil görünüyorsa CA sertifikasını yükleyin veya güvenin.",
+  "chip.host": "ana bilgisayar",
   "chip.process": "işlem",
   "inspect.request": "İstek",
   "inspect.requestTip": "İstek üst bilgileri ve gövdesi",

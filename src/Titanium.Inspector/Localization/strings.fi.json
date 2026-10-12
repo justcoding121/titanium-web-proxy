@@ -241,6 +241,7 @@
   "toolbar.portTip": "* tai tyhjä = käyttöjärjestelmän valitsema portti (todellinen portti näkyy käynnistyksen jälkeen). Muuten 1–65535.",
   "toolbar.listeningTip": "Proxy kuuntelee",
   "toolbar.trustHealthTip": "Luottamustila juuri-CA:lle toiminnossa Pura HTTPS. Asenna CA tai luota siihen, jos tila on CA ei luotettu.",
+  "chip.host": "isäntä",
   "chip.process": "prosessi",
   "inspect.request": "Pyyntö",
   "inspect.requestTip": "Pyynnön otsakkeet ja runko",
