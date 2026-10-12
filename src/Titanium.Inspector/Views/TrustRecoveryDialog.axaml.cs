@@ -13,6 +13,7 @@ public partial class TrustRecoveryDialog : Window
     {
         InitializeComponent();
         LanguageService.AttachWindow(this);
+        DialogWorkArea.Attach(this);
         PrimaryButton.Click += (_, _) =>
         {
             _choice = TrustRecoveryChoice.Primary;

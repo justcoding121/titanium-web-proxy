@@ -92,6 +92,23 @@
     <Style Selector="Expander">
       <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
+    <!-- Toolbar search stretches to the filters strip. The Filters dialog search uses that
+         same height and wraps, so a long query stays in the box. -->
+    <Style Selector="TextBox.searchQuery">
+      <Setter Property="Height" Value="70" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="AcceptsReturn" Value="True" />
+      <Setter Property="VerticalContentAlignment" Value="Top" />
+    </Style>
+    <!-- Dialog body scrolls vertically when the window is shorter than the form.
+         Horizontal scrolling stays off so fields and expanders keep the full row width. -->
+    <Style Selector="ScrollViewer.dialogBody">
+      <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+      <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+    </Style>
+    <Style Selector="ScrollViewer.dialogBody /template/ ScrollBar:vertical">
+      <Setter Property="AllowAutoHide" Value="False" />
+    </Style>
     <Style Selector="Button.paneCloseBtn">
       <Setter Property="MinWidth" Value="36" />
       <Setter Property="MinHeight" Value="36" />

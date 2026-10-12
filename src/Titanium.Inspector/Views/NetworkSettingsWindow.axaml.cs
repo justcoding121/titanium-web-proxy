@@ -23,6 +23,7 @@ public partial class NetworkSettingsWindow : Window
         _bindPort = bindPort;
         InitializeComponent();
         LanguageService.AttachWindow(this);
+        DialogWorkArea.Attach(this);
         LoadFromSettings();
         RestartCheck.IsVisible = captureRunning;
         NoneRadio.IsCheckedChanged += (_, _) => UpdateFieldsEnabled();

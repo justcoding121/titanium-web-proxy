@@ -12,6 +12,7 @@ public partial class SimpleConfirmDialog : Window
     {
         InitializeComponent();
         LanguageService.AttachWindow(this);
+        DialogWorkArea.Attach(this);
         AcceptButton.Click += OnAccept;
         CancelButton.Click += OnCancel;
     }

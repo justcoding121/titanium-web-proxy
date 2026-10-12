@@ -12,6 +12,7 @@ public partial class KeyboardShortcutsWindow : Window
     {
         InitializeComponent();
         LanguageService.AttachWindow(this);
+        DialogWorkArea.Attach(this);
         var first = true;
         foreach (var section in InspectorShortcuts.Sections(OperatingSystem.IsMacOS()))
         {

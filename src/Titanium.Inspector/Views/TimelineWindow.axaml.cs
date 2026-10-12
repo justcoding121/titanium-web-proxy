@@ -30,6 +30,7 @@ public partial class TimelineWindow : Window
     {
         InitializeComponent();
         LanguageService.AttachWindow(this);
+        DialogWorkArea.Attach(this);
         _selectedIds = selectedIds;
         _model = new TimelineViewModel(store, select);
         BuildLegend();

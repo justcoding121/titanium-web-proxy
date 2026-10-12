@@ -30,6 +30,7 @@ public partial class RunLogWindow : Window
         InitializeComponent();
         DataContext = _model;
         LanguageService.AttachWindow(this);
+        DialogWorkArea.Attach(this);
         LevelFilter.ItemsSource = new[]
         {
             LanguageService.Get("runLog.all"),

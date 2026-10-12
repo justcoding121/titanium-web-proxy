@@ -11,6 +11,7 @@ public partial class AboutWindow : Window
     {
         InitializeComponent();
         LanguageService.AttachWindow(this);
+        DialogWorkArea.Attach(this);
         VersionText.Text = $"Version {UpdateService.FormatAssemblyDisplayVersion()}";
         OkButton.Click += (_, _) => Close();
         LicenseLink.PointerPressed += (_, e) => OnLinkPressed(e, InspectorLinks.License);

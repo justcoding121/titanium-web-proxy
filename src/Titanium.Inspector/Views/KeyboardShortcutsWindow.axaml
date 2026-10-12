@@ -4,14 +4,18 @@
         x:Class="Titanium.Inspector.Views.KeyboardShortcutsWindow"
         Title="{loc:Loc menu.keyboardShortcuts}"
         Width="420"
+        MinWidth="360"
+        MinHeight="200"
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
-        CanResize="False"
+        CanResize="True"
         AutomationProperties.AutomationId="KeyboardShortcutsWindow">
   <DockPanel Margin="16">
     <Button DockPanel.Dock="Bottom" Content="{loc:Loc common.close}"
             HorizontalAlignment="Right" MinWidth="88" Margin="0,16,0,0" IsCancel="True"
             AutomationProperties.AutomationId="KeyboardShortcutsClose" />
-    <StackPanel x:Name="RowsHost" />
+    <ScrollViewer Classes="dialogBody">
+      <StackPanel x:Name="RowsHost" />
+    </ScrollViewer>
   </DockPanel>
 </Window>

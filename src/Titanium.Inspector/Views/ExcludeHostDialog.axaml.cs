@@ -21,6 +21,7 @@ public partial class ExcludeHostDialog : Window
         _hostname = hostname.Trim();
         InitializeComponent();
         LanguageService.AttachWindow(this);
+        DialogWorkArea.Attach(this);
         HostLabel.Text = _hostname;
         var parent = ExtractParentDomain(_hostname);
         if (string.IsNullOrEmpty(parent))

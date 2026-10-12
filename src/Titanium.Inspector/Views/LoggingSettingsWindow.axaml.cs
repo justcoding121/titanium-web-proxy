@@ -32,6 +32,7 @@ public partial class LoggingSettingsWindow : Window
         _currentFilePath = currentFilePath;
         InitializeComponent();
         LanguageService.AttachWindow(this);
+        DialogWorkArea.Attach(this);
         LevelCombo.ItemsSource = Levels;
         LevelCombo.SelectionChanged += (_, _) => UpdateLevelCost();
         WriteFileCheck.IsCheckedChanged += (_, _) => UpdateEnabledState();

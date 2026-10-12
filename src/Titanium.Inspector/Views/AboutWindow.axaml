@@ -13,6 +13,7 @@
       <Button x:Name="OkButton" Content="{loc:Loc common.ok}" MinWidth="88" IsDefault="True" IsCancel="True"
               AutomationProperties.AutomationId="AboutOk" />
     </StackPanel>
+    <ScrollViewer Classes="dialogBody">
     <StackPanel Spacing="12">
       <StackPanel Orientation="Horizontal" Spacing="12">
         <Image Source="/Assets/app.ico" Width="48" Height="48" />
@@ -31,5 +32,6 @@
                    TextDecorations="Underline" Foreground="{DynamicResource InspectorLinkBrush}" />
       </StackPanel>
     </StackPanel>
+    </ScrollViewer>
   </DockPanel>
 </Window>

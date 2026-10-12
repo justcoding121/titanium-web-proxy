@@ -25,7 +25,7 @@ public sealed class CommentPrompt : Window
             AcceptsReturn = true,
             TextWrapping = Avalonia.Media.TextWrapping.Wrap,
             MaxLength = maxLength,
-            MinHeight = 96,
+            MinHeight = 48,
         };
         AutomationProperties.SetAutomationId(_box, "CommentBox");
         var save = new Button
@@ -52,14 +52,16 @@ public sealed class CommentPrompt : Window
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
             Spacing = 8,
+            Margin = new Avalonia.Thickness(0, 12, 0, 0),
             Children = { cancel, save },
         };
-        Content = new StackPanel
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        Content = new DockPanel
         {
             Margin = new Avalonia.Thickness(16),
-            Spacing = 12,
-            Children = { _box, buttons },
+            Children = { buttons, _box },
         };
+        DialogWorkArea.Attach(this);
     }
 
     public static async Task<string?> ShowAsync(Window? owner, string? current, int maxLength)
