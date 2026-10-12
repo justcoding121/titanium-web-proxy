@@ -49,6 +49,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     private readonly RelayCommand _saveRawHttpCommand;
     private readonly RelayCommand _diffSessionsCommand;
     private string _sessionDiffText = "";
+    private long _diffLeftId;
+    private long _diffRightId;
     private static string StatusReady => LanguageService.Get("status.ready");
     private const string StartProxyFirstStatus = "Start the proxy first";
     private const string SystemProxyRestoredStatus = "System proxy restored";

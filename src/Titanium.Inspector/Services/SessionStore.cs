@@ -201,6 +201,12 @@ public sealed class SessionStore : IDisposable
     public event Action<SessionSnapshot>? SessionAdded;
     public event Action<IReadOnlyList<SessionSnapshot>>? SessionsRemoved;
 
+    /// <summary>
+    /// Raised after <see cref="Clear"/> drops every tracked session. Kept separate from
+    /// <see cref="SessionsRemoved"/> so the grid can reset once instead of removing each row.
+    /// </summary>
+    public event Action? SessionsCleared;
+
     /// <summary>Insert a new session, or refresh body budget if the id already exists.</summary>
     public void Add(SessionSnapshot snapshot)
     {
@@ -318,7 +324,8 @@ public sealed class SessionStore : IDisposable
     /// <summary>
     /// Drops every in-memory session and deletes the current-run HAR folder, including rows
     /// already evicted from the list. Earlier runs stay on disk. Does not raise
-    /// <see cref="SessionsRemoved"/> — the caller clears the grid itself.
+    /// <see cref="SessionsRemoved"/> — the caller clears the grid itself. Raises
+    /// <see cref="SessionsCleared"/> so other views drop the same rows.
     /// Disk deletion continues in the background (<see cref="FlushDiskCleanupAsync"/>).
     /// Returns tracked bytes queued for deletion.
     /// </summary>
@@ -336,6 +343,7 @@ public sealed class SessionStore : IDisposable
             Interlocked.Increment(ref _spillEpoch);
         }
 
+        SessionsCleared?.Invoke();
         return _disk?.AbandonCurrentRun() ?? 0;
     }
 

@@ -57,6 +57,7 @@ public sealed partial class MainWindowViewModel
 
         _retentionEvictedTotal = 0;
         _interception.ResetSessionIdSequence();
+        SyncViewsToTrackedSessions(null);
         RefreshSessionCountText();
         NotifyFilterSelectionProperties();
         SetOutcomeStatus(
@@ -418,6 +419,8 @@ public sealed partial class MainWindowViewModel
             : await Task.Run(() => SessionDiff.Compare(left, right), CancellationToken.None);
 
         // The clipboard gets the full report; the on-screen TextBox is bounded (layout cost).
+        _diffLeftId = left.Id;
+        _diffRightId = right.Id;
         SessionDiffText = InspectorDisplayText.ForTextBox(diff.Text);
         await CopyTextToClipboardAsync(diff.Text).ConfigureAwait(false);
         ShowSessionDetails = true;
@@ -1140,6 +1143,8 @@ public sealed partial class MainWindowViewModel
             _suppressOpenSessionDetails = false;
         }
 
+        SyncViewsToTrackedSessions(ids);
+
         if (_userRemovalDepth > 0)
         {
             RefreshSessionCountText();
@@ -1148,6 +1153,30 @@ public sealed partial class MainWindowViewModel
 
         _retentionEvictedTotal += removed.Count;
         RefreshSessionCountText();
+    }
+
+    /// <summary>
+    /// Retention eviction and manual delete (one row, a selection, or Clear) share one store.
+    /// Statistics, Session Diff, and an <c>ids:</c> filter have to drop those same sessions.
+    /// Pass null when every tracked session is gone.
+    /// </summary>
+    private void SyncViewsToTrackedSessions(IReadOnlySet<long>? removedIds)
+    {
+        if (!string.IsNullOrEmpty(_sessionDiffText) &&
+            (removedIds is null || removedIds.Contains(_diffLeftId) || removedIds.Contains(_diffRightId)))
+        {
+            _diffLeftId = 0;
+            _diffRightId = 0;
+            SessionDiffText = "";
+        }
+
+        RefreshStatisticsIfVisible();
+
+        var next = SessionSearch.PruneRemovedIds(SearchQuery, removedIds);
+        if (!string.Equals(next, SearchQuery, StringComparison.Ordinal))
+        {
+            SearchQuery = next;
+        }
     }
     private async Task LoadSelectedBodiesAsync(SessionSnapshot snap)
     {

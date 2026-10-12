@@ -112,6 +112,46 @@ public class TimelineTests
     }
 
     [TestMethod]
+    public void RemovalClearAndEviction_RefreshInsideTheThrottleWindow()
+    {
+        using var store = new SessionStore(new SessionStoreOptions
+        {
+            SpillBodiesToDisk = false,
+            MaxSessionsInMemory = 3,
+        });
+        store.Add(Session(1, 10));
+        store.Add(Session(2, 10, Start.AddSeconds(1)));
+        using var timeline = new TimelineViewModel(store);
+        var opened = Start.AddMinutes(1);
+        timeline.Open(opened);
+        timeline.SelectAt(4, timeline.Chart.Rows[0].Y + 1);
+        Assert.AreEqual(1, timeline.Chart.Rows[0].Id);
+        Assert.IsFalse(string.IsNullOrEmpty(timeline.Detail));
+
+        store.Remove([1L]);
+        Assert.IsTrue(timeline.Tick(opened.AddMilliseconds(10)));
+        Assert.AreEqual(1, timeline.Chart.Rows.Count);
+        Assert.AreEqual(2, timeline.Chart.Rows[0].Id);
+        Assert.AreEqual("", timeline.Detail);
+
+        store.Add(Session(3, 10, Start.AddSeconds(2)));
+        store.Add(Session(4, 10, Start.AddSeconds(3)));
+        store.Add(Session(5, 10, Start.AddSeconds(4)));
+        Assert.IsTrue(timeline.Tick(opened.AddMilliseconds(20)));
+        Assert.AreEqual(3, timeline.Chart.Rows.Count);
+        Assert.AreEqual(3, timeline.Chart.Rows[0].Id);
+        Assert.AreEqual(5, timeline.Chart.Rows[2].Id);
+        Assert.IsNull(store.TryGet(2));
+
+        timeline.SelectAt(4, timeline.Chart.Rows[0].Y + 1);
+        Assert.IsFalse(string.IsNullOrEmpty(timeline.Detail));
+        store.Clear();
+        Assert.IsTrue(timeline.Tick(opened.AddMilliseconds(30)));
+        Assert.AreEqual(0, timeline.Chart.Rows.Count);
+        Assert.AreEqual("", timeline.Detail);
+    }
+
+    [TestMethod]
     public void HiddenWindow_DoesNotRefresh_UntilShownAgain()
     {
         using var store = new SessionStore(new SessionStoreOptions { SpillBodiesToDisk = false });

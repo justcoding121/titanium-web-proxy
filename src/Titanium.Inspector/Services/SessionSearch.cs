@@ -150,6 +150,70 @@ public static class SessionSearch
     }
 
     /// <summary>
+    /// Drop session ids that are no longer tracked from every <c>ids:</c> (and <c>-ids:</c>) token.
+    /// Pass null to remove those tokens entirely. Returns <paramref name="query"/> unchanged when
+    /// nothing was removed.
+    /// </summary>
+    public static string PruneRemovedIds(string? query, IReadOnlySet<long>? removedIds)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return "";
+        }
+
+        var changed = false;
+        var parts = new List<string>();
+        foreach (var groups in TokenRegex.Matches(query).Cast<Match>().Select(m => m.Groups))
+        {
+            if (groups[1].Success && IsIdsKey(groups[1].Value))
+            {
+                if (removedIds is null)
+                {
+                    changed = true;
+                    continue;
+                }
+
+                var kept = new List<string>();
+                foreach (var part in groups[2].Value.Split(','))
+                {
+                    if (part.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    if (long.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) &&
+                        removedIds.Contains(id))
+                    {
+                        changed = true;
+                        continue;
+                    }
+
+                    kept.Add(part);
+                }
+
+                if (kept.Count == 0)
+                {
+                    changed = true;
+                    continue;
+                }
+
+                parts.Add($"{groups[1].Value}:{string.Join(',', kept)}");
+                continue;
+            }
+
+            parts.Add(groups[1].Success ? $"{groups[1].Value}:{groups[2].Value}" : groups[3].Value);
+        }
+
+        return changed ? string.Join(" ", parts) : query;
+    }
+
+    private static bool IsIdsKey(string key)
+    {
+        var name = key.StartsWith('-') ? key[1..] : key;
+        return name.Equals("ids", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Set <c>key:value</c>, replacing any existing tokens with the same key.
     /// Values must be a single search token (no whitespace).
     /// </summary>

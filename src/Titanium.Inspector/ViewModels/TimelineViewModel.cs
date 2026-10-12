@@ -18,6 +18,8 @@ public sealed class TimelineViewModel : IDisposable
     private bool _subscribed;
     private bool _visible;
     private bool _hasRefresh;
+    private volatile bool _forceRefresh;
+    private long? _detailId;
     private DateTimeOffset _lastRefresh;
     private double _width = TimelineLayout.LabelWidth + TimelineLayout.MinTrack;
 
@@ -85,7 +87,9 @@ public sealed class TimelineViewModel : IDisposable
         }
 
         _width = width;
-        if (_hasRefresh && now - _lastRefresh < RefreshInterval)
+        // Adds stay on the interval. Removals, retention eviction, and Clear redraw on the
+        // next tick so the chart matches the tracked sessions the grid is showing.
+        if (!_forceRefresh && _hasRefresh && now - _lastRefresh < RefreshInterval)
         {
             return false;
         }
@@ -101,10 +105,12 @@ public sealed class TimelineViewModel : IDisposable
         var id = HitTest(x, y);
         if (id is not long sessionId)
         {
+            _detailId = null;
             Detail = "";
             return;
         }
 
+        _detailId = sessionId;
         Detail = Describe(Chart.Rows.First(row => row.Id == sessionId));
         _select?.Invoke(sessionId);
     }
@@ -115,6 +121,7 @@ public sealed class TimelineViewModel : IDisposable
         {
             _store.SessionAdded -= OnStoreChanged;
             _store.SessionsRemoved -= OnStoreRemoved;
+            _store.SessionsCleared -= OnStoreCleared;
             _subscribed = false;
         }
 
@@ -169,20 +176,50 @@ public sealed class TimelineViewModel : IDisposable
 
         _store.SessionAdded += OnStoreChanged;
         _store.SessionsRemoved += OnStoreRemoved;
+        _store.SessionsCleared += OnStoreCleared;
         _subscribed = true;
     }
 
     private void OnStoreChanged(SessionSnapshot _) => Notifications++;
 
-    private void OnStoreRemoved(IReadOnlyList<SessionSnapshot> _) => Notifications++;
+    private void OnStoreRemoved(IReadOnlyList<SessionSnapshot> _) => MarkSessionsGone();
+
+    private void OnStoreCleared() => MarkSessionsGone();
+
+    private void MarkSessionsGone()
+    {
+        Notifications++;
+        _forceRefresh = true;
+    }
 
     private void Refresh(DateTimeOffset now)
     {
+        // Clear before the copy so a removal that lands during the copy is picked up next tick.
+        _forceRefresh = false;
         var total = _store.Count;
         var copy = _store.CopyNewest(TimelineLayout.MaxRows);
         Chart = TimelineLayout.Build(copy, total, now, _width);
+        if (_detailId is long detailId && !ChartHas(detailId))
+        {
+            _detailId = null;
+            Detail = "";
+        }
+
         _lastRefresh = now;
         _hasRefresh = true;
         RefreshCount++;
+    }
+
+    private bool ChartHas(long id)
+    {
+        foreach (var row in Chart.Rows)
+        {
+            if (row.Id == id)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

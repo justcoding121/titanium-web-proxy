@@ -108,6 +108,7 @@ public partial class TimelineWindow : Window
         Chart.Model = _model.Chart;
         Chart.Height = Math.Max(_model.Chart.Height, 1);
         Summary.Text = _model.Summary;
+        Detail.Text = _model.Detail;
         Chart.InvalidateVisual();
     }
 

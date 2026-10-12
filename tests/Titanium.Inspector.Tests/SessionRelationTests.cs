@@ -121,6 +121,76 @@ public class SessionRelationTests
     }
 
     [TestMethod]
+    public void PruneRemovedIds_DropsIdsThatAreGone()
+    {
+        Assert.AreEqual(
+            "ids:1,3 method:GET",
+            SessionSearch.PruneRemovedIds("ids:1,2,3 method:GET", new HashSet<long> { 2 }));
+        Assert.AreEqual("method:GET", SessionSearch.PruneRemovedIds("ids:2 method:GET", new HashSet<long> { 2 }));
+        Assert.AreEqual("method:GET", SessionSearch.PruneRemovedIds("ids:1,2 method:GET", null));
+        Assert.AreEqual("-ids:8", SessionSearch.PruneRemovedIds("-ids:2,8", new HashSet<long> { 2 }));
+        var same = "host:ex";
+        Assert.AreSame(same, SessionSearch.PruneRemovedIds(same, new HashSet<long> { 1 }));
+    }
+
+    [TestMethod]
+    public void DeleteAndRetention_SyncFilterDiffAndStatistics()
+    {
+        var (vm, registry, _) = NewTrackedVm();
+        var a = Row(1, "https://ex/a");
+        var b = Row(2, "https://ex/b");
+        var c = Row(3, "https://ex/c");
+        vm.SeedSession(a);
+        vm.SeedSession(b);
+        vm.SeedSession(c);
+
+        vm.SetSelectedSessions([a, b]);
+        vm.DiffSessionsCommand.Execute(null);
+        Assert.IsFalse(string.IsNullOrEmpty(vm.SessionDiffText));
+
+        vm.SetSelectedSessions([c]);
+        vm.RemoveSelectedSessionsCommand.Execute(null);
+        Assert.IsFalse(string.IsNullOrEmpty(vm.SessionDiffText));
+        Assert.IsNull(registry.TryGet(3));
+
+        vm.SearchQuery = "ids:1,2 method:GET";
+        vm.SetSelectedSessions([a]);
+        vm.RemoveSelectedSessionsCommand.Execute(null);
+        Assert.AreEqual("", vm.SessionDiffText);
+        Assert.AreEqual("ids:2 method:GET", vm.SearchQuery);
+        StringAssert.Contains(vm.RelatedChipText, "1");
+        Assert.IsNull(registry.TryGet(1));
+
+        vm.ClearSessionsCommand.Execute(null);
+        Assert.AreEqual("method:GET", vm.SearchQuery);
+        Assert.AreEqual("", vm.RelatedChipText);
+        Assert.AreEqual(0, vm.Sessions.Count);
+        Assert.AreEqual(0, registry.Store.Count);
+
+        var (limited, limitedRegistry, _) = NewTrackedVm(maxSessions: 3);
+        var first = Row(1, "https://ex/1");
+        var second = Row(2, "https://ex/2");
+        var third = Row(3, "https://ex/3");
+        limited.SeedSession(first);
+        limited.SeedSession(second);
+        limited.SeedSession(third);
+        limited.SelectedInspectTabIndex = (int)InspectTab.Statistics;
+        limited.SetSelectedSessions([first, second, third]);
+        limited.SelectedSession = third;
+        limited.SearchQuery = "ids:1,2,3";
+        StringAssert.Contains(limited.StatisticsSummary, "Sessions: 3");
+
+        limited.SeedSession(Row(4, "https://ex/4"));
+        Assert.IsNull(limitedRegistry.TryGet(1));
+        Assert.IsNotNull(limitedRegistry.TryGet(4));
+        Assert.AreEqual(3, limitedRegistry.Store.Count);
+        StringAssert.Contains(limited.StatisticsSummary, "Sessions: 2");
+        Assert.AreEqual("ids:2,3", limited.SearchQuery);
+        Assert.AreEqual(2, limited.Sessions.Count);
+        Assert.IsFalse(limited.Sessions.Any(s => s.Id is 1 or 4));
+    }
+
+    [TestMethod]
     public void EmptyRelation_DoesNotChangeTheQuery()
     {
         var (vm, _) = NewVm();
@@ -176,13 +246,24 @@ public class SessionRelationTests
 
     private static (MainWindowViewModel Vm, ScriptedInspectorPathPicker Picker) NewVm()
     {
+        var (vm, _, picker) = NewTrackedVm();
+        return (vm, picker);
+    }
+
+    private static (MainWindowViewModel Vm, SessionRegistry Registry, ScriptedInspectorPathPicker Picker) NewTrackedVm(
+        int maxSessions = 10_000)
+    {
         var dir = Path.Combine(Path.GetTempPath(), "ti-rel-vm-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         var settings = new SettingsService(Path.Combine(dir, "settings.json"));
         settings.Current.AutoStartCapture = false;
         settings.Save();
         var picker = new ScriptedInspectorPathPicker();
-        var registry = new SessionRegistry();
+        var registry = new SessionRegistry(new SessionStoreOptions
+        {
+            SpillBodiesToDisk = false,
+            MaxSessionsInMemory = maxSessions,
+        });
         var vm = new MainWindowViewModel(new InspectorViewModelServices(
             new SessionStreamBuffer(registry),
             registry,
@@ -191,6 +272,6 @@ public class SessionRelationTests
             new InterceptionService(new RecordingSystemProxyController()) { UseInMemoryTrustState = true },
             new ScriptedInspectorDialogs(),
             picker));
-        return (vm, picker);
+        return (vm, registry, picker);
     }
 }
