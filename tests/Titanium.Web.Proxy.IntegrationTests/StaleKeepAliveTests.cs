@@ -12,6 +12,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
 using Titanium.Web.Proxy.Logging;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.IntegrationTests;
 
@@ -359,6 +360,92 @@ public class StaleKeepAliveTests
 
         Assert.AreEqual(1, Volatile.Read(ref accepted),
             "healthy pooled upstream socket was not reused; the first attempt must use the pool");
+    }
+
+    /// <summary>
+    ///     Reverse endpoint with ForwardHost and no handlers takes the "H1 terminate lite" path, which has
+    ///     no session and no RetryPolicy. A stale pooled upstream socket must still be replayed on a fresh
+    ///     dial instead of dropping the client connection.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    [DataRow(1, DisplayName = "one-stale")]
+    [DataRow(3, DisplayName = "three-stale")]
+    public async Task ReverseTerminateLite_StalePooledSockets_ReplaysOnFreshDial(int pooled)
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+
+        var accepted = 0;
+        var allPooledAccepted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        server.HandleTcpRequest(async context =>
+        {
+            var n = Interlocked.Increment(ref accepted);
+            if (n == pooled) allPooledAccepted.TrySetResult(true);
+
+            await DrainRequestHeaders(context);
+            if (n <= pooled)
+            {
+                await allPooledAccepted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+
+            await context.Transport.Output.WriteAsync(MsgEncoding.GetBytes(
+                "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok"));
+
+            if (n <= pooled)
+            {
+                await Task.Delay(200);
+                context.Transport.Output.Complete();
+                context.Transport.Input.Complete();
+            }
+            else
+            {
+                await Task.Delay(500);
+            }
+        });
+
+        var proxy = testSuite.GetReverseProxy();
+        proxy.EnableConnectionPool = true;
+        Assert.IsFalse(proxy.NeedsHttpInterception(), "a registered handler would take the request off the lite path");
+
+        var endpoint = proxy.ProxyEndPoints.OfType<TransparentProxyEndPoint>().First();
+        endpoint.ForwardHost = "127.0.0.1";
+        endpoint.ForwardPort = new Uri(server.ListeningTcpUrl).Port;
+
+        var proxyUrl = $"http://127.0.0.1:{proxy.ProxyEndPoints[0].Port}/";
+        var warmups = Enumerable.Range(0, pooled)
+            .Select(_ => testSuite.GetReverseProxyClient().GetAsync(proxyUrl))
+            .ToArray();
+        foreach (var warmup in await Task.WhenAll(warmups))
+        {
+            Assert.AreEqual(HttpStatusCode.OK, warmup.StatusCode);
+        }
+
+        await Task.Delay(700);
+
+        // Raw socket on purpose: HttpClient silently retries a request whose connection drops before any
+        // response byte, which would hide a missing replay in the proxy.
+        using var raw = new System.Net.Sockets.TcpClient();
+        await raw.ConnectAsync(IPAddress.Loopback, proxy.ProxyEndPoints[0].Port);
+        var rawStream = raw.GetStream();
+        var rawRequest = MsgEncoding.GetBytes("GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+        await rawStream.WriteAsync(rawRequest);
+        using var readTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var received = new System.IO.MemoryStream();
+        var buffer = new byte[4096];
+        int count;
+        while ((count = await rawStream.ReadAsync(buffer, readTimeout.Token)) > 0)
+        {
+            received.Write(buffer, 0, count);
+        }
+
+        var text = MsgEncoding.GetString(received.ToArray());
+        Assert.IsTrue(text.StartsWith("HTTP/1.1 200", StringComparison.Ordinal),
+            $"stale pooled upstream socket was not replayed on a fresh dial; client saw: '{text}'");
+        Assert.IsTrue(text.EndsWith("ok", StringComparison.Ordinal));
+        Assert.IsTrue(Volatile.Read(ref accepted) > pooled,
+            $"expected a fresh upstream accept for the replay; accepted={accepted}");
     }
 
     private static async Task DrainRequestHeaders(ConnectionContext context)
