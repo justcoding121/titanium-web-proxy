@@ -238,7 +238,6 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         _exportSelectedArchiveCommand = Cmd(async () => await ExportSelectedArchiveAsync(), () => HasSelectedSessions);
         ExportSelectedArchiveCommand = _exportSelectedArchiveCommand;
         ImportArchiveCommand = Cmd(async () => await ImportArchiveAsync());
-        ImportSazCommand = Cmd(ImportSazAsync);
         ExitCommand = Cmd(ExitAsync);
         StartCaptureCommand = Cmd(async () => await StartCaptureAsync());
         StopCaptureCommand = Cmd(StopCaptureAsync);
@@ -1525,7 +1524,6 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public ICommand ExportArchiveCommand { get; }
     public ICommand ExportSelectedArchiveCommand { get; }
     public ICommand ImportArchiveCommand { get; }
-    public ICommand ImportSazCommand { get; }
     public ICommand ExitCommand { get; }
     public ICommand StartCaptureCommand { get; }
     public ICommand StopCaptureCommand { get; }

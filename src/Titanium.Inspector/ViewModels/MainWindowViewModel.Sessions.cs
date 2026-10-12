@@ -1275,7 +1275,7 @@ public sealed partial class MainWindowViewModel
         var owner = TryGetMainWindow();
         if (owner is null)
         {
-            StatusText = "Filters requires the main window";
+            StatusText = "Advanced requires the main window";
             return;
         }
 
@@ -1287,8 +1287,8 @@ public sealed partial class MainWindowViewModel
 
         SearchQuery = applied;
         StatusText = HasHiddenChips
-            ? "Filters applied · Clear filters to show hidden rows"
-            : "Filters applied";
+            ? "Advanced applied · Clear filters to show hidden rows"
+            : "Advanced applied";
     }
     private void ApplyFilter()
     {
@@ -1597,53 +1597,6 @@ public sealed partial class MainWindowViewModel
             ReportExportFailure("Export archive failed: " + Truncate(ex.Message, 160));
         }
     }
-    private async Task ImportSazAsync()
-    {
-        var path = await _pathPicker.PickOpenPathAsync("Import SAZ", "SAZ", "*.saz").ConfigureAwait(false);
-        if (path is null)
-        {
-            SetGuardStatus("No SAZ file to import");
-            return;
-        }
-
-        SetStatus("Importing SAZ…", StatusSeverity.Busy);
-        try
-        {
-            var start = _all.Count == 0 ? 1 : _all.Max(s => s.Id) + 1;
-            var result = await Task.Run(() =>
-            {
-                using var stream = File.OpenRead(path);
-                return SazImport.Read(stream, start);
-            }, StatusCancelToken).ConfigureAwait(false);
-            if (result.Status != SazImportStatus.Ok)
-            {
-                var key = result.Status switch
-                {
-                    SazImportStatus.Encrypted => "saz.encrypted",
-                    SazImportStatus.TooLarge => "saz.tooLarge",
-                    SazImportStatus.UnsafeMetadata => "saz.unsafe",
-                    SazImportStatus.Empty => "saz.empty",
-                    _ => "saz.rejected",
-                };
-                QueueLiveUi(() => PresentOutcome(LanguageService.Get(key), StatusSeverity.Error));
-                return;
-            }
-
-            var count = result.Sessions.Count;
-            var fileName = Path.GetFileName(path);
-            QueueLiveUi(() =>
-            {
-                AppendImportedSessions(result.Sessions);
-                RefreshSessionCountText();
-                PresentOutcome($"Appended {count} sessions from {fileName}", StatusSeverity.Success);
-            });
-        }
-        catch (Exception ex)
-        {
-            ReportExportFailure("Import SAZ failed: " + Truncate(ex.Message, 160));
-        }
-    }
-
     private async Task ImportArchiveAsync()
     {
         var path = await _pathPicker.PickOpenPathAsync("Import archive", "ZIP", ZipFileFilter);

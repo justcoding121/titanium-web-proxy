@@ -24,7 +24,6 @@ public class AutomationIdCoverageHeadlessTests
         "MenuExportArchive",
         "MenuExportSelectedArchive",
         "MenuImportArchive",
-        "MenuImportSaz",
         "MenuExit",
         "MenuCapture",
         "MenuStartCapture",
