@@ -4,7 +4,7 @@
         x:Class="Titanium.Inspector.Views.LoggingSettingsWindow"
         AutomationProperties.AutomationId="LoggingSettingsWindow"
         Title="{loc:Loc window.logging}"
-        Width="520"
+        Width="560"
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         CanResize="False">
@@ -20,44 +20,70 @@
     <StackPanel Spacing="12">
       <CheckBox x:Name="EnableLoggingCheck" Content="{loc:Loc logging.enable}"
                 AutomationProperties.AutomationId="LoggingEnabled" />
-      <CheckBox x:Name="WriteFileCheck" Content="{loc:Loc logging.writeFile}"
+      <CheckBox x:Name="WriteFileCheck" Content="{loc:Loc logging.writeFile}" Margin="24,0,0,0"
                 AutomationProperties.AutomationId="LoggingWriteFile" />
       <StackPanel Spacing="4">
         <TextBlock FontWeight="SemiBold" Text="{loc:Loc logging.detail}" />
-        <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                   Text="{loc:Loc logging.detailHelp}" />
-        <ComboBox x:Name="LevelCombo" HorizontalAlignment="Left" MinWidth="160"
+        <ComboBox x:Name="LevelCombo" HorizontalAlignment="Left" MinWidth="200"
                   AutomationProperties.AutomationId="LoggingLevel" />
         <TextBlock x:Name="LevelCost" Opacity="0.85" TextWrapping="Wrap" IsVisible="False"
                    Text="{loc:Loc logging.levelCost}"
                    AutomationProperties.AutomationId="LoggingLevelCost" />
       </StackPanel>
-      <Grid ColumnDefinitions="*,*,*">
-        <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,8,0">
-          <TextBlock Text="{loc:Loc logging.fileSize}" />
-          <TextBox x:Name="FileSizeBox" AutomationProperties.AutomationId="LoggingFileSize" />
+      <StackPanel x:Name="FileRows" Spacing="8">
+        <StackPanel Spacing="4">
+          <TextBlock FontWeight="SemiBold" Text="{loc:Loc logging.path}" />
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
+              <Button x:Name="OpenFolderButton" Content="{loc:Loc runLog.openLogsFolder}" MinWidth="88"
+                      AutomationProperties.AutomationId="LoggingOpenFolder" />
+              <Button x:Name="BrowseButton" Content="{loc:Loc common.browse}" MinWidth="88"
+                      AutomationProperties.AutomationId="LoggingBrowse" />
+            </StackPanel>
+            <TextBox x:Name="PathBox" AutomationProperties.AutomationId="LoggingPath" />
+          </DockPanel>
         </StackPanel>
-        <StackPanel Grid.Column="1" Spacing="4" Margin="0,0,8,0">
-          <TextBlock Text="{loc:Loc logging.rolledFiles}" />
-          <TextBox x:Name="RolledFilesBox" AutomationProperties.AutomationId="LoggingRolledFiles" />
-        </StackPanel>
-        <StackPanel Grid.Column="2" Spacing="4">
-          <TextBlock Text="{loc:Loc logging.memory}" />
-          <TextBox x:Name="MemoryLinesBox" AutomationProperties.AutomationId="LoggingMemoryLines" />
-        </StackPanel>
-      </Grid>
-      <StackPanel Spacing="4">
-        <TextBlock FontWeight="SemiBold" Text="{loc:Loc logging.path}" />
-        <DockPanel>
-          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
-            <Button x:Name="OpenFolderButton" Content="{loc:Loc common.openFolder}" MinWidth="88"
-                    AutomationProperties.AutomationId="LoggingOpenFolder" />
-            <Button x:Name="BrowseButton" Content="{loc:Loc common.browse}" MinWidth="88"
-                    AutomationProperties.AutomationId="LoggingBrowse" />
-          </StackPanel>
-          <TextBox x:Name="PathBox" AutomationProperties.AutomationId="LoggingPath" />
-        </DockPanel>
+        <TextBlock x:Name="ThisRunFileText" Opacity="0.85" TextWrapping="Wrap"
+                   AutomationProperties.AutomationId="LoggingThisRunFile" />
       </StackPanel>
+      <Expander x:Name="MoreOptions" Header="{loc:Loc logging.moreOptions}" IsExpanded="False"
+                AutomationProperties.AutomationId="LoggingMoreOptions">
+        <StackPanel Spacing="12" Margin="0,8,0,0">
+          <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="{loc:Loc logging.fileSize}"
+                         TextWrapping="Wrap" Margin="0,0,12,0" />
+              <NumericUpDown x:Name="FileSizeBox" Grid.Column="1" Width="120" Minimum="1" Maximum="4096"
+                             Increment="1" FormatString="0"
+                             AutomationProperties.Name="{loc:Loc logging.fileSize}"
+                             AutomationProperties.AutomationId="LoggingFileSize" />
+            </Grid>
+            <TextBlock Opacity="0.75" TextWrapping="Wrap" Text="{loc:Loc logging.fileSizeHelp}" />
+          </StackPanel>
+          <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="{loc:Loc logging.rolledFiles}"
+                         TextWrapping="Wrap" Margin="0,0,12,0" />
+              <NumericUpDown x:Name="RolledFilesBox" Grid.Column="1" Width="120" Minimum="1" Maximum="100"
+                             Increment="1" FormatString="0"
+                             AutomationProperties.Name="{loc:Loc logging.rolledFiles}"
+                             AutomationProperties.AutomationId="LoggingRolledFiles" />
+            </Grid>
+            <TextBlock x:Name="KeepFilesHelp" Opacity="0.75" TextWrapping="Wrap" />
+          </StackPanel>
+          <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="{loc:Loc logging.memory}"
+                         TextWrapping="Wrap" Margin="0,0,12,0" />
+              <NumericUpDown x:Name="MemoryLinesBox" Grid.Column="1" Width="120" Minimum="100" Maximum="50000"
+                             Increment="100" FormatString="0"
+                             AutomationProperties.Name="{loc:Loc logging.memory}"
+                             AutomationProperties.AutomationId="LoggingMemoryLines" />
+            </Grid>
+            <TextBlock Opacity="0.75" TextWrapping="Wrap" Text="{loc:Loc logging.memoryHelp}" />
+          </StackPanel>
+        </StackPanel>
+      </Expander>
     </StackPanel>
   </DockPanel>
 </Window>

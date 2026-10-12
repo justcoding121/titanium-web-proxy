@@ -10,9 +10,6 @@ namespace Titanium.Inspector.Tests;
 [TestClass]
 public class RunLogTests
 {
-    private static readonly string[] RingKeepsOrderExpected = ["Error three", "Error four", "Error five"];
-    private static readonly string[] RingSurvivesRebuildExpected = ["Error kept", "Error still"];
-
     [TestMethod]
     public async Task Ring_KeepsOrder_AndDropsTheOldest()
     {
@@ -24,7 +21,9 @@ public class RunLogTests
         }
 
         var lines = await WaitFor(ring, 3);
-        CollectionAssert.AreEqual(RingKeepsOrderExpected, lines.ToArray());
+        CollectionAssert.AreEqual(new[] { "three", "four", "five" }, lines.Select(e => e.Message).ToArray());
+        Assert.AreEqual(LogLevel.Error, lines[0].Level);
+        Assert.AreEqual("test", lines[0].Category);
     }
 
     [TestMethod]
@@ -42,7 +41,19 @@ public class RunLogTests
         proxy.Logger.Log(LogLevel.Error, 0, "still", null, static (state, _) => state);
 
         var lines = await WaitFor(ring, 2);
-        CollectionAssert.AreEqual(RingSurvivesRebuildExpected, lines.ToArray());
+        CollectionAssert.AreEqual(new[] { "kept", "still" }, lines.Select(e => e.Message).ToArray());
+    }
+
+    [TestMethod]
+    public async Task Ring_IncludesException_AndTrimsTrailingNewline()
+    {
+        using var ring = new RunLogRing(10);
+        var logger = ring.CreateLogger("cat");
+        logger.Log(LogLevel.Error, 0, "boom\n", new InvalidOperationException("x"), static (state, _) => state);
+        var lines = await WaitFor(ring, 1);
+        Assert.IsFalse(lines[0].Message.EndsWith('\n'));
+        StringAssert.Contains(lines[0].Message, "boom");
+        StringAssert.Contains(lines[0].Message, "InvalidOperationException");
     }
 
     [TestMethod]
@@ -72,13 +83,36 @@ public class RunLogTests
     }
 
     [TestMethod]
+    public void Filter_AndCopy_MatchStructuredEntries()
+    {
+        LanguageService.Apply("en");
+        using var ring = new RunLogRing(20);
+        ring.CreateLogger("Cat").Log(LogLevel.Warning, 0, "hello", null, static (s, _) => s);
+        ring.CreateLogger("Other").Log(LogLevel.Error, 0, "nope", null, static (s, _) => s);
+        SpinWait.SpinUntil(() => ring.Snapshot().Count >= 2, 2000);
+
+        var filtered = RunLogViewModel.FilterEntries(ring.Snapshot(), "Warning", null);
+        Assert.AreEqual(1, filtered.Count);
+        Assert.AreEqual(LogLevel.Warning, filtered[0].Level);
+
+        var byText = RunLogViewModel.FilterEntries(ring.Snapshot(), null, "Cat");
+        Assert.AreEqual(1, byText.Count);
+
+        var model = new RunLogViewModel(ring, () => "Error");
+        model.Level = "Warning";
+        model.Refresh();
+        StringAssert.Contains(model.CopyText(), "[WARN ]");
+        StringAssert.Contains(model.CopyText(), "Cat: hello");
+    }
+
+    [TestMethod]
     public void EmptyState_Follow_AndCommand()
     {
         LanguageService.Apply("en");
         using var ring = new RunLogRing(20);
         var model = new RunLogViewModel(ring, () => "Error");
         model.Refresh();
-        StringAssert.Contains(model.EmptyText, "Log level is Error");
+        StringAssert.Contains(model.EmptyText, "Only errors are shown");
         Assert.IsTrue(model.Following);
         model.NoteScroll(atBottom: false);
         Assert.IsFalse(model.Following);
@@ -109,7 +143,19 @@ public class RunLogTests
         }
     }
 
-    private static async Task<IReadOnlyList<string>> WaitFor(RunLogRing ring, int count)
+    [TestMethod]
+    public void Clear_EmptiesAndBumpsVersion()
+    {
+        using var ring = new RunLogRing(10);
+        ring.CreateLogger("c").Log(LogLevel.Error, 0, "x", null, static (s, _) => s);
+        SpinWait.SpinUntil(() => ring.Snapshot().Count == 1, 2000);
+        var before = ring.Version;
+        ring.Clear();
+        Assert.AreEqual(0, ring.Snapshot().Count);
+        Assert.IsTrue(ring.Version > before);
+    }
+
+    private static async Task<IReadOnlyList<RunLogEntry>> WaitFor(RunLogRing ring, int count)
     {
         var deadline = DateTime.UtcNow.AddSeconds(2);
         while (DateTime.UtcNow < deadline)
@@ -120,10 +166,10 @@ public class RunLogTests
                 return lines;
             }
 
-            await Task.Delay(15);
+            await Task.Delay(20);
         }
 
-        Assert.Fail("Timed out waiting for " + count + " log lines.");
+        Assert.Fail("ring did not reach " + count);
         return [];
     }
 }

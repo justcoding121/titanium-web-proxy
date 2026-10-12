@@ -46,7 +46,7 @@ public class SettingsPersistenceTests
             svc.Current.UpdateChannel = "Beta";
             svc.Current.LoggingEnableFile = true;
             svc.Current.LoggingMinimumLevel = "Debug";
-            svc.Current.LoggingFilePath = @"C:\logs\inspector.log";
+            svc.Current.LoggingFilePath = @"C:\logs";
             svc.Current.SessionGridLayout = new SessionGridLayoutDto
             {
                 SortColumnKey = "Host",
@@ -78,7 +78,7 @@ public class SettingsPersistenceTests
             Assert.AreEqual("Beta", loaded.UpdateChannel);
             Assert.IsTrue(loaded.LoggingEnableFile);
             Assert.AreEqual("Debug", loaded.LoggingMinimumLevel);
-            Assert.AreEqual(@"C:\logs\inspector.log", loaded.LoggingFilePath);
+            Assert.AreEqual(@"C:\logs", loaded.LoggingFilePath);
             Assert.IsNotNull(loaded.SessionGridLayout);
             Assert.AreEqual("Host", loaded.SessionGridLayout!.SortColumnKey);
             Assert.AreEqual(ListSortDirection.Ascending, loaded.SessionGridLayout.SortDirection);
@@ -98,6 +98,9 @@ public class SettingsPersistenceTests
         Assert.IsTrue(settings.LoggingEnabled);
         Assert.IsFalse(settings.IgnoreServerCertificateErrors);
         Assert.IsTrue(settings.AddViaHeader);
+        Assert.AreEqual(50, settings.LoggingMaxFileSizeMb);
+        Assert.AreEqual(5, settings.LoggingMaxRolledFiles);
+        Assert.AreEqual(1, settings.LoggingModelVersion);
 #if DEBUG
         Assert.IsTrue(settings.LoggingEnableFile);
         Assert.AreEqual("Debug", settings.LoggingMinimumLevel);
@@ -105,6 +108,64 @@ public class SettingsPersistenceTests
         Assert.IsFalse(settings.LoggingEnableFile);
         Assert.AreEqual("Error", settings.LoggingMinimumLevel);
 #endif
+    }
+
+    [TestMethod]
+    public void LoggingModel_MigratesOldDefaultsOnce()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-log-mig-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var json = """
+                {
+                  "loggingEnabled": true,
+                  "loggingMinimumLevel": "Error",
+                  "loggingEnableFile": false,
+                  "loggingFilePath": "C:\\old\\titanium-inspector.log",
+                  "loggingMaxFileSizeMb": 10,
+                  "loggingMaxRolledFiles": 5,
+                  "loggingMemoryLines": 2000,
+                  "loggingModelVersion": 0,
+                  "exclusionsInitialized": true,
+                  "systemProxyBypassHosts": [],
+                  "decryptSkipHosts": []
+                }
+                """;
+            File.WriteAllText(path, json);
+            var loaded = new SettingsService(path).Current;
+            Assert.AreEqual(1, loaded.LoggingModelVersion);
+            Assert.AreEqual(@"C:\old", loaded.LoggingFilePath);
+            Assert.AreEqual(50, loaded.LoggingMaxFileSizeMb);
+            Assert.AreEqual(5, loaded.LoggingMaxRolledFiles);
+
+            var again = new SettingsService(path).Current;
+            Assert.AreEqual(50, again.LoggingMaxFileSizeMb);
+            Assert.AreEqual(@"C:\old", again.LoggingFilePath);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
+    public void LoggingModel_MigratesZeroKeepToOne_KeepsCustomSize()
+    {
+        var settings = new InspectorSettings
+        {
+            LoggingModelVersion = 0,
+            LoggingMaxFileSizeMb = 25,
+            LoggingMaxRolledFiles = 0,
+            LoggingFilePath = @"D:\custom\folder",
+        };
+        Assert.IsTrue(SettingsService.MigrateLoggingModel(settings));
+        Assert.AreEqual(25, settings.LoggingMaxFileSizeMb);
+        Assert.AreEqual(1, settings.LoggingMaxRolledFiles);
+        Assert.AreEqual(@"D:\custom\folder", settings.LoggingFilePath);
+        Assert.IsFalse(SettingsService.MigrateLoggingModel(settings));
     }
 
     [TestMethod]

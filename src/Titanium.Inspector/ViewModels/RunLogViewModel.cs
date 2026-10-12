@@ -1,11 +1,12 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
 using Titanium.Inspector.Localization;
 using Titanium.Inspector.Services;
 
 namespace Titanium.Inspector.ViewModels;
 
-/// <summary>Filters and follow state for the Run log window. The ring is read on a timer, not per log line.</summary>
+/// <summary>Filters and follow state for Recent logs. The ring is read on a timer, not per log line.</summary>
 public sealed class RunLogViewModel : INotifyPropertyChanged
 {
     public const string AllLevels = "All";
@@ -16,7 +17,7 @@ public sealed class RunLogViewModel : INotifyPropertyChanged
     private string _filter = "";
     private string _level = AllLevels;
     private bool _following = true;
-    private IReadOnlyList<string> _visible = [];
+    private IReadOnlyList<RunLogEntry> _visible = [];
     private string _emptyText = "";
 
     public RunLogViewModel(RunLogRing ring, Func<string> minimumLevel)
@@ -57,11 +58,14 @@ public sealed class RunLogViewModel : INotifyPropertyChanged
         set => Set(ref _following, value);
     }
 
-    public IReadOnlyList<string> VisibleLines
+    public IReadOnlyList<RunLogEntry> VisibleEntries
     {
         get => _visible;
         private set => Set(ref _visible, value);
     }
+
+    /// <summary>Legacy alias used by older tests; same as <see cref="VisibleEntries"/>.</summary>
+    public IReadOnlyList<RunLogEntry> VisibleLines => VisibleEntries;
 
     public string EmptyText
     {
@@ -94,41 +98,53 @@ public sealed class RunLogViewModel : INotifyPropertyChanged
         Refresh();
     }
 
-    public string CopyText() => string.Join(Environment.NewLine, _visible);
+    public string CopyText() =>
+        string.Join(Environment.NewLine, _visible.Select(RunLogFormat.FormatLine));
 
-    public static IReadOnlyList<string> FilterLines(IReadOnlyList<string> lines, string? level, string? filter)
+    public static IReadOnlyList<RunLogEntry> FilterEntries(
+        IReadOnlyList<RunLogEntry> entries,
+        string? level,
+        string? filter)
     {
-        var selected = string.IsNullOrWhiteSpace(level) || level == AllLevels ? null : level;
+        var selected = string.IsNullOrWhiteSpace(level) || level == AllLevels
+            ? (LogLevel?)null
+            : Enum.TryParse<LogLevel>(level, ignoreCase: true, out var parsed) ? parsed : null;
         var needle = string.IsNullOrWhiteSpace(filter) ? null : filter.Trim();
         if (selected is null && needle is null)
         {
-            return lines;
+            return entries;
         }
 
-        var kept = new List<string>(lines.Count);
-        foreach (var line in lines)
+        var kept = new List<RunLogEntry>(entries.Count);
+        foreach (var entry in entries)
         {
-            if (selected is not null && !line.StartsWith(selected + " ", StringComparison.Ordinal))
+            if (selected is not null && entry.Level != selected.Value)
             {
                 continue;
             }
 
-            if (needle is not null && line.IndexOf(needle, StringComparison.OrdinalIgnoreCase) < 0)
+            if (needle is not null)
             {
-                continue;
+                var token = RunLogFormat.LevelToToken(entry.Level);
+                if (token.IndexOf(needle, StringComparison.OrdinalIgnoreCase) < 0
+                    && entry.Category.IndexOf(needle, StringComparison.OrdinalIgnoreCase) < 0
+                    && entry.Message.IndexOf(needle, StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    continue;
+                }
             }
 
-            kept.Add(line);
+            kept.Add(entry);
         }
 
         return kept;
     }
 
-    private void Publish(IReadOnlyList<string> lines)
+    private void Publish(IReadOnlyList<RunLogEntry> entries)
     {
-        VisibleLines = FilterLines(lines, _level, _filter);
+        VisibleEntries = FilterEntries(entries, _level, _filter);
         var minimum = _minimumLevel();
-        EmptyText = lines.Count == 0 && string.Equals(minimum, "Error", StringComparison.OrdinalIgnoreCase)
+        EmptyText = entries.Count == 0 && string.Equals(minimum, "Error", StringComparison.OrdinalIgnoreCase)
             ? LanguageService.Get("runLog.empty")
             : "";
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowEmpty)));

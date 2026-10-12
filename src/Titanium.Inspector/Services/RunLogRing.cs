@@ -4,23 +4,23 @@ using Microsoft.Extensions.Logging;
 namespace Titanium.Inspector.Services;
 
 /// <summary>
-/// Bounded in-memory log. Request threads only <c>TryWrite</c> a line. One writer task appends
+/// Bounded in-memory log. Request threads only <c>TryWrite</c> an entry. One writer task appends
 /// to the ring. The ring lock is never taken on a request thread.
 /// </summary>
 public sealed class RunLogRing : ILoggerProvider
 {
-    private readonly Channel<string> _channel;
+    private readonly Channel<RunLogEntry> _channel;
     private readonly object _ring = new();
     private readonly CancellationTokenSource _stop = new();
-    private string[] _lines;
+    private RunLogEntry[] _lines;
     private int _count;
     private int _next;
     private long _version;
 
     public RunLogRing(int capacity)
     {
-        _lines = new string[Math.Max(1, capacity)];
-        _channel = Channel.CreateBounded<string>(new BoundedChannelOptions(256)
+        _lines = new RunLogEntry[Math.Max(1, capacity)];
+        _channel = Channel.CreateBounded<RunLogEntry>(new BoundedChannelOptions(256)
         {
             SingleReader = true,
             SingleWriter = false,
@@ -58,7 +58,7 @@ public sealed class RunLogRing : ILoggerProvider
                 kept = kept.Skip(kept.Length - size).ToArray();
             }
 
-            _lines = new string[size];
+            _lines = new RunLogEntry[size];
             _count = kept.Length;
             _next = kept.Length % size;
             for (var i = 0; i < kept.Length; i++)
@@ -70,7 +70,7 @@ public sealed class RunLogRing : ILoggerProvider
         }
     }
 
-    public IReadOnlyList<string> Snapshot()
+    public IReadOnlyList<RunLogEntry> Snapshot()
     {
         lock (_ring)
         {
@@ -84,11 +84,12 @@ public sealed class RunLogRing : ILoggerProvider
         {
             _count = 0;
             _next = 0;
+            Array.Clear(_lines, 0, _lines.Length);
             _version++;
         }
     }
 
-    public ILogger CreateLogger(string categoryName) => new RingLogger(this);
+    public ILogger CreateLogger(string categoryName) => new RingLogger(this, categoryName);
 
     public void Dispose()
     {
@@ -105,9 +106,9 @@ public sealed class RunLogRing : ILoggerProvider
         _stop.Dispose();
     }
 
-    private void Enqueue(string line)
+    private void Enqueue(RunLogEntry entry)
     {
-        _channel.Writer.TryWrite(line);
+        _channel.Writer.TryWrite(entry);
     }
 
     private async Task WriteLoop()
@@ -116,9 +117,9 @@ public sealed class RunLogRing : ILoggerProvider
         {
             while (await _channel.Reader.WaitToReadAsync(_stop.Token).ConfigureAwait(false))
             {
-                while (_channel.Reader.TryRead(out var line))
+                while (_channel.Reader.TryRead(out var entry))
                 {
-                    Append(line);
+                    Append(entry);
                 }
             }
         }
@@ -128,11 +129,11 @@ public sealed class RunLogRing : ILoggerProvider
         }
     }
 
-    private void Append(string line)
+    private void Append(RunLogEntry entry)
     {
         lock (_ring)
         {
-            _lines[_next] = line;
+            _lines[_next] = entry;
             _next = (_next + 1) % _lines.Length;
             if (_count < _lines.Length)
             {
@@ -143,9 +144,9 @@ public sealed class RunLogRing : ILoggerProvider
         }
     }
 
-    private string[] SnapshotUnlocked()
+    private RunLogEntry[] SnapshotUnlocked()
     {
-        var result = new string[_count];
+        var result = new RunLogEntry[_count];
         var start = (_next - _count + _lines.Length) % _lines.Length;
         for (var i = 0; i < _count; i++)
         {
@@ -158,8 +159,13 @@ public sealed class RunLogRing : ILoggerProvider
     private sealed class RingLogger : ILogger
     {
         private readonly RunLogRing _ring;
+        private readonly string _category;
 
-        public RingLogger(RunLogRing ring) => _ring = ring;
+        public RingLogger(RunLogRing ring, string category)
+        {
+            _ring = ring;
+            _category = category;
+        }
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -174,7 +180,8 @@ public sealed class RunLogRing : ILoggerProvider
             }
 
             var text = formatter(state, exception);
-            _ring.Enqueue(logLevel + " " + text);
+            var message = RunLogFormat.BuildMessage(text, exception);
+            _ring.Enqueue(new RunLogEntry(DateTime.Now, logLevel, _category, message));
         }
     }
 }

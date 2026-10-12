@@ -29,9 +29,13 @@ public sealed class InterceptionService : IDisposable
     private readonly ConcurrentDictionary<object, SessionSnapshot> _live = new();
     private readonly ConcurrentDictionary<object, SessionEventBuffer> _eventNotes = new();
     private readonly RunLogRing _runLog = new(2000);
+    private InspectorFileLogProvider? _fileLog;
 
     /// <summary>In-memory run log. The same instance is reused across logging rebuilds.</summary>
     public RunLogRing RunLog => _runLog;
+
+    /// <summary>Active dated log file path when file logging is on; null otherwise.</summary>
+    public string? CurrentLogFilePath => _fileLog?.CurrentFilePath;
     private readonly ISystemProxyController _systemProxy;
     private ProxyServer? _proxy;
     private ExplicitProxyEndPoint? _endPoint;
@@ -458,6 +462,16 @@ public sealed class InterceptionService : IDisposable
         }
         finally
         {
+            try
+            {
+                _fileLog?.Dispose();
+            }
+            catch
+            {
+                // best-effort
+            }
+
+            _fileLog = null;
             _shutdownCompleted.Set();
         }
     }
@@ -501,18 +515,43 @@ public sealed class InterceptionService : IDisposable
         }
 
         _proxy.Logging.EnableConsole = false;
-        _proxy.Logging.EnableFile = s.LoggingEnableFile;
-        _proxy.Logging.MaxFileSizeBytes = Math.Max(1, s.LoggingMaxFileSizeMb) * 1024L * 1024L;
-        _proxy.Logging.MaxRolledFiles = Math.Max(0, s.LoggingMaxRolledFiles);
+        // Core numbered rolling is unused; Inspector attaches its own dated-file sink.
+        _proxy.Logging.EnableFile = false;
         RunLog.SetCapacity(s.LoggingMemoryLines);
         if (!_proxy.Logging.AdditionalLoggerProviders.Contains(RunLog))
         {
             _proxy.Logging.AdditionalLoggerProviders.Add(RunLog);
         }
-        EnsureRootPfxPath();
-        var dir = Path.GetDirectoryName(_rootPfxPath!)!;
-        var defaultLog = Path.Combine(dir, "logs", "titanium-inspector.log");
-        _proxy.Logging.FilePath = string.IsNullOrWhiteSpace(s.LoggingFilePath) ? defaultLog : s.LoggingFilePath;
+
+        var folder = InspectorLogFiles.ResolveFolder(s.LoggingFilePath);
+        var maxBytes = Math.Max(1, s.LoggingMaxFileSizeMb) * 1024L * 1024L;
+        var keep = Math.Clamp(Math.Max(1, s.LoggingMaxRolledFiles), 1, 100);
+
+        if (s.LoggingEnableFile)
+        {
+            if (_fileLog is null)
+            {
+                _fileLog = new InspectorFileLogProvider(folder, maxBytes, keep);
+                _proxy.Logging.AdditionalLoggerProviders.Add(_fileLog);
+            }
+            else
+            {
+                _fileLog.Reconfigure(folder, maxBytes, keep);
+                if (!_proxy.Logging.AdditionalLoggerProviders.Contains(_fileLog))
+                {
+                    _proxy.Logging.AdditionalLoggerProviders.Add(_fileLog);
+                }
+            }
+
+            InspectorLogFiles.Prune(folder, keep, _fileLog.CurrentFilePath);
+        }
+        else if (_fileLog is not null)
+        {
+            _proxy.Logging.AdditionalLoggerProviders.Remove(_fileLog);
+            _fileLog.Dispose();
+            _fileLog = null;
+        }
+
         _proxy.ApplyLoggingConfiguration();
     }
 

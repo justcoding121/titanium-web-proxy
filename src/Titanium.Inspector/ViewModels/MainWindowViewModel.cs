@@ -1214,7 +1214,19 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             return Task.CompletedTask;
         }
 
-        TimelineWindow.Show(owner, _store, SelectTimelineSession);
+        TimelineWindow.Show(
+            owner,
+            _store,
+            SelectTimelineSession,
+            () =>
+            {
+                if (_selectedSessions.Count > 0)
+                {
+                    return _selectedSessions.Select(s => s.Id).ToArray();
+                }
+
+                return _selected is null ? Array.Empty<long>() : new[] { _selected.Id };
+            });
         return Task.CompletedTask;
     }
 
@@ -1246,12 +1258,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             {
                 _interception.ConfigureLogging(s);
                 DebugFileLogging = IsDebugFileLoggingEnabled(s);
-            }));
+            },
+            () => _interception.CurrentLogFilePath));
         if (saved)
         {
-            var path = _settings.Current.LoggingFilePath ?? LoggingSettingsWindow.DefaultLogPath();
+            var folder = InspectorLogFiles.ResolveFolder(_settings.Current.LoggingFilePath);
+            var current = _interception.CurrentLogFilePath;
             StatusText = _settings.Current.LoggingEnableFile
-                ? $"Logging saved: {path}"
+                ? current is not null
+                    ? $"Logging saved: {folder} (current: {Path.GetFileName(current)})"
+                    : $"Logging saved: {folder}"
                 : "Logging saved (file logging off)";
         }
         else
@@ -2555,9 +2571,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
                 RefreshSessionCountText();
                 NotifyQuickFilterProperties();
                 RefreshHiddenChips();
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasActiveSearch)));
             }
         }
     }
+
+    /// <summary>True when the search box has any filter text (enables Clear filters).</summary>
+    public bool HasActiveSearch => !string.IsNullOrWhiteSpace(_searchQuery);
 
     /// <summary>Quick filter: exclude CONNECT/tunnel rows (<c>hide:tunnel</c>).</summary>
     public bool HideTunnelsFilter
@@ -3375,14 +3395,15 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         s.LoggingMinimumLevel = enable ? "Debug" : "Error";
         if (string.IsNullOrWhiteSpace(s.LoggingFilePath))
         {
-            s.LoggingFilePath = LoggingSettingsWindow.DefaultLogPath();
+            s.LoggingFilePath = InspectorLogFiles.DefaultFolder();
         }
 
         _interception.ConfigureLogging(s);
         _settings.Save();
         DebugFileLogging = enable;
+        var folder = InspectorLogFiles.ResolveFolder(s.LoggingFilePath);
         StatusText = enable
-            ? $"Debug file logging on: {s.LoggingFilePath}"
+            ? $"Debug file logging on: {folder}"
             : "Debug file logging off (Error level, file logging off)";
         return Task.CompletedTask;
     }

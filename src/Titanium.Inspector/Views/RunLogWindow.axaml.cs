@@ -98,10 +98,7 @@ public partial class RunLogWindow : Window
 
     private void OnOpenFolder(object? sender, RoutedEventArgs e)
     {
-        var path = string.IsNullOrWhiteSpace(_settings.Current.LoggingFilePath)
-            ? LoggingSettingsWindow.DefaultLogPath()
-            : _settings.Current.LoggingFilePath;
-        DesktopShell.TryRevealFileOrOpenDirectory(path, out _);
+        InspectorLogFiles.TryOpenLogsFolder(_settings.Current.LoggingFilePath, out _);
     }
 
     private void OnOpenLogging(object? sender, RoutedEventArgs e) => _openLogging();

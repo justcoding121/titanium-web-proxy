@@ -28,6 +28,8 @@
           <SolidColorBrush x:Key="StatusFeedbackErrorBrush" Color="#A4262C" />
           <SolidColorBrush x:Key="InspectorLinkBrush" Color="#0058A8" />
           <SolidColorBrush x:Key="InspectorErrorTextBrush" Color="#A4262C" />
+          <SolidColorBrush x:Key="InspectorLogWarnBrush" Color="#9A6700" />
+          <SolidColorBrush x:Key="InspectorLogMutedBrush" Color="#6B6B6B" />
           <SolidColorBrush x:Key="SessionMarkPurpleBrush" Color="#5C2C8A" />
           <x:String x:Key="SessionStatusBaseFontWeight">SemiBold</x:String>
           <SolidColorBrush x:Key="SessionGridSelectionBrush" Color="#CCE4F7" />
@@ -47,6 +49,8 @@
           <SolidColorBrush x:Key="StatusFeedbackErrorBrush" Color="#FF99A4" />
           <SolidColorBrush x:Key="InspectorLinkBrush" Color="#4CC2FF" />
           <SolidColorBrush x:Key="InspectorErrorTextBrush" Color="#FF99A4" />
+          <SolidColorBrush x:Key="InspectorLogWarnBrush" Color="#E8B96A" />
+          <SolidColorBrush x:Key="InspectorLogMutedBrush" Color="#9A9A9A" />
           <SolidColorBrush x:Key="SessionMarkPurpleBrush" Color="#E2C2FF" />
           <x:String x:Key="SessionStatusBaseFontWeight">Normal</x:String>
           <SolidColorBrush x:Key="SessionGridSelectionBrush" Color="#1F4268" />
@@ -61,6 +65,8 @@
       <conv:StatusCodeBrushConverter x:Key="StatusCodeBrushConverter" />
       <conv:StatusCodeFontWeightConverter x:Key="StatusCodeFontWeightConverter" />
       <conv:StatusSeverityBrushConverter x:Key="StatusSeverityBrushConverter" />
+      <conv:RunLogLevelBrushConverter x:Key="RunLogLevelBrushConverter" />
+      <conv:RunLogLevelFontWeightConverter x:Key="RunLogLevelFontWeightConverter" />
     </ResourceDictionary>
   </Application.Resources>
   <Application.Styles>

@@ -73,16 +73,22 @@ public sealed class InspectorSettings
     public string LoggingMinimumLevel { get; set; } = "Error";
     public bool LoggingEnableFile { get; set; }
 #endif
+    /// <summary>Folder where dated Inspector log files are written. Empty uses the default folder.</summary>
     public string? LoggingFilePath { get; set; }
 
-    /// <summary>Rolling file size cap, in megabytes. The proxy default is 10.</summary>
-    public int LoggingMaxFileSizeMb { get; set; } = 10;
+    /// <summary>Maximum size of one log file before a new dated file starts, in megabytes.</summary>
+    public int LoggingMaxFileSizeMb { get; set; } = 50;
 
-    /// <summary>Rolled log files kept beside the active file. The proxy default is 5.</summary>
+    /// <summary>Newest dated log files to keep (including the current file).</summary>
     public int LoggingMaxRolledFiles { get; set; } = 5;
 
-    /// <summary>Lines kept in the Run log window.</summary>
+    /// <summary>Lines kept in the Recent logs window.</summary>
     public int LoggingMemoryLines { get; set; } = 2000;
+
+    /// <summary>
+    /// 0 = pre-migration (file path + 10 MB truncate model). 1 = folder + dated files + 50 MB default.
+    /// </summary>
+    public int LoggingModelVersion { get; set; } = 1;
 
     public double RunLogWindowWidth { get; set; } = 720;
 
@@ -304,7 +310,38 @@ public sealed class SettingsService
         Current = new InspectorSettings();
         ApplyFactoryExclusionDefaults(Current);
         Current.ExclusionsInitialized = true;
+        Current.LoggingModelVersion = 1;
         Save();
+    }
+
+    /// <summary>
+    /// Migrates pre–dated-file logging settings once. Returns true when anything changed.
+    /// </summary>
+    internal static bool MigrateLoggingModel(InspectorSettings settings)
+    {
+        if (settings.LoggingModelVersion >= 1)
+        {
+            return false;
+        }
+
+        settings.LoggingFilePath = InspectorLogFiles.MigrateFilePathToFolder(settings.LoggingFilePath);
+        if (settings.LoggingMaxFileSizeMb == 10)
+        {
+            settings.LoggingMaxFileSizeMb = 50;
+        }
+
+        if (settings.LoggingMaxRolledFiles <= 0)
+        {
+            settings.LoggingMaxRolledFiles = 1;
+        }
+        else
+        {
+            settings.LoggingMaxRolledFiles = Math.Clamp(settings.LoggingMaxRolledFiles, 1, 100);
+        }
+
+        settings.LoggingMaxFileSizeMb = Math.Clamp(settings.LoggingMaxFileSizeMb, 1, 4096);
+        settings.LoggingModelVersion = 1;
+        return true;
     }
 
     private InspectorSettings LoadFromDisk()
@@ -314,6 +351,7 @@ public sealed class SettingsService
             var fresh = new InspectorSettings();
             ApplyFactoryExclusionDefaults(fresh);
             fresh.ExclusionsInitialized = true;
+            fresh.LoggingModelVersion = 1;
             return fresh;
         }
 
@@ -322,6 +360,7 @@ public sealed class SettingsService
             var json = File.ReadAllText(_path);
             var loaded = JsonSerializer.Deserialize<InspectorSettings>(json, JsonOptions)
                          ?? new InspectorSettings();
+            var writeBack = false;
             if (!loaded.ExclusionsInitialized)
             {
                 // Migrate: empty lists previously relied on silent Merge of factory defaults.
@@ -331,19 +370,22 @@ public sealed class SettingsService
                 }
 
                 loaded.ExclusionsInitialized = true;
-                try
-                {
-                    File.WriteAllText(_path, JsonSerializer.Serialize(loaded, JsonOptions));
-                }
-                catch
-                {
-                    // best effort
-                }
+                writeBack = true;
             }
             else if (MergeMissingFactoryOsBypassHosts(loaded))
             {
                 // Additive: new factory SSO/identity hosts must land in existing settings.json or
                 // Inspector Replace-mode system proxy omits them.
+                writeBack = true;
+            }
+
+            if (MigrateLoggingModel(loaded))
+            {
+                writeBack = true;
+            }
+
+            if (writeBack)
+            {
                 try
                 {
                     File.WriteAllText(_path, JsonSerializer.Serialize(loaded, JsonOptions));
@@ -361,6 +403,7 @@ public sealed class SettingsService
             var fallback = new InspectorSettings();
             ApplyFactoryExclusionDefaults(fallback);
             fallback.ExclusionsInitialized = true;
+            fallback.LoggingModelVersion = 1;
             return fallback;
         }
     }
