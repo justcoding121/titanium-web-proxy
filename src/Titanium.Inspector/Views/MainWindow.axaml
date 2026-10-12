@@ -526,56 +526,85 @@
                 AutoGenerateColumns="False">
         <DataGrid.ContextMenu>
           <ContextMenu AutomationProperties.AutomationId="SessionsContextMenu">
+            <!-- Single-session actions -->
             <MenuItem Header="{loc:Loc ctx.replay}" Command="{Binding ReplayCommand}"
                       IsVisible="{Binding HasSingleSelectedSession}"
                       AutomationProperties.AutomationId="CtxReplay" />
             <MenuItem Header="{loc:Loc ctx.loadComposer}" Command="{Binding LoadIntoComposerCommand}"
                       IsVisible="{Binding HasSingleSelectedSession}"
                       AutomationProperties.AutomationId="CtxLoadComposer" />
-            <MenuItem Header="{loc:Loc ctx.saveRequest}" Command="{Binding SaveRequestBodyCommand}"
-                      IsVisible="{Binding CanSaveRequestBody}"
-                      AutomationProperties.AutomationId="CtxSaveRequestBody" />
-            <MenuItem Header="{loc:Loc ctx.saveResponse}" Command="{Binding SaveResponseBodyCommand}"
-                      IsVisible="{Binding CanSaveResponseBody}"
-                      AutomationProperties.AutomationId="CtxSaveResponseBody" />
-            <MenuItem Header="{loc:Loc ctx.saveRaw}" Command="{Binding SaveRawHttpCommand}"
-                      IsVisible="{Binding CanSaveRawHttp}"
-                      AutomationProperties.AutomationId="CtxSaveRawHttp" />
-            <Separator IsVisible="{Binding HasSingleSelectedSession}" />
-            <MenuItem Header="{loc:Loc menu.exportSelectedHar}" Command="{Binding ExportSelectedHarCommand}"
-                      IsVisible="{Binding HasSelectedSessions}"
-                      AutomationProperties.AutomationId="CtxExportSelectedHar" />
-            <MenuItem Header="{loc:Loc menu.exportSelectedArchive}" Command="{Binding ExportSelectedArchiveCommand}"
-                      IsVisible="{Binding HasSelectedSessions}"
-                      AutomationProperties.AutomationId="CtxExportSelectedArchive" />
+            <MenuItem Header="{loc:Loc ctx.saveAs}" IsVisible="{Binding CanSaveSessionMenu}"
+                      AutomationProperties.AutomationId="CtxSaveAs">
+              <MenuItem Header="{loc:Loc ctx.saveRequest}" Command="{Binding SaveRequestBodyCommand}"
+                        IsVisible="{Binding CanSaveRequestBody}"
+                        AutomationProperties.AutomationId="CtxSaveRequestBody" />
+              <MenuItem Header="{loc:Loc ctx.saveResponse}" Command="{Binding SaveResponseBodyCommand}"
+                        IsVisible="{Binding CanSaveResponseBody}"
+                        AutomationProperties.AutomationId="CtxSaveResponseBody" />
+              <MenuItem Header="{loc:Loc ctx.saveRaw}" Command="{Binding SaveRawHttpCommand}"
+                        IsVisible="{Binding CanSaveRawHttp}"
+                        AutomationProperties.AutomationId="CtxSaveRawHttp" />
+            </MenuItem>
+            <MenuItem Header="{loc:Loc ctx.export}" IsVisible="{Binding HasSelectedSessions}"
+                      AutomationProperties.AutomationId="CtxExport">
+              <MenuItem Header="{loc:Loc menu.exportSelectedHar}" Command="{Binding ExportSelectedHarCommand}"
+                        AutomationProperties.AutomationId="CtxExportSelectedHar" />
+              <MenuItem Header="{loc:Loc menu.exportSelectedArchive}" Command="{Binding ExportSelectedArchiveCommand}"
+                        AutomationProperties.AutomationId="CtxExportSelectedArchive" />
+            </MenuItem>
             <Separator IsVisible="{Binding HasSelectedSessions}" />
-            <MenuItem Header="{loc:Loc ctx.copyUrl}" Command="{Binding CopyUrlCommand}"
-                      IsVisible="{Binding CanCopyUrl}"
-                      AutomationProperties.AutomationId="CtxCopyUrl" />
-            <MenuItem Header="{loc:Loc ctx.copyCurl}" Command="{Binding CopyAsCurlCommand}"
-                      IsVisible="{Binding CanCopyAsCurl}"
-                      AutomationProperties.AutomationId="CtxCopyAsCurl" />
-            <MenuItem Header="{loc:Loc ctx.copyFetch}" Command="{Binding CopyAsFetchCommand}"
-                      IsVisible="{Binding CanCopyAsCurl}"
-                      AutomationProperties.AutomationId="CtxCopyAsFetch" />
-            <MenuItem Header="{loc:Loc ctx.copyAs}" IsVisible="{Binding CanCopyAsTable}"
+            <!-- Copy: URL works for multi-select; codegen items need exactly one session. -->
+            <MenuItem Header="{loc:Loc ctx.copyAs}" IsVisible="{Binding CanCopySessionMenu}"
                       AutomationProperties.AutomationId="CtxCopyAs">
+              <MenuItem Header="{loc:Loc ctx.copyUrl}" Command="{Binding CopyUrlCommand}"
+                        IsVisible="{Binding CanCopyUrl}"
+                        AutomationProperties.AutomationId="CtxCopyUrl" />
+              <MenuItem Header="{loc:Loc ctx.copyCurl}" Command="{Binding CopyAsCurlCommand}"
+                        IsVisible="{Binding CanCopyAsCurl}"
+                        AutomationProperties.AutomationId="CtxCopyAsCurl" />
+              <MenuItem Header="{loc:Loc ctx.copyFetch}" Command="{Binding CopyAsFetchCommand}"
+                        IsVisible="{Binding CanCopyAsCurl}"
+                        AutomationProperties.AutomationId="CtxCopyAsFetch" />
               <MenuItem Header="{loc:Loc ctx.copyPowerShell}" Command="{Binding CopyAsPowerShellCommand}"
+                        IsVisible="{Binding CanCopyAsCurl}"
                         AutomationProperties.AutomationId="CtxCopyAsPowerShell" />
               <MenuItem Header="{loc:Loc ctx.copyPython}" Command="{Binding CopyAsPythonCommand}"
+                        IsVisible="{Binding CanCopyAsCurl}"
                         AutomationProperties.AutomationId="CtxCopyAsPython" />
+              <Separator IsVisible="{Binding CanCopyAsTable}" />
               <MenuItem Header="{loc:Loc ctx.copyTable}" Command="{Binding CopyAsTableCommand}"
+                        IsVisible="{Binding CanCopyAsTable}"
                         AutomationProperties.AutomationId="CtxCopyAsTable" />
             </MenuItem>
             <MenuItem Header="{loc:Loc ctx.diff}" Command="{Binding DiffSessionsCommand}"
                       IsVisible="{Binding CanDiffSessions}"
                       AutomationProperties.AutomationId="CtxDiffSessions" />
-            <MenuItem Header="{loc:Loc ctx.filterHost}" Command="{Binding FilterByHostCommand}"
-                      IsVisible="{Binding CanFilterByHost}"
-                      AutomationProperties.AutomationId="CtxFilterByHost" />
-            <MenuItem Header="{loc:Loc ctx.filterStatus}" Command="{Binding FilterByStatusCommand}"
-                      IsVisible="{Binding CanFilterByStatus}"
-                      AutomationProperties.AutomationId="CtxFilterByStatus" />
+            <!-- Filter / hide: only when the selection shares one host, status, or process. -->
+            <MenuItem Header="{loc:Loc ctx.filterMenu}" IsVisible="{Binding CanFilterSessionMenu}"
+                      AutomationProperties.AutomationId="CtxFilterMenu">
+              <MenuItem Header="{loc:Loc ctx.filterHost}" Command="{Binding FilterByHostCommand}"
+                        IsVisible="{Binding CanFilterByHost}"
+                        AutomationProperties.AutomationId="CtxFilterByHost" />
+              <MenuItem Header="{loc:Loc ctx.filterStatus}" Command="{Binding FilterByStatusCommand}"
+                        IsVisible="{Binding CanFilterByStatus}"
+                        AutomationProperties.AutomationId="CtxFilterByStatus" />
+              <MenuItem Header="{loc:Loc ctx.filterProcess}" Command="{Binding FilterByProcessCommand}"
+                        IsVisible="{Binding CanFilterByProcess}"
+                        AutomationProperties.AutomationId="CtxFilterByProcess" />
+              <Separator IsVisible="{Binding CanFilterByHost}" />
+              <MenuItem Header="{loc:Loc ctx.hideHost}" Command="{Binding HideHostCommand}"
+                        IsVisible="{Binding CanFilterByHost}"
+                        AutomationProperties.AutomationId="CtxHideHost" />
+              <MenuItem Header="{loc:Loc ctx.hideProcess}" Command="{Binding HideProcessCommand}"
+                        IsVisible="{Binding CanFilterByProcess}"
+                        AutomationProperties.AutomationId="CtxHideProcess" />
+              <!-- Exclude changes MITM decrypt; Hide only changes the list. -->
+              <Separator IsVisible="{Binding CanExcludeHost}" />
+              <MenuItem Header="{loc:Loc ctx.excludeHost}" Command="{Binding ExcludeHostCommand}"
+                        IsVisible="{Binding CanExcludeHost}"
+                        ToolTip.Tip="{loc:Loc ctx.excludeHostTip}"
+                        AutomationProperties.AutomationId="CtxExcludeHost" />
+            </MenuItem>
             <MenuItem Header="{loc:Loc ctx.mark}" IsVisible="{Binding HasSelectedSessions}"
                       AutomationProperties.AutomationId="CtxMark">
               <MenuItem Header="{loc:Loc ctx.markRed}" Command="{Binding SetMarkCommand}" CommandParameter="Red"
@@ -607,28 +636,15 @@
               <MenuItem Header="{loc:Loc ctx.findRelatedRedirect}" Command="{Binding FindRelatedCommand}"
                         CommandParameter="redirect" />
             </MenuItem>
-            <MenuItem Header="{loc:Loc ctx.hideHost}" Command="{Binding HideHostCommand}"
-                      IsVisible="{Binding CanFilterByHost}"
-                      AutomationProperties.AutomationId="CtxHideHost" />
-            <MenuItem Header="{loc:Loc ctx.filterProcess}" Command="{Binding FilterByProcessCommand}"
-                      IsVisible="{Binding CanFilterByProcess}"
-                      AutomationProperties.AutomationId="CtxFilterByProcess" />
-            <MenuItem Header="{loc:Loc ctx.hideProcess}" Command="{Binding HideProcessCommand}"
-                      IsVisible="{Binding CanFilterByProcess}"
-                      AutomationProperties.AutomationId="CtxHideProcess" />
-            <!-- Kept apart from Hide host: that only changes the list, this changes what Inspector decrypts. -->
-            <Separator IsVisible="{Binding CanExcludeHost}" />
-            <MenuItem Header="{loc:Loc ctx.excludeHost}" Command="{Binding ExcludeHostCommand}"
-                      IsVisible="{Binding CanExcludeHost}"
-                      ToolTip.Tip="{loc:Loc ctx.excludeHostTip}"
-                      AutomationProperties.AutomationId="CtxExcludeHost" />
             <Separator IsVisible="{Binding HasSelectedSessions}" />
             <MenuItem Header="{loc:Loc menu.removeSelected}" Command="{Binding RemoveSelectedSessionsCommand}"
                       IsVisible="{Binding HasSelectedSessions}"
                       AutomationProperties.AutomationId="CtxRemoveSelected" />
             <MenuItem Header="{loc:Loc menu.keepOnly}" Command="{Binding KeepOnlySelectedCommand}"
+                      IsVisible="{Binding CanKeepOnlySelected}"
                       AutomationProperties.AutomationId="CtxKeepOnlySelected" />
             <MenuItem Header="{loc:Loc menu.removeMatching}" Command="{Binding RemoveMatchingFilterCommand}"
+                      IsVisible="{Binding CanRemoveMatchingFilter}"
                       ToolTip.Tip="{loc:Loc menu.removeMatchingTip}"
                       AutomationProperties.AutomationId="CtxRemoveMatching" />
           </ContextMenu>

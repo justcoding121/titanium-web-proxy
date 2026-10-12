@@ -105,7 +105,8 @@ public sealed partial class MainWindowViewModel
         return Task.CompletedTask;
     }
 
-    private bool CanKeepOnlySelected =>
+    /// <summary>True when Keep only selected would remove other sessions.</summary>
+    public bool CanKeepOnlySelected =>
         HasSelectedSessions && ResolveFilterSelection().Count < _all.Count;
 
     private async Task KeepOnlySelectedAsync()
@@ -698,11 +699,16 @@ public sealed partial class MainWindowViewModel
 
     /// <summary>True when selection shares one HTTP status code.</summary>
     public bool CanFilterByStatus => ResolveUnanimousStatus() is not null;
+
+    /// <summary>True when the Filter submenu has at least one applicable action.</summary>
+    public bool CanFilterSessionMenu =>
+        CanFilterByHost || CanFilterByStatus || CanFilterByProcess || CanExcludeHost;
+
     /// <summary>True when at least one session is selected.</summary>
     public bool HasSelectedSessions => ResolveFilterSelection().Count > 0;
-    /// <summary>True when exactly one session is selected (Replay / Composer).</summary>
+    /// <summary>True when exactly one session is selected (Replay / Composer / save body).</summary>
     public bool HasSingleSelectedSession => ResolveFilterSelection().Count == 1;
-    /// <summary>True when at least one selected session has a URL to copy.</summary>
+    /// <summary>True when at least one selected session has a URL to copy (multi-select OK).</summary>
     public bool CanCopyUrl => ResolveCopyUrls().Count > 0;
     /// <summary>True when exactly two sessions are selected for Session Diff.</summary>
     public bool CanDiffSessions => ResolveFilterSelection().Count == 2;
@@ -817,13 +823,20 @@ public sealed partial class MainWindowViewModel
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanFilterByStatus)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanExcludeHost)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanFilterByProcess)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanFilterSessionMenu)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSelectedSessions)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSingleSelectedSession)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCopyUrl)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCopyAsCurl)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCopyAsTable)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCopySessionMenu)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanSaveRawHttp)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanSaveRequestBody)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanSaveResponseBody)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanSaveSessionMenu)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanDiffSessions)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanKeepOnlySelected)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanRemoveMatchingFilter)));
         RaiseSessionCommandCanExecuteChanged();
     }
     private void RaiseSessionCommandCanExecuteChanged()

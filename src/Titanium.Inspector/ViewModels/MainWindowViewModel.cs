@@ -1474,11 +1474,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         }
     }
 
-    /// <summary>True when the grid or the selection has rows to copy as a table.</summary>
-    public bool CanCopyAsTable => Sessions.Count > 0 || HasSelectedSessions;
+    /// <summary>True when the selection (or visible grid) has rows to copy as a table.</summary>
+    public bool CanCopyAsTable => HasSelectedSessions || Sessions.Count > 0;
 
-    /// <summary>True when one session can be saved as raw HTTP text.</summary>
-    public bool CanSaveRawHttp => SelectedSession is not null;
+    /// <summary>True when the Copy submenu should appear.</summary>
+    public bool CanCopySessionMenu => CanCopyUrl || CanCopyAsCurl || CanCopyAsTable;
+
+    /// <summary>True when one selected session can be saved as raw HTTP text.</summary>
+    public bool CanSaveRawHttp => HasSingleSelectedSession;
 
 
     /// <summary>Last Session Diff text (Inspect Diff tab / probe).</summary>
