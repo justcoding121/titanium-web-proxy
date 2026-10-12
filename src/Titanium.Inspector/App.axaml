@@ -87,6 +87,11 @@
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
+    <!-- Fluent sizes Expander to its content. Settings dialogs should span the form
+         so the header, chevron, and body line up with the fields above. -->
+    <Style Selector="Expander">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
     <Style Selector="Button.paneCloseBtn">
       <Setter Property="MinWidth" Value="36" />
       <Setter Property="MinHeight" Value="36" />
