@@ -1,4 +1,6 @@
 #nullable enable
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.AdditionalLoggerProviders.get -> System.Collections.Generic.IList<Microsoft.Extensions.Logging.ILoggerProvider!>!
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.AdditionalLoggerProviders.set -> void
 Titanium.Web.Proxy.ClientProcessId
 static Titanium.Web.Proxy.ClientProcessId.IsSupported.get -> bool
 Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming

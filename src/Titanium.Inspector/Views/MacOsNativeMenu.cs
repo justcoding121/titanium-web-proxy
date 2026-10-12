@@ -62,6 +62,7 @@ internal static class MacOsNativeMenu
             IsVisible = source.IsVisible,
             ToggleType = MapToggleType(source.ToggleType),
             IsChecked = source.IsChecked,
+            Gesture = source.InputGesture,
         };
 
         // Keep checkmarks in sync when OneWay bindings / commands flip IsChecked.

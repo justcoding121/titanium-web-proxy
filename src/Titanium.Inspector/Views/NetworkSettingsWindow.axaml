@@ -1,0 +1,84 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="using:Titanium.Inspector.Localization"
+        x:Class="Titanium.Inspector.Views.NetworkSettingsWindow"
+        AutomationProperties.AutomationId="NetworkSettingsWindow"
+        Title="{loc:Loc window.network}"
+        Width="480"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+  <DockPanel Margin="16">
+    <Grid DockPanel.Dock="Bottom" Margin="0,16,0,0" ColumnDefinitions="*,Auto">
+      <Button Grid.Column="0" x:Name="ResetButton" Content="{loc:Loc network.reset}"
+              HorizontalAlignment="Left" Background="Transparent" BorderThickness="0"
+              AutomationProperties.AutomationId="NetworkReset" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+        <Button x:Name="SaveButton" Content="{loc:Loc common.save}" MinWidth="88"
+                AutomationProperties.AutomationId="NetworkSave" />
+        <Button x:Name="CancelButton" Content="{loc:Loc common.cancel}" MinWidth="88" IsCancel="True"
+                AutomationProperties.AutomationId="NetworkCancel" />
+      </StackPanel>
+    </Grid>
+    <TextBlock x:Name="StatusText" DockPanel.Dock="Bottom" Margin="0,8,0,0" TextWrapping="Wrap"
+               Foreground="{DynamicResource InspectorErrorTextBrush}"
+               AutomationProperties.AutomationId="NetworkStatus" />
+    <StackPanel Spacing="12">
+      <StackPanel Spacing="8">
+        <TextBlock FontWeight="SemiBold" Text="{loc:Loc network.upstream}" />
+        <RadioButton x:Name="NoneRadio" GroupName="Upstream" Content="{loc:Loc network.none}"
+                     AutomationProperties.AutomationId="NetworkUpstreamNone" />
+        <RadioButton x:Name="ProxyRadio" GroupName="Upstream" Content="{loc:Loc network.proxy}"
+                     AutomationProperties.AutomationId="NetworkUpstreamProxy" />
+        <Grid ColumnDefinitions="*,120">
+          <TextBox x:Name="HostBox" Grid.Column="0" Margin="0,0,8,0" Watermark="{loc:Loc network.host}"
+                   AutomationProperties.AutomationId="NetworkUpstreamHost" />
+          <TextBox x:Name="PortBox" Grid.Column="1" Watermark="{loc:Loc network.port}"
+                   AutomationProperties.AutomationId="NetworkUpstreamPort" />
+        </Grid>
+        <TextBlock Opacity="0.75" TextWrapping="Wrap" Text="{loc:Loc network.appliesNextStart}" />
+        <CheckBox x:Name="RestartCheck" Content="{loc:Loc network.restartNow}"
+                  AutomationProperties.AutomationId="NetworkRestartCapture" />
+      </StackPanel>
+      <StackPanel Spacing="4">
+        <TextBlock FontWeight="SemiBold" Text="{loc:Loc network.protocols}" />
+        <CheckBox x:Name="Http2Check" Content="{loc:Loc network.http2}"
+                  AutomationProperties.AutomationId="NetworkHttp2" />
+        <TextBlock Opacity="0.75" TextWrapping="Wrap" Text="{loc:Loc network.http2Help}" />
+        <CheckBox x:Name="Http3Check" Content="{loc:Loc network.http3}"
+                  AutomationProperties.AutomationId="NetworkHttp3" />
+        <TextBlock Opacity="0.75" TextWrapping="Wrap" Text="{loc:Loc network.http3Help}" />
+        <TextBlock x:Name="Http3UnavailableText" Opacity="0.75" TextWrapping="Wrap"
+                   Text="{loc:Loc network.http3Unavailable}"
+                   AutomationProperties.AutomationId="NetworkHttp3Unavailable" />
+        <TextBlock x:Name="SummaryText" TextWrapping="Wrap"
+                   AutomationProperties.AutomationId="NetworkProtocolSummary" />
+        <TextBlock Opacity="0.75" TextWrapping="Wrap" Text="{loc:Loc network.newConnections}" />
+      </StackPanel>
+      <StackPanel x:Name="WinAuthSection" Spacing="4">
+        <TextBlock FontWeight="SemiBold" Text="{loc:Loc network.winAuth}" />
+        <TextBox x:Name="WinAuthBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="72"
+                 Watermark="{loc:Loc network.winAuthWatermark}"
+                 AutomationProperties.AutomationId="NetworkWinAuthHosts" />
+        <TextBlock Opacity="0.75" TextWrapping="Wrap" Text="{loc:Loc network.winAuthHelp}" />
+      </StackPanel>
+      <Expander Header="{loc:Loc network.advanced}" IsExpanded="False"
+                AutomationProperties.AutomationId="NetworkAdvanced">
+        <StackPanel Spacing="8" Margin="0,8,0,0">
+          <TextBlock FontWeight="SemiBold" Text="{loc:Loc network.tls}" />
+          <ComboBox x:Name="TlsCombo" HorizontalAlignment="Left" MinWidth="220"
+                    AutomationProperties.AutomationId="NetworkTls">
+            <ComboBoxItem Tag="Default" Content="{loc:Loc network.tlsDefault}" />
+            <ComboBoxItem Tag="Tls12" Content="{loc:Loc network.tls12}" />
+            <ComboBoxItem Tag="Legacy" Content="{loc:Loc network.tlsLegacy}" />
+          </ComboBox>
+          <TextBlock x:Name="TlsLegacyWarning" Opacity="0.75" TextWrapping="Wrap"
+                     Text="{loc:Loc network.tlsLegacyWarning}"
+                     AutomationProperties.AutomationId="NetworkTlsLegacyWarning" />
+          <CheckBox x:Name="ReuseCheck" Content="{loc:Loc network.reuse}"
+                    AutomationProperties.AutomationId="NetworkReuseConnections" />
+        </StackPanel>
+      </Expander>
+    </StackPanel>
+  </DockPanel>
+</Window>

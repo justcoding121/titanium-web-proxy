@@ -207,13 +207,15 @@ public class StatusFeedbackAndMenuGatingTests
 
             vm.BindPort = 0;
             vm.StartCaptureCommand.Execute(null);
-            await WaitUntil(() => interception.IsRunning);
+            await WaitUntil(() => interception.IsRunning && vm.StatusText == "Ready", timeoutMs: 15000);
             Assert.AreEqual("Ready", vm.StatusText);
 
             vm.SetTransientStatus("Exported 1 sessions", StatusSeverity.Success, revertMs: 100);
             Assert.AreEqual(StatusSeverity.Success, vm.StatusSeverity);
 
-            await Task.Delay(250);
+            await WaitUntil(
+                () => vm.StatusText == "Ready" && vm.StatusSeverity == StatusSeverity.Neutral,
+                timeoutMs: 5000);
             Assert.AreEqual("Ready", vm.StatusText);
             Assert.AreEqual(StatusSeverity.Neutral, vm.StatusSeverity);
 

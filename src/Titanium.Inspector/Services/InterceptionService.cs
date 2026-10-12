@@ -27,6 +27,11 @@ public sealed class InterceptionService : IDisposable
 
     private long _nextId;
     private readonly ConcurrentDictionary<object, SessionSnapshot> _live = new();
+    private readonly ConcurrentDictionary<object, SessionEventBuffer> _eventNotes = new();
+    private readonly RunLogRing _runLog = new(2000);
+
+    /// <summary>In-memory run log. The same instance is reused across logging rebuilds.</summary>
+    public RunLogRing RunLog => _runLog;
     private readonly ISystemProxyController _systemProxy;
     private ProxyServer? _proxy;
     private ExplicitProxyEndPoint? _endPoint;
@@ -147,6 +152,48 @@ public sealed class InterceptionService : IDisposable
 
     /// <summary>True when a Firefox profiles.ini is present on this machine.</summary>
     public static bool IsFirefoxProfilePresent => FirefoxCertificateTrust.IsFirefoxProfilePresent();
+
+    /// <summary>HTTP/2 for new connections. Applied by <see cref="ApplyHttpProtocols"/>.</summary>
+    public bool PreferHttp2 { get; set; } = true;
+
+    /// <summary>HTTP/3 toward servers for new connections. Applied by <see cref="ApplyHttpProtocols"/>.</summary>
+    public bool PreferHttp3 { get; set; } = true;
+
+    /// <summary>Outbound TLS mask. <see cref="System.Security.Authentication.SslProtocols.None"/> keeps the engine default.</summary>
+    public System.Security.Authentication.SslProtocols OutboundTlsProtocols { get; set; }
+
+    /// <summary>When false, server connections are not reused.</summary>
+    public bool ReuseServerConnections { get; set; } = true;
+
+    /// <summary>
+    /// When true, strip conditional cache headers and send <c>Cache-Control: no-cache</c>.
+    /// Session only; not stored in settings. Skips CONNECT, WebSocket, and range requests.
+    /// </summary>
+    public bool DisableCaching { get; set; }
+
+    /// <summary>
+    /// When true, send <c>Accept-Encoding: identity</c> and leave <c>grpc-accept-encoding</c> alone.
+    /// Session only; not stored in settings. Skips CONNECT, WebSocket, and range requests.
+    /// </summary>
+    public bool ForceUncompressed { get; set; }
+
+    private string _winAuthHosts = string.Empty;
+    private WinAuthHostMatcher? _winAuthMatcher;
+
+    /// <summary>
+    /// Hosts that receive per-session Windows authentication. Empty leaves every request unchanged.
+    /// The server-wide <c>EnableWinAuth</c> flag stays false.
+    /// </summary>
+    public string WinAuthHosts
+    {
+        get => _winAuthHosts;
+        set
+        {
+            _winAuthHosts = value ?? string.Empty;
+            WinAuthHostList.TryCompile(_winAuthHosts, out var matcher, out _);
+            Volatile.Write(ref _winAuthMatcher, matcher);
+        }
+    }
 
     /// <summary>True when the running proxy currently allows HTTP/2.</summary>
     public bool Http2Enabled { get; private set; } = true;
@@ -312,22 +359,25 @@ public sealed class InterceptionService : IDisposable
     }
 
     /// <summary>
-    /// Enable HTTP/2 and HTTP/3 (when MsQuic is available). Safe while capturing: new connections
-    /// pick up the change; in-flight sessions keep the protocol they already negotiated.
-    /// Inspector is an explicit TCP proxy, so HTTP/3 here is origin-side only.
+    /// Apply HTTP/2, HTTP/3, outbound TLS, and connection reuse. Safe while capturing: new
+    /// connections pick up the change; in-flight sessions keep the protocol they already negotiated.
+    /// Inspector is an explicit TCP proxy, so HTTP/3 here is origin-side only. HTTP/2 off does not
+    /// disable HTTP/3.
     /// </summary>
     public void ApplyHttpProtocols()
     {
         if (_proxy is null)
         {
-            Http2Enabled = true;
-            Http3Enabled = IsHttp3Supported;
+            Http2Enabled = PreferHttp2;
+            Http3Enabled = PreferHttp3 && IsHttp3Supported;
             return;
         }
 
-        _proxy.EnableHttp2 = true;
+        _proxy.EnableHttp2 = PreferHttp2;
         Http2Enabled = _proxy.EnableHttp2;
-        Http3Enabled = _proxy.SetHttp3Enabled(true);
+        Http3Enabled = _proxy.SetHttp3Enabled(PreferHttp3);
+        _proxy.EnableConnectionPool = ReuseServerConnections;
+        _proxy.SupportedServerSslProtocols = OutboundTlsProtocols;
     }
 
     /// <summary>Apply or refresh logging from Inspector settings (safe while running).</summary>
@@ -452,6 +502,13 @@ public sealed class InterceptionService : IDisposable
 
         _proxy.Logging.EnableConsole = false;
         _proxy.Logging.EnableFile = s.LoggingEnableFile;
+        _proxy.Logging.MaxFileSizeBytes = Math.Max(1, s.LoggingMaxFileSizeMb) * 1024L * 1024L;
+        _proxy.Logging.MaxRolledFiles = Math.Max(0, s.LoggingMaxRolledFiles);
+        RunLog.SetCapacity(s.LoggingMemoryLines);
+        if (!_proxy.Logging.AdditionalLoggerProviders.Contains(RunLog))
+        {
+            _proxy.Logging.AdditionalLoggerProviders.Add(RunLog);
+        }
         EnsureRootPfxPath();
         var dir = Path.GetDirectoryName(_rootPfxPath!)!;
         var defaultLog = Path.Combine(dir, "logs", "titanium-inspector.log");
@@ -1662,6 +1719,12 @@ public sealed class InterceptionService : IDisposable
     {
         var host = e.HttpClient.Request.RequestUri?.Host
                    ?? TryHost(e.HttpClient.Request);
+        if (MatchesWinAuthHost(host))
+        {
+            // NTLM and Negotiate are connection-bound and are not defined on HTTP/2.
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+        }
+
         var disableDecrypt = MitmBypass.ShouldDisableSslDecrypt(
             host,
             DecryptSkipHosts,
@@ -1689,6 +1752,11 @@ public sealed class InterceptionService : IDisposable
             // Opaque HTTPS (DecryptHttps=false) never hits BeforeRequest - publish CONNECT here
             // so the session list matches Fiddler when decryption is off.
             var snap = CreateTunnelSnapshot(e, opaqueReason);
+            if (opaqueReason != OpaqueTunnelReason.None)
+            {
+                Note(e.HttpClient, "stats.event.opaque", failure: false);
+            }
+
             AttachTunnelByteCounters(e, snap);
             _live[e.HttpClient] = snap;
             SessionCaptured?.Invoke(this, snap);
@@ -1712,6 +1780,7 @@ public sealed class InterceptionService : IDisposable
         try
         {
             ApplyConnectCompletion(snap, e);
+            PublishEvents(snap, e.HttpClient);
             SessionUpdated?.Invoke(this, snap);
         }
         catch
@@ -1736,6 +1805,7 @@ public sealed class InterceptionService : IDisposable
         return new SessionSnapshot
         {
             Id = NextSessionId(),
+            ConnectionId = e.ClientConnectionId,
             Method = "CONNECT",
             Url = req.RequestUriString ?? req.Url ?? "",
             Host = TryHost(req),
@@ -1757,6 +1827,23 @@ public sealed class InterceptionService : IDisposable
             {
                 e.HttpClient.Request.KeepBody = true;
                 await e.GetRequestBody(CancellationToken.None);
+            }
+
+            // Before scripts so the grid snapshot and the server see the same headers.
+            var tweaks = RequestCaptureTweaks.Apply(e.HttpClient.Request, DisableCaching, ForceUncompressed);
+            if (tweaks.HasFlag(RequestTweakChange.Caching))
+            {
+                Note(e.HttpClient, "stats.event.cache", failure: false);
+            }
+
+            if (tweaks.HasFlag(RequestTweakChange.Encoding))
+            {
+                Note(e.HttpClient, "stats.event.uncompressed", failure: false);
+            }
+
+            if (SessionScriptHost.HasEffect(ScriptOnRequest))
+            {
+                Note(e.HttpClient, "stats.event.script", failure: false);
             }
 
             if (SessionScriptHost.ApplyOnRequest(ScriptOnRequest, e))
@@ -1799,6 +1886,7 @@ public sealed class InterceptionService : IDisposable
                 }
 
                 autoResponded = true;
+                Note(e.HttpClient, "stats.event.rule", failure: false);
             }
 
             // Map Remote: rewrite URL before origin (only when not already answered).
@@ -1808,6 +1896,7 @@ public sealed class InterceptionService : IDisposable
                 !string.IsNullOrEmpty(rewritten))
             {
                 e.HttpClient.Request.Url = rewritten;
+                Note(e.HttpClient, "stats.event.rule", failure: false);
             }
 
             if (Breakpoints is { Enabled: true } &&
@@ -1815,6 +1904,7 @@ public sealed class InterceptionService : IDisposable
                  GraphQlOperationMatcher.MatchesOperation(requestBody, Breakpoints.GraphQlOperationName)) &&
                 Breakpoints.TryEnter(CreatePreviewSnapshot(e, assignId: false), out var hit))
             {
+                Note(e.HttpClient, "stats.event.breakpoint", failure: false);
                 var action = await hit.WaitAsync(CancellationToken.None);
                 if (action == BreakpointAction.Abort)
                 {
@@ -1826,6 +1916,11 @@ public sealed class InterceptionService : IDisposable
                 {
                     e.SetRequestBodyString(hit.EditedBody);
                 }
+            }
+
+            if (!autoResponded)
+            {
+                TryEnableWindowsAuthentication(e);
             }
 
             if (!Capturing)
@@ -1864,12 +1959,23 @@ public sealed class InterceptionService : IDisposable
                 }
             }
 
+            if (SessionScriptHost.HasEffect(ScriptOnResponse))
+            {
+                Note(e.HttpClient, "stats.event.script", failure: false);
+            }
+
             SessionScriptHost.ApplyOnResponse(ScriptOnResponse, e);
+
+            if (e.EnableWinAuth && e.HttpClient.Response.StatusCode == (int)HttpStatusCode.RequestEntityTooLarge)
+            {
+                Note(e.HttpClient, "stats.event.winAuthTooLarge", failure: true);
+            }
 
             if (BreakpointOnResponse &&
                 Breakpoints is { Enabled: true } &&
                 Breakpoints.TryEnter(CreatePreviewSnapshot(e, assignId: false), out var hit))
             {
+                Note(e.HttpClient, "stats.event.breakpoint", failure: false);
                 var action = await hit.WaitAsync(CancellationToken.None);
                 if (action == BreakpointAction.Abort)
                 {
@@ -1923,7 +2029,13 @@ public sealed class InterceptionService : IDisposable
             FinalizeStreamingBody(snap);
             // Response/reason first, duration last: DurationMs is what marks the session as finished.
             RecordMissingResponse(snap, e);
-            ApplyTiming(snap, e.Timing, snap.StartedUtc);
+            ApplyTiming(snap, e.Timing, e.UpstreamConnectionTiming, snap.StartedUtc);
+            if (e.Timing?.AttemptCount > 1)
+            {
+                Note(e.HttpClient, "stats.event.retry", failure: false);
+            }
+
+            PublishEvents(snap, e.HttpClient);
             SessionUpdated?.Invoke(this, snap);
         }
 
@@ -2000,7 +2112,7 @@ public sealed class InterceptionService : IDisposable
             }
 
             snap.FailureReason = "Capture was stopped before a response arrived.";
-            ApplyTiming(snap, null, snap.StartedUtc);
+            ApplyTiming(snap, null, null, snap.StartedUtc);
             SessionUpdated?.Invoke(this, snap);
         }
     }
@@ -2011,6 +2123,11 @@ public sealed class InterceptionService : IDisposable
         // Accept valid public chains; optionally ignore all errors when the user opts in.
         e.IsValid = IgnoreServerCertificateErrors
                     || e.SslPolicyErrors == SslPolicyErrors.None;
+        if (e.SslPolicyErrors != SslPolicyErrors.None)
+        {
+            Note(e.Session.HttpClient, "stats.event.tls", failure: true);
+        }
+
         return Task.CompletedTask;
     }
 
@@ -2025,6 +2142,7 @@ public sealed class InterceptionService : IDisposable
         var snap = new SessionSnapshot
         {
             Id = assignId ? NextSessionId() : 0,
+            ConnectionId = e.ClientConnectionId,
             Method = mark?.ClientMethod ?? req.Method ?? "GET",
             Url = BuildDisplayUrl(req, mark),
             Host = TryHost(req),
@@ -2239,7 +2357,7 @@ public sealed class InterceptionService : IDisposable
         ApplyResponseBodyCapture(snap, resp, e.HttpClient.Request, originalBody);
         SyncHttpBodySize(snap);
 
-        ApplyTiming(snap, e.Timing, snap.StartedUtc);
+        ApplyTiming(snap, e.Timing, e.UpstreamConnectionTiming, snap.StartedUtc);
 
         if (GrpcJsonTranscodeSessionMark.TryGet(e.UserData, out var mark) && mark is not null)
         {
@@ -2724,6 +2842,30 @@ public sealed class InterceptionService : IDisposable
         snap.BodySize = snap.ResponseBytesSeen > 0 ? snap.ResponseBytesSeen : null;
     }
 
+    private bool MatchesWinAuthHost(string? host)
+    {
+        var matcher = Volatile.Read(ref _winAuthMatcher);
+        return matcher is not null && matcher.Matches(host);
+    }
+
+    private void TryEnableWindowsAuthentication(SessionEventArgs e)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var host = TryHost(e.HttpClient.Request);
+        if (!MatchesWinAuthHost(host))
+        {
+            return;
+        }
+
+        e.EnableWinAuth = true;
+        e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+        Note(e.HttpClient, "stats.event.winAuth", failure: false);
+    }
+
     private static string? TryHost(Request req)
     {
         try
@@ -2743,7 +2885,7 @@ public sealed class InterceptionService : IDisposable
         snap.ResponseHeadersText = FormatHeaders(resp.Headers);
         snap.Protocol = SessionDisplayFormat.FormatClientServer(
             e.HttpClient.Request.HttpVersion, resp.HttpVersion);
-        ApplyTiming(snap, e.Timing, snap.StartedUtc);
+        ApplyTiming(snap, e.Timing, e.UpstreamConnectionTiming, snap.StartedUtc);
         snap.TtfbMs ??= snap.DurationMs;
         snap.BodySize ??= 0;
     }
@@ -2770,7 +2912,28 @@ public sealed class InterceptionService : IDisposable
         snap.BodySize = snap.SentBytes + snap.ReceivedBytes;
     }
 
-    private static void ApplyTiming(SessionSnapshot snap, HttpRequestTiming? timing, DateTimeOffset startedUtc)
+    private void Note(object key, string localizationKey, bool failure)
+    {
+        var buffer = _eventNotes.GetOrAdd(key, static _ => new SessionEventBuffer());
+        buffer.Add(localizationKey, failure);
+    }
+
+    private void PublishEvents(SessionSnapshot snap, object key)
+    {
+        if (!_eventNotes.TryRemove(key, out var buffer))
+        {
+            return;
+        }
+
+        var notes = buffer.Freeze(snap.StartedUtc);
+        snap.Events = notes.Count == 0 ? null : notes;
+    }
+
+    private static void ApplyTiming(
+        SessionSnapshot snap,
+        HttpRequestTiming? timing,
+        UpstreamConnectionTiming? connection,
+        DateTimeOffset startedUtc)
     {
         if (timing is not null)
         {
@@ -2780,12 +2943,30 @@ public sealed class InterceptionService : IDisposable
                 snap.TtfbMs = SessionDisplayFormat.RoundMs(ttfb.TotalMilliseconds);
             }
 
+            if (!snap.IsTunnel)
+            {
+                var phases = HarTimingMap.Map(timing, connection);
+                snap.BlockedMs = PhaseOrNull(phases.BlockedMs);
+                snap.DnsMs = PhaseOrNull(phases.DnsMs);
+                snap.ConnectMs = PhaseOrNull(phases.ConnectMs);
+                snap.TlsMs = PhaseOrNull(phases.SslMs);
+                snap.SendMs = PhaseOrNull(phases.SendMs);
+                snap.WaitMs = PhaseOrNull(phases.WaitMs);
+                snap.ReceiveMs = PhaseOrNull(phases.ReceiveMs);
+                snap.ConnectionReused = phases.Reused;
+                snap.TimingAttempts = timing.AttemptCount;
+                snap.TimingRecorded = true;
+                snap.TimingEstimated = false;
+            }
+
             return;
         }
 
         snap.DurationMs = SessionDisplayFormat.RoundMs(
             Math.Max(0, (DateTimeOffset.UtcNow - startedUtc).TotalMilliseconds));
     }
+
+    private static double? PhaseOrNull(double milliseconds) => milliseconds < 0 ? null : milliseconds;
 
     private static string FormatHeaders(HeaderCollection headers)
     {

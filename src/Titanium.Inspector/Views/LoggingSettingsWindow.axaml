@@ -28,7 +28,24 @@
                    Text="{loc:Loc logging.detailHelp}" />
         <ComboBox x:Name="LevelCombo" HorizontalAlignment="Left" MinWidth="160"
                   AutomationProperties.AutomationId="LoggingLevel" />
+        <TextBlock x:Name="LevelCost" Opacity="0.85" TextWrapping="Wrap" IsVisible="False"
+                   Text="{loc:Loc logging.levelCost}"
+                   AutomationProperties.AutomationId="LoggingLevelCost" />
       </StackPanel>
+      <Grid ColumnDefinitions="*,*,*">
+        <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,8,0">
+          <TextBlock Text="{loc:Loc logging.fileSize}" />
+          <TextBox x:Name="FileSizeBox" AutomationProperties.AutomationId="LoggingFileSize" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Spacing="4" Margin="0,0,8,0">
+          <TextBlock Text="{loc:Loc logging.rolledFiles}" />
+          <TextBox x:Name="RolledFilesBox" AutomationProperties.AutomationId="LoggingRolledFiles" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Spacing="4">
+          <TextBlock Text="{loc:Loc logging.memory}" />
+          <TextBox x:Name="MemoryLinesBox" AutomationProperties.AutomationId="LoggingMemoryLines" />
+        </StackPanel>
+      </Grid>
       <StackPanel Spacing="4">
         <TextBlock FontWeight="SemiBold" Text="{loc:Loc logging.path}" />
         <DockPanel>

@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Reflection;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Notifications;
@@ -48,11 +49,14 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         LanguageService.AttachWindow(this);
+        ApplyShortcutGestures();
         MacOsNativeMenu.AttachIfMac(this, MainMenu);
         Closing += OnClosing;
         Opened += OnOpened;
         DataContextChanged += OnDataContextChanged;
         SessionsGrid.Loaded += OnSessionsGridLoaded;
+        SessionsGrid.LoadingRow += (_, e) => ApplySessionMark(e.Row);
+        SessionsGrid.UnloadingRow += (_, e) => ClearSessionMark(e.Row);
         SessionsGrid.SelectionChanged += OnSessionsGridSelectionChanged;
         SessionsGrid.KeyDown += OnSessionsGridKeyDown;
         // Under heavy proxy load the machine is CPU-saturated by worker threads (and browsers); the UI thread
@@ -71,6 +75,7 @@ public partial class MainWindow : Window
         AddHandler(InputElement.PointerMovedEvent, OnUserInputForCaptureUi, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(InputElement.PointerWheelChangedEvent, OnUserInputForCaptureUi, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(InputElement.KeyDownEvent, OnUserInputForCaptureUi, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(InputElement.KeyDownEvent, OnShortcutKeyDown, RoutingStrategies.Tunnel);
         SessionsGrid.AddHandler(
             InputElement.PointerPressedEvent,
             OnSessionsGridPointerPressed,
@@ -119,12 +124,57 @@ public partial class MainWindow : Window
         ApplySessionColumnHeaderTips();
     }
 
+    private void ApplyShortcutGestures()
+    {
+        var macOs = OperatingSystem.IsMacOS();
+        var platform = InspectorShortcuts.PlatformModifier(macOs);
+        MenuToggleCapturing.InputGesture = new KeyGesture(Key.F12);
+        MenuClearSessions.InputGesture = new KeyGesture(Key.Delete, platform | KeyModifiers.Shift);
+        MenuRemoveSelected.InputGesture = new KeyGesture(Key.Delete);
+    }
+
+    private void OnShortcutKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        var action = InspectorShortcuts.Match(
+            e.Key,
+            e.KeyModifiers,
+            SessionsGrid.IsKeyboardFocusWithin,
+            IsTextInput(e.Source as Control),
+            OperatingSystem.IsMacOS());
+        if (action == ShortcutAction.None)
+            return;
+
+        if (action == ShortcutAction.FocusSearch)
+        {
+            SearchBox.Focus();
+            e.Handled = true;
+            return;
+        }
+
+        if (vm.TryHandleShortcut(action))
+            e.Handled = true;
+    }
+
+    private static bool IsTextInput(Control? source)
+    {
+        for (var current = source; current is not null; current = current.Parent as Control)
+        {
+            if (current is TextBox)
+                return true;
+        }
+
+        return false;
+    }
+
     private static bool IsSessionNavigationKey(Key key) =>
         key is Key.Up or Key.Down or Key.Home or Key.End or Key.PageUp or Key.PageDown;
 
     private void OnSessionsGridKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Delete || DataContext is not MainWindowViewModel vm)
+        if (e.Key != Key.Delete || e.KeyModifiers != KeyModifiers.None || DataContext is not MainWindowViewModel vm)
         {
             if (IsSessionNavigationKey(e.Key) && DataContext is MainWindowViewModel navigationVm)
             {
@@ -273,10 +323,16 @@ public partial class MainWindow : Window
         HookStatusAttention(DataContext as MainWindowViewModel);
         HookOneWayToggleVisualSync(DataContext as MainWindowViewModel);
         HookGridColumnsChanged(DataContext as MainWindowViewModel);
+        HookSessionAnnotations(DataContext as MainWindowViewModel);
         HookInspectHeadersLayout(DataContext as MainWindowViewModel);
         if (_notificationManager is not null && DataContext is MainWindowViewModel vm)
         {
             vm.AttachStatusNotifier(new AvaloniaStatusNotifier(() => _notificationManager));
+        }
+
+        if (DataContext is MainWindowViewModel alwaysOnTop)
+        {
+            alwaysOnTop.ApplyAlwaysOnTop(this);
         }
 
         ApplyColumnVisibility();
@@ -725,6 +781,63 @@ public partial class MainWindow : Window
         {
             return SessionListFollowEdge.Bottom;
         }
+    }
+
+    private MainWindowViewModel? _annotationsVm;
+
+    private void HookSessionAnnotations(MainWindowViewModel? vm)
+    {
+        if (_annotationsVm is not null)
+        {
+            _annotationsVm.SessionAnnotationsChanged -= OnSessionAnnotationsChanged;
+        }
+
+        _annotationsVm = vm;
+        if (vm is not null)
+        {
+            vm.SessionAnnotationsChanged += OnSessionAnnotationsChanged;
+        }
+    }
+
+    private void OnSessionAnnotationsChanged(object? sender, EventArgs e)
+    {
+        foreach (var row in SessionsGrid.GetVisualDescendants().OfType<DataGridRow>())
+        {
+            ApplySessionMark(row);
+        }
+    }
+
+    private static readonly string[] MarkClasses = ["mark-red", "mark-orange", "mark-yellow", "mark-green", "mark-blue", "mark-purple"];
+
+    private static void ClearSessionMark(DataGridRow row)
+    {
+        foreach (var name in MarkClasses)
+        {
+            row.Classes.Remove(name);
+        }
+    }
+
+    private static void ApplySessionMark(DataGridRow row)
+    {
+        ClearSessionMark(row);
+        if (row.DataContext is not SessionSnapshot snap)
+        {
+            AutomationProperties.SetHelpText(row, null);
+            ToolTip.SetTip(row, null);
+            return;
+        }
+
+        if (snap.Mark != SessionMark.None)
+        {
+            row.Classes.Add("mark-" + snap.Mark.ToString().ToLowerInvariant());
+            AutomationProperties.SetHelpText(row, snap.Mark.ToString());
+        }
+        else
+        {
+            AutomationProperties.SetHelpText(row, null);
+        }
+
+        ToolTip.SetTip(row, string.IsNullOrEmpty(snap.Comment) ? null : snap.Comment);
     }
 
     /// <summary>Column visibility from the catalog defaults, saved choices, and the Process platform gate.</summary>

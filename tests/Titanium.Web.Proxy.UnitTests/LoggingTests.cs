@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
+using System.Reflection;
 using System.Net.Security;
 using System.Security.Authentication;
 using System.Text.RegularExpressions;
@@ -32,9 +34,131 @@ public partial class LoggingTests
         Assert.IsTrue(options.EnableConsole);
         Assert.IsFalse(options.EnableFile);
         Assert.IsNull(options.LoggerFactory);
+        Assert.IsNotNull(options.AdditionalLoggerProviders);
+        Assert.AreEqual(0, options.AdditionalLoggerProviders.Count);
         Assert.IsTrue(options.MaxFileSizeBytes > 0);
         Assert.IsTrue(options.MaxRolledFiles >= 0);
         Assert.IsTrue(options.QueueCapacity > 0);
+    }
+
+    /// <summary>
+    /// Pins the default sink list. An empty extra-provider hook must not add, remove, or reorder
+    /// these, or CLI and library logging (and the RPS probe, which runs with logging off) change.
+    /// </summary>
+    [TestMethod]
+    public void ApplyLoggingConfiguration_DefaultProviderList_IsConsoleThenFile()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+
+        var defaults = OwnedProviderTypes(proxy);
+        CollectionAssert.AreEqual(
+            new[] { nameof(ConsoleLoggerProvider) },
+            defaults);
+
+        proxy.Logging.EnableFile = true;
+        proxy.Logging.FilePath = Path.Combine(Path.GetTempPath(), "titanium-log-guard-" + Guid.NewGuid(), "proxy.log");
+        proxy.ApplyLoggingConfiguration();
+        CollectionAssert.AreEqual(
+            new[] { nameof(ConsoleLoggerProvider), nameof(RollingFileLoggerProvider) },
+            OwnedProviderTypes(proxy));
+
+        proxy.Logging.EnableConsole = false;
+        proxy.Logging.EnableFile = false;
+        proxy.ApplyLoggingConfiguration();
+        Assert.AreEqual(0, OwnedProviderTypes(proxy).Length);
+        Assert.IsFalse(proxy.Logger.IsEnabled(LogLevel.Critical));
+    }
+
+    [TestMethod]
+    public void AdditionalLoggerProviders_Empty_LeavesTheSinkListUnchanged()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        proxy.Logging.AdditionalLoggerProviders = new List<ILoggerProvider>();
+        proxy.ApplyLoggingConfiguration();
+        CollectionAssert.AreEqual(new[] { nameof(ConsoleLoggerProvider) }, OwnedProviderTypes(proxy));
+    }
+
+    [TestMethod]
+    public void AdditionalLoggerProviders_SurviveARebuild_AndKeepBufferedLines()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        proxy.Logging.EnableConsole = false;
+        proxy.Logging.EnableFile = false;
+        proxy.Logging.MinimumLevel = LogLevel.Error;
+        var host = new RememberingLoggerProvider();
+        proxy.Logging.AdditionalLoggerProviders.Add(host);
+        proxy.ApplyLoggingConfiguration();
+
+        proxy.Logger.Log(LogLevel.Error, 0, "kept", null, static (state, _) => state);
+        proxy.ApplyLoggingConfiguration();
+
+        Assert.AreEqual(0, host.DisposeCount);
+        proxy.Logger.Log(LogLevel.Error, 0, "still", null, static (state, _) => state);
+        CollectionAssert.AreEqual(new[] { "kept", "still" }, host.Lines);
+    }
+
+    [TestMethod]
+    public void EmptyAdditionalProviders_LogAndIsEnabled_AllocateNothing()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        proxy.Logging.EnableConsole = false;
+        proxy.Logging.EnableFile = false;
+        proxy.ApplyLoggingConfiguration();
+        var logger = proxy.Logger;
+        Spin(logger);
+        Spin(logger);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        Spin(logger);
+
+        Assert.AreEqual(before, GC.GetAllocatedBytesForCurrentThread());
+    }
+
+    private static void Spin(ILogger logger)
+    {
+        for (var i = 0; i < 1000; i++)
+        {
+            logger.IsEnabled(LogLevel.Information);
+            logger.Log(LogLevel.Information, 0, "x", null, static (state, _) => state);
+        }
+    }
+
+    private sealed class RememberingLoggerProvider : ILoggerProvider
+    {
+        public List<string> Lines { get; } = new();
+
+        public int DisposeCount { get; private set; }
+
+        public ILogger CreateLogger(string categoryName) => new RememberingLogger(this);
+
+        public void Dispose() => DisposeCount++;
+
+        private sealed class RememberingLogger : ILogger
+        {
+            private readonly RememberingLoggerProvider owner;
+
+            public RememberingLogger(RememberingLoggerProvider owner) => this.owner = owner;
+
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+                Func<TState, Exception?, string> formatter)
+            {
+                owner.Lines.Add(formatter(state, exception));
+            }
+        }
+    }
+
+    private static string[] OwnedProviderTypes(ProxyServer proxy)
+    {
+        var factory = typeof(ProxyServer)
+            .GetField("activeLoggerFactory", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(proxy)!;
+        var providers = (System.Collections.IEnumerable)factory.GetType()
+            .GetProperty("Providers", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!
+            .GetValue(factory)!;
+        return providers.Cast<object>().Select(p => p.GetType().Name).ToArray();
     }
 
     [TestMethod]

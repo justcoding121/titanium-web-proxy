@@ -206,6 +206,12 @@ tunnel ends. The cache entry expires after the advertised `ma` (max-age) duratio
 periodically. There is no public eviction API; to force a protocol for a given request or
 connection, set `SessionEventArgs.UpstreamHttpProtocol` or `BeforeQuicAuthenticateEventArgs.UpstreamHttpProtocol`.
 
+## Browsers behind an explicit proxy
+
+An explicit HTTP proxy carries browser traffic as TCP (`CONNECT`). QUIC cannot go through that tunnel, but the origin's `Alt-Svc: h3` header is forwarded unchanged. A browser that then opened UDP directly to the origin would skip the proxy, so those requests would never appear in Inspector.
+
+Checked locally with Chrome, Edge, and Firefox, QUIC left enabled and loopback not on the bypass list: each browser kept its later requests on the proxy, and a UDP socket on the advertised HTTP/3 port received nothing. Safari was not in that run; check it by hand if you need it. The proxy's own HTTP/3 warmup sends UDP as well, so that check turns origin HTTP/3 off on the proxy and only counts browser datagrams.
+
 ## HTTPS/SVCB DNS discovery (opt-in)
 
 In addition to reactive `Alt-Svc` caching, you can enable **proactive** HTTP/3 capability discovery via

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Serialization;
 
 namespace Titanium.Inspector.Services;
 
@@ -8,6 +9,8 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
 {
     private int? _statusCode;
     private string? _failureReason;
+    private SessionMark _mark;
+    private string? _comment;
     private string? _requestHeadersText;
     private string? _responseHeadersText;
     private string? _requestBodyText;
@@ -33,6 +36,13 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     private OpaqueTunnelReason _opaqueReason;
 
     public long Id { get; set; }
+
+    /// <summary>
+    /// Client connection id for this process only. Counters restart at 1, so the value is not
+    /// written to HAR or archives and is cleared on import.
+    /// </summary>
+    [JsonIgnore]
+    public long ConnectionId { get; set; }
     public string Method { get; set; } = "GET";
     public string Url { get; set; } = "";
     public DateTimeOffset StartedUtc { get; set; } = DateTimeOffset.UtcNow;
@@ -117,6 +127,32 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     {
         get => _failureReason;
         set => SetField(ref _failureReason, value);
+    }
+
+    public const int CommentMaxLength = 2000;
+
+    /// <summary>User mark. None leaves the row style unchanged.</summary>
+    public SessionMark Mark
+    {
+        get => _mark;
+        set => SetField(ref _mark, value);
+    }
+
+    /// <summary>User comment, capped at <see cref="CommentMaxLength"/> characters.</summary>
+    public string? Comment
+    {
+        get => _comment;
+        set => SetField(ref _comment, CapComment(value));
+    }
+
+    private static string? CapComment(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.IsNullOrEmpty(value) ? null : value;
+        }
+
+        return value.Length <= CommentMaxLength ? value : value[..CommentMaxLength];
     }
 
     public string? RequestHeadersText
@@ -319,6 +355,38 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         get => _ttfbMs;
         set => SetField(ref _ttfbMs, value);
     }
+
+    /// <summary>HAR phases in milliseconds. Null means the phase does not apply. Not notified per property.</summary>
+    public double? BlockedMs { get; set; }
+
+    public double? DnsMs { get; set; }
+
+    public double? ConnectMs { get; set; }
+
+    public double? TlsMs { get; set; }
+
+    public double? SendMs { get; set; }
+
+    public double? WaitMs { get; set; }
+
+    public double? ReceiveMs { get; set; }
+
+    public bool ConnectionReused { get; set; }
+
+    /// <summary>True when phases were guessed by an older HAR file. The grid Duration and TTFB are still set.</summary>
+    public bool TimingEstimated { get; set; }
+
+    /// <summary>True when <see cref="HarTimingMap"/> filled the phase fields for this session.</summary>
+    public bool TimingRecorded { get; set; }
+
+    /// <summary>
+    /// Decision notes frozen once at completion. Null when nothing unusual happened.
+    /// The list is a copy; callers do not mutate it.
+    /// </summary>
+    public IReadOnlyList<SessionEventNote>? Events { get; set; }
+
+    /// <summary>Upstream attempts. Above one means earlier attempts were folded into <see cref="BlockedMs"/>.</summary>
+    public int TimingAttempts { get; set; }
 
     public string ProcessDisplay
     {

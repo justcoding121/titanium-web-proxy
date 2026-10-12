@@ -98,6 +98,29 @@ public sealed class SessionStore : IDisposable
         }
     }
 
+    /// <summary>Newest sessions, oldest of that window first. Empty when <paramref name="max"/> is below 1.</summary>
+    public SessionSnapshot[] CopyNewest(int max)
+    {
+        lock (_gate)
+        {
+            var count = Sessions.Count;
+            if (count == 0 || max < 1)
+            {
+                return [];
+            }
+
+            var take = Math.Min(count, max);
+            var start = count - take;
+            var copy = new SessionSnapshot[take];
+            for (var i = 0; i < take; i++)
+            {
+                copy[i] = Sessions[start + i];
+            }
+
+            return copy;
+        }
+    }
+
     public int SpilledCount
     {
         get
@@ -217,6 +240,21 @@ public sealed class SessionStore : IDisposable
         {
             return _byId.TryGetValue(id, out var snap) ? snap : null;
         }
+    }
+
+    /// <summary>
+    /// Opens the spilled HAR for <paramref name="snapshot"/> when its bodies are on disk.
+    /// The caller owns the stream. Returns false when the file is not written yet.
+    /// </summary>
+    public bool TryOpenSpilledHar(SessionSnapshot snapshot, out FileStream? stream)
+    {
+        stream = null;
+        if (!snapshot.BodiesOnDisk || _disk is null)
+        {
+            return false;
+        }
+
+        return _disk.TryOpenRead(snapshot.Id, out stream);
     }
 
     public void NotifyUpdated(SessionSnapshot snapshot)
@@ -854,6 +892,7 @@ public sealed class SessionStore : IDisposable
         new()
         {
             Id = snap.Id,
+            ConnectionId = snap.ConnectionId,
             Method = snap.Method,
             Url = snap.Url,
             StartedUtc = snap.StartedUtc,
@@ -899,7 +938,21 @@ public sealed class SessionStore : IDisposable
             SentBytes = snap.SentBytes,
             DurationMs = snap.DurationMs,
             TtfbMs = snap.TtfbMs,
+            BlockedMs = snap.BlockedMs,
+            DnsMs = snap.DnsMs,
+            ConnectMs = snap.ConnectMs,
+            TlsMs = snap.TlsMs,
+            SendMs = snap.SendMs,
+            WaitMs = snap.WaitMs,
+            ReceiveMs = snap.ReceiveMs,
+            ConnectionReused = snap.ConnectionReused,
+            TimingEstimated = snap.TimingEstimated,
+            TimingRecorded = snap.TimingRecorded,
+            TimingAttempts = snap.TimingAttempts,
+            Events = snap.Events is { Count: > 0 } events ? events.ToArray() : null,
             FailureReason = snap.FailureReason,
+            Mark = snap.Mark,
+            Comment = snap.Comment,
         };
 
     private List<SessionSnapshot> RemoveIdsLocked(HashSet<long> ids)

@@ -3,7 +3,7 @@ namespace Titanium.Inspector.ViewModels;
 /// <summary>
 /// Inspect pane tabs. Values match <see cref="MainWindowViewModel.SelectedInspectTabIndex"/>.
 /// Request and Response each show headers and body. Contextual tabs (Diff, WS, SSE, Protobuf)
-/// stay in this order and are hidden when they do not apply.
+/// stay in this order and are hidden when they do not apply. Statistics is always last.
 /// </summary>
 public enum InspectTab
 {
@@ -13,4 +13,5 @@ public enum InspectTab
     WsFrames = 3,
     Sse = 4,
     Protobuf = 5,
+    Statistics = 6,
 }

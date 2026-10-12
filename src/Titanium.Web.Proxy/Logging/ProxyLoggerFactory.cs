@@ -16,6 +16,7 @@ namespace Titanium.Web.Proxy.Logging;
 internal sealed class ProxyLoggerFactory : ILoggerFactory
 {
     private readonly List<ILoggerProvider> providers = new();
+    private readonly List<ILoggerProvider> ownedProviders = new();
     private readonly ConcurrentDictionary<string, ProxyLogger> loggers = new();
     private bool disposed;
 
@@ -30,8 +31,20 @@ internal sealed class ProxyLoggerFactory : ILoggerFactory
 
     public void AddProvider(ILoggerProvider provider)
     {
+        Add(provider, owned: true);
+    }
+
+    internal void AddHostProvider(ILoggerProvider provider)
+    {
+        Add(provider, owned: false);
+    }
+
+    private void Add(ILoggerProvider provider, bool owned)
+    {
         ObjectDisposedException.ThrowIf(disposed, this);
         providers.Add(provider);
+        if (owned)
+            ownedProviders.Add(provider);
     }
 
     public ILogger CreateLogger(string categoryName)
@@ -44,7 +57,7 @@ internal sealed class ProxyLoggerFactory : ILoggerFactory
         if (disposed) return;
         disposed = true;
 
-        foreach (var provider in providers)
+        foreach (var provider in ownedProviders)
             try
             {
                 provider.Dispose();

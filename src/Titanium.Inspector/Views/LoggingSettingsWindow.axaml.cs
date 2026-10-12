@@ -8,7 +8,7 @@ namespace Titanium.Inspector.Views;
 
 public partial class LoggingSettingsWindow : Window
 {
-    private static readonly string[] Levels = ["Error", "Warning", "Information", "Debug"];
+    private static readonly string[] Levels = ["Error", "Warning", "Information", "Debug", "Trace"];
 
     private readonly SettingsService _settings;
     private readonly Action<InspectorSettings>? _applyLogging;
@@ -25,6 +25,7 @@ public partial class LoggingSettingsWindow : Window
         InitializeComponent();
         LanguageService.AttachWindow(this);
         LevelCombo.ItemsSource = Levels;
+        LevelCombo.SelectionChanged += (_, _) => UpdateLevelCost();
         LoadFromSettings();
         SaveButton.Click += OnSave;
         CancelButton.Click += (_, _) => Close();
@@ -55,6 +56,16 @@ public partial class LoggingSettingsWindow : Window
         PathBox.Text = string.IsNullOrWhiteSpace(s.LoggingFilePath)
             ? DefaultLogPath()
             : s.LoggingFilePath;
+        FileSizeBox.Text = s.LoggingMaxFileSizeMb.ToString();
+        RolledFilesBox.Text = s.LoggingMaxRolledFiles.ToString();
+        MemoryLinesBox.Text = s.LoggingMemoryLines.ToString();
+        UpdateLevelCost();
+    }
+
+    private void UpdateLevelCost()
+    {
+        var level = LevelCombo.SelectedItem as string;
+        LevelCost.IsVisible = level is "Debug" or "Trace";
     }
 
     private async void OnBrowse(object? sender, RoutedEventArgs e)
@@ -92,6 +103,17 @@ public partial class LoggingSettingsWindow : Window
         s.LoggingEnabled = EnableLoggingCheck.IsChecked == true;
         s.LoggingEnableFile = WriteFileCheck.IsChecked == true;
         s.LoggingMinimumLevel = LevelCombo.SelectedItem as string ?? "Error";
+        if (!int.TryParse(FileSizeBox.Text, out var fileMb) || fileMb < 1
+            || !int.TryParse(RolledFilesBox.Text, out var rolled) || rolled < 0
+            || !int.TryParse(MemoryLinesBox.Text, out var memory) || memory < 100)
+        {
+            StatusText.Text = LanguageService.Get("logging.capsInvalid");
+            return;
+        }
+
+        s.LoggingMaxFileSizeMb = fileMb;
+        s.LoggingMaxRolledFiles = rolled;
+        s.LoggingMemoryLines = memory;
         var path = PathBox.Text?.Trim();
         s.LoggingFilePath = string.IsNullOrWhiteSpace(path) ? DefaultLogPath() : path;
         _settings.Save();
