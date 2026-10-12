@@ -1831,12 +1831,12 @@ public sealed class InterceptionService : IDisposable
 
             // Before scripts so the grid snapshot and the server see the same headers.
             var tweaks = RequestCaptureTweaks.Apply(e.HttpClient.Request, DisableCaching, ForceUncompressed);
-            if (tweaks.HasFlag(RequestTweakChange.Caching))
+            if (tweaks.HasFlag(RequestTweakChanges.Caching))
             {
                 Note(e.HttpClient, "stats.event.cache", failure: false);
             }
 
-            if (tweaks.HasFlag(RequestTweakChange.Encoding))
+            if (tweaks.HasFlag(RequestTweakChanges.Encoding))
             {
                 Note(e.HttpClient, "stats.event.uncompressed", failure: false);
             }
@@ -1943,63 +1943,18 @@ public sealed class InterceptionService : IDisposable
     {
         try
         {
-            if (e.HttpClient.Response.HasBody && ShouldBufferBody(e.HttpClient.Response, e))
+            await TryBufferResponseBodyAsync(e);
+            ApplyResponseScriptAndNotes(e);
+
+            if (await TryAbortAtResponseBreakpointAsync(e))
             {
-                e.HttpClient.Response.KeepBody = true;
-                try
-                {
-                    await e.GetResponseBody(CancellationToken.None);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    // Body capture is best-effort: the row must still get its status / protocol / headers.
-                    InspectorUxTrace.Event("BeforeResponse.BodyBufferFailed",
-                        $"{e.HttpClient.Request.Url} ver={e.HttpClient.Request.HttpVersion}->{e.HttpClient.Response.HttpVersion} " +
-                        $"{ex.GetType().Name}: {ex.Message}");
-                }
+                return;
             }
 
-            if (SessionScriptHost.HasEffect(ScriptOnResponse))
+            var snap = EnsureLiveSnapshotForResponse(e);
+            if (snap is null)
             {
-                Note(e.HttpClient, "stats.event.script", failure: false);
-            }
-
-            SessionScriptHost.ApplyOnResponse(ScriptOnResponse, e);
-
-            if (e.EnableWinAuth && e.HttpClient.Response.StatusCode == (int)HttpStatusCode.RequestEntityTooLarge)
-            {
-                Note(e.HttpClient, "stats.event.winAuthTooLarge", failure: true);
-            }
-
-            if (BreakpointOnResponse &&
-                Breakpoints is { Enabled: true } &&
-                Breakpoints.TryEnter(CreatePreviewSnapshot(e, assignId: false), out var hit))
-            {
-                Note(e.HttpClient, "stats.event.breakpoint", failure: false);
-                var action = await hit.WaitAsync(CancellationToken.None);
-                if (action == BreakpointAction.Abort)
-                {
-                    e.GenericResponse("Aborted by Titanium Inspector response breakpoint", HttpStatusCode.Forbidden);
-                    return;
-                }
-
-                if (hit.EditedBody is not null)
-                {
-                    e.SetResponseBodyString(hit.EditedBody);
-                }
-            }
-
-            if (!_live.TryGetValue(e.HttpClient, out var snap))
-            {
-                if (!Capturing)
-                {
-                    return;
-                }
-
-                snap = CreatePreviewSnapshot(e, assignId: true);
-                _live[e.HttpClient] = snap;
-                SessionCaptured?.Invoke(this, snap);
-                ScheduleProcessResolve(snap, e.HttpClient.ProcessId);
+                return;
             }
 
             try
@@ -2019,6 +1974,86 @@ public sealed class InterceptionService : IDisposable
                 $"{e.HttpClient.Request.Url} ver={e.HttpClient.Request.HttpVersion}->{e.HttpClient.Response.HttpVersion} " +
                 $"status={e.HttpClient.Response.StatusCode} {ex.GetType().Name}: {ex.Message}");
         }
+    }
+
+    private async Task TryBufferResponseBodyAsync(SessionEventArgs e)
+    {
+        if (!e.HttpClient.Response.HasBody || !ShouldBufferBody(e.HttpClient.Response, e))
+        {
+            return;
+        }
+
+        e.HttpClient.Response.KeepBody = true;
+        try
+        {
+            await e.GetResponseBody(CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Body capture is best-effort: the row must still get its status / protocol / headers.
+            InspectorUxTrace.Event("BeforeResponse.BodyBufferFailed",
+                $"{e.HttpClient.Request.Url} ver={e.HttpClient.Request.HttpVersion}->{e.HttpClient.Response.HttpVersion} " +
+                $"{ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private void ApplyResponseScriptAndNotes(SessionEventArgs e)
+    {
+        if (SessionScriptHost.HasEffect(ScriptOnResponse))
+        {
+            Note(e.HttpClient, "stats.event.script", failure: false);
+        }
+
+        SessionScriptHost.ApplyOnResponse(ScriptOnResponse, e);
+
+        if (e.EnableWinAuth && e.HttpClient.Response.StatusCode == (int)HttpStatusCode.RequestEntityTooLarge)
+        {
+            Note(e.HttpClient, "stats.event.winAuthTooLarge", failure: true);
+        }
+    }
+
+    private async Task<bool> TryAbortAtResponseBreakpointAsync(SessionEventArgs e)
+    {
+        if (!BreakpointOnResponse ||
+            Breakpoints is not { Enabled: true } ||
+            !Breakpoints.TryEnter(CreatePreviewSnapshot(e, assignId: false), out var hit))
+        {
+            return false;
+        }
+
+        Note(e.HttpClient, "stats.event.breakpoint", failure: false);
+        var action = await hit.WaitAsync(CancellationToken.None);
+        if (action == BreakpointAction.Abort)
+        {
+            e.GenericResponse("Aborted by Titanium Inspector response breakpoint", HttpStatusCode.Forbidden);
+            return true;
+        }
+
+        if (hit.EditedBody is not null)
+        {
+            e.SetResponseBodyString(hit.EditedBody);
+        }
+
+        return false;
+    }
+
+    private SessionSnapshot? EnsureLiveSnapshotForResponse(SessionEventArgs e)
+    {
+        if (_live.TryGetValue(e.HttpClient, out var snap))
+        {
+            return snap;
+        }
+
+        if (!Capturing)
+        {
+            return null;
+        }
+
+        snap = CreatePreviewSnapshot(e, assignId: true);
+        _live[e.HttpClient] = snap;
+        SessionCaptured?.Invoke(this, snap);
+        ScheduleProcessResolve(snap, e.HttpClient.ProcessId);
+        return snap;
     }
 
     private Task OnAfterResponse(object sender, SessionEventArgs e)

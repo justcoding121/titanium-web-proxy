@@ -105,7 +105,7 @@ public sealed partial class MainWindowViewModel
         ApplyStatistics(model, events);
     }
 
-    private IReadOnlyList<SessionSnapshot> StatisticsSelection()
+    private List<SessionSnapshot> StatisticsSelection()
     {
         if (_selectedSessions.Count > 1)
         {
@@ -164,7 +164,7 @@ public sealed partial class MainWindowViewModel
         ShowStatisticsEvents = eventRows.Count > 0;
     }
 
-    private static IReadOnlyList<StatisticsEventRow> BuildEventRows(IReadOnlyList<SessionEventNote>? events)
+    private static List<StatisticsEventRow> BuildEventRows(IReadOnlyList<SessionEventNote>? events)
     {
         if (events is null || events.Count == 0)
         {
@@ -192,6 +192,12 @@ public sealed partial class MainWindowViewModel
         out IReadOnlyList<StatisticsPhaseRow> rows,
         out string barName)
     {
+        AppendPhaseSummaryLines(model, summary);
+        (rows, barName) = BuildStatisticsPhaseRows(model);
+    }
+
+    private static void AppendPhaseSummaryLines(SessionStatistics.Model model, StringBuilder summary)
+    {
         if (model.TotalMs is double total)
         {
             AppendLine(summary, LanguageService.Format("stats.total", FormatMs(total)));
@@ -202,6 +208,16 @@ public sealed partial class MainWindowViewModel
             AppendLine(summary, LanguageService.Format("stats.slowest", LanguageService.Get(SessionStatistics.PhaseKey(slowest))));
         }
 
+        AppendConnectionNoteLine(model, summary);
+
+        if (model.Attempts > 1)
+        {
+            AppendLine(summary, LanguageService.Format("stats.retried", model.Attempts));
+        }
+    }
+
+    private static void AppendConnectionNoteLine(SessionStatistics.Model model, StringBuilder summary)
+    {
         if (model.Note == SessionStatistics.ConnectionNote.Reused)
         {
             AppendLine(summary, LanguageService.Get("stats.reused"));
@@ -210,20 +226,11 @@ public sealed partial class MainWindowViewModel
         {
             AppendLine(summary, LanguageService.Get("stats.prefetched"));
         }
+    }
 
-        if (model.Attempts > 1)
-        {
-            AppendLine(summary, LanguageService.Format("stats.retried", model.Attempts));
-        }
-
-        var sum = 0d;
-        foreach (var phase in model.Phases)
-        {
-            if (phase.Milliseconds > 0)
-            {
-                sum += phase.Milliseconds;
-            }
-        }
+    private static (IReadOnlyList<StatisticsPhaseRow> Rows, string BarName) BuildStatisticsPhaseRows(SessionStatistics.Model model)
+    {
+        var sum = model.Phases.Where(phase => phase.Milliseconds > 0).Sum(phase => phase.Milliseconds);
 
         var built = new List<StatisticsPhaseRow>(model.Phases.Count);
         var names = new StringBuilder();
@@ -254,8 +261,7 @@ public sealed partial class MainWindowViewModel
             names.Append(label).Append(' ').Append(ms);
         }
 
-        rows = built;
-        barName = names.ToString();
+        return (built, names.ToString());
     }
 
     private static void AppendMulti(SessionStatistics.Model model, StringBuilder summary)

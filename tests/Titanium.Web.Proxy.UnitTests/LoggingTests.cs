@@ -24,6 +24,8 @@ namespace Titanium.Web.Proxy.UnitTests;
 [TestClass]
 public partial class LoggingTests
 {
+    private static readonly string[] AdditionalProviderRebuildLines = ["kept", "still"];
+
     [TestMethod]
     public void ProxyLoggingOptions_Defaults_Are_Sane()
     {
@@ -94,7 +96,7 @@ public partial class LoggingTests
 
         Assert.AreEqual(0, host.DisposeCount);
         proxy.Logger.Log(LogLevel.Error, 0, "still", null, static (state, _) => state);
-        CollectionAssert.AreEqual(new[] { "kept", "still" }, host.Lines);
+        CollectionAssert.AreEqual(AdditionalProviderRebuildLines, host.Lines);
     }
 
     [TestMethod]

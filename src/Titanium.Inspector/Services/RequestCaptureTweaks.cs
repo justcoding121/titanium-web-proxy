@@ -8,7 +8,7 @@ namespace Titanium.Inspector.Services;
 /// and requests with <c>Range</c> or <c>If-Range</c> are also left untouched.
 /// </summary>
 [Flags]
-public enum RequestTweakChange
+public enum RequestTweakChanges
 {
     None = 0,
     Caching = 1,
@@ -17,20 +17,20 @@ public enum RequestTweakChange
 
 public static class RequestCaptureTweaks
 {
-    public static RequestTweakChange Apply(Request request, bool disableCaching, bool forceUncompressed)
+    public static RequestTweakChanges Apply(Request request, bool disableCaching, bool forceUncompressed)
     {
         if (!disableCaching && !forceUncompressed)
-            return RequestTweakChange.None;
+            return RequestTweakChanges.None;
 
         if (IsExcluded(request))
-            return RequestTweakChange.None;
+            return RequestTweakChanges.None;
 
         var headers = request.Headers;
-        var changed = RequestTweakChange.None;
+        var changed = RequestTweakChanges.None;
         if (disableCaching && ApplyDisableCaching(headers))
-            changed |= RequestTweakChange.Caching;
+            changed |= RequestTweakChanges.Caching;
         if (forceUncompressed && ApplyForceUncompressed(headers))
-            changed |= RequestTweakChange.Encoding;
+            changed |= RequestTweakChanges.Encoding;
         return changed;
     }
 

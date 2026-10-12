@@ -53,15 +53,15 @@ public sealed class RunLogRing : ILoggerProvider
             }
 
             var kept = SnapshotUnlocked();
-            if (kept.Count > size)
+            if (kept.Length > size)
             {
-                kept = kept.Skip(kept.Count - size).ToArray();
+                kept = kept.Skip(kept.Length - size).ToArray();
             }
 
             _lines = new string[size];
-            _count = kept.Count;
-            _next = kept.Count % size;
-            for (var i = 0; i < kept.Count; i++)
+            _count = kept.Length;
+            _next = kept.Length % size;
+            for (var i = 0; i < kept.Length; i++)
             {
                 _lines[i] = kept[i];
             }
@@ -143,7 +143,7 @@ public sealed class RunLogRing : ILoggerProvider
         }
     }
 
-    private IReadOnlyList<string> SnapshotUnlocked()
+    private string[] SnapshotUnlocked()
     {
         var result = new string[_count];
         var start = (_next - _count + _lines.Length) % _lines.Length;

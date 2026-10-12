@@ -154,8 +154,8 @@ public class SessionStatisticsTests
             previous = index;
         }
 
-        Assert.AreEqual(ids.Length, MainWindowViewModel.InspectTabCount);
-        Assert.AreEqual(ids.Length - 1, (int)InspectTab.Statistics);
+        Assert.AreEqual(MainWindowViewModel.InspectTabCount, ids.Length);
+        Assert.AreEqual((int)InspectTab.Statistics, ids.Length - 1);
 
         LanguageService.Apply("en");
         var path = Path.Combine(Path.GetTempPath(), "twp-inspector-stats-" + Guid.NewGuid().ToString("N") + ".json");

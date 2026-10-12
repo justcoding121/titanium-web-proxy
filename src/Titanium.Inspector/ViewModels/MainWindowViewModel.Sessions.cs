@@ -119,13 +119,8 @@ public sealed partial class MainWindowViewModel
         var visible = Sessions.Select(s => s.Id).ToHashSet();
         var remove = new List<long>();
         var hidden = 0;
-        foreach (var session in _all)
+        foreach (var session in _all.Where(s => !keep.Contains(s.Id)))
         {
-            if (keep.Contains(session.Id))
-            {
-                continue;
-            }
-
             remove.Add(session.Id);
             if (!visible.Contains(session.Id))
             {
@@ -151,13 +146,10 @@ public sealed partial class MainWindowViewModel
 
         var visible = remove.ToHashSet();
         var hidden = 0;
-        foreach (var session in _all)
+        foreach (var session in _all.Where(s => !visible.Contains(s.Id) && SessionSearch.Matches(s, SearchQuery)))
         {
-            if (!visible.Contains(session.Id) && SessionSearch.Matches(session, SearchQuery))
-            {
-                hidden++;
-                remove.Add(session.Id);
-            }
+            hidden++;
+            remove.Add(session.Id);
         }
 
         if (!await _dialogs.ConfirmRemoveSessionsAsync(TryGetMainWindow(), remove.Count, hidden).ConfigureAwait(true))
@@ -355,9 +347,18 @@ public sealed partial class MainWindowViewModel
         }
 
         await CopyTextToClipboardAsync(text).ConfigureAwait(false);
-        StatusText = truncated
-            ? $"Copied {written.ToString(System.Globalization.CultureInfo.InvariantCulture)} rows (list was longer)"
-            : written == 1 ? "Copied 1 row as a table" : $"Copied {written.ToString(System.Globalization.CultureInfo.InvariantCulture)} rows as a table";
+        if (truncated)
+        {
+            StatusText = $"Copied {written.ToString(System.Globalization.CultureInfo.InvariantCulture)} rows (list was longer)";
+        }
+        else if (written == 1)
+        {
+            StatusText = "Copied 1 row as a table";
+        }
+        else
+        {
+            StatusText = $"Copied {written.ToString(System.Globalization.CultureInfo.InvariantCulture)} rows as a table";
+        }
     }
     private async Task SaveRawHttpAsync()
     {
@@ -725,25 +726,13 @@ public sealed partial class MainWindowViewModel
             return null;
         }
 
-        int? code = null;
-        foreach (var session in selection)
+        if (selection.Any(s => s.StatusCode is not (>= 100 and <= 599)))
         {
-            if (session.StatusCode is not (>= 100 and <= 599))
-            {
-                return null;
-            }
-
-            if (code is null)
-            {
-                code = session.StatusCode;
-            }
-            else if (code != session.StatusCode)
-            {
-                return null;
-            }
+            return null;
         }
 
-        return code;
+        var codes = selection.Select(s => s.StatusCode).Distinct().ToList();
+        return codes.Count == 1 ? codes[0] : null;
     }
     private string? ResolveUnanimousFilterProcess()
     {
@@ -1181,42 +1170,10 @@ public sealed partial class MainWindowViewModel
 
     private void RefreshHiddenChips()
     {
-        var hosts = new List<string>();
-        var processes = new List<string>();
-        foreach (var token in SessionSearch.GetTokens(SearchQuery))
-        {
-            if (token.Key == "-host")
-            {
-                hosts.Add(token.Value);
-            }
-            else if (token.Key == "-process")
-            {
-                processes.Add(token.Value);
-            }
-        }
-
+        CollectHiddenChipValues(SearchQuery, out var hosts, out var processes);
         ReplaceChipList(HiddenHostChips, hosts);
         ReplaceChipList(HiddenProcessChips, processes);
-        var related = "";
-        foreach (var token in SessionSearch.GetTokens(SearchQuery))
-        {
-            if (token.Key == "ids")
-            {
-                var count = 0;
-                foreach (var part in token.Value.Split(','))
-                {
-                    if (long.TryParse(part, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _))
-                    {
-                        count++;
-                    }
-                }
-
-                if (count > 0)
-                {
-                    related = LanguageService.Format("filter.relatedChip", count);
-                }
-            }
-        }
+        var related = RelatedChipTextFromQuery(SearchQuery);
 
         if (!string.Equals(_relatedChipText, related, StringComparison.Ordinal))
         {
@@ -1228,6 +1185,50 @@ public sealed partial class MainWindowViewModel
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasHiddenChips)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasFilterChips)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowProcessChipPrefix)));
+    }
+
+    private static void CollectHiddenChipValues(string query, out List<string> hosts, out List<string> processes)
+    {
+        hosts = [];
+        processes = [];
+        foreach (var token in SessionSearch.GetTokens(query))
+        {
+            if (token.Key == "-host")
+            {
+                hosts.Add(token.Value);
+            }
+            else if (token.Key == "-process")
+            {
+                processes.Add(token.Value);
+            }
+        }
+    }
+
+    private static string RelatedChipTextFromQuery(string query)
+    {
+        foreach (var token in SessionSearch.GetTokens(query))
+        {
+            if (token.Key != "ids")
+            {
+                continue;
+            }
+
+            var count = 0;
+            foreach (var part in token.Value.Split(','))
+            {
+                if (long.TryParse(part, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _))
+                {
+                    count++;
+                }
+            }
+
+            if (count > 0)
+            {
+                return LanguageService.Format("filter.relatedChip", count);
+            }
+        }
+
+        return "";
     }
 
     private static void ReplaceChipList(ObservableCollection<string> chips, List<string> next)

@@ -10,6 +10,9 @@ namespace Titanium.Inspector.Tests;
 [TestClass]
 public class RunLogTests
 {
+    private static readonly string[] RingKeepsOrderExpected = ["Error three", "Error four", "Error five"];
+    private static readonly string[] RingSurvivesRebuildExpected = ["Error kept", "Error still"];
+
     [TestMethod]
     public async Task Ring_KeepsOrder_AndDropsTheOldest()
     {
@@ -21,7 +24,7 @@ public class RunLogTests
         }
 
         var lines = await WaitFor(ring, 3);
-        CollectionAssert.AreEqual(new[] { "Error three", "Error four", "Error five" }, lines.ToArray());
+        CollectionAssert.AreEqual(RingKeepsOrderExpected, lines.ToArray());
     }
 
     [TestMethod]
@@ -39,7 +42,7 @@ public class RunLogTests
         proxy.Logger.Log(LogLevel.Error, 0, "still", null, static (state, _) => state);
 
         var lines = await WaitFor(ring, 2);
-        CollectionAssert.AreEqual(new[] { "Error kept", "Error still" }, lines.ToArray());
+        CollectionAssert.AreEqual(RingSurvivesRebuildExpected, lines.ToArray());
     }
 
     [TestMethod]

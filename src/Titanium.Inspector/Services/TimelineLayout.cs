@@ -144,50 +144,71 @@ public static class TimelineLayout
         var segments = new List<Segment>(8);
         if (kind == RowKind.Phases)
         {
-            var model = SessionStatistics.Build([session]);
-            if (model.Kind == SessionStatistics.Kind.Phases && model.Phases.Count > 0)
-            {
-                var cursor = MillisecondsAfter(session.StartedUtc, origin);
-                foreach (var phase in model.Phases)
-                {
-                    var width = Math.Max(0, phase.Milliseconds) * scale;
-                    if (phase.Milliseconds > 0 && width < 1)
-                    {
-                        width = 1;
-                    }
-
-                    segments.Add(new Segment(
-                        SegmentStyle.Phase,
-                        phase.Phase,
-                        LabelWidth + (cursor * scale),
-                        width,
-                        phase.Milliseconds));
-                    cursor += Math.Max(0, phase.Milliseconds);
-                }
-            }
-            else
-            {
-                kind = session.DurationMs is null ? RowKind.InFlight : RowKind.Plain;
-            }
+            kind = AddPhaseSegments(session, origin, scale, segments, kind);
         }
 
         if (kind != RowKind.Phases)
         {
-            var start = MillisecondsAfter(session.StartedUtc, origin);
-            var duration = session.DurationMs is double known
-                ? Math.Max(0, known)
-                : Math.Max(0, (now - session.StartedUtc).TotalMilliseconds);
-            var width = duration * scale;
-            if (duration > 0 && width < 1)
+            AddPlainSegment(session, origin, now, scale, kind, segments);
+        }
+
+        return new Row(session.Id, LabelFor(session), kind, y, segments);
+    }
+
+    private static RowKind AddPhaseSegments(
+        SessionSnapshot session,
+        DateTimeOffset origin,
+        double scale,
+        List<Segment> segments,
+        RowKind kind)
+    {
+        var model = SessionStatistics.Build([session]);
+        if (model.Kind != SessionStatistics.Kind.Phases || model.Phases.Count == 0)
+        {
+            return session.DurationMs is null ? RowKind.InFlight : RowKind.Plain;
+        }
+
+        var cursor = MillisecondsAfter(session.StartedUtc, origin);
+        foreach (var phase in model.Phases)
+        {
+            var width = Math.Max(0, phase.Milliseconds) * scale;
+            if (phase.Milliseconds > 0 && width < 1)
             {
                 width = 1;
             }
 
-            var style = kind == RowKind.Estimated ? SegmentStyle.Hatched : SegmentStyle.Plain;
-            segments.Add(new Segment(style, null, LabelWidth + (start * scale), width, duration));
+            segments.Add(new Segment(
+                SegmentStyle.Phase,
+                phase.Phase,
+                LabelWidth + (cursor * scale),
+                width,
+                phase.Milliseconds));
+            cursor += Math.Max(0, phase.Milliseconds);
         }
 
-        return new Row(session.Id, LabelFor(session), kind, y, segments);
+        return kind;
+    }
+
+    private static void AddPlainSegment(
+        SessionSnapshot session,
+        DateTimeOffset origin,
+        DateTimeOffset now,
+        double scale,
+        RowKind kind,
+        List<Segment> segments)
+    {
+        var start = MillisecondsAfter(session.StartedUtc, origin);
+        var duration = session.DurationMs is double known
+            ? Math.Max(0, known)
+            : Math.Max(0, (now - session.StartedUtc).TotalMilliseconds);
+        var width = duration * scale;
+        if (duration > 0 && width < 1)
+        {
+            width = 1;
+        }
+
+        var style = kind == RowKind.Estimated ? SegmentStyle.Hatched : SegmentStyle.Plain;
+        segments.Add(new Segment(style, null, LabelWidth + (start * scale), width, duration));
     }
 
     private static RowKind KindOf(SessionSnapshot session)

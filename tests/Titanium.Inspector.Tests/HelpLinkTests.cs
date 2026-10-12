@@ -36,14 +36,16 @@ public class HelpLinkTests
 
         vm.OpenReportIssueCommand.Execute(null);
         Assert.AreEqual(InspectorLinks.ReportIssue, launcher.Last);
-        Assert.AreEqual(InspectorLinks.Website, new Uri(string.Concat("https://", "titaniumproxy.com")));
+        Assert.AreEqual("https://titaniumproxy.com/", InspectorLinks.Website.AbsoluteUri);
     }
 
     [TestMethod]
     public async Task WindowLauncher_WithoutAWindow_DoesNotThrow()
     {
         var launcher = new WindowUriLauncher(() => (TopLevel?)null);
-        await launcher.LaunchAsync(InspectorLinks.Documentation);
+        var launch = launcher.LaunchAsync(InspectorLinks.Documentation);
+        await launch;
+        Assert.IsTrue(launch.IsCompletedSuccessfully);
     }
 
     private sealed class RecordingUriLauncher : IExternalUriLauncher

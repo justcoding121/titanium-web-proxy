@@ -124,7 +124,7 @@ public class StatusContrastTests
         hex = hex.TrimStart('#');
         double Channel(int index)
         {
-            var v = int.Parse(hex.Substring(index, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture) / 255d;
+            var v = int.Parse(hex.AsSpan(index, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture) / 255d;
             return v <= 0.03928 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4);
         }
 
