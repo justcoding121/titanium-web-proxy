@@ -50,6 +50,7 @@ public class MenuActionsHeadlessTests
                     Host = "menu.test",
                     Url = "http://menu.test/item",
                     Protocol = "HTTP/1.1",
+                    ProcessName = "chrome",
                 });
                 fx.ViewModel.SeedSession(new SessionSnapshot
                 {
@@ -59,8 +60,9 @@ public class MenuActionsHeadlessTests
                     Host = "menu.test",
                     Url = "http://menu.test/other",
                     Protocol = "HTTP/1.1",
+                    ProcessName = "chrome",
                 });
-                fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
+                SelectOneSession(fx, fx.ViewModel.Sessions[0]);
             });
 
             // File
@@ -240,7 +242,8 @@ public class MenuActionsHeadlessTests
                     RequestBodyCapture = BodyCaptureState.Complete,
                     ResponseBodyCapture = BodyCaptureState.Complete,
                 });
-                fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[^1];
+                var bodySession = fx.ViewModel.Sessions[^1];
+                SelectOneSession(fx, bodySession);
                 OpenSessionsContextMenu(fx);
                 fx.PathPicker.SavePath = Path.Combine(Path.GetTempPath(), "twp-body-" + Guid.NewGuid().ToString("N") + ".bin");
                 fx.Robot.Click("CtxSaveRequestBody");
@@ -342,7 +345,7 @@ public class MenuActionsHeadlessTests
                     });
                 }
 
-                fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
+                SelectOneSession(fx, fx.ViewModel.Sessions[0]);
                 OpenSessionsContextMenu(fx);
                 fx.Robot.Click("CtxCopyUrl");
                 OpenSessionsContextMenu(fx);
@@ -360,13 +363,13 @@ public class MenuActionsHeadlessTests
                 StringAssert.Contains(fx.ViewModel.SearchQuery, $"-host:{hideHost}");
                 // Hiding the only row empties the list, so clear the filters and reselect between steps.
                 fx.ViewModel.SearchQuery = "";
-                fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
+                SelectOneSession(fx, fx.ViewModel.Sessions[0]);
                 OpenSessionsContextMenu(fx);
                 fx.Robot.Click("CtxHideProcess");
                 if (!string.IsNullOrWhiteSpace(hideProcess))
                     StringAssert.Contains(fx.ViewModel.SearchQuery, "-process:" + hideProcess.Split(' ')[0]);
                 fx.ViewModel.SearchQuery = "";
-                fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
+                SelectOneSession(fx, fx.ViewModel.Sessions[0]);
                 OpenSessionsContextMenu(fx);
                 fx.Robot.Click("CtxLoadComposer");
                 Assert.AreEqual(0, fx.ViewModel.SelectedToolsTabIndex);
@@ -376,7 +379,7 @@ public class MenuActionsHeadlessTests
 
             await fx.DispatchAsync(() =>
             {
-                fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
+                SelectOneSession(fx, fx.ViewModel.Sessions[0]);
                 Dispatcher.UIThread.Post(() => TryClickInOtherWindows(fx, "ExcludeHostCancel"), DispatcherPriority.Input);
                 OpenSessionsContextMenu(fx);
                 fx.Robot.Click("CtxExcludeHost");
@@ -396,7 +399,7 @@ public class MenuActionsHeadlessTests
             fx.PathPicker.SavePath = harPath;
             await fx.DispatchAsync(() =>
             {
-                fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
+                SelectOneSession(fx, fx.ViewModel.Sessions[0]);
                 OpenSessionsContextMenu(fx);
                 fx.Robot.Click("CtxExportSelectedHar");
             });
@@ -404,7 +407,7 @@ public class MenuActionsHeadlessTests
 
             await fx.DispatchAsync(() =>
             {
-                fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
+                SelectOneSession(fx, fx.ViewModel.Sessions[0]);
                 var before = fx.ViewModel.Sessions.Count;
                 OpenSessionsContextMenu(fx);
                 fx.Robot.Click("CtxRemoveSelected");
@@ -452,6 +455,12 @@ public class MenuActionsHeadlessTests
         Assert.IsFalse(
             HasOtherWindows(fx),
             $"Dialog still open after '{menuId}' (button '{dialogButtonId}'). Status={fx.ViewModel.StatusText}");
+    }
+
+    private static void SelectOneSession(InspectorHeadlessFixture fx, SessionSnapshot session)
+    {
+        fx.ViewModel.SelectedSession = session;
+        fx.ViewModel.SetSelectedSessions([session]);
     }
 
     private static void OpenSessionsContextMenu(InspectorHeadlessFixture fx)

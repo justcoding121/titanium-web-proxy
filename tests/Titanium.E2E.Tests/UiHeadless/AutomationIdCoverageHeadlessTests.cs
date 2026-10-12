@@ -256,14 +256,19 @@ public class AutomationIdCoverageHeadlessTests
         await fx.StartAsync();
         await fx.DispatchAsync(() =>
         {
-            fx.ViewModel.Sessions.Add(new SessionSnapshot
+            var snap = new SessionSnapshot
             {
                 Id = 1,
-                Method = "GET",
+                Method = "POST",
                 StatusCode = 200,
                 Host = "id.test",
-                Url = "wss://id.test/ws",
+                Url = "https://id.test/api",
                 Protocol = "HTTP/1.1",
+                ProcessName = "chrome",
+                RequestBodyText = "req",
+                ResponseBodyText = "res",
+                RequestBodyCapture = BodyCaptureState.Complete,
+                ResponseBodyCapture = BodyCaptureState.Complete,
                 IsWebSocket = true,
                 IsServerSentEvents = true,
                 SseEvents =
@@ -272,9 +277,12 @@ public class AutomationIdCoverageHeadlessTests
                 ],
                 IsGrpc = true,
                 ProtobufDecodedText = "[{\"field\":1}]",
-            });
-            fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
-            fx.ViewModel.SearchQuery = "-host:id.test";
+            };
+            fx.ViewModel.SeedSession(snap);
+            // Single-select so Save/Copy/Filter submenu children (IsVisible-bound) stay in the tree.
+            fx.ViewModel.SelectedSession = snap;
+            fx.ViewModel.SetSelectedSessions([snap]);
+            fx.ViewModel.SearchQuery = "-host:other.test";
             fx.Robot.Click("MenuToolsComposer");
 
             // ContextMenu items are not in the visual tree until opened.
