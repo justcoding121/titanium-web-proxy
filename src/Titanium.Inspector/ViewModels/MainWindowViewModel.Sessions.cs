@@ -608,11 +608,18 @@ public sealed partial class MainWindowViewModel
 
         SessionAnnotationsChanged?.Invoke(this, EventArgs.Empty);
         ApplyFilter();
-        StatusText = mark == SessionMark.None
-            ? selection.Count == 1 ? "Mark cleared" : $"Mark cleared on {selection.Count} sessions"
-            : selection.Count == 1
-                ? $"Marked {mark.ToString().ToLowerInvariant()}"
-                : $"Marked {mark.ToString().ToLowerInvariant()} on {selection.Count} sessions";
+        StatusText = BuildMarkStatus(mark, selection.Count);
+    }
+
+    private static string BuildMarkStatus(SessionMark mark, int count)
+    {
+        if (mark == SessionMark.None)
+        {
+            return count == 1 ? "Mark cleared" : $"Mark cleared on {count} sessions";
+        }
+
+        var name = mark.ToString().ToLowerInvariant();
+        return count == 1 ? $"Marked {name}" : $"Marked {name} on {count} sessions";
     }
 
     private async Task CommentAsync()
@@ -644,11 +651,19 @@ public sealed partial class MainWindowViewModel
 
         SessionAnnotationsChanged?.Invoke(this, EventArgs.Empty);
         ApplyFilter();
-        StatusText = string.IsNullOrEmpty(text)
-            ? selection.Count == 1 ? "Comment cleared" : $"Comment cleared on {selection.Count} sessions"
-            : selection.Count == 1
-                ? "Comment saved — shown in the Comment column and on row hover"
-                : $"Comment saved on {selection.Count} sessions — Comment column shown";
+        StatusText = BuildCommentStatus(text, selection.Count);
+    }
+
+    private static string BuildCommentStatus(string text, int count)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return count == 1 ? "Comment cleared" : $"Comment cleared on {count} sessions";
+        }
+
+        return count == 1
+            ? "Comment saved — shown in the Comment column and on row hover"
+            : $"Comment saved on {count} sessions — Comment column shown";
     }
     private Task FilterByProcessAsync()
     {
