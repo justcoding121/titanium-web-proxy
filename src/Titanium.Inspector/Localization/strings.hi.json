@@ -146,7 +146,7 @@
   "exclude.action": "बाहर रखें",
   "exclude.help": "यह होस्ट सत्र सूची में दिखाई देता रहेगा। Inspector इसके HTTPS को पढ़ने का प्रयास नहीं करेगा।",
   "window.logging": "लॉगिंग",
-  "logging.help": "Record what the proxy is doing, for troubleshooting. Save applies your choices right away.",
+  "logging.help": "Logs always feed Recent logs for troubleshooting. Optionally also write them to files. Save applies your choices right away.",
   "logging.enable": "Turn on logging",
   "logging.writeFile": "Save logs to files",
   "logging.detail": "कितना विवरण",
@@ -443,7 +443,7 @@
   "comment.title": "टिप्पणी",
   "comment.save": "सहेजें",
   "menu.col.comment": "टिप्पणी",
-  "menu.keepOnly": "Keep only selected…",
+  "menu.keepOnly": "Keep only selected sessions…",
   "menu.removeMatching": "Remove sessions matching filters…",
   "cleanup.removeTitle": "सत्र हटाएँ",
   "cleanup.removeConfirm": "{0} सत्र हटाएँ, जिनमें से {1} वर्तमान फ़िल्टर से छिपे हैं?",
@@ -481,5 +481,7 @@
   "runLog.help": "Shows the latest log lines kept in memory. Not a search of the log files.",
   "runLog.openLogging": "Logging settings…",
   "menu.rootCa": "Root certificate",
-  "menu.removeMatchingTip": "Removes every session that matches the current search and filters, including ones hidden by a Hide chip. You will be asked first."
+  "menu.removeMatchingTip": "Requires an active search or filter. Removes every session that matches, including ones hidden by a Hide chip. You will be asked first.",
+  "logging.numbersInvalid": "Enter whole numbers in the allowed ranges.",
+  "menu.removeMatchingNeedsFilter": "Set a search or filter first. With nothing filtered this would remove every session — use Clear sessions for that."
 }

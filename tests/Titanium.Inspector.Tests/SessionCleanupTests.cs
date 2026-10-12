@@ -38,23 +38,27 @@ public class SessionCleanupTests
     }
 
     [TestMethod]
-    public void RemoveMatching_UsesTheVisibleFilter_AndEmptyFilterRemovesAll()
+    public void RemoveMatching_UsesTheVisibleFilter_AndEmptyFilterRemovesNothing()
     {
         var (vm, dialogs, registry) = NewVm();
         vm.SeedSession(new SessionSnapshot { Id = 1, Url = "https://a/", StatusCode = 200 });
         vm.SeedSession(new SessionSnapshot { Id = 2, Url = "https://a/", StatusCode = 404 });
         vm.SearchQuery = "status:404";
         dialogs.RemoveSessionsResult = true;
+        Assert.IsTrue(vm.RemoveMatchingFilterCommand.CanExecute(null));
         vm.RemoveMatchingFilterCommand.Execute(null);
         Assert.AreEqual(1, dialogs.LastRemoveCount);
         Assert.AreEqual(0, dialogs.LastHiddenCount);
         Assert.IsNotNull(registry.TryGet(1));
         Assert.IsNull(registry.TryGet(2));
 
+        var calls = dialogs.RemoveSessionsCalls;
         vm.SearchQuery = "";
+        Assert.IsFalse(vm.CanRemoveMatchingFilter);
+        Assert.IsFalse(vm.RemoveMatchingFilterCommand.CanExecute(null));
         vm.RemoveMatchingFilterCommand.Execute(null);
-        Assert.AreEqual(1, dialogs.LastRemoveCount);
-        Assert.IsNull(registry.TryGet(1));
+        Assert.AreEqual(calls, dialogs.RemoveSessionsCalls);
+        Assert.IsNotNull(registry.TryGet(1));
     }
 
     [TestMethod]
@@ -108,6 +112,48 @@ public class SessionCleanupTests
 
         Assert.IsTrue(gone, path);
         Assert.IsNull(registry.TryGet(7));
+    }
+
+    [TestMethod]
+    public async Task Remove_WhileSpillPending_DoesNotRecreateHar()
+    {
+        var cache = Path.Combine(Path.GetTempPath(), "ti-clean-race-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(cache);
+        try
+        {
+            using var store = new SessionStore(
+                new SessionStoreOptions { SpillBodiesToDisk = true, MaxSessionsInMemory = 50 },
+                cache);
+
+            // Queue a spill then Remove immediately — before the writer drains — so the
+            // pending write must not recreate the deleted HAR.
+            store.Add(new SessionSnapshot
+            {
+                Id = 42,
+                Url = "https://race.test/",
+                StatusCode = 200,
+                DurationMs = 3,
+                ResponseBodyText = new string('x', 4096),
+            });
+            store.Remove([42L]);
+
+            await store.FlushDiskCleanupAsync(TimeSpan.FromSeconds(5));
+
+            Assert.IsNull(store.TryGet(42));
+            Assert.IsFalse(
+                Directory.EnumerateFiles(cache, "42.har", SearchOption.AllDirectories).Any(),
+                "pending spill must not recreate HAR after Remove");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(cache, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
     }
 
     private static (MainWindowViewModel Vm, ScriptedInspectorDialogs Dialogs, SessionRegistry Registry) NewVm()

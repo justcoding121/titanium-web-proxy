@@ -14,9 +14,9 @@ public partial class LoggingSettingsWindow : Window
     private readonly Action<InspectorSettings>? _applyLogging;
     private readonly Func<string?>? _currentFilePath;
     private bool _saved;
-    private decimal _lastFileSize = 50;
-    private decimal _lastRolled = 5;
-    private decimal _lastMemory = 2000;
+    private int _lastFileSize = 50;
+    private int _lastRolled = 5;
+    private int _lastMemory = 2000;
 
     public LoggingSettingsWindow() : this(SettingsService.Load(), null, null)
     {
@@ -34,10 +34,9 @@ public partial class LoggingSettingsWindow : Window
         LanguageService.AttachWindow(this);
         LevelCombo.ItemsSource = Levels;
         LevelCombo.SelectionChanged += (_, _) => UpdateLevelCost();
-        EnableLoggingCheck.IsCheckedChanged += (_, _) => UpdateEnabledState();
         WriteFileCheck.IsCheckedChanged += (_, _) => UpdateEnabledState();
-        FileSizeBox.ValueChanged += (_, _) => UpdateDiskUseHelp();
-        RolledFilesBox.ValueChanged += (_, _) => UpdateDiskUseHelp();
+        FileSizeBox.TextChanged += (_, _) => UpdateDiskUseHelp();
+        RolledFilesBox.TextChanged += (_, _) => UpdateDiskUseHelp();
         LoadFromSettings();
         SaveButton.Click += OnSave;
         CancelButton.Click += (_, _) => Close();
@@ -64,7 +63,6 @@ public partial class LoggingSettingsWindow : Window
     private void LoadFromSettings()
     {
         var s = _settings.Current;
-        EnableLoggingCheck.IsChecked = s.LoggingEnabled;
         WriteFileCheck.IsChecked = s.LoggingEnableFile;
         var level = Levels.FirstOrDefault(l =>
             string.Equals(l, s.LoggingMinimumLevel, StringComparison.OrdinalIgnoreCase)) ?? "Error";
@@ -73,9 +71,9 @@ public partial class LoggingSettingsWindow : Window
         _lastFileSize = Math.Clamp(s.LoggingMaxFileSizeMb, 1, 4096);
         _lastRolled = Math.Clamp(Math.Max(1, s.LoggingMaxRolledFiles), 1, 100);
         _lastMemory = Math.Clamp(s.LoggingMemoryLines, 100, 50_000);
-        FileSizeBox.Value = _lastFileSize;
-        RolledFilesBox.Value = _lastRolled;
-        MemoryLinesBox.Value = _lastMemory;
+        FileSizeBox.Text = _lastFileSize.ToString();
+        RolledFilesBox.Text = _lastRolled.ToString();
+        MemoryLinesBox.Text = _lastMemory.ToString();
         UpdateLevelCost();
         UpdateEnabledState();
         UpdateDiskUseHelp();
@@ -90,19 +88,18 @@ public partial class LoggingSettingsWindow : Window
 
     private void UpdateEnabledState()
     {
-        var loggingOn = EnableLoggingCheck.IsChecked == true;
-        WriteFileCheck.IsEnabled = loggingOn;
-        var filesOn = loggingOn && WriteFileCheck.IsChecked == true;
-        FileRows.IsEnabled = filesOn;
-        FileSizeBox.IsEnabled = filesOn;
-        RolledFilesBox.IsEnabled = filesOn;
+        var filesOn = WriteFileCheck.IsChecked == true;
+        // Hide file controls when off — greying NumericUpDown/TextBox looked broken in Fluent dark.
+        FileRows.IsVisible = filesOn;
+        FileSizeRow.IsVisible = filesOn;
+        KeepFilesRow.IsVisible = filesOn;
     }
 
     private void UpdateDiskUseHelp()
     {
-        var size = (int)(FileSizeBox.Value ?? _lastFileSize);
-        var keep = (int)(RolledFilesBox.Value ?? _lastRolled);
-        var totalMb = Math.Max(1, size) * (long)Math.Max(1, keep);
+        var size = ParseOr(_lastFileSize, FileSizeBox.Text, 1, 4096);
+        var keep = ParseOr(_lastRolled, RolledFilesBox.Text, 1, 100);
+        var totalMb = (long)size * keep;
         var amount = totalMb >= 1024
             ? $"{totalMb / 1024.0:0.##} GB"
             : $"{totalMb} MB";
@@ -154,18 +151,20 @@ public partial class LoggingSettingsWindow : Window
 
     private void OnSave(object? sender, RoutedEventArgs e)
     {
+        StatusText.Text = string.Empty;
+        if (!TryParseBox(FileSizeBox.Text, 1, 4096, out var fileMb)
+            || !TryParseBox(RolledFilesBox.Text, 1, 100, out var rolled)
+            || !TryParseBox(MemoryLinesBox.Text, 100, 50_000, out var memory))
+        {
+            StatusText.Text = LanguageService.Get("logging.numbersInvalid");
+            return;
+        }
+
         var s = _settings.Current;
-        s.LoggingEnabled = EnableLoggingCheck.IsChecked == true;
+        // Inspector always keeps the logger factory on so Recent logs keeps receiving lines.
+        s.LoggingEnabled = true;
         s.LoggingEnableFile = WriteFileCheck.IsChecked == true;
         s.LoggingMinimumLevel = LevelCombo.SelectedItem as string ?? "Error";
-
-        var fileMb = (int)(FileSizeBox.Value ?? _lastFileSize);
-        var rolled = (int)(RolledFilesBox.Value ?? _lastRolled);
-        var memory = (int)(MemoryLinesBox.Value ?? _lastMemory);
-        fileMb = Math.Clamp(fileMb, 1, 4096);
-        rolled = Math.Clamp(rolled, 1, 100);
-        memory = Math.Clamp(memory, 100, 50_000);
-
         s.LoggingMaxFileSizeMb = fileMb;
         s.LoggingMaxRolledFiles = rolled;
         s.LoggingMemoryLines = memory;
@@ -178,5 +177,26 @@ public partial class LoggingSettingsWindow : Window
         _applyLogging?.Invoke(s);
         _saved = true;
         Close();
+    }
+
+    private static int ParseOr(int fallback, string? text, int min, int max)
+    {
+        if (TryParseBox(text, min, max, out var value))
+        {
+            return value;
+        }
+
+        return fallback;
+    }
+
+    private static bool TryParseBox(string? text, int min, int max, out int value)
+    {
+        if (int.TryParse(text?.Trim(), out value) && value >= min && value <= max)
+        {
+            return true;
+        }
+
+        value = 0;
+        return false;
     }
 }

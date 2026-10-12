@@ -330,24 +330,25 @@
         <ColumnDefinition Width="{Binding SessionDetailsPaneWidth}" MinWidth="{Binding SessionDetailsPaneMinWidth}" />
         <ColumnDefinition Width="56" MinWidth="56" MaxWidth="56" />
       </Grid.ColumnDefinitions>
-      <StackPanel Grid.Row="0" Grid.ColumnSpan="4" Margin="8" Spacing="4"
+      <StackPanel Grid.Row="0" Grid.ColumnSpan="4" Margin="8" Spacing="8"
                   AutomationProperties.AutomationId="ToolbarPanel">
-        <!-- Search + Filters strip: wrap as one unit on narrow windows. -->
+        <!-- Search + Filters strip: outline-only group (no fill) so it matches the toolbar surface. -->
         <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarSearchFilters">
-          <TextBox x:Name="SearchBox" MinWidth="200" MaxWidth="480" Width="320" Margin="0,0,12,6"
+          <TextBox x:Name="SearchBox" MinWidth="200" MaxWidth="480" Width="320" Margin="0,0,12,0"
                    Watermark="{loc:Loc toolbar.searchWatermark}"
                    ToolTip.Tip="{loc:Loc toolbar.searchTip}"
                    Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
-          <Border Margin="0,0,12,6" Padding="8,4" CornerRadius="4"
+          <Border Margin="0,0,12,0" Padding="10,6" CornerRadius="6"
                   BorderThickness="1"
                   BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
-                  Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                  Background="Transparent"
                   AutomationProperties.AutomationId="ToolbarFilterGroup">
-            <StackPanel Orientation="Vertical" Spacing="2">
-              <TextBlock Text="{loc:Loc toolbar.filtersGroup}" Opacity="0.65" FontSize="11" Margin="0,0,0,2" />
+            <StackPanel Orientation="Vertical" Spacing="4">
+              <TextBlock Text="{loc:Loc toolbar.filtersGroup}" Opacity="0.65" FontSize="11" />
+              <!-- Bottom margin on each child keeps a clear gap when Status/Clear wraps to a new line. -->
               <WrapPanel Orientation="Horizontal">
                 <DropDownButton Content="{loc:Loc toolbar.status}"
-                        VerticalAlignment="Center" Margin="0,0,8,0"
+                        VerticalAlignment="Center" Margin="0,0,8,4"
                         ToolTip.Tip="{loc:Loc toolbar.statusTip}"
                         AutomationProperties.AutomationId="StatusFilterButton">
                   <DropDownButton.Flyout>
@@ -372,21 +373,21 @@
                   </DropDownButton.Flyout>
                 </DropDownButton>
                 <CheckBox Content="{loc:Loc toolbar.hideConnect}" IsChecked="{Binding HideTunnelsFilter}"
-                          VerticalAlignment="Center" Margin="0,0,8,0"
+                          VerticalAlignment="Center" Margin="0,0,8,4"
                           ToolTip.Tip="{loc:Loc toolbar.hideConnectTip}"
                           AutomationProperties.AutomationId="HideTunnelsFilterCheck" />
                 <CheckBox Content="{loc:Loc toolbar.hideImages}" IsChecked="{Binding HideImagesFilter}"
-                          VerticalAlignment="Center" Margin="0,0,8,0"
+                          VerticalAlignment="Center" Margin="0,0,8,4"
                           AutomationProperties.AutomationId="HideImagesFilterCheck" />
                 <CheckBox Content="{loc:Loc toolbar.errorsOnly}" IsChecked="{Binding ErrorsOnlyFilter}"
-                          VerticalAlignment="Center" Margin="0,0,8,0"
+                          VerticalAlignment="Center" Margin="0,0,8,4"
                           AutomationProperties.AutomationId="ErrorsOnlyFilterCheck" />
                 <Button Content="{loc:Loc toolbar.filters}" Command="{Binding OpenFiltersCommand}"
-                        VerticalAlignment="Center" Margin="0,0,8,0"
+                        VerticalAlignment="Center" Margin="0,0,8,4"
                         ToolTip.Tip="{loc:Loc toolbar.filtersTip}"
                         AutomationProperties.AutomationId="OpenFiltersButton" />
                 <Button Content="{loc:Loc toolbar.clearFilters}" Command="{Binding ClearFiltersCommand}"
-                        VerticalAlignment="Center"
+                        VerticalAlignment="Center" Margin="0,0,0,4"
                         IsEnabled="{Binding HasActiveSearch}"
                         AutomationProperties.AutomationId="ClearFiltersButton" />
               </WrapPanel>

@@ -146,7 +146,7 @@
   "exclude.action": "Undanta",
   "exclude.help": "Den här värden visas fortfarande i sessionslistan. Inspector försöker inte läsa dess HTTPS.",
   "window.logging": "Loggning",
-  "logging.help": "Record what the proxy is doing, for troubleshooting. Save applies your choices right away.",
+  "logging.help": "Logs always feed Recent logs for troubleshooting. Optionally also write them to files. Save applies your choices right away.",
   "logging.enable": "Turn on logging",
   "logging.writeFile": "Save logs to files",
   "logging.detail": "Hur mycket detaljer",
@@ -443,7 +443,7 @@
   "comment.title": "Kommentar",
   "comment.save": "Spara",
   "menu.col.comment": "Kommentar",
-  "menu.keepOnly": "Keep only selected…",
+  "menu.keepOnly": "Keep only selected sessions…",
   "menu.removeMatching": "Remove sessions matching filters…",
   "cleanup.removeTitle": "Ta bort sessioner",
   "cleanup.removeConfirm": "Ta bort {0} sessioner, varav {1} döljs av det aktuella filtret?",
@@ -481,5 +481,7 @@
   "runLog.help": "Shows the latest log lines kept in memory. Not a search of the log files.",
   "runLog.openLogging": "Logging settings…",
   "menu.rootCa": "Root certificate",
-  "menu.removeMatchingTip": "Removes every session that matches the current search and filters, including ones hidden by a Hide chip. You will be asked first."
+  "menu.removeMatchingTip": "Requires an active search or filter. Removes every session that matches, including ones hidden by a Hide chip. You will be asked first.",
+  "logging.numbersInvalid": "Enter whole numbers in the allowed ranges.",
+  "menu.removeMatchingNeedsFilter": "Set a search or filter first. With nothing filtered this would remove every session — use Clear sessions for that."
 }

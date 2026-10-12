@@ -285,7 +285,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         RemoveSelectedSessionsCommand = _removeSelectedSessionsCommand;
         _keepOnlySelectedCommand = Cmd(KeepOnlySelectedAsync, () => CanKeepOnlySelected);
         KeepOnlySelectedCommand = _keepOnlySelectedCommand;
-        _removeMatchingCommand = Cmd(RemoveMatchingFilterAsync, () => Sessions.Count > 0);
+        _removeMatchingCommand = Cmd(RemoveMatchingFilterAsync, () => CanRemoveMatchingFilter);
         RemoveMatchingFilterCommand = _removeMatchingCommand;
         ToggleSystemProxyCommand = Cmd(ToggleSystemProxyAsync);
         InstallCaCommand = Cmd(InstallCaAsync);
@@ -2572,12 +2572,19 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
                 NotifyQuickFilterProperties();
                 RefreshHiddenChips();
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasActiveSearch)));
+                _removeMatchingCommand.RaiseCanExecuteChanged();
             }
         }
     }
 
     /// <summary>True when the search box has any filter text (enables Clear filters).</summary>
     public bool HasActiveSearch => !string.IsNullOrWhiteSpace(_searchQuery);
+
+    /// <summary>
+    /// Remove-matching needs a real filter. An empty search matches every row, which would
+    /// wipe the list (use Clear sessions for that).
+    /// </summary>
+    public bool CanRemoveMatchingFilter => HasActiveSearch && Sessions.Count > 0;
 
     /// <summary>Quick filter: exclude CONNECT/tunnel rows (<c>hide:tunnel</c>).</summary>
     public bool HideTunnelsFilter

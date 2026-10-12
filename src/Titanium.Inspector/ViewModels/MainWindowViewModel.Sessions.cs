@@ -130,6 +130,13 @@ public sealed partial class MainWindowViewModel
 
     private async Task RemoveMatchingFilterAsync()
     {
+        // Empty search matches every session — refuse so this cannot act as a silent Clear all.
+        if (!HasActiveSearch)
+        {
+            StatusText = LanguageService.Get("menu.removeMatchingNeedsFilter");
+            return;
+        }
+
         var remove = Sessions.Select(s => s.Id).ToList();
         if (remove.Count == 0)
         {

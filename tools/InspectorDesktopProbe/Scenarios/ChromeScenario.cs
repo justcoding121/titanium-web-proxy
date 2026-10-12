@@ -456,7 +456,6 @@ public static class ChromeScenario
                 var win = ProbeUiRobot.FindWindowById("LoggingSettingsWindow")
                           ?? throw new InvalidOperationException("LoggingSettingsWindow missing");
                 var robot = new ProbeUiRobot(win);
-                robot.SetCheck("LoggingEnabled", true);
                 robot.SetCheck("LoggingWriteFile", true);
                 if (robot.TryFind<ComboBox>("LoggingLevel", out var combo) && combo is not null && combo.ItemCount > 0)
                     combo.SelectedIndex = Math.Min(1, combo.ItemCount - 1);

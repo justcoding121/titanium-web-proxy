@@ -508,7 +508,9 @@ public sealed class InterceptionService : IDisposable
         }
 
         var s = settings ?? new InspectorSettings();
-        _proxy.Logging.Enabled = s.LoggingEnabled;
+        // Inspector always leaves the logger factory on so Recent logs keeps receiving lines.
+        // File output is gated separately via LoggingEnableFile / InspectorFileLogProvider.
+        _proxy.Logging.Enabled = true;
         if (Enum.TryParse<LogLevel>(s.LoggingMinimumLevel, ignoreCase: true, out var level))
         {
             _proxy.Logging.MinimumLevel = level;
