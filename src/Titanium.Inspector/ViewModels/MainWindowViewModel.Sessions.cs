@@ -117,16 +117,8 @@ public sealed partial class MainWindowViewModel
         }
 
         var visible = Sessions.Select(s => s.Id).ToHashSet();
-        var remove = new List<long>();
-        var hidden = 0;
-        foreach (var session in _all.Where(s => !keep.Contains(s.Id)))
-        {
-            remove.Add(session.Id);
-            if (!visible.Contains(session.Id))
-            {
-                hidden++;
-            }
-        }
+        var remove = _all.Where(s => !keep.Contains(s.Id)).Select(s => s.Id).ToList();
+        var hidden = remove.Count(id => !visible.Contains(id));
 
         if (!await _dialogs.ConfirmRemoveSessionsAsync(TryGetMainWindow(), remove.Count, hidden).ConfigureAwait(true))
         {
