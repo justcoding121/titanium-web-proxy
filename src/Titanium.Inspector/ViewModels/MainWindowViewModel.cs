@@ -1262,18 +1262,30 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             () => _interception.CurrentLogFilePath));
         if (saved)
         {
-            var folder = InspectorLogFiles.ResolveFolder(_settings.Current.LoggingFilePath);
-            var current = _interception.CurrentLogFilePath;
-            StatusText = _settings.Current.LoggingEnableFile
-                ? current is not null
-                    ? $"Logging saved: {folder} (current: {Path.GetFileName(current)})"
-                    : $"Logging saved: {folder}"
-                : "Logging saved (file logging off)";
+            StatusText = BuildLoggingSavedStatus(
+                _settings.Current.LoggingEnableFile,
+                InspectorLogFiles.ResolveFolder(_settings.Current.LoggingFilePath),
+                _interception.CurrentLogFilePath);
         }
         else
         {
             StatusText = "Logging settings cancelled";
         }
+    }
+
+    private static string BuildLoggingSavedStatus(bool fileEnabled, string folder, string? currentFile)
+    {
+        if (!fileEnabled)
+        {
+            return "Logging saved (file logging off)";
+        }
+
+        if (currentFile is not null)
+        {
+            return $"Logging saved: {folder} (current: {Path.GetFileName(currentFile)})";
+        }
+
+        return $"Logging saved: {folder}";
     }
 
     private async Task OpenExcludedHostsAsync()

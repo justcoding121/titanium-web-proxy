@@ -81,51 +81,60 @@ public sealed class TimelineChart : Control
 
         foreach (var row in model.Rows)
         {
-            var selected = _selectedIds.Contains(row.Id);
-            var hovered = _hoveredId == row.Id;
-            if (selected)
+            DrawRow(context, row);
+        }
+    }
+
+    private void DrawRow(DrawingContext context, TimelineLayout.Row row)
+    {
+        var selected = _selectedIds.Contains(row.Id);
+        if (selected)
+        {
+            context.FillRectangle(SelectedBand, new Rect(0, row.Y, Bounds.Width, TimelineLayout.RowHeight));
+        }
+        else if (_hoveredId == row.Id)
+        {
+            context.FillRectangle(HoverBand, new Rect(0, row.Y, Bounds.Width, TimelineLayout.RowHeight));
+        }
+
+        var typeface = selected
+            ? new Typeface(Typeface.Default.FontFamily, FontStyle.Normal, FontWeight.Bold)
+            : Typeface.Default;
+        var label = new FormattedText(
+            row.Label,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            11,
+            _label);
+        using (context.PushClip(new Rect(0, row.Y, TimelineLayout.LabelWidth - 4, TimelineLayout.RowHeight)))
+        {
+            context.DrawText(label, new Point(0, row.Y + 1));
+        }
+
+        DrawSegments(context, row);
+    }
+
+    private void DrawSegments(DrawingContext context, TimelineLayout.Row row)
+    {
+        foreach (var segment in row.Segments)
+        {
+            if (segment.Width <= 0)
             {
-                context.FillRectangle(SelectedBand, new Rect(0, row.Y, Bounds.Width, TimelineLayout.RowHeight));
-            }
-            else if (hovered)
-            {
-                context.FillRectangle(HoverBand, new Rect(0, row.Y, Bounds.Width, TimelineLayout.RowHeight));
+                continue;
             }
 
-            var typeface = selected
-                ? new Typeface(Typeface.Default.FontFamily, FontStyle.Normal, FontWeight.Bold)
-                : Typeface.Default;
-            var label = new FormattedText(
-                row.Label,
-                CultureInfo.CurrentCulture,
-                FlowDirection.LeftToRight,
-                typeface,
-                11,
-                _label);
-            using (context.PushClip(new Rect(0, row.Y, TimelineLayout.LabelWidth - 4, TimelineLayout.RowHeight)))
+            var rect = new Rect(segment.X, row.Y, segment.Width, TimelineLayout.RowHeight);
+            if (segment.Style == TimelineLayout.SegmentStyle.Hatched)
             {
-                context.DrawText(label, new Point(0, row.Y + 1));
+                DrawHatched(context, rect);
+                continue;
             }
 
-            foreach (var segment in row.Segments)
-            {
-                if (segment.Width <= 0)
-                {
-                    continue;
-                }
-
-                var rect = new Rect(segment.X, row.Y, segment.Width, TimelineLayout.RowHeight);
-                if (segment.Style == TimelineLayout.SegmentStyle.Hatched)
-                {
-                    DrawHatched(context, rect);
-                    continue;
-                }
-
-                var brush = segment.Phase is SessionStatistics.Phase phase
-                    ? _phases[(int)phase % _phases.Length]
-                    : _plain;
-                context.FillRectangle(brush, rect);
-            }
+            var brush = segment.Phase is SessionStatistics.Phase phase
+                ? _phases[(int)phase % _phases.Length]
+                : _plain;
+            context.FillRectangle(brush, rect);
         }
     }
 

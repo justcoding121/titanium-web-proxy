@@ -83,7 +83,7 @@ public sealed class InspectorFileLogProvider : ILoggerProvider
         _channel.Writer.TryComplete();
         try
         {
-            _writerTask.Wait(TimeSpan.FromSeconds(2));
+            _writerTask.Wait(TimeSpan.FromSeconds(2), CancellationToken.None);
         }
         catch
         {

@@ -14,6 +14,12 @@ namespace Titanium.E2E.Tests.UiHeadless;
 [TestClass]
 public class MenuActionsHeadlessTests
 {
+    private static readonly string[] RootCertificateMenuIds =
+    [
+        "MenuInstallCa", "MenuRemoveCa", "MenuRotateCa", "MenuRemoveOldRootCas",
+        "MenuExportCa", "MenuTrustFirefoxCa", "MenuDeviceCa",
+    ];
+
     [TestMethod]
     [TestCategory("E2E-UI-Headless")]
     public async Task EveryMenuCommand_Click_ProducesExpectedSideEffect()
@@ -503,11 +509,7 @@ public class MenuActionsHeadlessTests
             Assert.IsFalse(fx.Robot.TryFind<Control>("MenuDecryptHttps", out _));
             Assert.IsFalse(fx.Robot.TryFind<Control>("MenuToggleSystemProxy", out _));
             var root = fx.Robot.Find<MenuItem>("MenuRootCertificate");
-            foreach (var id in new[]
-                     {
-                         "MenuInstallCa", "MenuRemoveCa", "MenuRotateCa", "MenuRemoveOldRootCas",
-                         "MenuExportCa", "MenuTrustFirefoxCa", "MenuDeviceCa",
-                     })
+            foreach (var id in RootCertificateMenuIds)
             {
                 var item = fx.Robot.Find<MenuItem>(id);
                 Assert.IsTrue(

@@ -26,7 +26,7 @@ public class InspectorFileLogProviderTests
 
             for (var i = 0; i < 40; i++)
             {
-                logger.Log(LogLevel.Information, 0, "pad-" + i + "-xxxxxxxxxxxxxxxx", null, static (s, _) => s);
+                logger.Log(LogLevel.Information, 0, i, null, static (s, _) => "pad-" + s + "-xxxxxxxxxxxxxxxx");
             }
 
             await WaitUntil(() =>

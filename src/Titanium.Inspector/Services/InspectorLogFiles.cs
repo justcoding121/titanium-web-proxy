@@ -43,13 +43,16 @@ public static class InspectorLogFiles
         }
 
         var stem = Path.GetFileNameWithoutExtension(baseName);
-        for (var i = 2; ; i++)
+        var i = 2;
+        while (true)
         {
             candidate = Path.Combine(folder, $"{stem}_{i}.log");
             if (!File.Exists(candidate))
             {
                 return candidate;
             }
+
+            i++;
         }
     }
 
@@ -65,24 +68,49 @@ public static class InspectorLogFiles
             return;
         }
 
-        string? currentFull = null;
-        if (!string.IsNullOrWhiteSpace(currentFile))
+        var currentFull = TryGetFullPath(currentFile);
+        var files = CollectInspectorLogFiles(folder);
+        files.Sort(static (a, b) => b.LastWriteTimeUtc.CompareTo(a.LastWriteTimeUtc));
+        var kept = 0;
+        foreach (var file in files)
         {
-            try
+            if (!TryGetFileFullName(file, out var full))
             {
-                currentFull = Path.GetFullPath(currentFile);
+                continue;
             }
-            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+
+            if (IsProtectedOrWithinKeep(full, currentFull, keep, ref kept))
             {
-                currentFull = null;
+                continue;
             }
+
+            TryDelete(file);
+        }
+    }
+
+    private static string? TryGetFullPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
         }
 
+        try
+        {
+            return Path.GetFullPath(path);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+    }
+
+    private static List<FileInfo> CollectInspectorLogFiles(string folder)
+    {
         var files = new List<FileInfo>();
         foreach (var path in Directory.EnumerateFiles(folder))
         {
-            var name = Path.GetFileName(path);
-            if (!IsInspectorLogFileName(name))
+            if (!IsInspectorLogFileName(Path.GetFileName(path)))
             {
                 continue;
             }
@@ -101,45 +129,58 @@ public static class InspectorLogFiles
             }
         }
 
-        files.Sort(static (a, b) => b.LastWriteTimeUtc.CompareTo(a.LastWriteTimeUtc));
-        var kept = 0;
-        foreach (var file in files)
+        return files;
+    }
+
+    private static bool TryGetFileFullName(FileInfo file, out string full)
+    {
+        try
         {
-            string full;
-            try
-            {
-                full = file.FullName;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                continue;
-            }
+            full = file.FullName;
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            full = "";
+            return false;
+        }
+    }
 
-            if (currentFull is not null
-                && string.Equals(full, currentFull, StringComparison.OrdinalIgnoreCase))
-            {
-                kept++;
-                continue;
-            }
+    private static bool IsProtectedOrWithinKeep(
+        string full,
+        string? currentFull,
+        int keep,
+        ref int kept)
+    {
+        if (currentFull is not null
+            && string.Equals(full, currentFull, StringComparison.OrdinalIgnoreCase))
+        {
+            kept++;
+            return true;
+        }
 
-            if (kept < keep)
-            {
-                kept++;
-                continue;
-            }
+        if (kept < keep)
+        {
+            kept++;
+            return true;
+        }
 
-            try
-            {
-                file.Delete();
-            }
-            catch (IOException)
-            {
-                // best effort
-            }
-            catch (UnauthorizedAccessException)
-            {
-                // best effort
-            }
+        return false;
+    }
+
+    private static void TryDelete(FileInfo file)
+    {
+        try
+        {
+            file.Delete();
+        }
+        catch (IOException)
+        {
+            // best effort
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // best effort
         }
     }
 

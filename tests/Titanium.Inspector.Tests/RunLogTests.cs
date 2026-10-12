@@ -10,18 +10,22 @@ namespace Titanium.Inspector.Tests;
 [TestClass]
 public class RunLogTests
 {
+    private static readonly string[] RingWords = ["one", "two", "three", "four", "five"];
+    private static readonly string[] RingTailMessages = ["three", "four", "five"];
+    private static readonly string[] RebuildMessages = ["kept", "still"];
+
     [TestMethod]
     public async Task Ring_KeepsOrder_AndDropsTheOldest()
     {
         using var ring = new RunLogRing(3);
         var logger = ring.CreateLogger("test");
-        foreach (var word in new[] { "one", "two", "three", "four", "five" })
+        foreach (var word in RingWords)
         {
             logger.Log(LogLevel.Error, 0, word, null, static (state, _) => state);
         }
 
         var lines = await WaitFor(ring, 3);
-        CollectionAssert.AreEqual(new[] { "three", "four", "five" }, lines.Select(e => e.Message).ToArray());
+        CollectionAssert.AreEqual(RingTailMessages, lines.Select(e => e.Message).ToArray());
         Assert.AreEqual(LogLevel.Error, lines[0].Level);
         Assert.AreEqual("test", lines[0].Category);
     }
@@ -41,7 +45,7 @@ public class RunLogTests
         proxy.Logger.Log(LogLevel.Error, 0, "still", null, static (state, _) => state);
 
         var lines = await WaitFor(ring, 2);
-        CollectionAssert.AreEqual(new[] { "kept", "still" }, lines.Select(e => e.Message).ToArray());
+        CollectionAssert.AreEqual(RebuildMessages, lines.Select(e => e.Message).ToArray());
     }
 
     [TestMethod]

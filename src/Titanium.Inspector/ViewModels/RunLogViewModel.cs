@@ -106,9 +106,7 @@ public sealed class RunLogViewModel : INotifyPropertyChanged
         string? level,
         string? filter)
     {
-        var selected = string.IsNullOrWhiteSpace(level) || level == AllLevels
-            ? (LogLevel?)null
-            : Enum.TryParse<LogLevel>(level, ignoreCase: true, out var parsed) ? parsed : null;
+        var selected = ParseLevelFilter(level);
         var needle = string.IsNullOrWhiteSpace(filter) ? null : filter.Trim();
         if (selected is null && needle is null)
         {
@@ -123,21 +121,33 @@ public sealed class RunLogViewModel : INotifyPropertyChanged
                 continue;
             }
 
-            if (needle is not null)
+            if (needle is not null && !MatchesNeedle(entry, needle))
             {
-                var token = RunLogFormat.LevelToToken(entry.Level);
-                if (token.IndexOf(needle, StringComparison.OrdinalIgnoreCase) < 0
-                    && entry.Category.IndexOf(needle, StringComparison.OrdinalIgnoreCase) < 0
-                    && entry.Message.IndexOf(needle, StringComparison.OrdinalIgnoreCase) < 0)
-                {
-                    continue;
-                }
+                continue;
             }
 
             kept.Add(entry);
         }
 
         return kept;
+    }
+
+    private static LogLevel? ParseLevelFilter(string? level)
+    {
+        if (string.IsNullOrWhiteSpace(level) || level == AllLevels)
+        {
+            return null;
+        }
+
+        return Enum.TryParse<LogLevel>(level, ignoreCase: true, out var parsed) ? parsed : null;
+    }
+
+    private static bool MatchesNeedle(RunLogEntry entry, string needle)
+    {
+        var token = RunLogFormat.LevelToToken(entry.Level);
+        return token.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0
+               || entry.Category.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0
+               || entry.Message.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     private void Publish(IReadOnlyList<RunLogEntry> entries)
