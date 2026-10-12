@@ -334,7 +334,8 @@
                   AutomationProperties.AutomationId="ToolbarPanel">
         <!-- Search + Filters strip: outline-only group (no fill) so it matches the toolbar surface. -->
         <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarSearchFilters">
-          <TextBox x:Name="SearchBox" MinWidth="200" MaxWidth="480" Width="320" Margin="0,0,12,0"
+          <!-- Bottom margin keeps a gap when the Filters strip wraps under the search box. -->
+          <TextBox x:Name="SearchBox" MinWidth="200" MaxWidth="480" Width="320" Margin="0,0,12,8"
                    Watermark="{loc:Loc toolbar.searchWatermark}"
                    ToolTip.Tip="{loc:Loc toolbar.searchTip}"
                    Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
