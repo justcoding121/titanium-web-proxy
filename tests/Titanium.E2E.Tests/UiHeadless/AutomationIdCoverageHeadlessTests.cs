@@ -37,15 +37,15 @@ public class AutomationIdCoverageHeadlessTests
         "CtxRemoveMatching",
         "AutoStartCaptureCheck",
         "AutoSystemProxyCheck",
-        "MenuDecryptHttps",
         "MenuDisableCaching",
         "MenuForceUncompressed",
-        "MenuToggleSystemProxy",
         "MenuProxyLocalhost",
         "MenuLoopbackExempt",
+        "MenuRootCertificate",
         "MenuInstallCa",
         "MenuRemoveCa",
         "MenuRotateCa",
+        "MenuRemoveOldRootCas",
         "MenuExportCa",
         "MenuTrustFirefoxCa",
         "MenuDeviceCa",
@@ -94,12 +94,14 @@ public class AutomationIdCoverageHeadlessTests
         "MenuKeyboardShortcuts",
         "MenuAbout",
         "SearchBox",
+        "ToolbarFilterGroup",
         "OpenFiltersButton",
         "SearchHideChips",
         "HideTunnelsFilterCheck",
         "HideImagesFilterCheck",
         "ErrorsOnlyFilterCheck",
         "ClearFiltersButton",
+        "StatusFilterButton",
         "ToolbarBindAddress",
         "ToolbarBindPort",
         "ToggleInterceptButton",
@@ -127,7 +129,6 @@ public class AutomationIdCoverageHeadlessTests
         "CtxMark",
         "CtxComment",
         "CtxFindRelated",
-        "StatusFilterButton",
         "CtxHideHost",
         "CtxExcludeHost",
         "CtxFilterByProcess",
@@ -335,7 +336,7 @@ public class AutomationIdCoverageHeadlessTests
             Assert.IsTrue(fx.Interception.IsRunning, fx.ViewModel.StatusText);
             fx.Robot.SetCheck("SystemProxyCheck", true);
             Assert.IsTrue(fx.ViewModel.SystemProxy);
-            fx.Robot.SetCheck("MenuToggleSystemProxy", false);
+            fx.Robot.SetCheck("SystemProxyCheck", false);
             Assert.IsFalse(fx.ViewModel.SystemProxy);
         });
     }

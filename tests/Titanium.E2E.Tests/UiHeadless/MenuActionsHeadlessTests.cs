@@ -120,12 +120,12 @@ public class MenuActionsHeadlessTests
             await fx.DispatchAsync(() => fx.Robot.Click("MenuInstallCa"));
             await fx.WaitUntilAsync(() => fx.Interception.IsRootTrusted, TimeSpan.FromSeconds(10));
 
-            await fx.DispatchAsync(() => fx.Robot.Click("MenuDecryptHttps"));
+            await fx.DispatchAsync(() => fx.Robot.Click("DecryptHttpsCheck"));
             await fx.WaitUntilAsync(() => fx.ViewModel.DecryptHttps, TimeSpan.FromSeconds(10));
 
-            await fx.DispatchAsync(() => fx.Robot.Click("MenuToggleSystemProxy"));
+            await fx.DispatchAsync(() => fx.Robot.Click("SystemProxyCheck"));
             await fx.WaitUntilAsync(() => fx.ViewModel.SystemProxy, TimeSpan.FromSeconds(10));
-            await fx.DispatchAsync(() => fx.Robot.Click("MenuToggleSystemProxy"));
+            await fx.DispatchAsync(() => fx.Robot.Click("SystemProxyCheck"));
             await fx.WaitUntilAsync(() => !fx.ViewModel.SystemProxy, TimeSpan.FromSeconds(10));
 
             fx.PathPicker.SavePath = cerPath;
@@ -189,10 +189,15 @@ public class MenuActionsHeadlessTests
                 fx.Robot.SetCheck("HideImagesFilterCheck", hideImages);
 
                 var errorsOnly = fx.ViewModel.ErrorsOnlyFilter;
-                fx.Robot.SetCheck("ErrorsOnlyFilterCheck", !errorsOnly);
-                Assert.AreEqual(!errorsOnly, fx.ViewModel.ErrorsOnlyFilter);
-                fx.Robot.SetCheck("ErrorsOnlyFilterCheck", errorsOnly);
+                fx.Robot.SetCheck("ErrorsOnlyFilterCheck", true);
+                Assert.IsTrue(fx.ViewModel.ErrorsOnlyFilter);
+                Assert.IsTrue(fx.ViewModel.HasActiveSearch);
+                var clearFilters = fx.Robot.Find<Avalonia.Controls.Button>("ClearFiltersButton");
+                Assert.IsTrue(clearFilters.IsEnabled);
                 fx.Robot.Click("ClearFiltersButton");
+                Assert.IsFalse(fx.ViewModel.HasActiveSearch);
+                Assert.IsFalse(clearFilters.IsEnabled);
+                fx.Robot.SetCheck("ErrorsOnlyFilterCheck", errorsOnly);
 
                 var via = fx.ViewModel.AddViaHeader;
                 fx.Robot.Click("MenuAddViaHeader");
@@ -485,6 +490,46 @@ public class MenuActionsHeadlessTests
             if (seen.Add(window))
                 yield return window;
         }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Headless")]
+    public async Task CaptureMenu_DropsToolbarDuplicates_AndGroupsRootCertificate()
+    {
+        await using var fx = new InspectorHeadlessFixture();
+        await fx.StartAsync();
+        await fx.DispatchAsync(() =>
+        {
+            Assert.IsFalse(fx.Robot.TryFind<Control>("MenuDecryptHttps", out _));
+            Assert.IsFalse(fx.Robot.TryFind<Control>("MenuToggleSystemProxy", out _));
+            var root = fx.Robot.Find<MenuItem>("MenuRootCertificate");
+            foreach (var id in new[]
+                     {
+                         "MenuInstallCa", "MenuRemoveCa", "MenuRotateCa", "MenuRemoveOldRootCas",
+                         "MenuExportCa", "MenuTrustFirefoxCa", "MenuDeviceCa",
+                     })
+            {
+                var item = fx.Robot.Find<MenuItem>(id);
+                Assert.IsTrue(
+                    IsDescendantOf(item, root),
+                    id + " must be under MenuRootCertificate");
+            }
+        });
+    }
+
+    private static bool IsDescendantOf(Control child, Control ancestor)
+    {
+        for (Avalonia.LogicalTree.ILogical? current = child;
+             current is not null;
+             current = current.LogicalParent)
+        {
+            if (ReferenceEquals(current, ancestor))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void TryDelete(string path)

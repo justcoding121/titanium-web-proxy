@@ -173,6 +173,27 @@ public class TimelineTests
         Assert.AreEqual(0, TimelineLayout.Build([future], 1, Start, 800).Rows[0].Segments[0].Width, 0.01);
     }
 
+    [TestMethod]
+    public void Chart_SelectedIds_SurvivesRebuildReorder()
+    {
+        var chart = new Titanium.Inspector.Views.TimelineChart();
+        var sessions = new[] { Session(1, 10), Session(2, 10, Start.AddSeconds(1)) };
+        chart.Model = TimelineLayout.Build(sessions, sessions.Length, Start.AddMinutes(1), 800);
+        chart.SelectedIds = new HashSet<long> { 2 };
+        Assert.IsTrue(chart.SelectedIds.Contains(2));
+
+        // Rebuild that reorders rows must still highlight by id, not index.
+        var rebuilt = new[] { Session(2, 10, Start.AddSeconds(1)), Session(1, 10), Session(3, 10, Start.AddSeconds(2)) };
+        chart.Model = TimelineLayout.Build(rebuilt, rebuilt.Length, Start.AddMinutes(1), 800);
+        Assert.IsTrue(chart.SelectedIds.Contains(2));
+        Assert.IsFalse(chart.SelectedIds.Contains(99));
+
+        chart.HoveredId = 1;
+        Assert.AreEqual(1L, chart.HoveredId);
+        chart.HoveredId = 1;
+        Assert.AreEqual(1L, chart.HoveredId);
+    }
+
     private static SessionSnapshot Session(long id, double? durationMs, DateTimeOffset? started = null) => new()
     {
         Id = id,

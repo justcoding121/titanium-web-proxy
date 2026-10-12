@@ -32,7 +32,9 @@
         <MenuItem x:Name="MenuClearSessions" Header="{loc:Loc menu.clearSessions}" Command="{Binding ClearSessionsCommand}" AutomationProperties.AutomationId="MenuClearSessions" />
         <MenuItem x:Name="MenuRemoveSelected" Header="{loc:Loc menu.removeSelected}" Command="{Binding RemoveSelectedSessionsCommand}" AutomationProperties.AutomationId="MenuRemoveSelected" />
         <MenuItem Header="{loc:Loc menu.keepOnly}" Command="{Binding KeepOnlySelectedCommand}" AutomationProperties.AutomationId="MenuKeepOnlySelected" />
-        <MenuItem Header="{loc:Loc menu.removeMatching}" Command="{Binding RemoveMatchingFilterCommand}" AutomationProperties.AutomationId="MenuRemoveMatching" />
+        <MenuItem Header="{loc:Loc menu.removeMatching}" Command="{Binding RemoveMatchingFilterCommand}"
+                  ToolTip.Tip="{loc:Loc menu.removeMatchingTip}"
+                  AutomationProperties.AutomationId="MenuRemoveMatching" />
         <Separator />
         <MenuItem Header="{loc:Loc menu.autoStartCapture}" ToggleType="CheckBox"
                   IsChecked="{Binding AutoStartCapture, Mode=OneWay}"
@@ -42,10 +44,6 @@
                   IsChecked="{Binding AutoSystemProxyOnStart, Mode=OneWay}"
                   Command="{Binding ToggleAutoSystemProxyOnStartCommand}"
                   AutomationProperties.AutomationId="AutoSystemProxyCheck" />
-        <MenuItem x:Name="MenuDecryptHttps" Header="{loc:Loc menu.decryptHttps}" ToggleType="CheckBox"
-                  IsChecked="{Binding DecryptHttps, Mode=OneWay}"
-                  Command="{Binding ToggleDecryptHttpsCommand}"
-                  AutomationProperties.AutomationId="MenuDecryptHttps" />
         <Separator />
         <MenuItem Header="{loc:Loc menu.disableCaching}" ToggleType="CheckBox"
                   IsChecked="{Binding DisableCaching, Mode=OneWay}"
@@ -58,10 +56,6 @@
                   ToolTip.Tip="{loc:Loc menu.forceUncompressedTip}"
                   AutomationProperties.AutomationId="MenuForceUncompressed" />
         <Separator />
-        <MenuItem x:Name="MenuToggleSystemProxy" Header="{loc:Loc menu.systemProxy}" ToggleType="CheckBox"
-                  IsChecked="{Binding SystemProxy, Mode=OneWay}"
-                  Command="{Binding ToggleSystemProxyCommand}"
-                  AutomationProperties.AutomationId="MenuToggleSystemProxy" />
         <MenuItem x:Name="MenuProxyLocalhost" Header="{loc:Loc menu.captureLocal}" ToggleType="CheckBox"
                   IsChecked="{Binding ProxyLoopback, Mode=OneWay}"
                   Command="{Binding ToggleProxyLocalhostCommand}"
@@ -71,14 +65,16 @@
                   IsVisible="{Binding ShowLoopbackExemptMenu}"
                   AutomationProperties.AutomationId="MenuLoopbackExempt" />
         <Separator />
-        <MenuItem Header="{loc:Loc menu.installCa}" Command="{Binding InstallCaCommand}" AutomationProperties.AutomationId="MenuInstallCa" />
-        <MenuItem Header="{loc:Loc menu.removeCa}" Command="{Binding UntrustCaCommand}" AutomationProperties.AutomationId="MenuRemoveCa" />
-        <MenuItem Header="{loc:Loc menu.rotateCa}" Command="{Binding RotateCaCommand}" AutomationProperties.AutomationId="MenuRotateCa" />
-        <MenuItem Header="{loc:Loc menu.removeOldCas}" Command="{Binding RemoveOldRootCasCommand}" AutomationProperties.AutomationId="MenuRemoveOldRootCas" />
-        <MenuItem Header="{loc:Loc menu.exportCa}" Command="{Binding ExportCaCommand}" AutomationProperties.AutomationId="MenuExportCa" />
-        <MenuItem Header="{loc:Loc menu.trustFirefox}" Command="{Binding TrustFirefoxCaCommand}"
-                  AutomationProperties.AutomationId="MenuTrustFirefoxCa" />
-        <MenuItem Header="{loc:Loc menu.deviceCa}" Command="{Binding DeviceCaSetupCommand}" AutomationProperties.AutomationId="MenuDeviceCa" />
+        <MenuItem Header="{loc:Loc menu.rootCa}" AutomationProperties.AutomationId="MenuRootCertificate">
+          <MenuItem Header="{loc:Loc menu.installCa}" Command="{Binding InstallCaCommand}" AutomationProperties.AutomationId="MenuInstallCa" />
+          <MenuItem Header="{loc:Loc menu.removeCa}" Command="{Binding UntrustCaCommand}" AutomationProperties.AutomationId="MenuRemoveCa" />
+          <MenuItem Header="{loc:Loc menu.rotateCa}" Command="{Binding RotateCaCommand}" AutomationProperties.AutomationId="MenuRotateCa" />
+          <MenuItem Header="{loc:Loc menu.removeOldCas}" Command="{Binding RemoveOldRootCasCommand}" AutomationProperties.AutomationId="MenuRemoveOldRootCas" />
+          <MenuItem Header="{loc:Loc menu.exportCa}" Command="{Binding ExportCaCommand}" AutomationProperties.AutomationId="MenuExportCa" />
+          <MenuItem Header="{loc:Loc menu.trustFirefox}" Command="{Binding TrustFirefoxCaCommand}"
+                    AutomationProperties.AutomationId="MenuTrustFirefoxCa" />
+          <MenuItem Header="{loc:Loc menu.deviceCa}" Command="{Binding DeviceCaSetupCommand}" AutomationProperties.AutomationId="MenuDeviceCa" />
+        </MenuItem>
       </MenuItem>
       <MenuItem Header="{loc:Loc menu.tools}" AutomationProperties.AutomationId="MenuTools">
         <MenuItem Header="{loc:Loc menu.composer}" Command="{Binding OpenToolsComposerCommand}" AutomationProperties.AutomationId="MenuToolsComposer" />
@@ -336,54 +332,66 @@
       </Grid.ColumnDefinitions>
       <StackPanel Grid.Row="0" Grid.ColumnSpan="4" Margin="8" Spacing="4"
                   AutomationProperties.AutomationId="ToolbarPanel">
-        <!-- Search + filters: WrapPanel so chips stay visible when the window narrows. -->
+        <!-- Search + Filters strip: wrap as one unit on narrow windows. -->
         <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarSearchFilters">
           <TextBox x:Name="SearchBox" MinWidth="200" MaxWidth="480" Width="320" Margin="0,0,12,6"
                    Watermark="{loc:Loc toolbar.searchWatermark}"
                    ToolTip.Tip="{loc:Loc toolbar.searchTip}"
                    Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
-          <Button Content="{loc:Loc toolbar.filters}" Command="{Binding OpenFiltersCommand}"
-                  VerticalAlignment="Center" Margin="0,0,12,6"
-                  ToolTip.Tip="{loc:Loc toolbar.filtersTip}"
-                  AutomationProperties.AutomationId="OpenFiltersButton" />
-          <CheckBox Content="{loc:Loc toolbar.hideConnect}" IsChecked="{Binding HideTunnelsFilter}"
-                    VerticalAlignment="Center" Margin="0,0,12,6"
-                    ToolTip.Tip="{loc:Loc toolbar.hideConnectTip}"
-                    AutomationProperties.AutomationId="HideTunnelsFilterCheck" />
-          <CheckBox Content="{loc:Loc toolbar.hideImages}" IsChecked="{Binding HideImagesFilter}"
-                    VerticalAlignment="Center" Margin="0,0,12,6"
-                    AutomationProperties.AutomationId="HideImagesFilterCheck" />
-          <CheckBox Content="{loc:Loc toolbar.errorsOnly}" IsChecked="{Binding ErrorsOnlyFilter}"
-                    VerticalAlignment="Center" Margin="0,0,12,6"
-                    AutomationProperties.AutomationId="ErrorsOnlyFilterCheck" />
-          <Button Content="{loc:Loc toolbar.status}"
-                  VerticalAlignment="Center" Margin="0,0,12,6"
-                  ToolTip.Tip="{loc:Loc toolbar.statusTip}"
-                  AutomationProperties.AutomationId="StatusFilterButton">
-            <Button.Flyout>
-              <Flyout Placement="Bottom">
-                <StackPanel Spacing="6" Width="240">
-                  <CheckBox Content="2xx" IsChecked="{Binding StatusClass2xx}"
-                            AutomationProperties.AutomationId="StatusFilter2xx" />
-                  <CheckBox Content="3xx" IsChecked="{Binding StatusClass3xx}"
-                            AutomationProperties.AutomationId="StatusFilter3xx" />
-                  <CheckBox Content="4xx" IsChecked="{Binding StatusClass4xx}"
-                            AutomationProperties.AutomationId="StatusFilter4xx" />
-                  <CheckBox Content="5xx" IsChecked="{Binding StatusClass5xx}"
-                            AutomationProperties.AutomationId="StatusFilter5xx" />
-                  <TextBox Text="{Binding StatusFreeText}"
-                           Watermark="{loc:Loc filter.statusFree}"
-                           AutomationProperties.AutomationId="StatusFilterFree" />
-                  <TextBlock Text="{Binding StatusFilterError}" TextWrapping="Wrap"
-                             IsVisible="{Binding HasStatusFilterError}"
-                             AutomationProperties.AutomationId="StatusFilterError" />
-                </StackPanel>
-              </Flyout>
-            </Button.Flyout>
-          </Button>
-          <Button Content="{loc:Loc toolbar.clearFilters}" Command="{Binding ClearFiltersCommand}"
-                  VerticalAlignment="Center" Margin="0,0,12,6"
-                  AutomationProperties.AutomationId="ClearFiltersButton" />
+          <Border Margin="0,0,12,6" Padding="8,4" CornerRadius="4"
+                  BorderThickness="1"
+                  BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                  Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                  AutomationProperties.AutomationId="ToolbarFilterGroup">
+            <StackPanel Orientation="Vertical" Spacing="2">
+              <TextBlock Text="{loc:Loc toolbar.filtersGroup}" Opacity="0.65" FontSize="11" Margin="0,0,0,2" />
+              <WrapPanel Orientation="Horizontal">
+                <DropDownButton Content="{loc:Loc toolbar.status}"
+                        VerticalAlignment="Center" Margin="0,0,8,0"
+                        ToolTip.Tip="{loc:Loc toolbar.statusTip}"
+                        AutomationProperties.AutomationId="StatusFilterButton">
+                  <DropDownButton.Flyout>
+                    <Flyout Placement="Bottom">
+                      <StackPanel Spacing="6" Width="240">
+                        <CheckBox Content="2xx" IsChecked="{Binding StatusClass2xx}"
+                                  AutomationProperties.AutomationId="StatusFilter2xx" />
+                        <CheckBox Content="3xx" IsChecked="{Binding StatusClass3xx}"
+                                  AutomationProperties.AutomationId="StatusFilter3xx" />
+                        <CheckBox Content="4xx" IsChecked="{Binding StatusClass4xx}"
+                                  AutomationProperties.AutomationId="StatusFilter4xx" />
+                        <CheckBox Content="5xx" IsChecked="{Binding StatusClass5xx}"
+                                  AutomationProperties.AutomationId="StatusFilter5xx" />
+                        <TextBox Text="{Binding StatusFreeText}"
+                                 Watermark="{loc:Loc filter.statusFree}"
+                                 AutomationProperties.AutomationId="StatusFilterFree" />
+                        <TextBlock Text="{Binding StatusFilterError}" TextWrapping="Wrap"
+                                   IsVisible="{Binding HasStatusFilterError}"
+                                   AutomationProperties.AutomationId="StatusFilterError" />
+                      </StackPanel>
+                    </Flyout>
+                  </DropDownButton.Flyout>
+                </DropDownButton>
+                <CheckBox Content="{loc:Loc toolbar.hideConnect}" IsChecked="{Binding HideTunnelsFilter}"
+                          VerticalAlignment="Center" Margin="0,0,8,0"
+                          ToolTip.Tip="{loc:Loc toolbar.hideConnectTip}"
+                          AutomationProperties.AutomationId="HideTunnelsFilterCheck" />
+                <CheckBox Content="{loc:Loc toolbar.hideImages}" IsChecked="{Binding HideImagesFilter}"
+                          VerticalAlignment="Center" Margin="0,0,8,0"
+                          AutomationProperties.AutomationId="HideImagesFilterCheck" />
+                <CheckBox Content="{loc:Loc toolbar.errorsOnly}" IsChecked="{Binding ErrorsOnlyFilter}"
+                          VerticalAlignment="Center" Margin="0,0,8,0"
+                          AutomationProperties.AutomationId="ErrorsOnlyFilterCheck" />
+                <Button Content="{loc:Loc toolbar.filters}" Command="{Binding OpenFiltersCommand}"
+                        VerticalAlignment="Center" Margin="0,0,8,0"
+                        ToolTip.Tip="{loc:Loc toolbar.filtersTip}"
+                        AutomationProperties.AutomationId="OpenFiltersButton" />
+                <Button Content="{loc:Loc toolbar.clearFilters}" Command="{Binding ClearFiltersCommand}"
+                        VerticalAlignment="Center"
+                        IsEnabled="{Binding HasActiveSearch}"
+                        AutomationProperties.AutomationId="ClearFiltersButton" />
+              </WrapPanel>
+            </StackPanel>
+          </Border>
         </WrapPanel>
         <WrapPanel Orientation="Horizontal" IsVisible="{Binding HasFilterChips}"
                    AutomationProperties.AutomationId="SearchHideChips">
@@ -618,6 +626,7 @@
             <MenuItem Header="{loc:Loc menu.keepOnly}" Command="{Binding KeepOnlySelectedCommand}"
                       AutomationProperties.AutomationId="CtxKeepOnlySelected" />
             <MenuItem Header="{loc:Loc menu.removeMatching}" Command="{Binding RemoveMatchingFilterCommand}"
+                      ToolTip.Tip="{loc:Loc menu.removeMatchingTip}"
                       AutomationProperties.AutomationId="CtxRemoveMatching" />
           </ContextMenu>
         </DataGrid.ContextMenu>

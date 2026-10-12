@@ -470,12 +470,10 @@ public partial class MainWindow : Window
             if (propertyName == nameof(MainWindowViewModel.DecryptHttps))
             {
                 OneWayToggleVisualSync.Apply(DecryptHttpsCheck, isChecked);
-                OneWayToggleVisualSync.Apply(MenuDecryptHttps, isChecked);
             }
             else if (propertyName == nameof(MainWindowViewModel.SystemProxy))
             {
                 OneWayToggleVisualSync.Apply(SystemProxyCheck, isChecked);
-                OneWayToggleVisualSync.Apply(MenuToggleSystemProxy, isChecked);
             }
             else if (propertyName == nameof(MainWindowViewModel.ProxyLoopback))
             {

@@ -11,7 +11,7 @@ namespace Titanium.E2E.Tests.UiHeadless;
 [TestClass]
 public class ToolbarHeightBaselineTests
 {
-    public const double BaselineHeight = 122;
+    public const double BaselineHeight = 150;
 
     [TestMethod]
     [TestCategory("E2E-UI-Headless")]

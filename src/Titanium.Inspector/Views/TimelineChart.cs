@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Media;
 using Titanium.Inspector.Services;
 
@@ -9,11 +10,16 @@ namespace Titanium.Inspector.Views;
 /// <summary>Paints one cached <see cref="TimelineLayout.Chart"/>. Hit testing stays in the layout helper.</summary>
 public sealed class TimelineChart : Control
 {
+    private static readonly IBrush SelectedBand = new SolidColorBrush(Color.Parse("#333B82F6"));
+    private static readonly IBrush HoverBand = new SolidColorBrush(Color.Parse("#1A3B82F6"));
+
     private readonly IBrush _label = new SolidColorBrush(Color.Parse("#FF6B7280"));
     private readonly IBrush _plain = new SolidColorBrush(Color.Parse("#FF64748B"));
     private readonly IBrush _hatch = new SolidColorBrush(Color.Parse("#FF94A3B8"));
     private readonly Pen _hatchPen;
     private readonly IBrush[] _phases;
+    private IReadOnlySet<long> _selectedIds = new HashSet<long>();
+    private long? _hoveredId;
 
     public TimelineChart()
     {
@@ -28,9 +34,42 @@ public sealed class TimelineChart : Control
             Brush("#FFEF4444"),
             Brush("#FF14B8A6"),
         ];
+        PointerMoved += OnPointerMoved;
+        PointerExited += OnPointerExited;
+    }
+
+    protected override void OnAttachedToVisualTree(Avalonia.VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        Cursor = new Cursor(StandardCursorType.Hand);
     }
 
     public TimelineLayout.Chart? Model { get; set; }
+
+    public IReadOnlySet<long> SelectedIds
+    {
+        get => _selectedIds;
+        set
+        {
+            _selectedIds = value ?? new HashSet<long>();
+            InvalidateVisual();
+        }
+    }
+
+    public long? HoveredId
+    {
+        get => _hoveredId;
+        set
+        {
+            if (_hoveredId == value)
+            {
+                return;
+            }
+
+            _hoveredId = value;
+            InvalidateVisual();
+        }
+    }
 
     public override void Render(DrawingContext context)
     {
@@ -42,11 +81,25 @@ public sealed class TimelineChart : Control
 
         foreach (var row in model.Rows)
         {
+            var selected = _selectedIds.Contains(row.Id);
+            var hovered = _hoveredId == row.Id;
+            if (selected)
+            {
+                context.FillRectangle(SelectedBand, new Rect(0, row.Y, Bounds.Width, TimelineLayout.RowHeight));
+            }
+            else if (hovered)
+            {
+                context.FillRectangle(HoverBand, new Rect(0, row.Y, Bounds.Width, TimelineLayout.RowHeight));
+            }
+
+            var typeface = selected
+                ? new Typeface(Typeface.Default.FontFamily, FontStyle.Normal, FontWeight.Bold)
+                : Typeface.Default;
             var label = new FormattedText(
                 row.Label,
                 CultureInfo.CurrentCulture,
                 FlowDirection.LeftToRight,
-                Typeface.Default,
+                typeface,
                 11,
                 _label);
             using (context.PushClip(new Rect(0, row.Y, TimelineLayout.LabelWidth - 4, TimelineLayout.RowHeight)))
@@ -75,6 +128,21 @@ public sealed class TimelineChart : Control
             }
         }
     }
+
+    private void OnPointerMoved(object? sender, PointerEventArgs e)
+    {
+        var model = Model;
+        if (model is null)
+        {
+            HoveredId = null;
+            return;
+        }
+
+        var point = e.GetPosition(this);
+        HoveredId = TimelineLayout.HitTest(model, point.X, point.Y);
+    }
+
+    private void OnPointerExited(object? sender, PointerEventArgs e) => HoveredId = null;
 
     private void DrawHatched(DrawingContext context, Rect rect)
     {

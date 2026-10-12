@@ -12,16 +12,22 @@ public partial class TimelineWindow : Window
     private static TimelineWindow? _open;
 
     private readonly TimelineViewModel _model;
+    private readonly Func<IReadOnlyCollection<long>>? _selectedIds;
     private readonly DispatcherTimer _timer;
+    private HashSet<long> _lastSelected = new();
 
-    public TimelineWindow() : this(new SessionStore(new SessionStoreOptions { SpillBodiesToDisk = false }), _ => { })
+    public TimelineWindow() : this(new SessionStore(new SessionStoreOptions { SpillBodiesToDisk = false }), _ => { }, null)
     {
     }
 
-    private TimelineWindow(SessionStore store, Action<long> select)
+    private TimelineWindow(
+        SessionStore store,
+        Action<long> select,
+        Func<IReadOnlyCollection<long>>? selectedIds)
     {
         InitializeComponent();
         LanguageService.AttachWindow(this);
+        _selectedIds = selectedIds;
         _model = new TimelineViewModel(store, select);
         Legend.Text = string.Join(
             " · ",
@@ -31,14 +37,18 @@ public partial class TimelineWindow : Window
             + " · " + LanguageService.Get("timeline.inFlight");
         _model.Open(DateTimeOffset.UtcNow, ChartWidth());
         ApplyModel();
+        SyncSelection(force: true);
         Chart.PointerPressed += OnChartPressed;
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
         _timer.Tick += (_, _) =>
         {
-            if (_model.Tick(DateTimeOffset.UtcNow, ChartWidth()))
+            var rebuilt = _model.Tick(DateTimeOffset.UtcNow, ChartWidth());
+            if (rebuilt)
             {
                 ApplyModel();
             }
+
+            SyncSelection(force: rebuilt);
         };
         _timer.Start();
         PropertyChanged += (_, e) =>
@@ -47,6 +57,7 @@ public partial class TimelineWindow : Window
             {
                 _model.SetVisible(IsVisible, DateTimeOffset.UtcNow, ChartWidth());
                 ApplyModel();
+                SyncSelection(force: true);
             }
         };
         Closed += (_, _) =>
@@ -58,7 +69,11 @@ public partial class TimelineWindow : Window
         };
     }
 
-    public static void Show(Window owner, SessionStore store, Action<long> select)
+    public static void Show(
+        Window owner,
+        SessionStore store,
+        Action<long> select,
+        Func<IReadOnlyCollection<long>>? selectedIds = null)
     {
         if (_open is { } existing)
         {
@@ -66,7 +81,7 @@ public partial class TimelineWindow : Window
             return;
         }
 
-        var window = new TimelineWindow(store, select);
+        var window = new TimelineWindow(store, select, selectedIds);
         RegisterOpen(window);
         window.Show(owner);
     }
@@ -95,6 +110,23 @@ public partial class TimelineWindow : Window
         Chart.Height = Math.Max(_model.Chart.Height, 1);
         Summary.Text = _model.Summary;
         Chart.InvalidateVisual();
+    }
+
+    private void SyncSelection(bool force)
+    {
+        if (_selectedIds is null)
+        {
+            return;
+        }
+
+        var next = new HashSet<long>(_selectedIds());
+        if (!force && next.SetEquals(_lastSelected))
+        {
+            return;
+        }
+
+        _lastSelected = next;
+        Chart.SelectedIds = next;
     }
 
     private double ChartWidth()

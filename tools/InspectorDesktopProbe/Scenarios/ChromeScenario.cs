@@ -210,11 +210,11 @@ public static class ChromeScenario
                 log.Info($"chrome-capture: after InstallCa trusted={harness.Interception.IsRootTrusted} status={harness.ViewModel.StatusText}");
 
                 // Decrypt may prompt for CA; keep recovery cancelled and soft-assert toggle when trust is available.
-                await harness.OnUiAsync(() => harness.Robot.Click("MenuDecryptHttps")).ConfigureAwait(true);
+                await harness.OnUiAsync(() => harness.Robot.Click("DecryptHttpsCheck")).ConfigureAwait(true);
                 await WaitStatusIdleAsync(harness, TimeSpan.FromSeconds(15)).ConfigureAwait(true);
                 if (harness.ViewModel.DecryptHttps)
                 {
-                    await harness.OnUiAsync(() => harness.Robot.Click("MenuDecryptHttps")).ConfigureAwait(true);
+                    await harness.OnUiAsync(() => harness.Robot.Click("DecryptHttpsCheck")).ConfigureAwait(true);
                     await harness.WaitUntilAsync(() => !harness.ViewModel.DecryptHttps, TimeSpan.FromSeconds(10))
                         .ConfigureAwait(true);
                 }
@@ -225,7 +225,7 @@ public static class ChromeScenario
 
                 // System proxy stay off — proxy scenario owns OS mutation.
                 if (harness.ViewModel.SystemProxy)
-                    await harness.OnUiAsync(() => harness.Robot.Click("MenuToggleSystemProxy")).ConfigureAwait(true);
+                    await harness.OnUiAsync(() => harness.Robot.Click("SystemProxyCheck")).ConfigureAwait(true);
 
                 var cerPath = Path.Combine(tempDir, "root.cer");
                 harness.PathPicker.SavePath = cerPath;
