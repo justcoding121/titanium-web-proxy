@@ -145,9 +145,9 @@ public sealed class RunLogViewModel : INotifyPropertyChanged
     private static bool MatchesNeedle(RunLogEntry entry, string needle)
     {
         var token = RunLogFormat.LevelToToken(entry.Level);
-        return token.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0
-               || entry.Category.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0
-               || entry.Message.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
+        return token.Contains(needle, StringComparison.OrdinalIgnoreCase)
+               || entry.Category.Contains(needle, StringComparison.OrdinalIgnoreCase)
+               || entry.Message.Contains(needle, StringComparison.OrdinalIgnoreCase);
     }
 
     private void Publish(IReadOnlyList<RunLogEntry> entries)

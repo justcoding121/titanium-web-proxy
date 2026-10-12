@@ -80,9 +80,12 @@ public class SessionMarkTests
         vm.SelectedSession = snap;
         vm.SetMarkCommand.Execute("Green");
         Assert.AreEqual(SessionMark.Green, snap.Mark);
+        StringAssert.Contains(vm.StatusText, "green");
 
         vm.CommentCommand.Execute(null);
         Assert.AreEqual(1, dialogs.CommentCalls);
         Assert.AreEqual("saved", snap.Comment);
+        Assert.IsTrue(vm.IsGridColumnVisible("Comment"));
+        StringAssert.Contains(vm.StatusText, "Comment");
     }
 }

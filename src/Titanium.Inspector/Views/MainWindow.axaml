@@ -576,7 +576,8 @@
             <MenuItem Header="{loc:Loc ctx.filterStatus}" Command="{Binding FilterByStatusCommand}"
                       IsVisible="{Binding CanFilterByStatus}"
                       AutomationProperties.AutomationId="CtxFilterByStatus" />
-            <MenuItem Header="{loc:Loc ctx.mark}" AutomationProperties.AutomationId="CtxMark">
+            <MenuItem Header="{loc:Loc ctx.mark}" IsVisible="{Binding HasSelectedSessions}"
+                      AutomationProperties.AutomationId="CtxMark">
               <MenuItem Header="{loc:Loc ctx.markRed}" Command="{Binding SetMarkCommand}" CommandParameter="Red"
                         AutomationProperties.AutomationId="CtxMarkRed" />
               <MenuItem Header="{loc:Loc ctx.markOrange}" Command="{Binding SetMarkCommand}" CommandParameter="Orange"
@@ -721,32 +722,6 @@
             </DataGridTextColumn.Header>
           </DataGridTextColumn>
         </DataGrid.Columns>
-        <DataGrid.Styles>
-          <Style Selector="DataGridRow.mark-red">
-            <Setter Property="BorderBrush" Value="{DynamicResource SessionStatusServerErrorBrush}" />
-            <Setter Property="BorderThickness" Value="4,0,0,0" />
-          </Style>
-          <Style Selector="DataGridRow.mark-orange">
-            <Setter Property="BorderBrush" Value="{DynamicResource StatusFeedbackWarningBrush}" />
-            <Setter Property="BorderThickness" Value="4,0,0,0" />
-          </Style>
-          <Style Selector="DataGridRow.mark-yellow">
-            <Setter Property="BorderBrush" Value="{DynamicResource SessionStatusClientErrorBrush}" />
-            <Setter Property="BorderThickness" Value="4,0,0,0" />
-          </Style>
-          <Style Selector="DataGridRow.mark-green">
-            <Setter Property="BorderBrush" Value="{DynamicResource SessionStatusSuccessBrush}" />
-            <Setter Property="BorderThickness" Value="4,0,0,0" />
-          </Style>
-          <Style Selector="DataGridRow.mark-blue">
-            <Setter Property="BorderBrush" Value="{DynamicResource SessionStatusRedirectBrush}" />
-            <Setter Property="BorderThickness" Value="4,0,0,0" />
-          </Style>
-          <Style Selector="DataGridRow.mark-purple">
-            <Setter Property="BorderBrush" Value="{DynamicResource SessionMarkPurpleBrush}" />
-            <Setter Property="BorderThickness" Value="4,0,0,0" />
-          </Style>
-        </DataGrid.Styles>
       </DataGrid>
       <GridSplitter Grid.Row="1" Grid.Column="1" Width="4" ResizeDirection="Columns"
                     IsVisible="{Binding ShowSessionDetails}" />

@@ -592,6 +592,7 @@ public sealed partial class MainWindowViewModel
         var selection = ResolveFilterSelection();
         if (selection.Count == 0)
         {
+            StatusText = "Select a session first to mark it";
             return;
         }
 
@@ -606,6 +607,11 @@ public sealed partial class MainWindowViewModel
 
         SessionAnnotationsChanged?.Invoke(this, EventArgs.Empty);
         ApplyFilter();
+        StatusText = mark == SessionMark.None
+            ? selection.Count == 1 ? "Mark cleared" : $"Mark cleared on {selection.Count} sessions"
+            : selection.Count == 1
+                ? $"Marked {mark.ToString().ToLowerInvariant()}"
+                : $"Marked {mark.ToString().ToLowerInvariant()} on {selection.Count} sessions";
     }
 
     private async Task CommentAsync()
@@ -613,6 +619,7 @@ public sealed partial class MainWindowViewModel
         var selection = ResolveFilterSelection();
         if (selection.Count == 0)
         {
+            StatusText = "Select a session first to comment";
             return;
         }
 
@@ -628,8 +635,19 @@ public sealed partial class MainWindowViewModel
             session.Comment = text;
         }
 
+        if (!string.IsNullOrEmpty(text))
+        {
+            // Comment column is off by default — show it so the note is visible in the grid.
+            SetGridColumnVisible("Comment", true);
+        }
+
         SessionAnnotationsChanged?.Invoke(this, EventArgs.Empty);
         ApplyFilter();
+        StatusText = string.IsNullOrEmpty(text)
+            ? selection.Count == 1 ? "Comment cleared" : $"Comment cleared on {selection.Count} sessions"
+            : selection.Count == 1
+                ? "Comment saved — shown in the Comment column and on row hover"
+                : $"Comment saved on {selection.Count} sessions — Comment column shown";
     }
     private Task FilterByProcessAsync()
     {

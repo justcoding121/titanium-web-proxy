@@ -805,7 +805,8 @@ public partial class MainWindow : Window
         }
     }
 
-    private static readonly string[] MarkClasses = ["mark-red", "mark-orange", "mark-yellow", "mark-green", "mark-blue", "mark-purple"];
+    private static readonly string[] MarkClasses =
+        ["mark-red", "mark-orange", "mark-yellow", "mark-green", "mark-blue", "mark-purple", "has-comment"];
 
     private static void ClearSessionMark(DataGridRow row)
     {
@@ -813,6 +814,10 @@ public partial class MainWindow : Window
         {
             row.Classes.Remove(name);
         }
+
+        // Clear code-applied stripe so recycled rows do not keep a previous mark color.
+        row.BorderThickness = default;
+        row.BorderBrush = null;
     }
 
     private static void ApplySessionMark(DataGridRow row)
@@ -827,15 +832,50 @@ public partial class MainWindow : Window
 
         if (snap.Mark != SessionMark.None)
         {
-            row.Classes.Add("mark-" + snap.Mark.ToString().ToLowerInvariant());
-            AutomationProperties.SetHelpText(row, snap.Mark.ToString());
+            var markName = snap.Mark.ToString();
+            row.Classes.Add("mark-" + markName.ToLowerInvariant());
+            // Set the left stripe on the row itself — Fluent RowBorder template-binds these.
+            // Class-only styles under DataGrid.Styles were easy to miss against selection fills.
+            row.BorderThickness = new Thickness(4, 0, 0, 0);
+            row.BorderBrush = MarkStripeBrush(snap.Mark);
+            AutomationProperties.SetHelpText(row, markName);
         }
         else
         {
             AutomationProperties.SetHelpText(row, null);
         }
 
-        ToolTip.SetTip(row, string.IsNullOrEmpty(snap.Comment) ? null : snap.Comment);
+        if (!string.IsNullOrEmpty(snap.Comment))
+        {
+            row.Classes.Add("has-comment");
+            ToolTip.SetTip(row, snap.Comment);
+        }
+        else
+        {
+            ToolTip.SetTip(row, null);
+        }
+    }
+
+    private static IBrush MarkStripeBrush(SessionMark mark) => mark switch
+    {
+        SessionMark.Red => BrushFromTheme("SessionStatusServerErrorBrush", "#A4262C"),
+        SessionMark.Orange => BrushFromTheme("StatusFeedbackWarningBrush", "#7A5200"),
+        SessionMark.Yellow => BrushFromTheme("SessionStatusClientErrorBrush", "#FCE100"),
+        SessionMark.Green => BrushFromTheme("SessionStatusSuccessBrush", "#0A5F0A"),
+        SessionMark.Blue => BrushFromTheme("SessionStatusRedirectBrush", "#005A9E"),
+        SessionMark.Purple => BrushFromTheme("SessionMarkPurpleBrush", "#5C2C8A"),
+        _ => Brushes.Transparent,
+    };
+
+    private static IBrush BrushFromTheme(string key, string fallbackHex)
+    {
+        if (Application.Current?.TryGetResource(key, Application.Current.ActualThemeVariant, out var value) == true
+            && value is IBrush brush)
+        {
+            return brush;
+        }
+
+        return new SolidColorBrush(Color.Parse(fallbackHex));
     }
 
     /// <summary>Column visibility from the catalog defaults, saved choices, and the Process platform gate.</summary>
