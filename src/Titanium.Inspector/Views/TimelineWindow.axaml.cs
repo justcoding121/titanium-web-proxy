@@ -54,10 +54,7 @@ public partial class TimelineWindow : Window
             _timer.Stop();
             Chart.PointerPressed -= OnChartPressed;
             _model.Close();
-            if (ReferenceEquals(_open, this))
-            {
-                _open = null;
-            }
+            ClearOpenIf(this);
         };
     }
 
@@ -70,8 +67,18 @@ public partial class TimelineWindow : Window
         }
 
         var window = new TimelineWindow(store, select);
-        _open = window;
+        RegisterOpen(window);
         window.Show(owner);
+    }
+
+    private static void RegisterOpen(TimelineWindow window) => _open = window;
+
+    private static void ClearOpenIf(TimelineWindow window)
+    {
+        if (ReferenceEquals(_open, window))
+        {
+            _open = null;
+        }
     }
 
     private void OnChartPressed(object? sender, PointerPressedEventArgs e)

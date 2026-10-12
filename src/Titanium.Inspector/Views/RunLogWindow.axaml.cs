@@ -59,10 +59,7 @@ public partial class RunLogWindow : Window
             settings.Current.RunLogWindowWidth = Width;
             settings.Current.RunLogWindowHeight = Height;
             settings.Save();
-            if (ReferenceEquals(_open, this))
-            {
-                _open = null;
-            }
+            ClearOpenIf(this);
         };
     }
 
@@ -75,8 +72,18 @@ public partial class RunLogWindow : Window
         }
 
         var window = new RunLogWindow(ring, settings, openLogging);
-        _open = window;
+        RegisterOpen(window);
         window.Show(owner);
+    }
+
+    private static void RegisterOpen(RunLogWindow window) => _open = window;
+
+    private static void ClearOpenIf(RunLogWindow window)
+    {
+        if (ReferenceEquals(_open, window))
+        {
+            _open = null;
+        }
     }
 
     private void OnClear(object? sender, RoutedEventArgs e) => _model.Clear();

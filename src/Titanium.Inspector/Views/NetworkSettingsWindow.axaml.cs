@@ -150,7 +150,18 @@ public partial class NetworkSettingsWindow : Window
         var s = _settings.Current;
         s.UpstreamProxyEnabled = enabled;
         s.UpstreamProxyHost = HostBox.Text?.Trim() ?? string.Empty;
-        s.UpstreamProxyPort = enabled ? port : (port is >= 1 and <= 65535 ? port : InspectorNetworkSettings.DefaultUpstreamPort);
+        if (enabled)
+        {
+            s.UpstreamProxyPort = port;
+        }
+        else if (port is >= 1 and <= 65535)
+        {
+            s.UpstreamProxyPort = port;
+        }
+        else
+        {
+            s.UpstreamProxyPort = InspectorNetworkSettings.DefaultUpstreamPort;
+        }
         s.EnableHttp2 = Http2Check.IsChecked == true;
         s.EnableHttp3 = Http3Check.IsEnabled && Http3Check.IsChecked == true;
         s.OutboundTlsPreset = SelectedTlsPreset();

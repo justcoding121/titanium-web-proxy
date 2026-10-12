@@ -130,45 +130,8 @@ public static class StatusFilter
     {
         errorKey = null;
         var terms = new List<string>(8);
-        if (class2xx) terms.Add("2xx");
-        if (class3xx) terms.Add("3xx");
-        if (class4xx) terms.Add("4xx");
-        if (class5xx) terms.Add("5xx");
-
-        var invalid = false;
-        if (!string.IsNullOrWhiteSpace(free))
-        {
-            foreach (var raw in free.Split([',', ' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
-            {
-                var term = raw.Trim();
-                if (term.Length == 0)
-                {
-                    continue;
-                }
-
-                if (IsClass(term, out var digit) && digit is >= '2' and <= '5')
-                {
-                    var canonical = $"{digit}xx";
-                    if (!terms.Contains(canonical, StringComparer.Ordinal))
-                    {
-                        terms.Add(canonical);
-                    }
-
-                    continue;
-                }
-
-                if (!IsRecognized(term))
-                {
-                    invalid = true;
-                    continue;
-                }
-
-                if (!terms.Contains(term, StringComparer.OrdinalIgnoreCase))
-                {
-                    terms.Add(term);
-                }
-            }
-        }
+        AddClassTerms(class2xx, class3xx, class4xx, class5xx, terms);
+        var invalid = MergeFreeTextTerms(free, terms);
 
         if (invalid)
         {
@@ -191,6 +154,61 @@ public static class StatusFilter
         }
 
         return true;
+    }
+
+    private static void AddClassTerms(
+        bool class2xx,
+        bool class3xx,
+        bool class4xx,
+        bool class5xx,
+        List<string> terms)
+    {
+        if (class2xx) terms.Add("2xx");
+        if (class3xx) terms.Add("3xx");
+        if (class4xx) terms.Add("4xx");
+        if (class5xx) terms.Add("5xx");
+    }
+
+    private static bool MergeFreeTextTerms(string? free, List<string> terms)
+    {
+        if (string.IsNullOrWhiteSpace(free))
+        {
+            return false;
+        }
+
+        var invalid = false;
+        foreach (var raw in free.Split([',', ' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var term = raw.Trim();
+            if (term.Length == 0)
+            {
+                continue;
+            }
+
+            if (IsClass(term, out var digit) && digit is >= '2' and <= '5')
+            {
+                var canonical = $"{digit}xx";
+                if (!terms.Contains(canonical, StringComparer.Ordinal))
+                {
+                    terms.Add(canonical);
+                }
+
+                continue;
+            }
+
+            if (!IsRecognized(term))
+            {
+                invalid = true;
+                continue;
+            }
+
+            if (!terms.Contains(term, StringComparer.OrdinalIgnoreCase))
+            {
+                terms.Add(term);
+            }
+        }
+
+        return invalid;
     }
 
     private static bool TermMatches(int? statusCode, ReadOnlySpan<char> term)

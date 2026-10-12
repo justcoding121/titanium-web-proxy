@@ -31,7 +31,7 @@ public static class SessionRawHttp
         WriteAscii(output, "\r\n");
         truncated |= WriteRequestBody(session, output, spilledHar, maxBodyBytes);
 
-        if (session.StatusCode is int status || !string.IsNullOrEmpty(session.ResponseHeadersText))
+        if (session.StatusCode is int || !string.IsNullOrEmpty(session.ResponseHeadersText))
         {
             WriteAscii(output, "\r\n");
             var code = session.StatusCode ?? 0;
@@ -277,7 +277,7 @@ internal static class HarBodyCopy
         {
             try
             {
-                return ReadValue(destination, maxBytes, parent, property, capture: true, out _);
+                return ReadValue(destination, maxBytes, parent, property, out _);
             }
             catch (EndOfStreamException)
             {
@@ -290,7 +290,7 @@ internal static class HarBodyCopy
             encoding = null;
             try
             {
-                return ReadValue(destination, maxBytes, "content", "text", capture: true, out encoding);
+                return ReadValue(destination, maxBytes, "content", "text", out encoding);
             }
             catch (EndOfStreamException)
             {
@@ -303,7 +303,6 @@ internal static class HarBodyCopy
             long maxBytes,
             string wantedParent,
             string wantedProperty,
-            bool capture,
             out string? contentEncoding)
         {
             contentEncoding = null;
@@ -360,55 +359,17 @@ internal static class HarBodyCopy
                 SkipWs();
                 Expect(':');
                 SkipWs();
-                var next = Peek();
-                if (next == '{')
+                truncated |= ReadObjectPropertyValue(
+                    body,
+                    maxBytes,
+                    wantedParent,
+                    wantedProperty,
+                    name,
+                    ref encoding,
+                    out var nestedEncoding);
+                if (nestedEncoding is not null)
                 {
-                    _parents.Push(name);
-                    truncated |= ReadObject(body, maxBytes, wantedParent, wantedProperty, out var nestedEncoding);
-                    if (_parents.Count > 0)
-                    {
-                        _parents.Pop();
-                    }
-
-                    if (nestedEncoding is not null)
-                    {
-                        contentEncoding = nestedEncoding;
-                    }
-                }
-                else if (next == '[')
-                {
-                    _parents.Push(name);
-                    truncated |= ReadArray(body, maxBytes, wantedParent, wantedProperty, out var nestedEncoding);
-                    if (_parents.Count > 0)
-                    {
-                        _parents.Pop();
-                    }
-
-                    if (nestedEncoding is not null)
-                    {
-                        contentEncoding = nestedEncoding;
-                    }
-                }
-                else if (next == '"')
-                {
-                    if (name.Equals(wantedProperty, StringComparison.Ordinal)
-                        && wantedParent.Length > 0
-                        && InParent(wantedParent))
-                    {
-                        truncated |= SkipString(body, maxBytes, out _);
-                    }
-                    else if (name.Equals("encoding", StringComparison.Ordinal) && InParent("content"))
-                    {
-                        encoding = ReadKey();
-                    }
-                    else
-                    {
-                        SkipString(body: null, 0, out _);
-                    }
-                }
-                else
-                {
-                    SkipLiteral();
+                    contentEncoding = nestedEncoding;
                 }
 
                 SkipWs();
@@ -426,6 +387,65 @@ internal static class HarBodyCopy
 
             contentEncoding ??= encoding;
             return truncated;
+        }
+
+        private bool ReadObjectPropertyValue(
+            Stream body,
+            long maxBytes,
+            string wantedParent,
+            string wantedProperty,
+            string name,
+            ref string? encoding,
+            out string? nestedEncoding)
+        {
+            nestedEncoding = null;
+            var truncated = false;
+            var next = Peek();
+            if (next == '{')
+            {
+                _parents.Push(name);
+                truncated = ReadObject(body, maxBytes, wantedParent, wantedProperty, out nestedEncoding);
+                if (_parents.Count > 0)
+                {
+                    _parents.Pop();
+                }
+
+                return truncated;
+            }
+
+            if (next == '[')
+            {
+                _parents.Push(name);
+                truncated = ReadArray(body, maxBytes, wantedParent, wantedProperty, out nestedEncoding);
+                if (_parents.Count > 0)
+                {
+                    _parents.Pop();
+                }
+
+                return truncated;
+            }
+
+            if (next == '"')
+            {
+                if (name.Equals(wantedProperty, StringComparison.Ordinal)
+                    && wantedParent.Length > 0
+                    && InParent(wantedParent))
+                {
+                    return SkipString(body, maxBytes, out _);
+                }
+
+                if (name.Equals("encoding", StringComparison.Ordinal) && InParent("content"))
+                {
+                    encoding = ReadKey();
+                    return false;
+                }
+
+                SkipString(body: null, 0, out _);
+                return false;
+            }
+
+            SkipLiteral();
+            return false;
         }
 
         private bool ReadArray(
@@ -447,7 +467,7 @@ internal static class HarBodyCopy
 
             while (true)
             {
-                truncated |= ReadValue(body, maxBytes, wantedParent, wantedProperty, true, out var nested);
+                truncated |= ReadValue(body, maxBytes, wantedParent, wantedProperty, out var nested);
                 if (nested is not null)
                 {
                     contentEncoding = nested;
@@ -471,18 +491,8 @@ internal static class HarBodyCopy
 
         private readonly Stack<string> _parents = new();
 
-        private bool InParent(string name)
-        {
-            foreach (var parent in _parents)
-            {
-                if (parent.Equals(name, StringComparison.Ordinal))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
+        private bool InParent(string name) =>
+            _parents.Any(parent => parent.Equals(name, StringComparison.Ordinal));
 
         private string ReadKey()
         {
@@ -551,24 +561,33 @@ internal static class HarBodyCopy
 
                 if (b == '\\')
                 {
-                    var esc = Read();
-                    if (esc == 'u')
-                    {
-                        _ = DecodeUnicode();
-                    }
-
-                    if (sb.Length < maxChars && esc is >= 32 and <= 126)
-                    {
-                        sb.Append((char)esc);
-                    }
-
+                    AppendSkipStringEscape(sb, maxChars);
                     continue;
                 }
 
-                if (sb.Length < maxChars && b is >= 32 and <= 126)
-                {
-                    sb.Append((char)b);
-                }
+                AppendSkipStringChar(sb, maxChars, b);
+            }
+        }
+
+        private void AppendSkipStringEscape(StringBuilder sb, int maxChars)
+        {
+            var esc = Read();
+            if (esc == 'u')
+            {
+                _ = DecodeUnicode();
+            }
+
+            if (sb.Length < maxChars && esc is >= 32 and <= 126)
+            {
+                sb.Append((char)esc);
+            }
+        }
+
+        private static void AppendSkipStringChar(StringBuilder sb, int maxChars, int b)
+        {
+            if (sb.Length < maxChars && b is >= 32 and <= 126)
+            {
+                sb.Append((char)b);
             }
         }
 

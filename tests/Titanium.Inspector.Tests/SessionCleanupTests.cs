@@ -7,6 +7,8 @@ namespace Titanium.Inspector.Tests;
 [TestClass]
 public class SessionCleanupTests
 {
+    private static readonly long[] SessionSeven = [7L];
+
     [TestMethod]
     public void KeepOnly_RemovesHiddenRows_AndCancelRemovesNothing()
     {
@@ -93,7 +95,7 @@ public class SessionCleanupTests
         }
 
         Assert.IsNotNull(path, "spill did not write 7.har");
-        registry.Store.Remove(new[] { 7L });
+        registry.Store.Remove(SessionSeven);
         var gone = false;
         for (var i = 0; i < 40 && !gone; i++)
         {

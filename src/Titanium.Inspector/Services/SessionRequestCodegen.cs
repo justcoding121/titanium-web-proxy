@@ -7,6 +7,8 @@ namespace Titanium.Inspector.Services;
 /// <summary>Generates curl and fetch snippets from a captured <see cref="SessionSnapshot"/> (offline; no hot path).</summary>
 public static class SessionRequestCodegen
 {
+    private const string NoReplayableUrlMessage = "Session has no replayable URL (or is a CONNECT tunnel).";
+
     private static readonly JsonSerializerOptions JsStringOptions = new()
     {
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
@@ -67,7 +69,7 @@ public static class SessionRequestCodegen
     {
         if (!TryGetRequest(session, out var request))
         {
-            throw new ArgumentException("Session has no replayable URL (or is a CONNECT tunnel).", nameof(session));
+            throw new ArgumentException(NoReplayableUrlMessage, nameof(session));
         }
 
         var sb = new StringBuilder();
@@ -98,7 +100,7 @@ public static class SessionRequestCodegen
     {
         if (!TryGetRequest(session, out var request))
         {
-            throw new ArgumentException("Session has no replayable URL (or is a CONNECT tunnel).", nameof(session));
+            throw new ArgumentException(NoReplayableUrlMessage, nameof(session));
         }
 
         var method = request.Method;
@@ -186,13 +188,36 @@ public static class SessionRequestCodegen
     {
         if (!TryGetRequest(session, out var request))
         {
-            throw new ArgumentException("Session has no replayable URL (or is a CONNECT tunnel).", nameof(session));
+            throw new ArgumentException(NoReplayableUrlMessage, nameof(session));
         }
 
+        var (contentType, userAgent, headers) = PartitionPowerShellHeaders(request.Headers);
+        var sb = new StringBuilder();
+        sb.Append("Invoke-WebRequest -Uri ").Append(PowerShellQuote(request.Url));
+        sb.Append(" -Method ").Append(PowerShellQuote(request.Method));
+        if (contentType is not null)
+        {
+            sb.Append(" -ContentType ").Append(PowerShellQuote(contentType));
+        }
+
+        if (userAgent is not null)
+        {
+            sb.Append(" -UserAgent ").Append(PowerShellQuote(userAgent));
+        }
+
+        AppendPowerShellHeaderBlock(sb, headers);
+        AppendPowerShellBody(sb, request);
+        sb.Append(" -UseBasicParsing");
+        return sb.ToString();
+    }
+
+    private static (string? ContentType, string? UserAgent, List<(string Name, string Value)> Headers) PartitionPowerShellHeaders(
+        IEnumerable<(string Name, string Value)> requestHeaders)
+    {
         string? contentType = null;
         string? userAgent = null;
         var headers = new List<(string Name, string Value)>();
-        foreach (var header in request.Headers)
+        foreach (var header in requestHeaders)
         {
             if (header.Name.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
             {
@@ -208,59 +233,57 @@ public static class SessionRequestCodegen
             }
         }
 
-        var sb = new StringBuilder();
-        sb.Append("Invoke-WebRequest -Uri ").Append(PowerShellQuote(request.Url));
-        sb.Append(" -Method ").Append(PowerShellQuote(request.Method));
-        if (contentType is not null)
+        return (contentType, userAgent, headers);
+    }
+
+    private static void AppendPowerShellHeaderBlock(StringBuilder sb, List<(string Name, string Value)> headers)
+    {
+        if (headers.Count == 0)
         {
-            sb.Append(" -ContentType ").Append(PowerShellQuote(contentType));
+            return;
         }
 
-        if (userAgent is not null)
+        sb.Append(" -Headers @{ ");
+        for (var i = 0; i < headers.Count; i++)
         {
-            sb.Append(" -UserAgent ").Append(PowerShellQuote(userAgent));
-        }
-
-        if (headers.Count > 0)
-        {
-            sb.Append(" -Headers @{ ");
-            for (var i = 0; i < headers.Count; i++)
+            if (i > 0)
             {
-                if (i > 0)
-                {
-                    sb.Append("; ");
-                }
-
-                sb.Append(PowerShellQuote(headers[i].Name))
-                    .Append(" = ")
-                    .Append(PowerShellQuote(headers[i].Value));
+                sb.Append("; ");
             }
 
-            sb.Append(" }");
+            sb.Append(PowerShellQuote(headers[i].Name))
+                .Append(" = ")
+                .Append(PowerShellQuote(headers[i].Value));
         }
 
+        sb.Append(" }");
+    }
+
+    private static void AppendPowerShellBody(StringBuilder sb, CapturedRequest request)
+    {
         if (request.BodyText is not null)
         {
             sb.Append(" -Body ").Append(PowerShellQuote(request.BodyText));
+            return;
         }
-        else if (request.BodyBytes is { Length: > 0 } bytes)
-        {
-            sb.Append(" -Body ([byte[]](");
-            for (var i = 0; i < bytes.Length; i++)
-            {
-                if (i > 0)
-                {
-                    sb.Append(',');
-                }
 
-                sb.Append(bytes[i].ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (request.BodyBytes is not { Length: > 0 } bytes)
+        {
+            return;
+        }
+
+        sb.Append(" -Body ([byte[]](");
+        for (var i = 0; i < bytes.Length; i++)
+        {
+            if (i > 0)
+            {
+                sb.Append(',');
             }
 
-            sb.Append("))");
+            sb.Append(bytes[i].ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
 
-        sb.Append(" -UseBasicParsing");
-        return sb.ToString();
+        sb.Append("))");
     }
 
     /// <summary>Python <c>requests.request</c>. Binary bodies use a <c>data=</c> bytes literal.</summary>
@@ -268,7 +291,7 @@ public static class SessionRequestCodegen
     {
         if (!TryGetRequest(session, out var request))
         {
-            throw new ArgumentException("Session has no replayable URL (or is a CONNECT tunnel).", nameof(session));
+            throw new ArgumentException(NoReplayableUrlMessage, nameof(session));
         }
 
         var sb = new StringBuilder();

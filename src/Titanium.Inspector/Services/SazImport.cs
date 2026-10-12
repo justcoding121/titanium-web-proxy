@@ -40,89 +40,16 @@ public static partial class SazImport
             return new SazImportResult(SazImportStatus.Encrypted, []);
         }
 
-        ZipArchive zip;
-        try
+        if (!TryOpenZipArchive(stream, out var zip, out var openFailure))
         {
-            zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
-        }
-        catch (InvalidDataException ex) when (IsEncrypted(ex))
-        {
-            return new SazImportResult(SazImportStatus.Encrypted, []);
-        }
-        catch (InvalidDataException)
-        {
-            return new SazImportResult(SazImportStatus.NotAnArchive, []);
+            return new SazImportResult(openFailure, []);
         }
 
         using (zip)
         {
-            var groups = new SortedDictionary<int, Parts>();
-            long total = 0;
-            try
+            if (!TryCollectParts(zip, cap, out var groups, out var readFailure))
             {
-                foreach (var entry in zip.Entries)
-                {
-                    var name = entry.FullName.Replace('\\', '/');
-                    var match = EntryName().Match(name);
-                    if (!match.Success)
-                    {
-                        continue;
-                    }
-
-                    var index = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
-                    var kind = match.Groups[2].Value.ToLowerInvariant();
-                    var ext = match.Groups[3].Value.ToLowerInvariant();
-                    if (kind == "m" && ext != "xml")
-                    {
-                        continue;
-                    }
-
-                    if (kind != "m" && ext != "txt")
-                    {
-                        continue;
-                    }
-
-                    if (!groups.TryGetValue(index, out var parts))
-                    {
-                        if (groups.Count >= cap.MaxSessions)
-                        {
-                            return new SazImportResult(SazImportStatus.TooLarge, []);
-                        }
-
-                        parts = new Parts();
-                        groups[index] = parts;
-                    }
-
-                    var bytes = ReadCapped(entry, cap.MaxEntryBytes, ref total, cap.MaxTotalBytes);
-                    if (kind == "c")
-                    {
-                        parts.Request = bytes;
-                    }
-                    else if (kind == "s")
-                    {
-                        parts.Response = bytes;
-                    }
-                    else
-                    {
-                        parts.Metadata = bytes;
-                    }
-                }
-            }
-            catch (SazEncryptedException)
-            {
-                return new SazImportResult(SazImportStatus.Encrypted, []);
-            }
-            catch (SazTooLargeException)
-            {
-                return new SazImportResult(SazImportStatus.TooLarge, []);
-            }
-            catch (InvalidDataException ex) when (IsEncrypted(ex))
-            {
-                return new SazImportResult(SazImportStatus.Encrypted, []);
-            }
-            catch (InvalidDataException)
-            {
-                return new SazImportResult(SazImportStatus.NotAnArchive, []);
+                return new SazImportResult(readFailure, []);
             }
 
             if (groups.Count == 0)
@@ -130,27 +57,160 @@ public static partial class SazImport
                 return new SazImportResult(SazImportStatus.Empty, []);
             }
 
-            var sessions = new List<SessionSnapshot>(groups.Count);
-            var id = startId < 1 ? 1 : startId;
-            foreach (var pair in groups)
+            return BuildSessionsFromParts(groups, startId);
+        }
+    }
+
+    private static bool TryOpenZipArchive(Stream stream, out ZipArchive zip, out SazImportStatus failure)
+    {
+        try
+        {
+            zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+            failure = SazImportStatus.Ok;
+            return true;
+        }
+        catch (InvalidDataException ex) when (IsEncrypted(ex))
+        {
+            zip = null!;
+            failure = SazImportStatus.Encrypted;
+            return false;
+        }
+        catch (InvalidDataException)
+        {
+            zip = null!;
+            failure = SazImportStatus.NotAnArchive;
+            return false;
+        }
+    }
+
+    private static bool TryCollectParts(
+        ZipArchive zip,
+        SazLimits cap,
+        out SortedDictionary<int, Parts> groups,
+        out SazImportStatus failure)
+    {
+        groups = new SortedDictionary<int, Parts>();
+        long total = 0;
+        try
+        {
+            foreach (var entry in zip.Entries)
             {
-                if (pair.Value.Metadata is { Length: > 0 } meta && !MetadataIsSafe(meta))
+                if (!TryParseEntryName(entry.FullName, out var index, out var kind))
+                {
+                    continue;
+                }
+
+                if (!groups.TryGetValue(index, out var parts))
+                {
+                    if (groups.Count >= cap.MaxSessions)
+                    {
+                        failure = SazImportStatus.TooLarge;
+                        groups = new SortedDictionary<int, Parts>();
+                        return false;
+                    }
+
+                    parts = new Parts();
+                    groups[index] = parts;
+                }
+
+                var bytes = ReadCapped(entry, cap.MaxEntryBytes, ref total, cap.MaxTotalBytes);
+                AssignPartBytes(parts, kind, bytes);
+            }
+        }
+        catch (SazEncryptedException)
+        {
+            failure = SazImportStatus.Encrypted;
+            groups = new SortedDictionary<int, Parts>();
+            return false;
+        }
+        catch (SazTooLargeException)
+        {
+            failure = SazImportStatus.TooLarge;
+            groups = new SortedDictionary<int, Parts>();
+            return false;
+        }
+        catch (InvalidDataException ex) when (IsEncrypted(ex))
+        {
+            failure = SazImportStatus.Encrypted;
+            groups = new SortedDictionary<int, Parts>();
+            return false;
+        }
+        catch (InvalidDataException)
+        {
+            failure = SazImportStatus.NotAnArchive;
+            groups = new SortedDictionary<int, Parts>();
+            return false;
+        }
+
+        failure = SazImportStatus.Ok;
+        return true;
+    }
+
+    private static bool TryParseEntryName(string fullName, out int index, out string kind)
+    {
+        index = 0;
+        kind = "";
+        var name = fullName.Replace('\\', '/');
+        var match = EntryName().Match(name);
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        index = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+        kind = match.Groups[2].Value.ToLowerInvariant();
+        var ext = match.Groups[3].Value.ToLowerInvariant();
+        if (kind == "m" && ext != "xml")
+        {
+            return false;
+        }
+
+        if (kind != "m" && ext != "txt")
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static void AssignPartBytes(Parts parts, string kind, byte[] bytes)
+    {
+        if (kind == "c")
+        {
+            parts.Request = bytes;
+        }
+        else if (kind == "s")
+        {
+            parts.Response = bytes;
+        }
+        else
+        {
+            parts.Metadata = bytes;
+        }
+    }
+
+    private static SazImportResult BuildSessionsFromParts(SortedDictionary<int, Parts> groups, long startId)
+    {
+        var sessions = new List<SessionSnapshot>(groups.Count);
+        var id = startId < 1 ? 1 : startId;
+            foreach (var parts in groups.Values)
+            {
+                if (parts.Metadata is { Length: > 0 } meta && !MetadataIsSafe(meta))
                 {
                     return new SazImportResult(SazImportStatus.UnsafeMetadata, []);
                 }
 
-                var session = Build(pair.Value, id);
-                if (session is not null)
-                {
-                    sessions.Add(session);
-                    id++;
-                }
+                var session = Build(parts, id);
+            if (session is not null)
+            {
+                sessions.Add(session);
+                id++;
             }
-
-            return sessions.Count == 0
-                ? new SazImportResult(SazImportStatus.Empty, [])
-                : new SazImportResult(SazImportStatus.Ok, sessions);
         }
+
+        return sessions.Count == 0
+            ? new SazImportResult(SazImportStatus.Empty, [])
+            : new SazImportResult(SazImportStatus.Ok, sessions);
     }
 
     private static bool HasEncryptionFlag(Stream stream)
@@ -159,39 +219,13 @@ public static partial class SazImport
         try
         {
             Span<byte> header = stackalloc byte[30];
-            while (true)
+            while (TryReadLocalHeader(stream, header, out var encrypted, out var skip))
             {
-                var read = stream.Read(header);
-                if (read < 4)
-                {
-                    return false;
-                }
-
-                if (header[0] != 0x50 || header[1] != 0x4B)
-                {
-                    return false;
-                }
-
-                if (header[2] == 0x01 && header[3] == 0x02)
-                {
-                    return false;
-                }
-
-                if (header[2] != 0x03 || header[3] != 0x04 || read < 30)
-                {
-                    return false;
-                }
-
-                var flags = header[6] | (header[7] << 8);
-                if ((flags & 1) != 0)
+                if (encrypted)
                 {
                     return true;
                 }
 
-                var compSize = header[18] | (header[19] << 8) | (header[20] << 16) | (header[21] << 24);
-                var nameLen = header[26] | (header[27] << 8);
-                var extraLen = header[28] | (header[29] << 8);
-                var skip = nameLen + extraLen + compSize;
                 if (skip < 0 || stream.Position + skip > stream.Length)
                 {
                     return false;
@@ -199,6 +233,8 @@ public static partial class SazImport
 
                 stream.Position += skip;
             }
+
+            return false;
         }
         catch (IOException)
         {
@@ -208,6 +244,46 @@ public static partial class SazImport
         {
             stream.Position = start;
         }
+    }
+
+    private static bool TryReadLocalHeader(Stream stream, Span<byte> header, out bool encrypted, out int skip)
+    {
+        encrypted = false;
+        skip = 0;
+        var read = stream.Read(header);
+        if (read < 4)
+        {
+            return false;
+        }
+
+        if (header[0] != 0x50 || header[1] != 0x4B)
+        {
+            return false;
+        }
+
+        if (header[2] == 0x01 && header[3] == 0x02)
+        {
+            return false;
+        }
+
+        if (header[2] != 0x03 || header[3] != 0x04 || read < 30)
+        {
+            return false;
+        }
+
+        var flags = header[6] | (header[7] << 8);
+        if ((flags & 1) != 0)
+        {
+            encrypted = true;
+            skip = 0;
+            return true;
+        }
+
+        var compSize = header[18] | (header[19] << 8) | (header[20] << 16) | (header[21] << 24);
+        var nameLen = header[26] | (header[27] << 8);
+        var extraLen = header[28] | (header[29] << 8);
+        skip = nameLen + extraLen + compSize;
+        return true;
     }
 
     private static bool IsEncrypted(InvalidDataException ex) =>
@@ -270,6 +346,7 @@ public static partial class SazImport
             using var reader = XmlReader.Create(new MemoryStream(xml), settings);
             while (reader.Read())
             {
+                // Consume the document; malformed XML throws from Read().
             }
 
             return true;
@@ -329,6 +406,29 @@ public static partial class SazImport
         }
 
         var text = Encoding.UTF8.GetString(raw);
+        SplitHeadAndBody(text, out var head, out var bodyText);
+        var lines = head.Split('\n');
+        if (lines.Length == 0)
+        {
+            return null;
+        }
+
+        ParseStartLine(lines[0].TrimEnd('\r'), isRequest, out var method, out var target, out var status);
+        ParseHeaderBlock(lines, headers: out var headers, host: out var host, chunked: out var chunked);
+
+        if (isRequest && !target.Contains("://", StringComparison.Ordinal) && host is not null &&
+            !method.Equals("CONNECT", StringComparison.OrdinalIgnoreCase))
+        {
+            var scheme = "https://";
+            target = scheme + host + (target.StartsWith('/') ? target : "/" + target);
+        }
+
+        BuildBodyFields(bodyText, chunked, out var body, out var storedText);
+        return new RawMessage(method, target, host, headers.ToString(), status, body, storedText);
+    }
+
+    private static void SplitHeadAndBody(string text, out string head, out string bodyText)
+    {
         var split = text.IndexOf("\r\n\r\n", StringComparison.Ordinal);
         var sepLen = 4;
         if (split < 0)
@@ -337,39 +437,42 @@ public static partial class SazImport
             sepLen = 2;
         }
 
-        var head = split < 0 ? text : text[..split];
-        var bodyText = split < 0 ? "" : text[(split + sepLen)..];
-        var lines = head.Split('\n');
-        if (lines.Length == 0)
-        {
-            return null;
-        }
+        head = split < 0 ? text : text[..split];
+        bodyText = split < 0 ? "" : text[(split + sepLen)..];
+    }
 
-        var start = lines[0].TrimEnd('\r');
-        string method = "GET";
-        string target = "";
-        int? status = null;
+    private static void ParseStartLine(string start, bool isRequest, out string method, out string target, out int? status)
+    {
+        method = "GET";
+        target = "";
+        status = null;
+        var bits = start.Split(' ');
         if (isRequest)
         {
-            var bits = start.Split(' ');
             if (bits.Length >= 2)
             {
                 method = bits[0];
                 target = bits[1];
             }
-        }
-        else
-        {
-            var bits = start.Split(' ');
-            if (bits.Length >= 2 && int.TryParse(bits[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var code))
-            {
-                status = code;
-            }
+
+            return;
         }
 
-        var headers = new StringBuilder();
-        string? host = null;
-        var chunked = false;
+        if (bits.Length >= 2 && int.TryParse(bits[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var code))
+        {
+            status = code;
+        }
+    }
+
+    private static void ParseHeaderBlock(
+        string[] lines,
+        out StringBuilder headers,
+        out string? host,
+        out bool chunked)
+    {
+        headers = new StringBuilder();
+        host = null;
+        chunked = false;
         for (var i = 1; i < lines.Length; i++)
         {
             var line = lines[i].TrimEnd('\r');
@@ -397,29 +500,25 @@ public static partial class SazImport
                 chunked = true;
             }
         }
+    }
 
-        if (isRequest && !target.Contains("://", StringComparison.Ordinal) && host is not null &&
-            !method.Equals("CONNECT", StringComparison.OrdinalIgnoreCase))
+    private static void BuildBodyFields(string bodyText, bool chunked, out byte[]? body, out string? storedText)
+    {
+        body = null;
+        storedText = null;
+        if (bodyText.Length == 0)
         {
-            var scheme = "https://";
-            target = scheme + host + (target.StartsWith('/') ? target : "/" + target);
+            return;
         }
 
-        byte[]? body = null;
-        string? storedText = null;
-        if (bodyText.Length > 0)
+        var bodyBytes = Encoding.UTF8.GetBytes(bodyText);
+        if (chunked)
         {
-            var bodyBytes = Encoding.UTF8.GetBytes(bodyText);
-            if (chunked)
-            {
-                bodyBytes = Dechunk(bodyBytes) ?? bodyBytes;
-            }
-
-            body = bodyBytes;
-            storedText = Encoding.UTF8.GetString(bodyBytes);
+            bodyBytes = Dechunk(bodyBytes) ?? bodyBytes;
         }
 
-        return new RawMessage(method, target, host, headers.ToString(), status, body, storedText);
+        body = bodyBytes;
+        storedText = Encoding.UTF8.GetString(bodyBytes);
     }
 
     internal static byte[]? Dechunk(byte[] body)
@@ -498,7 +597,7 @@ public static partial class SazImport
         byte[]? Body,
         string? BodyText);
 
-    private sealed class SazTooLargeException : Exception;
+    public sealed class SazTooLargeException : Exception;
 
-    private sealed class SazEncryptedException : Exception;
+    public sealed class SazEncryptedException : Exception;
 }

@@ -201,7 +201,7 @@ public class SessionCopyTests
     }
 
     [TestMethod]
-    public void ViewModel_BuildsTheSamePowerShell_AsTheGenerator()
+    public async Task ViewModel_BuildsTheSamePowerShell_AsTheGenerator()
     {
         var (vm, picker) = NewVm();
         var snap = Awkward();
@@ -235,7 +235,7 @@ public class SessionCopyTests
                 saved = null;
             }
 
-            Thread.Sleep(20);
+            await Task.Delay(20);
         }
 
         Assert.IsNotNull(saved);

@@ -2908,7 +2908,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     /// <summary>True when at least one tracked network setting differs from its default.</summary>
     public bool HasCustomSettings => _hasCustomSettings;
 
-    private IReadOnlyList<string> _customSettingLines = [];
+    private string[] _customSettingLines = [];
     private string _customSettingsLabel = "";
     private string _customSettingsDetail = "";
     private bool _hasCustomSettings;
@@ -2922,12 +2922,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
                 : LanguageService.Get(item.TextKey) + " " + item.Suffix)
             .ToArray();
         _customSettingsDetail = string.Join(Environment.NewLine, _customSettingLines);
-        _hasCustomSettings = _customSettingLines.Count > 0;
+        _hasCustomSettings = _customSettingLines.Length > 0;
         _customSettingsLabel = _hasCustomSettings
             ? string.Format(
                 CultureInfo.InvariantCulture,
                 LanguageService.Get("custom.settings"),
-                _customSettingLines.Count)
+                _customSettingLines.Length)
             : "";
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CustomSettingLines)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CustomSettingsLabel)));

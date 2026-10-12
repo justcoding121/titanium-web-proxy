@@ -40,12 +40,23 @@ public sealed class TimelineViewModel : IDisposable
 
     public string Detail { get; private set; } = "";
 
-    public string Summary =>
-        Chart.Rows.Count == 0
-            ? LanguageService.Get("timeline.empty")
-            : Chart.Capped
-                ? LanguageService.Format("timeline.capped", TimelineLayout.MaxRows)
-                : "";
+    public string Summary
+    {
+        get
+        {
+            if (Chart.Rows.Count == 0)
+            {
+                return LanguageService.Get("timeline.empty");
+            }
+
+            if (Chart.Capped)
+            {
+                return LanguageService.Format("timeline.capped", TimelineLayout.MaxRows);
+            }
+
+            return "";
+        }
+    }
 
     public void Open(DateTimeOffset now, double width = 800)
     {

@@ -94,14 +94,11 @@ public static class SessionRelations
 
     private static RelationResult Pack(SessionSnapshot seed, IEnumerable<SessionSnapshot> others)
     {
-        var ids = new List<long>();
-        foreach (var session in others)
-        {
-            if (session.Id != seed.Id && !ids.Contains(session.Id))
-            {
-                ids.Add(session.Id);
-            }
-        }
+        var ids = others
+            .Where(s => s.Id != seed.Id)
+            .Select(s => s.Id)
+            .Distinct()
+            .ToList();
 
         if (ids.Count == 0)
         {
@@ -147,15 +144,7 @@ public static class SessionRelations
         }
 
         var target = Resolve(current.Url, location);
-        foreach (var session in window)
-        {
-            if (!seen.Contains(session.Id) && SameTarget(session.Url, target))
-            {
-                return session;
-            }
-        }
-
-        return null;
+        return window.FirstOrDefault(s => !seen.Contains(s.Id) && SameTarget(s.Url, target));
     }
 
     private static SessionSnapshot? FindSource(
