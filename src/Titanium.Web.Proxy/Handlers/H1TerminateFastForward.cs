@@ -120,38 +120,41 @@ public partial class ProxyServer
                    || method.Equals("HEAD", StringComparison.OrdinalIgnoreCase));
     }
 
+    private readonly record struct H1TerminateLiteRedial(
+        bool IsHttps, string? ConnectHost, int? ConnectPort, string? PoolKey);
+
     /// <summary>
     ///     Dial a fresh origin connection (bypassing the pool) to replay a request after a pooled socket
     ///     turned out to be closed by the origin.
     /// </summary>
     private async Task<TcpServerConnection> RedialH1TerminateLiteOriginAsync(
-        TransparentBaseProxyEndPoint endPoint, Request request, bool isHttps, string? connectHost,
-        int? connectPort, string? poolKey, SessionEventArgsBase session, CancellationToken cancellationToken)
+        TransparentBaseProxyEndPoint endPoint, Request request, H1TerminateLiteRedial dial,
+        SessionEventArgsBase session, CancellationToken cancellationToken)
     {
         string host;
         int port;
-        if (connectHost != null && connectPort is { } fwdPort)
+        if (dial.ConnectHost != null && dial.ConnectPort is { } fwdPort)
         {
-            host = connectHost;
+            host = dial.ConnectHost;
             port = fwdPort;
         }
         else
         {
-            (host, port) = request.GetOriginHostPort(isHttps ? 443 : 80);
+            (host, port) = request.GetOriginHostPort(dial.IsHttps ? 443 : 80);
         }
 
         var connection = await TcpConnectionFactory.GetServerConnection(
-                             this, host, port, HttpHeader.Version11, isHttps,
+                             this, host, port, HttpHeader.Version11, dial.IsHttps,
                              SslExtensions.Http11ProtocolAsList, false, session,
                              UpStreamEndPoint,
-                             isHttps ? UpStreamHttpsProxy : UpStreamHttpProxy,
-                             true, false, cancellationToken, connectHost, connectPort,
-                             precomputedCacheKey: poolKey)
+                             dial.IsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy,
+                             true, false, cancellationToken, dial.ConnectHost, dial.ConnectPort,
+                             precomputedCacheKey: dial.PoolKey)
                          ?? throw new InvalidOperationException(
                              $"Failed to establish an HTTP/1.1 origin connection to '{host}:{port}'.");
 
         endPoint.CachedHttp11PoolKey = connection.CacheKey;
-        endPoint.CachedHttp11PoolIsHttps = isHttps;
+        endPoint.CachedHttp11PoolIsHttps = dial.IsHttps;
         return connection;
     }
 
@@ -254,8 +257,9 @@ public partial class ProxyServer
                 connection = null;
                 await TcpConnectionFactory.Release(stale, true);
                 openSession ??= CreateH1TerminateLiteColdSession(endPoint, clientStream);
-                connection = await RedialH1TerminateLiteOriginAsync(endPoint, request, isHttps, connectHost,
-                    connectPort, poolKey, openSession, cancellationToken);
+                connection = await RedialH1TerminateLiteOriginAsync(
+                    endPoint, request, new H1TerminateLiteRedial(isHttps, connectHost, connectPort, poolKey),
+                    openSession, cancellationToken);
                 http.SetConnection(connection);
                 await http.SendRequest(false, isTransparent: true, OriginHttpVersionPolicy, cancellationToken);
                 await http.ReceiveResponse(cancellationToken);
@@ -490,8 +494,9 @@ public partial class ProxyServer
                 connection = null;
                 await TcpConnectionFactory.Release(stale, true);
                 openSession ??= CreateH1TerminateLiteColdSession(endPoint, clientStream);
-                connection = await RedialH1TerminateLiteOriginAsync(endPoint, request, isHttps, connectHost,
-                    connectPort, poolKey, openSession, cancellationToken);
+                connection = await RedialH1TerminateLiteOriginAsync(
+                    endPoint, request, new H1TerminateLiteRedial(isHttps, connectHost, connectPort, poolKey),
+                    openSession, cancellationToken);
                 http.SetConnection(connection);
                 await http.SendRequest(false, isTransparent: true, OriginHttpVersionPolicy, cancellationToken);
                 await http.ReceiveResponse(cancellationToken);

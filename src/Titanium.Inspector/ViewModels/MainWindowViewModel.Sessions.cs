@@ -1160,7 +1160,7 @@ public sealed partial class MainWindowViewModel
     /// Statistics, Session Diff, and an <c>ids:</c> filter have to drop those same sessions.
     /// Pass null when every tracked session is gone.
     /// </summary>
-    private void SyncViewsToTrackedSessions(IReadOnlySet<long>? removedIds)
+    private void SyncViewsToTrackedSessions(HashSet<long>? removedIds)
     {
         if (!string.IsNullOrEmpty(_sessionDiffText) &&
             (removedIds is null || removedIds.Contains(_diffLeftId) || removedIds.Contains(_diffRightId)))

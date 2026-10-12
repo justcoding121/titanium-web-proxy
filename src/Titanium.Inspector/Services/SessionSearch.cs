@@ -154,7 +154,7 @@ public static class SessionSearch
     /// Pass null to remove those tokens entirely. Returns <paramref name="query"/> unchanged when
     /// nothing was removed.
     /// </summary>
-    public static string PruneRemovedIds(string? query, IReadOnlySet<long>? removedIds)
+    public static string PruneRemovedIds(string? query, HashSet<long>? removedIds)
     {
         if (string.IsNullOrWhiteSpace(query))
         {
@@ -167,37 +167,16 @@ public static class SessionSearch
         {
             if (groups[1].Success && IsIdsKey(groups[1].Value))
             {
-                if (removedIds is null)
+                if (RewriteIdsToken(groups[1].Value, groups[2].Value, removedIds, out var token))
                 {
                     changed = true;
-                    continue;
                 }
 
-                var kept = new List<string>();
-                foreach (var part in groups[2].Value.Split(','))
+                if (token is not null)
                 {
-                    if (part.Length == 0)
-                    {
-                        continue;
-                    }
-
-                    if (long.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) &&
-                        removedIds.Contains(id))
-                    {
-                        changed = true;
-                        continue;
-                    }
-
-                    kept.Add(part);
+                    parts.Add(token);
                 }
 
-                if (kept.Count == 0)
-                {
-                    changed = true;
-                    continue;
-                }
-
-                parts.Add($"{groups[1].Value}:{string.Join(',', kept)}");
                 continue;
             }
 
@@ -205,6 +184,52 @@ public static class SessionSearch
         }
 
         return changed ? string.Join(" ", parts) : query;
+    }
+
+    /// <summary>
+    /// Returns true when the token changed. <paramref name="token"/> is null when every id is gone.
+    /// </summary>
+    private static bool RewriteIdsToken(string key, string value, HashSet<long>? removedIds, out string? token)
+    {
+        if (removedIds is null)
+        {
+            token = null;
+            return true;
+        }
+
+        var kept = KeepIdParts(value, removedIds, out var dropped);
+        if (kept.Count == 0)
+        {
+            token = null;
+            return true;
+        }
+
+        token = $"{key}:{string.Join(',', kept)}";
+        return dropped;
+    }
+
+    private static List<string> KeepIdParts(string value, HashSet<long> removedIds, out bool dropped)
+    {
+        dropped = false;
+        var kept = new List<string>();
+        foreach (var part in value.Split(','))
+        {
+            if (part.Length == 0)
+            {
+                continue;
+            }
+
+            if (long.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) &&
+                removedIds.Contains(id))
+            {
+                dropped = true;
+                continue;
+            }
+
+            kept.Add(part);
+        }
+
+        return kept;
     }
 
     private static bool IsIdsKey(string key)
