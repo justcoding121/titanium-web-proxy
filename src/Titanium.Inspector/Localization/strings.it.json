@@ -379,7 +379,7 @@
   "stats.estimated": "Tempo stimato (importato da un file più vecchio)",
   "stats.total": "{0} ms",
   "stats.slowest": "La maggior parte del tempo è stata {0}.",
-  "stats.phase.blocked": "In attesa di iniziare",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "Connessione",
   "stats.phase.tls": "Handshake sicuro",

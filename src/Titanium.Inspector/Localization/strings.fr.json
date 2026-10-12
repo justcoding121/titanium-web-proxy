@@ -379,7 +379,7 @@
   "stats.estimated": "Durée estimée (importée d un fichier plus ancien)",
   "stats.total": "{0} ms",
   "stats.slowest": "La majeure partie du temps était {0}.",
-  "stats.phase.blocked": "Attente du démarrage",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "Connexion",
   "stats.phase.tls": "Négociation sécurisée",

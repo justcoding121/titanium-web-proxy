@@ -379,7 +379,7 @@
   "stats.estimated": "समय अनुमानित है (पुरानी फ़ाइल से आयात)",
   "stats.total": "{0} मि.से.",
   "stats.slowest": "अधिकांश समय {0} में गया।",
-  "stats.phase.blocked": "शुरू होने की प्रतीक्षा",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "कनेक्ट हो रहा है",
   "stats.phase.tls": "सुरक्षित हैंडशेक",

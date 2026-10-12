@@ -379,7 +379,7 @@
   "stats.estimated": "Waktu diperkirakan (diimpor dari berkas yang lebih lama)",
   "stats.total": "{0} ms",
   "stats.slowest": "Sebagian besar waktu adalah {0}.",
-  "stats.phase.blocked": "Menunggu mulai",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "Menyambungkan",
   "stats.phase.tls": "Jabat tangan aman",

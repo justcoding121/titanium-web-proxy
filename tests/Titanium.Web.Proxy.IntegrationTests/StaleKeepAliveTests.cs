@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -237,6 +238,127 @@ public class StaleKeepAliveTests
         await Task.Delay(300);
         Assert.AreEqual(1, acceptCount, "A POST must not be replayed on a fresh upstream connection.");
         Assert.AreEqual(1, postsSeen, "The POST must reach the origin exactly once.");
+    }
+
+    /// <summary>
+    ///     A page load leaves several idle upstream sockets pooled. A dev server idle-closes all of them
+    ///     together, and the pool cannot see that (its liveness poll only proves the local side is writable).
+    ///     The replay after the first stale socket must dial; renting the next queued socket fails the same
+    ///     way and surfaced as "502: the origin closed the connection before sending a response".
+    /// </summary>
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    [DataRow(false, DisplayName = "fast-path")]
+    [DataRow(true, DisplayName = "session-hooks")]
+    public async Task SeveralPooledSocketsIdleClosed_NextRequest_ReplaysOnFreshDial(bool withHooks)
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+
+        const int pooled = 3;
+        var accepted = 0;
+        var allPooledAccepted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        server.HandleTcpRequest(async context =>
+        {
+            var n = Interlocked.Increment(ref accepted);
+            if (n == pooled) allPooledAccepted.TrySetResult(true);
+
+            await DrainRequestHeaders(context);
+            if (n <= pooled)
+            {
+                // Hold every response until all sockets exist, so the proxy holds distinct ones.
+                await allPooledAccepted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+
+            await context.Transport.Output.WriteAsync(MsgEncoding.GetBytes(
+                "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok"));
+
+            if (n <= pooled)
+            {
+                // Idle close while the proxy still pools the socket.
+                await Task.Delay(200);
+                context.Transport.Output.Complete();
+                context.Transport.Input.Complete();
+            }
+            else
+            {
+                await Task.Delay(500);
+            }
+        });
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableConnectionPool = true;
+        if (withHooks)
+        {
+            // A registered handler takes requests off the fast path and onto RetryPolicy (the Inspector's path).
+            proxy.BeforeRequest += (_, _) => Task.CompletedTask;
+        }
+
+        var warmups = Enumerable.Range(0, pooled)
+            .Select(_ => testSuite.GetClient(proxy).GetAsync(server.ListeningTcpUrl))
+            .ToArray();
+        foreach (var warmup in await Task.WhenAll(warmups))
+        {
+            Assert.AreEqual(HttpStatusCode.OK, warmup.StatusCode);
+        }
+
+        // Let the origin close every idle socket, and the proxy release the sockets to its pool.
+        await Task.Delay(700);
+
+        var next = await testSuite.GetClient(proxy).GetAsync(server.ListeningTcpUrl);
+        Assert.AreEqual(HttpStatusCode.OK, next.StatusCode,
+            "replay rented another stale pooled socket instead of dialing a fresh connection");
+        Assert.AreEqual("ok", await next.Content.ReadAsStringAsync());
+        Assert.IsTrue(Volatile.Read(ref accepted) > pooled,
+            $"expected a fresh upstream accept for the replay; accepted={accepted}");
+    }
+
+    /// <summary>
+    ///     Guards the replay fix against over-reach: only a replay may skip the pool. A first attempt
+    ///     on a healthy pooled socket must still reuse it, or every request pays a new TCP/TLS handshake.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    [DataRow(false, DisplayName = "fast-path")]
+    [DataRow(true, DisplayName = "session-hooks")]
+    public async Task HealthyPooledSocket_FirstAttempt_StillReusesPool(bool withHooks)
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+
+        var accepted = 0;
+        server.HandleTcpRequest(async context =>
+        {
+            Interlocked.Increment(ref accepted);
+            while (true)
+            {
+                await DrainRequestHeaders(context);
+                await context.Transport.Output.WriteAsync(MsgEncoding.GetBytes(
+                    "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok"));
+            }
+        });
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableConnectionPool = true;
+        if (withHooks)
+        {
+            // A registered handler takes requests off the fast path and onto RetryPolicy (the Inspector's path).
+            proxy.BeforeRequest += (_, _) => Task.CompletedTask;
+        }
+
+        const int requests = 5;
+        for (var i = 0; i < requests; i++)
+        {
+            // A new client connection each time, so only the proxy's upstream pool can supply the socket.
+            var response = await testSuite.GetClient(proxy).GetAsync(server.ListeningTcpUrl);
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            await response.Content.ReadAsStringAsync();
+            await Task.Delay(150);
+        }
+
+        Assert.AreEqual(1, Volatile.Read(ref accepted),
+            "healthy pooled upstream socket was not reused; the first attempt must use the pool");
     }
 
     private static async Task DrainRequestHeaders(ConnectionContext context)

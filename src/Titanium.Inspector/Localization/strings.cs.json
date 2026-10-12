@@ -379,7 +379,7 @@
   "stats.estimated": "Čas je odhad (import ze staršího souboru)",
   "stats.total": "{0} ms",
   "stats.slowest": "Většinu času zabralo {0}.",
-  "stats.phase.blocked": "Čekání na start",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "Připojování",
   "stats.phase.tls": "Zabezpečené navázání",

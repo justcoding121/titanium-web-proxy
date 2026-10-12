@@ -379,7 +379,7 @@
   "stats.estimated": "Tiden er anslått (importert fra en eldre fil)",
   "stats.total": "{0} ms",
   "stats.slowest": "Mesteparten av tiden var {0}.",
-  "stats.phase.blocked": "Venter på å starte",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "Kobler til",
   "stats.phase.tls": "Sikkert håndtrykk",

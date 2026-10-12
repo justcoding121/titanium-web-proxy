@@ -379,7 +379,7 @@
   "stats.estimated": "Час оціночний (імпорт зі старішого файлу)",
   "stats.total": "{0} мс",
   "stats.slowest": "Більшість часу: {0}.",
-  "stats.phase.blocked": "Очікування старту",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "Підключення",
   "stats.phase.tls": "Захищене рукостискання",

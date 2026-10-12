@@ -379,7 +379,7 @@
   "stats.estimated": "Tiempo estimado (importado de un archivo anterior)",
   "stats.total": "{0} ms",
   "stats.slowest": "La mayor parte del tiempo fue {0}.",
-  "stats.phase.blocked": "Esperando para empezar",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "Conectando",
   "stats.phase.tls": "Negociación segura",

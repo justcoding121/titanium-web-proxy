@@ -10,13 +10,13 @@
         CanResize="True"
         WindowStartupLocation="CenterOwner">
   <DockPanel Margin="12">
-    <TextBlock x:Name="Legend" DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,8" Opacity="0.85"
+    <WrapPanel x:Name="Legend" DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8"
                AutomationProperties.AutomationId="TimelineLegend" />
     <TextBlock x:Name="Summary" DockPanel.Dock="Bottom" Margin="0,8,0,0" TextWrapping="Wrap"
                AutomationProperties.AutomationId="TimelineSummary" />
     <TextBlock x:Name="Detail" DockPanel.Dock="Bottom" Margin="0,4,0,0" TextWrapping="Wrap"
                AutomationProperties.AutomationId="TimelineDetail" />
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <ScrollViewer x:Name="ChartScroll" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
       <views:TimelineChart x:Name="Chart" AutomationProperties.AutomationId="TimelineChart" />
     </ScrollViewer>
   </DockPanel>

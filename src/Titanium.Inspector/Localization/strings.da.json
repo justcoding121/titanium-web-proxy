@@ -379,7 +379,7 @@
   "stats.estimated": "Tid er skønnet (importeret fra en ældre fil)",
   "stats.total": "{0} ms",
   "stats.slowest": "Det meste af tiden var {0}.",
-  "stats.phase.blocked": "Venter på at starte",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "Opretter forbindelse",
   "stats.phase.tls": "Sikker håndtryk",

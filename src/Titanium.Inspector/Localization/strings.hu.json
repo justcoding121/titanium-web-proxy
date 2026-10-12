@@ -379,7 +379,7 @@
   "stats.estimated": "Az idő becsült (régebbi fájlból importálva)",
   "stats.total": "{0} ms",
   "stats.slowest": "Az idő nagy része ez volt: {0}.",
-  "stats.phase.blocked": "Várakozás az indulásra",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "Kapcsolódás",
   "stats.phase.tls": "Biztonságos kézfogás",

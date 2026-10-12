@@ -379,7 +379,7 @@
   "stats.estimated": "Время оценочное (импорт из более старого файла)",
   "stats.total": "{0} мс",
   "stats.slowest": "Большая часть времени: {0}.",
-  "stats.phase.blocked": "Ожидание старта",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "Подключение",
   "stats.phase.tls": "Защищённое рукопожатие",

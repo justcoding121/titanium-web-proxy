@@ -379,7 +379,7 @@
   "stats.estimated": "เวลาเป็นค่าประมาณ (นำเข้าจากไฟล์ที่เก่ากว่า)",
   "stats.total": "{0} มิลลิวินาที",
   "stats.slowest": "เวลาส่วนใหญ่คือ {0}",
-  "stats.phase.blocked": "รอเริ่ม",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "กำลังเชื่อมต่อ",
   "stats.phase.tls": "การจับมือที่ปลอดภัย",

@@ -379,7 +379,7 @@
   "stats.estimated": "Czas jest szacowany (zaimportowany ze starszego pliku)",
   "stats.total": "{0} ms",
   "stats.slowest": "Większość czasu to {0}.",
-  "stats.phase.blocked": "Oczekiwanie na start",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "Łączenie",
   "stats.phase.tls": "Bezpieczny uścisk dłoni",

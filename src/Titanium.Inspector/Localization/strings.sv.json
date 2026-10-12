@@ -379,7 +379,7 @@
   "stats.estimated": "Tiden är uppskattad (importerad från en äldre fil)",
   "stats.total": "{0} ms",
   "stats.slowest": "Största delen av tiden var {0}.",
-  "stats.phase.blocked": "Väntar på att starta",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "Ansluter",
   "stats.phase.tls": "Säker handskakning",

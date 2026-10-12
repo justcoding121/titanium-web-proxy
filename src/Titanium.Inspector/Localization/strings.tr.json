@@ -379,7 +379,7 @@
   "stats.estimated": "Süre tahminidir (daha eski bir dosyadan içe aktarıldı)",
   "stats.total": "{0} ms",
   "stats.slowest": "Zamanın çoğu şuydu: {0}.",
-  "stats.phase.blocked": "Başlamayı bekliyor",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "Bağlanıyor",
   "stats.phase.tls": "Güvenli el sıkışma",

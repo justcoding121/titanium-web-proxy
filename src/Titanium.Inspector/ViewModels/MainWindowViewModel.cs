@@ -123,6 +123,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     private string _breakpointEditBody = "";
     private string? _scriptOnRequest;
     private string? _scriptOnResponse;
+    private bool _selectGridFromTimeline;
     private int _selectedOuterPaneIndex;
     private int _selectedInspectTabIndex;
     private int _lastCoreInspectTab;
@@ -1238,7 +1239,23 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             return;
         }
 
+        if (ReferenceEquals(SelectedSession, session))
+        {
+            SetSelectedSessions([session]);
+            return;
+        }
+
+        _selectGridFromTimeline = true;
+        SetSelectedSessions([session]);
         SelectSessionWithoutOpeningDetails(session);
+    }
+
+    /// <summary>True once after a timeline click, so the grid replaces its selection and scrolls.</summary>
+    public bool ConsumeTimelineGridSelection()
+    {
+        var pending = _selectGridFromTimeline;
+        _selectGridFromTimeline = false;
+        return pending;
     }
 
     private async Task OpenLoggingSettingsAsync()

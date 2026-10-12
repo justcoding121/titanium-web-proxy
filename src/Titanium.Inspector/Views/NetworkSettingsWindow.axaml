@@ -9,17 +9,22 @@
         WindowStartupLocation="CenterOwner"
         CanResize="False">
   <DockPanel Margin="16">
-    <Grid DockPanel.Dock="Bottom" Margin="0,16,0,0" ColumnDefinitions="*,Auto">
-      <Button Grid.Column="0" x:Name="ResetButton" Content="{loc:Loc network.reset}"
-              HorizontalAlignment="Left" Background="Transparent" BorderThickness="0"
-              AutomationProperties.AutomationId="NetworkReset" />
-      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-        <Button x:Name="SaveButton" Content="{loc:Loc common.save}" MinWidth="88"
-                AutomationProperties.AutomationId="NetworkSave" />
-        <Button x:Name="CancelButton" Content="{loc:Loc common.cancel}" MinWidth="88" IsCancel="True"
-                AutomationProperties.AutomationId="NetworkCancel" />
-      </StackPanel>
-    </Grid>
+    <StackPanel DockPanel.Dock="Bottom" Margin="0,16,0,0" Spacing="8">
+      <CheckBox x:Name="RestartCheck" Content="{loc:Loc network.restartNow}"
+                HorizontalAlignment="Right"
+                AutomationProperties.AutomationId="NetworkRestartCapture" />
+      <Grid ColumnDefinitions="*,Auto">
+        <Button Grid.Column="0" x:Name="ResetButton" Content="{loc:Loc network.reset}"
+                HorizontalAlignment="Left" Background="Transparent" BorderThickness="0"
+                AutomationProperties.AutomationId="NetworkReset" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+          <Button x:Name="SaveButton" Content="{loc:Loc common.save}" MinWidth="88"
+                  AutomationProperties.AutomationId="NetworkSave" />
+          <Button x:Name="CancelButton" Content="{loc:Loc common.cancel}" MinWidth="88" IsCancel="True"
+                  AutomationProperties.AutomationId="NetworkCancel" />
+        </StackPanel>
+      </Grid>
+    </StackPanel>
     <TextBlock x:Name="StatusText" DockPanel.Dock="Bottom" Margin="0,8,0,0" TextWrapping="Wrap"
                Foreground="{DynamicResource InspectorErrorTextBrush}"
                AutomationProperties.AutomationId="NetworkStatus" />
@@ -37,8 +42,6 @@
                    AutomationProperties.AutomationId="NetworkUpstreamPort" />
         </Grid>
         <TextBlock Opacity="0.75" TextWrapping="Wrap" Text="{loc:Loc network.appliesNextStart}" />
-        <CheckBox x:Name="RestartCheck" Content="{loc:Loc network.restartNow}"
-                  AutomationProperties.AutomationId="NetworkRestartCapture" />
       </StackPanel>
       <StackPanel Spacing="4">
         <TextBlock FontWeight="SemiBold" Text="{loc:Loc network.protocols}" />

@@ -379,7 +379,7 @@
   "stats.estimated": "Thời gian là ước tính (nhập từ tệp cũ hơn)",
   "stats.total": "{0} ms",
   "stats.slowest": "Phần lớn thời gian là {0}.",
-  "stats.phase.blocked": "Chờ bắt đầu",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "Đang kết nối",
   "stats.phase.tls": "Bắt tay an toàn",

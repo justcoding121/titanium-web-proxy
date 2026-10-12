@@ -379,7 +379,7 @@
   "stats.estimated": "시간은 추정입니다 (이전 파일에서 가져옴)",
   "stats.total": "{0} ms",
   "stats.slowest": "대부분의 시간은 {0}이었습니다.",
-  "stats.phase.blocked": "시작 대기",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "연결",
   "stats.phase.tls": "보안 핸드셰이크",

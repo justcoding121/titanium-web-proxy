@@ -591,6 +591,7 @@ public partial class MainWindow : Window
 
         if (_sessionsVm is not null)
         {
+            _sessionsVm.PropertyChanged -= OnSelectedSessionChanged;
             _sessionsVm.Sessions.CollectionChanged -= OnSessionsCollectionChanged;
             if (_sessionsVm.Sessions is SessionListCollection oldList)
             {
@@ -601,12 +602,37 @@ public partial class MainWindow : Window
         _sessionsVm = vm;
         if (_sessionsVm is not null)
         {
+            _sessionsVm.PropertyChanged += OnSelectedSessionChanged;
             _sessionsVm.Sessions.CollectionChanged += OnSessionsCollectionChanged;
             if (_sessionsVm.Sessions is SessionListCollection newList)
             {
                 newList.Replacing += OnSessionsReplacing;
             }
         }
+    }
+
+    private void OnSelectedSessionChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(MainWindowViewModel.SelectedSession)
+            || sender is not MainWindowViewModel vm
+            || vm.SelectedSession is not SessionSnapshot snap)
+        {
+            return;
+        }
+
+        var fromTimeline = vm.ConsumeTimelineGridSelection();
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (fromTimeline)
+            {
+                SessionsGrid.SelectedItems.Clear();
+                SessionsGrid.SelectedItem = snap;
+            }
+
+            _programmaticScroll = true;
+            SessionsGrid.ScrollIntoView(snap, column: null);
+            Dispatcher.UIThread.Post(() => _programmaticScroll = false, DispatcherPriority.Background);
+        }, DispatcherPriority.Background);
     }
 
     private void AttachSessionsScroll()

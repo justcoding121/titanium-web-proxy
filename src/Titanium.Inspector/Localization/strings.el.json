@@ -379,7 +379,7 @@
   "stats.estimated": "Ο χρόνος είναι εκτίμηση (εισαγωγή από παλαιότερο αρχείο)",
   "stats.total": "{0} ms",
   "stats.slowest": "Ο περισσότερος χρόνος ήταν {0}.",
-  "stats.phase.blocked": "Αναμονή έναρξης",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "Σύνδεση",
   "stats.phase.tls": "Ασφαλής χειραψία",

@@ -1,5 +1,8 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Titanium.Inspector.Localization;
 using Titanium.Inspector.Services;
@@ -29,12 +32,7 @@ public partial class TimelineWindow : Window
         LanguageService.AttachWindow(this);
         _selectedIds = selectedIds;
         _model = new TimelineViewModel(store, select);
-        Legend.Text = string.Join(
-            " · ",
-            Enum.GetValues<SessionStatistics.Phase>().Select(phase => LanguageService.Get(SessionStatistics.PhaseKey(phase))))
-            + " · " + LanguageService.Get("timeline.tunnel")
-            + " · " + LanguageService.Get("timeline.estimated")
-            + " · " + LanguageService.Get("timeline.inFlight");
+        BuildLegend();
         _model.Open(DateTimeOffset.UtcNow, ChartWidth());
         ApplyModel();
         SyncSelection(force: true);
@@ -127,11 +125,108 @@ public partial class TimelineWindow : Window
 
         _lastSelected = next;
         Chart.SelectedIds = next;
+        ScrollSelectionIntoView(next);
+    }
+
+    private void ScrollSelectionIntoView(HashSet<long> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var row in _model.Chart.Rows)
+        {
+            if (!ids.Contains(row.Id))
+            {
+                continue;
+            }
+
+            var viewport = ChartScroll.Viewport.Height;
+            var top = Math.Max(0, row.Y - Math.Max(0, (viewport - TimelineLayout.RowHeight) / 2));
+            ChartScroll.Offset = new Vector(ChartScroll.Offset.X, top);
+            return;
+        }
+    }
+
+    private void BuildLegend()
+    {
+        foreach (var phase in Enum.GetValues<SessionStatistics.Phase>())
+        {
+            AddLegendItem(
+                TimelineChart.PhaseBrushes[(int)phase],
+                hatched: false,
+                LanguageService.Get(SessionStatistics.PhaseKey(phase)));
+        }
+
+        AddLegendItem(TimelineChart.PlainBrush, hatched: false, LanguageService.Get("timeline.tunnel"));
+        AddLegendItem(TimelineChart.PlainBrush, hatched: true, LanguageService.Get("timeline.estimated"));
+        AddLegendItem(TimelineChart.PlainBrush, hatched: false, LanguageService.Get("timeline.inFlight"));
+    }
+
+    private void AddLegendItem(IBrush fill, bool hatched, string label)
+    {
+        Legend.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Margin = new Thickness(0, 0, 14, 4),
+            Children =
+            {
+                new LegendSwatch
+                {
+                    Width = 12,
+                    Height = 12,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Fill = fill,
+                    Hatched = hatched,
+                },
+                new TextBlock
+                {
+                    Text = label,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Opacity = 0.85,
+                },
+            },
+        });
     }
 
     private double ChartWidth()
     {
         var width = Bounds.Width - 24;
         return width > 1 ? width : 800;
+    }
+
+    private sealed class LegendSwatch : Control
+    {
+        private static readonly Pen HatchPen = new(TimelineChart.HatchBrush, 1);
+
+        public IBrush Fill { get; set; } = TimelineChart.PlainBrush;
+
+        public bool Hatched { get; set; }
+
+        public override void Render(DrawingContext context)
+        {
+            var rect = new Rect(Bounds.Size);
+            if (rect.Width <= 0 || rect.Height <= 0)
+            {
+                return;
+            }
+
+            if (!Hatched)
+            {
+                context.FillRectangle(Fill, rect);
+                return;
+            }
+
+            using (context.PushClip(rect))
+            {
+                context.FillRectangle(Fill, rect);
+                for (var x = rect.X - rect.Height; x < rect.Right; x += 3)
+                {
+                    context.DrawLine(HatchPen, new Point(x, rect.Bottom), new Point(x + rect.Height, rect.Top));
+                }
+            }
+        }
     }
 }

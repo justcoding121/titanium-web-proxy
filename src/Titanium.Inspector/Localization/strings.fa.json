@@ -379,7 +379,7 @@
   "stats.estimated": "زمان تخمینی است (وارد شده از یک پرونده قدیمی‌تر)",
   "stats.total": "{0} میلی‌ثانیه",
   "stats.slowest": "بیشتر زمان {0} بود.",
-  "stats.phase.blocked": "انتظار برای شروع",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "در حال اتصال",
   "stats.phase.tls": "دست‌دادن امن",

@@ -135,7 +135,7 @@ public sealed class TimelineViewModel : IDisposable
                 return LanguageService.Get("timeline.inFlight");
             case TimelineLayout.RowKind.Plain:
                 var duration = row.Segments.Count > 0 ? row.Segments[0].Milliseconds : 0;
-                return row.Label + " " + duration.ToString("0", CultureInfo.CurrentCulture);
+                return row.Label + " " + Milliseconds(duration);
         }
 
         var text = new StringBuilder();
@@ -151,11 +151,14 @@ public sealed class TimelineViewModel : IDisposable
                 : LanguageService.Get("timeline.tunnel");
             text.Append(name);
             text.Append(' ');
-            text.Append(segment.Milliseconds.ToString("0", CultureInfo.CurrentCulture));
+            text.Append(Milliseconds(segment.Milliseconds));
         }
 
         return text.ToString();
     }
+
+    private static string Milliseconds(double value) =>
+        LanguageService.Format("stats.total", value.ToString("0", CultureInfo.CurrentCulture));
 
     private void Subscribe()
     {

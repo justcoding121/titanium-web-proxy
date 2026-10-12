@@ -379,7 +379,7 @@
   "stats.estimated": "計時為估計（從較舊的檔案匯入）",
   "stats.total": "{0} 毫秒",
   "stats.slowest": "大部分時間花在{0}。",
-  "stats.phase.blocked": "等待開始",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "連線",
   "stats.phase.tls": "安全交握",

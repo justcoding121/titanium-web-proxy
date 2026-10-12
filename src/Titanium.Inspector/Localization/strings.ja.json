@@ -379,7 +379,7 @@
   "stats.estimated": "所要時間は推定です（古いファイルから取り込み）",
   "stats.total": "{0} ms",
   "stats.slowest": "時間のほとんどは{0}でした。",
-  "stats.phase.blocked": "開始待ち",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "接続",
   "stats.phase.tls": "安全なハンドシェイク",

@@ -379,7 +379,7 @@
   "stats.estimated": "التوقيت تقديري (مستورد من ملف أقدم)",
   "stats.total": "{0} مللي ثانية",
   "stats.slowest": "معظم الوقت كان {0}.",
-  "stats.phase.blocked": "انتظار البدء",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "الاتصال",
   "stats.phase.tls": "المصافحة الآمنة",

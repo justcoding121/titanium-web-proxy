@@ -379,7 +379,7 @@
   "stats.estimated": "התזמון משוער (יובא מקובץ ישן יותר)",
   "stats.total": "{0} אלפיות שנייה",
   "stats.slowest": "רוב הזמן היה {0}.",
-  "stats.phase.blocked": "המתנה להתחלה",
+  "stats.phase.blocked": "Queued before send",
   "stats.phase.dns": "DNS",
   "stats.phase.connect": "התחברות",
   "stats.phase.tls": "לחיצת יד מאובטחת",
