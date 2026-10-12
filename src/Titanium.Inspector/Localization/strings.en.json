@@ -12,7 +12,7 @@
   "menu.stopProxy": "Stop proxy",
   "menu.capturing": "Capturing",
   "menu.clearSessions": "Clear sessions",
-  "menu.removeSelected": "Remove selected",
+  "menu.removeSelected": "Remove selected sessions",
   "menu.autoStartCapture": "Auto-start capture",
   "menu.autoSystemProxy": "Auto system proxy on start",
   "menu.decryptHttps": "Decrypt HTTPS",
