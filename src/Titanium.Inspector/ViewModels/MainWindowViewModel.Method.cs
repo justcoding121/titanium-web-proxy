@@ -149,13 +149,11 @@ public sealed partial class MainWindowViewModel
 
         var mentioned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         MethodFilter.CollectMentioned(SearchQuery, mentioned);
-        foreach (var name in mentioned)
+        foreach (var name in mentioned.Where(static name =>
+                     !MethodFilter.IsCommon(name) &&
+                     !name.Equals(MethodFilter.Connect, StringComparison.OrdinalIgnoreCase)))
         {
-            if (!MethodFilter.IsCommon(name) &&
-                !name.Equals(MethodFilter.Connect, StringComparison.OrdinalIgnoreCase))
-            {
-                extras.Add(name);
-            }
+            extras.Add(name);
         }
 
         var names = new List<string>(MethodFilter.Common.Length + extras.Count + 1);

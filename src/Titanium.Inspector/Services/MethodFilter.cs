@@ -17,18 +17,8 @@ public static class MethodFilter
         "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS",
     ];
 
-    public static bool IsCommon(string method)
-    {
-        foreach (var name in Common)
-        {
-            if (name.Equals(method, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    public static bool IsCommon(string method) =>
+        Common.Any(name => name.Equals(method, StringComparison.OrdinalIgnoreCase));
 
     public static bool Matches(string? method, string value)
     {
@@ -119,12 +109,9 @@ public static class MethodFilter
     /// <summary>Canonical method names mentioned by <c>method:</c> or <c>-method:</c>.</summary>
     public static void CollectMentioned(string? query, ISet<string> into)
     {
-        foreach (var token in SessionSearch.GetTokens(query))
+        foreach (var token in SessionSearch.GetTokens(query).Where(static token => token.Key is "method" or "-method"))
         {
-            if (token.Key is "method" or "-method")
-            {
-                AddCanonicalTerms(token.Value, into);
-            }
+            AddCanonicalTerms(token.Value, into);
         }
     }
 
@@ -143,31 +130,11 @@ public static class MethodFilter
     public static bool HasPositiveMethodToken(string? query) =>
         HasKey(query, "method");
 
-    public static bool HasHideTunnel(string? query)
-    {
-        foreach (var token in SessionSearch.GetTokens(query))
-        {
-            if (HidesConnect(token.Key, token.Value))
-            {
-                return true;
-            }
-        }
+    public static bool HasHideTunnel(string? query) =>
+        SessionSearch.GetTokens(query).Any(static token => HidesConnect(token.Key, token.Value));
 
-        return false;
-    }
-
-    private static bool HasKey(string? query, string key)
-    {
-        foreach (var token in SessionSearch.GetTokens(query))
-        {
-            if (token.Key == key)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    private static bool HasKey(string? query, string key) =>
+        SessionSearch.GetTokens(query).Any(token => token.Key == key);
 
     private static bool HidesConnect(string key, string value) =>
         key == "hide" &&
@@ -216,18 +183,8 @@ public static class MethodFilter
         }
     }
 
-    private static bool ContainsOrdinal(ICollection<string> into, string canonical)
-    {
-        foreach (var name in into)
-        {
-            if (name.Equals(canonical, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    private static bool ContainsOrdinal(ICollection<string> into, string canonical) =>
+        into.Any(name => name.Equals(canonical, StringComparison.OrdinalIgnoreCase));
 
     private static bool IsMethodToken(string method)
     {
@@ -259,10 +216,13 @@ public static class MethodFilter
             for (var i = 0; i < src.Length; i++)
             {
                 var c = src[i];
-                dest[i] = c is >= 'a' and <= 'z' ? (char)(c - 32) : c;
+                dest[i] = ToUpperAscii(c);
             }
         });
     }
+
+    private static char ToUpperAscii(char c) =>
+        c is >= 'a' and <= 'z' ? (char)(c - 32) : c;
 
     private static bool EqualsMethod(string method, ReadOnlySpan<char> term)
     {
@@ -281,7 +241,4 @@ public static class MethodFilter
 
         return true;
     }
-
-    private static char ToUpperAscii(char c) =>
-        c is >= 'a' and <= 'z' ? (char)(c - 32) : c;
 }
