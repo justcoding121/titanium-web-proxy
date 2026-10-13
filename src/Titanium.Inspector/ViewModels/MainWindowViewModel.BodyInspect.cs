@@ -595,15 +595,30 @@ public sealed partial class MainWindowViewModel
     private static string FormatTunnelBodyInspectText(SessionSnapshot selected)
     {
         var wire = selected.BodySize ?? selected.SentBytes + selected.ReceivedBytes;
+        var size = SessionDisplayFormat.FormatByteSize(wire);
+        var sent = SessionDisplayFormat.FormatByteSize(selected.SentBytes);
+        var received = SessionDisplayFormat.FormatByteSize(selected.ReceivedBytes);
         var sb = new StringBuilder();
-        sb.AppendLine("CONNECT tunnel — no HTTP message body.");
-        sb.Append("Encrypted traffic on the wire: ");
-        sb.Append(SessionDisplayFormat.FormatByteSize(wire));
-        sb.Append(" (sent ");
-        sb.Append(SessionDisplayFormat.FormatByteSize(selected.SentBytes));
-        sb.Append(", received ");
-        sb.Append(SessionDisplayFormat.FormatByteSize(selected.ReceivedBytes));
-        sb.Append(')');
+        sb.AppendLine(LanguageService.Get("inspect.tunnelNoBody"));
+        sb.AppendLine();
+        if (selected.OpaqueReason == OpaqueTunnelReason.None)
+        {
+            // Decrypt opened this tunnel. Size is ciphertext for every request on the
+            // connection; each child row shows its own decompressed body.
+            sb.Append(LanguageService.Format("inspect.tunnelDecrypted", size, sent, received));
+        }
+        else
+        {
+            sb.AppendLine(LanguageService.Format("inspect.tunnelOpaque", size, sent, received));
+            var reason = ExclusionPreview.DescribeOpaqueReason(selected.OpaqueReason);
+            if (reason.Length > 0)
+            {
+                sb.AppendLine(reason);
+            }
+
+            sb.Append(LanguageService.Get("inspect.tunnelOpaqueHidden"));
+        }
+
         return sb.ToString();
     }
 
