@@ -235,8 +235,6 @@
   "trust.fail.body": "A Titanium Inspector gyökér CA-ja még nem megbízható ezen a számítógépen.",
   "toolbar.throttle": "Korlátozás",
   "toolbar.throttleTip": "Közös feltöltési és letöltési keret, plusz egy késleltetés válaszonként. Alapértelmezés szerint ki.",
-  "toolbar.progressiveThrottle": "Csepegtetés",
-  "toolbar.progressiveThrottleTip": "Amíg egy korlátozási profil be van kapcsolva, a pufferelt letöltések ütemezett szeletekben mennek, nem egy blokkban. A 64 KB alatti törzsek, a feltöltések és néhány különleges válasz továbbra is egy blokkban érkezik.",
   "stats.event.throttle": "A hálózati korlátozás formálta ezt a cserét",
   "stats.event.throttle.slow3g": "Korlátozva: Slow 3G",
   "stats.event.throttle.fast3g": "Korlátozva: Fast 3G",

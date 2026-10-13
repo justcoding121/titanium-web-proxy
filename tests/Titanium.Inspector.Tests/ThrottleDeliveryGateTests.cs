@@ -13,7 +13,7 @@ using Titanium.Inspector.Services;
 namespace Titanium.Inspector.Tests;
 
 /// <summary>
-///     Inspector end-to-end release gates for trickle delivery (plan Step 5 gates 2, 3, 5): header and body
+///     Inspector end-to-end release gates for network throttling (plan Step 5 gates 2, 3, 5): header and body
 ///     fidelity with and without the feature, real progressive arrival, keep-alive reuse, and client abort.
 /// </summary>
 [TestClass]
@@ -23,37 +23,32 @@ public class ThrottleDeliveryGateTests
 
     [TestMethod]
     [Timeout(60_000)]
-    public async Task Trickle_OnVersusOff_ClientSeesIdenticalHeadersAndBytes_AndCaptureIsUnchanged()
+    public async Task Throttled_H1_ClientSeesIdenticalHeadersAndBytes_AsUnthrottled_AndCaptureIsUnchanged()
     {
         using var origin = new KeepAliveOrigin();
         var fast = new NetworkThrottleProfile("fast", latencyMs: 0, bytesPerSecond: int.MaxValue);
 
-        var none = await Fetch(origin.Port, profile: null, trickle: false, "/big");
-        var off = await Fetch(origin.Port, fast, trickle: false, "/big");
-        var on = await Fetch(origin.Port, fast, trickle: true, "/big");
+        var none = await Fetch(origin.Port, profile: null, "/big");
+        var on = await Fetch(origin.Port, fast, "/big");
 
-        // Gate 2: same client-visible headers (trickle on vs off) and same body bytes in all three.
+        // Gate 2: the client sees the same headers and body bytes as without a throttle.
         CollectionAssert.AreEqual(
-            off.Headers,
+            none.Headers,
             on.Headers,
-            $"Trickle must not change response headers.\nOFF:\n{string.Join("\n", off.Headers)}\nON:\n{string.Join("\n", on.Headers)}\nNONE:\n{string.Join("\n", none.Headers)}");
+            $"Throttling must not change response headers.\nTHROTTLED:\n{string.Join("\n", on.Headers)}\nNONE:\n{string.Join("\n", none.Headers)}");
         CollectionAssert.AreEqual(none.Bytes, on.Bytes);
-        CollectionAssert.AreEqual(off.Bytes, on.Bytes);
         Assert.IsTrue(on.Headers.Contains("set-cookie: a=1"));
         Assert.IsTrue(on.Headers.Contains("set-cookie: b=2"), "Duplicate Set-Cookie headers must both survive.");
         Assert.IsTrue(on.Headers.Contains("x-origin: gate"));
         Assert.IsTrue(on.ConnectionClose, "A streamed HTTP/1 replacement announces that the connection ends.");
-        Assert.IsFalse(off.ConnectionClose);
         Assert.IsFalse(none.ConnectionClose);
 
         // Gate 3: capture is unchanged by the delivery mode.
         Assert.AreEqual(none.Snapshot.ResponseBodyCapture, on.Snapshot.ResponseBodyCapture);
-        Assert.AreEqual(off.Snapshot.ResponseBodyCapture, on.Snapshot.ResponseBodyCapture);
         CollectionAssert.AreEqual(none.Snapshot.ResponseBodyBytes, on.Snapshot.ResponseBodyBytes);
-        CollectionAssert.AreEqual(off.Snapshot.ResponseBodyBytes, on.Snapshot.ResponseBodyBytes);
-        Assert.AreEqual(off.Snapshot.StatusCode, on.Snapshot.StatusCode);
+        Assert.AreEqual(none.Snapshot.StatusCode, on.Snapshot.StatusCode);
         CollectionAssert.AreEqual(
-            NonThrottleEvents(off.Snapshot),
+            NonThrottleEvents(none.Snapshot),
             NonThrottleEvents(on.Snapshot),
             "Statistics events other than the throttle note must be identical.");
     }
@@ -64,7 +59,7 @@ public class ThrottleDeliveryGateTests
     {
         using var origin = new KeepAliveOrigin();
         using var interception = NewInterception(
-            new NetworkThrottleProfile("slow", latencyMs: 0, bytesPerSecond: 60_000), trickle: true);
+            new NetworkThrottleProfile("slow", latencyMs: 0, bytesPerSecond: 60_000));
         await interception.StartAsync(IPAddress.Loopback, 0);
         try
         {
@@ -105,21 +100,21 @@ public class ThrottleDeliveryGateTests
     [TestMethod]
     [Timeout(60_000)]
     public Task Trickle_H1Client_NeverStallsOnTheNextRequest_AndAnnouncesConnectionClose() =>
-        KeepAliveReuse(new NetworkThrottleProfile("fast", latencyMs: 0, bytesPerSecond: 4_000_000), trickle: true);
+        KeepAliveReuse(new NetworkThrottleProfile("fast", latencyMs: 0, bytesPerSecond: 4_000_000), "/big", streamed: true);
 
     [TestMethod]
     [Timeout(60_000)]
-    public Task Control_KeepAliveReuse_WithBurstDelivery() =>
-        KeepAliveReuse(new NetworkThrottleProfile("fast", latencyMs: 0, bytesPerSecond: 4_000_000), trickle: false);
+    public Task Control_KeepAliveReuse_WithBurstDelivery_OfASmallBody() =>
+        KeepAliveReuse(new NetworkThrottleProfile("fast", latencyMs: 0, bytesPerSecond: 4_000_000), "/small", streamed: false);
 
     [TestMethod]
     [Timeout(60_000)]
-    public Task Control_KeepAliveReuse_WithNoThrottle() => KeepAliveReuse(profile: null, trickle: false);
+    public Task Control_KeepAliveReuse_WithNoThrottle() => KeepAliveReuse(profile: null, "/big", streamed: false);
 
-    private static async Task KeepAliveReuse(NetworkThrottleProfile? profile, bool trickle)
+    private static async Task KeepAliveReuse(NetworkThrottleProfile? profile, string path, bool streamed)
     {
         using var origin = new KeepAliveOrigin();
-        using var interception = NewInterception(profile, trickle);
+        using var interception = NewInterception(profile);
         var captured = new List<(long Id, long Connection)>();
         interception.SessionCaptured += (_, s) =>
         {
@@ -137,8 +132,8 @@ public class ThrottleDeliveryGateTests
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
                 try
                 {
-                    var bytes = await http.GetByteArrayAsync($"http://127.0.0.1:{origin.Port}/big?i={i}", cts.Token);
-                    Assert.AreEqual(BigBytes, bytes.Length);
+                    var bytes = await http.GetByteArrayAsync($"http://127.0.0.1:{origin.Port}{path}?i={i}", cts.Token);
+                    Assert.AreEqual(path == "/small" ? 30 * 1024 : BigBytes, bytes.Length);
                 }
                 catch (OperationCanceledException)
                 {
@@ -159,16 +154,16 @@ public class ThrottleDeliveryGateTests
                 Assert.AreEqual(3, captured.Select(c => c.Id).Distinct().Count(), "Each exchange is captured exactly once.");
                 // A streamed HTTP/1 replacement ends the client connection (announced with Connection: close),
                 // because the consumed origin body cannot be drained. Every other mode keeps both legs alive.
-                var expectedClientConnections = trickle ? 3 : 1;
+                var expectedClientConnections = streamed ? 3 : 1;
                 Assert.AreEqual(
                     expectedClientConnections,
                     captured.Select(c => c.Connection).Distinct().Count(),
                     "Unexpected client connection reuse.");
             }
 
-            if (!trickle)
+            if (!streamed)
             {
-                Assert.AreEqual(1, origin.Connections, "Burst delivery must leave the origin connection pooled.");
+                Assert.AreEqual(1, origin.Connections, "A burst (or untouched) response must leave the origin connection pooled.");
             }
         }
         finally
@@ -184,7 +179,7 @@ public class ThrottleDeliveryGateTests
         using var origin = new KeepAliveOrigin();
         // 400 KiB at 20 kB/s would hold the shared download clock for about 20 s if the writer kept going.
         using var interception = NewInterception(
-            new NetworkThrottleProfile("slow", latencyMs: 0, bytesPerSecond: 20_000), trickle: true);
+            new NetworkThrottleProfile("slow", latencyMs: 0, bytesPerSecond: 20_000));
         await interception.StartAsync(IPAddress.Loopback, 0);
         try
         {
@@ -224,15 +219,15 @@ public class ThrottleDeliveryGateTests
 
     [TestMethod]
     [Timeout(90_000)]
-    public async Task Http2Client_TrickleOnVersusOff_IsIdentical_AndStaysOnOneConnection()
+    public async Task Http2Client_Throttled_IsIdenticalToUnthrottled_AndStaysOnOneConnection()
     {
         using var origin = new Http2Origin();
         var fast = new NetworkThrottleProfile("fast", latencyMs: 0, bytesPerSecond: 8_000_000);
 
-        var off = await FetchH2(origin.Port, fast, trickle: false, count: 3);
-        var on = await FetchH2(origin.Port, fast, trickle: true, count: 3);
+        var none = await FetchH2(origin.Port, profile: null, count: 3);
+        var on = await FetchH2(origin.Port, fast, count: 3);
 
-        foreach (var run in new[] { off, on })
+        foreach (var run in new[] { none, on })
         {
             Assert.IsTrue(run.All(r => r.Version == new Version(2, 0)), "The client must really be on HTTP/2.");
             Assert.IsTrue(run.All(r => r.Bytes.Length == BigBytes));
@@ -240,30 +235,36 @@ public class ThrottleDeliveryGateTests
 
         for (var i = 0; i < 3; i++)
         {
-            CollectionAssert.AreEqual(off[i].Headers, on[i].Headers, "Trickle must not change HTTP/2 response headers.");
-            CollectionAssert.AreEqual(off[i].Bytes, on[i].Bytes);
-            Assert.AreEqual(off[i].Snapshot.ResponseBodyCapture, on[i].Snapshot.ResponseBodyCapture);
-            CollectionAssert.AreEqual(off[i].Snapshot.ResponseBodyBytes, on[i].Snapshot.ResponseBodyBytes);
+            CollectionAssert.AreEqual(
+                none[i].Headers,
+                on[i].Headers,
+                $"Throttling must not change HTTP/2 response headers.\nTHROTTLED:\n{string.Join("\n", on[i].Headers)}\nNONE:\n{string.Join("\n", none[i].Headers)}");
+            CollectionAssert.AreEqual(none[i].Bytes, on[i].Bytes);
+            Assert.AreEqual(none[i].Snapshot.ResponseBodyCapture, on[i].Snapshot.ResponseBodyCapture);
+            CollectionAssert.AreEqual(none[i].Snapshot.ResponseBodyBytes, on[i].Snapshot.ResponseBodyBytes);
+            Assert.AreEqual(none[i].Snapshot.StatusCode, on[i].Snapshot.StatusCode);
             Assert.IsTrue(on[i].Headers.Contains("set-cookie: a=1") && on[i].Headers.Contains("set-cookie: b=2"));
             Assert.IsFalse(on[i].ConnectionClose, "HTTP/2 responses must never carry Connection: close.");
+            CollectionAssert.AreEqual(
+                NonThrottleEvents(none[i].Snapshot),
+                NonThrottleEvents(on[i].Snapshot),
+                "Statistics events other than the throttle note must be identical.");
         }
 
         Assert.AreEqual(1, on.Select(r => r.Snapshot.ConnectionId).Distinct().Count(),
             "All HTTP/2 streams stay on the one client connection.");
+        Assert.AreEqual(3, on.Select(r => r.Snapshot.Id).Distinct().Count(), "Each exchange is captured exactly once.");
     }
 
     [TestMethod]
-    [DataRow(true)]
-    [DataRow(false)]
     [Timeout(90_000)]
-    public async Task Http2Client_ParallelResponses_PayOneLatency_NotOnePerStream(bool trickle)
+    public async Task Http2Client_ParallelResponses_PayOneLatency_NotOnePerStream()
     {
         const int streams = 6;
         const int latencyMs = 500;
         using var origin = new Http2Origin();
         using var interception = NewInterception(
             new NetworkThrottleProfile("lat", latencyMs: latencyMs, bytesPerSecond: 50_000_000),
-            trickle,
             decrypt: true);
         await interception.StartAsync(IPAddress.Loopback, 0);
         try
@@ -294,32 +295,50 @@ public class ThrottleDeliveryGateTests
         }
     }
 
-    /// <summary>
-    ///     Documents the HTTP/2 limit: bandwidth is not shaped (the response is locked once capture reads the
-    ///     body, and sleeping on the frame loop would stall the connection). What must hold is that a slow
-    ///     profile never stalls the connection, so a sibling request finishes while a large one is in flight.
-    /// </summary>
     [TestMethod]
     [Timeout(90_000)]
-    public async Task Http2Client_SlowProfile_NeverStallsTheConnection()
+    public async Task Http2Client_Bandwidth_IsShaped_AndBytesArriveProgressively()
     {
         using var origin = new Http2Origin();
         using var interception = NewInterception(
-            new NetworkThrottleProfile("slow", latencyMs: 100, bytesPerSecond: 60_000),
-            trickle: true,
-            decrypt: true);
+            new NetworkThrottleProfile("slow", latencyMs: 0, bytesPerSecond: 60_000), decrypt: true);
         await interception.StartAsync(IPAddress.Loopback, 0);
         try
         {
             using var http = ProxyClient(interception.BoundPort, TimeSpan.FromSeconds(60), h2: true);
-            var watch = Stopwatch.StartNew();
-            var big = http.GetByteArrayAsync($"https://127.0.0.1:{origin.Port}/big");
-            var small = await http.GetByteArrayAsync($"https://127.0.0.1:{origin.Port}/small");
-            var smallDone = watch.Elapsed;
+            using (var warm = await http.GetAsync($"https://127.0.0.1:{origin.Port}/tiny?warm"))
+            {
+                Assert.AreEqual(new Version(2, 0), warm.Version, "The client must really be on HTTP/2.");
+                await warm.Content.ReadAsByteArrayAsync();
+            }
 
-            Assert.AreEqual(30 * 1024, small.Length);
-            Assert.AreEqual(BigBytes, (await big).Length);
-            Assert.IsTrue(smallDone < TimeSpan.FromSeconds(3), $"A sibling request took {smallDone}.");
+            var watch = Stopwatch.StartNew();
+            using var response = await http.GetAsync(
+                $"https://127.0.0.1:{origin.Port}/big", HttpCompletionOption.ResponseHeadersRead);
+            Assert.AreEqual(new Version(2, 0), response.Version);
+            await using var body = await response.Content.ReadAsStreamAsync();
+
+            var buffer = new byte[8 * 1024];
+            var total = 0;
+            TimeSpan? at20Percent = null;
+            int read;
+            while ((read = await body.ReadAsync(buffer)) > 0)
+            {
+                total += read;
+                if (at20Percent is null && total >= BigBytes / 5)
+                {
+                    at20Percent = watch.Elapsed;
+                }
+            }
+
+            watch.Stop();
+            Assert.AreEqual(BigBytes, total);
+            Assert.IsNotNull(at20Percent);
+            // 150 KiB at 60 kB/s is about 2.5 s; a burst would put everything inside one read burst.
+            Assert.IsTrue(watch.Elapsed >= TimeSpan.FromSeconds(1.8), $"Transfer finished in {watch.Elapsed}.");
+            Assert.IsTrue(
+                watch.Elapsed - at20Percent.Value >= TimeSpan.FromSeconds(1.2),
+                $"Bytes arrived as a block: 20% at {at20Percent}, done at {watch.Elapsed}.");
         }
         finally
         {
@@ -327,10 +346,102 @@ public class ThrottleDeliveryGateTests
         }
     }
 
-    private static async Task<List<(string[] Headers, byte[] Bytes, SessionSnapshot Snapshot, bool ConnectionClose, Version Version)>>
-        FetchH2(int originPort, NetworkThrottleProfile profile, bool trickle, int count)
+    [TestMethod]
+    [Timeout(90_000)]
+    public async Task Http2Client_SmallBodies_AreShapedToo_AndAParallelSiblingIsNotStalled()
     {
-        using var interception = NewInterception(profile, trickle, decrypt: true);
+        using var origin = new Http2Origin();
+        using var interception = NewInterception(
+            new NetworkThrottleProfile("slow", latencyMs: 100, bytesPerSecond: 60_000), decrypt: true);
+        await interception.StartAsync(IPAddress.Loopback, 0);
+        try
+        {
+            using var http = ProxyClient(interception.BoundPort, TimeSpan.FromSeconds(60), h2: true);
+            using (var warm = await http.GetAsync($"https://127.0.0.1:{origin.Port}/tiny?warm"))
+            {
+                await warm.Content.ReadAsByteArrayAsync();
+            }
+
+            var watch = Stopwatch.StartNew();
+            var big = http.GetByteArrayAsync($"https://127.0.0.1:{origin.Port}/big");
+            var tinyWatch = Stopwatch.StartNew();
+            var tiny = await http.GetByteArrayAsync($"https://127.0.0.1:{origin.Port}/tiny");
+            var tinyDone = tinyWatch.Elapsed;
+
+            Assert.AreEqual(2 * 1024, tiny.Length);
+            Assert.AreEqual(BigBytes, (await big).Length);
+            // A 2 KiB body is about 35 ms of bandwidth plus 100 ms of latency, even behind a busy download.
+            Assert.IsTrue(tinyDone >= TimeSpan.FromMilliseconds(90), $"A small body was not delayed ({tinyDone}).");
+            Assert.IsTrue(tinyDone < TimeSpan.FromSeconds(4), $"A sibling request took {tinyDone}.");
+            Assert.IsTrue(watch.Elapsed >= TimeSpan.FromSeconds(1.8), $"The big download finished in {watch.Elapsed}.");
+        }
+        finally
+        {
+            interception.EnsureShutdown();
+        }
+    }
+
+    [TestMethod]
+    [Timeout(90_000)]
+    public async Task Http2Client_Abort_StopsTheWriter_AndDoesNotStarveTheNextRequest()
+    {
+        using var origin = new Http2Origin();
+        // 400 KiB at 20 kB/s would hold the shared download clock for about 20 s if the writer kept going.
+        using var interception = NewInterception(
+            new NetworkThrottleProfile("slow", latencyMs: 0, bytesPerSecond: 20_000), decrypt: true);
+        await interception.StartAsync(IPAddress.Loopback, 0);
+        try
+        {
+            using var http = ProxyClient(interception.BoundPort, TimeSpan.FromSeconds(60), h2: true);
+            using (var cts = new CancellationTokenSource())
+            {
+                using var response = await http.GetAsync(
+                    $"https://127.0.0.1:{origin.Port}/huge", HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                await using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
+                var buffer = new byte[4096];
+                var got = 0;
+                while (got < 16 * 1024)
+                {
+                    var read = await stream.ReadAsync(buffer, cts.Token);
+                    Assert.IsTrue(read > 0);
+                    got += read;
+                }
+
+                cts.Cancel(); // RST_STREAM toward the proxy while the body is still being paced.
+            }
+
+            var watch = Stopwatch.StartNew();
+            var small = await http.GetByteArrayAsync($"https://127.0.0.1:{origin.Port}/small");
+            watch.Stop();
+
+            Assert.AreEqual(30 * 1024, small.Length);
+            Assert.IsTrue(watch.Elapsed < TimeSpan.FromSeconds(8), $"Next request took {watch.Elapsed}.");
+        }
+        finally
+        {
+            interception.EnsureShutdown();
+        }
+    }
+
+    // ---- HTTP/1 client to an HTTP/2 origin (the proxy bridges the two) ----
+
+    [TestMethod]
+    [Timeout(90_000)]
+    public async Task Http1Client_ToHttp2Origin_IsShaped_AndKeepsFidelity()
+    {
+        using var origin = new Http2Origin();
+        var none = await FetchH1Https(origin.Port, profile: null);
+        var on = await FetchH1Https(origin.Port, new NetworkThrottleProfile("slow", latencyMs: 0, bytesPerSecond: 80_000));
+
+        CollectionAssert.AreEqual(none.Bytes, on.Bytes);
+        CollectionAssert.AreEqual(none.Headers, on.Headers,
+            $"THROTTLED:\n{string.Join("\n", on.Headers)}\nNONE:\n{string.Join("\n", none.Headers)}");
+        Assert.IsTrue(on.Elapsed >= TimeSpan.FromSeconds(1.4), $"150 KiB at 80 kB/s took {on.Elapsed}.");
+    }
+    private static async Task<List<(string[] Headers, byte[] Bytes, SessionSnapshot Snapshot, bool ConnectionClose, Version Version)>>
+        FetchH2(int originPort, NetworkThrottleProfile? profile, int count)
+    {
+        using var interception = NewInterception(profile, decrypt: true);
         var snapshots = new List<SessionSnapshot>();
         interception.SessionCaptured += (_, s) =>
         {
@@ -376,14 +487,13 @@ public class ThrottleDeliveryGateTests
             .OrderBy(h => h, StringComparer.Ordinal)
             .ToArray();
 
-    private static InterceptionService NewInterception(NetworkThrottleProfile? profile, bool trickle, bool decrypt = false) =>
+    private static InterceptionService NewInterception(NetworkThrottleProfile? profile, bool decrypt = false) =>
         new(new RecordingSystemProxyController())
         {
             UseInMemoryTrustState = true,
             DecryptHttps = decrypt,
             IgnoreServerCertificateErrors = decrypt,
             Capturing = true,
-            ProgressiveThrottleDelivery = trickle,
             ThrottleProfile = profile,
         };
 
@@ -413,10 +523,36 @@ public class ThrottleDeliveryGateTests
         .Select(e => $"{e.Key}:{e.Failure}")
         .ToArray();
 
-    private static async Task<(string[] Headers, byte[] Bytes, SessionSnapshot Snapshot, bool ConnectionClose)> Fetch(
-        int originPort, NetworkThrottleProfile? profile, bool trickle, string path)
+    private static async Task<(string[] Headers, byte[] Bytes, TimeSpan Elapsed)> FetchH1Https(
+        int originPort, NetworkThrottleProfile? profile)
     {
-        using var interception = NewInterception(profile, trickle);
+        using var interception = NewInterception(profile, decrypt: true);
+        await interception.StartAsync(IPAddress.Loopback, 0);
+        try
+        {
+            using var http = ProxyClient(interception.BoundPort, TimeSpan.FromSeconds(60));
+            // Warm the CONNECT tunnel, then measure one transfer on it.
+            using (var warm = await http.GetAsync($"https://127.0.0.1:{originPort}/tiny?warm"))
+            {
+                await warm.Content.ReadAsByteArrayAsync();
+            }
+
+            var watch = Stopwatch.StartNew();
+            using var response = await http.GetAsync($"https://127.0.0.1:{originPort}/big");
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            watch.Stop();
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            return (FlattenHeaders(response), bytes, watch.Elapsed);
+        }
+        finally
+        {
+            interception.EnsureShutdown();
+        }
+    }
+    private static async Task<(string[] Headers, byte[] Bytes, SessionSnapshot Snapshot, bool ConnectionClose)> Fetch(
+        int originPort, NetworkThrottleProfile? profile, string path)
+    {
+        using var interception = NewInterception(profile);
         SessionSnapshot? snapshot = null;
         interception.SessionCaptured += (_, s) => snapshot = s;
         await interception.StartAsync(IPAddress.Loopback, 0);
@@ -563,7 +699,10 @@ public class ThrottleDeliveryGateTests
             _app.Run(async context =>
             {
                 var path = context.Request.Path.Value ?? "/";
-                var size = path.StartsWith("/small", StringComparison.Ordinal) ? 30 * 1024 : BigBytes;
+                var size = path.StartsWith("/huge", StringComparison.Ordinal) ? 400 * 1024
+                    : path.StartsWith("/small", StringComparison.Ordinal) ? 30 * 1024
+                    : path.StartsWith("/tiny", StringComparison.Ordinal) ? 2 * 1024
+                    : BigBytes;
                 var body = new byte[size];
                 Array.Fill(body, (byte)'Z');
                 context.Response.ContentType = "application/octet-stream";

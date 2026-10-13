@@ -235,8 +235,6 @@
   "trust.fail.body": "이 컴퓨터에서는 Titanium Inspector 루트 CA가 아직 신뢰되지 않았습니다.",
   "toolbar.throttle": "스로틀",
   "toolbar.throttleTip": "업로드와 다운로드가 대역을 나누고, 응답마다 지연을 한 번만 더합니다. 기본값은 꺼짐입니다.",
-  "toolbar.progressiveThrottle": "조금씩",
-  "toolbar.progressiveThrottleTip": "스로틀 프로필이 켜져 있으면 버퍼된 다운로드를 한 덩어리가 아니라 나누어 보냅니다. 64 KB 미만 본문, 업로드, 일부 특수 응답은 여전히 한 덩어리로 도착합니다.",
   "stats.event.throttle": "네트워크 스로틀이 이 교환을 조절했습니다",
   "stats.event.throttle.slow3g": "스로틀: Slow 3G",
   "stats.event.throttle.fast3g": "스로틀: Fast 3G",

@@ -235,8 +235,6 @@
   "trust.fail.body": "A CA raiz do Titanium Inspector ainda não é confiável neste computador.",
   "toolbar.throttle": "Limitação",
   "toolbar.throttleTip": "Orçamentos compartilhados de envio e download, mais um atraso de latência por resposta. Desligado por padrão.",
-  "toolbar.progressiveThrottle": "Gotejamento",
-  "toolbar.progressiveThrottleTip": "Com um perfil de limitação ativo, os downloads em buffer são enviados em fatias ritmadas em vez de um único bloco. Corpos abaixo de 64 KB, envios e algumas respostas especiais ainda chegam em um bloco.",
   "stats.event.throttle": "A limitação de rede moldou esta troca",
   "stats.event.throttle.slow3g": "Limitado: Slow 3G",
   "stats.event.throttle.fast3g": "Limitado: Fast 3G",

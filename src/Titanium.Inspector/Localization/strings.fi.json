@@ -235,8 +235,6 @@
   "trust.fail.body": "Titanium Inspectorin juuri-CA ei ole vielä luotettu tällä tietokoneella.",
   "toolbar.throttle": "Rajoitus",
   "toolbar.throttleTip": "Jaetut lähetys- ja latauskiintiöt sekä yksi viive vastausta kohti. Oletuksena pois käytöstä.",
-  "toolbar.progressiveThrottle": "Tipoittain",
-  "toolbar.progressiveThrottleTip": "Kun rajoitusprofiili on päällä, puskuroidut lataukset lähetetään tahditetuissa viipaleissa yhden lohkon sijaan. Alle 64 kt:n rungot, lähetykset ja muutamat erityiset vastaukset saapuvat yhä yhtenä lohkona.",
   "stats.event.throttle": "Verkon rajoitus muotoili tämän vaihdon",
   "stats.event.throttle.slow3g": "Rajoitettu: Slow 3G",
   "stats.event.throttle.fast3g": "Rajoitettu: Fast 3G",

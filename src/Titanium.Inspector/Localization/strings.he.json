@@ -235,8 +235,6 @@
   "trust.fail.body": "CA השורש של Titanium Inspector עדיין לא מהימן במחשב זה.",
   "toolbar.throttle": "הגבלת קצב",
   "toolbar.throttleTip": "תקציבי העלאה והורדה משותפים, ועוד השהיה אחת לכל תשובה. כבוי כברירת מחדל.",
-  "toolbar.progressiveThrottle": "טפטוף",
-  "toolbar.progressiveThrottleTip": "כשפרופיל הגבלת קצב פעיל, הורדות שנאגרו נשלחות בפרוסות מדודות במקום בגוש אחד. גופים מתחת ל-64 KB, העלאות וכמה תשובות מיוחדות עדיין מגיעים כגוש אחד.",
   "stats.event.throttle": "הגבלת הרשת עיצבה את החילוף הזה",
   "stats.event.throttle.slow3g": "הוגבל: Slow 3G",
   "stats.event.throttle.fast3g": "הוגבל: Fast 3G",

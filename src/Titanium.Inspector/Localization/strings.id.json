@@ -235,8 +235,6 @@
   "trust.fail.body": "Komputer ini belum memercayai CA akar Titanium Inspector.",
   "toolbar.throttle": "Pembatasan",
   "toolbar.throttleTip": "Anggaran unggah dan unduh bersama, plus satu penundaan latensi per respons. Mati secara bawaan.",
-  "toolbar.progressiveThrottle": "Tetes",
-  "toolbar.progressiveThrottleTip": "Saat profil pembatasan aktif, unduhan yang di-buffer dikirim dalam irisan berirama, bukan satu blok. Isi di bawah 64 KB, unggahan, dan beberapa respons khusus tetap tiba sebagai satu blok.",
   "stats.event.throttle": "Pembatasan jaringan membentuk pertukaran ini",
   "stats.event.throttle.slow3g": "Dibatasi: Slow 3G",
   "stats.event.throttle.fast3g": "Dibatasi: Fast 3G",

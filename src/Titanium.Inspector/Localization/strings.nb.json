@@ -235,8 +235,6 @@
   "trust.fail.body": "Rot-CA for Titanium Inspector er ikke klarert på denne datamaskinen ennå.",
   "toolbar.throttle": "Begrensning",
   "toolbar.throttleTip": "Delt budsjett for opplasting og nedlasting, pluss én forsinkelse per svar. Av som standard.",
-  "toolbar.progressiveThrottle": "Drypp",
-  "toolbar.progressiveThrottleTip": "Mens en begrensningsprofil er på, sendes bufrede nedlastinger i tempo-deler i stedet for én blokk. Innhold under 64 KB, opplastinger og noen spesielle svar kommer fortsatt som én blokk.",
   "stats.event.throttle": "Nettverksbegrensningen formet denne utvekslingen",
   "stats.event.throttle.slow3g": "Begrenset: Slow 3G",
   "stats.event.throttle.fast3g": "Begrenset: Fast 3G",

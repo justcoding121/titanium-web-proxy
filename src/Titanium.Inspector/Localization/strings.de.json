@@ -235,8 +235,6 @@
   "trust.fail.body": "Der Stamm-CA von Titanium Inspector wird auf diesem Computer noch nicht vertraut.",
   "toolbar.throttle": "Drosseln",
   "toolbar.throttleTip": "Gemeinsames Upload- und Download-Budget sowie eine Latenzverzögerung pro Antwort. Standardmäßig aus.",
-  "toolbar.progressiveThrottle": "Tröpfeln",
-  "toolbar.progressiveThrottleTip": "Solange ein Drosselprofil aktiv ist, werden gepufferte Downloads in getakteten Abschnitten gesendet statt in einem Block. Inhalte unter 64 KB, Uploads und einige besondere Antworten kommen weiterhin als ein Block an.",
   "stats.event.throttle": "Die Netzwerkdrossel hat diesen Austausch geformt",
   "stats.event.throttle.slow3g": "Gedrosselt: Slow 3G",
   "stats.event.throttle.fast3g": "Gedrosselt: Fast 3G",

@@ -235,8 +235,6 @@
   "trust.fail.body": "इस कंप्यूटर पर Titanium Inspector रूट CA अभी विश्वसनीय नहीं है।",
   "toolbar.throttle": "गति सीमा",
   "toolbar.throttleTip": "साझा अपलोड और डाउनलोड बजट, और हर प्रतिक्रिया पर एक विलंब। डिफ़ॉल्ट रूप से बंद।",
-  "toolbar.progressiveThrottle": "बूंद-बूंद",
-  "toolbar.progressiveThrottleTip": "गति-सीमा प्रोफ़ाइल चालू होने पर बफ़र किए डाउनलोड एक साथ के बजाय मापी हुई कतरनों में भेजे जाते हैं। 64 KB से छोटे बॉडी, अपलोड और कुछ विशेष प्रतिक्रियाएँ अब भी एक खंड में आती हैं।",
   "stats.event.throttle": "नेटवर्क गति सीमा ने इस आदान-प्रदान को आकार दिया",
   "stats.event.throttle.slow3g": "सीमित: Slow 3G",
   "stats.event.throttle.fast3g": "सीमित: Fast 3G",

@@ -14,6 +14,25 @@ namespace Titanium.Inspector.Tests;
 public class InspectViewersAndThrottleTests
 {
     [TestMethod]
+    public void Settings_WithRemovedProgressiveThrottleDeliveryKey_StillLoads()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-legacy-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var path = Path.Combine(dir, "settings.json");
+            File.WriteAllText(path, "{ \"networkThrottleProfile\": \"Fast 3G\", \"progressiveThrottleDelivery\": false }");
+
+            var settings = new SettingsService(path);
+
+            Assert.AreEqual("Fast 3G", settings.Current.NetworkThrottleProfile);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+    [TestMethod]
     public void SseEventParser_ParsesEvents()
     {
         var events = SseEventParser.Parse("event: ping\ndata: hi\n\nid: 1\ndata: a\ndata: b\n\n");
@@ -243,13 +262,12 @@ public class InspectViewersAndThrottleTests
     }
 
     [TestMethod]
-    public async Task Http2Response_IsNeverSleptOnOrReplaced_InBeforeResponse()
+    public async Task Http2Response_NeverSleepsInBeforeResponse_AndIsStreamedInstead()
     {
         using var interception = new InterceptionService(new RecordingSystemProxyController())
         {
             UseInMemoryTrustState = true,
             ThrottleProfile = NetworkThrottle.Slow3G,
-            ProgressiveThrottleDelivery = true,
         };
         using var session = MakeHttp2Session(bodyLength: 100 * 1024);
         var original = session.HttpClient.Response;
@@ -259,8 +277,63 @@ public class InspectViewersAndThrottleTests
 
         Assert.IsTrue(DateTime.UtcNow - started < TimeSpan.FromMilliseconds(200),
             "BeforeResponse must not sleep on HTTP/2: it serializes parallel streams and stalls the frame loop.");
-        Assert.AreSame(original, session.HttpClient.Response,
-            "The HTTP/2 response is locked once capture reads the body, so it cannot be replaced.");
+        Assert.AreNotSame(original, session.HttpClient.Response,
+            "Bandwidth is paid by a streamed replacement that Core writes off the frame loop.");
+        Assert.IsNotNull(session.HttpClient.Response.StreamBodyWriter);
+    }
+
+    [TestMethod]
+    public async Task Http2Response_SmallBodies_AreStreamedToo_BecauseThereIsNoInlineBurstFallback()
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+            ThrottleProfile = NetworkThrottle.Slow3G,
+        };
+        using var session = MakeHttp2Session(bodyLength: 1000);
+        var original = session.HttpClient.Response;
+
+        await interception.ApplyResponseThrottleAsync(session, responseEdited: false);
+
+        Assert.AreNotSame(original, session.HttpClient.Response);
+        Assert.IsNotNull(session.HttpClient.Response.StreamBodyWriter);
+    }
+
+    [TestMethod]
+    public async Task Http2Response_WhenCoreRefusesTheReplacement_IsLeftUnshaped_WithoutSleepingOrThrowing()
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+            ThrottleProfile = NetworkThrottle.Slow3G,
+        };
+        using var session = MakeHttp2Session(bodyLength: 100 * 1024);
+        var original = session.HttpClient.Response;
+        original.Locked = true; // already on its way to the client: Core refuses Respond
+
+        var started = DateTime.UtcNow;
+        await interception.ApplyResponseThrottleAsync(session, responseEdited: false);
+
+        Assert.IsTrue(DateTime.UtcNow - started < TimeSpan.FromMilliseconds(200));
+        Assert.AreSame(original, session.HttpClient.Response);
+    }
+
+    [TestMethod]
+    public async Task Http1Response_WhenCoreRefusesTheReplacement_FallsBackToOneBandwidthWait()
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+            ThrottleProfile = new NetworkThrottleProfile("bw", latencyMs: 0, bytesPerSecond: 200_000),
+        };
+        using var session = MakeHttp2Session(bodyLength: 100 * 1024, major: 1);
+        session.HttpClient.Response.Locked = true;
+
+        var started = DateTime.UtcNow;
+        await interception.ApplyResponseThrottleAsync(session, responseEdited: false);
+
+        Assert.IsTrue(DateTime.UtcNow - started >= TimeSpan.FromMilliseconds(350),
+            "100 KiB at 200 kB/s is about half a second.");
     }
 
     [TestMethod]
@@ -282,32 +355,12 @@ public class InspectViewersAndThrottleTests
     }
 
     [TestMethod]
-    public async Task Http2Response_WithTrickleOff_IsNotDelayed()
-    {
-        using var interception = new InterceptionService(new RecordingSystemProxyController())
-        {
-            UseInMemoryTrustState = true,
-            ThrottleProfile = NetworkThrottle.Slow3G,
-            ProgressiveThrottleDelivery = false,
-        };
-        using var session = MakeHttp2Session(bodyLength: 1000);
-        var original = session.HttpClient.Response;
-
-        var started = DateTime.UtcNow;
-        await interception.ApplyResponseThrottleAsync(session, responseEdited: false);
-
-        Assert.IsTrue(DateTime.UtcNow - started < TimeSpan.FromMilliseconds(200));
-        Assert.AreSame(original, session.HttpClient.Response);
-    }
-
-    [TestMethod]
     public async Task Http1Response_StillPaysLatencyInline()
     {
         using var interception = new InterceptionService(new RecordingSystemProxyController())
         {
             UseInMemoryTrustState = true,
             ThrottleProfile = new NetworkThrottleProfile("lat", latencyMs: 300, bytesPerSecond: 0),
-            ProgressiveThrottleDelivery = true,
         };
         using var session = MakeHttp2Session(bodyLength: 1000, major: 1);
 

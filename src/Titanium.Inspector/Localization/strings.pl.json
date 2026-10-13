@@ -235,8 +235,6 @@
   "trust.fail.body": "Główny CA Titanium Inspector nie jest jeszcze zaufany na tym komputerze.",
   "toolbar.throttle": "Ograniczanie",
   "toolbar.throttleTip": "Wspólny budżet wysyłania i pobierania oraz jedno opóźnienie na odpowiedź. Domyślnie wyłączone.",
-  "toolbar.progressiveThrottle": "Kroplami",
-  "toolbar.progressiveThrottleTip": "Gdy profil ograniczania jest włączony, buforowane pobierania są wysyłane miarowymi kawałkami zamiast jednego bloku. Treści poniżej 64 KB, wysyłania i kilka szczególnych odpowiedzi nadal przychodzą jako jeden blok.",
   "stats.event.throttle": "Ograniczenie sieci ukształtowało tę wymianę",
   "stats.event.throttle.slow3g": "Ograniczono: Slow 3G",
   "stats.event.throttle.fast3g": "Ograniczono: Fast 3G",

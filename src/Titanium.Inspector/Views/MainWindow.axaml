@@ -529,11 +529,6 @@
                     SelectedItem="{Binding NetworkThrottleProfile}"
                     ToolTip.Tip="{loc:Loc toolbar.throttleTip}"
                     AutomationProperties.AutomationId="ComboNetworkThrottle" />
-          <CheckBox Content="{loc:Loc toolbar.progressiveThrottle}"
-                    IsChecked="{Binding ProgressiveThrottleDelivery}"
-                    VerticalAlignment="Center" Margin="0,0,12,6"
-                    ToolTip.Tip="{loc:Loc toolbar.progressiveThrottleTip}"
-                    AutomationProperties.AutomationId="ProgressiveThrottleCheck" />
         </WrapPanel>
         <!-- Bind / intercept controls wrap independently of the rows above. -->
         <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarEndpoint">

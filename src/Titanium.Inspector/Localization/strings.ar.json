@@ -235,8 +235,6 @@
   "trust.fail.body": "CA الجذر لـ Titanium Inspector غير موثوق على هذا الكمبيوتر بعد.",
   "toolbar.throttle": "تقييد السرعة",
   "toolbar.throttleTip": "ميزانيتان مشتركتان للرفع والتنزيل، مع تأخير واحد لكل رد. متوقف افتراضيًا.",
-  "toolbar.progressiveThrottle": "تقطير",
-  "toolbar.progressiveThrottleTip": "عند تفعيل ملف تقييد السرعة، تُرسل التنزيلات المخزّنة على دفعات متتابعة بدل كتلة واحدة. الأجسام الأصغر من 64 ك.ب. والرفعات وبعض الردود الخاصة تصل ككتلة واحدة.",
   "stats.event.throttle": "شكّل تقييد الشبكة هذا التبادل",
   "stats.event.throttle.slow3g": "مقيَّد: Slow 3G",
   "stats.event.throttle.fast3g": "مقيَّد: Fast 3G",

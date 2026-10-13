@@ -235,8 +235,6 @@
   "trust.fail.body": "這部電腦尚未信任 Titanium Inspector 根 CA。",
   "toolbar.throttle": "節流",
   "toolbar.throttleTip": "上傳與下載共用頻寬，而且每個回應只加一次延遲。預設為關閉。",
-  "toolbar.progressiveThrottle": "細流",
-  "toolbar.progressiveThrottleTip": "節流設定開啟時，已緩衝的下載會分段勻速送出，而不是一次整塊。小於 64 KB 的本文、上傳，以及少數特殊回應仍一次送達。",
   "stats.event.throttle": "網路節流塑造了這次交換",
   "stats.event.throttle.slow3g": "已節流: Slow 3G",
   "stats.event.throttle.fast3g": "已節流: Fast 3G",

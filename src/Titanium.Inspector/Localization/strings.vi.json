@@ -235,8 +235,6 @@
   "trust.fail.body": "Máy tính này chưa tin cậy CA gốc Titanium Inspector.",
   "toolbar.throttle": "Giới hạn",
   "toolbar.throttleTip": "Ngân sách tải lên và tải xuống dùng chung, cộng một độ trễ cho mỗi phản hồi. Tắt theo mặc định.",
-  "toolbar.progressiveThrottle": "Nhỏ giọt",
-  "toolbar.progressiveThrottleTip": "Khi hồ sơ giới hạn đang bật, các tải xuống đã đệm được gửi thành lát nhịp thay vì một khối. Nội dung dưới 64 KB, tải lên và một số phản hồi đặc biệt vẫn đến thành một khối.",
   "stats.event.throttle": "Giới hạn mạng đã định hình phiên trao đổi này",
   "stats.event.throttle.slow3g": "Đã giới hạn: Slow 3G",
   "stats.event.throttle.fast3g": "Đã giới hạn: Fast 3G",

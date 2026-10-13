@@ -62,6 +62,15 @@ public abstract class RequestResponseBase
     internal bool Http2HeadersDeferred;
 
     /// <summary>
+    ///     Native HTTP/2 response whose handler asked for the body (GetResponseBody) so the response is
+    ///     <see cref="Locked" /> while the origin body is still being buffered, although no HEADERS have been sent
+    ///     to the client yet. While set, the still-running BeforeResponse handler may replace the response
+    ///     (Respond / RespondStreaming) once the body has arrived; the frame loop then emits the replacement
+    ///     instead of the buffered original. Cleared when the handler has finished.
+    /// </summary>
+    internal bool Http2ReplaceableUntilBodyEnd;
+
+    /// <summary>
     ///     Priority used only in HTTP/2
     /// </summary>
     internal long? Priority;
@@ -449,6 +458,7 @@ public abstract class RequestResponseBase
         Http2OriginAdmitted = null;
         Http2AdmitAfter = null;
         Http2HeadersDeferred = false;
+        Http2ReplaceableUntilBodyEnd = false;
         Priority = null;
         ReadHttp2BeforeHandlerTaskCompletionSource = null;
         ReadHttp2BodyTaskCompletionSource = null;

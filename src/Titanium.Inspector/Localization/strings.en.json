@@ -248,8 +248,6 @@
   "trust.fail.body": "The Titanium Inspector root CA is not trusted on this computer yet.",
   "toolbar.throttle": "Throttle",
   "toolbar.throttleTip": "Shared upload and download budgets, plus one latency delay per response. Off by default.",
-  "toolbar.progressiveThrottle": "Trickle",
-  "toolbar.progressiveThrottleTip": "While a throttle profile is on, send buffered downloads in paced slices instead of one block. Bodies under 64 KB, uploads, and a few special responses still arrive as a block.",
   "stats.event.throttle": "Network throttle shaped this exchange",
   "stats.event.throttle.slow3g": "Throttled: Slow 3G",
   "stats.event.throttle.fast3g": "Throttled: Fast 3G",

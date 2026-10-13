@@ -235,8 +235,6 @@
   "trust.fail.body": "La CA raíz de Titanium Inspector aún no es de confianza en este equipo.",
   "toolbar.throttle": "Limitación",
   "toolbar.throttleTip": "Presupuestos compartidos de subida y bajada, más un retardo de latencia por respuesta. Desactivado de forma predeterminada.",
-  "toolbar.progressiveThrottle": "Goteo",
-  "toolbar.progressiveThrottleTip": "Con un perfil de limitación activo, las descargas almacenadas se envían en fragmentos acompasados en lugar de un solo bloque. Los cuerpos de menos de 64 KB, las subidas y algunas respuestas especiales siguen llegando en un bloque.",
   "stats.event.throttle": "La limitación de red dio forma a este intercambio",
   "stats.event.throttle.slow3g": "Limitado: Slow 3G",
   "stats.event.throttle.fast3g": "Limitado: Fast 3G",

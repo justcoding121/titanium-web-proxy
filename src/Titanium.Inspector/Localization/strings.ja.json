@@ -235,8 +235,6 @@
   "trust.fail.body": "このコンピューターでは Titanium Inspector のルート CA がまだ信頼されていません。",
   "toolbar.throttle": "スロットル",
   "toolbar.throttleTip": "アップロードとダウンロードで帯域を共有し、応答ごとに遅延を一度だけ加えます。既定ではオフです。",
-  "toolbar.progressiveThrottle": "少しずつ",
-  "toolbar.progressiveThrottleTip": "スロットルプロファイルがオンの間、バッファしたダウンロードは一括ではなく区切って送ります。64 KB 未満の本文、アップロード、一部の特殊な応答はこれまでどおり一括で届きます。",
   "stats.event.throttle": "ネットワークスロットルがこの通信を調整しました",
   "stats.event.throttle.slow3g": "スロットル: Slow 3G",
   "stats.event.throttle.fast3g": "スロットル: Fast 3G",

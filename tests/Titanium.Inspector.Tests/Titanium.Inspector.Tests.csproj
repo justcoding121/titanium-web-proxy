@@ -20,6 +20,11 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
+    <!-- HTTP/3 origin (QuicListener) and the test certificate authority, shared with the Core integration tests. -->
+    <Compile Include="..\Titanium.Web.Proxy.IntegrationTests\Helpers\QuicHttp3Helpers.cs" Link="Shared\QuicHttp3Helpers.cs" />
+    <Compile Include="..\Titanium.Web.Proxy.IntegrationTests\Setup\TestCertificateAuthority.cs" Link="Shared\TestCertificateAuthority.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Titanium.Inspector\Titanium.Inspector.csproj" />
   </ItemGroup>
 </Project>

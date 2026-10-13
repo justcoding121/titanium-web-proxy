@@ -235,8 +235,6 @@
   "trust.fail.body": "De basis-CA van Titanium Inspector wordt op deze computer nog niet vertrouwd.",
   "toolbar.throttle": "Begrenzen",
   "toolbar.throttleTip": "Gedeeld upload- en downloadbudget, plus één latentievertraging per antwoord. Standaard uit.",
-  "toolbar.progressiveThrottle": "Druppelen",
-  "toolbar.progressiveThrottleTip": "Zolang een beperkingsprofiel aan staat, gaan gebufferde downloads in gedoseerde stukken weg in plaats van in één blok. Inhoud onder 64 KB, uploads en enkele bijzondere antwoorden komen nog steeds als één blok aan.",
   "stats.event.throttle": "Netwerkbeperking vormde deze uitwisseling",
   "stats.event.throttle.slow3g": "Beperkt: Slow 3G",
   "stats.event.throttle.fast3g": "Beperkt: Fast 3G",

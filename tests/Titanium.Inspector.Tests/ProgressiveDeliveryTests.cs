@@ -27,7 +27,6 @@ public class ProgressiveDeliveryTests
         Assert.AreEqual(ProgressiveSkipReason.NoBody, Check(ResponseOf(200, []), []));
         Assert.AreEqual(ProgressiveSkipReason.Edited, Check(ok, body, edited: true));
         Assert.AreEqual(ProgressiveSkipReason.Transcoded, Check(ok, body, transcoded: true));
-        Assert.AreEqual(ProgressiveSkipReason.Disabled, Check(ok, body, enabled: false));
 
         var upgrade = ResponseOf(200, body);
         upgrade.Headers.AddHeader(new HttpHeader("Upgrade", "websocket"));
@@ -43,6 +42,16 @@ public class ProgressiveDeliveryTests
     }
 
     [TestMethod]
+    public void Evaluate_FrameLoopExchanges_LowerTheFloor_SoSmallBodiesAreStreamedToo()
+    {
+        var small = new byte[1000];
+        var response = ResponseOf(200, small);
+        Assert.AreEqual(ProgressiveSkipReason.TooSmall, Check(response, small));
+        Assert.AreEqual(ProgressiveSkipReason.None, Check(response, small, minWireBytes: 1));
+        Assert.AreEqual(ProgressiveSkipReason.NoBody, Check(ResponseOf(200, []), [], minWireBytes: 1));
+    }
+
+    [TestMethod]
     public void Build_CopiesDuplicateHeaders_AndRecompressesGzip()
     {
         var plain = Encoding.UTF8.GetBytes(new string('x', ProgressiveDelivery.MinWireBytes));
@@ -51,7 +60,7 @@ public class ProgressiveDeliveryTests
         origin.Headers.AddHeader(new HttpHeader("Set-Cookie", "a=1"));
         origin.Headers.AddHeader(new HttpHeader("Set-Cookie", "b=2"));
 
-        var plan = ProgressiveDelivery.TryBuild(origin, RequestOf("GET"), plain, plain.Length, false, false, true);
+        var plan = ProgressiveDelivery.TryBuild(origin, RequestOf("GET"), plain, plain.Length, false, false);
         Assert.IsNotNull(plan);
         Assert.AreEqual(2, plan!.Response.Headers.Count(h => h.Name.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase)));
         Assert.AreEqual("gzip", plan.Response.ContentEncoding);
@@ -137,7 +146,7 @@ public class ProgressiveDeliveryTests
         GC.Collect();
         var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
         var watch = Stopwatch.StartNew();
-        var plan = ProgressiveDelivery.TryBuild(response, request, plain, plainBytes, false, false, true);
+        var plan = ProgressiveDelivery.TryBuild(response, request, plain, plainBytes, false, false);
         watch.Stop();
         var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
 
@@ -166,7 +175,7 @@ public class ProgressiveDeliveryTests
         GC.Collect();
         var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
         var watch = Stopwatch.StartNew();
-        var plan = ProgressiveDelivery.TryBuild(response, request, plain, plainBytes, false, false, true);
+        var plan = ProgressiveDelivery.TryBuild(response, request, plain, plainBytes, false, false);
         watch.Stop();
         var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
 
@@ -211,10 +220,10 @@ public class ProgressiveDeliveryTests
         var request = new Request { Method = "GET" };
         Assert.AreEqual(
             ProgressiveSkipReason.TooSmall,
-            ProgressiveDelivery.Evaluate(response, request, new byte[500], 500, false, false, true));
+            ProgressiveDelivery.Evaluate(response, request, new byte[500], 500, false, false));
         Assert.AreEqual(
             ProgressiveSkipReason.None,
-            ProgressiveDelivery.Evaluate(response, request, new byte[70 * 1024], 70 * 1024, false, false, true));
+            ProgressiveDelivery.Evaluate(response, request, new byte[70 * 1024], 70 * 1024, false, false));
     }
 
     [TestMethod]
@@ -257,7 +266,7 @@ public class ProgressiveDeliveryTests
         long? wire = null,
         bool transcoded = false,
         bool edited = false,
-        bool enabled = true) =>
+        int minWireBytes = ProgressiveDelivery.MinWireBytes) =>
         ProgressiveDelivery.Evaluate(
             response,
             RequestOf(method),
@@ -265,7 +274,7 @@ public class ProgressiveDeliveryTests
             wire ?? body.Length,
             transcoded,
             edited,
-            enabled);
+            minWireBytes);
 
     private static Request RequestOf(string method) => new() { Method = method };
 

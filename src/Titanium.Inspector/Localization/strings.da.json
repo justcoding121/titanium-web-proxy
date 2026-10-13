@@ -235,8 +235,6 @@
   "trust.fail.body": "Rod-CA'en for Titanium Inspector er ikke betroet på denne computer endnu.",
   "toolbar.throttle": "Begrænsning",
   "toolbar.throttleTip": "Delt budget for upload og download samt én ventetid pr. svar. Slået fra som standard.",
-  "toolbar.progressiveThrottle": "Dryp",
-  "toolbar.progressiveThrottleTip": "Mens en begrænsningsprofil er slået til, sendes bufrede downloads i taktede bidder i stedet for én blok. Indhold under 64 KB, uploads og enkelte særlige svar ankommer stadig som én blok.",
   "stats.event.throttle": "Netværksbegrænsningen formede denne udveksling",
   "stats.event.throttle.slow3g": "Begrænset: Slow 3G",
   "stats.event.throttle.fast3g": "Begrænset: Fast 3G",

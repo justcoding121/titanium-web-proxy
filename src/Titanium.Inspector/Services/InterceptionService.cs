@@ -255,12 +255,6 @@ public sealed class InterceptionService : IDisposable
         }
     }
 
-    /// <summary>
-    ///     When a profile is on, buffered downloads at or above 64 KiB are written in paced slices.
-    ///     Off sends those downloads as one burst after a single delay. Kill switch; default on.
-    /// </summary>
-    public bool ProgressiveThrottleDelivery { get; set; } = true;
-
     /// <summary>Optional FileDescriptorSet path for protobuf decode hints.</summary>
     public string? ProtobufDescriptorSetPath { get; set; }
 
@@ -2585,7 +2579,7 @@ public sealed class InterceptionService : IDisposable
 
         // HTTP/2 pays the exchange latency here, on the request side: a wait in BeforeRequest overlaps across
         // streams, while one in BeforeResponse serializes them (see ApplyResponseThrottleAsync).
-        if (e.HttpClient.Request.HttpVersion.Major == 2)
+        if (LatencyPaidOnRequestSide(e))
         {
             await shaper.WaitAsync(shaper.LatencyDelay).ConfigureAwait(false);
             Note(e.HttpClient, ThrottleEventKey(shaper.Profile), failure: false);
@@ -2620,32 +2614,31 @@ public sealed class InterceptionService : IDisposable
             return;
         }
 
-        // HTTP/2: this hook runs on the connection frame loop, and by the time it runs the response is already
-        // locked (capture asked for the body), so it can neither be replaced with a streamed one nor slept on
-        // without stalling every stream on the connection (N parallel responses would cost N latencies, and a
-        // long bandwidth wait would starve PING and WINDOW_UPDATE). The latency was paid on the request side
-        // instead, where the wait overlaps across streams. Bandwidth is not shaped on HTTP/2.
-        if (IsHttp2Exchange(e))
-        {
-            return;
-        }
+        // A native HTTP/2 exchange (client and origin both HTTP/2) runs this hook inline on the connection's
+        // frame loop, so waiting here would stall every stream on the connection: N parallel responses would
+        // cost N latencies and a long bandwidth wait would starve PING and WINDOW_UPDATE. The latency was
+        // already paid on the request side (PaceBufferedUploadAsync), where the wait overlaps across streams,
+        // and bandwidth is paid by the streamed replacement, which Core writes off the frame loop.
+        var nativeHttp2 = IsNativeHttp2Exchange(e);
 
         var response = e.HttpClient.Response;
         byte[]? plain = response.IsBodyRead && response.HasBody ? response.Body : null;
         var wire = state?.ResponseWire > 0 ? state.ResponseWire : plain?.LongLength ?? 0;
         var transcoded = GrpcJsonTranscodeSessionMark.TryGet(e.UserData, out _);
 
-        await shaper.WaitAsync(shaper.LatencyDelay).ConfigureAwait(false);
-        Note(e.HttpClient, ThrottleEventKey(shaper.Profile), failure: false);
-
-        shaper = Volatile.Read(ref _linkShaper);
-        if (shaper is null)
+        if (!LatencyPaidOnRequestSide(e))
         {
-            return;
+            await shaper.WaitAsync(shaper.LatencyDelay).ConfigureAwait(false);
+            Note(e.HttpClient, ThrottleEventKey(shaper.Profile), failure: false);
+
+            shaper = Volatile.Read(ref _linkShaper);
+            if (shaper is null)
+            {
+                return;
+            }
         }
 
-        if (ProgressiveThrottleDelivery
-            && plain is { Length: > 0 }
+        if (plain is { Length: > 0 }
             && ProgressiveDelivery.TryBuild(
                 response,
                 e.HttpClient.Request,
@@ -2653,15 +2646,15 @@ public sealed class InterceptionService : IDisposable
                 wire,
                 transcoded,
                 responseEdited,
-                enabled: true) is { } plan)
+                // On a frame-loop exchange there is no inline burst fallback, so even a small body goes through
+                // the streamed path (one paced slice) instead of arriving unshaped.
+                minWireBytes: nativeHttp2 ? 1 : ProgressiveDelivery.MinWireBytes) is { } plan
+            && TryStreamPlan(e, plan))
         {
-            if (TryStreamPlan(e, plan))
-            {
-                return;
-            }
+            return;
         }
 
-        if (wire <= 0)
+        if (nativeHttp2 || wire <= 0)
         {
             return;
         }
@@ -2670,9 +2663,9 @@ public sealed class InterceptionService : IDisposable
     }
 
     /// <summary>
-    ///     Installs the streamed replacement. Core refuses it when the response is already locked (it cannot be
-    ///     replaced any more); that returns false so the caller falls back to one bandwidth wait instead of
-    ///     leaving the response unshaped.
+    ///     Installs the streamed replacement. Core refuses it when the response can no longer be replaced; that
+    ///     returns false so the caller falls back to one bandwidth wait (or, on a frame-loop exchange, leaves
+    ///     the response unshaped) instead of failing the exchange.
     /// </summary>
     private bool TryStreamPlan(SessionEventArgs e, ProgressivePlan plan)
     {
@@ -2692,12 +2685,20 @@ public sealed class InterceptionService : IDisposable
     private void StreamPlan(SessionEventArgs e, ProgressivePlan plan)
     {
         var charge = plan.ChargeWireBytes;
-        if (_proxy?.ViaHeaderPseudonym is { Length: > 0 } pseudonym && !e.IsTransparent && !e.IsSocks)
+        // A streamed replacement skips Core's own response processing, where Via is appended. Append it only
+        // where the buffered response would have carried it: Core's native HTTP/2 path sends a response whose
+        // body was read (as capture does) without a Via entry, so adding one here would make the throttled
+        // response differ from the unthrottled one.
+        if (!IsNativeHttp2Exchange(e)
+            && _proxy?.ViaHeaderPseudonym is { Length: > 0 } pseudonym
+            && !e.IsTransparent
+            && !e.IsSocks)
         {
             ProgressiveDelivery.AppendVia(plan.Response.Headers, plan.Response.HttpVersion, pseudonym);
         }
 
-        if (e.HttpClient.Request.HttpVersion.Major < 2)
+        var http1Client = e.HttpClient.Request.HttpVersion.Major < 2;
+        if (http1Client)
         {
             ProgressiveDelivery.MarkConnectionClose(plan.Response.Headers);
         }
@@ -2714,12 +2715,18 @@ public sealed class InterceptionService : IDisposable
             // state, so with closeServerConnection:false Core waits to drain bytes that never come and stops
             // reading the client's next request. closeServerConnection:true skips the drain, but Core then also
             // ends an HTTP/1 client connection after this response, which is why that case says so with
-            // Connection: close. HTTP/2 and HTTP/3 clients are multiplexed, so only the origin socket closes.
-            closeServerConnection: true);
+            // Connection: close. An HTTP/2 or HTTP/3 client is multiplexed and there is nothing to drain, so
+            // the origin connection is left alone.
+            closeServerConnection: http1Client);
     }
 
-    private static bool IsHttp2Exchange(SessionEventArgs e) =>
-        e.HttpClient.Request.HttpVersion.Major == 2 || e.HttpClient.Response.HttpVersion.Major == 2;
+    /// <summary>Client and origin are both HTTP/2: BeforeResponse runs inline on the connection frame loop.</summary>
+    private static bool IsNativeHttp2Exchange(SessionEventArgs e) =>
+        e.HttpClient.Request.HttpVersion.Major == 2 && e.HttpClient.Response.HttpVersion.Major == 2;
+
+    /// <summary>Multiplexed clients pay the exchange latency in BeforeRequest, where waits overlap across streams.</summary>
+    private static bool LatencyPaidOnRequestSide(SessionEventArgs e) =>
+        e.HttpClient.Request.HttpVersion.Major == 2;
 
     private static string ThrottleEventKey(NetworkThrottleProfile profile) => profile.Name switch
     {

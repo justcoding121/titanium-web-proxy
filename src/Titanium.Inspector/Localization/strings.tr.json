@@ -235,8 +235,6 @@
   "trust.fail.body": "Titanium Inspector kök CA’sı bu bilgisayarda henüz güvenilir değil.",
   "toolbar.throttle": "Kısıtlama",
   "toolbar.throttleTip": "Paylaşılan yükleme ve indirme bütçesi, ayrıca yanıt başına bir gecikme. Varsayılan olarak kapalı.",
-  "toolbar.progressiveThrottle": "Damla damla",
-  "toolbar.progressiveThrottleTip": "Bir kısıtlama profili açıkken arabelleğe alınan indirmeler tek blok yerine aralıklı dilimler halinde gönderilir. 64 KB altındaki gövdeler, yüklemeler ve bazı özel yanıtlar yine tek blok olarak gelir.",
   "stats.event.throttle": "Ağ kısıtlaması bu alışverişi şekillendirdi",
   "stats.event.throttle.slow3g": "Kısıtlandı: Slow 3G",
   "stats.event.throttle.fast3g": "Kısıtlandı: Fast 3G",

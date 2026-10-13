@@ -9,7 +9,6 @@ namespace Titanium.Inspector.Services;
 internal enum ProgressiveSkipReason
 {
     None,
-    Disabled,
     TooSmall,
     Status,
     Head,
@@ -50,9 +49,9 @@ internal static class ProgressiveDelivery
         long originWireBytes,
         bool transcoded,
         bool edited,
-        bool enabled)
+        int minWireBytes = MinWireBytes)
     {
-        var reason = Evaluate(origin, request, plainBody, originWireBytes, transcoded, edited, enabled);
+        var reason = Evaluate(origin, request, plainBody, originWireBytes, transcoded, edited, minWireBytes);
         if (reason != ProgressiveSkipReason.None)
         {
             Record(reason);
@@ -134,13 +133,8 @@ internal static class ProgressiveDelivery
         long originWireBytes,
         bool transcoded,
         bool edited,
-        bool enabled)
+        int minWireBytes = MinWireBytes)
     {
-        if (!enabled)
-        {
-            return ProgressiveSkipReason.Disabled;
-        }
-
         if (edited)
         {
             return ProgressiveSkipReason.Edited;
@@ -172,7 +166,7 @@ internal static class ProgressiveDelivery
         }
 
         var size = originWireBytes > 0 ? originWireBytes : plainBody?.LongLength ?? 0;
-        if (plainBody is null || plainBody.Length == 0 || size < MinWireBytes)
+        if (plainBody is null || plainBody.Length == 0 || size < minWireBytes)
         {
             return size <= 0 || plainBody is null || plainBody.Length == 0
                 ? ProgressiveSkipReason.NoBody

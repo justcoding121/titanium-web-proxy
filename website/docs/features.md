@@ -20,7 +20,7 @@ Desktop HTTP(S) debugger on Windows, macOS, and Linux. [Inspector guide](/docs/i
 | GraphQL rules | Match AutoResponder / Map Remote / Breakpoints by `operationName` |
 | HAR and share | Import/export HAR; copy as curl or fetch; Diff two sessions |
 | Search | `is:ws`, `is:grpc`, `process:`, `status:2xx`, `-method:CONNECT` (or typed `hide:tunnel`), and a leading `-` to hide one host or process (`-host:cursor.sh`, shown as a chip); **Method** unchecks a verb to hide it; **Advanced…** edits host and process hides with more room; **Clear filters** resets it |
-| Network throttle | Slow 3G / Fast 3G / LTE. One latency delay per response. Uploads and downloads share separate budgets. Buffered downloads of 64 KB or more trickle; on HTTP/1 and HTTP/3 smaller bodies and uploads wait, then arrive as a block. On HTTP/2 only latency applies; turn HTTP/2 off to shape bandwidth. |
+| Network throttle | Slow 3G / Fast 3G / LTE. One latency delay per response. Uploads and downloads share separate budgets. Downloads always trickle in paced slices (no toggle). On HTTP/1 and HTTP/3 origins bodies under 64 KB and uploads wait, then arrive as a block. On HTTP/2 every buffered, known-length body is shaped; responses with no declared length only get the latency. |
 | Streaming-safe capture | Large known-length bodies are not buffered so downloads keep flowing |
 | Scripts | Line directives (`set-header`, `set-status`, `abort`) — not JavaScript or C# |
 

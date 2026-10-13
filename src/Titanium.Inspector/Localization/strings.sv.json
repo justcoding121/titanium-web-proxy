@@ -235,8 +235,6 @@
   "trust.fail.body": "Rot-CA för Titanium Inspector är inte betrodd på den här datorn ännu.",
   "toolbar.throttle": "Begränsning",
   "toolbar.throttleTip": "Delad budget för uppladdning och nedladdning, plus en fördröjning per svar. Av som standard.",
-  "toolbar.progressiveThrottle": "Droppvis",
-  "toolbar.progressiveThrottleTip": "Med en begränsningsprofil på skickas buffrade nedladdningar i taktade delar i stället för ett block. Innehåll under 64 KB, uppladdningar och några särskilda svar kommer fortfarande som ett block.",
   "stats.event.throttle": "Nätverksbegränsningen formade det här utbytet",
   "stats.event.throttle.slow3g": "Begränsad: Slow 3G",
   "stats.event.throttle.fast3g": "Begränsad: Fast 3G",

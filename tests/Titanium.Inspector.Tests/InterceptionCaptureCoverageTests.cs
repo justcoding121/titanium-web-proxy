@@ -618,7 +618,6 @@ public class InterceptionCaptureCoverageTests
             UseInMemoryTrustState = true,
             DecryptHttps = false,
             Capturing = true,
-            ProgressiveThrottleDelivery = true,
             ThrottleProfile = new NetworkThrottleProfile("fast", latencyMs: 0, bytesPerSecond: int.MaxValue),
         };
         SessionSnapshot? snap = null;
@@ -676,7 +675,6 @@ public class InterceptionCaptureCoverageTests
             UseInMemoryTrustState = true,
             DecryptHttps = false,
             Capturing = true,
-            ProgressiveThrottleDelivery = true,
             ThrottleProfile = profile,
         };
         SessionSnapshot? snap = null;

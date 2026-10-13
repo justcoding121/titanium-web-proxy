@@ -939,7 +939,12 @@ public class SessionEventArgs : SessionEventArgsBase
         if (HttpClient.Request.Locked)
         {
             // response already received from server and ready to be sent to client.
-            if (HttpClient.Response.Locked) throw new InvalidOperationException("You cannot call this function after response is sent to the client.");
+            // A native HTTP/2 response is locked while its body is buffered for GetResponseBody, but nothing has
+            // reached the client yet, so the still-running handler may replace it once the whole origin body has
+            // arrived (see Http2ReplaceableUntilBodyEnd). Earlier, the frame loop is still routing DATA to the original.
+            if (HttpClient.Response.Locked
+                && !(HttpClient.Response.Http2ReplaceableUntilBodyEnd && HttpClient.Response.IsBodyReceived))
+                throw new InvalidOperationException("You cannot call this function after response is sent to the client.");
 
             // cleanup original response.
             if (closeServerConnection)

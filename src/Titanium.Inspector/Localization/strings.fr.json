@@ -235,8 +235,6 @@
   "trust.fail.body": "La CA racine de Titanium Inspector n’est pas encore approuvée sur cet ordinateur.",
   "toolbar.throttle": "Limitation",
   "toolbar.throttleTip": "Budgets d’envoi et de téléchargement partagés, plus un délai de latence par réponse. Désactivé par défaut.",
-  "toolbar.progressiveThrottle": "Goutte à goutte",
-  "toolbar.progressiveThrottleTip": "Tant qu’un profil de limitation est actif, les téléchargements mis en mémoire tampon partent par tranches rythmées au lieu d’un seul bloc. Les contenus de moins de 64 Ko, les envois et quelques réponses particulières arrivent toujours en un bloc.",
   "stats.event.throttle": "La limitation réseau a façonné cet échange",
   "stats.event.throttle.slow3g": "Limité : Slow 3G",
   "stats.event.throttle.fast3g": "Limité : Fast 3G",

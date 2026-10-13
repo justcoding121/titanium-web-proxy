@@ -235,8 +235,6 @@
   "trust.fail.body": "Kořenová CA Titanium Inspector ještě není důvěryhodná na tomto počítači.",
   "toolbar.throttle": "Omezení",
   "toolbar.throttleTip": "Sdílené rozpočty odesílání a stahování a jedno zpoždění na každou odpověď. Ve výchozím stavu vypnuto.",
-  "toolbar.progressiveThrottle": "Po kapkách",
-  "toolbar.progressiveThrottleTip": "Je-li zapnutý profil omezení, odesílají se uložená stahování po dávkách místo jednoho bloku. Těla pod 64 KB, odesílání a několik zvláštních odpovědí stále přijdou jako jeden blok.",
   "stats.event.throttle": "Síťové omezení tvarovalo tuto výměnu",
   "stats.event.throttle.slow3g": "Omezeno: Slow 3G",
   "stats.event.throttle.fast3g": "Omezeno: Fast 3G",

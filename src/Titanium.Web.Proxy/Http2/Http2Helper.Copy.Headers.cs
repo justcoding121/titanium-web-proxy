@@ -1441,6 +1441,9 @@ namespace Titanium.Web.Proxy.Http2
                     else
                     {
                         response.Http2IgnoreBodyFrames = true;
+                        // The handler is still running and waits for the body. It may still replace the
+                        // response once the body is in; the end-of-body block of the DATA path emits it.
+                        response.Http2ReplaceableUntilBodyEnd = true;
                     }
 
                     response.Locked = true;
