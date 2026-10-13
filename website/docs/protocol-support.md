@@ -19,6 +19,8 @@ HTTP/2 is **on by default**. HTTP/3 is experimental and opt-in. CLI/Inspector re
 
 **Not supported:** `Upgrade: h2c` (prior-knowledge only); mid-connection H2→H3 on an open H2↔H2 MITM session; WebSocket over HTTP/3; explicit QUIC proxying (inbound H3 is transparent QUIC / dual-listen only).
 
+**Explicit HTTP proxy and origin `Alt-Svc`.** A browser that uses the proxy as an explicit HTTP proxy sends traffic as TCP (`CONNECT`) and cannot send QUIC through it. The origin's `Alt-Svc` header is still forwarded. Checked locally with Chrome, Edge, and Firefox (QUIC left enabled, loopback not bypassed): later requests stayed on the proxy, and no UDP arrived at the advertised HTTP/3 port. Safari was not part of that run. The proxy's own HTTP/3 to the server is separate; it still learns `Alt-Svc` for its origin cache.
+
 ## Connections and framing (high level)
 
 | Feature | H1.0 | H1.1 | H2 | H3 |

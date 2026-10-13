@@ -31,6 +31,7 @@ public partial class ExcludedHostsWindow : Window
         _interception = interception;
         InitializeComponent();
         LanguageService.AttachWindow(this);
+        DialogWorkArea.Attach(this);
         Title = readOnly ? "Excluded hosts (view)" : "Excluded hosts";
         _settings.EnsureExclusionsSeeded();
         LoadFromSettings();

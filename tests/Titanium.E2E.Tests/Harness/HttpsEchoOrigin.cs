@@ -16,6 +16,9 @@ public sealed class HttpsEchoOrigin : IDisposable
 
     public int Port { get; }
 
+    /// <summary>Optional response header block inserted before Content-Length, for example an Alt-Svc line.</summary>
+    public string? ExtraResponseHeaders { get; init; }
+
     public HttpsEchoOrigin()
     {
         using var rsa = RSA.Create(2048);
@@ -88,9 +91,15 @@ public sealed class HttpsEchoOrigin : IDisposable
             }
 
             var body = Encoding.UTF8.GetBytes($"echo:{path}:GET");
+            var extra = string.IsNullOrEmpty(ExtraResponseHeaders) ? "" : ExtraResponseHeaders;
+            if (extra.Length > 0 && !extra.EndsWith("\r\n", StringComparison.Ordinal))
+            {
+                extra += "\r\n";
+            }
+
             var header = Encoding.ASCII.GetBytes(
-                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " +
-                body.Length + "\r\nConnection: close\r\n\r\n");
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n" + extra +
+                "Content-Length: " + body.Length + "\r\nConnection: close\r\n\r\n");
             await ssl.WriteAsync(header, ct);
             await ssl.WriteAsync(body, ct);
             await ssl.FlushAsync(ct);

@@ -546,4 +546,52 @@ public class Http2TransparentTests
         Assert.AreEqual(Http2FrameType.Data, dataFrame.Type);
         Assert.AreEqual(body, Encoding.ASCII.GetString(dataFrame.Payload));
     }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task Http2_Transparent_BeforeResponse_ReplacesBufferedOriginBody_WithExactBytes()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var plain = new byte[70 * 1024];
+        for (var i = 0; i < plain.Length; i++)
+        {
+            plain[i] = (byte)(i % 251);
+        }
+
+        var server = testSuite.GetServer();
+        server.HandleRequest(async context => await context.Response.Body.WriteAsync(plain));
+
+        var proxy = testSuite.GetReverseProxy();
+        proxy.EnableHttp2 = true;
+        var endpoint = proxy.ProxyEndPoints.OfType<TransparentProxyEndPoint>().First();
+        endpoint.ForwardPort = server.HttpsListeningPort;
+        proxy.BeforeResponse += async (_, e) =>
+        {
+            var body = await e.GetResponseBody();
+            var replacement = new Titanium.Web.Proxy.Http.Response
+            {
+                StatusCode = 200,
+                StatusDescription = "OK",
+                HttpVersion = e.HttpClient.Request.HttpVersion
+            };
+            replacement.Headers.AddHeader("Content-Length", body.Length.ToString());
+            e.RespondStreaming(replacement, async (stream, ct) =>
+            {
+                var offset = 0;
+                while (offset < body.Length)
+                {
+                    var count = Math.Min(16 * 1024, body.Length - offset);
+                    await stream.WriteAsync(body.AsMemory(offset, count), ct);
+                    offset += count;
+                }
+            }, closeServerConnection: false);
+        };
+
+        using var client = GetHttp2DirectClient();
+        var response = await client.GetAsync(new Uri($"https://localhost:{proxy.ProxyEndPoints[0].Port}/"));
+        var got = await response.Content.ReadAsByteArrayAsync();
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(new Version(2, 0), response.Version);
+        CollectionAssert.AreEqual(plain, got);
+    }
 }

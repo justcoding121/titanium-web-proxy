@@ -1,0 +1,62 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="using:Titanium.Inspector.Localization"
+        xmlns:svc="using:Titanium.Inspector.Services"
+        xmlns:vm="using:Titanium.Inspector.ViewModels"
+        x:Class="Titanium.Inspector.Views.RunLogWindow"
+        x:DataType="vm:RunLogViewModel"
+        AutomationProperties.AutomationId="RunLogWindow"
+        Title="{loc:Loc menu.runLog}"
+        Width="720"
+        Height="480"
+        CanResize="True"
+        WindowStartupLocation="CenterOwner">
+  <DockPanel Margin="12">
+    <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,8">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <ComboBox x:Name="LevelFilter" MinWidth="120" SelectionChanged="OnLevelChanged"
+                  AutomationProperties.AutomationId="RunLogLevel" />
+        <TextBox MinWidth="160" Watermark="{loc:Loc runLog.filter}" Text="{Binding Filter}"
+                 AutomationProperties.AutomationId="RunLogFilter" />
+        <CheckBox Content="{loc:Loc runLog.follow}" IsChecked="{Binding Following}"
+                  AutomationProperties.AutomationId="RunLogFollow" />
+        <Button Content="{loc:Loc runLog.clear}" Click="OnClear"
+                AutomationProperties.AutomationId="RunLogClear" />
+        <Button Content="{loc:Loc stats.copy}" Click="OnCopy"
+                AutomationProperties.AutomationId="RunLogCopy" />
+        <Button Content="{loc:Loc runLog.openLogsFolder}" Click="OnOpenFolder"
+                AutomationProperties.AutomationId="RunLogOpenFolder" />
+      </StackPanel>
+      <TextBlock Opacity="0.75" TextWrapping="Wrap" Text="{loc:Loc runLog.help}"
+                 AutomationProperties.AutomationId="RunLogHelp" />
+    </StackPanel>
+    <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+      <Button DockPanel.Dock="Right" HorizontalAlignment="Right"
+              Content="{loc:Loc runLog.openLogging}" Click="OnOpenLogging"
+              AutomationProperties.AutomationId="RunLogOpenLogging" />
+      <TextBlock TextWrapping="Wrap" Opacity="0.85" VerticalAlignment="Center"
+                 Text="{Binding EmptyText}" IsVisible="{Binding ShowEmpty}"
+                 AutomationProperties.AutomationId="RunLogEmpty" />
+    </DockPanel>
+    <ListBox x:Name="Lines" ItemsSource="{Binding VisibleEntries}"
+             FontFamily="Consolas,Courier New,monospace"
+             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+             PointerWheelChanged="OnWheel"
+             AutomationProperties.AutomationId="RunLogLines">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="svc:RunLogEntry">
+          <Grid ColumnDefinitions="Auto,Auto,*" ToolTip.Tip="{Binding Category}">
+            <TextBlock Grid.Column="0" Text="{Binding TimeText}" Opacity="0.55"
+                       Margin="0,0,10,0" VerticalAlignment="Top" />
+            <TextBlock Grid.Column="1" Text="{Binding LevelToken}" Width="46"
+                       Margin="0,0,10,0" VerticalAlignment="Top"
+                       FontWeight="{Binding Level, Converter={StaticResource RunLogLevelFontWeightConverter}}"
+                       Foreground="{Binding Level, Converter={StaticResource RunLogLevelBrushConverter}}" />
+            <TextBlock Grid.Column="2" Text="{Binding Message}" TextWrapping="Wrap"
+                       VerticalAlignment="Top" />
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </DockPanel>
+</Window>

@@ -69,8 +69,12 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
         }, CancellationToken.None);
     }
 
-    public Task DispatchAsync(Action action) =>
-        _session!.Dispatch(() =>
+    public async Task DispatchAsync(Action action)
+    {
+        // macOS CI can drop IFontManagerImpl while ResetForUnitTests drains a queued layout.
+        // Pump once before the caller's action so a retry does not click the same control twice.
+        await PumpUntilFontsReadyAsync();
+        await _session!.Dispatch(() =>
         {
             // After SetupUnsafe, before the caller's action. Export/import completion
             // stashes UI work so ResetForUnitTests does not show a toast with no clock.
@@ -78,14 +82,40 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
             action();
             Dispatcher.UIThread.RunJobs();
         }, CancellationToken.None);
+    }
 
-    public async Task DispatchAsync(Func<Task> action) =>
+    public async Task DispatchAsync(Func<Task> action)
+    {
+        await PumpUntilFontsReadyAsync();
         await _session!.Dispatch(async () =>
         {
             ViewModel?.FlushDeferredInspectorUi();
             await action();
             Dispatcher.UIThread.RunJobs();
         }, CancellationToken.None);
+    }
+
+    private async Task PumpUntilFontsReadyAsync()
+    {
+        const int maxAttempts = 8;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                await _session!.Dispatch(() =>
+                {
+                    ViewModel?.FlushDeferredInspectorUi();
+                    Dispatcher.UIThread.RunJobs();
+                }, CancellationToken.None);
+                return;
+            }
+            catch (InvalidOperationException ex) when (
+                attempt < maxAttempts && IsTransientHeadlessFontRace(ex))
+            {
+                await Task.Delay(25 * attempt);
+            }
+        }
+    }
 
     /// <summary>
     /// Wait until <paramref name="condition"/> is true, pumping the Avalonia dispatcher each poll so

@@ -62,7 +62,7 @@ public class CaptureSettingsParityTests
             svc.Current.LoggingEnabled = true;
             svc.Current.LoggingEnableFile = true;
             svc.Current.LoggingMinimumLevel = "Warning";
-            svc.Current.LoggingFilePath = @"C:\tmp\inspector.log";
+            svc.Current.LoggingFilePath = @"C:\tmp\logs";
             svc.Save();
 
             var loaded = new SettingsService(path).Current;
@@ -89,7 +89,7 @@ public class CaptureSettingsParityTests
             Assert.IsFalse(loaded.ProxyLoopback);
             Assert.IsTrue(loaded.WarnedAboutPacReplace);
             Assert.AreEqual("Warning", loaded.LoggingMinimumLevel);
-            Assert.AreEqual(@"C:\tmp\inspector.log", loaded.LoggingFilePath);
+            Assert.AreEqual(@"C:\tmp\logs", loaded.LoggingFilePath);
         }
         finally
         {

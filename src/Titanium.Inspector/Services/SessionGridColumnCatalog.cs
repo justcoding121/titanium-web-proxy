@@ -39,6 +39,7 @@ public static class SessionGridColumnCatalog
         new("Started", "Started", false, true, false, "MenuColumn_Started"),
         new("Scheme", "Scheme", false, true, false, "MenuColumn_Scheme"),
         new("Content-Type", "Content-Type", false, true, false, "MenuColumn_ContentType"),
+        new("Comment", "Comment", false, true, false, "MenuColumn_Comment"),
     ];
 
     public static IReadOnlyList<SessionGridColumnInfo> All => Columns;

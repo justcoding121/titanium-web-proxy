@@ -5,8 +5,9 @@
         AutomationProperties.AutomationId="SessionRetentionWindow"
         Title="{loc:Loc window.retention}"
         Width="520" Height="460"
+        MinWidth="420" MinHeight="240"
         WindowStartupLocation="CenterOwner"
-        CanResize="False">
+        CanResize="True">
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
       <Button x:Name="SaveButton" Content="{loc:Loc common.save}" MinWidth="88" AutomationProperties.AutomationId="RetentionSave" />
@@ -14,7 +15,7 @@
     </StackPanel>
     <TextBlock x:Name="StatusText" DockPanel.Dock="Bottom" Margin="0,8,0,0" TextWrapping="Wrap"
                Foreground="{DynamicResource InspectorErrorTextBrush}" AutomationProperties.AutomationId="RetentionStatus" />
-    <ScrollViewer>
+    <ScrollViewer Classes="dialogBody">
       <StackPanel Spacing="14">
         <StackPanel Spacing="4">
           <TextBlock FontWeight="SemiBold" Text="{loc:Loc retention.max}" />

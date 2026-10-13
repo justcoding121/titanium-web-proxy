@@ -22,6 +22,7 @@ public partial class SessionRetentionWindow : Window
         _store = store;
         InitializeComponent();
         LanguageService.AttachWindow(this);
+        DialogWorkArea.Attach(this);
         LoadFromSettings();
         SaveButton.Click += OnSave;
         CancelButton.Click += (_, _) => Close();

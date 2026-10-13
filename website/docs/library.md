@@ -41,7 +41,7 @@ proxyServer.Start();
 - Upstream HTTP/HTTPS/SOCKS + system proxy detection
 - Proxy auth, mTLS, Kerberos, NTLM
 - Connection, certificate, and buffer pooling
-- Built-in async logging and opt-in request timing
+- Built-in async logging and opt-in request timing. `Logging.AdditionalLoggerProviders` adds host sinks after the built-in ones; an empty list changes nothing, the proxy does not dispose those providers, and the default level stays Error.
 
 ## Reverse proxy
 

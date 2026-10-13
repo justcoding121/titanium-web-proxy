@@ -26,7 +26,7 @@ public class DesktopShellAndPathTests
         var expectedRoot = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         var path = LoggingSettingsWindow.DefaultLogPath();
         Assert.AreEqual(
-            Path.GetFullPath(Path.Combine(expectedRoot, "TitaniumInspector", "logs", "titanium-inspector.log")),
+            Path.GetFullPath(Path.Combine(expectedRoot, "TitaniumInspector", "logs")),
             Path.GetFullPath(path));
     }
 

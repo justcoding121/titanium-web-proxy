@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Reflection;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Notifications;
@@ -43,16 +44,23 @@ public partial class MainWindow : Window
     private WindowNotificationManager? _notificationManager;
     private CancellationTokenSource? _attentionCts;
     private EventHandler? _themeVariantChangedHandler;
+    private bool _syncingSearchBox;
+
+    /// <summary>Gap under the search box only when the Filters border has wrapped onto the next line.</summary>
+    private const double SearchFilterWrapGap = 8;
 
     public MainWindow()
     {
         InitializeComponent();
         LanguageService.AttachWindow(this);
+        ApplyShortcutGestures();
         MacOsNativeMenu.AttachIfMac(this, MainMenu);
         Closing += OnClosing;
         Opened += OnOpened;
         DataContextChanged += OnDataContextChanged;
         SessionsGrid.Loaded += OnSessionsGridLoaded;
+        SessionsGrid.LoadingRow += (_, e) => ApplySessionMark(e.Row);
+        SessionsGrid.UnloadingRow += (_, e) => ClearSessionMark(e.Row);
         SessionsGrid.SelectionChanged += OnSessionsGridSelectionChanged;
         SessionsGrid.KeyDown += OnSessionsGridKeyDown;
         // Under heavy proxy load the machine is CPU-saturated by worker threads (and browsers); the UI thread
@@ -71,6 +79,7 @@ public partial class MainWindow : Window
         AddHandler(InputElement.PointerMovedEvent, OnUserInputForCaptureUi, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(InputElement.PointerWheelChangedEvent, OnUserInputForCaptureUi, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(InputElement.KeyDownEvent, OnUserInputForCaptureUi, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(InputElement.KeyDownEvent, OnShortcutKeyDown, RoutingStrategies.Tunnel);
         SessionsGrid.AddHandler(
             InputElement.PointerPressedEvent,
             OnSessionsGridPointerPressed,
@@ -84,6 +93,52 @@ public partial class MainWindow : Window
         HookOneWayToggleVisualSync(DataContext as MainWindowViewModel);
         HookGridColumnsChanged(DataContext as MainWindowViewModel);
         HookThemeVariantChanged();
+        ToolbarFilterGroup.SizeChanged += (_, _) => SyncSearchBoxToFilterGroup();
+        ToolbarSearchFilters.SizeChanged += (_, _) => SyncSearchBoxToFilterGroup();
+    }
+
+    private void SyncSearchBoxToFilterGroup()
+    {
+        if (_syncingSearchBox)
+            return;
+
+        var filterHeight = ToolbarFilterGroup.Bounds.Height;
+        if (filterHeight <= 0)
+            return;
+
+        var sameRow = Math.Abs(SearchBox.Bounds.Y - ToolbarFilterGroup.Bounds.Y) < 1;
+        var bottom = sameRow ? 0 : SearchFilterWrapGap;
+        var margin = SearchBox.Margin;
+        var target = Math.Max(filterHeight, SearchQueryMinHeight());
+        var heightMatches = !double.IsNaN(SearchBox.Height) && Math.Abs(SearchBox.Height - target) <= 0.5;
+        var marginMatches = Math.Abs(margin.Bottom - bottom) <= 0.5;
+        if (heightMatches && marginMatches)
+            return;
+
+        _syncingSearchBox = true;
+        try
+        {
+            if (!heightMatches)
+                SearchBox.Height = target;
+            if (!marginMatches)
+                SearchBox.Margin = new Thickness(margin.Left, margin.Top, margin.Right, bottom);
+        }
+        finally
+        {
+            _syncingSearchBox = false;
+        }
+    }
+
+    private double SearchQueryMinHeight()
+    {
+        if (this.TryGetResource("SearchQueryBoxHeight", ActualThemeVariant, out var value) &&
+            value is double height &&
+            height > 0)
+        {
+            return height;
+        }
+
+        return 0;
     }
 
     protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
@@ -119,12 +174,57 @@ public partial class MainWindow : Window
         ApplySessionColumnHeaderTips();
     }
 
+    private void ApplyShortcutGestures()
+    {
+        var macOs = OperatingSystem.IsMacOS();
+        var platform = InspectorShortcuts.PlatformModifier(macOs);
+        MenuToggleCapturing.InputGesture = new KeyGesture(Key.F12);
+        MenuClearSessions.InputGesture = new KeyGesture(Key.Delete, platform | KeyModifiers.Shift);
+        MenuRemoveSelected.InputGesture = new KeyGesture(Key.Delete);
+    }
+
+    private void OnShortcutKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        var action = InspectorShortcuts.Match(
+            e.Key,
+            e.KeyModifiers,
+            SessionsGrid.IsKeyboardFocusWithin,
+            IsTextInput(e.Source as Control),
+            OperatingSystem.IsMacOS());
+        if (action == ShortcutAction.None)
+            return;
+
+        if (action == ShortcutAction.FocusSearch)
+        {
+            SearchBox.Focus();
+            e.Handled = true;
+            return;
+        }
+
+        if (vm.TryHandleShortcut(action))
+            e.Handled = true;
+    }
+
+    private static bool IsTextInput(Control? source)
+    {
+        for (var current = source; current is not null; current = current.Parent as Control)
+        {
+            if (current is TextBox)
+                return true;
+        }
+
+        return false;
+    }
+
     private static bool IsSessionNavigationKey(Key key) =>
         key is Key.Up or Key.Down or Key.Home or Key.End or Key.PageUp or Key.PageDown;
 
     private void OnSessionsGridKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Delete || DataContext is not MainWindowViewModel vm)
+        if (e.Key != Key.Delete || e.KeyModifiers != KeyModifiers.None || DataContext is not MainWindowViewModel vm)
         {
             if (IsSessionNavigationKey(e.Key) && DataContext is MainWindowViewModel navigationVm)
             {
@@ -273,10 +373,16 @@ public partial class MainWindow : Window
         HookStatusAttention(DataContext as MainWindowViewModel);
         HookOneWayToggleVisualSync(DataContext as MainWindowViewModel);
         HookGridColumnsChanged(DataContext as MainWindowViewModel);
+        HookSessionAnnotations(DataContext as MainWindowViewModel);
         HookInspectHeadersLayout(DataContext as MainWindowViewModel);
         if (_notificationManager is not null && DataContext is MainWindowViewModel vm)
         {
             vm.AttachStatusNotifier(new AvaloniaStatusNotifier(() => _notificationManager));
+        }
+
+        if (DataContext is MainWindowViewModel alwaysOnTop)
+        {
+            alwaysOnTop.ApplyAlwaysOnTop(this);
         }
 
         ApplyColumnVisibility();
@@ -414,12 +520,10 @@ public partial class MainWindow : Window
             if (propertyName == nameof(MainWindowViewModel.DecryptHttps))
             {
                 OneWayToggleVisualSync.Apply(DecryptHttpsCheck, isChecked);
-                OneWayToggleVisualSync.Apply(MenuDecryptHttps, isChecked);
             }
             else if (propertyName == nameof(MainWindowViewModel.SystemProxy))
             {
                 OneWayToggleVisualSync.Apply(SystemProxyCheck, isChecked);
-                OneWayToggleVisualSync.Apply(MenuToggleSystemProxy, isChecked);
             }
             else if (propertyName == nameof(MainWindowViewModel.ProxyLoopback))
             {
@@ -537,6 +641,7 @@ public partial class MainWindow : Window
 
         if (_sessionsVm is not null)
         {
+            _sessionsVm.PropertyChanged -= OnSelectedSessionChanged;
             _sessionsVm.Sessions.CollectionChanged -= OnSessionsCollectionChanged;
             if (_sessionsVm.Sessions is SessionListCollection oldList)
             {
@@ -547,12 +652,37 @@ public partial class MainWindow : Window
         _sessionsVm = vm;
         if (_sessionsVm is not null)
         {
+            _sessionsVm.PropertyChanged += OnSelectedSessionChanged;
             _sessionsVm.Sessions.CollectionChanged += OnSessionsCollectionChanged;
             if (_sessionsVm.Sessions is SessionListCollection newList)
             {
                 newList.Replacing += OnSessionsReplacing;
             }
         }
+    }
+
+    private void OnSelectedSessionChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(MainWindowViewModel.SelectedSession)
+            || sender is not MainWindowViewModel vm
+            || vm.SelectedSession is not SessionSnapshot snap)
+        {
+            return;
+        }
+
+        var fromTimeline = vm.ConsumeTimelineGridSelection();
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (fromTimeline)
+            {
+                SessionsGrid.SelectedItems.Clear();
+                SessionsGrid.SelectedItem = snap;
+            }
+
+            _programmaticScroll = true;
+            SessionsGrid.ScrollIntoView(snap, column: null);
+            Dispatcher.UIThread.Post(() => _programmaticScroll = false, DispatcherPriority.Background);
+        }, DispatcherPriority.Background);
     }
 
     private void AttachSessionsScroll()
@@ -725,6 +855,103 @@ public partial class MainWindow : Window
         {
             return SessionListFollowEdge.Bottom;
         }
+    }
+
+    private MainWindowViewModel? _annotationsVm;
+
+    private void HookSessionAnnotations(MainWindowViewModel? vm)
+    {
+        if (_annotationsVm is not null)
+        {
+            _annotationsVm.SessionAnnotationsChanged -= OnSessionAnnotationsChanged;
+        }
+
+        _annotationsVm = vm;
+        if (vm is not null)
+        {
+            vm.SessionAnnotationsChanged += OnSessionAnnotationsChanged;
+        }
+    }
+
+    private void OnSessionAnnotationsChanged(object? sender, EventArgs e)
+    {
+        foreach (var row in SessionsGrid.GetVisualDescendants().OfType<DataGridRow>())
+        {
+            ApplySessionMark(row);
+        }
+    }
+
+    private static readonly string[] MarkClasses =
+        ["mark-red", "mark-orange", "mark-yellow", "mark-green", "mark-blue", "mark-purple", "has-comment"];
+
+    private static void ClearSessionMark(DataGridRow row)
+    {
+        foreach (var name in MarkClasses)
+        {
+            row.Classes.Remove(name);
+        }
+
+        // Clear code-applied stripe so recycled rows do not keep a previous mark color.
+        row.BorderThickness = default;
+        row.BorderBrush = null;
+    }
+
+    private static void ApplySessionMark(DataGridRow row)
+    {
+        ClearSessionMark(row);
+        if (row.DataContext is not SessionSnapshot snap)
+        {
+            AutomationProperties.SetHelpText(row, null);
+            ToolTip.SetTip(row, null);
+            return;
+        }
+
+        if (snap.Mark != SessionMark.None)
+        {
+            var markName = snap.Mark.ToString();
+            row.Classes.Add("mark-" + markName.ToLowerInvariant());
+            // Set the left stripe on the row itself — Fluent RowBorder template-binds these.
+            // Class-only styles under DataGrid.Styles were easy to miss against selection fills.
+            row.BorderThickness = new Thickness(4, 0, 0, 0);
+            row.BorderBrush = MarkStripeBrush(snap.Mark);
+            AutomationProperties.SetHelpText(row, markName);
+        }
+        else
+        {
+            AutomationProperties.SetHelpText(row, null);
+        }
+
+        if (!string.IsNullOrEmpty(snap.Comment))
+        {
+            row.Classes.Add("has-comment");
+            ToolTip.SetTip(row, snap.Comment);
+        }
+        else
+        {
+            ToolTip.SetTip(row, null);
+        }
+    }
+
+    private static IBrush MarkStripeBrush(SessionMark mark) => mark switch
+    {
+        SessionMark.Red => BrushFromTheme("SessionStatusServerErrorBrush", "#A4262C"),
+        SessionMark.Orange => BrushFromTheme("StatusFeedbackWarningBrush", "#7A5200"),
+        SessionMark.Yellow => BrushFromTheme("SessionStatusClientErrorBrush", "#FCE100"),
+        SessionMark.Green => BrushFromTheme("SessionStatusSuccessBrush", "#0A5F0A"),
+        SessionMark.Blue => BrushFromTheme("SessionStatusRedirectBrush", "#005A9E"),
+        SessionMark.Purple => BrushFromTheme("SessionMarkPurpleBrush", "#5C2C8A"),
+        _ => Brushes.Transparent,
+    };
+
+    private static IBrush BrushFromTheme(string key, string fallbackHex)
+    {
+        if (Application.Current?.TryGetResource(key, Application.Current.ActualThemeVariant, out var value) == true
+            && value is IBrush brush)
+        {
+            return brush;
+        }
+
+        return new SolidColorBrush(Color.Parse(fallbackHex));
     }
 
     /// <summary>Column visibility from the catalog defaults, saved choices, and the Process platform gate.</summary>

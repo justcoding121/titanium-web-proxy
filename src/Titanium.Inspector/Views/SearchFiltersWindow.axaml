@@ -1,11 +1,12 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="using:Titanium.Inspector.Localization"
+        xmlns:views="using:Titanium.Inspector.Views"
         x:Class="Titanium.Inspector.Views.SearchFiltersWindow"
         AutomationProperties.AutomationId="SearchFiltersWindow"
         Title="{loc:Loc window.filters}"
         Width="560" Height="480"
-        MinWidth="420" MinHeight="360"
+        MinWidth="420" MinHeight="280"
         WindowStartupLocation="CenterOwner"
         CanResize="True"
         ShowInTaskbar="False">
@@ -16,14 +17,15 @@
       <Button x:Name="ApplyButton" Content="{loc:Loc common.apply}" MinWidth="88" IsDefault="True"
               AutomationProperties.AutomationId="SearchFiltersApply" />
     </StackPanel>
-    <ScrollViewer>
+    <ScrollViewer Classes="dialogBody">
       <StackPanel Spacing="14">
         <StackPanel Spacing="4">
           <TextBlock FontWeight="SemiBold" Text="{loc:Loc filters.search}" />
           <TextBlock Opacity="0.75" TextWrapping="Wrap"
                      Text="{loc:Loc filters.searchHelp}" />
-          <TextBox x:Name="RemainderBox" Watermark="{loc:Loc filters.searchWatermark}"
-                   AcceptsReturn="False"
+          <views:SearchQueryTextBox x:Name="RemainderBox" Classes="searchQuery"
+                   Height="{DynamicResource SearchQueryBoxHeight}"
+                   Watermark="{loc:Loc filters.searchWatermark}"
                    AutomationProperties.AutomationId="SearchFiltersRemainder" />
         </StackPanel>
 
@@ -47,12 +49,12 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBox x:Name="HostAddBox" MinWidth="220" Watermark="{loc:Loc filters.addHostWatermark}"
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBox x:Name="HostAddBox" Grid.Column="0" Margin="0,0,8,0" Watermark="{loc:Loc filters.addHostWatermark}"
                      AutomationProperties.AutomationId="SearchFiltersHostAdd" />
-            <Button x:Name="HostAddButton" Content="{loc:Loc filters.addHost}" MinWidth="88"
+            <Button x:Name="HostAddButton" Grid.Column="1" Content="{loc:Loc filters.addHost}" MinWidth="88"
                     AutomationProperties.AutomationId="SearchFiltersAddHost" />
-          </StackPanel>
+          </Grid>
         </StackPanel>
 
         <StackPanel Spacing="6">
@@ -69,12 +71,12 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBox x:Name="ProcessAddBox" MinWidth="220" Watermark="{loc:Loc filters.addProcessWatermark}"
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBox x:Name="ProcessAddBox" Grid.Column="0" Margin="0,0,8,0" Watermark="{loc:Loc filters.addProcessWatermark}"
                      AutomationProperties.AutomationId="SearchFiltersProcessAdd" />
-            <Button x:Name="ProcessAddButton" Content="{loc:Loc filters.addProcess}" MinWidth="88"
+            <Button x:Name="ProcessAddButton" Grid.Column="1" Content="{loc:Loc filters.addProcess}" MinWidth="88"
                     AutomationProperties.AutomationId="SearchFiltersAddProcess" />
-          </StackPanel>
+          </Grid>
           <TextBlock Opacity="0.75" TextWrapping="Wrap"
                      Text="{loc:Loc filters.processSpace}" />
         </StackPanel>

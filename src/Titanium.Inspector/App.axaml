@@ -17,18 +17,24 @@
       <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
           <SolidColorBrush x:Key="SessionStatusSuccessBrush" Color="#0A5F0A" />
-          <SolidColorBrush x:Key="SessionStatusRedirectBrush" Color="#0078D4" />
-          <SolidColorBrush x:Key="SessionStatusClientErrorBrush" Color="#9A6700" />
-          <SolidColorBrush x:Key="SessionStatusServerErrorBrush" Color="#C42B1C" />
-          <SolidColorBrush x:Key="SessionStatusMutedBrush" Color="#6B6B6B" />
-          <SolidColorBrush x:Key="StatusFeedbackNeutralBrush" Color="#6B6B6B" />
-          <SolidColorBrush x:Key="StatusFeedbackBusyBrush" Color="#0078D4" />
+          <SolidColorBrush x:Key="SessionStatusRedirectBrush" Color="#005A9E" />
+          <SolidColorBrush x:Key="SessionStatusClientErrorBrush" Color="#7A5200" />
+          <SolidColorBrush x:Key="SessionStatusServerErrorBrush" Color="#A4262C" />
+          <SolidColorBrush x:Key="SessionStatusMutedBrush" Color="#595959" />
+          <SolidColorBrush x:Key="StatusFeedbackNeutralBrush" Color="#595959" />
+          <SolidColorBrush x:Key="StatusFeedbackBusyBrush" Color="#005A9E" />
           <SolidColorBrush x:Key="StatusFeedbackSuccessBrush" Color="#0A5F0A" />
-          <SolidColorBrush x:Key="StatusFeedbackWarningBrush" Color="#9A6700" />
-          <SolidColorBrush x:Key="StatusFeedbackErrorBrush" Color="#C42B1C" />
-          <SolidColorBrush x:Key="InspectorLinkBrush" Color="#0066CC" />
-          <SolidColorBrush x:Key="InspectorErrorTextBrush" Color="#C0392B" />
-          <SolidColorBrush x:Key="SessionGridSelectionBrush" Color="#90C0E0" />
+          <SolidColorBrush x:Key="StatusFeedbackWarningBrush" Color="#7A5200" />
+          <SolidColorBrush x:Key="StatusFeedbackErrorBrush" Color="#A4262C" />
+          <SolidColorBrush x:Key="InspectorLinkBrush" Color="#0058A8" />
+          <!-- Accent pill text on the dark-blue light-theme accent. -->
+          <SolidColorBrush x:Key="FilterBadgeForeground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="InspectorErrorTextBrush" Color="#A4262C" />
+          <SolidColorBrush x:Key="InspectorLogWarnBrush" Color="#9A6700" />
+          <SolidColorBrush x:Key="InspectorLogMutedBrush" Color="#6B6B6B" />
+          <SolidColorBrush x:Key="SessionMarkPurpleBrush" Color="#5C2C8A" />
+          <x:String x:Key="SessionStatusBaseFontWeight">SemiBold</x:String>
+          <SolidColorBrush x:Key="SessionGridSelectionBrush" Color="#CCE4F7" />
           <SolidColorBrush x:Key="SessionGridSelectionForegroundBrush" Color="#000000" />
           <SolidColorBrush x:Key="SessionGridHoverBrush" Color="#F3F3F3" />
         </ResourceDictionary>
@@ -37,26 +43,35 @@
           <SolidColorBrush x:Key="SessionStatusRedirectBrush" Color="#4CC2FF" />
           <SolidColorBrush x:Key="SessionStatusClientErrorBrush" Color="#FCE100" />
           <SolidColorBrush x:Key="SessionStatusServerErrorBrush" Color="#FF99A4" />
-          <SolidColorBrush x:Key="SessionStatusMutedBrush" Color="#A0A0A0" />
-          <SolidColorBrush x:Key="StatusFeedbackNeutralBrush" Color="#A0A0A0" />
+          <SolidColorBrush x:Key="SessionStatusMutedBrush" Color="#B4B4B4" />
+          <SolidColorBrush x:Key="StatusFeedbackNeutralBrush" Color="#B4B4B4" />
           <SolidColorBrush x:Key="StatusFeedbackBusyBrush" Color="#4CC2FF" />
           <SolidColorBrush x:Key="StatusFeedbackSuccessBrush" Color="#8ADB7A" />
           <SolidColorBrush x:Key="StatusFeedbackWarningBrush" Color="#E8B96A" />
           <SolidColorBrush x:Key="StatusFeedbackErrorBrush" Color="#FF99A4" />
           <SolidColorBrush x:Key="InspectorLinkBrush" Color="#4CC2FF" />
           <SolidColorBrush x:Key="InspectorErrorTextBrush" Color="#FF99A4" />
-          <SolidColorBrush x:Key="SessionGridSelectionBrush" Color="#2B5A8A" />
+          <SolidColorBrush x:Key="InspectorLogWarnBrush" Color="#E8B96A" />
+          <SolidColorBrush x:Key="InspectorLogMutedBrush" Color="#9A9A9A" />
+          <SolidColorBrush x:Key="SessionMarkPurpleBrush" Color="#E2C2FF" />
+          <x:String x:Key="SessionStatusBaseFontWeight">Normal</x:String>
+          <SolidColorBrush x:Key="SessionGridSelectionBrush" Color="#1F4268" />
           <SolidColorBrush x:Key="SessionGridSelectionForegroundBrush" Color="#FFFFFF" />
           <SolidColorBrush x:Key="SessionGridHoverBrush" Color="#2A2D2E" />
-          <!-- Accent Start-proxy label must stay dark on light cyan Accent (#4CC2FF). -->
+          <!-- Accent Start-proxy label and filter pills must stay dark on light cyan Accent (#4CC2FF). -->
+          <SolidColorBrush x:Key="FilterBadgeForeground" Color="#000000" />
           <SolidColorBrush x:Key="AccentButtonForeground" Color="#000000" />
           <SolidColorBrush x:Key="AccentButtonForegroundPointerOver" Color="#000000" />
           <SolidColorBrush x:Key="AccentButtonForegroundPressed" Color="#000000" />
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
+      <!-- One-row Filters border height. The dialog box uses it as Height; the toolbar box uses it as MinHeight. -->
+      <x:Double x:Key="SearchQueryBoxHeight">70</x:Double>
       <conv:StatusCodeBrushConverter x:Key="StatusCodeBrushConverter" />
       <conv:StatusCodeFontWeightConverter x:Key="StatusCodeFontWeightConverter" />
       <conv:StatusSeverityBrushConverter x:Key="StatusSeverityBrushConverter" />
+      <conv:RunLogLevelBrushConverter x:Key="RunLogLevelBrushConverter" />
+      <conv:RunLogLevelFontWeightConverter x:Key="RunLogLevelFontWeightConverter" />
     </ResourceDictionary>
   </Application.Resources>
   <Application.Styles>
@@ -76,6 +91,93 @@
     <Style Selector="Button">
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <!-- Fluent sizes Expander to its content. Settings dialogs should span the form
+         so the header, chevron, and body line up with the fields above. -->
+    <Style Selector="Expander">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <!-- Search boxes wrap visually and stay one logical line. Enter does not insert a break.
+         The toolbar box grows with the Filters border and is never shorter than SearchQueryBoxHeight. -->
+    <Style Selector="TextBox.searchQuery">
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="AcceptsReturn" Value="False" />
+      <Setter Property="VerticalContentAlignment" Value="Top" />
+      <Setter Property="(ScrollViewer.HorizontalScrollBarVisibility)" Value="Disabled" />
+      <Setter Property="(ScrollViewer.VerticalScrollBarVisibility)" Value="Auto" />
+      <Setter Property="(ScrollViewer.AllowAutoHide)" Value="False" />
+    </Style>
+    <Style Selector="TextBox.searchQuery /template/ TextBlock#PART_Watermark">
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <!-- Method and Status share one footprint. The pill stays in the layout at opacity 0 when idle. -->
+    <Style Selector="DropDownButton.filterDropdown">
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="DropDownButton.filterDropdown.active">
+      <Setter Property="BorderBrush" Value="{DynamicResource SystemControlHighlightAccentBrush}" />
+    </Style>
+    <!-- Fluent paints the outline on the template presenter, not the control's BorderBrush. -->
+    <Style Selector="DropDownButton.filterDropdown.active /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="BorderBrush" Value="{DynamicResource SystemControlHighlightAccentBrush}" />
+    </Style>
+    <Style Selector="Border.filterBadge">
+      <Setter Property="Width" Value="28" />
+      <Setter Property="MinWidth" Value="28" />
+      <Setter Property="Height" Value="16" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="6,0,0,0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.filterBadge > TextBlock">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="FontSize" Value="11" />
+    </Style>
+    <Style Selector="DropDownButton.filterDropdown.active Border.filterBadge">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="Background" Value="{DynamicResource SystemControlHighlightAccentBrush}" />
+    </Style>
+    <Style Selector="DropDownButton.filterDropdown.active Border.filterBadge > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource FilterBadgeForeground}" />
+    </Style>
+    <!-- Dialog body scrolls vertically when the window is shorter than the form.
+         Horizontal scrolling stays off so fields and expanders keep the full row width. -->
+    <Style Selector="ScrollViewer.dialogBody">
+      <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+      <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+    </Style>
+    <Style Selector="ScrollViewer.dialogBody /template/ ScrollBar:vertical">
+      <Setter Property="AllowAutoHide" Value="False" />
+    </Style>
+    <Style Selector="Button.methodLink">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0,2" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Foreground" Value="{DynamicResource InspectorLinkBrush}" />
+    </Style>
+    <Style Selector="Button.methodOnly">
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="IsHitTestVisible" Value="False" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="8,0,0,0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource InspectorLinkBrush}" />
+    </Style>
+    <Style Selector="Grid.methodFilterRow:pointerover Button.methodOnly">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="IsHitTestVisible" Value="True" />
+    </Style>
+    <Style Selector="Button.methodOnly:focus, Button.methodOnly:pointerover">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="IsHitTestVisible" Value="True" />
     </Style>
     <Style Selector="Button.paneCloseBtn">
       <Setter Property="MinWidth" Value="36" />

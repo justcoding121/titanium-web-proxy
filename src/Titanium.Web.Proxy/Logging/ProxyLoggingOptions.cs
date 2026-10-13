@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
 
 namespace Titanium.Web.Proxy.Logging;
@@ -82,6 +83,15 @@ public sealed class ProxyLoggingOptions
     ///     Optional externally supplied <see cref="ILoggerFactory" /> (e.g. bridging to Serilog, NLog, or
     ///     an ASP.NET Core host's logging pipeline). When set, the built-in Console/File sinks are not
     ///     created and this factory is used verbatim; the proxy never disposes a factory it does not own.
+    ///     <see cref="AdditionalLoggerProviders" /> is not consulted in that case.
     /// </summary>
     public ILoggerFactory? LoggerFactory { get; set; }
+
+    /// <summary>
+    ///     Host-supplied sinks appended after the built-in console and file sinks. Empty by default, which
+    ///     leaves the sink list unchanged. The proxy does not dispose these providers; it disposes only the
+    ///     sinks it created. Ignored when <see cref="LoggerFactory" /> is set or <see cref="Enabled" /> is
+    ///     <see langword="false" />.
+    /// </summary>
+    public IList<ILoggerProvider> AdditionalLoggerProviders { get; set; } = new List<ILoggerProvider>();
 }

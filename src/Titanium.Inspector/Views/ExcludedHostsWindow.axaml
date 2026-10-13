@@ -5,6 +5,7 @@
         AutomationProperties.AutomationId="ExcludedHostsWindow"
         Title="{loc:Loc window.excludedHosts}"
         Width="640" Height="600"
+        MinWidth="480" MinHeight="320"
         WindowStartupLocation="CenterOwner">
   <DockPanel Margin="16">
     <DockPanel DockPanel.Dock="Bottom" Margin="0,16,0,0">
@@ -15,7 +16,7 @@
         <Button x:Name="CancelButton" Content="{loc:Loc common.cancel}" MinWidth="88" IsCancel="True" AutomationProperties.AutomationId="ExcludedHostsCancel" />
       </StackPanel>
     </DockPanel>
-    <ScrollViewer>
+    <ScrollViewer Classes="dialogBody">
       <StackPanel Spacing="12">
         <TextBlock FontWeight="SemiBold" Text="{loc:Loc excluded.bypass}" />
         <TextBlock Opacity="0.75" TextWrapping="Wrap"

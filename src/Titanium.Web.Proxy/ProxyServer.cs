@@ -1399,6 +1399,7 @@ public partial class ProxyServer : IDisposable
             var factory = new global::Titanium.Web.Proxy.Logging.ProxyLoggerFactory(options.MinimumLevel);
             if (options.EnableConsole) factory.AddProvider(new ConsoleLoggerProvider(options));
             if (options.EnableFile) factory.AddProvider(new RollingFileLoggerProvider(options));
+            AddHostLoggerProviders(factory, options.AdditionalLoggerProviders);
             activeLoggerFactory = factory;
             ownsActiveLoggerFactory = true;
         }
@@ -1418,6 +1419,19 @@ public partial class ProxyServer : IDisposable
             {
                 // A misbehaving sink must never prevent the logger from being replaced.
             }
+    }
+
+    private static void AddHostLoggerProviders(ProxyLoggerFactory factory, IList<ILoggerProvider>? extras)
+    {
+        if (extras is null || extras.Count == 0)
+            return;
+
+        for (var i = 0; i < extras.Count; i++)
+        {
+            var provider = extras[i];
+            if (provider != null)
+                factory.AddHostProvider(provider);
+        }
     }
 
     /// <summary>

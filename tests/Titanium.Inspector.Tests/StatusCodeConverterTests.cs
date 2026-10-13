@@ -47,11 +47,11 @@ public class StatusCodeConverterTests
         var server = AssertSolid(StatusCodeBrushConverter.Instance.Convert(500, typeof(IBrush), null, Culture));
         var other = AssertSolid(StatusCodeBrushConverter.Instance.Convert(0, typeof(IBrush), null, Culture));
 
-        Assert.AreEqual(Color.Parse("#888888"), pending.Color);
+        Assert.AreEqual(Color.Parse("#595959"), pending.Color);
         Assert.AreEqual(Color.Parse("#0A5F0A"), success.Color);
-        Assert.AreEqual(Color.Parse("#0078D4"), redirect.Color);
-        Assert.AreEqual(Color.Parse("#C19C00"), client.Color);
-        Assert.AreEqual(Color.Parse("#C42B1C"), server.Color);
+        Assert.AreEqual(Color.Parse("#005A9E"), redirect.Color);
+        Assert.AreEqual(Color.Parse("#7A5200"), client.Color);
+        Assert.AreEqual(Color.Parse("#A4262C"), server.Color);
         Assert.AreEqual(pending.Color, other.Color);
         Assert.AreEqual(pending.Color, AssertSolid(StatusCodeBrushConverter.Instance.Convert(101, typeof(IBrush), null, Culture)).Color);
     }
@@ -78,11 +78,11 @@ public class StatusCodeConverterTests
         var error = AssertSolid(StatusSeverityBrushConverter.Instance.Convert(
             StatusSeverity.Error, typeof(IBrush), null, Culture));
 
-        Assert.AreEqual(Color.Parse("#6B6B6B"), neutral.Color);
-        Assert.AreEqual(Color.Parse("#0078D4"), busy.Color);
+        Assert.AreEqual(Color.Parse("#595959"), neutral.Color);
+        Assert.AreEqual(Color.Parse("#005A9E"), busy.Color);
         Assert.AreEqual(Color.Parse("#0A5F0A"), success.Color);
-        Assert.AreEqual(Color.Parse("#9A6700"), warning.Color);
-        Assert.AreEqual(Color.Parse("#C42B1C"), error.Color);
+        Assert.AreEqual(Color.Parse("#7A5200"), warning.Color);
+        Assert.AreEqual(Color.Parse("#A4262C"), error.Color);
     }
 
     private static SolidColorBrush AssertSolid(object? value)

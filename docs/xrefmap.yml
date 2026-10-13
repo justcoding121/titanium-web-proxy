@@ -2878,6 +2878,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.DeclaredPayloadLength
   nameWithType: WebSocketFrameElidedEventArgs.DeclaredPayloadLength
+- uid: Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.Delay
+  name: Delay
+  href: api/Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.html#Titanium_Web_Proxy_EventArguments_WebSocketFrameElidedEventArgs_Delay
+  commentId: P:Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.Delay
+  fullName: Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.Delay
+  nameWithType: WebSocketFrameElidedEventArgs.Delay
+- uid: Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.Delay*
+  name: Delay
+  href: api/Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.html#Titanium_Web_Proxy_EventArguments_WebSocketFrameElidedEventArgs_Delay_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.Delay
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.Delay
+  nameWithType: WebSocketFrameElidedEventArgs.Delay
 - uid: Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.Direction
   name: Direction
   href: api/Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.html#Titanium_Web_Proxy_EventArguments_WebSocketFrameElidedEventArgs_Direction
@@ -5108,6 +5121,19 @@ references:
   commentId: T:Titanium.Web.Proxy.Logging.ProxyLoggingOptions
   fullName: Titanium.Web.Proxy.Logging.ProxyLoggingOptions
   nameWithType: ProxyLoggingOptions
+- uid: Titanium.Web.Proxy.Logging.ProxyLoggingOptions.AdditionalLoggerProviders
+  name: AdditionalLoggerProviders
+  href: api/Titanium.Web.Proxy.Logging.ProxyLoggingOptions.html#Titanium_Web_Proxy_Logging_ProxyLoggingOptions_AdditionalLoggerProviders
+  commentId: P:Titanium.Web.Proxy.Logging.ProxyLoggingOptions.AdditionalLoggerProviders
+  fullName: Titanium.Web.Proxy.Logging.ProxyLoggingOptions.AdditionalLoggerProviders
+  nameWithType: ProxyLoggingOptions.AdditionalLoggerProviders
+- uid: Titanium.Web.Proxy.Logging.ProxyLoggingOptions.AdditionalLoggerProviders*
+  name: AdditionalLoggerProviders
+  href: api/Titanium.Web.Proxy.Logging.ProxyLoggingOptions.html#Titanium_Web_Proxy_Logging_ProxyLoggingOptions_AdditionalLoggerProviders_
+  commentId: Overload:Titanium.Web.Proxy.Logging.ProxyLoggingOptions.AdditionalLoggerProviders
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Logging.ProxyLoggingOptions.AdditionalLoggerProviders
+  nameWithType: ProxyLoggingOptions.AdditionalLoggerProviders
 - uid: Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsole
   name: EnableConsole
   href: api/Titanium.Web.Proxy.Logging.ProxyLoggingOptions.html#Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableConsole

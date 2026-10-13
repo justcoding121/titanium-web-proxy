@@ -269,6 +269,7 @@ public class ConfigReloadTests
         {
             AccessLog = new AccessLogConfig { Path = Path.Combine(_tempDir, "a.jsonl"), SampleRate = 0 },
         }]));
+        Assert.IsFalse(proxy.EnableRequestTimingCapture);
 
         var logPath = Path.Combine(_tempDir, "access.jsonl");
         var writer = method.Invoke(null, [proxy, new ServerConfig
@@ -278,6 +279,7 @@ public class ConfigReloadTests
         Assert.IsNotNull(writer);
         (writer as IDisposable)?.Dispose();
         Assert.IsTrue(proxy.EnableHttpInterception);
+        Assert.IsTrue(proxy.EnableRequestTimingCapture);
     }
 
     private string WriteRoutesConfig(string routeId, string matchPath, int originPort, string pathPrefix)

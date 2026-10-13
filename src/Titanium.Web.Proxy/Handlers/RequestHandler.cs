@@ -892,6 +892,12 @@ public partial class ProxyServer
 
         args.HttpClient.Request.Locked = true;
 
+        // True once an origin connection for this request has already failed before any response
+        // byte. From then on the next connection must be dialed, not rented: sockets idle-closed by
+        // the origin are not detected by the pool (the liveness poll only proves the local side is
+        // writable), and a burst leaves several of them queued, so a second rent fails the same way.
+        var replayAttempt = false;
+
         // Sticky keep-alive (already leased) or reverse fast-path tiny GET: skip RetryPolicy +
         // two closures per request. New-connection TLS terminate hits the null-serverConnection
         // branch every time — Schannel is the dominant cost; do not wrap it in ExecuteAsync.
@@ -923,29 +929,39 @@ public partial class ProxyServer
                 if (connection != null)
                     await TcpConnectionFactory.Release(connection, true);
                 serverConnection = null;
+                replayAttempt = true;
             }
             catch (IOException) when (justRented)
             {
                 if (connection != null)
                     await TcpConnectionFactory.Release(connection, true);
                 serverConnection = null;
+                replayAttempt = true;
             }
             catch (SocketException) when (justRented)
             {
                 if (connection != null)
                     await TcpConnectionFactory.Release(connection, true);
                 serverConnection = null;
+                replayAttempt = true;
             }
         }
 
-        // a connection generator task with captured parameters via closure.
+        // RetryPolicy calls the generator for the first attempt (no connection yet: pooling applies as
+        // normal, this is the hot path for every intercepted new-connection request) and again to replace
+        // a failed connection. Only the replacement, or a replay after the fast-path block above failed,
+        // skips the pool.
         var generator = () =>
-            TcpConnectionFactory.GetServerConnection(this,
+        {
+            var skipPool = noCache || replayAttempt;
+            replayAttempt = true;
+            return TcpConnectionFactory.GetServerConnection(this,
                 args,
                 false,
                 sslApplicationProtocol,
-                noCache,
+                skipPool,
                 cancellationToken);
+        };
 
         /// Retry with new connection if the initial stream.WriteAsync call to server fails.
         /// i.e if request line and headers failed to get send.

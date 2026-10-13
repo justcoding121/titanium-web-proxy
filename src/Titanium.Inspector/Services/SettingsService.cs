@@ -73,7 +73,26 @@ public sealed class InspectorSettings
     public string LoggingMinimumLevel { get; set; } = "Error";
     public bool LoggingEnableFile { get; set; }
 #endif
+    /// <summary>Folder where dated Inspector log files are written. Empty uses the default folder.</summary>
     public string? LoggingFilePath { get; set; }
+
+    /// <summary>Maximum size of one log file before a new dated file starts, in megabytes.</summary>
+    public int LoggingMaxFileSizeMb { get; set; } = 50;
+
+    /// <summary>Newest dated log files to keep (including the current file).</summary>
+    public int LoggingMaxRolledFiles { get; set; } = 5;
+
+    /// <summary>Lines kept in the Recent logs window.</summary>
+    public int LoggingMemoryLines { get; set; } = 2000;
+
+    /// <summary>
+    /// 0 = pre-migration (file path + 10 MB truncate model). 1 = folder + dated files + 50 MB default.
+    /// </summary>
+    public int LoggingModelVersion { get; set; } = 1;
+
+    public double RunLogWindowWidth { get; set; } = 720;
+
+    public double RunLogWindowHeight { get; set; } = 480;
 
     /// <summary>Accept upstream TLS that fails normal validation (lab / self-signed hosts). Off by default.</summary>
     public bool IgnoreServerCertificateErrors { get; set; }
@@ -98,6 +117,9 @@ public sealed class InspectorSettings
 
     /// <summary>UI language: <c>auto</c> follows the OS UI language, or a shipped culture name such as <c>de</c>.</summary>
     public string UiLanguage { get; set; } = "auto";
+
+    /// <summary>Keep the main window above other windows. Some desktops ignore this.</summary>
+    public bool AlwaysOnTop { get; set; }
 
     /// <summary>Session grid column widths, order, and sort across launches.</summary>
     public SessionGridLayoutDto? SessionGridLayout { get; set; }
@@ -154,6 +176,33 @@ public sealed class InspectorSettings
 
     /// <summary>Active network throttle profile name (<c>None</c>, <c>Slow 3G</c>, …).</summary>
     public string NetworkThrottleProfile { get; set; } = "None";
+
+    /// <summary>When true, new capture sessions chain through <see cref="UpstreamProxyHost"/>.</summary>
+    public bool UpstreamProxyEnabled { get; set; }
+
+    /// <summary>Manual upstream HTTP proxy host. Ignored unless <see cref="UpstreamProxyEnabled"/>.</summary>
+    public string UpstreamProxyHost { get; set; } = string.Empty;
+
+    /// <summary>Manual upstream HTTP proxy port.</summary>
+    public int UpstreamProxyPort { get; set; } = InspectorNetworkSettings.DefaultUpstreamPort;
+
+    /// <summary>Offer HTTP/2 on new connections. On by default, matching the engine.</summary>
+    public bool EnableHttp2 { get; set; } = true;
+
+    /// <summary>Offer HTTP/3 from Inspector to servers when this computer supports QUIC.</summary>
+    public bool EnableHttp3 { get; set; } = true;
+
+    /// <summary><c>Default</c>, <c>Tls12</c>, or <c>Legacy</c>. Outbound to servers only.</summary>
+    public string OutboundTlsPreset { get; set; } = InspectorNetworkSettings.TlsDefault;
+
+    /// <summary>Keep server connections and reuse them. On by default.</summary>
+    public bool ReuseServerConnections { get; set; } = true;
+
+    /// <summary>
+    /// Hosts that receive automatic Windows authentication, one host or <c>*.suffix</c> per line.
+    /// Empty means off. Windows only; other systems keep the list but do not send credentials.
+    /// </summary>
+    public string WinAuthHosts { get; set; } = string.Empty;
 
     /// <summary>
     /// When set, the user chose whether the Inspect headers pane is collapsed.
@@ -261,7 +310,38 @@ public sealed class SettingsService
         Current = new InspectorSettings();
         ApplyFactoryExclusionDefaults(Current);
         Current.ExclusionsInitialized = true;
+        Current.LoggingModelVersion = 1;
         Save();
+    }
+
+    /// <summary>
+    /// Migrates pre–dated-file logging settings once. Returns true when anything changed.
+    /// </summary>
+    internal static bool MigrateLoggingModel(InspectorSettings settings)
+    {
+        if (settings.LoggingModelVersion >= 1)
+        {
+            return false;
+        }
+
+        settings.LoggingFilePath = InspectorLogFiles.MigrateFilePathToFolder(settings.LoggingFilePath);
+        if (settings.LoggingMaxFileSizeMb == 10)
+        {
+            settings.LoggingMaxFileSizeMb = 50;
+        }
+
+        if (settings.LoggingMaxRolledFiles <= 0)
+        {
+            settings.LoggingMaxRolledFiles = 1;
+        }
+        else
+        {
+            settings.LoggingMaxRolledFiles = Math.Clamp(settings.LoggingMaxRolledFiles, 1, 100);
+        }
+
+        settings.LoggingMaxFileSizeMb = Math.Clamp(settings.LoggingMaxFileSizeMb, 1, 4096);
+        settings.LoggingModelVersion = 1;
+        return true;
     }
 
     private InspectorSettings LoadFromDisk()
@@ -271,6 +351,7 @@ public sealed class SettingsService
             var fresh = new InspectorSettings();
             ApplyFactoryExclusionDefaults(fresh);
             fresh.ExclusionsInitialized = true;
+            fresh.LoggingModelVersion = 1;
             return fresh;
         }
 
@@ -279,6 +360,7 @@ public sealed class SettingsService
             var json = File.ReadAllText(_path);
             var loaded = JsonSerializer.Deserialize<InspectorSettings>(json, JsonOptions)
                          ?? new InspectorSettings();
+            var writeBack = false;
             if (!loaded.ExclusionsInitialized)
             {
                 // Migrate: empty lists previously relied on silent Merge of factory defaults.
@@ -288,19 +370,22 @@ public sealed class SettingsService
                 }
 
                 loaded.ExclusionsInitialized = true;
-                try
-                {
-                    File.WriteAllText(_path, JsonSerializer.Serialize(loaded, JsonOptions));
-                }
-                catch
-                {
-                    // best effort
-                }
+                writeBack = true;
             }
             else if (MergeMissingFactoryOsBypassHosts(loaded))
             {
                 // Additive: new factory SSO/identity hosts must land in existing settings.json or
                 // Inspector Replace-mode system proxy omits them.
+                writeBack = true;
+            }
+
+            if (MigrateLoggingModel(loaded))
+            {
+                writeBack = true;
+            }
+
+            if (writeBack)
+            {
                 try
                 {
                     File.WriteAllText(_path, JsonSerializer.Serialize(loaded, JsonOptions));
@@ -318,6 +403,7 @@ public sealed class SettingsService
             var fallback = new InspectorSettings();
             ApplyFactoryExclusionDefaults(fallback);
             fallback.ExclusionsInitialized = true;
+            fallback.LoggingModelVersion = 1;
             return fallback;
         }
     }

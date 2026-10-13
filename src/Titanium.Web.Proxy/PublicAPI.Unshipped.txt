@@ -1,4 +1,6 @@
 #nullable enable
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.AdditionalLoggerProviders.get -> System.Collections.Generic.IList<Microsoft.Extensions.Logging.ILoggerProvider!>!
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.AdditionalLoggerProviders.set -> void
 Titanium.Web.Proxy.ClientProcessId
 static Titanium.Web.Proxy.ClientProcessId.IsSupported.get -> bool
 Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming
@@ -276,6 +278,8 @@ Titanium.Web.Proxy.EventArguments.SessionEventArgs.CanBufferBody(Titanium.Web.Pr
 Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketFrameElided -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs!>?
 Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs
 Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.DeclaredPayloadLength.get -> long
+Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.Delay.get -> System.TimeSpan
+Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.Delay.set -> void
 Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.Direction.get -> Titanium.Web.Proxy.EventArguments.WebSocketFrameDirection
 Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.IsFinal.get -> bool
 Titanium.Web.Proxy.EventArguments.WebSocketFrameElidedEventArgs.OpCode.get -> Titanium.Web.Proxy.WebsocketOpCode

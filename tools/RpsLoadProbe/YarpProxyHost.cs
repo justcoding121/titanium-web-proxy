@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Security;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
@@ -376,8 +377,8 @@ internal sealed class YarpProxyHost : IDisposable
         builder.WebHost.ConfigureKestrel(kestrel =>
         {
             kestrel.Limits.MaxRequestBodySize = 10 * 1024 * 1024;
-            // Dual-stack so HttpClient "localhost" (::1 first) reaches H3; IPv4-only Loopback
-            // surfaces as ALPN failure — same issue TWP dual-listen QuicListener hit.
+            // HttpClient "localhost" prefers ::1; IPv4-only loopback surfaces as an ALPN failure.
+            // Bind both loopback families. ListenAnyIP (0.0.0.0 and ::) prompts Windows Defender Firewall.
             void ConfigureListen(Microsoft.AspNetCore.Server.Kestrel.Core.ListenOptions listen)
             {
                 listen.Protocols = options.InboundProtocols;
@@ -392,10 +393,9 @@ internal sealed class YarpProxyHost : IDisposable
                 }
             }
 
-            if (options.InboundProtocols.HasFlag(HttpProtocols.Http3))
-                kestrel.ListenAnyIP(port, ConfigureListen);
-            else
-                kestrel.Listen(IPAddress.Loopback, port, ConfigureListen);
+            if (options.InboundProtocols.HasFlag(HttpProtocols.Http3) && Socket.OSSupportsIPv6)
+                kestrel.Listen(IPAddress.IPv6Loopback, port, ConfigureListen);
+            kestrel.Listen(IPAddress.Loopback, port, ConfigureListen);
         });
 
         var routes = new[]
@@ -482,7 +482,7 @@ internal sealed class YarpProxyHost : IDisposable
         for (var i = 0; i < 20; i++)
         {
             var port = GetFreeTcpPort();
-            if (IsUdpPortFree(port))
+            if (IsUdpPortFree(port) && IsIpv6TcpPortFree(port))
                 return port;
         }
 
@@ -493,22 +493,37 @@ internal sealed class YarpProxyHost : IDisposable
     {
         try
         {
-            // Loopback endpoints now bind ::1 and 127.0.0.1. A free wildcard port is free on both,
-            // so this probe stays conservative.
-            using var udp = new System.Net.Sockets.UdpClient(new IPEndPoint(IPAddress.IPv6Any, port));
+            // Probe the addresses we listen on. Binding 0.0.0.0 or :: is an inbound listen and
+            // prompts Windows Defender Firewall for this process.
+            using var v4 = new UdpClient(new IPEndPoint(IPAddress.Loopback, port));
+            if (Socket.OSSupportsIPv6)
+            {
+                using var v6 = new UdpClient(new IPEndPoint(IPAddress.IPv6Loopback, port));
+            }
+
             return true;
         }
         catch
         {
-            try
-            {
-                using var udp = new System.Net.Sockets.UdpClient(new IPEndPoint(IPAddress.Any, port));
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
+            return false;
+        }
+    }
+
+    private static bool IsIpv6TcpPortFree(int port)
+    {
+        if (!Socket.OSSupportsIPv6)
+            return true;
+
+        try
+        {
+            var listener = new TcpListener(IPAddress.IPv6Loopback, port);
+            listener.Start();
+            listener.Stop();
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 }

@@ -1,0 +1,21 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="using:Titanium.Inspector.Localization"
+        x:Class="Titanium.Inspector.Views.KeyboardShortcutsWindow"
+        Title="{loc:Loc menu.keyboardShortcuts}"
+        Width="420"
+        MinWidth="360"
+        MinHeight="200"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="True"
+        AutomationProperties.AutomationId="KeyboardShortcutsWindow">
+  <DockPanel Margin="16">
+    <Button DockPanel.Dock="Bottom" Content="{loc:Loc common.close}"
+            HorizontalAlignment="Right" MinWidth="88" Margin="0,16,0,0" IsCancel="True"
+            AutomationProperties.AutomationId="KeyboardShortcutsClose" />
+    <ScrollViewer Classes="dialogBody">
+      <StackPanel x:Name="RowsHost" />
+    </ScrollViewer>
+  </DockPanel>
+</Window>

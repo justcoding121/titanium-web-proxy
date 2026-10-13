@@ -210,11 +210,11 @@ public static class ChromeScenario
                 log.Info($"chrome-capture: after InstallCa trusted={harness.Interception.IsRootTrusted} status={harness.ViewModel.StatusText}");
 
                 // Decrypt may prompt for CA; keep recovery cancelled and soft-assert toggle when trust is available.
-                await harness.OnUiAsync(() => harness.Robot.Click("MenuDecryptHttps")).ConfigureAwait(true);
+                await harness.OnUiAsync(() => harness.Robot.Click("DecryptHttpsCheck")).ConfigureAwait(true);
                 await WaitStatusIdleAsync(harness, TimeSpan.FromSeconds(15)).ConfigureAwait(true);
                 if (harness.ViewModel.DecryptHttps)
                 {
-                    await harness.OnUiAsync(() => harness.Robot.Click("MenuDecryptHttps")).ConfigureAwait(true);
+                    await harness.OnUiAsync(() => harness.Robot.Click("DecryptHttpsCheck")).ConfigureAwait(true);
                     await harness.WaitUntilAsync(() => !harness.ViewModel.DecryptHttps, TimeSpan.FromSeconds(10))
                         .ConfigureAwait(true);
                 }
@@ -225,7 +225,7 @@ public static class ChromeScenario
 
                 // System proxy stay off — proxy scenario owns OS mutation.
                 if (harness.ViewModel.SystemProxy)
-                    await harness.OnUiAsync(() => harness.Robot.Click("MenuToggleSystemProxy")).ConfigureAwait(true);
+                    await harness.OnUiAsync(() => harness.Robot.Click("SystemProxyCheck")).ConfigureAwait(true);
 
                 var cerPath = Path.Combine(tempDir, "root.cer");
                 harness.PathPicker.SavePath = cerPath;
@@ -456,7 +456,6 @@ public static class ChromeScenario
                 var win = ProbeUiRobot.FindWindowById("LoggingSettingsWindow")
                           ?? throw new InvalidOperationException("LoggingSettingsWindow missing");
                 var robot = new ProbeUiRobot(win);
-                robot.SetCheck("LoggingEnabled", true);
                 robot.SetCheck("LoggingWriteFile", true);
                 if (robot.TryFind<ComboBox>("LoggingLevel", out var combo) && combo is not null && combo.ItemCount > 0)
                     combo.SelectedIndex = Math.Min(1, combo.ItemCount - 1);
@@ -702,7 +701,9 @@ public static class ChromeScenario
                 harness.Robot.SetText("SearchBox", "method:GET");
                 if (!string.Equals(harness.ViewModel.SearchQuery, "method:GET", StringComparison.Ordinal))
                     throw new InvalidOperationException("SearchBox did not bind");
-                harness.Robot.SetCheck("HideTunnelsFilterCheck", true);
+                if (harness.ViewModel.ConnectMethodRow is not { } connect)
+                    throw new InvalidOperationException("CONNECT method row missing");
+                connect.IsChecked = !connect.IsChecked;
                 harness.Robot.SetCheck("HideImagesFilterCheck", true);
                 harness.Robot.SetCheck("ErrorsOnlyFilterCheck", true);
                 harness.Robot.Click("ClearFiltersButton");

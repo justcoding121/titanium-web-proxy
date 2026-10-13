@@ -24,6 +24,7 @@ public partial class SearchFiltersWindow : Window
     {
         InitializeComponent();
         LanguageService.AttachWindow(this);
+        DialogWorkArea.Attach(this);
         HostList.ItemsSource = _hosts;
         ProcessList.ItemsSource = _processes;
         LoadSnapshot(query);

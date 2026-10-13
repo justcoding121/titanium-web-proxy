@@ -27,6 +27,7 @@ public partial class LoopbackExemptWindow : Window
         _session = session;
         InitializeComponent();
         LanguageService.AttachWindow(this);
+        DialogWorkArea.Attach(this);
         IntroText.Text = LoopbackExemptCopy.Intro;
         ExemptButton.Click += OnExempt;
         ClearButton.Click += OnClear;

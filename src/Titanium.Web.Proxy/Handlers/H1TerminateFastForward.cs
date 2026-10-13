@@ -120,6 +120,44 @@ public partial class ProxyServer
                    || method.Equals("HEAD", StringComparison.OrdinalIgnoreCase));
     }
 
+    private readonly record struct H1TerminateLiteRedial(
+        bool IsHttps, string? ConnectHost, int? ConnectPort, string? PoolKey);
+
+    /// <summary>
+    ///     Dial a fresh origin connection (bypassing the pool) to replay a request after a pooled socket
+    ///     turned out to be closed by the origin.
+    /// </summary>
+    private async Task<TcpServerConnection> RedialH1TerminateLiteOriginAsync(
+        TransparentBaseProxyEndPoint endPoint, Request request, H1TerminateLiteRedial dial,
+        SessionEventArgsBase session, CancellationToken cancellationToken)
+    {
+        string host;
+        int port;
+        if (dial.ConnectHost != null && dial.ConnectPort is { } fwdPort)
+        {
+            host = dial.ConnectHost;
+            port = fwdPort;
+        }
+        else
+        {
+            (host, port) = request.GetOriginHostPort(dial.IsHttps ? 443 : 80);
+        }
+
+        var connection = await TcpConnectionFactory.GetServerConnection(
+                             this, host, port, HttpHeader.Version11, dial.IsHttps,
+                             SslExtensions.Http11ProtocolAsList, false, session,
+                             UpStreamEndPoint,
+                             dial.IsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy,
+                             true, false, cancellationToken, dial.ConnectHost, dial.ConnectPort,
+                             precomputedCacheKey: dial.PoolKey)
+                         ?? throw new InvalidOperationException(
+                             $"Failed to establish an HTTP/1.1 origin connection to '{host}:{port}'.");
+
+        endPoint.CachedHttp11PoolKey = connection.CacheKey;
+        endPoint.CachedHttp11PoolIsHttps = dial.IsHttps;
+        return connection;
+    }
+
     /// <summary>
     ///     Forward one bodiless reverse GET/HEAD without a session bag. Returns whether the client
     ///     connection should stay open for another keep-alive request.
@@ -171,6 +209,7 @@ public partial class ProxyServer
             if (poolKey != null)
                 TcpConnectionFactory.TryRentPooled(this, poolKey, SslExtensions.Http11ProtocolAsList,
                     out connection);
+            var rentedFromPool = connection != null;
 
             if (connection == null)
             {
@@ -205,8 +244,26 @@ public partial class ProxyServer
             try
             {
             http.SetConnection(connection);
-            await http.SendRequest(false, isTransparent: true, OriginHttpVersionPolicy, cancellationToken);
-            await http.ReceiveResponse(cancellationToken);
+            try
+            {
+                await http.SendRequest(false, isTransparent: true, OriginHttpVersionPolicy, cancellationToken);
+                await http.ReceiveResponse(cancellationToken);
+            }
+            catch (RetryableServerConnectionException) when (rentedFromPool)
+            {
+                // The pooled socket was closed by the origin while idle. Nothing reached the client yet and
+                // the request is a bodyless GET/HEAD, so replay it once on a freshly dialed connection.
+                var stale = connection;
+                connection = null;
+                await TcpConnectionFactory.Release(stale, true);
+                openSession ??= CreateH1TerminateLiteColdSession(endPoint, clientStream);
+                connection = await RedialH1TerminateLiteOriginAsync(
+                    endPoint, request, new H1TerminateLiteRedial(isHttps, connectHost, connectPort, poolKey),
+                    openSession, cancellationToken);
+                http.SetConnection(connection);
+                await http.SendRequest(false, isTransparent: true, OriginHttpVersionPolicy, cancellationToken);
+                await http.ReceiveResponse(cancellationToken);
+            }
 
             var response = http.Response;
             if (response.StatusCode is >= 100 and <= 199)
@@ -392,6 +449,7 @@ public partial class ProxyServer
             if (poolKey != null)
                 TcpConnectionFactory.TryRentPooled(this, poolKey, SslExtensions.Http11ProtocolAsList,
                     out connection);
+            var rentedFromPool = connection != null;
 
             if (connection == null)
             {
@@ -424,8 +482,25 @@ public partial class ProxyServer
 
             var http = new HttpWebClient(null, request, H1TerminateLiteProcessId);
             http.SetConnection(connection);
-            await http.SendRequest(false, isTransparent: true, OriginHttpVersionPolicy, cancellationToken);
-            await http.ReceiveResponse(cancellationToken);
+            try
+            {
+                await http.SendRequest(false, isTransparent: true, OriginHttpVersionPolicy, cancellationToken);
+                await http.ReceiveResponse(cancellationToken);
+            }
+            catch (RetryableServerConnectionException) when (rentedFromPool)
+            {
+                // Stale idle pooled socket: replay the bodyless GET/HEAD once on a fresh dial (see above).
+                var stale = connection;
+                connection = null;
+                await TcpConnectionFactory.Release(stale, true);
+                openSession ??= CreateH1TerminateLiteColdSession(endPoint, clientStream);
+                connection = await RedialH1TerminateLiteOriginAsync(
+                    endPoint, request, new H1TerminateLiteRedial(isHttps, connectHost, connectPort, poolKey),
+                    openSession, cancellationToken);
+                http.SetConnection(connection);
+                await http.SendRequest(false, isTransparent: true, OriginHttpVersionPolicy, cancellationToken);
+                await http.ReceiveResponse(cancellationToken);
+            }
 
             var response = http.Response;
             if (response.StatusCode is >= 100 and <= 199)

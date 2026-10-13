@@ -16,6 +16,12 @@ public sealed class SessionStore : IDisposable
     private readonly SessionStoreOptions _options;
     private readonly SessionBodyDiskCache? _disk;
     private readonly Dictionary<long, SessionSnapshot> _byId = new();
+    /// <summary>
+    /// Session ids the user removed. Pending spill writes must not recreate their HAR files
+    /// (Clear already bumps <see cref="_spillEpoch"/>; selective Remove does not).
+    /// Eviction must not add here — memory eviction intentionally keeps HARs on disk.
+    /// </summary>
+    private readonly HashSet<long> _spillTombstones = new();
     private readonly Channel<SpillWork>? _spillChannel;
     private readonly CancellationTokenSource? _spillCts;
     private readonly Task? _spillLoop;
@@ -98,6 +104,29 @@ public sealed class SessionStore : IDisposable
         }
     }
 
+    /// <summary>Newest sessions, oldest of that window first. Empty when <paramref name="max"/> is below 1.</summary>
+    public SessionSnapshot[] CopyNewest(int max)
+    {
+        lock (_gate)
+        {
+            var count = Sessions.Count;
+            if (count == 0 || max < 1)
+            {
+                return [];
+            }
+
+            var take = Math.Min(count, max);
+            var start = count - take;
+            var copy = new SessionSnapshot[take];
+            for (var i = 0; i < take; i++)
+            {
+                copy[i] = Sessions[start + i];
+            }
+
+            return copy;
+        }
+    }
+
     public int SpilledCount
     {
         get
@@ -172,6 +201,12 @@ public sealed class SessionStore : IDisposable
     public event Action<SessionSnapshot>? SessionAdded;
     public event Action<IReadOnlyList<SessionSnapshot>>? SessionsRemoved;
 
+    /// <summary>
+    /// Raised after <see cref="Clear"/> drops every tracked session. Kept separate from
+    /// <see cref="SessionsRemoved"/> so the grid can reset once instead of removing each row.
+    /// </summary>
+    public event Action? SessionsCleared;
+
     /// <summary>Insert a new session, or refresh body budget if the id already exists.</summary>
     public void Add(SessionSnapshot snapshot)
     {
@@ -219,6 +254,21 @@ public sealed class SessionStore : IDisposable
         }
     }
 
+    /// <summary>
+    /// Opens the spilled HAR for <paramref name="snapshot"/> when its bodies are on disk.
+    /// The caller owns the stream. Returns false when the file is not written yet.
+    /// </summary>
+    public bool TryOpenSpilledHar(SessionSnapshot snapshot, out FileStream? stream)
+    {
+        stream = null;
+        if (!snapshot.BodiesOnDisk || _disk is null)
+        {
+            return false;
+        }
+
+        return _disk.TryOpenRead(snapshot.Id, out stream);
+    }
+
     public void NotifyUpdated(SessionSnapshot snapshot)
     {
         // Same shutdown race as Add — do not crash Avalonia's dispatcher.
@@ -258,6 +308,10 @@ public sealed class SessionStore : IDisposable
         lock (_gate)
         {
             removed = RemoveIdsLocked(idSet);
+            foreach (var snap in removed)
+            {
+                _spillTombstones.Add(snap.Id);
+            }
         }
 
         if (removed.Count > 0)
@@ -270,7 +324,8 @@ public sealed class SessionStore : IDisposable
     /// <summary>
     /// Drops every in-memory session and deletes the current-run HAR folder, including rows
     /// already evicted from the list. Earlier runs stay on disk. Does not raise
-    /// <see cref="SessionsRemoved"/> — the caller clears the grid itself.
+    /// <see cref="SessionsRemoved"/> — the caller clears the grid itself. Raises
+    /// <see cref="SessionsCleared"/> so other views drop the same rows.
     /// Disk deletion continues in the background (<see cref="FlushDiskCleanupAsync"/>).
     /// Returns tracked bytes queued for deletion.
     /// </summary>
@@ -283,10 +338,12 @@ public sealed class SessionStore : IDisposable
             _inMemoryBodyBytes = 0;
             _bytesById.Clear();
             _spilledCount = 0;
+            _spillTombstones.Clear();
             Sessions.Clear();
             Interlocked.Increment(ref _spillEpoch);
         }
 
+        SessionsCleared?.Invoke();
         return _disk?.AbandonCurrentRun() ?? 0;
     }
 
@@ -854,6 +911,7 @@ public sealed class SessionStore : IDisposable
         new()
         {
             Id = snap.Id,
+            ConnectionId = snap.ConnectionId,
             Method = snap.Method,
             Url = snap.Url,
             StartedUtc = snap.StartedUtc,
@@ -899,7 +957,21 @@ public sealed class SessionStore : IDisposable
             SentBytes = snap.SentBytes,
             DurationMs = snap.DurationMs,
             TtfbMs = snap.TtfbMs,
+            BlockedMs = snap.BlockedMs,
+            DnsMs = snap.DnsMs,
+            ConnectMs = snap.ConnectMs,
+            TlsMs = snap.TlsMs,
+            SendMs = snap.SendMs,
+            WaitMs = snap.WaitMs,
+            ReceiveMs = snap.ReceiveMs,
+            ConnectionReused = snap.ConnectionReused,
+            TimingEstimated = snap.TimingEstimated,
+            TimingRecorded = snap.TimingRecorded,
+            TimingAttempts = snap.TimingAttempts,
+            Events = snap.Events is { Count: > 0 } events ? events.ToArray() : null,
             FailureReason = snap.FailureReason,
+            Mark = snap.Mark,
+            Comment = snap.Comment,
         };
 
     private List<SessionSnapshot> RemoveIdsLocked(HashSet<long> ids)
@@ -1032,8 +1104,20 @@ public sealed class SessionStore : IDisposable
                         continue;
                     }
 
+                    if (IsSpillTombstoned(work.Snapshot.Id))
+                    {
+                        // User Remove beat this write — do not recreate the deleted HAR.
+                        continue;
+                    }
+
                     var pruned = _disk.Write(work.Snapshot, work.DiskGeneration);
                     MarkBodiesMissing(pruned);
+
+                    // Remove raced the write itself: delete again so the file does not linger.
+                    if (IsSpillTombstoned(work.Snapshot.Id))
+                    {
+                        _disk.ScheduleDelete([work.Snapshot.Id]);
+                    }
                 }
                 catch
                 {
@@ -1048,6 +1132,14 @@ public sealed class SessionStore : IDisposable
         catch (OperationCanceledException)
         {
             // Shutdown.
+        }
+    }
+
+    private bool IsSpillTombstoned(long id)
+    {
+        lock (_gate)
+        {
+            return _spillTombstones.Contains(id);
         }
     }
 
