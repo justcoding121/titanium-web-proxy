@@ -146,9 +146,9 @@ internal sealed class LinkShaper : IDisposable
                 throw;
             }
         }
-        catch (ObjectDisposedException)
+        catch (ObjectDisposedException ex)
         {
-            return;
+            Debug.WriteLine($"LinkShaper wait ended because the shaper was disposed: {ex.Message}");
         }
     }
 
@@ -162,9 +162,9 @@ internal sealed class LinkShaper : IDisposable
                 _epoch.Cancel();
             }
         }
-        catch (ObjectDisposedException)
+        catch (ObjectDisposedException ex)
         {
-            return;
+            Debug.WriteLine($"LinkShaper release ignored a disposed epoch: {ex.Message}");
         }
     }
 
