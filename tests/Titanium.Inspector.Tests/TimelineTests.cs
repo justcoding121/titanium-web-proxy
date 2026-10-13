@@ -1,6 +1,10 @@
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Threading;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.ViewModels;
+using Titanium.Inspector.Views;
 
 namespace Titanium.Inspector.Tests;
 
@@ -232,6 +236,50 @@ public class TimelineTests
         Assert.AreEqual(1L, chart.HoveredId);
         chart.HoveredId = 1;
         Assert.AreEqual(1L, chart.HoveredId);
+    }
+
+    [TestMethod]
+    public async Task Scroll_StaysWhereTheUserLeftIt_WhenTheChartRebuilds()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(InspectorDispatcherCoverageBootstrap));
+        await session.Dispatch(() =>
+        {
+            using var store = new SessionStore(new SessionStoreOptions { SpillBodiesToDisk = false });
+            const int count = 120;
+            for (var id = 1; id <= count; id++)
+            {
+                store.Add(Session(id, 10, Start.AddMilliseconds(id)));
+            }
+
+            var owner = new Window { Width = 400, Height = 300 };
+            owner.Show();
+            TimelineWindow? timeline = null;
+            long selected = count;
+            try
+            {
+                TimelineWindow.Show(owner, store, _ => { }, () => new long[] { selected });
+                timeline = owner.OwnedWindows.OfType<TimelineWindow>().Single();
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.IsTrue(timeline.VerticalOffset > 50, "Opening should show the selected session.");
+
+                timeline.VerticalOffset = 0;
+                var opened = DateTimeOffset.UtcNow;
+                timeline.Pump(opened.Add(TimelineViewModel.RefreshInterval));
+                timeline.Pump(opened.AddSeconds(1));
+
+                Assert.AreEqual(0, timeline.VerticalOffset, 0.5, "A chart rebuild must not pull the scrollbar back.");
+
+                selected = 60;
+                timeline.Pump(opened.AddSeconds(1).AddMilliseconds(10));
+                Assert.IsTrue(timeline.VerticalOffset > 50, "Choosing another session should scroll to it.");
+            }
+            finally
+            {
+                timeline?.Close();
+                owner.Close();
+            }
+        }, CancellationToken.None);
     }
 
     private static SessionSnapshot Session(long id, double? durationMs, DateTimeOffset? started = null) => new()

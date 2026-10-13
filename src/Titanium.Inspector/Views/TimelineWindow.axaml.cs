@@ -18,6 +18,8 @@ public partial class TimelineWindow : Window
     private readonly Func<IReadOnlyCollection<long>>? _selectedIds;
     private readonly DispatcherTimer _timer;
     private HashSet<long> _lastSelected = new();
+    private HashSet<long>? _pendingScrollIds;
+    private bool _applyingScroll;
 
     public TimelineWindow() : this(new SessionStore(new SessionStoreOptions { SpillBodiesToDisk = false }), _ => { }, null)
     {
@@ -36,19 +38,11 @@ public partial class TimelineWindow : Window
         BuildLegend();
         _model.Open(DateTimeOffset.UtcNow, ChartWidth());
         ApplyModel();
-        SyncSelection(force: true);
+        ChartScroll.LayoutUpdated += OnChartScrollLayoutUpdated;
+        SyncSelection(scrollIntoView: true);
         Chart.PointerPressed += OnChartPressed;
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
-        _timer.Tick += (_, _) =>
-        {
-            var rebuilt = _model.Tick(DateTimeOffset.UtcNow, ChartWidth());
-            if (rebuilt)
-            {
-                ApplyModel();
-            }
-
-            SyncSelection(force: rebuilt);
-        };
+        _timer.Tick += (_, _) => OnTick(DateTimeOffset.UtcNow);
         _timer.Start();
         PropertyChanged += (_, e) =>
         {
@@ -56,12 +50,13 @@ public partial class TimelineWindow : Window
             {
                 _model.SetVisible(IsVisible, DateTimeOffset.UtcNow, ChartWidth());
                 ApplyModel();
-                SyncSelection(force: true);
+                SyncSelection(scrollIntoView: IsVisible);
             }
         };
         Closed += (_, _) =>
         {
             _timer.Stop();
+            ChartScroll.LayoutUpdated -= OnChartScrollLayoutUpdated;
             Chart.PointerPressed -= OnChartPressed;
             _model.Close();
             ClearOpenIf(this);
@@ -112,7 +107,28 @@ public partial class TimelineWindow : Window
         Chart.InvalidateVisual();
     }
 
-    private void SyncSelection(bool force)
+    /// <summary>Runs one refresh the same way the live timer does. Tests use this instead of waiting.</summary>
+    internal void Pump(DateTimeOffset now) => OnTick(now);
+
+    internal double VerticalOffset
+    {
+        get => ChartScroll.Offset.Y;
+        set => ChartScroll.Offset = new Vector(ChartScroll.Offset.X, value);
+    }
+
+    private void OnTick(DateTimeOffset now)
+    {
+        var rebuilt = _model.Tick(now, ChartWidth());
+        if (rebuilt)
+        {
+            ApplyModel();
+        }
+
+        // A rebuild keeps the highlight. It must not pull the scrollbar back to the selection.
+        SyncSelection(scrollIntoView: false);
+    }
+
+    private void SyncSelection(bool scrollIntoView)
     {
         if (_selectedIds is null)
         {
@@ -120,19 +136,44 @@ public partial class TimelineWindow : Window
         }
 
         var next = new HashSet<long>(_selectedIds());
-        if (!force && next.SetEquals(_lastSelected))
+        var changed = !next.SetEquals(_lastSelected);
+        if (!changed && !scrollIntoView)
         {
             return;
         }
 
-        _lastSelected = next;
-        Chart.SelectedIds = next;
-        ScrollSelectionIntoView(next);
+        if (changed)
+        {
+            _lastSelected = next;
+            Chart.SelectedIds = next;
+        }
+
+        RequestScrollSelection(next);
     }
 
-    private void ScrollSelectionIntoView(HashSet<long> ids)
+    private void RequestScrollSelection(HashSet<long> ids)
     {
         if (ids.Count == 0)
+        {
+            _pendingScrollIds = null;
+            return;
+        }
+
+        _pendingScrollIds = ids;
+        TryScrollPending();
+    }
+
+    private void OnChartScrollLayoutUpdated(object? sender, EventArgs e) => TryScrollPending();
+
+    private void TryScrollPending()
+    {
+        if (_applyingScroll || _pendingScrollIds is not { Count: > 0 } ids)
+        {
+            return;
+        }
+
+        var viewport = ChartScroll.Viewport.Height;
+        if (viewport <= 0)
         {
             return;
         }
@@ -144,11 +185,22 @@ public partial class TimelineWindow : Window
                 continue;
             }
 
-            var viewport = ChartScroll.Viewport.Height;
             var top = Math.Max(0, row.Y - Math.Max(0, (viewport - TimelineLayout.RowHeight) / 2));
-            ChartScroll.Offset = new Vector(ChartScroll.Offset.X, top);
+            _applyingScroll = true;
+            try
+            {
+                ChartScroll.Offset = new Vector(ChartScroll.Offset.X, top);
+            }
+            finally
+            {
+                _applyingScroll = false;
+            }
+
+            _pendingScrollIds = null;
             return;
         }
+
+        _pendingScrollIds = null;
     }
 
     private void BuildLegend()
