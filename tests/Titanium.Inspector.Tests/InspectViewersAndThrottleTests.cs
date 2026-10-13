@@ -243,7 +243,7 @@ public class InspectViewersAndThrottleTests
     }
 
     [TestMethod]
-    public async Task Http2Response_LatencyMovesIntoTheStreamedReplacement_NotAnInlineSleep()
+    public async Task Http2Response_IsNeverSleptOnOrReplaced_InBeforeResponse()
     {
         using var interception = new InterceptionService(new RecordingSystemProxyController())
         {
@@ -251,19 +251,38 @@ public class InspectViewersAndThrottleTests
             ThrottleProfile = NetworkThrottle.Slow3G,
             ProgressiveThrottleDelivery = true,
         };
-        using var session = MakeHttp2Session(bodyLength: 1000);
+        using var session = MakeHttp2Session(bodyLength: 100 * 1024);
         var original = session.HttpClient.Response;
 
         var started = DateTime.UtcNow;
         await interception.ApplyResponseThrottleAsync(session, responseEdited: false);
 
         Assert.IsTrue(DateTime.UtcNow - started < TimeSpan.FromMilliseconds(200),
-            "BeforeResponse must not sleep inline on HTTP/2: that serializes parallel streams.");
-        Assert.AreNotSame(original, session.HttpClient.Response, "Small HTTP/2 bodies are streamed so the wait is off the frame loop.");
+            "BeforeResponse must not sleep on HTTP/2: it serializes parallel streams and stalls the frame loop.");
+        Assert.AreSame(original, session.HttpClient.Response,
+            "The HTTP/2 response is locked once capture reads the body, so it cannot be replaced.");
     }
 
     [TestMethod]
-    public async Task Http2Response_WithTrickleOff_IsNotDelayedOnTheFrameLoop()
+    public async Task Http2Request_PaysTheExchangeLatency_OnTheRequestSide()
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+            ThrottleProfile = new NetworkThrottleProfile("lat", latencyMs: 300, bytesPerSecond: 0),
+        };
+        using var session = MakeHttp2Session(bodyLength: 10);
+        var pace = typeof(InterceptionService).GetMethod(
+            "PaceBufferedUploadAsync", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+
+        var started = DateTime.UtcNow;
+        await (Task)pace.Invoke(interception, [session])!;
+
+        Assert.IsTrue(DateTime.UtcNow - started >= TimeSpan.FromMilliseconds(250));
+    }
+
+    [TestMethod]
+    public async Task Http2Response_WithTrickleOff_IsNotDelayed()
     {
         using var interception = new InterceptionService(new RecordingSystemProxyController())
         {

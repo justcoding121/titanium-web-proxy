@@ -2583,6 +2583,14 @@ public sealed class InterceptionService : IDisposable
             return;
         }
 
+        // HTTP/2 pays the exchange latency here, on the request side: a wait in BeforeRequest overlaps across
+        // streams, while one in BeforeResponse serializes them (see ApplyResponseThrottleAsync).
+        if (e.HttpClient.Request.HttpVersion.Major == 2)
+        {
+            await shaper.WaitAsync(shaper.LatencyDelay).ConfigureAwait(false);
+            Note(e.HttpClient, ThrottleEventKey(shaper.Profile), failure: false);
+        }
+
         var request = e.HttpClient.Request;
         if (!request.IsBodyRead || !request.HasBody)
         {
@@ -2612,34 +2620,20 @@ public sealed class InterceptionService : IDisposable
             return;
         }
 
+        // HTTP/2: this hook runs on the connection frame loop, and by the time it runs the response is already
+        // locked (capture asked for the body), so it can neither be replaced with a streamed one nor slept on
+        // without stalling every stream on the connection (N parallel responses would cost N latencies, and a
+        // long bandwidth wait would starve PING and WINDOW_UPDATE). The latency was paid on the request side
+        // instead, where the wait overlaps across streams. Bandwidth is not shaped on HTTP/2.
+        if (IsHttp2Exchange(e))
+        {
+            return;
+        }
+
         var response = e.HttpClient.Response;
         byte[]? plain = response.IsBodyRead && response.HasBody ? response.Body : null;
         var wire = state?.ResponseWire > 0 ? state.ResponseWire : plain?.LongLength ?? 0;
         var transcoded = GrpcJsonTranscodeSessionMark.TryGet(e.UserData, out _);
-
-        if (IsHttp2Exchange(e))
-        {
-            // BeforeResponse can run inline on the HTTP/2 frame loop, so an inline sleep here makes N parallel
-            // responses cost N latencies. Hand the wait to a streamed replacement, which is written on its own
-            // task. A response that cannot be rebuilt safely is left undelayed rather than stalling the loop.
-            if (ProgressiveThrottleDelivery
-                && plain is { Length: > 0 }
-                && ProgressiveDelivery.TryBuild(
-                    response,
-                    e.HttpClient.Request,
-                    plain,
-                    wire,
-                    transcoded,
-                    responseEdited,
-                    enabled: true,
-                    minWireBytes: 1) is { } h2Plan)
-            {
-                Note(e.HttpClient, ThrottleEventKey(shaper.Profile), failure: false);
-                StreamPlan(e, h2Plan, shaper.LatencyDelay);
-            }
-
-            return;
-        }
 
         await shaper.WaitAsync(shaper.LatencyDelay).ConfigureAwait(false);
         Note(e.HttpClient, ThrottleEventKey(shaper.Profile), failure: false);
@@ -2661,8 +2655,10 @@ public sealed class InterceptionService : IDisposable
                 responseEdited,
                 enabled: true) is { } plan)
         {
-            StreamPlan(e, plan, TimeSpan.Zero);
-            return;
+            if (TryStreamPlan(e, plan))
+            {
+                return;
+            }
         }
 
         if (wire <= 0)
@@ -2673,7 +2669,27 @@ public sealed class InterceptionService : IDisposable
         await shaper.WaitAsync(shaper.Reserve(ThrottleDirection.Download, wire)).ConfigureAwait(false);
     }
 
-    private void StreamPlan(SessionEventArgs e, ProgressivePlan plan, TimeSpan leadDelay)
+    /// <summary>
+    ///     Installs the streamed replacement. Core refuses it when the response is already locked (it cannot be
+    ///     replaced any more); that returns false so the caller falls back to one bandwidth wait instead of
+    ///     leaving the response unshaped.
+    /// </summary>
+    private bool TryStreamPlan(SessionEventArgs e, ProgressivePlan plan)
+    {
+        try
+        {
+            StreamPlan(e, plan);
+            return true;
+        }
+        catch (InvalidOperationException ex)
+        {
+            InspectorUxTrace.Event("Throttle.TrickleRefused",
+                $"{e.HttpClient.Request.Url} ver={e.HttpClient.Request.HttpVersion}: {ex.Message}");
+            return false;
+        }
+    }
+
+    private void StreamPlan(SessionEventArgs e, ProgressivePlan plan)
     {
         var charge = plan.ChargeWireBytes;
         if (_proxy?.ViaHeaderPseudonym is { Length: > 0 } pseudonym && !e.IsTransparent && !e.IsSocks)
@@ -2693,8 +2709,7 @@ public sealed class InterceptionService : IDisposable
                 plan.Wire,
                 charge,
                 () => Volatile.Read(ref _linkShaper),
-                ct,
-                leadDelay: leadDelay),
+                ct),
             // The origin body was already consumed for capture. A replacement response does not inherit that
             // state, so with closeServerConnection:false Core waits to drain bytes that never come and stops
             // reading the client's next request. closeServerConnection:true skips the drain, but Core then also

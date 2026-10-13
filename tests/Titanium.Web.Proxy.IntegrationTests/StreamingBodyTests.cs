@@ -543,8 +543,11 @@ public class StreamingBodyTests
     }
 
     /// <summary>
-    ///     The Inspector fix for the test above: on HTTP/2 the wait moves into a streamed replacement, which
-    ///     is written off the frame loop, so parallel streams overlap their latency.
+    ///     Core capability: a streamed replacement installed from BeforeResponse is written off the frame
+    ///     loop, so parallel streams overlap their latency. This holds when the handler replaces the response
+    ///     in this hand-written shape. The Inspector cannot use it on HTTP/2: capture reads the body first,
+    ///     which locks the response (RespondStreaming then throws), so the Inspector pays HTTP/2 latency on the
+    ///     request side instead. See ThrottleDeliveryGateTests.
     /// </summary>
     [TestMethod]
     [Timeout(60_000)]

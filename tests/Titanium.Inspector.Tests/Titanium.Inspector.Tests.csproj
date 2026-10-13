@@ -16,6 +16,10 @@
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
   </ItemGroup>
   <ItemGroup>
+    <!-- In-process Kestrel HTTP/2 origin for the throttle delivery gate tests. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Titanium.Inspector\Titanium.Inspector.csproj" />
   </ItemGroup>
 </Project>

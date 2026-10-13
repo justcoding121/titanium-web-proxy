@@ -50,10 +50,9 @@ internal static class ProgressiveDelivery
         long originWireBytes,
         bool transcoded,
         bool edited,
-        bool enabled,
-        long minWireBytes = MinWireBytes)
+        bool enabled)
     {
-        var reason = Evaluate(origin, request, plainBody, originWireBytes, transcoded, edited, enabled, minWireBytes);
+        var reason = Evaluate(origin, request, plainBody, originWireBytes, transcoded, edited, enabled);
         if (reason != ProgressiveSkipReason.None)
         {
             Record(reason);
@@ -135,8 +134,7 @@ internal static class ProgressiveDelivery
         long originWireBytes,
         bool transcoded,
         bool edited,
-        bool enabled,
-        long minWireBytes = MinWireBytes)
+        bool enabled)
     {
         if (!enabled)
         {
@@ -174,7 +172,7 @@ internal static class ProgressiveDelivery
         }
 
         var size = originWireBytes > 0 ? originWireBytes : plainBody?.LongLength ?? 0;
-        if (plainBody is null || plainBody.Length == 0 || size < minWireBytes)
+        if (plainBody is null || plainBody.Length == 0 || size < MinWireBytes)
         {
             return size <= 0 || plainBody is null || plainBody.Length == 0
                 ? ProgressiveSkipReason.NoBody
@@ -196,19 +194,11 @@ internal static class ProgressiveDelivery
         long chargeWireBytes,
         Func<LinkShaper?> shaper,
         CancellationToken cancellationToken,
-        int sliceBytes = SliceBytes,
-        TimeSpan leadDelay = default)
+        int sliceBytes = SliceBytes)
     {
         if (wire.Length == 0)
         {
             return;
-        }
-
-        // Latency is paid here, on the writer's own task, so HTTP/2 siblings overlap their waits
-        // instead of queueing behind one another on the connection's frame loop.
-        if (leadDelay > TimeSpan.Zero && shaper() is { } lead)
-        {
-            await lead.WaitAsync(leadDelay, cancellationToken).ConfigureAwait(false);
         }
 
         if (sliceBytes <= 0)
