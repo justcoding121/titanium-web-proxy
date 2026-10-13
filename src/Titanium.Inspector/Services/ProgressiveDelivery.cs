@@ -96,15 +96,10 @@ internal static class ProgressiveDelivery
         }
 
         var values = existing.Select(h => h.Value).ToList();
-        foreach (var value in values)
+        if (values.Any(value => value.Split(',').Any(token =>
+                string.Equals(token.Trim(), entry, StringComparison.OrdinalIgnoreCase))))
         {
-            foreach (var token in value.Split(','))
-            {
-                if (string.Equals(token.Trim(), entry, StringComparison.OrdinalIgnoreCase))
-                {
-                    return;
-                }
-            }
+            return;
         }
 
         values[0] = $"{values[0]}, {entry}";
@@ -166,11 +161,9 @@ internal static class ProgressiveDelivery
         }
 
         var size = originWireBytes > 0 ? originWireBytes : plainBody?.LongLength ?? 0;
-        if (plainBody is null || plainBody.Length == 0 || size < minWireBytes)
+        if (SkipForBodySize(plainBody, size, minWireBytes) is { } sizeReason)
         {
-            return size <= 0 || plainBody is null || plainBody.Length == 0
-                ? ProgressiveSkipReason.NoBody
-                : ProgressiveSkipReason.TooSmall;
+            return sizeReason;
         }
 
         var encoding = ContentEncoding(origin);
@@ -363,18 +356,20 @@ internal static class ProgressiveDelivery
         }
     }
 
-    private static bool HasHeader(HeaderCollection headers, string name)
+    private static ProgressiveSkipReason? SkipForBodySize(byte[]? plainBody, long size, int minWireBytes)
     {
-        foreach (var header in headers)
+        if (plainBody is not null && plainBody.Length > 0 && size >= minWireBytes)
         {
-            if (header.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
+            return null;
         }
 
-        return false;
+        return size <= 0 || plainBody is null || plainBody.Length == 0
+            ? ProgressiveSkipReason.NoBody
+            : ProgressiveSkipReason.TooSmall;
     }
+
+    private static bool HasHeader(HeaderCollection headers, string name) =>
+        headers.Any(header => header.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 }
 
 internal sealed class ProgressivePlan

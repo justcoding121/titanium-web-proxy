@@ -707,7 +707,7 @@ public class ThrottleDeliveryGateTests
                 Array.Fill(body, (byte)'Z');
                 context.Response.ContentType = "application/octet-stream";
                 context.Response.ContentLength = size;
-                context.Response.Headers["Set-Cookie"] = new Microsoft.Extensions.Primitives.StringValues(["a=1", "b=2"]);
+                context.Response.Headers.SetCookie = new Microsoft.Extensions.Primitives.StringValues(["a=1", "b=2"]);
                 context.Response.Headers["X-Origin"] = "gate";
                 await context.Response.Body.WriteAsync(body);
             });

@@ -2581,7 +2581,7 @@ public sealed class InterceptionService : IDisposable
         // streams, while one in BeforeResponse serializes them (see ApplyResponseThrottleAsync).
         if (LatencyPaidOnRequestSide(e))
         {
-            await shaper.WaitAsync(shaper.LatencyDelay).ConfigureAwait(false);
+            await shaper.WaitAsync(shaper.LatencyDelay, CancellationToken.None).ConfigureAwait(false);
             Note(e.HttpClient, ThrottleEventKey(shaper.Profile), failure: false);
         }
 
@@ -2597,7 +2597,7 @@ public sealed class InterceptionService : IDisposable
             return;
         }
 
-        await shaper.WaitAsync(shaper.Reserve(ThrottleDirection.Upload, wire)).ConfigureAwait(false);
+        await shaper.WaitAsync(shaper.Reserve(ThrottleDirection.Upload, wire), CancellationToken.None).ConfigureAwait(false);
     }
 
     internal async Task ApplyResponseThrottleAsync(SessionEventArgs e, bool responseEdited)
@@ -2628,7 +2628,7 @@ public sealed class InterceptionService : IDisposable
 
         if (!LatencyPaidOnRequestSide(e))
         {
-            await shaper.WaitAsync(shaper.LatencyDelay).ConfigureAwait(false);
+            await shaper.WaitAsync(shaper.LatencyDelay, CancellationToken.None).ConfigureAwait(false);
             Note(e.HttpClient, ThrottleEventKey(shaper.Profile), failure: false);
 
             shaper = Volatile.Read(ref _linkShaper);
@@ -2659,7 +2659,7 @@ public sealed class InterceptionService : IDisposable
             return;
         }
 
-        await shaper.WaitAsync(shaper.Reserve(ThrottleDirection.Download, wire)).ConfigureAwait(false);
+        await shaper.WaitAsync(shaper.Reserve(ThrottleDirection.Download, wire), CancellationToken.None).ConfigureAwait(false);
     }
 
     /// <summary>

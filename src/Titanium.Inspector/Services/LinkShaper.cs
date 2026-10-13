@@ -148,6 +148,7 @@ internal sealed class LinkShaper : IDisposable
         }
         catch (ObjectDisposedException)
         {
+            return;
         }
     }
 
@@ -163,6 +164,7 @@ internal sealed class LinkShaper : IDisposable
         }
         catch (ObjectDisposedException)
         {
+            return;
         }
     }
 

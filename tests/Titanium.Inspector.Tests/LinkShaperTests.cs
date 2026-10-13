@@ -91,6 +91,7 @@ public class LinkShaperTests
         await started.Task.WaitAsync(TimeSpan.FromSeconds(2));
         shaper.ReleaseWaiters();
         await blocked.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.IsTrue(blocked.IsCompletedSuccessfully);
     }
 
     [TestMethod]
