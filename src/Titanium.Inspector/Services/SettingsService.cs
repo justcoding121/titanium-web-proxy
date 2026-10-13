@@ -177,6 +177,12 @@ public sealed class InspectorSettings
     /// <summary>Active network throttle profile name (<c>None</c>, <c>Slow 3G</c>, …).</summary>
     public string NetworkThrottleProfile { get; set; } = "None";
 
+    /// <summary>
+    ///     When a throttle profile is on, buffered downloads of 64 KiB or more are written in paced slices.
+    ///     When false, those downloads wait once and then arrive as a block. Default on.
+    /// </summary>
+    public bool ProgressiveThrottleDelivery { get; set; } = true;
+
     /// <summary>When true, new capture sessions chain through <see cref="UpstreamProxyHost"/>.</summary>
     public bool UpstreamProxyEnabled { get; set; }
 

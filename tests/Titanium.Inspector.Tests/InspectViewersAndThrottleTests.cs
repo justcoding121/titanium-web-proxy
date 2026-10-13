@@ -1,5 +1,12 @@
+using System.Net;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
+using Titanium.Web.Proxy;
+using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Inspector.Tests;
 
@@ -151,5 +158,108 @@ public class InspectViewersAndThrottleTests
         Assert.AreEqual("{\"n\":1}", snap.SseEvents[0].Data);
         Assert.AreEqual("message", snap.SseEvents[1].Event);
         Assert.AreEqual("trailing", snap.SseEvents[1].Data);
+    }
+
+    [TestMethod]
+    public void Hooks_WithProfileNone_DoNotAllocate()
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+            ThrottleProfile = null,
+        };
+        using var session = MakeSession();
+        session.HttpClient.Request.IsBodyRead = true;
+        session.HttpClient.Response.IsBodyRead = true;
+        var args = new BeforeBodyWriteEventArgs(session, [1, 2, 3], isChunked: true, isLastChunk: false);
+        interception.OnRequestBodyWriteThrottle(interception, args);
+        interception.OnResponseBodyWriteThrottle(interception, args);
+        GC.Collect();
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 10_000; i++)
+        {
+            interception.OnRequestBodyWriteThrottle(interception, args);
+            interception.OnResponseBodyWriteThrottle(interception, args);
+        }
+
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.AreEqual(0, allocated);
+    }
+
+    [TestMethod]
+    public void Http2Relay_DoesNotSleepInTheBodyWriteHook()
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+            ThrottleProfile = NetworkThrottle.Slow3G,
+        };
+        using var session = MakeSession();
+        session.HttpClient.Request.HttpVersion = new Version(2, 0);
+        session.HttpClient.Response.HttpVersion = new Version(2, 0);
+        session.HttpClient.Request.IsBodyRead = true;
+        session.HttpClient.Response.IsBodyRead = true;
+        var args = new BeforeBodyWriteEventArgs(session, new byte[8 * 1024], isChunked: true, isLastChunk: false);
+        var started = DateTime.UtcNow;
+        interception.OnRequestBodyWriteThrottle(interception, args).GetAwaiter().GetResult();
+        interception.OnResponseBodyWriteThrottle(interception, args).GetAwaiter().GetResult();
+        Assert.IsTrue(DateTime.UtcNow - started < TimeSpan.FromMilliseconds(200));
+    }
+
+    [TestMethod]
+    public void Http1Relay_DoesNotAddLatencyOnEveryChunk()
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+            ThrottleProfile = new NetworkThrottleProfile("lat", latencyMs: 500, bytesPerSecond: int.MaxValue),
+        };
+        using var session = MakeSession();
+        session.HttpClient.Request.HttpVersion = new Version(1, 1);
+        session.HttpClient.Response.HttpVersion = new Version(1, 1);
+        var args = new BeforeBodyWriteEventArgs(session, new byte[128], isChunked: true, isLastChunk: false);
+        var started = DateTime.UtcNow;
+        for (var i = 0; i < 5; i++)
+        {
+            interception.OnResponseBodyWriteThrottle(interception, args).GetAwaiter().GetResult();
+        }
+
+        Assert.IsTrue(DateTime.UtcNow - started < TimeSpan.FromMilliseconds(400));
+    }
+
+    [TestMethod]
+    public void ProfileSwap_ReplacesTheShaper()
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+            ThrottleProfile = NetworkThrottle.Slow3G,
+        };
+        interception.ThrottleProfile = NetworkThrottle.LTE;
+        interception.ThrottleProfile = null;
+        Assert.IsNull(interception.ThrottleProfile);
+        interception.ThrottleProfile = NetworkThrottle.Fast3G;
+        Assert.AreEqual("Fast 3G", interception.ThrottleProfile.Name);
+    }
+
+    [TestMethod]
+    public void ProxyTimeouts_StayDisabledByDefault()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        Assert.AreEqual(0, proxy.ResponseHeaderTimeoutSeconds);
+        Assert.AreEqual(0, proxy.IdleReadTimeoutSeconds);
+        Assert.AreEqual(0, proxy.IdleWriteTimeoutSeconds);
+        Assert.AreEqual(0, proxy.RequestTimeoutSeconds);
+    }
+
+    private static SessionEventArgs MakeSession()
+    {
+        var proxy = new ProxyServer(userTrustRootCertificate: false);
+        var endPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false);
+        var connection = new QuicClientConnection(
+            proxy, new IPEndPoint(IPAddress.Loopback, 4433), new IPEndPoint(IPAddress.Loopback, 12345));
+        var cts = new CancellationTokenSource();
+        var clientStream = new HttpClientStream(proxy, connection, Stream.Null, proxy.BufferPool, cts.Token);
+        return new SessionEventArgs(proxy, endPoint, clientStream, null, cts);
     }
 }

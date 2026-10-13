@@ -152,6 +152,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     private string _selectedSseEvents = "";
     private string _selectedProtobufDecoded = "";
     private string _networkThrottleProfile = "None";
+    private bool _progressiveThrottleDelivery = true;
     private string _composerMethod = "GET";
     private string _composerUrl = "";
     private string _composerHeaders = "";
@@ -2592,6 +2593,23 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         }
     }
 
+    /// <summary>Paced slices for buffered downloads while a throttle profile is on.</summary>
+    public bool ProgressiveThrottleDelivery
+    {
+        get => _progressiveThrottleDelivery;
+        set
+        {
+            if (!SetField(ref _progressiveThrottleDelivery, value))
+            {
+                return;
+            }
+
+            _interception.ProgressiveThrottleDelivery = value;
+            _settings.Current.ProgressiveThrottleDelivery = value;
+            _settings.Save();
+        }
+    }
+
     public IReadOnlyList<string> NetworkThrottleProfileNames { get; } =
         NetworkThrottle.Profiles.Select(p => p.Name).ToArray();
 
@@ -3085,6 +3103,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         _interception.ThrottleProfile = NetworkThrottle.Find(_networkThrottleProfile) is { IsEnabled: true } tp
             ? tp
             : null;
+        _progressiveThrottleDelivery = s.ProgressiveThrottleDelivery;
+        _interception.ProgressiveThrottleDelivery = _progressiveThrottleDelivery;
         ApplyExclusionSettingsFromSettings();
         _debugFileLogging = IsDebugFileLoggingEnabled(s);
         _interception.ConfigureLogging(s);

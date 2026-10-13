@@ -157,6 +157,7 @@ internal static class WebSocketInterceptRelay
                     {
                         if (frame.RelayRaw)
                         {
+                            WebSocketFrameElidedEventArgs? elided = null;
                             if (frame.IsOversizeNotice)
                             {
                                 ProxyMetrics.PolicyBreach(PolicyFamily.WebSocketFrameBudget, PolicyMode.Observe);
@@ -169,10 +170,16 @@ internal static class WebSocketInterceptRelay
 
                                 if (session.HasWebSocketFrameElidedHandler)
                                 {
-                                    await session.InvokeWebSocketFrameElided(new WebSocketFrameElidedEventArgs(
+                                    elided = new WebSocketFrameElidedEventArgs(
                                         session.Server, session.ClientConnection, session, direction, frame.OpCode,
-                                        frame.IsFinal, frame.DeclaredPayloadLength)).ConfigureAwait(false);
+                                        frame.IsFinal, frame.DeclaredPayloadLength);
+                                    await session.InvokeWebSocketFrameElided(elided).ConfigureAwait(false);
                                 }
+                            }
+
+                            if (elided is { Delay.Ticks: > 0 })
+                            {
+                                await Task.Delay(elided.Delay, cancellationToken).ConfigureAwait(false);
                             }
 
                             await writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);

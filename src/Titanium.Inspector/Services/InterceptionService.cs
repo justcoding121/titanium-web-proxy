@@ -46,6 +46,9 @@ public sealed class InterceptionService : IDisposable
     private InspectorSettings? _loggingSettings;
     private Channel<ProcessResolveWork>? _processResolveChannel;
     private CancellationTokenSource? _processResolveCts;
+    private NetworkThrottleProfile? _throttleProfile;
+    private LinkShaper? _linkShaper;
+    private readonly ConcurrentDictionary<object, ExchangeThrottleState> _exchange = new();
 
     /// <summary>
     ///     Serializes fire-and-forget trust cleanup: Firefox prefs/HKCU/policies and Personal-store
@@ -242,7 +245,21 @@ public sealed class InterceptionService : IDisposable
     public string? ScriptOnResponse { get; set; }
 
     /// <summary>Active network throttle profile (null / None = off).</summary>
-    public NetworkThrottleProfile? ThrottleProfile { get; set; }
+    public NetworkThrottleProfile? ThrottleProfile
+    {
+        get => _throttleProfile;
+        set
+        {
+            _throttleProfile = value is { IsEnabled: true } ? value : null;
+            RefreshShaper();
+        }
+    }
+
+    /// <summary>
+    ///     When a profile is on, buffered downloads at or above 64 KiB are written in paced slices.
+    ///     Off sends those downloads as one burst after a single delay. Kill switch; default on.
+    /// </summary>
+    public bool ProgressiveThrottleDelivery { get; set; } = true;
 
     /// <summary>Optional FileDescriptorSet path for protobuf decode hints.</summary>
     public string? ProtobufDescriptorSetPath { get; set; }
@@ -472,6 +489,7 @@ public sealed class InterceptionService : IDisposable
             }
 
             _fileLog = null;
+            DisposeShaper();
             _shutdownCompleted.Set();
         }
     }
@@ -562,6 +580,7 @@ public sealed class InterceptionService : IDisposable
         // Release a paused breakpoint so Stop does not wait out the 120s hit timeout
         // and the client is not left hanging after the listener is gone.
         Breakpoints?.ContinueIfPaused("Proxy stopped — paused request continued");
+        RefreshShaper();
 
         if (_proxy is null)
         {
@@ -1866,6 +1885,7 @@ public sealed class InterceptionService : IDisposable
             // (huge POST would RST HTTP/2 with ENHANCE_YOUR_CALM).
             if (e.HttpClient.Request.HasBody && ShouldBufferBody(e.HttpClient.Request, e))
             {
+                RememberWire(e.HttpClient, request: true, e.HttpClient.Request.ContentLength);
                 e.HttpClient.Request.KeepBody = true;
                 await e.GetRequestBody(CancellationToken.None);
             }
@@ -1889,6 +1909,7 @@ public sealed class InterceptionService : IDisposable
 
             if (SessionScriptHost.ApplyOnRequest(ScriptOnRequest, e))
             {
+                MarkLocalAnswer(e.HttpClient);
                 return;
             }
 
@@ -1927,6 +1948,7 @@ public sealed class InterceptionService : IDisposable
                 }
 
                 autoResponded = true;
+                MarkLocalAnswer(e.HttpClient);
                 Note(e.HttpClient, "stats.event.rule", failure: false);
             }
 
@@ -1949,6 +1971,7 @@ public sealed class InterceptionService : IDisposable
                 var action = await hit.WaitAsync(CancellationToken.None);
                 if (action == BreakpointAction.Abort)
                 {
+                    MarkLocalAnswer(e.HttpClient);
                     e.GenericResponse("Aborted by Titanium Inspector breakpoint", HttpStatusCode.Forbidden);
                     return;
                 }
@@ -1966,6 +1989,7 @@ public sealed class InterceptionService : IDisposable
 
             if (!Capturing)
             {
+                await PaceBufferedUploadAsync(e).ConfigureAwait(false);
                 return;
             }
 
@@ -1973,6 +1997,7 @@ public sealed class InterceptionService : IDisposable
             _live[e.HttpClient] = snap;
             SessionCaptured?.Invoke(this, snap);
             ScheduleProcessResolve(snap, e.HttpClient.ProcessId);
+            await PaceBufferedUploadAsync(e).ConfigureAwait(false);
         }
         catch (Exception)
         {
@@ -1998,6 +2023,7 @@ public sealed class InterceptionService : IDisposable
                 return;
             }
 
+            var responseEdited = false;
             try
             {
                 FillResponse(snap, e);
@@ -2008,6 +2034,13 @@ public sealed class InterceptionService : IDisposable
                 // step throws, so the grid row never stays blank.
                 SessionUpdated?.Invoke(this, snap);
             }
+
+            if (_exchange.TryGetValue(e.HttpClient, out var state))
+            {
+                responseEdited = state.ResponseEdited;
+            }
+
+            await ApplyResponseThrottleAsync(e, responseEdited).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -2017,13 +2050,14 @@ public sealed class InterceptionService : IDisposable
         }
     }
 
-    private static async Task TryBufferResponseBodyAsync(SessionEventArgs e)
+    private async Task TryBufferResponseBodyAsync(SessionEventArgs e)
     {
         if (!e.HttpClient.Response.HasBody || !ShouldBufferBody(e.HttpClient.Response, e))
         {
             return;
         }
 
+        RememberWire(e.HttpClient, request: false, e.HttpClient.Response.ContentLength);
         e.HttpClient.Response.KeepBody = true;
         try
         {
@@ -2045,7 +2079,10 @@ public sealed class InterceptionService : IDisposable
             Note(e.HttpClient, "stats.event.script", failure: false);
         }
 
-        SessionScriptHost.ApplyOnResponse(ScriptOnResponse, e);
+        if (SessionScriptHost.ApplyOnResponse(ScriptOnResponse, e))
+        {
+            MarkLocalAnswer(e.HttpClient);
+        }
 
         if (e.EnableWinAuth && e.HttpClient.Response.StatusCode == (int)HttpStatusCode.RequestEntityTooLarge)
         {
@@ -2066,6 +2103,7 @@ public sealed class InterceptionService : IDisposable
         var action = await hit.WaitAsync(CancellationToken.None);
         if (action == BreakpointAction.Abort)
         {
+            MarkLocalAnswer(e.HttpClient);
             e.GenericResponse("Aborted by Titanium Inspector response breakpoint", HttpStatusCode.Forbidden);
             return true;
         }
@@ -2073,6 +2111,7 @@ public sealed class InterceptionService : IDisposable
         if (hit.EditedBody is not null)
         {
             e.SetResponseBodyString(hit.EditedBody);
+            Exchange(e.HttpClient).ResponseEdited = true;
         }
 
         return false;
@@ -2116,6 +2155,7 @@ public sealed class InterceptionService : IDisposable
         }
 
         _live.TryRemove(e.HttpClient, out _);
+        _exchange.TryRemove(e.HttpClient, out _);
         return Task.CompletedTask;
     }
 
@@ -2491,6 +2531,187 @@ public sealed class InterceptionService : IDisposable
         }
     }
 
+    private void RefreshShaper()
+    {
+        var profile = _throttleProfile;
+        var next = profile is null ? null : new LinkShaper(profile);
+        var previous = Interlocked.Exchange(ref _linkShaper, next);
+        previous?.ReleaseWaiters();
+        previous?.Dispose();
+    }
+
+    private void DisposeShaper()
+    {
+        var previous = Interlocked.Exchange(ref _linkShaper, null);
+        previous?.ReleaseWaiters();
+        previous?.Dispose();
+    }
+
+    private void RememberWire(object key, bool request, long length)
+    {
+        if (Volatile.Read(ref _linkShaper) is null || length <= 0)
+        {
+            return;
+        }
+
+        var state = Exchange(key);
+        if (request)
+        {
+            state.RequestWire = length;
+        }
+        else
+        {
+            state.ResponseWire = length;
+        }
+    }
+
+    private void MarkLocalAnswer(object key) => Exchange(key).LocalAnswer = true;
+
+    private ExchangeThrottleState Exchange(object key) =>
+        _exchange.GetOrAdd(key, static _ => new ExchangeThrottleState());
+
+    private async Task PaceBufferedUploadAsync(SessionEventArgs e)
+    {
+        var shaper = Volatile.Read(ref _linkShaper);
+        if (shaper is null)
+        {
+            return;
+        }
+
+        if (_exchange.TryGetValue(e.HttpClient, out var state) && state.LocalAnswer)
+        {
+            return;
+        }
+
+        var request = e.HttpClient.Request;
+        if (!request.IsBodyRead || !request.HasBody)
+        {
+            return;
+        }
+
+        var wire = state?.RequestWire > 0 ? state.RequestWire : request.Body.LongLength;
+        if (wire <= 0)
+        {
+            return;
+        }
+
+        await shaper.WaitAsync(shaper.Reserve(ThrottleDirection.Upload, wire)).ConfigureAwait(false);
+    }
+
+    private async Task ApplyResponseThrottleAsync(SessionEventArgs e, bool responseEdited)
+    {
+        var shaper = Volatile.Read(ref _linkShaper);
+        if (shaper is null)
+        {
+            return;
+        }
+
+        _exchange.TryGetValue(e.HttpClient, out var state);
+        if (state is { LocalAnswer: true })
+        {
+            return;
+        }
+
+        await shaper.WaitAsync(shaper.LatencyDelay).ConfigureAwait(false);
+        Note(e.HttpClient, ThrottleEventKey(shaper.Profile), failure: false);
+
+        shaper = Volatile.Read(ref _linkShaper);
+        if (shaper is null)
+        {
+            return;
+        }
+
+        var response = e.HttpClient.Response;
+        byte[]? plain = response.IsBodyRead && response.HasBody ? response.Body : null;
+        var wire = state?.ResponseWire > 0 ? state.ResponseWire : plain?.LongLength ?? 0;
+        if (ProgressiveThrottleDelivery
+            && plain is { Length: > 0 }
+            && ProgressiveDelivery.TryBuild(
+                response,
+                e.HttpClient.Request,
+                plain,
+                wire,
+                GrpcJsonTranscodeSessionMark.TryGet(e.UserData, out _),
+                responseEdited,
+                enabled: true) is { } plan)
+        {
+            var charge = plan.ChargeWireBytes;
+            e.RespondStreaming(
+                plan.Response,
+                (stream, ct) => ProgressiveDelivery.WritePacedAsync(
+                    stream,
+                    plan.Wire,
+                    charge,
+                    () => Volatile.Read(ref _linkShaper),
+                    ct),
+                closeServerConnection: false);
+            return;
+        }
+
+        if (wire <= 0)
+        {
+            return;
+        }
+
+        await shaper.WaitAsync(shaper.Reserve(ThrottleDirection.Download, wire)).ConfigureAwait(false);
+    }
+
+    private static string ThrottleEventKey(NetworkThrottleProfile profile) => profile.Name switch
+    {
+        "Slow 3G" => "stats.event.throttle.slow3g",
+        "Fast 3G" => "stats.event.throttle.fast3g",
+        "LTE" => "stats.event.throttle.lte",
+        _ => "stats.event.throttle",
+    };
+
+    /// <summary>
+    ///     HTTP/2 body-write hooks run on the connection frame loop. Sleeping there stalls every
+    ///     stream and WINDOW_UPDATE on that connection, so relay pacing is HTTP/1 and HTTP/3 only.
+    /// </summary>
+    private static bool ShouldPaceRelay(SessionEventArgs session)
+    {
+        var request = session.HttpClient.Request.HttpVersion;
+        var response = session.HttpClient.Response.HttpVersion;
+        return request.Major != 2 && response.Major != 2;
+    }
+
+    private static async Task PaceRelayAsync(LinkShaper shaper, ThrottleDirection direction, int byteCount, Action tee)
+    {
+        if (byteCount > 0)
+        {
+            await shaper.WaitAsync(shaper.Reserve(direction, byteCount)).ConfigureAwait(false);
+        }
+
+        tee();
+    }
+
+    private Task PaceWebSocketFrameAsync(
+        LinkShaper shaper,
+        SessionSnapshot snap,
+        WsThrottleFlags flags,
+        WebSocketFrameDirection direction,
+        long byteCount,
+        Action<TimeSpan> setDelay)
+    {
+        var throttleDirection = direction == WebSocketFrameDirection.ClientToServer
+            ? ThrottleDirection.Upload
+            : ThrottleDirection.Download;
+        var delay = byteCount > 0 ? shaper.Reserve(throttleDirection, byteCount) : TimeSpan.Zero;
+        if (flags.TryChargeLatency(throttleDirection))
+        {
+            delay += shaper.LatencyDelay;
+        }
+
+        if (delay > LinkShaper.MaxWait)
+        {
+            delay = LinkShaper.MaxWait;
+        }
+
+        setDelay(delay);
+        SessionUpdated?.Invoke(this, snap);
+        return Task.CompletedTask;
+    }
+
     private void AttachLiveWebSocketFrames(SessionEventArgs e, SessionSnapshot snap)
     {
         // Immutable snapshots: proxy threads append while the UI dispatcher may
@@ -2498,42 +2719,72 @@ public sealed class InterceptionService : IDisposable
         // threw InvalidOperationException and killed the process (tray + system proxy gone).
         var live = new LiveWebSocketFrames();
         snap.WebSocketFrames = live.Current;
+        WsThrottleFlags? wsFlags = null;
         e.BeforeWebSocketFrame += (_, args) =>
         {
             var direction = args.Direction == WebSocketFrameDirection.ClientToServer ? "Client" : "Server";
             var opcode = args.OpCode.ToString();
             live.Append(snap, ProtocolFrameInspectors.FromLiveFrame(direction, opcode, args.Data));
-            var profile = ThrottleProfile;
-            if (profile is { IsEnabled: true })
+            var shaper = Volatile.Read(ref _linkShaper);
+            if (shaper is null)
             {
-                args.Delay = NetworkThrottle.DelayFor(profile, args.Data.Length, applyLatency: true);
+                SessionUpdated?.Invoke(this, snap);
+                return Task.CompletedTask;
             }
 
-            SessionUpdated?.Invoke(this, snap);
-            return Task.CompletedTask;
+            var flags = wsFlags ??= new WsThrottleFlags();
+            return PaceWebSocketFrameAsync(shaper, snap, flags, args.Direction, args.Data.Length, delay => args.Delay = delay);
         };
         e.WebSocketFrameElided += (_, args) =>
         {
             var direction = args.Direction == WebSocketFrameDirection.ClientToServer ? "Client" : "Server";
             live.Append(snap, ProtocolFrameInspectors.ElidedFrame(direction, args.OpCode.ToString(), args.DeclaredPayloadLength));
-            SessionUpdated?.Invoke(this, snap);
-            return Task.CompletedTask;
+            var shaper = Volatile.Read(ref _linkShaper);
+            if (shaper is null)
+            {
+                SessionUpdated?.Invoke(this, snap);
+                return Task.CompletedTask;
+            }
+
+            var flags = wsFlags ??= new WsThrottleFlags();
+            var bytes = args.DeclaredPayloadLength < 0 ? 0 : args.DeclaredPayloadLength;
+            return PaceWebSocketFrameAsync(shaper, snap, flags, args.Direction, bytes, delay => args.Delay = delay);
         };
     }
 
-    private async Task OnRequestBodyWriteThrottle(object sender, BeforeBodyWriteEventArgs e)
+    internal Task OnRequestBodyWriteThrottle(object sender, BeforeBodyWriteEventArgs e)
     {
-        var profile = ThrottleProfile;
-        if (profile is { IsEnabled: true })
+        // No lambda in this method: a closure would allocate on the None path.
+        var shaper = Volatile.Read(ref _linkShaper);
+        if (shaper is null || !ShouldPaceRelay(e.Session))
         {
-            var delay = NetworkThrottle.DelayFor(profile, e.BodyBytes?.Length ?? 0, applyLatency: !e.IsChunked || e.BodyBytes?.Length > 0);
-            if (delay > TimeSpan.Zero)
-            {
-                await Task.Delay(delay, _processResolveCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
-            }
+            TeeRequestIfStreaming(e);
+            return Task.CompletedTask;
         }
 
-        // Preview tee for unknown-length uploads that were relayed instead of buffered.
+        return PaceRequestRelayAsync(shaper, e);
+    }
+
+    internal Task OnResponseBodyWriteThrottle(object sender, BeforeBodyWriteEventArgs e)
+    {
+        var shaper = Volatile.Read(ref _linkShaper);
+        if (shaper is null || !ShouldPaceRelay(e.Session))
+        {
+            TeeResponseIfStreaming(e);
+            return Task.CompletedTask;
+        }
+
+        return PaceResponseRelayAsync(shaper, e);
+    }
+
+    private Task PaceRequestRelayAsync(LinkShaper shaper, BeforeBodyWriteEventArgs e) =>
+        PaceRelayAsync(shaper, ThrottleDirection.Upload, e.BodyBytes?.Length ?? 0, () => TeeRequestIfStreaming(e));
+
+    private Task PaceResponseRelayAsync(LinkShaper shaper, BeforeBodyWriteEventArgs e) =>
+        PaceRelayAsync(shaper, ThrottleDirection.Download, e.BodyBytes?.Length ?? 0, () => TeeResponseIfStreaming(e));
+
+    private void TeeRequestIfStreaming(BeforeBodyWriteEventArgs e)
+    {
         if (e.Session.HttpClient.Request.IsBodyRead
             || !_live.TryGetValue(e.Session.HttpClient, out var snap)
             || snap.RequestBodyCapture != BodyCaptureState.Streaming)
@@ -2544,18 +2795,8 @@ public sealed class InterceptionService : IDisposable
         TeeRequestChunk(snap, e);
     }
 
-    private async Task OnResponseBodyWriteThrottle(object sender, BeforeBodyWriteEventArgs e)
+    private void TeeResponseIfStreaming(BeforeBodyWriteEventArgs e)
     {
-        var profile = ThrottleProfile;
-        if (profile is { IsEnabled: true })
-        {
-            var delay = NetworkThrottle.DelayFor(profile, e.BodyBytes?.Length ?? 0, applyLatency: true);
-            if (delay > TimeSpan.Zero)
-            {
-                await Task.Delay(delay, _processResolveCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
-            }
-        }
-
         // Preview tee only for relayed unknown-length bodies (not buffered). Do not tee NotCaptured huge downloads.
         if (e.Session.HttpClient.Response.IsBodyRead)
         {
@@ -3068,4 +3309,28 @@ public sealed class InterceptionService : IDisposable
         session.CanBufferBody(message);
 
     public void Dispose() => EnsureShutdown();
+
+    private sealed class ExchangeThrottleState
+    {
+        public long RequestWire = -1;
+        public long ResponseWire = -1;
+        public bool LocalAnswer;
+        public bool ResponseEdited;
+    }
+
+    private sealed class WsThrottleFlags
+    {
+        private int _uploadLatency;
+        private int _downloadLatency;
+
+        public bool TryChargeLatency(ThrottleDirection direction)
+        {
+            if (direction == ThrottleDirection.Upload)
+            {
+                return Interlocked.Exchange(ref _uploadLatency, 1) == 0;
+            }
+
+            return Interlocked.Exchange(ref _downloadLatency, 1) == 0;
+        }
+    }
 }

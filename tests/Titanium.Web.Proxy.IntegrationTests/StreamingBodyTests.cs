@@ -440,6 +440,109 @@ public class StreamingBodyTests
             "AfterResponse should fire for each stream once synthetic END_STREAM completes.");
     }
 
+    /// <summary>
+    ///     The HTTP/2 body-write hook is awaited on the connection frame loop. A sleep there must not be
+    ///     used for relay pacing: this test records whether a sibling stream can finish while the hook is
+    ///     still asleep. Inspector skips that sleep when the result is a stall.
+    /// </summary>
+    [TestMethod]
+    public async Task OnResponseBodyWrite_Http2_Sleep_SiblingStream()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+        server.HandleRequest(context =>
+        {
+            if (context.Request.Path == "/fast")
+            {
+                return context.Response.WriteAsync("fast-ok");
+            }
+
+            return context.Response.WriteAsync(new string('S', 32 * 1024));
+        });
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        var inHook = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        proxy.OnResponseBodyWrite += async (_, e) =>
+        {
+            if (e.Session.HttpClient.Request.RequestUri.AbsolutePath != "/slow")
+            {
+                return;
+            }
+
+            inHook.TrySetResult();
+            await Task.Delay(1500);
+        };
+
+        using var client = CreateHttp2Client(proxy);
+        var slow = client.GetAsync(new Uri(new Uri(server.ListeningHttpsUrl), "/slow"));
+        await inHook.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        var siblingStalled = false;
+        try
+        {
+            using var fastCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(400));
+            var fast = await client.GetAsync(new Uri(new Uri(server.ListeningHttpsUrl), "/fast"), fastCts.Token);
+            Assert.AreEqual("fast-ok", await fast.Content.ReadAsStringAsync(fastCts.Token));
+        }
+        catch (OperationCanceledException)
+        {
+            siblingStalled = true;
+        }
+
+        // The frame loop is shared. A sleep in the hook stalls the sibling, so relay pacing must not sleep here.
+        Assert.IsTrue(siblingStalled,
+            "Expected the HTTP/2 body-write hook to stall a sibling stream. If it no longer does, HTTP/2 relay pacing can sleep in the hook.");
+
+        using var drain = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await slow.WaitAsync(drain.Token);
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task BeforeResponse_Http2_ReplacesBufferedOriginBody_WithExactBytes()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var plain = new byte[70 * 1024];
+        for (var i = 0; i < plain.Length; i++)
+        {
+            plain[i] = (byte)(i % 251);
+        }
+
+        var server = testSuite.GetServer();
+        server.HandleRequest(async context => await context.Response.Body.WriteAsync(plain));
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.BeforeResponse += async (_, e) =>
+        {
+            var body = await e.GetResponseBody();
+            var replacement = new Response
+            {
+                StatusCode = 200,
+                StatusDescription = "OK",
+                HttpVersion = e.HttpClient.Request.HttpVersion,
+            };
+            replacement.Headers.AddHeader("Content-Length", body.Length.ToString());
+            e.RespondStreaming(replacement, async (stream, ct) =>
+            {
+                var offset = 0;
+                while (offset < body.Length)
+                {
+                    var count = Math.Min(16 * 1024, body.Length - offset);
+                    await stream.WriteAsync(body.AsMemory(offset, count), ct);
+                    offset += count;
+                }
+            }, closeServerConnection: false);
+        };
+
+        using var client = CreateHttp2Client(proxy);
+        var response = await client.GetAsync(new Uri(server.ListeningHttpsUrl));
+        var got = await response.Content.ReadAsByteArrayAsync();
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(new Version(2, 0), response.Version);
+        CollectionAssert.AreEqual(plain, got);
+    }
+
     private static HttpClient CreateHttp2Client(ProxyServer proxy)
     {
         var handler = new SocketsHttpHandler
