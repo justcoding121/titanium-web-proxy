@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared desktop icon helpers for Inspector packaging (Linux hicolor + macOS icns).
+# Shared file-icon helpers for Inspector (desktop) and CLI (exe / AppImage).
 # Sourced by install/build scripts — not meant to be run standalone.
 #
 # Prebuilt assets live in tools/packaging/icons/ (committed). Fallbacks:
@@ -59,12 +59,6 @@ install_hicolor_icons() {
     if [[ ! -f "${src}" ]]; then
       src="${icons_dir}/${icon_id}.png"
     fi
-    if [[ ! -f "${src}" ]]; then
-      src="${icons_dir}/titanium-inspector-${size}.png"
-    fi
-    if [[ ! -f "${src}" ]]; then
-      src="${icons_dir}/titanium-inspector.png"
-    fi
     if [[ -f "${src}" ]]; then
       cp -f "${src}" "${dest}"
       continue
@@ -79,8 +73,10 @@ install_hicolor_icons() {
   dest="${hicolor_root}/256x256/apps/${icon_id}.png"
   if [[ ! -f "${dest}" ]]; then
     mkdir -p "$(dirname "${dest}")"
-    if [[ -f "${icons_dir}/titanium-inspector.png" ]]; then
-      cp -f "${icons_dir}/titanium-inspector.png" "${dest}"
+    if [[ -f "${icons_dir}/${icon_id}-256.png" ]]; then
+      cp -f "${icons_dir}/${icon_id}-256.png" "${dest}"
+    elif [[ -f "${icons_dir}/${icon_id}.png" ]]; then
+      cp -f "${icons_dir}/${icon_id}.png" "${dest}"
     elif ico="$(_desktop_icons_find_ico "$@")" && command -v convert >/dev/null 2>&1; then
       convert "${ico}" -thumbnail 256x256 "${dest}" 2>/dev/null || true
     fi

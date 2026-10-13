@@ -12,6 +12,7 @@
     <Description>Titanium Web Proxy CLI (titanium / twp).</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <AssemblyName>titanium</AssemblyName>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <!-- CLI enables experimental HTTP/3 via listener config; suppress TWP001 like Core. -->
     <NoWarn>$(NoWarn);TWP001</NoWarn>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

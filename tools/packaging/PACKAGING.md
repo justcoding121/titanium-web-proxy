@@ -85,7 +85,9 @@ Release publish copies helpers into each Inspector zip:
 | `linux-*` | `install.sh`, `uninstall.sh`, `TitaniumInspector.desktop.in`, `app.ico`, `desktop-icons.sh`, `titanium-inspector*.png` |
 | `osx-*` | `install-app.sh`, `uninstall-app.sh`, `app.ico`, `desktop-icons.sh`, `AppIcon.icns` |
 
-Prebuilt icons live in [`icons/`](icons/) (hicolor PNG sizes + macOS `AppIcon.icns`). Deb/rpm/AppImage/DMG packaging installs them into the OS icon locations.
+Prebuilt icons live in [`icons/`](icons/) (hicolor PNG sizes + macOS `AppIcon.icns`). Deb/rpm/AppImage/DMG packaging installs the Inspector set into the OS icon locations.
+
+CLI does not install a Start menu, Dock, or application-menu launcher. It does ship a file icon: `src/Titanium.Cli/Assets/app.ico` is the Windows `ApplicationIcon` on `titanium.exe` and `twp.exe` (copied from the same publish, so both binaries match), and `icons/titanium-cli-*.png` is the Linux AppImage icon. `build-appimage.sh` reads those PNGs from this directory at release time; the CLI zip stays a single file on Windows.
 
 **Linux:** extract the zip, then `./install.sh` (default prefix `~/.local`). **macOS:** extract, then `./install-app.sh` → `~/Applications/Titanium Inspector.app` (prefer DMG when published).
 
