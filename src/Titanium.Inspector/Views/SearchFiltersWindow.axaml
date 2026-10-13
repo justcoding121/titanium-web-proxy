@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="using:Titanium.Inspector.Localization"
+        xmlns:views="using:Titanium.Inspector.Views"
         x:Class="Titanium.Inspector.Views.SearchFiltersWindow"
         AutomationProperties.AutomationId="SearchFiltersWindow"
         Title="{loc:Loc window.filters}"
@@ -22,7 +23,9 @@
           <TextBlock FontWeight="SemiBold" Text="{loc:Loc filters.search}" />
           <TextBlock Opacity="0.75" TextWrapping="Wrap"
                      Text="{loc:Loc filters.searchHelp}" />
-          <TextBox x:Name="RemainderBox" Classes="searchQuery" Watermark="{loc:Loc filters.searchWatermark}"
+          <views:SearchQueryTextBox x:Name="RemainderBox" Classes="searchQuery"
+                   Height="{DynamicResource SearchQueryBoxHeight}"
+                   Watermark="{loc:Loc filters.searchWatermark}"
                    AutomationProperties.AutomationId="SearchFiltersRemainder" />
         </StackPanel>
 

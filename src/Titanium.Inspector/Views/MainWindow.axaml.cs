@@ -44,6 +44,10 @@ public partial class MainWindow : Window
     private WindowNotificationManager? _notificationManager;
     private CancellationTokenSource? _attentionCts;
     private EventHandler? _themeVariantChangedHandler;
+    private bool _syncingSearchBox;
+
+    /// <summary>Gap under the search box only when the Filters border has wrapped onto the next line.</summary>
+    private const double SearchFilterWrapGap = 8;
 
     public MainWindow()
     {
@@ -89,6 +93,52 @@ public partial class MainWindow : Window
         HookOneWayToggleVisualSync(DataContext as MainWindowViewModel);
         HookGridColumnsChanged(DataContext as MainWindowViewModel);
         HookThemeVariantChanged();
+        ToolbarFilterGroup.SizeChanged += (_, _) => SyncSearchBoxToFilterGroup();
+        ToolbarSearchFilters.SizeChanged += (_, _) => SyncSearchBoxToFilterGroup();
+    }
+
+    private void SyncSearchBoxToFilterGroup()
+    {
+        if (_syncingSearchBox)
+            return;
+
+        var filterHeight = ToolbarFilterGroup.Bounds.Height;
+        if (filterHeight <= 0)
+            return;
+
+        var sameRow = Math.Abs(SearchBox.Bounds.Y - ToolbarFilterGroup.Bounds.Y) < 1;
+        var bottom = sameRow ? 0 : SearchFilterWrapGap;
+        var margin = SearchBox.Margin;
+        var target = Math.Max(filterHeight, SearchQueryMinHeight());
+        var heightMatches = !double.IsNaN(SearchBox.Height) && Math.Abs(SearchBox.Height - target) <= 0.5;
+        var marginMatches = Math.Abs(margin.Bottom - bottom) <= 0.5;
+        if (heightMatches && marginMatches)
+            return;
+
+        _syncingSearchBox = true;
+        try
+        {
+            if (!heightMatches)
+                SearchBox.Height = target;
+            if (!marginMatches)
+                SearchBox.Margin = new Thickness(margin.Left, margin.Top, margin.Right, bottom);
+        }
+        finally
+        {
+            _syncingSearchBox = false;
+        }
+    }
+
+    private double SearchQueryMinHeight()
+    {
+        if (this.TryGetResource("SearchQueryBoxHeight", ActualThemeVariant, out var value) &&
+            value is double height &&
+            height > 0)
+        {
+            return height;
+        }
+
+        return 0;
     }
 
     protected override void OnApplyTemplate(TemplateAppliedEventArgs e)

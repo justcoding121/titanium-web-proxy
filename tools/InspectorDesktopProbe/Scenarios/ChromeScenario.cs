@@ -701,7 +701,9 @@ public static class ChromeScenario
                 harness.Robot.SetText("SearchBox", "method:GET");
                 if (!string.Equals(harness.ViewModel.SearchQuery, "method:GET", StringComparison.Ordinal))
                     throw new InvalidOperationException("SearchBox did not bind");
-                harness.Robot.SetCheck("HideTunnelsFilterCheck", true);
+                if (harness.ViewModel.ConnectMethodRow is not { } connect)
+                    throw new InvalidOperationException("CONNECT method row missing");
+                connect.IsChecked = !connect.IsChecked;
                 harness.Robot.SetCheck("HideImagesFilterCheck", true);
                 harness.Robot.SetCheck("ErrorsOnlyFilterCheck", true);
                 harness.Robot.Click("ClearFiltersButton");

@@ -57,6 +57,7 @@ public sealed partial class MainWindowViewModel
 
         _retentionEvictedTotal = 0;
         _interception.ResetSessionIdSequence();
+        ResetSeenMethods();
         SyncViewsToTrackedSessions(null);
         RefreshSessionCountText();
         NotifyFilterSelectionProperties();
@@ -1031,6 +1032,7 @@ public sealed partial class MainWindowViewModel
         foreach (var snapshot in batch)
         {
             _store.Add(snapshot);
+            NoteSessionMethod(snapshot.Method);
         }
 
         if (SessionSearch.HasBodyToken(SearchQuery))
@@ -1055,6 +1057,7 @@ public sealed partial class MainWindowViewModel
 
     private void OnSessionAddedToFilter(SessionSnapshot snapshot)
     {
+        NoteSessionMethod(snapshot.Method);
         if (SessionSearch.HasBodyToken(SearchQuery))
         {
             RunBodyFilter();
@@ -1077,6 +1080,7 @@ public sealed partial class MainWindowViewModel
     /// </summary>
     private void OnSessionUpdatedForFilter(SessionSnapshot snapshot)
     {
+        NoteSessionMethod(snapshot.Method);
         // Capture is batched (~50ms). CONNECT/response updates can reach the UI first.
         // Do not invent a grid row until the store owns the session — otherwise the later
         // batch add would duplicate it.
@@ -1219,6 +1223,7 @@ public sealed partial class MainWindowViewModel
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HideImagesFilter)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ErrorsOnlyFilter)));
         NotifyStatusChrome(resetFreeText: !_statusWrite);
+        SyncMethodRows();
     }
 
     /// <summary>Hosts hidden from the list (<c>-host:</c>), in query order. Display only.</summary>
@@ -1228,7 +1233,8 @@ public sealed partial class MainWindowViewModel
     public ObservableCollection<string> HiddenProcessChips { get; } = new();
 
     /// <summary>True when at least one hide-host or hide-process chip should show.</summary>
-    public bool HasHiddenChips => HiddenHostChips.Count > 0 || HiddenProcessChips.Count > 0;
+    public bool HasHiddenChips =>
+        HiddenHostChips.Count > 0 || HiddenProcessChips.Count > 0;
 
     private string _relatedChipText = "";
 
@@ -1239,8 +1245,9 @@ public sealed partial class MainWindowViewModel
 
     public bool HasFilterChips => HasHiddenChips || HasRelatedChip;
 
-    /// <summary>True when both chip kinds are present, so each chip shows a host or process prefix.</summary>
-    public bool ShowProcessChipPrefix => HiddenHostChips.Count > 0 && HiddenProcessChips.Count > 0;
+    /// <summary>True when both host and process chips are present, so each chip shows its prefix.</summary>
+    public bool ShowProcessChipPrefix =>
+        HiddenHostChips.Count > 0 && HiddenProcessChips.Count > 0;
 
     private void RefreshHiddenChips()
     {

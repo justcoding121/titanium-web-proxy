@@ -97,7 +97,7 @@ public class AutomationIdCoverageHeadlessTests
         "ToolbarFilterGroup",
         "OpenFiltersButton",
         "SearchHideChips",
-        "HideTunnelsFilterCheck",
+        "MethodFilterButton",
         "HideImagesFilterCheck",
         "ErrorsOnlyFilterCheck",
         "ClearFiltersButton",

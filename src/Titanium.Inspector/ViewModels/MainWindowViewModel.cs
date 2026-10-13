@@ -403,6 +403,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         OpenFiltersCommand = Cmd(OpenFiltersAsync);
         RemoveHiddenHostCommand = CmdWithParameter(RemoveHiddenHostAsync);
         RemoveHiddenProcessCommand = CmdWithParameter(RemoveHiddenProcessAsync);
+        WireMethodFilter();
         WireBodyInspectCommands();
 
         WireEventHandlers();
@@ -2620,7 +2621,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     /// </summary>
     public bool CanRemoveMatchingFilter => HasActiveSearch && Sessions.Count > 0;
 
-    /// <summary>Quick filter: exclude CONNECT/tunnel rows (<c>hide:tunnel</c>).</summary>
+    /// <summary>Quick filter: exclude CONNECT/tunnel rows (<c>hide:tunnel</c>). The Method menu writes <c>-method:</c> instead; this remains for typed queries and tests.</summary>
     public bool HideTunnelsFilter
     {
         get => SessionSearch.ContainsToken(_searchQuery, "hide", "tunnel");

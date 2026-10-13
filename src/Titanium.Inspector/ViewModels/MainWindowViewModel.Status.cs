@@ -87,6 +87,30 @@ public sealed partial class MainWindowViewModel
 
     public bool HasStatusFilterError => _statusErrorKey is not null;
 
+    /// <summary>Count pill. Empty when unset, otherwise how many <c>status:</c> terms are selected (<c>9+</c> past nine).</summary>
+    public string StatusFilterBadge
+    {
+        get
+        {
+            var value = StatusFilter.FindValue(SearchQuery);
+            return string.IsNullOrEmpty(value) ? "" : BadgeText(StatusFilter.TermCount(value));
+        }
+    }
+
+    /// <summary>Help text when idle; the selected terms when a filter is active.</summary>
+    public string StatusFilterTip
+    {
+        get
+        {
+            var value = StatusFilter.FindValue(SearchQuery);
+            return string.IsNullOrEmpty(value)
+                ? LanguageService.Get("toolbar.statusTip")
+                : LanguageService.Format("toolbar.statusActiveTip", value);
+        }
+    }
+
+    public bool StatusFilterActive => !string.IsNullOrEmpty(StatusFilter.FindValue(SearchQuery));
+
     private void WriteStatus(bool c2, bool c3, bool c4, bool c5, string? free)
     {
         if (_statusWrite)
@@ -131,5 +155,8 @@ public sealed partial class MainWindowViewModel
 
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StatusFilterError)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasStatusFilterError)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StatusFilterBadge)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StatusFilterTip)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StatusFilterActive)));
     }
 }

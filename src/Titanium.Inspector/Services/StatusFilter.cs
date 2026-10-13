@@ -87,6 +87,17 @@ public static class StatusFilter
         return false;
     }
 
+    /// <summary>How many comma-separated terms <paramref name="statusValue"/> contains, using the same limits as matching.</summary>
+    public static int TermCount(string? statusValue)
+    {
+        if (string.IsNullOrEmpty(statusValue))
+        {
+            return 0;
+        }
+
+        return Terms(statusValue).Count;
+    }
+
     /// <summary>Terms that are not a 2xx–5xx class, joined with commas. Empty when there are none.</summary>
     public static string FreeText(string? statusValue)
     {

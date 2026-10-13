@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Titanium.Inspector.ViewModels"
+        xmlns:views="using:Titanium.Inspector.Views"
         xmlns:svc="using:Titanium.Inspector.Services"
         xmlns:loc="using:Titanium.Inspector.Localization"
         xmlns:conv="using:Titanium.Inspector.Converters"
@@ -333,13 +334,15 @@
       <StackPanel Grid.Row="0" Grid.ColumnSpan="4" Margin="8" Spacing="8"
                   AutomationProperties.AutomationId="ToolbarPanel">
         <!-- Search + Filters strip: outline-only group (no fill) so it matches the toolbar surface. -->
-        <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarSearchFilters">
-          <!-- Bottom margin keeps a gap when the Filters strip wraps under the search box. -->
-          <TextBox x:Name="SearchBox" MinWidth="200" MaxWidth="480" Width="320" Margin="0,0,12,8"
+        <WrapPanel x:Name="ToolbarSearchFilters" Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarSearchFilters">
+          <!-- Height tracks the Filters border. A bottom margin is added only when that border wraps underneath. -->
+          <views:SearchQueryTextBox x:Name="SearchBox" Classes="searchQuery" MinWidth="200" MaxWidth="480" Width="320"
+                   MinHeight="{DynamicResource SearchQueryBoxHeight}" Margin="0,0,12,0"
+                   VerticalAlignment="Top"
                    Watermark="{loc:Loc toolbar.searchWatermark}"
                    ToolTip.Tip="{loc:Loc toolbar.searchTip}"
                    Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
-          <Border Margin="0,0,12,0" Padding="10,6" CornerRadius="6"
+          <Border x:Name="ToolbarFilterGroup" Margin="0,0,12,0" Padding="10,6" CornerRadius="6"
                   BorderThickness="1"
                   BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
                   Background="Transparent"
@@ -348,10 +351,17 @@
               <TextBlock Text="{loc:Loc toolbar.filtersGroup}" Opacity="0.65" FontSize="11" />
               <!-- Bottom margin on each child keeps a clear gap when Status/Clear wraps to a new line. -->
               <WrapPanel Orientation="Horizontal">
-                <DropDownButton Content="{loc:Loc toolbar.status}"
+                <DropDownButton Classes="filterDropdown"
+                        Classes.active="{Binding StatusFilterActive}"
                         VerticalAlignment="Center" Margin="0,0,8,4"
-                        ToolTip.Tip="{loc:Loc toolbar.statusTip}"
+                        ToolTip.Tip="{Binding StatusFilterTip}"
                         AutomationProperties.AutomationId="StatusFilterButton">
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{loc:Loc toolbar.status}" VerticalAlignment="Center" />
+                    <Border Classes="filterBadge">
+                      <TextBlock Text="{Binding StatusFilterBadge}" />
+                    </Border>
+                  </StackPanel>
                   <DropDownButton.Flyout>
                     <Flyout Placement="Bottom">
                       <StackPanel Spacing="6" Width="240">
@@ -373,10 +383,54 @@
                     </Flyout>
                   </DropDownButton.Flyout>
                 </DropDownButton>
-                <CheckBox Content="{loc:Loc toolbar.hideConnect}" IsChecked="{Binding HideTunnelsFilter}"
-                          VerticalAlignment="Center" Margin="0,0,8,4"
-                          ToolTip.Tip="{loc:Loc toolbar.hideConnectTip}"
-                          AutomationProperties.AutomationId="HideTunnelsFilterCheck" />
+                <DropDownButton Classes="filterDropdown"
+                        Classes.active="{Binding MethodFilterActive}"
+                        VerticalAlignment="Center" Margin="0,0,8,4"
+                        ToolTip.Tip="{Binding MethodFilterTip}"
+                        AutomationProperties.AutomationId="MethodFilterButton">
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{loc:Loc toolbar.method}" VerticalAlignment="Center" />
+                    <Border Classes="filterBadge">
+                      <TextBlock Text="{Binding MethodFilterBadge}" />
+                    </Border>
+                  </StackPanel>
+                  <DropDownButton.Flyout>
+                    <Flyout Placement="Bottom">
+                      <StackPanel Spacing="6" Width="300">
+                        <Button Classes="methodLink" HorizontalAlignment="Left"
+                                Content="{loc:Loc filter.methodSelectAll}"
+                                Command="{Binding SelectAllMethodsCommand}"
+                                AutomationProperties.AutomationId="MethodFilterSelectAll" />
+                        <ItemsControl ItemsSource="{Binding MethodFilterRows}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:MethodFilterRow">
+                              <StackPanel>
+                                <Separator IsVisible="{Binding IsTunnel}" Margin="0,4,0,2" />
+                                <Grid Classes="methodFilterRow" ColumnDefinitions="*,Auto">
+                                  <CheckBox IsChecked="{Binding IsChecked}"
+                                            AutomationProperties.AutomationId="{Binding RowAutomationId}">
+                                    <StackPanel Orientation="Horizontal" Spacing="0">
+                                      <TextBlock Text="{Binding Name}" IsVisible="{Binding !IsTunnel}" />
+                                      <TextBlock Text="{loc:Loc filter.methodTunnels}" IsVisible="{Binding IsTunnel}" />
+                                    </StackPanel>
+                                  </CheckBox>
+                                  <Button Grid.Column="1" Classes="methodOnly"
+                                          Content="{loc:Loc filter.methodOnly}"
+                                          Command="{Binding OnlyCommand}"
+                                          AutomationProperties.AutomationId="{Binding OnlyAutomationId}" />
+                                </Grid>
+                              </StackPanel>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="{loc:Loc filter.methodTypedNote}" TextWrapping="Wrap"
+                                   IsVisible="{Binding MethodFilterShowsTypedNote}"
+                                   Opacity="0.75" FontSize="11"
+                                   AutomationProperties.AutomationId="MethodFilterTypedNote" />
+                      </StackPanel>
+                    </Flyout>
+                  </DropDownButton.Flyout>
+                </DropDownButton>
                 <CheckBox Content="{loc:Loc toolbar.hideImages}" IsChecked="{Binding HideImagesFilter}"
                           VerticalAlignment="Center" Margin="0,0,8,4"
                           AutomationProperties.AutomationId="HideImagesFilterCheck" />

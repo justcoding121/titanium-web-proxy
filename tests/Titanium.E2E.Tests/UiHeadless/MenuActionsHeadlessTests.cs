@@ -186,10 +186,14 @@ public class MenuActionsHeadlessTests
                 fx.Robot.Click("MenuToolsMapRemote");
                 Assert.AreEqual(4, fx.ViewModel.SelectedToolsTabIndex);
 
-                var hideTunnels = fx.ViewModel.HideTunnelsFilter;
-                fx.Robot.SetCheck("HideTunnelsFilterCheck", !hideTunnels);
-                Assert.AreEqual(!hideTunnels, fx.ViewModel.HideTunnelsFilter);
-                fx.Robot.SetCheck("HideTunnelsFilterCheck", hideTunnels);
+                var connect = fx.ViewModel.ConnectMethodRow;
+                Assert.IsNotNull(connect);
+                Assert.IsTrue(connect.IsChecked);
+                connect.IsChecked = false;
+                StringAssert.Contains(fx.ViewModel.SearchQuery, "-method:CONNECT");
+                connect.IsChecked = true;
+                Assert.IsFalse(fx.ViewModel.SearchQuery.Contains("-method:", StringComparison.Ordinal));
+                Assert.IsFalse(fx.ViewModel.HideTunnelsFilter);
 
                 var hideImages = fx.ViewModel.HideImagesFilter;
                 fx.Robot.SetCheck("HideImagesFilterCheck", !hideImages);

@@ -5,8 +5,8 @@ namespace Titanium.Inspector.Services;
 
 /// <summary>
 /// Session search/filter syntax. A bare word matches URL, host, process name, process ID (exact),
-/// method (exact), or status code (exact). Prefixes limit the match to one field:
-/// method:, status: (exact, Nxx, comma list, or range), host:, url:, body:, process:, pid:, protocol:, content-type:, ids:,
+/// method (exact or a comma list), or status code (exact). Prefixes limit the match to one field:
+/// method: (exact or comma list), status: (exact, Nxx, comma list, or range), host:, url:, body:, process:, pid:, protocol:, content-type:, ids:,
 /// is:ws|grpc|tunnel|multipart|error, hide:tunnel|image|static.
 /// A leading <c>-</c> on a field prefix excludes rows that match it (<c>-host:cursor.sh</c>,
 /// <c>-process:Cursor</c>), and on a bare word excludes rows that word would match (<c>-cursor</c>).
@@ -481,7 +481,7 @@ public static class SessionSearch
     {
         return key switch
         {
-            "method" => s.Method.Equals(value, StringComparison.OrdinalIgnoreCase),
+            "method" => MethodFilter.Matches(s.Method, value),
             "status" => MatchStatus(s.StatusCode, value),
             "mark" => MatchMark(s.Mark, value),
             "comment" => s.Comment?.Contains(value, StringComparison.OrdinalIgnoreCase) == true,
