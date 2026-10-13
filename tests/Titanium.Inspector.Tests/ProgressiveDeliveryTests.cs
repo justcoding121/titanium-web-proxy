@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -121,6 +122,107 @@ public class ProgressiveDeliveryTests
         Assert.AreEqual(30, written);
         Assert.AreEqual(TimeSpan.FromMilliseconds(400), delays[0]);
         Assert.AreEqual(1, delays.Count(d => d == TimeSpan.FromMilliseconds(400)));
+    }
+
+    public TestContext TestContext { get; set; } = null!;
+
+    /// <summary>
+    ///     Release gate 6: recompression cost. The body is already buffered (32 MiB cap), so the extra memory is
+    ///     one compressed copy plus encoder buffers, and the CPU cost is a single Fastest-level pass.
+    /// </summary>
+    [TestMethod]
+    [DataRow("gzip")]
+    [DataRow("deflate")]
+    [DataRow("br")]
+    public void Recompression_CostIsBounded_ForTheLargestBufferedBody(string encoding)
+    {
+        const int plainBytes = 32 * 1024 * 1024;
+        var plain = new byte[plainBytes];
+        var random = new Random(7);
+        var text = Encoding.ASCII.GetBytes("The quick brown fox jumps over the lazy dog. ");
+        for (var i = 0; i < plain.Length; i += text.Length)
+        {
+            Buffer.BlockCopy(text, 0, plain, i, Math.Min(text.Length, plain.Length - i));
+        }
+
+        // Mix in incompressible runs so the encoder cannot take only the cheap path.
+        for (var offset = 0; offset < plain.Length; offset += 1024 * 1024)
+        {
+            random.NextBytes(plain.AsSpan(offset, 64 * 1024));
+        }
+
+        var response = new Response { StatusCode = 200, HttpVersion = new Version(1, 1) };
+        response.Headers.AddHeader("Content-Encoding", encoding);
+        var request = new Request { Method = "GET" };
+
+        GC.Collect();
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var watch = Stopwatch.StartNew();
+        var plan = ProgressiveDelivery.TryBuild(response, request, plain, plainBytes, false, false, true);
+        watch.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Assert.IsNotNull(plan);
+        TestContext.WriteLine(
+            $"{encoding}: 32 MiB -> {plan!.Wire.Length / 1024} KiB wire in {watch.ElapsedMilliseconds} ms, " +
+            $"allocated {allocated / (1024 * 1024)} MiB");
+
+        // Pooled working buffer plus the exact-size compressed copy.
+        Assert.IsTrue(allocated < 2L * plainBytes + (4 << 20), $"Allocated {allocated} bytes for a {plainBytes} byte body.");
+        Assert.IsTrue(watch.Elapsed < TimeSpan.FromSeconds(15), $"Recompression took {watch.Elapsed}.");
+    }
+
+    [TestMethod]
+    [DataRow("gzip")]
+    [DataRow("br")]
+    public void Recompression_WorstCase_IncompressibleLargestBody_StaysBounded(string encoding)
+    {
+        const int plainBytes = 32 * 1024 * 1024;
+        var plain = new byte[plainBytes];
+        new Random(11).NextBytes(plain);
+        var response = new Response { StatusCode = 200, HttpVersion = new Version(1, 1) };
+        response.Headers.AddHeader("Content-Encoding", encoding);
+        var request = new Request { Method = "GET" };
+
+        GC.Collect();
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var watch = Stopwatch.StartNew();
+        var plan = ProgressiveDelivery.TryBuild(response, request, plain, plainBytes, false, false, true);
+        watch.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Assert.IsNotNull(plan);
+        TestContext.WriteLine(
+            $"{encoding} incompressible: 32 MiB -> {plan!.Wire.Length / (1024 * 1024)} MiB wire in " +
+            $"{watch.ElapsedMilliseconds} ms, allocated {allocated / (1024 * 1024)} MiB");
+        // Pooled working buffer sized for the worst case, plus the one exact-size compressed copy.
+        Assert.IsTrue(allocated < 2L * plainBytes + (4 << 20), $"Allocated {allocated} bytes for a {plainBytes} byte body.");
+        Assert.IsTrue(watch.Elapsed < TimeSpan.FromSeconds(15), $"Recompression took {watch.Elapsed}.");
+    }
+
+    [TestMethod]
+    public void AppendVia_AddsOnce_AndExtendsAnExistingChain()
+    {
+        var headers = new HeaderCollection();
+        ProgressiveDelivery.AppendVia(headers, new Version(1, 1), "titanium-web-proxy");
+        ProgressiveDelivery.AppendVia(headers, new Version(1, 1), "titanium-web-proxy");
+        Assert.AreEqual("1.1 titanium-web-proxy", headers.GetHeaders("Via")!.Single().Value);
+
+        var chained = new HeaderCollection();
+        chained.AddHeader("Via", "1.0 upstream");
+        ProgressiveDelivery.AppendVia(chained, new Version(2, 0), "titanium-web-proxy");
+        Assert.AreEqual("1.0 upstream, 2.0 titanium-web-proxy", chained.GetHeaders("Via")!.Single().Value);
+    }
+
+    [TestMethod]
+    public void MarkConnectionClose_ReplacesKeepAliveHeaders()
+    {
+        var headers = new HeaderCollection();
+        headers.AddHeader("Connection", "keep-alive");
+        headers.AddHeader("Keep-Alive", "timeout=5");
+        ProgressiveDelivery.MarkConnectionClose(headers);
+        Assert.AreEqual("close", headers.GetHeaders("Connection")!.Single().Value);
+        Assert.IsNull(headers.GetHeaders("Keep-Alive"));
     }
 
     [TestMethod]

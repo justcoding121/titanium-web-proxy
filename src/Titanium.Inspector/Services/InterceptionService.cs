@@ -2676,6 +2676,16 @@ public sealed class InterceptionService : IDisposable
     private void StreamPlan(SessionEventArgs e, ProgressivePlan plan, TimeSpan leadDelay)
     {
         var charge = plan.ChargeWireBytes;
+        if (_proxy?.ViaHeaderPseudonym is { Length: > 0 } pseudonym && !e.IsTransparent && !e.IsSocks)
+        {
+            ProgressiveDelivery.AppendVia(plan.Response.Headers, plan.Response.HttpVersion, pseudonym);
+        }
+
+        if (e.HttpClient.Request.HttpVersion.Major < 2)
+        {
+            ProgressiveDelivery.MarkConnectionClose(plan.Response.Headers);
+        }
+
         e.RespondStreaming(
             plan.Response,
             (stream, ct) => ProgressiveDelivery.WritePacedAsync(
@@ -2685,7 +2695,12 @@ public sealed class InterceptionService : IDisposable
                 () => Volatile.Read(ref _linkShaper),
                 ct,
                 leadDelay: leadDelay),
-            closeServerConnection: false);
+            // The origin body was already consumed for capture. A replacement response does not inherit that
+            // state, so with closeServerConnection:false Core waits to drain bytes that never come and stops
+            // reading the client's next request. closeServerConnection:true skips the drain, but Core then also
+            // ends an HTTP/1 client connection after this response, which is why that case says so with
+            // Connection: close. HTTP/2 and HTTP/3 clients are multiplexed, so only the origin socket closes.
+            closeServerConnection: true);
     }
 
     private static bool IsHttp2Exchange(SessionEventArgs e) =>

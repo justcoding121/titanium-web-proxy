@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.IO.Compression;
 using Titanium.Web.Proxy.Http;
@@ -79,6 +80,52 @@ internal static class ProgressiveDelivery
             Record(ProgressiveSkipReason.BuildFailed);
             return null;
         }
+    }
+
+    /// <summary>
+    ///     A streamed replacement skips the proxy's own response processing, which is where Core appends its
+    ///     <c>Via</c> entry (RFC 9110 §7.6.3). Append the same entry so the client sees the headers it would
+    ///     see on the normal path. Idempotent for the exact received-protocol entry.
+    /// </summary>
+    internal static void AppendVia(HeaderCollection headers, Version httpVersion, string pseudonym)
+    {
+        var entry = $"{httpVersion.Major}.{httpVersion.Minor} {pseudonym}";
+        var existing = headers.GetHeaders("Via");
+        if (existing is not { Count: > 0 })
+        {
+            headers.AddHeader("via", entry);
+            return;
+        }
+
+        var values = existing.Select(h => h.Value).ToList();
+        foreach (var value in values)
+        {
+            foreach (var token in value.Split(','))
+            {
+                if (string.Equals(token.Trim(), entry, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+            }
+        }
+
+        values[0] = $"{values[0]}, {entry}";
+        headers.RemoveHeader("Via");
+        foreach (var value in values)
+        {
+            headers.AddHeader("via", value);
+        }
+    }
+
+    /// <summary>
+    ///     Tells an HTTP/1 client the connection ends after this response, so it never reuses a socket the
+    ///     proxy is about to close (a reused socket would race with the close and surface as a reset).
+    /// </summary>
+    internal static void MarkConnectionClose(HeaderCollection headers)
+    {
+        headers.RemoveHeader("Connection");
+        headers.RemoveHeader("Keep-Alive");
+        headers.AddHeader("Connection", "close");
     }
 
     internal static ProgressiveSkipReason Evaluate(
@@ -298,25 +345,38 @@ internal static class ProgressiveDelivery
             return plain;
         }
 
-        using var output = new MemoryStream();
-        Stream compressor = encoding switch
-        {
-            "gzip" => new GZipStream(output, CompressionLevel.Fastest, leaveOpen: true),
-            "deflate" => new DeflateStream(output, CompressionLevel.Fastest, leaveOpen: true),
-            "br" => new BrotliStream(output, CompressionLevel.Fastest, leaveOpen: true),
-            _ => Stream.Null,
-        };
-        if (ReferenceEquals(compressor, Stream.Null))
+        if (encoding is not ("gzip" or "deflate" or "br"))
         {
             return null;
         }
 
-        using (compressor)
+        // A growing MemoryStream plus ToArray peaks at several copies of the body. Compress into one pooled
+        // buffer sized for the worst case instead, then copy out only the bytes produced. The stream cannot
+        // grow, so a miscalculated bound throws and the caller falls back to the one-shot delay path.
+        var bound = encoding == "br"
+            ? BrotliEncoder.GetMaxCompressedLength(plain.Length)
+            : plain.Length + (plain.Length / 64) + 4096;
+        var rented = ArrayPool<byte>.Shared.Rent(bound);
+        try
         {
-            compressor.Write(plain, 0, plain.Length);
-        }
+            using var output = new MemoryStream(rented, 0, rented.Length, writable: true, publiclyVisible: true);
+            Stream compressor = encoding switch
+            {
+                "gzip" => new GZipStream(output, CompressionLevel.Fastest, leaveOpen: true),
+                "deflate" => new DeflateStream(output, CompressionLevel.Fastest, leaveOpen: true),
+                _ => new BrotliStream(output, CompressionLevel.Fastest, leaveOpen: true),
+            };
+            using (compressor)
+            {
+                compressor.Write(plain, 0, plain.Length);
+            }
 
-        return output.ToArray();
+            return rented.AsSpan(0, (int)output.Position).ToArray();
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
     }
 
     private static bool HasHeader(HeaderCollection headers, string name)
