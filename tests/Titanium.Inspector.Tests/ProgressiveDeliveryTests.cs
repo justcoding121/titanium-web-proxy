@@ -103,6 +103,60 @@ public class ProgressiveDeliveryTests
     }
 
     [TestMethod]
+    public async Task Writer_LeadDelay_IsPaidOnceBeforeTheFirstSlice()
+    {
+        var delays = new List<TimeSpan>();
+        var written = 0;
+        using var shaper = new LinkShaper(
+            new NetworkThrottleProfile("t", 0, int.MaxValue),
+            delay: (span, _) =>
+            {
+                delays.Add(span);
+                return Task.CompletedTask;
+            });
+        await ProgressiveDelivery.WritePacedAsync(
+            new CountingStream(n => written += n),
+            new byte[30], 30, () => shaper, CancellationToken.None, sliceBytes: 10,
+            leadDelay: TimeSpan.FromMilliseconds(400));
+        Assert.AreEqual(30, written);
+        Assert.AreEqual(TimeSpan.FromMilliseconds(400), delays[0]);
+        Assert.AreEqual(1, delays.Count(d => d == TimeSpan.FromMilliseconds(400)));
+    }
+
+    [TestMethod]
+    public void Evaluate_SmallBody_IsOnlyEligibleWithALowerFloor()
+    {
+        var response = new Response { StatusCode = 200, HttpVersion = new Version(2, 0) };
+        var request = new Request { Method = "GET" };
+        var body = new byte[500];
+        Assert.AreEqual(
+            ProgressiveSkipReason.TooSmall,
+            ProgressiveDelivery.Evaluate(response, request, body, 500, false, false, true));
+        Assert.AreEqual(
+            ProgressiveSkipReason.None,
+            ProgressiveDelivery.Evaluate(response, request, body, 500, false, false, true, minWireBytes: 1));
+    }
+
+    private sealed class CountingStream(Action<int> onWrite) : Stream
+    {
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => onWrite(count);
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            onWrite(buffer.Length);
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    [TestMethod]
     public async Task Writer_CallerCancel_Stops()
     {
         using var shaper = new LinkShaper(

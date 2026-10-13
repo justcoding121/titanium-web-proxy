@@ -2598,7 +2598,7 @@ public sealed class InterceptionService : IDisposable
         await shaper.WaitAsync(shaper.Reserve(ThrottleDirection.Upload, wire)).ConfigureAwait(false);
     }
 
-    private async Task ApplyResponseThrottleAsync(SessionEventArgs e, bool responseEdited)
+    internal async Task ApplyResponseThrottleAsync(SessionEventArgs e, bool responseEdited)
     {
         var shaper = Volatile.Read(ref _linkShaper);
         if (shaper is null)
@@ -2612,6 +2612,35 @@ public sealed class InterceptionService : IDisposable
             return;
         }
 
+        var response = e.HttpClient.Response;
+        byte[]? plain = response.IsBodyRead && response.HasBody ? response.Body : null;
+        var wire = state?.ResponseWire > 0 ? state.ResponseWire : plain?.LongLength ?? 0;
+        var transcoded = GrpcJsonTranscodeSessionMark.TryGet(e.UserData, out _);
+
+        if (IsHttp2Exchange(e))
+        {
+            // BeforeResponse can run inline on the HTTP/2 frame loop, so an inline sleep here makes N parallel
+            // responses cost N latencies. Hand the wait to a streamed replacement, which is written on its own
+            // task. A response that cannot be rebuilt safely is left undelayed rather than stalling the loop.
+            if (ProgressiveThrottleDelivery
+                && plain is { Length: > 0 }
+                && ProgressiveDelivery.TryBuild(
+                    response,
+                    e.HttpClient.Request,
+                    plain,
+                    wire,
+                    transcoded,
+                    responseEdited,
+                    enabled: true,
+                    minWireBytes: 1) is { } h2Plan)
+            {
+                Note(e.HttpClient, ThrottleEventKey(shaper.Profile), failure: false);
+                StreamPlan(e, h2Plan, shaper.LatencyDelay);
+            }
+
+            return;
+        }
+
         await shaper.WaitAsync(shaper.LatencyDelay).ConfigureAwait(false);
         Note(e.HttpClient, ThrottleEventKey(shaper.Profile), failure: false);
 
@@ -2621,9 +2650,6 @@ public sealed class InterceptionService : IDisposable
             return;
         }
 
-        var response = e.HttpClient.Response;
-        byte[]? plain = response.IsBodyRead && response.HasBody ? response.Body : null;
-        var wire = state?.ResponseWire > 0 ? state.ResponseWire : plain?.LongLength ?? 0;
         if (ProgressiveThrottleDelivery
             && plain is { Length: > 0 }
             && ProgressiveDelivery.TryBuild(
@@ -2631,20 +2657,11 @@ public sealed class InterceptionService : IDisposable
                 e.HttpClient.Request,
                 plain,
                 wire,
-                GrpcJsonTranscodeSessionMark.TryGet(e.UserData, out _),
+                transcoded,
                 responseEdited,
                 enabled: true) is { } plan)
         {
-            var charge = plan.ChargeWireBytes;
-            e.RespondStreaming(
-                plan.Response,
-                (stream, ct) => ProgressiveDelivery.WritePacedAsync(
-                    stream,
-                    plan.Wire,
-                    charge,
-                    () => Volatile.Read(ref _linkShaper),
-                    ct),
-                closeServerConnection: false);
+            StreamPlan(e, plan, TimeSpan.Zero);
             return;
         }
 
@@ -2655,6 +2672,24 @@ public sealed class InterceptionService : IDisposable
 
         await shaper.WaitAsync(shaper.Reserve(ThrottleDirection.Download, wire)).ConfigureAwait(false);
     }
+
+    private void StreamPlan(SessionEventArgs e, ProgressivePlan plan, TimeSpan leadDelay)
+    {
+        var charge = plan.ChargeWireBytes;
+        e.RespondStreaming(
+            plan.Response,
+            (stream, ct) => ProgressiveDelivery.WritePacedAsync(
+                stream,
+                plan.Wire,
+                charge,
+                () => Volatile.Read(ref _linkShaper),
+                ct,
+                leadDelay: leadDelay),
+            closeServerConnection: false);
+    }
+
+    private static bool IsHttp2Exchange(SessionEventArgs e) =>
+        e.HttpClient.Request.HttpVersion.Major == 2 || e.HttpClient.Response.HttpVersion.Major == 2;
 
     private static string ThrottleEventKey(NetworkThrottleProfile profile) => profile.Name switch
     {

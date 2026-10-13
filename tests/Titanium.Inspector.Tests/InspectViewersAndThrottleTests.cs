@@ -243,6 +243,79 @@ public class InspectViewersAndThrottleTests
     }
 
     [TestMethod]
+    public async Task Http2Response_LatencyMovesIntoTheStreamedReplacement_NotAnInlineSleep()
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+            ThrottleProfile = NetworkThrottle.Slow3G,
+            ProgressiveThrottleDelivery = true,
+        };
+        using var session = MakeHttp2Session(bodyLength: 1000);
+        var original = session.HttpClient.Response;
+
+        var started = DateTime.UtcNow;
+        await interception.ApplyResponseThrottleAsync(session, responseEdited: false);
+
+        Assert.IsTrue(DateTime.UtcNow - started < TimeSpan.FromMilliseconds(200),
+            "BeforeResponse must not sleep inline on HTTP/2: that serializes parallel streams.");
+        Assert.AreNotSame(original, session.HttpClient.Response, "Small HTTP/2 bodies are streamed so the wait is off the frame loop.");
+    }
+
+    [TestMethod]
+    public async Task Http2Response_WithTrickleOff_IsNotDelayedOnTheFrameLoop()
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+            ThrottleProfile = NetworkThrottle.Slow3G,
+            ProgressiveThrottleDelivery = false,
+        };
+        using var session = MakeHttp2Session(bodyLength: 1000);
+        var original = session.HttpClient.Response;
+
+        var started = DateTime.UtcNow;
+        await interception.ApplyResponseThrottleAsync(session, responseEdited: false);
+
+        Assert.IsTrue(DateTime.UtcNow - started < TimeSpan.FromMilliseconds(200));
+        Assert.AreSame(original, session.HttpClient.Response);
+    }
+
+    [TestMethod]
+    public async Task Http1Response_StillPaysLatencyInline()
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+            ThrottleProfile = new NetworkThrottleProfile("lat", latencyMs: 300, bytesPerSecond: 0),
+            ProgressiveThrottleDelivery = true,
+        };
+        using var session = MakeHttp2Session(bodyLength: 1000, major: 1);
+
+        var started = DateTime.UtcNow;
+        await interception.ApplyResponseThrottleAsync(session, responseEdited: false);
+
+        Assert.IsTrue(DateTime.UtcNow - started >= TimeSpan.FromMilliseconds(250));
+    }
+
+    private static SessionEventArgs MakeHttp2Session(int bodyLength, int major = 2)
+    {
+        var session = MakeSession();
+        var version = new Version(major, major == 2 ? 0 : 1);
+        var request = session.HttpClient.Request;
+        request.HttpVersion = version;
+        request.Method = "GET";
+        request.Locked = true;
+        var response = session.HttpClient.Response;
+        response.HttpVersion = version;
+        response.StatusCode = 200;
+        response.ContentLength = bodyLength;
+        response.IsBodyRead = true;
+        response.Body = new byte[bodyLength];
+        return session;
+    }
+
+    [TestMethod]
     public void ProxyTimeouts_StayDisabledByDefault()
     {
         using var proxy = new ProxyServer(userTrustRootCertificate: false);

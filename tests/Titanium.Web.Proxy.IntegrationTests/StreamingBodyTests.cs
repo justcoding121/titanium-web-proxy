@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Security;
@@ -496,6 +497,135 @@ public class StreamingBodyTests
 
         using var drain = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         await slow.WaitAsync(drain.Token);
+    }
+
+    /// <summary>
+    ///     Characterization: BeforeResponse runs inline on the HTTP/2 frame loop, so a plain wait there costs
+    ///     one latency per stream (six parallel responses take about six latencies). Inspector therefore does
+    ///     not sleep in BeforeResponse on HTTP/2; see the streamed-replacement test below. If this test starts
+    ///     failing, Core stopped serializing and the HTTP/2 branch in ApplyResponseThrottleAsync can be simplified.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task BeforeResponse_Http2_InlineLatencyWait_SerializesParallelStreams()
+    {
+        const int streams = 6;
+        const int latencyMs = 400;
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync("ok"));
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.BeforeResponse += async (_, _) => await Task.Delay(latencyMs);
+
+        using var client = CreateHttp2Client(proxy);
+        // Warm the connection so the measurement is not dominated by the handshake.
+        using (var warm = await client.GetAsync(new Uri(server.ListeningHttpsUrl)))
+        {
+            Assert.AreEqual(HttpStatusCode.OK, warm.StatusCode);
+        }
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var all = Enumerable.Range(0, streams)
+            .Select(_ => client.GetAsync(new Uri(server.ListeningHttpsUrl)))
+            .ToArray();
+        var responses = await Task.WhenAll(all);
+        watch.Stop();
+        foreach (var r in responses)
+        {
+            Assert.AreEqual(new Version(2, 0), r.Version);
+            r.Dispose();
+        }
+
+        Assert.IsTrue(watch.ElapsedMilliseconds >= latencyMs * 3,
+            $"Expected serialized latency; {streams} parallel HTTP/2 responses took only {watch.ElapsedMilliseconds} ms (latency {latencyMs} ms).");
+    }
+
+    /// <summary>
+    ///     The Inspector fix for the test above: on HTTP/2 the wait moves into a streamed replacement, which
+    ///     is written off the frame loop, so parallel streams overlap their latency.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task BeforeResponse_Http2_LatencyInsideStreamedReplacement_OverlapsParallelStreams()
+    {
+        const int streams = 6;
+        const int latencyMs = 400;
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync("ok"));
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.BeforeResponse += async (_, e) =>
+        {
+            var body = await e.GetResponseBody();
+            var replacement = new Response
+            {
+                StatusCode = 200,
+                StatusDescription = "OK",
+                HttpVersion = e.HttpClient.Request.HttpVersion
+            };
+            replacement.Headers.AddHeader("Content-Length", body.Length.ToString());
+            e.RespondStreaming(replacement, async (stream, ct) =>
+            {
+                await Task.Delay(latencyMs, ct);
+                await stream.WriteAsync(body, ct);
+            }, closeServerConnection: false);
+        };
+
+        using var client = CreateHttp2Client(proxy);
+        using (var warm = await client.GetAsync(new Uri(server.ListeningHttpsUrl)))
+        {
+            Assert.AreEqual(HttpStatusCode.OK, warm.StatusCode);
+        }
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var responses = await Task.WhenAll(Enumerable.Range(0, streams)
+            .Select(_ => client.GetAsync(new Uri(server.ListeningHttpsUrl))));
+        watch.Stop();
+        foreach (var r in responses)
+        {
+            Assert.AreEqual("ok", await r.Content.ReadAsStringAsync());
+            r.Dispose();
+        }
+
+        Assert.IsTrue(watch.ElapsedMilliseconds < latencyMs * 3,
+            $"{streams} parallel HTTP/2 responses took {watch.ElapsedMilliseconds} ms; one latency is {latencyMs} ms.");
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task BeforeRequest_Http2_UploadWait_DoesNotSerializeParallelStreams()
+    {
+        const int streams = 6;
+        const int waitMs = 400;
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync("ok"));
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.BeforeRequest += async (_, _) => await Task.Delay(waitMs);
+
+        using var client = CreateHttp2Client(proxy);
+        using (var warm = await client.GetAsync(new Uri(server.ListeningHttpsUrl)))
+        {
+            Assert.AreEqual(HttpStatusCode.OK, warm.StatusCode);
+        }
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var responses = await Task.WhenAll(Enumerable.Range(0, streams)
+            .Select(_ => client.GetAsync(new Uri(server.ListeningHttpsUrl))));
+        watch.Stop();
+        foreach (var r in responses)
+        {
+            r.Dispose();
+        }
+
+        Assert.IsTrue(watch.ElapsedMilliseconds < waitMs * 3,
+            $"{streams} parallel HTTP/2 requests took {watch.ElapsedMilliseconds} ms; one wait is {waitMs} ms.");
     }
 
     [TestMethod]
