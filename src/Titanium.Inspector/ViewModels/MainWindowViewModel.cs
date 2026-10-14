@@ -3712,6 +3712,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
                 return;
             }
 
+            // Decrypt was bound while IsRootTrusted was still false. Refresh the pip now that
+            // StartAsync has read the store, or a trusted root stays labeled "CA not trusted".
+            NotifyDecryptTrustHealth();
+
             // Keep the system-proxy restart guidance visible; do not replace it with Ready.
             // Also do not clobber a newer status if the user already acted during start
             // (Install CA / Decrypt can finish while StartCaptureAsync is still awaiting UI marshal).

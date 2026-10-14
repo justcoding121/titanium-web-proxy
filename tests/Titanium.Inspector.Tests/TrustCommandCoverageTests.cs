@@ -315,6 +315,62 @@ public class TrustCommandCoverageTests
     }
 
     [TestMethod]
+    public async Task Start_AlreadyTrustedRoot_RefreshesDecryptHealthLabel()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-trust-health-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            typeof(InterceptionService)
+                .GetField("_inMemoryTrusted", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .SetValue(interception, true);
+
+            var settings = new SettingsService(Path.Combine(dir, "settings.json"));
+            settings.Current.AutoStartCapture = false;
+            settings.Current.AutoSystemProxyOnStart = false;
+            settings.Current.DecryptHttps = true;
+            settings.Save();
+
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                new ScriptedInspectorDialogs());
+
+            vm.BindPort = 0;
+            var healthNotified = false;
+            vm.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(MainWindowViewModel.DecryptTrustHealthText))
+                    healthNotified = true;
+            };
+
+            await ExecuteUntilAsync(vm.ToggleInterceptCommand, () => interception.IsRunning);
+            Assert.IsTrue(interception.IsRootTrusted);
+            Assert.IsTrue(healthNotified);
+            Assert.AreEqual("CA trusted", vm.DecryptTrustHealthText);
+            vm.EnsureShutdown();
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
+
+    [TestMethod]
     public void TrustStatusHelpers_SetOsTrustSuccessAndBusy()
     {
         var dir = Path.Combine(Path.GetTempPath(), "ti-trust-status-" + Guid.NewGuid().ToString("N"));
