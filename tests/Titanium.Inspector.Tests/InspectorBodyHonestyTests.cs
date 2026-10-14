@@ -558,9 +558,20 @@ public class InspectorBodyHonestyTests
 
         var body = (string)core.Invoke(null, [snap, false, false, false])!;
         StringAssert.Contains(body, "CONNECT tunnel");
-        StringAssert.Contains(body, "wire");
         StringAssert.Contains(body, "no HTTP message body");
         StringAssert.Contains(body, "10 KB");
+        StringAssert.Contains(body, "TLS traffic");
+        StringAssert.Contains(body, "sent 3.9 KB");
+        StringAssert.Contains(body, "received 6.1 KB");
+        StringAssert.Contains(body, "decompression");
+        Assert.IsFalse(body.Contains("encrypted traffic", StringComparison.OrdinalIgnoreCase));
         Assert.IsFalse(body.Contains("(empty)", StringComparison.Ordinal));
+
+        snap.OpaqueReason = OpaqueTunnelReason.DecryptOff;
+        var opaque = (string)core.Invoke(null, [snap, false, false, false])!;
+        StringAssert.Contains(opaque, "encrypted traffic on the wire");
+        StringAssert.Contains(opaque, "Decrypt HTTPS is off");
+        StringAssert.Contains(opaque, "not listed separately");
+        Assert.IsFalse(opaque.Contains("TLS traffic", StringComparison.Ordinal));
     }
 }

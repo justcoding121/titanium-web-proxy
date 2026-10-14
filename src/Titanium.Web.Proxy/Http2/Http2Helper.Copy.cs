@@ -929,6 +929,10 @@ namespace Titanium.Web.Proxy.Http2
                 bool hookEndStreamDeferred = false;
                 bool endStream = false;
 
+                // Set when a replaced response is being emitted off the loop (see the end-of-body block): that
+                // emission, not this frame's END_STREAM bookkeeping, closes and finalizes the stream.
+                bool replacementEmitStarted = false;
+
                 SessionEventArgs? args = null;
                 RequestResponseBase? rr = null;
                 Http2StreamState? existingStreamState = null;
@@ -2564,13 +2568,26 @@ namespace Titanium.Web.Proxy.Http2
                     if (rr.Http2BodyData != null) await rr.Http2BodyData.DisposeAsync();
                     rr.Http2BodyData = null;
 
+                    var replaceableUntilBodyEnd = rr.Http2ReplaceableUntilBodyEnd;
+
                     if (rr.Http2BeforeHandlerTask != null)
                     {
                         await rr.Http2BeforeHandlerTask;
                     }
 
+                    rr.Http2ReplaceableUntilBodyEnd = false;
+
                     if (args == null)
                         throw new InvalidOperationException("HTTP/2 body completion has no session.");
+
+                    // BeforeResponse replaced the response after reading its body (Respond / RespondStreaming).
+                    // Nothing of the original has reached the client yet, so emit the replacement instead of the
+                    // buffered original. Emission runs off the frame loop (a paced or slow body must not stall the
+                    // other streams on this connection) and closes/finalizes the stream itself.
+                    Response? replacedResponse = null;
+                    if (replaceableUntilBodyEnd && !isClient && rr is Response
+                        && !ReferenceEquals(args.HttpClient.Response, rr))
+                        replacedResponse = args.HttpClient.Response;
 
                     if (args.IsPromise)
                     {
@@ -2588,7 +2605,40 @@ namespace Titanium.Web.Proxy.Http2
                     // started executing on the thread pool), so TryGetValue is guaranteed to return the
                     // already-mutated state object.
                     connectionState.Streams.TryGetValue(streamId, out var bodyStreamState);
-                    if (bodyStreamState?.IsExternalBridge != true)
+                    if (replacedResponse != null && bodyStreamState?.IsExternalBridge != true)
+                    {
+                        replacedResponse.Http2IgnoreBodyFrames = true;
+                        replacedResponse.Locked = true;
+
+                        var replacementCts = bodyStreamState != null
+                            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,
+                                bodyStreamState.Cancellation.Token)
+                            : null;
+                        var replacementToken = replacementCts?.Token ?? cancellationToken;
+                        var replacementTask = EmitSyntheticResponseAsync(args, streamId, connectionState, output,
+                                replacementToken, onAfterResponse, logger)
+                            .ContinueWith(t =>
+                            {
+                                replacementCts?.Dispose();
+                                if (t.IsFaulted)
+                                {
+                                    ReportException(logger, new ProxyHttpException(
+                                        SyntheticResponseFailedMessage, t.Exception.GetBaseException(), args));
+                                }
+
+                                if (t.IsFaulted || t.IsCanceled)
+                                {
+                                    // Headers may already be queued: reset the stream rather than leave it half
+                                    // open, then run the close/finalize bookkeeping the emitter skipped.
+                                    QueueRstStreamFrame(connectionState, output, streamId, Http2ErrorCode.InternalError);
+                                    MarkSyntheticResponseClosed(streamId, connectionState, onAfterResponse, logger);
+                                }
+                            }, TaskScheduler.Default);
+                        if (bodyStreamState != null) bodyStreamState.SyntheticTask = replacementTask;
+                        pendingSynthetics.Track(replacementTask);
+                        replacementEmitStarted = true;
+                    }
+                    else if (bodyStreamState?.IsExternalBridge != true)
                     {
                         // HEADERS + DATA join the direction's ordered writer FIFO behind whatever is already
                         // queued (see SendBody). Draining the legacy write chain here was a no-op with the
@@ -2627,7 +2677,8 @@ namespace Titanium.Web.Proxy.Http2
                 // half-close / finalize until the last byte is actually queued (see sendPacket /
                 // OnDeferredEndStream). Non-DATA END_STREAM (HEADERS) and DATA that is not forwarded
                 // still close here.
-                if (endStream && !hookEndStreamDeferred && (type != Http2FrameType.Data || !sendPacket))
+                if (endStream && !hookEndStreamDeferred && !replacementEmitStarted
+                    && (type != Http2FrameType.Data || !sendPacket))
                 {
                     if (isClient)
                         connectionState.MultipartObservers.TryRemove(streamId, out _);

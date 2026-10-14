@@ -125,4 +125,10 @@ public sealed class WebSocketFrameElidedEventArgs : ProxyEventArgsBase
     public bool IsFinal { get; }
 
     public long DeclaredPayloadLength { get; }
+
+    /// <summary>
+    ///     Optional delay applied before this frame's raw bytes are written.
+    ///     Defaults to zero, which does not wait. Later raw pieces of the same frame are not delayed again.
+    /// </summary>
+    public TimeSpan Delay { get; set; }
 }

@@ -1,6 +1,12 @@
+using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Styling;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.E2E.Tests.Harness;
+using Titanium.Inspector.Converters;
 using Titanium.Inspector.Services;
 
 namespace Titanium.E2E.Tests.UiVisual;
@@ -119,6 +125,81 @@ public class InspectorShellVisualTests
             fx.Robot.SetText("ScriptOnRequest", "abort");
             InspectorVisualAssert.AssertFramePainted(fx.Window.CaptureRenderedFrame());
         });
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Visual")]
+    public async Task Status200_PaintsTheActiveThemeBrush()
+    {
+        await using var fx = new InspectorHeadlessFixture();
+        await fx.StartAsync(visualSkia: true);
+        await fx.DispatchAsync(() =>
+        {
+            AssertPainted(fx, ThemeVariant.Light, 0x0A, 0x5F, 0x0A);
+            AssertPainted(fx, ThemeVariant.Dark, 0x8A, 0xDB, 0x7A);
+            AssertPainted(fx, ThemeVariant.Light, 0x0A, 0x5F, 0x0A);
+        });
+    }
+
+    private static void AssertPainted(InspectorHeadlessFixture fx, ThemeVariant theme, byte r, byte g, byte b)
+    {
+        Application.Current!.RequestedThemeVariant = theme;
+        fx.ViewModel.NotifyThemeVariantChanged();
+        var brush = (IBrush)StatusCodeBrushConverter.Instance.Convert(
+            200, typeof(IBrush), null, System.Globalization.CultureInfo.InvariantCulture)!;
+        var window = new Window
+        {
+            Width = 220,
+            Height = 140,
+            Background = Brushes.White,
+            Content = new TextBlock
+            {
+                Text = "200",
+                FontSize = 72,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = brush,
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            },
+        };
+        window.Show();
+        try
+        {
+            var frame = window.CaptureRenderedFrame();
+            Assert.IsNotNull(frame);
+            var hits = CountNear(frame!, r, g, b, tolerance: 28);
+            Assert.IsTrue(hits > 20, $"{theme} painted {hits} pixels near #{r:X2}{g:X2}{b:X2}");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    private static unsafe int CountNear(WriteableBitmap frame, byte r, byte g, byte b, int tolerance)
+    {
+        using var locked = frame.Lock();
+        var bgra = frame.Format == Avalonia.Platform.PixelFormat.Bgra8888;
+        var ptr = (byte*)locked.Address;
+        var stride = locked.RowBytes;
+        var hits = 0;
+        for (var y = 0; y < frame.PixelSize.Height; y++)
+        {
+            var row = ptr + (y * stride);
+            for (var x = 0; x < frame.PixelSize.Width; x++)
+            {
+                var i = x * 4;
+                byte pr = bgra ? row[i + 2] : row[i];
+                byte pg = row[i + 1];
+                byte pb = bgra ? row[i] : row[i + 2];
+                if (Math.Abs(pr - r) <= tolerance && Math.Abs(pg - g) <= tolerance && Math.Abs(pb - b) <= tolerance)
+                {
+                    hits++;
+                }
+            }
+        }
+
+        return hits;
     }
 
     private static void SeedSession(InspectorHeadlessFixture fx, string? body = null, string? headers = null)

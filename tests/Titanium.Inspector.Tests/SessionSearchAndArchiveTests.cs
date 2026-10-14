@@ -64,6 +64,33 @@ public class SessionSearchAndArchiveTests
         Assert.IsFalse(SessionSearch.Matches(sessions[3], "status:2xx"));
     }
 
+    /// <summary>Pins today's status syntax so a later list/range change cannot drop these forms.</summary>
+    [TestMethod]
+    public void Filter_StatusSemantics_Pinned()
+    {
+        var sessions = new[]
+        {
+            new SessionSnapshot { Id = 1, StatusCode = 200, Url = "https://a/" },
+            new SessionSnapshot { Id = 2, StatusCode = 304, Url = "https://a/" },
+            new SessionSnapshot { Id = 3, StatusCode = 404, Url = "https://a/" },
+            new SessionSnapshot { Id = 4, StatusCode = 500, Url = "https://a/" },
+            new SessionSnapshot { Id = 5, StatusCode = null, Url = "https://a/" },
+        };
+
+        Assert.AreEqual(1, SessionSearch.Filter(sessions, "status:304").Count());
+        Assert.AreEqual(1, SessionSearch.Filter(sessions, "status:2xx").Count());
+        Assert.AreEqual(1, SessionSearch.Filter(sessions, "status:3xx").Count());
+        Assert.AreEqual(1, SessionSearch.Filter(sessions, "status:4xx").Count());
+        Assert.AreEqual(1, SessionSearch.Filter(sessions, "status:5xx").Count());
+        Assert.AreEqual(2, SessionSearch.Filter(sessions, "status:error").Count());
+        Assert.IsFalse(SessionSearch.Matches(sessions[4], "status:200"));
+        Assert.IsFalse(SessionSearch.Matches(sessions[4], "status:2xx"));
+        Assert.IsFalse(SessionSearch.Matches(sessions[4], "status:error"));
+
+        var excluded = SessionSearch.Filter(sessions, "-status:404").Select(s => s.Id).ToList();
+        CollectionAssert.AreEquivalent(new long[] { 1, 2, 4, 5 }, excluded);
+    }
+
     [TestMethod]
     public void Filter_ProcessAndContentType()
     {

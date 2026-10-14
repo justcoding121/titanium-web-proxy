@@ -30,11 +30,13 @@ case "${PRODUCT}" in
     EXE_NAME="titanium"
     DESKTOP_NAME="Titanium CLI"
     ICON_ID="titanium-cli"
+    ICON_ICO="${ROOT}/src/Titanium.Cli/Assets/app.ico"
     ;;
   inspector)
     EXE_NAME="TitaniumInspector"
     DESKTOP_NAME="Titanium Inspector"
     ICON_ID="titanium-inspector"
+    ICON_ICO="${ROOT}/src/Titanium.Inspector/Assets/app.ico"
     ;;
   *)
     echo "error: product must be cli or inspector" >&2
@@ -76,7 +78,7 @@ ICON_PNG="${APPDIR}/usr/share/icons/hicolor/256x256/apps/${ICON_ID}.png"
 # shellcheck source=../desktop-icons.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/desktop-icons.sh"
 install_hicolor_icons "${APPDIR}/usr/share/icons/hicolor" "${ICON_ID}" \
-  "${PAYLOAD_DIR}/app.ico" "${ROOT}/src/Titanium.Inspector/Assets/app.ico" || true
+  "${PAYLOAD_DIR}/app.ico" "${ICON_ICO}" || true
 # appimagetool requires the icon named in the desktop file to exist
 if [[ ! -f "${ICON_PNG}" ]]; then
   if command -v convert >/dev/null 2>&1; then

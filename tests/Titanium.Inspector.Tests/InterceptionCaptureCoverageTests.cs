@@ -175,7 +175,7 @@ public class InterceptionCaptureCoverageTests
         StringAssert.Contains((string)formatHeaders.Invoke(null, [headers])!, "X-A");
 
         var snap = new SessionSnapshot { StartedUtc = DateTimeOffset.UtcNow.AddMilliseconds(-15) };
-        applyTiming.Invoke(null, [snap, null, snap.StartedUtc]);
+        applyTiming.Invoke(null, [snap, null, null, snap.StartedUtc]);
         Assert.IsTrue(snap.DurationMs >= 0);
         addTunnel.Invoke(null, [snap, 12, 7]);
         Assert.AreEqual(19L, snap.BodySize);
@@ -581,6 +581,120 @@ public class InterceptionCaptureCoverageTests
         }
     }
 
+    [TestMethod]
+    public async Task Throttle_DoesNotChangeCapturedBody_AndTrickleDeliversExactBytes()
+    {
+        using var origin = StartOrigin("plain-body");
+        var plain = await CaptureBody(origin.Port, profile: null, "/");
+        var paced = await CaptureBody(
+            origin.Port,
+            new NetworkThrottleProfile("fast", latencyMs: 0, bytesPerSecond: int.MaxValue),
+            "/");
+        Assert.AreEqual(BodyCaptureState.Complete, plain.Capture);
+        Assert.AreEqual(plain.Capture, paced.Capture);
+        CollectionAssert.AreEqual(plain.Bytes, paced.Bytes);
+
+        var large = await CaptureBody(
+            origin.Port,
+            new NetworkThrottleProfile("fast", latencyMs: 0, bytesPerSecond: int.MaxValue),
+            "/large");
+        Assert.AreEqual(70 * 1024, large.ClientBytes.Length);
+        Assert.IsTrue(large.ClientBytes.All(b => b == (byte)'A'));
+        CollectionAssert.AreEqual(large.ClientBytes, large.Bytes);
+
+        var delayed = await CaptureBody(
+            origin.Port,
+            new NetworkThrottleProfile("lat", latencyMs: 200, bytesPerSecond: int.MaxValue),
+            "/");
+        Assert.AreEqual("plain-body", Encoding.UTF8.GetString(delayed.ClientBytes));
+    }
+
+    [TestMethod]
+    public async Task Throttle_GzipTrickle_DeliversBytesThatDecompressToTheOrigin()
+    {
+        using var origin = StartOrigin("unused");
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+            DecryptHttps = false,
+            Capturing = true,
+            ThrottleProfile = new NetworkThrottleProfile("fast", latencyMs: 0, bytesPerSecond: int.MaxValue),
+        };
+        SessionSnapshot? snap = null;
+        interception.SessionCaptured += (_, s) => snap = s;
+        await interception.StartAsync(IPAddress.Loopback, 0);
+        try
+        {
+            using var handler = new HttpClientHandler
+            {
+                Proxy = new WebProxy($"http://127.0.0.1:{interception.BoundPort}"),
+                UseProxy = true,
+                AutomaticDecompression = DecompressionMethods.None,
+            };
+            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
+            var response = await http.GetAsync($"http://127.0.0.1:{origin.Port}/gzipbin");
+            var wire = await response.Content.ReadAsByteArrayAsync();
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            var encoding = response.Content.Headers.ContentEncoding.FirstOrDefault();
+            byte[] plain;
+            if (string.Equals(encoding, "gzip", StringComparison.OrdinalIgnoreCase))
+            {
+                using var gzip = new System.IO.Compression.GZipStream(
+                    new MemoryStream(wire), System.IO.Compression.CompressionMode.Decompress);
+                using var copy = new MemoryStream();
+                gzip.CopyTo(copy);
+                plain = copy.ToArray();
+            }
+            else
+            {
+                plain = wire;
+            }
+
+            CollectionAssert.AreEqual(GzipPlain(), plain);
+            Assert.IsNotNull(snap);
+            CollectionAssert.AreEqual(plain, snap!.ResponseBodyBytes);
+        }
+        finally
+        {
+            interception.EnsureShutdown();
+        }
+    }
+
+    private static byte[] GzipPlain()
+    {
+        var plain = new byte[80 * 1024];
+        new Random(1).NextBytes(plain);
+        return plain;
+    }
+
+    private static async Task<(BodyCaptureState Capture, byte[]? Bytes, byte[] ClientBytes)> CaptureBody(
+        int originPort, NetworkThrottleProfile? profile, string path)
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+            DecryptHttps = false,
+            Capturing = true,
+            ThrottleProfile = profile,
+        };
+        SessionSnapshot? snap = null;
+        interception.SessionCaptured += (_, s) => snap = s;
+        await interception.StartAsync(IPAddress.Loopback, 0);
+        try
+        {
+            using var http = ProxyClient(interception.BoundPort);
+            var response = await http.GetAsync($"http://127.0.0.1:{originPort}{path}");
+            var clientBytes = await response.Content.ReadAsByteArrayAsync();
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            Assert.IsNotNull(snap);
+            return (snap!.ResponseBodyCapture, snap.ResponseBodyBytes, clientBytes);
+        }
+        finally
+        {
+            interception.EnsureShutdown();
+        }
+    }
+
     private static HttpClient ProxyClient(int port)
     {
         var handler = new HttpClientHandler
@@ -624,6 +738,24 @@ public class InterceptionCaptureCoverageTests
                         bytes = Encoding.UTF8.GetBytes(
                             "--abc\r\nContent-Disposition: form-data; name=\"f\"\r\n\r\nhi\r\n--abc--\r\n");
                         ctx.Response.ContentType = "multipart/form-data; boundary=abc";
+                    }
+                    else if (path.Contains("large", StringComparison.Ordinal))
+                    {
+                        bytes = new byte[70 * 1024];
+                        Array.Fill(bytes, (byte)'A');
+                    }
+                    else if (path.Contains("gzipbin", StringComparison.Ordinal))
+                    {
+                        var plain = GzipPlain();
+                        using var ms = new MemoryStream();
+                        using (var gzip = new System.IO.Compression.GZipStream(
+                                   ms, System.IO.Compression.CompressionLevel.SmallestSize, leaveOpen: true))
+                        {
+                            gzip.Write(plain);
+                        }
+
+                        bytes = ms.ToArray();
+                        ctx.Response.AddHeader("Content-Encoding", "gzip");
                     }
                     else
                     {

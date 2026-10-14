@@ -117,6 +117,22 @@ public sealed class InspectorUiRobot(Control root)
             return logical;
         }
 
+        // Nested context-menu items (Save ▸, Copy ▸, …) hang under ContextMenu, which is often
+        // not a logical descendant of the window until searched via the host control.
+        foreach (var host in root.GetLogicalDescendants().OfType<Control>())
+        {
+            if (host.ContextMenu is not { } menu)
+            {
+                continue;
+            }
+
+            var nested = menu.GetLogicalDescendants().OfType<T>().FirstOrDefault(c => IdMatch(c, automationId));
+            if (nested is not null)
+            {
+                return nested;
+            }
+        }
+
         return root.GetVisualDescendants().OfType<T>().FirstOrDefault(c => IdMatch(c, automationId));
     }
 }

@@ -585,7 +585,8 @@ internal sealed class NginxHost : IDisposable
             File.Copy(keyPem, keyDest, overwrite: true);
             certDest = certDest.Replace('\\', '/');
             keyDest = keyDest.Replace('\\', '/');
-            // Bind all interfaces so HttpClient "localhost" (::1 first) reaches QUIC, matching YARP ListenAnyIP.
+            // Both loopback families so HttpClient "localhost" (::1 first) and 127.0.0.1 reach QUIC.
+            // A wildcard bind (0.0.0.0 / ::) prompts Windows Defender Firewall.
             // Dual listen: TCP SSL for readiness; UDP QUIC for the HTTP/3 client.
             return $$"""
                 worker_processes auto;

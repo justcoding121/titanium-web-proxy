@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Security;
@@ -438,6 +439,386 @@ public class StreamingBodyTests
             await Task.Delay(50);
         Assert.IsTrue(Volatile.Read(ref afterResponseCount) >= 2,
             "AfterResponse should fire for each stream once synthetic END_STREAM completes.");
+    }
+
+    /// <summary>
+    ///     The HTTP/2 body-write hook is awaited on the connection frame loop. A sleep there must not be
+    ///     used for relay pacing: this test records whether a sibling stream can finish while the hook is
+    ///     still asleep. Inspector skips that sleep when the result is a stall.
+    /// </summary>
+    [TestMethod]
+    public async Task OnResponseBodyWrite_Http2_Sleep_SiblingStream()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+        server.HandleRequest(context =>
+        {
+            if (context.Request.Path == "/fast")
+            {
+                return context.Response.WriteAsync("fast-ok");
+            }
+
+            return context.Response.WriteAsync(new string('S', 32 * 1024));
+        });
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        var inHook = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        proxy.OnResponseBodyWrite += async (_, e) =>
+        {
+            if (e.Session.HttpClient.Request.RequestUri.AbsolutePath != "/slow")
+            {
+                return;
+            }
+
+            inHook.TrySetResult();
+            await Task.Delay(1500);
+        };
+
+        using var client = CreateHttp2Client(proxy);
+        var slow = client.GetAsync(new Uri(new Uri(server.ListeningHttpsUrl), "/slow"));
+        await inHook.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        var siblingStalled = false;
+        try
+        {
+            using var fastCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(400));
+            var fast = await client.GetAsync(new Uri(new Uri(server.ListeningHttpsUrl), "/fast"), fastCts.Token);
+            Assert.AreEqual("fast-ok", await fast.Content.ReadAsStringAsync(fastCts.Token));
+        }
+        catch (OperationCanceledException)
+        {
+            siblingStalled = true;
+        }
+
+        // The frame loop is shared. A sleep in the hook stalls the sibling, so relay pacing must not sleep here.
+        Assert.IsTrue(siblingStalled,
+            "Expected the HTTP/2 body-write hook to stall a sibling stream. If it no longer does, HTTP/2 relay pacing can sleep in the hook.");
+
+        using var drain = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await slow.WaitAsync(drain.Token);
+    }
+
+    /// <summary>
+    ///     Characterization: BeforeResponse runs inline on the HTTP/2 frame loop, so a plain wait there costs
+    ///     one latency per stream (six parallel responses take about six latencies). Inspector therefore does
+    ///     not sleep in BeforeResponse on HTTP/2; see the streamed-replacement test below. If this test starts
+    ///     failing, Core stopped serializing and the HTTP/2 branch in ApplyResponseThrottleAsync can be simplified.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task BeforeResponse_Http2_InlineLatencyWait_SerializesParallelStreams()
+    {
+        const int streams = 6;
+        const int latencyMs = 400;
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync("ok"));
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.BeforeResponse += async (_, _) => await Task.Delay(latencyMs);
+
+        using var client = CreateHttp2Client(proxy);
+        // Warm the connection so the measurement is not dominated by the handshake.
+        using (var warm = await client.GetAsync(new Uri(server.ListeningHttpsUrl)))
+        {
+            Assert.AreEqual(HttpStatusCode.OK, warm.StatusCode);
+        }
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var all = Enumerable.Range(0, streams)
+            .Select(_ => client.GetAsync(new Uri(server.ListeningHttpsUrl)))
+            .ToArray();
+        var responses = await Task.WhenAll(all);
+        watch.Stop();
+        foreach (var r in responses)
+        {
+            Assert.AreEqual(new Version(2, 0), r.Version);
+            r.Dispose();
+        }
+
+        Assert.IsTrue(watch.ElapsedMilliseconds >= latencyMs * 3,
+            $"Expected serialized latency; {streams} parallel HTTP/2 responses took only {watch.ElapsedMilliseconds} ms (latency {latencyMs} ms).");
+    }
+
+    /// <summary>
+    ///     Core capability: a streamed replacement installed from BeforeResponse after GetResponseBody is written
+    ///     off the frame loop, so parallel streams overlap their latency. The replacement must actually reach the
+    ///     client (asserted through a marker header): before Http2ReplaceableUntilBodyEnd, RespondStreaming threw
+    ///     here because the buffered response was locked, and the origin response was forwarded instead.
+    ///     The Inspector relies on this for HTTP/2 bandwidth shaping. See ThrottleDeliveryGateTests.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task BeforeResponse_Http2_LatencyInsideStreamedReplacement_OverlapsParallelStreams()
+    {
+        const int streams = 6;
+        const int latencyMs = 400;
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync("ok"));
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.BeforeResponse += async (_, e) =>
+        {
+            var body = await e.GetResponseBody();
+            var replacement = new Response
+            {
+                StatusCode = 200,
+                StatusDescription = "OK",
+                HttpVersion = e.HttpClient.Request.HttpVersion
+            };
+            replacement.Headers.AddHeader("Content-Length", body.Length.ToString());
+            replacement.Headers.AddHeader("X-Replaced", "yes");
+            e.RespondStreaming(replacement, async (stream, ct) =>
+            {
+                await Task.Delay(latencyMs, ct);
+                await stream.WriteAsync(body, ct);
+            }, closeServerConnection: false);
+        };
+
+        using var client = CreateHttp2Client(proxy);
+        using (var warm = await client.GetAsync(new Uri(server.ListeningHttpsUrl)))
+        {
+            Assert.AreEqual(HttpStatusCode.OK, warm.StatusCode);
+        }
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var responses = await Task.WhenAll(Enumerable.Range(0, streams)
+            .Select(_ => client.GetAsync(new Uri(server.ListeningHttpsUrl))));
+        watch.Stop();
+        foreach (var r in responses)
+        {
+            Assert.AreEqual("ok", await r.Content.ReadAsStringAsync());
+            Assert.IsTrue(r.Headers.Contains("X-Replaced"), "The streamed replacement must reach the client.");
+            r.Dispose();
+        }
+
+        Assert.IsTrue(watch.ElapsedMilliseconds >= latencyMs, "The replacement latency was never applied.");
+        Assert.IsTrue(watch.ElapsedMilliseconds < latencyMs * 3,
+            $"{streams} parallel HTTP/2 responses took {watch.ElapsedMilliseconds} ms; one latency is {latencyMs} ms.");
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task BeforeRequest_Http2_UploadWait_DoesNotSerializeParallelStreams()
+    {
+        const int streams = 6;
+        const int waitMs = 400;
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync("ok"));
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.BeforeRequest += async (_, _) => await Task.Delay(waitMs);
+
+        using var client = CreateHttp2Client(proxy);
+        using (var warm = await client.GetAsync(new Uri(server.ListeningHttpsUrl)))
+        {
+            Assert.AreEqual(HttpStatusCode.OK, warm.StatusCode);
+        }
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var responses = await Task.WhenAll(Enumerable.Range(0, streams)
+            .Select(_ => client.GetAsync(new Uri(server.ListeningHttpsUrl))));
+        watch.Stop();
+        foreach (var r in responses)
+        {
+            r.Dispose();
+        }
+
+        Assert.IsTrue(watch.ElapsedMilliseconds < waitMs * 3,
+            $"{streams} parallel HTTP/2 requests took {watch.ElapsedMilliseconds} ms; one wait is {waitMs} ms.");
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task BeforeResponse_Http2_ReplacesBufferedOriginBody_WithExactBytes()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var plain = new byte[70 * 1024];
+        for (var i = 0; i < plain.Length; i++)
+        {
+            plain[i] = (byte)(i % 251);
+        }
+
+        var server = testSuite.GetServer();
+        server.HandleRequest(async context => await context.Response.Body.WriteAsync(plain));
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.BeforeResponse += async (_, e) =>
+        {
+            var body = await e.GetResponseBody();
+            var replacement = new Response
+            {
+                StatusCode = 200,
+                StatusDescription = "OK",
+                HttpVersion = e.HttpClient.Request.HttpVersion,
+            };
+            replacement.Headers.AddHeader("Content-Length", body.Length.ToString());
+            replacement.Headers.AddHeader("X-Replaced", "yes");
+            e.RespondStreaming(replacement, async (stream, ct) =>
+            {
+                var offset = 0;
+                while (offset < body.Length)
+                {
+                    var count = Math.Min(16 * 1024, body.Length - offset);
+                    await stream.WriteAsync(body.AsMemory(offset, count), ct);
+                    offset += count;
+                }
+            }, closeServerConnection: false);
+        };
+
+        using var client = CreateHttp2Client(proxy);
+        var response = await client.GetAsync(new Uri(server.ListeningHttpsUrl));
+        var got = await response.Content.ReadAsByteArrayAsync();
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(new Version(2, 0), response.Version);
+        Assert.IsTrue(response.Headers.Contains("X-Replaced"), "The streamed replacement must reach the client.");
+        CollectionAssert.AreEqual(plain, got);
+    }
+
+    // Replacement after the origin body was read (the Inspector's bandwidth shaping shape): the handler awaits
+    // GetResponseBody, which locks the native HTTP/2 response, then swaps in a paced RespondStreaming replacement.
+    [TestMethod]
+    [DataRow(2, false)]
+    [DataRow(2, true)]
+    [DataRow(150 * 1024, false)]
+    [DataRow(150 * 1024, true)]
+    public async Task BeforeResponse_Http2_ReplacementAfterBodyRead_DeliversReplacement(int size, bool inspectorLike)
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var plain = new byte[size];
+        for (var i = 0; i < plain.Length; i++)
+        {
+            plain[i] = (byte)(i % 251);
+        }
+
+        var server = testSuite.GetServer();
+        server.HandleRequest(async context =>
+        {
+            context.Response.ContentLength = plain.Length;
+            await context.Response.Body.WriteAsync(plain);
+        });
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        var afterResponse = 0;
+        if (inspectorLike)
+        {
+            proxy.EnableHttpInterception = true;
+            proxy.EnableRequestTimingCapture = true;
+            proxy.MaxBufferedBodyBytes = 32 * 1024 * 1024;
+            proxy.OnResponseBodyWrite += (_, _) => Task.CompletedTask;
+            proxy.AfterResponse += (_, _) =>
+            {
+                Interlocked.Increment(ref afterResponse);
+                return Task.CompletedTask;
+            };
+        }
+
+        proxy.BeforeResponse += async (_, e) =>
+        {
+            var body = await e.GetResponseBody();
+            var replacement = new Response
+            {
+                StatusCode = 200,
+                StatusDescription = "OK",
+                HttpVersion = e.HttpClient.Request.HttpVersion,
+            };
+            replacement.Headers.AddHeader("Content-Length", body.Length.ToString());
+            replacement.Headers.AddHeader("X-Replaced", "yes");
+            e.RespondStreaming(replacement, async (stream, ct) =>
+            {
+                var offset = 0;
+                while (offset < body.Length)
+                {
+                    var count = Math.Min(16 * 1024, body.Length - offset);
+                    await stream.WriteAsync(body.AsMemory(offset, count), ct);
+                    offset += count;
+                    await Task.Delay(5, ct);
+                }
+            }, closeServerConnection: false);
+        };
+
+        using var client = CreateHttp2Client(proxy);
+        var response = await client.GetAsync(new Uri(server.ListeningHttpsUrl));
+        var got = await response.Content.ReadAsByteArrayAsync();
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(new Version(2, 0), response.Version);
+        Assert.IsTrue(response.Headers.Contains("X-Replaced"), "The replacement response headers must reach the client.");
+        CollectionAssert.AreEqual(plain, got);
+
+        if (inspectorLike)
+        {
+            for (var i = 0; i < 50 && Volatile.Read(ref afterResponse) == 0; i++)
+            {
+                await Task.Delay(100);
+            }
+
+            Assert.AreEqual(1, Volatile.Read(ref afterResponse), "AfterResponse must fire exactly once.");
+        }
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task BeforeResponse_Http2_ReplacementAfterBodyRead_ClientAbort_DoesNotBreakConnection()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var plain = new byte[150 * 1024];
+        var server = testSuite.GetServer();
+        server.HandleRequest(async context =>
+        {
+            context.Response.ContentLength = plain.Length;
+            await context.Response.Body.WriteAsync(plain);
+        });
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        var slowPaths = 0;
+        proxy.BeforeResponse += async (_, e) =>
+        {
+            var body = await e.GetResponseBody();
+            var slow = e.HttpClient.Request.RequestUri.AbsolutePath == "/slow";
+            if (slow)
+            {
+                Interlocked.Increment(ref slowPaths);
+            }
+
+            var replacement = new Response { StatusCode = 200, StatusDescription = "OK", HttpVersion = e.HttpClient.Request.HttpVersion };
+            replacement.Headers.AddHeader("Content-Length", body.Length.ToString());
+            replacement.Headers.AddHeader("X-Replaced", "yes");
+            e.RespondStreaming(replacement, async (stream, ct) =>
+            {
+                var offset = 0;
+                while (offset < body.Length)
+                {
+                    var count = Math.Min(4 * 1024, body.Length - offset);
+                    await stream.WriteAsync(body.AsMemory(offset, count), ct);
+                    offset += count;
+                    if (slow)
+                    {
+                        await Task.Delay(100, ct);
+                    }
+                }
+            }, closeServerConnection: false);
+        };
+
+        using var client = CreateHttp2Client(proxy);
+        var baseUri = new Uri(server.ListeningHttpsUrl);
+        using (var aborted = await client.GetAsync(new Uri(baseUri, "/slow"), HttpCompletionOption.ResponseHeadersRead))
+        {
+            Assert.IsTrue(aborted.Headers.Contains("X-Replaced"));
+            // Dispose without reading the body: the client resets the stream mid-replacement.
+        }
+
+        // The shared HTTP/2 connection and the proxy must still serve new streams promptly.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        var follow = await client.GetAsync(new Uri(baseUri, "/fast"), cts.Token);
+        var got = await follow.Content.ReadAsByteArrayAsync(cts.Token);
+        Assert.AreEqual(plain.Length, got.Length);
+        Assert.AreEqual(1, Volatile.Read(ref slowPaths));
     }
 
     private static HttpClient CreateHttp2Client(ProxyServer proxy)

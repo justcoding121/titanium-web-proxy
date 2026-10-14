@@ -7,7 +7,7 @@ namespace Titanium.Inspector.ViewModels;
 public sealed partial class MainWindowViewModel
 {
     /// <summary>Number of <see cref="InspectTab"/> values. Tools indices in <see cref="SelectedDetailTabIndex"/> start here.</summary>
-    public const int InspectTabCount = (int)InspectTab.Protobuf + 1;
+    public const int InspectTabCount = (int)InspectTab.Statistics + 1;
 
     /// <summary>Composer, Breakpoints, AutoResponder, Scripts, Map Remote.</summary>
     public const int ToolsTabCount = 5;

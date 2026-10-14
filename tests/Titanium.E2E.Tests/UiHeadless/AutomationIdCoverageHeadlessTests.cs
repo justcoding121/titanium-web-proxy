@@ -31,15 +31,21 @@ public class AutomationIdCoverageHeadlessTests
         "MenuToggleCapturing",
         "MenuClearSessions",
         "MenuRemoveSelected",
+        "MenuKeepOnlySelected",
+        "MenuRemoveMatching",
+        "CtxKeepOnlySelected",
+        "CtxRemoveMatching",
         "AutoStartCaptureCheck",
         "AutoSystemProxyCheck",
-        "MenuDecryptHttps",
-        "MenuToggleSystemProxy",
+        "MenuDisableCaching",
+        "MenuForceUncompressed",
         "MenuProxyLocalhost",
         "MenuLoopbackExempt",
+        "MenuRootCertificate",
         "MenuInstallCa",
         "MenuRemoveCa",
         "MenuRotateCa",
+        "MenuRemoveOldRootCas",
         "MenuExportCa",
         "MenuTrustFirefoxCa",
         "MenuDeviceCa",
@@ -67,6 +73,7 @@ public class AutomationIdCoverageHeadlessTests
         "MenuColumn_Started",
         "MenuColumn_Scheme",
         "MenuColumn_ContentType",
+        "MenuColumn_Comment",
         "MenuColumnsReset",
         "MenuSessionRetention",
         "MenuHttpsDecryptHosts",
@@ -76,18 +83,25 @@ public class AutomationIdCoverageHeadlessTests
         "MenuUpdateChannelStable",
         "MenuUpdateChannelBeta",
         "MenuCheckUpdatesOnStartup",
+        "MenuNetwork",
         "MenuLogging",
+        "MenuAlwaysOnTop",
         "MenuResetSettings",
         "MenuHelp",
         "MenuCheckForUpdates",
+        "MenuDocumentation",
+        "MenuReportIssue",
+        "MenuKeyboardShortcuts",
         "MenuAbout",
         "SearchBox",
+        "ToolbarFilterGroup",
         "OpenFiltersButton",
         "SearchHideChips",
-        "HideTunnelsFilterCheck",
+        "MethodFilterButton",
         "HideImagesFilterCheck",
         "ErrorsOnlyFilterCheck",
         "ClearFiltersButton",
+        "StatusFilterButton",
         "ToolbarBindAddress",
         "ToolbarBindPort",
         "ToggleInterceptButton",
@@ -100,15 +114,24 @@ public class AutomationIdCoverageHeadlessTests
         "SessionsContextMenu",
         "CtxReplay",
         "CtxLoadComposer",
+        "CtxSaveAs",
         "CtxSaveRequestBody",
         "CtxSaveResponseBody",
+        "CtxSaveRawHttp",
+        "CtxExport",
         "CtxExportSelectedHar",
         "CtxExportSelectedArchive",
+        "CtxCopyAs",
         "CtxCopyUrl",
         "CtxCopyAsCurl",
         "CtxCopyAsFetch",
         "CtxDiffSessions",
+        "CtxFilterMenu",
         "CtxFilterByHost",
+        "CtxFilterByStatus",
+        "CtxMark",
+        "CtxComment",
+        "CtxFindRelated",
         "CtxHideHost",
         "CtxExcludeHost",
         "CtxFilterByProcess",
@@ -157,6 +180,9 @@ public class AutomationIdCoverageHeadlessTests
         "SseText",
         "TabProtobuf",
         "ProtobufText",
+        "TabStatistics",
+        "StatisticsSummary",
+        "StatisticsCopy",
         "ComboNetworkThrottle",
         "TabComposer",
         "ComposerMethod",
@@ -190,6 +216,8 @@ public class AutomationIdCoverageHeadlessTests
         "MapRemoteTarget",
         "MapRemoteAdd",
         "MenuToolsMapRemote",
+        "MenuRunLog",
+        "MenuTimeline",
         "TabMapRemote",
         "AutoResponderUpdate",
         "AutoResponderDelete",
@@ -202,6 +230,7 @@ public class AutomationIdCoverageHeadlessTests
         "StatusBarPanel",
         "SessionCountText",
         "SessionCountLink",
+        "CustomSettingsLink",
         "AutoResponderGraphQlOperation",
         "AutoResponderGraphQlFromSelected",
         "BreakpointGraphQlOperation",
@@ -227,14 +256,19 @@ public class AutomationIdCoverageHeadlessTests
         await fx.StartAsync();
         await fx.DispatchAsync(() =>
         {
-            fx.ViewModel.Sessions.Add(new SessionSnapshot
+            var snap = new SessionSnapshot
             {
                 Id = 1,
-                Method = "GET",
+                Method = "POST",
                 StatusCode = 200,
                 Host = "id.test",
-                Url = "wss://id.test/ws",
+                Url = "https://id.test/api",
                 Protocol = "HTTP/1.1",
+                ProcessName = "chrome",
+                RequestBodyText = "req",
+                ResponseBodyText = "res",
+                RequestBodyCapture = BodyCaptureState.Complete,
+                ResponseBodyCapture = BodyCaptureState.Complete,
                 IsWebSocket = true,
                 IsServerSentEvents = true,
                 SseEvents =
@@ -243,9 +277,12 @@ public class AutomationIdCoverageHeadlessTests
                 ],
                 IsGrpc = true,
                 ProtobufDecodedText = "[{\"field\":1}]",
-            });
-            fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
-            fx.ViewModel.SearchQuery = "-host:id.test";
+            };
+            fx.ViewModel.SeedSession(snap);
+            // Single-select so Save/Copy/Filter submenu children (IsVisible-bound) stay in the tree.
+            fx.ViewModel.SelectedSession = snap;
+            fx.ViewModel.SetSelectedSessions([snap]);
+            fx.ViewModel.SearchQuery = "-host:other.test";
             fx.Robot.Click("MenuToolsComposer");
 
             // ContextMenu items are not in the visual tree until opened.
@@ -310,7 +347,7 @@ public class AutomationIdCoverageHeadlessTests
             Assert.IsTrue(fx.Interception.IsRunning, fx.ViewModel.StatusText);
             fx.Robot.SetCheck("SystemProxyCheck", true);
             Assert.IsTrue(fx.ViewModel.SystemProxy);
-            fx.Robot.SetCheck("MenuToggleSystemProxy", false);
+            fx.Robot.SetCheck("SystemProxyCheck", false);
             Assert.IsFalse(fx.ViewModel.SystemProxy);
         });
     }

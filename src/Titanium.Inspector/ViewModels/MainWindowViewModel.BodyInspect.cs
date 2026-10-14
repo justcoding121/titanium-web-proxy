@@ -137,17 +137,24 @@ public sealed partial class MainWindowViewModel
     public GridLength ResponseBodyImageRowHeight =>
         ShowResponseBodyPreviewImage ? new GridLength(2, GridUnitType.Star) : new GridLength(0);
 
+    /// <summary>Save body needs exactly one selected session (not a multi-select).</summary>
     public bool CanSaveRequestBody =>
-        _selected is not null
+        HasSingleSelectedSession
+        && _selected is not null
         && (_selected.RequestBodyBytes is { Length: > 0 }
             || !string.IsNullOrEmpty(_selected.RequestBodyText))
         && _selected.RequestBodyCapture != BodyCaptureState.NotCaptured;
 
+    /// <summary>Save body needs exactly one selected session (not a multi-select).</summary>
     public bool CanSaveResponseBody =>
-        _selected is not null
+        HasSingleSelectedSession
+        && _selected is not null
         && (_selected.ResponseBodyBytes is { Length: > 0 }
             || !string.IsNullOrEmpty(_selected.ResponseBodyText))
         && _selected.ResponseBodyCapture != BodyCaptureState.NotCaptured;
+
+    /// <summary>True when the Save submenu should appear (any single-session save action).</summary>
+    public bool CanSaveSessionMenu => CanSaveRequestBody || CanSaveResponseBody || CanSaveRawHttp;
 
     public string? ComposerBodyFilePath
     {
@@ -366,6 +373,8 @@ public sealed partial class MainWindowViewModel
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanSaveRequestBody)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanSaveResponseBody)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanSaveSessionMenu)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanSaveRawHttp)));
     }
 
     /// <summary>Shown in Inspect when the body spill file was removed by the disk-cache budget.</summary>
@@ -586,15 +595,30 @@ public sealed partial class MainWindowViewModel
     private static string FormatTunnelBodyInspectText(SessionSnapshot selected)
     {
         var wire = selected.BodySize ?? selected.SentBytes + selected.ReceivedBytes;
+        var size = SessionDisplayFormat.FormatByteSize(wire);
+        var sent = SessionDisplayFormat.FormatByteSize(selected.SentBytes);
+        var received = SessionDisplayFormat.FormatByteSize(selected.ReceivedBytes);
         var sb = new StringBuilder();
-        sb.AppendLine("CONNECT tunnel — no HTTP message body.");
-        sb.Append("Encrypted traffic on the wire: ");
-        sb.Append(SessionDisplayFormat.FormatByteSize(wire));
-        sb.Append(" (sent ");
-        sb.Append(SessionDisplayFormat.FormatByteSize(selected.SentBytes));
-        sb.Append(", received ");
-        sb.Append(SessionDisplayFormat.FormatByteSize(selected.ReceivedBytes));
-        sb.Append(')');
+        sb.AppendLine(LanguageService.Get("inspect.tunnelNoBody"));
+        sb.AppendLine();
+        if (selected.OpaqueReason == OpaqueTunnelReason.None)
+        {
+            // Decrypt opened this tunnel. Size is ciphertext for every request on the
+            // connection; each child row shows its own decompressed body.
+            sb.Append(LanguageService.Format("inspect.tunnelDecrypted", size, sent, received));
+        }
+        else
+        {
+            sb.AppendLine(LanguageService.Format("inspect.tunnelOpaque", size, sent, received));
+            var reason = ExclusionPreview.DescribeOpaqueReason(selected.OpaqueReason);
+            if (reason.Length > 0)
+            {
+                sb.AppendLine(reason);
+            }
+
+            sb.Append(LanguageService.Get("inspect.tunnelOpaqueHidden"));
+        }
+
         return sb.ToString();
     }
 

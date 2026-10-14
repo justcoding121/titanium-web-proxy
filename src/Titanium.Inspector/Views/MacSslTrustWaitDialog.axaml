@@ -29,7 +29,7 @@
                 AutomationProperties.AutomationId="MacSslTrustCancel" />
       </StackPanel>
     </StackPanel>
-    <ScrollViewer>
+    <ScrollViewer Classes="dialogBody">
       <TextBlock x:Name="MessageText" TextWrapping="Wrap"
                  AutomationProperties.AutomationId="MacSslTrustMessage" />
     </ScrollViewer>

@@ -5,8 +5,8 @@ namespace Titanium.Inspector.Services;
 
 /// <summary>
 /// Session search/filter syntax. A bare word matches URL, host, process name, process ID (exact),
-/// method (exact), or status code (exact). Prefixes limit the match to one field:
-/// method:, status: (exact or 2xx–5xx), host:, url:, body:, process:, pid:, protocol:, content-type:,
+/// method (exact or a comma list), or status code (exact). Prefixes limit the match to one field:
+/// method: (exact or comma list), status: (exact, Nxx, comma list, or range), host:, url:, body:, process:, pid:, protocol:, content-type:, ids:,
 /// is:ws|grpc|tunnel|multipart|error, hide:tunnel|image|static.
 /// A leading <c>-</c> on a field prefix excludes rows that match it (<c>-host:cursor.sh</c>,
 /// <c>-process:Cursor</c>), and on a bare word excludes rows that word would match (<c>-cursor</c>).
@@ -147,6 +147,95 @@ public static class SessionSearch
         }
 
         return string.Join(" ", parts);
+    }
+
+    /// <summary>
+    /// Drop session ids that are no longer tracked from every <c>ids:</c> (and <c>-ids:</c>) token.
+    /// Pass null to remove those tokens entirely. Returns <paramref name="query"/> unchanged when
+    /// nothing was removed.
+    /// </summary>
+    public static string PruneRemovedIds(string? query, HashSet<long>? removedIds)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return "";
+        }
+
+        var changed = false;
+        var parts = new List<string>();
+        foreach (var groups in TokenRegex.Matches(query).Cast<Match>().Select(m => m.Groups))
+        {
+            if (groups[1].Success && IsIdsKey(groups[1].Value))
+            {
+                if (RewriteIdsToken(groups[1].Value, groups[2].Value, removedIds, out var token))
+                {
+                    changed = true;
+                }
+
+                if (token is not null)
+                {
+                    parts.Add(token);
+                }
+
+                continue;
+            }
+
+            parts.Add(groups[1].Success ? $"{groups[1].Value}:{groups[2].Value}" : groups[3].Value);
+        }
+
+        return changed ? string.Join(" ", parts) : query;
+    }
+
+    /// <summary>
+    /// Returns true when the token changed. <paramref name="token"/> is null when every id is gone.
+    /// </summary>
+    private static bool RewriteIdsToken(string key, string value, HashSet<long>? removedIds, out string? token)
+    {
+        if (removedIds is null)
+        {
+            token = null;
+            return true;
+        }
+
+        var kept = KeepIdParts(value, removedIds, out var dropped);
+        if (kept.Count == 0)
+        {
+            token = null;
+            return true;
+        }
+
+        token = $"{key}:{string.Join(',', kept)}";
+        return dropped;
+    }
+
+    private static List<string> KeepIdParts(string value, HashSet<long> removedIds, out bool dropped)
+    {
+        dropped = false;
+        var kept = new List<string>();
+        foreach (var part in value.Split(','))
+        {
+            if (part.Length == 0)
+            {
+                continue;
+            }
+
+            if (long.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) &&
+                removedIds.Contains(id))
+            {
+                dropped = true;
+                continue;
+            }
+
+            kept.Add(part);
+        }
+
+        return kept;
+    }
+
+    private static bool IsIdsKey(string key)
+    {
+        var name = key.StartsWith('-') ? key[1..] : key;
+        return name.Equals("ids", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -342,7 +431,7 @@ public static class SessionSearch
     /// <summary>Fields a leading <c>-</c> may invert. <c>hide:</c> is already an exclusion.</summary>
     private static bool IsNegatableKey(string key) => key is
         "method" or "status" or "host" or "url" or "body" or "process" or "pid" or
-        "protocol" or "content-type" or "contenttype" or "is";
+        "protocol" or "content-type" or "contenttype" or "is" or "mark" or "comment" or "ids";
 
     private static bool MatchToken(
         SessionSnapshot s,
@@ -392,8 +481,10 @@ public static class SessionSearch
     {
         return key switch
         {
-            "method" => s.Method.Equals(value, StringComparison.OrdinalIgnoreCase),
+            "method" => MethodFilter.Matches(s.Method, value),
             "status" => MatchStatus(s.StatusCode, value),
+            "mark" => MatchMark(s.Mark, value),
+            "comment" => s.Comment?.Contains(value, StringComparison.OrdinalIgnoreCase) == true,
             "host" => MatchHost(s, value),
             "url" => s.Url.Contains(value, StringComparison.OrdinalIgnoreCase),
             "body" => bodyMatcher?.Invoke(s, value) ??
@@ -420,6 +511,7 @@ public static class SessionSearch
                     MatchOpaqueReason(s, value["opaque-reason:".Length..]),
                 _ => true,
             },
+            "ids" => MatchIds(s.Id, value),
             "hide" => value.ToLowerInvariant() switch
             {
                 "tunnel" or "connect" => !s.IsTunnel,
@@ -430,26 +522,18 @@ public static class SessionSearch
         };
     }
 
-    private static bool MatchStatus(int? statusCode, string value)
+    private static bool MatchStatus(int? statusCode, string value) =>
+        StatusFilter.Matches(statusCode, value);
+
+    private static bool MatchMark(SessionMark mark, string value)
     {
-        var v = value.ToLowerInvariant();
-        if (v is "2xx" or "3xx" or "4xx" or "5xx")
+        if (value.Equals("none", StringComparison.OrdinalIgnoreCase))
         {
-            if (statusCode is null)
-            {
-                return false;
-            }
-
-            var hundreds = statusCode.Value / 100;
-            return v[0] - '0' == hundreds;
+            return mark == SessionMark.None;
         }
 
-        if (v is "error" or "errors")
-        {
-            return IsErrorStatus(statusCode);
-        }
-
-        return statusCode?.ToString() == value;
+        return mark != SessionMark.None &&
+               mark.ToString().Equals(value, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsErrorStatus(int? statusCode) =>
@@ -558,5 +642,39 @@ public static class SessionSearch
             "learned" or "auto" => s.OpaqueReason == OpaqueTunnelReason.LearnedFailure,
             _ => s.OpaqueReason.ToString().Equals(reasonToken, StringComparison.OrdinalIgnoreCase),
         };
+    }
+
+    private static readonly object IdsCacheGate = new();
+    private static string? IdsCacheValue;
+    private static HashSet<long>? IdsCacheSet;
+
+    /// <summary>
+    /// <c>ids:</c> is a comma list parsed once per distinct value. Later rows of the same query
+    /// hit the set instead of splitting the text again.
+    /// </summary>
+    private static bool MatchIds(long id, string value)
+    {
+        HashSet<long> set;
+        lock (IdsCacheGate)
+        {
+            if (IdsCacheSet is null || !string.Equals(IdsCacheValue, value, StringComparison.Ordinal))
+            {
+                var parsed = new HashSet<long>();
+                foreach (var part in value.Split(','))
+                {
+                    if (long.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedId))
+                    {
+                        parsed.Add(parsedId);
+                    }
+                }
+
+                IdsCacheValue = value;
+                IdsCacheSet = parsed;
+            }
+
+            set = IdsCacheSet;
+        }
+
+        return set.Contains(id);
     }
 }

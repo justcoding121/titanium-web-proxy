@@ -31,17 +31,26 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     private readonly InterceptionService _interception;
     private readonly IInspectorDialogs _dialogs;
     private readonly IInspectorPathPicker _pathPicker;
+    private readonly IExternalUriLauncher _uriLauncher;
     private IStatusNotifier _statusNotifier;
     private readonly ObservableCollection<SessionSnapshot> _all;
     private readonly List<SessionSnapshot> _selectedSessions = new();
     private readonly RelayCommand _clearSessionsCommand;
     private readonly RelayCommand _removeSelectedSessionsCommand;
+    private readonly RelayCommand _keepOnlySelectedCommand;
+    private readonly RelayCommand _removeMatchingCommand;
     private readonly RelayCommand _exportSelectedHarCommand;
     private readonly RelayCommand _exportSelectedArchiveCommand;
     private readonly RelayCommand _copyAsCurlCommand;
     private readonly RelayCommand _copyAsFetchCommand;
+    private readonly RelayCommand _copyAsPowerShellCommand;
+    private readonly RelayCommand _copyAsPythonCommand;
+    private readonly RelayCommand _copyAsTableCommand;
+    private readonly RelayCommand _saveRawHttpCommand;
     private readonly RelayCommand _diffSessionsCommand;
     private string _sessionDiffText = "";
+    private long _diffLeftId;
+    private long _diffRightId;
     private static string StatusReady => LanguageService.Get("status.ready");
     private const string StartProxyFirstStatus = "Start the proxy first";
     private const string SystemProxyRestoredStatus = "System proxy restored";
@@ -82,6 +91,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     private bool _debugFileLogging;
     /// <summary>Prefs as loaded from disk — used for auto-start so MenuItem binding cannot clobber before Opened.</summary>
     private bool _launchAutoStartCapture = true;
+    private bool _alwaysOnTop;
     private bool _launchAutoSystemProxyOnStart = true;
     private bool _decryptHttps;
     private bool _decryptHttpsBusy;
@@ -115,6 +125,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     private string _breakpointEditBody = "";
     private string? _scriptOnRequest;
     private string? _scriptOnResponse;
+    private bool _selectGridFromTimeline;
     private int _selectedOuterPaneIndex;
     private int _selectedInspectTabIndex;
     private int _lastCoreInspectTab;
@@ -170,6 +181,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         _interception = services.Interception ?? new InterceptionService();
         _dialogs = services.Dialogs ?? new AvaloniaInspectorDialogs();
         _pathPicker = services.PathPicker ?? new AvaloniaInspectorPathPicker();
+        _uriLauncher = services.UriLauncher ?? new WindowUriLauncher(() =>
+        {
+            var owner = TryGetMainWindow();
+            return owner is null ? null : TopLevel.GetTopLevel(owner);
+        });
         _statusNotifier = services.StatusNotifier ?? NullStatusNotifier.Instance;
         Sessions = new SessionListCollection();
         Breakpoints = new BreakpointViewModel();
@@ -241,6 +257,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             return Task.CompletedTask;
         });
         ToggleDecryptHttpsCommand = Cmd(ToggleDecryptHttpsAsync);
+        ToggleDisableCachingCommand = Cmd(() =>
+        {
+            DisableCaching = !DisableCaching;
+            return Task.CompletedTask;
+        });
+        ToggleForceUncompressedCommand = Cmd(() =>
+        {
+            ForceUncompressed = !ForceUncompressed;
+            return Task.CompletedTask;
+        });
         ToggleIgnoreServerCertificateErrorsCommand = Cmd(() =>
         {
             IgnoreServerCertificateErrors = !IgnoreServerCertificateErrors;
@@ -260,6 +286,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         ClearSessionsCommand = _clearSessionsCommand;
         _removeSelectedSessionsCommand = Cmd(RemoveSelectedSessionsAsync, () => HasSelectedSessions);
         RemoveSelectedSessionsCommand = _removeSelectedSessionsCommand;
+        _keepOnlySelectedCommand = Cmd(KeepOnlySelectedAsync, () => CanKeepOnlySelected);
+        KeepOnlySelectedCommand = _keepOnlySelectedCommand;
+        _removeMatchingCommand = Cmd(RemoveMatchingFilterAsync, () => CanRemoveMatchingFilter);
+        RemoveMatchingFilterCommand = _removeMatchingCommand;
         ToggleSystemProxyCommand = Cmd(ToggleSystemProxyAsync);
         InstallCaCommand = Cmd(InstallCaAsync);
         TrustFirefoxCaCommand = Cmd(TrustFirefoxCaAsync);
@@ -285,10 +315,22 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             return Task.CompletedTask;
         });
         OpenLoggingSettingsCommand = Cmd(OpenLoggingSettingsAsync);
+        OpenRunLogCommand = Cmd(OpenRunLogAsync);
+        OpenTimelineCommand = Cmd(OpenTimeline);
+        OpenNetworkSettingsCommand = Cmd(OpenNetworkSettingsAsync);
         OpenAboutCommand = Cmd(OpenAboutAsync);
+        OpenKeyboardShortcutsCommand = Cmd(OpenKeyboardShortcutsAsync);
+        OpenDocumentationCommand = Cmd(() => _uriLauncher.LaunchAsync(InspectorLinks.Documentation));
+        OpenReportIssueCommand = Cmd(() => _uriLauncher.LaunchAsync(InspectorLinks.ReportIssue));
         OpenHttpsDecryptHostsCommand = Cmd(OpenExcludedHostsAsync);
         ExcludeHostCommand = Cmd(ExcludeHostAsync);
         ResetSettingsCommand = Cmd(ResetSettingsAsync);
+        ToggleAlwaysOnTopCommand = Cmd(() =>
+        {
+            AlwaysOnTop = !AlwaysOnTop;
+            return Task.CompletedTask;
+        });
+        ResetCustomSettingsCommand = Cmd(ResetCustomSettingsAsync);
         ReplayCommand = Cmd(async () => await ReplaySelectedAsync());
         LoadFromSelectedCommand = Cmd(LoadFromSelectedAsync);
         LoadIntoComposerCommand = Cmd(LoadIntoComposerAsync);
@@ -297,9 +339,25 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         CopyAsCurlCommand = _copyAsCurlCommand;
         _copyAsFetchCommand = Cmd(CopyAsFetchAsync, () => CanCopyAsCurl);
         CopyAsFetchCommand = _copyAsFetchCommand;
+        _copyAsPowerShellCommand = Cmd(CopyAsPowerShellAsync, () => CanCopyAsCurl);
+        CopyAsPowerShellCommand = _copyAsPowerShellCommand;
+        _copyAsPythonCommand = Cmd(CopyAsPythonAsync, () => CanCopyAsCurl);
+        CopyAsPythonCommand = _copyAsPythonCommand;
+        _copyAsTableCommand = Cmd(CopyAsTableAsync, () => CanCopyAsTable);
+        CopyAsTableCommand = _copyAsTableCommand;
+        _saveRawHttpCommand = Cmd(SaveRawHttpAsync, () => CanSaveRawHttp);
+        SaveRawHttpCommand = _saveRawHttpCommand;
         _diffSessionsCommand = Cmd(DiffSessionsAsync, () => CanDiffSessions);
         DiffSessionsCommand = _diffSessionsCommand;
         FilterByHostCommand = Cmd(FilterByHostAsync);
+        FilterByStatusCommand = Cmd(FilterByStatusAsync);
+        SetMarkCommand = CmdWithParameter(parameter =>
+        {
+            SetMark(parameter);
+            return Task.CompletedTask;
+        });
+        CommentCommand = Cmd(CommentAsync);
+        FindRelatedCommand = CmdWithParameter(parameter => FindRelatedAsync(parameter as string));
         HideHostCommand = Cmd(HideHostAsync);
         FilterByProcessCommand = Cmd(FilterByProcessAsync);
         HideProcessCommand = Cmd(HideProcessAsync);
@@ -345,6 +403,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         OpenFiltersCommand = Cmd(OpenFiltersAsync);
         RemoveHiddenHostCommand = CmdWithParameter(RemoveHiddenHostAsync);
         RemoveHiddenProcessCommand = CmdWithParameter(RemoveHiddenProcessAsync);
+        WireMethodFilter();
         WireBodyInspectCommands();
 
         WireEventHandlers();
@@ -393,6 +452,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         {
             UpdateWsFramesVisibility();
             RefreshSelectedInspectors();
+            RefreshStatisticsIfVisible();
         }
     }
 
@@ -402,6 +462,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         _selectedSessions.Clear();
         _selectedSessions.AddRange(selected);
         NotifyFilterSelectionProperties();
+        RefreshStatisticsIfVisible();
     }
 
     /// <summary>True when the store has at least one session (Clear sessions).</summary>
@@ -1071,6 +1132,135 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     }
 
 
+    private async Task OpenNetworkSettingsAsync()
+    {
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            StatusText = "Network settings require the main window";
+            return;
+        }
+
+        var window = await AwaitCancellableAsync(NetworkSettingsWindow.ShowAsync(
+            owner,
+            _settings,
+            BindAddress,
+            BindPort,
+            _interception.IsRunning));
+        if (!window.Saved)
+        {
+            StatusText = "Network settings cancelled";
+            return;
+        }
+
+        InspectorNetworkSettings.ApplyTo(_interception, _settings.Current);
+        RefreshCustomSettings();
+        if (window.RestartCapture && _interception.IsRunning)
+        {
+            await StopCaptureCoreAsync("Restarting capture…");
+            await StartCaptureAsync();
+            return;
+        }
+
+        StatusText = _interception.IsRunning
+            ? "Network settings saved. Applies the next time capture starts."
+            : "Network settings saved";
+    }
+
+    private async Task OpenKeyboardShortcutsAsync()
+    {
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            StatusText = "Keyboard shortcuts require the main window";
+            return;
+        }
+
+        await KeyboardShortcutsWindow.ShowAsync(owner);
+    }
+
+    public bool TryHandleShortcut(ShortcutAction action)
+    {
+        ICommand? command = action switch
+        {
+            ShortcutAction.ToggleCapture => ToggleCapturingCommand,
+            ShortcutAction.ClearSessions => ClearSessionsCommand,
+            ShortcutAction.RemoveSelected => RemoveSelectedSessionsCommand,
+            ShortcutAction.Replay => HasSingleSelectedSession ? ReplayCommand : null,
+            _ => null,
+        };
+        if (command is null || !command.CanExecute(null))
+            return false;
+
+        command.Execute(null);
+        return true;
+    }
+
+    private Task OpenRunLogAsync()
+    {
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            StatusText = LanguageService.Get("runLog.needsWindow");
+            return Task.CompletedTask;
+        }
+
+        RunLogWindow.Show(owner, _interception.RunLog, _settings, () => _ = OpenLoggingSettingsAsync());
+        return Task.CompletedTask;
+    }
+
+    private Task OpenTimeline()
+    {
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            StatusText = LanguageService.Get("timeline.needsWindow");
+            return Task.CompletedTask;
+        }
+
+        TimelineWindow.Show(
+            owner,
+            _store,
+            SelectTimelineSession,
+            () =>
+            {
+                if (_selectedSessions.Count > 0)
+                {
+                    return _selectedSessions.Select(s => s.Id).ToArray();
+                }
+
+                return _selected is null ? Array.Empty<long>() : new[] { _selected.Id };
+            });
+        return Task.CompletedTask;
+    }
+
+    private void SelectTimelineSession(long id)
+    {
+        var session = _store.TryGet(id);
+        if (session is null)
+        {
+            return;
+        }
+
+        if (ReferenceEquals(SelectedSession, session))
+        {
+            SetSelectedSessions([session]);
+            return;
+        }
+
+        _selectGridFromTimeline = true;
+        SetSelectedSessions([session]);
+        SelectSessionWithoutOpeningDetails(session);
+    }
+
+    /// <summary>True once after a timeline click, so the grid replaces its selection and scrolls.</summary>
+    public bool ConsumeTimelineGridSelection()
+    {
+        var pending = _selectGridFromTimeline;
+        _selectGridFromTimeline = false;
+        return pending;
+    }
+
     private async Task OpenLoggingSettingsAsync()
     {
         var owner = TryGetMainWindow();
@@ -1088,18 +1278,34 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             {
                 _interception.ConfigureLogging(s);
                 DebugFileLogging = IsDebugFileLoggingEnabled(s);
-            }));
+            },
+            () => _interception.CurrentLogFilePath));
         if (saved)
         {
-            var path = _settings.Current.LoggingFilePath ?? LoggingSettingsWindow.DefaultLogPath();
-            StatusText = _settings.Current.LoggingEnableFile
-                ? $"Logging saved: {path}"
-                : "Logging saved (file logging off)";
+            StatusText = BuildLoggingSavedStatus(
+                _settings.Current.LoggingEnableFile,
+                InspectorLogFiles.ResolveFolder(_settings.Current.LoggingFilePath),
+                _interception.CurrentLogFilePath);
         }
         else
         {
             StatusText = "Logging settings cancelled";
         }
+    }
+
+    private static string BuildLoggingSavedStatus(bool fileEnabled, string folder, string? currentFile)
+    {
+        if (!fileEnabled)
+        {
+            return "Logging saved (file logging off)";
+        }
+
+        if (currentFile is not null)
+        {
+            return $"Logging saved: {folder} (current: {Path.GetFileName(currentFile)})";
+        }
+
+        return $"Logging saved: {folder}";
     }
 
     private async Task OpenExcludedHostsAsync()
@@ -1288,6 +1494,15 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         }
     }
 
+    /// <summary>True when the selection (or visible grid) has rows to copy as a table.</summary>
+    public bool CanCopyAsTable => HasSelectedSessions || Sessions.Count > 0;
+
+    /// <summary>True when the Copy submenu should appear.</summary>
+    public bool CanCopySessionMenu => CanCopyUrl || CanCopyAsCurl || CanCopyAsTable;
+
+    /// <summary>True when one selected session can be saved as raw HTTP text.</summary>
+    public bool CanSaveRawHttp => HasSingleSelectedSession;
+
 
     /// <summary>Last Session Diff text (Inspect Diff tab / probe).</summary>
     public string SessionDiffText
@@ -1368,11 +1583,15 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public ICommand ToggleAutoStartCaptureCommand { get; }
     public ICommand ToggleAutoSystemProxyOnStartCommand { get; }
     public ICommand ToggleDecryptHttpsCommand { get; }
+    public ICommand ToggleDisableCachingCommand { get; }
+    public ICommand ToggleForceUncompressedCommand { get; }
     public ICommand ToggleIgnoreServerCertificateErrorsCommand { get; }
     public ICommand ToggleAddViaHeaderCommand { get; }
     public ICommand ToggleProxyLocalhostCommand { get; }
     public ICommand ClearSessionsCommand { get; }
     public ICommand RemoveSelectedSessionsCommand { get; }
+    public ICommand KeepOnlySelectedCommand { get; }
+    public ICommand RemoveMatchingFilterCommand { get; }
     public ICommand ToggleSystemProxyCommand { get; }
     public ICommand InstallCaCommand { get; }
     public ICommand TrustFirefoxCaCommand { get; }
@@ -1390,19 +1609,36 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     /// <summary>Restore the default columns (visibility, order, widths, sort).</summary>
     public ICommand ResetGridColumnsCommand { get; }
     public ICommand OpenLoggingSettingsCommand { get; }
+
+    public ICommand OpenRunLogCommand { get; }
+    public ICommand OpenTimelineCommand { get; }
+    public ICommand OpenNetworkSettingsCommand { get; }
     public ICommand OpenAboutCommand { get; }
+    public ICommand OpenKeyboardShortcutsCommand { get; }
+    public ICommand OpenDocumentationCommand { get; }
+    public ICommand OpenReportIssueCommand { get; }
     public ICommand OpenHttpsDecryptHostsCommand { get; }
     public ICommand ExcludeHostCommand { get; }
     public ICommand OpenExclusionSummaryCommand { get; }
     public ICommand ResetSettingsCommand { get; }
+    public ICommand ToggleAlwaysOnTopCommand { get; }
+    public ICommand ResetCustomSettingsCommand { get; }
     public ICommand ReplayCommand { get; }
     public ICommand LoadFromSelectedCommand { get; }
     public ICommand LoadIntoComposerCommand { get; }
     public ICommand CopyUrlCommand { get; }
     public ICommand CopyAsCurlCommand { get; }
     public ICommand CopyAsFetchCommand { get; }
+    public ICommand CopyAsPowerShellCommand { get; }
+    public ICommand CopyAsPythonCommand { get; }
+    public ICommand CopyAsTableCommand { get; }
+    public ICommand SaveRawHttpCommand { get; }
     public ICommand DiffSessionsCommand { get; }
     public ICommand FilterByHostCommand { get; }
+    public ICommand FilterByStatusCommand { get; }
+    public ICommand SetMarkCommand { get; }
+    public ICommand CommentCommand { get; }
+    public ICommand FindRelatedCommand { get; }
     public ICommand HideHostCommand { get; }
     public ICommand FilterByProcessCommand { get; }
     public ICommand HideProcessCommand { get; }
@@ -2187,6 +2423,34 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         return Task.CompletedTask;
     }
 
+    /// <summary>Session-only. Strips conditional cache headers. Not written to settings.</summary>
+    public bool DisableCaching
+    {
+        get => _interception.DisableCaching;
+        private set
+        {
+            if (_interception.DisableCaching == value)
+                return;
+
+            _interception.DisableCaching = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DisableCaching)));
+        }
+    }
+
+    /// <summary>Session-only. Sends Accept-Encoding: identity. Not written to settings.</summary>
+    public bool ForceUncompressed
+    {
+        get => _interception.ForceUncompressed;
+        private set
+        {
+            if (_interception.ForceUncompressed == value)
+                return;
+
+            _interception.ForceUncompressed = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ForceUncompressed)));
+        }
+    }
+
     /// <summary>When true, accept upstream TLS certs that would otherwise fail validation.</summary>
     public bool IgnoreServerCertificateErrors
     {
@@ -2342,11 +2606,22 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
                 RefreshSessionCountText();
                 NotifyQuickFilterProperties();
                 RefreshHiddenChips();
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasActiveSearch)));
+                _removeMatchingCommand.RaiseCanExecuteChanged();
             }
         }
     }
 
-    /// <summary>Quick filter: exclude CONNECT/tunnel rows (<c>hide:tunnel</c>).</summary>
+    /// <summary>True when the search box has any filter text (enables Clear filters).</summary>
+    public bool HasActiveSearch => !string.IsNullOrWhiteSpace(_searchQuery);
+
+    /// <summary>
+    /// Remove-matching needs a real filter. An empty search matches every row, which would
+    /// wipe the list (use Clear sessions for that).
+    /// </summary>
+    public bool CanRemoveMatchingFilter => HasActiveSearch && Sessions.Count > 0;
+
+    /// <summary>Quick filter: exclude CONNECT/tunnel rows (<c>hide:tunnel</c>). The Method menu writes <c>-method:</c> instead; this remains for typed queries and tests.</summary>
     public bool HideTunnelsFilter
     {
         get => SessionSearch.ContainsToken(_searchQuery, "hide", "tunnel");
@@ -2450,6 +2725,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             {
                 RefreshSelectedInspectors();
             }
+
+            RefreshStatisticsIfVisible();
         }
     }
 
@@ -2588,6 +2865,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
                     RefreshSelectedInspectors();
                 }
 
+                RefreshStatisticsIfVisible();
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
             }
         }
@@ -2634,7 +2912,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             if (value < InspectTabCount)
             {
                 SelectedPaneNavIndex = 0;
-                SelectedInspectTabIndex = Math.Clamp(value, 0, (int)InspectTab.Protobuf);
+                SelectedInspectTabIndex = Math.Clamp(value, 0, (int)InspectTab.Statistics);
             }
             else
             {
@@ -2676,6 +2954,59 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     {
         get => _sessionCountText;
         private set => SetField(ref _sessionCountText, value);
+    }
+
+    /// <summary>Translated lines for network settings that differ from factory defaults.</summary>
+    public IReadOnlyList<string> CustomSettingLines => _customSettingLines;
+
+    /// <summary>Status-strip label. Empty when <see cref="HasCustomSettings"/> is false.</summary>
+    public string CustomSettingsLabel => _customSettingsLabel;
+
+    /// <summary>Same lines as the flyout, for the hover tip.</summary>
+    public string CustomSettingsDetail => _customSettingsDetail;
+
+    /// <summary>True when at least one tracked network setting differs from its default.</summary>
+    public bool HasCustomSettings => _hasCustomSettings;
+
+    private string[] _customSettingLines = [];
+    private string _customSettingsLabel = "";
+    private string _customSettingsDetail = "";
+    private bool _hasCustomSettings;
+
+    private void RefreshCustomSettings()
+    {
+        var deviations = CustomSettingsReport.ListDeviations(_settings.Current);
+        _customSettingLines = deviations
+            .Select(item => item.Suffix is null
+                ? LanguageService.Get(item.TextKey)
+                : LanguageService.Get(item.TextKey) + " " + item.Suffix)
+            .ToArray();
+        _customSettingsDetail = string.Join(Environment.NewLine, _customSettingLines);
+        _hasCustomSettings = _customSettingLines.Length > 0;
+        _customSettingsLabel = _hasCustomSettings
+            ? string.Format(
+                CultureInfo.InvariantCulture,
+                LanguageService.Get("custom.settings"),
+                _customSettingLines.Length)
+            : "";
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CustomSettingLines)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CustomSettingsLabel)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CustomSettingsDetail)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasCustomSettings)));
+    }
+
+    private Task ResetCustomSettingsAsync()
+    {
+        var upstreamWasOn = _settings.Current.UpstreamProxyEnabled;
+        var captureRunning = _interception.IsRunning;
+        CustomSettingsReport.RestoreDefaults(_settings.Current);
+        _settings.Save();
+        InspectorNetworkSettings.ApplyTo(_interception, _settings.Current);
+        RefreshCustomSettings();
+        StatusText = upstreamWasOn && captureRunning
+            ? LanguageService.Get("custom.upstreamNextStart")
+            : LanguageService.Get("custom.resetDone");
+        return Task.CompletedTask;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -2732,6 +3063,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     private void LoadFromSettings()
     {
         var s = _settings.Current;
+        // Before any child setter that calls PersistSettings, so a reset is not copied back.
+        _alwaysOnTop = s.AlwaysOnTop;
         BindAddress = s.BindAddress;
         BindPort = s.BindPort is >= 0 and <= 65535 ? s.BindPort : 8866;
         _launchAutoStartCapture = _autoStartCapture = s.AutoStartCapture;
@@ -2755,6 +3088,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         ApplyExclusionSettingsFromSettings();
         _debugFileLogging = IsDebugFileLoggingEnabled(s);
         _interception.ConfigureLogging(s);
+        InspectorNetworkSettings.ApplyTo(_interception, s);
 
         AutoResponder.Enabled = s.AutoResponderEnabled;
         AutoResponder.LoadFromDtos(s.AutoResponderRules);
@@ -2764,6 +3098,39 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         Breakpoints.UrlFilter = string.IsNullOrEmpty(s.BreakpointUrlFilter) ? "*" : s.BreakpointUrlFilter;
         Breakpoints.GraphQlOperationName = s.BreakpointGraphQlOperationName ?? "";
         ApplyInspectLayoutFromSettings();
+        ApplyAlwaysOnTop();
+        RefreshCustomSettings();
+    }
+
+    /// <summary>Applies <see cref="AlwaysOnTop"/> to the main window only. Dialogs are left alone.</summary>
+    public void ApplyAlwaysOnTop()
+    {
+        if (TryGetMainWindow() is { } window)
+        {
+            ApplyAlwaysOnTop(window);
+        }
+    }
+
+    /// <summary>Applies the saved flag to <paramref name="window"/>. Call this from the main window only.</summary>
+    public void ApplyAlwaysOnTop(Window window) => window.Topmost = _alwaysOnTop;
+
+    /// <summary>Keep the main window above other windows. Saved immediately.</summary>
+    public bool AlwaysOnTop
+    {
+        get => _alwaysOnTop;
+        set
+        {
+            if (_alwaysOnTop == value)
+            {
+                return;
+            }
+
+            _alwaysOnTop = value;
+            _settings.Current.AlwaysOnTop = value;
+            _settings.Save();
+            ApplyAlwaysOnTop();
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AlwaysOnTop)));
+        }
     }
 
     private void NotifySettingsUiChanged()
@@ -2787,6 +3154,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThemeModeIsLight)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThemeModeIsDark)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThemeModeIsAutomatic)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AlwaysOnTop)));
         ThemeService.ApplyThemeMode(_settings.Current.ThemeMode);
     }
 
@@ -2813,6 +3181,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BodyPrettyToolTip)));
         RefreshEndpointAndBindUi();
         RefreshSelectedInspectors();
+        RefreshCustomSettings();
+        RefreshStatisticsIfVisible();
     }
 
     private void SetThemeMode(ThemeMode mode)
@@ -2863,6 +3233,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         s.BindAddress = BindAddress;
         s.BindPort = BindPort;
         s.AutoStartCapture = AutoStartCapture;
+        s.AlwaysOnTop = AlwaysOnTop;
         s.AutoSystemProxyOnStart = AutoSystemProxyOnStart;
         s.DecryptHttps = DecryptHttps;
         s.ProxyLoopback = _interception.ProxyLoopback;
@@ -3066,14 +3437,15 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         s.LoggingMinimumLevel = enable ? "Debug" : "Error";
         if (string.IsNullOrWhiteSpace(s.LoggingFilePath))
         {
-            s.LoggingFilePath = LoggingSettingsWindow.DefaultLogPath();
+            s.LoggingFilePath = InspectorLogFiles.DefaultFolder();
         }
 
         _interception.ConfigureLogging(s);
         _settings.Save();
         DebugFileLogging = enable;
+        var folder = InspectorLogFiles.ResolveFolder(s.LoggingFilePath);
         StatusText = enable
-            ? $"Debug file logging on: {s.LoggingFilePath}"
+            ? $"Debug file logging on: {folder}"
             : "Debug file logging off (Error level, file logging off)";
         return Task.CompletedTask;
     }
@@ -3298,6 +3670,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             _interception.AddViaHeader = _settings.Current.AddViaHeader;
             _interception.DecryptHttps = _decryptHttps;
             _interception.ConfigureLogging(_settings.Current);
+            InspectorNetworkSettings.ApplyTo(_interception, _settings.Current);
             SetStatus("Starting proxy…", StatusSeverity.Busy);
             var token = StatusCancelToken;
             // Listener start + first Root-store trust refresh can stall Crypt32 — keep off UI.

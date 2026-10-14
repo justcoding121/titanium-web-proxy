@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
 using Titanium.Web.Proxy.Models;
 
@@ -59,6 +60,57 @@ public class SocksUpstreamProxyTests
         var response = await client.GetAsync(server.ListeningHttpsUrl);
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual("socks5-https-ok", await response.Content.ReadAsStringAsync());
+    }
+
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    public async Task Http_Through_Socks5_BeforeResponse_ReplacesBufferedBody_WithExactBytes()
+    {
+        var plain = new byte[70 * 1024];
+        for (var i = 0; i < plain.Length; i++)
+        {
+            plain[i] = (byte)(i % 251);
+        }
+
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+        server.HandleRequest(async context => await context.Response.Body.WriteAsync(plain));
+
+        using var socksUpstream = BuildSocksUpstream();
+        var proxy = testSuite.GetProxy();
+        proxy.UpStreamHttpProxy = new ExternalProxy
+        {
+            HostName = "127.0.0.1",
+            Port = socksUpstream.ProxyEndPoints[0].Port,
+            ProxyType = ExternalProxyType.Socks5
+        };
+        proxy.BeforeResponse += async (_, e) =>
+        {
+            var body = await e.GetResponseBody();
+            var replacement = new Response
+            {
+                StatusCode = 200,
+                StatusDescription = "OK",
+                HttpVersion = e.HttpClient.Request.HttpVersion
+            };
+            replacement.Headers.AddHeader("Content-Length", body.Length.ToString());
+            e.RespondStreaming(replacement, async (stream, ct) =>
+            {
+                var offset = 0;
+                while (offset < body.Length)
+                {
+                    var count = Math.Min(16 * 1024, body.Length - offset);
+                    await stream.WriteAsync(body.AsMemory(offset, count), ct);
+                    offset += count;
+                }
+            }, closeServerConnection: false);
+        };
+
+        using var client = testSuite.GetClient(proxy);
+        var response = await client.GetAsync(server.ListeningHttpUrl);
+        var got = await response.Content.ReadAsByteArrayAsync();
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        CollectionAssert.AreEqual(plain, got);
     }
 
     private static ProxyServer BuildSocksUpstream()

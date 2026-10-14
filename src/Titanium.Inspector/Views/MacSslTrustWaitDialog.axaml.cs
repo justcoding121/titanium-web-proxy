@@ -19,6 +19,7 @@ public partial class MacSslTrustWaitDialog : Window
     {
         InitializeComponent();
         LanguageService.AttachWindow(this);
+        DialogWorkArea.Attach(this);
         CancelButton.Click += (_, _) => CloseWith(MacSslTrustWaitResult.Cancelled);
         ConfirmSavedButton.Click += (_, _) => OnConfirmSavedClicked();
         Activated += (_, _) => TryVerifyOnFocus();

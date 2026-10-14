@@ -12,6 +12,7 @@
       <Button x:Name="SaveButton" Content="{loc:Loc exclude.action}" MinWidth="88" AutomationProperties.AutomationId="ExcludeHostAdd" />
       <Button x:Name="CancelButton" Content="{loc:Loc common.cancel}" MinWidth="88" IsCancel="True" AutomationProperties.AutomationId="ExcludeHostCancel" />
     </StackPanel>
+    <ScrollViewer Classes="dialogBody">
     <StackPanel Spacing="10">
       <TextBlock x:Name="HostLabel" FontWeight="SemiBold" />
       <TextBlock TextWrapping="Wrap" Opacity="0.9"
@@ -19,5 +20,6 @@
       <CheckBox x:Name="WildcardParentCheck"
                 AutomationProperties.AutomationId="ExcludeHostWildcardParent" />
     </StackPanel>
+    </ScrollViewer>
   </DockPanel>
 </Window>

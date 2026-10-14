@@ -134,9 +134,16 @@ public static class SessionArchive
     public static JsonObject ToHarEntry(SessionSnapshot s)
     {
         var duration = s.DurationMs ?? 0;
-        var wait = s.TtfbMs ?? Math.Max(0, duration * 0.6);
-        var receive = Math.Max(0, duration - wait);
-        var send = Math.Max(0, duration * 0.05);
+        var recorded = s.BlockedMs is not null || s.ReceiveMs is not null;
+        var wait = recorded
+            ? HarTimingMap.HarValue(s.WaitMs)
+            : s.TtfbMs ?? Math.Max(0, duration * 0.6);
+        var receive = recorded
+            ? HarTimingMap.HarValue(s.ReceiveMs)
+            : Math.Max(0, duration - (s.TtfbMs ?? Math.Max(0, duration * 0.6)));
+        var send = recorded
+            ? HarTimingMap.HarValue(s.SendMs)
+            : Math.Max(0, duration * 0.05);
         var mime = GuessMime(s);
 
         JsonNode? postDataNode = null;
@@ -199,7 +206,7 @@ public static class SessionArchive
             content["encoding"] = contentEncoding;
         }
 
-        return new JsonObject
+        var entry = new JsonObject
         {
             ["startedDateTime"] = s.StartedUtc.UtcDateTime.ToString("o"),
             ["time"] = duration,
@@ -218,10 +225,10 @@ public static class SessionArchive
             },
             ["timings"] = new JsonObject
             {
-                ["blocked"] = -1,
-                ["dns"] = -1,
-                ["connect"] = -1,
-                ["ssl"] = -1,
+                ["blocked"] = recorded ? HarTimingMap.HarValue(s.BlockedMs) : -1,
+                ["dns"] = recorded ? HarTimingMap.HarValue(s.DnsMs) : -1,
+                ["connect"] = recorded ? HarTimingMap.HarValue(s.ConnectMs) : -1,
+                ["ssl"] = recorded ? HarTimingMap.HarValue(s.TlsMs) : -1,
                 ["send"] = send,
                 ["wait"] = wait,
                 ["receive"] = receive,
@@ -229,6 +236,13 @@ public static class SessionArchive
             ["cache"] = new JsonObject(),
             ["_inspector"] = BuildInspectorExtension(s),
         };
+
+        if (!string.IsNullOrEmpty(s.Comment))
+        {
+            entry["comment"] = s.Comment;
+        }
+
+        return entry;
     }
 
     public static SessionSnapshot? FromHarEntry(JsonElement entry, long id)
@@ -264,7 +278,17 @@ public static class SessionArchive
                 Protocol = "HAR",
             };
 
+            if (entry.TryGetProperty("comment", out var comment) && comment.ValueKind == JsonValueKind.String)
+            {
+                snap.Comment = comment.GetString();
+            }
+
             ApplyInspectorExtension(entry, snap);
+            if (!HasTimingExtension(entry) && snap.DurationMs is not null)
+            {
+                snap.TimingEstimated = true;
+            }
+
             return snap;
         }
         catch
@@ -323,6 +347,7 @@ public static class SessionArchive
             var snap = JsonSerializer.Deserialize<SessionSnapshot>(stream);
             if (snap is not null)
             {
+                snap.ConnectionId = 0;
                 list.Add(snap);
             }
         }
@@ -376,7 +401,47 @@ public static class SessionArchive
             MultipartParts = s.MultipartParts,
         };
 
-        return JsonSerializer.SerializeToNode(ext, InspectorJson)!.AsObject();
+        var node = JsonSerializer.SerializeToNode(ext, InspectorJson)!.AsObject();
+        if (s.DurationMs is not null || s.TimingRecorded || s.TimingEstimated)
+        {
+            node["timing"] = new JsonObject
+            {
+                ["recorded"] = s.TimingRecorded,
+                ["estimated"] = s.TimingEstimated,
+                ["reused"] = s.ConnectionReused,
+                ["attempts"] = s.TimingAttempts,
+                ["blocked"] = HarTimingMap.HarValue(s.BlockedMs),
+                ["dns"] = HarTimingMap.HarValue(s.DnsMs),
+                ["connect"] = HarTimingMap.HarValue(s.ConnectMs),
+                ["ssl"] = HarTimingMap.HarValue(s.TlsMs),
+                ["send"] = HarTimingMap.HarValue(s.SendMs),
+                ["wait"] = HarTimingMap.HarValue(s.WaitMs),
+                ["receive"] = HarTimingMap.HarValue(s.ReceiveMs),
+            };
+        }
+
+        if (s.Events is { Count: > 0 } events)
+        {
+            var notes = new JsonArray();
+            foreach (var note in events.Take(SessionEventBuffer.Cap))
+            {
+                notes.Add(new JsonObject
+                {
+                    ["ms"] = note.OffsetMs,
+                    ["key"] = note.Key,
+                    ["failure"] = note.Failure,
+                });
+            }
+
+            node["events"] = notes;
+        }
+
+        if (s.Mark != SessionMark.None)
+        {
+            node["mark"] = s.Mark.ToString();
+        }
+
+        return node;
     }
 
     private static void ApplyInspectorExtension(JsonElement entry, SessionSnapshot snap)
@@ -387,9 +452,114 @@ public static class SessionArchive
         }
 
         ApplyInspectorIdentity(ext, snap);
+        if (ext.TryGetProperty("mark", out var markEl) &&
+            markEl.ValueKind == JsonValueKind.String &&
+            Enum.TryParse<SessionMark>(markEl.GetString(), ignoreCase: true, out var mark))
+        {
+            snap.Mark = mark;
+        }
+
+        ApplyInspectorTiming(ext, snap);
+        ApplyInspectorEvents(ext, snap);
         ApplyInspectorCapture(ext, snap);
         ApplyInspectorFlags(ext, snap);
         ApplyInspectorBodies(ext, snap);
+    }
+
+    private static bool HasTimingExtension(JsonElement entry)
+    {
+        return entry.TryGetProperty("_inspector", out var ext)
+            && ext.ValueKind == JsonValueKind.Object
+            && ext.TryGetProperty("timing", out var timing)
+            && timing.ValueKind == JsonValueKind.Object;
+    }
+
+    private static void ApplyInspectorEvents(JsonElement ext, SessionSnapshot snap)
+    {
+        if (!ext.TryGetProperty("events", out var events) || events.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        var notes = new List<SessionEventNote>();
+        foreach (var item in events.EnumerateArray())
+        {
+            if (notes.Count >= SessionEventBuffer.Cap)
+            {
+                break;
+            }
+
+            if (TryParseInspectorEventNote(item, out var note))
+            {
+                notes.Add(note);
+            }
+        }
+
+        snap.Events = notes.Count == 0 ? null : notes;
+    }
+
+    private static bool TryParseInspectorEventNote(JsonElement item, out SessionEventNote note)
+    {
+        note = default;
+        if (item.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        var key = item.TryGetProperty("key", out var keyEl) ? keyEl.GetString() : null;
+        if (string.IsNullOrEmpty(key))
+        {
+            return false;
+        }
+
+        var milliseconds = 0d;
+        if (item.TryGetProperty("ms", out var msEl) && msEl.TryGetDouble(out var value))
+        {
+            milliseconds = Math.Max(0, value);
+        }
+
+        var failure = item.TryGetProperty("failure", out var failureEl) && failureEl.ValueKind == JsonValueKind.True;
+        note = new SessionEventNote(milliseconds, key, failure);
+        return true;
+    }
+
+    private static void ApplyInspectorTiming(JsonElement ext, SessionSnapshot snap)
+    {
+        if (!ext.TryGetProperty("timing", out var timing) || timing.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        snap.TimingEstimated = timing.TryGetProperty("estimated", out var estimated) && estimated.ValueKind == JsonValueKind.True;
+        snap.TimingRecorded = timing.TryGetProperty("recorded", out var recorded) && recorded.ValueKind == JsonValueKind.True;
+        snap.ConnectionReused = timing.TryGetProperty("reused", out var reused) && reused.ValueKind == JsonValueKind.True;
+        if (timing.TryGetProperty("attempts", out var attempts) && attempts.TryGetInt32(out var attemptCount))
+        {
+            snap.TimingAttempts = attemptCount;
+        }
+
+        if (!snap.TimingRecorded || snap.TimingEstimated)
+        {
+            return;
+        }
+
+        snap.BlockedMs = ReadPhase(timing, "blocked");
+        snap.DnsMs = ReadPhase(timing, "dns");
+        snap.ConnectMs = ReadPhase(timing, "connect");
+        snap.TlsMs = ReadPhase(timing, "ssl");
+        snap.SendMs = ReadPhase(timing, "send");
+        snap.WaitMs = ReadPhase(timing, "wait");
+        snap.ReceiveMs = ReadPhase(timing, "receive");
+    }
+
+    private static double? ReadPhase(JsonElement timing, string name)
+    {
+        if (!timing.TryGetProperty(name, out var value) || !value.TryGetDouble(out var milliseconds) || milliseconds < 0)
+        {
+            return null;
+        }
+
+        return milliseconds;
     }
 
     private static void ApplyInspectorIdentity(JsonElement ext, SessionSnapshot snap)

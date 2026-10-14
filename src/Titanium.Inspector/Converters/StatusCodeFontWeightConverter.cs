@@ -1,4 +1,5 @@
 using System.Globalization;
+using Avalonia;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 using Titanium.Inspector.Services;
@@ -14,9 +15,24 @@ public sealed class StatusCodeFontWeightConverter : IValueConverter
     {
         var status = value as int? ?? (value is int i ? i : null);
         var statusClass = SessionDisplayFormat.GetStatusClass(status);
-        return statusClass is HttpStatusClass.ClientError or HttpStatusClass.ServerError
-            ? FontWeight.SemiBold
-            : FontWeight.Normal;
+        if (statusClass is HttpStatusClass.ClientError or HttpStatusClass.ServerError)
+        {
+            return FontWeight.SemiBold;
+        }
+
+        // Light draws dark strokes on white, which look thin at Normal. The theme dictionary
+        // raises the base weight; Dark stays Normal for 2xx and 3xx.
+        if (Application.Current?.TryGetResource(
+                "SessionStatusBaseFontWeight",
+                Application.Current.ActualThemeVariant,
+                out var resource) == true
+            && resource is string name
+            && Enum.TryParse(name, ignoreCase: false, out FontWeight weight))
+        {
+            return weight;
+        }
+
+        return FontWeight.Normal;
     }
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)

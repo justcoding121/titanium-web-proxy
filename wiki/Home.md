@@ -542,6 +542,11 @@ proxyServer.Logging.LoggerFactory = hostLoggerFactory;
 proxyServer.ApplyLoggingConfiguration();
 ```
 
+To keep the built-in sinks and add your own, append them to `AdditionalLoggerProviders` and call
+`ApplyLoggingConfiguration` again. An empty list leaves the sink list unchanged. The proxy disposes only
+the console and file sinks it created; it does not dispose providers you supply. The list is ignored when
+`LoggerFactory` is set. The default minimum level stays `Error`.
+
 Exceptions the proxy considers expected/benign under normal operation (client disconnects, cancelled
 operations, expected socket resets, retries, and similar) are logged at `Debug`/`Trace` so they never
 contribute to `Error`-level noise in the default configuration, while genuinely unexpected failures are

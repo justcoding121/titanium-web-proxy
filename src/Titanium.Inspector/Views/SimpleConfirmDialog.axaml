@@ -15,7 +15,9 @@
       <Button x:Name="CancelButton" MinWidth="88" IsCancel="True"
               AutomationProperties.AutomationId="ConfirmCancel" />
     </StackPanel>
+    <ScrollViewer Classes="dialogBody">
     <TextBlock x:Name="MessageText" TextWrapping="Wrap" VerticalAlignment="Center"
                AutomationProperties.AutomationId="ConfirmMessage" />
+    </ScrollViewer>
   </DockPanel>
 </Window>

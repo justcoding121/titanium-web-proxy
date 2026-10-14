@@ -1,6 +1,6 @@
 # Inspector trust / proxy UX matrix
 
-Living scorecard for Capture → Install / Remove / Clear+Install / Decrypt / System proxy / Trust Firefox.
+Living scorecard for Capture → Root certificate → Install / Remove / Clear+Install / Trust Firefox, plus toolbar Decrypt HTTPS and System proxy.
 Fill outcomes during manual attended CryptUI/Keychain runs; automated Yes/No/Cancel leaves are covered by `Inspector-Trust-Decision` + Headless suites.
 
 ## Invariants

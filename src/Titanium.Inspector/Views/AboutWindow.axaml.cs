@@ -7,19 +7,15 @@ namespace Titanium.Inspector.Views;
 
 public partial class AboutWindow : Window
 {
-    private static readonly string LicenseUrl =
-        string.Concat("https://", "polyformproject.org", "/licenses/noncommercial/1.0.0");
-    private static readonly string WebsiteUrl =
-        string.Concat("https://", "titaniumproxy.com");
-
     public AboutWindow()
     {
         InitializeComponent();
         LanguageService.AttachWindow(this);
+        DialogWorkArea.Attach(this);
         VersionText.Text = $"Version {UpdateService.FormatAssemblyDisplayVersion()}";
         OkButton.Click += (_, _) => Close();
-        LicenseLink.PointerPressed += (_, e) => OnLinkPressed(e, LicenseUrl);
-        WebsiteLink.PointerPressed += (_, e) => OnLinkPressed(e, WebsiteUrl);
+        LicenseLink.PointerPressed += (_, e) => OnLinkPressed(e, InspectorLinks.License);
+        WebsiteLink.PointerPressed += (_, e) => OnLinkPressed(e, InspectorLinks.Website);
     }
 
     public static async Task ShowAsync(Window owner)
@@ -28,7 +24,7 @@ public partial class AboutWindow : Window
         await w.ShowDialog(owner);
     }
 
-    private async void OnLinkPressed(PointerPressedEventArgs e, string url)
+    private async void OnLinkPressed(PointerPressedEventArgs e, Uri url)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
@@ -39,7 +35,7 @@ public partial class AboutWindow : Window
         var launcher = TopLevel.GetTopLevel(this)?.Launcher;
         if (launcher is not null)
         {
-            await launcher.LaunchUriAsync(new Uri(url));
+            await launcher.LaunchUriAsync(url);
         }
     }
 }

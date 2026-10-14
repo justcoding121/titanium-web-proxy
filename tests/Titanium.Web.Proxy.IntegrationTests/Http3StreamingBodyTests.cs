@@ -268,6 +268,57 @@ public class Http3StreamingBodyTests
         Assert.AreEqual("synthetic-post", response.TextBody);
         Assert.AreEqual(0, originHits);
     }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task BeforeResponse_Http3_ReplacesBufferedOriginBody_WithExactBytes()
+    {
+        RequireQuic();
+        var plain = new byte[70 * 1024];
+        for (var i = 0; i < plain.Length; i++)
+        {
+            plain[i] = (byte)(i % 251);
+        }
+
+        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleRequest(_ => Task.FromResult(new QuicHttp3Response(200, "origin", plain)));
+
+        var quicEp = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+        {
+            ForwardHost = "localhost",
+            ForwardPort = origin.Port
+        };
+
+        using var proxy = CreateHttp3Proxy(quicEp);
+        proxy.BeforeResponse += async (_, e) =>
+        {
+            var body = await e.GetResponseBody();
+            var replacement = new Response
+            {
+                StatusCode = 200,
+                StatusDescription = "OK",
+                HttpVersion = e.HttpClient.Request.HttpVersion
+            };
+            replacement.Headers.AddHeader("Content-Length", body.Length.ToString());
+            e.RespondStreaming(replacement, async (stream, ct) =>
+            {
+                var offset = 0;
+                while (offset < body.Length)
+                {
+                    var count = Math.Min(16 * 1024, body.Length - offset);
+                    await stream.WriteAsync(body.AsMemory(offset, count), ct);
+                    offset += count;
+                }
+            }, closeServerConnection: false);
+        };
+
+        await using var client = await QuicHttp3Client.ConnectAsync(
+            new IPEndPoint(IPAddress.Loopback, quicEp.Port), "localhost");
+        var response = await client.SendAsync("GET", $"localhost:{origin.Port}", "/paced");
+
+        Assert.AreEqual(200, response.StatusCode);
+        CollectionAssert.AreEqual(plain, response.Body);
+    }
 }
 
 #pragma warning restore TWP001
