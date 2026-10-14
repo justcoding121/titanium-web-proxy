@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 
@@ -34,6 +35,9 @@ public static class ReplayService
         using var handler = new HttpClientHandler
         {
             AllowAutoRedirect = false,
+            // Captured browsers send Accept-Encoding, so origins answer with gzip/br.
+            // Decode before the preview is treated as text; otherwise the body is raw compressed bytes.
+            AutomaticDecompression = DecompressionMethods.All,
         };
         if (options.IgnoreServerCertificateErrors)
         {
