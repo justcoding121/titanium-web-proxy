@@ -989,8 +989,39 @@ namespace Titanium.Web.Proxy.Http2
                     frameHeaderBuffer, clientStream, cancellationToken);
             }
 
+            // Seamless decrypt-bypass: the meta-refresh must be followed by GOAWAY on the same
+            // writer FIFO. A later socket close must not overtake these frames — Chrome treats a
+            // truncated h2 stream as ERR_HTTP2_PROTOCOL_ERROR and never applies the refresh.
+            if (args.CloseClientConnectionAfterResponse)
+            {
+                QueueGoAwayFrame(connectionState, clientStream, connectionState.LastClientStreamId,
+                    Http2ErrorCode.NoError);
+            }
+
             response.IsBodySent = true;
             MarkSyntheticResponseClosed(streamId, connectionState, onAfterResponse, logger);
+        }
+
+        /// <summary>
+        ///     Queues a GOAWAY on the client frame-writer FIFO (same path as synthetic HEADERS/DATA)
+        ///     so it cannot overtake the response it is shutting down.
+        /// </summary>
+        private static void QueueGoAwayFrame(Http2ConnectionState connectionState, Stream clientStream,
+            int lastStreamId, Http2ErrorCode errorCode)
+        {
+            var rented = ArrayPool<byte>.Shared.Rent(17);
+            var header = new Http2FrameHeader
+            {
+                StreamId = 0,
+                Type = Http2FrameType.GoAway,
+                Flags = 0,
+                Length = 8
+            };
+            header.CopyToBuffer(rented);
+            BinaryPrimitives.WriteInt32BigEndian(rented.AsSpan(9, 4), lastStreamId & 0x7fffffff);
+            BinaryPrimitives.WriteInt32BigEndian(rented.AsSpan(13, 4), (int)errorCode);
+            connectionState.EnqueueWriteRented(towardServer: false, connectionState.ClientWriteLock,
+                clientStream, rented, 17);
         }
 
         private static async Task EmitStreamedSyntheticResponseAsync(Response response,
