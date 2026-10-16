@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.LogicalTree;
 
 namespace Titanium.Inspector.Views;
 
@@ -43,6 +44,49 @@ internal static class DialogWorkArea
             }
         };
         window.PositionChanged += (_, _) => Apply(window);
+        AttachExpanderScroll(window);
+    }
+
+    /// <summary>
+    /// Opening an expander grows the form below the fold. Scroll that section into the dialog body.
+    /// </summary>
+    private static void AttachExpanderScroll(Window window)
+    {
+        foreach (var expander in window.GetLogicalDescendants().OfType<Expander>())
+        {
+            expander.PropertyChanged += (_, e) =>
+            {
+                if (e.Property != Expander.IsExpandedProperty || !expander.IsExpanded)
+                {
+                    return;
+                }
+
+                ScrollExpandedIntoView(expander);
+            };
+        }
+    }
+
+    private static void ScrollExpandedIntoView(Expander expander)
+    {
+        var attempts = 0;
+        void OnLayout(object? sender, EventArgs e)
+        {
+            attempts++;
+            if (expander.Content is not Control content || content.Bounds.Height <= 0)
+            {
+                if (attempts > 8)
+                {
+                    expander.LayoutUpdated -= OnLayout;
+                }
+
+                return;
+            }
+
+            expander.LayoutUpdated -= OnLayout;
+            content.BringIntoView();
+        }
+
+        expander.LayoutUpdated += OnLayout;
     }
 
     internal static void Apply(Window window)
