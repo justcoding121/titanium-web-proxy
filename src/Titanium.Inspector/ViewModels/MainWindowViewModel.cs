@@ -3458,6 +3458,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             PublishHeaderCounts(null);
             RequestBodyCaptureHint = "";
             ResponseBodyCaptureHint = "";
+            RequestBodyCaptureNotice = "";
+            ResponseBodyCaptureNotice = "";
+            RequestBodyCaptureNoticeSeverity = BodyInspectNoticeSeverity.None;
+            ResponseBodyCaptureNoticeSeverity = BodyInspectNoticeSeverity.None;
             RequestBodyPreviewBitmap = null;
             ResponseBodyPreviewBitmap = null;
             ClearBodyInspectCache();

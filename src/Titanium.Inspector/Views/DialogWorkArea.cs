@@ -10,10 +10,38 @@ internal static class DialogWorkArea
 {
     private const double ScreenMargin = 48;
     private static bool _applying;
+    private static readonly HashSet<Window> HeightLocked = new();
 
     public static void Attach(Window window)
     {
-        window.Opened += (_, _) => Apply(window);
+        window.Closed += (_, _) => HeightLocked.Remove(window);
+        window.Opened += (_, _) =>
+        {
+            Apply(window);
+            if (window.SizeToContent != SizeToContent.Manual && !HeightLocked.Contains(window))
+            {
+                void OnLayoutUpdated(object? sender, EventArgs e)
+                {
+                    if (HeightLocked.Contains(window))
+                    {
+                        window.LayoutUpdated -= OnLayoutUpdated;
+                        return;
+                    }
+
+                    var height = window.Bounds.Height;
+                    if (height <= 0 || double.IsNaN(height))
+                    {
+                        return;
+                    }
+
+                    LockHeightAfterSizeToContent(window, height);
+                    window.LayoutUpdated -= OnLayoutUpdated;
+                    Apply(window);
+                }
+
+                window.LayoutUpdated += OnLayoutUpdated;
+            }
+        };
         window.PositionChanged += (_, _) => Apply(window);
     }
 
@@ -53,6 +81,38 @@ internal static class DialogWorkArea
                 {
                     window.Width = maxWidth;
                 }
+            }
+        }
+        finally
+        {
+            _applying = false;
+        }
+    }
+
+    private static void LockHeightAfterSizeToContent(Window window, double height)
+    {
+        _applying = true;
+        try
+        {
+            if (window.MaxHeight is > 0 and var max && height > max)
+            {
+                height = max;
+            }
+
+            height = Math.Max(height, window.MinHeight);
+            var sizeToContent = window.SizeToContent;
+            switch (sizeToContent)
+            {
+                case SizeToContent.Height:
+                    window.SizeToContent = SizeToContent.Manual;
+                    window.Height = height;
+                    HeightLocked.Add(window);
+                    break;
+                case SizeToContent.WidthAndHeight:
+                    window.SizeToContent = SizeToContent.Width;
+                    window.Height = height;
+                    HeightLocked.Add(window);
+                    break;
             }
         }
         finally
