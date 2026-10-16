@@ -71,6 +71,7 @@
       <conv:StatusCodeFontWeightConverter x:Key="StatusCodeFontWeightConverter" />
       <conv:StatusSeverityBrushConverter x:Key="StatusSeverityBrushConverter" />
       <conv:RunLogLevelBrushConverter x:Key="RunLogLevelBrushConverter" />
+      <conv:BodyInspectNoticeBrushConverter x:Key="BodyInspectNoticeBrushConverter" />
       <conv:RunLogLevelFontWeightConverter x:Key="RunLogLevelFontWeightConverter" />
     </ResourceDictionary>
   </Application.Resources>

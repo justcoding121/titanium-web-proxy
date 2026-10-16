@@ -537,7 +537,7 @@ public class InspectorBodyHonestyTests
     public void TunnelInspect_ExplainsWireSizeNotHttpBody()
     {
         var hint = typeof(MainWindowViewModel).GetMethod(
-            "BuildSideCaptureHint",
+            "BuildSideCaptureInfoHint",
             BindingFlags.NonPublic | BindingFlags.Static)!;
         var core = typeof(MainWindowViewModel).GetMethod(
             "BuildSelectedBodyTextCore",

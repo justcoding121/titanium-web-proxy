@@ -674,13 +674,12 @@ namespace Titanium.Web.Proxy.Http2
             frameHeader.StreamId = 0;
             frameHeader.Type = Http2FrameType.GoAway;
             frameHeader.Flags = 0;
-            frameHeader.Length = 8;
+            frameHeader.Length = GoAwayPayloadLength;
             frameHeader.CopyToBuffer(frameHeaderBuffer);
 
-            var payload = new byte[8];
-            BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(0, 4), lastStreamId & 0x7fffffff);
-            BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(4, 4), (int)errorCode);
-            await WriteTwoAsync(output, frameHeaderBuffer.AsMemory(0, 9), payload.AsMemory(0, 8));
+            var payload = new byte[GoAwayPayloadLength];
+            WriteGoAwayPayload(payload, lastStreamId, errorCode);
+            await WriteTwoAsync(output, frameHeaderBuffer.AsMemory(0, 9), payload.AsMemory(0, GoAwayPayloadLength));
 
             // GOAWAY is often immediately followed by connection teardown (the sending relay returns
             // and cancels its peer). Flushing here ensures the frame reaches the wire before the socket
@@ -989,8 +988,48 @@ namespace Titanium.Web.Proxy.Http2
                     frameHeaderBuffer, clientStream, cancellationToken);
             }
 
+            // Seamless decrypt-bypass: the meta-refresh must be followed by GOAWAY on the same
+            // writer FIFO. A later socket close must not overtake these frames — Chrome treats a
+            // truncated h2 stream as ERR_HTTP2_PROTOCOL_ERROR and never applies the refresh.
+            if (args.CloseClientConnectionAfterResponse)
+            {
+                QueueGoAwayFrame(connectionState, clientStream, connectionState.LastClientStreamId,
+                    Http2ErrorCode.NoError);
+            }
+
             response.IsBodySent = true;
             MarkSyntheticResponseClosed(streamId, connectionState, onAfterResponse, logger);
+        }
+
+        /// <summary>
+        ///     Queues a GOAWAY on the client frame-writer FIFO (same path as synthetic HEADERS/DATA)
+        ///     so it cannot overtake the response it is shutting down.
+        /// </summary>
+        private static void QueueGoAwayFrame(Http2ConnectionState connectionState, Stream clientStream,
+            int lastStreamId, Http2ErrorCode errorCode)
+        {
+            const int frameLength = 9 + GoAwayPayloadLength;
+            var rented = ArrayPool<byte>.Shared.Rent(frameLength);
+            var header = new Http2FrameHeader
+            {
+                StreamId = 0,
+                Type = Http2FrameType.GoAway,
+                Flags = 0,
+                Length = GoAwayPayloadLength
+            };
+            header.CopyToBuffer(rented);
+            WriteGoAwayPayload(rented.AsSpan(9, GoAwayPayloadLength), lastStreamId, errorCode);
+            connectionState.EnqueueWriteRented(towardServer: false, connectionState.ClientWriteLock,
+                clientStream, rented, frameLength);
+        }
+
+        /// <summary>Last-Stream-ID (reserved bit cleared) + error code, RFC 9113 §6.8.</summary>
+        private const int GoAwayPayloadLength = 8;
+
+        private static void WriteGoAwayPayload(Span<byte> payload, int lastStreamId, Http2ErrorCode errorCode)
+        {
+            BinaryPrimitives.WriteInt32BigEndian(payload[..4], lastStreamId & 0x7fffffff);
+            BinaryPrimitives.WriteInt32BigEndian(payload.Slice(4, 4), (int)errorCode);
         }
 
         private static async Task EmitStreamedSyntheticResponseAsync(Response response,

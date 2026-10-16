@@ -864,10 +864,17 @@
                                   ToolTip.Tip="{loc:Loc inspect.resizeTip}"
                                   AutomationProperties.AutomationId="ReqHeadersSplitter" />
                     <Grid Grid.Row="4" RowDefinitions="Auto,Auto,*">
-                      <TextBlock Grid.Row="0" Text="{Binding RequestBodyCaptureHint}" Margin="0,0,0,8"
-                                 TextWrapping="Wrap" Opacity="0.85" FontSize="12"
-                                 IsVisible="{Binding ShowRequestBodyCaptureHint}"
-                                 AutomationProperties.AutomationId="ReqBodyCaptureHint" />
+                      <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+                        <TextBlock Text="{Binding RequestBodyCaptureHint}"
+                                   TextWrapping="Wrap" Opacity="0.85" FontSize="12"
+                                   IsVisible="{Binding ShowRequestBodyCaptureHint}"
+                                   AutomationProperties.AutomationId="ReqBodyCaptureHint" />
+                        <TextBlock Text="{Binding RequestBodyCaptureNotice}"
+                                   TextWrapping="Wrap" FontSize="12"
+                                   Foreground="{Binding RequestBodyCaptureNoticeSeverity, Converter={StaticResource BodyInspectNoticeBrushConverter}}"
+                                   IsVisible="{Binding ShowRequestBodyCaptureNotice}"
+                                   AutomationProperties.AutomationId="ReqBodyCaptureNotice" />
+                      </StackPanel>
                       <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center"
                                     IsVisible="{Binding ShowBodyModeToggles}">
@@ -943,10 +950,17 @@
                                   ToolTip.Tip="{loc:Loc inspect.resizeTip}"
                                   AutomationProperties.AutomationId="RespHeadersSplitter" />
                     <Grid Grid.Row="4" RowDefinitions="Auto,Auto,*">
-                      <TextBlock Grid.Row="0" Text="{Binding ResponseBodyCaptureHint}" Margin="0,0,0,8"
-                                 TextWrapping="Wrap" Opacity="0.85" FontSize="12"
-                                 IsVisible="{Binding ShowResponseBodyCaptureHint}"
-                                 AutomationProperties.AutomationId="RespBodyCaptureHint" />
+                      <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+                        <TextBlock Text="{Binding ResponseBodyCaptureHint}"
+                                   TextWrapping="Wrap" Opacity="0.85" FontSize="12"
+                                   IsVisible="{Binding ShowResponseBodyCaptureHint}"
+                                   AutomationProperties.AutomationId="RespBodyCaptureHint" />
+                        <TextBlock Text="{Binding ResponseBodyCaptureNotice}"
+                                   TextWrapping="Wrap" FontSize="12"
+                                   Foreground="{Binding ResponseBodyCaptureNoticeSeverity, Converter={StaticResource BodyInspectNoticeBrushConverter}}"
+                                   IsVisible="{Binding ShowResponseBodyCaptureNotice}"
+                                   AutomationProperties.AutomationId="RespBodyCaptureNotice" />
+                      </StackPanel>
                       <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center"
                                     IsVisible="{Binding ShowBodyModeToggles}">
