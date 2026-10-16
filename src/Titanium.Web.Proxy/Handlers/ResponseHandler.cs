@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
@@ -497,8 +498,8 @@ public partial class ProxyServer
             return false;
 
         var html = Network.Tcp.DecryptFailureLearning.BuildMetaRefreshHtml(url);
-        // Connection: close is H1-only; H2 strips hop-by-hop headers and we cancel/dispose the client
-        // connection after the response so the forged MITM multiplex is not reused.
+        // Connection: close is H1-only. H2 queues a GOAWAY behind the meta-refresh
+        // (see EmitSyntheticResponseAsync) instead of shutting the socket down here.
         HttpHeader[] headers = request.HttpVersion >= HttpHeader.Version20
             ?
             [
@@ -514,15 +515,32 @@ public partial class ProxyServer
         return true;
     }
 
+    /// <summary>
+    ///     How long an HTTP/2 client that ignores GOAWAY may keep the forged MITM connection.
+    ///     Idle-read is off by default (<see cref="IdleReadTimeoutSeconds" /> is 0), so it does not
+    ///     reclaim this socket. The delay starts after GOAWAY is already queued, so the FIN cannot
+    ///     truncate the meta-refresh.
+    /// </summary>
+    private static readonly TimeSpan Http2SeamlessGoAwayCloseFallback = TimeSpan.FromSeconds(2);
+
     private async Task MaybeCloseClientAfterSeamlessRetryAsync(SessionEventArgs args)
     {
         if (!args.CloseClientConnectionAfterResponse)
             return;
 
-        // Do not CancelAsync first — that races the just-completed synthetic body write and
-        // can surface as net::ERR_CONNECTION_RESET before the browser applies meta-refresh.
-        // Graceful FIN (not linger-0 RST) tears down the forged MITM multiplex so the refresh
-        // opens a new CONNECT that hits the learned opaque bypass.
+        // HTTP/2: GOAWAY(NO_ERROR) is already queued behind the meta-refresh. Closing the socket
+        // here races the frame-writer drain and Chrome reports ERR_HTTP2_PROTOCOL_ERROR instead of
+        // following the refresh. The browser closes after GOAWAY; the fallback reclaims a client
+        // that never does.
+        if (ClientSpokeHttp2(args))
+        {
+            _ = CloseHttp2ClientAfterGoAwayAsync(args.ClientConnection, args.CancellationToken);
+            return;
+        }
+
+        // HTTP/1.1 writes the meta-refresh before this runs, and the response carries Connection: close.
+        // Do not CancelAsync first — that races the just-completed body write and can surface as
+        // net::ERR_CONNECTION_RESET before the browser applies meta-refresh.
         try
         {
             await Task.Yield();
@@ -532,6 +550,33 @@ public partial class ProxyServer
         {
             ProxyDiagnostics.ReportBenign(logger,
                 "Seamless decrypt-bypass: closing client connection after meta-refresh", ex);
+        }
+    }
+
+    private static bool ClientSpokeHttp2(SessionEventArgs args)
+    {
+        var connection = args.ClientConnection;
+        return connection.Http2CleartextClient
+               || connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2;
+    }
+
+    private async Task CloseHttp2ClientAfterGoAwayAsync(Network.Tcp.TcpClientConnection connection,
+        CancellationToken sessionToken)
+    {
+        try
+        {
+            await Task.Delay(Http2SeamlessGoAwayCloseFallback, sessionToken).ConfigureAwait(false);
+            connection.CloseGracefully();
+        }
+        catch (OperationCanceledException)
+        {
+            // Session ended first (the browser honored GOAWAY, or the proxy is stopping): the
+            // connection teardown already owns the socket, so there is nothing left to reclaim.
+        }
+        catch (Exception ex)
+        {
+            ProxyDiagnostics.ReportBenign(logger,
+                "Seamless decrypt-bypass: fallback close after HTTP/2 GOAWAY", ex);
         }
     }
 

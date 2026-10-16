@@ -17,7 +17,7 @@ public class BodyInspectCoverageTests
     [TestMethod]
     public void BuildBodyAndHexCaptureHints_CoverAllBannerBranches()
     {
-        var bodyHint = typeof(MainWindowViewModel).GetMethod("BuildSideCaptureHint", PrivateStatic)!;
+        var bodyHint = typeof(MainWindowViewModel).GetMethod("BuildSideCaptureInfoHint", PrivateStatic)!;
         var looksImage = typeof(MainWindowViewModel).GetMethod("LooksLikeImageHeaders", PrivateStatic)!;
         var core = typeof(MainWindowViewModel).GetMethod("BuildSelectedBodyTextCore", PrivateStatic)!;
 
@@ -95,6 +95,69 @@ public class BodyInspectCoverageTests
             ResponseBodyCapture = BodyCaptureState.Truncated,
         };
         Assert.IsFalse(string.IsNullOrEmpty((string)core.Invoke(null, [truncatedBad, false, true, false])!));
+    }
+
+    [TestMethod]
+    public void PrettyPrintFailure_ShowsWarningNoticeSeparateFromCaptureInfo()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-pretty-notice-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var settings = new SettingsService(Path.Combine(dir, "settings.json"));
+            settings.Current.AutoStartCapture = false;
+            settings.Save();
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                new ScriptedInspectorDialogs())
+            {
+                BindPort = 0,
+                BindAddress = "127.0.0.1",
+            };
+
+            var snap = new SessionSnapshot
+            {
+                Id = 42,
+                Method = "GET",
+                StatusCode = 200,
+                Url = "https://pretty.test/bad",
+                ResponseHeadersText = "Content-Type: application/json\r\n",
+                ResponseBodyText = "{not-json",
+                ResponseBodyCapture = BodyCaptureState.Truncated,
+                ResponseBodyOriginalSize = 9000,
+            };
+            vm.SeedSession(snap);
+            vm.SelectedSession = snap;
+            vm.BodyPrettyMode = true;
+            vm.SelectedInspectTabIndex = (int)InspectTab.Response;
+
+            Assert.IsTrue(vm.ShowResponseBodyCaptureHint);
+            StringAssert.Contains(vm.ResponseBodyCaptureHint, "Showing first");
+            Assert.IsTrue(vm.ShowResponseBodyCaptureNotice);
+            StringAssert.Contains(vm.ResponseBodyCaptureNotice, "pretty-print");
+            Assert.AreEqual(BodyInspectNoticeSeverity.Warning, vm.ResponseBodyCaptureNoticeSeverity);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(dir))
+                    Directory.Delete(dir, true);
+            }
+            catch
+            {
+                // best effort
+            }
+        }
     }
 
     [TestMethod]

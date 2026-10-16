@@ -22,6 +22,10 @@ public sealed partial class MainWindowViewModel
     private bool _bodyHexMode;
     private string _requestBodyCaptureHint = "";
     private string _responseBodyCaptureHint = "";
+    private string _requestBodyCaptureNotice = "";
+    private string _responseBodyCaptureNotice = "";
+    private BodyInspectNoticeSeverity _requestBodyCaptureNoticeSeverity = BodyInspectNoticeSeverity.None;
+    private BodyInspectNoticeSeverity _responseBodyCaptureNoticeSeverity = BodyInspectNoticeSeverity.None;
     private Bitmap? _requestBodyPreviewBitmap;
     private Bitmap? _responseBodyPreviewBitmap;
     private string? _composerBodyFilePath;
@@ -99,6 +103,26 @@ public sealed partial class MainWindowViewModel
 
     public bool ShowRequestBodyCaptureHint => !string.IsNullOrEmpty(_requestBodyCaptureHint);
 
+    public string RequestBodyCaptureNotice
+    {
+        get => _requestBodyCaptureNotice;
+        private set
+        {
+            if (SetField(ref _requestBodyCaptureNotice, value))
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowRequestBodyCaptureNotice)));
+            }
+        }
+    }
+
+    public BodyInspectNoticeSeverity RequestBodyCaptureNoticeSeverity
+    {
+        get => _requestBodyCaptureNoticeSeverity;
+        private set => SetField(ref _requestBodyCaptureNoticeSeverity, value);
+    }
+
+    public bool ShowRequestBodyCaptureNotice => !string.IsNullOrEmpty(_requestBodyCaptureNotice);
+
     public string ResponseBodyCaptureHint
     {
         get => _responseBodyCaptureHint;
@@ -112,6 +136,26 @@ public sealed partial class MainWindowViewModel
     }
 
     public bool ShowResponseBodyCaptureHint => !string.IsNullOrEmpty(_responseBodyCaptureHint);
+
+    public string ResponseBodyCaptureNotice
+    {
+        get => _responseBodyCaptureNotice;
+        private set
+        {
+            if (SetField(ref _responseBodyCaptureNotice, value))
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowResponseBodyCaptureNotice)));
+            }
+        }
+    }
+
+    public BodyInspectNoticeSeverity ResponseBodyCaptureNoticeSeverity
+    {
+        get => _responseBodyCaptureNoticeSeverity;
+        private set => SetField(ref _responseBodyCaptureNoticeSeverity, value);
+    }
+
+    public bool ShowResponseBodyCaptureNotice => !string.IsNullOrEmpty(_responseBodyCaptureNotice);
 
     public Bitmap? RequestBodyPreviewBitmap
     {
@@ -348,14 +392,28 @@ public sealed partial class MainWindowViewModel
             SelectedResponseBody = "";
             RequestBodyCaptureHint = "";
             ResponseBodyCaptureHint = "";
+            RequestBodyCaptureNotice = "";
+            ResponseBodyCaptureNotice = "";
+            RequestBodyCaptureNoticeSeverity = BodyInspectNoticeSeverity.None;
+            ResponseBodyCaptureNoticeSeverity = BodyInspectNoticeSeverity.None;
             RequestBodyPreviewBitmap = null;
             ResponseBodyPreviewBitmap = null;
             NotifySaveBodyCanExecute();
             return;
         }
 
-        RequestBodyCaptureHint = BuildSideCaptureHint(_selected, isRequest: true, _bodyHexMode);
-        ResponseBodyCaptureHint = BuildSideCaptureHint(_selected, isRequest: false, _bodyHexMode);
+        RequestBodyCaptureHint = BuildSideCaptureInfoHint(_selected, isRequest: true, _bodyHexMode);
+        ResponseBodyCaptureHint = BuildSideCaptureInfoHint(_selected, isRequest: false, _bodyHexMode);
+        RequestBodyCaptureNotice = "";
+        ResponseBodyCaptureNotice = "";
+        RequestBodyCaptureNoticeSeverity = BodyInspectNoticeSeverity.None;
+        ResponseBodyCaptureNoticeSeverity = BodyInspectNoticeSeverity.None;
+        if (BodiesMissing(_selected))
+        {
+            SetCaptureNotice(isRequest: true, BodiesMissingFromDiskHint, BodyInspectNoticeSeverity.Error);
+            SetCaptureNotice(isRequest: false, BodiesMissingFromDiskHint, BodyInspectNoticeSeverity.Error);
+        }
+
         UpdateBodyPreviewImages(_selected);
         NotifySaveBodyCanExecute();
 
@@ -381,11 +439,11 @@ public sealed partial class MainWindowViewModel
     public const string BodiesMissingFromDiskHint =
         "Saved session data removed — disk cache limit reached. Headers in the list are still available. Raise the limit under Options → Session retention…";
 
-    private static string BuildSideCaptureHint(SessionSnapshot selected, bool isRequest, bool hex)
+    private static string BuildSideCaptureInfoHint(SessionSnapshot selected, bool isRequest, bool hex)
     {
         if (BodiesMissing(selected))
         {
-            return BodiesMissingFromDiskHint;
+            return "";
         }
 
         if (selected.IsTunnel)
@@ -428,9 +486,9 @@ public sealed partial class MainWindowViewModel
                 || (long)bitmap.PixelSize.Width * bitmap.PixelSize.Height > InspectorBodyLimits.MaxDecodedImagePixels)
             {
                 bitmap.Dispose();
-                if (string.IsNullOrEmpty(CaptureHint(isRequest)))
+                if (CaptureNoticeSeverity(isRequest) != BodyInspectNoticeSeverity.Error)
                 {
-                    SetCaptureHint(isRequest, ImageTooLargeHint);
+                    SetCaptureNotice(isRequest, ImageTooLargeHint, BodyInspectNoticeSeverity.Warning);
                 }
 
                 return null;
@@ -648,14 +706,15 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        var hint = CaptureHint(isRequest);
-        if (string.IsNullOrEmpty(hint))
+        if (CaptureNotice(isRequest) is { Length: > 0 } existing
+            && existing.Contains("pretty-print", StringComparison.OrdinalIgnoreCase))
         {
-            SetCaptureHint(isRequest, PrettyPrintFailureHint);
+            return;
         }
-        else if (!hint.Contains("pretty-print", StringComparison.OrdinalIgnoreCase))
+
+        if (CaptureNoticeSeverity(isRequest) != BodyInspectNoticeSeverity.Error)
         {
-            SetCaptureHint(isRequest, hint + " · " + PrettyPrintFailureHint);
+            SetCaptureNotice(isRequest, PrettyPrintFailureHint, BodyInspectNoticeSeverity.Warning);
         }
     }
 
@@ -715,18 +774,23 @@ public sealed partial class MainWindowViewModel
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ResponseBodyImageRowHeight)));
     }
 
-    private string CaptureHint(bool isRequest) =>
-        isRequest ? _requestBodyCaptureHint : _responseBodyCaptureHint;
+    private string CaptureNotice(bool isRequest) =>
+        isRequest ? _requestBodyCaptureNotice : _responseBodyCaptureNotice;
 
-    private void SetCaptureHint(bool isRequest, string value)
+    private BodyInspectNoticeSeverity CaptureNoticeSeverity(bool isRequest) =>
+        isRequest ? _requestBodyCaptureNoticeSeverity : _responseBodyCaptureNoticeSeverity;
+
+    private void SetCaptureNotice(bool isRequest, string text, BodyInspectNoticeSeverity severity)
     {
         if (isRequest)
         {
-            RequestBodyCaptureHint = value;
+            RequestBodyCaptureNotice = text;
+            RequestBodyCaptureNoticeSeverity = severity;
         }
         else
         {
-            ResponseBodyCaptureHint = value;
+            ResponseBodyCaptureNotice = text;
+            ResponseBodyCaptureNoticeSeverity = severity;
         }
     }
 
