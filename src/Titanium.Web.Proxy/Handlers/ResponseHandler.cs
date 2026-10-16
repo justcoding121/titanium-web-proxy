@@ -534,7 +534,7 @@ public partial class ProxyServer
         // that never does.
         if (ClientSpokeHttp2(args))
         {
-            _ = CloseHttp2ClientAfterGoAwayAsync(args.ClientConnection);
+            _ = CloseHttp2ClientAfterGoAwayAsync(args.ClientConnection, args.CancellationToken);
             return;
         }
 
@@ -560,12 +560,18 @@ public partial class ProxyServer
                || connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2;
     }
 
-    private async Task CloseHttp2ClientAfterGoAwayAsync(Network.Tcp.TcpClientConnection connection)
+    private async Task CloseHttp2ClientAfterGoAwayAsync(Network.Tcp.TcpClientConnection connection,
+        CancellationToken sessionToken)
     {
         try
         {
-            await Task.Delay(Http2SeamlessGoAwayCloseFallback).ConfigureAwait(false);
+            await Task.Delay(Http2SeamlessGoAwayCloseFallback, sessionToken).ConfigureAwait(false);
             connection.CloseGracefully();
+        }
+        catch (OperationCanceledException)
+        {
+            // Session ended first (the browser honored GOAWAY, or the proxy is stopping): the
+            // connection teardown already owns the socket, so there is nothing left to reclaim.
         }
         catch (Exception ex)
         {

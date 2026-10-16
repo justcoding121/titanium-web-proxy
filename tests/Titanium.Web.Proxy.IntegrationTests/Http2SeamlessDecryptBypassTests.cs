@@ -47,6 +47,58 @@ public class Http2SeamlessDecryptBypassTests
         }
     }
 
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    public async Task ClientIgnoringGoAway_IsClosedByTheFallback()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleConnection(ServeChallengeAsync);
+
+        using var suite = new TestSuite();
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableDecryptFailureBypass = true;
+
+        using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, "localhost", origin.Port);
+        var block = raw.Connection.EncodeHeaders(
+            new[]
+            {
+                (":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", "/")
+            },
+            new[] { ("sec-fetch-dest", "document"), ("accept", "text/html") });
+        await raw.Connection.WriteHeaderBlockAsync(1, block, endStream: true);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        var sawGoAway = false;
+        try
+        {
+            // Never close from the client side: only the proxy's bounded fallback can end this connection.
+            while (true)
+            {
+                var frame = await raw.Connection.ReadFrameAsync().WaitAsync(cts.Token);
+                if (frame.Type == Http2FrameType.Settings && (frame.Flags & Http2FrameFlag.Ack) == 0)
+                {
+                    await raw.Connection.WriteFrameAsync(Http2FrameType.Settings, 0, Http2FrameFlag.Ack,
+                        Array.Empty<byte>());
+                }
+                else if (frame.Type == Http2FrameType.GoAway)
+                {
+                    sawGoAway = true;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Assert.Fail("the proxy never closed a connection whose client ignored GOAWAY");
+        }
+        catch (Exception) when (sawGoAway)
+        {
+            // EOF after GOAWAY: the fallback closed the connection.
+        }
+
+        Assert.IsTrue(sawGoAway, "connection ended before GOAWAY");
+    }
+
     private static async Task ServeChallengeAsync(Http2RawFrame.Connection connection)
     {
         await connection.SendInitialSettingsAsync();
