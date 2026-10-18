@@ -149,6 +149,37 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         [TestMethod]
+        public void SystemProxySettingsDropsLoopbackSubtractWhenProxyLoopbackIsOff()
+        {
+            var settings = new SystemProxySettings
+            {
+                ProxyLoopback = false
+            };
+            settings.BypassRules.Add("*.example.com");
+            settings.BypassRules.Add("<-loopback>");
+
+            var proxyOverride = settings.BuildProxyOverride(
+                "<-loopback>;*.microsoftonline.com;<local>");
+
+            Assert.AreEqual("*.microsoftonline.com;<local>;*.example.com", proxyOverride);
+        }
+
+        [TestMethod]
+        public void SystemProxySettingsPlacesLoopbackRuleLastEvenWhenCurrentListAlreadyHasIt()
+        {
+            var settings = new SystemProxySettings
+            {
+                ProxyLoopback = true,
+                ProxyLoopbackPlacement = SystemProxyLoopbackPlacement.Last
+            };
+            settings.BypassRules.Add("*.example.com");
+
+            var proxyOverride = settings.BuildProxyOverride("<-loopback>;*.internal");
+
+            Assert.AreEqual("*.internal;*.example.com;<-loopback>", proxyOverride);
+        }
+
+        [TestMethod]
         public void SystemProxySettingsPlacesLoopbackRuleLastWhenRequested()
         {
             var settings = new SystemProxySettings

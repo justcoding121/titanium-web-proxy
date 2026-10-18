@@ -100,6 +100,7 @@ internal static class Program
                     GetOption(_args, "--log") ?? Path.Combine(Path.GetTempPath(), "twp-replay", "inspector.log")).ConfigureAwait(true),
                 "firefox" => await FirefoxScenario.RunAsync(harness, log, timeout).ConfigureAwait(true),
                 "loopback" => await LoopbackScenario.RunAsync(harness, log).ConfigureAwait(true),
+                "capture-localhost" => await CaptureLocalhostScenario.RunAsync(harness, log).ConfigureAwait(true),
                 "exclusions" => await ExclusionsScenario.RunAsync(harness, log).ConfigureAwait(true),
                 "pac" => await PacScenario.RunAsync(harness, log).ConfigureAwait(true),
                 "map-local" => await MapLocalScenario.RunAsync(harness, log).ConfigureAwait(true),
@@ -186,6 +187,7 @@ internal static class Program
               cert           Install/Remove CA via menus; assert Decrypt HTTPS auto-off after remove
               firefox        Trust CA in Firefox + system-proxy HTTPS capture
               loopback       Windows: Allow Store apps dialog
+              capture-localhost  Capture local traffic menu vs 127.0.0.1 WinINET bypass
               exclusions     Excluded hosts dialog
               pac            PAC replace confirm cancel/accept (when PAC active)
               map-local      AutoResponder Map Local file body via harness proxy

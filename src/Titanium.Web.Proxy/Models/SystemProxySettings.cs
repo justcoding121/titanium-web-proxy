@@ -65,14 +65,17 @@ public class SystemProxySettings
         var result = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // <-loopback> is owned by ProxyLoopback. A live ProxyOverride from the previous apply
+        // still contains it, and Merge would otherwise copy it back after the checkbox is cleared.
         if (ProxyLoopback && ProxyLoopbackPlacement == SystemProxyLoopbackPlacement.First)
             AddRule(result, seen, SubtractImplicitLoopbackRule);
 
         if (BypassRuleMode == SystemProxyBypassRuleMode.Merge && !string.IsNullOrWhiteSpace(currentProxyOverride))
             foreach (var rule in currentProxyOverride.Split(';'))
-                AddRule(result, seen, rule);
+                AddRule(result, seen, rule, skipLoopbackSubtract: true);
 
-        foreach (var rule in BypassRules) AddRule(result, seen, rule);
+        foreach (var rule in BypassRules)
+            AddRule(result, seen, rule, skipLoopbackSubtract: true);
 
         if (ProxyLoopback && ProxyLoopbackPlacement == SystemProxyLoopbackPlacement.Last)
             AddRule(result, seen, SubtractImplicitLoopbackRule);
@@ -80,11 +83,15 @@ public class SystemProxySettings
         return string.Join(";", result);
     }
 
-    private static void AddRule(List<string> result, HashSet<string> seen, string? rule)
+    private static void AddRule(List<string> result, HashSet<string> seen, string? rule, bool skipLoopbackSubtract = false)
     {
         if (string.IsNullOrWhiteSpace(rule)) return;
 
         var normalizedRule = rule.Trim();
+        if (skipLoopbackSubtract &&
+            normalizedRule.Equals(SubtractImplicitLoopbackRule, StringComparison.OrdinalIgnoreCase))
+            return;
+
         if (seen.Add(normalizedRule)) result.Add(normalizedRule);
     }
 }
