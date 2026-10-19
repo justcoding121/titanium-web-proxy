@@ -11943,6 +11943,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.SystemProxySettings.BypassRules
   nameWithType: SystemProxySettings.BypassRules
+- uid: Titanium.Web.Proxy.SystemProxySettings.ManageLoopbackRule
+  name: ManageLoopbackRule
+  href: api/Titanium.Web.Proxy.SystemProxySettings.html#Titanium_Web_Proxy_SystemProxySettings_ManageLoopbackRule
+  commentId: P:Titanium.Web.Proxy.SystemProxySettings.ManageLoopbackRule
+  fullName: Titanium.Web.Proxy.SystemProxySettings.ManageLoopbackRule
+  nameWithType: SystemProxySettings.ManageLoopbackRule
+- uid: Titanium.Web.Proxy.SystemProxySettings.ManageLoopbackRule*
+  name: ManageLoopbackRule
+  href: api/Titanium.Web.Proxy.SystemProxySettings.html#Titanium_Web_Proxy_SystemProxySettings_ManageLoopbackRule_
+  commentId: Overload:Titanium.Web.Proxy.SystemProxySettings.ManageLoopbackRule
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.SystemProxySettings.ManageLoopbackRule
+  nameWithType: SystemProxySettings.ManageLoopbackRule
 - uid: Titanium.Web.Proxy.SystemProxySettings.ProxyLoopback
   name: ProxyLoopback
   href: api/Titanium.Web.Proxy.SystemProxySettings.html#Titanium_Web_Proxy_SystemProxySettings_ProxyLoopback

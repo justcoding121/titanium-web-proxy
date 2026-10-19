@@ -86,6 +86,8 @@ public static class MitmExclusionDefaults
         }
 
         settings.ProxyLoopback = proxyLoopback;
+        // The caller passes an explicit on/off choice, so a stale <-loopback> must not override it.
+        settings.ManageLoopbackRule = true;
         return settings;
     }
 

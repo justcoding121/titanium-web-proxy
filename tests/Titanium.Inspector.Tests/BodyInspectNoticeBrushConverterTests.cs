@@ -41,7 +41,7 @@ public class BodyInspectNoticeBrushConverterTests
     [TestMethod]
     public void ConvertBack_Throws()
     {
-        Assert.ThrowsException<NotSupportedException>(() =>
+        Assert.ThrowsExactly<NotSupportedException>(() =>
             BodyInspectNoticeBrushConverter.Instance.ConvertBack(null, typeof(BodyInspectNoticeSeverity), null, Culture));
     }
 

@@ -29,6 +29,17 @@ public class SystemProxySettings
     public SystemProxyLoopbackPlacement ProxyLoopbackPlacement { get; set; } = SystemProxyLoopbackPlacement.First;
 
     /// <summary>
+    ///     Gets or sets whether <see cref="ProxyLoopback"/> alone decides if the <c>&lt;-loopback&gt;</c> rule is applied.
+    /// </summary>
+    /// <remarks>
+    ///     When <see langword="true"/>, any <c>&lt;-loopback&gt;</c> found in the existing bypass list or in
+    ///     <see cref="BypassRules"/> is discarded, so <see cref="ProxyLoopback"/> <see langword="false"/> really
+    ///     stops loopback going through the proxy even if a previous run left the rule behind.
+    ///     Defaults to <see langword="false"/>: an existing or explicitly listed rule is kept as-is.
+    /// </remarks>
+    public bool ManageLoopbackRule { get; set; }
+
+    /// <summary>
     ///     Gets additional WinINET host patterns that should bypass the proxy.
     /// </summary>
     public IList<string> BypassRules { get; } = new List<string>();
@@ -70,9 +81,9 @@ public class SystemProxySettings
 
         if (BypassRuleMode == SystemProxyBypassRuleMode.Merge && !string.IsNullOrWhiteSpace(currentProxyOverride))
             foreach (var rule in currentProxyOverride.Split(';'))
-                AddRule(result, seen, rule);
+                AddRule(result, seen, rule, ManageLoopbackRule);
 
-        foreach (var rule in BypassRules) AddRule(result, seen, rule);
+        foreach (var rule in BypassRules) AddRule(result, seen, rule, ManageLoopbackRule);
 
         if (ProxyLoopback && ProxyLoopbackPlacement == SystemProxyLoopbackPlacement.Last)
             AddRule(result, seen, SubtractImplicitLoopbackRule);
@@ -80,11 +91,16 @@ public class SystemProxySettings
         return string.Join(";", result);
     }
 
-    private static void AddRule(List<string> result, HashSet<string> seen, string? rule)
+    private static void AddRule(List<string> result, HashSet<string> seen, string? rule,
+        bool skipLoopbackSubtract = false)
     {
         if (string.IsNullOrWhiteSpace(rule)) return;
 
         var normalizedRule = rule.Trim();
+        if (skipLoopbackSubtract &&
+            normalizedRule.Equals(SubtractImplicitLoopbackRule, StringComparison.OrdinalIgnoreCase))
+            return;
+
         if (seen.Add(normalizedRule)) result.Add(normalizedRule);
     }
 }
