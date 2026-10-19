@@ -227,6 +227,8 @@ Titanium.Web.Proxy.MitmExclusionMode
 Titanium.Web.Proxy.MitmExclusionMode.Merge = 0 -> Titanium.Web.Proxy.MitmExclusionMode
 Titanium.Web.Proxy.MitmExclusionMode.Replace = 1 -> Titanium.Web.Proxy.MitmExclusionMode
 Titanium.Web.Proxy.SystemProxySettings.BuildProxyOverride(string? currentProxyOverride) -> string!
+Titanium.Web.Proxy.SystemProxySettings.ManageLoopbackRule.get -> bool
+Titanium.Web.Proxy.SystemProxySettings.ManageLoopbackRule.set -> void
 Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper
 static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.IsLocalHost(string? host) -> bool
 static Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.ToCommaSeparated(string? winInetProxyOverride) -> string!

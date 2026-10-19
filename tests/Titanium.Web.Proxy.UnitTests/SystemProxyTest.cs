@@ -149,34 +149,37 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         [TestMethod]
-        public void SystemProxySettingsDropsLoopbackSubtractWhenProxyLoopbackIsOff()
+        public void SystemProxySettingsKeepsExistingLoopbackRuleByDefault()
         {
-            var settings = new SystemProxySettings
-            {
-                ProxyLoopback = false
-            };
-            settings.BypassRules.Add("*.example.com");
+            var settings = new SystemProxySettings { ProxyLoopback = false };
             settings.BypassRules.Add("<-loopback>");
-
-            var proxyOverride = settings.BuildProxyOverride(
-                "<-loopback>;*.microsoftonline.com;<local>");
-
-            Assert.AreEqual("*.microsoftonline.com;<local>;*.example.com", proxyOverride);
-        }
-
-        [TestMethod]
-        public void SystemProxySettingsPlacesLoopbackRuleLastEvenWhenCurrentListAlreadyHasIt()
-        {
-            var settings = new SystemProxySettings
-            {
-                ProxyLoopback = true,
-                ProxyLoopbackPlacement = SystemProxyLoopbackPlacement.Last
-            };
-            settings.BypassRules.Add("*.example.com");
 
             var proxyOverride = settings.BuildProxyOverride("<-loopback>;*.internal");
 
-            Assert.AreEqual("*.internal;*.example.com;<-loopback>", proxyOverride);
+            Assert.AreEqual("<-loopback>;*.internal", proxyOverride);
+        }
+
+        [TestMethod]
+        public void SystemProxySettingsManagedLoopbackRuleFollowsProxyLoopbackOnly()
+        {
+            var off = new SystemProxySettings { ProxyLoopback = false, ManageLoopbackRule = true };
+            off.BypassRules.Add("<-loopback>");
+            Assert.AreEqual("*.internal", off.BuildProxyOverride("<-loopback>;*.internal"));
+
+            var on = new SystemProxySettings
+            {
+                ProxyLoopback = true,
+                ManageLoopbackRule = true,
+                ProxyLoopbackPlacement = SystemProxyLoopbackPlacement.Last
+            };
+            Assert.AreEqual("*.internal;<-loopback>", on.BuildProxyOverride("<-loopback>;*.internal"));
+        }
+
+        [TestMethod]
+        public void MitmExclusionDefaultsManageTheLoopbackRule()
+        {
+            Assert.IsTrue(MitmExclusionDefaults.CreateSystemProxySettings(proxyLoopback: false).ManageLoopbackRule);
+            Assert.IsFalse(new SystemProxySettings().ManageLoopbackRule);
         }
 
         [TestMethod]
@@ -201,6 +204,71 @@ namespace Titanium.Web.Proxy.UnitTests
             settings.BypassRules.Add("*.example.com;*.other.com");
 
             Assert.ThrowsExactly<ArgumentException>(() => settings.Validate());
+        }
+
+        /// <summary>
+        ///     Re-applying settings must merge against the bypass list from before the first apply, not the
+        ///     live list that already holds the previous apply's rules (e.g. a stale <c>&lt;-loopback&gt;</c>).
+        /// </summary>
+        [TestMethod]
+        public void TrySetAsSystemProxy_MergesAgainstPreApplyBaseline_NotPreviousApply()
+        {
+            using var proxy = new ProxyServer();
+            var backend = new FakeSystemProxyBackend("<local>;*.corp");
+            InjectBackend(proxy, backend);
+
+            var endPoint = new ExplicitProxyEndPoint(System.Net.IPAddress.Loopback, 0);
+            proxy.AddEndPoint(endPoint);
+            typeof(ProxyServer).GetProperty(nameof(ProxyServer.ProxyRunning))!.SetValue(proxy, true);
+
+            var on = new SystemProxySettings { ProxyLoopback = true };
+            on.BypassRules.Add("*.extra.com");
+            Assert.IsTrue(proxy.TrySetAsSystemProxy(endPoint, ProxyProtocolType.Http, on).Succeeded);
+            Assert.AreEqual("<-loopback>;<local>;*.corp;*.extra.com", backend.LastWrittenOverride);
+
+            // Unchecking loopback and dropping a host: neither may survive via the live list.
+            var off = new SystemProxySettings { ProxyLoopback = false };
+            Assert.IsTrue(proxy.TrySetAsSystemProxy(endPoint, ProxyProtocolType.Http, off).Succeeded);
+            Assert.AreEqual("<local>;*.corp", backend.LastWrittenOverride);
+
+            // After restore the baseline is re-read, so an externally changed list is honoured again.
+            Assert.IsTrue(proxy.TryRestoreOriginalProxySettings().Succeeded);
+            backend.Current = "<-loopback>;*.managed";
+            Assert.IsTrue(proxy.TrySetAsSystemProxy(endPoint, ProxyProtocolType.Http, off).Succeeded);
+            Assert.AreEqual("<-loopback>;*.managed", backend.LastWrittenOverride);
+        }
+
+        private static void InjectBackend(ProxyServer proxy, ISystemProxyBackend backend)
+        {
+            var field = typeof(ProxyServer).GetField(
+                "<SystemProxySettingsManager>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            (field.GetValue(proxy) as IDisposable)?.Dispose();
+            field.SetValue(proxy, backend);
+        }
+
+        private sealed class FakeSystemProxyBackend(string? initialOverride) : ISystemProxyBackend
+        {
+            public string? Current { get; set; } = initialOverride;
+            public string? LastWrittenOverride { get; private set; }
+
+            public void SetProxy(string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
+            {
+                LastWrittenOverride = proxyOverride;
+                if (proxyOverride != null) Current = proxyOverride;
+            }
+
+            public void RemoveProxy(ProxyProtocolType protocolType, bool saveOriginalConfig = true) { }
+
+            public void DisableAllProxy() { }
+
+            public void RestoreOriginalSettings() { }
+
+            public string? GetCurrentProxyOverride() => Current;
+
+            public ProxyProtocolType GetStaleLocalProxyProtocols(System.Collections.Generic.IReadOnlyCollection<int> ownedPorts) =>
+                ProxyProtocolType.None;
+
+            public void Dispose() { }
         }
 
         /// <summary>

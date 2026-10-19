@@ -327,6 +327,7 @@ public partial class ProxyServer : IDisposable
             if (systemProxyEndPoints.Count > 0)
             {
                 SystemProxySettingsManager.RestoreOriginalSettings();
+                ResetSystemProxyOverrideBaseline();
                 foreach (var endPoint in systemProxyEndPoints)
                 {
                     endPoint.IsSystemHttpProxy = false;

@@ -141,8 +141,10 @@ public partial class ProxyServer : IDisposable
             string? proxyOverride = null;
             if (settings != null)
             {
-                var currentProxyOverride = SystemProxySettingsManager.GetCurrentProxyOverride();
-                proxyOverride = settings.BuildProxyOverride(currentProxyOverride);
+                // Merge against the bypass list as it was before this server first changed it, not the
+                // live list: re-applying (e.g. after unchecking Capture local traffic or removing a
+                // bypass host) would otherwise copy our own previous rules straight back in.
+                proxyOverride = settings.BuildProxyOverride(GetSystemProxyOverrideBaseline());
             }
 
             SystemProxySettingsManager.SetProxy(
@@ -183,6 +185,37 @@ public partial class ProxyServer : IDisposable
         }
     }
 
+    private readonly object systemProxyOverrideBaselineLock = new();
+    private bool systemProxyOverrideBaselineCaptured;
+    private string? systemProxyOverrideBaseline;
+
+    /// <summary>
+    ///     The bypass list present before this server first wrote one, captured once and kept until the
+    ///     original settings are restored (the backends keep their restore snapshot for the same span).
+    /// </summary>
+    private string? GetSystemProxyOverrideBaseline()
+    {
+        lock (systemProxyOverrideBaselineLock)
+        {
+            if (!systemProxyOverrideBaselineCaptured)
+            {
+                systemProxyOverrideBaseline = SystemProxySettingsManager?.GetCurrentProxyOverride();
+                systemProxyOverrideBaselineCaptured = true;
+            }
+
+            return systemProxyOverrideBaseline;
+        }
+    }
+
+    private void ResetSystemProxyOverrideBaseline()
+    {
+        lock (systemProxyOverrideBaselineLock)
+        {
+            systemProxyOverrideBaselineCaptured = false;
+            systemProxyOverrideBaseline = null;
+        }
+    }
+
     /// <summary>
     ///     Clear HTTP proxy settings of current machine.
     /// </summary>
@@ -218,6 +251,7 @@ public partial class ProxyServer : IDisposable
         try
         {
             SystemProxySettingsManager.RestoreOriginalSettings();
+            ResetSystemProxyOverrideBaseline();
             ClearEndpointSystemProxyFlags(ProxyProtocolType.AllHttp);
             return SystemProxyChangeResult.Ok("System proxy restored");
         }
