@@ -65,9 +65,11 @@ public static class JsonReverseProxyDocument
                     Match = new RouteMatch
                     {
                         Host = r.Match?.Hosts?.FirstOrDefault() ?? r.Match?.Host,
+                        Hosts = r.Match?.Hosts,
                         Path = r.Match?.Path,
                         PathKind = ParsePathKind(r.Match?.PathKind),
                         Method = r.Match?.Methods?.FirstOrDefault() ?? r.Match?.Method,
+                        Methods = r.Match?.Methods,
                         Headers = r.Match?.Headers,
                         Query = r.Match?.Query,
                     },
@@ -136,6 +138,8 @@ public static class JsonReverseProxyDocument
         {
             "exact" => PathMatchKind.Exact,
             "template" => PathMatchKind.Template,
+            "segmentprefix" or "segment_prefix" => PathMatchKind.SegmentPrefix,
+            "regex" => PathMatchKind.Regex,
             _ => PathMatchKind.Prefix,
         };
 

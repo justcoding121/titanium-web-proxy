@@ -6,6 +6,8 @@ public enum PathMatchKind
     Exact = 0,
     Prefix = 1,
     Template = 2,
+    SegmentPrefix = 3,
+    Regex = 4,
 }
 
 /// <summary>Declarative route match criteria (host, path, method, headers, query).</summary>
@@ -17,6 +19,11 @@ public sealed class RouteMatch
     public string? Method { get; init; }
     public IReadOnlyDictionary<string, string>? Headers { get; init; }
     public IReadOnlyDictionary<string, string>? Query { get; init; }
+    public IReadOnlyList<string>? Hosts { get; init; }
+    public IReadOnlyList<string>? Methods { get; init; }
+
+    /// <summary>True keeps today's ordinal path compare.</summary>
+    public bool PathCaseSensitive { get; init; } = true;
 }
 
 /// <summary>A named route bound to a cluster with optional transforms and order.</summary>

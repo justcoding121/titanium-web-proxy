@@ -381,11 +381,26 @@
               "host": {
                 "type": "string"
               },
+              "hosts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "method": {
                 "type": "string"
               },
+              "methods": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "path": {
                 "type": "string"
+              },
+              "pathCaseSensitive": {
+                "type": "boolean"
               },
               "pathKind": {
                 "type": "string"

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using Titanium.Web.Proxy.Abstractions.Routing;
 
 namespace Titanium.Web.Proxy.Routing;
@@ -79,7 +81,10 @@ public sealed class RouteMatcher : IRouteMatcher
 
         return match.PathKind switch
         {
-            PathMatchKind.Exact => 3,
+            PathMatchKind.Exact => 4,
+            PathMatchKind.SegmentPrefix => 3,
+            PathMatchKind.Prefix => 2,
+            PathMatchKind.Regex => 2,
             PathMatchKind.Template => 1,
             _ => 2,
         };
@@ -91,31 +96,99 @@ public sealed class RouteMatcher : IRouteMatcher
         (match.Headers?.Count ?? 0) + (match.Query?.Count ?? 0);
 
     private static bool Matches(RouteMatch match, RouteMatchContext context) =>
-        HostMatches(match.Host, context.Host) &&
-        MethodMatches(match.Method, context.Method) &&
+        HostMatches(match, context.Host) &&
+        MethodMatches(match, context.Method) &&
         PathConstraintMatches(match, context) &&
         DictionaryMatches(match.Headers, context.Headers, ignoreCase: true) &&
         DictionaryMatches(match.Query, context.Query, ignoreCase: false);
 
-    private static bool HostMatches(string? expected, string? actual) =>
-        string.IsNullOrEmpty(expected) ||
-        string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase);
+    private static bool HostMatches(RouteMatch match, string? actual)
+    {
+        if (match.Hosts is { Count: > 0 } hosts)
+        {
+            for (var i = 0; i < hosts.Count; i++)
+            {
+                if (HostTokenMatches(hosts[i], actual))
+                {
+                    return true;
+                }
+            }
 
-    private static bool MethodMatches(string? expected, string? actual) =>
-        string.IsNullOrEmpty(expected) ||
-        string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase);
+            return false;
+        }
+
+        return HostTokenMatches(match.Host, actual);
+    }
+
+    private static bool HostTokenMatches(string? expected, string? actual)
+    {
+        if (string.IsNullOrEmpty(expected) || expected == "*")
+        {
+            return true;
+        }
+
+        if (expected.StartsWith("*.", StringComparison.Ordinal))
+        {
+            var suffix = expected[1..];
+            return actual is not null && actual.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool MethodMatches(RouteMatch match, string? actual)
+    {
+        if (match.Methods is { Count: > 0 } methods)
+        {
+            for (var i = 0; i < methods.Count; i++)
+            {
+                if (string.Equals(methods[i], actual, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return string.IsNullOrEmpty(match.Method) ||
+               string.Equals(match.Method, actual, StringComparison.OrdinalIgnoreCase);
+    }
 
     private static bool PathConstraintMatches(RouteMatch match, RouteMatchContext context) =>
         string.IsNullOrEmpty(match.Path) ||
-        PathMatches(match.Path, match.PathKind, context.Path ?? "/");
+        PathMatches(match, context.Path ?? "/");
 
-    private static bool PathMatches(string matchPath, PathMatchKind kind, string path) =>
-        kind switch
+    private static readonly ConditionalWeakTable<RouteMatch, Regex> CompiledExpressions = new();
+
+    private static bool PathMatches(RouteMatch match, string path)
+    {
+        var matchPath = match.Path ?? string.Empty;
+        var comparison = match.PathCaseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+        return match.PathKind switch
         {
-            PathMatchKind.Exact => string.Equals(path, matchPath, StringComparison.Ordinal),
+            PathMatchKind.Exact => string.Equals(path, matchPath, comparison),
             PathMatchKind.Template => TemplateMatches(matchPath, path),
-            _ => path.StartsWith(matchPath, StringComparison.Ordinal),
+            PathMatchKind.SegmentPrefix => SegmentPrefix(matchPath, path, comparison),
+            PathMatchKind.Regex => CompiledExpressions.GetValue(
+                match,
+                static value => new Regex(
+                    value.Path ?? ".*",
+                    RegexOptions.NonBacktracking | RegexOptions.CultureInvariant |
+                    (value.PathCaseSensitive ? RegexOptions.None : RegexOptions.IgnoreCase))).IsMatch(path),
+            _ => path.StartsWith(matchPath, comparison),
         };
+    }
+
+    private static bool SegmentPrefix(string matchPath, string path, StringComparison comparison)
+    {
+        if (!path.StartsWith(matchPath, comparison))
+        {
+            return false;
+        }
+
+        return path.Length == matchPath.Length || path[matchPath.Length] == '/';
+    }
 
     private static bool DictionaryMatches(
         IReadOnlyDictionary<string, string>? expected,

@@ -702,6 +702,50 @@ public class RouteTargetAndCookieTests
 }
 
 [TestClass]
+public class MatchModeTests
+{
+    [TestMethod]
+    public void SegmentPrefix_DoesNotMatchALongerSegment()
+    {
+        var matcher = new RouteMatcher();
+        var routes = new List<RouteConfig>
+        {
+            new()
+            {
+                Id = "api",
+                ClusterId = "c",
+                Match = new RouteMatch { Path = "/api", PathKind = PathMatchKind.SegmentPrefix },
+            },
+        };
+        Assert.IsNotNull(matcher.Match(new RouteMatchContext(null, "/api/v1", "GET", null, null), routes));
+        Assert.IsNull(matcher.Match(new RouteMatchContext(null, "/apiary", "GET", null, null), routes));
+    }
+
+    [TestMethod]
+    public void WildcardHost_AndRegexPath()
+    {
+        var matcher = new RouteMatcher();
+        var routes = new List<RouteConfig>
+        {
+            new()
+            {
+                Id = "wild",
+                ClusterId = "c",
+                Match = new RouteMatch
+                {
+                    Hosts = ["*.example.com"],
+                    Path = "^/items/\\d+$",
+                    PathKind = PathMatchKind.Regex,
+                },
+            },
+        };
+        Assert.AreEqual("wild", matcher.Match(new RouteMatchContext("a.example.com", "/items/4", "GET", null, null), routes)?.Id);
+        Assert.IsNull(matcher.Match(new RouteMatchContext("example.com", "/items/4", "GET", null, null), routes));
+        Assert.IsNull(matcher.Match(new RouteMatchContext("a.example.com", "/items/x", "GET", null, null), routes));
+    }
+}
+
+[TestClass]
 public class PassiveHealthTests
 {
     [TestMethod]

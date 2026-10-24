@@ -428,3 +428,11 @@ Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.Method.set -> vo
 Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.OriginalHost.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.OriginalHost.set -> void
 Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.RouteValues.get -> System.Collections.Generic.Dictionary<string!, string!>!
+Titanium.Web.Proxy.Abstractions.Routing.PathMatchKind.Regex = 4 -> Titanium.Web.Proxy.Abstractions.Routing.PathMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.PathMatchKind.SegmentPrefix = 3 -> Titanium.Web.Proxy.Abstractions.Routing.PathMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.Hosts.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.Hosts.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.Methods.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.Methods.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.PathCaseSensitive.get -> bool
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.PathCaseSensitive.init -> void

@@ -120,9 +120,17 @@ public static class HttpServerConfigReader
         {
             rest = rest["^~ ".Length..].Trim();
         }
-        else if (rest.StartsWith("~*", StringComparison.Ordinal) || rest.StartsWith("~", StringComparison.Ordinal))
+        else if (rest.StartsWith("~*", StringComparison.Ordinal))
         {
-            throw new FormatException("location regex modifiers are not supported");
+            kind = PathMatchKind.Regex;
+            state.LocationCaseSensitive = false;
+            rest = rest["~*".Length..].Trim();
+        }
+        else if (rest.StartsWith('~'))
+        {
+            kind = PathMatchKind.Regex;
+            state.LocationCaseSensitive = true;
+            rest = rest[1..].Trim();
         }
 
         state.LocationPath = rest;
@@ -286,6 +294,7 @@ public static class HttpServerConfigReader
         public string? ServerName { get; set; }
         public string? LocationPath { get; set; }
         public PathMatchKind LocationKind { get; set; } = PathMatchKind.Prefix;
+        public bool LocationCaseSensitive { get; set; } = true;
         public int Order { get; set; }
         public int Depth { get; set; }
         public int ServerDepth { get; set; } = int.MaxValue;
@@ -348,6 +357,7 @@ public static class HttpServerConfigReader
                     Host = ServerName,
                     Path = string.IsNullOrEmpty(LocationPath) ? "/" : LocationPath,
                     PathKind = LocationKind,
+                    PathCaseSensitive = LocationCaseSensitive,
                 },
             });
         }
