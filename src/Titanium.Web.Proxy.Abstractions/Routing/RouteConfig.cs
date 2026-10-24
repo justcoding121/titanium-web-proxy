@@ -48,6 +48,19 @@ public sealed class RouteConfig
 
     /// <summary>Terminal response. No cluster is contacted.</summary>
     public DirectResponseConfig? DirectResponse { get; init; }
+
+    /// <summary>Policy names. Null means this route pays nothing.</summary>
+    public IReadOnlyList<string>? Policies { get; init; }
+}
+
+/// <summary>A named policy. Only <c>maxRequestBodySize</c> and <c>requireHeader</c> are enforced here.</summary>
+public sealed class RoutePolicyConfig
+{
+    public required string Name { get; init; }
+    public required string Kind { get; init; }
+    public long? MaxRequestBodyBytes { get; init; }
+    public string? HeaderName { get; init; }
+    public string? HeaderValue { get; init; }
 }
 
 /// <summary>Redirect built by the proxy.</summary>

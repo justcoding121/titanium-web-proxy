@@ -12,6 +12,9 @@ public sealed class ReverseProxyOptions
 {
     public IReadOnlyList<RouteConfig>? Routes { get; init; }
     public IReadOnlyList<ClusterConfig>? Clusters { get; init; }
+
+    /// <summary>Named policies. Unused until a route lists one.</summary>
+    public IReadOnlyList<Routing.RoutePolicyConfig>? Policies { get; init; }
     public IReadOnlyList<IProxyMiddleware>? Middleware { get; init; }
     public IClusterManager? ClusterManager { get; init; }
     public IRouteMatcher? RouteMatcher { get; init; }

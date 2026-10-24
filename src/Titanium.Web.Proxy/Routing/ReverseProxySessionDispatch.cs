@@ -72,6 +72,11 @@ internal static class ReverseProxySessionDispatch
 
         var resolution = DestinationResolver.Resolve(options, request, fallbackHost, fallbackPort,
             out var destination, out var route);
+        if (route is not null && RoutePolicies.TryDeny(server, session, route))
+        {
+            return RouteDispatchResult.Handled;
+        }
+
         if (resolution == DestinationResolution.Terminal && route is not null)
         {
             PrepareTerminalResponse(session, route);

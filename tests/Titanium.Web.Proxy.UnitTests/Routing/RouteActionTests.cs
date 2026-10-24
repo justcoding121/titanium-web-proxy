@@ -60,6 +60,32 @@ public class RouteActionTests
         Assert.AreEqual(204, session.HttpClient.Response.StatusCode);
     }
 
+    [TestMethod]
+    public void RequireHeader_DeniesBeforeAClusterIsNeeded()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        proxy.ReverseProxy = new ReverseProxyOptions
+        {
+            Policies =
+            [
+                new RoutePolicyConfig { Name = "key", Kind = "requireHeader", HeaderName = "X-Api-Key", HeaderValue = "secret" },
+            ],
+            Routes =
+            [
+                new RouteConfig
+                {
+                    Id = "r",
+                    ClusterId = "missing",
+                    Policies = ["key"],
+                    Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+                },
+            ],
+        };
+        var session = MakeSession(proxy);
+        Assert.AreEqual(ReverseProxySessionDispatch.RouteDispatchResult.Handled, ReverseProxySessionDispatch.Apply(proxy, session));
+        Assert.AreEqual(401, session.HttpClient.Response.StatusCode);
+    }
+
     private static SessionEventArgs MakeSession(ProxyServer proxy)
     {
         var endPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false);

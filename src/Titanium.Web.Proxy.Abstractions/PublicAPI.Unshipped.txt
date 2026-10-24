@@ -492,3 +492,19 @@ Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot.Generation.ini
 Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot.ProxyConfigSnapshot() -> void
 Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot.Routes.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.RouteConfig!>!
 Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot.Routes.init -> void
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.Policies.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig!>?
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.Policies.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Policies.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Policies.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.HeaderName.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.HeaderName.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.HeaderValue.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.HeaderValue.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Kind.get -> string!
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Kind.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.MaxRequestBodyBytes.get -> long?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.MaxRequestBodyBytes.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Name.get -> string!
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Name.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.RoutePolicyConfig() -> void

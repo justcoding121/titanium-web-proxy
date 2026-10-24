@@ -449,6 +449,12 @@
           "order": {
             "type": "integer"
           },
+          "policies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "redirect": {
             "type": "object",
             "additionalProperties": false,
