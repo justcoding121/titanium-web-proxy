@@ -129,6 +129,9 @@ public static class JsonReverseProxyDocument
             "random" => LoadBalanceAlgorithm.Random,
             "leastrequests" or "least_requests" => LoadBalanceAlgorithm.LeastRequests,
             "leasttime" or "least_time" or "leastresponsetime" => LoadBalanceAlgorithm.LeastTime,
+            "poweroftwochoices" or "power_of_two_choices" => LoadBalanceAlgorithm.PowerOfTwoChoices,
+            "firstalphabetical" or "first_alphabetical" => LoadBalanceAlgorithm.FirstAlphabetical,
+            "consistenthash" or "iphash" or "ip_hash" => LoadBalanceAlgorithm.ConsistentHash,
             _ => throw new FormatException($"Unknown load-balancing algorithm '{policy}'."),
         };
     }

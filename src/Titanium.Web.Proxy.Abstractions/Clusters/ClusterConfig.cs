@@ -16,6 +16,9 @@ public enum LoadBalanceAlgorithm
     Random = 1,
     LeastRequests = 2,
     LeastTime = 3,
+    PowerOfTwoChoices = 4,
+    FirstAlphabetical = 5,
+    ConsistentHash = 6,
 }
 
 /// <summary>Single upstream destination.</summary>

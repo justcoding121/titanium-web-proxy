@@ -80,6 +80,9 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
             LoadBalanceAlgorithm.Random => SelectWeightedRandom(eligible, cluster.SlowStartSeconds),
             LoadBalanceAlgorithm.LeastRequests => SelectLeastRequests(eligible),
             LoadBalanceAlgorithm.LeastTime => SelectLeastTime(eligible),
+            LoadBalanceAlgorithm.PowerOfTwoChoices => SelectPowerOfTwo(eligible),
+            LoadBalanceAlgorithm.FirstAlphabetical => SelectAlphabetical(eligible),
+            LoadBalanceAlgorithm.ConsistentHash => SelectHash(eligible, context.AffinityKey ?? cluster.Id),
             _ => SelectWeightedRoundRobin(eligible, cluster.SlowStartSeconds),
         };
     }
@@ -130,6 +133,52 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
         }
 
         return best;
+    }
+
+    private DestinationConfig SelectPowerOfTwo(List<DestinationConfig> eligible)
+    {
+        if (eligible.Count == 1)
+        {
+            return eligible[0];
+        }
+
+        var i = Random.Shared.Next(eligible.Count);
+        var j = Random.Shared.Next(eligible.Count - 1);
+        if (j >= i)
+        {
+            j++;
+        }
+
+        var left = _health.GetActiveRequests(eligible[i].Id);
+        var right = _health.GetActiveRequests(eligible[j].Id);
+        return left <= right ? eligible[i] : eligible[j];
+    }
+
+    private static DestinationConfig SelectAlphabetical(List<DestinationConfig> eligible)
+    {
+        var best = eligible[0];
+        for (var i = 1; i < eligible.Count; i++)
+        {
+            if (string.Compare(eligible[i].Address, best.Address, StringComparison.Ordinal) < 0)
+            {
+                best = eligible[i];
+            }
+        }
+
+        return best;
+    }
+
+    private static DestinationConfig SelectHash(List<DestinationConfig> eligible, string key)
+    {
+        var hash = 14695981039346656037ul;
+        foreach (var ch in key)
+        {
+            hash ^= ch;
+            hash *= 1099511628211ul;
+        }
+
+        var index = (int)(hash % (ulong)eligible.Count);
+        return eligible[index];
     }
 
     private DestinationConfig SelectWeightedRoundRobin(List<DestinationConfig> eligible, int clusterSlowStartSeconds)

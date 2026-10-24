@@ -746,6 +746,39 @@ public class MatchModeTests
 }
 
 [TestClass]
+public class HashBalanceTests
+{
+    [TestMethod]
+    public async Task FirstAlphabetical_IsStable_AndHashDoesNotChangeForTheSameKey()
+    {
+        var manager = new ClusterManager();
+        var cluster = new ClusterConfig
+        {
+            Id = "c",
+            Algorithm = LoadBalanceAlgorithm.FirstAlphabetical,
+            Destinations =
+            [
+                new DestinationConfig { Id = "b", Address = "10.0.0.2", Port = 80 },
+                new DestinationConfig { Id = "a", Address = "10.0.0.1", Port = 80 },
+            ],
+        };
+        await manager.ApplyAsync([cluster]);
+        var balancer = new LoadBalancer();
+        Assert.AreEqual("a", balancer.Select(cluster, manager.Snapshot)?.Id);
+
+        cluster = new ClusterConfig
+        {
+            Id = "c",
+            Algorithm = LoadBalanceAlgorithm.ConsistentHash,
+            Destinations = cluster.Destinations,
+        };
+        var first = balancer.Select(cluster, manager.Snapshot, new LoadBalanceContext("user-1"))?.Id;
+        var second = balancer.Select(cluster, manager.Snapshot, new LoadBalanceContext("user-1"))?.Id;
+        Assert.AreEqual(first, second);
+    }
+}
+
+[TestClass]
 public class PassiveHealthTests
 {
     [TestMethod]

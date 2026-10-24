@@ -462,3 +462,6 @@ Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.DirectResponse.get -> Titani
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.DirectResponse.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Redirect.get -> Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig?
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Redirect.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm.ConsistentHash = 6 -> Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm
+Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm.FirstAlphabetical = 5 -> Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm
+Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm.PowerOfTwoChoices = 4 -> Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm
