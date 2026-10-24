@@ -1,4 +1,7 @@
 #nullable enable
+Titanium.Web.Proxy.Abstractions.Network.CidrPrefix
+static Titanium.Web.Proxy.Abstractions.Network.CidrPrefix.TryParse(string? text, out Titanium.Web.Proxy.Abstractions.Network.CidrPrefix? prefix) -> bool
+Titanium.Web.Proxy.Abstractions.Network.CidrPrefix.Contains(System.Net.IPAddress! address) -> bool
 static Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot.Empty.get -> Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot!
 static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.Compare(System.Version? left, System.Version? right) -> int
 static Titanium.Web.Proxy.Abstractions.Updates.ReleaseVersion.CompareReleaseTags(string? left, string? right) -> int
@@ -357,6 +360,8 @@ Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Backup.get -> bool
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Backup.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Health.get -> string?
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Health.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.DnsRefreshSeconds.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.DnsRefreshSeconds.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Host.get -> string?
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Host.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.MaxConcurrentRequests.get -> int?
@@ -475,6 +480,19 @@ Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.MaxConnectionsP
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.MaxConnectionsPerServer.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.SslProtocols.get -> string?
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.SslProtocols.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.ConnectTimeout.get -> System.TimeSpan?
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.ConnectTimeout.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.RequestTimeout.get -> System.TimeSpan?
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.RequestTimeout.init -> void
+Titanium.Web.Proxy.Abstractions.Configuration.IProxyConfigValidator
+Titanium.Web.Proxy.Abstractions.Configuration.IProxyConfigValidator.Validate(Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot! snapshot) -> System.Collections.Generic.IReadOnlyList<string!>!
+Titanium.Web.Proxy.Abstractions.Routing.IRouteTransformFactory
+Titanium.Web.Proxy.Abstractions.Routing.IRouteTransformFactory.CanHandle(string! kind) -> bool
+Titanium.Web.Proxy.Abstractions.Routing.IRouteTransformFactory.Apply(Titanium.Web.Proxy.Abstractions.Routing.TransformConfig! transform, Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext! context) -> void
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.RequestTrailers.get -> System.Collections.Generic.Dictionary<string!, string!>?
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.RequestTrailers.set -> void
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.ResponseTrailers.get -> System.Collections.Generic.Dictionary<string!, string!>?
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.ResponseTrailers.set -> void
 Titanium.Web.Proxy.Abstractions.Configuration.InMemoryProxyConfigProvider
 Titanium.Web.Proxy.Abstractions.Configuration.InMemoryProxyConfigProvider.Current.get -> Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot!
 Titanium.Web.Proxy.Abstractions.Configuration.InMemoryProxyConfigProvider.InMemoryProxyConfigProvider() -> void
@@ -600,3 +618,5 @@ Titanium.Web.Proxy.Abstractions.Routing.MirrorConfig.MaxBodyBytes.get -> int
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Limit.get -> int?
 Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.HttpToHttps.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext.LoadBalanceContext(string? affinityKey = null, string? hashInput = null) -> void
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.RequestTrailerSet = "RequestTrailerSet" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.ResponseTrailerSet = "ResponseTrailerSet" -> string!

@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using Microsoft.Extensions.Logging;
+using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -141,6 +143,15 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     ///     TCP connect race for this individual request.
     /// </summary>
     public TimeSpan? ConnectTimeout { get; set; }
+
+    /// <summary>Per-cluster upstream client settings. Null when the cluster uses process defaults.</summary>
+    internal ClusterHttpClientConfig? UpstreamHttpClient { get; set; }
+
+    /// <summary>Address published by DNS refresh. Null leaves name resolution unchanged.</summary>
+    internal IPAddress? UpstreamPinnedAddress { get; set; }
+
+    /// <summary>Response trailers staged by a transform. Null unless one ran.</summary>
+    internal Dictionary<string, string>? ResponseTrailerPlan { get; set; }
 
     /// <summary>
     ///     Enable/disable Windows Authentication (NTLM/Kerberos) for the current session.

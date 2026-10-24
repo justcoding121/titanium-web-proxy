@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Authentication;
 using Titanium.Web.Proxy.Abstractions.Clusters;
+using Titanium.Web.Proxy.Abstractions.Network;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Configuration.Models;
 
@@ -79,6 +80,15 @@ public static class TwpConfigValidator
                 {
                     errors.Add($"Destination '{dest.Id}' has an empty address.");
                 }
+                else if (dest.Address.StartsWith("unix:", StringComparison.Ordinal) && OperatingSystem.IsWindows())
+                {
+                    errors.Add($"Destination '{dest.Id}' uses a unix socket, which is not supported on Windows.");
+                }
+
+                if (dest.DnsRefreshSeconds < 0)
+                {
+                    errors.Add($"Destination '{dest.Id}' dnsRefreshSeconds must be >= 0.");
+                }
 
                 if (dest.Port is < 0 or > 65535)
                 {
@@ -121,6 +131,10 @@ public static class TwpConfigValidator
             if (route.Match is null)
             {
                 errors.Add($"Route '{route.Id}' is missing Match.");
+            }
+            else if (route.Match.PathKind == PathMatchKind.Template)
+            {
+                ValidateTemplate(route, errors);
             }
 
             if (route.Transforms is not null)
@@ -188,6 +202,51 @@ public static class TwpConfigValidator
             if (listener.IdleTimeoutSeconds is < 0)
             {
                 errors.Add($"Listener port {listener.Port}: idleTimeoutSeconds must be >= 0.");
+            }
+
+            if (listener.TrustedProxyProtocolSources is not { Count: > 0 } sources)
+            {
+                continue;
+            }
+
+            foreach (var source in sources)
+            {
+                if (!CidrPrefix.TryParse(source, out _))
+                {
+                    errors.Add($"Listener port {listener.Port}: trustedProxyProtocolSources '{source}' is not a CIDR prefix.");
+                }
+            }
+        }
+    }
+
+    private static void ValidateTemplate(RouteConfig route, List<string> errors)
+    {
+        var path = route.Match?.Path;
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+
+        foreach (var part in path.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part.Length < 2 || part[0] != '{' || part[^1] != '}')
+            {
+                continue;
+            }
+
+            var inner = part[1..^1];
+            var colon = inner.IndexOf(':');
+            if (colon < 0 || colon == inner.Length - 1)
+            {
+                continue;
+            }
+
+            var constraint = inner[(colon + 1)..];
+            var known = constraint is "int" or "guid" or "alpha" ||
+                        (constraint.StartsWith("regex(", StringComparison.Ordinal) && constraint.EndsWith(')'));
+            if (!known)
+            {
+                errors.Add($"Route '{route.Id}' has unknown template constraint '{constraint}'.");
             }
         }
     }
@@ -562,6 +621,15 @@ public static class TwpConfigValidator
             warnings.Add("server.limits.maxEncodedBodyBytes is reserved and not enforced. The enforced whole-body budget is maxBufferedBodyBytes.");
         if (limits?.MaxDecodedBodyBytes is not null)
             warnings.Add("server.limits.maxDecodedBodyBytes is reserved and not enforced. The enforced whole-body budget is maxBufferedBodyBytes.");
+        foreach (var listener in config.Listeners)
+        {
+            if (listener.AcceptProxyProtocol && listener.TrustedProxyProtocolSources is not { Count: > 0 })
+            {
+                warnings.Add(
+                    $"Listener port {listener.Port}: acceptProxyProtocol is set with no trustedProxyProtocolSources. Any peer may send a preamble.");
+            }
+        }
+
         return warnings;
     }
 }

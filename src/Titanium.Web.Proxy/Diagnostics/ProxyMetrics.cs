@@ -254,6 +254,18 @@ internal static class ProxyMetrics
     private static readonly Counter<long> MirrorDrops =
         Meter.CreateCounter<long>("twp.proxy.mirror.drops", "{drop}", "Mirrored requests dropped because the queue was full.");
 
+    private static readonly Counter<long> MirrorQueued =
+        Meter.CreateCounter<long>("twp.proxy.mirror.queued", "{request}", "Mirrored requests accepted onto the queue.");
+
+    private static readonly Counter<long> MirrorSent =
+        Meter.CreateCounter<long>("twp.proxy.mirror.sent", "{request}", "Mirrored requests written to the mirror destination.");
+
+    private static readonly Counter<long> MirrorFailed =
+        Meter.CreateCounter<long>("twp.proxy.mirror.failed", "{request}", "Mirrored requests that failed before a response was discarded.");
+
+    private static readonly Counter<long> MirrorSkipped =
+        Meter.CreateCounter<long>("twp.proxy.mirror.skipped", "{request}", "Mirrored requests skipped because the body was missing, streaming, or over the cap.");
+
     /// <summary>Live listener check. Do not cache the result.</summary>
     public static bool RequestInstrumentsEnabled =>
         Requests.Enabled || RequestDuration.Enabled || ActiveRequests.Enabled;
@@ -287,6 +299,38 @@ internal static class ProxyMetrics
         if (MirrorDrops.Enabled)
         {
             MirrorDrops.Add(1);
+        }
+    }
+
+    public static void RecordMirrorQueued()
+    {
+        if (MirrorQueued.Enabled)
+        {
+            MirrorQueued.Add(1);
+        }
+    }
+
+    public static void RecordMirrorSent()
+    {
+        if (MirrorSent.Enabled)
+        {
+            MirrorSent.Add(1);
+        }
+    }
+
+    public static void RecordMirrorFailed()
+    {
+        if (MirrorFailed.Enabled)
+        {
+            MirrorFailed.Add(1);
+        }
+    }
+
+    public static void RecordMirrorSkipped()
+    {
+        if (MirrorSkipped.Enabled)
+        {
+            MirrorSkipped.Add(1);
         }
     }
 

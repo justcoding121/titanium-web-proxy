@@ -1899,7 +1899,8 @@ public partial class ProxyServer : IDisposable
                 continue;
             }
 
-            if (endPoint.AcceptProxyProtocol)
+            if (endPoint.AcceptProxyProtocol &&
+                endPoint.IsTrustedProxyProtocolPeer((tcpClient.RemoteEndPoint as System.Net.IPEndPoint)?.Address))
             {
                 try
                 {

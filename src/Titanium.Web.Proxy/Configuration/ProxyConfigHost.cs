@@ -17,11 +17,24 @@ public sealed class ProxyConfigHost
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly IReadOnlyList<IProxyConfigFilter> _filters;
+    private readonly IReadOnlyList<IProxyConfigValidator> _validators;
     private IReadOnlyList<ClusterConfig> _previous = [];
 
-    public ProxyConfigHost(IReadOnlyList<IProxyConfigFilter>? filters = null)
+    public ProxyConfigHost(
+        IReadOnlyList<IProxyConfigFilter>? filters = null,
+        IReadOnlyList<IProxyConfigValidator>? validators = null)
     {
         _filters = filters ?? [];
+        _validators = validators ?? [];
+    }
+
+    /// <summary>
+    /// Records clusters already applied so the next <see cref="ApplyAsync"/> keeps them until routes swap.
+    /// </summary>
+    public void RememberAppliedClusters(IReadOnlyList<ClusterConfig> clusters)
+    {
+        ArgumentNullException.ThrowIfNull(clusters);
+        _previous = clusters;
     }
 
     public async Task ApplyAsync(
@@ -51,6 +64,15 @@ public sealed class ProxyConfigHost
         Action<ReverseProxyOptions> publish,
         CancellationToken cancellationToken)
     {
+        foreach (var validator in _validators)
+        {
+            var errors = validator.Validate(snapshot);
+            if (errors.Count > 0)
+            {
+                throw new InvalidOperationException(string.Join("; ", errors));
+            }
+        }
+
         foreach (var filter in _filters)
         {
             snapshot = await filter.ApplyAsync(snapshot, cancellationToken).ConfigureAwait(false);

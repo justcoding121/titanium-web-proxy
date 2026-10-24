@@ -82,6 +82,9 @@ public class SessionEventArgs : SessionEventArgsBase
         UpstreamHttpProtocol = upstreamHttpProtocol ?? connectArgs?.UpstreamHttpProtocol;
         reRequest = false;
         ConnectTimeout = null;
+        UpstreamPinnedAddress = null;
+        UpstreamHttpClient = null;
+        ResponseTrailerPlan = null;
         CustomUpStreamProxy = null;
         CustomUpStreamProxyUsed = null;
         UpstreamConnectHost = null;

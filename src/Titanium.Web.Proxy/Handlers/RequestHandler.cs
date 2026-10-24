@@ -1009,6 +1009,23 @@ public partial class ProxyServer
         }, generator, serverConnection);
     }
 
+    private async Task<bool> TryReplayGatewayStatusAsync(SessionEventArgs args, CancellationToken cancellationToken)
+    {
+        if (!Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, args))
+        {
+            return false;
+        }
+
+        args.HttpClient.CloseServerConnection = true;
+        var connection = await TcpConnectionFactory.GetServerConnection(
+            this, args, false, SslApplicationProtocol.Http11, true, cancellationToken);
+        args.HttpClient.SetConnection(connection);
+        await args.HttpClient.SendRequest(
+            false, args.IsTransparent, args.OriginHttpVersionPolicy ?? OriginHttpVersionPolicy, cancellationToken);
+        await args.HttpClient.ReceiveResponse(cancellationToken);
+        return true;
+    }
+
     private async Task HandleHttpSessionRequest(SessionEventArgs args) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var cancellationToken = args.CancellationToken;
@@ -1044,6 +1061,11 @@ public partial class ProxyServer
             else
             {
                 await args.HttpClient.ReceiveResponse(cancellationToken);
+            }
+
+            if (await TryReplayGatewayStatusAsync(args, cancellationToken).ConfigureAwait(false))
+            {
+                // One status retry already replaced the origin response. Do not loop.
             }
 
             var fastResponse = args.HttpClient.Response;

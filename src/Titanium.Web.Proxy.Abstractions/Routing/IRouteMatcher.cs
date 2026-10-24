@@ -117,4 +117,10 @@ public sealed class TransformRequestContext
 
     /// <summary>Subject of the inbound client certificate. Null when the listener did not capture one.</summary>
     public string? ClientCertificateSubject { get; set; }
+
+    /// <summary>Request trailers. Null unless a trailer transform ran.</summary>
+    public Dictionary<string, string>? RequestTrailers { get; set; }
+
+    /// <summary>Response trailers. Null unless a trailer transform ran.</summary>
+    public Dictionary<string, string>? ResponseTrailers { get; set; }
 }

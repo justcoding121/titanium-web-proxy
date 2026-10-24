@@ -72,6 +72,9 @@ public sealed class ServerConfig
     /// <summary>DNS resolver for HTTPS/SVCB discovery, e.g. <c>8.8.8.8:53</c>.</summary>
     public string? DnsServerEndPoint { get; set; }
 
+    /// <summary>Seconds to wait for in-flight clients on SIGTERM, SIGINT, or Ctrl+C. Default is 10.</summary>
+    public int? DrainTimeoutSeconds { get; set; }
+
     public TimeoutsConfig? Timeouts { get; set; }
 
     public PoolingConfig? Pooling { get; set; }

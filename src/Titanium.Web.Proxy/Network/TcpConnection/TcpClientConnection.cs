@@ -119,6 +119,8 @@ internal class TcpClientConnection : IDisposable
 
         if (disposing)
         {
+            ClientCertificate?.Dispose();
+            ClientCertificate = null;
             // Prefer peer-first close (push TIME_WAIT to the client) only when explicitly requested.
             // Default TcpTimeWaitSeconds==0: close immediately — matches Kestrel SocketConnection
             // and avoids scheduling ~1 Task.Delay per new-connection handshake onto the worker pool.
@@ -177,6 +179,9 @@ internal class TcpClientConnection : IDisposable
     internal virtual void CloseGracefully()
     {
         if (Interlocked.Exchange(ref disposed, 1) != 0) return;
+
+        ClientCertificate?.Dispose();
+        ClientCertificate = null;
 
         if (trackClientConnectionCount)
             ProxyServer.UpdateClientConnectionCount(false);

@@ -1,8 +1,10 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
+using Titanium.Web.Proxy.Abstractions.Network;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Options;
 
@@ -72,6 +74,67 @@ public abstract class ProxyEndPoint
 
     /// <summary>When true, the accept loop requires a PROXY protocol preamble.</summary>
     public bool AcceptProxyProtocol { get; set; }
+
+    private CidrPrefix[]? _trustedProxySources;
+    private IReadOnlyList<string>? _trustedProxySourceText;
+
+    /// <summary>
+    /// CIDR prefixes allowed to send a PROXY protocol preamble. Null or empty keeps today's behavior:
+    /// any peer may send the preamble. A non-empty list skips the preamble for everyone else.
+    /// </summary>
+    public IReadOnlyList<string>? TrustedProxyProtocolSources
+    {
+        get => _trustedProxySourceText;
+        set
+        {
+            if (value is null || value.Count == 0)
+            {
+                _trustedProxySourceText = value;
+                _trustedProxySources = null;
+                return;
+            }
+
+            var parsed = new CidrPrefix[value.Count];
+            var text = new string[value.Count];
+            for (var i = 0; i < value.Count; i++)
+            {
+                if (!CidrPrefix.TryParse(value[i], out var prefix) || prefix is null)
+                {
+                    throw new FormatException($"Invalid PROXY protocol CIDR '{value[i]}'.");
+                }
+
+                parsed[i] = prefix;
+                text[i] = value[i];
+            }
+
+            _trustedProxySources = parsed;
+            _trustedProxySourceText = text;
+        }
+    }
+
+    /// <summary>True when the peer may send a PROXY protocol preamble.</summary>
+    internal bool IsTrustedProxyProtocolPeer(IPAddress? address)
+    {
+        if (_trustedProxySources is null)
+        {
+            return true;
+        }
+
+        if (address is null)
+        {
+            return false;
+        }
+
+        foreach (var prefix in _trustedProxySources)
+        {
+            if (prefix.Contains(address))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Optional override of <see cref="ProxyServer.MaxCachedConnections"/> for upstream TCP pooling

@@ -24,6 +24,8 @@ namespace Titanium.Cli.Config;
 
 internal static class RunCommand
 {
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ClusterManager, ProxyConfigHost> ConfigHosts = new();
+
     private static readonly string[] PlusRelativePathKeys =
     [
         "grpc.transcode.descriptorSet",
@@ -118,12 +120,14 @@ internal static class RunCommand
         }
 
         CertificateBootstrap.Apply(proxy, loaded.Config.Certificates);
+        using var certificateWatch = CertificateBootstrap.WatchCertificateFiles(proxy, loaded.Config.Certificates);
         StaticFileHost.RegisterIfNeeded(proxy, loaded.Config.StaticFiles, requiresSessionPath);
 
         var loadBalancer = new LoadBalancer();
         var responseCache = new MemoryHttpResponseCache();
         var middleware = new List<IProxyMiddleware>();
         var routes = loaded.Config.Routes.ToList();
+        var policies = loaded.Config.Policies?.ToList() ?? new List<RoutePolicyConfig>();
         var plusOptions = loaded.Config.Plus is not null
             ? BuildPlusOptions(loaded.Config.Plus)
             : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -138,7 +142,7 @@ internal static class RunCommand
         void RefreshReverseProxy()
         {
             proxy.ReverseProxy = BuildReverseProxyOptions(
-                routes, clusterManager, loadBalancer, middleware, grpcJsonTranscoder);
+                routes, clusterManager, loadBalancer, middleware, grpcJsonTranscoder, policies);
         }
 
         var plusContext = new PlusActivationContext
@@ -200,6 +204,7 @@ internal static class RunCommand
                                 () => grpcJsonTranscoder,
                                 t => grpcJsonTranscoder = t,
                                 RefreshReverseProxy,
+                                policies,
                                 stoppingToken).ConfigureAwait(false);
                             AsyncConsole.WriteLine("Config reloaded.");
                             await AsyncConsole.FlushAsync().ConfigureAwait(false);
@@ -215,7 +220,7 @@ internal static class RunCommand
                 ConfigReloadGate.TryDeletePidFile(configPath);
             }
 
-            await proxy.StopAsync().ConfigureAwait(false);
+            await proxy.DrainAsync(TimeSpan.FromSeconds(ResolveDrainTimeoutSeconds(loaded.Config.Server))).ConfigureAwait(false);
             await clusterManager.DisposeAsync().ConfigureAwait(false);
             return 0;
         }
@@ -275,6 +280,7 @@ internal static class RunCommand
         Func<IGrpcJsonTranscoder?> getGrpc,
         Action<IGrpcJsonTranscoder?> setGrpc,
         Action refreshReverseProxy,
+        List<RoutePolicyConfig>? policies = null,
         CancellationToken stoppingToken = default)
     {
         var loaded = ConfigLoader.Load(configPath);
@@ -287,28 +293,32 @@ internal static class RunCommand
         WriteConfigWarnings(loaded);
 
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
-        var previous = clusterManager.Snapshot.Clusters.Values.ToList();
-        var incoming = loaded.Config.Clusters.ToList();
-        var union = new List<ClusterConfig>(previous);
-        foreach (var cluster in incoming)
+        var host = ConfigHosts.GetValue(clusterManager, static _ => new ProxyConfigHost());
+        host.RememberAppliedClusters(clusterManager.Snapshot.Clusters.Values.ToList());
+
+        var snapshot = new Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot
         {
-            var index = union.FindIndex(c => string.Equals(c.Id, cluster.Id, StringComparison.Ordinal));
-            if (index >= 0)
+            Routes = loaded.Config.Routes.ToList(),
+            Clusters = loaded.Config.Clusters.ToList(),
+        };
+        if (policies is not null)
+        {
+            policies.Clear();
+            if (loaded.Config.Policies is not null)
             {
-                union[index] = cluster;
-            }
-            else
-            {
-                union.Add(cluster);
+                foreach (var policy in loaded.Config.Policies)
+                {
+                    policies.Add(policy);
+                }
             }
         }
 
-        // Keep old and new clusters until routes have swapped, then drop removed clusters.
-        await clusterManager.ApplyCoreAsync(union, reconcileBackground: false, stoppingToken).ConfigureAwait(false);
-        ReplaceRoutes(routes, loaded.Config.Routes);
-        refreshReverseProxy();
-        await clusterManager.ApplyCoreAsync(incoming, reconcileBackground: true, stoppingToken).ConfigureAwait(false);
-        _ = proxy;
+        await host.ApplyAsync(snapshot, clusterManager, options =>
+        {
+            ReplaceRoutes(routes, options.Routes ?? []);
+            refreshReverseProxy();
+        }, stoppingToken).ConfigureAwait(false);
+        CertificateBootstrap.ApplySniItems(proxy, loaded.Config.Certificates);
         _ = middleware;
         _ = loadBalancer;
         _ = responseCache;
@@ -317,17 +327,25 @@ internal static class RunCommand
         _ = setGrpc;
     }
 
+    internal static int ResolveDrainTimeoutSeconds(ServerConfig? server)
+    {
+        var drainSeconds = server?.DrainTimeoutSeconds ?? 10;
+        return drainSeconds < 0 ? 0 : drainSeconds;
+    }
+
     internal static ReverseProxyOptions BuildReverseProxyOptions(
         IReadOnlyCollection<RouteConfig> routes,
         IClusterManager clusterManager,
         LoadBalancer loadBalancer,
         IReadOnlyCollection<IProxyMiddleware> middleware,
-        IGrpcJsonTranscoder? grpcJsonTranscoder)
+        IGrpcJsonTranscoder? grpcJsonTranscoder,
+        IReadOnlyCollection<RoutePolicyConfig>? policies = null)
     {
         var snapClusters = clusterManager.Snapshot.Clusters;
         return new ReverseProxyOptions
         {
             Routes = routes.Count > 0 ? routes.ToArray() : null,
+            Policies = policies is { Count: > 0 } ? policies.ToArray() : null,
             Clusters = snapClusters.Count > 0 ? snapClusters.Values.ToList() : null,
             ClusterManager = clusterManager,
             RouteMatcher = new RouteMatcher(),
@@ -936,6 +954,11 @@ internal static class RunCommand
         }
 
         ep.AcceptProxyProtocol = listener.AcceptProxyProtocol;
+        if (listener.TrustedProxyProtocolSources is { Count: > 0 })
+        {
+            ep.TrustedProxyProtocolSources = listener.TrustedProxyProtocolSources.ToArray();
+        }
+
         ep.Passthrough = listener.Passthrough;
         ep.ClientCertificateMode = listener.ClientCertificateMode switch
         {

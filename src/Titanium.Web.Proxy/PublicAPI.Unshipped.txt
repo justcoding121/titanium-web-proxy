@@ -354,7 +354,12 @@ Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateMode.get -> Titanium.We
 Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateMode.set -> void
 Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptProxyProtocol.get -> bool
 Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptProxyProtocol.set -> void
-Titanium.Web.Proxy.Configuration.ProxyConfigHost.ProxyConfigHost(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Configuration.IProxyConfigFilter!>? filters = null) -> void
+Titanium.Web.Proxy.Models.ProxyEndPoint.TrustedProxyProtocolSources.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Models.ProxyEndPoint.TrustedProxyProtocolSources.set -> void
+Titanium.Web.Proxy.Configuration.ProxyConfigHost.RememberAppliedClusters(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig!>! clusters) -> void
+Titanium.Web.Proxy.Configuration.ProxyConfigHost.ProxyConfigHost(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Configuration.IProxyConfigFilter!>? filters = null, System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Configuration.IProxyConfigValidator!>? validators = null) -> void
+Titanium.Web.Proxy.Transforms.TransformEngine.Factories.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.IRouteTransformFactory!>?
+Titanium.Web.Proxy.Transforms.TransformEngine.Factories.init -> void
 Titanium.Web.Proxy.Clusters.LoadBalancer.Policies.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ILoadBalancingPolicy!>?
 static Titanium.Web.Proxy.Certificates.SniCertificateSelector.Select(string? serverName, System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Models.SniCertificateBinding!>! bindings) -> System.Security.Cryptography.X509Certificates.X509Certificate2?
 Titanium.Web.Proxy.Clusters.LoadBalancer.Policies.set -> void

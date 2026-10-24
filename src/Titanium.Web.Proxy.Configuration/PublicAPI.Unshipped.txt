@@ -344,6 +344,8 @@ Titanium.Web.Proxy.Configuration.Models.TwpConfig.Plus.get -> Titanium.Web.Proxy
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.Plus.set -> void
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.Routes.get -> System.Collections.Generic.IList<Titanium.Web.Proxy.Abstractions.Routing.RouteConfig!>!
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.Routes.set -> void
+Titanium.Web.Proxy.Configuration.Models.TwpConfig.Policies.get -> System.Collections.Generic.IList<Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig!>!
+Titanium.Web.Proxy.Configuration.Models.TwpConfig.Policies.set -> void
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.SchemaVersion.get -> string
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.SchemaVersion.get -> string?
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.SchemaVersion.set -> void
@@ -445,3 +447,7 @@ Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Passthrough.get -> bool
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Passthrough.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ClientCertificateMode.get -> string?
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ClientCertificateMode.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TrustedProxyProtocolSources.get -> System.Collections.Generic.IList<string!>!
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TrustedProxyProtocolSources.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.DrainTimeoutSeconds.get -> int?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.DrainTimeoutSeconds.set -> void

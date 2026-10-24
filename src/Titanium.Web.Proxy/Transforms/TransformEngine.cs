@@ -8,6 +8,9 @@ namespace Titanium.Web.Proxy.Transforms;
 /// <summary>Applies known transform kinds to request path/headers/query and staged response headers.</summary>
 public sealed class TransformEngine : ITransformEngine
 {
+    /// <summary>Extra kinds. Null (the default) does not allocate or change built-in transforms.</summary>
+    public IReadOnlyList<IRouteTransformFactory>? Factories { get; init; }
+
     public void ApplyRequestTransforms(IReadOnlyList<TransformConfig>? transforms, TransformRequestContext context) // NOSONAR S3776 -- Transform kinds share the request context; splitting would hide apply order.
     {
         if (transforms is null || transforms.Count == 0)
@@ -124,6 +127,34 @@ public sealed class TransformEngine : ITransformEngine
                 case TransformKinds.ResponseHeadersAllowed when Param(t, "headers") is { } responseAllowed:
                     context.ResponseHeadersToRemove.Add("*" + responseAllowed);
                     break;
+                case TransformKinds.RequestTrailerSet when Param(t, "name") is { } requestTrailer && Param(t, "value") is { } requestTrailerValue:
+                    context.RequestTrailers ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    context.RequestTrailers[requestTrailer] = requestTrailerValue;
+                    break;
+                case TransformKinds.ResponseTrailerSet when Param(t, "name") is { } responseTrailer && Param(t, "value") is { } responseTrailerValue:
+                    context.ResponseTrailers ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    context.ResponseTrailers[responseTrailer] = responseTrailerValue;
+                    break;
+                default:
+                    ApplyFactory(t, context);
+                    break;
+            }
+        }
+    }
+
+    private void ApplyFactory(TransformConfig transform, TransformRequestContext context)
+    {
+        if (Factories is not { Count: > 0 } factories || string.IsNullOrEmpty(transform.Kind))
+        {
+            return;
+        }
+
+        for (var i = 0; i < factories.Count; i++)
+        {
+            if (factories[i].CanHandle(transform.Kind))
+            {
+                factories[i].Apply(transform, context);
+                return;
             }
         }
     }

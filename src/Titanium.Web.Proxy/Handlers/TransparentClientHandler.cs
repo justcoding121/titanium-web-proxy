@@ -108,8 +108,9 @@ public partial class ProxyServer
                         // ClientHello arrival (Kestrel: Start WaitForData, then middleware builds SslStream).
                         sslStream = new SslStream(networkStream, leaveInnerStreamOpen: false);
                         var sniBindings = endPoint.SniCertificates;
-                        var requireClient = endPoint.ClientCertificateMode == ClientCertificateMode.Require;
-                        var options = sniBindings is { Count: > 0 } || requireClient ? null : endPoint.CachedServerAuthOptions;
+                        var clientCertMode = endPoint.ClientCertificateMode;
+                        var requestsClientCert = Certificates.ClientCertificateHandshake.RequestsCertificate(clientCertMode);
+                        var options = sniBindings is { Count: > 0 } || requestsClientCert ? null : endPoint.CachedServerAuthOptions;
                         if (options == null)
                         {
                             var fallback = certificate ?? (sniBindings is { Count: > 0 } ? sniBindings[0].Certificate : null);
@@ -117,19 +118,19 @@ public partial class ProxyServer
                             {
                                 ServerCertificateContext =
                                     CertificateManager.CreateSslCertificateContext(fallback!),
-                                ClientCertificateRequired = requireClient,
                                 EnabledSslProtocols = SupportedSslProtocols,
                                 CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
                                 ApplicationProtocols = SslExtensions.Http11ProtocolAsList,
                                 AllowRenegotiation = false
                             };
+                            Certificates.ClientCertificateHandshake.Apply(options, clientCertMode);
                             if (sniBindings is { Count: > 0 })
                             {
                                 options.ServerCertificateSelectionCallback = (_, name) =>
                                     Certificates.SniCertificateSelector.Select(name, sniBindings) ?? fallback!;
                             }
 
-                            if (sniBindings is not { Count: > 0 })
+                            if (sniBindings is not { Count: > 0 } && !requestsClientCert)
                             {
                                 endPoint.CachedServerAuthOptions = options;
                             }
@@ -137,6 +138,7 @@ public partial class ProxyServer
 
                         await AwaitPendingClientHelloAsync(clientConnection);
                         await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
+                        Certificates.ClientCertificateHandshake.Capture(clientConnection, sslStream, clientCertMode);
                         RecordClientHandshakeSuccess(httpsHostName);
                         clientConnection.NegotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
                         // Store the negotiated protocol, not the enabled-protocols bitmask.
@@ -317,10 +319,11 @@ public partial class ProxyServer
                         var options = new SslServerAuthenticationOptions
                         {
                             ServerCertificateContext = CertificateManager.CreateSslCertificateContext(certificate),
-                            ClientCertificateRequired = endPoint.ClientCertificateMode == ClientCertificateMode.Require,
                             EnabledSslProtocols = SupportedSslProtocols,
                             CertificateRevocationCheckMode = X509RevocationMode.NoCheck
                         };
+                        var peekClientCertMode = endPoint.ClientCertificateMode;
+                        Certificates.ClientCertificateHandshake.Apply(options, peekClientCertMode);
                         if (endPoint.SniCertificates is { Count: > 0 } handshakeBindings)
                         {
                             var fallbackCert = certificate;
@@ -333,6 +336,7 @@ public partial class ProxyServer
                             : SslExtensions.Http11ProtocolAsList;
 
                         await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
+                        Certificates.ClientCertificateHandshake.Capture(clientStream.Connection, sslStream, peekClientCertMode);
                         RecordClientHandshakeSuccess(httpsHostName);
 
                         clientStream.Connection.NegotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;

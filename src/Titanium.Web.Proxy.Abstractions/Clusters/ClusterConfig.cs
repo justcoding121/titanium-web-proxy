@@ -40,6 +40,9 @@ public sealed class DestinationConfig
     /// <summary>Optional probe address (<c>host:port</c> or URL). Null probes the destination itself.</summary>
     public string? Health { get; init; }
 
+    /// <summary>Seconds between DNS refreshes. Zero (the default) resolves only at connect time.</summary>
+    public int DnsRefreshSeconds { get; init; }
+
     /// <summary>Optional Host header sent by an HTTP probe.</summary>
     public string? Host { get; init; }
 
@@ -137,17 +140,25 @@ public sealed class ClusterHttpClientConfig
     public bool AcceptAnyServerCertificate { get; init; }
     public int? MaxConnectionsPerServer { get; init; }
 
+    /// <summary>Null uses the process connect timeout.</summary>
+    public TimeSpan? ConnectTimeout { get; init; }
+
+    /// <summary>Null uses the process request-header timeout.</summary>
+    public TimeSpan? RequestTimeout { get; init; }
+
     /// <summary>Empty when every setting is at the process default.</summary>
     public string ConnectionKey
     {
         get
         {
-            if (SslProtocols is null && !AcceptAnyServerCertificate && MaxConnectionsPerServer is null)
+            if (SslProtocols is null && !AcceptAnyServerCertificate && MaxConnectionsPerServer is null &&
+                ConnectTimeout is null && RequestTimeout is null)
             {
                 return string.Empty;
             }
 
-            return (SslProtocols ?? string.Empty) + "|" + AcceptAnyServerCertificate + "|" + MaxConnectionsPerServer;
+            return (SslProtocols ?? string.Empty) + "|" + AcceptAnyServerCertificate + "|" + MaxConnectionsPerServer +
+                   "|" + ConnectTimeout?.TotalMilliseconds + "|" + RequestTimeout?.TotalMilliseconds;
         }
     }
 }

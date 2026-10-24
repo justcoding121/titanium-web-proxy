@@ -8,6 +8,7 @@ namespace Titanium.Web.Proxy.EventArguments;
 internal sealed class RoutingFeatureState
 {
     public RetryConfig? Retry { get; set; }
+    public bool StatusRetried { get; set; }
     public long RequestStartTimestamp { get; set; }
     public System.Diagnostics.Activity? Activity { get; set; }
     public string? RequestId { get; set; }

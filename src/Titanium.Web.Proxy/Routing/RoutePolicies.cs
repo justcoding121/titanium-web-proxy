@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using Titanium.Web.Proxy.Abstractions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Abstractions.Diagnostics;
@@ -28,6 +29,7 @@ internal static class RoutePolicies
     {
         Windows.Clear();
         Connections.Clear();
+        _rateWrites = 0;
         Clock = TimeProvider.System;
     }
 
@@ -305,10 +307,42 @@ internal static class RoutePolicies
             {
                 state.Start = now;
                 state.Count = 0;
+                state.Span = window;
             }
 
             state.Count++;
+            state.Seen = now;
+            SweepIdleWindows(now);
             return state.Count <= limit;
+        }
+    }
+
+    private static int _rateWrites;
+
+    internal static int RateWindowCount => Windows.Count;
+
+    private static void SweepIdleWindows(DateTimeOffset now)
+    {
+        if ((Interlocked.Increment(ref _rateWrites) & 31) != 0)
+        {
+            return;
+        }
+
+        foreach (var pair in Windows)
+        {
+            var state = pair.Value;
+            if (state.Span <= TimeSpan.Zero)
+            {
+                continue;
+            }
+
+            lock (state)
+            {
+                if (now - state.Seen > state.Span + state.Span)
+                {
+                    Windows.TryRemove(pair);
+                }
+            }
         }
     }
 
@@ -434,6 +468,8 @@ internal static class RoutePolicies
     private sealed class Window
     {
         public DateTimeOffset Start;
+        public DateTimeOffset Seen;
+        public TimeSpan Span;
         public int Count;
     }
 

@@ -103,6 +103,12 @@ internal static class ReverseProxySessionDispatch
         session.UpstreamConnectHost = destination.Address;
         session.UpstreamConnectPort = port;
         session.UpstreamDestinationId = destination.Id;
+        if (destination.DnsRefreshSeconds > 0 &&
+            options.ClusterManager is ClusterManager dnsManager &&
+            dnsManager.TryGetResolved(destination.Id, out var pinned))
+        {
+            session.UpstreamPinnedAddress = pinned;
+        }
         session.MatchedRoute = route;
         if (server.ForwardedHeaders is { } forwarded)
         {
@@ -112,7 +118,7 @@ internal static class ReverseProxySessionDispatch
         ObserveRequestStart(server, session, route);
         if (route.Mirror is { } mirror)
         {
-            MirrorFanout.TryEnqueue(mirror, request);
+            MirrorFanout.TryEnqueue(mirror, request, FirstMirrorDestination(options, mirror.ClusterId));
         }
 
         ClusterConfig? cluster = null;
@@ -124,6 +130,16 @@ internal static class ReverseProxySessionDispatch
             session.PassiveDestinationCount = cluster.Destinations.Count;
             var connectionKey = cluster.HttpClient?.ConnectionKey;
             session.ClusterConnectionKey = string.IsNullOrEmpty(connectionKey) ? null : connectionKey;
+            session.UpstreamHttpClient = cluster.HttpClient;
+            if (cluster.HttpClient?.ConnectTimeout is { } connectTimeout)
+            {
+                session.ConnectTimeout = connectTimeout;
+            }
+
+            if (cluster.HttpClient?.RequestTimeout is { } requestTimeout && session is SessionEventArgs timed)
+            {
+                timed.ResponseHeaderTimeout = requestTimeout;
+            }
             StageAffinityCookie(session, cluster, destination, request);
         }
 
@@ -343,7 +359,46 @@ internal static class ReverseProxySessionDispatch
                headers[0].Value.StartsWith("application/grpc", StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>Reports passive health after a completed or failed upstream attempt.</summary>
+    private static DestinationConfig? FirstMirrorDestination(Titanium.Web.Proxy.Abstractions.ReverseProxyOptions options, string clusterId)
+    {
+        if (options.ClusterManager?.Snapshot.Clusters.TryGetValue(clusterId, out var cluster) != true ||
+            cluster is not { Destinations.Count: > 0 })
+        {
+            return null;
+        }
+
+        return cluster.Destinations[0];
+    }
+
+    /// <summary>
+    /// Stages one status retry when the origin answered 502, 503, or 504 and nothing has been written
+    /// to the client. Off unless a retry policy is set. Connect failover is unchanged.
+    /// </summary>
+    internal static bool TryStageGatewayRetry(ProxyServer server, SessionEventArgsBase session)
+    {
+        var extras = session.Extras;
+        var retry = extras?.Retry;
+        if (retry is not { Attempts: > 0 } || extras!.StatusRetried || session.IsClientResponseCommitted)
+        {
+            return false;
+        }
+
+        var status = session.HttpClient.Response.StatusCode;
+        if (status is not (502 or 503 or 504))
+        {
+            return false;
+        }
+
+        var request = session.HttpClient.Request;
+        if (request.HasBody && (!request.IsBodyRead || request.ContentLength > retry.MaxBufferedBodyBytes))
+        {
+            return false;
+        }
+
+        extras.StatusRetried = true;
+        return TrySelectAlternate(server, session);
+    }
+
     /// <summary>Picks another destination after a connect failure. False means do not retry.</summary>
     internal static bool TrySelectAlternate(ProxyServer server, SessionEventArgsBase session)
     {
@@ -519,6 +574,19 @@ internal static class ReverseProxySessionDispatch
             request.Headers.SetOrAddHeaderValue(pair.Key, pair.Value);
         }
 
+        if (ctx.RequestTrailers is { Count: > 0 })
+        {
+            foreach (var pair in ctx.RequestTrailers)
+            {
+                request.TrailingHeaders.AddHeader(pair.Key, pair.Value);
+            }
+        }
+
+        if (ctx.ResponseTrailers is { Count: > 0 })
+        {
+            session.ResponseTrailerPlan = ctx.ResponseTrailers;
+        }
+
         if (ctx.ResponseHeadersToSet.Count > 0 || ctx.ResponseHeadersToRemove.Count > 0)
         {
             session.ResponseHeaderTransformPlan =
@@ -531,9 +599,18 @@ internal static class ReverseProxySessionDispatch
     /// <summary>Applies staged response header transforms when present.</summary>
     public static void ApplyResponseTransforms(SessionEventArgsBase session)
     {
-        if (session.ResponseHeaderTransformPlan is TransformResponseHeaderPlan plan)
+        if (session.ResponseTrailerPlan is { Count: > 0 } trailers && session.HttpClient.Response is not null)
         {
-            plan.Apply(session.HttpClient.Response.Headers);
+            foreach (var pair in trailers)
+            {
+                session.HttpClient.Response.TrailingHeaders.AddHeader(pair.Key, pair.Value);
+            }
+        }
+
+        if (session.ResponseHeaderTransformPlan is TransformResponseHeaderPlan plan &&
+            session.HttpClient.Response is { } response)
+        {
+            plan.Apply(response.Headers);
         }
 
         if (session.Extras?.PendingSetCookie is { Length: > 0 } cookie && session.HttpClient.Response is not null)

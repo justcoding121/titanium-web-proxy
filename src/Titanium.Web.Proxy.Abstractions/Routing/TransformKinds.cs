@@ -24,6 +24,8 @@ public static class TransformKinds
     public const string ResponseHeaderAppend = "ResponseHeaderAppend";
     public const string ResponseHeadersAllowed = "ResponseHeadersAllowed";
     public const string ClientCertHeader = "ClientCertHeader";
+    public const string RequestTrailerSet = "RequestTrailerSet";
+    public const string ResponseTrailerSet = "ResponseTrailerSet";
 
     public static bool TryGetRequiredParameters(string kind, out IReadOnlyList<string> required)
     {
@@ -74,6 +76,8 @@ public static class TransformKinds
                 required = ["headers"];
                 return true;
             case ClientCertHeader:
+            case RequestTrailerSet:
+            case ResponseTrailerSet:
                 required = ["name"];
                 return true;
             default:

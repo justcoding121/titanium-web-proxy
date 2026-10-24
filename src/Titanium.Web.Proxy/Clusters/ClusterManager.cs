@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Abstractions.Clusters;
@@ -16,6 +18,7 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
     private ImmutableClusterSnapshot _snapshot = ImmutableClusterSnapshot.Empty;
     private readonly List<DestinationHealthTracker> _healthTrackers = new();
     private readonly List<ClusterHealthProber> _probers = new();
+    private readonly ConcurrentDictionary<string, IPAddress> _resolved = new(StringComparer.Ordinal);
     private readonly TimeProvider _time;
 
     public ClusterManager()
@@ -29,6 +32,11 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
     internal event Action<string, DestinationState, DestinationState>? StateChanged;
 
     public ImmutableClusterSnapshot Snapshot => Volatile.Read(ref _snapshot);
+
+    internal void SetResolved(string destinationId, IPAddress address) => _resolved[destinationId] = address;
+
+    internal bool TryGetResolved(string destinationId, out IPAddress address) =>
+        _resolved.TryGetValue(destinationId, out address!);
 
     /// <summary>Background probers and refreshers. Zero until a later phase starts one.</summary>
     internal int ActiveBackgroundTaskCount { get; private set; }
@@ -259,13 +267,26 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
         StopProbers();
         foreach (var cluster in clusters)
         {
-            if (cluster.HealthCheck?.Active is { Enabled: true })
+            if (cluster.HealthCheck?.Active is { Enabled: true } || ClusterRefreshesDns(cluster))
             {
                 _probers.Add(new ClusterHealthProber(this, cluster, _time));
             }
         }
 
         ActiveBackgroundTaskCount = _probers.Count;
+    }
+
+    private static bool ClusterRefreshesDns(ClusterConfig cluster)
+    {
+        foreach (var destination in cluster.Destinations)
+        {
+            if (destination.DnsRefreshSeconds > 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void StopProbers()

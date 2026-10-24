@@ -685,7 +685,24 @@ internal class TcpConnectionFactory : IDisposable
                 port = externalProxy.Port;
             }
 
-            var ipAddresses = await Dns.GetHostAddressesAsync(hostname, cancellationToken);
+            if (hostname.StartsWith("unix:", StringComparison.Ordinal) && externalProxy == null)
+            {
+                return await ConnectUnixDestinationAsync(
+                    proxyServer, hostname, remoteHostName, remotePort, httpVersion, cacheKey, sessionArgs,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            IPAddress[] ipAddresses;
+            if (sessionArgs?.UpstreamPinnedAddress is { } pinned && externalProxy == null)
+            {
+                ipAddresses = [pinned];
+                timing?.MarkDnsResolved();
+            }
+            else
+            {
+                ipAddresses = await Dns.GetHostAddressesAsync(hostname, cancellationToken);
+            }
+
             if (ipAddresses == null || ipAddresses.Length == 0)
             {
                 if (prefetch) return null;
@@ -1062,7 +1079,8 @@ internal class TcpConnectionFactory : IDisposable
                     // HttpServerStream tears down the chain.
                     var sslStream = new SslStream(stream, leaveInnerStreamOpen: false,
                         (sender, certificate, chain, sslPolicyErrors) =>
-                            proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
+                            sessionArgs?.UpstreamHttpClient?.AcceptAnyServerCertificate == true ||
+                        proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
                                 sslPolicyErrors),
                         (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
                         {
@@ -1078,7 +1096,7 @@ internal class TcpConnectionFactory : IDisposable
                         ApplicationProtocols = applicationProtocols,
                         TargetHost = remoteHostName,
                         ClientCertificates = null,
-                        EnabledSslProtocols = enabledSslProtocols,
+                        EnabledSslProtocols = ClusterSslProtocols(sessionArgs, enabledSslProtocols),
                         CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
                     };
 
@@ -1095,6 +1113,7 @@ internal class TcpConnectionFactory : IDisposable
             {
                 var sslStream = new SslStream(networkStream, leaveInnerStreamOpen: false,
                     (sender, certificate, chain, sslPolicyErrors) =>
+                        sessionArgs?.UpstreamHttpClient?.AcceptAnyServerCertificate == true ||
                         proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
                             sslPolicyErrors),
                     (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
@@ -1111,7 +1130,7 @@ internal class TcpConnectionFactory : IDisposable
                     ApplicationProtocols = applicationProtocols,
                     TargetHost = remoteHostName,
                     ClientCertificates = null,
-                    EnabledSslProtocols = enabledSslProtocols,
+                    EnabledSslProtocols = ClusterSslProtocols(sessionArgs, enabledSslProtocols),
                     CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
                 };
 
@@ -1206,7 +1225,8 @@ internal class TcpConnectionFactory : IDisposable
             IsWinAuthenticated = upstreamProxyWinAuthenticated,
             UsedClientCertificate = usedClientCertificate,
             Timing = timing,
-            PoolSizeLimit = sessionArgs?.ProxyEndPoint?.MaxCachedConnections
+            PoolSizeLimit = sessionArgs?.UpstreamHttpClient?.MaxConnectionsPerServer
+                            ?? sessionArgs?.ProxyEndPoint?.MaxCachedConnections
         };
     }
 
@@ -1719,6 +1739,53 @@ internal class TcpConnectionFactory : IDisposable
         }
 
         disposed = true;
+    }
+
+    private static SslProtocols ClusterSslProtocols(SessionEventArgsBase? session, SslProtocols fallback)
+    {
+        var text = session?.UpstreamHttpClient?.SslProtocols;
+        if (string.IsNullOrEmpty(text) || !Enum.TryParse(text, out SslProtocols parsed) || parsed == SslProtocols.None)
+        {
+            return fallback;
+        }
+
+        return parsed;
+    }
+
+    private async Task<TcpServerConnection?> ConnectUnixDestinationAsync(
+        ProxyServer proxyServer,
+        string hostname,
+        string remoteHostName,
+        int remotePort,
+        Version httpVersion,
+        string cacheKey,
+        SessionEventArgsBase? sessionArgs,
+        CancellationToken cancellationToken)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("Unix domain destinations are not supported on Windows.");
+        }
+
+        var path = hostname[5..];
+        var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        try
+        {
+            await socket.ConnectAsync(new UnixDomainSocketEndPoint(path), cancellationToken).ConfigureAwait(false);
+            var stream = new HttpServerStream(
+                proxyServer, new NetworkStream(socket, ownsSocket: true), proxyServer.BufferPool, cancellationToken);
+            return new TcpServerConnection(
+                proxyServer, socket, stream, remoteHostName, remotePort, false, default, httpVersion, null, null, cacheKey)
+            {
+                PoolSizeLimit = sessionArgs?.UpstreamHttpClient?.MaxConnectionsPerServer
+                                ?? sessionArgs?.ProxyEndPoint?.MaxCachedConnections,
+            };
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
     }
 
     private static class ProxySocketConnectionTaskFactory

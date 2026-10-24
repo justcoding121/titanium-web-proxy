@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Threading;
@@ -24,6 +26,7 @@ internal sealed class ClusterHealthProber : IDisposable
         Timeout = Timeout.InfiniteTimeSpan,
     };
 
+    private readonly Dictionary<string, DateTimeOffset> _dnsRefreshed = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource _cancel = new();
     private readonly Task _loop;
     private int _disposed;
@@ -77,7 +80,17 @@ internal sealed class ClusterHealthProber : IDisposable
     private async Task LoopAsync(TimeProvider time)
     {
         var active = _cluster.HealthCheck?.Active;
-        var seconds = Math.Max(1, active?.IntervalSeconds ?? 15);
+        var seconds = active is { Enabled: true } ? Math.Max(1, active.IntervalSeconds) : int.MaxValue;
+        var dnsInterval = MinDnsRefreshSeconds(_cluster);
+        if (dnsInterval > 0)
+        {
+            seconds = Math.Min(seconds, dnsInterval);
+        }
+
+        if (seconds == int.MaxValue)
+        {
+            seconds = 15;
+        }
         if (active is { JitterPercent: > 0 } jittered)
         {
             var spread = (Random.Shared.NextDouble() * 2) - 1;
@@ -89,12 +102,61 @@ internal sealed class ClusterHealthProber : IDisposable
             while (await timer.WaitForNextTickAsync(_cancel.Token).ConfigureAwait(false))
             {
                 await ProbeOnceAsync(_cancel.Token).ConfigureAwait(false);
+                await RefreshDnsAsync(time, _cancel.Token).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
         {
             // Stopped with the cluster.
         }
+    }
+
+    private async Task RefreshDnsAsync(TimeProvider time, CancellationToken cancellationToken)
+    {
+        var now = time.GetUtcNow();
+        foreach (var destination in _cluster.Destinations)
+        {
+            if (destination.DnsRefreshSeconds <= 0 ||
+                destination.Address.StartsWith("unix:", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (_dnsRefreshed.TryGetValue(destination.Id, out var refreshed) &&
+                now - refreshed < TimeSpan.FromSeconds(destination.DnsRefreshSeconds))
+            {
+                continue;
+            }
+
+            try
+            {
+                var addresses = await Dns.GetHostAddressesAsync(destination.Address, cancellationToken)
+                    .ConfigureAwait(false);
+                if (addresses.Length > 0)
+                {
+                    _manager.SetResolved(destination.Id, addresses[0]);
+                    _dnsRefreshed[destination.Id] = now;
+                }
+            }
+            catch (Exception ex) when (ex is SocketException or IOException or OperationCanceledException)
+            {
+                // The next pass retries. A failed refresh keeps the previous address.
+            }
+        }
+    }
+
+    private static int MinDnsRefreshSeconds(ClusterConfig cluster)
+    {
+        var min = 0;
+        foreach (var destination in cluster.Destinations)
+        {
+            if (destination.DnsRefreshSeconds > 0 && (min == 0 || destination.DnsRefreshSeconds < min))
+            {
+                min = destination.DnsRefreshSeconds;
+            }
+        }
+
+        return min;
     }
 
     private async Task<bool> ProbeAsync(DestinationConfig dest, ActiveHealthConfig active, CancellationToken cancellationToken)

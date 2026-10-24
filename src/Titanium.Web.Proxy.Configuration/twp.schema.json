@@ -77,6 +77,9 @@
                 "backup": {
                   "type": "boolean"
                 },
+                "dnsRefreshSeconds": {
+                  "type": "integer"
+                },
                 "health": {
                   "type": "string"
                 },
@@ -225,11 +228,17 @@
               "acceptAnyServerCertificate": {
                 "type": "boolean"
               },
+              "connectTimeout": {
+                "type": "string"
+              },
               "connectionKey": {
                 "type": "string"
               },
               "maxConnectionsPerServer": {
                 "type": "integer"
+              },
+              "requestTimeout": {
+                "type": "string"
               },
               "sslProtocols": {
                 "type": "string"
@@ -350,6 +359,12 @@
           "port": {
             "type": "integer"
           },
+          "trustedProxyProtocolSources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "type": {
             "type": "string"
           }
@@ -418,6 +433,51 @@
           "type": "object",
           "additionalProperties": {
             "type": "string"
+          }
+        }
+      }
+    },
+    "policies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "allow": {
+            "type": "string"
+          },
+          "deny": {
+            "type": "string"
+          },
+          "headerName": {
+            "type": "string"
+          },
+          "headerValue": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "maxRequestBodyBytes": {
+            "type": "integer"
+          },
+          "methods": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "origins": {
+            "type": "string"
+          },
+          "timeoutSeconds": {
+            "type": "integer"
+          },
+          "windowSeconds": {
+            "type": "integer"
           }
         }
       }
@@ -740,6 +800,9 @@
         },
         "dnsServerEndPoint": {
           "type": "string"
+        },
+        "drainTimeoutSeconds": {
+          "type": "integer"
         },
         "enable100ContinueBehaviour": {
           "type": "boolean"
