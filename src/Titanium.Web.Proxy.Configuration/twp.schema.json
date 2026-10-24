@@ -21,6 +21,27 @@
         "certificatePath": {
           "type": "string"
         },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "hosts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "password": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            }
+          }
+        },
         "privateKeyPath": {
           "type": "string"
         }
@@ -48,6 +69,9 @@
               "additionalProperties": false,
               "properties": {
                 "address": {
+                  "type": "string"
+                },
+                "affinityKey": {
                   "type": "string"
                 },
                 "backup": {
@@ -83,6 +107,18 @@
                 "weight": {
                   "type": "integer"
                 }
+              }
+            }
+          },
+          "hashKey": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
               }
             }
           },
@@ -203,6 +239,9 @@
           "id": {
             "type": "string"
           },
+          "loadBalancingPolicy": {
+            "type": "string"
+          },
           "queue": {
             "type": "object",
             "additionalProperties": false,
@@ -230,6 +269,24 @@
               }
             }
           },
+          "sessionAffinity": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "cookieName": {
+                "type": "string"
+              },
+              "failurePolicy": {
+                "type": "string"
+              },
+              "headerName": {
+                "type": "string"
+              },
+              "mode": {
+                "type": "string"
+              }
+            }
+          },
           "slowStartSeconds": {
             "type": "integer"
           }
@@ -242,6 +299,12 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "acceptProxyProtocol": {
+            "type": "boolean"
+          },
+          "clientCertificateMode": {
+            "type": "string"
+          },
           "decryptSsl": {
             "type": "boolean"
           },
@@ -280,6 +343,9 @@
           },
           "maxInboundUnidirectionalStreams": {
             "type": "integer"
+          },
+          "passthrough": {
+            "type": "boolean"
           },
           "port": {
             "type": "integer"
@@ -365,6 +431,21 @@
           "clusterId": {
             "type": "string"
           },
+          "clusters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "clusterId": {
+                  "type": "string"
+                },
+                "weight": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
           "directResponse": {
             "type": "object",
             "additionalProperties": false,
@@ -375,8 +456,32 @@
               "contentType": {
                 "type": "string"
               },
+              "headers": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
               "status": {
                 "type": "integer"
+              }
+            }
+          },
+          "errorPages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "body": {
+                  "type": "string"
+                },
+                "contentType": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -446,6 +551,21 @@
               }
             }
           },
+          "mirror": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "clusterId": {
+                "type": "string"
+              },
+              "maxBodyBytes": {
+                "type": "integer"
+              },
+              "samplePercent": {
+                "type": "integer"
+              }
+            }
+          },
           "order": {
             "type": "integer"
           },
@@ -461,6 +581,9 @@
             "properties": {
               "host": {
                 "type": "string"
+              },
+              "httpToHttps": {
+                "type": "boolean"
               },
               "path": {
                 "type": "string"
@@ -493,6 +616,12 @@
                 "type": "boolean"
               }
             }
+          },
+          "splitOverrideCookie": {
+            "type": "string"
+          },
+          "splitOverrideHeader": {
+            "type": "string"
           },
           "transforms": {
             "type": "array",

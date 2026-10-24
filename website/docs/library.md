@@ -45,7 +45,7 @@ proxyServer.Start();
 
 ## Reverse proxy
 
-Use `ForwardHost` on a transparent endpoint for a zero-cost terminate-lite path, or declarative routes/clusters (also used by the CLI). Call `DisposeAsync` on `ClusterManager` when the proxy stops so active health probes shut down. See [Configuration](/docs/configuration) and [Protocol support](/docs/protocol-support).
+Use `ForwardHost` on a transparent endpoint for a zero-cost terminate-lite path, or declarative routes/clusters (also used by the CLI). Call `DisposeAsync` on `ClusterManager` when the proxy stops so active health probes shut down. `DrainAsync` stops admitting new clients and then stops the proxy. Hosts that use dependency injection can call `AddTitaniumReverseProxy` from the hosting package. See [Configuration](/docs/configuration) and [Protocol support](/docs/protocol-support).
 
 ## API reference
 

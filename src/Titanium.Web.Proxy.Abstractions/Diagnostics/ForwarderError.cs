@@ -14,4 +14,5 @@ public enum ForwarderError
     ResponseBodyDestination = 8,
     UpgradeFailed = 9,
     Other = 10,
+    PolicyDenied = 11,
 }

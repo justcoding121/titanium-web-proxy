@@ -77,9 +77,10 @@ Embed the same engine in .NET 10. MIT. [Library guide](/docs/library) · [API](/
 | Synthetic responses | Html / Json / File / Stream / Redirect without an origin |
 | Fast path | Skip interception work when your handlers do not need the body |
 | Metrics and tracing | Core `Meter` and `ActivitySource` named `Titanium.Web.Proxy` (`AddMeter("Titanium.Web.Proxy")` / `AddSource("Titanium.Web.Proxy")`). Request counters stay quiet until a listener is attached |
-| Clusters | Passive health, optional active probes, retry, concurrency, priority, and backup |
-| Routing | Order plus specificity, segment prefix, regex, redirects, and direct responses |
-| Policies | Optional per-route header and body-size checks before a destination is chosen |
+| Clusters | Passive health, optional active probes, retry, concurrency, priority, backup, hash, and opaque session affinity |
+| Routing | Order plus specificity, segment prefix, regex, redirects, direct responses, error pages, traffic split, and mirroring |
+| Listeners | SNI certificate selection, optional client certificates, PROXY protocol, TCP passthrough, and drain |
+| Policies | Optional per-route header, body-size, CORS, rate, connection, and address checks. An empty policy list leaves terminate-lite eligible |
 
 Deeper API notes: [GitHub wiki](https://github.com/justcoding121/titanium-web-proxy/wiki).
 

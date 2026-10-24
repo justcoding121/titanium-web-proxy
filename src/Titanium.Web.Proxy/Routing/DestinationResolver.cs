@@ -65,15 +65,71 @@ internal static class DestinationResolver
 
         var manager = options.ClusterManager;
         var snapshot = manager?.Snapshot ?? ImmutableClusterSnapshot.Empty;
-        if (!snapshot.Clusters.TryGetValue(route.ClusterId, out var cluster))
+        var clusterId = TrafficSplit.Select(route, request);
+        if (!snapshot.Clusters.TryGetValue(clusterId, out var cluster))
         {
             return DestinationResolution.RouteWithoutDestination;
         }
 
         var affinityKey = ExtractAffinityKey(request, cluster);
+        var hashInput = HashInput(request, cluster);
         var lb = options.LoadBalancer ?? new LoadBalancer();
-        destination = lb.Select(cluster, snapshot, new LoadBalanceContext(affinityKey));
+        destination = lb.Select(cluster, snapshot, new LoadBalanceContext(affinityKey, hashInput));
+        if (destination is not null &&
+            cluster.SessionAffinity is { FailurePolicy: AffinityFailurePolicy.Return503 } &&
+            !string.IsNullOrEmpty(affinityKey) &&
+            !AffinityPins.Matches(cluster, destination, affinityKey))
+        {
+            destination = null;
+        }
+
         return destination is null ? DestinationResolution.RouteWithoutDestination : DestinationResolution.Resolved;
+    }
+
+    private static string? HashInput(Request request, ClusterConfig cluster)
+    {
+        var key = cluster.HashKey;
+        if (key is null)
+        {
+            return null;
+        }
+
+        return key.Source switch
+        {
+            "host" => request.Host,
+            "header" when !string.IsNullOrEmpty(key.Name) => FirstHeader(request, key.Name),
+            "query" when !string.IsNullOrEmpty(key.Name) => QueryValue(request, key.Name),
+            "connection" => request.Host,
+            _ => request.RequestUriString8.GetString(),
+        };
+    }
+
+    private static string? FirstHeader(Request request, string name)
+    {
+        var headers = request.Headers.GetHeaders(name);
+        return headers is { Count: > 0 } ? headers[0].Value : null;
+    }
+
+    private static string? QueryValue(Request request, string name)
+    {
+        var raw = request.RequestUriString8.GetString();
+        var q = raw.IndexOf('?');
+        if (q < 0)
+        {
+            return null;
+        }
+
+        var parts = raw[(q + 1)..].Split('&', StringSplitOptions.RemoveEmptyEntries);
+        var prefix = name + "=";
+        for (var i = 0; i < parts.Length; i++)
+        {
+            if (parts[i].StartsWith(prefix, StringComparison.Ordinal))
+            {
+                return parts[i][prefix.Length..];
+            }
+        }
+
+        return null;
     }
 
     private static Dictionary<string, string>? CollectHeaders(Request request, HashSet<string> names)
@@ -140,9 +196,18 @@ internal static class DestinationResolver
         return map;
     }
 
-    private static string? ExtractAffinityKey(Request request, ClusterConfig cluster) =>
-        TryAffinityHeader(request, cluster.AffinityHeader) ??
-        TryAffinityCookie(request, cluster.AffinityCookie);
+    private static string? ExtractAffinityKey(Request request, ClusterConfig cluster)
+    {
+        if (cluster.SessionAffinity is { } affinity)
+        {
+            return affinity.Mode == AffinityMode.Header
+                ? TryAffinityHeader(request, affinity.HeaderName)
+                : TryAffinityCookie(request, affinity.CookieName);
+        }
+
+        return TryAffinityHeader(request, cluster.AffinityHeader) ??
+               TryAffinityCookie(request, cluster.AffinityCookie);
+    }
 
     private static string? TryAffinityHeader(Request request, string? headerName)
     {

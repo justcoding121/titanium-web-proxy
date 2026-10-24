@@ -1,0 +1,3 @@
+Titanium.Web.Proxy.Hosting.ServiceCollectionExtensions
+static Titanium.Web.Proxy.Hosting.ServiceCollectionExtensions.AddTitaniumReverseProxy(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Titanium.Web.Proxy.ProxyServer!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Titanium.Web.Proxy.Hosting.ServiceCollectionExtensions.AddTitaniumReverseProxy(this Microsoft.Extensions.DependencyInjection.IServiceCollection services, System.Action<Titanium.Web.Proxy.ProxyServer> configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection

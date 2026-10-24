@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System.Collections.Generic;
+using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
@@ -62,6 +63,15 @@ public abstract class ProxyEndPoint
     ///     Generic certificate to use for SSL decryption.
     /// </summary>
     public X509Certificate2? GenericCertificate { get; set; }
+
+    /// <summary>SNI certificate list. Null keeps <see cref="GenericCertificate"/>.</summary>
+    public IReadOnlyList<SniCertificateBinding>? SniCertificates { get; set; }
+
+    /// <summary>Inbound client-certificate mode. <see cref="ClientCertificateMode.None"/> changes nothing.</summary>
+    public ClientCertificateMode ClientCertificateMode { get; set; }
+
+    /// <summary>When true, the accept loop requires a PROXY protocol preamble.</summary>
+    public bool AcceptProxyProtocol { get; set; }
 
     /// <summary>
     /// Optional override of <see cref="ProxyServer.MaxCachedConnections"/> for upstream TCP pooling

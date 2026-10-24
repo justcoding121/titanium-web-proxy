@@ -28,7 +28,8 @@ public static class ReverseProxyFastPath
 
         var route = routes[0];
         if (route.Transforms is { Count: > 0 } || route.Limits is not null || route.Retry is { Attempts: > 0 } ||
-            route.Redirect is not null || route.DirectResponse is not null || route.Policies is { Count: > 0 })
+            route.Redirect is not null || route.DirectResponse is not null ||
+            route.Clusters is { Count: > 0 } || route.Mirror is not null || route.ErrorPages is { Count: > 0 })
         {
             return false;
         }
@@ -39,6 +40,8 @@ public static class ReverseProxyFastPath
         }
 
         if (cluster.Retry is { Attempts: > 0 } || cluster.Queue is not null || cluster.SlowStartSeconds > 0 ||
+            cluster.SessionAffinity is not null || cluster.HashKey is not null ||
+            !string.IsNullOrEmpty(cluster.LoadBalancingPolicy) ||
             !string.IsNullOrEmpty(cluster.HttpClient?.ConnectionKey))
         {
             return false;

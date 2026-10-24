@@ -15,7 +15,14 @@ namespace Titanium.Web.Proxy.Configuration;
 /// </summary>
 public sealed class ProxyConfigHost
 {
+    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly IReadOnlyList<IProxyConfigFilter> _filters;
     private IReadOnlyList<ClusterConfig> _previous = [];
+
+    public ProxyConfigHost(IReadOnlyList<IProxyConfigFilter>? filters = null)
+    {
+        _filters = filters ?? [];
+    }
 
     public async Task ApplyAsync(
         ProxyConfigSnapshot snapshot,
@@ -26,6 +33,28 @@ public sealed class ProxyConfigHost
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(clusters);
         ArgumentNullException.ThrowIfNull(publish);
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await ApplyCoreAsync(snapshot, clusters, publish, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task ApplyCoreAsync(
+        ProxyConfigSnapshot snapshot,
+        ClusterManager clusters,
+        Action<ReverseProxyOptions> publish,
+        CancellationToken cancellationToken)
+    {
+        foreach (var filter in _filters)
+        {
+            snapshot = await filter.ApplyAsync(snapshot, cancellationToken).ConfigureAwait(false);
+        }
 
         var union = new Dictionary<string, ClusterConfig>(StringComparer.Ordinal);
         foreach (var cluster in _previous)

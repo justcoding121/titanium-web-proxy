@@ -51,9 +51,47 @@ public sealed class RouteConfig
 
     /// <summary>Policy names. Null means this route pays nothing.</summary>
     public IReadOnlyList<string>? Policies { get; init; }
+
+    /// <summary>Weighted cluster choices. Null keeps <see cref="ClusterId"/>.</summary>
+    public IReadOnlyList<WeightedCluster>? Clusters { get; init; }
+
+    /// <summary>Request header whose value selects a cluster id from <see cref="Clusters"/>.</summary>
+    public string? SplitOverrideHeader { get; init; }
+
+    /// <summary>Cookie whose value selects a cluster id from <see cref="Clusters"/>.</summary>
+    public string? SplitOverrideCookie { get; init; }
+
+    /// <summary>Best-effort copy of the request. Null sends nothing extra.</summary>
+    public MirrorConfig? Mirror { get; init; }
+
+    /// <summary>Overrides the server error pages for this route.</summary>
+    public IReadOnlyList<ErrorPageConfig>? ErrorPages { get; init; }
 }
 
-/// <summary>A named policy. Only <c>maxRequestBodySize</c> and <c>requireHeader</c> are enforced here.</summary>
+/// <summary>One cluster in a traffic split.</summary>
+public sealed class WeightedCluster
+{
+    public required string ClusterId { get; init; }
+    public int Weight { get; init; } = 1;
+}
+
+/// <summary>Fire-and-forget copy of a request. Drops are counted and never fail the caller.</summary>
+public sealed class MirrorConfig
+{
+    public required string ClusterId { get; init; }
+    public int SamplePercent { get; init; } = 100;
+    public int MaxBodyBytes { get; init; } = 65536;
+}
+
+/// <summary>Static body for a status or class such as <c>503</c> or <c>5xx</c>.</summary>
+public sealed class ErrorPageConfig
+{
+    public required string Status { get; init; }
+    public string? ContentType { get; init; }
+    public string? Body { get; init; }
+}
+
+/// <summary>A named policy. Unknown kinds are ignored.</summary>
 public sealed class RoutePolicyConfig
 {
     public required string Name { get; init; }
@@ -61,6 +99,13 @@ public sealed class RoutePolicyConfig
     public long? MaxRequestBodyBytes { get; init; }
     public string? HeaderName { get; init; }
     public string? HeaderValue { get; init; }
+    public int? Limit { get; init; }
+    public int? WindowSeconds { get; init; }
+    public int? TimeoutSeconds { get; init; }
+    public string? Allow { get; init; }
+    public string? Deny { get; init; }
+    public string? Origins { get; init; }
+    public string? Methods { get; init; }
 }
 
 /// <summary>Redirect built by the proxy.</summary>
@@ -72,6 +117,9 @@ public sealed class RedirectConfig
     public int? Port { get; init; }
     public string? Path { get; init; }
     public bool PreserveQuery { get; init; } = true;
+
+    /// <summary>When the request is cleartext, the redirect scheme is https.</summary>
+    public bool HttpToHttps { get; init; }
 }
 
 /// <summary>Response produced without an upstream.</summary>
@@ -80,6 +128,7 @@ public sealed class DirectResponseConfig
     public int Status { get; init; } = 200;
     public string? Body { get; init; }
     public string? ContentType { get; init; }
+    public IReadOnlyDictionary<string, string>? Headers { get; init; }
 }
 
 /// <summary>Per-route timeout and body/WebSocket caps applied to a matched session.</summary>

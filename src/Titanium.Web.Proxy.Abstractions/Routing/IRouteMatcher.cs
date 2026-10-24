@@ -68,8 +68,17 @@ public readonly struct LoadBalanceContext
         AffinityKey = affinityKey;
     }
 
-    /// <summary>Preferred destination id from cookie/header stickiness.</summary>
+    public LoadBalanceContext(string? affinityKey, string? hashInput)
+    {
+        AffinityKey = affinityKey;
+        HashInput = hashInput;
+    }
+
+    /// <summary>Preferred destination id or opaque pin from cookie/header stickiness.</summary>
     public string? AffinityKey { get; }
+
+    /// <summary>Value hashed by consistent-hash selection. Null hashes the affinity key or cluster id.</summary>
+    public string? HashInput { get; }
 }
 
 /// <summary>Selects a healthy destination from a cluster.</summary>
@@ -110,4 +119,7 @@ public sealed class TransformRequestContext
     public Dictionary<string, string> RouteValues { get; } = new(StringComparer.Ordinal);
 
     public string? OriginalHost { get; set; }
+
+    /// <summary>Subject of the inbound client certificate. Null when the listener did not capture one.</summary>
+    public string? ClientCertificateSubject { get; set; }
 }

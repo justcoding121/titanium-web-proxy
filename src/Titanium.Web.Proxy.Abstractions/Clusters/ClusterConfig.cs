@@ -54,6 +54,9 @@ public sealed class DestinationConfig
 
     /// <summary>Ramp weight from 10 percent to full over this many seconds. Zero disables.</summary>
     public int SlowStartSeconds { get; init; }
+
+    /// <summary>Opaque pin. Null means the destination id is the pin.</summary>
+    public string? AffinityKey { get; init; }
 }
 
 /// <summary>Cluster of destinations with LB settings.</summary>
@@ -83,6 +86,48 @@ public sealed class ClusterConfig
 
     /// <summary>Per-cluster upstream identity. Null keeps the process-wide connection pool key.</summary>
     public ClusterHttpClientConfig? HttpClient { get; init; }
+
+    /// <summary>Sticky session. Null keeps the legacy cookie and header fields.</summary>
+    public SessionAffinityConfig? SessionAffinity { get; init; }
+
+    /// <summary>Input for <see cref="LoadBalanceAlgorithm.ConsistentHash"/>. Null hashes the cluster id.</summary>
+    public HashKeyConfig? HashKey { get; init; }
+
+    /// <summary>Name of an <c>ILoadBalancingPolicy</c>. Null uses <see cref="Algorithm"/>.</summary>
+    public string? LoadBalancingPolicy { get; init; }
+}
+
+/// <summary>How a sticky pin is read.</summary>
+public enum AffinityMode
+{
+    Cookie = 0,
+    Header = 1,
+}
+
+/// <summary>What to do when the pinned destination cannot be used.</summary>
+public enum AffinityFailurePolicy
+{
+    Redistribute = 0,
+    Return503 = 1,
+}
+
+/// <summary>Opaque sticky session. The cookie value is never the raw destination id.</summary>
+public sealed class SessionAffinityConfig
+{
+    public AffinityMode Mode { get; init; } = AffinityMode.Cookie;
+    public string? CookieName { get; init; }
+    public string? HeaderName { get; init; }
+    public AffinityFailurePolicy FailurePolicy { get; init; }
+}
+
+/// <summary>Where a hash algorithm reads its key.</summary>
+public sealed class HashKeyConfig
+{
+    /// <summary><c>path</c>, <c>host</c>, <c>header</c>, <c>query</c>, or <c>connection</c>.</summary>
+    public string Source { get; init; } = "path";
+
+    /// <summary>Header or query name when <see cref="Source"/> needs one.</summary>
+    public string? Name { get; init; }
 }
 
 /// <summary>Upstream connection settings that change pool identity.</summary>

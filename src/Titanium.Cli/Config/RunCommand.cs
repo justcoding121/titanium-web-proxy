@@ -935,6 +935,15 @@ internal static class RunCommand
             ep.GenericCertificateName = listener.GenericCertificateName;
         }
 
+        ep.AcceptProxyProtocol = listener.AcceptProxyProtocol;
+        ep.Passthrough = listener.Passthrough;
+        ep.ClientCertificateMode = listener.ClientCertificateMode switch
+        {
+            "require" => ClientCertificateMode.Require,
+            "allow" => ClientCertificateMode.Allow,
+            _ => ClientCertificateMode.None,
+        };
+
         ApplyQuicKnobs(ep, listener);
         return ep;
     }

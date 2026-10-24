@@ -85,9 +85,13 @@ internal static class ReverseProxySessionDispatch
 
         if (resolution == DestinationResolution.NoRoute || destination is null || route is null)
         {
-            return resolution == DestinationResolution.RouteWithoutDestination
-                ? RouteDispatchResult.NoDestination
-                : RouteDispatchResult.NotRouted;
+            if (resolution == DestinationResolution.RouteWithoutDestination && route is not null)
+            {
+                session.MatchedRoute = route;
+                return RouteDispatchResult.NoDestination;
+            }
+
+            return RouteDispatchResult.NotRouted;
         }
 
         var port = destination.Port;
@@ -106,14 +110,21 @@ internal static class ReverseProxySessionDispatch
         }
 
         ObserveRequestStart(server, session, route);
+        if (route.Mirror is { } mirror)
+        {
+            MirrorFanout.TryEnqueue(mirror, request);
+        }
+
         ClusterConfig? cluster = null;
-        if (options.ClusterManager?.Snapshot.Clusters.TryGetValue(route.ClusterId, out var found) == true)
+        var clusterId = SelectedClusterId(options, route, destination.Id);
+        if (options.ClusterManager?.Snapshot.Clusters.TryGetValue(clusterId, out var found) == true)
         {
             cluster = found;
             session.PassiveHealth = cluster.HealthCheck?.Passive;
             session.PassiveDestinationCount = cluster.Destinations.Count;
             var connectionKey = cluster.HttpClient?.ConnectionKey;
             session.ClusterConnectionKey = string.IsNullOrEmpty(connectionKey) ? null : connectionKey;
+            StageAffinityCookie(session, cluster, destination, request);
         }
 
         var retry = route.Retry ?? cluster?.Retry;
@@ -170,9 +181,20 @@ internal static class ReverseProxySessionDispatch
             return;
         }
 
-        var headers = string.IsNullOrEmpty(direct.ContentType)
-            ? null
-            : new[] { new HttpHeader("Content-Type", direct.ContentType) };
+        var headers = new List<HttpHeader>();
+        if (!string.IsNullOrEmpty(direct.ContentType))
+        {
+            headers.Add(new HttpHeader("Content-Type", direct.ContentType));
+        }
+
+        if (direct.Headers is not null)
+        {
+            foreach (var pair in direct.Headers)
+            {
+                headers.Add(new HttpHeader(pair.Key, pair.Value));
+            }
+        }
+
         args.GenericResponse(direct.Body ?? string.Empty, (HttpStatusCode)direct.Status, headers);
     }
 
@@ -192,7 +214,9 @@ internal static class ReverseProxySessionDispatch
 
         if (!string.IsNullOrEmpty(redirect.Host))
         {
-            var scheme = redirect.Scheme ?? (request.IsHttps ? "https" : "http");
+            var scheme = redirect.HttpToHttps && !request.IsHttps
+                ? "https"
+                : redirect.Scheme ?? (request.IsHttps ? "https" : "http");
             var port = redirect.Port is int p and > 0 ? ":" + p.ToString() : "";
             if (path.Contains('?', StringComparison.Ordinal))
             {
@@ -230,6 +254,7 @@ internal static class ReverseProxySessionDispatch
                 HttpVersion = request.HttpVersion,
             };
             session.HttpClient.Response.Headers.AddHeader("Retry-After", "1");
+            ApplyErrorPage(session, 503);
         }
 
         session.HttpClient.Response.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionClose);
@@ -250,8 +275,65 @@ internal static class ReverseProxySessionDispatch
             return;
         }
 
-        session.GenericResponse(string.Empty, HttpStatusCode.ServiceUnavailable,
-            [new HttpHeader("Retry-After", "1")]);
+        var page = ErrorPages.Find(session, 503);
+        session.GenericResponse(page?.Body ?? string.Empty, HttpStatusCode.ServiceUnavailable,
+        [
+            new HttpHeader("Retry-After", "1"),
+            new HttpHeader("Content-Type", page?.ContentType ?? "text/plain"),
+        ]);
+    }
+
+    private static void ApplyErrorPage(SessionEventArgsBase session, int status)
+    {
+        var page = ErrorPages.Find(session, status);
+        if (page?.Body is null || session.HttpClient.Response is null)
+        {
+            return;
+        }
+
+        session.HttpClient.Response.Body = System.Text.Encoding.UTF8.GetBytes(page.Body);
+        if (!string.IsNullOrEmpty(page.ContentType))
+        {
+            session.HttpClient.Response.Headers.AddHeader("Content-Type", page.ContentType);
+        }
+    }
+
+    private static string SelectedClusterId(Titanium.Web.Proxy.Abstractions.ReverseProxyOptions options, RouteConfig route, string destinationId)
+    {
+        if (route.Clusters is not { Count: > 0 } || options.ClusterManager is null)
+        {
+            return route.ClusterId;
+        }
+
+        foreach (var cluster in options.ClusterManager.Snapshot.Clusters.Values)
+        {
+            for (var i = 0; i < cluster.Destinations.Count; i++)
+            {
+                if (string.Equals(cluster.Destinations[i].Id, destinationId, StringComparison.Ordinal))
+                {
+                    return cluster.Id;
+                }
+            }
+        }
+
+        return route.ClusterId;
+    }
+
+    private static void StageAffinityCookie(SessionEventArgsBase session, ClusterConfig cluster, DestinationConfig destination, Request request)
+    {
+        if (cluster.SessionAffinity is not { Mode: AffinityMode.Cookie, CookieName: { Length: > 0 } name })
+        {
+            return;
+        }
+
+        var existing = request.Headers.GetHeaders("Cookie");
+        if (existing is { Count: > 0 } && existing[0].Value.Contains(name + "=", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        session.Extras ??= new RoutingFeatureState();
+        session.Extras.PendingSetCookie = name + "=" + AffinityPins.For(cluster, destination) + "; Path=/; HttpOnly";
     }
 
     private static bool IsGrpc(Request request)
@@ -410,6 +492,11 @@ internal static class ReverseProxySessionDispatch
         }
 
         var ctx = new TransformRequestContext { Path = path };
+        if (session.ClientConnection is Network.Tcp.TcpClientConnection { ClientCertificate: { } clientCert })
+        {
+            ctx.ClientCertificateSubject = clientCert.Subject;
+        }
+
         engine.ApplyRequestTransforms(transforms, ctx);
 
         if (!string.Equals(path, ctx.Path, StringComparison.Ordinal))
@@ -447,6 +534,11 @@ internal static class ReverseProxySessionDispatch
         if (session.ResponseHeaderTransformPlan is TransformResponseHeaderPlan plan)
         {
             plan.Apply(session.HttpClient.Response.Headers);
+        }
+
+        if (session.Extras?.PendingSetCookie is { Length: > 0 } cookie && session.HttpClient.Response is not null)
+        {
+            session.HttpClient.Response.Headers.AddHeader("Set-Cookie", cookie);
         }
     }
 
@@ -506,6 +598,11 @@ internal static class ReverseProxySessionDispatch
             seconds,
             session.HttpClient.Request.ContentLength,
             session.HttpClient.Response.ContentLength);
+        if (session.Extras?.HeldConnectionPolicy is { } held)
+        {
+            RoutePolicies.Release(held);
+        }
+
         if (started != 0)
         {
             ProxyMetrics.AddActiveRequest(-1);
@@ -517,6 +614,11 @@ internal static class ReverseProxySessionDispatch
 
     internal static ForwarderError Classify(SessionEventArgsBase session)
     {
+        if (session.ForwarderError == ForwarderError.PolicyDenied)
+        {
+            return ForwarderError.PolicyDenied;
+        }
+
         var ex = session.Exception;
         if (ex is OperationCanceledException)
         {

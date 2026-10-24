@@ -15,6 +15,9 @@ public sealed class ReverseProxyOptions
 
     /// <summary>Named policies. Unused until a route lists one.</summary>
     public IReadOnlyList<Routing.RoutePolicyConfig>? Policies { get; init; }
+
+    /// <summary>Bodies for generated error responses. A route page wins.</summary>
+    public IReadOnlyList<Routing.ErrorPageConfig>? ErrorPages { get; init; }
     public IReadOnlyList<IProxyMiddleware>? Middleware { get; init; }
     public IClusterManager? ClusterManager { get; init; }
     public IRouteMatcher? RouteMatcher { get; init; }

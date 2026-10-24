@@ -107,6 +107,10 @@ public sealed class TransformEngine : ITransformEngine
                 case TransformKinds.RequestHeadersAllowed when Param(t, "headers") is { } allowed:
                     KeepOnly(context, allowed);
                     break;
+                case TransformKinds.ClientCertHeader when Param(t, "name") is { } certHeader &&
+                    !string.IsNullOrEmpty(context.ClientCertificateSubject):
+                    context.Headers[certHeader] = context.ClientCertificateSubject;
+                    break;
                 case TransformKinds.RequestHeaderOriginalHost:
                     if (!string.IsNullOrEmpty(context.OriginalHost))
                     {

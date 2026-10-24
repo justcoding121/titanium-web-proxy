@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Plugins;
@@ -16,6 +17,10 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
     private int _queueWaiters;
     private readonly DestinationHealthTracker _health;
     private readonly ConcurrentDictionary<string, long> _latencyTicks = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, StrongBox<int>> _roundRobinByCluster = new(StringComparer.Ordinal);
+
+    /// <summary>Custom pickers. Null leaves <see cref="LoadBalanceAlgorithm"/> in charge.</summary>
+    public IReadOnlyList<ILoadBalancingPolicy>? Policies { get; set; }
 
     /// <summary>Test seam for the wrap-safe round-robin counter.</summary>
     internal int RoundRobinCounter
@@ -67,11 +72,21 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
 
         if (!string.IsNullOrEmpty(context.AffinityKey))
         {
-            var affinityMatch = eligible.FirstOrDefault(dest =>
-                string.Equals(dest.Id, context.AffinityKey, StringComparison.Ordinal));
+            var affinityMatch = eligible.FirstOrDefault(dest => AffinityPins.Matches(cluster, dest, context.AffinityKey));
             if (affinityMatch is not null)
             {
                 return affinityMatch;
+            }
+        }
+
+        if (!string.IsNullOrEmpty(cluster.LoadBalancingPolicy) && Policies is { Count: > 0 } policies)
+        {
+            for (var i = 0; i < policies.Count; i++)
+            {
+                if (string.Equals(policies[i].Name, cluster.LoadBalancingPolicy, StringComparison.Ordinal))
+                {
+                    return policies[i].Pick(cluster, eligible, context);
+                }
             }
         }
 
@@ -82,8 +97,8 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
             LoadBalanceAlgorithm.LeastTime => SelectLeastTime(eligible),
             LoadBalanceAlgorithm.PowerOfTwoChoices => SelectPowerOfTwo(eligible),
             LoadBalanceAlgorithm.FirstAlphabetical => SelectAlphabetical(eligible),
-            LoadBalanceAlgorithm.ConsistentHash => SelectHash(eligible, context.AffinityKey ?? cluster.Id),
-            _ => SelectWeightedRoundRobin(eligible, cluster.SlowStartSeconds),
+            LoadBalanceAlgorithm.ConsistentHash => SelectHash(eligible, context.HashInput ?? context.AffinityKey ?? cluster.Id),
+            _ => SelectWeightedRoundRobin(cluster.Id, eligible, cluster.SlowStartSeconds),
         };
     }
 
@@ -105,13 +120,16 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
     {
         DestinationConfig best = eligible[0];
         var bestCount = _health.GetActiveRequests(best.Id);
+        var bestWeight = best.Weight < 1 ? 1 : best.Weight;
         for (var i = 1; i < eligible.Count; i++)
         {
             var count = _health.GetActiveRequests(eligible[i].Id);
-            if (count < bestCount)
+            var weight = eligible[i].Weight < 1 ? 1 : eligible[i].Weight;
+            if ((long)count * bestWeight < (long)bestCount * weight)
             {
                 best = eligible[i];
                 bestCount = count;
+                bestWeight = weight;
             }
         }
 
@@ -181,10 +199,11 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
         return eligible[index];
     }
 
-    private DestinationConfig SelectWeightedRoundRobin(List<DestinationConfig> eligible, int clusterSlowStartSeconds)
+    private DestinationConfig SelectWeightedRoundRobin(string clusterId, List<DestinationConfig> eligible, int clusterSlowStartSeconds)
     {
         var expanded = ExpandByWeight(eligible, clusterSlowStartSeconds);
-        var n = (uint)Interlocked.Increment(ref _roundRobin);
+        var box = _roundRobinByCluster.GetOrAdd(clusterId, _ => new StrongBox<int>(Volatile.Read(ref _roundRobin)));
+        var n = (uint)Interlocked.Increment(ref box.Value);
         return expanded[(int)(n % (uint)expanded.Count)];
     }
 

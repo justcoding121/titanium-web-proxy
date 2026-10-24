@@ -89,8 +89,8 @@ public sealed class JsonAccessLogWriter : IDisposable
             session.ForwarderError == Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.None
                 ? null
                 : session.ForwarderError.ToString(),
-            session.Extras?.RequestId,
-            session.Extras?.Activity?.TraceId.ToString());
+            session.ProxyRequestId,
+            session.ProxyTraceId);
     }
 
     public void TryWrite(SessionEventArgs session)

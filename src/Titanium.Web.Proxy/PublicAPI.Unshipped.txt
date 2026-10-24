@@ -334,4 +334,33 @@ Titanium.Web.Proxy.ProxyServer.ForwardedHeaders.get -> Titanium.Web.Proxy.Abstra
 Titanium.Web.Proxy.ProxyServer.ForwardedHeaders.set -> void
 Titanium.Web.Proxy.Configuration.ProxyConfigHost
 Titanium.Web.Proxy.Configuration.ProxyConfigHost.ApplyAsync(Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot! snapshot, Titanium.Web.Proxy.Clusters.ClusterManager! clusters, System.Action<Titanium.Web.Proxy.Abstractions.ReverseProxyOptions!>! publish, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
-Titanium.Web.Proxy.Configuration.ProxyConfigHost.ProxyConfigHost() -> void
+Titanium.Web.Proxy.Network.ProxyProtocolReader
+Titanium.Web.Proxy.Models.ClientCertificateMode.None = 0 -> Titanium.Web.Proxy.Models.ClientCertificateMode
+Titanium.Web.Proxy.Models.ClientCertificateMode.Require = 2 -> Titanium.Web.Proxy.Models.ClientCertificateMode
+Titanium.Web.Proxy.Models.ClientCertificateMode.Allow = 1 -> Titanium.Web.Proxy.Models.ClientCertificateMode
+Titanium.Web.Proxy.Models.ClientCertificateMode
+Titanium.Web.Proxy.Models.SniCertificateBinding
+Titanium.Web.Proxy.Models.SniCertificateBinding.SniCertificateBinding() -> void
+Titanium.Web.Proxy.Certificates.SniCertificateSelector
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.Passthrough.get -> bool
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.Passthrough.set -> void
+Titanium.Web.Proxy.Models.SniCertificateBinding.Certificate.init -> void
+Titanium.Web.Proxy.Models.SniCertificateBinding.Certificate.get -> System.Security.Cryptography.X509Certificates.X509Certificate2!
+Titanium.Web.Proxy.Models.SniCertificateBinding.Hosts.init -> void
+Titanium.Web.Proxy.Models.SniCertificateBinding.Hosts.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Titanium.Web.Proxy.Models.ProxyEndPoint.SniCertificates.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Models.SniCertificateBinding!>?
+Titanium.Web.Proxy.Models.ProxyEndPoint.SniCertificates.set -> void
+Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateMode.get -> Titanium.Web.Proxy.Models.ClientCertificateMode
+Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateMode.set -> void
+Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptProxyProtocol.get -> bool
+Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptProxyProtocol.set -> void
+Titanium.Web.Proxy.Configuration.ProxyConfigHost.ProxyConfigHost(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Configuration.IProxyConfigFilter!>? filters = null) -> void
+Titanium.Web.Proxy.Clusters.LoadBalancer.Policies.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ILoadBalancingPolicy!>?
+static Titanium.Web.Proxy.Certificates.SniCertificateSelector.Select(string? serverName, System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Models.SniCertificateBinding!>! bindings) -> System.Security.Cryptography.X509Certificates.X509Certificate2?
+Titanium.Web.Proxy.Clusters.LoadBalancer.Policies.set -> void
+static Titanium.Web.Proxy.Network.ProxyProtocolReader.TryParse(System.ReadOnlySpan<byte> buffer, out System.Net.IPEndPoint? client, out int consumed) -> bool
+static Titanium.Web.Proxy.Network.ProxyProtocolReader.TryReadAsync(System.Net.Sockets.Socket! socket, System.Threading.CancellationToken cancellationToken, System.Net.IPEndPoint? client = null) -> System.Threading.Tasks.ValueTask<bool>
+Titanium.Web.Proxy.ProxyServer.DrainAsync(System.TimeSpan timeout) -> System.Threading.Tasks.Task!
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.MatchedRoute.get -> Titanium.Web.Proxy.Abstractions.Routing.RouteConfig?
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ProxyRequestId.get -> string?
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ProxyTraceId.get -> string?

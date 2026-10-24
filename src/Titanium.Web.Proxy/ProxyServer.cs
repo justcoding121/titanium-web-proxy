@@ -1853,16 +1853,70 @@ public partial class ProxyServer : IDisposable
                 continue;
             }
 
-            if (!ProxyRunning)
+            if (!ProxyRunning || _stopAccepting)
             {
                 tcpClient.Dispose();
-                break;
+                if (!ProxyRunning)
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            if (endPoint is TransparentBaseProxyEndPoint { Passthrough: true, ForwardHost.Length: > 0 } passthrough)
+            {
+                if (!TryAdmitClientConnection(endPoint))
+                {
+                    tcpClient.Dispose();
+                    continue;
+                }
+
+                try
+                {
+                    await Network.TcpPassthrough.RelayAsync(
+                        tcpClient,
+                        passthrough.ForwardHost!,
+                        passthrough.ForwardPort ?? (endPoint.DecryptSsl ? 443 : 80),
+                        cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    OnException(null, ex);
+                }
+                finally
+                {
+                    tcpClient.Dispose();
+                    ReleaseClientConnection(endPoint);
+                }
+
+                continue;
             }
 
             if (!TryAdmitClientConnection(endPoint))
             {
                 tcpClient.Dispose();
                 continue;
+            }
+
+            if (endPoint.AcceptProxyProtocol)
+            {
+                try
+                {
+                    if (!await Network.ProxyProtocolReader.TryReadAsync(tcpClient, cancellationToken).ConfigureAwait(false))
+                    {
+                        tcpClient.Dispose();
+                        ReleaseClientConnection(endPoint);
+                        continue;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    OnException(null, ex);
+                    tcpClient.Dispose();
+                    ReleaseClientConnection(endPoint);
+                    continue;
+                }
             }
 
             try

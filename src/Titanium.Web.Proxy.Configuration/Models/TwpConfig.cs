@@ -96,6 +96,15 @@ public sealed class ListenerConfig
 
     /// <summary>QUIC idle timeout in seconds.</summary>
     public int? IdleTimeoutSeconds { get; set; }
+
+    /// <summary>Require a PROXY protocol preamble before HTTP bytes.</summary>
+    public bool AcceptProxyProtocol { get; set; }
+
+    /// <summary>Copy accepted bytes to <see cref="ForwardHost"/> without parsing HTTP.</summary>
+    public bool Passthrough { get; set; }
+
+    /// <summary><c>none</c>, <c>allow</c>, or <c>require</c>.</summary>
+    public string? ClientCertificateMode { get; set; }
 }
 
 /// <summary>Static file serving options.</summary>
@@ -147,4 +156,16 @@ public sealed class CertificatesConfig
 
     /// <summary>ACME directory URL (e.g. Pebble or Let's Encrypt). Required for automated issue.</summary>
     public string? AcmeDirectory { get; set; }
+
+    public IList<CertificateFileConfig> Items { get; set; } = new List<CertificateFileConfig>();
+}
+
+/// <summary>One certificate file and the hosts it should answer for.</summary>
+public sealed class CertificateFileConfig
+{
+    public string? Path { get; set; }
+
+    public string? Password { get; set; }
+
+    public IList<string> Hosts { get; set; } = new List<string>();
 }

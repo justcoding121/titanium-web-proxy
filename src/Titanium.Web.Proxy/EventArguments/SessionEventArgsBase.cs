@@ -242,7 +242,13 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     internal RoutingFeatureState? Extras { get; set; }
 
     /// <summary>Route chosen for this request. Null when the request was not routed.</summary>
-    internal Abstractions.Routing.RouteConfig? MatchedRoute { get; set; }
+    public Abstractions.Routing.RouteConfig? MatchedRoute { get; internal set; }
+
+    /// <summary>Request id assigned when <see cref="ProxyServer.RequestIdHeader"/> is set.</summary>
+    public string? ProxyRequestId => Extras?.RequestId;
+
+    /// <summary>W3C trace id when tracing is enabled for this request.</summary>
+    public string? ProxyTraceId => Extras?.Activity?.TraceId.ToString();
 
     /// <summary>Appended to the upstream pool key only when a cluster sets HttpClient.</summary>
     internal string? ClusterConnectionKey { get; set; }

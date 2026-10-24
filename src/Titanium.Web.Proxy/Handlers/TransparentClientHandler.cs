@@ -107,20 +107,32 @@ public partial class ProxyServer
                         // Construct SslStream before WaitForData completes so construction overlaps
                         // ClientHello arrival (Kestrel: Start WaitForData, then middleware builds SslStream).
                         sslStream = new SslStream(networkStream, leaveInnerStreamOpen: false);
-                        var options = endPoint.CachedServerAuthOptions;
+                        var sniBindings = endPoint.SniCertificates;
+                        var requireClient = endPoint.ClientCertificateMode == ClientCertificateMode.Require;
+                        var options = sniBindings is { Count: > 0 } || requireClient ? null : endPoint.CachedServerAuthOptions;
                         if (options == null)
                         {
+                            var fallback = certificate ?? (sniBindings is { Count: > 0 } ? sniBindings[0].Certificate : null);
                             options = new SslServerAuthenticationOptions
                             {
                                 ServerCertificateContext =
-                                    CertificateManager.CreateSslCertificateContext(certificate!),
-                                ClientCertificateRequired = false,
+                                    CertificateManager.CreateSslCertificateContext(fallback!),
+                                ClientCertificateRequired = requireClient,
                                 EnabledSslProtocols = SupportedSslProtocols,
                                 CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
                                 ApplicationProtocols = SslExtensions.Http11ProtocolAsList,
                                 AllowRenegotiation = false
                             };
-                            endPoint.CachedServerAuthOptions = options;
+                            if (sniBindings is { Count: > 0 })
+                            {
+                                options.ServerCertificateSelectionCallback = (_, name) =>
+                                    Certificates.SniCertificateSelector.Select(name, sniBindings) ?? fallback!;
+                            }
+
+                            if (sniBindings is not { Count: > 0 })
+                            {
+                                endPoint.CachedServerAuthOptions = options;
+                            }
                         }
 
                         await AwaitPendingClientHelloAsync(clientConnection);
@@ -305,10 +317,16 @@ public partial class ProxyServer
                         var options = new SslServerAuthenticationOptions
                         {
                             ServerCertificateContext = CertificateManager.CreateSslCertificateContext(certificate),
-                            ClientCertificateRequired = false,
+                            ClientCertificateRequired = endPoint.ClientCertificateMode == ClientCertificateMode.Require,
                             EnabledSslProtocols = SupportedSslProtocols,
                             CertificateRevocationCheckMode = X509RevocationMode.NoCheck
                         };
+                        if (endPoint.SniCertificates is { Count: > 0 } handshakeBindings)
+                        {
+                            var fallbackCert = certificate;
+                            options.ServerCertificateSelectionCallback = (_, name) =>
+                                Certificates.SniCertificateSelector.Select(name, handshakeBindings) ?? fallbackCert;
+                        }
 
                         options.ApplicationProtocols = http2Supported
                             ? SslExtensions.Http2AndHttp11ProtocolAsList

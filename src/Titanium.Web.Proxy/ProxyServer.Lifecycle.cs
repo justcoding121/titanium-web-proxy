@@ -37,6 +37,7 @@ namespace Titanium.Web.Proxy;
 /// </summary>
 public partial class ProxyServer : IDisposable
 {
+    private volatile bool _stopAccepting;
     /// <summary>
     ///     Start this proxy server instance.
     ///     <para>
@@ -99,6 +100,7 @@ public partial class ProxyServer : IDisposable
             assignedSystemUpStreamResolver = true;
         }
 
+        _stopAccepting = false;
         ProxyRunning = true;
 
         // Name only, per the plan's rollout section - never hosts, URLs or secrets.
@@ -281,6 +283,27 @@ public partial class ProxyServer : IDisposable
     ///     In-flight sessions are cancelled; pooled upstream connections are cleared. The connection
     ///     factory itself stays usable for a subsequent Start (it is only disposed with the proxy).
     /// </summary>
+    /// <summary>Stops admitting clients, waits for in-flight work, then stops.</summary>
+    public async Task DrainAsync(TimeSpan timeout)
+    {
+        _stopAccepting = true;
+        if (!ProxyRunning)
+        {
+            return;
+        }
+
+        var deadline = DateTime.UtcNow + timeout;
+        while ((ClientConnectionCount > 0 || Http3ClientConnectionCount > 0) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(50, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        if (ProxyRunning)
+        {
+            await StopAsync(TimeSpan.Zero).ConfigureAwait(false);
+        }
+    }
+
     public void Stop()
     {
         StopCore(cancelSessions: true, clearPools: true);
