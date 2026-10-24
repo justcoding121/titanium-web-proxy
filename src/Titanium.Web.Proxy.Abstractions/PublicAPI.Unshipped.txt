@@ -196,6 +196,17 @@ Titanium.Web.Proxy.Abstractions.Routing.IClusterManager
 Titanium.Web.Proxy.Abstractions.Routing.IClusterManager.ApplyAsync(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig!>! clusters, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Titanium.Web.Proxy.Abstractions.Routing.IClusterManager.GetDestinationState(string! destinationId) -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationState
 Titanium.Web.Proxy.Abstractions.Routing.IClusterManager.SetDestinationState(string! destinationId, Titanium.Web.Proxy.Abstractions.Clusters.DestinationState state) -> void
+Titanium.Web.Proxy.Abstractions.Routing.IClusterManager.TrySetDestinationState(string! destinationId, Titanium.Web.Proxy.Abstractions.Clusters.DestinationState expected, Titanium.Web.Proxy.Abstractions.Clusters.DestinationState next) -> bool
+Titanium.Web.Proxy.Abstractions.Routing.TransformKinds
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.PathPrefix = "PathPrefix" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.PathRemovePrefix = "PathRemovePrefix" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.QueryValueSet = "QueryValueSet" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.RequestHeaderRemove = "RequestHeaderRemove" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.RequestHeaderSet = "RequestHeaderSet" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.RequestHostUseDestination = "RequestHostUseDestination" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.ResponseHeaderRemove = "ResponseHeaderRemove" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.ResponseHeaderSet = "ResponseHeaderSet" -> string!
+static Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.TryGetRequiredParameters(string! kind, out System.Collections.Generic.IReadOnlyList<string!>! required) -> bool
 Titanium.Web.Proxy.Abstractions.Routing.IClusterManager.Snapshot.get -> Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot!
 Titanium.Web.Proxy.Abstractions.Routing.ILoadBalancer
 Titanium.Web.Proxy.Abstractions.Routing.ILoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig! cluster, Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot! snapshot) -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig?

@@ -133,23 +133,12 @@ internal static class RunCommand
 
         IGrpcJsonTranscoder? grpcJsonTranscoder = null;
 
+        clusterManager.AttachHealthTracker(loadBalancer.Health);
+
         void RefreshReverseProxy()
         {
-            // Prefer ClusterManager snapshot so SIGHUP reload picks up new destinations
-            // (do not close over the initial ConfigLoader result).
-            var snapClusters = clusterManager.Snapshot.Clusters;
-            proxy.ReverseProxy = new ReverseProxyOptions
-            {
-                Routes = routes.Count > 0 ? routes : null,
-                Clusters = snapClusters.Count > 0 ? snapClusters.Values.ToList() : null,
-                ClusterManager = clusterManager,
-                RouteMatcher = new RouteMatcher(),
-                LoadBalancer = loadBalancer,
-                TransformEngine = new TransformEngine(),
-                Middleware = middleware.Count > 0 ? middleware : null,
-                LatencyRecorder = loadBalancer,
-                GrpcJsonTranscoder = grpcJsonTranscoder,
-            };
+            proxy.ReverseProxy = BuildReverseProxyOptions(
+                routes, clusterManager, loadBalancer, middleware, grpcJsonTranscoder);
         }
 
         var plusContext = new PlusActivationContext
@@ -297,25 +286,56 @@ internal static class RunCommand
         WriteConfigWarnings(loaded);
 
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
-        if (loaded.Config.Clusters.Count > 0)
+        var previous = clusterManager.Snapshot.Clusters.Values.ToList();
+        var incoming = loaded.Config.Clusters.ToList();
+        var union = new List<ClusterConfig>(previous);
+        foreach (var cluster in incoming)
         {
-            await clusterManager.ApplyAsync(loaded.Config.Clusters.ToList(), stoppingToken).ConfigureAwait(false);
-        }
-        else
-        {
-            await clusterManager.ApplyAsync([], stoppingToken).ConfigureAwait(false);
+            var index = union.FindIndex(c => string.Equals(c.Id, cluster.Id, StringComparison.Ordinal));
+            if (index >= 0)
+            {
+                union[index] = cluster;
+            }
+            else
+            {
+                union.Add(cluster);
+            }
         }
 
+        // Keep old and new clusters until routes have swapped, then drop removed clusters.
+        await clusterManager.ApplyCoreAsync(union, reconcileBackground: false, stoppingToken).ConfigureAwait(false);
         ReplaceRoutes(routes, loaded.Config.Routes);
-
-        // Keep existing middleware; Plus control plane remains. Refresh reverse options only.
-        _ = getGrpc();
         refreshReverseProxy();
+        await clusterManager.ApplyCoreAsync(incoming, reconcileBackground: true, stoppingToken).ConfigureAwait(false);
+        _ = proxy;
         _ = middleware;
         _ = loadBalancer;
         _ = responseCache;
         _ = plusOptions;
+        _ = getGrpc;
         _ = setGrpc;
+    }
+
+    internal static ReverseProxyOptions BuildReverseProxyOptions(
+        IReadOnlyCollection<RouteConfig> routes,
+        IClusterManager clusterManager,
+        LoadBalancer loadBalancer,
+        IReadOnlyCollection<IProxyMiddleware> middleware,
+        IGrpcJsonTranscoder? grpcJsonTranscoder)
+    {
+        var snapClusters = clusterManager.Snapshot.Clusters;
+        return new ReverseProxyOptions
+        {
+            Routes = routes.Count > 0 ? routes.ToArray() : null,
+            Clusters = snapClusters.Count > 0 ? snapClusters.Values.ToList() : null,
+            ClusterManager = clusterManager,
+            RouteMatcher = new RouteMatcher(),
+            LoadBalancer = loadBalancer,
+            TransformEngine = new TransformEngine(),
+            Middleware = middleware.Count > 0 ? middleware.ToArray() : null,
+            LatencyRecorder = loadBalancer,
+            GrpcJsonTranscoder = grpcJsonTranscoder,
+        };
     }
 
     /// <summary>In-place route list swap used by SIGHUP reload (and unit tests).</summary>
@@ -1043,7 +1063,7 @@ internal static class RunCommand
             return true;
         }
 
-        return config.Routes.Any(r => r.Transforms is { Count: > 0 });
+        return config.Routes.Any(r => r.Transforms is { Count: > 0 } || r.Limits is not null);
     }
 
     private static void WriteConfigWarnings(LoadedConfig loaded)

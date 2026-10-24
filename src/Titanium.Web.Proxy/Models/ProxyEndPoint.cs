@@ -78,6 +78,9 @@ public abstract class ProxyEndPoint
     /// </summary>
     public int? MaxConcurrentClients { get; set; }
 
+    /// <summary>Single-slot forward-host equivalence cache for this listener.</summary>
+    internal Routing.ForwardHostEquivalenceCache? ForwardHostEquivalence;
+
     /// <summary>
     /// Endpoint-level override for <see cref="ProxyServer.EnableHttpInterception"/>.
     /// <see langword="null"/> inherits the server-level value.

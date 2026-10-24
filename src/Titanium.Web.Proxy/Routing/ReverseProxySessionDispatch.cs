@@ -1,10 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Http.Responses;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Transforms;
 
@@ -20,12 +26,24 @@ internal static class ReverseProxySessionDispatch
     /// Resolves destination for this session and sets <see cref="SessionEventArgsBase.UpstreamConnectHost"/>.
     /// Returns false when ReverseProxy is unset / unmatched (caller keeps ForwardHost behaviour).
     /// </summary>
-    public static bool TryApply(ProxyServer server, SessionEventArgsBase session)
+    internal enum RouteDispatchResult
+    {
+        NotRouted,
+        Routed,
+        NoDestination,
+        Handled,
+    }
+
+    public static bool TryApply(ProxyServer server, SessionEventArgsBase session) =>
+        Apply(server, session) == RouteDispatchResult.Routed;
+
+    public static RouteDispatchResult Apply(ProxyServer server, SessionEventArgsBase session)
     {
         var options = server.ReverseProxy;
+        session.ResponseHeaderTransformPlan = null;
         if (options?.Routes is null || options.Routes.Count == 0)
         {
-            return false;
+            return RouteDispatchResult.NotRouted;
         }
 
         session.UpstreamConnectHost = null;
@@ -41,12 +59,13 @@ internal static class ReverseProxySessionDispatch
             fallbackPort = transparent.ForwardPort ?? (request.IsHttps ? 443 : 80);
         }
 
-        if (!DestinationResolver.TryResolve(options, request, fallbackHost, fallbackPort,
-                out var destination, out var route) ||
-            destination is null ||
-            route is null)
+        var resolution = DestinationResolver.Resolve(options, request, fallbackHost, fallbackPort,
+            out var destination, out var route);
+        if (resolution == DestinationResolution.NoRoute || destination is null || route is null)
         {
-            return false;
+            return resolution == DestinationResolution.RouteWithoutDestination
+                ? RouteDispatchResult.NoDestination
+                : RouteDispatchResult.NotRouted;
         }
 
         var port = destination.Port;
@@ -80,7 +99,63 @@ internal static class ReverseProxySessionDispatch
             request.SetUpstreamCleartextHostOverride(destination.Address, port);
         }
 
-        return true;
+        return RouteDispatchResult.Routed;
+    }
+
+    /// <summary>H1 synthetic 503 (or gRPC UNAVAILABLE). Kept out of line so the session loop's state machine stays small.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static async ValueTask WriteNoDestinationAsync(
+        SessionEventArgsBase session,
+        HttpClientStream clientStream,
+        CancellationToken cancellationToken)
+    {
+        var request = session.HttpClient.Request;
+        if (IsGrpc(request))
+        {
+            session.HttpClient.Response = new GenericResponse(HttpStatusCode.OK)
+            {
+                HttpVersion = request.HttpVersion,
+            };
+            session.HttpClient.Response.Headers.AddHeader("content-type", "application/grpc");
+            session.HttpClient.Response.Headers.AddHeader("grpc-status", "14");
+            session.HttpClient.Response.Headers.AddHeader("grpc-message", "no available destination");
+        }
+        else
+        {
+            session.HttpClient.Response = new GenericResponse(HttpStatusCode.ServiceUnavailable)
+            {
+                HttpVersion = request.HttpVersion,
+            };
+            session.HttpClient.Response.Headers.AddHeader("Retry-After", "1");
+        }
+
+        session.HttpClient.Response.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionClose);
+        await clientStream.WriteResponseAsync(session.HttpClient.Response, cancellationToken).ConfigureAwait(false);
+        session.IsClientResponseCommitted = true;
+    }
+
+    internal static void SignalNoDestination(SessionEventArgs session)
+    {
+        if (IsGrpc(session.HttpClient.Request))
+        {
+            session.GenericResponse(string.Empty, HttpStatusCode.OK,
+            [
+                new HttpHeader("content-type", "application/grpc"),
+                new HttpHeader("grpc-status", "14"),
+                new HttpHeader("grpc-message", "no available destination"),
+            ]);
+            return;
+        }
+
+        session.GenericResponse(string.Empty, HttpStatusCode.ServiceUnavailable,
+            [new HttpHeader("Retry-After", "1")]);
+    }
+
+    private static bool IsGrpc(Request request)
+    {
+        var headers = request.Headers.GetHeaders("Content-Type");
+        return headers is { Count: > 0 } &&
+               headers[0].Value.StartsWith("application/grpc", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Reports passive health after a completed or failed upstream attempt.</summary>
@@ -132,7 +207,8 @@ internal static class ReverseProxySessionDispatch
             return true;
         }
 
-        return ReverseProxyFastPath.IsForwardHostEquivalent(
+        return ReverseProxyFastPath.IsForwardHostEquivalentCached(
+            endPoint,
             reverse.Routes,
             reverse.ClusterManager?.Snapshot,
             transparent.ForwardHost,

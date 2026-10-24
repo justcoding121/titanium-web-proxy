@@ -125,7 +125,14 @@ public partial class ProxyServer
             await OnBeforeRequest(sessionArgs);
 
         // Per-stream destination when ReverseProxy routes are set (overrides connection ForwardHost).
-        if (Routing.ReverseProxySessionDispatch.TryApply(this, sessionArgs) &&
+        var routeDispatch = Routing.ReverseProxySessionDispatch.Apply(this, sessionArgs);
+        if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination)
+        {
+            Routing.ReverseProxySessionDispatch.SignalNoDestination(sessionArgs);
+            return;
+        }
+
+        if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.Routed &&
             sessionArgs.UpstreamConnectHost is { Length: > 0 } routedHost)
         {
             connectHost = routedHost;

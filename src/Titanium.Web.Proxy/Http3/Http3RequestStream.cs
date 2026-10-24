@@ -119,6 +119,7 @@ internal static class Http3RequestStream
                 // Same playbook that beat YARP on H2 (lightweight session args): keep Request for
                 // HPACK/QPACK only. Covers forced H3→H2 / H3→H3 / H3→H1 reverse probes.
                 if (interceptionOff
+                    && !Routing.ReverseProxyFastPath.RequiresPerRequestDispatch(server.ReverseProxy, endPoint)
                     && !server.EnableRfc8441
                     && method is "GET" or "HEAD" or "DELETE" or "OPTIONS"
                     && authArgs.UpstreamHttpProtocol is UpstreamHttpProtocol.Http2
@@ -280,7 +281,12 @@ internal static class Http3RequestStream
                 }
 
                 // Per-stream route → destination (no-op when ReverseProxy routes unset).
-                Routing.ReverseProxySessionDispatch.TryApply(server, sessionArgs);
+                if (Routing.ReverseProxySessionDispatch.Apply(server, sessionArgs) ==
+                    Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination
+                    && sessionArgs is SessionEventArgs noDestSession)
+                {
+                    Routing.ReverseProxySessionDispatch.SignalNoDestination(noDestSession);
+                }
 
                 // Inject Via only when we stay on the full session forward path (not MITM
                 // unchanged-lite / IsFastPath). Adding Via before the unchanged check would

@@ -1,5 +1,6 @@
 #nullable enable
 static Titanium.Web.Proxy.Configuration.Parsers.HttpServerConfigReader.Parse(string! text) -> Titanium.Web.Proxy.Configuration.Models.TwpConfig!
+static Titanium.Web.Proxy.Configuration.Parsers.HttpServerConfigReader.Parse(string! text, System.Collections.Generic.ICollection<string!>? warnings) -> Titanium.Web.Proxy.Configuration.Models.TwpConfig!
 static Titanium.Web.Proxy.Configuration.Parsers.HttpServerConfigReader.ParseFile(string! path) -> Titanium.Web.Proxy.Configuration.Models.TwpConfig!
 static Titanium.Web.Proxy.Configuration.Parsers.JsonReverseProxyDocument.Parse(string! json) -> Titanium.Web.Proxy.Configuration.Models.TwpConfig!
 static Titanium.Web.Proxy.Configuration.Parsers.JsonReverseProxyDocument.ParseFile(string! path) -> Titanium.Web.Proxy.Configuration.Models.TwpConfig!

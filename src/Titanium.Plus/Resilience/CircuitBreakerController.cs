@@ -20,18 +20,39 @@ public sealed class CircuitBreakerController : IDisposable
     private readonly TimeSpan _cooldown;
     private readonly IClusterManager? _manager;
     private readonly ProxyServer _proxy;
+    private readonly TimeProvider _time;
+    private readonly CancellationTokenSource _cts = new();
+    private readonly Task? _recoveryLoop;
 
     private CircuitBreakerController(
         ProxyServer proxy,
         IClusterManager? manager,
         int threshold,
-        TimeSpan cooldown)
+        TimeSpan cooldown,
+        TimeProvider? timeProvider,
+        bool startRecoveryLoop)
     {
         _proxy = proxy;
         _manager = manager;
+        _time = timeProvider ?? TimeProvider.System;
         _threshold = Math.Max(1, threshold);
         _cooldown = cooldown;
         proxy.AfterResponse += OnAfterResponse;
+        if (startRecoveryLoop)
+        {
+            _recoveryLoop = RecoverLoopAsync(_cts.Token);
+        }
+    }
+
+    /// <summary>Test constructor. Does not start the background loop; call <see cref="RecoverExpiredForTests"/>.</summary>
+    internal CircuitBreakerController(
+        ProxyServer proxy,
+        IClusterManager manager,
+        int threshold,
+        TimeSpan cooldown,
+        TimeProvider timeProvider)
+        : this(proxy, manager, threshold, cooldown, timeProvider, startRecoveryLoop: false)
+    {
     }
 
     public static CircuitBreakerController? TryStart(
@@ -60,7 +81,9 @@ public sealed class CircuitBreakerController : IDisposable
             proxy,
             context.ClusterManager,
             threshold,
-            TimeSpan.FromMilliseconds(Math.Max(1000, cooldownMs)));
+            TimeSpan.FromMilliseconds(Math.Max(1000, cooldownMs)),
+            TimeProvider.System,
+            startRecoveryLoop: true);
         PlusLog.Info(context,
             $"Plus Circuit: outlier ejection threshold={threshold} cooldownMs={cooldownMs}");
         return controller;
@@ -79,11 +102,11 @@ public sealed class CircuitBreakerController : IDisposable
             return Task.CompletedTask;
         }
 
-        if (_ejectedUntil.TryGetValue(id, out var until) && DateTimeOffset.UtcNow >= until)
+        if (_ejectedUntil.TryGetValue(id, out var until) && _time.GetUtcNow() >= until)
         {
             _ejectedUntil.TryRemove(id, out _);
             _consecutiveFailures[id] = 0;
-            _manager.SetDestinationState(id, DestinationState.Healthy);
+            _manager.TrySetDestinationState(id, DestinationState.Unhealthy, DestinationState.Healthy);
         }
 
         var status = e.HttpClient.Response.StatusCode;
@@ -92,8 +115,10 @@ public sealed class CircuitBreakerController : IDisposable
             var count = _consecutiveFailures.AddOrUpdate(id, 1, static (_, v) => v + 1);
             if (count >= _threshold)
             {
-                _manager.SetDestinationState(id, DestinationState.Unhealthy);
-                _ejectedUntil[id] = DateTimeOffset.UtcNow.Add(_cooldown);
+                if (_manager.TrySetDestinationState(id, DestinationState.Healthy, DestinationState.Unhealthy))
+                {
+                    _ejectedUntil[id] = _time.GetUtcNow().Add(_cooldown);
+                }
             }
         }
         else if (status is >= 200 and < 500)
@@ -131,17 +156,28 @@ public sealed class CircuitBreakerController : IDisposable
             }
         }
 
-        var host = e.HttpClient.Request.RequestUri?.Host ?? e.HttpClient.Request.Host;
-        if (host is not null)
+        var host = e.HttpClient.Request.Host;
+        var port = 0;
+        if (!string.IsNullOrEmpty(host))
         {
-            var colon = host.IndexOf(':');
-            if (colon > 0)
+            if (host[0] == '[')
             {
-                host = host[..colon];
+                var end = host.IndexOf(']');
+                if (end > 1)
+                {
+                    host = host[1..end];
+                }
+            }
+            else
+            {
+                var colon = host.LastIndexOf(':');
+                if (colon > 0 && int.TryParse(host.AsSpan(colon + 1), out var parsedPort))
+                {
+                    port = parsedPort;
+                    host = host[..colon];
+                }
             }
         }
-
-        var port = e.HttpClient.Request.RequestUri?.Port ?? 0;
         if (string.IsNullOrEmpty(host))
         {
             return null;
@@ -172,8 +208,10 @@ public sealed class CircuitBreakerController : IDisposable
             var count = _consecutiveFailures.AddOrUpdate(destinationId, 1, static (_, v) => v + 1);
             if (count >= _threshold)
             {
-                _manager.SetDestinationState(destinationId, DestinationState.Unhealthy);
-                _ejectedUntil[destinationId] = DateTimeOffset.UtcNow.Add(_cooldown);
+                if (_manager.TrySetDestinationState(destinationId, DestinationState.Healthy, DestinationState.Unhealthy))
+                {
+                    _ejectedUntil[destinationId] = _time.GetUtcNow().Add(_cooldown);
+                }
             }
         }
         else
@@ -182,5 +220,52 @@ public sealed class CircuitBreakerController : IDisposable
         }
     }
 
-    public void Dispose() => _proxy.AfterResponse -= OnAfterResponse;
+    internal void RecoverExpiredForTests()
+    {
+        var now = _time.GetUtcNow();
+        foreach (var pair in _ejectedUntil)
+        {
+            if (now < pair.Value)
+            {
+                continue;
+            }
+
+            _ejectedUntil.TryRemove(pair.Key, out _);
+            _consecutiveFailures[pair.Key] = 0;
+            _manager?.TrySetDestinationState(pair.Key, DestinationState.Unhealthy, DestinationState.Healthy);
+        }
+    }
+
+    private async Task RecoverLoopAsync(CancellationToken cancellationToken)
+    {
+        var periodMs = Math.Clamp((int)_cooldown.TotalMilliseconds / 4, 250, 1000);
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(periodMs));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            {
+                RecoverExpiredForTests();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // shutdown
+        }
+    }
+
+    public void Dispose()
+    {
+        _proxy.AfterResponse -= OnAfterResponse;
+        _cts.Cancel();
+        try
+        {
+            _recoveryLoop?.Wait(TimeSpan.FromSeconds(2));
+        }
+        catch (AggregateException)
+        {
+            // loop cancelled
+        }
+
+        _cts.Dispose();
+    }
 }

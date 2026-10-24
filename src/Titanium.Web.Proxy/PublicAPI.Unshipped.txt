@@ -127,9 +127,12 @@ static Titanium.Web.Proxy.Middleware.ProxyMiddlewarePipeline.InvokeEmptyAsync(Ti
 static Titanium.Web.Proxy.Routing.ReverseProxyFastPath.IsForwardHostEquivalent(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.RouteConfig!>? routes, Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot? snapshot, string? forwardHost, int forwardPort) -> bool
 Titanium.Web.Proxy.Clusters.ClusterManager
 Titanium.Web.Proxy.Clusters.ClusterManager.ApplyAsync(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig!>! clusters, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Titanium.Web.Proxy.Clusters.ClusterManager.ApplyCoreAsync(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig!>! clusters, bool reconcileBackground, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Titanium.Web.Proxy.Clusters.ClusterManager.AttachHealthTracker(Titanium.Web.Proxy.Clusters.DestinationHealthTracker! tracker) -> void
 Titanium.Web.Proxy.Clusters.ClusterManager.ClusterManager() -> void
 Titanium.Web.Proxy.Clusters.ClusterManager.GetDestinationState(string! destinationId) -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationState
 Titanium.Web.Proxy.Clusters.ClusterManager.SetDestinationState(string! destinationId, Titanium.Web.Proxy.Abstractions.Clusters.DestinationState state) -> void
+Titanium.Web.Proxy.Clusters.ClusterManager.TrySetDestinationState(string! destinationId, Titanium.Web.Proxy.Abstractions.Clusters.DestinationState expected, Titanium.Web.Proxy.Abstractions.Clusters.DestinationState next) -> bool
 Titanium.Web.Proxy.Clusters.ClusterManager.Snapshot.get -> Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot!
 Titanium.Web.Proxy.Clusters.DestinationHealthTracker
 Titanium.Web.Proxy.Clusters.DestinationHealthTracker.DestinationHealthTracker() -> void

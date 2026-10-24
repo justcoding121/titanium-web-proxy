@@ -540,4 +540,163 @@ public class DestinationHealthTrackerTests
         tracker.ReportFailure("d1", manager, unhealthyThreshold: 2);
         Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("d1"));
     }
+
+    [TestMethod]
+    public async Task ExternalHealthyRestore_ResetsFailureStreak()
+    {
+        var manager = new ClusterManager();
+        await manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c1",
+                Destinations = [new DestinationConfig { Id = "d1", Address = "10.0.0.1", Port = 80 }],
+            },
+        ]);
+        var tracker = new DestinationHealthTracker();
+        manager.AttachHealthTracker(tracker);
+        tracker.ReportFailure("d1", manager, 3);
+        tracker.ReportFailure("d1", manager, 3);
+        tracker.ReportFailure("d1", manager, 3);
+        Assert.AreEqual(DestinationState.Unhealthy, manager.GetDestinationState("d1"));
+        manager.SetDestinationState("d1", DestinationState.Healthy);
+        tracker.ReportFailure("d1", manager, 3);
+        Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("d1"));
+    }
+}
+
+[TestClass]
+public class RouteMatcherTieBreakTests
+{
+    [TestMethod]
+    public void EqualOrder_PrefersLongerPrefix_RegardlessOfListOrder()
+    {
+        var matcher = new RouteMatcher();
+        RouteConfig Root() => new()
+        {
+            Id = "root",
+            ClusterId = "c",
+            Order = 0,
+            Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+        };
+        RouteConfig Api() => new()
+        {
+            Id = "api",
+            ClusterId = "c",
+            Order = 0,
+            Match = new RouteMatch { Path = "/api", PathKind = PathMatchKind.Prefix },
+        };
+
+        var ctx = new RouteMatchContext(null, "/api/x", "GET", null, null);
+        Assert.AreEqual("api", matcher.Match(ctx, [Root(), Api()])?.Id);
+        Assert.AreEqual("api", matcher.Match(ctx, [Api(), Root()])?.Id);
+    }
+}
+
+[TestClass]
+public class LoadBalancerDefectTests
+{
+    [TestMethod]
+    public async Task RoundRobin_WrapsWithoutThrowing()
+    {
+        var manager = new ClusterManager();
+        var cluster = new ClusterConfig
+        {
+            Id = "c",
+            Destinations =
+            [
+                new DestinationConfig { Id = "a", Address = "10.0.0.1", Port = 80, Weight = 1 },
+                new DestinationConfig { Id = "b", Address = "10.0.0.2", Port = 80, Weight = 1 },
+            ],
+        };
+        await manager.ApplyAsync([cluster]);
+        var lb = new LoadBalancer();
+        lb.RoundRobinCounter = int.MaxValue - 2;
+        for (var i = 0; i < 10; i++)
+        {
+            Assert.IsNotNull(lb.Select(cluster, manager.Snapshot));
+        }
+    }
+
+    [TestMethod]
+    public async Task LeastTime_ExploresUnsampledDestination()
+    {
+        var manager = new ClusterManager();
+        var cluster = new ClusterConfig
+        {
+            Id = "c",
+            Algorithm = LoadBalanceAlgorithm.LeastTime,
+            Destinations =
+            [
+                new DestinationConfig { Id = "a", Address = "10.0.0.1", Port = 80 },
+                new DestinationConfig { Id = "b", Address = "10.0.0.2", Port = 80 },
+            ],
+        };
+        await manager.ApplyAsync([cluster]);
+        var lb = new LoadBalancer();
+        lb.RecordDestination("a", TimeSpan.FromMilliseconds(5));
+        Assert.AreEqual("b", lb.Select(cluster, manager.Snapshot)?.Id);
+    }
+}
+
+[TestClass]
+public class ClusterManagerCasTests
+{
+    [TestMethod]
+    public async Task TrySetDestinationState_IsCompareAndSwap()
+    {
+        var manager = new ClusterManager();
+        await manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c",
+                Destinations = [new DestinationConfig { Id = "d1", Address = "10.0.0.1", Port = 80 }],
+            },
+        ]);
+        Assert.IsTrue(manager.TrySetDestinationState("d1", DestinationState.Healthy, DestinationState.Unhealthy));
+        Assert.IsFalse(manager.TrySetDestinationState("d1", DestinationState.Healthy, DestinationState.Maintenance));
+        Assert.AreEqual(DestinationState.Unhealthy, manager.GetDestinationState("d1"));
+    }
+
+    [TestMethod]
+    public async Task ApplyAsync_KeepsDrainingWhenEndpointUnchanged()
+    {
+        var manager = new ClusterManager();
+        var dest = new DestinationConfig { Id = "d1", Address = "10.0.0.1", Port = 80 };
+        await manager.ApplyAsync([new ClusterConfig { Id = "c", Destinations = [dest] }]);
+        manager.SetDestinationState("d1", DestinationState.Draining);
+        await manager.ApplyAsync([new ClusterConfig { Id = "c", Destinations = [dest] }]);
+        Assert.AreEqual(DestinationState.Draining, manager.GetDestinationState("d1"));
+        await manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c",
+                Destinations = [new DestinationConfig { Id = "d1", Address = "10.0.0.2", Port = 80 }],
+            },
+        ]);
+        Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("d1"));
+    }
+}
+
+[TestClass]
+public class RouteTargetAndCookieTests
+{
+    [TestMethod]
+    public void Normalize_RemovesDotSegments()
+    {
+        Assert.AreEqual("/admin", RouteTarget.NormalizeMatchPath("/public/../admin"));
+        Assert.AreEqual("/admin", RouteTarget.NormalizeMatchPath("/%2e%2e/admin"));
+        Assert.AreEqual("/a/b", RouteTarget.NormalizeMatchPath("/a/./b"));
+        Assert.AreEqual("/a%2fb", RouteTarget.NormalizeMatchPath("/a%2fb"));
+    }
+
+    [TestMethod]
+    public void ReadCookie_StripsQuotes()
+    {
+        Assert.AreEqual("d2", DestinationResolver.ReadCookie("a=1; sticky=\"d2\"; b=3", "sticky"));
+        Assert.AreEqual("d2", DestinationResolver.ReadCookie("xsticky=d9; sticky=d2", "sticky"));
+        Assert.IsNull(DestinationResolver.ReadCookie(null, "sticky"));
+    }
 }

@@ -19,7 +19,7 @@ public sealed class TransformEngine : ITransformEngine
         {
             switch (t.Kind)
             {
-                case "PathRemovePrefix" when t.Parameters is not null &&
+                case TransformKinds.PathRemovePrefix when t.Parameters is not null &&
                                              t.Parameters.TryGetValue("prefix", out var prefix) &&
                                              context.Path.StartsWith(prefix, StringComparison.Ordinal):
                     context.Path = context.Path[prefix.Length..];
@@ -29,7 +29,7 @@ public sealed class TransformEngine : ITransformEngine
                     }
 
                     break;
-                case "PathPrefix" when t.Parameters is not null &&
+                case TransformKinds.PathPrefix when t.Parameters is not null &&
                                        t.Parameters.TryGetValue("prefix", out var addPrefix):
                     if (string.IsNullOrEmpty(addPrefix))
                     {
@@ -44,30 +44,30 @@ public sealed class TransformEngine : ITransformEngine
                     var rest = context.Path.StartsWith('/') ? context.Path : "/" + context.Path;
                     context.Path = addPrefix.TrimEnd('/') + rest;
                     break;
-                case "RequestHeaderSet" when t.Parameters is not null &&
+                case TransformKinds.RequestHeaderSet when t.Parameters is not null &&
                                              t.Parameters.TryGetValue("name", out var name) &&
                                              t.Parameters.TryGetValue("value", out var value):
                     context.Headers[name] = value;
                     break;
-                case "RequestHeaderRemove" when t.Parameters is not null &&
+                case TransformKinds.RequestHeaderRemove when t.Parameters is not null &&
                                                 t.Parameters.TryGetValue("name", out var removeName):
                     context.Headers.Remove(removeName);
                     context.HeadersToRemove.Add(removeName);
                     break;
-                case "QueryValueSet" when t.Parameters is not null &&
+                case TransformKinds.QueryValueSet when t.Parameters is not null &&
                                           t.Parameters.TryGetValue("name", out var qName) &&
                                           t.Parameters.TryGetValue("value", out var qValue):
                     context.Path = SetQueryValue(context.Path, qName, qValue);
                     break;
-                case "RequestHostUseDestination":
+                case TransformKinds.RequestHostUseDestination:
                     context.UseDestinationHost = true;
                     break;
-                case "ResponseHeaderSet" when t.Parameters is not null &&
+                case TransformKinds.ResponseHeaderSet when t.Parameters is not null &&
                                               t.Parameters.TryGetValue("name", out var rhName) &&
                                               t.Parameters.TryGetValue("value", out var rhValue):
                     context.ResponseHeadersToSet[rhName] = rhValue;
                     break;
-                case "ResponseHeaderRemove" when t.Parameters is not null &&
+                case TransformKinds.ResponseHeaderRemove when t.Parameters is not null &&
                                                  t.Parameters.TryGetValue("name", out var rrName):
                     context.ResponseHeadersToRemove.Add(rrName);
                     break;

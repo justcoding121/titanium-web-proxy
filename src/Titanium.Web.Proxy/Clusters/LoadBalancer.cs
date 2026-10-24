@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -13,8 +14,14 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
 {
     private int _roundRobin;
     private readonly DestinationHealthTracker _health;
-    private readonly Dictionary<string, TimeSpan> _latencies = new(StringComparer.Ordinal);
-    private readonly object _latencyGate = new();
+    private readonly ConcurrentDictionary<string, long> _latencyTicks = new(StringComparer.Ordinal);
+
+    /// <summary>Test seam for the wrap-safe round-robin counter.</summary>
+    internal int RoundRobinCounter
+    {
+        get => Volatile.Read(ref _roundRobin);
+        set => Volatile.Write(ref _roundRobin, value);
+    }
 
     public LoadBalancer(DestinationHealthTracker? health = null)
     {
@@ -68,27 +75,15 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
 
     public void RecordDestination(string destinationId, TimeSpan duration)
     {
-        lock (_latencyGate)
-        {
-            if (_latencies.TryGetValue(destinationId, out var prev))
-            {
-                // EWMA: 70% previous + 30% new
-                _latencies[destinationId] = TimeSpan.FromTicks((long)(prev.Ticks * 0.7 + duration.Ticks * 0.3));
-            }
-            else
-            {
-                _latencies[destinationId] = duration;
-            }
-        }
+        var sample = duration.Ticks;
+        _latencyTicks.AddOrUpdate(
+            destinationId,
+            sample,
+            (_, prev) => (long)(prev * 0.7 + sample * 0.3));
     }
 
-    public TimeSpan? GetDestinationLatency(string destinationId)
-    {
-        lock (_latencyGate)
-        {
-            return _latencies.TryGetValue(destinationId, out var t) ? t : null;
-        }
-    }
+    public TimeSpan? GetDestinationLatency(string destinationId) =>
+        _latencyTicks.TryGetValue(destinationId, out var ticks) ? TimeSpan.FromTicks(ticks) : null;
 
     private DestinationConfig SelectLeastRequests(List<DestinationConfig> eligible)
     {
@@ -110,10 +105,10 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
     private DestinationConfig SelectLeastTime(List<DestinationConfig> eligible)
     {
         DestinationConfig best = eligible[0];
-        var bestLatency = GetDestinationLatency(best.Id) ?? TimeSpan.MaxValue;
+        var bestLatency = GetDestinationLatency(best.Id) ?? TimeSpan.Zero;
         for (var i = 1; i < eligible.Count; i++)
         {
-            var latency = GetDestinationLatency(eligible[i].Id) ?? TimeSpan.MaxValue;
+            var latency = GetDestinationLatency(eligible[i].Id) ?? TimeSpan.Zero;
             if (latency < bestLatency)
             {
                 best = eligible[i];
@@ -127,7 +122,8 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
     private DestinationConfig SelectWeightedRoundRobin(List<DestinationConfig> eligible)
     {
         var expanded = ExpandByWeight(eligible);
-        return expanded[Math.Abs(Interlocked.Increment(ref _roundRobin)) % expanded.Count];
+        var n = (uint)Interlocked.Increment(ref _roundRobin);
+        return expanded[(int)(n % (uint)expanded.Count)];
     }
 
     private static DestinationConfig SelectWeightedRandom(List<DestinationConfig> eligible)

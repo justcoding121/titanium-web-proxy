@@ -87,6 +87,9 @@ public class SessionEventArgs : SessionEventArgsBase
         UpstreamConnectHost = null;
         UpstreamConnectPort = null;
         UpstreamDestinationId = null;
+        ResponseHeaderTransformPlan = null;
+        DestinationRequestLease?.Dispose();
+        DestinationRequestLease = null;
         Deadlines.Reset();
         UserData = connectArgs?.UserData;
         HttpClient.ResetForKeepAlive();

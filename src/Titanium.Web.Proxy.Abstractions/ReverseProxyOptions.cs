@@ -24,4 +24,10 @@ public sealed class ReverseProxyOptions
     /// When non-null, Core disables fast-path for the session so bodies can be rewritten.
     /// </summary>
     public IGrpcJsonTranscoder? GrpcJsonTranscoder { get; init; }
+
+    /// <summary>
+    /// Per-options cache for data derived from <see cref="Routes"/> (requirements, compiled table).
+    /// Core replaces it when <see cref="Routes"/> is a different instance. Not part of the public contract.
+    /// </summary>
+    internal object? Compiled { get; set; }
 }

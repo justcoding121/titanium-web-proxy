@@ -4,7 +4,7 @@ using Titanium.Web.Proxy.Abstractions.Routing;
 
 namespace Titanium.Web.Proxy.Routing;
 
-/// <summary>Default route matcher: order ascending, first match wins.</summary>
+/// <summary>Default route matcher: lower order wins; equal order uses specificity, then earlier list position.</summary>
 public sealed class RouteMatcher : IRouteMatcher
 {
     public RouteConfig? Match(RouteMatchContext context, IReadOnlyList<RouteConfig> routes)
@@ -18,12 +18,17 @@ public sealed class RouteMatcher : IRouteMatcher
         var bestOrder = int.MaxValue;
         foreach (var route in routes)
         {
-            if (route.Order > bestOrder)
+            if (best is not null && route.Order > bestOrder)
             {
                 continue;
             }
 
             if (!Matches(route.Match, context))
+            {
+                continue;
+            }
+
+            if (best is not null && route.Order == bestOrder && CompareSpecificity(route, best) <= 0)
             {
                 continue;
             }
@@ -34,6 +39,56 @@ public sealed class RouteMatcher : IRouteMatcher
 
         return best;
     }
+
+    /// <summary>Positive when <paramref name="candidate"/> is more specific than <paramref name="current"/>.</summary>
+    internal static int CompareSpecificity(RouteConfig candidate, RouteConfig current)
+    {
+        var rank = PathRank(candidate.Match) - PathRank(current.Match);
+        if (rank != 0)
+        {
+            return rank;
+        }
+
+        var length = (candidate.Match.Path?.Length ?? 0) - (current.Match.Path?.Length ?? 0);
+        if (length != 0)
+        {
+            return length;
+        }
+
+        var host = Presence(candidate.Match.Host) - Presence(current.Match.Host);
+        if (host != 0)
+        {
+            return host;
+        }
+
+        var method = Presence(candidate.Match.Method) - Presence(current.Match.Method);
+        if (method != 0)
+        {
+            return method;
+        }
+
+        return ConstraintCount(candidate.Match) - ConstraintCount(current.Match);
+    }
+
+    private static int PathRank(RouteMatch match)
+    {
+        if (string.IsNullOrEmpty(match.Path))
+        {
+            return 0;
+        }
+
+        return match.PathKind switch
+        {
+            PathMatchKind.Exact => 3,
+            PathMatchKind.Template => 1,
+            _ => 2,
+        };
+    }
+
+    private static int Presence(string? value) => string.IsNullOrEmpty(value) ? 0 : 1;
+
+    private static int ConstraintCount(RouteMatch match) =>
+        (match.Headers?.Count ?? 0) + (match.Query?.Count ?? 0);
 
     private static bool Matches(RouteMatch match, RouteMatchContext context) =>
         HostMatches(match.Host, context.Host) &&

@@ -16,6 +16,9 @@ public sealed class DestinationHealthTracker
         _failures[destinationId] = 0;
     }
 
+    /// <summary>Clears the failure streak after an external restore to Healthy.</summary>
+    internal void ResetCounters(string destinationId) => _failures[destinationId] = 0;
+
     public void ReportFailure(string destinationId, IClusterManager? manager, int unhealthyThreshold = 3)
     {
         var count = _failures.AddOrUpdate(destinationId, 1, static (_, v) => v + 1);

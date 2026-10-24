@@ -38,6 +38,26 @@ public interface IClusterManager
     ValueTask ApplyAsync(IReadOnlyList<ClusterConfig> clusters, CancellationToken cancellationToken = default);
     void SetDestinationState(string destinationId, DestinationState state);
     DestinationState GetDestinationState(string destinationId);
+
+    /// <summary>
+    /// Atomically changes <paramref name="destinationId"/> from <paramref name="expected"/> to <paramref name="next"/>.
+    /// Returns false when the current state is not <paramref name="expected"/>. The default body is not atomic;
+    /// <c>ClusterManager</c> overrides it with compare-and-swap.
+    /// </summary>
+    bool TrySetDestinationState(string destinationId, DestinationState expected, DestinationState next)
+    {
+        if (GetDestinationState(destinationId) != expected)
+        {
+            return false;
+        }
+
+        if (expected != next)
+        {
+            SetDestinationState(destinationId, next);
+        }
+
+        return true;
+    }
 }
 
 /// <summary>Optional per-request context for load balancing (affinity, counters).</summary>

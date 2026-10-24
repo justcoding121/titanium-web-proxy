@@ -43,6 +43,7 @@ public static class TwpConfigValidator
     private static HashSet<string> ValidateClusters(IEnumerable<ClusterConfig> clusters, List<string> errors)
     {
         var clusterIds = new HashSet<string>(StringComparer.Ordinal);
+        var allDestinationIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var cluster in clusters)
         {
             if (string.IsNullOrWhiteSpace(cluster.Id))
@@ -59,6 +60,35 @@ public static class TwpConfigValidator
             if (cluster.Destinations is null || cluster.Destinations.Count == 0)
             {
                 errors.Add($"Cluster '{cluster.Id}' has no destinations.");
+                continue;
+            }
+
+            var destinationIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var dest in cluster.Destinations)
+            {
+                if (string.IsNullOrWhiteSpace(dest.Id))
+                {
+                    errors.Add($"Cluster '{cluster.Id}' has a destination with an empty id.");
+                }
+                else if (!destinationIds.Add(dest.Id) || !allDestinationIds.Add(dest.Id))
+                {
+                    errors.Add($"Duplicate destination id '{dest.Id}'.");
+                }
+
+                if (string.IsNullOrWhiteSpace(dest.Address))
+                {
+                    errors.Add($"Destination '{dest.Id}' has an empty address.");
+                }
+
+                if (dest.Port is < 0 or > 65535)
+                {
+                    errors.Add($"Destination '{dest.Id}' port {dest.Port} is out of range.");
+                }
+
+                if (dest.Weight < 1)
+                {
+                    errors.Add($"Destination '{dest.Id}' weight must be >= 1.");
+                }
             }
         }
 
@@ -70,11 +100,16 @@ public static class TwpConfigValidator
         HashSet<string> clusterIds,
         List<string> errors)
     {
+        var routeIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var route in routes)
         {
             if (string.IsNullOrWhiteSpace(route.Id))
             {
                 errors.Add("Route is missing Id.");
+            }
+            else if (!routeIds.Add(route.Id))
+            {
+                errors.Add($"Duplicate route id '{route.Id}'.");
             }
 
             if (string.IsNullOrWhiteSpace(route.ClusterId) || !clusterIds.Contains(route.ClusterId))
@@ -85,6 +120,26 @@ public static class TwpConfigValidator
             if (route.Match is null)
             {
                 errors.Add($"Route '{route.Id}' is missing Match.");
+            }
+
+            if (route.Transforms is not null)
+            {
+                foreach (var transform in route.Transforms)
+                {
+                    if (!TransformKinds.TryGetRequiredParameters(transform.Kind, out var required))
+                    {
+                        errors.Add($"Route '{route.Id}' has unknown transform kind '{transform.Kind}'.");
+                        continue;
+                    }
+
+                    foreach (var name in required)
+                    {
+                        if (transform.Parameters is null || !transform.Parameters.ContainsKey(name))
+                        {
+                            errors.Add($"Route '{route.Id}' transform '{transform.Kind}' requires parameter '{name}'.");
+                        }
+                    }
+                }
             }
 
             var limits = route.Limits;

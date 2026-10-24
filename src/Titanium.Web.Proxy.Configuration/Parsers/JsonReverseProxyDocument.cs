@@ -67,7 +67,18 @@ public static class JsonReverseProxyDocument
                         Path = r.Match?.Path,
                         PathKind = ParsePathKind(r.Match?.PathKind),
                         Method = r.Match?.Methods?.FirstOrDefault() ?? r.Match?.Method,
+                        Headers = r.Match?.Headers,
+                        Query = r.Match?.Query,
                     },
+                    Limits = r.Limits is null
+                        ? null
+                        : new RouteLimits
+                        {
+                            RequestTimeoutSeconds = r.Limits.RequestTimeoutSeconds,
+                            IdleTimeoutSeconds = r.Limits.IdleTimeoutSeconds,
+                            MaxBufferedBodyBytes = r.Limits.MaxBufferedBodyBytes,
+                            MaxWebSocketFramePayloadBytes = r.Limits.MaxWebSocketFramePayloadBytes,
+                        },
                     Transforms = MapTransforms(r.Transforms),
                 });
                 order++;
@@ -102,14 +113,22 @@ public static class JsonReverseProxyDocument
 
     public static TwpConfig ParseFile(string path) => Parse(File.ReadAllText(path));
 
-    private static LoadBalanceAlgorithm ParseAlgorithm(string? policy) =>
-        policy?.ToLowerInvariant() switch
+    private static LoadBalanceAlgorithm ParseAlgorithm(string? policy)
+    {
+        if (string.IsNullOrWhiteSpace(policy))
         {
+            return LoadBalanceAlgorithm.RoundRobin;
+        }
+
+        return policy.ToLowerInvariant() switch
+        {
+            "roundrobin" or "round_robin" => LoadBalanceAlgorithm.RoundRobin,
             "random" => LoadBalanceAlgorithm.Random,
             "leastrequests" or "least_requests" => LoadBalanceAlgorithm.LeastRequests,
             "leasttime" or "least_time" or "leastresponsetime" => LoadBalanceAlgorithm.LeastTime,
-            _ => LoadBalanceAlgorithm.RoundRobin,
+            _ => throw new FormatException($"Unknown load-balancing algorithm '{policy}'."),
         };
+    }
 
     private static PathMatchKind ParsePathKind(string? kind) =>
         kind?.ToLowerInvariant() switch
@@ -163,7 +182,16 @@ public static class JsonReverseProxyDocument
         public string? ClusterId { get; set; }
         public int? Order { get; set; }
         public MatchDto? Match { get; set; }
+        public LimitsDto? Limits { get; set; }
         public List<TransformDto>? Transforms { get; set; }
+    }
+
+    private sealed class LimitsDto
+    {
+        public int? RequestTimeoutSeconds { get; set; }
+        public int? IdleTimeoutSeconds { get; set; }
+        public int? MaxBufferedBodyBytes { get; set; }
+        public int? MaxWebSocketFramePayloadBytes { get; set; }
     }
 
     private sealed class TransformDto
@@ -180,6 +208,8 @@ public static class JsonReverseProxyDocument
         public string? PathKind { get; set; }
         public List<string>? Methods { get; set; }
         public string? Method { get; set; }
+        public Dictionary<string, string>? Headers { get; set; }
+        public Dictionary<string, string>? Query { get; set; }
     }
 
     private sealed class ClusterDto
