@@ -1599,6 +1599,15 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public Action<Response>? ResponseHeaderContributor { get; set; }
 
+    /// <summary>When set, generate or reuse this request id header. Null leaves the header untouched.</summary>
+    public string? RequestIdHeader { get; set; }
+
+    /// <summary>When true, start a server span for each intercepted request.</summary>
+    public bool TracingEnabled { get; set; }
+
+    /// <summary>When true with <see cref="TracingEnabled"/>, copy the span context onto the upstream request.</summary>
+    public bool PropagateTraceContext { get; set; }
+
     /// <summary>
     /// Returns <see langword="true"/> when the global interception gate is active for the given
     /// endpoint: any session event handler is subscribed, <see cref="EnableHttpInterception"/> is
@@ -1613,7 +1622,9 @@ public partial class ProxyServer : IDisposable
         || AfterResponse != null
         || OnRequestBodyWrite != null
         || OnResponseBodyWrite != null
-        || EnableDecryptFailureBypass;
+        || EnableDecryptFailureBypass
+        || TracingEnabled
+        || RequestIdHeader is not null;
 
     /// <summary>
     /// Returns <see langword="true"/> when this specific request/stream should go through the

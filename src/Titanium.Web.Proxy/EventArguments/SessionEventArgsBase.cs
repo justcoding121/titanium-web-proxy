@@ -241,6 +241,12 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     /// <summary>Allocated only when retry or a later feature needs per-request state.</summary>
     internal RoutingFeatureState? Extras { get; set; }
 
+    /// <summary>Route chosen for this request. Null when the request was not routed.</summary>
+    internal Abstractions.Routing.RouteConfig? MatchedRoute { get; set; }
+
+    /// <summary>Classification of how the request ended.</summary>
+    public Abstractions.Diagnostics.ForwarderError ForwarderError { get; internal set; }
+
     /// <summary>
     ///     Local endpoint via which we make the request.
     /// </summary>

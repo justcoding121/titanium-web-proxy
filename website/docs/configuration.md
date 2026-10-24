@@ -56,6 +56,18 @@ Engine knobs live under `server:` ([reference](#server-reference)). Plus feature
 | `maxInboundBidirectionalStreams` / `maxInboundUnidirectionalStreams` | int? | QUIC stream caps |
 | `handshakeTimeoutSeconds` / `idleTimeoutSeconds` | int? | QUIC timeouts |
 
+## Observability
+
+Request instruments on the `Titanium.Web.Proxy` meter stay quiet until a listener is attached:
+
+- `twp.proxy.requests` counts completed requests, tagged `route`, `cluster`, `status_class`, `protocol`.
+- `twp.proxy.request.duration` records seconds, tagged `route` and `status_class`.
+- `twp.proxy.requests.active` is the in-flight gauge.
+- `twp.proxy.requests.failed` counts failures, tagged `error`.
+- `twp.proxy.bytes` counts bytes, tagged `direction`.
+
+`server.requestId.enabled` and `server.tracing.enabled` are off by default. Turning either on leaves the terminate-lite path.
+
 ## Routes & clusters
 
 ```json

@@ -384,3 +384,15 @@ Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.RetryNonIdempotent.get -> b
 Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.RetryNonIdempotent.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Retry.get -> Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig?
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Retry.init -> void
+Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError
+Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.NoAvailableDestination = 1 -> Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError
+Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.None = 0 -> Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError
+Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.Other = 10 -> Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError
+Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.RequestBodyClient = 4 -> Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError
+Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.RequestBodyDestination = 5 -> Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError
+Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.RequestCanceled = 3 -> Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError
+Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.RequestTimedOut = 2 -> Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError
+Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.ResponseBodyClient = 7 -> Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError
+Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.ResponseBodyDestination = 8 -> Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError
+Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.ResponseHeaders = 6 -> Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError
+Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.UpgradeFailed = 9 -> Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError

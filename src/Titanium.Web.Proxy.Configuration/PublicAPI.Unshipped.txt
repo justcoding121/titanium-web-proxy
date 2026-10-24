@@ -411,3 +411,19 @@ Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableDecryptFailureBypass.
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableDecryptFailureBypass.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.ProxyAuthenticationRealm.get -> string?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.ProxyAuthenticationRealm.set -> void
+Titanium.Web.Proxy.Configuration.Models.RequestIdConfig
+Titanium.Web.Proxy.Configuration.Models.RequestIdConfig.Enabled.get -> bool
+Titanium.Web.Proxy.Configuration.Models.RequestIdConfig.Enabled.set -> void
+Titanium.Web.Proxy.Configuration.Models.RequestIdConfig.Header.get -> string!
+Titanium.Web.Proxy.Configuration.Models.RequestIdConfig.Header.set -> void
+Titanium.Web.Proxy.Configuration.Models.RequestIdConfig.RequestIdConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.RequestId.get -> Titanium.Web.Proxy.Configuration.Models.RequestIdConfig?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.RequestId.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.Tracing.get -> Titanium.Web.Proxy.Configuration.Models.TracingConfig?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.Tracing.set -> void
+Titanium.Web.Proxy.Configuration.Models.TracingConfig
+Titanium.Web.Proxy.Configuration.Models.TracingConfig.Enabled.get -> bool
+Titanium.Web.Proxy.Configuration.Models.TracingConfig.Enabled.set -> void
+Titanium.Web.Proxy.Configuration.Models.TracingConfig.Propagate.get -> bool
+Titanium.Web.Proxy.Configuration.Models.TracingConfig.Propagate.set -> void
+Titanium.Web.Proxy.Configuration.Models.TracingConfig.TracingConfig() -> void

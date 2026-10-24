@@ -741,6 +741,18 @@
         "proxyLoopback": {
           "type": "boolean"
         },
+        "requestId": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "header": {
+              "type": "string"
+            }
+          }
+        },
         "systemProxyBypassHosts": {
           "type": "array",
           "items": {
@@ -792,6 +804,18 @@
               "items": {
                 "type": "string"
               }
+            }
+          }
+        },
+        "tracing": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "propagate": {
+              "type": "boolean"
             }
           }
         },

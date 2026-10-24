@@ -92,6 +92,9 @@ public class SessionEventArgs : SessionEventArgsBase
         DestinationRequestLease = null;
         PassiveHealth = null;
         PassiveDestinationCount = 0;
+        MatchedRoute = null;
+        ForwarderError = Abstractions.Diagnostics.ForwarderError.None;
+        Extras?.Activity?.Dispose();
         Extras = null;
         Deadlines.Reset();
         UserData = connectArgs?.UserData;

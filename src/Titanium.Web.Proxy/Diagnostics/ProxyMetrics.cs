@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
@@ -228,4 +229,112 @@ internal static class ProxyMetrics
     public static void Http2FrameWriterHighWaterCrossed(string threshold) =>
         Http2FrameWriterHighWater.Add(1,
             new KeyValuePair<string, object?>("threshold", threshold));
+
+    private static readonly Counter<long> Requests =
+        Meter.CreateCounter<long>("twp.proxy.requests", "{request}", "Completed proxy requests.");
+
+    private static readonly Histogram<double> RequestDuration =
+        Meter.CreateHistogram<double>("twp.proxy.request.duration", "s", "Proxy request duration.");
+
+    private static readonly UpDownCounter<long> ActiveRequests =
+        Meter.CreateUpDownCounter<long>("twp.proxy.requests.active", "{request}", "Requests in flight.");
+
+    private static readonly Counter<long> FailedRequests =
+        Meter.CreateCounter<long>("twp.proxy.requests.failed", "{request}", "Failed proxy requests.");
+
+    private static readonly Counter<long> ProxyBytes =
+        Meter.CreateCounter<long>("twp.proxy.bytes", "By", "Bytes observed on a proxied request.");
+
+    private static readonly Counter<long> UpstreamRetries =
+        Meter.CreateCounter<long>("twp.proxy.upstream.retries", "{retry}", "Upstream retry attempts.");
+
+    private static readonly Counter<long> DestinationEjections =
+        Meter.CreateCounter<long>("twp.proxy.destination.ejections", "{ejection}", "Destinations marked unhealthy.");
+
+    /// <summary>Live listener check. Do not cache the result.</summary>
+    public static bool RequestInstrumentsEnabled =>
+        Requests.Enabled || RequestDuration.Enabled || ActiveRequests.Enabled;
+
+    public static void AddActiveRequest(int delta)
+    {
+        if (ActiveRequests.Enabled)
+        {
+            ActiveRequests.Add(delta);
+        }
+    }
+
+    public static void RecordRetry()
+    {
+        if (UpstreamRetries.Enabled)
+        {
+            UpstreamRetries.Add(1);
+        }
+    }
+
+    public static void RecordEjection()
+    {
+        if (DestinationEjections.Enabled)
+        {
+            DestinationEjections.Add(1);
+        }
+    }
+
+    public static void RecordRequest(
+        string route,
+        string cluster,
+        int status,
+        string protocol,
+        string error,
+        double durationSeconds,
+        long bytesIn,
+        long bytesOut)
+    {
+        if (!RequestInstrumentsEnabled && !FailedRequests.Enabled && !ProxyBytes.Enabled)
+        {
+            return;
+        }
+
+        var statusClass = status switch
+        {
+            >= 100 and < 200 => "1xx",
+            >= 200 and < 300 => "2xx",
+            >= 300 and < 400 => "3xx",
+            >= 400 and < 500 => "4xx",
+            >= 500 and < 600 => "5xx",
+            _ => "none",
+        };
+        if (Requests.Enabled)
+        {
+            Requests.Add(1,
+                new KeyValuePair<string, object?>("route", route),
+                new KeyValuePair<string, object?>("cluster", cluster),
+                new KeyValuePair<string, object?>("status_class", statusClass),
+                new KeyValuePair<string, object?>("protocol", protocol));
+        }
+
+        if (RequestDuration.Enabled && durationSeconds > 0)
+        {
+            RequestDuration.Record(durationSeconds,
+                new KeyValuePair<string, object?>("route", route),
+                new KeyValuePair<string, object?>("status_class", statusClass));
+        }
+
+        if (FailedRequests.Enabled && !string.Equals(error, "None", StringComparison.Ordinal))
+        {
+            FailedRequests.Add(1, new KeyValuePair<string, object?>("error", error));
+        }
+
+        if (ProxyBytes.Enabled)
+        {
+            if (bytesIn > 0)
+            {
+                ProxyBytes.Add(bytesIn, new KeyValuePair<string, object?>("direction", "in"));
+            }
+
+            if (bytesOut > 0)
+            {
+                ProxyBytes.Add(bytesOut, new KeyValuePair<string, object?>("direction", "out"));
+            }
+        }
+    }
 }

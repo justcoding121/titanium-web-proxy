@@ -36,7 +36,13 @@ public sealed class JsonAccessLogWriter : IDisposable
         string? host,
         int status,
         double? durationMs,
-        string? clientIp)
+        string? clientIp,
+        string? route = null,
+        string? cluster = null,
+        string? destination = null,
+        string? error = null,
+        string? requestId = null,
+        string? traceId = null)
     {
         var record = new Dictionary<string, object?>
         {
@@ -48,7 +54,21 @@ public sealed class JsonAccessLogWriter : IDisposable
             ["durationMs"] = durationMs.HasValue ? Math.Round(durationMs.Value, 3) : null,
             ["clientIp"] = clientIp,
         };
+        AddIfPresent(record, "route", route);
+        AddIfPresent(record, "cluster", cluster);
+        AddIfPresent(record, "destination", destination);
+        AddIfPresent(record, "error", error);
+        AddIfPresent(record, "requestId", requestId);
+        AddIfPresent(record, "traceId", traceId);
         return JsonSerializer.Serialize(record, JsonOptions);
+    }
+
+    private static void AddIfPresent(Dictionary<string, object?> record, string name, string? value)
+    {
+        if (!string.IsNullOrEmpty(value))
+        {
+            record[name] = value;
+        }
     }
 
     public static string FormatLine(SessionEventArgs session)
@@ -62,7 +82,15 @@ public sealed class JsonAccessLogWriter : IDisposable
             req.Host ?? req.RequestUri?.Host,
             resp.StatusCode,
             durationMs,
-            session.ClientRemoteEndPoint.Address.ToString());
+            session.ClientRemoteEndPoint.Address.ToString(),
+            session.MatchedRoute?.Id,
+            session.MatchedRoute?.ClusterId,
+            session.UpstreamDestinationId,
+            session.ForwarderError == Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.None
+                ? null
+                : session.ForwarderError.ToString(),
+            session.Extras?.RequestId,
+            session.Extras?.Activity?.TraceId.ToString());
     }
 
     public void TryWrite(SessionEventArgs session)

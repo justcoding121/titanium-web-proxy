@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Abstractions.Clusters;
+using Titanium.Web.Proxy.Abstractions.Diagnostics;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.EventArguments;
@@ -52,6 +55,9 @@ internal static class ReverseProxySessionDispatch
         session.UpstreamDestinationId = null;
         session.PassiveHealth = null;
         session.PassiveDestinationCount = 0;
+        session.MatchedRoute = null;
+        session.ForwarderError = Abstractions.Diagnostics.ForwarderError.None;
+        session.Extras?.Activity?.Dispose();
         session.Extras = null;
 
         var request = session.HttpClient.Request;
@@ -81,6 +87,8 @@ internal static class ReverseProxySessionDispatch
         session.UpstreamConnectHost = destination.Address;
         session.UpstreamConnectPort = port;
         session.UpstreamDestinationId = destination.Id;
+        session.MatchedRoute = route;
+        ObserveRequestStart(server, session, route);
         ClusterConfig? cluster = null;
         if (options.ClusterManager?.Snapshot.Clusters.TryGetValue(route.ClusterId, out var found) == true)
         {
@@ -360,6 +368,134 @@ internal static class ReverseProxySessionDispatch
         {
             plan.Apply(session.HttpClient.Response.Headers);
         }
+    }
+
+    internal static void ObserveRequestStart(ProxyServer server, SessionEventArgsBase session, RouteConfig route)
+    {
+        if (ProxyMetrics.RequestInstrumentsEnabled)
+        {
+            session.Extras ??= new RoutingFeatureState();
+            session.Extras.RequestStartTimestamp = Stopwatch.GetTimestamp();
+            ProxyMetrics.AddActiveRequest(1);
+        }
+
+        if (server.RequestIdHeader is { Length: > 0 } headerName)
+        {
+            session.Extras ??= new RoutingFeatureState();
+            var id = TakeRequestId(session, headerName);
+            session.Extras.RequestId = id;
+            session.HttpClient.Request.Headers.SetOrAddHeaderValue(headerName, id);
+        }
+
+        if (!server.TracingEnabled)
+        {
+            return;
+        }
+
+        var activity = ProxyMetrics.ActivitySource.StartActivity("twp.proxy.request", ActivityKind.Server);
+        if (activity is null)
+        {
+            return;
+        }
+
+        activity.SetTag("twp.route", route.Id);
+        activity.SetTag("twp.cluster", route.ClusterId);
+        session.Extras ??= new RoutingFeatureState();
+        session.Extras.Activity = activity;
+        if (server.PropagateTraceContext)
+        {
+            session.HttpClient.Request.Headers.SetOrAddHeaderValue("traceparent", activity.Id ?? string.Empty);
+        }
+    }
+
+    internal static void FinishRequest(SessionEventArgsBase session, string protocol)
+    {
+        var error = Classify(session);
+        session.ForwarderError = error;
+        var route = session.MatchedRoute;
+        var started = session.Extras?.RequestStartTimestamp ?? 0;
+        var seconds = started == 0
+            ? 0
+            : (Stopwatch.GetTimestamp() - started) / (double)Stopwatch.Frequency;
+        ProxyMetrics.RecordRequest(
+            route?.Id ?? "_none",
+            route?.ClusterId ?? "_none",
+            session.HttpClient.Response.StatusCode,
+            protocol,
+            error.ToString(),
+            seconds,
+            session.HttpClient.Request.ContentLength,
+            session.HttpClient.Response.ContentLength);
+        if (started != 0)
+        {
+            ProxyMetrics.AddActiveRequest(-1);
+        }
+
+        session.Extras?.Activity?.SetTag("http.response.status_code", session.HttpClient.Response.StatusCode);
+        session.Extras?.Activity?.Stop();
+    }
+
+    internal static ForwarderError Classify(SessionEventArgsBase session)
+    {
+        var ex = session.Exception;
+        if (ex is OperationCanceledException)
+        {
+            return ForwarderError.RequestCanceled;
+        }
+
+        if (ex is TimeoutException)
+        {
+            return ForwarderError.RequestTimedOut;
+        }
+
+        if (ex is System.Net.Sockets.SocketException or System.IO.IOException)
+        {
+            return ForwarderError.RequestBodyDestination;
+        }
+
+        if (ex is not null)
+        {
+            return ForwarderError.Other;
+        }
+
+        var status = session.HttpClient.Response.StatusCode;
+        if (status == 503 && session.MatchedRoute is not null && session.UpstreamDestinationId is null)
+        {
+            return ForwarderError.NoAvailableDestination;
+        }
+
+        return status switch
+        {
+            504 => ForwarderError.RequestTimedOut,
+            502 => ForwarderError.RequestBodyDestination,
+            _ => ForwarderError.None,
+        };
+    }
+
+    private static string TakeRequestId(SessionEventArgsBase session, string headerName)
+    {
+        var existing = session.HttpClient.Request.Headers.GetHeaders(headerName);
+        if (existing is { Count: > 0 } && existing[0].Value is { Length: > 0 and <= 128 } value && IsToken(value))
+        {
+            return value;
+        }
+
+        Span<byte> bytes = stackalloc byte[16];
+        Random.Shared.NextBytes(bytes);
+        return Convert.ToHexString(bytes);
+    }
+
+    private static bool IsToken(string value)
+    {
+        foreach (var ch in value)
+        {
+            if (ch is not (>= '0' and <= '9' or >= 'a' and <= 'z' or >= 'A' and <= 'Z' or '-' or '_' or '.'))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
 

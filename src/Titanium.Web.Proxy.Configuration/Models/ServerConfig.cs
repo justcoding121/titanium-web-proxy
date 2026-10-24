@@ -9,6 +9,12 @@ public sealed class ServerConfig
     /// <summary>Balanced, LegacyCompatible, or PublicFacing. Applied before other overlays.</summary>
     public string? Profile { get; set; }
 
+    /// <summary>Off unless <see cref="RequestIdConfig.Enabled"/> is true.</summary>
+    public RequestIdConfig? RequestId { get; set; }
+
+    /// <summary>Off unless <see cref="TracingConfig.Enabled"/> is true.</summary>
+    public TracingConfig? Tracing { get; set; }
+
     public bool? EnableHttp2 { get; set; }
 
     public bool? EnableHttp3 { get; set; }
@@ -329,4 +335,18 @@ public sealed class CertificateManagerConfig
     public bool? SaveFakeCertificates { get; set; }
 
     public bool? DisableWildCardCertificates { get; set; }
+}
+
+/// <summary>Request id header. Disabled unless <see cref="Enabled"/> is true.</summary>
+public sealed class RequestIdConfig
+{
+    public bool Enabled { get; set; }
+    public string Header { get; set; } = "X-Request-Id";
+}
+
+/// <summary>Server spans. Disabled unless <see cref="Enabled"/> is true.</summary>
+public sealed class TracingConfig
+{
+    public bool Enabled { get; set; }
+    public bool Propagate { get; set; }
 }

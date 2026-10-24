@@ -323,3 +323,10 @@ Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectThreshold.set -> void
 Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectWindow.get -> System.TimeSpan
 Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectWindow.set -> void
 Titanium.Web.Proxy.Clusters.ClusterManager.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ForwarderError.get -> Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError
+Titanium.Web.Proxy.ProxyServer.PropagateTraceContext.get -> bool
+Titanium.Web.Proxy.ProxyServer.PropagateTraceContext.set -> void
+Titanium.Web.Proxy.ProxyServer.RequestIdHeader.get -> string?
+Titanium.Web.Proxy.ProxyServer.RequestIdHeader.set -> void
+Titanium.Web.Proxy.ProxyServer.TracingEnabled.get -> bool
+Titanium.Web.Proxy.ProxyServer.TracingEnabled.set -> void
