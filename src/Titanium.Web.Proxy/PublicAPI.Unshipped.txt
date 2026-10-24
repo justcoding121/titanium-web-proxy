@@ -127,12 +127,17 @@ static Titanium.Web.Proxy.Middleware.ProxyMiddlewarePipeline.InvokeEmptyAsync(Ti
 static Titanium.Web.Proxy.Routing.ReverseProxyFastPath.IsForwardHostEquivalent(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.RouteConfig!>? routes, Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot? snapshot, string? forwardHost, int forwardPort) -> bool
 Titanium.Web.Proxy.Clusters.ClusterManager
 Titanium.Web.Proxy.Clusters.ClusterManager.ApplyAsync(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig!>! clusters, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Titanium.Web.Proxy.Clusters.ClusterManager.ApplyCoreAsync(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig!>! clusters, bool reconcileBackground, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Titanium.Web.Proxy.Clusters.ClusterManager.AttachHealthTracker(Titanium.Web.Proxy.Clusters.DestinationHealthTracker! tracker) -> void
 Titanium.Web.Proxy.Clusters.ClusterManager.ClusterManager() -> void
 Titanium.Web.Proxy.Clusters.ClusterManager.GetDestinationState(string! destinationId) -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationState
 Titanium.Web.Proxy.Clusters.ClusterManager.SetDestinationState(string! destinationId, Titanium.Web.Proxy.Abstractions.Clusters.DestinationState state) -> void
+Titanium.Web.Proxy.Clusters.ClusterManager.TrySetDestinationState(string! destinationId, Titanium.Web.Proxy.Abstractions.Clusters.DestinationState expected, Titanium.Web.Proxy.Abstractions.Clusters.DestinationState next) -> bool
 Titanium.Web.Proxy.Clusters.ClusterManager.Snapshot.get -> Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot!
 Titanium.Web.Proxy.Clusters.DestinationHealthTracker
 Titanium.Web.Proxy.Clusters.DestinationHealthTracker.DestinationHealthTracker() -> void
+Titanium.Web.Proxy.Clusters.DestinationHealthTracker.DestinationHealthTracker(System.TimeProvider! timeProvider) -> void
+Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportStatus(string! destinationId, int statusCode, Titanium.Web.Proxy.Abstractions.Routing.IClusterManager? manager, Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig? passive, int destinationCount) -> void
 Titanium.Web.Proxy.Clusters.DestinationHealthTracker.GetActiveRequests(string! destinationId) -> long
 Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportFailure(string! destinationId, Titanium.Web.Proxy.Abstractions.Routing.IClusterManager? manager, int unhealthyThreshold = 3) -> void
 Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportSuccess(string! destinationId) -> void
@@ -317,3 +322,50 @@ Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectThreshold.get -> int
 Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectThreshold.set -> void
 Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectWindow.get -> System.TimeSpan
 Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectWindow.set -> void
+Titanium.Web.Proxy.Clusters.ClusterManager.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ForwarderError.get -> Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError
+Titanium.Web.Proxy.ProxyServer.PropagateTraceContext.get -> bool
+Titanium.Web.Proxy.ProxyServer.PropagateTraceContext.set -> void
+Titanium.Web.Proxy.ProxyServer.RequestIdHeader.get -> string?
+Titanium.Web.Proxy.ProxyServer.RequestIdHeader.set -> void
+Titanium.Web.Proxy.ProxyServer.TracingEnabled.get -> bool
+Titanium.Web.Proxy.ProxyServer.TracingEnabled.set -> void
+Titanium.Web.Proxy.ProxyServer.ForwardedHeaders.get -> Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig?
+Titanium.Web.Proxy.ProxyServer.ForwardedHeaders.set -> void
+Titanium.Web.Proxy.Configuration.ProxyConfigHost
+Titanium.Web.Proxy.Configuration.ProxyConfigHost.ApplyAsync(Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot! snapshot, Titanium.Web.Proxy.Clusters.ClusterManager! clusters, System.Action<Titanium.Web.Proxy.Abstractions.ReverseProxyOptions!>! publish, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Titanium.Web.Proxy.Network.ProxyProtocolReader
+Titanium.Web.Proxy.Models.ClientCertificateMode.None = 0 -> Titanium.Web.Proxy.Models.ClientCertificateMode
+Titanium.Web.Proxy.Models.ClientCertificateMode.Require = 2 -> Titanium.Web.Proxy.Models.ClientCertificateMode
+Titanium.Web.Proxy.Models.ClientCertificateMode.Allow = 1 -> Titanium.Web.Proxy.Models.ClientCertificateMode
+Titanium.Web.Proxy.Models.ClientCertificateMode
+Titanium.Web.Proxy.Models.SniCertificateBinding
+Titanium.Web.Proxy.Models.SniCertificateBinding.SniCertificateBinding() -> void
+Titanium.Web.Proxy.Certificates.SniCertificateSelector
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.Passthrough.get -> bool
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.Passthrough.set -> void
+Titanium.Web.Proxy.Models.SniCertificateBinding.Certificate.init -> void
+Titanium.Web.Proxy.Models.SniCertificateBinding.Certificate.get -> System.Security.Cryptography.X509Certificates.X509Certificate2!
+Titanium.Web.Proxy.Models.SniCertificateBinding.Hosts.init -> void
+Titanium.Web.Proxy.Models.SniCertificateBinding.Hosts.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Titanium.Web.Proxy.Models.ProxyEndPoint.SniCertificates.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Models.SniCertificateBinding!>?
+Titanium.Web.Proxy.Models.ProxyEndPoint.SniCertificates.set -> void
+Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateMode.get -> Titanium.Web.Proxy.Models.ClientCertificateMode
+Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateMode.set -> void
+Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptProxyProtocol.get -> bool
+Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptProxyProtocol.set -> void
+Titanium.Web.Proxy.Models.ProxyEndPoint.TrustedProxyProtocolSources.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Models.ProxyEndPoint.TrustedProxyProtocolSources.set -> void
+Titanium.Web.Proxy.Configuration.ProxyConfigHost.RememberAppliedClusters(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig!>! clusters) -> void
+Titanium.Web.Proxy.Configuration.ProxyConfigHost.ProxyConfigHost(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Configuration.IProxyConfigFilter!>? filters = null, System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Configuration.IProxyConfigValidator!>? validators = null) -> void
+Titanium.Web.Proxy.Transforms.TransformEngine.Factories.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.IRouteTransformFactory!>?
+Titanium.Web.Proxy.Transforms.TransformEngine.Factories.init -> void
+Titanium.Web.Proxy.Clusters.LoadBalancer.Policies.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ILoadBalancingPolicy!>?
+static Titanium.Web.Proxy.Certificates.SniCertificateSelector.Select(string? serverName, System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Models.SniCertificateBinding!>! bindings) -> System.Security.Cryptography.X509Certificates.X509Certificate2?
+Titanium.Web.Proxy.Clusters.LoadBalancer.Policies.set -> void
+static Titanium.Web.Proxy.Network.ProxyProtocolReader.TryParse(System.ReadOnlySpan<byte> buffer, out System.Net.IPEndPoint? client, out int consumed) -> bool
+static Titanium.Web.Proxy.Network.ProxyProtocolReader.TryReadAsync(System.Net.Sockets.Socket! socket, System.Threading.CancellationToken cancellationToken, System.Net.IPEndPoint? client = null) -> System.Threading.Tasks.ValueTask<bool>
+Titanium.Web.Proxy.ProxyServer.DrainAsync(System.TimeSpan timeout) -> System.Threading.Tasks.Task!
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.MatchedRoute.get -> Titanium.Web.Proxy.Abstractions.Routing.RouteConfig?
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ProxyRequestId.get -> string?
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ProxyTraceId.get -> string?

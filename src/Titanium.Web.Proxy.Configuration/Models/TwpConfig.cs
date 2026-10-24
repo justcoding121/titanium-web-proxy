@@ -14,6 +14,9 @@ public sealed class TwpConfig
 
     public IList<ClusterConfig> Clusters { get; set; } = new List<ClusterConfig>();
 
+    /// <summary>Named policies referenced by <see cref="RouteConfig.Policies"/>. Empty leaves evaluation off.</summary>
+    public IList<RoutePolicyConfig> Policies { get; set; } = new List<RoutePolicyConfig>();
+
     public StaticFilesConfig? StaticFiles { get; set; }
 
     public PlusConfig? Plus { get; set; }
@@ -96,6 +99,21 @@ public sealed class ListenerConfig
 
     /// <summary>QUIC idle timeout in seconds.</summary>
     public int? IdleTimeoutSeconds { get; set; }
+
+    /// <summary>Require a PROXY protocol preamble before HTTP bytes.</summary>
+    public bool AcceptProxyProtocol { get; set; }
+
+    /// <summary>
+    /// CIDR prefixes allowed to send a PROXY protocol preamble. Empty keeps the preamble required
+    /// from any peer and produces a validation warning.
+    /// </summary>
+    public IList<string> TrustedProxyProtocolSources { get; set; } = new List<string>();
+
+    /// <summary>Copy accepted bytes to <see cref="ForwardHost"/> without parsing HTTP.</summary>
+    public bool Passthrough { get; set; }
+
+    /// <summary><c>none</c>, <c>allow</c>, or <c>require</c>.</summary>
+    public string? ClientCertificateMode { get; set; }
 }
 
 /// <summary>Static file serving options.</summary>
@@ -147,4 +165,16 @@ public sealed class CertificatesConfig
 
     /// <summary>ACME directory URL (e.g. Pebble or Let's Encrypt). Required for automated issue.</summary>
     public string? AcmeDirectory { get; set; }
+
+    public IList<CertificateFileConfig> Items { get; set; } = new List<CertificateFileConfig>();
+}
+
+/// <summary>One certificate file and the hosts it should answer for.</summary>
+public sealed class CertificateFileConfig
+{
+    public string? Path { get; set; }
+
+    public string? Password { get; set; }
+
+    public IList<string> Hosts { get; set; } = new List<string>();
 }

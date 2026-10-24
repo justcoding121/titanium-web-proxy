@@ -26,6 +26,7 @@ internal static class CertificateBootstrap
         }
 
         TryApplyLeafCertificate(proxy, certificates);
+        ApplySniItems(proxy, certificates);
         if (string.IsNullOrEmpty(certificates.AcmeDomain))
         {
             return;
@@ -268,6 +269,170 @@ internal static class CertificateBootstrap
     public static void SetChallengeToken(string token, string keyAuthorization) =>
         AcmeTokens[token] = keyAuthorization;
 
+    /// <summary>Binds <see cref="CertificatesConfig.Items"/> onto decrypting listeners. Does not drop connections.</summary>
+    public static void ApplySniItems(ProxyServer proxy, CertificatesConfig? certificates)
+    {
+        if (certificates?.Items is not { Count: > 0 } items)
+        {
+            return;
+        }
+
+        var bindings = new List<SniCertificateBinding>();
+        foreach (var item in items)
+        {
+            if (string.IsNullOrWhiteSpace(item.Path) || item.Hosts is not { Count: > 0 })
+            {
+                continue;
+            }
+
+            if (!TryLoadLeaf(item.Path, keyPath: null, out var certificate, item.Password) || certificate is null)
+            {
+                continue;
+            }
+
+            var hosts = new List<string>();
+            foreach (var host in item.Hosts)
+            {
+                if (!string.IsNullOrWhiteSpace(host))
+                {
+                    hosts.Add(host);
+                }
+            }
+
+            if (hosts.Count == 0)
+            {
+                certificate.Dispose();
+                continue;
+            }
+
+            bindings.Add(new SniCertificateBinding { Hosts = hosts, Certificate = certificate });
+        }
+
+        if (bindings.Count == 0)
+        {
+            return;
+        }
+
+        IReadOnlyList<SniCertificateBinding> frozen = bindings;
+        foreach (var endPoint in proxy.ProxyEndPoints)
+        {
+            if (endPoint.DecryptSsl)
+            {
+                endPoint.SniCertificates = frozen;
+            }
+        }
+    }
+
+    /// <summary>Rebuilds leaf and SNI bindings when a configured certificate file changes.</summary>
+    public static IDisposable? WatchCertificateFiles(ProxyServer proxy, CertificatesConfig? certificates)
+    {
+        var paths = new List<string>();
+        if (!string.IsNullOrEmpty(certificates?.CertificatePath))
+        {
+            paths.Add(certificates.CertificatePath);
+        }
+
+        if (!string.IsNullOrEmpty(certificates?.PrivateKeyPath))
+        {
+            paths.Add(certificates.PrivateKeyPath);
+        }
+
+        if (certificates?.Items is not null)
+        {
+            foreach (var item in certificates.Items)
+            {
+                if (!string.IsNullOrEmpty(item.Path))
+                {
+                    paths.Add(item.Path);
+                }
+            }
+        }
+
+        var existing = new List<string>();
+        foreach (var path in paths)
+        {
+            if (File.Exists(path) && !existing.Contains(path, StringComparer.OrdinalIgnoreCase))
+            {
+                existing.Add(path);
+            }
+        }
+
+        if (existing.Count == 0 || certificates is null)
+        {
+            return null;
+        }
+
+        var watchers = new List<FileSystemWatcher>();
+        CancellationTokenSource? debounce = null;
+        void OnChange(object? sender, FileSystemEventArgs args)
+        {
+            var previous = debounce;
+            previous?.Cancel();
+            previous?.Dispose();
+            var next = new CancellationTokenSource();
+            debounce = next;
+            var token = next.Token;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(250, token).ConfigureAwait(false);
+                    Apply(proxy, certificates);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Debounced.
+                }
+                catch (Exception ex)
+                {
+                    AsyncConsole.WriteError("Certificate reload failed: " + ex.Message);
+                }
+            }, CancellationToken.None);
+        }
+
+        foreach (var path in existing)
+        {
+            var full = Path.GetFullPath(path);
+            var directory = Path.GetDirectoryName(full);
+            if (string.IsNullOrEmpty(directory))
+            {
+                continue;
+            }
+
+            var watcher = new FileSystemWatcher(directory, Path.GetFileName(full))
+            {
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
+                EnableRaisingEvents = true,
+            };
+            watcher.Changed += OnChange;
+            watcher.Created += OnChange;
+            watcher.Renamed += OnChange;
+            watchers.Add(watcher);
+        }
+
+        return new WatchSubscription(watchers, () => debounce);
+    }
+
+    private sealed class WatchSubscription(List<FileSystemWatcher> watchers, Func<CancellationTokenSource?> debounce) : IDisposable
+    {
+        public void Dispose()
+        {
+            foreach (var watcher in watchers)
+            {
+                watcher.Dispose();
+            }
+
+            var source = debounce();
+            if (source is null)
+            {
+                return;
+            }
+
+            source.Cancel();
+            source.Dispose();
+        }
+    }
+
     private static void AssignGenericCertificate(ProxyServer proxy, X509Certificate2 leaf)
     {
         foreach (var endPoint in proxy.ProxyEndPoints)
@@ -279,7 +444,7 @@ internal static class CertificateBootstrap
         }
     }
 
-    private static bool TryLoadLeaf(string certPath, string? keyPath, out X509Certificate2? leaf)
+    private static bool TryLoadLeaf(string certPath, string? keyPath, out X509Certificate2? leaf, string? pfxPassword = null)
     {
         leaf = null;
         if (string.IsNullOrEmpty(certPath) || !File.Exists(certPath))
@@ -293,7 +458,7 @@ internal static class CertificateBootstrap
             if (ext.Equals(".pfx", StringComparison.OrdinalIgnoreCase) ||
                 ext.Equals(".p12", StringComparison.OrdinalIgnoreCase))
             {
-                var password = Environment.GetEnvironmentVariable("TITANIUM_CERT_PASSWORD");
+                var password = pfxPassword ?? Environment.GetEnvironmentVariable("TITANIUM_CERT_PASSWORD");
                 // Exportable (not EphemeralKeySet): Windows Schannel needs a usable private key
                 // for SslStream.AuthenticateAsServer on TLS-terminate listeners.
                 leaf = X509CertificateLoader.LoadPkcs12(

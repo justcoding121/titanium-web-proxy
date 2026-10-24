@@ -37,6 +37,7 @@ public static class JsonReverseProxyDocument
                     Algorithm = ParseAlgorithm(c.LoadBalancingPolicy ?? c.Algorithm),
                     AffinityCookie = c.AffinityCookie,
                     AffinityHeader = c.AffinityHeader,
+                    HealthCheck = MapHealth(c.HealthCheck),
                     Destinations = (c.Destinations ?? []).Select((d, i) => new DestinationConfig
                     {
                         Id = d.Id ?? $"{c.Id}-d{i}",
@@ -64,10 +65,23 @@ public static class JsonReverseProxyDocument
                     Match = new RouteMatch
                     {
                         Host = r.Match?.Hosts?.FirstOrDefault() ?? r.Match?.Host,
+                        Hosts = r.Match?.Hosts,
                         Path = r.Match?.Path,
                         PathKind = ParsePathKind(r.Match?.PathKind),
                         Method = r.Match?.Methods?.FirstOrDefault() ?? r.Match?.Method,
+                        Methods = r.Match?.Methods,
+                        Headers = r.Match?.Headers,
+                        Query = r.Match?.Query,
                     },
+                    Limits = r.Limits is null
+                        ? null
+                        : new RouteLimits
+                        {
+                            RequestTimeoutSeconds = r.Limits.RequestTimeoutSeconds,
+                            IdleTimeoutSeconds = r.Limits.IdleTimeoutSeconds,
+                            MaxBufferedBodyBytes = r.Limits.MaxBufferedBodyBytes,
+                            MaxWebSocketFramePayloadBytes = r.Limits.MaxWebSocketFramePayloadBytes,
+                        },
                     Transforms = MapTransforms(r.Transforms),
                 });
                 order++;
@@ -102,20 +116,33 @@ public static class JsonReverseProxyDocument
 
     public static TwpConfig ParseFile(string path) => Parse(File.ReadAllText(path));
 
-    private static LoadBalanceAlgorithm ParseAlgorithm(string? policy) =>
-        policy?.ToLowerInvariant() switch
+    private static LoadBalanceAlgorithm ParseAlgorithm(string? policy)
+    {
+        if (string.IsNullOrWhiteSpace(policy))
         {
+            return LoadBalanceAlgorithm.RoundRobin;
+        }
+
+        return policy.ToLowerInvariant() switch
+        {
+            "roundrobin" or "round_robin" => LoadBalanceAlgorithm.RoundRobin,
             "random" => LoadBalanceAlgorithm.Random,
             "leastrequests" or "least_requests" => LoadBalanceAlgorithm.LeastRequests,
             "leasttime" or "least_time" or "leastresponsetime" => LoadBalanceAlgorithm.LeastTime,
-            _ => LoadBalanceAlgorithm.RoundRobin,
+            "poweroftwochoices" or "power_of_two_choices" => LoadBalanceAlgorithm.PowerOfTwoChoices,
+            "firstalphabetical" or "first_alphabetical" => LoadBalanceAlgorithm.FirstAlphabetical,
+            "consistenthash" or "iphash" or "ip_hash" => LoadBalanceAlgorithm.ConsistentHash,
+            _ => throw new FormatException($"Unknown load-balancing algorithm '{policy}'."),
         };
+    }
 
     private static PathMatchKind ParsePathKind(string? kind) =>
         kind?.ToLowerInvariant() switch
         {
             "exact" => PathMatchKind.Exact,
             "template" => PathMatchKind.Template,
+            "segmentprefix" or "segment_prefix" => PathMatchKind.SegmentPrefix,
+            "regex" => PathMatchKind.Regex,
             _ => PathMatchKind.Prefix,
         };
 
@@ -163,7 +190,16 @@ public static class JsonReverseProxyDocument
         public string? ClusterId { get; set; }
         public int? Order { get; set; }
         public MatchDto? Match { get; set; }
+        public LimitsDto? Limits { get; set; }
         public List<TransformDto>? Transforms { get; set; }
+    }
+
+    private sealed class LimitsDto
+    {
+        public int? RequestTimeoutSeconds { get; set; }
+        public int? IdleTimeoutSeconds { get; set; }
+        public int? MaxBufferedBodyBytes { get; set; }
+        public int? MaxWebSocketFramePayloadBytes { get; set; }
     }
 
     private sealed class TransformDto
@@ -180,6 +216,8 @@ public static class JsonReverseProxyDocument
         public string? PathKind { get; set; }
         public List<string>? Methods { get; set; }
         public string? Method { get; set; }
+        public Dictionary<string, string>? Headers { get; set; }
+        public Dictionary<string, string>? Query { get; set; }
     }
 
     private sealed class ClusterDto
@@ -189,7 +227,43 @@ public static class JsonReverseProxyDocument
         public string? Algorithm { get; set; }
         public string? AffinityCookie { get; set; }
         public string? AffinityHeader { get; set; }
+        public HealthDto? HealthCheck { get; set; }
         public List<DestinationDto>? Destinations { get; set; }
+    }
+
+    private static HealthCheckConfig? MapHealth(HealthDto? health)
+    {
+        if (health?.Passive is null)
+        {
+            return null;
+        }
+
+        var passive = health.Passive;
+        return new HealthCheckConfig
+        {
+            Passive = new PassiveHealthConfig
+            {
+                Enabled = passive.Enabled ?? true,
+                ConsecutiveFailures = passive.ConsecutiveFailures ?? 3,
+                ReactivateAfterSeconds = passive.ReactivateAfterSeconds ?? 30,
+                MaxEjectionPercent = passive.MaxEjectionPercent ?? 100,
+                FailureStatusCodes = passive.FailureStatusCodes,
+            },
+        };
+    }
+
+    private sealed class HealthDto
+    {
+        public PassiveDto? Passive { get; set; }
+    }
+
+    private sealed class PassiveDto
+    {
+        public bool? Enabled { get; set; }
+        public int? ConsecutiveFailures { get; set; }
+        public int? ReactivateAfterSeconds { get; set; }
+        public int? MaxEjectionPercent { get; set; }
+        public List<int>? FailureStatusCodes { get; set; }
     }
 
     private sealed class DestinationDto

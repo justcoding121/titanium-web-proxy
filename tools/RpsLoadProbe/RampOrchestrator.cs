@@ -294,7 +294,13 @@ internal enum ProbeMode
     OriginDirect,
     /// <summary>Managed reverse peer H2 TLS → HTTPS HTTP/2 origin.</summary>
     YarpReverseHttp2ToHttps,
-    ExplicitPoolSweep
+    ExplicitPoolSweep,
+    /// <summary>CLI route policy with a ceiling high enough that probe traffic is allowed.</summary>
+    TwpCliPoliciesHttp1,
+    /// <summary>CLI mirror of each request onto the same origin.</summary>
+    TwpCliMirrorHttp1,
+    /// <summary>CLI cluster client cap and connect timeout, so the pool key is not the process default.</summary>
+    TwpCliClusterClientHttp1
 }
 
 internal sealed class RampOptions
@@ -1395,6 +1401,12 @@ internal static class RampOrchestrator
                 [new("twp-cli-lb-leasttime-http1", ProbeMode.TwpCliLbLeastTimeHttp1, null)],
             ProbeMode.TwpCliDialectTwpHttp1 =>
                 [new("twp-cli-dialect-twp-http1", ProbeMode.TwpCliDialectTwpHttp1, null)],
+            ProbeMode.TwpCliPoliciesHttp1 =>
+                [new("twp-cli-policies-http1", ProbeMode.TwpCliPoliciesHttp1, null)],
+            ProbeMode.TwpCliMirrorHttp1 =>
+                [new("twp-cli-mirror-http1", ProbeMode.TwpCliMirrorHttp1, null)],
+            ProbeMode.TwpCliClusterClientHttp1 =>
+                [new("twp-cli-cluster-client-http1", ProbeMode.TwpCliClusterClientHttp1, null)],
             ProbeMode.CompareProduct =>
             [
                 ..BuildFullMatrixArms(nginxAvailable, nginxHttp3Available, haproxyAvailable, haproxyQuicAvailable,
@@ -1765,7 +1777,10 @@ internal static class RampOrchestrator
         new("twp-cli-static-http1", ProbeMode.TwpCliStaticHttp1, null),
         new("twp-cli-logging-http1", ProbeMode.TwpCliLoggingHttp1, null),
         new("twp-cli-lb-leasttime-http1", ProbeMode.TwpCliLbLeastTimeHttp1, null),
-        new("twp-cli-dialect-twp-http1", ProbeMode.TwpCliDialectTwpHttp1, null)
+        new("twp-cli-dialect-twp-http1", ProbeMode.TwpCliDialectTwpHttp1, null),
+        new("twp-cli-policies-http1", ProbeMode.TwpCliPoliciesHttp1, null),
+        new("twp-cli-mirror-http1", ProbeMode.TwpCliMirrorHttp1, null),
+        new("twp-cli-cluster-client-http1", ProbeMode.TwpCliClusterClientHttp1, null)
     ];
 
     private static IReadOnlyList<ArmSpec> BuildFullMatrixArms(bool nginxAvailable, bool nginxHttp3Available,

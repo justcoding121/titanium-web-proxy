@@ -12,6 +12,12 @@ public sealed class ReverseProxyOptions
 {
     public IReadOnlyList<RouteConfig>? Routes { get; init; }
     public IReadOnlyList<ClusterConfig>? Clusters { get; init; }
+
+    /// <summary>Named policies. Unused until a route lists one.</summary>
+    public IReadOnlyList<Routing.RoutePolicyConfig>? Policies { get; init; }
+
+    /// <summary>Bodies for generated error responses. A route page wins.</summary>
+    public IReadOnlyList<Routing.ErrorPageConfig>? ErrorPages { get; init; }
     public IReadOnlyList<IProxyMiddleware>? Middleware { get; init; }
     public IClusterManager? ClusterManager { get; init; }
     public IRouteMatcher? RouteMatcher { get; init; }
@@ -24,4 +30,10 @@ public sealed class ReverseProxyOptions
     /// When non-null, Core disables fast-path for the session so bodies can be rewritten.
     /// </summary>
     public IGrpcJsonTranscoder? GrpcJsonTranscoder { get; init; }
+
+    /// <summary>
+    /// Per-options cache for data derived from <see cref="Routes"/> (requirements, compiled table).
+    /// Core replaces it when <see cref="Routes"/> is a different instance. Not part of the public contract.
+    /// </summary>
+    internal object? Compiled { get; set; }
 }

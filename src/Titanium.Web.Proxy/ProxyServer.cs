@@ -25,6 +25,7 @@ using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Network.WinAuth;
 using Titanium.Web.Proxy.Abstractions;
+using Titanium.Web.Proxy.Routing;
 using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
@@ -1598,6 +1599,18 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public Action<Response>? ResponseHeaderContributor { get; set; }
 
+    /// <summary>When set, generate or reuse this request id header. Null leaves the header untouched.</summary>
+    public string? RequestIdHeader { get; set; }
+
+    /// <summary>When true, start a server span for each intercepted request.</summary>
+    public bool TracingEnabled { get; set; }
+
+    /// <summary>When true with <see cref="TracingEnabled"/>, copy the span context onto the upstream request.</summary>
+    public bool PropagateTraceContext { get; set; }
+
+    /// <summary>Null leaves forwarded headers untouched and keeps terminate-lite eligible.</summary>
+    public Abstractions.Routing.ForwardedHeadersConfig? ForwardedHeaders { get; set; }
+
     /// <summary>
     /// Returns <see langword="true"/> when the global interception gate is active for the given
     /// endpoint: any session event handler is subscribed, <see cref="EnableHttpInterception"/> is
@@ -1612,7 +1625,10 @@ public partial class ProxyServer : IDisposable
         || AfterResponse != null
         || OnRequestBodyWrite != null
         || OnResponseBodyWrite != null
-        || EnableDecryptFailureBypass;
+        || EnableDecryptFailureBypass
+        || TracingEnabled
+        || RequestIdHeader is not null
+        || ForwardedHeaders is not null;
 
     /// <summary>
     /// Returns <see langword="true"/> when this specific request/stream should go through the
@@ -1837,16 +1853,71 @@ public partial class ProxyServer : IDisposable
                 continue;
             }
 
-            if (!ProxyRunning)
+            if (!ProxyRunning || _stopAccepting)
             {
                 tcpClient.Dispose();
-                break;
+                if (!ProxyRunning)
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            if (endPoint is TransparentBaseProxyEndPoint { Passthrough: true, ForwardHost.Length: > 0 } passthrough)
+            {
+                if (!TryAdmitClientConnection(endPoint))
+                {
+                    tcpClient.Dispose();
+                    continue;
+                }
+
+                try
+                {
+                    await Network.TcpPassthrough.RelayAsync(
+                        tcpClient,
+                        passthrough.ForwardHost!,
+                        passthrough.ForwardPort ?? (endPoint.DecryptSsl ? 443 : 80),
+                        cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    OnException(null, ex);
+                }
+                finally
+                {
+                    tcpClient.Dispose();
+                    ReleaseClientConnection(endPoint);
+                }
+
+                continue;
             }
 
             if (!TryAdmitClientConnection(endPoint))
             {
                 tcpClient.Dispose();
                 continue;
+            }
+
+            if (endPoint.AcceptProxyProtocol &&
+                endPoint.IsTrustedProxyProtocolPeer((tcpClient.RemoteEndPoint as System.Net.IPEndPoint)?.Address))
+            {
+                try
+                {
+                    if (!await Network.ProxyProtocolReader.TryReadAsync(tcpClient, cancellationToken).ConfigureAwait(false))
+                    {
+                        tcpClient.Dispose();
+                        ReleaseClientConnection(endPoint);
+                        continue;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    OnException(null, ex);
+                    tcpClient.Dispose();
+                    ReleaseClientConnection(endPoint);
+                    continue;
+                }
             }
 
             try
@@ -2171,7 +2242,19 @@ public partial class ProxyServer : IDisposable
     private RetryPolicy<T> RetryPolicy<T>(SessionEventArgs? sessionOverride) where T : Exception
     {
         var attempts = sessionOverride?.NetworkFailureRetryAttempts ?? NetworkFailureRetryAttempts;
-        return new RetryPolicy<T>(attempts, TcpConnectionFactory);
+        if (sessionOverride?.Extras?.Retry is { Attempts: > 0 } retry)
+        {
+            attempts = Math.Max(attempts, retry.Attempts);
+        }
+
+        var policy = new RetryPolicy<T>(attempts, TcpConnectionFactory);
+        if (sessionOverride?.Extras?.Retry is { Attempts: > 0 })
+        {
+            var session = sessionOverride;
+            policy.BeforeRetry = () => ReverseProxySessionDispatch.TrySelectAlternate(this, session);
+        }
+
+        return policy;
     }
 
 }

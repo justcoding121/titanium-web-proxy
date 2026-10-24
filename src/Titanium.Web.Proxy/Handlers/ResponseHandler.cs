@@ -604,6 +604,8 @@ public partial class ProxyServer
         var success = args.Exception is null &&
                       args.HttpClient.Response.StatusCode is >= 200 and < 500;
         ReverseProxySessionDispatch.ReportUpstreamResult(this, args, success);
+        var protocol = args.HttpClient.Request.IsHttps ? "h2" : "h1";
+        ReverseProxySessionDispatch.FinishRequest(args, protocol);
 
         if (!args.IsFastPath && AfterResponse != null)
             return OnAfterResponseWithHandlerAndClientCloseAsync(args);

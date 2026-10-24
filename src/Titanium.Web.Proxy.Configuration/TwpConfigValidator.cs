@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Authentication;
 using Titanium.Web.Proxy.Abstractions.Clusters;
+using Titanium.Web.Proxy.Abstractions.Network;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Configuration.Models;
 
@@ -43,6 +44,7 @@ public static class TwpConfigValidator
     private static HashSet<string> ValidateClusters(IEnumerable<ClusterConfig> clusters, List<string> errors)
     {
         var clusterIds = new HashSet<string>(StringComparer.Ordinal);
+        var allDestinationIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var cluster in clusters)
         {
             if (string.IsNullOrWhiteSpace(cluster.Id))
@@ -59,6 +61,44 @@ public static class TwpConfigValidator
             if (cluster.Destinations is null || cluster.Destinations.Count == 0)
             {
                 errors.Add($"Cluster '{cluster.Id}' has no destinations.");
+                continue;
+            }
+
+            var destinationIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var dest in cluster.Destinations)
+            {
+                if (string.IsNullOrWhiteSpace(dest.Id))
+                {
+                    errors.Add($"Cluster '{cluster.Id}' has a destination with an empty id.");
+                }
+                else if (!destinationIds.Add(dest.Id) || !allDestinationIds.Add(dest.Id))
+                {
+                    errors.Add($"Duplicate destination id '{dest.Id}'.");
+                }
+
+                if (string.IsNullOrWhiteSpace(dest.Address))
+                {
+                    errors.Add($"Destination '{dest.Id}' has an empty address.");
+                }
+                else if (dest.Address.StartsWith("unix:", StringComparison.Ordinal) && OperatingSystem.IsWindows())
+                {
+                    errors.Add($"Destination '{dest.Id}' uses a unix socket, which is not supported on Windows.");
+                }
+
+                if (dest.DnsRefreshSeconds < 0)
+                {
+                    errors.Add($"Destination '{dest.Id}' dnsRefreshSeconds must be >= 0.");
+                }
+
+                if (dest.Port is < 0 or > 65535)
+                {
+                    errors.Add($"Destination '{dest.Id}' port {dest.Port} is out of range.");
+                }
+
+                if (dest.Weight < 1)
+                {
+                    errors.Add($"Destination '{dest.Id}' weight must be >= 1.");
+                }
             }
         }
 
@@ -70,14 +110,20 @@ public static class TwpConfigValidator
         HashSet<string> clusterIds,
         List<string> errors)
     {
+        var routeIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var route in routes)
         {
             if (string.IsNullOrWhiteSpace(route.Id))
             {
                 errors.Add("Route is missing Id.");
             }
+            else if (!routeIds.Add(route.Id))
+            {
+                errors.Add($"Duplicate route id '{route.Id}'.");
+            }
 
-            if (string.IsNullOrWhiteSpace(route.ClusterId) || !clusterIds.Contains(route.ClusterId))
+            if (route.Redirect is null && route.DirectResponse is null &&
+                (string.IsNullOrWhiteSpace(route.ClusterId) || !clusterIds.Contains(route.ClusterId)))
             {
                 errors.Add($"Route '{route.Id}' references unknown cluster '{route.ClusterId}'.");
             }
@@ -85,6 +131,30 @@ public static class TwpConfigValidator
             if (route.Match is null)
             {
                 errors.Add($"Route '{route.Id}' is missing Match.");
+            }
+            else if (route.Match.PathKind == PathMatchKind.Template)
+            {
+                ValidateTemplate(route, errors);
+            }
+
+            if (route.Transforms is not null)
+            {
+                foreach (var transform in route.Transforms)
+                {
+                    if (!TransformKinds.TryGetRequiredParameters(transform.Kind, out var required))
+                    {
+                        errors.Add($"Route '{route.Id}' has unknown transform kind '{transform.Kind}'.");
+                        continue;
+                    }
+
+                    foreach (var name in required)
+                    {
+                        if (transform.Parameters is null || !transform.Parameters.ContainsKey(name))
+                        {
+                            errors.Add($"Route '{route.Id}' transform '{transform.Kind}' requires parameter '{name}'.");
+                        }
+                    }
+                }
             }
 
             var limits = route.Limits;
@@ -132,6 +202,51 @@ public static class TwpConfigValidator
             if (listener.IdleTimeoutSeconds is < 0)
             {
                 errors.Add($"Listener port {listener.Port}: idleTimeoutSeconds must be >= 0.");
+            }
+
+            if (listener.TrustedProxyProtocolSources is not { Count: > 0 } sources)
+            {
+                continue;
+            }
+
+            foreach (var source in sources)
+            {
+                if (!CidrPrefix.TryParse(source, out _))
+                {
+                    errors.Add($"Listener port {listener.Port}: trustedProxyProtocolSources '{source}' is not a CIDR prefix.");
+                }
+            }
+        }
+    }
+
+    private static void ValidateTemplate(RouteConfig route, List<string> errors)
+    {
+        var path = route.Match?.Path;
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+
+        foreach (var part in path.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part.Length < 2 || part[0] != '{' || part[^1] != '}')
+            {
+                continue;
+            }
+
+            var inner = part[1..^1];
+            var colon = inner.IndexOf(':');
+            if (colon < 0 || colon == inner.Length - 1)
+            {
+                continue;
+            }
+
+            var constraint = inner[(colon + 1)..];
+            var known = constraint is "int" or "guid" or "alpha" ||
+                        (constraint.StartsWith("regex(", StringComparison.Ordinal) && constraint.EndsWith(')'));
+            if (!known)
+            {
+                errors.Add($"Route '{route.Id}' has unknown template constraint '{constraint}'.");
             }
         }
     }
@@ -506,6 +621,15 @@ public static class TwpConfigValidator
             warnings.Add("server.limits.maxEncodedBodyBytes is reserved and not enforced. The enforced whole-body budget is maxBufferedBodyBytes.");
         if (limits?.MaxDecodedBodyBytes is not null)
             warnings.Add("server.limits.maxDecodedBodyBytes is reserved and not enforced. The enforced whole-body budget is maxBufferedBodyBytes.");
+        foreach (var listener in config.Listeners)
+        {
+            if (listener.AcceptProxyProtocol && listener.TrustedProxyProtocolSources is not { Count: > 0 })
+            {
+                warnings.Add(
+                    $"Listener port {listener.Port}: acceptProxyProtocol is set with no trustedProxyProtocolSources. Any peer may send a preamble.");
+            }
+        }
+
         return warnings;
     }
 }
