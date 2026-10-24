@@ -22,6 +22,13 @@ public sealed class RouteMatcher : IRouteMatcher
         }
 
         var index = Compiled.GetValue(routes, static list => RouteIndex.Build(list));
+        if (index.RouteCount != routes.Count)
+        {
+            // The list was appended to or trimmed after it was indexed. Rebuild instead of serving a stale table.
+            index = RouteIndex.Build(routes);
+            Compiled.AddOrUpdate(routes, index);
+        }
+
         return index.Match(context, MatchLinear);
     }
 
@@ -202,19 +209,20 @@ public sealed class RouteMatcher : IRouteMatcher
 
     private static bool RegexMatches(RouteMatch match, string path)
     {
-        var regex = CompiledExpressions.GetValue(
-            match,
-            static value => new Regex(
-                value.Path ?? ".*",
-                RegexOptions.NonBacktracking | RegexOptions.CultureInvariant |
-                (value.PathCaseSensitive ? RegexOptions.None : RegexOptions.IgnoreCase),
-                RegexTimeout));
         try
         {
+            var regex = CompiledExpressions.GetValue(
+                match,
+                static value => new Regex(
+                    value.Path ?? ".*",
+                    RegexOptions.NonBacktracking | RegexOptions.CultureInvariant |
+                    (value.PathCaseSensitive ? RegexOptions.None : RegexOptions.IgnoreCase),
+                    RegexTimeout));
             return regex.IsMatch(path);
         }
-        catch (RegexMatchTimeoutException)
+        catch (Exception ex) when (ex is RegexMatchTimeoutException or ArgumentException or NotSupportedException)
         {
+            // A pattern that cannot compile never matches. Validation reports it before it gets here.
             return false;
         }
     }
@@ -310,7 +318,7 @@ public sealed class RouteMatcher : IRouteMatcher
                     RegexOptions.NonBacktracking | RegexOptions.CultureInvariant,
                     RegexTimeout);
             }
-            catch (RegexMatchTimeoutException)
+            catch (Exception ex) when (ex is RegexMatchTimeoutException or ArgumentException or NotSupportedException)
             {
                 return false;
             }
@@ -354,12 +362,16 @@ internal sealed class RouteIndex
     private readonly Dictionary<string, RouteConfig[]> _buckets;
     private readonly Dictionary<RouteConfig, int> _position;
 
-    private RouteIndex(RouteConfig[] fallback, Dictionary<string, RouteConfig[]> buckets, Dictionary<RouteConfig, int> position)
+    private RouteIndex(RouteConfig[] fallback, Dictionary<string, RouteConfig[]> buckets, Dictionary<RouteConfig, int> position, int routeCount)
     {
         _fallback = fallback;
         _buckets = buckets;
         _position = position;
+        RouteCount = routeCount;
     }
+
+    /// <summary>List length at build time. Differs from the list count when the list changed afterwards.</summary>
+    public int RouteCount { get; }
 
     public static RouteIndex Build(IReadOnlyList<RouteConfig> routes)
     {
@@ -391,7 +403,7 @@ internal sealed class RouteIndex
             buckets[pair.Key] = pair.Value.ToArray();
         }
 
-        return new RouteIndex(fallback.ToArray(), buckets, position);
+        return new RouteIndex(fallback.ToArray(), buckets, position, routes.Count);
     }
 
     public RouteConfig? Match(RouteMatchContext context, Func<RouteMatchContext, IReadOnlyList<RouteConfig>, RouteConfig?> scan)

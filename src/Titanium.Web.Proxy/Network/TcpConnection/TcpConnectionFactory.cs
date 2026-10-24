@@ -685,7 +685,10 @@ internal class TcpConnectionFactory : IDisposable
                 port = externalProxy.Port;
             }
 
-            if (hostname.StartsWith("unix:", StringComparison.Ordinal) && externalProxy == null)
+            // Only a configured destination may name a socket path. A host taken from the client's own
+            // request target must never reach a local unix socket.
+            if (!string.IsNullOrEmpty(connectHost) &&
+                hostname.StartsWith("unix:", StringComparison.Ordinal) && externalProxy == null)
             {
                 return await ConnectUnixDestinationAsync(
                     proxyServer, hostname, remoteHostName, remotePort, httpVersion, cacheKey, sessionArgs,

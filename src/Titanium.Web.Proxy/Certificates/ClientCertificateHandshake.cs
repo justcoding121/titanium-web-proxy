@@ -7,8 +7,8 @@ namespace Titanium.Web.Proxy.Certificates;
 
 /// <summary>
 /// Requests an inbound client certificate for <see cref="ClientCertificateMode.Allow"/> and
-/// <see cref="ClientCertificateMode.Require"/>. Allow accepts a missing certificate. Require keeps
-/// the platform check. A presented certificate is copied onto the connection.
+/// <see cref="ClientCertificateMode.Require"/>. Allow accepts a missing certificate. Both verify a
+/// presented certificate with the platform check. A verified certificate is copied onto the connection.
 /// </summary>
 internal static class ClientCertificateHandshake
 {
@@ -44,9 +44,9 @@ internal static class ClientCertificateHandshake
     }
 
     /// <summary>
-    /// Allow mode: a missing certificate is fine. A presented certificate is kept even when the
-    /// OS chain is untrusted, because Allow has no configured trust store. Name and availability
-    /// errors are still rejected.
+    /// Allow mode: a missing certificate is fine. A presented certificate must pass the same platform
+    /// chain check as Require. The subject is forwarded to the origin as identity, so an unverified
+    /// certificate is refused rather than recorded.
     /// </summary>
     internal static bool AcceptOptional(X509Certificate? certificate, SslPolicyErrors errors)
     {
@@ -55,8 +55,6 @@ internal static class ClientCertificateHandshake
             return true;
         }
 
-        const SslPolicyErrors blocked =
-            SslPolicyErrors.RemoteCertificateNameMismatch | SslPolicyErrors.RemoteCertificateNotAvailable;
-        return (errors & blocked) == SslPolicyErrors.None;
+        return errors == SslPolicyErrors.None;
     }
 }

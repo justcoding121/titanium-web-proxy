@@ -143,6 +143,10 @@ public class TransformKindTests
         Assert.AreEqual("CN=client", cert.Headers["X-Client-Cert"]);
         var absent = Run("/", TransformKinds.ClientCertHeader, ("name", "X-Client-Cert"));
         Assert.IsFalse(absent.Headers.ContainsKey("X-Client-Cert"));
+
+        // The header is identity. Without a certificate it is still removed, so a client cannot assert one.
+        Assert.IsTrue(absent.HeadersToRemove.Contains("X-Client-Cert"));
+        Assert.IsTrue(cert.HeadersToRemove.Contains("X-Client-Cert"));
     }
 
     [TestMethod]

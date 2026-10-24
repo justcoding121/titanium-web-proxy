@@ -301,20 +301,22 @@ internal static class RunCommand
             Routes = loaded.Config.Routes.ToList(),
             Clusters = loaded.Config.Clusters.ToList(),
         };
-        if (policies is not null)
-        {
-            policies.Clear();
-            if (loaded.Config.Policies is not null)
-            {
-                foreach (var policy in loaded.Config.Policies)
-                {
-                    policies.Add(policy);
-                }
-            }
-        }
-
         await host.ApplyAsync(snapshot, clusterManager, options =>
         {
+            // Swap policies together with routes. A failed apply leaves both as they were, and no request
+            // sees a route naming a policy that has already been replaced.
+            if (policies is not null)
+            {
+                policies.Clear();
+                if (loaded.Config.Policies is not null)
+                {
+                    foreach (var policy in loaded.Config.Policies)
+                    {
+                        policies.Add(policy);
+                    }
+                }
+            }
+
             ReplaceRoutes(routes, options.Routes ?? []);
             refreshReverseProxy();
         }, stoppingToken).ConfigureAwait(false);

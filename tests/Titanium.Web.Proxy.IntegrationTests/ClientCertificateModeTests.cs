@@ -26,7 +26,7 @@ public class ClientCertificateModeTests
 {
     [TestMethod]
     [Timeout(60 * 1000)]
-    public async Task Allow_WithoutCertificate_Succeeds_AndWithCertificate_SetsHeader()
+    public async Task Allow_WithoutCertificate_Succeeds_ClientHeaderIsStripped_AndUnverifiedCertificateIsRefused()
     {
         var (origin, originPort) = BindLoopbackHttpListener();
         using var cts = new CancellationTokenSource();
@@ -52,11 +52,15 @@ public class ClientCertificateModeTests
         try
         {
             var without = await GetAsync(endPoint.Port, clientCertificate: null);
-            StringAssert.Contains(without, "cert:");
-            Assert.IsFalse(without.Contains("CN=client-allow", StringComparison.Ordinal));
+            Assert.AreEqual("cert:", without);
 
-            var withCert = await GetAsync(endPoint.Port, clientCert);
-            StringAssert.Contains(withCert, "CN=client-allow");
+            // A client cannot assert an identity by sending the header itself.
+            var spoofed = await GetAsync(endPoint.Port, clientCertificate: null, spoofedHeader: "CN=admin");
+            Assert.AreEqual("cert:", spoofed);
+
+            // Allow does not mean "trust anything". A certificate that does not chain to a trusted root
+            // is refused, so its subject can never reach the origin as identity.
+            await Assert.ThrowsExceptionAsync<HttpRequestException>(() => GetAsync(endPoint.Port, clientCert));
         }
         finally
         {
@@ -140,7 +144,7 @@ public class ClientCertificateModeTests
         };
     }
 
-    private static async Task<string> GetAsync(int port, X509Certificate2? clientCertificate)
+    private static async Task<string> GetAsync(int port, X509Certificate2? clientCertificate, string? spoofedHeader = null)
     {
         using var handler = new HttpClientHandler
         {
@@ -154,7 +158,14 @@ public class ClientCertificateModeTests
         }
 
         using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
-        return await client.GetStringAsync($"https://127.0.0.1:{port}/tls");
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"https://127.0.0.1:{port}/tls");
+        if (spoofedHeader is not null)
+        {
+            request.Headers.TryAddWithoutValidation("X-Client-Cert", spoofedHeader);
+        }
+
+        using var response = await client.SendAsync(request);
+        return await response.Content.ReadAsStringAsync();
     }
 
     private static X509Certificate2 CreateClientCertificate()

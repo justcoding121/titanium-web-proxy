@@ -216,11 +216,12 @@ internal static class ReverseProxySessionDispatch
 
     internal static string BuildRedirect(Request request, RedirectConfig redirect)
     {
-        var path = string.IsNullOrEmpty(redirect.Path) ? request.RequestUriString8.GetString() : redirect.Path;
+        var target = OriginForm(request.RequestUriString8.GetString());
+        var path = string.IsNullOrEmpty(redirect.Path) ? target : redirect.Path;
         var query = "";
         if (redirect.PreserveQuery)
         {
-            var raw = request.RequestUriString8.GetString();
+            var raw = target;
             var q = raw.IndexOf('?');
             if (q >= 0)
             {
@@ -243,6 +244,29 @@ internal static class ReverseProxySessionDispatch
         }
 
         return path + query;
+    }
+
+    /// <summary>
+    /// The request target as a path and query. An absolute-form target loses its authority, and a leading
+    /// double slash collapses, so a relative <c>Location</c> never reads as a network-path reference to
+    /// another host.
+    /// </summary>
+    internal static string OriginForm(string target)
+    {
+        if ((target.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+             target.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) &&
+            Uri.TryCreate(target, UriKind.Absolute, out var absolute))
+        {
+            target = absolute.PathAndQuery;
+        }
+
+        var start = 0;
+        while (start + 1 < target.Length && target[start] == '/' && target[start + 1] == '/')
+        {
+            start++;
+        }
+
+        return start == 0 ? target : target[start..];
     }
 
     /// <summary>H1 synthetic 503 (or gRPC UNAVAILABLE). Kept out of line so the session loop's state machine stays small.</summary>
@@ -349,7 +373,8 @@ internal static class ReverseProxySessionDispatch
         }
 
         session.Extras ??= new RoutingFeatureState();
-        session.Extras.PendingSetCookie = name + "=" + AffinityPins.For(cluster, destination) + "; Path=/; HttpOnly";
+        session.Extras.PendingSetCookie = name + "=" + AffinityPins.For(cluster, destination) +
+                                          "; Path=/; HttpOnly; SameSite=Lax" + (request.IsHttps ? "; Secure" : string.Empty);
     }
 
     private static bool IsGrpc(Request request)
@@ -462,6 +487,15 @@ internal static class ReverseProxySessionDispatch
         session.UpstreamConnectHost = alternate.Address;
         session.UpstreamConnectPort = port;
         session.UpstreamDestinationId = alternate.Id;
+
+        // The pin belongs to the destination that failed. Carrying it over would dial the new
+        // destination's name at the old one's address.
+        session.UpstreamPinnedAddress = null;
+        if (alternate.DnsRefreshSeconds > 0 && manager.TryGetResolved(alternate.Id, out var alternatePin))
+        {
+            session.UpstreamPinnedAddress = alternatePin;
+        }
+
         extras.Remember(alternate.Id);
         session.DestinationRequestLease?.Dispose();
         session.DestinationRequestLease = balancer.Health.TrackRequest(alternate.Id);

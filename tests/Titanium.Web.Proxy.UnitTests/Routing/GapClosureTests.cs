@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -211,6 +212,7 @@ public class GapClosureTests
             var request = new Request { Method = "POST", Host = "app.test" };
             request.RequestUriString8 = (ByteString)"/copy";
             request.Headers.AddHeader("X-Trace", "abc");
+            request.Headers.AddHeader("Proxy-Authorization", "Basic c2VjcmV0");
             request.Body = Encoding.UTF8.GetBytes("ping");
             request.IsBodyRead = true;
             using var proxy = new ProxyServer(userTrustRootCertificate: false);
@@ -242,6 +244,7 @@ public class GapClosureTests
             var text = Encoding.UTF8.GetString(buffer, 0, read);
             StringAssert.Contains(text, "POST /copy HTTP/1.1");
             StringAssert.Contains(text, "X-Trace: abc");
+            Assert.IsFalse(text.Contains("Proxy-Authorization", StringComparison.OrdinalIgnoreCase), "hop-by-hop credentials are not copied");
             StringAssert.Contains(text, "ping");
             Assert.AreEqual(200, session.HttpClient.Response.StatusCode);
             client.Close();
@@ -400,6 +403,246 @@ public class GapClosureTests
             new ProxyConfigSnapshot(),
             manager,
             _ => { }));
+    }
+
+    // ---- Review hardening -------------------------------------------------------------------------
+
+    private static readonly TransparentProxyEndPoint LiteEndPoint =
+        new(IPAddress.Loopback, 0, false) { ForwardHost = "127.0.0.1", ForwardPort = 80 };
+
+    private static ReverseProxyOptions PolicyOptions(string policyName, params RoutePolicyConfig[] policies) => new()
+    {
+        Policies = policies,
+        Routes =
+        [
+            new RouteConfig
+            {
+                Id = "r",
+                ClusterId = "c",
+                Policies = [policyName],
+                Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+            },
+        ],
+    };
+
+    private static bool Denied(ReverseProxyOptions options, string client, out int status, params (string Name, string Value)[] headers)
+    {
+        var request = new Request { Method = "GET", RequestUriString8 = (ByteString)"/x", Host = "app" };
+        foreach (var (name, value) in headers)
+        {
+            request.Headers.AddHeader(name, value);
+        }
+
+        return RoutePolicies.TryHandleLite(
+            options, LiteEndPoint, request, new IPEndPoint(IPAddress.Parse(client), 1), out status, out _, out _);
+    }
+
+    [TestMethod]
+    public void RateLimit_ParallelSweeps_DoNotDeadlock()
+    {
+        RoutePolicies.ResetForTests();
+        try
+        {
+            RoutePolicies.Clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-01-01T00:00:00Z"));
+            var options = PolicyOptions("rate", new RoutePolicyConfig { Name = "rate", Kind = "rateLimit", Limit = 1000, WindowSeconds = 1 });
+            var workers = new Task[4];
+            for (var t = 0; t < workers.Length; t++)
+            {
+                var thread = (byte)t;
+                workers[t] = Task.Run(() =>
+                {
+                    for (var i = 0; i < 1500; i++)
+                    {
+                        Denied(options, new IPAddress([10, thread, (byte)(i >> 8), (byte)i]).ToString(), out _);
+                    }
+                });
+            }
+
+            Assert.IsTrue(Task.WaitAll(workers, TimeSpan.FromSeconds(60)), "rate-window sweeps deadlocked");
+        }
+        finally
+        {
+            RoutePolicies.ResetForTests();
+        }
+    }
+
+    [TestMethod]
+    public void IpAllowDeny_CoversIPv6AndMappedClients_AndNeverFailsOpen()
+    {
+        RoutePolicies.ResetForTests();
+        var deny = PolicyOptions("ip", new RoutePolicyConfig { Name = "ip", Kind = "ipAllowDeny", Deny = "10.0.0.0/8, 2001:db8::/32" });
+        Assert.IsTrue(Denied(deny, "10.1.2.3", out var status));
+        Assert.AreEqual(403, status);
+        Assert.IsTrue(Denied(deny, "::ffff:10.1.2.3", out _), "a dual-stack listener reports IPv4 clients as mapped IPv6");
+        Assert.IsTrue(Denied(deny, "2001:db8::7", out _));
+        Assert.IsFalse(Denied(deny, "192.168.1.1", out _));
+        Assert.IsFalse(Denied(deny, "2001:db9::1", out _));
+
+        var allow = PolicyOptions("ip", new RoutePolicyConfig { Name = "ip", Kind = "ipAllowDeny", Allow = "192.168.0.0/16, fd00::/8" });
+        Assert.IsFalse(Denied(allow, "192.168.5.5", out _));
+        Assert.IsFalse(Denied(allow, "fd00::1", out _));
+        Assert.IsTrue(Denied(allow, "172.16.0.1", out _));
+
+        var garbage = PolicyOptions("ip", new RoutePolicyConfig { Name = "ip", Kind = "ipAllowDeny", Allow = "not-an-address" });
+        Assert.IsTrue(Denied(garbage, "192.168.5.5", out _), "an allow list that parses to nothing admits nobody");
+        RoutePolicies.ResetForTests();
+    }
+
+    [TestMethod]
+    public void HeaderPolicies_FailClosed_WhenTheValueIsMissing()
+    {
+        RoutePolicies.ResetForTests();
+        var presence = PolicyOptions("need", new RoutePolicyConfig { Name = "need", Kind = "requireHeader", HeaderName = "X-Tenant" });
+        Assert.IsTrue(Denied(presence, "10.0.0.1", out var status));
+        Assert.AreEqual(401, status);
+        Assert.IsFalse(Denied(presence, "10.0.0.1", out _, ("X-Tenant", "anything")));
+
+        var key = PolicyOptions("key", new RoutePolicyConfig { Name = "key", Kind = "apiKey", HeaderName = "X-Api-Key" });
+        Assert.IsTrue(Denied(key, "10.0.0.1", out _), "no header");
+        Assert.IsTrue(Denied(key, "10.0.0.1", out _, ("X-Api-Key", "guess")), "an apiKey with no configured key admits nothing");
+        RoutePolicies.ResetForTests();
+    }
+
+    [TestMethod]
+    public void BadRegexConstraints_NeverMatch_AndNeverThrow()
+    {
+        var matcher = new RouteMatcher();
+        Assert.IsNull(Match(matcher, "/users/{id:regex((}", "/users/9"));
+        Assert.IsNull(Match(matcher, "/users/{id:regex((?=a)a)}", "/users/a"), "look-around is not supported by the linear-time engine");
+        var regexRoute = new RouteConfig
+        {
+            Id = "r",
+            ClusterId = "c",
+            Match = new RouteMatch { Path = "([", PathKind = PathMatchKind.Regex },
+        };
+        Assert.IsNull(matcher.Match(new RouteMatchContext(null, "/x", "GET", null, null), [regexRoute]));
+    }
+
+    [TestMethod]
+    public void RouteIndex_IsRebuilt_WhenTheListGrowsAfterIndexing()
+    {
+        var routes = new List<RouteConfig>
+        {
+            new() { Id = "a", ClusterId = "c", Match = new RouteMatch { Path = "/a", PathKind = PathMatchKind.Prefix } },
+            new() { Id = "b", ClusterId = "c", Match = new RouteMatch { Path = "/b", PathKind = PathMatchKind.Prefix } },
+        };
+        var matcher = new RouteMatcher();
+        var context = new RouteMatchContext(null, "/c/item", "GET", null, null);
+        Assert.IsNull(matcher.Match(context, routes));
+        routes.Add(new RouteConfig { Id = "c", ClusterId = "c", Match = new RouteMatch { Path = "/c", PathKind = PathMatchKind.Prefix } });
+        Assert.AreEqual("c", matcher.Match(context, routes)?.Id);
+    }
+
+    [TestMethod]
+    public void BuildRedirect_NeverEmitsANetworkPathReference()
+    {
+        Assert.AreEqual("/a/b?x=1", ReverseProxySessionDispatch.OriginForm("http://other.test/a/b?x=1"));
+        Assert.AreEqual("/evil.test/path", ReverseProxySessionDispatch.OriginForm("//evil.test/path"));
+        Assert.AreEqual("/evil.test", ReverseProxySessionDispatch.OriginForm("////evil.test"));
+        Assert.AreEqual("/plain", ReverseProxySessionDispatch.OriginForm("/plain"));
+
+        var request = new Request { Method = "GET", Host = "app.test" };
+        request.RequestUriString8 = (ByteString)"//evil.test/x";
+        var location = ReverseProxySessionDispatch.BuildRedirect(request, new RedirectConfig { Host = "safe.test", Scheme = "https" });
+        Assert.AreEqual("https://safe.test/evil.test/x", location);
+    }
+
+    [TestMethod]
+    public async Task StatusRetry_DoesNotCarryTheFailedDestinationsPin()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        var manager = new ClusterManager();
+        await manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c",
+                Destinations =
+                [
+                    new DestinationConfig { Id = "a", Address = "a.test", Port = 80, DnsRefreshSeconds = 30 },
+                    new DestinationConfig { Id = "b", Address = "b.test", Port = 80, DnsRefreshSeconds = 30 },
+                ],
+            },
+        ]);
+        manager.SetResolved("a", IPAddress.Parse("10.1.1.1"));
+        proxy.ReverseProxy = new ReverseProxyOptions
+        {
+            ClusterManager = manager,
+            LoadBalancer = new LoadBalancer(),
+            Routes =
+            [
+                new RouteConfig
+                {
+                    Id = "r",
+                    ClusterId = "c",
+                    Retry = new RetryConfig { Attempts = 1 },
+                    Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+                },
+            ],
+        };
+
+        var session = Session(proxy, "GET");
+        ReverseProxySessionDispatch.Apply(proxy, session);
+        var stale = IPAddress.Parse("10.9.9.9");
+        session.UpstreamPinnedAddress = stale;
+        session.HttpClient.Response.StatusCode = 502;
+        Assert.IsTrue(ReverseProxySessionDispatch.TryStageGatewayRetry(proxy, session));
+
+        // Only "a" has a resolved address. The retry must use the new destination's own pin, never the old one.
+        var expected = session.UpstreamDestinationId == "a" ? IPAddress.Parse("10.1.1.1") : null;
+        Assert.AreNotEqual(stale, session.UpstreamPinnedAddress);
+        Assert.AreEqual(expected, session.UpstreamPinnedAddress);
+    }
+
+    [TestMethod]
+    public void AllowMode_RefusesAnyChainError_AndAcceptsAMissingCertificate()
+    {
+        using var rsa = System.Security.Cryptography.RSA.Create(2048);
+        var request = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+            "CN=probe", rsa, System.Security.Cryptography.HashAlgorithmName.SHA256, System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+        using var cert = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+
+        Assert.IsTrue(Titanium.Web.Proxy.Certificates.ClientCertificateHandshake.AcceptOptional(null, System.Net.Security.SslPolicyErrors.RemoteCertificateNotAvailable));
+        Assert.IsTrue(Titanium.Web.Proxy.Certificates.ClientCertificateHandshake.AcceptOptional(cert, System.Net.Security.SslPolicyErrors.None));
+        Assert.IsFalse(Titanium.Web.Proxy.Certificates.ClientCertificateHandshake.AcceptOptional(cert, System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors));
+        Assert.IsFalse(Titanium.Web.Proxy.Certificates.ClientCertificateHandshake.AcceptOptional(cert, System.Net.Security.SslPolicyErrors.RemoteCertificateNameMismatch));
+    }
+
+    [TestMethod]
+    public async Task Mirror_ToAnHttpsDestination_NeverSendsPlaintext()
+    {
+        MirrorFanout.ResetForTests();
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        try
+        {
+            var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+            var accepted = listener.AcceptTcpClientAsync();
+            var request = new Request { Method = "GET", Host = "app.test" };
+            request.RequestUriString8 = (ByteString)"/secure";
+            MirrorFanout.TryEnqueue(
+                new MirrorConfig { ClusterId = "m" },
+                request,
+                new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = port, UseHttps = true });
+            using var client = await accepted.WaitAsync(TimeSpan.FromSeconds(15));
+            await using var stream = client.GetStream();
+            var buffer = new byte[64];
+            var read = await stream.ReadAsync(buffer);
+            Assert.IsTrue(read > 0);
+            Assert.AreEqual(0x16, buffer[0], "the first byte on the wire must be a TLS handshake record, not an HTTP request line");
+            var until = DateTime.UtcNow.AddSeconds(5);
+            while (MirrorFanout.FailedForTests == 0 && DateTime.UtcNow < until)
+            {
+                await Task.Delay(25);
+            }
+
+            Assert.AreEqual(0, MirrorFanout.SentForTests);
+        }
+        finally
+        {
+            listener.Stop();
+            MirrorFanout.ResetForTests();
+        }
     }
 
     private static ProxyConfigSnapshot Snapshot(string id) => new()

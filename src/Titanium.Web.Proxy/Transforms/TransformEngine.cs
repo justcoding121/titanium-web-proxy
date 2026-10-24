@@ -110,9 +110,19 @@ public sealed class TransformEngine : ITransformEngine
                 case TransformKinds.RequestHeadersAllowed when Param(t, "headers") is { } allowed:
                     KeepOnly(context, allowed);
                     break;
-                case TransformKinds.ClientCertHeader when Param(t, "name") is { } certHeader &&
-                    !string.IsNullOrEmpty(context.ClientCertificateSubject):
-                    context.Headers[certHeader] = context.ClientCertificateSubject;
+                case TransformKinds.ClientCertHeader when Param(t, "name") is { } certHeader:
+                    // The header carries identity. A copy the client sent itself is never forwarded,
+                    // whether or not a certificate was presented.
+                    context.HeadersToRemove.Add(certHeader);
+                    if (!string.IsNullOrEmpty(context.ClientCertificateSubject))
+                    {
+                        context.Headers[certHeader] = context.ClientCertificateSubject;
+                    }
+                    else
+                    {
+                        context.Headers.Remove(certHeader);
+                    }
+
                     break;
                 case TransformKinds.RequestHeaderOriginalHost:
                     if (!string.IsNullOrEmpty(context.OriginalHost))

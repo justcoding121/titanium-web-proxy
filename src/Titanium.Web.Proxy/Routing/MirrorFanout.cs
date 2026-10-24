@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -52,6 +53,12 @@ internal static class MirrorFanout
     {
         Observed = null;
         HoldForTests = null;
+
+        // Work queued by an earlier test would otherwise delay the next one behind its connect timeouts.
+        while (Queue.Reader.TryRead(out _))
+        {
+        }
+
         _queued = 0;
         _dropped = 0;
         _skipped = 0;
@@ -90,6 +97,7 @@ internal static class MirrorFanout
         var work = new MirrorWork(
             destination.Address,
             port,
+            destination.UseHttps,
             request.Method ?? "GET",
             path,
             request.Host ?? destination.Address,
@@ -152,7 +160,10 @@ internal static class MirrorFanout
         name.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase) ||
         name.Equals("Content-Length", StringComparison.OrdinalIgnoreCase) ||
         name.Equals("Upgrade", StringComparison.OrdinalIgnoreCase) ||
-        name.Equals("TE", StringComparison.OrdinalIgnoreCase);
+        name.Equals("TE", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals("Trailer", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals("Expect", StringComparison.OrdinalIgnoreCase) ||
+        name.StartsWith("Proxy-", StringComparison.OrdinalIgnoreCase);
 
     private static async Task WorkerAsync()
     {
@@ -186,7 +197,17 @@ internal static class MirrorFanout
         using var client = new TcpClient();
         using var timeout = new CancellationTokenSource(SendTimeout);
         await client.ConnectAsync(work.Host, work.Port, timeout.Token).ConfigureAwait(false);
-        await using var stream = client.GetStream();
+        Stream stream = client.GetStream();
+        if (work.UseHttps)
+        {
+            // Same rule as any origin leg: the certificate is validated against the destination name.
+            var secure = new SslStream(stream, false);
+            stream = secure;
+            await secure.AuthenticateAsClientAsync(
+                new SslClientAuthenticationOptions { TargetHost = work.Host }, timeout.Token).ConfigureAwait(false);
+        }
+
+        await using var closer = stream.ConfigureAwait(false);
         var head = work.Method + " " + work.Path + " HTTP/1.1\r\nHost: " + work.HostHeader +
                    "\r\nConnection: close\r\n" + work.Headers;
         if (work.Body is { Length: > 0 } body)
@@ -216,5 +237,5 @@ internal static class MirrorFanout
     }
 
     private readonly record struct MirrorWork(
-        string Host, int Port, string Method, string Path, string HostHeader, string Headers, byte[]? Body);
+        string Host, int Port, bool UseHttps, string Method, string Path, string HostHeader, string Headers, byte[]? Body);
 }

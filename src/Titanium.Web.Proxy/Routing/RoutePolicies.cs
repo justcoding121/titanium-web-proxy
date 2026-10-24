@@ -6,8 +6,10 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using Titanium.Web.Proxy.Abstractions;
+using Titanium.Web.Proxy.Abstractions.Network;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Abstractions.Diagnostics;
 using Titanium.Web.Proxy.Abstractions.Routing;
@@ -252,9 +254,9 @@ internal static class RoutePolicies
             {
                 case "maxRequestBodySize" when policy.MaxRequestBodyBytes is long max && contentLength > max:
                     return Deny(Stop(413, "payload too large"));
-                case "requireHeader" when !FixedEquals(header(policy.HeaderName ?? ""), policy.HeaderValue):
+                case "requireHeader" when !HeaderSatisfies(header(policy.HeaderName ?? ""), policy.HeaderValue, valueOptional: true):
                     return Deny(Stop(401, string.Empty));
-                case "apiKey" when !FixedEquals(header(policy.HeaderName ?? ""), policy.HeaderValue):
+                case "apiKey" when !HeaderSatisfies(header(policy.HeaderName ?? ""), policy.HeaderValue, valueOptional: false):
                     return Deny(Stop(401, string.Empty));
                 case "timeout" when policy.TimeoutSeconds is int seconds:
                     decision = decision with { TimeoutSeconds = seconds };
@@ -301,6 +303,7 @@ internal static class RoutePolicies
         var key = policy.Name + "|" + (client?.ToString() ?? "");
         var now = Clock.GetUtcNow();
         var state = Windows.GetOrAdd(key, _ => new Window());
+        bool allowed;
         lock (state)
         {
             if (state.Start == default || now - state.Start >= window)
@@ -312,9 +315,13 @@ internal static class RoutePolicies
 
             state.Count++;
             state.Seen = now;
-            SweepIdleWindows(now);
-            return state.Count <= limit;
+            allowed = state.Count <= limit;
         }
+
+        // The sweep takes other windows' locks. Run it after this one is released so two writers
+        // that sweep at the same time cannot wait on each other.
+        SweepIdleWindows(now);
+        return allowed;
     }
 
     private static int _rateWrites;
@@ -371,71 +378,62 @@ internal static class RoutePolicies
             return string.IsNullOrEmpty(policy.Allow);
         }
 
-        if (!string.IsNullOrEmpty(policy.Deny) && MatchesAny(client, policy.Deny))
+        var rules = AddressRuleCache.GetValue(policy, static p => new AddressRules(p.Allow, p.Deny));
+        if (rules.Deny.Length > 0 && MatchesAny(client, rules.Deny))
         {
             return false;
         }
 
-        if (!string.IsNullOrEmpty(policy.Allow))
+        // An allow list that parses to nothing admits nobody. It never falls open.
+        if (rules.HasAllow)
         {
-            return MatchesAny(client, policy.Allow);
+            return MatchesAny(client, rules.Allow);
         }
 
         return true;
     }
 
-    private static bool MatchesAny(IPAddress client, string csv)
+    private static readonly ConditionalWeakTable<RoutePolicyConfig, AddressRules> AddressRuleCache = new();
+
+    /// <summary>Parsed once per policy. IPv4 and IPv6 prefixes, and IPv4-mapped IPv6 clients, all match.</summary>
+    private sealed class AddressRules(string? allow, string? deny)
     {
-        var parts = csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        for (var i = 0; i < parts.Length; i++)
+        public bool HasAllow { get; } = !string.IsNullOrWhiteSpace(allow);
+        public CidrPrefix[] Allow { get; } = Parse(allow);
+        public CidrPrefix[] Deny { get; } = Parse(deny);
+
+        private static CidrPrefix[] Parse(string? csv)
         {
-            if (InCidr(client, parts[i]))
+            if (string.IsNullOrWhiteSpace(csv))
+            {
+                return [];
+            }
+
+            var parts = csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var list = new List<CidrPrefix>(parts.Length);
+            foreach (var part in parts)
+            {
+                if (CidrPrefix.TryParse(part, out var prefix) && prefix is not null)
+                {
+                    list.Add(prefix);
+                }
+            }
+
+            return [.. list];
+        }
+    }
+
+    private static bool MatchesAny(IPAddress client, CidrPrefix[] prefixes)
+    {
+        for (var i = 0; i < prefixes.Length; i++)
+        {
+            if (prefixes[i].Contains(client))
             {
                 return true;
             }
         }
 
         return false;
-    }
-
-    private static bool InCidr(IPAddress address, string cidr)
-    {
-        var slash = cidr.IndexOf('/');
-        if (slash < 0)
-        {
-            return IPAddress.TryParse(cidr, out var exact) && exact.Equals(address);
-        }
-
-        if (!IPAddress.TryParse(cidr[..slash], out var network) ||
-            !int.TryParse(cidr[(slash + 1)..], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var bits))
-        {
-            return false;
-        }
-
-        var ip = address.GetAddressBytes();
-        var net = network.GetAddressBytes();
-        if (ip.Length != net.Length || address.AddressFamily != AddressFamily.InterNetwork)
-        {
-            return false;
-        }
-
-        var full = bits / 8;
-        var rem = bits % 8;
-        for (var i = 0; i < full && i < ip.Length; i++)
-        {
-            if (ip[i] != net[i])
-            {
-                return false;
-            }
-        }
-
-        if (rem == 0 || full >= ip.Length)
-        {
-            return true;
-        }
-
-        var mask = (byte)(0xFF << (8 - rem));
-        return (ip[full] & mask) == (net[full] & mask);
     }
 
     private static List<KeyValuePair<string, string>> CorsHeaders(RoutePolicyConfig policy, string? origin)
@@ -453,9 +451,29 @@ internal static class RoutePolicies
         return
         [
             new("Access-Control-Allow-Origin", allowOrigin),
+            new("Vary", "Origin"),
             new("Access-Control-Allow-Methods", policy.Methods ?? "GET, POST, OPTIONS"),
             new("Access-Control-Allow-Headers", policy.HeaderName ?? "*"),
         ];
+    }
+
+    /// <summary>
+    /// A header policy fails closed. A missing header never satisfies it. With no configured value,
+    /// <c>requireHeader</c> accepts any non-empty header and <c>apiKey</c> accepts nothing.
+    /// </summary>
+    private static bool HeaderSatisfies(string? actual, string? expected, bool valueOptional)
+    {
+        if (string.IsNullOrEmpty(actual))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(expected))
+        {
+            return valueOptional;
+        }
+
+        return FixedEquals(actual, expected);
     }
 
     private static bool FixedEquals(string? left, string? right)

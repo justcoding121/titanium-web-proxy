@@ -611,11 +611,16 @@ public partial class ProxyServer
                                 requestToken, cancellationTokenSource);
 
                             var newConnection = result.LatestConnection;
+
+                            // A status retry swapped the origin socket inside the request. Track the new one.
+                            if (args.Extras is { StatusRetried: true } && args.HttpClient.HasConnection)
+                                newConnection = args.HttpClient.Connection;
+
                             if (connection != newConnection && connection != null)
                                 await TcpConnectionFactory.Release(connection);
 
                             // update connection to latest used
-                            connection = result.LatestConnection;
+                            connection = newConnection;
 
                             closeServerConnection = !result.Continue;
 
@@ -1011,13 +1016,27 @@ public partial class ProxyServer
 
     private async Task ReplayGatewayStatusAsync(SessionEventArgs args, CancellationToken cancellationToken)
     {
-        args.HttpClient.CloseServerConnection = true;
+        // The first origin answered with an unread body, so that socket is finished. Close it now. The
+        // replacement is returned through HttpClient and released by the session loop like any other.
+        if (args.HttpClient.HasConnection)
+        {
+            await TcpConnectionFactory.Release(args.HttpClient.Connection, true);
+        }
+
         var connection = await TcpConnectionFactory.GetServerConnection(
             this, args, false, SslApplicationProtocol.Http11, true, cancellationToken);
         args.HttpClient.SetConnection(connection);
-        await args.HttpClient.SendRequest(
-            false, args.IsTransparent, args.OriginHttpVersionPolicy ?? OriginHttpVersionPolicy, cancellationToken);
-        await args.HttpClient.ReceiveResponse(cancellationToken);
+        try
+        {
+            await args.HttpClient.SendRequest(
+                false, args.IsTransparent, args.OriginHttpVersionPolicy ?? OriginHttpVersionPolicy, cancellationToken);
+            await args.HttpClient.ReceiveResponse(cancellationToken);
+        }
+        catch
+        {
+            await TcpConnectionFactory.Release(connection, true);
+            throw;
+        }
     }
 
     private async Task HandleHttpSessionRequest(SessionEventArgs args) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.

@@ -364,20 +364,30 @@ internal static class CertificateBootstrap
 
         var watchers = new List<FileSystemWatcher>();
         CancellationTokenSource? debounce = null;
+        var gate = new object();
         void OnChange(object? sender, FileSystemEventArgs args)
         {
-            var previous = debounce;
-            previous?.Cancel();
-            previous?.Dispose();
-            var next = new CancellationTokenSource();
-            debounce = next;
-            var token = next.Token;
+            // Watchers raise on pool threads. One lock keeps a single pending reload and a single apply at a time.
+            CancellationToken token;
+            lock (gate)
+            {
+                var previous = debounce;
+                previous?.Cancel();
+                previous?.Dispose();
+                var next = new CancellationTokenSource();
+                debounce = next;
+                token = next.Token;
+            }
+
             _ = Task.Run(async () =>
             {
                 try
                 {
                     await Task.Delay(250, token).ConfigureAwait(false);
-                    Apply(proxy, certificates);
+                    lock (gate)
+                    {
+                        Apply(proxy, certificates);
+                    }
                 }
                 catch (OperationCanceledException)
                 {
