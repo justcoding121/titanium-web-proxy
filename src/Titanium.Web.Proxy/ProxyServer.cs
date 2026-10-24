@@ -1608,6 +1608,9 @@ public partial class ProxyServer : IDisposable
     /// <summary>When true with <see cref="TracingEnabled"/>, copy the span context onto the upstream request.</summary>
     public bool PropagateTraceContext { get; set; }
 
+    /// <summary>Null leaves forwarded headers untouched and keeps terminate-lite eligible.</summary>
+    public Abstractions.Routing.ForwardedHeadersConfig? ForwardedHeaders { get; set; }
+
     /// <summary>
     /// Returns <see langword="true"/> when the global interception gate is active for the given
     /// endpoint: any session event handler is subscribed, <see cref="EnableHttpInterception"/> is
@@ -1624,7 +1627,8 @@ public partial class ProxyServer : IDisposable
         || OnResponseBodyWrite != null
         || EnableDecryptFailureBypass
         || TracingEnabled
-        || RequestIdHeader is not null;
+        || RequestIdHeader is not null
+        || ForwardedHeaders is not null;
 
     /// <summary>
     /// Returns <see langword="true"/> when this specific request/stream should go through the

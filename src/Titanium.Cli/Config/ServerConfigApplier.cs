@@ -48,6 +48,11 @@ internal static class ServerConfigApplier
             proxy.TracingEnabled = true;
             proxy.PropagateTraceContext = tracing.Propagate;
         }
+
+        if (server.ForwardedHeaders is not null)
+        {
+            proxy.ForwardedHeaders = server.ForwardedHeaders;
+        }
     }
 
     private static void ApplyDecryptFailureBypass(ProxyServer proxy, ServerConfig server)

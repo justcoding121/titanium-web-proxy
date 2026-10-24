@@ -330,3 +330,5 @@ Titanium.Web.Proxy.ProxyServer.RequestIdHeader.get -> string?
 Titanium.Web.Proxy.ProxyServer.RequestIdHeader.set -> void
 Titanium.Web.Proxy.ProxyServer.TracingEnabled.get -> bool
 Titanium.Web.Proxy.ProxyServer.TracingEnabled.set -> void
+Titanium.Web.Proxy.ProxyServer.ForwardedHeaders.get -> Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig?
+Titanium.Web.Proxy.ProxyServer.ForwardedHeaders.set -> void

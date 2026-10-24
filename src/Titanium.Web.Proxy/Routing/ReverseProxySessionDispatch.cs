@@ -88,6 +88,11 @@ internal static class ReverseProxySessionDispatch
         session.UpstreamConnectPort = port;
         session.UpstreamDestinationId = destination.Id;
         session.MatchedRoute = route;
+        if (server.ForwardedHeaders is { } forwarded)
+        {
+            ForwardedHeadersApplier.Apply(session, forwarded);
+        }
+
         ObserveRequestStart(server, session, route);
         ClusterConfig? cluster = null;
         if (options.ClusterManager?.Snapshot.Clusters.TryGetValue(route.ClusterId, out var found) == true)
@@ -340,6 +345,11 @@ internal static class ReverseProxySessionDispatch
         if (!string.Equals(path, ctx.Path, StringComparison.Ordinal))
         {
             request.RequestUriString8 = (ByteString)ctx.Path;
+        }
+
+        if (!string.IsNullOrEmpty(ctx.Method))
+        {
+            request.Method = ctx.Method;
         }
 
         foreach (var name in ctx.HeadersToRemove)

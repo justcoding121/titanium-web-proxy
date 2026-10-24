@@ -427,3 +427,5 @@ Titanium.Web.Proxy.Configuration.Models.TracingConfig.Enabled.set -> void
 Titanium.Web.Proxy.Configuration.Models.TracingConfig.Propagate.get -> bool
 Titanium.Web.Proxy.Configuration.Models.TracingConfig.Propagate.set -> void
 Titanium.Web.Proxy.Configuration.Models.TracingConfig.TracingConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ForwardedHeaders.get -> Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ForwardedHeaders.set -> void

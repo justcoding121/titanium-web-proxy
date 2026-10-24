@@ -396,3 +396,35 @@ Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.ResponseBodyClient = 
 Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.ResponseBodyDestination = 8 -> Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError
 Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.ResponseHeaders = 6 -> Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError
 Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.UpgradeFailed = 9 -> Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.HttpMethodChange = "HttpMethodChange" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.PathPattern = "PathPattern" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.PathRegexReplace = "PathRegexReplace" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.PathSet = "PathSet" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.QueryRemove = "QueryRemove" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.QueryRouteParameter = "QueryRouteParameter" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.QueryValueAppend = "QueryValueAppend" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.RequestHeaderAppend = "RequestHeaderAppend" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.RequestHeaderOriginalHost = "RequestHeaderOriginalHost" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.RequestHeadersAllowed = "RequestHeadersAllowed" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.ResponseHeaderAppend = "ResponseHeaderAppend" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.ResponseHeadersAllowed = "ResponseHeadersAllowed" -> string!
+Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeaderAction
+Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeaderAction.Append = 2 -> Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeaderAction
+Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeaderAction.Off = 0 -> Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeaderAction
+Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeaderAction.Remove = 3 -> Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeaderAction
+Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeaderAction.Set = 1 -> Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeaderAction
+Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig
+Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig.ForwardedHeadersConfig() -> void
+Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig.TrustedProxies.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig.TrustedProxies.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig.XForwardedFor.get -> Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeaderAction
+Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig.XForwardedFor.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig.XForwardedHost.get -> Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeaderAction
+Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig.XForwardedHost.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig.XForwardedProto.get -> Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeaderAction
+Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig.XForwardedProto.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.Method.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.Method.set -> void
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.OriginalHost.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.OriginalHost.set -> void
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.RouteValues.get -> System.Collections.Generic.Dictionary<string!, string!>!

@@ -102,4 +102,12 @@ public sealed class TransformRequestContext
     ///     destination bind identity (wire-only; logical Host unchanged).
     /// </summary>
     public bool UseDestinationHost { get; set; }
+
+    /// <summary>Set by <c>HttpMethodChange</c>. Null leaves the method unchanged.</summary>
+    public string? Method { get; set; }
+
+    /// <summary>Route values captured by a template. Empty unless the route captured any.</summary>
+    public Dictionary<string, string> RouteValues { get; } = new(StringComparer.Ordinal);
+
+    public string? OriginalHost { get; set; }
 }

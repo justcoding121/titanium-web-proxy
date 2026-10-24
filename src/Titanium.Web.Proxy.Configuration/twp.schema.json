@@ -558,6 +558,27 @@
         "enableWinAuth": {
           "type": "boolean"
         },
+        "forwardedHeaders": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "trustedProxies": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "xForwardedFor": {
+              "type": "string"
+            },
+            "xForwardedHost": {
+              "type": "string"
+            },
+            "xForwardedProto": {
+              "type": "string"
+            }
+          }
+        },
         "ignoreServerCertificateErrors": {
           "type": "boolean"
         },

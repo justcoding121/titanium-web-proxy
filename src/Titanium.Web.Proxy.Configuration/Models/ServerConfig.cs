@@ -15,6 +15,9 @@ public sealed class ServerConfig
     /// <summary>Off unless <see cref="TracingConfig.Enabled"/> is true.</summary>
     public TracingConfig? Tracing { get; set; }
 
+    /// <summary>Null leaves X-Forwarded-* untouched.</summary>
+    public Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig? ForwardedHeaders { get; set; }
+
     public bool? EnableHttp2 { get; set; }
 
     public bool? EnableHttp3 { get; set; }
