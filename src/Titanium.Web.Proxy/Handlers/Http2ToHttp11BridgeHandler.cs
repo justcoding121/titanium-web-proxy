@@ -175,6 +175,9 @@ public partial class ProxyServer
         // RFC 8441 extended CONNECT: the stream was opened as a tunnel (e.g. WebSocket-over-HTTP/2).
         // For the websocket protocol, translate to an HTTP/1.1 WebSocket upgrade on the origin.
         // Any other :protocol value is unsupported and gets a 501 so the client can retry over h1.
+        // Gateway status retry is intentionally not done on this bridge. The bridge already replays a
+        // stale socket (allowReplay), and a second replay can send headers twice or release the wrong
+        // connection from the finally block. HTTP/3 has the same gap.
         if (ctx.ConnectionState.Streams.TryGetValue(ctx.StreamId, out var extStreamState) &&
             extStreamState.IsExtendedConnect)
         {
