@@ -86,7 +86,7 @@
 Classes
 </h3>
       <h4><a class="xref" href="Titanium.Web.Proxy.Clusters.ClusterManager.html">ClusterManager</a></h4>
-      <section><p>Thread-safe cluster manager. Snapshot is swapped with Interlocked.Exchange;
+      <section><p>Thread-safe cluster manager. Snapshot swaps use compare-and-swap;
 in-flight sessions keep the previous snapshot reference.</p>
 </section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Clusters.DestinationHealthTracker.html">DestinationHealthTracker</a></h4>
