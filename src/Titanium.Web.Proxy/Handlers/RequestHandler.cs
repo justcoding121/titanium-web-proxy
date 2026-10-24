@@ -390,7 +390,21 @@ public partial class ProxyServer
                         // Mitm COW baseline is still armed so append-only sets stay on terminate-lite.
                         // Taking the baseline before TryApply made MutationCount diverge and forced
                         // the full session path (~0.75× CLI reverse for intercept-http1).
-                        Routing.ReverseProxySessionDispatch.TryApply(this, args);
+                        var routeDispatch = Routing.ReverseProxySessionDispatch.Apply(this, args);
+                        if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination)
+                        {
+                            closeServerConnection = true;
+                            await Routing.ReverseProxySessionDispatch.WriteNoDestinationAsync(args, clientStream, cancellationToken);
+                            return;
+                        }
+
+                        if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.Handled)
+                        {
+                            closeServerConnection = true;
+                            await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                            args.IsClientResponseCommitted = true;
+                            return;
+                        }
 
                         var requestHeaderRelayBaseline = request.Headers.TakeMitmRelayBaseline();
 
@@ -597,11 +611,16 @@ public partial class ProxyServer
                                 requestToken, cancellationTokenSource);
 
                             var newConnection = result.LatestConnection;
+
+                            // A status retry swapped the origin socket inside the request. Track the new one.
+                            if (args.Extras is { StatusRetried: true } && args.HttpClient.HasConnection)
+                                newConnection = args.HttpClient.Connection;
+
                             if (connection != newConnection && connection != null)
                                 await TcpConnectionFactory.Release(connection);
 
                             // update connection to latest used
-                            connection = result.LatestConnection;
+                            connection = newConnection;
 
                             closeServerConnection = !result.Continue;
 
@@ -995,6 +1014,31 @@ public partial class ProxyServer
         }, generator, serverConnection);
     }
 
+    private async Task ReplayGatewayStatusAsync(SessionEventArgs args, CancellationToken cancellationToken)
+    {
+        // The first origin answered with an unread body, so that socket is finished. Close it now. The
+        // replacement is returned through HttpClient and released by the session loop like any other.
+        if (args.HttpClient.HasConnection)
+        {
+            await TcpConnectionFactory.Release(args.HttpClient.Connection, true);
+        }
+
+        var connection = await TcpConnectionFactory.GetServerConnection(
+            this, args, false, SslApplicationProtocol.Http11, true, cancellationToken);
+        args.HttpClient.SetConnection(connection);
+        try
+        {
+            await args.HttpClient.SendRequest(
+                false, args.IsTransparent, args.OriginHttpVersionPolicy ?? OriginHttpVersionPolicy, cancellationToken);
+            await args.HttpClient.ReceiveResponse(cancellationToken);
+        }
+        catch
+        {
+            await TcpConnectionFactory.Release(connection, true);
+            throw;
+        }
+    }
+
     private async Task HandleHttpSessionRequest(SessionEventArgs args) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var cancellationToken = args.CancellationToken;
@@ -1030,6 +1074,12 @@ public partial class ProxyServer
             else
             {
                 await args.HttpClient.ReceiveResponse(cancellationToken);
+            }
+
+            if (Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, args))
+            {
+                // Async only after a retry is staged, so an unset policy does not allocate a state machine.
+                await ReplayGatewayStatusAsync(args, cancellationToken).ConfigureAwait(false);
             }
 
             var fastResponse = args.HttpClient.Response;

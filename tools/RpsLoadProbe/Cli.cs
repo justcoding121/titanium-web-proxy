@@ -775,6 +775,15 @@ internal static class Cli
             case "twp-cli-dialect-twp-http1":
                 mode = ProbeMode.TwpCliDialectTwpHttp1;
                 return true;
+            case "twp-cli-policies-http1":
+                mode = ProbeMode.TwpCliPoliciesHttp1;
+                return true;
+            case "twp-cli-mirror-http1":
+                mode = ProbeMode.TwpCliMirrorHttp1;
+                return true;
+            case "twp-cli-cluster-client-http1":
+                mode = ProbeMode.TwpCliClusterClientHttp1;
+                return true;
             case "origin-direct":
                 mode = ProbeMode.OriginDirect;
                 return true;

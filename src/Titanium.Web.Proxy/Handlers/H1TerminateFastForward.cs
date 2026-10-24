@@ -109,6 +109,10 @@ public partial class ProxyServer
             if (!Routing.ReverseProxyFastPath.IsForwardHostEquivalent(
                     reverse.Routes, snapshot, transparent.ForwardHost, transparent.ForwardPort ?? 80))
                 return false;
+
+            // A connection-limit slot is released when the session ends, which lite does not have.
+            if (reverse.Policies is { Count: > 0 } && Routing.RoutePolicies.HoldsConnectionSlot(reverse))
+                return false;
         }
 
         if (request.HasBody || request.UpgradeToWebSocket)
@@ -168,6 +172,28 @@ public partial class ProxyServer
         Request request,
         CancellationToken cancellationToken)
     {
+        if (ReverseProxy is { Policies: { Count: > 0 } } policyOptions &&
+            Routing.RoutePolicies.TryHandleLite(
+                policyOptions,
+                endPoint,
+                request,
+                clientStream.Connection.RemoteEndPoint as IPEndPoint,
+                out var policyStatus,
+                out var policyBody,
+                out var policyHeaders))
+        {
+            var denied = new Abstractions.Middleware.ProxyMiddlewareContext
+            {
+                Session = H1TerminateLiteMiddlewareSession,
+                HandledStatusCode = policyStatus,
+                HandledBody = policyBody,
+                HandledHeaders = policyHeaders,
+            };
+            await WriteTerminateLiteMiddlewareResponseAsync(clientStream, request, denied, cancellationToken)
+                .ConfigureAwait(false);
+            return !H1TerminateClientRequestedClose(request);
+        }
+
         if (ReverseProxy?.Middleware is { Count: > 0 } middleware)
         {
             var handled = await TryRunTerminateLiteMiddlewareAsync(

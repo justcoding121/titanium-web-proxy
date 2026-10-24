@@ -38,18 +38,42 @@ public interface IClusterManager
     ValueTask ApplyAsync(IReadOnlyList<ClusterConfig> clusters, CancellationToken cancellationToken = default);
     void SetDestinationState(string destinationId, DestinationState state);
     DestinationState GetDestinationState(string destinationId);
+
+    /// <summary>
+    /// Atomically changes <paramref name="destinationId"/> from <paramref name="expected"/> to <paramref name="next"/>.
+    /// Returns false when the current state is not <paramref name="expected"/>. The default body is not atomic;
+    /// <c>ClusterManager</c> overrides it with compare-and-swap.
+    /// </summary>
+    bool TrySetDestinationState(string destinationId, DestinationState expected, DestinationState next)
+    {
+        if (GetDestinationState(destinationId) != expected)
+        {
+            return false;
+        }
+
+        if (expected != next)
+        {
+            SetDestinationState(destinationId, next);
+        }
+
+        return true;
+    }
 }
 
 /// <summary>Optional per-request context for load balancing (affinity, counters).</summary>
 public readonly struct LoadBalanceContext
 {
-    public LoadBalanceContext(string? affinityKey = null)
+    public LoadBalanceContext(string? affinityKey = null, string? hashInput = null)
     {
         AffinityKey = affinityKey;
+        HashInput = hashInput;
     }
 
-    /// <summary>Preferred destination id from cookie/header stickiness.</summary>
+    /// <summary>Preferred destination id or opaque pin from cookie/header stickiness.</summary>
     public string? AffinityKey { get; }
+
+    /// <summary>Value hashed by consistent-hash selection. Null hashes the affinity key or cluster id.</summary>
+    public string? HashInput { get; }
 }
 
 /// <summary>Selects a healthy destination from a cluster.</summary>
@@ -82,4 +106,21 @@ public sealed class TransformRequestContext
     ///     destination bind identity (wire-only; logical Host unchanged).
     /// </summary>
     public bool UseDestinationHost { get; set; }
+
+    /// <summary>Set by <c>HttpMethodChange</c>. Null leaves the method unchanged.</summary>
+    public string? Method { get; set; }
+
+    /// <summary>Route values captured by a template. Empty unless the route captured any.</summary>
+    public Dictionary<string, string> RouteValues { get; } = new(StringComparer.Ordinal);
+
+    public string? OriginalHost { get; set; }
+
+    /// <summary>Subject of the inbound client certificate. Null when the listener did not capture one.</summary>
+    public string? ClientCertificateSubject { get; set; }
+
+    /// <summary>Request trailers. Null unless a trailer transform ran.</summary>
+    public Dictionary<string, string>? RequestTrailers { get; set; }
+
+    /// <summary>Response trailers. Null unless a trailer transform ran.</summary>
+    public Dictionary<string, string>? ResponseTrailers { get; set; }
 }

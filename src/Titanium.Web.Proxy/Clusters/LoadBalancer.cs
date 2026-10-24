@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Plugins;
@@ -12,9 +14,20 @@ namespace Titanium.Web.Proxy.Clusters;
 public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
 {
     private int _roundRobin;
+    private int _queueWaiters;
     private readonly DestinationHealthTracker _health;
-    private readonly Dictionary<string, TimeSpan> _latencies = new(StringComparer.Ordinal);
-    private readonly object _latencyGate = new();
+    private readonly ConcurrentDictionary<string, long> _latencyTicks = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, StrongBox<int>> _roundRobinByCluster = new(StringComparer.Ordinal);
+
+    /// <summary>Custom pickers. Null leaves <see cref="LoadBalanceAlgorithm"/> in charge.</summary>
+    public IReadOnlyList<ILoadBalancingPolicy>? Policies { get; set; }
+
+    /// <summary>Test seam for the wrap-safe round-robin counter.</summary>
+    internal int RoundRobinCounter
+    {
+        get => Volatile.Read(ref _roundRobin);
+        set => Volatile.Write(ref _roundRobin, value);
+    }
 
     public LoadBalancer(DestinationHealthTracker? health = null)
     {
@@ -26,18 +39,30 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
     public DestinationConfig? Select(ClusterConfig cluster, ImmutableClusterSnapshot snapshot)
         => Select(cluster, snapshot, default);
 
+    internal DestinationConfig? SelectFirstUntried(
+        ClusterConfig cluster,
+        ImmutableClusterSnapshot snapshot,
+        Func<string, bool> alreadyTried)
+    {
+        var eligible = Collect(cluster, snapshot, cluster.HealthCheck?.Passive);
+        for (var i = 0; i < eligible.Count; i++)
+        {
+            if (!alreadyTried(eligible[i].Id))
+            {
+                return eligible[i];
+            }
+        }
+
+        return null;
+    }
+
     public DestinationConfig? Select(ClusterConfig cluster, ImmutableClusterSnapshot snapshot, LoadBalanceContext context)
     {
-        var eligible = new List<DestinationConfig>();
-        foreach (var dest in cluster.Destinations)
+        var passive = cluster.HealthCheck?.Passive;
+        var eligible = Collect(cluster, snapshot, passive);
+        if (eligible.Count == 0 && cluster.Queue is { TimeoutMilliseconds: > 0, MaxLength: > 0 } queue)
         {
-            if (snapshot.DestinationStates.TryGetValue(dest.Id, out var state) &&
-                state is DestinationState.Unhealthy or DestinationState.Draining or DestinationState.Maintenance)
-            {
-                continue;
-            }
-
-            eligible.Add(dest);
+            eligible = WaitForCapacity(cluster, snapshot, passive, queue);
         }
 
         if (eligible.Count == 0)
@@ -47,20 +72,39 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
 
         if (!string.IsNullOrEmpty(context.AffinityKey))
         {
-            var affinityMatch = eligible.FirstOrDefault(dest =>
-                string.Equals(dest.Id, context.AffinityKey, StringComparison.Ordinal));
+            var affinityMatch = eligible.FirstOrDefault(dest => AffinityPins.Matches(cluster, dest, context.AffinityKey));
             if (affinityMatch is not null)
             {
                 return affinityMatch;
             }
         }
 
+        if (!string.IsNullOrEmpty(cluster.LoadBalancingPolicy) && Policies is { Count: > 0 } policies)
+        {
+            for (var i = 0; i < policies.Count; i++)
+            {
+                if (string.Equals(policies[i].Name, cluster.LoadBalancingPolicy, StringComparison.Ordinal))
+                {
+                    return policies[i].Pick(cluster, eligible, context);
+                }
+            }
+        }
+
+        if (eligible.Count == 1)
+        {
+            // Every algorithm picks the only candidate. Skip weight expansion and the per-cluster counter lookup.
+            return eligible[0];
+        }
+
         return cluster.Algorithm switch
         {
-            LoadBalanceAlgorithm.Random => SelectWeightedRandom(eligible),
+            LoadBalanceAlgorithm.Random => SelectWeightedRandom(eligible, cluster.SlowStartSeconds),
             LoadBalanceAlgorithm.LeastRequests => SelectLeastRequests(eligible),
             LoadBalanceAlgorithm.LeastTime => SelectLeastTime(eligible),
-            _ => SelectWeightedRoundRobin(eligible),
+            LoadBalanceAlgorithm.PowerOfTwoChoices => SelectPowerOfTwo(eligible),
+            LoadBalanceAlgorithm.FirstAlphabetical => SelectAlphabetical(eligible),
+            LoadBalanceAlgorithm.ConsistentHash => SelectHash(eligible, context.HashInput ?? context.AffinityKey ?? cluster.Id),
+            _ => SelectWeightedRoundRobin(cluster.Id, eligible, cluster.SlowStartSeconds),
         };
     }
 
@@ -68,39 +112,30 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
 
     public void RecordDestination(string destinationId, TimeSpan duration)
     {
-        lock (_latencyGate)
-        {
-            if (_latencies.TryGetValue(destinationId, out var prev))
-            {
-                // EWMA: 70% previous + 30% new
-                _latencies[destinationId] = TimeSpan.FromTicks((long)(prev.Ticks * 0.7 + duration.Ticks * 0.3));
-            }
-            else
-            {
-                _latencies[destinationId] = duration;
-            }
-        }
+        var sample = duration.Ticks;
+        _latencyTicks.AddOrUpdate(
+            destinationId,
+            sample,
+            (_, prev) => (long)(prev * 0.7 + sample * 0.3));
     }
 
-    public TimeSpan? GetDestinationLatency(string destinationId)
-    {
-        lock (_latencyGate)
-        {
-            return _latencies.TryGetValue(destinationId, out var t) ? t : null;
-        }
-    }
+    public TimeSpan? GetDestinationLatency(string destinationId) =>
+        _latencyTicks.TryGetValue(destinationId, out var ticks) ? TimeSpan.FromTicks(ticks) : null;
 
     private DestinationConfig SelectLeastRequests(List<DestinationConfig> eligible)
     {
         DestinationConfig best = eligible[0];
         var bestCount = _health.GetActiveRequests(best.Id);
+        var bestWeight = best.Weight < 1 ? 1 : best.Weight;
         for (var i = 1; i < eligible.Count; i++)
         {
             var count = _health.GetActiveRequests(eligible[i].Id);
-            if (count < bestCount)
+            var weight = eligible[i].Weight < 1 ? 1 : eligible[i].Weight;
+            if ((long)count * bestWeight < (long)bestCount * weight)
             {
                 best = eligible[i];
                 bestCount = count;
+                bestWeight = weight;
             }
         }
 
@@ -110,10 +145,10 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
     private DestinationConfig SelectLeastTime(List<DestinationConfig> eligible)
     {
         DestinationConfig best = eligible[0];
-        var bestLatency = GetDestinationLatency(best.Id) ?? TimeSpan.MaxValue;
+        var bestLatency = GetDestinationLatency(best.Id) ?? TimeSpan.Zero;
         for (var i = 1; i < eligible.Count; i++)
         {
-            var latency = GetDestinationLatency(eligible[i].Id) ?? TimeSpan.MaxValue;
+            var latency = GetDestinationLatency(eligible[i].Id) ?? TimeSpan.Zero;
             if (latency < bestLatency)
             {
                 best = eligible[i];
@@ -124,24 +159,161 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
         return best;
     }
 
-    private DestinationConfig SelectWeightedRoundRobin(List<DestinationConfig> eligible)
+    private DestinationConfig SelectPowerOfTwo(List<DestinationConfig> eligible)
     {
-        var expanded = ExpandByWeight(eligible);
-        return expanded[Math.Abs(Interlocked.Increment(ref _roundRobin)) % expanded.Count];
+        if (eligible.Count == 1)
+        {
+            return eligible[0];
+        }
+
+        var i = Random.Shared.Next(eligible.Count);
+        var j = Random.Shared.Next(eligible.Count - 1);
+        if (j >= i)
+        {
+            j++;
+        }
+
+        var left = _health.GetActiveRequests(eligible[i].Id);
+        var right = _health.GetActiveRequests(eligible[j].Id);
+        return left <= right ? eligible[i] : eligible[j];
     }
 
-    private static DestinationConfig SelectWeightedRandom(List<DestinationConfig> eligible)
+    private static DestinationConfig SelectAlphabetical(List<DestinationConfig> eligible)
     {
-        var expanded = ExpandByWeight(eligible);
+        var best = eligible[0];
+        for (var i = 1; i < eligible.Count; i++)
+        {
+            if (string.Compare(eligible[i].Address, best.Address, StringComparison.Ordinal) < 0)
+            {
+                best = eligible[i];
+            }
+        }
+
+        return best;
+    }
+
+    private static DestinationConfig SelectHash(List<DestinationConfig> eligible, string key)
+    {
+        var hash = 14695981039346656037ul;
+        foreach (var ch in key)
+        {
+            hash ^= ch;
+            hash *= 1099511628211ul;
+        }
+
+        var index = (int)(hash % (ulong)eligible.Count);
+        return eligible[index];
+    }
+
+    private DestinationConfig SelectWeightedRoundRobin(string clusterId, List<DestinationConfig> eligible, int clusterSlowStartSeconds)
+    {
+        var expanded = ExpandByWeight(eligible, clusterSlowStartSeconds);
+        var box = _roundRobinByCluster.GetOrAdd(clusterId, _ => new StrongBox<int>(Volatile.Read(ref _roundRobin)));
+        var n = (uint)Interlocked.Increment(ref box.Value);
+        return expanded[(int)(n % (uint)expanded.Count)];
+    }
+
+    private DestinationConfig SelectWeightedRandom(List<DestinationConfig> eligible, int clusterSlowStartSeconds)
+    {
+        var expanded = ExpandByWeight(eligible, clusterSlowStartSeconds);
         return expanded[Random.Shared.Next(expanded.Count)];
     }
 
-    private static List<DestinationConfig> ExpandByWeight(List<DestinationConfig> eligible)
+    private List<DestinationConfig> Collect(ClusterConfig cluster, ImmutableClusterSnapshot snapshot, PassiveHealthConfig? passive)
+    {
+        var eligible = new List<DestinationConfig>();
+        var tiered = false;
+        foreach (var dest in cluster.Destinations)
+        {
+            snapshot.DestinationStates.TryGetValue(dest.Id, out var state);
+            if (!Accept(dest, state, passive))
+            {
+                continue;
+            }
+
+            if (dest.Priority != 0 || dest.Backup)
+            {
+                tiered = true;
+            }
+
+            eligible.Add(dest);
+        }
+
+        if (!tiered || eligible.Count <= 1)
+        {
+            return eligible;
+        }
+
+        var best = int.MaxValue;
+        for (var i = 0; i < eligible.Count; i++)
+        {
+            var rank = eligible[i].Backup ? int.MaxValue : eligible[i].Priority;
+            if (rank < best)
+            {
+                best = rank;
+            }
+        }
+
+        eligible.RemoveAll(dest => (dest.Backup ? int.MaxValue : dest.Priority) != best);
+        return eligible;
+    }
+
+    private bool Accept(DestinationConfig dest, DestinationState state, PassiveHealthConfig? passive)
+    {
+        if (state is DestinationState.Draining or DestinationState.Maintenance)
+        {
+            return false;
+        }
+
+        if (state == DestinationState.Unhealthy &&
+            !(passive is { Enabled: true } && _health.IsTrialDue(dest.Id, passive)))
+        {
+            return false;
+        }
+
+        return dest.MaxConcurrentRequests is not int cap || _health.GetActiveRequests(dest.Id) < cap;
+    }
+
+    private List<DestinationConfig> WaitForCapacity(
+        ClusterConfig cluster,
+        ImmutableClusterSnapshot snapshot,
+        PassiveHealthConfig? passive,
+        QueueConfig queue)
+    {
+        var waiters = Interlocked.Increment(ref _queueWaiters);
+        try
+        {
+            if (waiters > queue.MaxLength)
+            {
+                return new List<DestinationConfig>();
+            }
+
+            var until = Environment.TickCount64 + queue.TimeoutMilliseconds;
+            while (Environment.TickCount64 < until)
+            {
+                var ready = Collect(cluster, snapshot, passive);
+                if (ready.Count > 0)
+                {
+                    return ready;
+                }
+
+                Thread.Sleep(1);
+            }
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _queueWaiters);
+        }
+
+        return new List<DestinationConfig>();
+    }
+
+    private List<DestinationConfig> ExpandByWeight(List<DestinationConfig> eligible, int clusterSlowStartSeconds)
     {
         var expanded = new List<DestinationConfig>();
         foreach (var dest in eligible)
         {
-            var weight = dest.Weight < 1 ? 1 : dest.Weight;
+            var weight = _health.EffectiveWeight(dest, clusterSlowStartSeconds);
             for (var i = 0; i < weight; i++)
             {
                 expanded.Add(dest);

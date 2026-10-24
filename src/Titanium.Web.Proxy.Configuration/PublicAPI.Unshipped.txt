@@ -1,5 +1,6 @@
 #nullable enable
 static Titanium.Web.Proxy.Configuration.Parsers.HttpServerConfigReader.Parse(string! text) -> Titanium.Web.Proxy.Configuration.Models.TwpConfig!
+static Titanium.Web.Proxy.Configuration.Parsers.HttpServerConfigReader.Parse(string! text, System.Collections.Generic.ICollection<string!>? warnings) -> Titanium.Web.Proxy.Configuration.Models.TwpConfig!
 static Titanium.Web.Proxy.Configuration.Parsers.HttpServerConfigReader.ParseFile(string! path) -> Titanium.Web.Proxy.Configuration.Models.TwpConfig!
 static Titanium.Web.Proxy.Configuration.Parsers.JsonReverseProxyDocument.Parse(string! json) -> Titanium.Web.Proxy.Configuration.Models.TwpConfig!
 static Titanium.Web.Proxy.Configuration.Parsers.JsonReverseProxyDocument.ParseFile(string! path) -> Titanium.Web.Proxy.Configuration.Models.TwpConfig!
@@ -343,6 +344,8 @@ Titanium.Web.Proxy.Configuration.Models.TwpConfig.Plus.get -> Titanium.Web.Proxy
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.Plus.set -> void
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.Routes.get -> System.Collections.Generic.IList<Titanium.Web.Proxy.Abstractions.Routing.RouteConfig!>!
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.Routes.set -> void
+Titanium.Web.Proxy.Configuration.Models.TwpConfig.Policies.get -> System.Collections.Generic.IList<Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig!>!
+Titanium.Web.Proxy.Configuration.Models.TwpConfig.Policies.set -> void
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.SchemaVersion.get -> string
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.SchemaVersion.get -> string?
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.SchemaVersion.set -> void
@@ -410,3 +413,41 @@ Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableDecryptFailureBypass.
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableDecryptFailureBypass.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.ProxyAuthenticationRealm.get -> string?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.ProxyAuthenticationRealm.set -> void
+Titanium.Web.Proxy.Configuration.Models.RequestIdConfig
+Titanium.Web.Proxy.Configuration.Models.RequestIdConfig.Enabled.get -> bool
+Titanium.Web.Proxy.Configuration.Models.RequestIdConfig.Enabled.set -> void
+Titanium.Web.Proxy.Configuration.Models.RequestIdConfig.Header.get -> string!
+Titanium.Web.Proxy.Configuration.Models.RequestIdConfig.Header.set -> void
+Titanium.Web.Proxy.Configuration.Models.RequestIdConfig.RequestIdConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.RequestId.get -> Titanium.Web.Proxy.Configuration.Models.RequestIdConfig?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.RequestId.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.Tracing.get -> Titanium.Web.Proxy.Configuration.Models.TracingConfig?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.Tracing.set -> void
+Titanium.Web.Proxy.Configuration.Models.TracingConfig
+Titanium.Web.Proxy.Configuration.Models.TracingConfig.Enabled.get -> bool
+Titanium.Web.Proxy.Configuration.Models.TracingConfig.Enabled.set -> void
+Titanium.Web.Proxy.Configuration.Models.TracingConfig.Propagate.get -> bool
+Titanium.Web.Proxy.Configuration.Models.TracingConfig.Propagate.set -> void
+Titanium.Web.Proxy.Configuration.Models.TracingConfig.TracingConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ForwardedHeaders.get -> Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ForwardedHeaders.set -> void
+Titanium.Web.Proxy.Configuration.Models.CertificateFileConfig.Path.get -> string?
+Titanium.Web.Proxy.Configuration.Models.CertificateFileConfig.Path.set -> void
+Titanium.Web.Proxy.Configuration.Models.CertificateFileConfig
+Titanium.Web.Proxy.Configuration.Models.CertificateFileConfig.CertificateFileConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.CertificateFileConfig.Password.get -> string?
+Titanium.Web.Proxy.Configuration.Models.CertificateFileConfig.Password.set -> void
+Titanium.Web.Proxy.Configuration.Models.CertificateFileConfig.Hosts.get -> System.Collections.Generic.IList<string!>!
+Titanium.Web.Proxy.Configuration.Models.CertificateFileConfig.Hosts.set -> void
+Titanium.Web.Proxy.Configuration.Models.CertificatesConfig.Items.get -> System.Collections.Generic.IList<Titanium.Web.Proxy.Configuration.Models.CertificateFileConfig!>!
+Titanium.Web.Proxy.Configuration.Models.CertificatesConfig.Items.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AcceptProxyProtocol.get -> bool
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AcceptProxyProtocol.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Passthrough.get -> bool
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Passthrough.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ClientCertificateMode.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ClientCertificateMode.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TrustedProxyProtocolSources.get -> System.Collections.Generic.IList<string!>!
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TrustedProxyProtocolSources.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.DrainTimeoutSeconds.get -> int?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.DrainTimeoutSeconds.set -> void

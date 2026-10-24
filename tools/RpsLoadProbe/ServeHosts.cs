@@ -216,6 +216,9 @@ internal static class ServeProxyHost
             case ProbeMode.TwpCliLoggingHttp1:
             case ProbeMode.TwpCliLbLeastTimeHttp1:
             case ProbeMode.TwpCliDialectTwpHttp1:
+            case ProbeMode.TwpCliPoliciesHttp1:
+            case ProbeMode.TwpCliMirrorHttp1:
+            case ProbeMode.TwpCliClusterClientHttp1:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
                 var kind = mode switch
@@ -240,6 +243,9 @@ internal static class ServeProxyHost
                     ProbeMode.TwpCliLoggingHttp1 => TitaniumCliHost.CliArmKind.Logging,
                     ProbeMode.TwpCliLbLeastTimeHttp1 => TitaniumCliHost.CliArmKind.LbLeastTime,
                     ProbeMode.TwpCliDialectTwpHttp1 => TitaniumCliHost.CliArmKind.DialectTwp,
+                    ProbeMode.TwpCliPoliciesHttp1 => TitaniumCliHost.CliArmKind.Policies,
+                    ProbeMode.TwpCliMirrorHttp1 => TitaniumCliHost.CliArmKind.Mirror,
+                    ProbeMode.TwpCliClusterClientHttp1 => TitaniumCliHost.CliArmKind.ClusterClient,
                     _ => TitaniumCliHost.CliArmKind.ForwardHost
                 };
                 var cli = await TitaniumCliHost.StartAsync(originHttpPort, kind, cancellationToken);
@@ -1268,6 +1274,9 @@ internal static class ServeProxyHost
         ProbeMode.TwpCliLoggingHttp1 => "twp-cli-logging-http1",
         ProbeMode.TwpCliLbLeastTimeHttp1 => "twp-cli-lb-leasttime-http1",
         ProbeMode.TwpCliDialectTwpHttp1 => "twp-cli-dialect-twp-http1",
+        ProbeMode.TwpCliPoliciesHttp1 => "twp-cli-policies-http1",
+        ProbeMode.TwpCliMirrorHttp1 => "twp-cli-mirror-http1",
+        ProbeMode.TwpCliClusterClientHttp1 => "twp-cli-cluster-client-http1",
         ProbeMode.OriginDirect => "origin-direct",
         ProbeMode.ExplicitPoolSweep => "explicit-pool-sweep",
         _ => mode.ToString()

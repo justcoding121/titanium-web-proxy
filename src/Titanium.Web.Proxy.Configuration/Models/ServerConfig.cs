@@ -9,6 +9,15 @@ public sealed class ServerConfig
     /// <summary>Balanced, LegacyCompatible, or PublicFacing. Applied before other overlays.</summary>
     public string? Profile { get; set; }
 
+    /// <summary>Off unless <see cref="RequestIdConfig.Enabled"/> is true.</summary>
+    public RequestIdConfig? RequestId { get; set; }
+
+    /// <summary>Off unless <see cref="TracingConfig.Enabled"/> is true.</summary>
+    public TracingConfig? Tracing { get; set; }
+
+    /// <summary>Null leaves X-Forwarded-* untouched.</summary>
+    public Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig? ForwardedHeaders { get; set; }
+
     public bool? EnableHttp2 { get; set; }
 
     public bool? EnableHttp3 { get; set; }
@@ -62,6 +71,9 @@ public sealed class ServerConfig
 
     /// <summary>DNS resolver for HTTPS/SVCB discovery, e.g. <c>8.8.8.8:53</c>.</summary>
     public string? DnsServerEndPoint { get; set; }
+
+    /// <summary>Seconds to wait for in-flight clients on SIGTERM, SIGINT, or Ctrl+C. Default is 10.</summary>
+    public int? DrainTimeoutSeconds { get; set; }
 
     public TimeoutsConfig? Timeouts { get; set; }
 
@@ -329,4 +341,18 @@ public sealed class CertificateManagerConfig
     public bool? SaveFakeCertificates { get; set; }
 
     public bool? DisableWildCardCertificates { get; set; }
+}
+
+/// <summary>Request id header. Disabled unless <see cref="Enabled"/> is true.</summary>
+public sealed class RequestIdConfig
+{
+    public bool Enabled { get; set; }
+    public string Header { get; set; } = "X-Request-Id";
+}
+
+/// <summary>Server spans. Disabled unless <see cref="Enabled"/> is true.</summary>
+public sealed class TracingConfig
+{
+    public bool Enabled { get; set; }
+    public bool Propagate { get; set; }
 }

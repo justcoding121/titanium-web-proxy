@@ -138,7 +138,8 @@ internal class TcpConnectionFactory : IDisposable
         bool isHttps, List<SslApplicationProtocol>? applicationProtocols,
         IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
         string? connectHost = null, int? connectPort = null,
-        IPEndPoint? upStreamEndPointIPv4 = null, IPEndPoint? upStreamEndPointIPv6 = null)
+        IPEndPoint? upStreamEndPointIPv4 = null, IPEndPoint? upStreamEndPointIPv6 = null,
+        string? clusterKey = null)
     {
         // http version is ignored since its an application level decision b/w HTTP 1.0/1.1
         // also when doing connect request MS Edge browser sends http 1.0 but uses 1.1 after server sends 1.1 its response.
@@ -179,6 +180,12 @@ internal class TcpConnectionFactory : IDisposable
                 cacheKeyBuilder.Append("-next-");
                 AppendExternalProxyToCacheKey(cacheKeyBuilder, externalProxy.NextHop);
             }
+        }
+
+        if (!string.IsNullOrEmpty(clusterKey))
+        {
+            cacheKeyBuilder.Append("-cluster-");
+            cacheKeyBuilder.Append(clusterKey);
         }
 
         return cacheKeyBuilder.ToString();
@@ -327,7 +334,8 @@ internal class TcpConnectionFactory : IDisposable
         var (connectHost, connectPort) = ResolveConnectTarget(session);
 
         return GetConnectionCacheKey(originHost, originPort, isHttps, applicationProtocols, upStreamEndPoint,
-            upStreamProxy, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
+            upStreamProxy, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6,
+            session.ClusterConnectionKey);
     }
 
     private static (IPEndPoint? Generic, IPEndPoint? IPv4, IPEndPoint? IPv6) ResolveConfiguredUpStreamEndPoints(
@@ -491,7 +499,7 @@ internal class TcpConnectionFactory : IDisposable
 
             cacheKey = GetConnectionCacheKey(remoteHostName, remotePort,
                 isHttps, applicationProtocols, upStreamEndPoint, externalProxy, connectHost, connectPort,
-                resolvedV4, resolvedV6);
+                resolvedV4, resolvedV6, sessionArgs.ClusterConnectionKey);
         }
 
         upStreamEndPointIPv4 = resolvedV4;
@@ -677,7 +685,27 @@ internal class TcpConnectionFactory : IDisposable
                 port = externalProxy.Port;
             }
 
-            var ipAddresses = await Dns.GetHostAddressesAsync(hostname, cancellationToken);
+            // Only a configured destination may name a socket path. A host taken from the client's own
+            // request target must never reach a local unix socket.
+            if (!string.IsNullOrEmpty(connectHost) &&
+                hostname.StartsWith("unix:", StringComparison.Ordinal) && externalProxy == null)
+            {
+                return await ConnectUnixDestinationAsync(
+                    proxyServer, hostname, remoteHostName, remotePort, httpVersion, cacheKey, sessionArgs,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            IPAddress[] ipAddresses;
+            if (sessionArgs?.UpstreamPinnedAddress is { } pinned && externalProxy == null)
+            {
+                ipAddresses = [pinned];
+                timing?.MarkDnsResolved();
+            }
+            else
+            {
+                ipAddresses = await Dns.GetHostAddressesAsync(hostname, cancellationToken);
+            }
+
             if (ipAddresses == null || ipAddresses.Length == 0)
             {
                 if (prefetch) return null;
@@ -1054,7 +1082,8 @@ internal class TcpConnectionFactory : IDisposable
                     // HttpServerStream tears down the chain.
                     var sslStream = new SslStream(stream, leaveInnerStreamOpen: false,
                         (sender, certificate, chain, sslPolicyErrors) =>
-                            proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
+                            sessionArgs?.UpstreamHttpClient?.AcceptAnyServerCertificate == true ||
+                        proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
                                 sslPolicyErrors),
                         (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
                         {
@@ -1070,7 +1099,7 @@ internal class TcpConnectionFactory : IDisposable
                         ApplicationProtocols = applicationProtocols,
                         TargetHost = remoteHostName,
                         ClientCertificates = null,
-                        EnabledSslProtocols = enabledSslProtocols,
+                        EnabledSslProtocols = ClusterSslProtocols(sessionArgs, enabledSslProtocols),
                         CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
                     };
 
@@ -1087,6 +1116,7 @@ internal class TcpConnectionFactory : IDisposable
             {
                 var sslStream = new SslStream(networkStream, leaveInnerStreamOpen: false,
                     (sender, certificate, chain, sslPolicyErrors) =>
+                        sessionArgs?.UpstreamHttpClient?.AcceptAnyServerCertificate == true ||
                         proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
                             sslPolicyErrors),
                     (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
@@ -1103,7 +1133,7 @@ internal class TcpConnectionFactory : IDisposable
                     ApplicationProtocols = applicationProtocols,
                     TargetHost = remoteHostName,
                     ClientCertificates = null,
-                    EnabledSslProtocols = enabledSslProtocols,
+                    EnabledSslProtocols = ClusterSslProtocols(sessionArgs, enabledSslProtocols),
                     CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
                 };
 
@@ -1198,7 +1228,8 @@ internal class TcpConnectionFactory : IDisposable
             IsWinAuthenticated = upstreamProxyWinAuthenticated,
             UsedClientCertificate = usedClientCertificate,
             Timing = timing,
-            PoolSizeLimit = sessionArgs?.ProxyEndPoint?.MaxCachedConnections
+            PoolSizeLimit = sessionArgs?.UpstreamHttpClient?.MaxConnectionsPerServer
+                            ?? sessionArgs?.ProxyEndPoint?.MaxCachedConnections
         };
     }
 
@@ -1711,6 +1742,53 @@ internal class TcpConnectionFactory : IDisposable
         }
 
         disposed = true;
+    }
+
+    private static SslProtocols ClusterSslProtocols(SessionEventArgsBase? session, SslProtocols fallback)
+    {
+        var text = session?.UpstreamHttpClient?.SslProtocols;
+        if (string.IsNullOrEmpty(text) || !Enum.TryParse(text, out SslProtocols parsed) || parsed == SslProtocols.None)
+        {
+            return fallback;
+        }
+
+        return parsed;
+    }
+
+    private async Task<TcpServerConnection?> ConnectUnixDestinationAsync(
+        ProxyServer proxyServer,
+        string hostname,
+        string remoteHostName,
+        int remotePort,
+        Version httpVersion,
+        string cacheKey,
+        SessionEventArgsBase? sessionArgs,
+        CancellationToken cancellationToken)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("Unix domain destinations are not supported on Windows.");
+        }
+
+        var path = hostname[5..];
+        var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        try
+        {
+            await socket.ConnectAsync(new UnixDomainSocketEndPoint(path), cancellationToken).ConfigureAwait(false);
+            var stream = new HttpServerStream(
+                proxyServer, new NetworkStream(socket, ownsSocket: true), proxyServer.BufferPool, cancellationToken);
+            return new TcpServerConnection(
+                proxyServer, socket, stream, remoteHostName, remotePort, false, default, httpVersion, null, null, cacheKey)
+            {
+                PoolSizeLimit = sessionArgs?.UpstreamHttpClient?.MaxConnectionsPerServer
+                                ?? sessionArgs?.ProxyEndPoint?.MaxCachedConnections,
+            };
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
     }
 
     private static class ProxySocketConnectionTaskFactory

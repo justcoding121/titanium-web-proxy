@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Authentication;
 using Titanium.Web.Proxy.Abstractions.Clusters;
+using Titanium.Web.Proxy.Abstractions.Network;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Configuration.Models;
 
@@ -34,7 +35,8 @@ public static class TwpConfigValidator
         ArgumentNullException.ThrowIfNull(config);
         var errors = new List<string>();
         var clusterIds = ValidateClusters(config.Clusters, errors);
-        ValidateRoutes(config.Routes, clusterIds, errors);
+        var policyNames = ValidatePolicies(config.Policies, errors);
+        ValidateRoutes(config.Routes, clusterIds, policyNames, errors);
         ValidateListeners(config.Listeners, errors);
         ValidateServer(config.Server, errors);
         return errors;
@@ -43,6 +45,7 @@ public static class TwpConfigValidator
     private static HashSet<string> ValidateClusters(IEnumerable<ClusterConfig> clusters, List<string> errors)
     {
         var clusterIds = new HashSet<string>(StringComparer.Ordinal);
+        var allDestinationIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var cluster in clusters)
         {
             if (string.IsNullOrWhiteSpace(cluster.Id))
@@ -59,25 +62,169 @@ public static class TwpConfigValidator
             if (cluster.Destinations is null || cluster.Destinations.Count == 0)
             {
                 errors.Add($"Cluster '{cluster.Id}' has no destinations.");
+                continue;
+            }
+
+            var destinationIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var dest in cluster.Destinations)
+            {
+                if (string.IsNullOrWhiteSpace(dest.Id))
+                {
+                    errors.Add($"Cluster '{cluster.Id}' has a destination with an empty id.");
+                }
+                else if (!destinationIds.Add(dest.Id) || !allDestinationIds.Add(dest.Id))
+                {
+                    errors.Add($"Duplicate destination id '{dest.Id}'.");
+                }
+
+                if (string.IsNullOrWhiteSpace(dest.Address))
+                {
+                    errors.Add($"Destination '{dest.Id}' has an empty address.");
+                }
+                else if (dest.Address.StartsWith("unix:", StringComparison.Ordinal) && OperatingSystem.IsWindows())
+                {
+                    errors.Add($"Destination '{dest.Id}' uses a unix socket, which is not supported on Windows.");
+                }
+
+                if (dest.DnsRefreshSeconds < 0)
+                {
+                    errors.Add($"Destination '{dest.Id}' dnsRefreshSeconds must be >= 0.");
+                }
+
+                if (dest.Port is < 0 or > 65535)
+                {
+                    errors.Add($"Destination '{dest.Id}' port {dest.Port} is out of range.");
+                }
+
+                if (dest.Weight < 1)
+                {
+                    errors.Add($"Destination '{dest.Id}' weight must be >= 1.");
+                }
             }
         }
 
         return clusterIds;
     }
 
+    private static readonly HashSet<string> KnownPolicyKinds = new(StringComparer.Ordinal)
+    {
+        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", "rateLimit", "connectionLimit", "ipAllowDeny",
+    };
+
+    /// <summary>
+    /// A policy that is misspelled, incomplete, or never defined would be skipped at run time, which turns a
+    /// protection into a no-op. Every such case is a load-time error instead.
+    /// </summary>
+    private static HashSet<string> ValidatePolicies(IEnumerable<RoutePolicyConfig>? policies, List<string> errors)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        if (policies is null)
+        {
+            return names;
+        }
+
+        foreach (var policy in policies)
+        {
+            if (string.IsNullOrWhiteSpace(policy.Name))
+            {
+                errors.Add("Policy is missing Name.");
+                continue;
+            }
+
+            if (!names.Add(policy.Name))
+            {
+                errors.Add($"Duplicate policy name '{policy.Name}'.");
+            }
+
+            if (!KnownPolicyKinds.Contains(policy.Kind ?? string.Empty))
+            {
+                errors.Add($"Policy '{policy.Name}' has unknown kind '{policy.Kind}'.");
+                continue;
+            }
+
+            ValidatePolicyParameters(policy, errors);
+        }
+
+        return names;
+    }
+
+    private static void ValidatePolicyParameters(RoutePolicyConfig policy, List<string> errors)
+    {
+        var name = policy.Name;
+        switch (policy.Kind)
+        {
+            case "maxRequestBodySize" when policy.MaxRequestBodyBytes is not > 0:
+                errors.Add($"Policy '{name}' (maxRequestBodySize) needs maxRequestBodyBytes > 0.");
+                break;
+            case "requireHeader" when string.IsNullOrWhiteSpace(policy.HeaderName):
+                errors.Add($"Policy '{name}' (requireHeader) needs headerName.");
+                break;
+            case "apiKey" when string.IsNullOrWhiteSpace(policy.HeaderName) || string.IsNullOrEmpty(policy.HeaderValue):
+                errors.Add($"Policy '{name}' (apiKey) needs headerName and headerValue.");
+                break;
+            case "timeout" when policy.TimeoutSeconds is not > 0:
+                errors.Add($"Policy '{name}' (timeout) needs timeoutSeconds > 0.");
+                break;
+            case "rateLimit" or "connectionLimit":
+                if (policy.Limit is < 1)
+                {
+                    errors.Add($"Policy '{name}' limit must be >= 1.");
+                }
+
+                if (policy.WindowSeconds is < 1)
+                {
+                    errors.Add($"Policy '{name}' windowSeconds must be >= 1.");
+                }
+
+                break;
+            case "ipAllowDeny":
+                if (string.IsNullOrWhiteSpace(policy.Allow) && string.IsNullOrWhiteSpace(policy.Deny))
+                {
+                    errors.Add($"Policy '{name}' (ipAllowDeny) needs allow or deny.");
+                }
+
+                ValidatePrefixList(name, "allow", policy.Allow, errors);
+                ValidatePrefixList(name, "deny", policy.Deny, errors);
+                break;
+        }
+    }
+
+    private static void ValidatePrefixList(string name, string field, string? csv, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(csv))
+        {
+            return;
+        }
+
+        foreach (var part in csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!CidrPrefix.TryParse(part, out _))
+            {
+                errors.Add($"Policy '{name}' {field} entry '{part}' is not an address or CIDR prefix.");
+            }
+        }
+    }
+
     private static void ValidateRoutes(
         IEnumerable<RouteConfig> routes,
         HashSet<string> clusterIds,
+        HashSet<string> policyNames,
         List<string> errors)
     {
+        var routeIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var route in routes)
         {
             if (string.IsNullOrWhiteSpace(route.Id))
             {
                 errors.Add("Route is missing Id.");
             }
+            else if (!routeIds.Add(route.Id))
+            {
+                errors.Add($"Duplicate route id '{route.Id}'.");
+            }
 
-            if (string.IsNullOrWhiteSpace(route.ClusterId) || !clusterIds.Contains(route.ClusterId))
+            if (route.Redirect is null && route.DirectResponse is null &&
+                (string.IsNullOrWhiteSpace(route.ClusterId) || !clusterIds.Contains(route.ClusterId)))
             {
                 errors.Add($"Route '{route.Id}' references unknown cluster '{route.ClusterId}'.");
             }
@@ -85,6 +232,64 @@ public static class TwpConfigValidator
             if (route.Match is null)
             {
                 errors.Add($"Route '{route.Id}' is missing Match.");
+            }
+            else if (route.Match.PathKind == PathMatchKind.Template)
+            {
+                ValidateTemplate(route, errors);
+            }
+            else if (route.Match.PathKind == PathMatchKind.Regex && !string.IsNullOrEmpty(route.Match.Path) &&
+                     !CompilesAsRegex(route.Match.Path))
+            {
+                errors.Add($"Route '{route.Id}' has a path regex that does not compile.");
+            }
+
+            if (route.Policies is not null)
+            {
+                foreach (var policyName in route.Policies)
+                {
+                    if (!policyNames.Contains(policyName))
+                    {
+                        errors.Add($"Route '{route.Id}' references unknown policy '{policyName}'.");
+                    }
+                }
+            }
+
+            if (route.Mirror is { } mirror)
+            {
+                if (!clusterIds.Contains(mirror.ClusterId))
+                {
+                    errors.Add($"Route '{route.Id}' mirrors to unknown cluster '{mirror.ClusterId}'.");
+                }
+
+                if (mirror.SamplePercent is < 0 or > 100)
+                {
+                    errors.Add($"Route '{route.Id}' mirror samplePercent must be 0-100.");
+                }
+            }
+
+            if (route.Redirect is { Status: < 300 or > 399 } badRedirect)
+            {
+                errors.Add($"Route '{route.Id}' redirect status {badRedirect.Status} is not a 3xx code.");
+            }
+
+            if (route.Transforms is not null)
+            {
+                foreach (var transform in route.Transforms)
+                {
+                    if (!TransformKinds.TryGetRequiredParameters(transform.Kind, out var required))
+                    {
+                        errors.Add($"Route '{route.Id}' has unknown transform kind '{transform.Kind}'.");
+                        continue;
+                    }
+
+                    foreach (var name in required)
+                    {
+                        if (transform.Parameters is null || !transform.Parameters.ContainsKey(name))
+                        {
+                            errors.Add($"Route '{route.Id}' transform '{transform.Kind}' requires parameter '{name}'.");
+                        }
+                    }
+                }
             }
 
             var limits = route.Limits;
@@ -132,6 +337,78 @@ public static class TwpConfigValidator
             if (listener.IdleTimeoutSeconds is < 0)
             {
                 errors.Add($"Listener port {listener.Port}: idleTimeoutSeconds must be >= 0.");
+            }
+
+            if (listener.TrustedProxyProtocolSources is not { Count: > 0 } sources)
+            {
+                continue;
+            }
+
+            foreach (var source in sources)
+            {
+                if (!CidrPrefix.TryParse(source, out _))
+                {
+                    errors.Add($"Listener port {listener.Port}: trustedProxyProtocolSources '{source}' is not a CIDR prefix.");
+                }
+            }
+        }
+    }
+
+    /// <summary>Same engine options the matcher uses, so what loads is what matches.</summary>
+    private static bool CompilesAsRegex(string? pattern)
+    {
+        if (string.IsNullOrEmpty(pattern))
+        {
+            return false;
+        }
+
+        try
+        {
+            _ = new System.Text.RegularExpressions.Regex(
+                pattern,
+                System.Text.RegularExpressions.RegexOptions.NonBacktracking |
+                System.Text.RegularExpressions.RegexOptions.CultureInvariant,
+                TimeSpan.FromMilliseconds(250));
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    private static void ValidateTemplate(RouteConfig route, List<string> errors)
+    {
+        var path = route.Match?.Path;
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+
+        foreach (var part in path.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part.Length < 2 || part[0] != '{' || part[^1] != '}')
+            {
+                continue;
+            }
+
+            var inner = part[1..^1];
+            var colon = inner.IndexOf(':');
+            if (colon < 0 || colon == inner.Length - 1)
+            {
+                continue;
+            }
+
+            var constraint = inner[(colon + 1)..];
+            var known = constraint is "int" or "guid" or "alpha" ||
+                        (constraint.StartsWith("regex(", StringComparison.Ordinal) && constraint.EndsWith(')'));
+            if (!known)
+            {
+                errors.Add($"Route '{route.Id}' has unknown template constraint '{constraint}'.");
+            }
+            else if (constraint.StartsWith("regex(", StringComparison.Ordinal) && !CompilesAsRegex(constraint[6..^1]))
+            {
+                errors.Add($"Route '{route.Id}' template constraint '{constraint}' does not compile.");
             }
         }
     }
@@ -506,6 +783,15 @@ public static class TwpConfigValidator
             warnings.Add("server.limits.maxEncodedBodyBytes is reserved and not enforced. The enforced whole-body budget is maxBufferedBodyBytes.");
         if (limits?.MaxDecodedBodyBytes is not null)
             warnings.Add("server.limits.maxDecodedBodyBytes is reserved and not enforced. The enforced whole-body budget is maxBufferedBodyBytes.");
+        foreach (var listener in config.Listeners)
+        {
+            if (listener.AcceptProxyProtocol && listener.TrustedProxyProtocolSources is not { Count: > 0 })
+            {
+                warnings.Add(
+                    $"Listener port {listener.Port}: acceptProxyProtocol is set with no trustedProxyProtocolSources. Any peer may send a preamble.");
+            }
+        }
+
         return warnings;
     }
 }

@@ -107,6 +107,88 @@ public class CertificateBootstrapTests
         }
     }
 
+    [TestMethod]
+    public void ApplySniItems_BindsHostsOnDecryptingListeners()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-sni-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var pfx = Path.Combine(dir, "leaf.pfx");
+        try
+        {
+            WritePfx(pfx, "CN=sni.example");
+            using var proxy = new ProxyServer(false, false, false);
+            var decrypting = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true);
+            var clear = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false);
+            proxy.AddEndPoint(decrypting);
+            proxy.AddEndPoint(clear);
+            CertificateBootstrap.ApplySniItems(proxy, new CertificatesConfig
+            {
+                Items =
+                [
+                    new CertificateFileConfig
+                    {
+                        Path = pfx,
+                        Password = "secret",
+                        Hosts = ["sni.example"],
+                    },
+                ],
+            });
+            Assert.IsNotNull(decrypting.SniCertificates);
+            Assert.AreEqual(1, decrypting.SniCertificates!.Count);
+            Assert.AreEqual("sni.example", decrypting.SniCertificates[0].Hosts[0]);
+            Assert.IsNull(clear.SniCertificates);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public void WatchCertificateFiles_RebuildsSniBindingsAfterTheFileChanges()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-watch-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var pfx = Path.Combine(dir, "leaf.pfx");
+        try
+        {
+            WritePfx(pfx, "CN=before.example");
+            using var proxy = new ProxyServer(false, false, false);
+            var ep = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true);
+            proxy.AddEndPoint(ep);
+            var certificates = new CertificatesConfig
+            {
+                Items = [new CertificateFileConfig { Path = pfx, Password = "secret", Hosts = ["app.example"] }],
+            };
+            using var watch = CertificateBootstrap.WatchCertificateFiles(proxy, certificates);
+            Assert.IsNotNull(watch);
+            CertificateBootstrap.ApplySniItems(proxy, certificates);
+            Assert.AreEqual("CN=before.example", ep.SniCertificates![0].Certificate.Subject);
+
+            WritePfx(pfx, "CN=after.example");
+            var saw = false;
+            for (var i = 0; i < 30 && !saw; i++)
+            {
+                Thread.Sleep(100);
+                saw = ep.SniCertificates![0].Certificate.Subject == "CN=after.example";
+            }
+
+            Assert.IsTrue(saw);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    private static void WritePfx(string path, string subject)
+    {
+        using var rsa = RSA.Create(2048);
+        var req = new CertificateRequest(subject, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        using var cert = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+        File.WriteAllBytes(path, cert.Export(X509ContentType.Pfx, "secret"));
+    }
+
     private static void WriteSelfSignedPem(string certPath, string keyPath)
     {
         using var rsa = RSA.Create(2048);

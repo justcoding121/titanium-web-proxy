@@ -18,6 +18,9 @@ internal class RetryPolicy<T> where T : Exception
     private readonly int retries;
     private readonly TcpConnectionFactory tcpConnectionFactory;
 
+    /// <summary>Invoked after a failed attempt and before the next dial. False cancels the retry.</summary>
+    internal Func<bool>? BeforeRetry { get; set; }
+
     internal RetryPolicy(int retries, TcpConnectionFactory tcpConnectionFactory)
     {
         this.retries = retries;
@@ -59,6 +62,8 @@ internal class RetryPolicy<T> where T : Exception
             attempts--;
 
             if (attempts < 0 || exception == null || !(exception is T)) break;
+
+            if (BeforeRetry is not null && !BeforeRetry()) break;
 
             exception = null;
             ProxyMetrics.PoolRetried();
