@@ -13,8 +13,9 @@ internal enum DestinationResolution
 {
     NoRoute,
     Resolved,
-    RouteWithoutDestination,
-}
+        RouteWithoutDestination,
+        Terminal,
+    }
 
 /// <summary>Resolves per-request / per-stream upstream destination from ReverseProxy options.</summary>
 internal static class DestinationResolver
@@ -54,6 +55,12 @@ internal static class DestinationResolver
         if (route is null)
         {
             return DestinationResolution.NoRoute;
+        }
+
+        if (route.Redirect is not null || route.DirectResponse is not null)
+        {
+            destination = null;
+            return DestinationResolution.Terminal;
         }
 
         var manager = options.ClusterManager;

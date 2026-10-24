@@ -390,11 +390,19 @@ public partial class ProxyServer
                         // Mitm COW baseline is still armed so append-only sets stay on terminate-lite.
                         // Taking the baseline before TryApply made MutationCount diverge and forced
                         // the full session path (~0.75× CLI reverse for intercept-http1).
-                        if (Routing.ReverseProxySessionDispatch.Apply(this, args) ==
-                            Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination)
+                        var routeDispatch = Routing.ReverseProxySessionDispatch.Apply(this, args);
+                        if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination)
                         {
                             closeServerConnection = true;
                             await Routing.ReverseProxySessionDispatch.WriteNoDestinationAsync(args, clientStream, cancellationToken);
+                            return;
+                        }
+
+                        if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.Handled)
+                        {
+                            closeServerConnection = true;
+                            await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                            args.IsClientResponseCommitted = true;
                             return;
                         }
 

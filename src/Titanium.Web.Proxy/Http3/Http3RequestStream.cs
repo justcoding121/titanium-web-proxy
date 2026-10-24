@@ -281,11 +281,16 @@ internal static class Http3RequestStream
                 }
 
                 // Per-stream route → destination (no-op when ReverseProxy routes unset).
-                if (Routing.ReverseProxySessionDispatch.Apply(server, sessionArgs) ==
-                    Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination
+                var routeDispatch = Routing.ReverseProxySessionDispatch.Apply(server, sessionArgs);
+                if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination
                     && sessionArgs is SessionEventArgs noDestSession)
                 {
                     Routing.ReverseProxySessionDispatch.SignalNoDestination(noDestSession);
+                }
+
+                if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.Handled)
+                {
+                    return;
                 }
 
                 // Inject Via only when we stay on the full session forward path (not MITM

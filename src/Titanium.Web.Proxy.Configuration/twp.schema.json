@@ -347,6 +347,21 @@
           "clusterId": {
             "type": "string"
           },
+          "directResponse": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "body": {
+                "type": "string"
+              },
+              "contentType": {
+                "type": "string"
+              },
+              "status": {
+                "type": "integer"
+              }
+            }
+          },
           "id": {
             "type": "string"
           },
@@ -415,6 +430,30 @@
           },
           "order": {
             "type": "integer"
+          },
+          "redirect": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "host": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "port": {
+                "type": "integer"
+              },
+              "preserveQuery": {
+                "type": "boolean"
+              },
+              "scheme": {
+                "type": "string"
+              },
+              "status": {
+                "type": "integer"
+              }
+            }
           },
           "retry": {
             "type": "object",

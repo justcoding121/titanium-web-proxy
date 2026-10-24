@@ -112,7 +112,8 @@ public static class TwpConfigValidator
                 errors.Add($"Duplicate route id '{route.Id}'.");
             }
 
-            if (string.IsNullOrWhiteSpace(route.ClusterId) || !clusterIds.Contains(route.ClusterId))
+            if (route.Redirect is null && route.DirectResponse is null &&
+                (string.IsNullOrWhiteSpace(route.ClusterId) || !clusterIds.Contains(route.ClusterId)))
             {
                 errors.Add($"Route '{route.Id}' references unknown cluster '{route.ClusterId}'.");
             }

@@ -126,9 +126,13 @@ public partial class ProxyServer
 
         // Per-stream destination when ReverseProxy routes are set (overrides connection ForwardHost).
         var routeDispatch = Routing.ReverseProxySessionDispatch.Apply(this, sessionArgs);
-        if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination)
+        if (routeDispatch is Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination
+            or Routing.ReverseProxySessionDispatch.RouteDispatchResult.Handled)
         {
-            Routing.ReverseProxySessionDispatch.SignalNoDestination(sessionArgs);
+            if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination)
+            {
+                Routing.ReverseProxySessionDispatch.SignalNoDestination(sessionArgs);
+            }
             return;
         }
 

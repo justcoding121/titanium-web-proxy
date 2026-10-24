@@ -27,7 +27,8 @@ public static class ReverseProxyFastPath
         }
 
         var route = routes[0];
-        if (route.Transforms is { Count: > 0 } || route.Limits is not null || route.Retry is { Attempts: > 0 })
+        if (route.Transforms is { Count: > 0 } || route.Limits is not null || route.Retry is { Attempts: > 0 } ||
+            route.Redirect is not null || route.DirectResponse is not null)
         {
             return false;
         }

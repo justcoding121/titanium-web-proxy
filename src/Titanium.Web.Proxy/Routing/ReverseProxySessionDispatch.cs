@@ -71,6 +71,12 @@ internal static class ReverseProxySessionDispatch
 
         var resolution = DestinationResolver.Resolve(options, request, fallbackHost, fallbackPort,
             out var destination, out var route);
+        if (resolution == DestinationResolution.Terminal && route is not null)
+        {
+            PrepareTerminalResponse(session, route);
+            return RouteDispatchResult.Handled;
+        }
+
         if (resolution == DestinationResolution.NoRoute || destination is null || route is null)
         {
             return resolution == DestinationResolution.RouteWithoutDestination
@@ -133,6 +139,62 @@ internal static class ReverseProxySessionDispatch
         }
 
         return RouteDispatchResult.Routed;
+    }
+
+    internal static void PrepareTerminalResponse(SessionEventArgsBase session, RouteConfig route)
+    {
+        if (session is not SessionEventArgs args)
+        {
+            return;
+        }
+
+        if (route.Redirect is { } redirect)
+        {
+            var location = BuildRedirect(args.HttpClient.Request, redirect);
+            args.GenericResponse(string.Empty, (HttpStatusCode)redirect.Status,
+                [new HttpHeader("Location", location)]);
+            return;
+        }
+
+        var direct = route.DirectResponse;
+        if (direct is null)
+        {
+            return;
+        }
+
+        var headers = string.IsNullOrEmpty(direct.ContentType)
+            ? null
+            : new[] { new HttpHeader("Content-Type", direct.ContentType) };
+        args.GenericResponse(direct.Body ?? string.Empty, (HttpStatusCode)direct.Status, headers);
+    }
+
+    internal static string BuildRedirect(Request request, RedirectConfig redirect)
+    {
+        var path = string.IsNullOrEmpty(redirect.Path) ? request.RequestUriString8.GetString() : redirect.Path;
+        var query = "";
+        if (redirect.PreserveQuery)
+        {
+            var raw = request.RequestUriString8.GetString();
+            var q = raw.IndexOf('?');
+            if (q >= 0)
+            {
+                query = raw[q..];
+            }
+        }
+
+        if (!string.IsNullOrEmpty(redirect.Host))
+        {
+            var scheme = redirect.Scheme ?? (request.IsHttps ? "https" : "http");
+            var port = redirect.Port is int p and > 0 ? ":" + p.ToString() : "";
+            if (path.Contains('?', StringComparison.Ordinal))
+            {
+                path = path[..path.IndexOf('?')];
+            }
+
+            return scheme + "://" + redirect.Host + port + path + query;
+        }
+
+        return path + query;
     }
 
     /// <summary>H1 synthetic 503 (or gRPC UNAVAILABLE). Kept out of line so the session loop's state machine stays small.</summary>

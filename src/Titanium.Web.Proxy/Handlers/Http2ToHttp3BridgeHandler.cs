@@ -106,10 +106,15 @@ public partial class ProxyServer
             await OnBeforeRequest(sessionArgs);
 
         // Per-stream destination when ReverseProxy routes are set.
-        if (Routing.ReverseProxySessionDispatch.Apply(this, sessionArgs) ==
-            Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination)
+        var routeDispatch = Routing.ReverseProxySessionDispatch.Apply(this, sessionArgs);
+        if (routeDispatch is Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination
+            or Routing.ReverseProxySessionDispatch.RouteDispatchResult.Handled)
         {
-            Routing.ReverseProxySessionDispatch.SignalNoDestination(sessionArgs);
+            if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination)
+            {
+                Routing.ReverseProxySessionDispatch.SignalNoDestination(sessionArgs);
+            }
+
             return;
         }
 

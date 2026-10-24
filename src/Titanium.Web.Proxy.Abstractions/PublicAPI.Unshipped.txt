@@ -436,3 +436,29 @@ Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.Methods.get -> System.Collect
 Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.Methods.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.PathCaseSensitive.get -> bool
 Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.PathCaseSensitive.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.DirectResponseConfig
+Titanium.Web.Proxy.Abstractions.Routing.DirectResponseConfig.Body.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.DirectResponseConfig.Body.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.DirectResponseConfig.ContentType.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.DirectResponseConfig.ContentType.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.DirectResponseConfig.DirectResponseConfig() -> void
+Titanium.Web.Proxy.Abstractions.Routing.DirectResponseConfig.Status.get -> int
+Titanium.Web.Proxy.Abstractions.Routing.DirectResponseConfig.Status.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.Host.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.Host.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.Path.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.Path.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.Port.get -> int?
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.Port.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.PreserveQuery.get -> bool
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.PreserveQuery.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.RedirectConfig() -> void
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.Scheme.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.Scheme.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.Status.get -> int
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.Status.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.DirectResponse.get -> Titanium.Web.Proxy.Abstractions.Routing.DirectResponseConfig?
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.DirectResponse.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Redirect.get -> Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig?
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Redirect.init -> void

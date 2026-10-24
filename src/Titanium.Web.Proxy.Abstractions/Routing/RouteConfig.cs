@@ -42,6 +42,31 @@ public sealed class RouteConfig
 
     /// <summary>Route retry wins over the cluster retry. Null leaves the cluster value.</summary>
     public Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig? Retry { get; init; }
+
+    /// <summary>Terminal redirect. No cluster is contacted.</summary>
+    public RedirectConfig? Redirect { get; init; }
+
+    /// <summary>Terminal response. No cluster is contacted.</summary>
+    public DirectResponseConfig? DirectResponse { get; init; }
+}
+
+/// <summary>Redirect built by the proxy.</summary>
+public sealed class RedirectConfig
+{
+    public int Status { get; init; } = 302;
+    public string? Scheme { get; init; }
+    public string? Host { get; init; }
+    public int? Port { get; init; }
+    public string? Path { get; init; }
+    public bool PreserveQuery { get; init; } = true;
+}
+
+/// <summary>Response produced without an upstream.</summary>
+public sealed class DirectResponseConfig
+{
+    public int Status { get; init; } = 200;
+    public string? Body { get; init; }
+    public string? ContentType { get; init; }
 }
 
 /// <summary>Per-route timeout and body/WebSocket caps applied to a matched session.</summary>
