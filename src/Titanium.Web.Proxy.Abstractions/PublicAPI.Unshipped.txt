@@ -33,7 +33,46 @@ Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Port.get -> int
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Port.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.UseDestinationHost.get -> bool
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.UseDestinationHost.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.AvailabilityPolicy
+Titanium.Web.Proxy.Abstractions.Clusters.AvailabilityPolicy.HealthyAndUnknown = 0 -> Titanium.Web.Proxy.Abstractions.Clusters.AvailabilityPolicy
+Titanium.Web.Proxy.Abstractions.Clusters.AvailabilityPolicy.HealthyOrPanic = 1 -> Titanium.Web.Proxy.Abstractions.Clusters.AvailabilityPolicy
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.HealthCheck.get -> Titanium.Web.Proxy.Abstractions.Clusters.HealthCheckConfig?
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.HealthCheck.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.UseHttps.get -> bool
+Titanium.Web.Proxy.Abstractions.Clusters.FailureRateConfig
+Titanium.Web.Proxy.Abstractions.Clusters.FailureRateConfig.FailureRateConfig() -> void
+Titanium.Web.Proxy.Abstractions.Clusters.FailureRateConfig.MinimumRequests.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.FailureRateConfig.MinimumRequests.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.FailureRateConfig.Threshold.get -> double
+Titanium.Web.Proxy.Abstractions.Clusters.FailureRateConfig.Threshold.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.FailureRateConfig.WindowSeconds.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.FailureRateConfig.WindowSeconds.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.HealthCheckConfig
+Titanium.Web.Proxy.Abstractions.Clusters.HealthCheckConfig.AvailabilityPolicy.get -> Titanium.Web.Proxy.Abstractions.Clusters.AvailabilityPolicy
+Titanium.Web.Proxy.Abstractions.Clusters.HealthCheckConfig.AvailabilityPolicy.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.HealthCheckConfig.HealthCheckConfig() -> void
+Titanium.Web.Proxy.Abstractions.Clusters.HealthCheckConfig.PanicThresholdPercent.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.HealthCheckConfig.PanicThresholdPercent.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.HealthCheckConfig.Passive.get -> Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig?
+Titanium.Web.Proxy.Abstractions.Clusters.HealthCheckConfig.Passive.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig
+Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.ConsecutiveFailures.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.ConsecutiveFailures.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.Enabled.get -> bool
+Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.Enabled.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.FailureRate.get -> Titanium.Web.Proxy.Abstractions.Clusters.FailureRateConfig?
+Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.FailureRate.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.FailureStatusCodes.get -> System.Collections.Generic.IReadOnlyList<int>?
+Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.FailureStatusCodes.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.HalfOpenSuccesses.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.HalfOpenSuccesses.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.MaxBackoffSeconds.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.MaxBackoffSeconds.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.MaxEjectionPercent.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.MaxEjectionPercent.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.PassiveHealthConfig() -> void
+Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.ReactivateAfterSeconds.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.ReactivateAfterSeconds.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.UseHttps.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Weight.get -> int
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Weight.init -> void

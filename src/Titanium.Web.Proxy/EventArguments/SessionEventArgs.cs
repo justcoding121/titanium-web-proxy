@@ -90,6 +90,8 @@ public class SessionEventArgs : SessionEventArgsBase
         ResponseHeaderTransformPlan = null;
         DestinationRequestLease?.Dispose();
         DestinationRequestLease = null;
+        PassiveHealth = null;
+        PassiveDestinationCount = 0;
         Deadlines.Reset();
         UserData = connectArgs?.UserData;
         HttpClient.ResetForKeepAlive();

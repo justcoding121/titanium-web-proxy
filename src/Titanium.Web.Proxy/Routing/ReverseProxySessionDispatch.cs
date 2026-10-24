@@ -49,6 +49,8 @@ internal static class ReverseProxySessionDispatch
         session.UpstreamConnectHost = null;
         session.UpstreamConnectPort = null;
         session.UpstreamDestinationId = null;
+        session.PassiveHealth = null;
+        session.PassiveDestinationCount = 0;
 
         var request = session.HttpClient.Request;
         string? fallbackHost = null;
@@ -77,6 +79,12 @@ internal static class ReverseProxySessionDispatch
         session.UpstreamConnectHost = destination.Address;
         session.UpstreamConnectPort = port;
         session.UpstreamDestinationId = destination.Id;
+        if (options.ClusterManager?.Snapshot.Clusters.TryGetValue(route.ClusterId, out var cluster) == true)
+        {
+            session.PassiveHealth = cluster.HealthCheck?.Passive;
+            session.PassiveDestinationCount = cluster.Destinations.Count;
+        }
+
         StreamDestinationDispatch.ApplyRouteLimits(route, session);
 
         if (options.LoadBalancer is LoadBalancer lb)
@@ -172,10 +180,21 @@ internal static class ReverseProxySessionDispatch
         session.DestinationRequestLease?.Dispose();
         session.DestinationRequestLease = null;
 
-        if (success)
+        var status = session.HttpClient.Response.StatusCode;
+        var transportFailure = !success && (session.Exception is not null || status == 0);
+        if (transportFailure)
         {
-            lb.Health.ReportSuccess(id);
-            if (session.Timing is not null)
+            lb.Health.ReportFailure(id, server.ReverseProxy?.ClusterManager);
+        }
+        else
+        {
+            lb.Health.ReportStatus(
+                id,
+                status,
+                server.ReverseProxy?.ClusterManager,
+                session.PassiveHealth,
+                session.PassiveDestinationCount > 0 ? session.PassiveDestinationCount : int.MaxValue);
+            if (status is >= 200 and <= 499 && session.Timing is not null)
             {
                 var total = session.Timing.TotalDuration;
                 if (total > TimeSpan.Zero)
@@ -184,10 +203,6 @@ internal static class ReverseProxySessionDispatch
                     server.ReverseProxy?.LatencyRecorder?.RecordDestination(id, total);
                 }
             }
-        }
-        else
-        {
-            lb.Health.ReportFailure(id, server.ReverseProxy?.ClusterManager);
         }
     }
 

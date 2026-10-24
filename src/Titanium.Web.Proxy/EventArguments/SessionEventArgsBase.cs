@@ -232,6 +232,12 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     /// <summary>Active-request lease for <see cref="Clusters.DestinationHealthTracker"/>.</summary>
     internal IDisposable? DestinationRequestLease { get; set; }
 
+    /// <summary>Passive policy copied at dispatch. Null uses the default 502/503/504 failures.</summary>
+    internal Abstractions.Clusters.PassiveHealthConfig? PassiveHealth { get; set; }
+
+    /// <summary>Destination count of the matched cluster, for the ejection cap.</summary>
+    internal int PassiveDestinationCount { get; set; }
+
     /// <summary>
     ///     Local endpoint via which we make the request.
     /// </summary>

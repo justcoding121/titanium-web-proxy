@@ -700,3 +700,115 @@ public class RouteTargetAndCookieTests
         Assert.IsNull(DestinationResolver.ReadCookie(null, "sticky"));
     }
 }
+
+[TestClass]
+public class PassiveHealthTests
+{
+    [TestMethod]
+    public async Task Status500_DoesNotEject_Status503_Does()
+    {
+        var manager = new ClusterManager();
+        var tracker = new DestinationHealthTracker();
+        manager.AttachHealthTracker(tracker);
+        await manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c",
+                Destinations = [new DestinationConfig { Id = "a", Address = "10.0.0.1", Port = 80 }],
+            },
+        ]);
+
+        tracker.ReportStatus("a", 500, manager, null, 1);
+        tracker.ReportStatus("a", 500, manager, null, 1);
+        tracker.ReportStatus("a", 500, manager, null, 1);
+        Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("a"));
+
+        var passive = new PassiveHealthConfig { ConsecutiveFailures = 2 };
+        tracker.ReportStatus("a", 503, manager, passive, 1);
+        Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("a"));
+        tracker.ReportStatus("a", 503, manager, passive, 1);
+        Assert.AreEqual(DestinationState.Unhealthy, manager.GetDestinationState("a"));
+    }
+
+    [TestMethod]
+    public async Task HalfOpenTrial_IsSelectedAfterReactivate_AndSuccessRestores()
+    {
+        var time = new Support.ManualTimeProvider();
+        var tracker = new DestinationHealthTracker(time);
+        var manager = new ClusterManager();
+        manager.AttachHealthTracker(tracker);
+        var cluster = new ClusterConfig
+        {
+            Id = "c",
+            HealthCheck = new HealthCheckConfig
+            {
+                Passive = new PassiveHealthConfig { ConsecutiveFailures = 1, ReactivateAfterSeconds = 10 },
+            },
+            Destinations = [new DestinationConfig { Id = "a", Address = "10.0.0.1", Port = 80 }],
+        };
+        await manager.ApplyAsync([cluster]);
+        tracker.ReportStatus("a", 502, manager, cluster.HealthCheck!.Passive, 1);
+        Assert.AreEqual(DestinationState.Unhealthy, manager.GetDestinationState("a"));
+
+        var balancer = new LoadBalancer(tracker);
+        Assert.IsNull(balancer.Select(cluster, manager.Snapshot));
+        time.Advance(TimeSpan.FromSeconds(10));
+        Assert.AreEqual("a", balancer.Select(cluster, manager.Snapshot)?.Id);
+
+        tracker.ReportStatus("a", 200, manager, cluster.HealthCheck.Passive, 1);
+        Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("a"));
+    }
+
+    [TestMethod]
+    public async Task MaxEjectionPercent_KeepsOneDestination()
+    {
+        var manager = new ClusterManager();
+        var tracker = new DestinationHealthTracker();
+        manager.AttachHealthTracker(tracker);
+        await manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c",
+                Destinations =
+                [
+                    new DestinationConfig { Id = "a", Address = "10.0.0.1", Port = 80 },
+                    new DestinationConfig { Id = "b", Address = "10.0.0.2", Port = 80 },
+                ],
+            },
+        ]);
+        var passive = new PassiveHealthConfig { ConsecutiveFailures = 1, MaxEjectionPercent = 50 };
+        tracker.ReportStatus("a", 504, manager, passive, 2);
+        tracker.ReportStatus("b", 504, manager, passive, 2);
+        Assert.AreEqual(DestinationState.Unhealthy, manager.GetDestinationState("a"));
+        Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("b"));
+    }
+
+    [TestMethod]
+    public async Task FailureRate_EjectsAfterTheWindowFills()
+    {
+        var manager = new ClusterManager();
+        var tracker = new DestinationHealthTracker();
+        manager.AttachHealthTracker(tracker);
+        await manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c",
+                Destinations = [new DestinationConfig { Id = "a", Address = "10.0.0.1", Port = 80 }],
+            },
+        ]);
+        var passive = new PassiveHealthConfig
+        {
+            ConsecutiveFailures = 100,
+            FailureRate = new FailureRateConfig { WindowSeconds = 60, MinimumRequests = 4, Threshold = 0.5 },
+        };
+        tracker.ReportStatus("a", 200, manager, passive, 1);
+        tracker.ReportStatus("a", 503, manager, passive, 1);
+        tracker.ReportStatus("a", 200, manager, passive, 1);
+        Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("a"));
+        tracker.ReportStatus("a", 503, manager, passive, 1);
+        Assert.AreEqual(DestinationState.Unhealthy, manager.GetDestinationState("a"));
+    }
+}

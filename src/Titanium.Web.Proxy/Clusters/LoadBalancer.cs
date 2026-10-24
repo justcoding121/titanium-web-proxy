@@ -35,12 +35,28 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
 
     public DestinationConfig? Select(ClusterConfig cluster, ImmutableClusterSnapshot snapshot, LoadBalanceContext context)
     {
+        var passive = cluster.HealthCheck?.Passive;
         var eligible = new List<DestinationConfig>();
         foreach (var dest in cluster.Destinations)
         {
-            if (snapshot.DestinationStates.TryGetValue(dest.Id, out var state) &&
-                state is DestinationState.Unhealthy or DestinationState.Draining or DestinationState.Maintenance)
+            if (!snapshot.DestinationStates.TryGetValue(dest.Id, out var state))
             {
+                eligible.Add(dest);
+                continue;
+            }
+
+            if (state is DestinationState.Draining or DestinationState.Maintenance)
+            {
+                continue;
+            }
+
+            if (state == DestinationState.Unhealthy)
+            {
+                if (passive is { Enabled: true } && _health.IsTrialDue(dest.Id, passive))
+                {
+                    eligible.Add(dest);
+                }
+
                 continue;
             }
 

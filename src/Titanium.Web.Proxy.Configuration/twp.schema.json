@@ -68,6 +68,63 @@
               }
             }
           },
+          "healthCheck": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "availabilityPolicy": {
+                "type": "string"
+              },
+              "panicThresholdPercent": {
+                "type": "integer"
+              },
+              "passive": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "consecutiveFailures": {
+                    "type": "integer"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "failureRate": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "minimumRequests": {
+                        "type": "integer"
+                      },
+                      "threshold": {
+                        "type": "number"
+                      },
+                      "windowSeconds": {
+                        "type": "integer"
+                      }
+                    }
+                  },
+                  "failureStatusCodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "halfOpenSuccesses": {
+                    "type": "integer"
+                  },
+                  "maxBackoffSeconds": {
+                    "type": "integer"
+                  },
+                  "maxEjectionPercent": {
+                    "type": "integer"
+                  },
+                  "reactivateAfterSeconds": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          },
           "id": {
             "type": "string"
           }

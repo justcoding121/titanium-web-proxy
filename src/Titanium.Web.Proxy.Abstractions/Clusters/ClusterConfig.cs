@@ -47,6 +47,45 @@ public sealed class ClusterConfig
 
     /// <summary>When set, sticky sessions use this request header value as the affinity key (destination id).</summary>
     public string? AffinityHeader { get; init; }
+
+    /// <summary>Optional active and passive health policy. Null keeps today's counters.</summary>
+    public HealthCheckConfig? HealthCheck { get; init; }
+}
+
+/// <summary>How a cluster chooses destinations when too few are healthy.</summary>
+public enum AvailabilityPolicy
+{
+    HealthyAndUnknown = 0,
+    HealthyOrPanic = 1,
+}
+
+/// <summary>Cluster health policy.</summary>
+public sealed class HealthCheckConfig
+{
+    public PassiveHealthConfig? Passive { get; init; }
+    public AvailabilityPolicy AvailabilityPolicy { get; init; } = AvailabilityPolicy.HealthyAndUnknown;
+    public int PanicThresholdPercent { get; init; }
+}
+
+/// <summary>Passive ejection and half-open recovery.</summary>
+public sealed class PassiveHealthConfig
+{
+    public bool Enabled { get; init; } = true;
+    public IReadOnlyList<int>? FailureStatusCodes { get; init; }
+    public int ConsecutiveFailures { get; init; } = 3;
+    public FailureRateConfig? FailureRate { get; init; }
+    public int ReactivateAfterSeconds { get; init; } = 30;
+    public int MaxBackoffSeconds { get; init; } = 300;
+    public int HalfOpenSuccesses { get; init; } = 1;
+    public int MaxEjectionPercent { get; init; } = 100;
+}
+
+/// <summary>Optional failure-rate ejection window. Null disables it.</summary>
+public sealed class FailureRateConfig
+{
+    public int WindowSeconds { get; init; } = 60;
+    public int MinimumRequests { get; init; } = 20;
+    public double Threshold { get; init; } = 0.5;
 }
 
 /// <summary>Immutable view of clusters after Apply; swap via Interlocked.Exchange.</summary>

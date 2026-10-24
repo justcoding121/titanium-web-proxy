@@ -37,6 +37,7 @@ public static class JsonReverseProxyDocument
                     Algorithm = ParseAlgorithm(c.LoadBalancingPolicy ?? c.Algorithm),
                     AffinityCookie = c.AffinityCookie,
                     AffinityHeader = c.AffinityHeader,
+                    HealthCheck = MapHealth(c.HealthCheck),
                     Destinations = (c.Destinations ?? []).Select((d, i) => new DestinationConfig
                     {
                         Id = d.Id ?? $"{c.Id}-d{i}",
@@ -219,7 +220,43 @@ public static class JsonReverseProxyDocument
         public string? Algorithm { get; set; }
         public string? AffinityCookie { get; set; }
         public string? AffinityHeader { get; set; }
+        public HealthDto? HealthCheck { get; set; }
         public List<DestinationDto>? Destinations { get; set; }
+    }
+
+    private static HealthCheckConfig? MapHealth(HealthDto? health)
+    {
+        if (health?.Passive is null)
+        {
+            return null;
+        }
+
+        var passive = health.Passive;
+        return new HealthCheckConfig
+        {
+            Passive = new PassiveHealthConfig
+            {
+                Enabled = passive.Enabled ?? true,
+                ConsecutiveFailures = passive.ConsecutiveFailures ?? 3,
+                ReactivateAfterSeconds = passive.ReactivateAfterSeconds ?? 30,
+                MaxEjectionPercent = passive.MaxEjectionPercent ?? 100,
+                FailureStatusCodes = passive.FailureStatusCodes,
+            },
+        };
+    }
+
+    private sealed class HealthDto
+    {
+        public PassiveDto? Passive { get; set; }
+    }
+
+    private sealed class PassiveDto
+    {
+        public bool? Enabled { get; set; }
+        public int? ConsecutiveFailures { get; set; }
+        public int? ReactivateAfterSeconds { get; set; }
+        public int? MaxEjectionPercent { get; set; }
+        public List<int>? FailureStatusCodes { get; set; }
     }
 
     private sealed class DestinationDto
