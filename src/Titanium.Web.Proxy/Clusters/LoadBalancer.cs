@@ -90,6 +90,12 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
             }
         }
 
+        if (eligible.Count == 1)
+        {
+            // Every algorithm picks the only candidate. Skip weight expansion and the per-cluster counter lookup.
+            return eligible[0];
+        }
+
         return cluster.Algorithm switch
         {
             LoadBalanceAlgorithm.Random => SelectWeightedRandom(eligible, cluster.SlowStartSeconds),

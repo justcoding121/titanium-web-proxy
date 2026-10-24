@@ -63,12 +63,7 @@ public interface IClusterManager
 /// <summary>Optional per-request context for load balancing (affinity, counters).</summary>
 public readonly struct LoadBalanceContext
 {
-    public LoadBalanceContext(string? affinityKey = null)
-    {
-        AffinityKey = affinityKey;
-    }
-
-    public LoadBalanceContext(string? affinityKey, string? hashInput)
+    public LoadBalanceContext(string? affinityKey = null, string? hashInput = null)
     {
         AffinityKey = affinityKey;
         HashInput = hashInput;

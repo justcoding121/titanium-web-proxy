@@ -257,7 +257,6 @@ Titanium.Web.Proxy.Abstractions.Routing.ITransformEngine.ApplyRequestTransforms(
 Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext
 Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext.AffinityKey.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext.LoadBalanceContext() -> void
-Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext.LoadBalanceContext(string? affinityKey = null) -> void
 Titanium.Web.Proxy.Abstractions.Routing.PathMatchKind
 Titanium.Web.Proxy.Abstractions.Routing.PathMatchKind.Exact = 0 -> Titanium.Web.Proxy.Abstractions.Routing.PathMatchKind
 Titanium.Web.Proxy.Abstractions.Routing.PathMatchKind.Prefix = 1 -> Titanium.Web.Proxy.Abstractions.Routing.PathMatchKind
@@ -553,7 +552,6 @@ Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.AffinityKey.init -> v
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.AffinityKey.get -> string?
 Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.ErrorPages.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.ErrorPageConfig!>?
 Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.ErrorPages.init -> void
-Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext.LoadBalanceContext(string? affinityKey, string? hashInput) -> void
 Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext.HashInput.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.ClientCertificateSubject.set -> void
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Clusters.init -> void
@@ -601,3 +599,4 @@ Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Methods.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.MirrorConfig.MaxBodyBytes.get -> int
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Limit.get -> int?
 Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.HttpToHttps.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext.LoadBalanceContext(string? affinityKey = null, string? hashInput = null) -> void
