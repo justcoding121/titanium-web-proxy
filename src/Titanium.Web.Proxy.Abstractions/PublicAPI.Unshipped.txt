@@ -476,3 +476,19 @@ Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.MaxConnectionsP
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.MaxConnectionsPerServer.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.SslProtocols.get -> string?
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.SslProtocols.init -> void
+Titanium.Web.Proxy.Abstractions.Configuration.InMemoryProxyConfigProvider
+Titanium.Web.Proxy.Abstractions.Configuration.InMemoryProxyConfigProvider.Current.get -> Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot!
+Titanium.Web.Proxy.Abstractions.Configuration.InMemoryProxyConfigProvider.InMemoryProxyConfigProvider() -> void
+Titanium.Web.Proxy.Abstractions.Configuration.InMemoryProxyConfigProvider.Subscribe(System.Action<Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot!>! onChange) -> System.IDisposable!
+Titanium.Web.Proxy.Abstractions.Configuration.InMemoryProxyConfigProvider.Update(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.RouteConfig!>! routes, System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig!>! clusters) -> void
+Titanium.Web.Proxy.Abstractions.Configuration.IProxyConfigProvider
+Titanium.Web.Proxy.Abstractions.Configuration.IProxyConfigProvider.Current.get -> Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot!
+Titanium.Web.Proxy.Abstractions.Configuration.IProxyConfigProvider.Subscribe(System.Action<Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot!>! onChange) -> System.IDisposable!
+Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot
+Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot.Clusters.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig!>!
+Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot.Clusters.init -> void
+Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot.Generation.get -> long
+Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot.Generation.init -> void
+Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot.ProxyConfigSnapshot() -> void
+Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot.Routes.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.RouteConfig!>!
+Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot.Routes.init -> void

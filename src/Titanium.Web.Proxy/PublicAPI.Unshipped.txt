@@ -332,3 +332,6 @@ Titanium.Web.Proxy.ProxyServer.TracingEnabled.get -> bool
 Titanium.Web.Proxy.ProxyServer.TracingEnabled.set -> void
 Titanium.Web.Proxy.ProxyServer.ForwardedHeaders.get -> Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig?
 Titanium.Web.Proxy.ProxyServer.ForwardedHeaders.set -> void
+Titanium.Web.Proxy.Configuration.ProxyConfigHost
+Titanium.Web.Proxy.Configuration.ProxyConfigHost.ApplyAsync(Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot! snapshot, Titanium.Web.Proxy.Clusters.ClusterManager! clusters, System.Action<Titanium.Web.Proxy.Abstractions.ReverseProxyOptions!>! publish, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Titanium.Web.Proxy.Configuration.ProxyConfigHost.ProxyConfigHost() -> void
