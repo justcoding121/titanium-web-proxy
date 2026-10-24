@@ -170,14 +170,30 @@ public sealed class RouteMatcher : IRouteMatcher
             PathMatchKind.Exact => string.Equals(path, matchPath, comparison),
             PathMatchKind.Template => TemplateMatches(matchPath, path),
             PathMatchKind.SegmentPrefix => SegmentPrefix(matchPath, path, comparison),
-            PathMatchKind.Regex => CompiledExpressions.GetValue(
-                match,
-                static value => new Regex(
-                    value.Path ?? ".*",
-                    RegexOptions.NonBacktracking | RegexOptions.CultureInvariant |
-                    (value.PathCaseSensitive ? RegexOptions.None : RegexOptions.IgnoreCase))).IsMatch(path),
+            PathMatchKind.Regex => RegexMatches(match, path),
             _ => path.StartsWith(matchPath, comparison),
         };
+    }
+
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
+
+    private static bool RegexMatches(RouteMatch match, string path)
+    {
+        var regex = CompiledExpressions.GetValue(
+            match,
+            static value => new Regex(
+                value.Path ?? ".*",
+                RegexOptions.NonBacktracking | RegexOptions.CultureInvariant |
+                (value.PathCaseSensitive ? RegexOptions.None : RegexOptions.IgnoreCase),
+                RegexTimeout));
+        try
+        {
+            return regex.IsMatch(path);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return false;
+        }
     }
 
     private static bool SegmentPrefix(string matchPath, string path, StringComparison comparison)

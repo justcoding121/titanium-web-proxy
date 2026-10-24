@@ -108,6 +108,12 @@ public static class ReverseProxyFastPath
             return false;
         }
 
+        // The session-less H3 path never evaluates route policies, so a policy forces per-request dispatch.
+        if (options.Policies is { Count: > 0 } && RoutePolicies.AnyRouteUsesPolicies(options))
+        {
+            return true;
+        }
+
         if (endPoint is TransparentBaseProxyEndPoint { ForwardHost.Length: > 0 } transparent)
         {
             return !IsForwardHostEquivalentCached(

@@ -38,7 +38,7 @@ public static class SniCertificateSelector
                     continue;
                 }
 
-                var suffix = host.Length > 1 && host[1] == '.' ? host[1..] : host[1..];
+                var suffix = host[1..];
                 if (serverName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
                     serverName.Length > suffix.Length &&
                     suffix.Length > wildcardLength)

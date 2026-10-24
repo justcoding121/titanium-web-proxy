@@ -259,7 +259,7 @@ public sealed class CircuitBreakerController : IDisposable
         _cts.Cancel();
         try
         {
-            _recoveryLoop?.Wait(TimeSpan.FromSeconds(2));
+            _recoveryLoop?.Wait(TimeSpan.FromSeconds(2), CancellationToken.None);
         }
         catch (AggregateException)
         {

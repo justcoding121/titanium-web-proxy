@@ -29,46 +29,61 @@ public static class ProxyProtocolReader
         return false;
     }
 
+    /// <summary>
+    ///     Reads exactly the preamble and nothing after it, so the first application bytes (for example a TLS
+    ///     ClientHello) stay in the socket. Returns false for a malformed or truncated preamble.
+    /// </summary>
     public static async ValueTask<bool> TryReadAsync(Socket socket, CancellationToken cancellationToken, IPEndPoint? client = null)
     {
         _ = client;
-        var buffer = new byte[512];
-        var read = 0;
-        while (read < 16)
+        var buffer = new byte[536];
+        if (!await ReadExactAsync(socket, buffer, 0, 6, cancellationToken).ConfigureAwait(false))
         {
-            var n = await socket.ReceiveAsync(buffer.AsMemory(read), cancellationToken).ConfigureAwait(false);
-            if (n == 0)
+            return false;
+        }
+
+        var total = 6;
+        if (buffer.AsSpan(0, 6).SequenceEqual("PROXY "u8))
+        {
+            // v1 is one line of at most 107 bytes ending in CRLF. Read one byte at a time so nothing past it is consumed.
+            while (total < 107)
+            {
+                if (!await ReadExactAsync(socket, buffer, total, 1, cancellationToken).ConfigureAwait(false))
+                {
+                    return false;
+                }
+
+                total++;
+                if (buffer[total - 1] == (byte)'\n')
+                {
+                    break;
+                }
+            }
+        }
+        else
+        {
+            if (!await ReadExactAsync(socket, buffer, total, 10, cancellationToken).ConfigureAwait(false))
             {
                 return false;
             }
 
-            read += n;
-        }
-
-        if (!TryParse(buffer.AsSpan(0, read), out var parsed, out var consumed))
-        {
-            while (read < buffer.Length)
+            total = 16;
+            if (!buffer.AsSpan(0, 12).SequenceEqual(V2Signature))
             {
-                var n = await socket.ReceiveAsync(buffer.AsMemory(read, 1), cancellationToken).ConfigureAwait(false);
-                if (n == 0)
-                {
-                    return false;
-                }
-
-                read += n;
-                if (TryParse(buffer.AsSpan(0, read), out parsed, out consumed))
-                {
-                    break;
-                }
-
-                if (read > 256)
-                {
-                    return false;
-                }
+                return false;
             }
+
+            var length = (buffer[14] << 8) | buffer[15];
+            if (length > buffer.Length - 16 ||
+                !await ReadExactAsync(socket, buffer, 16, length, cancellationToken).ConfigureAwait(false))
+            {
+                return false;
+            }
+
+            total += length;
         }
 
-        if (consumed == 0 || consumed > read)
+        if (!TryParse(buffer.AsSpan(0, total), out var parsed, out var consumed) || consumed != total)
         {
             return false;
         }
@@ -81,6 +96,22 @@ public static class ProxyProtocolReader
         return true;
     }
 
+    private static async ValueTask<bool> ReadExactAsync(Socket socket, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    {
+        var done = 0;
+        while (done < count)
+        {
+            var n = await socket.ReceiveAsync(buffer.AsMemory(offset + done, count - done), cancellationToken).ConfigureAwait(false);
+            if (n == 0)
+            {
+                return false;
+            }
+
+            done += n;
+        }
+
+        return true;
+    }
     private static bool TryParseV1(ReadOnlySpan<byte> buffer, out IPEndPoint? client, out int consumed)
     {
         client = null;

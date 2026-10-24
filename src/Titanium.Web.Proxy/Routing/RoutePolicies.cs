@@ -31,9 +31,75 @@ internal static class RoutePolicies
         Clock = TimeProvider.System;
     }
 
-    public static void Release(string policyName)
+    private const char HeldSeparator = '\u001f';
+
+    /// <summary>Gives back every slot named in a held-policy value (one name, or several joined by a separator).</summary>
+    public static void Release(string policyNames) => ReleaseHeld(policyNames);
+
+    private static void ReleaseHeld(string? policyNames)
     {
-        Connections.AddOrUpdate(policyName, 0, (_, count) => count > 0 ? count - 1 : 0);
+        if (string.IsNullOrEmpty(policyNames))
+        {
+            return;
+        }
+
+        foreach (var policyName in policyNames.Split(HeldSeparator))
+        {
+            Connections.AddOrUpdate(policyName, 0, (_, count) => count > 0 ? count - 1 : 0);
+        }
+    }
+
+    /// <summary>True when any route lists a policy. Paths that skip the session cannot enforce policies.</summary>
+    internal static bool AnyRouteUsesPolicies(ReverseProxyOptions options)
+    {
+        if (options.Policies is not { Count: > 0 } || options.Routes is not { Count: > 0 } routes)
+        {
+            return false;
+        }
+
+        for (var r = 0; r < routes.Count; r++)
+        {
+            if (routes[r].Policies is { Count: > 0 })
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     True when the route holds a connection slot for the life of the request. Terminate-lite has no
+    ///     end-of-request hook to give the slot back, so such a route must take the session path.
+    /// </summary>
+    internal static bool HoldsConnectionSlot(ReverseProxyOptions options)
+    {
+        if (options.Policies is not { Count: > 0 } policies || options.Routes is not { Count: > 0 } routes)
+        {
+            return false;
+        }
+
+        for (var r = 0; r < routes.Count; r++)
+        {
+            if (routes[r].Policies is not { Count: > 0 } names)
+            {
+                continue;
+            }
+
+            for (var n = 0; n < names.Count; n++)
+            {
+                for (var p = 0; p < policies.Count; p++)
+                {
+                    if (string.Equals(policies[p].Name, names[n], StringComparison.Ordinal) &&
+                        string.Equals(policies[p].Kind, "connectionLimit", StringComparison.Ordinal))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     public static bool TryDeny(ProxyServer server, SessionEventArgsBase session, RouteConfig route)
@@ -154,6 +220,15 @@ internal static class RoutePolicies
         }
 
         var decision = default(PolicyDecision);
+        string? heldNames = null;
+
+        // A later policy can deny after a connection slot was taken. Give those slots back.
+        PolicyDecision Deny(PolicyDecision stop)
+        {
+            ReleaseHeld(heldNames);
+            return stop;
+        }
+
         foreach (var name in names)
         {
             RoutePolicyConfig? policy = null;
@@ -174,35 +249,36 @@ internal static class RoutePolicies
             switch (policy.Kind)
             {
                 case "maxRequestBodySize" when policy.MaxRequestBodyBytes is long max && contentLength > max:
-                    return Stop(413, "payload too large");
+                    return Deny(Stop(413, "payload too large"));
                 case "requireHeader" when !FixedEquals(header(policy.HeaderName ?? ""), policy.HeaderValue):
-                    return Stop(401, string.Empty);
+                    return Deny(Stop(401, string.Empty));
                 case "apiKey" when !FixedEquals(header(policy.HeaderName ?? ""), policy.HeaderValue):
-                    return Stop(401, string.Empty);
+                    return Deny(Stop(401, string.Empty));
                 case "timeout" when policy.TimeoutSeconds is int seconds:
                     decision = decision with { TimeoutSeconds = seconds };
                     break;
                 case "cors":
                     if (string.Equals(method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
                     {
-                        return new PolicyDecision
+                        return Deny(new PolicyDecision
                         {
                             Stop = true,
                             Status = 204,
                             Headers = CorsHeaders(policy, header("Origin")),
-                        };
+                        });
                     }
 
                     break;
                 case "rateLimit" when !AllowRate(policy, client):
-                    return Stop(429, string.Empty);
-                case "connectionLimit" when !AllowConnection(policy, out var held):
-                    return Stop(503, string.Empty);
+                    return Deny(Stop(429, string.Empty));
+                case "connectionLimit" when !AllowConnection(policy):
+                    return Deny(Stop(503, string.Empty));
                 case "connectionLimit":
-                    decision = decision with { Held = policy.Name };
+                    heldNames = heldNames is null ? policy.Name : heldNames + HeldSeparator + policy.Name;
+                    decision = decision with { Held = heldNames };
                     break;
                 case "ipAllowDeny" when !AllowAddress(policy, client):
-                    return Stop(403, string.Empty);
+                    return Deny(Stop(403, string.Empty));
             }
         }
 
@@ -236,9 +312,8 @@ internal static class RoutePolicies
         }
     }
 
-    private static bool AllowConnection(RoutePolicyConfig policy, out string held)
+    private static bool AllowConnection(RoutePolicyConfig policy)
     {
-        held = policy.Name;
         var limit = policy.Limit ?? 1;
         while (true)
         {

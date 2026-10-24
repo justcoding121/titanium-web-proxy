@@ -109,6 +109,10 @@ public partial class ProxyServer
             if (!Routing.ReverseProxyFastPath.IsForwardHostEquivalent(
                     reverse.Routes, snapshot, transparent.ForwardHost, transparent.ForwardPort ?? 80))
                 return false;
+
+            // A connection-limit slot is released when the session ends, which lite does not have.
+            if (reverse.Policies is { Count: > 0 } && Routing.RoutePolicies.HoldsConnectionSlot(reverse))
+                return false;
         }
 
         if (request.HasBody || request.UpgradeToWebSocket)

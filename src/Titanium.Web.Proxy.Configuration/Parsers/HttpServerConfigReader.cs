@@ -47,13 +47,11 @@ public static class HttpServerConfigReader
 
     private static void ApplyDirective(string line, ParseState state, ICollection<string>? warnings, int lineNo)
     {
-        if (line.StartsWith("server_name ", StringComparison.OrdinalIgnoreCase) || line.Equals("server", StringComparison.OrdinalIgnoreCase))
+        // Inside an upstream block, "server host:port" names a member, not a server block.
+        if (state.InUpstream && line.StartsWith("server ", StringComparison.OrdinalIgnoreCase))
         {
-            if (line.Equals("server", StringComparison.OrdinalIgnoreCase))
-            {
-                state.BeginServer();
-                return;
-            }
+            state.AddUpstreamServer(line["server ".Length..].Trim());
+            return;
         }
 
         if (line.StartsWith("server ", StringComparison.OrdinalIgnoreCase) || line.Equals("server", StringComparison.OrdinalIgnoreCase))
@@ -89,12 +87,6 @@ public static class HttpServerConfigReader
         if (line.StartsWith("upstream ", StringComparison.OrdinalIgnoreCase))
         {
             state.BeginUpstream(line["upstream ".Length..].Trim());
-            return;
-        }
-
-        if (state.InUpstream && line.StartsWith("server ", StringComparison.OrdinalIgnoreCase))
-        {
-            state.AddUpstreamServer(line["server ".Length..].Trim());
             return;
         }
 
@@ -334,14 +326,26 @@ public static class HttpServerConfigReader
                 return;
             }
 
-            var token = spec.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
+            var tokens = spec.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var token = tokens[0];
             ParseProxyPass(token.Contains("://", StringComparison.Ordinal) ? token : "http://" + token, out var address, out var port, out var https);
+            var weight = 1;
+            for (var i = 1; i < tokens.Length; i++)
+            {
+                if (tokens[i].StartsWith("weight=", StringComparison.OrdinalIgnoreCase) &&
+                    int.TryParse(tokens[i]["weight=".Length..], out var parsed) && parsed >= 1)
+                {
+                    weight = parsed;
+                }
+            }
+
             def.Destinations.Add(new DestinationConfig
             {
                 Id = $"{UpstreamName}-d{def.Destinations.Count}",
                 Address = address,
                 Port = port,
                 UseHttps = https,
+                Weight = weight,
             });
         }
 

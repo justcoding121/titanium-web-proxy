@@ -26,12 +26,13 @@ internal sealed class ClusterHealthProber : IDisposable
 
     private readonly CancellationTokenSource _cancel = new();
     private readonly Task _loop;
+    private int _disposed;
 
     public ClusterHealthProber(ClusterManager manager, ClusterConfig cluster, TimeProvider time)
     {
         _manager = manager;
         _cluster = cluster;
-        _loop = Task.Run(() => LoopAsync(time));
+        _loop = Task.Run(() => LoopAsync(time), _cancel.Token);
     }
 
     public async Task ProbeOnceAsync(CancellationToken cancellationToken = default)
@@ -145,5 +146,21 @@ internal sealed class ClusterHealthProber : IDisposable
         }
     }
 
-    public void Dispose() => _cancel.Cancel();
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
+        _cancel.Cancel();
+
+        // Release the source only after the loop has stopped touching its token.
+        _ = _loop.ContinueWith(
+            static (_, state) => ((CancellationTokenSource)state!).Dispose(),
+            _cancel,
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
 }
