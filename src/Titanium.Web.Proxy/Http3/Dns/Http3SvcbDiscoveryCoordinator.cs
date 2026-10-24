@@ -105,9 +105,13 @@ internal sealed class Http3SvcbDiscoveryCoordinator : IDisposable
             if (result != null)
             {
                 var altPort = result.AltPort == port ? int.MinValue : result.AltPort;
-                server.Http3OriginCapabilityCache.Set(key, altPort, result.Ttl, result.TargetName);
-                missSuppressedUntil.TryRemove(key, out _);
-                server.TryBeginHttp3OriginWarmup(host, result.AltPort, result.TargetName ?? host);
+                // Broken origins ignore SVCB until the backoff elapses. Do not warm a QUIC
+                // handshake that just failed (airplane / captive Wi-Fi drops UDP/443).
+                if (server.Http3OriginCapabilityCache.Set(key, altPort, result.Ttl, result.TargetName))
+                {
+                    missSuppressedUntil.TryRemove(key, out _);
+                    server.TryBeginHttp3OriginWarmup(host, result.AltPort, result.TargetName ?? host, key);
+                }
             }
             else
             {

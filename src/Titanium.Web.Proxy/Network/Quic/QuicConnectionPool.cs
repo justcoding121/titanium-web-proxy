@@ -190,7 +190,13 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     ///     origin runs at a time. Failures are silent — the next CONNECT still takes HTTP/3 and
     ///     handshakes on demand (or stays on TCP if QUIC cannot be established).
     /// </summary>
-    internal void BeginWarmup(string connectHost, int port, string sniHost, IPEndPoint? upStreamEndPoint)
+    /// <param name="capabilityKey">
+    ///     Capability-cache key (<c>host:originPort</c>) to mark unreachable when the handshake fails.
+    ///     Without it a blackholed UDP path is only discovered by the first real request, which then
+    ///     pays the whole handshake timeout on the critical path.
+    /// </param>
+    internal void BeginWarmup(string connectHost, int port, string sniHost, IPEndPoint? upStreamEndPoint,
+        string? capabilityKey = null)
     {
         if (_draining) return;
 
@@ -211,10 +217,17 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
                 // back so the connection counts as idle and stays available to real requests.
                 await ReleaseAsync(connection);
             }
+            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException
+                                           or InvalidOperationException)
+            {
+                // Shutdown / drain, not a verdict on the origin.
+            }
             catch
             {
-                // Unreachable over QUIC (UDP blocked, handshake timeout, ...). Staying on TCP is the
-                // correct outcome, and is exactly what not marking the origin warm produces.
+                // Unreachable over QUIC (UDP blocked, handshake timeout, ...). Remember it so the next
+                // CONNECT / request stays on TCP instead of re-running this handshake in the foreground.
+                if (capabilityKey != null && !_draining)
+                    _proxyServer.NoteHttp3OriginUnreachable(capabilityKey);
             }
             finally
             {

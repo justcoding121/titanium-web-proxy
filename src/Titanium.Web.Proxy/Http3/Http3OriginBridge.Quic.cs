@@ -253,8 +253,10 @@ internal static partial class Http3OriginBridge
                         continue;
                     var ttlSeconds = Math.Min(entry.MaxAgeSeconds, Http3OriginCapabilityCache.DefaultTtl.TotalSeconds * 2);
                     var ttl = TimeSpan.FromSeconds(ttlSeconds);
+                    // This response arrived on a completed QUIC connection, so it may clear a
+                    // broken mark. Alt-Svc on a TCP fallback must not (see CacheHttp3CapabilityFromAltSvc).
                     server.Http3OriginCapabilityCache.Set($"{sniHost}:{originPort}",
-                        entry.Port == originPort ? int.MinValue : entry.Port, ttl);
+                        entry.Port == originPort ? int.MinValue : entry.Port, ttl, overrideBroken: true);
                     break;
                 }
             }
@@ -495,9 +497,11 @@ internal static partial class Http3OriginBridge
 
             if (!isForcedH3)
             {
+                var originPort = request.GetOriginHostPort(port).Port;
+                server.NoteHttp3OriginUnreachable($"{sniHost}:{originPort}");
                 try
                 {
-                    await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse);
+                    await FallbackToTcpOriginAsync(sessionArgs, server, logger, cancellationToken, onInterimResponse);
                 }
                 catch (Exception tcpEx) when (tcpEx is not OperationCanceledException)
                 {
@@ -558,12 +562,14 @@ internal static partial class Http3OriginBridge
                 // port, which may differ when Alt-Svc / SVCB advertised an alternative port.
                 var originPort = request.GetOriginHostPort(port).Port;
                 var hostAndPort = $"{sniHost}:{originPort}";
-                server.Http3OriginCapabilityCache.Evict(hostAndPort);
+                server.NoteHttp3OriginUnreachable(hostAndPort);
                 if (logger.IsEnabled(LogLevel.Debug))
-                    logger.LogDebug("Evicted stale H3 capability for {HostAndPort}; falling back to TCP.", hostAndPort);
+                    logger.LogDebug(
+                        "Marked {HostAndPort} HTTP/3 unreachable for {BrokenSeconds}s; staying on TCP.",
+                        hostAndPort, (int)Http3OriginCapabilityCache.BrokenTtl.TotalSeconds);
                 try
                 {
-                    await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse);
+                    await FallbackToTcpOriginAsync(sessionArgs, server, logger, cancellationToken, onInterimResponse);
                 }
                 catch (Exception tcpEx) when (tcpEx is not OperationCanceledException)
                 {

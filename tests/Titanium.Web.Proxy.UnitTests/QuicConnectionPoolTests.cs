@@ -164,6 +164,48 @@ public class QuicConnectionPoolTests
     }
 
     [TestMethod]
+    public async Task BeginWarmup_HandshakeFails_MarksOriginUnreachable()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        await using var pool = new QuicConnectionPool(proxy, new ThrowingQuicFactory());
+        proxy.Http3OriginCapabilityCache.Set("sni.example:443");
+
+        pool.BeginWarmup("connect.example", 443, "sni.example", null, capabilityKey: "sni.example:443");
+
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (!proxy.Http3OriginCapabilityCache.IsBroken("sni.example:443") && DateTime.UtcNow < deadline)
+            await Task.Delay(20);
+
+        Assert.IsTrue(proxy.Http3OriginCapabilityCache.IsBroken("sni.example:443"),
+            "A failed warm-up handshake must keep real requests off the blackholed QUIC path.");
+        Assert.IsFalse(proxy.Http3OriginCapabilityCache.TryGet("sni.example:443", out _));
+    }
+
+    [TestMethod]
+    public async Task BeginWarmup_HandshakeFails_WithoutKey_DoesNotTouchCache()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        await using var pool = new QuicConnectionPool(proxy, new ThrowingQuicFactory());
+        proxy.Http3OriginCapabilityCache.Set("sni.example:443");
+
+        pool.BeginWarmup("connect.example", 443, "sni.example", null);
+        await Task.Delay(300);
+
+        Assert.IsFalse(proxy.Http3OriginCapabilityCache.IsBroken("sni.example:443"));
+        Assert.IsTrue(proxy.Http3OriginCapabilityCache.TryGet("sni.example:443", out _));
+    }
+
+    private sealed class ThrowingQuicFactory : IQuicConnectionFactory
+    {
+        public Task<QuicServerConnection> CreateAsync(
+            string connectHost, string sniHost, int port, IPEndPoint? upStreamEndPoint,
+            IExternalProxy? upStreamProxy, string cacheKey,
+            RemoteCertificateValidationCallback? remoteCertificateValidationCallback,
+            CancellationToken cancellationToken, bool failFastHandshake = true)
+            => throw new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.TimedOut);
+    }
+
+    [TestMethod]
     public async Task TryAcquireStream_OnRetiredConnection_ReturnsFalse()
     {
         using var proxy = new ProxyServer(false, false, false);

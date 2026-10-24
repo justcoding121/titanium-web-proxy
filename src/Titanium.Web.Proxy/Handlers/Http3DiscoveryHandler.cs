@@ -60,6 +60,17 @@ public partial class ProxyServer
         _svcbDiscoveryCoordinator?.Invalidate(clearKey);
     }
 
+    /// <summary>
+    ///     QUIC connect failed before any request bytes were written. Auto mode stays on TCP
+    ///     (HTTP/2 when the client already negotiated it) until <see cref="Http3OriginCapabilityCache.BrokenTtl"/>
+    ///     elapses. An in-flight SVCB lookup must not put HTTP/3 back.
+    /// </summary>
+    internal void NoteHttp3OriginUnreachable(string hostAndPort)
+    {
+        Http3OriginCapabilityCache.MarkBroken(hostAndPort);
+        _svcbDiscoveryCoordinator?.Invalidate(hostAndPort);
+    }
+
     private void CacheHttp3CapabilityFromAltSvc(SessionEventArgs args, string altSvc)
     {
         var entries = AltSvcParser.Parse(altSvc);
@@ -77,9 +88,13 @@ public partial class ProxyServer
             var altPort = entry.Port == port ? int.MinValue : entry.Port;
             var ttl = TimeSpan.FromSeconds(Math.Min(entry.MaxAgeSeconds, Http3OriginCapabilityCache.DefaultTtl.TotalSeconds * 2));
             // Alt-Svc does not carry a TargetName — always null here.
-            Http3OriginCapabilityCache.Set(hostAndPort, altPort, ttl, targetName: null);
+            // A broken mark (QUIC handshake failed) rejects this advertisement so the TCP
+            // fallback response cannot send the next request back onto a blackholed UDP path.
+            if (!Http3OriginCapabilityCache.Set(hostAndPort, altPort, ttl, targetName: null))
+                break;
+
             var quicPort = altPort == int.MinValue ? port : altPort;
-            TryBeginHttp3OriginWarmup(host, quicPort, connectHost: host);
+            TryBeginHttp3OriginWarmup(host, quicPort, connectHost: host, capabilityKey: hostAndPort);
             break; // Take the first valid h3 entry.
         }
     }
@@ -90,12 +105,13 @@ public partial class ProxyServer
     ///     request. No-ops when the proxy is not running, a static HTTPS upstream proxy is set (QUIC
     ///     cannot be tunnelled), or a connection to this origin is already live / warming.
     /// </summary>
-    internal void TryBeginHttp3OriginWarmup(string sniHost, int quicPort, string? connectHost)
+    internal void TryBeginHttp3OriginWarmup(string sniHost, int quicPort, string? connectHost,
+        string? capabilityKey = null)
     {
         if (string.IsNullOrEmpty(sniHost) || UpStreamHttpsProxy != null || !ProxyRunning)
             return;
 
-        QuicConnectionPool.BeginWarmup(connectHost ?? sniHost, quicPort, sniHost, UpStreamEndPoint);
+        QuicConnectionPool.BeginWarmup(connectHost ?? sniHost, quicPort, sniHost, UpStreamEndPoint, capabilityKey);
     }
 
     /// <summary>
@@ -148,8 +164,13 @@ public partial class ProxyServer
         if (protocol == UpstreamHttpProtocol.Http11 || protocol == UpstreamHttpProtocol.Http2)
             return Http3OriginRoute.None;
 
-        // Auto: check the in-memory Alt-Svc / SVCB capability cache (synchronous, no I/O).
+        // Auto: a recent QUIC connect failure wins over Alt-Svc / SVCB. Otherwise every
+        // advertisement (including the TCP fallback that just failed QUIC) would commit the
+        // next connection to HTTP/3 and stall it for the handshake timeout.
         var hostAndPort = $"{host}:{port}";
+        if (Http3OriginCapabilityCache.IsBroken(hostAndPort))
+            return Http3OriginRoute.None;
+
         if (Http3OriginCapabilityCache.TryGet(hostAndPort, out var cachedAltPort, out var cachedTarget))
         {
             var quicPort = cachedAltPort == int.MinValue ? port : cachedAltPort;
@@ -161,7 +182,7 @@ public partial class ProxyServer
             // Kick warmup if this entry was cached without going through Alt-Svc/SVCB helpers
             // (tests, or a race with the first response); GetOrCreateAsync coalesces with it.
             if (!Http3WarmOrigins.IsWarm(host, quicPort))
-                TryBeginHttp3OriginWarmup(host, quicPort, cachedTarget ?? host);
+                TryBeginHttp3OriginWarmup(host, quicPort, cachedTarget ?? host, hostAndPort);
 
             return new Http3OriginRoute
             {
