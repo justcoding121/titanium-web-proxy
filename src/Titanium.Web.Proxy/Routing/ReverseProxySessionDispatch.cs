@@ -56,6 +56,7 @@ internal static class ReverseProxySessionDispatch
         session.PassiveHealth = null;
         session.PassiveDestinationCount = 0;
         session.MatchedRoute = null;
+        session.ClusterConnectionKey = null;
         session.ForwarderError = Abstractions.Diagnostics.ForwarderError.None;
         session.Extras?.Activity?.Dispose();
         session.Extras = null;
@@ -106,6 +107,8 @@ internal static class ReverseProxySessionDispatch
             cluster = found;
             session.PassiveHealth = cluster.HealthCheck?.Passive;
             session.PassiveDestinationCount = cluster.Destinations.Count;
+            var connectionKey = cluster.HttpClient?.ConnectionKey;
+            session.ClusterConnectionKey = string.IsNullOrEmpty(connectionKey) ? null : connectionKey;
         }
 
         var retry = route.Retry ?? cluster?.Retry;

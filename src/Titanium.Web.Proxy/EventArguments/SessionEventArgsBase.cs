@@ -244,6 +244,9 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     /// <summary>Route chosen for this request. Null when the request was not routed.</summary>
     internal Abstractions.Routing.RouteConfig? MatchedRoute { get; set; }
 
+    /// <summary>Appended to the upstream pool key only when a cluster sets HttpClient.</summary>
+    internal string? ClusterConnectionKey { get; set; }
+
     /// <summary>Classification of how the request ended.</summary>
     public Abstractions.Diagnostics.ForwarderError ForwarderError { get; internal set; }
 

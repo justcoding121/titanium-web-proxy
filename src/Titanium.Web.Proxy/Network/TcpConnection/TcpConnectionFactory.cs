@@ -138,7 +138,8 @@ internal class TcpConnectionFactory : IDisposable
         bool isHttps, List<SslApplicationProtocol>? applicationProtocols,
         IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
         string? connectHost = null, int? connectPort = null,
-        IPEndPoint? upStreamEndPointIPv4 = null, IPEndPoint? upStreamEndPointIPv6 = null)
+        IPEndPoint? upStreamEndPointIPv4 = null, IPEndPoint? upStreamEndPointIPv6 = null,
+        string? clusterKey = null)
     {
         // http version is ignored since its an application level decision b/w HTTP 1.0/1.1
         // also when doing connect request MS Edge browser sends http 1.0 but uses 1.1 after server sends 1.1 its response.
@@ -179,6 +180,12 @@ internal class TcpConnectionFactory : IDisposable
                 cacheKeyBuilder.Append("-next-");
                 AppendExternalProxyToCacheKey(cacheKeyBuilder, externalProxy.NextHop);
             }
+        }
+
+        if (!string.IsNullOrEmpty(clusterKey))
+        {
+            cacheKeyBuilder.Append("-cluster-");
+            cacheKeyBuilder.Append(clusterKey);
         }
 
         return cacheKeyBuilder.ToString();
@@ -327,7 +334,8 @@ internal class TcpConnectionFactory : IDisposable
         var (connectHost, connectPort) = ResolveConnectTarget(session);
 
         return GetConnectionCacheKey(originHost, originPort, isHttps, applicationProtocols, upStreamEndPoint,
-            upStreamProxy, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
+            upStreamProxy, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6,
+            session.ClusterConnectionKey);
     }
 
     private static (IPEndPoint? Generic, IPEndPoint? IPv4, IPEndPoint? IPv6) ResolveConfiguredUpStreamEndPoints(
@@ -491,7 +499,7 @@ internal class TcpConnectionFactory : IDisposable
 
             cacheKey = GetConnectionCacheKey(remoteHostName, remotePort,
                 isHttps, applicationProtocols, upStreamEndPoint, externalProxy, connectHost, connectPort,
-                resolvedV4, resolvedV6);
+                resolvedV4, resolvedV6, sessionArgs.ClusterConnectionKey);
         }
 
         upStreamEndPointIPv4 = resolvedV4;

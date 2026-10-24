@@ -465,3 +465,14 @@ Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Redirect.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm.ConsistentHash = 6 -> Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm
 Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm.FirstAlphabetical = 5 -> Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm
 Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm.PowerOfTwoChoices = 4 -> Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.HttpClient.get -> Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig?
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.HttpClient.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.AcceptAnyServerCertificate.get -> bool
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.AcceptAnyServerCertificate.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.ClusterHttpClientConfig() -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.ConnectionKey.get -> string!
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.MaxConnectionsPerServer.get -> int?
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.MaxConnectionsPerServer.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.SslProtocols.get -> string?
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.SslProtocols.init -> void

@@ -182,6 +182,24 @@
               }
             }
           },
+          "httpClient": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "acceptAnyServerCertificate": {
+                "type": "boolean"
+              },
+              "connectionKey": {
+                "type": "string"
+              },
+              "maxConnectionsPerServer": {
+                "type": "integer"
+              },
+              "sslProtocols": {
+                "type": "string"
+              }
+            }
+          },
           "id": {
             "type": "string"
           },

@@ -80,6 +80,31 @@ public sealed class ClusterConfig
 
     /// <summary>Wait for a free destination only when set.</summary>
     public QueueConfig? Queue { get; init; }
+
+    /// <summary>Per-cluster upstream identity. Null keeps the process-wide connection pool key.</summary>
+    public ClusterHttpClientConfig? HttpClient { get; init; }
+}
+
+/// <summary>Upstream connection settings that change pool identity.</summary>
+public sealed class ClusterHttpClientConfig
+{
+    public string? SslProtocols { get; init; }
+    public bool AcceptAnyServerCertificate { get; init; }
+    public int? MaxConnectionsPerServer { get; init; }
+
+    /// <summary>Empty when every setting is at the process default.</summary>
+    public string ConnectionKey
+    {
+        get
+        {
+            if (SslProtocols is null && !AcceptAnyServerCertificate && MaxConnectionsPerServer is null)
+            {
+                return string.Empty;
+            }
+
+            return (SslProtocols ?? string.Empty) + "|" + AcceptAnyServerCertificate + "|" + MaxConnectionsPerServer;
+        }
+    }
 }
 
 /// <summary>How an active probe checks a destination.</summary>

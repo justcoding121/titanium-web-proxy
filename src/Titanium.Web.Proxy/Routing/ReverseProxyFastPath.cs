@@ -38,7 +38,8 @@ public static class ReverseProxyFastPath
             return false;
         }
 
-        if (cluster.Retry is { Attempts: > 0 } || cluster.Queue is not null || cluster.SlowStartSeconds > 0)
+        if (cluster.Retry is { Attempts: > 0 } || cluster.Queue is not null || cluster.SlowStartSeconds > 0 ||
+            !string.IsNullOrEmpty(cluster.HttpClient?.ConnectionKey))
         {
             return false;
         }
