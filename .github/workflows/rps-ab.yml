@@ -146,6 +146,19 @@ jobs:
           done
           ls -la "$RUNNER_TEMP/ab-bin/baseline/RpsLoadProbe" "$RUNNER_TEMP/ab-bin/candidate/RpsLoadProbe"
 
+      - name: Publish the CLI for each product ref
+        run: |
+          set -euo pipefail
+          for side in baseline candidate; do
+            wt="$RUNNER_TEMP/ab/$side"
+            out="$RUNNER_TEMP/ab-cli/$side"
+            dotnet publish -c Release "$wt/src/Titanium.Cli/Titanium.Cli.csproj" -o "$out"
+            test -f "$out/titanium.dll"
+            wrapper="$RUNNER_TEMP/ab-bin/$side/run-probe.sh"
+            printf '%s\n' '#!/bin/bash' "export TWP_RPS_CLI_DIR=\"$out\"" "exec \"$RUNNER_TEMP/ab-bin/$side/RpsLoadProbe\" \"\$@\"" > "$wrapper"
+            chmod +x "$wrapper"
+          done
+
       - name: Paired A/B ramp
         run: |
           set -euo pipefail
@@ -156,8 +169,8 @@ jobs:
             for a in $AB_PROBE_ARGS; do extra+=(--probe-arg "$a"); done
           fi
           python3 tools/RpsLoadProbe/rps-ab-run.py \
-            --baseline-probe "$RUNNER_TEMP/ab-bin/baseline/RpsLoadProbe" \
-            --candidate-probe "$RUNNER_TEMP/ab-bin/candidate/RpsLoadProbe" \
+            --baseline-probe "$RUNNER_TEMP/ab-bin/baseline/run-probe.sh" \
+            --candidate-probe "$RUNNER_TEMP/ab-bin/candidate/run-probe.sh" \
             --mode "$AB_MODE" --arm-contains "$AB_ARM_CONTAINS" \
             --concurrency "$AB_CONCURRENCY" --duration-sec "$AB_DURATION" \
             --pairs "$AB_PAIRS" --cooldown-sec "$AB_COOLDOWN" --order "$AB_ORDER" \
