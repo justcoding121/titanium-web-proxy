@@ -16,6 +16,7 @@ public sealed class DestinationHealthTracker
     private readonly ConcurrentDictionary<string, long> _reactivateAt = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, int> _ejections = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, RateWindow> _rates = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, long> _slowStart = new(StringComparer.Ordinal);
     private int _ejected;
 
     public DestinationHealthTracker()
@@ -113,6 +114,27 @@ public sealed class DestinationHealthTracker
     }
 
     private readonly record struct RateWindow(long Started, int Total, int Failures);
+
+    internal int EffectiveWeight(DestinationConfig dest, int clusterSlowStartSeconds)
+    {
+        var weight = dest.Weight < 1 ? 1 : dest.Weight;
+        var seconds = dest.SlowStartSeconds > 0 ? dest.SlowStartSeconds : clusterSlowStartSeconds;
+        if (seconds <= 0)
+        {
+            return weight;
+        }
+
+        var now = _time.GetUtcNow().UtcTicks;
+        var start = _slowStart.GetOrAdd(dest.Id, now);
+        var elapsed = (now - start) / (double)TimeSpan.TicksPerSecond;
+        if (elapsed >= seconds)
+        {
+            return weight;
+        }
+
+        var factor = 0.1 + (0.9 * (elapsed / seconds));
+        return Math.Max(1, (int)Math.Round(weight * factor));
+    }
 
     /// <summary>True when an ejected destination is due for one half-open trial.</summary>
     internal bool IsTrialDue(string destinationId, PassiveHealthConfig passive)

@@ -322,3 +322,4 @@ Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectThreshold.get -> int
 Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectThreshold.set -> void
 Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectWindow.get -> System.TimeSpan
 Titanium.Web.Proxy.ProxyServer.ClientHandshakeRejectWindow.set -> void
+Titanium.Web.Proxy.Clusters.ClusterManager.DisposeAsync() -> System.Threading.Tasks.ValueTask

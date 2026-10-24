@@ -13,6 +13,7 @@ namespace Titanium.Web.Proxy.Clusters;
 public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
 {
     private int _roundRobin;
+    private int _queueWaiters;
     private readonly DestinationHealthTracker _health;
     private readonly ConcurrentDictionary<string, long> _latencyTicks = new(StringComparer.Ordinal);
 
@@ -33,34 +34,30 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
     public DestinationConfig? Select(ClusterConfig cluster, ImmutableClusterSnapshot snapshot)
         => Select(cluster, snapshot, default);
 
+    internal DestinationConfig? SelectFirstUntried(
+        ClusterConfig cluster,
+        ImmutableClusterSnapshot snapshot,
+        Func<string, bool> alreadyTried)
+    {
+        var eligible = Collect(cluster, snapshot, cluster.HealthCheck?.Passive);
+        for (var i = 0; i < eligible.Count; i++)
+        {
+            if (!alreadyTried(eligible[i].Id))
+            {
+                return eligible[i];
+            }
+        }
+
+        return null;
+    }
+
     public DestinationConfig? Select(ClusterConfig cluster, ImmutableClusterSnapshot snapshot, LoadBalanceContext context)
     {
         var passive = cluster.HealthCheck?.Passive;
-        var eligible = new List<DestinationConfig>();
-        foreach (var dest in cluster.Destinations)
+        var eligible = Collect(cluster, snapshot, passive);
+        if (eligible.Count == 0 && cluster.Queue is { TimeoutMilliseconds: > 0, MaxLength: > 0 } queue)
         {
-            if (!snapshot.DestinationStates.TryGetValue(dest.Id, out var state))
-            {
-                eligible.Add(dest);
-                continue;
-            }
-
-            if (state is DestinationState.Draining or DestinationState.Maintenance)
-            {
-                continue;
-            }
-
-            if (state == DestinationState.Unhealthy)
-            {
-                if (passive is { Enabled: true } && _health.IsTrialDue(dest.Id, passive))
-                {
-                    eligible.Add(dest);
-                }
-
-                continue;
-            }
-
-            eligible.Add(dest);
+            eligible = WaitForCapacity(cluster, snapshot, passive, queue);
         }
 
         if (eligible.Count == 0)
@@ -80,10 +77,10 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
 
         return cluster.Algorithm switch
         {
-            LoadBalanceAlgorithm.Random => SelectWeightedRandom(eligible),
+            LoadBalanceAlgorithm.Random => SelectWeightedRandom(eligible, cluster.SlowStartSeconds),
             LoadBalanceAlgorithm.LeastRequests => SelectLeastRequests(eligible),
             LoadBalanceAlgorithm.LeastTime => SelectLeastTime(eligible),
-            _ => SelectWeightedRoundRobin(eligible),
+            _ => SelectWeightedRoundRobin(eligible, cluster.SlowStartSeconds),
         };
     }
 
@@ -135,25 +132,114 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
         return best;
     }
 
-    private DestinationConfig SelectWeightedRoundRobin(List<DestinationConfig> eligible)
+    private DestinationConfig SelectWeightedRoundRobin(List<DestinationConfig> eligible, int clusterSlowStartSeconds)
     {
-        var expanded = ExpandByWeight(eligible);
+        var expanded = ExpandByWeight(eligible, clusterSlowStartSeconds);
         var n = (uint)Interlocked.Increment(ref _roundRobin);
         return expanded[(int)(n % (uint)expanded.Count)];
     }
 
-    private static DestinationConfig SelectWeightedRandom(List<DestinationConfig> eligible)
+    private DestinationConfig SelectWeightedRandom(List<DestinationConfig> eligible, int clusterSlowStartSeconds)
     {
-        var expanded = ExpandByWeight(eligible);
+        var expanded = ExpandByWeight(eligible, clusterSlowStartSeconds);
         return expanded[Random.Shared.Next(expanded.Count)];
     }
 
-    private static List<DestinationConfig> ExpandByWeight(List<DestinationConfig> eligible)
+    private List<DestinationConfig> Collect(ClusterConfig cluster, ImmutableClusterSnapshot snapshot, PassiveHealthConfig? passive)
+    {
+        var eligible = new List<DestinationConfig>();
+        var tiered = false;
+        foreach (var dest in cluster.Destinations)
+        {
+            snapshot.DestinationStates.TryGetValue(dest.Id, out var state);
+            if (!Accept(dest, state, passive))
+            {
+                continue;
+            }
+
+            if (dest.Priority != 0 || dest.Backup)
+            {
+                tiered = true;
+            }
+
+            eligible.Add(dest);
+        }
+
+        if (!tiered || eligible.Count <= 1)
+        {
+            return eligible;
+        }
+
+        var best = int.MaxValue;
+        for (var i = 0; i < eligible.Count; i++)
+        {
+            var rank = eligible[i].Backup ? int.MaxValue : eligible[i].Priority;
+            if (rank < best)
+            {
+                best = rank;
+            }
+        }
+
+        eligible.RemoveAll(dest => (dest.Backup ? int.MaxValue : dest.Priority) != best);
+        return eligible;
+    }
+
+    private bool Accept(DestinationConfig dest, DestinationState state, PassiveHealthConfig? passive)
+    {
+        if (state is DestinationState.Draining or DestinationState.Maintenance)
+        {
+            return false;
+        }
+
+        if (state == DestinationState.Unhealthy &&
+            !(passive is { Enabled: true } && _health.IsTrialDue(dest.Id, passive)))
+        {
+            return false;
+        }
+
+        return dest.MaxConcurrentRequests is not int cap || _health.GetActiveRequests(dest.Id) < cap;
+    }
+
+    private List<DestinationConfig> WaitForCapacity(
+        ClusterConfig cluster,
+        ImmutableClusterSnapshot snapshot,
+        PassiveHealthConfig? passive,
+        QueueConfig queue)
+    {
+        var waiters = Interlocked.Increment(ref _queueWaiters);
+        try
+        {
+            if (waiters > queue.MaxLength)
+            {
+                return new List<DestinationConfig>();
+            }
+
+            var until = Environment.TickCount64 + queue.TimeoutMilliseconds;
+            while (Environment.TickCount64 < until)
+            {
+                var ready = Collect(cluster, snapshot, passive);
+                if (ready.Count > 0)
+                {
+                    return ready;
+                }
+
+                Thread.Sleep(1);
+            }
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _queueWaiters);
+        }
+
+        return new List<DestinationConfig>();
+    }
+
+    private List<DestinationConfig> ExpandByWeight(List<DestinationConfig> eligible, int clusterSlowStartSeconds)
     {
         var expanded = new List<DestinationConfig>();
         foreach (var dest in eligible)
         {
-            var weight = dest.Weight < 1 ? 1 : dest.Weight;
+            var weight = _health.EffectiveWeight(dest, clusterSlowStartSeconds);
             for (var i = 0; i < weight; i++)
             {
                 expanded.Add(dest);

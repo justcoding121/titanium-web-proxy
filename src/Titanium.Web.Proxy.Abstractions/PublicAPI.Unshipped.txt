@@ -323,3 +323,64 @@ Titanium.Web.Proxy.Abstractions.Routing.RouteLimits.MaxWebSocketFramePayloadByte
 Titanium.Web.Proxy.Abstractions.Routing.RouteLimits.RequestTimeoutSeconds.get -> int?
 Titanium.Web.Proxy.Abstractions.Routing.RouteLimits.RequestTimeoutSeconds.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RouteLimits.RouteLimits() -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.ActiveHealthConfig() -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.Enabled.get -> bool
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.Enabled.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.ExpectedStatus.get -> System.Collections.Generic.IReadOnlyList<int>?
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.ExpectedStatus.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.HealthyThreshold.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.HealthyThreshold.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.IntervalSeconds.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.IntervalSeconds.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.JitterPercent.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.JitterPercent.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.Kind.get -> Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.Kind.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.Path.get -> string!
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.Query.get -> string?
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.Query.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.Path.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.TimeoutSeconds.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.TimeoutSeconds.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.UnhealthyThreshold.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.UnhealthyThreshold.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind.Http = 0 -> Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind.Tcp = 1 -> Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.Queue.get -> Titanium.Web.Proxy.Abstractions.Clusters.QueueConfig?
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.Queue.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.Retry.get -> Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig?
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.Retry.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.SlowStartSeconds.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.SlowStartSeconds.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Backup.get -> bool
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Backup.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Health.get -> string?
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Health.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Host.get -> string?
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Host.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.MaxConcurrentRequests.get -> int?
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.MaxConcurrentRequests.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Priority.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Priority.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.SlowStartSeconds.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.SlowStartSeconds.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.HealthCheckConfig.Active.get -> Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig?
+Titanium.Web.Proxy.Abstractions.Clusters.HealthCheckConfig.Active.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.QueueConfig
+Titanium.Web.Proxy.Abstractions.Clusters.QueueConfig.MaxLength.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.QueueConfig.MaxLength.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.QueueConfig.QueueConfig() -> void
+Titanium.Web.Proxy.Abstractions.Clusters.QueueConfig.TimeoutMilliseconds.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.QueueConfig.TimeoutMilliseconds.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.Attempts.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.Attempts.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.MaxBufferedBodyBytes.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.MaxBufferedBodyBytes.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.RetryConfig() -> void
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.RetryNonIdempotent.get -> bool
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.RetryNonIdempotent.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Retry.get -> Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig?
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Retry.init -> void

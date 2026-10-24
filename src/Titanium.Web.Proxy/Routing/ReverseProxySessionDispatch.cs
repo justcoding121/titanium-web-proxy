@@ -4,6 +4,7 @@ using System.Net;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.EventArguments;
@@ -51,6 +52,7 @@ internal static class ReverseProxySessionDispatch
         session.UpstreamDestinationId = null;
         session.PassiveHealth = null;
         session.PassiveDestinationCount = 0;
+        session.Extras = null;
 
         var request = session.HttpClient.Request;
         string? fallbackHost = null;
@@ -79,10 +81,20 @@ internal static class ReverseProxySessionDispatch
         session.UpstreamConnectHost = destination.Address;
         session.UpstreamConnectPort = port;
         session.UpstreamDestinationId = destination.Id;
-        if (options.ClusterManager?.Snapshot.Clusters.TryGetValue(route.ClusterId, out var cluster) == true)
+        ClusterConfig? cluster = null;
+        if (options.ClusterManager?.Snapshot.Clusters.TryGetValue(route.ClusterId, out var found) == true)
         {
+            cluster = found;
             session.PassiveHealth = cluster.HealthCheck?.Passive;
             session.PassiveDestinationCount = cluster.Destinations.Count;
+        }
+
+        var retry = route.Retry ?? cluster?.Retry;
+        if (retry is { Attempts: > 0 })
+        {
+            session.Extras ??= new RoutingFeatureState();
+            session.Extras.Retry = retry;
+            session.Extras.Remember(destination.Id);
         }
 
         StreamDestinationDispatch.ApplyRouteLimits(route, session);
@@ -167,6 +179,75 @@ internal static class ReverseProxySessionDispatch
     }
 
     /// <summary>Reports passive health after a completed or failed upstream attempt.</summary>
+    /// <summary>Picks another destination after a connect failure. False means do not retry.</summary>
+    internal static bool TrySelectAlternate(ProxyServer server, SessionEventArgsBase session)
+    {
+        var extras = session.Extras;
+        var retry = extras?.Retry;
+        if (extras is null || retry is null || extras.TriedCount > retry.Attempts)
+        {
+            return false;
+        }
+
+        var method = session.HttpClient.Request.Method;
+        var idempotent = method is "GET" or "HEAD" or "PUT" or "DELETE" or "OPTIONS" or "TRACE";
+        if (!idempotent && !retry.RetryNonIdempotent)
+        {
+            return false;
+        }
+
+        if (!idempotent && session.HttpClient.Request.ContentLength > retry.MaxBufferedBodyBytes)
+        {
+            return false;
+        }
+
+        var options = server.ReverseProxy;
+        if (options?.LoadBalancer is not LoadBalancer balancer || options.ClusterManager is not ClusterManager manager)
+        {
+            return false;
+        }
+
+        var failed = session.UpstreamDestinationId;
+        if (failed is not null)
+        {
+            balancer.Health.ReportFailure(failed, manager);
+        }
+
+        var snapshot = manager.Snapshot;
+        ClusterConfig? owner = null;
+        foreach (var candidate in snapshot.Clusters.Values)
+        {
+            foreach (var dest in candidate.Destinations)
+            {
+                if (string.Equals(dest.Id, failed, StringComparison.Ordinal))
+                {
+                    owner = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (owner is null)
+        {
+            return false;
+        }
+
+        var alternate = balancer.SelectFirstUntried(owner, snapshot, extras.AlreadyTried);
+        if (alternate is null)
+        {
+            return false;
+        }
+
+        var port = alternate.Port == 0 ? (alternate.UseHttps ? 443 : 80) : alternate.Port;
+        session.UpstreamConnectHost = alternate.Address;
+        session.UpstreamConnectPort = port;
+        session.UpstreamDestinationId = alternate.Id;
+        extras.Remember(alternate.Id);
+        session.DestinationRequestLease?.Dispose();
+        session.DestinationRequestLease = balancer.Health.TrackRequest(alternate.Id);
+        return true;
+    }
+
     public static void ReportUpstreamResult(ProxyServer server, SessionEventArgsBase session, bool success)
     {
         var id = session.UpstreamDestinationId;

@@ -50,10 +50,28 @@
                 "address": {
                   "type": "string"
                 },
+                "backup": {
+                  "type": "boolean"
+                },
+                "health": {
+                  "type": "string"
+                },
+                "host": {
+                  "type": "string"
+                },
                 "id": {
                   "type": "string"
                 },
+                "maxConcurrentRequests": {
+                  "type": "integer"
+                },
                 "port": {
+                  "type": "integer"
+                },
+                "priority": {
+                  "type": "integer"
+                },
+                "slowStartSeconds": {
                   "type": "integer"
                 },
                 "useDestinationHost": {
@@ -72,6 +90,45 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
+              "active": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "expectedStatus": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "healthyThreshold": {
+                    "type": "integer"
+                  },
+                  "intervalSeconds": {
+                    "type": "integer"
+                  },
+                  "jitterPercent": {
+                    "type": "integer"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "query": {
+                    "type": "string"
+                  },
+                  "timeoutSeconds": {
+                    "type": "integer"
+                  },
+                  "unhealthyThreshold": {
+                    "type": "integer"
+                  }
+                }
+              },
               "availabilityPolicy": {
                 "type": "string"
               },
@@ -127,6 +184,36 @@
           },
           "id": {
             "type": "string"
+          },
+          "queue": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "maxLength": {
+                "type": "integer"
+              },
+              "timeoutMilliseconds": {
+                "type": "integer"
+              }
+            }
+          },
+          "retry": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "attempts": {
+                "type": "integer"
+              },
+              "maxBufferedBodyBytes": {
+                "type": "integer"
+              },
+              "retryNonIdempotent": {
+                "type": "boolean"
+              }
+            }
+          },
+          "slowStartSeconds": {
+            "type": "integer"
           }
         }
       }
@@ -313,6 +400,21 @@
           },
           "order": {
             "type": "integer"
+          },
+          "retry": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "attempts": {
+                "type": "integer"
+              },
+              "maxBufferedBodyBytes": {
+                "type": "integer"
+              },
+              "retryNonIdempotent": {
+                "type": "boolean"
+              }
+            }
           },
           "transforms": {
             "type": "array",

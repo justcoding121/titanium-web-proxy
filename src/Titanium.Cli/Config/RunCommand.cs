@@ -216,6 +216,7 @@ internal static class RunCommand
             }
 
             await proxy.StopAsync().ConfigureAwait(false);
+            await clusterManager.DisposeAsync().ConfigureAwait(false);
             return 0;
         }
         finally

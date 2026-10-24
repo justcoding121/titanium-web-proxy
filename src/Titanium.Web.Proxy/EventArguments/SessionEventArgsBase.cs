@@ -238,6 +238,9 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     /// <summary>Destination count of the matched cluster, for the ejection cap.</summary>
     internal int PassiveDestinationCount { get; set; }
 
+    /// <summary>Allocated only when retry or a later feature needs per-request state.</summary>
+    internal RoutingFeatureState? Extras { get; set; }
+
     /// <summary>
     ///     Local endpoint via which we make the request.
     /// </summary>

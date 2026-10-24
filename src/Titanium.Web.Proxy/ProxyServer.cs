@@ -25,6 +25,7 @@ using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Network.WinAuth;
 using Titanium.Web.Proxy.Abstractions;
+using Titanium.Web.Proxy.Routing;
 using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
@@ -2171,7 +2172,19 @@ public partial class ProxyServer : IDisposable
     private RetryPolicy<T> RetryPolicy<T>(SessionEventArgs? sessionOverride) where T : Exception
     {
         var attempts = sessionOverride?.NetworkFailureRetryAttempts ?? NetworkFailureRetryAttempts;
-        return new RetryPolicy<T>(attempts, TcpConnectionFactory);
+        if (sessionOverride?.Extras?.Retry is { Attempts: > 0 } retry)
+        {
+            attempts = Math.Max(attempts, retry.Attempts);
+        }
+
+        var policy = new RetryPolicy<T>(attempts, TcpConnectionFactory);
+        if (sessionOverride?.Extras?.Retry is { Attempts: > 0 })
+        {
+            var session = sessionOverride;
+            policy.BeforeRetry = () => ReverseProxySessionDispatch.TrySelectAlternate(this, session);
+        }
+
+        return policy;
     }
 
 }

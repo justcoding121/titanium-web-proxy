@@ -92,6 +92,7 @@ public class SessionEventArgs : SessionEventArgsBase
         DestinationRequestLease = null;
         PassiveHealth = null;
         PassiveDestinationCount = 0;
+        Extras = null;
         Deadlines.Reset();
         UserData = connectArgs?.UserData;
         HttpClient.ResetForKeepAlive();

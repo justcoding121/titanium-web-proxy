@@ -27,7 +27,7 @@ public static class ReverseProxyFastPath
         }
 
         var route = routes[0];
-        if (route.Transforms is { Count: > 0 } || route.Limits is not null)
+        if (route.Transforms is { Count: > 0 } || route.Limits is not null || route.Retry is { Attempts: > 0 })
         {
             return false;
         }
@@ -37,7 +37,16 @@ public static class ReverseProxyFastPath
             return false;
         }
 
+        if (cluster.Retry is { Attempts: > 0 } || cluster.Queue is not null || cluster.SlowStartSeconds > 0)
+        {
+            return false;
+        }
+
         var dest = cluster.Destinations[0];
+        if (dest.MaxConcurrentRequests is not null || dest.Priority != 0 || dest.Backup || dest.SlowStartSeconds > 0)
+        {
+            return false;
+        }
         if (snapshot.DestinationStates.TryGetValue(dest.Id, out var state) &&
             state is not DestinationState.Healthy)
         {

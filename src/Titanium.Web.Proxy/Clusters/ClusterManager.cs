@@ -11,10 +11,19 @@ namespace Titanium.Web.Proxy.Clusters;
 /// Thread-safe cluster manager. Snapshot swaps use compare-and-swap;
 /// in-flight sessions keep the previous snapshot reference.
 /// </summary>
-public sealed class ClusterManager : IClusterManager
+public sealed class ClusterManager : IClusterManager, IAsyncDisposable
 {
     private ImmutableClusterSnapshot _snapshot = ImmutableClusterSnapshot.Empty;
     private readonly List<DestinationHealthTracker> _healthTrackers = new();
+    private readonly List<ClusterHealthProber> _probers = new();
+    private readonly TimeProvider _time;
+
+    public ClusterManager()
+        : this(TimeProvider.System)
+    {
+    }
+
+    internal ClusterManager(TimeProvider timeProvider) => _time = timeProvider;
 
     /// <summary>Raised after a destination state value actually changes. Not raised on the request hot path.</summary>
     internal event Action<string, DestinationState, DestinationState>? StateChanged;
@@ -61,6 +70,11 @@ public sealed class ClusterManager : IClusterManager
                     NotifyHealthy(id, DestinationState.Unhealthy);
                 }
 
+                if (reconcileBackground)
+                {
+                    ReconcileProbers(clusters);
+                }
+
                 return ValueTask.CompletedTask;
             }
         }
@@ -83,7 +97,7 @@ public sealed class ClusterManager : IClusterManager
             {
                 [destinationId] = state,
             };
-            var next = new ImmutableClusterSnapshot(current.Clusters, states);
+            var next = new ImmutableClusterSnapshot(current.Clusters, states, current.Runtimes);
             if (ReferenceEquals(Interlocked.CompareExchange(ref _snapshot, next, current), current))
             {
                 if (state == DestinationState.Healthy)
@@ -122,7 +136,7 @@ public sealed class ClusterManager : IClusterManager
             {
                 [destinationId] = next,
             };
-            var snapshot = new ImmutableClusterSnapshot(current.Clusters, states);
+            var snapshot = new ImmutableClusterSnapshot(current.Clusters, states, current.Runtimes);
             if (ReferenceEquals(Interlocked.CompareExchange(ref _snapshot, snapshot, current), current))
             {
                 if (next == DestinationState.Healthy)
@@ -148,6 +162,14 @@ public sealed class ClusterManager : IClusterManager
     }
 
     internal void SetActiveBackgroundTaskCount(int count) => ActiveBackgroundTaskCount = count;
+
+    internal async Task ProbeActiveOnceAsync()
+    {
+        foreach (var prober in _probers)
+        {
+            await prober.ProbeOnceAsync().ConfigureAwait(false);
+        }
+    }
 
     private void NotifyHealthy(string destinationId, DestinationState previous)
     {
@@ -211,6 +233,55 @@ public sealed class ClusterManager : IClusterManager
             }
         }
 
-        return new ImmutableClusterSnapshot(new Dictionary<string, ClusterConfig>(map, StringComparer.Ordinal), states);
+        var runtimes = new Dictionary<string, object>(StringComparer.Ordinal);
+        foreach (var pair in map)
+        {
+            if (current.Runtimes.TryGetValue(pair.Key, out var existing) &&
+                existing is ClusterRuntime previous &&
+                ReferenceEquals(previous.Cluster, pair.Value))
+            {
+                runtimes[pair.Key] = previous;
+            }
+            else
+            {
+                runtimes[pair.Key] = new ClusterRuntime(pair.Value);
+            }
+        }
+
+        return new ImmutableClusterSnapshot(
+            new Dictionary<string, ClusterConfig>(map, StringComparer.Ordinal),
+            states,
+            runtimes);
+    }
+
+    private void ReconcileProbers(IReadOnlyList<ClusterConfig> clusters)
+    {
+        StopProbers();
+        foreach (var cluster in clusters)
+        {
+            if (cluster.HealthCheck?.Active is { Enabled: true })
+            {
+                _probers.Add(new ClusterHealthProber(this, cluster, _time));
+            }
+        }
+
+        ActiveBackgroundTaskCount = _probers.Count;
+    }
+
+    private void StopProbers()
+    {
+        foreach (var prober in _probers)
+        {
+            prober.Dispose();
+        }
+
+        _probers.Clear();
+        ActiveBackgroundTaskCount = 0;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        StopProbers();
+        await Task.CompletedTask;
     }
 }

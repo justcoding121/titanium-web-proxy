@@ -32,6 +32,9 @@ public sealed class RouteConfig
     ///     Optional per-route overrides. Null leaves the server limits unchanged (one null check).
     /// </summary>
     public RouteLimits? Limits { get; init; }
+
+    /// <summary>Route retry wins over the cluster retry. Null leaves the cluster value.</summary>
+    public Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig? Retry { get; init; }
 }
 
 /// <summary>Per-route timeout and body/WebSocket caps applied to a matched session.</summary>
