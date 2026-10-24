@@ -128,6 +128,29 @@ public class TwpConfigValidatorCoverageTests
     }
 
     [TestMethod]
+    public void Validate_RejectsAltSvcPortAndMaxAge_AndWarnsWhenHttp3IsOff()
+    {
+        var config = new TwpConfig
+        {
+            Listeners =
+            [
+                new ListenerConfig
+                {
+                    Port = 443,
+                    EnableHttp3 = false,
+                    AltSvc = new AltSvcConfig { Port = 0, MaxAgeSeconds = 0 },
+                },
+            ],
+        };
+
+        var errors = string.Join('\n', TwpConfigValidator.Validate(config));
+        Assert.IsTrue(errors.Contains("altSvc.port", StringComparison.Ordinal), errors);
+        Assert.IsTrue(errors.Contains("altSvc.maxAgeSeconds", StringComparison.Ordinal), errors);
+        var warnings = string.Join('\n', TwpConfigValidator.CollectWarnings(config));
+        Assert.IsTrue(warnings.Contains("HTTP/3 is off", StringComparison.Ordinal), warnings);
+    }
+
+    [TestMethod]
     public void Validate_NullServer_AndEmptyCollections_AreOk()
     {
         Assert.AreEqual(0, TwpConfigValidator.Validate(new TwpConfig()).Count);

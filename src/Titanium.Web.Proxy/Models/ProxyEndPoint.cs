@@ -72,6 +72,13 @@ public abstract class ProxyEndPoint
     /// <summary>Inbound client-certificate mode. <see cref="ClientCertificateMode.None"/> changes nothing.</summary>
     public ClientCertificateMode ClientCertificateMode { get; set; }
 
+    /// <summary>
+    ///     Trust anchors for an inbound client certificate. Null uses the platform trust store,
+    ///     which is the historical behavior. A reload assigns a new collection; it never mutates one
+    ///     that a handshake is already reading.
+    /// </summary>
+    public X509Certificate2Collection? ClientCertificateTrustedRoots { get; set; }
+
     /// <summary>When true, the accept loop requires a PROXY protocol preamble.</summary>
     public bool AcceptProxyProtocol { get; set; }
 

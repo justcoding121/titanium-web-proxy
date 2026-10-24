@@ -35,7 +35,6 @@ public class ParityGapTests
     public void Cleanup()
     {
         TrafficSplit.Draw = null;
-        MirrorFanout.Observed = null;
         RoutePolicies.ResetForTests();
     }
 
@@ -363,7 +362,6 @@ public class ParityGapTests
     public async Task Mirror_NotifiesTheSinkWithoutFailingTheRoute()
     {
         var seen = new List<string>();
-        MirrorFanout.Observed = (cluster, _, _) => seen.Add(cluster);
         var manager = new ClusterManager();
         var cluster = new ClusterConfig
         {
@@ -372,6 +370,7 @@ public class ParityGapTests
         };
         await manager.ApplyAsync([cluster]);
         using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        proxy.Mirror.Observed = (clusterId, _, _) => seen.Add(clusterId);
         proxy.ReverseProxy = new ReverseProxyOptions
         {
             ClusterManager = manager,

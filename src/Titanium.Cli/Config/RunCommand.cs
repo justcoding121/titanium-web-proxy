@@ -120,7 +120,7 @@ internal static class RunCommand
         }
 
         CertificateBootstrap.Apply(proxy, loaded.Config.Certificates);
-        using var certificateWatch = CertificateBootstrap.WatchCertificateFiles(proxy, loaded.Config.Certificates);
+        using var certificateWatch = CertificateBootstrap.WatchCertificateFiles(proxy, loaded.Config.Certificates, loaded.Config.Listeners);
         StaticFileHost.RegisterIfNeeded(proxy, loaded.Config.StaticFiles, requiresSessionPath);
 
         var loadBalancer = new LoadBalancer();
@@ -941,6 +941,7 @@ internal static class RunCommand
         var ep = new TransparentProxyEndPoint(ip, listener.Port, listener.DecryptSsl)
         {
             EnableHttp3 = ResolveListenerHttp3(listener, listener.DecryptSsl),
+            AltSvc = ToAltSvcOptions(listener.AltSvc),
         };
 
         if (!string.IsNullOrEmpty(listener.ForwardHost))
@@ -971,6 +972,21 @@ internal static class RunCommand
 
         ApplyQuicKnobs(ep, listener);
         return ep;
+    }
+
+    private static AltSvcOptions? ToAltSvcOptions(AltSvcConfig? config)
+    {
+        if (config is null)
+        {
+            return null;
+        }
+
+        return new AltSvcOptions
+        {
+            Enabled = config.Enabled ?? true,
+            MaxAgeSeconds = config.MaxAgeSeconds,
+            Port = config.Port,
+        };
     }
 
     private static void ApplyQuicKnobs(TransparentProxyEndPoint ep, ListenerConfig listener)
@@ -1029,6 +1045,11 @@ internal static class RunCommand
         if (listener.MaxConcurrentClients is int maxClients)
         {
             endPoint.MaxConcurrentClients = maxClients;
+        }
+
+        if (!string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))
+        {
+            endPoint.ClientCertificateTrustedRoots = ClientCertificateAuthorityFiles.Load(listener.ClientCertificateCaPath);
         }
     }
 

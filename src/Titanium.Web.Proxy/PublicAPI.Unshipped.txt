@@ -57,6 +57,14 @@ Titanium.Web.Proxy.Models.HttpInterceptionContext.Hostname.get -> string!
 Titanium.Web.Proxy.Models.HttpInterceptionContext.Hostname.init -> void
 Titanium.Web.Proxy.Models.HttpInterceptionContext.HttpInterceptionContext() -> void
 Titanium.Web.Proxy.Models.HttpInterceptionContext.HttpVersion.get -> System.Version!
+[TWP001]Titanium.Web.Proxy.Models.AltSvcOptions
+[TWP001]Titanium.Web.Proxy.Models.AltSvcOptions.AltSvcOptions() -> void
+[TWP001]Titanium.Web.Proxy.Models.AltSvcOptions.Enabled.get -> bool
+[TWP001]Titanium.Web.Proxy.Models.AltSvcOptions.Enabled.set -> void
+[TWP001]Titanium.Web.Proxy.Models.AltSvcOptions.MaxAgeSeconds.get -> int?
+[TWP001]Titanium.Web.Proxy.Models.AltSvcOptions.MaxAgeSeconds.set -> void
+[TWP001]Titanium.Web.Proxy.Models.AltSvcOptions.Port.get -> int?
+[TWP001]Titanium.Web.Proxy.Models.AltSvcOptions.Port.set -> void
 Titanium.Web.Proxy.Models.HttpInterceptionContext.HttpVersion.init -> void
 Titanium.Web.Proxy.Models.HttpInterceptionContext.IsHttps.get -> bool
 Titanium.Web.Proxy.Models.HttpInterceptionContext.IsHttps.init -> void
@@ -70,6 +78,8 @@ Titanium.Web.Proxy.Models.HttpInterceptionContext.ProxyEndPoint.get -> Titanium.
 Titanium.Web.Proxy.Models.HttpInterceptionContext.ProxyEndPoint.init -> void
 Titanium.Web.Proxy.Models.ProxyEndPoint.EnableHttpInterception.get -> bool?
 Titanium.Web.Proxy.Models.ProxyEndPoint.EnableHttpInterception.set -> void
+[TWP001]Titanium.Web.Proxy.Models.TransparentProxyEndPoint.AltSvc.get -> Titanium.Web.Proxy.Models.AltSvcOptions?
+[TWP001]Titanium.Web.Proxy.Models.TransparentProxyEndPoint.AltSvc.set -> void
 Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeHttpAuthenticate -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs!>?
 [TWP001]Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeQuicAuthenticate -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs!>?
 [TWP001]Titanium.Web.Proxy.Models.TransparentProxyEndPoint.EnableHttp3.get -> bool
@@ -352,6 +362,8 @@ Titanium.Web.Proxy.Models.ProxyEndPoint.SniCertificates.get -> System.Collection
 Titanium.Web.Proxy.Models.ProxyEndPoint.SniCertificates.set -> void
 Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateMode.get -> Titanium.Web.Proxy.Models.ClientCertificateMode
 Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateMode.set -> void
+Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateTrustedRoots.get -> System.Security.Cryptography.X509Certificates.X509Certificate2Collection?
+Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateTrustedRoots.set -> void
 Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptProxyProtocol.get -> bool
 Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptProxyProtocol.set -> void
 Titanium.Web.Proxy.Models.ProxyEndPoint.TrustedProxyProtocolSources.get -> System.Collections.Generic.IReadOnlyList<string!>?

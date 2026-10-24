@@ -591,6 +591,8 @@ Titanium.Web.Proxy.Abstractions.Routing.MirrorConfig.ClusterId.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.ErrorPageConfig.Status.get -> string!
 Titanium.Web.Proxy.Abstractions.Routing.MirrorConfig.SamplePercent.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.ErrorPageConfig.Status.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.MirrorConfig.MaxConcurrency.get -> int
+Titanium.Web.Proxy.Abstractions.Routing.MirrorConfig.MaxConcurrency.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.MirrorConfig.MaxBodyBytes.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.ErrorPageConfig.ContentType.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.ErrorPageConfig.Body.init -> void

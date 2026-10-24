@@ -445,8 +445,22 @@ Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AcceptProxyProtocol.get -
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AcceptProxyProtocol.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Passthrough.get -> bool
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Passthrough.set -> void
+Titanium.Web.Proxy.Configuration.Models.AltSvcConfig
+Titanium.Web.Proxy.Configuration.Models.AltSvcConfig.AltSvcConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.AltSvcConfig.Enabled.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.AltSvcConfig.Enabled.set -> void
+Titanium.Web.Proxy.Configuration.Models.AltSvcConfig.MaxAgeSeconds.get -> int?
+Titanium.Web.Proxy.Configuration.Models.AltSvcConfig.MaxAgeSeconds.set -> void
+Titanium.Web.Proxy.Configuration.Models.AltSvcConfig.Port.get -> int?
+Titanium.Web.Proxy.Configuration.Models.AltSvcConfig.Port.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AltSvc.get -> Titanium.Web.Proxy.Configuration.Models.AltSvcConfig?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AltSvc.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ClientCertificateMode.get -> string?
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ClientCertificateMode.set -> void
+static Titanium.Web.Proxy.Configuration.ClientCertificateAuthorityFiles.Load(string! path) -> System.Security.Cryptography.X509Certificates.X509Certificate2Collection!
+Titanium.Web.Proxy.Configuration.ClientCertificateAuthorityFiles
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ClientCertificateCaPath.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ClientCertificateCaPath.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TrustedProxyProtocolSources.get -> System.Collections.Generic.IList<string!>!
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TrustedProxyProtocolSources.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.DrainTimeoutSeconds.get -> int?

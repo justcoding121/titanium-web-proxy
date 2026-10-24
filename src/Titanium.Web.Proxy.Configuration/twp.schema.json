@@ -311,6 +311,24 @@
           "acceptProxyProtocol": {
             "type": "boolean"
           },
+          "altSvc": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "maxAgeSeconds": {
+                "type": "integer"
+              },
+              "port": {
+                "type": "integer"
+              }
+            }
+          },
+          "clientCertificateCaPath": {
+            "type": "string"
+          },
           "clientCertificateMode": {
             "type": "string"
           },
@@ -619,6 +637,9 @@
                 "type": "string"
               },
               "maxBodyBytes": {
+                "type": "integer"
+              },
+              "maxConcurrency": {
                 "type": "integer"
               },
               "samplePercent": {

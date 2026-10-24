@@ -202,7 +202,7 @@ public class GapClosureTests
     [TestMethod]
     public async Task Mirror_CopiesMethodPathHeadersAndBody_WithoutChangingTheClient()
     {
-        MirrorFanout.ResetForTests();
+        var fanout = new MirrorDispatcher();
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         try
@@ -218,7 +218,7 @@ public class GapClosureTests
             using var proxy = new ProxyServer(userTrustRootCertificate: false);
             var session = Session(proxy, "POST");
             session.HttpClient.Response.StatusCode = 200;
-            MirrorFanout.TryEnqueue(
+            fanout.TryEnqueue(
                 new MirrorConfig { ClusterId = "m", MaxBodyBytes = 64 },
                 request,
                 new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = port });
@@ -252,54 +252,54 @@ public class GapClosureTests
         finally
         {
             listener.Stop();
-            MirrorFanout.ResetForTests();
+            fanout.Dispose();
         }
     }
 
     [TestMethod]
     public void Mirror_SkipsALargeBody_AndDropsWhenTheQueueIsFull()
     {
-        MirrorFanout.ResetForTests();
+        var fanout = new MirrorDispatcher();
         var large = new Request { Method = "POST", Host = "app.test", ContentLength = 100_000 };
         large.RequestUriString8 = (ByteString)"/big";
-        MirrorFanout.TryEnqueue(
+        fanout.TryEnqueue(
             new MirrorConfig { ClusterId = "m", MaxBodyBytes = 32 },
             large,
             new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = 9 });
-        Assert.AreEqual(1, MirrorFanout.SkippedForTests);
+        Assert.AreEqual(1, fanout.SkippedForTests);
 
         var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        MirrorFanout.HoldForTests = hold.Task;
+        fanout.HoldForTests = hold.Task;
         try
         {
             var small = new Request { Method = "GET", Host = "app.test" };
             small.RequestUriString8 = (ByteString)"/q";
-            MirrorFanout.TryEnqueue(
+            fanout.TryEnqueue(
                 new MirrorConfig { ClusterId = "m" },
                 small,
                 new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = 9 });
             var until = DateTime.UtcNow.AddSeconds(2);
-            while (MirrorFanout.HoldEntriesForTests == 0 && DateTime.UtcNow < until)
+            while (fanout.HoldEntriesForTests == 0 && DateTime.UtcNow < until)
             {
                 Thread.Sleep(1);
             }
 
-            Assert.IsTrue(MirrorFanout.HoldEntriesForTests > 0, "mirror worker did not pause");
+            Assert.IsTrue(fanout.HoldEntriesForTests > 0, "mirror worker did not pause");
             for (var i = 0; i < 40; i++)
             {
-                MirrorFanout.TryEnqueue(
+                fanout.TryEnqueue(
                     new MirrorConfig { ClusterId = "m" },
                     small,
                     new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = 9 });
             }
 
-            Assert.IsTrue(MirrorFanout.DroppedForTests > 0, $"dropped={MirrorFanout.DroppedForTests} queued={MirrorFanout.QueuedForTests}");
-            Assert.IsTrue(MirrorFanout.QueuedForTests <= 32, $"queued={MirrorFanout.QueuedForTests}");
+            Assert.IsTrue(fanout.DroppedForTests > 0, $"dropped={fanout.DroppedForTests} queued={fanout.QueuedForTests}");
+            Assert.IsTrue(fanout.QueuedForTests <= 32, $"queued={fanout.QueuedForTests}");
         }
         finally
         {
             hold.TrySetResult();
-            MirrorFanout.ResetForTests();
+            fanout.Dispose();
         }
     }
 
@@ -611,7 +611,7 @@ public class GapClosureTests
     [TestMethod]
     public async Task Mirror_ToAnHttpsDestination_NeverSendsPlaintext()
     {
-        MirrorFanout.ResetForTests();
+        var fanout = new MirrorDispatcher();
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         try
@@ -620,7 +620,7 @@ public class GapClosureTests
             var accepted = listener.AcceptTcpClientAsync();
             var request = new Request { Method = "GET", Host = "app.test" };
             request.RequestUriString8 = (ByteString)"/secure";
-            MirrorFanout.TryEnqueue(
+            fanout.TryEnqueue(
                 new MirrorConfig { ClusterId = "m" },
                 request,
                 new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = port, UseHttps = true });
@@ -631,17 +631,17 @@ public class GapClosureTests
             Assert.IsTrue(read > 0);
             Assert.AreEqual(0x16, buffer[0], "the first byte on the wire must be a TLS handshake record, not an HTTP request line");
             var until = DateTime.UtcNow.AddSeconds(5);
-            while (MirrorFanout.FailedForTests == 0 && DateTime.UtcNow < until)
+            while (fanout.FailedForTests == 0 && DateTime.UtcNow < until)
             {
                 await Task.Delay(25);
             }
 
-            Assert.AreEqual(0, MirrorFanout.SentForTests);
+            Assert.AreEqual(0, fanout.SentForTests);
         }
         finally
         {
             listener.Stop();
-            MirrorFanout.ResetForTests();
+            fanout.Dispose();
         }
     }
 

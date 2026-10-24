@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -6,8 +7,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Http;
@@ -15,61 +16,66 @@ using Titanium.Web.Proxy.Http;
 namespace Titanium.Web.Proxy.Routing;
 
 /// <summary>
-/// Best-effort mirror. A full queue increments the drop counter. The copy is a separate connection
-/// and never writes the client's response.
+///     Best-effort mirror owned by one <see cref="ProxyServer" />. A full queue increments the drop
+///     counter. The copy is a separate connection and never writes the client's response.
+///     Buffered memory is bounded by 32 queued bodies of at most <see cref="MirrorConfig.MaxBodyBytes" />.
 /// </summary>
-internal static class MirrorFanout
+internal sealed class MirrorDispatcher : IDisposable
 {
     private const int MaxQueued = 32;
     private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(2);
-    private static readonly Channel<MirrorWork> Queue = Channel.CreateBounded<MirrorWork>(new BoundedChannelOptions(MaxQueued)
+    private readonly Channel<MirrorWork> queue = Channel.CreateBounded<MirrorWork>(new BoundedChannelOptions(MaxQueued)
     {
         FullMode = BoundedChannelFullMode.Wait,
-        SingleReader = true,
+        SingleReader = false,
     });
 
-    private static int _started;
-    private static int _queued;
-    private static int _dropped;
-    private static int _skipped;
-    private static int _sent;
-    private static int _failed;
-    private static int _holdEntries;
+    private readonly List<Task> workers = new();
+    private readonly object workerGate = new();
+    private int queued;
+    private int dropped;
+    private int skipped;
+    private int sent;
+    private int failed;
+    private int holdEntries;
+    private int disposed;
 
     /// <summary>Test sink. When set, nothing is queued.</summary>
-    internal static Action<string, string, string>? Observed { get; set; }
+    internal Action<string, string, string>? Observed { get; set; }
 
-    internal static int QueuedForTests => _queued;
-    internal static int DroppedForTests => _dropped;
-    internal static int SkippedForTests => _skipped;
-    internal static int SentForTests => _sent;
-    internal static int FailedForTests => _failed;
-    internal static int HoldEntriesForTests => _holdEntries;
+    /// <summary>Replaces the socket send. Tests use it so they do not need a listener.</summary>
+    internal Func<MirrorWork, Task>? Sender { get; set; }
 
-    /// <summary>When set, the worker waits before opening a socket. Tests use it to fill the queue.</summary>
-    internal static Task? HoldForTests { get; set; }
+    internal int QueuedForTests => queued;
+    internal int DroppedForTests => dropped;
+    internal int SkippedForTests => skipped;
+    internal int SentForTests => sent;
+    internal int FailedForTests => failed;
+    internal int HoldEntriesForTests => holdEntries;
 
-    internal static void ResetForTests()
+    /// <summary>When set, a worker waits before sending. Tests use it to fill the queue.</summary>
+    internal Task? HoldForTests { get; set; }
+
+    internal void ResetForTests()
     {
         Observed = null;
+        Sender = null;
         HoldForTests = null;
-
-        // Work queued by an earlier test would otherwise delay the next one behind its connect timeouts.
-        while (Queue.Reader.TryRead(out _))
+        while (queue.Reader.TryRead(out _))
         {
         }
 
-        _queued = 0;
-        _dropped = 0;
-        _skipped = 0;
-        _sent = 0;
-        _failed = 0;
-        _holdEntries = 0;
+        queued = 0;
+        dropped = 0;
+        skipped = 0;
+        sent = 0;
+        failed = 0;
+        holdEntries = 0;
     }
 
-    public static void TryEnqueue(MirrorConfig mirror, Request request, DestinationConfig? destination = null)
+    public void TryEnqueue(MirrorConfig mirror, Request request, DestinationConfig? destination = null)
     {
-        if (mirror.SamplePercent <= 0)
+        if (Volatile.Read(ref disposed) != 0 || mirror.SamplePercent <= 0)
         {
             return;
         }
@@ -86,9 +92,10 @@ internal static class MirrorFanout
             return;
         }
 
-        if (destination is null || !TryCopyBody(mirror, request, out var body))
+        if (destination is null || destination.Address.StartsWith("unix:", StringComparison.OrdinalIgnoreCase) ||
+            !TryCopyBody(mirror, request, out var body))
         {
-            Interlocked.Increment(ref _skipped);
+            Interlocked.Increment(ref skipped);
             ProxyMetrics.RecordMirrorSkipped();
             return;
         }
@@ -104,18 +111,49 @@ internal static class MirrorFanout
             CopyHeaders(request),
             body);
 
-        if (!Queue.Writer.TryWrite(work))
+        if (!queue.Writer.TryWrite(work))
         {
-            Interlocked.Increment(ref _dropped);
+            Interlocked.Increment(ref dropped);
             ProxyMetrics.RecordMirrorDrop();
             return;
         }
 
-        Interlocked.Increment(ref _queued);
+        Interlocked.Increment(ref queued);
         ProxyMetrics.RecordMirrorQueued();
-        if (Interlocked.CompareExchange(ref _started, 1, 0) == 0)
+        EnsureWorkers(mirror.MaxConcurrency);
+    }
+
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref disposed, 1) != 0)
         {
-            _ = Task.Run(WorkerAsync);
+            return;
+        }
+
+        queue.Writer.TryComplete();
+        Task[] running;
+        lock (workerGate)
+        {
+            running = workers.ToArray();
+        }
+
+        if (running.Length == 0)
+        {
+            return;
+        }
+
+        Task.WhenAll(running).Wait(TimeSpan.FromSeconds(1));
+    }
+
+    private void EnsureWorkers(int requested)
+    {
+        var target = Math.Clamp(requested <= 0 ? 2 : requested, 1, 16);
+        lock (workerGate)
+        {
+            while (workers.Count < target && Volatile.Read(ref disposed) == 0)
+            {
+                workers.Add(Task.Run(WorkerAsync));
+            }
         }
     }
 
@@ -165,27 +203,35 @@ internal static class MirrorFanout
         name.Equals("Expect", StringComparison.OrdinalIgnoreCase) ||
         name.StartsWith("Proxy-", StringComparison.OrdinalIgnoreCase);
 
-    private static async Task WorkerAsync()
+    private async Task WorkerAsync()
     {
-        while (await Queue.Reader.WaitToReadAsync().ConfigureAwait(false))
+        while (await queue.Reader.WaitToReadAsync().ConfigureAwait(false))
         {
             if (HoldForTests is { } hold)
             {
-                Interlocked.Increment(ref _holdEntries);
+                Interlocked.Increment(ref holdEntries);
                 await hold.ConfigureAwait(false);
             }
 
-            while (Queue.Reader.TryRead(out var work))
+            while (queue.Reader.TryRead(out var work))
             {
                 try
                 {
-                    await SendAsync(work).ConfigureAwait(false);
-                    Interlocked.Increment(ref _sent);
+                    if (Sender is { } sender)
+                    {
+                        await sender(work).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await SendAsync(work).ConfigureAwait(false);
+                    }
+
+                    Interlocked.Increment(ref sent);
                     ProxyMetrics.RecordMirrorSent();
                 }
                 catch
                 {
-                    Interlocked.Increment(ref _failed);
+                    Interlocked.Increment(ref failed);
                     ProxyMetrics.RecordMirrorFailed();
                 }
             }
@@ -200,7 +246,6 @@ internal static class MirrorFanout
         Stream stream = client.GetStream();
         if (work.UseHttps)
         {
-            // Same rule as any origin leg: the certificate is validated against the destination name.
             var secure = new SslStream(stream, false);
             stream = secure;
             await secure.AuthenticateAsClientAsync(
@@ -232,10 +277,9 @@ internal static class MirrorFanout
         var sink = new byte[256];
         while (await stream.ReadAsync(sink, timeout.Token).ConfigureAwait(false) > 0)
         {
-            // Discard the mirror response.
         }
     }
 
-    private readonly record struct MirrorWork(
+    internal readonly record struct MirrorWork(
         string Host, int Port, bool UseHttps, string Method, string Path, string HostHeader, string Headers, byte[]? Body);
 }

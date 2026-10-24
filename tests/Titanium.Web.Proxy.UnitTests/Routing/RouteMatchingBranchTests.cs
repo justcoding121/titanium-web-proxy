@@ -299,37 +299,31 @@ public class RouteMatchingBranchTests
     public void MirrorFanout_SamplesAndReportsToTheSink()
     {
         var seen = new List<(string Cluster, string Method, string Path)>();
-        MirrorFanout.Observed = (cluster, method, path) => seen.Add((cluster, method, path));
-        try
+        var fanout = new MirrorDispatcher();
+        fanout.Observed = (cluster, method, path) => seen.Add((cluster, method, path));
+        var request = new Request { Method = "POST", RequestUriString8 = (ByteString)"/m?x=1", Host = "app" };
+        fanout.TryEnqueue(new MirrorConfig { ClusterId = "shadow", SamplePercent = 0 }, request);
+        Assert.AreEqual(0, seen.Count);
+        fanout.TryEnqueue(new MirrorConfig { ClusterId = "shadow" }, request);
+        Assert.AreEqual(("shadow", "POST", "/m?x=1"), seen.Single());
+        seen.Clear();
+        for (var i = 0; i < 400; i++)
         {
-            var request = new Request { Method = "POST", RequestUriString8 = (ByteString)"/m?x=1", Host = "app" };
-            MirrorFanout.TryEnqueue(new MirrorConfig { ClusterId = "shadow", SamplePercent = 0 }, request);
-            Assert.AreEqual(0, seen.Count);
-            MirrorFanout.TryEnqueue(new MirrorConfig { ClusterId = "shadow" }, request);
-            Assert.AreEqual(("shadow", "POST", "/m?x=1"), seen.Single());
-            seen.Clear();
-            for (var i = 0; i < 400; i++)
-            {
-                MirrorFanout.TryEnqueue(new MirrorConfig { ClusterId = "shadow", SamplePercent = 50 }, request);
-            }
+            fanout.TryEnqueue(new MirrorConfig { ClusterId = "shadow", SamplePercent = 50 }, request);
+        }
 
-            Assert.IsTrue(seen.Count is > 0 and < 400, "half sampling neither drops everything nor keeps everything: " + seen.Count);
-        }
-        finally
-        {
-            MirrorFanout.Observed = null;
-        }
+        Assert.IsTrue(seen.Count is > 0 and < 400, "half sampling neither drops everything nor keeps everything: " + seen.Count);
     }
 
     [TestMethod]
     public void MirrorFanout_WithoutASink_NeverBlocksAndBoundsItsQueue()
     {
-        MirrorFanout.Observed = null;
+        var fanout = new MirrorDispatcher();
         var request = new Request { Method = "GET", RequestUriString8 = (ByteString)"/m", Host = "app" };
         var mirror = new MirrorConfig { ClusterId = "shadow" };
         for (var i = 0; i < 500; i++)
         {
-            MirrorFanout.TryEnqueue(mirror, request);
+            fanout.TryEnqueue(mirror, request);
         }
     }
 

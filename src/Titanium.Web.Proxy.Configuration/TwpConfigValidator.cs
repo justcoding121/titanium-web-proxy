@@ -265,6 +265,11 @@ public static class TwpConfigValidator
                 {
                     errors.Add($"Route '{route.Id}' mirror samplePercent must be 0-100.");
                 }
+
+                if (mirror.MaxConcurrency is < 1 or > 16)
+                {
+                    errors.Add($"Route '{route.Id}' mirror maxConcurrency must be 1-16.");
+                }
             }
 
             if (route.Redirect is { Status: < 300 or > 399 } badRedirect)
@@ -337,6 +342,44 @@ public static class TwpConfigValidator
             if (listener.IdleTimeoutSeconds is < 0)
             {
                 errors.Add($"Listener port {listener.Port}: idleTimeoutSeconds must be >= 0.");
+            }
+
+            if (listener.AltSvc?.Port is < 1 or > 65535)
+            {
+                errors.Add($"Listener port {listener.Port}: altSvc.port must be between 1 and 65535.");
+            }
+
+            if (listener.AltSvc?.MaxAgeSeconds is < 1 or > 31536000)
+            {
+                errors.Add($"Listener port {listener.Port}: altSvc.maxAgeSeconds must be between 1 and 31536000.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))
+            {
+                if (listener.ClientCertificateMode is not ("allow" or "require"))
+                {
+                    errors.Add($"Listener port {listener.Port}: clientCertificateCaPath requires clientCertificateMode allow or require.");
+                }
+
+                if (!File.Exists(listener.ClientCertificateCaPath))
+                {
+                    errors.Add($"Listener port {listener.Port}: clientCertificateCaPath '{listener.ClientCertificateCaPath}' was not found.");
+                }
+                else
+                {
+                    try
+                    {
+                        var roots = ClientCertificateAuthorityFiles.Load(listener.ClientCertificateCaPath);
+                        if (roots.Count == 0)
+                        {
+                            errors.Add($"Listener port {listener.Port}: clientCertificateCaPath contains no certificates.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"Listener port {listener.Port}: clientCertificateCaPath does not parse ({ex.Message}).");
+                    }
+                }
             }
 
             if (listener.TrustedProxyProtocolSources is not { Count: > 0 } sources)
@@ -789,6 +832,12 @@ public static class TwpConfigValidator
             {
                 warnings.Add(
                     $"Listener port {listener.Port}: acceptProxyProtocol is set with no trustedProxyProtocolSources. Any peer may send a preamble.");
+            }
+
+            if (listener.AltSvc is not null && listener.EnableHttp3 == false)
+            {
+                warnings.Add(
+                    $"Listener port {listener.Port}: altSvc is set but HTTP/3 is off, so the header is not injected.");
             }
         }
 

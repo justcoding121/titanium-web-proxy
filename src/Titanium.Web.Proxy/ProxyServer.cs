@@ -202,6 +202,34 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     internal TcpConnectionFactory TcpConnectionFactory { get; }
 
+    private Routing.MirrorDispatcher? mirrorDispatcher;
+
+    /// <summary>
+    ///     Mirror queue for this proxy. Created on first use so a process with no mirror route
+    ///     does not start workers. Two proxies do not share a queue.
+    /// </summary>
+    internal Routing.MirrorDispatcher Mirror
+    {
+        get
+        {
+            var existing = Volatile.Read(ref mirrorDispatcher);
+            if (existing is not null)
+            {
+                return existing;
+            }
+
+            var created = new Routing.MirrorDispatcher();
+            var raced = Interlocked.CompareExchange(ref mirrorDispatcher, created, null);
+            if (raced is not null)
+            {
+                created.Dispose();
+                return raced;
+            }
+
+            return created;
+        }
+    }
+
     /// <summary>
     ///     Pool of outbound QUIC connections to HTTP/3 origin servers.
     ///     Drained on proxy stop and disposed with the proxy.

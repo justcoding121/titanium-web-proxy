@@ -114,6 +114,28 @@ public sealed class ListenerConfig
 
     /// <summary><c>none</c>, <c>allow</c>, or <c>require</c>.</summary>
     public string? ClientCertificateMode { get; set; }
+
+    /// <summary>PEM or CRT file of trust anchors for inbound client certificates.</summary>
+    public string? ClientCertificateCaPath { get; set; }
+
+    /// <summary>
+    ///     Client-facing Alt-Svc advertisement for a dual-listen HTTP/3 listener.
+    ///     Null keeps the built-in <c>h3=":port"; ma=86400</c> header.
+    /// </summary>
+    public AltSvcConfig? AltSvc { get; set; }
+}
+
+/// <summary>Alt-Svc advertisement for a listener that also accepts HTTP/3.</summary>
+public sealed class AltSvcConfig
+{
+    /// <summary>When false, the listener never injects Alt-Svc. Null inherits enabled.</summary>
+    public bool? Enabled { get; set; }
+
+    /// <summary>Overrides the ma parameter, in seconds.</summary>
+    public int? MaxAgeSeconds { get; set; }
+
+    /// <summary>Advertised UDP port when it differs from the bound port.</summary>
+    public int? Port { get; set; }
 }
 
 /// <summary>Static file serving options.</summary>
