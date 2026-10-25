@@ -210,10 +210,15 @@ internal static partial class Http3OriginBridge
             List<(string Name, string Value)> decodedResponseHeaders;
             int finalStatus;
 
+            // A silent QUIC path (handshake fine, no response) would otherwise hold the request until the
+            // idle timeout. Bound only the very first frame, and only when replaying over TCP is safe.
+            var guardFirstFrame = !isForcedH3 && IsReplayableOnStall(request, finOnHeaders);
+
             while (true)
             {
-                responseHeadersFrame = await Http3Frame.ReadAsync(originStream,
-                    maxPayloadBytes: server.MaxDecodedHeaderListBytes, cancellationToken);
+                responseHeadersFrame = await ReadResponseFrameAsync(originStream,
+                    server.MaxDecodedHeaderListBytes, guardFirstFrame, cancellationToken);
+                guardFirstFrame = false; // the peer is alive once any frame arrives
 
                 try
                 {
@@ -543,6 +548,15 @@ internal static partial class Http3OriginBridge
             sessionArgs.HttpClient.Response = MakeBadGatewayResponse("QUIC cannot be routed via the configured upstream proxy (forced Http3).");
             return;
         }
+        catch (Http3ResponseStalledException)
+        {
+            // Silent QUIC origin and a request that is safe to send again: replay it over TCP.
+            var stalledConn = quicConn;
+            quicConn = null; // ownership moves to the replay helper (invalidated there)
+            await ReplayStalledRequestOverTcpAsync(sessionArgs, server, logger, originStream, stalledConn,
+                sniHost, port, cancellationToken, onInterimResponse);
+            return;
+        }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             if (logger.IsEnabled(LogLevel.Debug))
@@ -613,7 +627,13 @@ internal static partial class Http3OriginBridge
             }
 
             // Forced H3, or Auto after the request was already on the wire: surface as a 502 —
-            // never silently replay a non-idempotent exchange on TCP.
+            // never silently replay a non-idempotent exchange on TCP. A QUIC idle timeout means the path
+            // stopped delivering though, so remember that and keep later requests off QUIC.
+            if (!isForcedH3 && requestSent && ex is QuicException { QuicError: QuicError.ConnectionTimeout })
+            {
+                server.NoteHttp3OriginUnreachable($"{sniHost}:{request.GetOriginHostPort(port).Port}");
+            }
+
             sessionArgs.HttpClient.Response = MakeBadGatewayResponse(ex.Message);
             return;
         }

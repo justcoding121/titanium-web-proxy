@@ -30,13 +30,18 @@ internal sealed class QuicHttp3OriginServer : IAsyncDisposable
         _ => Task.FromResult(new QuicHttp3Response(200, "ok"));
     private int acceptedConnectionCount;
 
-    public QuicHttp3OriginServer(X509Certificate2 certificate)
+    /// <param name="certificate">Server certificate.</param>
+    /// <param name="port">
+    ///     UDP port to bind on both loopback families, or 0 to pick a free one. A fixed port lets a test put a TCP
+    ///     origin on the same number, as a real origin that advertises HTTP/3 via Alt-Svc does.
+    /// </param>
+    public QuicHttp3OriginServer(X509Certificate2 certificate, int port = 0)
     {
         this.certificate = certificate;
         // HttpClient / the proxy resolve "localhost" to ::1 first, while QuicHttp3Client connects
         // to 127.0.0.1. Both families, same port, no wildcard — a wildcard bind prompts the
         // Windows firewall for testhost.exe.
-        const int maxAttempts = 20;
+        var maxAttempts = port == 0 ? 20 : 1;
         QuicListener? boundV6 = null;
         QuicListener? boundV4 = null;
         for (var attempt = 1; ; attempt++)
@@ -44,9 +49,9 @@ internal sealed class QuicHttp3OriginServer : IAsyncDisposable
             QuicListener? v6 = null;
             try
             {
-                v6 = Listen(new IPEndPoint(IPAddress.IPv6Loopback, 0));
-                var port = v6.LocalEndPoint.Port;
-                boundV4 = Listen(new IPEndPoint(IPAddress.Loopback, port));
+                v6 = Listen(new IPEndPoint(IPAddress.IPv6Loopback, port));
+                var boundPort = v6.LocalEndPoint.Port;
+                boundV4 = Listen(new IPEndPoint(IPAddress.Loopback, boundPort));
                 boundV6 = v6;
                 break;
             }

@@ -12,6 +12,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http2;
+using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
 using Titanium.Web.Proxy.Models;
@@ -171,6 +172,75 @@ public class Http3UdpBlackholeRegressionTests
 
         Assert.IsTrue(await WaitUntilAsync(() => proxy.Http3OriginCapabilityCache.IsBroken(key),
             TimeSpan.FromSeconds(20)), "The abandoned handshake must still mark the origin unreachable.");
+    }
+
+    /// <summary>
+    ///     The other way a lossy network breaks QUIC: the handshake completes and the request is written, but the
+    ///     response never arrives (seen on in-flight Wi-Fi, where it held a request for the ~16s idle timeout). A GET
+    ///     is safe to send twice, so after the stall deadline the proxy must replay it over TCP/h2, retire the QUIC
+    ///     connection and keep later requests off QUIC.
+    /// </summary>
+    [TestMethod]
+    [Timeout(120 * 1000)]
+    public async Task QuicHandshakeSucceeds_ButOriginIsSilent_GetIsReplayedOverTcp_AndOriginStaysOnTcp()
+    {
+        RequireQuic();
+
+        var savedStall = Http3OriginBridge.Http3ResponseStallTimeout;
+        var savedRace = Http3OriginBridge.TcpRaceDelay;
+        Http3OriginBridge.Http3ResponseStallTimeout = TimeSpan.FromSeconds(1);
+        // Give QUIC every chance to finish its handshake first, so this exercises the stall and not the race.
+        Http3OriginBridge.TcpRaceDelay = TimeSpan.FromSeconds(30);
+        var release = new TaskCompletionSource<QuicHttp3Response>();
+        try
+        {
+            using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+            AnswerWithAltSvc(origin);
+            await using var quicOrigin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate, origin.Port);
+            var silentRequests = 0;
+            quicOrigin.HandleRequest(_ =>
+            {
+                Interlocked.Increment(ref silentRequests);
+                return release.Task; // accepted, never answered
+            });
+
+            using var testSuite = new TestSuite();
+            var proxy = ConfigureProxy(testSuite);
+            // A real loopback handshake must finish well inside the cap; the blackhole tests' 1s is too tight here.
+            proxy.ConnectTimeOutSeconds = 3;
+            var key = $"localhost:{origin.Port}";
+            proxy.Http3OriginCapabilityCache.Set(key, int.MinValue, TimeSpan.FromMinutes(5), targetName: null);
+            // As after an Alt-Svc discovery: Auto policy only takes the H3 route for a warm origin.
+            proxy.Http3WarmOrigins.Mark("localhost", origin.Port);
+
+            var (status, body) = await GetThroughFreshConnectionAsync(proxy, origin.Port);
+
+            Assert.AreEqual(HttpStatusCode.OK, status, body);
+            Assert.AreEqual(OriginBody, body, "The stalled GET must be answered by the TCP/h2 origin.");
+            Assert.IsTrue(Volatile.Read(ref silentRequests) >= 1,
+                $"precondition: the request really went to the silent QUIC origin first (accepted QUIC connections: {quicOrigin.AcceptedConnectionCount}, broken: {proxy.Http3OriginCapabilityCache.IsBroken(key)})");
+            Assert.IsTrue(proxy.Http3OriginCapabilityCache.IsBroken(key),
+                "A QUIC origin that went silent must be marked unreachable.");
+
+            var connectionsAfterFirst = quicOrigin.AcceptedConnectionCount;
+            var requestsAfterFirst = Volatile.Read(ref silentRequests);
+            for (var i = 0; i < 2; i++)
+            {
+                var (nextStatus, nextBody) = await GetThroughFreshConnectionAsync(proxy, origin.Port);
+                Assert.AreEqual(HttpStatusCode.OK, nextStatus, nextBody);
+                Assert.AreEqual(OriginBody, nextBody);
+            }
+
+            Assert.AreEqual(connectionsAfterFirst, quicOrigin.AcceptedConnectionCount,
+                "No later connection may open QUIC again while the origin is marked unreachable.");
+            Assert.AreEqual(requestsAfterFirst, Volatile.Read(ref silentRequests));
+        }
+        finally
+        {
+            release.TrySetResult(new QuicHttp3Response(200, "late"));
+            Http3OriginBridge.Http3ResponseStallTimeout = savedStall;
+            Http3OriginBridge.TcpRaceDelay = savedRace;
+        }
     }
 
     /// <summary>
