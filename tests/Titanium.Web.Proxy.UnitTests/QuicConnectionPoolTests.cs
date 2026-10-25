@@ -136,6 +136,23 @@ public class QuicConnectionPoolTests
     }
 
     [TestMethod]
+    public async Task HasLiveConnection_IsFalseCold_TrueWhileShared_FalseAfterInvalidate()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        await using var pool = new QuicConnectionPool(proxy, new FakeQuicFactory(proxy));
+
+        Assert.IsFalse(pool.HasLiveConnection("origin.example", 443, null, null),
+            "A cold origin has no connection, which is the case worth racing TCP against.");
+
+        var conn = await pool.GetOrCreateAsync("origin.example", 443, null, null, null, CancellationToken.None);
+        Assert.IsTrue(pool.HasLiveConnection("origin.example", 443, null, null));
+        Assert.IsFalse(pool.HasLiveConnection("other.example", 443, null, null));
+
+        await pool.InvalidateAsync(conn);
+        Assert.IsFalse(pool.HasLiveConnection("origin.example", 443, null, null));
+    }
+
+    [TestMethod]
     public async Task BeginWarmup_CreatesConnectionAndMarksOriginWarm()
     {
         using var proxy = new ProxyServer(false, false, false);

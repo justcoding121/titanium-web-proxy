@@ -117,7 +117,10 @@ public class Http3UdpBlackholeRegressionTests
         Assert.AreEqual(OriginBody, firstBody,
             "The H2 client must be served by the origin over HTTP/2 after QUIC fails, not dropped to HTTP/1.1.");
         Assert.IsTrue(blackhole.Datagrams > 0, "precondition: the proxy really attempted QUIC");
-        Assert.IsTrue(proxy.Http3OriginCapabilityCache.IsBroken(key));
+        // The TCP leg wins the race, so this response arrives before the handshake gives up; the verdict
+        // lands once the abandoned handshake times out in the background.
+        Assert.IsTrue(await WaitUntilAsync(() => proxy.Http3OriginCapabilityCache.IsBroken(key),
+            TimeSpan.FromSeconds(20)), "The failed handshake must still mark the origin unreachable.");
 
         await SettleAsync();
         var attemptsSoFar = blackhole.Datagrams;
@@ -132,6 +135,42 @@ public class Http3UdpBlackholeRegressionTests
         Assert.AreEqual(attemptsSoFar, blackhole.Datagrams,
             "QUIC must not be retried on later connections while the origin is marked unreachable.");
         Assert.IsTrue(proxy.Http3OriginCapabilityCache.IsBroken(key));
+    }
+
+    /// <summary>
+    ///     The race itself: HTTP/3 is cached, UDP is blackholed and the handshake would take the full 3s cap.
+    ///     The first request must be answered over TCP/h2 well before that, because the TCP leg starts after
+    ///     <see cref="Http3OriginBridge.TcpRaceDelay" /> instead of after the QUIC failure.
+    /// </summary>
+    [TestMethod]
+    [Timeout(120 * 1000)]
+    public async Task ColdQuicBlackholed_TcpWinsRace_FirstRequestDoesNotWaitForHandshakeTimeout()
+    {
+        RequireQuic();
+
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        AnswerWithAltSvc(origin);
+        using var blackhole = UdpBlackhole.Bind(origin.Port);
+
+        using var testSuite = new TestSuite();
+        var proxy = ConfigureProxy(testSuite);
+        proxy.ConnectTimeOutSeconds = 3; // handshake cap: the no-race baseline would stall for ~3s
+        var key = $"localhost:{origin.Port}";
+        proxy.Http3OriginCapabilityCache.Set(key, int.MinValue, TimeSpan.FromMinutes(5), targetName: null);
+
+        var (status, body) = await GetThroughFreshConnectionAsync(proxy, origin.Port);
+        var brokenWhenAnswered = proxy.Http3OriginCapabilityCache.IsBroken(key);
+
+        Assert.AreEqual(HttpStatusCode.OK, status, body);
+        Assert.AreEqual(OriginBody, body);
+        Assert.IsTrue(blackhole.Datagrams > 0, "precondition: the proxy really attempted QUIC");
+        // Ordering rather than wall-clock time, so a slow machine cannot make this flaky: without the race the
+        // TCP fallback only starts after the handshake has failed, i.e. after the origin was marked unreachable.
+        Assert.IsFalse(brokenWhenAnswered,
+            "The response arrived only after the QUIC handshake had failed: the TCP leg did not race it.");
+
+        Assert.IsTrue(await WaitUntilAsync(() => proxy.Http3OriginCapabilityCache.IsBroken(key),
+            TimeSpan.FromSeconds(20)), "The abandoned handshake must still mark the origin unreachable.");
     }
 
     /// <summary>

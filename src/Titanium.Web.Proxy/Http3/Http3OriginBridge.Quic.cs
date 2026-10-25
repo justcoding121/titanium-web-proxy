@@ -114,13 +114,42 @@ internal static partial class Http3OriginBridge
             // default path supplies sessionArgs: null, which skips the user callback and rejects
             // any chain that is not already trusted by the OS (breaking MITM-test and custom-CA
             // deployments for every H3→H3 origin connect).
-            quicConn = await server.QuicConnectionPool.GetOrCreateAsync(
-                connectHost, port, upStreamEndPoint, upstreamProxy,
-                (sender, certificate, chain, errors) =>
-                    server.ValidateServerCertificate(sender, sessionArgs, certificate, chain, errors),
-                cancellationToken,
-                sniHost: sniHost,
-                failFastHandshake: !isForcedH3);
+            if (staleConnectionRetries == 0
+                && ShouldRaceTcp(sessionArgs, server, isForcedH3, connectHost, sniHost, port, upStreamEndPoint,
+                    upstreamProxy))
+            {
+                // Cold QUIC origin: a handshake that never completes (UDP/443 dropped) must not hold the
+                // request for the whole timeout while a working TCP path is available.
+                var (racedConn, tcpWon) = await AcquireQuicRacingTcpAsync(
+                    sessionArgs, server, logger, connectHost, sniHost, port, upStreamEndPoint, upstreamProxy,
+                    cancellationToken);
+                if (tcpWon)
+                {
+                    try
+                    {
+                        await FallbackToTcpOriginAsync(sessionArgs, server, logger, cancellationToken,
+                            onInterimResponse);
+                    }
+                    catch (Exception tcpEx) when (tcpEx is not OperationCanceledException)
+                    {
+                        sessionArgs.HttpClient.Response = MakeBadGatewayResponse(tcpEx.Message);
+                    }
+
+                    return;
+                }
+
+                quicConn = racedConn!; // non-null whenever TCP did not win
+            }
+            else
+            {
+                quicConn = await server.QuicConnectionPool.GetOrCreateAsync(
+                    connectHost, port, upStreamEndPoint, upstreamProxy,
+                    (sender, certificate, chain, errors) =>
+                        server.ValidateServerCertificate(sender, sessionArgs, certificate, chain, errors),
+                    cancellationToken,
+                    sniHost: sniHost,
+                    failFastHandshake: !isForcedH3);
+            }
 
             reused = !quicConn.ClaimFirstUse();
             sessionArgs.Timing?.MarkConnectionReady(quicConn.Id, reused);

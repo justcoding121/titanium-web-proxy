@@ -156,6 +156,20 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     }
 
     /// <summary>
+    ///     True when a usable shared connection already exists for the origin, i.e. the next
+    ///     <see cref="GetOrCreateAsync" /> will not pay a handshake. A cold origin is where racing the
+    ///     TCP path against QUIC is worth doing.
+    /// </summary>
+    internal bool HasLiveConnection(string connectHost, int port, IPEndPoint? upStreamEndPoint,
+        IExternalProxy? upStreamProxy, string? sniHost = null)
+    {
+        var cacheKey = QuicConnectionFactory.GetCacheKey(connectHost, port, sniHost ?? connectHost,
+            upStreamProxy, upStreamEndPoint);
+        return _pool.TryGetValue(cacheKey, out var entry)
+               && Volatile.Read(ref entry.Current) is { IsClosed: false };
+    }
+
+    /// <summary>
     ///     Releases a stream previously registered by <see cref="GetOrCreateAsync" />. The connection
     ///     stays shared and available to other requests; only a retired connection whose last stream
     ///     has now finished is disposed.

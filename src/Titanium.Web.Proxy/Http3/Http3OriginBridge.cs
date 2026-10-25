@@ -98,6 +98,18 @@ internal static partial class Http3OriginBridge
     }
 
     /// <summary>
+    ///     True when the TCP leg for this request is HTTP/2 to the origin: an explicit HTTP/2 policy, or an
+    ///     HTTP/2 client without an explicit HTTP/1.1 policy.
+    /// </summary>
+    private static bool PrefersHttp2Origin(SessionEventArgs sessionArgs)
+    {
+        var protocol = sessionArgs.UpstreamHttpProtocol;
+        return protocol == UpstreamHttpProtocol.Http2
+               || (protocol != UpstreamHttpProtocol.Http11
+                   && sessionArgs.HttpClient.Request.HttpVersion == HttpHeader.Version20);
+    }
+
+    /// <summary>
     ///     Origin TCP after HTTP/3 was not selected or QUIC failed before the request was sent.
     ///     HTTP/2 clients (and an explicit HTTP/2 policy) use the HTTP/2 origin pool. When the origin
     ///     simply does not negotiate h2 (nothing sent yet), an H2 client's request is retried as
@@ -114,10 +126,8 @@ internal static partial class Http3OriginBridge
     {
         var protocol = sessionArgs.UpstreamHttpProtocol;
         var clientVersion = sessionArgs.HttpClient.Request.HttpVersion;
-        var preferH2 = protocol == UpstreamHttpProtocol.Http2
-            || (protocol != UpstreamHttpProtocol.Http11 && clientVersion == HttpHeader.Version20);
 
-        if (preferH2)
+        if (PrefersHttp2Origin(sessionArgs))
         {
             if (protocol == UpstreamHttpProtocol.Http2)
             {
