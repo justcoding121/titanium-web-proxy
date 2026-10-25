@@ -46,15 +46,32 @@ public partial class ProxyServer
         var sslStream = new SslStream(networkStream, leaveInnerStreamOpen: false);
         try
         {
+            SslStreamCertificateContext? context = null;
+            try
+            {
+                context = CertificateManager.CreateSslCertificateContext(certificate);
+            }
+            catch (CryptographicException)
+            {
+                // A leaf minted outside this CertificateManager can fail the offline chain
+                // build. SslStream still accepts the certificate directly.
+            }
+
             var options = new SslServerAuthenticationOptions
             {
                 EnabledSslProtocols = SupportedSslProtocols,
                 CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
                 ApplicationProtocols = SslExtensions.Http2ProtocolAsList,
-                ServerCertificateContext = CertificateManager.CreateSslCertificateContext(certificate),
             };
+            if (context is not null)
+            {
+                options.ServerCertificateContext = context;
+            }
+            else
+            {
+                options.ServerCertificate = certificate;
+            }
 
-            // The accept loop armed a zero-byte read for the ClientHello. Finish it before SslStream reads.
             await AwaitPendingClientHelloAsync(clientConnection).ConfigureAwait(false);
             await sslStream.AuthenticateAsServerAsync(options, cancellationTokenSource.Token).ConfigureAwait(false);
         }

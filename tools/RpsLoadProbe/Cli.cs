@@ -784,6 +784,12 @@ internal static class Cli
             case "twp-cli-cluster-client-http1":
                 mode = ProbeMode.TwpCliClusterClientHttp1;
                 return true;
+            case "twp-cli-retry-http1":
+                mode = ProbeMode.TwpCliRetryHttp1;
+                return true;
+            case "twp-cli-conncap-http1":
+                mode = ProbeMode.TwpCliConnCapHttp1;
+                return true;
             case "origin-direct":
                 mode = ProbeMode.OriginDirect;
                 return true;

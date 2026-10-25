@@ -165,6 +165,7 @@ public class MasqueRelayTests
         {
             TargetHost = "localhost",
             ApplicationProtocols = [SslApplicationProtocol.Http2],
+            EnabledSslProtocols = System.Security.Authentication.SslProtocols.None,
             CertificateRevocationCheckMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck,
         });
         await ssl.WriteAsync(Http2Helper.ConnectionPreface);
