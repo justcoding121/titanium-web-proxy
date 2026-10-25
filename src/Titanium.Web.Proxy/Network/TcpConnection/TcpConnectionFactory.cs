@@ -55,6 +55,19 @@ internal class TcpConnectionFactory : IDisposable
     // Present only for pool keys whose cluster set MaxConnectionsPerServer.
     private readonly ConcurrentDictionary<string, ConnectionBudget> budgets = new();
 
+    internal int BudgetCountForTests => budgets.Count;
+
+    internal int BudgetOpenForTests()
+    {
+        var total = 0;
+        foreach (var budget in budgets.Values)
+        {
+            total += budget.Open;
+        }
+
+        return total;
+    }
+
     // Tcp connections waiting to be disposed by cleanup task
     private readonly ConcurrentBag<TcpServerConnection> disposalBag = new();
 

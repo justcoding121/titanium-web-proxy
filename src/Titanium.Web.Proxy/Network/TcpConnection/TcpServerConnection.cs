@@ -227,6 +227,10 @@ internal class TcpServerConnection : IDisposable
     {
         if (disposed) return;
 
+        // ClearPools disposes pooled sockets directly. The slot has to drop here, before the
+        // one-second close delay, or a capped cluster keeps the slot after the socket is gone.
+        ReleaseBudgetSlotOnce();
+
         if (disposing)
         {
             // No finalizer: sockets/streams already have their own finalization, and scheduling
