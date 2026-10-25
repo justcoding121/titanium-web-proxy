@@ -381,3 +381,26 @@ Titanium.Web.Proxy.ProxyServer.DrainAsync(System.TimeSpan timeout) -> System.Thr
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.MatchedRoute.get -> Titanium.Web.Proxy.Abstractions.Routing.RouteConfig?
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ProxyRequestId.get -> string?
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ProxyTraceId.get -> string?
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.AllowedPorts.get -> int[]!
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.AllowedPorts.set -> void
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.BlockPrivateTargets.get -> bool
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.BlockPrivateTargets.set -> void
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.IdleTimeout.get -> System.TimeSpan
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.IdleTimeout.set -> void
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.MasqueOptions() -> void
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.MaxBytesPerSecond.get -> int
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.MaxBytesPerSecond.set -> void
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.MaxDatagramsPerSecond.get -> int
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.MaxDatagramsPerSecond.set -> void
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.MaxTunnels.get -> int
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.MaxTunnels.set -> void
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.MaxTunnelsPerClient.get -> int
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.MaxTunnelsPerClient.set -> void
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.RequireAuth.get -> bool
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.RequireAuth.set -> void
+[TWP001]Titanium.Web.Proxy.Models.MasqueProxyEndPoint
+[TWP001]Titanium.Web.Proxy.Models.MasqueProxyEndPoint.MasqueProxyEndPoint(System.Net.IPAddress! ipAddress, int port) -> void
+[TWP001]Titanium.Web.Proxy.Models.MasqueProxyEndPoint.Options.get -> Titanium.Web.Proxy.Models.MasqueOptions!
+[TWP001]Titanium.Web.Proxy.Models.MasqueProxyEndPoint.Options.set -> void
+

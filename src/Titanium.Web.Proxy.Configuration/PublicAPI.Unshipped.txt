@@ -465,3 +465,23 @@ Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TrustedProxyProtocolSourc
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TrustedProxyProtocolSources.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.DrainTimeoutSeconds.get -> int?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.DrainTimeoutSeconds.set -> void
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.AllowedPorts.get -> int[]?
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.AllowedPorts.set -> void
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.BlockPrivateTargets.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.BlockPrivateTargets.set -> void
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.IdleTimeoutSeconds.get -> int?
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.IdleTimeoutSeconds.set -> void
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.MasqueListenerConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.MaxBytesPerSecond.get -> int?
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.MaxBytesPerSecond.set -> void
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.MaxDatagramsPerSecond.get -> int?
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.MaxDatagramsPerSecond.set -> void
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.MaxTunnels.get -> int?
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.MaxTunnels.set -> void
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.MaxTunnelsPerClient.get -> int?
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.MaxTunnelsPerClient.set -> void
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.RequireAuth.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.RequireAuth.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Masque.get -> Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Masque.set -> void

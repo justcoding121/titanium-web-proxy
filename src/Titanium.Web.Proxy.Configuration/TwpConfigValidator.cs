@@ -22,7 +22,7 @@ public static class TwpConfigValidator
 
     private static readonly HashSet<string> KnownListenerTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "explicit", "transparent", "socks", "quic",
+        "explicit", "transparent", "socks", "quic", "masque",
     };
 
     private static readonly HashSet<string> KnownProxyTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -321,7 +321,7 @@ public static class TwpConfigValidator
 
             if (!string.IsNullOrWhiteSpace(listener.Type) && !KnownListenerTypes.Contains(listener.Type))
             {
-                errors.Add($"Listener type '{listener.Type}' is unknown (explicit, transparent, socks, quic).");
+                errors.Add($"Listener type '{listener.Type}' is unknown (explicit, transparent, socks, quic, masque).");
             }
 
             if (listener.MaxCachedConnections is <= 0)
@@ -352,6 +352,45 @@ public static class TwpConfigValidator
             if (listener.AltSvc?.MaxAgeSeconds is < 1 or > 31536000)
             {
                 errors.Add($"Listener port {listener.Port}: altSvc.maxAgeSeconds must be between 1 and 31536000.");
+            }
+
+            if (listener.Masque is { } masque)
+            {
+                if (masque.AllowedPorts is { } ports)
+                {
+                    foreach (var allowed in ports)
+                    {
+                        if (allowed is < 1 or > 65535)
+                        {
+                            errors.Add($"Listener port {listener.Port}: masque.allowedPorts contains {allowed}.");
+                        }
+                    }
+                }
+
+                if (masque.MaxTunnels is <= 0)
+                {
+                    errors.Add($"Listener port {listener.Port}: masque.maxTunnels must be positive.");
+                }
+
+                if (masque.MaxTunnelsPerClient is <= 0)
+                {
+                    errors.Add($"Listener port {listener.Port}: masque.maxTunnelsPerClient must be positive.");
+                }
+
+                if (masque.IdleTimeoutSeconds is <= 0)
+                {
+                    errors.Add($"Listener port {listener.Port}: masque.idleTimeoutSeconds must be positive.");
+                }
+
+                if (masque.MaxDatagramsPerSecond is <= 0)
+                {
+                    errors.Add($"Listener port {listener.Port}: masque.maxDatagramsPerSecond must be positive.");
+                }
+
+                if (masque.MaxBytesPerSecond is <= 0)
+                {
+                    errors.Add($"Listener port {listener.Port}: masque.maxBytesPerSecond must be positive.");
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))
@@ -838,6 +877,14 @@ public static class TwpConfigValidator
             {
                 warnings.Add(
                     $"Listener port {listener.Port}: altSvc is set but HTTP/3 is off, so the header is not injected.");
+            }
+
+            if (string.Equals(listener.Type, "masque", StringComparison.OrdinalIgnoreCase)
+                && listener.Masque?.RequireAuth == false
+                && listener.Host is not ("127.0.0.1" or "::1" or "localhost"))
+            {
+                warnings.Add(
+                    $"Listener port {listener.Port}: masque authentication is off on a non-loopback address.");
             }
         }
 

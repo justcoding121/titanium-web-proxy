@@ -98,6 +98,10 @@ internal sealed class Http2RawClient : IDisposable
         return new Http2RawClient(tcpClient, connection);
     }
 
+    /// <summary>Wraps a connection the caller already finished the TLS and preface handshake for.</summary>
+    internal static Http2RawClient Adopt(TcpClient tcpClient, Http2RawFrame.Connection connection) =>
+        new(tcpClient, connection);
+
     private static async Task<Http2RawClient> FromTcpAndTlsAsync(TcpClient tcpClient, Stream networkStream,
         string targetHost, int? headerTableSize)
     {

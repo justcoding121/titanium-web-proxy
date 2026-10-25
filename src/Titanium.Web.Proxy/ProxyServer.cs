@@ -2158,6 +2158,7 @@ public partial class ProxyServer : IDisposable
             else if (endPoint is TransparentProxyEndPoint tep)
                 await HandleClient(tep, clientConnection);
             else if (endPoint is SocksProxyEndPoint sep) await HandleClient(sep, clientConnection);
+            else if (endPoint is MasqueProxyEndPoint masque) await HandleMasqueClient(masque, clientConnection);
         }
     }
 

@@ -359,6 +359,39 @@
           "idleTimeoutSeconds": {
             "type": "integer"
           },
+          "masque": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "allowedPorts": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "blockPrivateTargets": {
+                "type": "boolean"
+              },
+              "idleTimeoutSeconds": {
+                "type": "integer"
+              },
+              "maxBytesPerSecond": {
+                "type": "integer"
+              },
+              "maxDatagramsPerSecond": {
+                "type": "integer"
+              },
+              "maxTunnels": {
+                "type": "integer"
+              },
+              "maxTunnelsPerClient": {
+                "type": "integer"
+              },
+              "requireAuth": {
+                "type": "boolean"
+              }
+            }
+          },
           "maxCachedConnections": {
             "type": "integer"
           },

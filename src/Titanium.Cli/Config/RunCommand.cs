@@ -871,6 +871,7 @@ internal static class RunCommand
             "socks" => CreateSocksEndPoint(ip, listener),
             "quic" => CreateQuicEndPoint(ip, listener),
             "transparent" => CreateTransparentEndPoint(ip, listener),
+            "masque" => CreateMasqueEndPoint(ip, listener),
             _ when !string.IsNullOrEmpty(listener.ForwardHost) => CreateTransparentEndPoint(ip, listener),
             _ => new ExplicitProxyEndPoint(ip, listener.Port, listener.DecryptSsl),
         };
@@ -971,6 +972,58 @@ internal static class RunCommand
         };
 
         ApplyQuicKnobs(ep, listener);
+        return ep;
+    }
+
+    private static MasqueProxyEndPoint CreateMasqueEndPoint(IPAddress ip, ListenerConfig listener)
+    {
+        var ep = new MasqueProxyEndPoint(ip, listener.Port);
+        var masque = listener.Masque;
+        if (masque is null)
+        {
+            return ep;
+        }
+
+        if (masque.RequireAuth is bool requireAuth)
+        {
+            ep.Options.RequireAuth = requireAuth;
+        }
+
+        if (masque.AllowedPorts is { Length: > 0 } ports)
+        {
+            ep.Options.AllowedPorts = ports;
+        }
+
+        if (masque.BlockPrivateTargets is bool blockPrivate)
+        {
+            ep.Options.BlockPrivateTargets = blockPrivate;
+        }
+
+        if (masque.MaxTunnels is int maxTunnels)
+        {
+            ep.Options.MaxTunnels = maxTunnels;
+        }
+
+        if (masque.MaxTunnelsPerClient is int perClient)
+        {
+            ep.Options.MaxTunnelsPerClient = perClient;
+        }
+
+        if (masque.IdleTimeoutSeconds is int idle)
+        {
+            ep.Options.IdleTimeout = TimeSpan.FromSeconds(idle);
+        }
+
+        if (masque.MaxDatagramsPerSecond is int datagrams)
+        {
+            ep.Options.MaxDatagramsPerSecond = datagrams;
+        }
+
+        if (masque.MaxBytesPerSecond is int bytes)
+        {
+            ep.Options.MaxBytesPerSecond = bytes;
+        }
+
         return ep;
     }
 
